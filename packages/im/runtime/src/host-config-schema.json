@@ -946,7 +946,10 @@
                   "properties": {
                     "mode": {
                       "type": "string",
-                      "enum": ["pick-one", "summary"],
+                      "enum": [
+                        "pick-one",
+                        "summary"
+                      ],
                       "default": "pick-one",
                       "description": "pick-one answers one danmaku of the window; summary answers the window as a whole once.",
                       "x-descriptionZh": "pick-one：从窗口里挑一条回；summary：概括整个窗口后回一次。"
@@ -2413,6 +2416,11 @@
               "nickname": {
                 "type": "string",
                 "description": "Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。"
+              },
+              "preset": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Invocation preset reference; do not combine with legacy provider/model. MCP and permission fields remain Agent authority."
               }
             }
           },
@@ -2779,21 +2787,23 @@
                 },
                 "fallbacks": {
                   "type": "array",
-                  "description": "主识图模型失败、空回答或不支持该媒体时，按顺序尝试；不改变主对话模型。",
                   "items": {
                     "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "model": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
                     "required": [
                       "provider",
                       "model"
-                    ],
-                    "properties": {
-                      "provider": {
-                        "type": "string"
-                      },
-                      "model": {
-                        "type": "string"
-                      }
-                    }
+                    ]
                   }
                 }
               },
@@ -3310,6 +3320,181 @@
               "description": "Object directory ending in /; must be covered by the bucket lifecycle."
             }
           }
+        },
+        "modelCatalog": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "connections": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/modelConnection"
+              }
+            },
+            "models": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/catalogModel"
+              }
+            },
+            "presets": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/modelPreset"
+              }
+            }
+          },
+          "required": [
+            "connections",
+            "models",
+            "presets"
+          ],
+          "description": "Closed Host connection/model/preset catalog. Dictionary keys supply omitted ids; this Host supplies omitted connection owners. Explicit identities must match; references are checked by the model compiler."
+        },
+        "modelPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "defaults": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "chat": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "perception": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "When omitted, compilation selects deployment defaults.chat. Personal/Adapter/Endpoint/Scene chat overrides do not change summary."
+                }
+              },
+              "required": [
+                "chat"
+              ]
+            },
+            "adapters": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "chat": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "perception": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "endpoints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "address": {
+                    "$ref": "#/$defs/modelPolicyEndpointAddress"
+                  },
+                  "models": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "chat": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "perception": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "address",
+                  "models"
+                ]
+              }
+            },
+            "scenes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "address": {
+                    "$ref": "#/$defs/modelPolicySceneAddress"
+                  },
+                  "models": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "chat": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "address",
+                  "models"
+                ]
+              }
+            }
+          },
+          "required": [
+            "defaults"
+          ],
+          "description": "Purpose references only. Adapter/Endpoint may select chat/perception; Scene may select chat. Session chat selection is stored separately."
+        },
+        "personalPrincipals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "rootId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "platform": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "endpoint": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "adapterId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "subjectId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "rootId",
+                "platform",
+                "endpoint",
+                "adapterId",
+                "subjectId"
+              ]
+            }
+          },
+          "description": "Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input."
         }
       }
     },
@@ -4556,6 +4741,255 @@
           "maximum": 9007199254740991
         }
       }
+    },
+    "modelCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "audio",
+              "video",
+              "file"
+            ]
+          }
+        },
+        "streaming": {
+          "type": "boolean"
+        },
+        "toolCalling": {
+          "type": "boolean"
+        },
+        "thinking": {
+          "type": "boolean"
+        }
+      }
+    },
+    "modelConnection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Defaults to the dictionary key; an explicit id must match that key."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Defaults to this Host owner; an explicit owner must match this Host."
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sdk": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "anthropic",
+            "google",
+            "deepseek",
+            "minimax",
+            "ollama",
+            "openai-compatible"
+          ]
+        },
+        "baseUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "secretRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque credential reference; plaintext credentials are resolved only by the execution factory."
+        }
+      },
+      "required": [
+        "revision",
+        "sdk"
+      ]
+    },
+    "catalogModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Defaults to the dictionary key; an explicit id must match that key."
+        },
+        "connectionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capabilities": {
+          "$ref": "#/$defs/modelCapabilities"
+        },
+        "contextWindow": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "connectionId",
+        "model",
+        "capabilities"
+      ]
+    },
+    "modelPreset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Defaults to the dictionary key; an explicit id must match that key."
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "modelId"
+      ]
+    },
+    "modelPolicyEndpointAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adapterId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "rootId",
+        "platform",
+        "endpoint",
+        "adapterId"
+      ]
+    },
+    "modelPolicySceneAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "endpoint": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "adapter": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "adapter",
+                "id"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "private",
+                "group",
+                "channel"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parent": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "private",
+                    "group",
+                    "channel"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ]
+            },
+            "threadId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "endpoint",
+            "kind",
+            "id"
+          ]
+        }
+      },
+      "required": [
+        "rootId",
+        "platform",
+        "endpoint",
+        "conversation"
+      ]
     }
   }
 }

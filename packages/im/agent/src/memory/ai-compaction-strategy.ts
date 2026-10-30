@@ -10,6 +10,7 @@ import {
   type LlmCompletionPort,
 } from '@zhin.js/ai';
 import type { CompactionStrategy, MemoryContext } from './contracts.js';
+import { resolveTurnSummaryExecution } from './summary-model.js';
 
 export class AiCompactionStrategy implements CompactionStrategy {
   private readonly state = createAgentCompactionState();
@@ -27,8 +28,7 @@ export class AiCompactionStrategy implements CompactionStrategy {
 
   async compact(context: MemoryContext): Promise<MemoryContext> {
     const result = await autoCompactAgentMessagesIfNeeded({
-      transport: this.transport,
-      model: this.model,
+      ...resolveTurnSummaryExecution({ transport: this.transport, model: this.model }),
       messages: context.messages,
       config: this.config,
       state: this.state,

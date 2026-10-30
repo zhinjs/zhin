@@ -1,9 +1,11 @@
-import type { CapabilityContext } from '@zhin.js/feature-kit';
+import type { OperationSession, CapabilityContext } from '@zhin.js/feature-kit';
 import type { UserInteraction } from '@zhin.js/interaction';
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 
 /** Handler context contains only generation-safe capabilities and user interactions. */
-export interface HandlerContext<TConfig = unknown> extends CapabilityContext<TConfig> {
+export interface HandlerContext<TConfig = unknown, TAdapter extends string | undefined = string | undefined> extends CapabilityContext<TConfig> {
+  /** Canonical message operations share their bound view; native events without a message projection have none. */
+  readonly session: OperationSession<TAdapter> | undefined;
   readonly interaction?: UserInteraction;
 }
 

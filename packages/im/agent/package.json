@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/agent",
   "version": "1.1.43",
-  "description": "Zhin AI Agent — session, ZhinAgent, init; composes @zhin.js/core providers and tools",
+  "description": "Zhin AI Agent \u2014 session, ZhinAgent, init; composes @zhin.js/core providers and tools",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -100,6 +100,21 @@
       "types": "./lib/plugin-runtime/index.d.ts",
       "development": "./src/plugin-runtime/index.ts",
       "import": "./lib/plugin-runtime/index.js"
+    },
+    "./model-policy": {
+      "types": "./lib/model-policy/index.d.ts",
+      "development": "./src/model-policy/index.ts",
+      "import": "./lib/model-policy/index.js"
+    },
+    "./personal-session": {
+      "types": "./lib/personal-session/index.d.ts",
+      "development": "./src/personal-session/index.ts",
+      "import": "./lib/personal-session/index.js"
+    },
+    "./model-runtime": {
+      "types": "./lib/model-runtime/index.d.ts",
+      "development": "./src/model-runtime/index.ts",
+      "import": "./lib/model-runtime/index.js"
     }
   },
   "files": [
@@ -232,6 +247,18 @@
       "./runtime": {
         "types": "./lib/plugin-runtime/index.d.ts",
         "import": "./lib/plugin-runtime/index.js"
+      },
+      "./model-policy": {
+        "types": "./lib/model-policy/index.d.ts",
+        "import": "./lib/model-policy/index.js"
+      },
+      "./personal-session": {
+        "types": "./lib/personal-session/index.d.ts",
+        "import": "./lib/personal-session/index.js"
+      },
+      "./model-runtime": {
+        "types": "./lib/model-runtime/index.d.ts",
+        "import": "./lib/model-runtime/index.js"
       }
     }
   },

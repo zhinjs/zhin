@@ -39,6 +39,8 @@ export interface PlatformEvent<
 
 /** Structured outbound request delivered to one platform Endpoint. */
 export interface EndpointSendRequest {
+  /** Account/operation cancellation; never serialized directly over a worker boundary. */
+  readonly signal?: AbortSignal;
   /** Trusted operation language, resolved by the unified send chain. */
   readonly locale?: import('@zhin.js/plugin-runtime').Locale;
   /** The Endpoint derives its native target from this canonical conversation address. */
@@ -51,6 +53,9 @@ export type EndpointConversation = Omit<ConversationRef, 'endpoint'>;
 
 /** Compact inbound message shape; the framework attaches Endpoint identity. */
 export interface EndpointIncomingMessage<TSegment = unknown> {
+  /** Same SDK callback object; never serialized or frozen by the framework. */
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly conversation: EndpointConversation;
   readonly message?: MessageRef;
   readonly content: string;

@@ -133,8 +133,10 @@ describe('createAdapterConsoleRpc', () => {
     const rpc = createAdapterConsoleRpc(baseSpec, resources());
     const status = await statusOf(rpc);
     expect(status).toMatchObject({ canAdd: false, canRemove: false, configStore: false });
-    expect(rpc.methods.has('endpoint-add')).toBe(false);
-    expect(rpc.methods.has('endpoint-remove')).toBe(false);
+    // Methods also serve the Host runtime branch; an unbound embedder still cannot write.
+    const call = { signal: new AbortController().signal };
+    await expect(rpc.methods.get('endpoint-add')!.handler({ id: 'bot', values: {} }, call)).rejects.toMatchObject({ code: 'unsupported' });
+    await expect(rpc.methods.get('endpoint-remove')!.handler({ id: 'bot' }, call)).rejects.toMatchObject({ code: 'unsupported' });
     const configured = status.configured as Array<{ id: string; values: Record<string, string> }>;
     expect(configured[0]?.id).toBe('bot');
     // 没有配置存储时仍只返回安全视图：env 字段不是 `${ENV}` 引用就遮蔽。

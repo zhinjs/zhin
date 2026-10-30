@@ -280,6 +280,15 @@
       ],
       "zhin.js/i18n": [
         "./packages/im/zhin/src/i18n.ts"
+      ],
+      "@zhin.js/agent/model-policy": [
+        "./packages/im/agent/src/model-policy/index.ts"
+      ],
+      "@zhin.js/agent/model-runtime": [
+        "./packages/im/agent/src/model-runtime/index.ts"
+      ],
+      "@zhin.js/agent/personal-session": [
+        "./packages/im/agent/src/personal-session/index.ts"
       ]
     },
     "types": [],

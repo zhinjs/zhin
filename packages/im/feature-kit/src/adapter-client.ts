@@ -4,6 +4,7 @@
  * One adapter augments this interface once; every authoring Feature then
  * derives the same Client and native event types from its literal `adapter`.
  */
+/** @deprecated New platforms augment AdapterRegistry with their Adapter type. */
 export interface AdapterClientRegistry {
   // Augmented by platform adapter packages.
 }
@@ -13,21 +14,24 @@ export interface AdapterClientTypes<TClient = unknown, TEvents extends object = 
   readonly events: TEvents;
 }
 
-export type RegisteredAdapterName = Extract<keyof AdapterClientRegistry, string>;
+/** Canonical registry: new adapters register their Adapter class here once.
+ * Legacy Client descriptors remain accepted through the same registry during migration. */
+export interface AdapterRegistry extends AdapterClientRegistry {}
 
-export type AdapterClient<TAdapter extends string | undefined> =
-  TAdapter extends keyof AdapterClientRegistry
-    ? AdapterClientRegistry[TAdapter] extends AdapterClientTypes<infer TClient, object>
-      ? TClient
-      : unknown
-    : unknown;
-
-export type AdapterEvents<TAdapter extends string | undefined> =
-  TAdapter extends keyof AdapterClientRegistry
-    ? AdapterClientRegistry[TAdapter] extends AdapterClientTypes<unknown, infer TEvents>
-      ? TEvents
-      : Record<string, unknown>
-    : Record<string, unknown>;
+export type RegisteredAdapterName = Extract<keyof AdapterRegistry, string>;
+export type EndpointOf<TAdapter> = TAdapter extends { getEndpoint(...args: never[]): infer TEndpoint }
+  ? NonNullable<TEndpoint> : unknown;
+export type EventsOf<TAdapter> = TAdapter extends { readonly adapterEvents: infer TEvents extends object }
+  ? TEvents : TAdapter extends AdapterClientTypes<unknown, infer TEvents> ? TEvents : Record<string, unknown>;
+export type AdapterInstance<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
+  ? AdapterRegistry[TAdapter] extends { getEndpoint(...args: never[]): unknown } ? AdapterRegistry[TAdapter] : unknown
+  : unknown;
+export type AdapterClient<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
+  ? AdapterRegistry[TAdapter] extends { getEndpoint(...args: never[]): infer TEndpoint } ? NonNullable<TEndpoint>
+    : AdapterRegistry[TAdapter] extends AdapterClientTypes<infer TClient, object> ? TClient : unknown
+  : unknown;
+export type AdapterEvents<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
+  ? EventsOf<AdapterRegistry[TAdapter]> : Record<string, unknown>;
 
 /** Runtime-only Client accessor carried by the current operation. */
 export interface OperationClientPort {

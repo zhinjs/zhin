@@ -47,7 +47,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.client.emit('message.group.normal', {
+    endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -90,14 +90,14 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
   it('在 endpoint lease 内解析 ICQQ 私有语音/视频引用后再进入 Gateway', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
     const endpoint = createEndpoint(receive);
-    vi.mocked(endpoint.client.pickGroup).mockReturnValue({
+    vi.mocked(endpoint.pickGroup).mockReturnValue({
       getPttUrl: vi.fn(async () => 'https://cdn.example/voice.silk'),
       getVideoUrl: vi.fn(async () => 'https://cdn.example/video.mp4'),
     } as never);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.client.emit('message.group.normal', {
+    endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -128,14 +128,14 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     const endpoint = createEndpoint(receive);
     let resolvePtt!: (url: string) => void;
     const pttUrl = new Promise<string>((resolve) => { resolvePtt = resolve; });
-    vi.mocked(endpoint.client.pickGroup).mockReturnValue({
+    vi.mocked(endpoint.pickGroup).mockReturnValue({
       getPttUrl: vi.fn(() => pttUrl),
       getVideoUrl: vi.fn(async () => null),
     } as never);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.client.emit('message.group.normal', {
+    endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -171,7 +171,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.client.emit('message.group.normal', {
+    endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -208,7 +208,7 @@ describe('UNI-Channel 入站：CQ/元素 → canonical segments', () => {
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    endpoint.client.emit('message.group.normal', {
+    endpoint.emit('message.group.normal', {
       post_type: 'message',
       message_type: 'group',
       group_id: 100,
@@ -253,7 +253,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       ],
     });
 
-    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, [
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, [
       { type: 'reply', id: 'm1' },
       { type: 'at', qq: 2 },
       'hi',
@@ -275,7 +275,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       ],
     });
 
-    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, [
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, [
       { type: 'at', qq: 2, text: '@小明' },
       { type: 'at', qq: 3 },
     ]);
@@ -299,7 +299,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       ],
     });
 
-    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(
       100,
       [
         { type: 'image', file: 'https://x/a.jpg' },
@@ -326,14 +326,14 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       payload: [{ type, data: { media } }],
     });
 
-    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, expected);
+    expect(endpoint.sendGroupMsg).toHaveBeenCalledWith(100, expected);
     await endpoint.stop();
   });
 
   it('file 使用 ICQQ 文件 API，不经过 sendGroupMsg 的空消息路径', async () => {
     const endpoint = createEndpoint(vi.fn(), base64MediaConfig);
     const sendFile = vi.fn(async () => ({ fid: 'group-file-1' }));
-    vi.mocked(endpoint.client.pickGroup).mockReturnValue({ sendFile } as never);
+    vi.mocked(endpoint.pickGroup).mockReturnValue({ sendFile } as never);
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
@@ -350,7 +350,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
     });
 
     expect(sendFile).toHaveBeenCalledWith('/tmp/report.pdf', '/', 'report.pdf');
-    expect(endpoint.client.sendGroupMsg).not.toHaveBeenCalled();
+    expect(endpoint.sendGroupMsg).not.toHaveBeenCalled();
     await expect(sending).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
     await endpoint.stop();
   });
@@ -371,7 +371,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       ],
     });
 
-    const message = vi.mocked(endpoint.client.sendGroupMsg).mock.calls[0]?.[1] as {
+    const message = vi.mocked(endpoint.sendGroupMsg).mock.calls[0]?.[1] as {
       type: string;
       file: string;
     };

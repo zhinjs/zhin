@@ -1,5 +1,5 @@
 import { DisposeStack, type Dispose } from './dispose.js';
-import { tokenId, type PluginId, type TokenId } from './identity.js';
+import { tokenId, type FeatureId, type PluginId, type TokenId } from './identity.js';
 
 export interface Token<T> {
   readonly id: TokenId;
@@ -8,6 +8,7 @@ export interface Token<T> {
 }
 
 const rootPrivateTokens = new WeakSet<object>();
+const featurePrivateTokens = new WeakMap<object, FeatureId>();
 
 export function createToken<T>(id: string, description?: string): Token<T> {
   return Object.freeze({ id: tokenId(id), description });
@@ -17,6 +18,19 @@ export function createRootPrivateToken<T>(id: string, description?: string): Tok
   const token: Token<T> = { id: tokenId(id), description };
   rootPrivateTokens.add(token);
   return Object.freeze(token);
+}
+
+/** A Root-private capability readable only while projecting its owning Feature. */
+export function createFeaturePrivateToken<T>(id: string, feature: FeatureId, description?: string): Token<T> {
+  const token = createRootPrivateToken<T>(id, description);
+  featurePrivateTokens.set(token, feature);
+  return token;
+}
+
+/** @internal The actual candidate Root Scope never enters the Feature context. */
+export function readFeaturePrivateResource<T>(scope: Pick<Scope, 'has' | 'use'>, feature: FeatureId, token: Token<T>): T | undefined {
+  if (featurePrivateTokens.get(token) !== feature) throw new Error(`Feature cannot access Root resource ${token.id}`);
+  return scope.has(token) ? scope.use(token) : undefined;
 }
 
 interface Binding<T = unknown> {

@@ -18,6 +18,7 @@ import {
   resolveRuntimeTurnIntent,
   resolveSnapshotTurnIntentResolver,
   runtimeApprovalPolicy,
+  runtimeImSessionKey,
 } from '../../../../src/plugin-runtime/agent/turn/request.js';
 import {
   renderTriggerError,
@@ -224,7 +225,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const state = await resolveRuntimeTurnContextState(snapshot as never, message.conversation, signal);
     const request = createRuntimeTurnRequest(message, 'hello', { isMaster: false, isTrusted: false }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
-      workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' }, contextState: state,
+      projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' }, contextState: state,
     });
 
     expect(connection).toHaveBeenCalledExactlyOnceWith(endpointId, endpointId);
@@ -249,7 +250,7 @@ describe('canonical IM TurnRequest ingress', () => {
     expect(await resolveRuntimeTurnContextState({ projections: new Map() }, message.conversation, signal)).toBeUndefined();
     const request = createRuntimeTurnRequest(message, 'hello', { isMaster: true, isTrusted: false }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
-      workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
+      projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
     });
     expect(request.input.contextState).toBeUndefined();
   });
@@ -384,7 +385,7 @@ describe('canonical IM TurnRequest ingress', () => {
       traceId: 'trace-1',
       turnId: 'turn-1',
       signal,
-      workspaceRoot: '/workspace',
+      projectRoot: '/workspace', workspaceRoot: '/workspace',
       network: { enabled: true, httpsOnly: true, allowedDomains: ['example.com'] },
       ports: {},
       resolveReference: async (reference) => reference.kind === 'forward'
@@ -424,7 +425,7 @@ describe('canonical IM TurnRequest ingress', () => {
           { key: 'ref-2', kind: 'forward', sourceId: 'forward-1' },
         ],
       },
-      session: { key: 'icqq:10001:group:100' },
+      session: { key: runtimeImSessionKey(createRuntimeTurnAccess(message, { isMaster: false, isTrusted: true }), '/workspace') },
       policy: {
         permissions: ['trusted'],
         unattended: false,
@@ -435,8 +436,8 @@ describe('canonical IM TurnRequest ingress', () => {
     expect(request.signal).toBe(signal);
     await request.ports.conversationContext?.readPending(signal);
     await request.ports.conversationContext?.commit(3);
-    expect(readConversationContext).toHaveBeenCalledWith('agent-session:icqq:10001:group:100', signal);
-    expect(commitConversationContext).toHaveBeenCalledWith('agent-session:icqq:10001:group:100', 3);
+    expect(readConversationContext).toHaveBeenCalledWith(`agent-session:${request.session.key}`, signal);
+    expect(commitConversationContext).toHaveBeenCalledWith(`agent-session:${request.session.key}`, 3);
     await expect(request.ports.references?.resolve('ref-2', {
       depth: 2,
       maxEntries: 2,
@@ -455,7 +456,7 @@ describe('canonical IM TurnRequest ingress', () => {
 
   it('fails closed when authenticated sender or endpoint identity is absent', () => {
     const signal = new AbortController().signal;
-    const options = { traceId: 't', turnId: 'u', signal, workspaceRoot: '/workspace', ports: {} } as const;
+    const options = { traceId: 't', turnId: 'u', signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {} } as const;
     expect(() => createRuntimeTurnRequest(makeMessage({
       content: 'x', sender: null, metadata: { endpoint: 'bot' },
     }), 'x', { isMaster: false, isTrusted: false }, options)).toThrow('sender identity');
@@ -471,7 +472,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const request = createRuntimeTurnRequest(message, 'x', {
       isMaster: false,
       isTrusted: true,
-    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, workspaceRoot: '/workspace', ports: {} });
+    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {} });
     expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
     expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
   });
@@ -485,7 +486,7 @@ describe('canonical IM TurnRequest ingress', () => {
       isTrusted: true,
     }, {
       traceId: 'trace-workroom', turnId: 'turn-workroom',
-      signal: new AbortController().signal, workspaceRoot: '/workspace', ports: {},
+      signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {},
       intent: { kind: 'new' },
       sessionKey: 'workroom:zhin:orchestrator:software.orchestrator',
       trustedMetadata: {
@@ -517,7 +518,7 @@ describe('canonical IM TurnRequest ingress', () => {
       traceId: 't',
       turnId: 'u',
       signal: new AbortController().signal,
-      workspaceRoot: '/workspace',
+      projectRoot: '/workspace', workspaceRoot: '/workspace',
       ports: {},
       intent: { kind: 'follow_up', targetTurnId: 'active-turn' },
     });

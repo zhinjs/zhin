@@ -6,3 +6,4 @@ export * from './owner-capability-index.js';
 export * from './discovery.js';
 export * from './directory-module-convention.js';
 export * from './provider.js';
+export * from './operation-session.js';

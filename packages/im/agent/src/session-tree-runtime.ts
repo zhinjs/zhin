@@ -17,6 +17,7 @@ export interface SessionTreeRuntimeHandle {
 
 export function createSessionTreeRuntimeFromAgent(
   host: ZhinAgentPrivate,
+  withModelScope: <T>(operation: () => Promise<T>) => Promise<T> = operation => operation(),
 ): SessionTreeRuntimeHandle {
   return {
     getActiveLeafMessageId: async (sessionId) => {
@@ -24,9 +25,9 @@ export function createSessionTreeRuntimeFromAgent(
       return session?.active_leaf_message_id ?? null;
     },
     switchActiveLeaf: (sessionId, messageId) =>
-      switchActiveLeafWithBranchSummarization(host, sessionId, messageId),
+      withModelScope(() => switchActiveLeafWithBranchSummarization(host, sessionId, messageId)),
     jumpToBranchIndex: (sessionId, index) =>
-      jumpToBranchIndexWithSummarization(host, sessionId, index),
+      withModelScope(() => jumpToBranchIndexWithSummarization(host, sessionId, index)),
     listBranchPoints: (sessionId) => host.contextRepository.listBranchPoints(sessionId),
     readBranchMessage: async (sessionId, messageId) => {
       const rows = await host.contextRepository.loadMessageRows(sessionId);

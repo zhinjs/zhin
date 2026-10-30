@@ -57,7 +57,7 @@ export class SlotGenerationPreparer {
     const providers = [...this.model.providers.values()].filter((provider) =>
       selectedByFeature.has(provider.id) || provider.runtime.retain !== 'when-owner-unchanged');
     const projectedFeatures = providers.map((provider) => provider.id);
-    const projected = await new FeatureProjector(providers).project(
+    const projected = await new FeatureProjector(providers, this.model.scopes.get(current.root)).project(
       current.generation + 1,
       {
         root: current.root,

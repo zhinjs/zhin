@@ -107,6 +107,14 @@ Convert platform-specific structures such as `share`, audio or cards at the `sen
 
 `createEndpointCommands` generates `<adapter> endpoint list / add / remove` commands; see [Commands · Endpoint management commands for adapters](./commands.md#endpoint-management-commands-for-adapters).
 
+## Native Client inheritance and account ownership
+
+For native SDK typing and runtime account management, implement `Adapter<E, Config, Events>` and let it own every Endpoint. An Endpoint extends the actual SDK Client and uses `endpointSpec` / `createEndpointSpecification` for framework hooks without replacing native `on`, `off`, or `emit`. Register the Adapter type once in `AdapterRegistry`; literal platform declarations in commands infer its Endpoint.
+
+Adding an account saves disabled configuration without constructing an SDK object. Explicit start connects it. The owning Adapter handles update, stop, removal, and replacement. Updating a running account reconnects only that account; existing operations remain bound to their original incarnation. Legacy `create(context)` inputs remain supported; do not add another global account controller or writable directory.
+
+ICQQ uses this structure. WebSocket/SSE transports still use `createEndpointLifecycle` for heartbeat and reconnect behavior. The lightweight example above and the traditional `Endpoint<TClient>` form below remain compatibility inputs.
+
 ## When to extend Endpoint
 
 `defineAdapter` as above covers most platforms. Only when a protocol needs a **custom multi-stage connection flow** should you extend the `Endpoint` class and implement `start` / `open` / `close` / `stop` yourself; see [Endpoint lifecycle hooks](./endpoint-lifecycle.md#endpoint-lifecycle-hooks).

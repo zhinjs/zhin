@@ -191,7 +191,7 @@
     "export * from '@zhin.js/logger'",
     "export type * from '@zhin.js/interaction'",
     "export type{AgentTurnMessage,SyntheticMessageInput}from './built/message-enrich.js'",
-    "export type{CapabilityContext,OperationClientPort}from '@zhin.js/feature-kit'",
+    "export type{CapabilityContext,OperationClientPort,OperationSession,OperationScene,OperationSender,OperationMessage,OperationMessageRef}from '@zhin.js/feature-kit'",
     "export type{ConversationRef,DeliveryReceipt}from '@zhin.js/im-contract'",
     "export type{MessageChannel,MessageType}from './message.js'",
     "export type{Schedule,JobPayload,JobState,ScheduledJob,JobStore,JobCallback,AddJobOptions,IScheduler,SchedulerOptions,ScheduleFireCallback,MemoryScheduleRegistration,ScheduleEngineOptions,JobContext,ResolvedJob,ScheduleKind,}from '@zhin.js/kernel'",
@@ -201,7 +201,8 @@
     "export{Schema}from '@zhin.js/schema'",
     "export{component,type ComponentCall,raw,type RawContent}from './plugin-runtime/im/contracts.js'",
     "export{defineComponent,type ComponentDefinition,type ComponentContext}from '@zhin.js/component'",
-    "export{markdownToPlainText}from './built/rich-segments/markdown-to-text.js'"
+    "export{markdownToPlainText}from './built/rich-segments/markdown-to-text.js'",
+    "export{readOperationSession}from '@zhin.js/feature-kit'"
   ],
   "zhin.js/jsx": [
     "export * from '@zhin.js/core/jsx';"

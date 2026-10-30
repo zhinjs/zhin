@@ -277,6 +277,9 @@ export interface IcqqWireSegment {
 }
 
 export interface IcqqInboundMessage {
+  /** Exact SDK callback object, operation-local and never a persisted projection. */
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly id: string;
   readonly conversation: ConversationRef;
   readonly content: string;

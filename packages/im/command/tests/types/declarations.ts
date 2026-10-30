@@ -53,3 +53,7 @@ defineCommand({
     return [dynamic, stringOnly];
   },
 });
+
+// Keep the registered-platform Session regressions in the existing project type gate.
+import './session-registry.js';
+import './session.js';

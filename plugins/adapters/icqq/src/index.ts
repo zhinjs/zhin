@@ -31,3 +31,5 @@ export {
 export {
   resolveIcqqInboundMessageId,
 } from './icqq-inbound.js';
+
+export { IcqqAdapter } from './adapter.js';

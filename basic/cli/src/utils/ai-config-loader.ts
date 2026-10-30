@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export type AiConfigUtils = {
+  /** Canonical model catalog/policy validation; no execution or credential IO. */
+  validateModelRuntimeConfig?: (ai: unknown, hostOwnerId: string) => string[];
   normalizeAiRoutingConfig: (ai: unknown) => Record<string, unknown>;
   validateAiRoutingConfig: (cfg: unknown) => string[];
   applyAiConfigFixes: (

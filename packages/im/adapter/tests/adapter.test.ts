@@ -345,7 +345,7 @@ describe('Adapter Feature', () => {
       conversation,
       payload: 'hello',
     });
-    expect(received).toEqual({ conversation, payload: 'hello' });
+    expect(received).toEqual({ conversation, payload: 'hello', signal: expect.any(AbortSignal) });
     await index.stop();
   });
 
@@ -720,8 +720,7 @@ describe('Adapter Feature', () => {
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
     const activation = index.activate(new AbortController().signal);
-    await Promise.resolve();
-    expect(events).toEqual(['start-begin']);
+    await vi.waitFor(() => expect(events).toEqual(['start-begin']));
     resolveStart();
     await activation;
     expect(events).toEqual(['start-begin', 'start-done', 'open']);

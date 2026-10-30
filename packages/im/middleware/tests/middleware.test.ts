@@ -10,6 +10,8 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   FeatureDiscovery,
+  operationSession,
+  type OperationSession,
   type DirectoryEntry,
   type DiscoveryHost,
 } from '@zhin.js/feature-kit';
@@ -37,6 +39,22 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Middleware Feature', () => {
+  it('reads the same operation Session without manufacturing one for non-IM dispatch', async () => {
+    const root = rootPluginId();
+    const session: OperationSession<'middleware-test'> = { adapterName: 'middleware-test', adapter: {}, endpoint: { id: 'native' },
+      scene: { endpoint: { adapter: 'owner', id: 'canonical' }, kind: 'group', id: 'g' },
+      message: { text: 'original', receivedAt: 100 }, event: new Set(['native']),
+      signal: new AbortController().signal, reply: async () => undefined };
+    const values: unknown[] = [];
+    const definition = defineMiddleware({ adapter: 'middleware-test', async handle(context, next) { values.push(context.session); await next(); } });
+    const slot = createCapabilitySlot({ owner: root, feature: middlewareFeatureId, localName: 'session', source: '/middleware/session.ts', definition });
+    const current = snapshot(root, undefined, [slot]);
+    const index = new MiddlewareIndex([slot], current);
+    await index.run({ clientAdapter: 'middleware-test', [operationSession]: () => session });
+    await index.run({ clientAdapter: 'middleware-test' });
+    expect(values).toEqual([session, undefined]);
+  });
+
   it('preserves a descendant author through three continuation frames', async () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');

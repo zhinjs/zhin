@@ -26,7 +26,16 @@ export default defineAdapter({
 });
 ```
 
-普通适配器只实现 `client`、`connect` 和 `send`。`connect` 返回一个清理函数即可；
+平台也可以通过 `defineAdapter({ createAdapter })` 提供继承 `Adapter<E, Config, Events>` 的类。
+它拥有账号配置、启动/停止、更新、销毁与 child epoch；`AdapterIndex` 只投影目录和路由。
+新增账号仅持久化，不构造 SDK。运行配置通过注入的 Repository 做一次 CAS，公开结果不包含私有配置或凭据。
+Repository 在数据库就绪的 activation 阶段读取；停用或删除的持久账号不会先按启动配置创建连接。
+
+原生 SDK 集成使用独立的 `PlatformEndpoint` 规范：Endpoint 继承实际 Client，通过 `endpointSpec`
+命名空间声明框架钩子，不覆盖 SDK 的 `emit/on/off`。ICQQ 已采用此路径，operation 的 `$client`
+指向该 Endpoint 本体。原生 SDK 方法不等同于可撤销的框架操作，已提交的外部副作用不能靠取消信号撤回。
+
+旧式普通适配器仍可只实现 `client`、`connect` 和 `send`。`connect` 返回一个清理函数即可；
 `Endpoint` 身份、`start/open/close/stop`、切代期间的事件缓冲均由框架处理。需要精细控制
 连接状态的复杂协议仍可返回 `Endpoint` 子类，现有适配器无需迁移。
 
@@ -43,7 +52,9 @@ export default defineAdapter({
 | `endpoint-contract.ts` | Client、事件、消息与紧凑实现的纯类型契约；不含运行时状态 |
 | `endpoint.ts` | 可继承的 Endpoint 平台边界、身份绑定与代际事件准入 |
 | `managed-endpoint.ts` | 把 `{ client, connect, activate?, send }` 转成完整 Endpoint；框架内部 |
-| `adapter-index.ts` | 展开配置并编排一代 Endpoint；框架内部 |
+| `adapter.ts`、`adapter-types.ts` | Adapter 账号管理、desired Repository、child epoch 与操作租约 |
+| `endpoint-specification.ts` | 原生 Client Endpoint 的 symbol 规范，复用同一事件准入实现 |
+| `adapter-index.ts` | Adapter 的目录、Endpoint 投影与租约路由；框架内部 |
 | `endpoint-{client,control,content,management}.ts` | 四个相互独立的可选端口 |
 | `endpoint-lifecycle.ts` | WebSocket/SSE 的连接、重连与心跳基座 |
 | `endpoint-configuration.ts` | Endpoint 配置持久化端口；不包含文件系统实现 |

@@ -58,6 +58,17 @@ export default defineEvalCase({
 });
 ```
 
+### Fixed chat selection
+
+The user-approved policy on 2026-10-30 fixes every chat turn to its selected
+model, including legacy configurations. Same-model retries remain; registered
+alternatives do not grant cross-model chat fallback. The four historical
+`provider-*-fallback*` case ids remain stable, but now assert the exact primary
+request ids/counts and the existing failure message. The image case also checks
+that each primary retry retains its image. These cases deliberately register
+alternatives so an accidental switch fails the assertions. Configured perception
+fallback is separate and remains covered by `multimodal-perception-fallback`.
+
 ### Fixture fields
 
 | Field | Meaning |
@@ -72,7 +83,7 @@ export default defineEvalCase({
 | `nativeTools` | Real native tools (`bash`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`) that run against `workspace`. `bash` never runs a shell: it returns `bashOutput`. |
 | `workspace` | Files (relative path → content) written to a temporary directory. That directory becomes the turn's `workspaceRoot` with workspace-write access. Set `shell: true` on an inbound message to grant the isolated shell policy. |
 | `script` | Ordered steps. Each is `{ text }`, `{ toolCalls: [{ name, args, notOffered? }], text? }`, or `{ fault }`. |
-| `models` | Extra model ids registered after the primary `scripted-model`, in fallback order (they become the turn's later `modelCandidates`). A step's optional `model` pins which model must receive that request. |
+| `models` | Extra model ids registered after the primary `scripted-model`, in registration order (legacy `modelCandidates`; fixed chat selection must not call the later models). A step's optional `model` pins which model must receive that request. |
 | `modelInput` | Input modalities the scripted model declares (default `['text']`). Add `'image'` so turn images reach it. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
 
@@ -90,7 +101,7 @@ export default defineEvalCase({
 | `systemPromptContains` | Every model request's system prompt contains each string (for example a trust label on a plugin section). |
 | `outboundMessages` | The number of reply-port sends. |
 | `streamToolEvents` | Tool events (`tool_call:name`, `tool_result:name`, `tool_denied:name`) that stream consumers see, in order. The stream is derived from the turn journal. |
-| `modelIds` | The model id of every request, in order (fallback cases). |
+| `modelIds` | The model id of every request, in order; fixed-model cases assert that registered alternatives are never called. |
 | `modelImages` | Image blocks the model received in each request, in order (multimodal cases). |
 | `modelSteps` / `maxModelSteps` | The exact count, or the upper bound, of model requests across the case. |
 
@@ -165,17 +176,18 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `multimodal-text-follow-up` | multimodal, memory | #769 Gemini switch — text follow-up about an earlier image |
 | `multimodal-text-only-model-placeholder` | multimodal | #769 Gemini switch — text-only models still never get image bytes |
 | `plugin-prompt-injection` | injection | #726 trust tiers — plugin / skill prompt injection |
-| `provider-5xx-fallback-model` | long-task | #724 provider resilience (5xx → fallback model) |
+| `provider-5xx-fallback-model` | long-task | #724 retries; approved fixed chat policy: 5xx exhausts primary only |
+| `provider-fallback-keeps-image-input` | multimodal, long-task | Approved fixed chat policy: primary retries retain images and never switch |
 | `provider-billing-no-same-provider-fallback` | long-task | #724 provider resilience: 402 / out of credit → no pointless same-key fallback |
 | `provider-deepseek-insufficient-resource-retried` | long-task | #724 provider audit S9: DeepSeek insufficient_system_resource → retry |
 | `provider-gemini-context-overflow-compacted` | context, long-task | #724 provider audit S2: one shared context-overflow detector (Gemini / Vertex / Anthropic wording) |
-| `provider-gemini-daily-quota-fallback` | long-task | #724 provider resilience, Gemini primary (#770): daily quota → fallback without retry |
+| `provider-gemini-daily-quota-fallback` | long-task | #724/#770 daily quota; approved fixed chat policy: primary fails without retry or switching |
 | `provider-gemini-deadline-exceeded-polite` | long-task | #724 provider resilience, Gemini primary (#770): 504 DEADLINE_EXCEEDED → timeout |
 | `provider-gemini-malformed-function-call-reasked` | long-task | #724 provider resilience, Gemini primary (#770): MALFORMED_FUNCTION_CALL → re-ask (model-harness preset) |
 | `provider-gemini-prompt-blocked-polite` | long-task | #724 provider resilience, Gemini primary (#770): blocked prompt → no retry, no fallback |
 | `provider-gemini-rate-limit-retry-delay` | long-task | #724 provider resilience, Gemini primary (#770): 429 RESOURCE_EXHAUSTED → retry |
 | `provider-gemini-safety-block-polite` | long-task | #724 provider resilience, Gemini primary (#770): safety block → no retry, no fallback |
-| `provider-gemini-unavailable-fallback` | long-task | #724 provider resilience, Gemini primary (#770): 503 UNAVAILABLE → retry → fallback |
+| `provider-gemini-unavailable-fallback` | long-task | #724/#770 UNAVAILABLE; approved fixed chat policy: primary retries then fails |
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
 | `provider-empty-reply-reasked` | long-task | #724 provider resilience (empty reply, model-harness quirk preset) |
 | `provider-malformed-tool-call` | tool-use | #724 provider resilience (malformed tool call) |

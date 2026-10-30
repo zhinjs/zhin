@@ -52,6 +52,33 @@ export default definePlugin({
 两种写法共用同一套命令表和冲突检测。命令变多后移到 `commands/` 目录，修改单个命令时只会重载这一个文件。
 :::
 
+## 平台类型与单次 Session
+
+在项目统一声明入口加载已安装的适配器类型，业务命令不需要引入 Adapter 类。例如项目 `tsconfig.json` 的 `compilerOptions.types` 可包含 `"node"`、`"@zhin.js/adapter-icqq"`；保留原有类型条目。仅安装 npm 包并不会让 TypeScript 自动扫描它。
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  adapter: 'icqq',
+  params: { text: { type: 'text' } },
+  options: { silent: { type: 'boolean', default: false } },
+  async execute({ session, params, options }) {
+    if (!session) return;
+    session.adapter;  // IcqqAdapter
+    session.endpoint; // IcqqEndpoint，继承实际 ICQQ Client
+    session.scene;    // 当前群、私聊或频道；使用群字段前仍需收窄 kind
+    session.sender;   // platformRoles 与 authorizationRoles 分开
+    session.event;    // 同一次 SDK 回调的原生对象
+    if (!options.silent) await session.reply(params.text);
+  },
+});
+```
+
+`params`、`options`、`withConfig` 与命令工厂保留各自的类型推断。没有实际 IM 输入的直接调用中，`session` 为 `undefined`。规范化 `message.receive` Handler 和入站 Middleware 使用同一 Session；未形成规范消息的原生事件不伪造 Session。
+
+Session 是当前操作的只读视图。账号停止或重连会取消它的 `signal`；之后框架回复不会发送到替代连接。直接保存 SDK 引用并调用原生方法不经过框架租约，插件作者仍需遵守统一发送链路。
+
 ## 常见需求
 
 ### 查看已加载的指令菜单
@@ -506,13 +533,17 @@ flowchart LR
 ::: details 给适配器生成 list / add / remove 命令
 `@zhin.js/adapter` 的 `createEndpointCommands(spec, defineCommand)` 为适配器生成 `<adapter> endpoint list / add / remove` 三个命令，用来在聊天里管理账号。除 email（配置是嵌套对象）和 sandbox（无凭据）外，所有平台适配器都已接入：qq、icqq、napcat、onebot11、onebot12、milky、satori、slack、telegram、discord、kook、lark、dingtalk、line、wecom、wechat-mp、weixin-ilink、github。
 
-- `list`：列出运行中的账号，以及 `<adapterKey>.endpoints` 中配置的账号。
-- `add <name> <key=value...>`：录入字段。标记为 `env: true` 的凭据写入 `.env`（键名如 `TELEGRAM_BOT1_TOKEN`），配置文件中保存 `${REF}` 引用；YAML 会保留原有注释；重名拒绝。
-- `remove <name>`：从配置中移除，重启后生效；`.env` 中的键需手动清理。
-- 特殊的添加流程（如 QQ 扫码绑定）通过 `spec.bindFlow` 接管 `add`，QQ 因此多一个 `qq endpoint cancel`。
-- `add` / `remove` 只允许 master 执行；未配置 master 时放行，首个绑定者会被写为新账号的 `master`。
+采用 Adapter 基类且由官方 CLI 装配的运行时管理路径：
 
-这些命令只依赖 `EndpointConfigurationStore`，不直接读写文件。官方 CLI 会提供 `endpointConfigurationStoreToken`；自行组装 `RootRuntime` 时需要提供同一接口的实现。`plugins` 必须是对象映射，旧的数组形态需要先显式迁移。
+- `list`：读取所属 Adapter 的期望账号与运行状态。
+- `add <name> <key=value...>`：加密保存账号配置，先停用，之后在 Console 手动启动；不触发扫码或登录。
+- `remove <name>`：先停止接入、取消该账号在途任务，再关闭并移除。历史保留，同名重建使用新身份。
+- 首次修改前需要管理员在 Console 确认旧账号迁移；聊天命令不能代替这次确认。迁移后只写数据库，不修改启动配置和 `.env`，不重启进程。
+- `add` / `remove` 沿用已有 master 权限规则；配置冲突或存储错误直接报告，不回退到文件写入。
+
+下面的 runtime-state 与 `EndpointConfigurationStore` 接法用于既有 `defineAdapter({ create })` 组合式适配器或自行装配的兼容路径。只有未接入运行时 Adapter 管理时，它才会通过配置存储写启动文件及 `.env`，并保留原有重启生效和 `spec.bindFlow` 行为；不能与同一账号的数据库管理并用。
+
+接入步骤（以 telegram 为例）：
 
 接入步骤（以 telegram 为例）：
 

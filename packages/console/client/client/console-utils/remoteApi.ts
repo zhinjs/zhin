@@ -34,6 +34,7 @@ export async function apiFetch(
   init?: RequestInit,
 ): Promise<Response> {
   const token = getToken();
+  const requestBase = getApiBase();
   const headers = new Headers(init?.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
@@ -43,7 +44,7 @@ export async function apiFetch(
       : input;
 
   const res = await fetch(url, { ...init, headers });
-  if (res.status === 401) {
+  if (res.status === 401 && getApiBase() === requestBase && getToken() === token) {
     // runtime token（Demo 预置）过期后也必须失效，否则 getToken() 永远优先命中它，
     // local/sessionStorage 清理不掉，造成 401 死循环。
     clearRuntimeToken();

@@ -95,6 +95,7 @@
 | [0042](../adr/0042-first-turn-token-budget.md) | 压低首轮 token |
 | [0043](../adr/0043-history-token-budget.md) | 历史只存对话、token 预算窗口、引用消息 |
 | [0044](../adr/0044-adapter-capability-profile.md) | 适配器能力画像 |
+| [0045](../adr/0045-personal-session-model-policy.md) | 个人 Session、模型目录与作用域策略 |
 
 0036–0040 的整体规划见[受控落地路线图](../plans/controlled-ops-roadmap.md)。
 

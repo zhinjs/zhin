@@ -16,6 +16,7 @@ import {
 import { expandEnvironmentValue, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import { findConfigFile, readConfig, saveConfig } from './config-file.js';
 import { detectLegacyConfig, formatLegacyConfigHint } from './legacy-config.js';
+import { hostModelOwnerId } from '../plugin-runtime/personal-models/host-identity.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
 
 export type ConfigIssueSeverity = 'error' | 'warn' | 'info';
@@ -222,6 +223,7 @@ function checkAi(
   config: Record<string, unknown>,
   issues: ConfigIssue[],
   aiUtils: AiConfigUtils | null,
+  hostOwnerId: string,
 ): void {
   const ai = config.ai;
   if (!ai || typeof ai !== 'object' || Array.isArray(ai)) return;
@@ -344,6 +346,15 @@ function checkAi(
 
   try {
     const validationAi = migrateAiLegacyConfig(legacy).ai;
+    const canonical = validationAi.modelCatalog !== undefined || validationAi.modelPolicy !== undefined
+      || Object.values((validationAi.agents ?? {}) as Record<string, { preset?: unknown }>).some(binding => binding?.preset !== undefined);
+    if (canonical) {
+      if (!aiUtils.validateModelRuntimeConfig) throw new Error('Installed @zhin.js/agent does not support modelCatalog/modelPolicy; update the AI stack');
+      for (const message of aiUtils.validateModelRuntimeConfig(validationAi, hostOwnerId)) {
+        pushIssue(issues, { severity: 'error', code: 'ai.model_config_invalid', path: 'ai', message, fixHint: 'Check modelCatalog/modelPolicy references and Host ownership' });
+      }
+      return;
+    }
     const normalized = aiUtils.normalizeAiRoutingConfig(validationAi);
     for (const err of aiUtils.validateAiRoutingConfig(normalized)) {
       pushIssue(issues, {
@@ -446,7 +457,7 @@ export async function runConfigCheck(
   checkEndpoints(config, issues);
   checkZhinStackDependencies(cwd, config, issues);
   checkAiDependencies(cwd, config, issues);
-  checkAi(config, issues, aiUtils);
+  checkAi(config, issues, aiUtils, hostModelOwnerId(cwd));
   collectEnvRefs(config, '', env, issues);
 
   const uniqueIssues = issues.filter((issue, index) => issues.findIndex((candidate) =>

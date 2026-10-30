@@ -1,3 +1,4 @@
+import { isPlatformEndpoint, type AnyEndpoint } from './endpoint-specification.js';
 import { DisposeStack } from '@zhin.js/plugin-runtime';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { Endpoint, isEndpoint } from './endpoint.js';
@@ -214,10 +215,10 @@ async function disposeAfterError(
 
 /** @internal Convert the compact authoring form into the Runtime Endpoint contract. */
 export function materializeEndpoint<TClient>(
-  value: Endpoint<TClient> | EndpointImplementation<TClient>,
+  value: AnyEndpoint | EndpointImplementation<TClient>,
   context: ManagedEndpointContext,
-): Endpoint<TClient> {
-  if (isEndpoint(value)) return value as Endpoint<TClient>;
+): AnyEndpoint {
+  if (isEndpoint(value) || isPlatformEndpoint(value)) return value;
   if (!value || typeof value !== 'object' || !('client' in value)) {
     throw new TypeError(
       `Adapter ${context.id} create() must return an Endpoint or an object with a client`,

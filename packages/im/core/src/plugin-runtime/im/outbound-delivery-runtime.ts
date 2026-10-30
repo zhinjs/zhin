@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
-import { resolveLocale } from '@zhin.js/plugin-runtime';
+import { endpointClientOf } from '@zhin.js/adapter';
+import { operationEndpoint } from './operation-endpoint.js';
 import { projectLocale } from './locale.js';
 import {
+  resolveLocale,
   type CapabilityId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
@@ -72,6 +74,8 @@ export class OutboundDeliveryRuntime {
     observeRendering: (rendering: RuntimeMessageRendering) => void,
   ): Promise<DeliveryReceipt> {
     const adapter = request.conversation.endpoint.id as CapabilityId;
+    const boundEndpoint = request[operationEndpoint];
+    if (boundEndpoint && boundEndpoint.canonicalId !== adapter) throw new Error('Outbound Endpoint binding does not match its conversation');
     const presentation = resolveOutboundPresentation(snapshot, request.conversation, request.requester);
     const jsxCache = new WeakMap<JSXElement, Promise<unknown>>();
     const buttons = this.context.prepareButtons?.(request, snapshot);
@@ -106,7 +110,11 @@ export class OutboundDeliveryRuntime {
       requester: request.requester,
       generation: snapshot.generation,
       clientAdapter: adapters.clientAdapter(adapter),
-    }, initialPayload, () => adapters.clientById(adapter));
+    }, initialPayload, () => {
+      if (!boundEndpoint) return adapters.clientById(adapter);
+      boundEndpoint.assertActive();
+      return endpointClientOf(boundEndpoint.endpoint);
+    });
     // Record identities and fallback text before middleware can mutate the array
     // or its segments. Do not copy/serialize media buffers or streams.
     const initialItems = Array.isArray(initialPayload) ? initialPayload.map(item => ({
@@ -166,11 +174,14 @@ export class OutboundDeliveryRuntime {
           const contentSources = canonicalContent?.map(snapshotHistorySource);
           const payloadLength = Array.isArray(payload) ? payload.length : 1;
           try {
-            const result = await requireAdapters(snapshot).send(adapter, {
+            const sendRequest = {
               conversation: request.conversation,
               locale: resolveLocale(request.locale ?? projectLocale(snapshot)),
               payload,
-            });
+            };
+            const result = boundEndpoint
+              ? await boundEndpoint.send(sendRequest)
+              : await requireAdapters(snapshot).send(adapter, sendRequest);
             receipt = receiptFromEndpointResult(result, request.conversation, payloadLength);
           } catch (error) {
             receipt = receiptFromEndpointError(error, true, request.conversation, payloadLength);

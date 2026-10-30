@@ -4,6 +4,7 @@ import {
   type GenerationAdmissionGate,
   type GenerationAdmissionSource,
 } from './admission.js';
+import type { PluginId, FeatureId } from './identity.js';
 import type { JsonValue } from './persistent-state.js';
 import { createToken } from './token.js';
 
@@ -31,6 +32,13 @@ export type PluginConsoleRpcInput = Readonly<Record<string, JsonValue>>;
 export interface PluginConsoleRpcCall {
   /** Aborted when the Host request times out. Long work must observe it. */
   readonly signal: AbortSignal;
+  /** Authenticated operation view; no snapshot, configuration, resource or private resolver access. */
+  readonly runtime?: Readonly<{
+    owner: PluginId; generation: number; operator: boolean;
+    project(feature: FeatureId): unknown;
+  }>;
+  /** Framework-only request-local notification before a validated durable mutation begins. */
+  commitStarted?(): void;
 }
 
 export interface PluginConsoleRpcMethod<TInput = PluginConsoleRpcInput> {
@@ -92,7 +100,7 @@ export interface PluginConsoleRpc extends GenerationAdmissionSource {
 
 /** Safe, user-facing failure. `message` is shown in the Console; never put raw errors in it. */
 export class PluginConsoleRpcError extends Error {
-  readonly code: 'invalid_input' | 'conflict' | 'not_found' | 'unsupported' | 'unavailable';
+  readonly code: 'invalid_input' | 'conflict' | 'not_found' | 'unsupported' | 'unavailable' | 'forbidden' | 'commit_unknown';
   constructor(code: PluginConsoleRpcError['code'], message: string) {
     super(message);
     this.name = 'PluginConsoleRpcError';

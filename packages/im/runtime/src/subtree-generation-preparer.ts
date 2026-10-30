@@ -123,7 +123,7 @@ export class SubtreeGenerationPreparer {
         if (roots.some((root) => isWithin(slot.owner, root))) affectedFeatures.add(slot.feature);
       }
       const providers = [...this.model.providers.values()].filter((provider) => affectedFeatures.has(provider.id));
-      const projected = await new FeatureProjector(providers).project(
+      const projected = await new FeatureProjector(providers, plugins.scopes.get(current.root)).project(
         current.generation + 1,
         {
           root: current.root,

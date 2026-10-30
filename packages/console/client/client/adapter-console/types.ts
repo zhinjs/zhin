@@ -39,10 +39,65 @@ export interface AdapterConsoleActionView {
 
 export interface AdapterConsoleConfiguredEndpoint {
   readonly id: string;
+  readonly instanceId?: string;
   readonly values: Readonly<Record<string, string>>;
 }
 
+export interface AdapterConsoleExecution {
+  readonly instanceId: string;
+  readonly action: 'add' | 'update' | 'start' | 'stop' | 'remove' | 'replace';
+  readonly revision: number | null;
+  readonly status: 'pending' | 'applied' | 'failed';
+  readonly code?: string;
+}
+
+export interface AdapterConsoleRuntimeEndpoint {
+  readonly instanceId: string;
+  readonly canonicalId: string;
+  readonly endpointId: string;
+  readonly revision: number | null;
+  readonly desiredEnabled: boolean;
+  readonly epoch: number;
+  readonly incarnationId?: string;
+  readonly started: boolean;
+  readonly admitted: boolean;
+  readonly retiring?: boolean;
+  readonly removed?: boolean;
+  readonly execution?: AdapterConsoleExecution;
+}
+
+export interface AdapterConsoleRuntimeView {
+  readonly adapterId: string;
+  readonly generation: number;
+  readonly revision: number | null;
+  readonly needsMigration: boolean;
+  readonly canManage: boolean;
+  readonly canMigrate: boolean;
+  readonly canUpdate: boolean;
+  readonly canReplace: boolean;
+  readonly mutableFields: readonly string[];
+  readonly identityFields: readonly string[];
+  readonly endpoints: readonly AdapterConsoleRuntimeEndpoint[];
+  readonly lastMutation?: AdapterConsoleExecution;
+}
+
+export interface AdapterConsoleMutationResult {
+  readonly saved: true;
+  readonly restartRequired: false;
+  readonly execution: { readonly status: 'pending' | 'applied' | 'failed'; readonly code?: string };
+  readonly operation?: AdapterConsoleExecution;
+  readonly runtime: AdapterConsoleRuntimeView;
+}
+
+export interface AdapterConsoleLoginIdentity {
+  readonly incarnationId: string;
+  readonly canonicalId: string;
+  readonly instanceId: string;
+  readonly epoch: number;
+}
+
 export interface AdapterConsoleStatus {
+  readonly runtime?: AdapterConsoleRuntimeView;
   readonly adapterKey: string;
   readonly displayName: string;
   readonly page: string;
@@ -75,6 +130,7 @@ export interface AdapterConsoleLoginTask {
   readonly id: string;
   readonly adapter: string;
   readonly endpointKey: string;
+  readonly endpointIdentity?: AdapterConsoleLoginIdentity;
   readonly type: string;
   readonly payload: Readonly<Record<string, unknown>>;
   readonly createdAt: number;

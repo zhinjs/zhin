@@ -336,6 +336,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agents.<key>.model` | string | no | — | — |
 | `ai.agents.<key>.mcpServers` | array \| null | no | — | — |
 | `ai.agents.<key>.nickname` | string | no | — | Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 |
+| `ai.agents.<key>.preset` | string | no | — | Invocation preset reference; do not combine with legacy provider/model. MCP and permission fields remain Agent authority. |
 | `ai.sessions` | object \| null | no | — | — |
 | `ai.sessions.maxHistory` | number \| string | no | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
 | `ai.sessions.expireMs` | number \| string | no | — | 会话过期时间（毫秒，数据库模式默认7天，内存模式默认24小时） |
@@ -386,7 +387,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.multimodal.perception.maxChars` | number \| string | no | — | Description length cap in characters. Default 800. |
 | `ai.multimodal.perception.timeoutMs` | number \| string | no | — | Per-attempt timeout in ms. Default 30000. |
 | `ai.multimodal.perception.maxItemsPerTurn` | number \| string | no | — | Media described per turn; the rest keep the placeholder. Default 4. |
-| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | no | — | 主识图模型失败、空回答或不支持该媒体时，按顺序尝试；不改变主对话模型。 |
+| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | no | — | — |
 | `ai.multimodal.perception.fallbacks[].provider` | string | yes | — | — |
 | `ai.multimodal.perception.fallbacks[].model` | string | yes | — | — |
 | `ai.memory` | object \| null | no | — | 三层 Markdown 文件记忆（global / platform / session）。 默认启用；设 enabled: false 可关闭注入。 |
@@ -449,6 +450,64 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.imageStorage.secretAccessKey` | string | yes | — | — |
 | `ai.imageStorage.publicBaseUrl` | string | yes | — | Public HTTPS base URL; not the S3 upload endpoint. |
 | `ai.imageStorage.prefix` | string | yes | — | Object directory ending in /; must be covered by the bucket lifecycle. |
+| `ai.modelCatalog` | object | no | — | Closed Host connection/model/preset catalog. Dictionary keys supply omitted ids; this Host supplies omitted connection owners. Explicit identities must match; references are checked by the model compiler. |
+| `ai.modelCatalog.connections` | object | yes | — | — |
+| `ai.modelCatalog.connections.<key>.id` | string | no | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.connections.<key>.ownerId` | string | no | — | Defaults to this Host owner; an explicit owner must match this Host. |
+| `ai.modelCatalog.connections.<key>.revision` | integer | yes | — | — |
+| `ai.modelCatalog.connections.<key>.sdk` | string: `"openai"`, `"anthropic"`, `"google"`, `"deepseek"`, `"minimax"`, `"ollama"`, `"openai-compatible"` | yes | — | — |
+| `ai.modelCatalog.connections.<key>.baseUrl` | string | no | — | — |
+| `ai.modelCatalog.connections.<key>.secretRef` | string | no | — | Opaque credential reference; plaintext credentials are resolved only by the execution factory. |
+| `ai.modelCatalog.models` | object | yes | — | — |
+| `ai.modelCatalog.models.<key>.id` | string | no | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.models.<key>.connectionId` | string | yes | — | — |
+| `ai.modelCatalog.models.<key>.model` | string | yes | — | — |
+| `ai.modelCatalog.models.<key>.capabilities` | object | yes | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.input` | array&lt;string: `"text"`, `"image"`, `"audio"`, `"video"`, `"file"`&gt; | no | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.streaming` | boolean | no | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.toolCalling` | boolean | no | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.thinking` | boolean | no | — | — |
+| `ai.modelCatalog.models.<key>.contextWindow` | integer | no | — | — |
+| `ai.modelCatalog.models.<key>.maxOutputTokens` | integer | no | — | — |
+| `ai.modelCatalog.presets` | object | yes | — | — |
+| `ai.modelCatalog.presets.<key>.id` | string | no | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.presets.<key>.modelId` | string | yes | — | — |
+| `ai.modelPolicy` | object | no | — | Purpose references only. Adapter/Endpoint may select chat/perception; Scene may select chat. Session chat selection is stored separately. |
+| `ai.modelPolicy.defaults` | object | yes | — | — |
+| `ai.modelPolicy.defaults.chat` | string | yes | — | — |
+| `ai.modelPolicy.defaults.perception` | string | no | — | — |
+| `ai.modelPolicy.defaults.summary` | string | no | — | When omitted, compilation selects deployment defaults.chat. Personal/Adapter/Endpoint/Scene chat overrides do not change summary. |
+| `ai.modelPolicy.adapters` | object | no | — | — |
+| `ai.modelPolicy.adapters.<key>.chat` | string | no | — | — |
+| `ai.modelPolicy.adapters.<key>.perception` | string | no | — | — |
+| `ai.modelPolicy.endpoints` | array&lt;object&gt; | no | — | — |
+| `ai.modelPolicy.endpoints[].address` | object | yes | — | — |
+| `ai.modelPolicy.endpoints[].address.rootId` | string | yes | — | — |
+| `ai.modelPolicy.endpoints[].address.platform` | string | yes | — | — |
+| `ai.modelPolicy.endpoints[].address.endpoint` | string | yes | — | — |
+| `ai.modelPolicy.endpoints[].address.adapterId` | string | yes | — | — |
+| `ai.modelPolicy.endpoints[].models` | object | yes | — | — |
+| `ai.modelPolicy.endpoints[].models.chat` | string | no | — | — |
+| `ai.modelPolicy.endpoints[].models.perception` | string | no | — | — |
+| `ai.modelPolicy.scenes` | array&lt;object&gt; | no | — | — |
+| `ai.modelPolicy.scenes[].address` | object | yes | — | — |
+| `ai.modelPolicy.scenes[].address.rootId` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.platform` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.endpoint` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation` | object | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint` | object | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint.adapter` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint.id` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.id` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent` | object | no | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent.id` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.threadId` | string | no | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.name` | string | no | — | — |
+| `ai.modelPolicy.scenes[].models` | object | yes | — | — |
+| `ai.modelPolicy.scenes[].models.chat` | string | no | — | — |
+| `ai.personalPrincipals` | object | no | — | Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input. |
 | `menuKeyword` | string \| `false` | no | — | Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu. |
 | `menuStyle` | object | no | — | Command menu appearance when an HTML renderer is available; plain text fallback remains available. |
 | `menuStyle.title` | string | no | — | Menu title. |

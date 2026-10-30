@@ -178,7 +178,7 @@ export async function createSandboxImFixture(options: { room?: RoomDefinition } 
       name: 'message.receive',
       payload: { conversation: conv, content, sender: { id: sender }, message: { conversation: conv, id: messageId }, ...rest },
       endpoint: Object.freeze({ id: endpointId as never, name: 'test' }),
-      client: ignored,
+      client: adapters.clientById(endpointId as typeof adapter.id),
     }) as never) as Promise<{ matched: boolean }>;
   };
   /** Deliver the same message to several Endpoints concurrently (each Bot in the group sees one copy). */

@@ -123,8 +123,11 @@ async function fixture(session?: SessionWelcomeOptions) {
   store.commit(0, { snapshot: createSnapshotView(1, { ...store.current, config }), dispose() {} });
   const notice: IncomingNotice = { id: 'joined', type: 'notice', name: 'notice.group.member_increase', timestamp: 1, metadata: {},
     conversation: { kind: target.kind, id: target.id, parent: target.parent, threadId: target.threadId }, target: { id: 'new', name: 'Bob' } };
-  const receive = (payload = notice, endpointId = String(adapters[0]!.id)) => im.endpointEvents.receive({ name: 'notice.receive',
-    endpoint: im.endpoints.list().find(item => item.id === endpointId)!.endpoint, payload, client: {} });
+  const receive = (payload = notice, endpointId = String(adapters[0]!.id)) => {
+    const row = im.endpoints.list().find(item => item.id === endpointId)!;
+    return im.endpointEvents.receive({ name: 'notice.receive', endpoint: row.endpoint, payload,
+      client: index.clientById(row.id as typeof adapters[number]['id']) });
+  };
   return { target, alpha, root, sent, requesters, adapters, notice, receive, lifecycle,
     fail: (status: typeof failure) => { failure = status; },
     close: async () => { lifecycle?.dispose(); await store.close(); await index.stop(); },

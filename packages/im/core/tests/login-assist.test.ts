@@ -103,3 +103,33 @@ describe('LoginAssist', () => {
     await expect(b).resolves.toBe('1');
   });
 });
+
+it('binds a login challenge to the exact incarnation signal and rejects mismatched target submissions', async () => {
+  const assist = new LoginAssist();
+  const abort = new AbortController();
+  const identity = { canonicalId: 'canonical', instanceId: 'instance', epoch: 1, incarnationId: 'execution-one' };
+  const waiting = assist.waitForInput('icqq', 'display', 'slider', {}, { owner: {}, signal: abort.signal, endpointIdentity: identity });
+  const caught = waiting.catch(error => error);
+  const task = assist.listPending()[0]!;
+  expect(task.endpointIdentity).toEqual(identity);
+  expect(assist.submit(task.id, 'ticket', { ...identity, epoch: 2 })).toBe(false);
+  expect(assist.listPending()).toHaveLength(1);
+  abort.abort(new Error('account stopped'));
+  await expect(caught).resolves.toBeInstanceOf(Error);
+  expect(assist.listPending()).toEqual([]);
+  expect(assist.submit(task.id, 'late', identity)).toBe(false);
+  assist.dispose();
+});
+
+it('does not recreate tasks from a retired account or reuse task ids across Host restarts', async () => {
+  const abort = new AbortController(); abort.abort(new Error('retired'));
+  const first = new LoginAssist(), second = new LoginAssist();
+  expect(() => first.waitForInput('icqq', 'display', 'qrcode', {}, { owner: {}, signal: abort.signal })).toThrow('retired');
+  const time = vi.spyOn(Date, 'now').mockReturnValue(1000);
+  try {
+    const a = first.waitForInput('icqq', 'display', 'qrcode', {}, { owner: {} }).catch(error => error);
+    const b = second.waitForInput('icqq', 'display', 'qrcode', {}, { owner: {} }).catch(error => error);
+    expect(first.listPending()[0].id).not.toBe(second.listPending()[0].id);
+    first.dispose(); second.dispose(); await Promise.all([a, b]);
+  } finally { time.mockRestore(); first.dispose(); second.dispose(); }
+});

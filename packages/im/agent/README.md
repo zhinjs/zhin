@@ -98,7 +98,7 @@ turn 会跨代执行。
 - 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository`；IM 事实由 `ConversationEventStore` 独占
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
 - 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`；结果写入 `provider.models` 并供 owner-scoped `LlmApiRuntime` 校验
-- 🔄 **模型自动降级**：首选模型失败时按 `resolveModelCandidates` 候选链 fallback（文本 / 多模态 / standalone 均走 agentLoop）
+- 🔄 **固定模型与重试**：聊天（含旧配置）、多模态主回合与 standalone 固定本轮选定模型；失败仅按原配置在同一模型上重试，不跨模型降级。媒体感知保留显式配置的 `ai.multimodal.perception.fallbacks` 备用链
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
 - 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
@@ -346,7 +346,7 @@ Standalone Agent 不隐式继承主 Agent 的 native Tool，也**默认不带** 
 能力必须通过 `tools` 显式传入，或传 `includeRegisteredTools: true` 使用已注册的工具。
 
 只需要文本（总结群聊、分类消息、改写回复）时，不要借整轮 Agent，改用 `aiCompletionToken`：
-它只做一次补全，不带任何工具，自带重试和降级，不可信内容放进 `untrusted` 按数据渲染。见
+它只做一次补全，不带任何工具，固定所选模型并保留同模型重试与超时；不可信内容放进 `untrusted` 按数据渲染。见
 [Host Token 总览](../../../docs/authoring/host-tokens.md)。
 适合：按场景/按接口使用不同「角色」的 Agent（代码、翻译、总结等），彼此独立。
 

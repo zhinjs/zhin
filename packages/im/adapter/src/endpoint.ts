@@ -72,7 +72,9 @@ interface EndpointBindingContext {
 /**
  * Deep platform boundary.
  *
- * Platform implementations inherit this class, expose the platform-native
+ * Compatibility base for existing platform implementations. Native SDK subclasses
+ * implement PlatformEndpoint instead; both paths use this admission attachment.
+ * Legacy implementations inherit this class, expose the platform-native
  * `client`, own account/transport lifecycle, and normalize every inbound SDK
  * callback through `emit()`. Core owns dispatch, admission and plugin context.
  */
@@ -272,7 +274,14 @@ export function bindEndpoint(
 }
 
 /** @internal Called before releasing transport resources on rollback/stop. */
-export function retireEndpoint(endpoint: Endpoint): void { endpoint[endpointRetire](); }
+export function retireEndpoint(endpoint: Endpoint | import('./endpoint-specification.js').PlatformEndpoint): void {
+  const runtime = isEndpoint(endpoint) ? endpoint : Reflect.get(
+    Reflect.get(endpoint, Symbol.for('zhin.endpoint.specification/1')),
+    Symbol.for('zhin.endpoint.specification-runtime/1'),
+  );
+  if (!isEndpoint(runtime)) throw new TypeError('Invalid Endpoint specification');
+  runtime[endpointRetire]();
+}
 
 /** @internal Cross-generation Endpoint check that survives ESM module re-evaluation. */
 export function isEndpoint(value: unknown): value is Endpoint {

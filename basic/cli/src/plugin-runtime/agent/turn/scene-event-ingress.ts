@@ -2,7 +2,7 @@
  * 状态感知入站（#996）：与旁听（ambient）并列的第二条「没人叫也会进回合」的入口。
  *
  * 事件落库 → ImRuntime.sceneEvents 广播 → 这里按优先级分流：
- * - 高优先（禁言/解禁、入群申请、成员进出、公告、戳 Bot）：按 `platform:sceneId` coalesce + 限频后
+ * - 高优先（禁言/解禁、入群申请、成员进出、公告、戳 Bot）：按完整 Host / Endpoint / Conversation 任务身份 coalesce + 限频后
  *   合成**一次**轻量回合；不依赖下一条人话。
  * - 低优先：不唤醒；下一轮（人话回合或被高优先唤醒的回合）的 ephemeral `[Scene events]` 里可见。
  * - 发言门禁与 #995 一致：先折叠事件进会话画像，Bot 不能发言（禁言/全员禁言/宿主限制）时只记 skip，不调模型。
@@ -44,7 +44,7 @@ import {
   checkControlAtOutbound,
   logControlBlocked,
 } from './control-gate.js';
-import { capabilityLocalName } from './request.js';
+import { capabilityLocalName, runtimeSceneTaskSessionKey } from './request.js';
 import {
   auditCannotSpeak,
   auditModelError,
@@ -137,6 +137,12 @@ export class SceneEventIngress {
     return config.conversations.includes('*') || config.conversations.includes(`${platform}:${sceneId}`);
   }
 
+  #sceneTaskKey(conversation: ConversationRef, endpointId: string | undefined): string {
+    const platform = capabilityLocalName(String(conversation.endpoint.id));
+    const scope = conversation.kind === 'channel' ? 'channel' : 'group';
+    return runtimeSceneTaskSessionKey({ origin: { kind: 'im', platform, endpoint: endpointId ?? platform, scope, sceneId: conversation.id, conversation } }, this.deps.projectRoot);
+  }
+
   #audit(conversation: ConversationRef, turnId: string, endpoint?: string): DecisionAudit {
     const platform = capabilityLocalName(String(conversation.endpoint.id));
     return createDecisionAudit(this.deps.decisionEvents?.(), decisionScopeOf({
@@ -187,7 +193,7 @@ export class SceneEventIngress {
     // 低优先：已在 conversation_events，下一轮 [Scene events] 带上。
     if (priority === 'low') return 'low';
     const platform = capabilityLocalName(String(conversation.endpoint.id));
-    const key = `${platform}:${conversation.id}`;
+    const key = this.#sceneTaskKey(conversation, signal.endpointId);
     if (this.#owned(signal)) {
       logger.debug(formatCompact({ op: 'scene_event_wake_suppressed', conv: key, type: signal.event.type, reason: 'welcome_enabled' }));
       return 'suppressed';
@@ -221,8 +227,7 @@ export class SceneEventIngress {
     if (!message) return;
     const conversation = signal.event.conversation;
     const platform = capabilityLocalName(String(conversation.endpoint.id));
-    const scope = conversation.kind === 'channel' ? 'channel' : 'group';
-    const sessionKey = `${platform}:${signal.endpointId ?? platform}:${scope}:${conversation.id}`;
+    const sessionKey = this.#sceneTaskKey(conversation, signal.endpointId);
     const create = this.enabledFor(platform, conversation.id);
     const task: Promise<void> = record(sessionKey, message, { create }).then(() => undefined, (error: unknown) => {
       logger.warn(formatCompact({ op: 'scene_state_record_failed', conv: sessionKey, type: signal.event.type, error: error instanceof Error ? error.message : String(error) }));
@@ -246,6 +251,8 @@ export class SceneEventIngress {
     sessionKey: string;
     conversation: ConversationRef;
     platform: string;
+    /** Trusted live Endpoint instance, matching the state-history owner. */
+    endpointId: string;
     throughSequence: number | undefined;
     selfIds: readonly string[];
   }>): Promise<string[]> {
@@ -257,7 +264,9 @@ export class SceneEventIngress {
         conversation: input.conversation,
         throughSequence: input.throughSequence,
         afterSequence: this.#shown.get(input.sessionKey),
-        omitStateChanges: this.deps.recordState !== undefined,
+        // Only this exact system Session already carries these events in its history.
+        omitStateChanges: this.deps.recordState !== undefined
+          && input.sessionKey === this.#sceneTaskKey(input.conversation, input.endpointId),
         selfIds: input.selfIds,
         ...(nickname ? {
           nicknames: async (actors: readonly ActorRef[]) => {
@@ -319,9 +328,9 @@ export class SceneEventIngress {
       auditCannotSpeak(audit, blocked, auditPayload);
       return { kind: 'skipped', reason: `cannot_speak:${blocked}` };
     }
-    const sessionKey = `${platform}:${endpoint}:${scope}:${conversation.id}`;
+    const sessionKey = this.#sceneTaskKey(conversation, endpoint);
     await Promise.all([...this.#records]);
-    const lines = await this.linesFor({ sessionKey, conversation, platform, throughSequence: batch.throughSequence, selfIds });
+    const lines = await this.linesFor({ sessionKey, conversation, platform, endpointId: endpoint, throughSequence: batch.throughSequence, selfIds });
     // 进出 / 资料变更已写进会话历史（[state change]），不再出现在 [Scene events]，但仍足以唤醒回合。
     const stateChanges = this.deps.recordState ? batch.items.filter((item) => sceneEventToStateMessage(item.event)).length : 0;
     if (lines.length === 0 && stateChanges === 0) {
@@ -387,7 +396,8 @@ export class SceneEventIngress {
     });
     if (this.#turnIds.get(batch.key) === turnId) this.#turnIds.delete(batch.key);
     auditModelRun(audit, outcome, { source: 'scene_event', durationMs: Date.now() - startedAt, spoke });
-    if (spoke) this.deps.onSpoke?.(batch.key);
+    // Ambient engagement still tracks the existing public scene identity.
+    if (spoke) this.deps.onSpoke?.(`${platform}:${conversation.id}`);
     logger.info(formatCompact({ op: 'scene_event_wake', conv: batch.key, events: batch.items.length, types, lines: lines.length, status: outcome.status, spoke }));
     return { kind: 'woke', status: outcome.status, lines: lines.length };
   }

@@ -1,3 +1,5 @@
+import { readOperationSession } from '@zhin.js/core';
+import { withDeploymentModelScope } from '../../personal-models/deployment-scope.js';
 import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -107,6 +109,8 @@ import {
   resolveSnapshotTurnIntentResolver,
   resolveTrustedForRuntimeMessage,
   runtimeImSessionKey,
+  runtimePersonalSessionAddress,
+  runtimeSceneTaskSessionKey,
 } from './request.js';
 import { NO_WORKROOM_PORT, type AgentWorkroomPort } from '../workroom-port.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '@zhin.js/agent/context';
@@ -760,6 +764,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
     requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean> {
+    // Capture the actual inbound incarnation once, before async preprocessing can retire it.
+    const operationSignal = readOperationSession(message)?.signal;
     const options = this.options;
     const service = options.agent.service;
     const zhinAgent = options.agent.agent;
@@ -772,13 +778,20 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const workroomAgentTurn = workroom.takeAgentTurn(message);
       let matched = resolveRuntimeAgentTrigger(message, trigger, workroomAgentTurn != null);
 
-      const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner);
-      const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted);
+      const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner, snapshot);
+      const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted, snapshot);
       const senderRoles = resolveRuntimeSenderRoles(message, ownerId, endpointTrusted, trigger);
       const turnAccess = createRuntimeTurnAccess(message, senderRoles);
-      const sessionKey = workroomAgentTurn
+      // Unattended live reactions belong to the scene, independently of whichever
+      // participant supplied the first candidate in the window.
+      const liveRoom = !workroomAgentTurn
+        && turnAccess.origin.kind === 'im'
+        && turnAccess.origin.scope !== 'private'
+        && adapterDeclaresLiveDanmaku(message.conversation.endpoint.id as CapabilityId, snapshot);
+      let sessionKey = workroomAgentTurn
         ? workroomOrchestratorSessionKey(workroomAgentTurn)
-        : runtimeImSessionKey(turnAccess);
+        : liveRoom ? runtimeSceneTaskSessionKey(turnAccess, options.projectRoot)
+          : runtimeImSessionKey(turnAccess, options.projectRoot);
       const workroomReplyConversation = workroomAgentTurn
         ? await workroom.resolveOrchestratorConversation(workroomAgentTurn)
         : undefined;
@@ -824,6 +837,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             commandPrefix: message.commandPrefix,
             locale: message.locale,
             senderRoles,
+            withModelScope: operation => withDeploymentModelScope(service, options.projectRoot, operation),
             semanticMemory: options.agent.semanticMemory,
             senderId: turnAccess.principal.subjectId,
           });
@@ -960,10 +974,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
         }
       }
       // ADR 0038 §5: in a live room every danmaku is a candidate; viewers do not @ the Bot.
-      const liveRoom = !workroomAgentTurn
-        && turnAccess.origin.kind === 'im'
-        && turnAccess.origin.scope !== 'private'
-        && adapterDeclaresLiveDanmaku(message.conversation.endpoint.id as CapabilityId, snapshot);
       if (!matched && liveRoom) {
         const text = message.content.trim();
         if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger)) matched = { content: text };
@@ -979,6 +989,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         );
         if (!matched) return false;
         ambient = true;
+        sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
       } else if (ambientKey) {
         this.#ambientEngagement()?.noteSpoke(ambientKey);
       }
@@ -994,6 +1005,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           sessionKey,
           conversation: message.conversation,
           platform,
+          endpointId: turnAccess.origin.endpoint,
           throughSequence: conversationSequence,
           selfIds: [effectiveEndpoint, message.metadata?.selfId, message.metadata?.self_id]
             .filter((value): value is string | number => (typeof value === 'string' && value !== '') || typeof value === 'number')
@@ -1009,7 +1021,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const productIntent = taskIntentResolver || message.metadata?.turnIntent !== undefined
           ? (await resolveProductTurnIntent(message, senderRoles, undefined, taskIntentResolver).catch(() => undefined))?.kind
           : undefined;
-        const routedTask = await routeTaskInterjection(detachedTasks, taskActor, matched.content, productIntent, { locale: message.locale });
+        const routedTask = await routeTaskInterjection(detachedTasks, { ...taskActor, sessionId: sessionKey }, matched.content, productIntent, { locale: message.locale });
         if (routedTask.handled) {
           if (routedTask.reply) await reply(routedTask.reply);
           logger.info(formatCompact({ op: 'agent_host_task_interjection', kind: routedTask.kind, task: routedTask.taskId }));
@@ -1126,6 +1138,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const { outcome, capabilities, routed } = await withTriggerTimeout(async (timeoutSignal) => {
           const signal = AbortSignal.any([
             timeoutSignal,
+            ...(operationSignal ? [operationSignal] : []),
             ...(admission ? [admission.signal] : []),
             ...(lease.retirementSignal ? [lease.retirementSignal] : []),
           ]);
@@ -1250,12 +1263,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
               traceId,
               turnId,
               signal,
+              projectRoot: options.projectRoot,
               workspaceRoot: turnPolicy.filesystem.workspaceRoot,
               workingDirectory: turnPolicy.filesystem.workingDirectory,
               filesystemAccess: liveDanmaku ? 'read-only' : turnPolicy.filesystem.access,
               shell: liveDanmaku ? undefined : turnPolicy.shell,
               network: turnPolicy.network,
               sessionKey,
+              ...(!workroomAgentTurn && !liveRoom && !ambient
+                ? { personalSession: runtimePersonalSessionAddress(turnAccess, options.projectRoot) } : {}),
               contextState,
               ...(sceneEvents.length ? { sceneEvents } : {}),
               ...(mergedSenders ? { mergedSenders } : {}),

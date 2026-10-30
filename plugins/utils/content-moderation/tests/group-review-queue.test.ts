@@ -48,7 +48,17 @@ function fixture(legacyRecall = false) {
   const endpoint = { identity: { adapter: 'icqq', id: 'canonical:8596238' }, selfUserId: '8596238',
     management: { inspectGroupMember, moderateGroupMember } };
   const gate = createGenerationAdmissionGate();
-  const adapters = { connection: () => endpoint, [generationAdmissionSource]: [gate] };
+  const client = {};
+  const adapters = { connection: () => endpoint, [generationAdmissionSource]: [gate],
+    management: () => endpoint.management,
+    acquire: (id: string, signal: AbortSignal, source: unknown) => {
+      if (id !== endpoint.identity.id || source !== client) throw new Error('Wrong fixture Endpoint source');
+      signal.throwIfAborted(); let released = false;
+      return { signal, release: () => { released = true; }, assertActive: () => {
+        signal.throwIfAborted(); if (released) throw new Error('Fixture Endpoint lease released');
+      } };
+    },
+  };
   const resources = new Map<string, unknown>([
     [moderationEngineToken.id, engine], [aiCompletionToken.id, { supportsUsageShares: true, completeText }],
     [databaseHostToken.id, { state: { forConversation: () => state } }],
@@ -64,7 +74,7 @@ function fixture(legacyRecall = false) {
     content: advertising, segments: [], metadata: { platformSentAt: NOW },
     $reply: vi.fn(async () => { throw new Error('Original Message reply expired'); }) };
   const abort = new AbortController(); const next = vi.fn(async () => undefined);
-  const run = (input = message, signal = abort.signal) => inbound.handle({ config, input, signal,
+  const run = (input = message, signal = abort.signal) => inbound.handle({ config, input, signal, $client: client,
     use: (token: { id: string }) => { if (!resources.has(token.id)) throw new Error('Missing resource'); return resources.get(token.id); },
     project: () => adapters } as never, next as never);
   const flush = () => vi.advanceTimersByTimeAsync(300);

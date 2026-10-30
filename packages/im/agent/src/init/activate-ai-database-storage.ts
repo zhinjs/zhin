@@ -22,7 +22,7 @@ import { AI_SESSION_EVENTS_TABLE } from '../session-events.js';
 export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,
-  config: AIConfig,
+  config: Pick<AIConfig, 'sessions' | 'memory'>,
   semanticMemory: SemanticMemoryRuntime | null,
 ): Promise<void> {
   if (!refs.zhinAgent) throw new Error('Agent database activation requires a ZhinAgent instance');

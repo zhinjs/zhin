@@ -1,4 +1,6 @@
-import type { Client, EventMap } from '@icqqjs/icqq';
+import type { IcqqAdapter } from './adapter.js';
+import type { IcqqEndpoint } from './endpoint.js';
+import type { EventMap } from '@icqqjs/icqq';
 import { defineEndpointClient } from 'zhin.js/adapter';
 
 type EventPayload<TListener> = TListener extends (
@@ -9,7 +11,7 @@ type EventPayload<TListener> = TListener extends (
   : never;
 
 /** The actual ICQQ SDK instance exposed by every ICQQ Endpoint event. */
-export type IcqqClient = Client;
+export type IcqqClient = IcqqEndpoint;
 
 /** Native ICQQ event-name → first public event payload, derived from the SDK SSOT. */
 export type IcqqClientEventMap = {
@@ -17,11 +19,8 @@ export type IcqqClientEventMap = {
 };
 
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly icqq: {
-      readonly client: IcqqClient;
-      readonly events: IcqqClientEventMap;
-    };
+  interface AdapterRegistry {
+    readonly icqq: IcqqAdapter;
   }
 }
 

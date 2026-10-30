@@ -2,7 +2,6 @@ import {
   AdapterIndex,
   adapterFeatureId,
   isAdapterIndex,
-  resolveEndpointManagement,
   type AdapterEndpointPhase,
   type AdapterOperation,
   type EndpointControl,
@@ -246,7 +245,9 @@ export class EndpointRuntime {
       const id = resolveEndpointIdentity(lease.value, index, adapter, endpointKey);
       const endpoint = id ? index.connection(String(id), String(id)) : undefined;
       if (!endpoint) return null;
-      return await run(resolveEndpointManagement(endpoint) ?? Object.freeze({}));
+      return await run(index.management(id!, () => {
+        if (!lease.active) throw new EndpointDeliveryError('operation_scope_ended', 'Management operation scope has ended', 'not_sent');
+      }) ?? Object.freeze({}));
     } finally {
       this.context.release(lease);
     }

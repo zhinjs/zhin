@@ -52,7 +52,7 @@ export type ScriptFault =
 
 /**
  * One model response: a final text answer, one or more tool calls, or a fault.
- * `model` optionally pins which model id must receive this request (fallback cases).
+ * `model` optionally pins which model id must receive this request (including fixed-model assertions).
  * `tokens` reports that many total tokens for the response (default 0), for quota cases.
  */
 export type ScriptStep = (
@@ -131,11 +131,11 @@ export interface ScriptedModelOptions {
   readonly contextWindow?: number;
   /** Input modalities the scripted model declares (default text only); `image` lets turn images through. */
   readonly input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
-  /** Extra model ids registered after the primary `scripted-model`, in candidate (fallback) order. */
+  /** Extra model ids registered after the primary `scripted-model`, in registration order; fixed chat must not call them. */
   readonly extraModels?: readonly string[];
   /** Virtual clock advanced by `hang` steps. */
   readonly clock?: EvalClock;
-  /** Per-model input overrides (e.g. a text-only fallback next to an image-capable primary). */
+  /** Per-model input overrides (e.g. a text-only alternative next to an image-capable primary). */
   readonly modelInputs?: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>;
   /** Also register the media-capable perception model (`eval-perception/scripted-perception`). */
   readonly perception?: boolean;

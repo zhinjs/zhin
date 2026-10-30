@@ -24,6 +24,14 @@ export async function migrateConversationColumns(database: StructuredDatabase): 
     { name: 'conversation_kind', text: true }, { name: 'conversation_id', text: true },
     { name: 'id' },
   ]);
+  // Operator scope directory selects only canonical address columns. SQLite/PostgreSQL
+  // can cover the full tuple; MySQL TEXT prefixes cannot cover full identities and
+  // seven 128-character utf8mb4 prefixes exceed its key budget, so keep an endpoint seek.
+  await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_scope_directory',
+    (database.dialectName === 'mysql' ? ['endpoint_id'] : [
+      'endpoint_id', 'endpoint_adapter', 'conversation_kind', 'conversation_id', 'parent_kind', 'parent_id', 'thread_id',
+    ]).map(name => ({ name, text: true })));
+
 }
 
 /** Older observations without canonical addresses remain explicitly unknown. */

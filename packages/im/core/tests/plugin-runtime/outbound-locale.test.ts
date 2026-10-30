@@ -49,7 +49,7 @@ async function fixture(projectLocale: Locale, replace = false) {
   im.attach(store); await adapters.start(); adapters.open();
   const row = im.endpoints.list()[0]!;
   return { im, sent, row, async receive() {
-    return im.endpointEvents.receive({ name: 'message.receive', endpoint: { ...row.endpoint, id: row.id as never }, client: {},
+    return im.endpointEvents.receive({ name: 'message.receive', endpoint: { ...row.endpoint, id: row.id as never }, client: adapters.clientById(row.id as never)!,
       payload: { conversation: { endpoint: row.endpoint, kind: 'group', id: 'room' }, sender: { id: 'alice' }, content: '/multiple' } });
   }, async stop() { await store.close(); await adapters.stop(); } };
 }

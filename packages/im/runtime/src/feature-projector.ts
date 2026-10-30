@@ -2,6 +2,9 @@ import {
   DisposeStack,
   GenerationHandoffStack,
   createSnapshotView,
+  readFeaturePrivateResource,
+  type Scope,
+  type Token,
   type Dispose,
   type FeatureId,
   type GenerationHandoff,
@@ -19,7 +22,7 @@ export interface ProjectedFeatures {
 
 /** Builds selected Feature projections against one coherent candidate snapshot. */
 export class FeatureProjector {
-  constructor(private readonly providers: Iterable<FeatureProvider>) {}
+  constructor(private readonly providers: Iterable<FeatureProvider>, private readonly rootScope?: Pick<Scope, 'has' | 'use'>) {}
 
   async project(
     generation: number,
@@ -34,6 +37,7 @@ export class FeatureProjector {
     const disposers = new Map<FeatureId, Dispose>();
     const handoffs = new GenerationHandoffStack();
     const state: SnapshotState = { ...base, projections };
+    const rootScope = this.rootScope;
 
     try {
       for (const provider of this.providers) {
@@ -44,6 +48,7 @@ export class FeatureProjector {
         const projection = await provider.runtime.project(slots, {
           snapshot: createSnapshotView(generation, state),
           signal,
+          ...(rootScope ? { featureResource: <T>(token: Token<T>) => readFeaturePrivateResource(rootScope, provider.id, token) } : {}),
         });
         signal.throwIfAborted();
         projections.set(provider.id, projection.value);

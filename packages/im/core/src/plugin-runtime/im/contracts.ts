@@ -1,10 +1,10 @@
 import type { JSXElement } from '@zhin.js/jsx';
 import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
-import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
-import { operationInputBinding, operationInputSignal } from '@zhin.js/feature-kit';
+import { resolveLocale, type PluginId, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
+import { operationInputBinding, operationInputSignal, operationSession, type OperationSession } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MessageOrigin } from './inbound-origin.js';
+import type { OperationEndpointSource } from './operation-endpoint.js';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 import { interactionOperationScope, type InteractionOperationScope } from './interaction-operation.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
@@ -75,6 +75,9 @@ export interface MessageSenderRef {
 }
 
 export interface IncomingMessage {
+  /** Original SDK message callback object; operation-only, not a persistence field. */
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly conversation: ConversationRef;
   readonly message?: MessageRef;
   readonly content: string;
@@ -109,7 +112,7 @@ export interface IncomingContext {
   readonly mentioned?: boolean;
 }
 
-export interface SendRequest {
+export interface SendRequest extends OperationEndpointSource {
   /** Language captured by the sending operation; absent for explicit sends without a user. */
   readonly locale?: Locale;
   readonly conversation: ConversationRef;
@@ -165,7 +168,7 @@ export interface MessageDispatchResult {
 }
 
 /** Canonical message value delivered to inbound middleware and handlers. */
-export interface MessageBase extends IncomingMessage {
+export interface MessageBase extends Omit<IncomingMessage, 'event' | 'platformSentAt'> {
   /** Language resolved from the sender and project when this operation began. */
   readonly locale: Locale;
   /** Effective chat command environment; undefined means no resolved environment. */
@@ -194,6 +197,19 @@ export interface MessageBase extends IncomingMessage {
   readonly $replyToChannel: (channelId: string, guildId: string, content: SendContent, threadId?: string) => Promise<DeliveryReceipt>;
 }
 
+/** Captured once from the actual inbound Endpoint operation, never from message metadata. */
+export interface RuntimeMessageSessionBinding {
+  readonly adapter: unknown;
+  readonly endpoint: unknown;
+  readonly adapterName: string;
+  readonly event: unknown;
+  readonly receivedAt: number;
+  readonly platformSentAt?: number;
+  readonly platformRoles?: readonly string[];
+  readonly authorizationRoles?: readonly string[];
+  readonly signal: AbortSignal;
+}
+
 /** Canonical runtime message with optional plugin-owned extensions. */
 export type Message<T extends object = {}> = MessageBase & T;
 
@@ -208,6 +224,8 @@ export class RuntimeMessage implements MessageBase {
   readonly #snapshot?: RuntimeSnapshot;
   readonly #assertActive?: () => void;
   readonly #retirementSignal?: AbortSignal;
+  readonly #sessionBinding?: RuntimeMessageSessionBinding;
+  readonly #session?: OperationSession<string>;
   readonly #registerOperationView?: (view: object, owner: PluginId) => void;
   readonly origin?: MessageOrigin;
 
@@ -242,6 +260,7 @@ export class RuntimeMessage implements MessageBase {
       assertActive?: () => void;
       origin?: MessageOrigin;
       retirementSignal?: AbortSignal;
+      session?: RuntimeMessageSessionBinding;
       registerOperationView?: (view: object, owner: PluginId) => void;
     }> = {},
   ) {
@@ -253,6 +272,7 @@ export class RuntimeMessage implements MessageBase {
     this.#snapshot = binding.snapshot;
     this.#assertActive = binding.assertActive;
     this.#retirementSignal = binding.retirementSignal;
+    this.#sessionBinding = binding.session;
     this.#registerOperationView = binding.registerOperationView;
     if (binding.snapshot) binding.registerOperationView?.(this, binding.requester ?? binding.snapshot.root);
     const requester = binding.requester;
@@ -290,7 +310,36 @@ export class RuntimeMessage implements MessageBase {
     const commands = binding.commands ?? binding.resolveCommands?.(this);
     this.commandPrefix = commands?.prefix;
     this.commandMenu = commands?.menu;
+    if (binding.session) {
+      const captured = binding.session;
+      const scene = Object.freeze({ ...conversation,
+        endpoint: Object.freeze({ ...conversation.endpoint }),
+        ...(conversation.parent ? { parent: Object.freeze({ ...conversation.parent }) } : {}),
+      });
+      this.#session = Object.freeze({
+        adapterName: captured.adapterName, adapter: captured.adapter, endpoint: captured.endpoint,
+        scene, event: captured.event, signal: captured.signal,
+        ...(sender ? { sender: Object.freeze({ id: sender.id, ...(sender.name !== undefined ? { name: sender.name } : {}),
+          ...(captured.platformRoles ? { platformRoles: Object.freeze([...captured.platformRoles]) } : {}),
+          ...(captured.authorizationRoles ? { authorizationRoles: Object.freeze([...captured.authorizationRoles]) } : {}),
+        }) } : {}),
+        message: Object.freeze({ text: content, receivedAt: captured.receivedAt,
+          ...(message ? { id: message.id, ref: Object.freeze({ conversation: scene, id: message.id }) } : {}),
+          ...(segments ? { segments } : {}),
+          ...(captured.platformSentAt !== undefined ? { platformSentAt: captured.platformSentAt } : {}),
+          ...(mentioned !== undefined ? { mentioned } : {}),
+          ...(replyTo ? { replyTo: Object.freeze({ ...replyTo }) } : {}),
+        }),
+        reply: (value: unknown) => this.$reply(value as SendContent),
+      });
+    }
     Object.freeze(this);
+  }
+
+  /** The same captured data, with reply authority rebound by operationInputBinding. */
+  [operationSession](): OperationSession<string> | undefined {
+    this.#assertActive?.();
+    return this.#session;
   }
 
   /** @internal A frozen view whose sends retain the current author's exact operation. */
@@ -308,7 +357,7 @@ export class RuntimeMessage implements MessageBase {
       { requester: owner, snapshot, locale: this.locale,
         ...(this.commandPrefix !== undefined ? { commands: { prefix: this.commandPrefix, menu: this.commandMenu } } : {}),
         assertActive: this.#assertActive, origin: this.origin,
-        retirementSignal: this.#retirementSignal, registerOperationView: this.#registerOperationView },
+        retirementSignal: this.#retirementSignal, session: this.#sessionBinding, registerOperationView: this.#registerOperationView },
     );
   }
 

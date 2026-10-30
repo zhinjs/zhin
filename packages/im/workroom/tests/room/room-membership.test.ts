@@ -158,12 +158,7 @@ describe('Room membership port on a real ImRuntime (3 Endpoints)', () => {
     const f = await createRoomImFixture();
     try {
       const conv = { endpoint: { id: f.ids.b, adapter: 'memory' }, kind: 'group' as const, id: 'other-group' };
-      await f.im.endpointEvents.receive(Object.freeze({
-        name: 'message.receive',
-        payload: { conversation: conv, content: 'hi', sender: { id: 'alice' }, message: { conversation: conv, id: 'o-1' } },
-        endpoint: Object.freeze({ id: f.ids.b as never, name: 'test' }),
-        client: { receive: async () => undefined },
-      }) as never);
+      await f.deliver(f.ids.b, { messageId: 'o-1', content: 'hi', conversation: conv });
       expect(f.routed.map((r) => r.endpointId)).toEqual([f.ids.b]);
     } finally { await f.close(); }
   });

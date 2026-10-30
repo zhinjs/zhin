@@ -4,6 +4,7 @@
  */
 import type {
   AdapterClient,
+  OperationSession,
   CapabilityContext,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
@@ -26,6 +27,7 @@ export interface MiddlewareContext<
   readonly input: TInput;
   /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
   readonly $client: AdapterClient<TAdapter>;
+  readonly session: OperationSession<TAdapter> | undefined;
 }
 
 /** Shared metadata for the public inbound and outbound definition contracts. */

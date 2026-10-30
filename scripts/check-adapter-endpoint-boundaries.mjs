@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { usesSupportedAdapterBase, declaresAdapterTypeRegistry } from './lib/adapter-authoring-contract.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
@@ -41,9 +42,8 @@ for (const file of typescriptFiles(adaptersRoot)) {
     }
   }
 
-  if (/\bextends\s+Adapter\b/u.test(source)
-    || importsLegacyAdapter(source)) {
-    errors.push(`${relative}: platform adapters must use defineAdapter + Endpoint, not the legacy Adapter class`);
+  if (!usesSupportedAdapterBase(source) || importsLegacyAdapter(source)) {
+    errors.push(`${relative}: Adapter subclasses must import the generic base from zhin.js/adapter; the legacy root Adapter is forbidden`);
   }
 
   if (/^const\s+endpoints\s*=\s*new\s+Map\b/mu.test(source)
@@ -101,10 +101,10 @@ for (const entry of fs.readdirSync(adaptersRoot, { withFileTypes: true })) {
   const src = path.join(adaptersRoot, entry.name, 'src');
   if (!fs.existsSync(src)) continue;
   const hasClientRegistry = typescriptFiles(src).some((file) => (
-    /\binterface\s+AdapterClientRegistry\b/u.test(fs.readFileSync(file, 'utf8'))
+    declaresAdapterTypeRegistry(fs.readFileSync(file, 'utf8'))
   ));
   if (!hasClientRegistry) {
-    errors.push(`plugins/adapters/${entry.name}: adapter must register its public Client in AdapterClientRegistry`);
+    errors.push(`plugins/adapters/${entry.name}: adapter must register its Adapter in AdapterRegistry or its legacy Client descriptor in AdapterClientRegistry`);
   }
 }
 
@@ -138,7 +138,7 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Adapter/Endpoint responsibility check passed `
-    + `(distinct registered Clients, no Agent Endpoint registries; `
+    + `(registered Adapter/Client types, no Agent Endpoint registries; `
     + `${legacyAdapterConsumers.size} legacy Adapter consumers and `
     + `${directEnvironmentConsumers.size} direct environment consumers remain ratcheted debt).`,
   );

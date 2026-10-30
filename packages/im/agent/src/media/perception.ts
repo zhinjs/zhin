@@ -68,7 +68,12 @@ const PERCEPTION_SYSTEM_PROMPT =
 
 const CACHE_LIMIT = 256;
 
+export type PerceptionCacheEntry = Pick<MediaPerception, 'text' | 'provider' | 'model'>;
+
 export interface LlmMediaPerceptionOptions {
+  /** Host-owned bounded cache shared only with explicitly separated namespaces. */
+  readonly cache?: Map<string, PerceptionCacheEntry>;
+  readonly cacheNamespace?: string;
   readonly runtime: LlmApiRuntime;
   readonly config: ResolvedPerceptionConfig;
   /** `ai.providerResilience` (global layer); the provider's own timeout/maxRetries and `timeoutMs` apply on top. */
@@ -138,7 +143,7 @@ function isPdf(payload: MediaBinaryPayload): boolean {
  */
 export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions): MediaPerceptionPort {
   const { runtime, config } = options;
-  const cache = new Map<string, Pick<MediaPerception, 'text' | 'provider' | 'model'>>();
+  const cache = options.cache ?? new Map<string, PerceptionCacheEntry>();
   const remember = (key: string, value: Pick<MediaPerception, 'text' | 'provider' | 'model'>) => {
     cache.delete(key);
     cache.set(key, value);
@@ -155,7 +160,8 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
     async describe(payload: MediaBinaryPayload, signal?: AbortSignal): Promise<MediaPerception | undefined> {
       signal?.throwIfAborted();
       if (payload.kind === 'audio' || !config.kinds.includes(payload.kind) || (payload.kind === 'file' && !isPdf(payload))) return undefined;
-      const key = perceptionCacheKey(payload);
+      const contentKey = perceptionCacheKey(payload);
+      const key = options.cacheNamespace ? `${options.cacheNamespace}:${contentKey}` : contentKey;
       const hit = cache.get(key);
       if (hit !== undefined) {
         remember(key, hit);

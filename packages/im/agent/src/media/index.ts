@@ -12,3 +12,5 @@ export * from './vision-capability.js';
 export * from './subagent-inbound.js';
 export * from './inbound-refs.js';
 export * from './perception.js';
+
+export { createScopedMediaPerceptionPort, type ScopedMediaPerceptionOptions } from './scoped-perception.js';

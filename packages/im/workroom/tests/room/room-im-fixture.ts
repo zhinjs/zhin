@@ -149,7 +149,7 @@ export async function createRoomImFixture(options: {
       name: 'message.receive',
       payload: { conversation: conv, content, sender: { id: sender }, message: { conversation: conv, id: messageId }, ...rest },
       endpoint: Object.freeze({ id: endpointId as never, name: 'test' }),
-      client: ignored,
+      client: adapters.clientById(endpointId as typeof adapter.id),
     }) as never) as Promise<{ matched: boolean }>;
   };
   /**

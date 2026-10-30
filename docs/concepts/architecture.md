@@ -81,6 +81,16 @@ flowchart BT
 
 再往上，`@zhin.js/core` 把 adapter / command / component / middleware 四个 Feature 和 kernel 组装成 IM 层（Plugin、Adapter、Endpoint、消息收发）。门面包 `zhin.js` 把核心包重新导出为统一入口——插件作者只需 `import { ... } from 'zhin.js'`。`@zhin.js/agent`、`@zhin.js/ai` 等是可选 peer 依赖，默认安装只含 IM 核心，AI 按需加装。
 
+## Adapter、Endpoint 与单次消息
+
+Plugin 正常注册 command、component、page、middleware 等能力，Adapter 只是其中的 IM Channel 能力。`Adapter<E, Config, Events>` 基类统一持有所属账号的 desired 状态、连接代次和操作租约；平台子类负责创建 SDK Endpoint 及平台特殊逻辑。`AdapterIndex` 提供目录与路由，不另建 Controller 或 Worker 管理账号。
+
+新的平台 Endpoint 可以继承真实 SDK Client，并通过 `endpointSpec` 实现框架规范；SDK 的原生事件 API 保留。旧 `defineAdapter({ create })` 与 `Endpoint<TClient>` 输入仍兼容，由同一 Adapter 生命周期管理。
+
+Core 从实际入站实例捕获单次操作 Session，提供 Adapter、Endpoint、场景、发言者、规范消息与原生事件。Command、Handler、Middleware 读取同一数据的作者绑定视图；平台类型通过开放注册表与 `adapter: 'icqq'` 推导。这个操作 Session 与持久化的个人 AI Session 分开。
+
+账号的运行时配置加密持久化，账号停止/重连只取消目标实例的操作，Root generation 与其他账号保持运行。框架回复和群管端口持有具体 incarnation 租约，不能在停止后改用同名新连接。私有账号仓储只交给所属 Feature 的构建阶段，不进入公开 snapshot 或普通插件资源。详细合同与实施验收见[重构方案](../plans/adapter-session-runtime-refactor.md)。
+
 ## 各层职责
 
 | 层 | 包 | 职责 |

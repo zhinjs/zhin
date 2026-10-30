@@ -52,6 +52,33 @@ export default definePlugin({
 Both styles share the same command table and conflict detection. As commands grow, move them into `commands/`; editing one then reloads only that file.
 :::
 
+## Platform types and the operation Session
+
+Load installed adapter declarations once in the project, for example by including `"node"` and `"@zhin.js/adapter-icqq"` in `compilerOptions.types` while preserving existing entries. Business commands do not import Adapter classes. Installing a package alone does not make TypeScript scan its declarations.
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  adapter: 'icqq',
+  params: { text: { type: 'text' } },
+  options: { silent: { type: 'boolean', default: false } },
+  async execute({ session, params, options }) {
+    if (!session) return;
+    session.adapter;  // IcqqAdapter
+    session.endpoint; // IcqqEndpoint, extending the actual ICQQ Client
+    session.scene;    // Narrow kind before using scene-specific fields
+    session.sender;   // Separate platformRoles and authorizationRoles
+    session.event;    // The original SDK callback object
+    if (!options.silent) await session.reply(params.text);
+  },
+});
+```
+
+Parameter, option, `withConfig`, and factory inference remains intact. Direct execution without a real IM input has no Session. Canonical message handlers and inbound middleware share the same operation view; unrelated native callbacks do not fabricate one.
+
+Stopping or reconnecting the account cancels the captured signal. Framework replies cannot switch to a replacement connection. Retaining an SDK reference does not make direct native calls cancellable; use the unified send chain.
+
 ## Common tasks
 
 ### Browse loaded commands
@@ -504,15 +531,17 @@ Programmatic `CommandIndex.dispatch()` returns `status: unmatched | invalid | de
 ::: details Generate list / add / remove commands for an adapter
 `createEndpointCommands(spec, defineCommand)` from `@zhin.js/adapter` generates `<adapter> endpoint list / add / remove` so accounts can be managed from chat. Every platform adapter uses it except email (nested config objects) and sandbox (no credentials): qq, icqq, napcat, onebot11, onebot12, milky, satori, slack, telegram, discord, kook, lark, dingtalk, line, wecom, wechat-mp, weixin-ilink, github.
 
-- `list`: running accounts plus those configured under `<adapterKey>.endpoints`.
-- `add <name> <key=value...>`: enter fields. Credentials marked `env: true` are written to `.env` (keys like `TELEGRAM_BOT1_TOKEN`) and the config stores a `${REF}`; YAML keeps existing comments; duplicate names are refused.
-- `remove <name>`: removes from config, effective after restart; clean up `.env` keys manually.
-- Special add flows (e.g. QQ QR binding) take over `add` through `spec.bindFlow`; QQ therefore has an extra `qq endpoint cancel`.
-- `add` / `remove` are master-only; with no master configured they're allowed, and the first binder becomes the new account's `master`.
+For an Adapter subclass managed by the official CLI:
 
-These commands depend only on `EndpointConfigurationStore` and never touch files directly. The official CLI provides `endpointConfigurationStoreToken`; if you assemble `RootRuntime` yourself, provide an implementation of the same interface. `plugins` must be an object map; legacy arrays need an explicit migration first.
+- `list` reads desired accounts and live status from the owning Adapter.
+- `add <name> <key=value...>` saves encrypted configuration with the account disabled. Start it manually in Console; adding does not start login or QR binding.
+- `remove <name>` stops admission, cancels that account's work, then closes and removes it. History remains; recreating the name gets a new identity.
+- Before the first change, an administrator must confirm legacy-account migration in Console. A chat command cannot confirm it. Afterwards, changes use the database without rewriting startup files or `.env`, or restarting the process.
+- Existing master permissions still apply. Conflicts and storage failures are reported without falling back to file writes.
 
-Wiring steps (telegram as the example):
+The runtime-state and `EndpointConfigurationStore` example below describes the compatibility path for existing `defineAdapter({ create })` adapters or custom hosts. Only when runtime Adapter management is absent does it retain startup-file / `.env` writes, restart requirements and `spec.bindFlow`. Do not use both storage paths for the same account.
+
+Integration steps (Telegram example):
 
 ```ts
 // 1. src/telegram-runtime-state.ts: registry of running accounts

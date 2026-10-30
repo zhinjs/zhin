@@ -147,6 +147,8 @@ export interface TurnInput {
 
 export interface TurnSessionAddress {
   readonly key: string;
+  /** Trusted personal owner and scene, absent for independent scene tasks. */
+  readonly personal?: import('../personal-session/index.js').PersonalSessionAddress;
 }
 
 export interface TurnPolicyContext {

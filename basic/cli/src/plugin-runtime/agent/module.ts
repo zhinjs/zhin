@@ -15,3 +15,5 @@ export {
   type WorkroomHostModule,
 } from './workroom-loader.js';
 export { createSelfChangeImpactPort } from './self-change-impact.js';
+
+export { registerPersonalModelHttp } from '../personal-models/register-http.js';

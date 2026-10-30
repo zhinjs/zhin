@@ -336,6 +336,7 @@ outline: [2, 3]
 | `ai.agents.<key>.model` | string | 否 | — | — |
 | `ai.agents.<key>.mcpServers` | array \| null | 否 | — | — |
 | `ai.agents.<key>.nickname` | string | 否 | — | Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 |
+| `ai.agents.<key>.preset` | string | 否 | — | Invocation preset reference; do not combine with legacy provider/model. MCP and permission fields remain Agent authority. |
 | `ai.sessions` | object \| null | 否 | — | — |
 | `ai.sessions.maxHistory` | number \| string | 否 | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
 | `ai.sessions.expireMs` | number \| string | 否 | — | 会话过期时间（毫秒，数据库模式默认7天，内存模式默认24小时） |
@@ -386,7 +387,7 @@ outline: [2, 3]
 | `ai.multimodal.perception.maxChars` | number \| string | 否 | — | Description length cap in characters. Default 800. |
 | `ai.multimodal.perception.timeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms. Default 30000. |
 | `ai.multimodal.perception.maxItemsPerTurn` | number \| string | 否 | — | Media described per turn; the rest keep the placeholder. Default 4. |
-| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | 否 | — | 主识图模型失败、空回答或不支持该媒体时，按顺序尝试；不改变主对话模型。 |
+| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | 否 | — | — |
 | `ai.multimodal.perception.fallbacks[].provider` | string | 是 | — | — |
 | `ai.multimodal.perception.fallbacks[].model` | string | 是 | — | — |
 | `ai.memory` | object \| null | 否 | — | 三层 Markdown 文件记忆（global / platform / session）。 默认启用；设 enabled: false 可关闭注入。 |
@@ -449,6 +450,64 @@ outline: [2, 3]
 | `ai.imageStorage.secretAccessKey` | string | 是 | — | — |
 | `ai.imageStorage.publicBaseUrl` | string | 是 | — | Public HTTPS base URL; not the S3 upload endpoint. |
 | `ai.imageStorage.prefix` | string | 是 | — | Object directory ending in /; must be covered by the bucket lifecycle. |
+| `ai.modelCatalog` | object | 否 | — | Closed Host connection/model/preset catalog. Dictionary keys supply omitted ids; this Host supplies omitted connection owners. Explicit identities must match; references are checked by the model compiler. |
+| `ai.modelCatalog.connections` | object | 是 | — | — |
+| `ai.modelCatalog.connections.<key>.id` | string | 否 | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.connections.<key>.ownerId` | string | 否 | — | Defaults to this Host owner; an explicit owner must match this Host. |
+| `ai.modelCatalog.connections.<key>.revision` | integer | 是 | — | — |
+| `ai.modelCatalog.connections.<key>.sdk` | string: `"openai"`, `"anthropic"`, `"google"`, `"deepseek"`, `"minimax"`, `"ollama"`, `"openai-compatible"` | 是 | — | — |
+| `ai.modelCatalog.connections.<key>.baseUrl` | string | 否 | — | — |
+| `ai.modelCatalog.connections.<key>.secretRef` | string | 否 | — | Opaque credential reference; plaintext credentials are resolved only by the execution factory. |
+| `ai.modelCatalog.models` | object | 是 | — | — |
+| `ai.modelCatalog.models.<key>.id` | string | 否 | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.models.<key>.connectionId` | string | 是 | — | — |
+| `ai.modelCatalog.models.<key>.model` | string | 是 | — | — |
+| `ai.modelCatalog.models.<key>.capabilities` | object | 是 | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.input` | array&lt;string: `"text"`, `"image"`, `"audio"`, `"video"`, `"file"`&gt; | 否 | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.streaming` | boolean | 否 | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.toolCalling` | boolean | 否 | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.thinking` | boolean | 否 | — | — |
+| `ai.modelCatalog.models.<key>.contextWindow` | integer | 否 | — | — |
+| `ai.modelCatalog.models.<key>.maxOutputTokens` | integer | 否 | — | — |
+| `ai.modelCatalog.presets` | object | 是 | — | — |
+| `ai.modelCatalog.presets.<key>.id` | string | 否 | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.presets.<key>.modelId` | string | 是 | — | — |
+| `ai.modelPolicy` | object | 否 | — | Purpose references only. Adapter/Endpoint may select chat/perception; Scene may select chat. Session chat selection is stored separately. |
+| `ai.modelPolicy.defaults` | object | 是 | — | — |
+| `ai.modelPolicy.defaults.chat` | string | 是 | — | — |
+| `ai.modelPolicy.defaults.perception` | string | 否 | — | — |
+| `ai.modelPolicy.defaults.summary` | string | 否 | — | When omitted, compilation selects deployment defaults.chat. Personal/Adapter/Endpoint/Scene chat overrides do not change summary. |
+| `ai.modelPolicy.adapters` | object | 否 | — | — |
+| `ai.modelPolicy.adapters.<key>.chat` | string | 否 | — | — |
+| `ai.modelPolicy.adapters.<key>.perception` | string | 否 | — | — |
+| `ai.modelPolicy.endpoints` | array&lt;object&gt; | 否 | — | — |
+| `ai.modelPolicy.endpoints[].address` | object | 是 | — | — |
+| `ai.modelPolicy.endpoints[].address.rootId` | string | 是 | — | — |
+| `ai.modelPolicy.endpoints[].address.platform` | string | 是 | — | — |
+| `ai.modelPolicy.endpoints[].address.endpoint` | string | 是 | — | — |
+| `ai.modelPolicy.endpoints[].address.adapterId` | string | 是 | — | — |
+| `ai.modelPolicy.endpoints[].models` | object | 是 | — | — |
+| `ai.modelPolicy.endpoints[].models.chat` | string | 否 | — | — |
+| `ai.modelPolicy.endpoints[].models.perception` | string | 否 | — | — |
+| `ai.modelPolicy.scenes` | array&lt;object&gt; | 否 | — | — |
+| `ai.modelPolicy.scenes[].address` | object | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.rootId` | string | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.platform` | string | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.endpoint` | string | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation` | object | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint` | object | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint.adapter` | string | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint.id` | string | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.id` | string | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent` | object | 否 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent.id` | string | 是 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.threadId` | string | 否 | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.name` | string | 否 | — | — |
+| `ai.modelPolicy.scenes[].models` | object | 是 | — | — |
+| `ai.modelPolicy.scenes[].models.chat` | string | 否 | — | — |
+| `ai.personalPrincipals` | object | 否 | — | Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input. |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
 | `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
 | `menuStyle.title` | string | 否 | — | 菜单标题。 |

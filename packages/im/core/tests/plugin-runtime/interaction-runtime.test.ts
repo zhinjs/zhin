@@ -61,6 +61,8 @@ const ignoredEndpointEvents = Object.freeze({
   receive: async (_event: EndpointEvent) => undefined,
 });
 
+const fixtureStores = new WeakMap<ImRuntime, SnapshotStore>();
+
 function receive(
   im: ImRuntime,
   payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
@@ -72,7 +74,7 @@ function receive(
     name: 'message.receive',
     payload,
     endpoint: { ...endpoint, id: endpoint.id as Parameters<ImRuntime['endpointEvents']['receive']>[0]['endpoint']['id'] },
-    client: ignoredEndpointEvents,
+    client: (fixtureStores.get(im)!.current.projections.get(adapterFeatureId) as AdapterIndex).clientById(endpoint.id as never),
   })) as Promise<MessageDispatchResult>;
 }
 
@@ -182,6 +184,7 @@ describe('UserInteraction via ImRuntime', () => {
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
     return {
@@ -350,6 +353,7 @@ describe('UserInteraction via ImRuntime', () => {
     });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -416,6 +420,7 @@ describe('UserInteraction via ImRuntime', () => {
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -475,6 +480,7 @@ describe('UserInteraction via ImRuntime', () => {
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -532,6 +538,7 @@ describe('UserInteraction via ImRuntime', () => {
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -633,6 +640,7 @@ describe('UserInteraction via ImRuntime', () => {
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -712,6 +720,7 @@ describe('UserInteraction via ImRuntime', () => {
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 

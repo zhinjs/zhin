@@ -1,7 +1,7 @@
 import {
-  bindEndpoint,
+  bindPlatformEndpoint, endpointClientOf,
   type AdapterContext,
-  type Endpoint,
+  type AnyEndpoint,
   type EndpointEvent,
   type EndpointEventGateway,
   type EndpointClientContext,
@@ -18,7 +18,7 @@ interface LegacySideEventGateway {
 }
 
 /** Bind directly-constructed Endpoint instances to the same unified event shape used in Runtime. */
-export function bindTestEndpoint<TEndpoint extends Endpoint>(
+export function bindTestEndpoint<TEndpoint extends AnyEndpoint>(
   endpoint: TEndpoint,
   messages?: LegacyOutboundMessageService,
   sideEvents?: LegacySideEventGateway,
@@ -43,11 +43,11 @@ export function bindTestEndpoint<TEndpoint extends Endpoint>(
 }
 
 /** Bind a direct Endpoint test through the same public event gateway as production. */
-export function bindTestEndpointEvents<TEndpoint extends Endpoint>(
+export function bindTestEndpointEvents<TEndpoint extends AnyEndpoint>(
   endpoint: TEndpoint,
   events: EndpointEventGateway,
 ): TEndpoint {
-  bindEndpoint(endpoint, {
+  bindPlatformEndpoint(endpoint, {
     id: 'test-endpoint' as never,
     name: 'test-endpoint',
     use: () => events,
@@ -55,10 +55,10 @@ export function bindTestEndpointEvents<TEndpoint extends Endpoint>(
   return endpoint;
 }
 
-export function endpointClientContext(endpoint: Endpoint): EndpointClientContext {
+export function endpointClientContext(endpoint: AnyEndpoint): EndpointClientContext {
   return Object.freeze({
     message: Object.freeze({
-      get $client() { return endpoint.client; },
+      get $client() { return endpointClientOf(endpoint); },
     }),
   });
 }

@@ -1,3 +1,4 @@
+import type { Token } from './token.js';
 import type { CapabilitySlot } from './capability.js';
 import {
   collectGenerationAdmissions,
@@ -104,26 +105,32 @@ export class SnapshotLease {
   }
 }
 
-/** Read-only operation seam exposed by a Root lifecycle. */
+export type RootResourceResolver<TState> = (state: TState, root: PluginId, token: Token<unknown>) => unknown;
+
+/** Read-only operation seam exposed only to trusted Host integrations, never Plugin setup. */
 export interface SnapshotReader {
   acquire(): SnapshotLease;
   owns(lease: SnapshotLease): boolean;
+  /** Exact leased generation, including private Root resources excluded from public snapshots. */
+  rootResource?<T>(lease: SnapshotLease, token: Token<T>): T | undefined;
 }
 
 export class SnapshotStore<TState = undefined> implements SnapshotReader {
   #current: SnapshotRecord<TState>;
   readonly #retired = new Set<SnapshotRecord<TState>>();
-  readonly #leases = new WeakSet<SnapshotLease>();
+  readonly #leases = new WeakMap<SnapshotLease, SnapshotRecord<TState> | null>();
+  readonly #rootResource?: RootResourceResolver<TState>;
   #closed = false;
 
   constructor(
     initial: SnapshotState,
     private readonly onDisposalError: (error: unknown) => void = () => undefined,
     ...state: [TState] extends [undefined]
-      ? [initialState?: undefined]
-      : [initialState: TState]
+      ? [initialState?: undefined, rootResource?: RootResourceResolver<TState>]
+      : [initialState: TState, rootResource?: RootResourceResolver<TState>]
   ) {
     const initialState = state[0] as TState;
+    this.#rootResource = state[1];
     const snapshot = createSnapshotView(0, initial);
     const committed = Object.freeze({ snapshot, state: initialState });
     const admissions = collectSnapshotAdmissions(snapshot);
@@ -153,18 +160,32 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
   acquire(): SnapshotLease {
     if (this.#closed) throw new Error('SnapshotStore is closed');
     const record = this.#current;
+    const releaseRecord = this.#retain(record);
     const lease = new SnapshotLease(
       record.snapshot,
-      this.#retain(record),
+      () => {
+        this.#leases.set(lease, null);
+        releaseRecord();
+      },
       snapshotLeaseAuthority,
       record.retirement.signal,
     );
-    this.#leases.add(lease);
+    this.#leases.set(lease, record);
     return lease;
   }
 
   owns(lease: SnapshotLease): boolean {
     return this.#leases.has(lease);
+  }
+
+  rootResource<T>(lease: SnapshotLease, token: Token<T>): T | undefined {
+    const record = this.#leases.get(lease);
+    if (!record || !lease.active) throw new Error('Root resource access requires an active owned SnapshotLease');
+    // Manually authored snapshots retain their explicit resource contract. Real
+    // Runtime Roots inject the same-generation Scope resolver, including privacy checks.
+    return (this.#rootResource
+      ? this.#rootResource(record.state, record.snapshot.root, token)
+      : record.snapshot.resources.get(record.snapshot.root)?.get(token.id)) as T | undefined;
   }
 
   commit(
@@ -348,4 +369,11 @@ class ReadonlyMapView<K, V> implements ReadonlyMap<K, V> {
 
 function readonlyMap<K, V>(values: ReadonlyMap<K, V> | Iterable<readonly [K, V]>): ReadonlyMap<K, V> {
   return new ReadonlyMapView(values);
+}
+
+/** Compatibility for Host embedders that implement the original minimal SnapshotReader. */
+export function readLeasedRootResource<T>(reader: SnapshotReader, lease: SnapshotLease, token: Token<T>): T | undefined {
+  if (!reader.owns(lease) || !lease.active) throw new Error('Root resource access requires an active owned SnapshotLease');
+  return reader.rootResource ? reader.rootResource(lease, token)
+    : lease.value.resources.get(lease.value.root)?.get(token.id) as T | undefined;
 }

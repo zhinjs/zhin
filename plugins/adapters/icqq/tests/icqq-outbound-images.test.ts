@@ -87,7 +87,7 @@ describe('unified IM image delivery to ICQQ', () => {
     const fixture = await imageFixture('base64', async (input, next) => { input.replace(text); await next(); });
     try {
       const receipt = await fixture.im.send({ requester: fixture.root, conversation: fixture.conversation, content: 'planned' });
-      expect(fixture.endpoint.client.sendGroupMsg).toHaveBeenCalledExactlyOnceWith(100, text.trim() || '\u200b');
+      expect(fixture.endpoint.sendGroupMsg).toHaveBeenCalledExactlyOnceWith(100, text.trim() || '\u200b');
       expect(receipt).toMatchObject({ status: 'sent', message: { id: 'sent-1' }, parts: [{ message: { id: 'sent-1' } }] });
       expect(receipt.parts?.[0]?.sourceIndices).toBeUndefined();
       expect(receipt.parts?.[0]?.outboundTextDigest).toBeUndefined();
@@ -104,7 +104,7 @@ describe('unified IM image delivery to ICQQ', () => {
     const fixture = await imageFixture(mode, async (input, next) => { seen.push(input.payload); await next(); });
     const delivered: string[] = [];
     const temporaryFiles: string[] = [];
-    vi.spyOn(fixture.endpoint.client, 'sendGroupMsg').mockImplementation(async (_group, image) => {
+    vi.spyOn(fixture.endpoint, 'sendGroupMsg').mockImplementation(async (_group, image) => {
       if (typeof image !== 'object' || Array.isArray(image) || image.type !== 'image') throw new Error('Expected native image element');
       const file = image.file;
       expect(typeof file).toBe('string');
@@ -148,10 +148,10 @@ describe('unified IM image delivery to ICQQ', () => {
     });
     try {
       expect(await fixture.im.send({ requester: fixture.root, conversation: fixture.conversation, content: 'tool placeholder' })).toMatchObject({ status: 'sent' });
-      expect(fixture.endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, { type: 'image', file: `base64://${base64}` });
+      expect(fixture.endpoint.sendGroupMsg).toHaveBeenCalledWith(100, { type: 'image', file: `base64://${base64}` });
       suppress = true;
       expect(await fixture.im.send({ requester: fixture.root, conversation: fixture.conversation, content: 'blocked' })).toMatchObject({ status: 'suppressed' });
-      expect(fixture.endpoint.client.sendGroupMsg).toHaveBeenCalledTimes(1);
+      expect(fixture.endpoint.sendGroupMsg).toHaveBeenCalledTimes(1);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 });
@@ -182,7 +182,7 @@ async function imageFixture(mode: 'file' | 'base64', handle: (input: OutboundEnv
   im.attach(store);
   await adapters.start();
   adapters.open();
-  const endpoint = adapters.connection('icqq', 'icqq');
+  const endpoint = adapters.client<import('../src/endpoint.js').IcqqEndpoint>('icqq', 'icqq');
   if (!(endpoint instanceof IcqqEndpoint)) throw new Error('Expected ICQQ endpoint');
   return { root, im, adapters, store, endpoint, renderHtml,
     conversation: { endpoint: { id: String(adapter.id), adapter: 'icqq' }, kind: 'group' as const, id: '100' } };

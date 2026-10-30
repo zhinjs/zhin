@@ -155,7 +155,7 @@ Optional fields:
   - `supportsReasoningContent` and `toolCallsInAssistant` are deprecated and have no effect.
 - `authScheme`: the `Authorization` scheme. Unset uses the SDK default (`Bearer` for OpenAI-style SDKs, `x-api-key` for Anthropic, `x-goog-api-key` for Google). `''` sends `Authorization: <key>`; `Bearer`, `Token` and so on send `Authorization: <scheme> <key>`. Chat and model-list requests use the same rule.
 - `timeout`, `maxRetries`: this provider's per-request timeout (ms, 0 disables) and retries per model. They override `requestTimeoutMs` / `maxRetries` in `ai.providerResilience`; a per-model `modelHarness.requestTimeoutMs` still wins.
-- `firstChunkTimeoutMs`, `chunkTimeoutMs`: streaming stall timeouts (ms), off by default. The first bounds the wait for response headers and the first chunk; the second bounds silence between chunks. A stall counts as a timeout: it is retried, then fails over to a fallback model. This catches a connected-but-silent request well before `timeout`; a few tens of seconds is a good value.
+- `firstChunkTimeoutMs`, `chunkTimeoutMs`: streaming stall timeouts (ms), off by default. The first bounds the wait for response headers and the first chunk; the second bounds silence between chunks. A stall counts as a timeout: it is retried on the selected model, then reported as an error without switching chat models. This catches a connected-but-silent request well before `timeout`; a few tens of seconds is a good value.
 - `imageGeneration`: defaults for text-to-image.
 - `providerOptions`: AI SDK `providerOptions` keyed by SDK name, merged into every request. For Gemini, this is where safety settings and thinking depth go:
 
@@ -213,7 +213,7 @@ Optional fields:
   - `reasoning_effort` goes only to GPT-OSS and Qwen 3. GPT-OSS defaults to `low`, which keeps replies fast and helps you stay under the free tier's 8K tokens per minute. Other models (Llama, for example) never get the field, even with `thinkingLevel` set.
   - GPT-OSS is text-only. Images are handled the way zhin handles any model without image support, so they never reach Groq. Llama 4 Scout and Maverick default to `text, image`. An explicit `input` always wins.
   - The context window comes from the model id: 131072 for GPT-OSS and 128k for other models. Override it with `contextWindow`.
-  - Free-tier limits are low: GPT-OSS gets about 8K tokens per minute and 1,000 requests per day (see [Groq rate limits](https://console.groq.com/docs/rate-limits)). A 429 on a per-minute limit (RPM / TPM) is retried after `retry-after`. A per-day limit (RPD / TPD) can't recover until the next day, so zhin skips retries and moves to the next candidate model (limits are per model). If no candidate is left, the user is told today's quota is used up.
+  - Free-tier limits are low: GPT-OSS gets about 8K tokens per minute and 1,000 requests per day (see [Groq rate limits](https://console.groq.com/docs/rate-limits)). A 429 on a per-minute limit (RPM / TPM) is retried after `retry-after`. A per-day limit (RPD / TPD) can't recover until the next day, so zhin skips retries and tells the user today's quota is used up without switching chat models.
 
 ### ai.agents
 
@@ -388,6 +388,9 @@ ai:
     perception:
       provider: gemini              # required, a name from ai.providers
       model: gemini-2.5-flash-lite  # required, must declare input for the kinds below
+      # Optional: configure the backup provider and its image input capability first.
+      # fallbacks:
+      #   - { provider: backup, model: your-vision-model }
       kinds: [image]                # optional: image | video | file, default [image]; file means PDF only
       maxChars: 800                 # optional: description length cap, default 800
       timeoutMs: 30000              # optional: per-request timeout, default 30000
@@ -397,6 +400,7 @@ ai:
 | Field | Meaning |
 | --- | --- |
 | `provider` / `model` | The model that describes media. `provider` must be a name from `ai.providers`; a wrong value fails startup and `zhin config check` reports it |
+| `fallbacks` | Optional ordered `{ provider, model }` list, tried when the primary model cannot describe the media; omitted means one perception model |
 | `kinds` | Kinds to describe. Audio is not here; it keeps using speech-to-text from `ai.multimodal.audio` |
 | `maxChars` | Longer descriptions are cut off |
 | `timeoutMs` | Per-request timeout. A failure is retried at most once, with the same retry, timeout and error classification as the main chat |
@@ -409,6 +413,7 @@ How it behaves:
 - The description is saved with the user message in the session history, so later turns can still ask about "that image". The image itself is not saved.
 - Images with the same content (sha256 of the bytes) are described once, so common stickers and memes do not cost another call.
 - If a description fails, times out or exceeds `maxItemsPerTurn`, the old placeholder is used and the turn carries on. Each media item's result is recorded as a `media_resolution` event in the `zhin trace` timeline; a successful description has `code: media_perception` and names the model used.
+- Explicit `fallbacks` are tried in order after a failed request, an empty answer or unsupported media input. Each candidate keeps `timeoutMs` and at most one retry; cancellation stops the chain immediately. Fixed-model chat does not remove this media-perception chain, and `providerResilience.fallback` does not control its outer loop.
 - Without `perception`, behaviour is exactly as before.
 
 ### ai.agent

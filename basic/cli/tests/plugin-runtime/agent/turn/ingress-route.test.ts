@@ -6,6 +6,8 @@ import type { DecisionProvider } from '@zhin.js/ai';
 import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/runtime';
 import type { TurnRequest } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
+import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
+import { ConversationRuntime } from '../../../../../../packages/im/core/src/plugin-runtime/im/conversation-runtime.js';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
@@ -332,4 +334,191 @@ it('audits a dropped stale reply and one sent anyway (ADR 0038 §4)', () => {
     { kind: 'outbound', outcome: 'skip', reasonCode: 'merge_reply_stale_discarded', payload: { senders: ['alice'] } },
     { kind: 'outbound', outcome: 'allow', reasonCode: 'merge_reply_stale_sent', payload: { senders: ['bob'], reason: 'starvation' } },
   ]);
+});
+
+
+describe('personal Session IM ingress', () => {
+  const endpoint = { id: 'root\0zhin.adapter\0icqq', adapter: 'icqq' };
+  const conversation: ConversationRef = { endpoint, kind: 'group', id: 'shared-room' };
+
+  function fixture(options: { merge?: boolean; hold?: boolean; live?: boolean; ambient?: boolean; events?: MemoryConversationEventStore } = {}) {
+    const requests: TurnRequest[] = [];
+    const complete: Array<() => void> = [];
+    let released = false;
+    const snapshot = {
+      root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(),
+      capabilities: new Map(options.live ? [[endpoint.id, { definition: { capabilities: ['inbound', 'liveDanmaku'] } }]] : []),
+    } as unknown as RuntimeSnapshot;
+    const archiveSession = vi.fn(async () => true);
+    const appendSessionEvents = vi.fn(async (_sessionKey: string, _events: unknown, _options: unknown) => true);
+    const readConversationContext = vi.fn(async (_conversation: ConversationRef, _consumer: string) => ({
+      blocks: options.ambient ? [{ text: 'Unanswered question', eventType: 'message.created' }] : [], cursor: 5,
+    }));
+    const commitConversationContext = vi.fn(async (_conversation: ConversationRef, _consumer: string, _cursor: number) => undefined);
+    const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) => {
+      requests.push(request);
+      if (options.hold && !released) await new Promise<void>(resolve => complete.push(resolve));
+      return { status: 'completed', output: [] };
+    });
+    const route = new AgentTurnIngressRoute({
+      projectRoot: '/host-a', runtime: { executeLeased } as never,
+      im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext, commitConversationContext, conversationEventReader: options.events } as never,
+      ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
+      agent: {
+        service: {
+          getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+          getTriggerConfig: () => ({ enabled: true,
+            ...(options.events ? { sceneEvents: { conversations: ['*'] } } : {}),
+            ...(options.ambient ? { ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } } : {}),
+          }),
+          getLlmRuntime: () => ({
+            model: () => ({}),
+            completeSimple: async () => ({ role: 'assistant', content: [{ type: 'text', text: '{"engage":true,"confidence":0.9,"reason":"unanswered"}' }] }),
+          }),
+          getAgentConfig: () => ({ inboundQueue: { merge: { enabled: options.merge ?? false, quietMs: 0, maxWaitMs: 0 },
+            ...(options.live ? { live: { windowMs: 50, minIntervalMs: 0 } } : {}) } }),
+        },
+        agent: { archiveSession, appendSessionEvents },
+      } as never,
+    });
+    const run = (subjectId: string, text = '#hello', target = conversation, account = 'account-a') => {
+      const message = {
+        conversation: target, content: text, endpointId: account, sender: { id: subjectId },
+        message: { conversation: target, id: `message-${subjectId}` },
+        $reply: vi.fn(async () => ({ status: 'sent' })),
+      } as unknown as Message;
+      return route.route(message, { value: snapshot, active: true } as never, rootPluginId(), 5);
+    };
+    return { route, run, requests, release: () => { released = true; complete.splice(0).forEach(resolve => resolve()); }, executeLeased, archiveSession, appendSessionEvents, readConversationContext, commitConversationContext };
+  }
+
+  it('runs two people in one group independently even with group merging enabled', async () => {
+    const f = fixture({ merge: true, hold: true });
+    const alice = f.run('alice', '#alice question');
+    const bob = f.run('bob', '#bob question');
+    try {
+      await vi.waitFor(() => expect(f.executeLeased).toHaveBeenCalledTimes(2));
+      expect(new Set(f.requests.map(request => request.session.key)).size).toBe(2);
+      expect(f.requests.map(request => request.input.text).sort()).toEqual(['alice question', 'bob question']);
+      expect(f.requests.every(request => request.input.mergedSenders === undefined)).toBe(true);
+      expect(f.requests.map(request => request.session.personal?.subjectId).sort()).toEqual(['alice', 'bob']);
+      expect(f.requests.every(request => request.signal.aborted === false)).toBe(true);
+    } finally {
+      f.release();
+      await Promise.all([alice, bob]);
+      f.route.dispose();
+    }
+  });
+
+  it('retains a shared system scene task for a multi-person live window', async () => {
+    vi.useFakeTimers();
+    const f = fixture({ live: true });
+    try {
+      const alice = f.run('alice', 'alice question');
+      const bob = f.run('bob', 'bob question');
+      await vi.advanceTimersByTimeAsync(50);
+      await Promise.all([alice, bob]);
+      expect(f.requests).toHaveLength(1);
+      const request = f.requests[0]!;
+      expect(request.session.key).toMatch(/^scene-task:v1:[a-f0-9]{64}$/);
+      expect(request.session.personal).toBeUndefined();
+      expect(request.input.liveDanmaku?.senders.map(sender => sender.subjectId).sort()).toEqual(['alice', 'bob']);
+      expect(request.policy.permissions).toEqual(['user']);
+      expect(request.policy.filesystem?.access).toBe('read-only');
+    } finally { f.route.dispose(); vi.useRealTimers(); }
+  });
+
+  it('uses a shared system Session for ambient participation without a personal owner', async () => {
+    const f = fixture({ ambient: true });
+    try {
+      await f.run('alice', 'A question nobody answered');
+      await f.run('bob', 'Another question');
+      expect(f.requests).toHaveLength(2);
+      expect(f.requests[0]!.session.key).toMatch(/^scene-task:v1:[a-f0-9]{64}$/);
+      expect(f.requests[0]!.session.key).toBe(f.requests[1]!.session.key);
+      expect(f.requests.every(request => request.session.personal === undefined)).toBe(true);
+      // The judge reads public events as its own non-committing consumer.
+      expect(f.readConversationContext.mock.calls.map(call => call[1])).toEqual(['zhin.ambient-engagement', 'zhin.ambient-engagement']);
+      expect(f.commitConversationContext).not.toHaveBeenCalled();
+    } finally { f.route.dispose(); }
+  });
+
+  it('keeps public conversation consumers independent for each personal Session', async () => {
+    const f = fixture();
+    try {
+      await f.run('alice');
+      await f.run('bob');
+      await f.run('alice', '#again');
+      const [alice, bob, again] = f.requests;
+      expect(alice.session.key).toBe(again.session.key);
+      expect(alice.session.key).not.toBe(bob.session.key);
+      await alice.ports.conversationContext!.readPending(alice.signal);
+      await bob.ports.conversationContext!.readPending(bob.signal);
+      await alice.ports.conversationContext!.commit(5);
+      expect(f.readConversationContext.mock.calls.map(call => call[1])).toEqual([
+        `agent-session:${alice.session.key}`, `agent-session:${bob.session.key}`,
+      ]);
+      expect(f.commitConversationContext).toHaveBeenCalledExactlyOnceWith(conversation, `agent-session:${alice.session.key}`, 5);
+    } finally { f.route.dispose(); }
+  });
+
+  it('passes shared card/title changes to each personal turn even though they are stored only in the scene-task history', async () => {
+    const events = new MemoryConversationEventStore();
+    const f = fixture({ events });
+    try {
+      for (const [index, change] of [
+        { type: 'member.card_changed', value: 'changed' },
+        { type: 'member.title_changed', value: 'moderator' },
+      ].entries()) {
+        const event = { ...change, eventId: `profile-${index}`, conversation, member: { id: 'bob' }, timestamp: Date.now() } as ConversationEvent;
+        const { sequence } = await events.append(event);
+        f.route.handleSceneEvent({ sequence, event, selfIds: ['account-a'], endpointId: 'account-a' });
+      }
+      // Core deliberately excludes these event types from its ordinary conversation blocks.
+      expect((await new ConversationRuntime(events).readContext(conversation, 'independent-check', 2)).blocks).toEqual([]);
+      await f.run('alice');
+      await f.run('carol');
+      await f.run('alice', '#again');
+      const expected = ['bob title → "moderator"', 'bob card → "changed"'];
+      expect(f.requests[0]!.input.sceneEvents).toEqual(expected);
+      expect(f.requests[1]!.input.sceneEvents).toEqual(expected);
+      expect(f.requests[2]!.input.sceneEvents).toBeUndefined();
+      expect(f.appendSessionEvents).toHaveBeenCalledTimes(2);
+      expect(new Set(f.appendSessionEvents.mock.calls.map(([key]) => key)).size).toBe(1);
+      expect(f.requests.every(request => f.appendSessionEvents.mock.calls.every(([key]) => key !== request.session.key))).toBe(true);
+    } finally { f.route.dispose(); }
+  });
+
+  it('isolates actual account instances, parents and threads through the real request path', async () => {
+    const f = fixture();
+    try {
+      await f.run('alice');
+      await f.run('alice', '#other account', conversation, 'account-b');
+      await f.run('alice', '#parent', { ...conversation, parent: { kind: 'group', id: 'guild' } });
+      await f.run('alice', '#thread', { ...conversation, threadId: 'thread' });
+      expect(new Set(f.requests.map(request => request.session.key)).size).toBe(4);
+    } finally { f.route.dispose(); }
+  });
+
+  it('clears only the caller Session and cancels only that caller active turn', async () => {
+    const f = fixture({ hold: true });
+    const alice = f.run('alice');
+    const bob = f.run('bob');
+    try {
+      await vi.waitFor(() => expect(f.requests).toHaveLength(2));
+      const aliceRequest = f.requests.find(request => request.principal.subjectId === 'alice')!;
+      const bobRequest = f.requests.find(request => request.principal.subjectId === 'bob')!;
+      await f.run('alice', '#clear');
+      expect(f.archiveSession).toHaveBeenCalledExactlyOnceWith(aliceRequest.session.key);
+      expect(f.archiveSession).not.toHaveBeenCalledWith(bobRequest.session.key);
+      expect(f.archiveSession).not.toHaveBeenCalledWith('icqq:account-a:group:shared-room');
+      await f.run('alice', '#cancel');
+      expect(aliceRequest.signal.aborted).toBe(true);
+      expect(bobRequest.signal.aborted).toBe(false);
+    } finally {
+      f.release();
+      await Promise.all([alice, bob]);
+      f.route.dispose();
+    }
+  });
 });

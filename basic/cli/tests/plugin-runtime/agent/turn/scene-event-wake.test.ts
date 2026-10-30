@@ -1,6 +1,7 @@
+import { runtimeSceneTaskSessionKey } from '../../../../src/plugin-runtime/agent/turn/request.js';
 import { describe, expect, it, vi } from 'vitest';
-import { MemoryConversationEventStore, type ConversationEvent } from '@zhin.js/im-contract';
-import { SessionProfileStore } from '@zhin.js/agent';
+import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
+import { SessionProfileStore, type TurnRequest } from '@zhin.js/agent';
 import { SceneEventWake } from '../../../../src/plugin-runtime/agent/turn/scene-event-wake.js';
 import { SceneEventIngress, SCENE_WAKE_INPUT_TEXT } from '../../../../src/plugin-runtime/agent/turn/scene-event-ingress.js';
 
@@ -88,13 +89,19 @@ describe('SceneEventWake (debounce + rate limit)', () => {
   });
 });
 
-function harness(options: { conversations?: string[]; sessions?: SessionProfileStore } = {}) {
+function harness(options: { conversations?: string[]; sessions?: SessionProfileStore; projectRoot?: string } = {}) {
   const clock = fakeTimers();
   const store = new MemoryConversationEventStore();
-  const executeTurn = vi.fn(async () => ({ status: 'completed' as const }));
+  const executeTurn = vi.fn(async (_request: TurnRequest) => ({ status: 'completed' as const }));
   const deliver = vi.fn(async () => ({ status: 'sent' as const }));
+  const readConversationContext = vi.fn(async (_conversation: ConversationRef, _consumer: string, _throughSequence: number) => ({ blocks: [], cursor: 0 }));
+  const commitConversationContext = vi.fn(async (_conversation: ConversationRef, _consumer: string, _cursor: number) => undefined);
+  const onSpoke = vi.fn();
   const ingress = new SceneEventIngress({
-    projectRoot: '/tmp/project',
+    projectRoot: options.projectRoot ?? '/tmp/project',
+    readConversationContext,
+    commitConversationContext,
+    onSpoke,
     triggerConfig: () => ({ sceneEvents: { conversations: options.conversations ?? ['icqq:g1'] } }),
     reader: () => store,
     sessions: () => options.sessions,
@@ -105,14 +112,62 @@ function harness(options: { conversations?: string[]; sessions?: SessionProfileS
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
   });
-  const emit = async (event: ConversationEvent, selfIds: string[] = ['10000']) => {
+  const emit = async (event: ConversationEvent, selfIds: string[] = ['10000'], endpointId = '10000') => {
     const { sequence } = await store.append(event);
-    return ingress.handle({ sequence, event, selfIds, endpointId: '10000' });
+    return ingress.handle({ sequence, event, selfIds, endpointId });
   };
-  return { clock, store, ingress, executeTurn, deliver, emit };
+  return { clock, store, ingress, executeTurn, deliver, emit, readConversationContext, commitConversationContext, onSpoke };
 }
 
 describe('SceneEventIngress (wake contract)', () => {
+  const channel: ConversationRef = { ...group, kind: 'channel', parent: { kind: 'group', id: 'guild-a' }, threadId: 'thread-a' };
+  it.each([
+    { dimension: 'endpoint instance', first: group, second: group, secondEndpoint: '20000' },
+    { dimension: 'canonical endpoint adapter', first: group, second: { ...group, endpoint: { ...endpoint, adapter: 'other-adapter' } } },
+    { dimension: 'canonical endpoint id', first: group, second: { ...group, endpoint: { ...endpoint, id: 'root\0slot\0icqq' } } },
+    { dimension: 'parent id', first: channel, second: { ...channel, parent: { kind: 'group', id: 'guild-b' } } },
+    { dimension: 'parent kind', first: channel, second: { ...channel, parent: { kind: 'channel', id: 'guild-a' } } },
+    { dimension: 'thread', first: channel, second: { ...channel, threadId: 'thread-b' } },
+  ] satisfies readonly { dimension: string; first: ConversationRef; second: ConversationRef; secondEndpoint?: string }[])(
+    'keeps $dimension independent at the real scene-event ingress queue and context cursor', async ({ first, second, secondEndpoint = '10000' }) => {
+      const { clock, executeTurn, emit, readConversationContext, commitConversationContext } = harness();
+      expect(await emit(ev('member.joined', { conversation: first, member: { id: 'u1' } }))).toBe('scheduled');
+      // One identical scene still coalesces; another account/container/thread starts its own window.
+      expect(await emit(ev('member.joined', { conversation: first, member: { id: 'u2' } }))).toBe('coalesced');
+      expect(await emit(ev('member.joined', { conversation: second, member: { id: 'u3' } }), [secondEndpoint], secondEndpoint)).toBe('scheduled');
+      await clock.advance(4_000);
+      expect(executeTurn).toHaveBeenCalledTimes(2);
+      const requests = executeTurn.mock.calls.map(([request]) => request);
+      const expected = [{ conversation: first, endpoint: '10000' }, { conversation: second, endpoint: secondEndpoint }];
+      for (const [index, request] of requests.entries()) {
+        const { conversation, endpoint: instance } = expected[index]!;
+        const key = runtimeSceneTaskSessionKey({ origin: { kind: 'im', platform: 'icqq', endpoint: instance, scope: conversation.kind === 'channel' ? 'channel' : 'group', sceneId: conversation.id, conversation } }, '/tmp/project');
+        expect(request.session).toEqual({ key });
+        expect(request.origin).toMatchObject({ endpoint: instance, conversation });
+        await request.ports.conversationContext!.readPending();
+        await request.ports.conversationContext!.commit(index + 1);
+        expect(readConversationContext.mock.calls[index]).toEqual([conversation, `agent-session:${key}`, index === 0 ? 2 : 3]);
+        expect(commitConversationContext.mock.calls[index]).toEqual([conversation, `agent-session:${key}`, index + 1]);
+      }
+      expect(requests[0].session.key).not.toBe(requests[1].session.key);
+    },
+  );
+
+  it('keeps Host roots independent and preserves the existing ambient spoke scene key', async () => {
+    const first = harness({ projectRoot: '/tmp/project-a' });
+    const second = harness({ projectRoot: '/tmp/project-b' });
+    for (const instance of [first, second]) {
+      instance.executeTurn.mockImplementationOnce(async (request) => {
+        await request.ports.reply.send([]);
+        return { status: 'completed' as const };
+      });
+      await instance.emit(ev('member.joined', { member: { id: 'u1' } }));
+      await instance.clock.advance(4_000);
+      expect(instance.onSpoke).toHaveBeenCalledExactlyOnceWith('icqq:g1');
+    }
+    expect(first.executeTurn.mock.calls[0]![0].session.key).not.toBe(second.executeTurn.mock.calls[0]![0].session.key);
+  });
+
   it('mute-free join: one short turn after debounce, no human message needed, ephemeral lines attached', async () => {
     const { clock, ingress, executeTurn, emit } = harness();
     expect(await emit(ev('message.reaction_changed', { actor: { id: 'u9' }, message: { conversation: group, id: 'm1' }, reaction: '👍', operation: 'added' }))).toBe('low');
@@ -125,7 +180,8 @@ describe('SceneEventIngress (wake contract)', () => {
     expect(request.input.metadata).toMatchObject({ zhinSceneWake: true, zhinEngagement: 'ambient' });
     // Low-priority reaction did not wake on its own but is visible in the woken turn (newest first).
     expect(request.input.sceneEvents).toEqual(['阿强 joined', 'u9 reacted 👍']);
-    expect(request.session.key).toBe('icqq:10000:group:g1');
+    expect(request.session.key).toBe(runtimeSceneTaskSessionKey({ origin: { kind: 'im', platform: 'icqq', endpoint: '10000', scope: 'group', sceneId: 'g1', conversation: group } }, '/tmp/project'));
+    expect(request.session.personal).toBeUndefined();
     expect(request.policy.shell).toBeUndefined();
     expect(request.policy.network).toBeUndefined();
     expect(ingress.lastResult).toMatchObject({ kind: 'woke', status: 'completed' });
@@ -169,12 +225,13 @@ describe('SceneEventIngress (wake contract)', () => {
     expect(off.executeTurn).not.toHaveBeenCalled();
   });
 
-  it('scene lines are shown once per session: the next human turn does not repeat them', async () => {
+  it('keeps each personal cursor independent of scene-task consumption', async () => {
     const { clock, store, ingress, emit } = harness();
     await emit(ev('member.joined', { member: { id: 'u1' } }));
     await clock.advance(4_000);
     const latest = (await store.append(ev('member.card_changed', { member: { id: 'u1' }, value: 'x' }))).sequence;
-    const lines = await ingress.linesFor({ sessionKey: 'icqq:10000:group:g1', conversation: group, platform: 'icqq', throughSequence: latest, selfIds: ['10000'] });
-    expect(lines).toEqual(['u1 card → "x"']);
+    const lines = await ingress.linesFor({ sessionKey: 'icqq:10000:group:g1', conversation: group, platform: 'icqq', endpointId: '10000', throughSequence: latest, selfIds: ['10000'] });
+    expect(lines).toEqual(['u1 card → "x"', 'u1 joined']);
+    expect(await ingress.linesFor({ sessionKey: 'icqq:10000:group:g1', conversation: group, platform: 'icqq', endpointId: '10000', throughSequence: latest, selfIds: ['10000'] })).toEqual([]);
   });
 });

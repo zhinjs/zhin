@@ -138,14 +138,13 @@ export function applyAiConfigFixes(
     }
   }
 
-  const normalized = normalizeAiRoutingConfig(preNormalized);
-  const nextAgents = { ...normalized.agents };
-
+  const canonical = Object.hasOwn(src, 'modelCatalog') || Object.hasOwn(src, 'modelPolicy');
+  const normalized = canonical ? undefined : normalizeAiRoutingConfig(preNormalized);
   const next: Record<string, unknown> = {
     ...preNormalized,
-    providers: normalized.providers,
-    agents: nextAgents,
+    ...(normalized ? { providers: normalized.providers, agents: { ...normalized.agents } } : {}),
   };
+  if (canonical && !Object.hasOwn(src, 'agents')) delete next.agents;
 
   for (const key of ['allowedTools', 'disabledTools', 'toolSearch'] as const) {
     if (key in next) {

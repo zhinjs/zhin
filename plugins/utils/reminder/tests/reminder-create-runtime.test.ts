@@ -65,7 +65,7 @@ async function fixture(options: { afterSend?: (count: number) => void; locale?: 
   const receive = async (content: string, overrides: Partial<IncomingMessage> = {}) => {
     const payload = { conversation, sender: { id: 'alice' }, content, ...overrides };
     const endpoint = im.endpoints.list().find(item => item.id === payload.conversation.endpoint.id)!.endpoint;
-    return im.endpointEvents.receive({ name: 'message.receive', endpoint, payload, client: {} });
+    return im.endpointEvents.receive({ name: 'message.receive', endpoint, payload, client: adapters.clientById(endpoint.id as typeof slots[number]['id']) });
   };
   return { sent, requesters, service, added, outbound, index, store, im, conversation, receive, owner,
     failPrompt: (after = 1) => { uncertainIn = after; },

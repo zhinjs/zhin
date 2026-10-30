@@ -1,3 +1,4 @@
+import { endpointRuntimeOf } from 'zhin.js/adapter';
 import { bindTestEndpoint } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -36,7 +37,7 @@ describe('IcqqEndpoint selfUserId', () => {
     expect(endpoint.selfUserId).toBeUndefined();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    endpoint.client.emit('system.online');
+    endpoint.emit('system.online');
     expect(endpoint.selfUserId).toBe('10001');
     expect(getProcessPeerRegistry().lookup('test-endpoint', '10001')).toBeDefined();
     retireEndpoint(endpoint);
@@ -46,10 +47,10 @@ describe('IcqqEndpoint selfUserId', () => {
 
   it('does not report when the client uin is 0', async () => {
     const endpoint = createEndpoint('10001');
-    (endpoint.client as unknown as { uin: number }).uin = 0;
+    (endpoint as unknown as { uin: number }).uin = 0;
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    endpoint.client.emit('system.online');
+    endpoint.emit('system.online');
     expect(endpoint.selfUserId).toBeUndefined();
     expect(getProcessPeerRegistry().isReady('test-endpoint')).toBe(false);
     retireEndpoint(endpoint);
@@ -63,7 +64,7 @@ describe('IcqqEndpoint selfUserId', () => {
     expect(getProcessPeerRegistry().isReady('test-endpoint')).toBe(true);
     retireEndpoint(endpoint);
     const stopping = endpoint.stop();
-    endpoint.client.emit('system.online');
+    endpoint.emit('system.online');
     await stopping;
     expect(getProcessPeerRegistry().isReady('test-endpoint')).toBe(false);
   });
@@ -78,11 +79,11 @@ describe('IcqqEndpoint selfUserId', () => {
       config: resolveIcqqConfig({ id: '10001', autoReconnect: false }),
       ...ports,
     }), gateway, undefined);
-    const report = vi.spyOn(endpoint as unknown as { reportSelfUserId: () => void }, 'reportSelfUserId')
+    const report = vi.spyOn(endpointRuntimeOf(endpoint) as unknown as { reportSelfUserId: () => void }, 'reportSelfUserId')
       .mockImplementation(() => { throw new Error('registry down'); });
     const starting = endpoint.start(new AbortController().signal);
     await vi.waitFor(() => expect(report).toHaveBeenCalled());
-    endpoint.client.emit('system.online');
+    endpoint.emit('system.online');
     await expect(starting).resolves.toBeUndefined();
     expect(cancelOwned).toHaveBeenCalledWith(expect.anything(), 'online');
     expect(endpoint.selfUserId).toBeUndefined();

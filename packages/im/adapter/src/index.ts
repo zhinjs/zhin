@@ -23,3 +23,7 @@ export * from './endpoint-content.js';
 export * from './endpoint-client.js';
 export * from './provider.js';
 export { default } from './provider.js';
+
+export * from './adapter.js';
+export * from './adapter-types.js';
+export * from './endpoint-specification.js';

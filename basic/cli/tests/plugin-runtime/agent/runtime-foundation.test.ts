@@ -8,6 +8,7 @@ describe('AgentRuntimeFoundation', () => {
   it('rejects invalid AI configuration before constructing auxiliary runtimes', async () => {
     await expect(AgentRuntimeFoundation.create({
       config: {},
+      modelRuntime: { hostOwnerId: 'host' },
       im: {} as ImRuntime,
       projectRoot: process.cwd(),
       processRuntime: {} as AgentRuntime,

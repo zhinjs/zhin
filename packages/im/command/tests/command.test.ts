@@ -18,6 +18,8 @@ import {
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import {
   FeatureDiscovery,
+  operationSession,
+  type OperationSession,
   type DirectoryEntry,
   type DiscoveryHost,
 } from '@zhin.js/feature-kit';
@@ -235,6 +237,39 @@ describe('Command Feature', () => {
       get $client() { reads += 1; return client; },
     })).resolves.toMatchObject({ matched: true, value: 'client-1' });
     expect(reads).toBe(1);
+  });
+
+  it('passes the same bound operation Session and preserves optional direct execution', async () => {
+    const owner = rootPluginId();
+    class NativeEvent { text() { return 'sdk'; } }
+    const native = new NativeEvent();
+    const client = { id: 'client-1' };
+    const session: OperationSession<'command-test'> = {
+      adapterName: 'command-test', adapter: {}, endpoint: client,
+      scene: { endpoint: { adapter: 'adapter-owner', id: 'canonical' }, kind: 'group', id: 'room', name: 'canonical room' },
+      sender: { id: 'speaker', platformRoles: ['admin'], authorizationRoles: ['trusted'] }, message: { text: 'original', receivedAt: 100 }, event: native,
+      signal: new AbortController().signal, reply: async () => undefined,
+    };
+    const contexts: unknown[] = [];
+    const definition = defineCommand({ adapter: 'command-test', execute(context) {
+      contexts.push(context);
+      if (!context.session) return 'direct';
+      expect(context.session).toBe(session);
+      expect(context.session.event).toBe(native);
+      expect(context.$client).toBe(client);
+      expect(context.scene).toEqual({ id: 'room', type: 'group', name: 'canonical room' });
+      expect(context.sender).toEqual({ id: 'speaker', role: ['trusted', 'admin'] });
+      expect(context.endpoint).toBe('account');
+      expect(Reflect.set(context, 'session', undefined)).toBe(false);
+      return context.session.message.text;
+    } });
+    const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'bound-session', source: '/commands/bound-session/index.ts', definition });
+    const index = new CommandIndex([slot], snapshotWithOwners([owner], [slot]));
+    const source = { clientAdapter: 'command-test', endpointId: 'account', metadata: { endpoint: 'wrong-account', group_name: 'wrong room', roles: ['master'] }, $client: client, [operationSession]: () => session };
+    await expect(index.dispatch('bound-session', source)).resolves.toMatchObject({ status: 'executed', value: 'original' });
+    await expect(index.dispatch('bound-session', { ...source, clientAdapter: 'other' })).resolves.toMatchObject({ status: 'unmatched' });
+    await expect(index.execute('bound-session')).resolves.toBe('direct');
+    expect(contexts).toHaveLength(2);
   });
 
   it('discovers nested files as hierarchical command words', async () => {

@@ -1,4 +1,7 @@
+import { resolveEndpointRoleTarget } from '../../sender-enrichment.js';
 import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
+import { personalSessionIdentity, samePersonalSessionAddress, type PersonalSessionAddress } from '@zhin.js/agent/personal-session';
 import {
   collectSegmentMedia,
   toCanonicalSegments,
@@ -361,12 +364,16 @@ export function createRuntimeTurnRequest(
     traceId: string;
     turnId: string;
     signal: AbortSignal;
+    /** Trusted Host project namespace, independent of the tool workspace. */
+    projectRoot: string;
     workspaceRoot: string;
     workingDirectory?: string;
     filesystemAccess?: NonNullable<TurnRequest['policy']['filesystem']>['access'];
     shell?: TurnRequest['policy']['shell'];
     network?: TurnRequest['policy']['network'];
     sessionKey?: string;
+    /** Trusted personal owner address; explicit system/Workroom sessions omit it. */
+    personalSession?: PersonalSessionAddress;
     intent: TurnIntent;
     ports: TurnRequestPorts;
     resolveReference?: (
@@ -477,9 +484,16 @@ export function createRuntimeTurnRequest(
         },
       })
     : undefined;
-  // Conversation events belong to the Agent session, not to whichever principal
-  // happened to trigger the next turn in a shared room.
-  const sessionKey = input.sessionKey ?? runtimeImSessionKey(access);
+  // Public conversation facts have an independent cursor for each personal Session.
+  // Workroom and other explicit system domains supply their own session key.
+  const personalSession = input.personalSession
+    ? personalSessionIdentity(input.personalSession).address
+    : input.sessionKey ? undefined : runtimePersonalSessionAddress(access, input.projectRoot);
+  const sessionKey = input.sessionKey ?? personalSessionIdentity(personalSession!).key;
+  if (personalSession && (!samePersonalSessionAddress(personalSession, runtimePersonalSessionAddress(access, input.projectRoot))
+    || personalSessionIdentity(personalSession).key !== sessionKey)) {
+    throw new TypeError('Personal Session must match the authenticated ingress address and key');
+  }
   const contextConsumer = `agent-session:${sessionKey}`;
   const conversationContext = input.readConversationContext && input.commitConversationContext
     ? Object.freeze({
@@ -508,6 +522,7 @@ export function createRuntimeTurnRequest(
     }),
     session: Object.freeze({
       key: sessionKey,
+      ...(personalSession ? { personal: personalSession } : {}),
     }),
     policy: Object.freeze({
       ...access.policy,
@@ -905,39 +920,55 @@ export function createRuntimeTurnAccess(
   });
 }
 
-export function runtimeImSessionKey(access: TurnAccessContext): string {
+/** Trusted IM identity used by Session ownership and model selection alike. */
+export function runtimePersonalSessionAddress(access: TurnAccessContext, projectRoot: string): PersonalSessionAddress {
   const origin = access.origin;
   if (origin.kind !== 'im') throw new TypeError('Runtime IM access requires an IM origin');
-  return `${origin.platform}:${origin.endpoint}:${origin.scope}:${origin.sceneId}`;
+  if (!origin.conversation) throw new TypeError('Personal Session requires a canonical conversation');
+  if (typeof projectRoot !== 'string' || !projectRoot.trim()) throw new TypeError('Personal Session requires a trusted Host project root');
+  return personalSessionIdentity({
+    rootId: resolve(projectRoot),
+    platform: origin.platform,
+    endpoint: origin.endpoint,
+    conversation: origin.conversation,
+    subjectId: access.principal.subjectId,
+  }).address;
+}
+
+export function runtimeImSessionKey(access: TurnAccessContext, projectRoot: string): string {
+  return personalSessionIdentity(runtimePersonalSessionAddress(access, projectRoot)).key;
+}
+
+/** System-owned scene work: no participant or personal preset participates in identity. */
+export function runtimeSceneTaskSessionKey(access: Pick<TurnAccessContext, 'origin'>, projectRoot: string): string {
+  const origin = access.origin;
+  if (origin.kind !== 'im' || !origin.conversation) throw new TypeError('Scene task requires a canonical IM conversation');
+  if (typeof projectRoot !== 'string' || !projectRoot.trim()) throw new TypeError('Scene task requires a trusted Host project root');
+  const conversation = origin.conversation;
+  const identity = [resolve(projectRoot), origin.platform, origin.endpoint,
+    conversation.endpoint.adapter, conversation.endpoint.id, conversation.kind, conversation.id,
+    conversation.parent ? [conversation.parent.kind, conversation.parent.id] : null, conversation.threadId ?? null];
+  return `scene-task:v1:${createHash('sha256').update(JSON.stringify(identity)).digest('hex')}`;
 }
 
 export function resolveOwnerForRuntimeMessage(
   message: Message,
   resolve?: EndpointOwnerResolver,
+  snapshot?: RuntimeSnapshot,
 ): string | undefined {
   if (!resolve) return undefined;
-  const localName = capabilityLocalName(String(message.conversation.endpoint.id));
-  const endpointKey = String(
-    message.metadata?.endpoint
-    ?? message.metadata?.endpointKey
-    ?? localName,
-  );
-  return resolve(localName, endpointKey) ?? resolve(endpointKey, endpointKey);
+  const target = resolveEndpointRoleTarget(message.conversation, snapshot, message.endpointId);
+  return target ? resolve(target.pluginKey, target.endpointId) : undefined;
 }
 
 export function resolveTrustedForRuntimeMessage(
   message: Message,
   resolve?: EndpointTrustedResolver,
+  snapshot?: RuntimeSnapshot,
 ): readonly string[] {
   if (!resolve) return [];
-  const localName = capabilityLocalName(String(message.conversation.endpoint.id));
-  const endpointKey = String(
-    message.metadata?.endpoint
-    ?? message.metadata?.endpointKey
-    ?? localName,
-  );
-  const merged = [...resolve(localName, endpointKey), ...resolve(endpointKey, endpointKey)];
-  return [...new Set(merged.map((id) => String(id).trim()).filter(Boolean))];
+  const target = resolveEndpointRoleTarget(message.conversation, snapshot, message.endpointId);
+  return target ? [...new Set(resolve(target.pluginKey, target.endpointId).map(id => String(id).trim()).filter(Boolean))] : [];
 }
 
 function resolveChannelId(message: Message): string {

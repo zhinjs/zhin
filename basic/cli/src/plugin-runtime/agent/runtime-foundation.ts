@@ -1,3 +1,5 @@
+import { withDeploymentModelScope } from '../personal-models/deployment-scope.js';
+import type { ModelRuntimeServiceOptions } from '@zhin.js/agent/model-runtime';
 import { projectLocaleToken, resolveLocale } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
@@ -38,6 +40,7 @@ type RuntimeZhinAgent = ReturnType<typeof createRuntimeZhinAgent>;
 type AssistantHomeRuntime = Awaited<ReturnType<typeof createAssistantHomeRuntime>>;
 
 export interface AgentRuntimeFoundationOptions {
+  readonly modelRuntime: Omit<ModelRuntimeServiceOptions, 'config' | 'hostProviders'>;
   readonly config: AgentHostAIConfig;
   readonly assistantConfig?: AssistantConfig;
   readonly im: ImRuntime;
@@ -103,7 +106,7 @@ export class AgentRuntimeFoundation {
   }
 
   static async create(options: AgentRuntimeFoundationOptions): Promise<AgentRuntimeFoundation> {
-    const service = await createReadyService(options.config);
+    const service = await createReadyService(options.config, options.modelRuntime);
     options.lifecycle.add(() => service.dispose());
     const knowledgeDirectory = resolveAgentHostKnowledgeDirectory(
       options.config,
@@ -145,6 +148,8 @@ export class AgentRuntimeFoundation {
       options.resources.provide(agentEventBusToken, created.events);
       options.resources.provide(aiCompletionToken, createAiCompletion({
         service,
+        acquireDefaultModel: signal => service.getModelRuntime().acquireForTurn({ rootId: options.modelRuntime.rootId ?? options.projectRoot,
+          ownerId: options.modelRuntime.hostOwnerId }, signal),
         usageQuota: created.agent.usageQuota,
       }));
 
@@ -185,7 +190,8 @@ export class AgentRuntimeFoundation {
         traceRuntime,
         schedule,
         home,
-        sessionTreeRuntime: createSessionTreeRuntimeFromAgent(created.runtime.host),
+        sessionTreeRuntime: createSessionTreeRuntimeFromAgent(created.runtime.host, operation =>
+          withDeploymentModelScope(service, options.projectRoot, operation)),
         seedPresets: created.seedPresets,
         approvalReviewer,
         approvalJudgment,
@@ -210,11 +216,13 @@ export class AgentRuntimeFoundation {
   }
 }
 
-async function createReadyService(config: AgentHostAIConfig): Promise<AIService> {
-  let service: AIService;
+async function createReadyService(config: AgentHostAIConfig, modelRuntime: Omit<ModelRuntimeServiceOptions, 'config' | 'hostProviders'>): Promise<AIService> {
+  let service: AIService | undefined;
   try {
     service = new AIService(config);
+    await service.prepareModelRuntime(modelRuntime);
   } catch (error) {
+    await service?.dispose().catch(() => undefined);
     throw new Error('Agent Host rejected invalid AI configuration', { cause: error });
   }
   if (!service.isReady()) {

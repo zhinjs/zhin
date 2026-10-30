@@ -1,6 +1,6 @@
 import type { Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
-import type { LoginAssist, LoginAssistType, PendingLoginTaskPayload } from '@zhin.js/core';
+import type { LoginAssist, LoginAssistEndpointIdentity, LoginAssistType, PendingLoginTaskPayload } from '@zhin.js/core';
 import { formatCompact } from '@zhin.js/logger';
 
 type IcqqLoginClient = {
@@ -26,6 +26,8 @@ export async function runIcqqLoginAssistStep(input: {
   adapter: string;
   endpointKey: string;
   owner: object;
+  signal?: AbortSignal;
+  endpointIdentity?: LoginAssistEndpointIdentity;
   logger: Logger;
   step: LoginAssistType;
   event: unknown;
@@ -44,6 +46,7 @@ export async function runIcqqLoginAssistStep(input: {
   }));
 
   try {
+    input.signal?.throwIfAborted();
     if (step === 'device') {
       try {
         await client.sendSmsCode();
@@ -56,7 +59,8 @@ export async function runIcqqLoginAssistStep(input: {
       }
     }
 
-    const value = await assist.waitForInput(adapter, endpointKey, step, payload, { owner });
+    const value = await assist.waitForInput(adapter, endpointKey, step, payload, { owner, signal: input.signal, endpointIdentity: input.endpointIdentity });
+    input.signal?.throwIfAborted();
     const text = normalizeSubmitValue(value);
 
     switch (step) {

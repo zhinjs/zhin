@@ -21,6 +21,8 @@ export type RuntimeManagementSenderRoles = {
 
 export type RuntimeManagementDeps = AgentCommandPresentation & {
   readonly service: AIService;
+  /** Host resolves deployment-only summary authority lazily for model-using commands. */
+  readonly withModelScope?: <T>(operation: () => Promise<T>) => Promise<T>;
   readonly zhinAgent: ZhinAgent;
   readonly sessionKey: string;
   readonly content: string;
@@ -78,7 +80,9 @@ export async function handleRuntimeManagementCommand(
     if (!isOperator) return t(locale, 'denied');
     const n = parseLeadingInt(treeJump[1] ?? '');
     if (n == null) return t(locale, 'usage', { command: command('tree') + ' 2' });
-    return jumpSessionTree(agent, deps.sessionKey, n, locale);
+    return deps.withModelScope
+      ? deps.withModelScope(() => jumpSessionTree(agent, deps.sessionKey, n, locale))
+      : jumpSessionTree(agent, deps.sessionKey, n, locale);
   }
 
   const fork = text?.match(/^fork\s+(\d+)\s*$/iu);
@@ -86,12 +90,15 @@ export async function handleRuntimeManagementCommand(
     if (!isOperator) return t(locale, 'denied');
     const n = parseLeadingInt(fork[1] ?? '');
     if (n == null) return t(locale, 'usage', { command: command('fork') + ' 2' });
-    return jumpSessionTree(agent, deps.sessionKey, n, locale);
+    return deps.withModelScope
+      ? deps.withModelScope(() => jumpSessionTree(agent, deps.sessionKey, n, locale))
+      : jumpSessionTree(agent, deps.sessionKey, n, locale);
   }
 
   if (/^compact\s*$/iu.test(text ?? '')) {
     if (!isOperator) return t(locale, 'denied');
-    const result = await deps.zhinAgent.compactSession(deps.sessionKey, locale);
+    const compact = () => deps.zhinAgent.compactSession(deps.sessionKey, locale);
+    const result = await (deps.withModelScope ? deps.withModelScope(compact) : compact());
     return result.ok ? `✅ ${result.message}` : `ℹ️ ${result.message}`;
   }
 

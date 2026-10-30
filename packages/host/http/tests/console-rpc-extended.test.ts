@@ -1126,3 +1126,19 @@ describe('dispatchExtendedConsoleRpc', () => {
     });
   });
 });
+
+it('round-trips exact login incarnation metadata and rejects a stale target without consuming the real challenge', async () => {
+  const { LoginAssist } = await import('../../../im/core/src/built/login-assist.js');
+  const assist = new LoginAssist();
+  const identity = { canonicalId: 'canonical', instanceId: 'instance', epoch: 1, incarnationId: 'execution-one' };
+  const waiting = assist.waitForInput('icqq', 'display', 'slider', {}, { owner: {}, endpointIdentity: identity });
+  try {
+    const task = assist.listPending()[0]!;
+    const ctx = makeCtx({ loginAssist: assist });
+    await expect(dispatchExtendedConsoleRpc('login.list', {}, ctx)).resolves.toMatchObject({ data: { tasks: [{ endpointIdentity: identity }] } });
+    await expect(dispatchExtendedConsoleRpc('login.submit', { taskId: task.id, value: 'ticket', endpointIdentity: { ...identity, epoch: 2, incarnationId: 'execution-two' } }, ctx)).resolves.toHaveProperty('error');
+    expect(assist.listPending()).toHaveLength(1);
+    await expect(dispatchExtendedConsoleRpc('login.submit', { taskId: task.id, value: 'ticket', endpointIdentity: identity }, ctx)).resolves.toEqual({ data: { success: true } });
+    await expect(waiting).resolves.toBe('ticket');
+  } finally { assist.dispose(); await waiting.catch(() => undefined); }
+});

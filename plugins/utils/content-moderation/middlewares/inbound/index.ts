@@ -4,7 +4,7 @@ import { aiCompletionToken, createDeliveryTarget, databaseHostToken, getLogger, 
   outboundHostToken, usageSubjectFromMessage } from 'zhin.js';
 import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
 import { groupRuleViolationToken, type GroupRuleViolationSink } from '@zhin.js/core/runtime';
-import { generationAdmissionSource } from 'zhin.js/plugin-runtime';
+import { generationAdmissionSource, type CapabilityId } from 'zhin.js/plugin-runtime';
 import { resolveLocale } from 'zhin.js/i18n';
 import {
   buildScanContext,
@@ -155,27 +155,38 @@ async function enqueueGroupModeration(
       && hasResource(context, outboundHostToken)) {
       const host = context.use(outboundHostToken);
       if (!host.sendTarget) return;
-      const lifetime = new AbortController();
-      const gates = adapters[generationAdmissionSource] ?? [];
-      const detach = gates.map(gate => gate.onDeactivate(() => lifetime.abort(new Error('Moderation adapter generation retired'))));
-      const signal = AbortSignal.any([context.signal, lifetime.signal]);
-      const messageId = message.id ?? '';
-      const assertTarget = () => {
-        signal.throwIfAborted();
-        if (endpoint.identity.id !== conversation.endpoint.id || endpoint.selfUserId !== target.account
-          || endpoint.identity.adapter !== target.adapter || gates.some(gate => !gate.active)) {
-          throw new Error('Moderation target account is no longer active');
-        }
+      const client = context.$client;
+      if (client === undefined) throw new Error('Moderation source Client is unavailable');
+      // This work outlives the Message. Its own lease keeps the captured incarnation's
+      // cancellation wired after the inbound operation releases its child lease.
+      const child = adapters.acquire(conversation.endpoint.id as CapabilityId, context.signal, client);
+      const detach: Array<() => void> = [];
+      const finish = () => {
+        try { detach.forEach(remove => remove()); } finally { child.release(); }
       };
       try {
+        const lifetime = new AbortController();
+        const gates = adapters[generationAdmissionSource] ?? [];
+        for (const gate of gates) detach.push(gate.onDeactivate(() => lifetime.abort(new Error('Moderation adapter generation retired'))));
+        const signal = AbortSignal.any([context.signal, lifetime.signal, child.signal]);
+        const messageId = message.id ?? '';
+        const management = adapters.management(conversation.endpoint.id as CapabilityId);
+        const assertTarget = () => {
+          signal.throwIfAborted();
+          child.assertActive();
+          if (endpoint.identity.id !== conversation.endpoint.id || endpoint.selfUserId !== target.account
+            || endpoint.identity.adapter !== target.adapter || gates.some(gate => !gate.active)) {
+            throw new Error('Moderation target account is no longer active');
+          }
+        };
         const queued = await engine.groupReviewQueue.enqueue({
           scope, group: conversation.id, sender: message.sender.id, locale,
           messageId, sentAt: Number(message.metadata?.platformSentAt), text, ...remembered,
           signal,
           state: context.use(databaseHostToken).state.forConversation(destination),
           completion: context.use(aiCompletionToken), management: {
-            inspectGroupMember: endpoint.management?.inspectGroupMember ? async (group, member, operationSignal) => {
-              assertTarget(); return endpoint.management!.inspectGroupMember!(group, member, operationSignal);
+            inspectGroupMember: management?.inspectGroupMember ? async (group, member, operationSignal) => {
+              assertTarget(); return management.inspectGroupMember!(group, member, operationSignal);
             } : undefined,
           },
           ...(rules ? { rules: async (hit) => {
@@ -206,9 +217,9 @@ async function enqueueGroupModeration(
           },
           audit: (event) => logger.info({ ...event, endpoint: conversation.endpoint.id, group: conversation.id }),
         });
-        return { done: queued.done.finally(() => detach.forEach(remove => remove())) };
+        return { done: queued.done.finally(finish) };
       } catch (error) {
-        detach.forEach(remove => remove()); throw error;
+        finish(); throw error;
       }
     }
   } catch (error) {

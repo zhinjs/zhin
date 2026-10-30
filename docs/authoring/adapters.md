@@ -107,6 +107,14 @@ example:
 
 用 `createEndpointCommands` 为适配器生成 `<适配器> endpoint list / add / remove` 命令，见 [命令 · 适配器的 endpoint 管理命令](./commands.md#适配器的-endpoint-管理命令)。
 
+## 继承平台 Client 与账号所有权
+
+需要直接提供平台 SDK 类型和运行时账号管理时，定义 `Adapter<E, Config, Events>` 子类，由它创建与管理所有 Endpoint。Endpoint 继承实际 SDK Client，并通过 `endpointSpec` / `createEndpointSpecification` 注册框架钩子；不覆盖 SDK 的 `on`、`off`、`emit`。在 `AdapterRegistry` 注册一次 Adapter 类型，Command 的字符串平台声明即可推导子类与 Endpoint。
+
+新增账号只保存停用配置，不创建 SDK 对象；显式启动才连接。停止、更新、删除和替换都由所属 Adapter 控制。更新运行账号只重连该账号，旧操作固定到原 incarnation。旧 `create(context)` 实现继续兼容，但不要另建全局账号 Controller 或可写 Endpoint 目录。
+
+ICQQ 已使用这一结构。对于 WebSocket/SSE 传输，仍使用现有 `createEndpointLifecycle` 管理重连与心跳。上面的轻量写法与下面的传统 `Endpoint<TClient>` 写法都是兼容输入。
+
 ## 什么时候需要继承 Endpoint
 
 上面的 `defineAdapter` 写法覆盖绝大多数平台。只有当协议需要**自定义的多阶段连接流程**时，才继承 `Endpoint` 类自己实现 `start` / `open` / `close` / `stop`，生命周期钩子说明见 [端点生命周期](./endpoint-lifecycle.md#endpoint-的生命周期钩子)。

@@ -1,6 +1,8 @@
+import type { Token } from './token.js';
 import type { PluginId } from './identity.js';
 import { GenerationCompensationError } from './handoff.js';
 import {
+  type RootResourceResolver,
   SnapshotStore,
   type CommittedGeneration,
   type PreparedGeneration,
@@ -49,8 +51,8 @@ export class RootController<TState = undefined> {
     initial: SnapshotState,
     private readonly onControlError: ControlErrorHandler = () => undefined,
     ...state: [TState] extends [undefined]
-      ? [initialState?: undefined]
-      : [initialState: TState]
+      ? [initialState?: undefined, rootResource?: RootResourceResolver<TState>]
+      : [initialState: TState, rootResource?: RootResourceResolver<TState>]
   ) {
     this.#snapshotStore = new SnapshotStore(
       initial,
@@ -66,6 +68,7 @@ export class RootController<TState = undefined> {
         return store.acquire();
       },
       owns: (lease: SnapshotLease) => store.owns(lease),
+      rootResource: <T>(lease: SnapshotLease, token: Token<T>) => store.rootResource(lease, token),
     });
   }
 

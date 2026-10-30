@@ -3,8 +3,11 @@
  *
  * 把 QQ 适配器独有的 `qq endpoint` 命令族泛化为任意适配器可复用的套件：
  *
- * - `<adapter> endpoint list`：运行中的 endpoints（adapter create 注册的 runtime state）
- *   + zhin.config.yml 配置里的 `plugins.<adapterKey>.endpoints`。
+ * - Runtime 命令从所属 Adapter 读取账号清单，并直接提交同一 desired repository。
+ *   首次修改前需管理员在 Console 确认迁移；新增仅保存，移除取消并清理目标账号。
+ *   Runtime 路径不写启动文件或 `.env`，不重建 Root；目录错误不能降为旧文件路径。
+ * - 以下文件写入和 bindFlow 仅兼容没有 project 上下文的手工 embedded 调用。
+ * - `<adapter> endpoint list`：旧入口显示运行状态及启动配置。
  * - `<adapter> endpoint add <name> <key=value...>`：手动录入字段，
  *   凭据类字段转换成环境变量引用，其余字段保持内联值；具体项目文件持久化由根级
  *   EndpointConfigurationStore 负责。
@@ -31,11 +34,18 @@ import {
   createToken,
   resolveLocale,
   outboundHostToken,
+  PluginConsoleRpcError,
   type OutboundHost,
   type OutboundSendInput,
   type Token,
   type Locale,
+  type PluginId,
+  type FeatureId,
+  type PluginConsoleRpcCall,
 } from '@zhin.js/plugin-runtime';
+import { isAdapterIndex } from './adapter-index.js';
+import { adapterFeatureId } from './provider.js';
+import { mutateConsoleAdapter, ownedConsoleAdapter } from './adapter-runtime-console.js';
 import { endpointCommandMessages } from './endpoint-command-messages.js';
 import {
   endpointConfigurationStoreToken,
@@ -214,6 +224,7 @@ export interface EndpointFieldSpec {
   readonly required?: boolean;
   /** 凭据类字段：值写入 .env，yaml 保存 ${REF} 引用；否则内联写入 yaml */
   readonly env?: boolean;
+  readonly secret?: boolean;
   /** 字段说明（用于用法提示） */
   readonly description?: string;
   readonly descriptionI18n?: Readonly<Partial<Record<Locale, string>>>;
@@ -264,6 +275,10 @@ export interface EndpointCommandsSpec {
  * TS 逆变检查失败（TS2345）。
  */
 export interface EndpointCommandContext {
+  readonly owner?: PluginId | Readonly<{ id: PluginId }>;
+  readonly generation?: number;
+  readonly signal?: AbortSignal;
+  project?<T>(feature: FeatureId): T;
   readonly locale?: Locale;
   readonly formatCommand?: (localPath: string) => string | undefined;
   readonly config: unknown;
@@ -327,6 +342,7 @@ export function formatEndpointList(
     readonly configured: readonly ConfiguredEndpointEntry[];
     readonly footer?: string;
     readonly locale?: Locale;
+    readonly runtime?: boolean;
   },
 ): string {
   const running = [...source.running];
@@ -340,7 +356,7 @@ export function formatEndpointList(
       lines.push(endpoint.mode ? `  - ${endpoint.id}（${endpoint.mode}）` : `  - ${endpoint.id}`);
     }
   }
-  lines.push(endpointCommandMessages(locale, 'configured', { adapter: spec.adapterDisplayName, key: spec.adapterKey }));
+  lines.push(endpointCommandMessages(locale, source.runtime ? 'runtimeConfigured' : 'configured', { adapter: spec.adapterDisplayName, key: spec.adapterKey }));
   if (source.configured.length === 0) {
     lines.push(endpointCommandMessages(locale, 'none'));
   } else {
@@ -353,7 +369,7 @@ export function formatEndpointList(
   return lines.join('\n');
 }
 
-function addUsage(spec: EndpointCommandsSpec, locale: Locale, command?: string): string {
+function addUsage(spec: EndpointCommandsSpec, locale: Locale, command?: string, runtime = false): string {
   if (command === undefined) return endpointCommandMessages(locale, 'noCommand');
   const fields = spec.fields ?? [];
   const fieldText = fields.length === 0
@@ -361,7 +377,7 @@ function addUsage(spec: EndpointCommandsSpec, locale: Locale, command?: string):
     : endpointCommandMessages(locale, 'fieldList', { fields: fields.map((field) => {
       const marks = [
         field.required ? endpointCommandMessages(locale, 'required') : '',
-        field.env ? endpointCommandMessages(locale, 'environment') : '',
+        field.env ? endpointCommandMessages(locale, runtime ? 'credential' : 'environment') : '',
         field.descriptionI18n?.[locale] ?? field.description ?? '',
       ].filter(Boolean).join(locale === 'en' ? ', ' : '，');
       return marks ? `${field.key}（${marks}）` : field.key;
@@ -453,6 +469,49 @@ export async function removeEndpointById(
 }
 
 /** 生成 `<adapter> endpoint` 的 list / add / remove 三个命令定义（见文件头接入步骤）。 */
+function commandRuntime(spec: EndpointCommandsSpec, context: EndpointCommandContext) {
+  if (!context.project) return undefined;
+  const projection = context.project<unknown>(adapterFeatureId);
+  if (!isAdapterIndex(projection)) throw new Error('Adapter projection is unavailable');
+  const owner = typeof context.owner === 'string' ? context.owner : context.owner?.id;
+  const generation = context.generation;
+  if (!owner || typeof generation !== 'number') throw new Error('Command runtime owner or generation is unavailable');
+  const directory = projection.forOwner(owner);
+  const call: PluginConsoleRpcCall = { signal: context.signal ?? new AbortController().signal,
+    runtime: { owner, generation, operator: false, project(feature) {
+      if (feature !== adapterFeatureId) throw new PluginConsoleRpcError('unsupported', 'Projection is not granted');
+      return directory;
+    } },
+  };
+  const consoleSpec = { adapterKey: spec.adapterKey, adapterDisplayName: spec.adapterDisplayName, fields: spec.fields };
+  const adapter = ownedConsoleAdapter(consoleSpec, call);
+  return { adapter, call, consoleSpec, revision: adapter.revision, generation };
+}
+
+function runtimePairs(args: readonly string[]): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const argument of args) {
+    const separator = argument.indexOf('=');
+    if (separator <= 0) throw new PluginConsoleRpcError('invalid_input', 'Use declared key=value fields');
+    values[argument.slice(0, separator)] = argument.slice(separator + 1);
+  }
+  return values;
+}
+
+async function runtimeCommandMutation(runtime: NonNullable<ReturnType<typeof commandRuntime>>, action: 'add' | 'remove', id: string,
+  values: Record<string, string> | undefined, locale: Locale): Promise<string> {
+  if (runtime.adapter.needsMigration) return endpointCommandMessages(locale, 'migrationRequired');
+  try {
+    await mutateConsoleAdapter(runtime.consoleSpec, runtime.call, action, {
+      expectedGeneration: runtime.generation, expectedRevision: runtime.revision, id,
+      ...(values ? { values } : {}),
+    });
+    return endpointCommandMessages(locale, action === 'add' ? 'runtimeAdded' : 'runtimeRemoved', { id });
+  } catch (error) {
+    return endpointCommandMessages(locale, error instanceof PluginConsoleRpcError && error.code === 'conflict' ? 'runtimeConflict' : 'runtimeFailed');
+  }
+}
+
 export function createEndpointCommands<TCommand>(
   spec: EndpointCommandsSpec,
   defineCommand: (definition: EndpointCommandDefinition) => TCommand,
@@ -461,8 +520,15 @@ export function createEndpointCommands<TCommand>(
     list: defineCommand({
       description: endpointCommandMessages('zh-CN', 'listDescription', { adapter: spec.adapterDisplayName }),
       descriptionI18n: { en: endpointCommandMessages('en', 'listDescription', { adapter: spec.adapterDisplayName }) },
-      async execute({ use, locale: preference }) {
+      async execute(context) {
+        const { use, locale: preference } = context;
         const locale = resolveLocale(preference);
+        const runtime = commandRuntime(spec, context);
+        if (runtime) return formatEndpointList(spec, {
+          running: runtime.adapter.list().filter(entry => entry.started).map(entry => ({ id: entry.endpointId })),
+          configured: runtime.adapter.configurationView(spec.fields ?? []).map(entry => ({ id: entry.id, ...entry.values })),
+          footer: spec.listFooter?.(use, locale), locale, runtime: true,
+        });
         const store = use(endpointConfigurationStoreToken);
         return formatEndpointList(spec, {
           running: spec.running?.(use) ?? [],
@@ -477,10 +543,19 @@ export function createEndpointCommands<TCommand>(
       descriptionI18n: spec.addDescriptionI18n ?? (spec.addDescription === undefined
         ? { en: endpointCommandMessages('en', 'addDescription', { adapter: spec.adapterDisplayName }) } : undefined),
       params: { id: { type: 'string', description: 'endpoint ID' } },
-      async execute({ config, input, params, args, use, locale: preference, formatCommand }) {
+      async execute(context) {
+        const { config, input, params, args, use, locale: preference, formatCommand } = context;
         const locale = resolveLocale(preference);
         if (!isEndpointOperator(config, input)) return endpointCommandForbidden(spec.adapterDisplayName, locale);
         const id = endpointIdParam(params);
+        const runtime = commandRuntime(spec, context);
+        if (runtime) {
+          if (runtime.adapter.needsMigration) return endpointCommandMessages(locale, 'migrationRequired');
+          if (!id) return addUsage(spec, locale, formatCommand?.(`${spec.adapterKey} endpoint add`), true);
+          let values: Record<string, string>;
+          try { values = runtimePairs(args); } catch { return endpointCommandMessages(locale, 'runtimeFailed'); }
+          return runtimeCommandMutation(runtime, 'add', id, values, locale);
+        }
         if (spec.bindFlow) {
           return await spec.bindFlow({
             id,
@@ -502,9 +577,16 @@ export function createEndpointCommands<TCommand>(
       description: endpointCommandMessages('zh-CN', 'removeDescription', { key: spec.adapterKey }),
       descriptionI18n: { en: endpointCommandMessages('en', 'removeDescription', { key: spec.adapterKey }) },
       params: { id: { type: 'string', description: 'endpoint ID' } },
-      async execute({ config, input, params, use, locale: preference, formatCommand }) {
+      async execute(context) {
+        const { config, input, params, use, locale: preference, formatCommand } = context;
         const locale = resolveLocale(preference);
         if (!isEndpointOperator(config, input)) return endpointCommandForbidden(spec.adapterDisplayName, locale);
+        const runtime = commandRuntime(spec, context);
+        if (runtime) {
+          const id = endpointIdParam(params);
+          if (!id) return endpointCommandMessages(locale, 'runtimeFailed');
+          return runtimeCommandMutation(runtime, 'remove', id, undefined, locale);
+        }
         return await removeEndpointById(
           spec,
           String(params.id ?? ''),

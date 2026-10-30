@@ -1,3 +1,10 @@
+interface LoginEndpointIdentity {
+  readonly canonicalId: string;
+  readonly instanceId: string;
+  readonly epoch: number;
+  readonly incarnationId: string;
+}
+
 export interface ConsoleRpcExtendedCtx {
   /** full scope 才允许写操作；demo scope 只放行只读 RPC。 */
   fullScope: boolean;
@@ -20,13 +27,14 @@ export interface ConsoleRpcExtendedCtx {
       id: string;
       adapter: string;
       endpointKey: string;
+      endpointIdentity?: LoginEndpointIdentity;
       type: string;
       payload: Record<string, unknown>;
       createdAt: number;
       expiresAt?: number;
     }[];
-    submit(id: string, value: string | Record<string, unknown>): boolean;
-    cancel(id: string, reason?: string): boolean;
+    submit(id: string, value: string | Record<string, unknown>, endpointIdentity?: LoginEndpointIdentity): boolean;
+    cancel(id: string, reason?: string, endpointIdentity?: LoginEndpointIdentity): boolean;
   };
   /** Authenticated Root adapter; mutation DTOs deliberately contain no principal/decision fields. */
   workroomProfileControl?: ConsoleWorkroomProfileControlPort;

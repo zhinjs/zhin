@@ -56,7 +56,7 @@ import {
   middlewareFeatureId,
   type MiddlewareNext,
 } from '@zhin.js/middleware';
-import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit';
+import { bindOperationInput, operationInputBinding, readOperationSession } from '@zhin.js/feature-kit';
 import {
   HandlerIndex,
   defineHandler,
@@ -117,6 +117,8 @@ const ignoredEndpointEvents = Object.freeze({
   receive: async (_event: EndpointEvent) => undefined,
 });
 
+const fixtureStores = new WeakMap<ImRuntime, SnapshotStore>();
+
 function receive(
   im: ImRuntime,
   payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
@@ -130,7 +132,11 @@ function receive(
       adapter: input.conversation?.endpoint?.adapter ?? 'test',
       name: 'test',
     }),
-    client: ignoredEndpointEvents,
+    client: (() => {
+      const adapters = fixtureStores.get(im)!.current.projections.get(adapterFeatureId) as AdapterIndex;
+      const id = input.conversation?.endpoint?.id as never;
+      return adapters.list().some(row => row.id === id) ? adapters.clientById(id) : ignoredEndpointEvents;
+    })(),
   })) as Promise<import('../../src/plugin-runtime/im/index.js').MessageDispatchResult>;
 }
 
@@ -139,7 +145,8 @@ function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<un
     name,
     payload,
     endpoint: Object.freeze({ id: (payload as { endpointId?: string }).endpointId as never, adapter: 'test' }),
-    client: ignoredEndpointEvents,
+    client: (fixtureStores.get(im)!.current.projections.get(adapterFeatureId) as AdapterIndex)
+      .clientById((payload as { endpointId?: string }).endpointId as never),
   }));
 }
 
@@ -539,7 +546,7 @@ describe('IM Runtime', () => {
     let scoped: Message | undefined;
     const sends = async (input: Message) => {
       scoped = input;
-      expect(input.$client).toBe(ignoredEndpointEvents);
+      expect(input.$client).toBe(fixture.adapters.clientById(fixture.adapter.id));
       const card = component('result', {});
       await input.$reply(card);
       await input.$sendTo({ kind: 'private', id: 'other' }, card);
@@ -615,6 +622,7 @@ describe('IM Runtime', () => {
     const root = rootPluginId();
     const sent: unknown[] = [];
     let signal: AbortSignal | undefined;
+    let sessionSignal: AbortSignal | undefined;
     let entered!: () => void;
     let release!: () => void;
     let disposed = false;
@@ -624,7 +632,7 @@ describe('IM Runtime', () => {
       middleware: false,
       commandOwner: childPluginId(root, 'context-author'),
       commandShortcut: entry === 'shortcut',
-      commandSignal: value => { signal = value; },
+      commandSignal: (value, input) => { signal = value; sessionSignal = readOperationSession(input)?.signal; },
       commandResult: async input => {
         await input.$reply('ordinary explicit reply');
         return 'ordinary command result';
@@ -640,7 +648,8 @@ describe('IM Runtime', () => {
       expect(signal?.aborted).toBe(false);
       fixture.store.commit(1, { snapshot: snapshotState(fixture.store.current), dispose: () => undefined });
       expect(signal?.aborted).toBe(true);
-      expect(signal).toBe(retirementSignal);
+      expect(signal).toBe(sessionSignal);
+      expect(retirementSignal.aborted).toBe(true);
       expect(disposed).toBe(false);
       release();
       await expect(running).resolves.toMatchObject({ matched: true });
@@ -2959,7 +2968,7 @@ describe('IM Runtime', () => {
       name: 'message.receive',
       payload: input,
       endpoint: Object.freeze({ id: fixture.adapter.id, adapter: 'memory' }),
-      client: ignoredEndpointEvents,
+      client: fixture.adapters.clientById(fixture.adapter.id),
     });
     await expect(previous.receive(endpointEvent)).resolves.toMatchObject({ matched: true });
     expect(calls).toEqual(['previous']);
@@ -3064,7 +3073,7 @@ async function createFixture(
     restrictCommand?: boolean;
     adapterSegments?: { supported?: readonly string[]; html?: 'direct' | 'image' | 'text'; markdown?: 'native' | 'text'; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     commandResult?: (input: Message) => SendContent | void | Promise<SendContent | void>;
-    commandSignal?: (signal: AbortSignal) => void;
+    commandSignal?: (signal: AbortSignal, input: Message) => void;
     execution?: import('@zhin.js/command').CommandExecutionPolicy;
     componentResult?: () => SendContent | Promise<SendContent>;
     componentOwner?: PluginId;
@@ -3131,7 +3140,7 @@ async function createFixture(
       async execute({ args, input, signal }) {
         if (!input) throw new Error('Fixture command requires a Message');
         events.push(`command:${args[0]}`);
-        options?.commandSignal?.(signal);
+        options?.commandSignal?.(signal, input);
         commandStarted?.();
         await commandGate;
         if (options?.commandResult) return options.commandResult(input);
@@ -3243,6 +3252,7 @@ async function createFixture(
   ]);
   const store = new SnapshotStore({ ...base, projections });
   im.attach(store);
+  fixtureStores.set(im, store);
   dispatchEndpointEvent = event => im.endpointEvents.receive(event);
   await adapters.start();
   adapters.open();

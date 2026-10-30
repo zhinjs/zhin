@@ -316,6 +316,7 @@ export type {
 // ── Agent session persistence ──
 export {
   AGENT_SESSION_SOURCE_MODEL,
+  agentSessionSourceFields,
   AGENT_MESSAGE_QUERY_MODEL,
   agentMessageQueryFields,
   AGENT_SESSION_MODEL,

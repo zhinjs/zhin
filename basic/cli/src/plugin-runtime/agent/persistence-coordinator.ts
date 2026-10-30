@@ -142,6 +142,12 @@ async function migrateAgentQueryColumns(database: StructuredDatabase): Promise<v
     }
   }
   await ensureDatabaseIndex(database, 'agent_sessions', 'agent_sessions_key_status_time', [{ name: 'session_key', text: true }, { name: 'status', text: true }, { name: 'updated_at' }]);
+  // Prefix sizes stay below MySQL's composite-key byte limit. Remaining owner
+  // dimensions are still enforced by the SQL predicate before LIMIT/OFFSET.
+  await ensureDatabaseIndex(database, 'agent_sessions', 'agent_sessions_personal_current', [
+    { name: 'source_root', text: true }, { name: 'source_instance', text: true }, { name: 'source_subject', text: true },
+    { name: 'status', text: true }, { name: 'updated_at' }, { name: 'session_id', text: true },
+  ]);
   await ensureDatabaseIndex(database, 'agent_messages', 'agent_messages_session_time', [{ name: 'session_id', text: true }, { name: 'timestamp' }]);
   await ensureDatabaseIndex(database, 'agent_messages', 'agent_messages_actor_time', [{ name: 'actor_id', text: true }, { name: 'timestamp' }]);
 }

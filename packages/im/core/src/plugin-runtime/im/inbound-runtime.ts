@@ -5,11 +5,12 @@ import type {
   RuntimeSnapshot,
   SnapshotLease,
 } from '@zhin.js/plugin-runtime';
-import type { EndpointEvent, PeerRegistry } from '@zhin.js/adapter';
+import type { EndpointEvent, PeerRegistry, EndpointChildLease } from '@zhin.js/adapter';
+import { operationEndpoint } from './operation-endpoint.js';
 import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
-import { bindOperationInput } from '@zhin.js/feature-kit';
+import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { DeliveryReceipt } from '@zhin.js/im-contract';
 import type { UserInteraction } from '@zhin.js/interaction';
@@ -188,6 +189,7 @@ export class InboundRuntime {
     const lease = this.context.acquire();
     let active = true;
     let commandOperation: CommandOperationController | undefined;
+    let endpointLease: EndpointChildLease | undefined;
     try {
       const adapter = source.endpoint.id as CapabilityId;
       this.context.diagnostics?.begin(lease.value.generation, {
@@ -196,6 +198,11 @@ export class InboundRuntime {
       }, source.payload.message?.id);
       const adapters = requireAdapters(lease.value);
       const requester = adapters.owner(adapter);
+      endpointLease = adapters.acquireInbound(adapter, source.client);
+      const boundEndpoint = endpointLease;
+      const adapterInstance = adapters.adapterForEndpoint(adapter);
+      if (!adapterInstance) throw new Error('Inbound Endpoint has no owning Adapter');
+      const operationSignal = AbortSignal.any([lease.retirementSignal, boundEndpoint.signal]);
       // Routing identity belongs to the bound Endpoint, never to a protocol
       // normalizer's payload or a Plugin owner inferred from a CapabilityId.
       const conversation = Object.freeze({ ...source.payload.conversation,
@@ -338,11 +345,13 @@ export class InboundRuntime {
       const locale = await messageLocale(lease.value, conversation, enrichedSender?.id);
       const operationReply: ConstructorParameters<typeof RuntimeMessage>[3] = (content, replyRequester = requester, targetConversation) => {
           if (!active) throw new Error('Message reply scope has ended');
+          boundEndpoint.assertActive();
           const effectiveConversation = targetConversation
             ? { ...targetConversation, endpoint: conversation.endpoint }
             : conversation;
           const deliver = () => this.context.deliver({
             conversation: effectiveConversation,
+            [operationEndpoint]: boundEndpoint,
             requester: replyRequester,
             locale,
             content,
@@ -363,7 +372,7 @@ export class InboundRuntime {
         };
       commandOperation = this.context.commandExecution?.openOperation({
         snapshot: lease.value, conversation, senderId: enrichedSender?.id,
-        retirementSignal: lease.retirementSignal, reply: (owner, text) => operationReply(text, owner),
+        retirementSignal: operationSignal, reply: (owner, text) => operationReply(text, owner),
       });
       const execute = async (): Promise<MessageDispatchResult> => {
         const message = new RuntimeMessage(
@@ -380,13 +389,22 @@ export class InboundRuntime {
           input.replyTo,
           (): unknown => {
             if (!active) throw new Error('Message Client scope has ended');
+            boundEndpoint.assertActive();
             return source.client;
           },
           source.endpoint.adapter,
           { snapshot: lease.value, locale,
             resolveCommands: (message) => this.#dispatcher.commandEnvironment(message, lease.value),
-            retirementSignal: lease.retirementSignal, registerOperationView: commandOperation?.bind, assertActive: () => {
+            retirementSignal: operationSignal,
+            session: { adapter: adapterInstance, endpoint: boundEndpoint.endpoint,
+              adapterName: adapters.clientAdapter(adapter), event: input.event, receivedAt,
+              platformSentAt: input.platformSentAt,
+              platformRoles: input.sender?.roles?.filter(role => role !== 'master' && role !== 'trusted' && role !== 'user'),
+              authorizationRoles: enrichedSender?.roles?.filter(role => role === 'master' || role === 'trusted' || role === 'user'),
+              signal: operationSignal },
+            registerOperationView: commandOperation?.bind, assertActive: () => {
             if (!active) throw new Error('Message author binding scope has ended');
+            boundEndpoint.assertActive();
           }, ...(origin ? { origin } : {}) },
         );
         const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
@@ -556,7 +574,10 @@ export class InboundRuntime {
         ? await this.context.runCommandOperation(commandOperation, execute) : await execute();
     } finally {
       try { await commandOperation?.finish(); }
-      finally { active = false; this.context.release(lease); }
+      finally {
+        active = false;
+        try { endpointLease?.release(); } finally { this.context.release(lease); }
+      }
     }
   }
 
@@ -565,20 +586,30 @@ export class InboundRuntime {
   ): Promise<void> {
     const lease = this.context.acquire();
     let active = true;
+    let endpointLease: EndpointChildLease | undefined;
     try {
+      const adapters = requireAdapters(lease.value);
+      endpointLease = adapters.acquireInbound(source.endpoint.id, source.client);
+      const captured = endpointLease;
+      const operationSignal = AbortSignal.any([lease.retirementSignal, captured.signal]);
+      const assertActive = () => {
+        if (!active) throw new Error('Endpoint event context expired with its generation operation');
+        // A held Root callback may drain across Root retirement; a retired child may not.
+        captured.assertActive();
+      };
       const context: EndpointEventContext = {
         endpoint: {
           id: source.endpoint.id,
-          adapter: requireAdapters(lease.value).clientAdapter(source.endpoint.id),
+          adapter: adapters.clientAdapter(source.endpoint.id),
         },
         generation: lease.value.generation,
         client: () => {
-          if (!active) throw new Error('Endpoint event Client context expired with its generation operation');
+          assertActive();
           return source.client;
         },
       };
       const dispatch = async (payload: Notice | Request | SystemEvent) => {
-        await this.#runHandlers(lease, source.name, [withEndpointEventPayload(source, payload)]);
+        await this.#runHandlers(lease, source.name, [withEndpointEventPayload(source, payload)], operationSignal);
       };
       if (source.payload.type !== source.name.split('.')[0]) {
         throw new TypeError('Endpoint event payload type does not match its gateway event');
@@ -600,7 +631,7 @@ export class InboundRuntime {
             } finally {
               await recording;
             }
-          });
+          }, assertActive);
           break;
         case 'system':
           await dispatch(new RuntimeSystemEvent(source.payload, context));
@@ -608,7 +639,7 @@ export class InboundRuntime {
       }
     } finally {
       active = false;
-      this.context.release(lease);
+      try { endpointLease?.release(); } finally { this.context.release(lease); }
     }
   }
 
@@ -625,6 +656,7 @@ export class InboundRuntime {
     lease: SnapshotLease,
     event: string,
     args: readonly unknown[],
+    retirementSignal: AbortSignal = lease.retirementSignal,
   ): Promise<void> {
     const snapshot = lease.value;
     const index = handlers(snapshot);
@@ -645,7 +677,7 @@ export class InboundRuntime {
             payload as Notice | Request,
             snapshot,
             owner,
-            lease.retirementSignal,
+            retirementSignal,
           );
         }
         return undefined;
@@ -709,12 +741,13 @@ function interactionResult(requester: PluginId): MessageDispatchResult {
 async function withRequestActionScope(
   request: IncomingRequest,
   dispatch: (request: IncomingRequest) => Promise<void>,
+  assertOperation: () => void,
 ): Promise<void> {
   let active = true;
   const actions = new Set<Promise<void>>();
   const run = (action: () => void | Promise<void>): Promise<void> => {
     if (!active) throw new Error('Request action port expired with its generation operation');
-    const operation = Promise.resolve().then(action);
+    const operation = Promise.resolve().then(() => { assertOperation(); return action(); });
     actions.add(operation);
     void operation.then(
       () => actions.delete(operation),
@@ -748,5 +781,7 @@ function withEndpointEventPayload<TPayload, TClient, TName extends string>(
     payload,
     endpoint: source.endpoint,
     client: source.client,
+    [operationInputBinding]: (owner: PluginId, snapshot: RuntimeSnapshot) =>
+      withEndpointEventPayload(source, bindOperationInput(payload, owner, snapshot)),
   });
 }

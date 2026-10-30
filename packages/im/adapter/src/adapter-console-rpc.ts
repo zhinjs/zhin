@@ -2,16 +2,17 @@
  * Adapter Console RPC — 每个平台适配器 Console 页共享的服务端实现。
  *
  * 页面（`pages/index/index.ts`）只负责展示；这里把适配器原本只能在聊天命令里完成的
- * endpoint 管理（add / remove）和适配器自有的少量动作（如 QQ 扫码绑定）收拢成
+ * endpoint 管理和适配器自有的少量动作（如 QQ 扫码绑定）收拢成
  * `plugin.<pluginId>.*` Console RPC：
  *
  * - `status`：适配器标识、字段元数据、运行中 / 已配置 endpoint、可用动作与平台状态。
- * - `endpoint-add` / `endpoint-remove`：写 `plugins.<adapterKey>.endpoints`（凭据进 `.env`）。
+ * - Runtime 管理入口将 add/update/start/stop/remove/replace 委派给 exact-owned Adapter，
+ *   通过私有 repository CAS 保存，不写启动配置或 `.env`，不重建 Root。
+ * - 无 runtime 上下文的 embedded add/remove 保留旧配置文件入口。
  * - `actions`：适配器按需扩展的只读查询 / 有限动作；动作名只能用小写字母、数字和 `-`。
  *
  * 安全边界：
- * - 不返回原始错误、日志、聊天内容或密钥；`env` 字段只在配置里以 `${ENV}` 引用形式出现，
- *   其他字段标了 `secret` 的一律遮蔽。
+ * - 不返回原始错误、日志、聊天内容或密钥；`env` / `secret` 字段在管理清单一律遮蔽。
  * - 读取、写入分别用 `<adapterKey>:read` / `<adapterKey>:write` 权限；页面和方法各自声明，
  *   非管理员令牌必须同时满足。
  * - 没有配置存储（例如单元测试 / 非 CLI 装配）时 `canAdd` / `canRemove` 为 false，页面隐藏写操作。
@@ -22,6 +23,7 @@ import {
   type PluginConsoleRpc,
   type PluginConsoleRpcDefinition,
   type PluginConsoleRpcInput,
+  type PluginConsoleRpcCall,
   type PluginConsoleRpcJson,
   type Token,
 } from '@zhin.js/plugin-runtime';
@@ -35,12 +37,14 @@ import {
   type ConfiguredEndpointEntry,
   type EndpointConfigurationStore,
 } from './endpoint-configuration.js';
+import { consoleRuntimeView, mutateConsoleAdapter, ownedConsoleAdapter, type AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
+export type { AdapterConsoleRuntimeView } from './adapter-runtime-console.js';
 
-/** 适配器 Console 页面里可编辑的字段；`env` 表示凭据写入 `.env`。 */
+/** 适配器 Console 页面字段；`env` 是敏感字段，legacy 文件入口写入 `.env`。 */
 export interface AdapterConsoleField {
   readonly key: string;
   readonly required?: boolean;
-  /** 凭据字段：写入 `.env`，配置里保存 `${ENV_KEY}` 引用。 */
+  /** 凭据字段；runtime 保存在私有持久库，legacy 文件入口保存环境变量引用。 */
   readonly env?: boolean;
   /** 非 env 字段也要遮蔽展示（例如 PEM 内容）。 */
   readonly secret?: boolean;
@@ -138,7 +142,8 @@ interface StatusView {
   canRemove: boolean;
   configStore: boolean;
   running: { id: string; mode?: string }[];
-  configured: { id: string; values: Record<string, string> }[];
+  configured: { id: string; instanceId?: string; values: Record<string, string> }[];
+  runtime?: AdapterConsoleRuntimeView;
   actions: AdapterConsoleActionView[];
   extra?: Record<string, string | number | boolean>;
   readPermission?: string;
@@ -212,7 +217,7 @@ export function createAdapterConsoleRpc(
 
   for (const name of Object.keys(actions)) {
     if (!ACTION_NAME.test(name)) throw new TypeError(`Invalid adapter console action: ${name}`);
-    if (name === 'status' || name === 'endpoint-add' || name === 'endpoint-remove') {
+    if (name === 'status' || ['endpoint-add', 'endpoint-update', 'endpoint-start', 'endpoint-stop', 'endpoint-remove', 'endpoint-replace'].includes(name)) {
       throw new TypeError(`Reserved adapter console action: ${name}`);
     }
   }
@@ -221,7 +226,7 @@ export function createAdapterConsoleRpc(
     status: {
       page,
       ...(readPermission ? { requiredPermissions: [readPermission] } : {}),
-      handler: async () => statusView() as unknown as PluginConsoleRpcJson,
+      handler: async (_input, call) => statusView(call) as unknown as PluginConsoleRpcJson,
     },
   };
 
@@ -229,21 +234,27 @@ export function createAdapterConsoleRpc(
     page: string;
     requiredPermissions?: readonly string[];
     requiredRoles?: readonly string[];
-    handler: (input: PluginConsoleRpcInput) => Promise<PluginConsoleRpcJson>;
+    handler: (input: PluginConsoleRpcInput, call: PluginConsoleRpcCall) => Promise<PluginConsoleRpcJson>;
   }> = {};
 
-  if (store && spec.canAdd !== false) {
+  if (spec.canAdd !== false) {
     methods['endpoint-add'] = {
       page,
       ...(writePermissions ? { requiredPermissions: writePermissions } : {}),
-      handler: async (input) => addEndpoint(input),
+      handler: async (input, call) => call.runtime ? mutateConsoleAdapter(spec, call, 'add', input) : addEndpoint(input),
     };
   }
-  if (store && spec.canRemove !== false) {
+  if (spec.canRemove !== false) {
     methods['endpoint-remove'] = {
       page,
       ...(writePermissions ? { requiredPermissions: writePermissions } : {}),
-      handler: async (input) => removeEndpoint(input),
+      handler: async (input, call) => call.runtime ? mutateConsoleAdapter(spec, call, 'remove', input) : removeEndpoint(input),
+    };
+  }
+  for (const action of ['update', 'start', 'stop', 'replace'] as const) {
+    methods[`endpoint-${action}`] = {
+      page, ...(writePermissions ? { requiredPermissions: writePermissions } : {}),
+      handler: async (input, call) => mutateConsoleAdapter(spec, call, action, input),
     };
   }
 
@@ -257,9 +268,16 @@ export function createAdapterConsoleRpc(
   }
 
   return definePluginConsoleRpc({ ...definition, actions: methods });
-  async function statusView(): Promise<StatusView> {
-    const running = listRunning();
-    const configured = await listConfigured();
+  async function statusView(call: PluginConsoleRpcCall): Promise<StatusView> {
+    const adapter = call.runtime ? ownedConsoleAdapter(spec, call) : undefined;
+    if (adapter) {
+      try { await adapter.verifyPendingCommit(); }
+      catch { throw new PluginConsoleRpcError('commit_unknown', '提交结果尚未核实，请刷新状态，勿重复提交'); }
+    }
+    const runtime = adapter ? consoleRuntimeView(spec, call, adapter) : undefined;
+    const runtimeConfigured = adapter?.configurationView(fields);
+    const running: EndpointRunningInfo[] = adapter ? adapter.list().filter(entry => entry.started).map(entry => ({ id: entry.endpointId })) : listRunning();
+    const configured = runtimeConfigured ? runtimeConfigured.map(entry => ({ id: entry.id, ...entry.values })) : await listConfigured();
     const names = new Set(
       [...(spec.availableActions
         ? spec.availableActions({ running, configured })
@@ -271,14 +289,14 @@ export function createAdapterConsoleRpc(
       displayName: spec.adapterDisplayName,
       page,
       fields: fields.map(fieldView),
-      canAdd: Boolean(store) && spec.canAdd !== false,
-      canRemove: Boolean(store) && spec.canRemove !== false,
-      configStore: Boolean(store),
+      canAdd: Boolean(adapter ? adapter.canManage : store) && spec.canAdd !== false,
+      canRemove: Boolean(adapter ? adapter.canManage : store) && spec.canRemove !== false,
+      configStore: Boolean(adapter ? adapter.canManage : store),
       running: running.map((endpoint) => ({
         id: endpoint.id,
         ...(endpoint.mode ? { mode: endpoint.mode } : {}),
       })),
-      configured: configured.map((entry) => ({
+      configured: runtimeConfigured ? runtimeConfigured.map(entry => ({ id: entry.id, instanceId: entry.instanceId, values: { ...entry.values } })) : configured.map((entry) => ({
         id: String(entry.id),
         values: entryValues(entry),
       })),
@@ -286,6 +304,7 @@ export function createAdapterConsoleRpc(
         .filter(([name]) => names.has(name))
         .map(([name, action]) => actionView(name, action)),
       ...(extra ? { extra } : {}),
+      ...(runtime ? { runtime } : {}),
     };
     if (readPermission) view.readPermission = readPermission;
     if (writePermission) view.writePermission = writePermission;
