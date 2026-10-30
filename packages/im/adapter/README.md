@@ -215,6 +215,24 @@ context.resources.provide(pluginConsoleRpcToken, createAdapterConsoleRpc({
 
 浏览器侧使用 [`@zhin.js/client`](../../console/client/README.md) 的 `createAdapterConsolePage(adapterKey)`。
 
+## 掉线通知（createAdapterOutageNotifier）
+
+适配器可用共享 helper 在自身掉线时经**另一个**适配器实例发通知，不绕过统一出站链路：
+
+```ts
+import { createAdapterOutageNotifier, resolveAdapterNotifyTarget } from 'zhin.js/adapter';
+import { outboundHostToken } from 'zhin.js';
+
+const target = resolveAdapterNotifyTarget(config.notify); // yaml: adapter/endpoint/kind/id
+const notifier = createAdapterOutageNotifier(
+  context.has?.(outboundHostToken) ? context.use(outboundHostToken) : undefined,
+  target,
+);
+await notifier.send('ICQQ 10001 已掉线');
+```
+
+`notify` 目标显式写 `adapter`、`endpoint`、`kind`、`id`，不会猜会话；`configured` 为 false 时 `send` 返回 `false`，适配器照常运行。ICQQ/QQ 的 `notify` schema 见各自 `schema.json`。
+
 验证：`pnpm --filter @zhin.js/adapter test && pnpm --filter @zhin.js/adapter build`。
 
 架构说明见 [Plugin Monorepo 与 Feature Provider](../../../docs/architecture/target-implementation/plugin-monorepo-and-features.md)。

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=28d3bf9b33aead65 -->
+<!-- sync-adapter-docs:sha256=b9595734017ca9e2 -->
 
 # @zhin.js/adapter-qq
 
@@ -240,6 +240,24 @@ QQ 开放平台按有没有带上用户消息的 `msg_id`（或事件的 `event_
 - 「平台操作」里扫码绑定新机器人：扫码 → 选择公域 / 私域 → 写入配置；原来的 `qq endpoint add` 仍然保留。
 
 读取需要 `qq:read`，写操作需要 `qq:write`；管理员 full token 不受限。页面里的「扫码绑定新机器人」等价于原来的 `qq endpoint add`。
+
+## 掉线通知
+
+QQ 官方机器人掉线 / 启动失败时，可以配置 `notify` 让另一个适配器实例通知 master：
+
+```yaml
+icqq:
+  # ... 已配置好的 ICQQ 实例
+qq:
+  master: "${QQ_MASTER_OPENID}"
+  notify:
+    adapter: icqq
+    endpoint: "123456"
+    kind: private
+    id: "123456"   # master 的 QQ 号
+```
+
+通知里会提示恢复方式：在 QQ 回复 `qq endpoint add` 重新扫码绑定（或打开 Console 的 QQ 页面）。`notify.id` 同时作为 endpoint 管理命令的 master 身份，方便从通知会话直接完成绑定。未配置 `notify` 时只在日志和 Console 的 QQ 页面显示连接状态。
 
 ## 故障排查
 

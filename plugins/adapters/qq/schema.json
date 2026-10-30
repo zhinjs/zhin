@@ -197,6 +197,93 @@
               }
             },
             "description": "Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName."
+          },
+          "notify": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话）",
+            "x-i18n": {
+              "en": {
+                "description": "Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation)."
+              }
+            },
+            "properties": {
+              "adapter": {
+                "type": "string",
+                "description": "通知使用的适配器类型，如 qq / icqq",
+                "x-i18n": {
+                  "en": {
+                    "description": "Adapter type used for the notice, such as qq or icqq."
+                  }
+                }
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "该适配器的 endpoint id",
+                "x-i18n": {
+                  "en": {
+                    "description": "Endpoint id of that adapter."
+                  }
+                }
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "group",
+                  "channel"
+                ],
+                "default": "private",
+                "description": "会话类型，默认 private",
+                "x-i18n": {
+                  "en": {
+                    "description": "Conversation kind; defaults to private."
+                  }
+                }
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "number"
+                ],
+                "description": "master 在该平台上的会话 id（QQ 官方为 openid，ICQQ 为 QQ 号）",
+                "x-i18n": {
+                  "en": {
+                    "description": "Master conversation id on that platform (openid for QQ official, QQ number for ICQQ)."
+                  }
+                }
+              },
+              "parent": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "private",
+                      "group",
+                      "channel"
+                    ]
+                  },
+                  "id": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "description": "可选的父频道/群容器"
+              }
+            },
+            "required": [
+              "adapter",
+              "endpoint",
+              "id"
+            ]
           }
         },
         "required": [
@@ -240,6 +327,93 @@
         }
       },
       "description": "Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName."
+    },
+    "notify": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话）",
+      "x-i18n": {
+        "en": {
+          "description": "Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation)."
+        }
+      },
+      "properties": {
+        "adapter": {
+          "type": "string",
+          "description": "通知使用的适配器类型，如 qq / icqq",
+          "x-i18n": {
+            "en": {
+              "description": "Adapter type used for the notice, such as qq or icqq."
+            }
+          }
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "该适配器的 endpoint id",
+          "x-i18n": {
+            "en": {
+              "description": "Endpoint id of that adapter."
+            }
+          }
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "private",
+            "group",
+            "channel"
+          ],
+          "default": "private",
+          "description": "会话类型，默认 private",
+          "x-i18n": {
+            "en": {
+              "description": "Conversation kind; defaults to private."
+            }
+          }
+        },
+        "id": {
+          "type": [
+            "string",
+            "number"
+          ],
+          "description": "master 在该平台上的会话 id（QQ 官方为 openid，ICQQ 为 QQ 号）",
+          "x-i18n": {
+            "en": {
+              "description": "Master conversation id on that platform (openid for QQ official, QQ number for ICQQ)."
+            }
+          }
+        },
+        "parent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "private",
+                "group",
+                "channel"
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "number"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "description": "可选的父频道/群容器"
+        }
+      },
+      "required": [
+        "adapter",
+        "endpoint",
+        "id"
+      ]
     }
   },
   "required": [
