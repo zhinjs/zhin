@@ -1,0 +1,45 @@
+docs/adapters/sandbox.md
+  s_9622fd28aba994::t_8c18c42e014567 11,106-119,165-166,177,192,198-215
+docs/en/adapters/sandbox.md
+  s_9622fd28aba994::t_18083769331e94 99-112,134,158-159,170,185-186,191-192
+plugins/adapters/sandbox/README.md
+  s_9622fd28aba994::t_4623f4608fafab 94-107,153-154,165,180,186-203
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  s_9622fd28aba994::t_764824b0234696 11,44,71,104,145-152,156-157,163-165,184,187,199-203,211-215,217,219-220,223,225,228,233-237,241-248,251-254,271-273,275,289,294,301-302,352-353,568-584,595-601,609,615-616
+plugins/adapters/sandbox/pages/index/agentTrace.ts
+  s_9622fd28aba994::t_12cffa0d409bad 369-370
+plugins/adapters/sandbox/pages/index/messages.ts
+  s_9622fd28aba994::t_32410b97f1daa6 6-7
+plugins/adapters/sandbox/pages/index/playgroundState.ts
+  s_9622fd28aba994::t_34bba7da600654 31,85,174-185
+plugins/adapters/sandbox/pages/index/sandboxTransport.ts
+  s_9622fd28aba994::t_ed760e9496972e 46-70
+plugins/adapters/sandbox/src/client.ts
+  s_9622fd28aba994::t_556fc965513381 5,28-32
+plugins/adapters/sandbox/src/protocol.ts
+  s_9622fd28aba994::t_53480889267f48 21,119-124,133-145,147-150,152,154-181,258,370,407
+plugins/adapters/sandbox/tests/localization.test.ts
+  s_9622fd28aba994::t_c1f09b51074a8a 6,55
+plugins/adapters/sandbox/tests/sandbox-multi-connection.test.ts
+  s_9622fd28aba994::t_6579cfd4a1936c 1-231
+plugins/adapters/sandbox/tests/sandbox-page-transport.test.ts
+  s_9622fd28aba994::t_564c091d94fa3b 1-254
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  s_9622fd28aba994::t_c50cfc63d3aa8a 534,543,548-557
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9a9bbd94fd2e3a791d51de1aadf35c854e54329c",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
