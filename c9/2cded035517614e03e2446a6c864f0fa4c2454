@@ -1,0 +1,440 @@
+plugins/adapters/qq/src/qq-endpoint-write.ts
+  s_9622fd28aba994::t_fb491c67958180 1-52
+plugins/adapters/email/adapters/email/index.ts
+  s_9622fd28aba994::t_fb491c67958180 10,33-37,40
+plugins/adapters/weixin-ilink/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+docs/en/authoring/console-pages.md
+  s_9622fd28aba994::t_fb491c67958180 425-455
+plugins/adapters/icqq/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,5,15
+plugins/adapters/discord/README.md
+  s_9622fd28aba994::t_fb491c67958180 90-99
+plugins/adapters/bilibili-live/package.json
+  s_9622fd28aba994::t_fb491c67958180 47-48,52-53,77-78,103-105
+  s_9622fd28aba994::t_7832916428936b 106
+plugins/adapters/onebot12/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+docs/en/adapters/dingtalk.md
+  s_9622fd28aba994::t_fb491c67958180 104-113
+docs/en/adapters/email.md
+  s_9622fd28aba994::t_fb491c67958180 91-94
+plugins/adapters/qq/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-96
+plugins/adapters/dingtalk/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,6,15
+plugins/adapters/lark/package.json
+  s_9622fd28aba994::t_fb491c67958180 45,48-49,55,58,90,140-142
+  s_9622fd28aba994::t_7579227e48201d 143
+plugins/adapters/email/README.md
+  s_9622fd28aba994::t_fb491c67958180 79-89
+plugins/adapters/icqq/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/qq/commands/qq/endpoint/definition.ts
+  s_9622fd28aba994::t_fb491c67958180 25-27,61-63,91-101,133,138,223,231-234
+packages/im/adapter/tests/adapter-console-rpc.test.ts
+  s_9622fd28aba994::t_fb491c67958180 1-168
+plugins/adapters/onebot11/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+docs/adapters/kook.md
+  s_9622fd28aba994::t_fb491c67958180 11,120-128
+  s_9622fd28aba994::t_4f9886e3dd665a 129
+docs/en/adapters/onebot12.md
+  s_9622fd28aba994::t_fb491c67958180 96-105
+plugins/adapters/milky/README.md
+  s_9622fd28aba994::t_fb491c67958180 93-102
+docs/en/adapters/weixin-ilink.md
+  s_9622fd28aba994::t_fb491c67958180 77-86
+plugins/adapters/napcat/README.md
+  s_9622fd28aba994::t_fb491c67958180 90-99
+plugins/adapters/telegram/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,6,15
+plugins/adapters/wechat-mp/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,4,14
+docs/en/adapters/discord.md
+  s_9622fd28aba994::t_fb491c67958180 103-112
+plugins/adapters/line/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+docs/en/console/index.md
+  s_9622fd28aba994::t_fb491c67958180 99
+plugins/adapters/onebot12/README.md
+  s_9622fd28aba994::t_fb491c67958180 88-97
+docs/en/adapters/slack.md
+  s_9622fd28aba994::t_fb491c67958180 147-156
+plugins/adapters/dingtalk/README.md
+  s_9622fd28aba994::t_fb491c67958180 101-110
+plugins/adapters/napcat/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/kook/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,6,15
+plugins/adapters/dingtalk/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/bilibili-live/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 1-4,9,16-19
+packages/console/client/client/adapter-console/messages.ts
+  s_9622fd28aba994::t_fb491c67958180 1-93
+plugins/adapters/email/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 1-4,11-13
+  s_9622fd28aba994::t_c0c03676f7b2c2 14
+packages/im/adapter/src/adapter-console-rpc.ts
+  s_9622fd28aba994::t_fb491c67958180 1-488
+plugins/adapters/onebot11/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-17
+plugins/adapters/bilibili-live/src/bilibili-live-runtime-state.ts
+  s_9622fd28aba994::t_fb491c67958180 1-7
+plugins/adapters/telegram/README.md
+  s_9622fd28aba994::t_fb491c67958180 137-146
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_d2ba0b95386e2d 2
+plugins/adapters/kook/package.json
+  s_9622fd28aba994::t_fb491c67958180 46-47,53,88,138-140
+  s_9622fd28aba994::t_c8a0c523cb07e5 141
+plugins/adapters/weixin-ilink/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,4,14
+plugins/adapters/discord/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/onebot12/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,4,14
+docs/adapters/dingtalk.md
+  s_9622fd28aba994::t_fb491c67958180 11,113-121
+  s_9622fd28aba994::t_e5cdf56a84850f 122
+packages/console/client/client/adapter-console/types.ts
+  s_9622fd28aba994::t_fb491c67958180 1-102
+plugins/adapters/satori/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/wecom/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+docs/adapters/slack.md
+  s_9622fd28aba994::t_fb491c67958180 11,146-154
+  s_9622fd28aba994::t_dc5c3fff34bc51 155
+plugins/adapters/email/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/icqq/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-17
+plugins/adapters/satori/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,4,14
+plugins/adapters/bilibili-live/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/qq/src/qq-console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-18
+plugins/adapters/kook/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/qq/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 1,5,13-15
+docs/adapters/icqq.md
+  s_9622fd28aba994::t_fb491c67958180 188-198
+  s_9622fd28aba994::t_d2ba0b95386e2d 11
+  s_9622fd28aba994::t_0079faa90597a5 199
+docs/en/adapters/satori.md
+  s_9622fd28aba994::t_fb491c67958180 115-124
+plugins/adapters/discord/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+docs/adapters/onebot11.md
+  s_9622fd28aba994::t_fb491c67958180 11,108-116
+  s_9622fd28aba994::t_a5b4c8c9a1f0e9 117
+plugins/adapters/bilibili-live/README.md
+  s_9622fd28aba994::t_fb491c67958180 94-104
+plugins/adapters/github/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/lark/README.md
+  s_9622fd28aba994::t_fb491c67958180 96-105
+plugins/adapters/onebot11/package.json
+  s_9622fd28aba994::t_fb491c67958180 26,57-58,64,142-144
+  s_9622fd28aba994::t_ffcb0f0d154672 145
+plugins/adapters/onebot12/package.json
+  s_9622fd28aba994::t_fb491c67958180 26,53-54,60-61,63,123-125
+  s_9622fd28aba994::t_df7af1a15811cb 126
+plugins/adapters/satori/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/wecom/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/bilibili-live/adapters/bilibili-live/index.ts
+  s_9622fd28aba994::t_fb491c67958180 8,23-27,30
+plugins/adapters/github/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-17
+plugins/adapters/kook/README.md
+  s_9622fd28aba994::t_fb491c67958180 108-117
+docs/adapters/telegram.md
+  s_9622fd28aba994::t_fb491c67958180 11,149-157
+  s_9622fd28aba994::t_252ae2d5e982f4 158
+plugins/adapters/milky/package.json
+  s_9622fd28aba994::t_fb491c67958180 26,54-55,61-62,64,134-136
+  s_9622fd28aba994::t_b6e01a7da61f3b 137
+plugins/adapters/wechat-mp/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/telegram/tests/telegram-console-page.test.ts
+  s_9622fd28aba994::t_fb491c67958180 1-55
+plugins/adapters/wechat-mp/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-18
+tests/docs/adapter-console-pages.test.ts
+  s_9622fd28aba994::t_fb491c67958180 1-62
+plugins/adapters/discord/package.json
+  s_9622fd28aba994::t_fb491c67958180 43-44,47-48,54,90,139-141
+  s_9622fd28aba994::t_29d32e9b96b604 142
+plugins/adapters/dingtalk/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-17
+plugins/adapters/lark/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-18
+plugins/adapters/line/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/email/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-20
+plugins/adapters/bilibili-live/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-18
+plugins/adapters/napcat/package.json
+  s_9622fd28aba994::t_fb491c67958180 26,58-59,65,142-144
+  s_9622fd28aba994::t_eeaf9668c9f9af 145
+plugins/adapters/milky/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+.changeset/adapter-console-pages.md
+  s_9622fd28aba994::t_fb491c67958180 1-37
+plugins/adapters/lark/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/qq/package.json
+  s_9622fd28aba994::t_fb491c67958180 47-48,54,94,148-150
+  s_9622fd28aba994::t_89e1e732529837 151
+plugins/adapters/satori/package.json
+  s_9622fd28aba994::t_fb491c67958180 26,52-53,59-60,62,122-124
+  s_9622fd28aba994::t_132a22ce80bbbf 125
+plugins/adapters/slack/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,6,15
+plugins/adapters/qq/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+packages/console/client/client/index.ts
+  s_9622fd28aba994::t_fb491c67958180 105,113-129
+  s_9622fd28aba994::t_cf35815fdbf07f 130
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_9622fd28aba994::t_fb491c67958180 37,41-42
+  s_9622fd28aba994::t_d2ba0b95386e2d 36,38,40
+plugins/adapters/milky/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,4,14
+plugins/adapters/onebot11/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+docs/adapters/weixin-ilink.md
+  s_9622fd28aba994::t_fb491c67958180 11,81-89
+  s_9622fd28aba994::t_a4ffcf3bd9f6f2 90
+plugins/adapters/wecom/README.md
+  s_9622fd28aba994::t_fb491c67958180 105-114
+plugins/adapters/napcat/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/wecom/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-18
+docs/en/adapters/wecom.md
+  s_9622fd28aba994::t_fb491c67958180 118-127
+docs/adapters/milky.md
+  s_9622fd28aba994::t_fb491c67958180 11,105-113
+  s_9622fd28aba994::t_a425d5ce305622 114
+plugins/adapters/bilibili-live/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/satori/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-17
+plugins/adapters/weixin-ilink/package.json
+  s_9622fd28aba994::t_fb491c67958180 40,68-69,73-74,114-116
+  s_9622fd28aba994::t_b7e9d182953b1f 117
+plugins/adapters/email/src/email-runtime-state.ts
+  s_9622fd28aba994::t_fb491c67958180 1-7
+plugins/adapters/github/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,5,34
+docs/en/adapters/icqq.md
+  s_9622fd28aba994::t_fb491c67958180 100-111
+docs/en/adapters/lark.md
+  s_9622fd28aba994::t_fb491c67958180 107-116
+plugins/adapters/telegram/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/onebot12/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-18
+plugins/adapters/weixin-ilink/README.md
+  s_9622fd28aba994::t_fb491c67958180 69-78
+docs/adapters/wecom.md
+  s_9622fd28aba994::t_fb491c67958180 11,117-125
+  s_9622fd28aba994::t_232723e2a98b8a 126
+plugins/adapters/line/package.json
+  s_9622fd28aba994::t_fb491c67958180 45-46,52,85,135-137
+  s_9622fd28aba994::t_3ed773c0e6657b 138
+plugins/adapters/telegram/package.json
+  s_9622fd28aba994::t_fb491c67958180 45-46,52,78,87,137-139
+  s_9622fd28aba994::t_3fcff57946ea41 140
+plugins/adapters/email/package.json
+  s_9622fd28aba994::t_fb491c67958180 18-19,24-25,28,72,115-117
+  s_9622fd28aba994::t_ecbfa10f6df53f 118
+plugins/adapters/weixin-ilink/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-15
+docs/adapters/wechat-mp.md
+  s_9622fd28aba994::t_fb491c67958180 11,90-98
+  s_9622fd28aba994::t_b2aa4bd9893ba5 99
+plugins/adapters/milky/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+docs/adapters/email.md
+  s_9622fd28aba994::t_fb491c67958180 11,91-100
+  s_9622fd28aba994::t_b841284137a096 101
+docs/en/adapters/wechat-mp.md
+  s_9622fd28aba994::t_fb491c67958180 90-99
+plugins/adapters/line/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,4,14
+plugins/adapters/napcat/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-19
+plugins/adapters/qq/src/qq-runtime-state.ts
+  s_9622fd28aba994::t_fb491c67958180 37-54,62-63,71
+docs/adapters/napcat.md
+  s_9622fd28aba994::t_fb491c67958180 11,102-110
+  s_9622fd28aba994::t_e536179bc727f1 111
+packages/console/client/README.md
+  s_9622fd28aba994::t_fb491c67958180 3,32-33,39-57
+  s_9622fd28aba994::t_2dff2f33981f1d 58
+plugins/adapters/icqq/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/line/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/line/README.md
+  s_9622fd28aba994::t_fb491c67958180 102-111
+plugins/adapters/wecom/package.json
+  s_9622fd28aba994::t_fb491c67958180 47-48,54,88,138-140
+  s_9622fd28aba994::t_23354ab9f7dab6 141
+plugins/adapters/discord/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-15
+docs/en/adapters/qq.md
+  s_9622fd28aba994::t_fb491c67958180 129-136
+plugins/adapters/icqq/package.json
+  s_9622fd28aba994::t_fb491c67958180 48-49,54,97,147-149
+  s_9622fd28aba994::t_373113279b9597 150
+plugins/adapters/github/package.json
+  s_9622fd28aba994::t_fb491c67958180 54-55,61,104,158-160
+  s_9622fd28aba994::t_3c4effd2c7af6c 161
+docs/adapters/discord.md
+  s_9622fd28aba994::t_fb491c67958180 11,102-110
+  s_9622fd28aba994::t_96bdc7e653933b 111
+plugins/adapters/lark/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/icqq/README.md
+  s_9622fd28aba994::t_fb491c67958180 176-187
+plugins/adapters/slack/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-17
+plugins/adapters/slack/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/telegram/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-15
+docs/adapters/line.md
+  s_9622fd28aba994::t_fb491c67958180 11,114-122
+  s_9622fd28aba994::t_be0be4c11745c1 123
+docs/adapters/lark.md
+  s_9622fd28aba994::t_fb491c67958180 11,108-116
+  s_9622fd28aba994::t_92f27a229311ae 117
+docs/en/adapters/kook.md
+  s_9622fd28aba994::t_fb491c67958180 117-126
+packages/im/adapter/src/index.ts
+  s_9622fd28aba994::t_fb491c67958180 17
+plugins/adapters/kook/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  s_9622fd28aba994::t_fb491c67958180 1-677
+docs/en/adapters/bilibili-live.md
+  s_9622fd28aba994::t_fb491c67958180 88-99
+plugins/adapters/milky/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-17
+plugins/adapters/onebot11/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,5,14
+plugins/adapters/slack/README.md
+  s_9622fd28aba994::t_fb491c67958180 134-143
+plugins/adapters/onebot11/README.md
+  s_9622fd28aba994::t_fb491c67958180 96-105
+plugins/adapters/wechat-mp/package.json
+  s_9622fd28aba994::t_fb491c67958180 18-19,25-26,28,78,125-127
+  s_9622fd28aba994::t_43062bd00ea45c 128
+docs/adapters/qq.md
+  s_9622fd28aba994::t_fb491c67958180 11,234-242
+  s_9622fd28aba994::t_b80805c2856e46 243
+docs/en/adapters/line.md
+  s_9622fd28aba994::t_fb491c67958180 114-123
+packages/im/adapter/README.md
+  s_9622fd28aba994::t_fb491c67958180 197-221
+plugins/adapters/email/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/kook/src/console-spec.ts
+  s_9622fd28aba994::t_fb491c67958180 1-17
+docs/authoring/console-pages.md
+  s_9622fd28aba994::t_fb491c67958180 425-455
+plugins/adapters/dingtalk/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/napcat/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,5,14
+plugins/adapters/satori/README.md
+  s_9622fd28aba994::t_fb491c67958180 107-116
+plugins/adapters/dingtalk/package.json
+  s_9622fd28aba994::t_fb491c67958180 46-47,53,89,138-140
+  s_9622fd28aba994::t_9c1fbbe8d745f4 141
+plugins/adapters/telegram/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+docs/adapters/onebot12.md
+  s_9622fd28aba994::t_fb491c67958180 11,100-108
+  s_9622fd28aba994::t_9a27dc67909564 109
+plugins/adapters/slack/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/wechat-mp/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+plugins/adapters/wecom/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,6,15
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_fb491c67958180 3
+plugins/adapters/lark/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,6,15
+docs/en/adapters/github.md
+  s_9622fd28aba994::t_fb491c67958180 110-119
+docs/en/adapters/napcat.md
+  s_9622fd28aba994::t_fb491c67958180 102-111
+docs/en/adapters/onebot11.md
+  s_9622fd28aba994::t_fb491c67958180 104-113
+docs/en/adapters/milky.md
+  s_9622fd28aba994::t_fb491c67958180 99-108
+plugins/adapters/qq/src/qq-console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-124
+docs/adapters/github.md
+  s_9622fd28aba994::t_fb491c67958180 11,112-120
+  s_9622fd28aba994::t_fdb0c3f7db8c65 121
+plugins/adapters/qq/README.md
+  s_9622fd28aba994::t_fb491c67958180 222-231
+docs/adapters/satori.md
+  s_9622fd28aba994::t_fb491c67958180 11,119-127
+  s_9622fd28aba994::t_9e558919f8485f 128
+docs/en/adapters/telegram.md
+  s_9622fd28aba994::t_fb491c67958180 110-119
+plugins/adapters/github/README.md
+  s_9622fd28aba994::t_fb491c67958180 100-109
+plugins/adapters/discord/plugin.ts
+  s_9622fd28aba994::t_fb491c67958180 2,6,15
+plugins/adapters/onebot12/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+plugins/adapters/qq/tests/qq-console.test.ts
+  s_9622fd28aba994::t_fb491c67958180 1-119
+plugins/adapters/wechat-mp/README.md
+  s_9622fd28aba994::t_fb491c67958180 78-87
+plugins/adapters/weixin-ilink/pages/index/index.ts
+  s_9622fd28aba994::t_fb491c67958180 1-16
+docs/adapters/bilibili-live.md
+  s_9622fd28aba994::t_fb491c67958180 11,106-115
+  s_9622fd28aba994::t_56b0f366e3b78b 116
+plugins/adapters/github/src/console.ts
+  s_9622fd28aba994::t_fb491c67958180 1-21
+docs/console/index.md
+  s_9622fd28aba994::t_fb491c67958180 99
+plugins/adapters/slack/package.json
+  s_9622fd28aba994::t_fb491c67958180 47-48,54,88,138-140
+  s_9622fd28aba994::t_c83362bda8484c 141
+pnpm-lock.yaml
+  s_9622fd28aba994::t_604a19973bb393 2161-2166,2179-2181,2204-2206,2210-2212,2228-2230,2277-2279,2283-2285,2301-2303,2341-2346,2359-2361,2405-2407,2411-2413,2429-2431,2469-2471,2475-2477,2490-2492,2533-2535,2539-2541,2557-2559,2600-2602,2606-2608,2624-2626,2664-2666,2670-2672,2688-2690,2722-2724,2728-2730,2746-2748,2789-2791,2795-2797,2813-2815,2859-2861,2865-2867,2883-2885,2929-2931,2935-2937,2953-2955,2990-2992,2996-2998,3017-3019,3121-3123,3127-3129,3145-3147,3188-3190,3194-3196,3212-3214,3249-3251,3255-3257,3273-3275,3289-3291,3310-3312,3316-3318,3334-3336,3371-3373,3377-3379,3395-3397,3429-3431,3435-3437,3450-3452
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c92cded035517614e03e2446a6c864f0fa4c2454",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
