@@ -1,0 +1,61 @@
+plugins/adapters/qq/agents/qq/conversation.ts
+  s_9622fd28aba994::t_97d3f49a2a127f 1-99
+plugins/adapters/qq/agents/qq/skills/qq-conversation/tools/conversation_info/index.ts
+  s_9622fd28aba994::t_9d8421bd4021a9 1-76
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/group_kick/index.ts
+  s_9622fd28aba994::t_c488dfb9556d52 1-38
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/handle_join_request/index.ts
+  s_9622fd28aba994::t_187163d681a6c4 1-32
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/recall_member_message/index.ts
+  s_9622fd28aba994::t_e760e244a8d74e 1-25
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/set_mute/index.ts
+  s_9622fd28aba994::t_9a13532452b3d7 1-36
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/tools/group_info/index.ts
+  s_9622fd28aba994::t_6d578aabb9efe1 1-16
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/tools/group_member_info/index.ts
+  s_9622fd28aba994::t_1e6b8f7a21e7ea 1-19
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/tools/group_members/index.ts
+  s_9622fd28aba994::t_5d9b9b3fb4b803 1-19
+plugins/adapters/qq/agents/qq/skills/qq-group-state/tools/group_blacklist/index.ts
+  s_9622fd28aba994::t_3cbf827ff966a2 1-19
+plugins/adapters/qq/agents/qq/skills/qq-group-state/tools/list_join_requests/index.ts
+  s_9622fd28aba994::t_1a729625199f7d 1-19
+plugins/adapters/qq/agents/qq/skills/qq-group-state/tools/list_muted/index.ts
+  s_9622fd28aba994::t_249a675af4c702 1-21
+plugins/adapters/qq/agents/qq/skills/qq-messages/tools/quote_reply/index.ts
+  s_9622fd28aba994::t_60b5f9ddd8d64f 1-21
+plugins/adapters/qq/agents/qq/skills/qq-messages/tools/recall_own_message/index.ts
+  s_9622fd28aba994::t_923943cab8b74d 1-17
+plugins/adapters/qq/agents/qq/skills/qq/tools/guild_kick_member/index.ts
+  s_9622fd28aba994::t_112357c14148cc 1-29
+plugins/adapters/qq/agents/qq/skills/qq/tools/guild_mute_member/index.ts
+  s_9622fd28aba994::t_37578e71a20818 1-30
+plugins/adapters/qq/agents/qq/skills/qq-conversation/SKILL.md
+  s_9622fd28aba994::t_47447a26d44fe2 1-24
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/SKILL.md
+  s_9622fd28aba994::t_f5350d151c3936 1-34
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/SKILL.md
+  s_9622fd28aba994::t_52779b52096a57 1-24
+plugins/adapters/qq/agents/qq/skills/qq-group-state/SKILL.md
+  s_9622fd28aba994::t_7ceb2ae930bc7d 1-21
+plugins/adapters/qq/agents/qq/skills/qq-messages/SKILL.md
+  s_9622fd28aba994::t_dd733acebc1fe0 1-27
+plugins/adapters/qq/src/group-admin.ts
+  s_9622fd28aba994::t_4f6073d5f8aafb 1-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "26888e4fdd4bdc1f6f6af96b7c11ced39e1aa971",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
