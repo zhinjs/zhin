@@ -9,7 +9,6 @@ import {
   type ImHelperEventMap,
 } from 'imhelper';
 import {
-  defineEndpointClient,
   forwardEndpointClientEvents,
   type ClientEventPayloads,
 } from 'zhin.js/adapter';
@@ -21,11 +20,12 @@ type MilkyClientEvents = ImHelperEventMap<string, MilkyV1Event, EventMap<string>
 export type MilkyClientEventMap = ClientEventPayloads<MilkyClientEvents>;
 
 /** Construct the exact public imhelper Client without handing it transport ownership. */
-export function createMilkyEndpointClient(
+export function milkyClientOptions(
   config: ResolvedMilkyConfig,
   request: typeof callApi,
-): MilkyV1Client {
-  return new MilkyV1Client({
+  signal?: AbortSignal,
+): ConstructorParameters<typeof MilkyV1Client>[0] {
+  return {
     baseUrl: config.baseUrl,
     selfId: config.id,
     accessToken: config.access_token,
@@ -34,11 +34,12 @@ export function createMilkyEndpointClient(
       {
         baseUrl: config.baseUrl,
         access_token: config.access_token,
+        ...(signal ? { signal } : {}),
       },
       action,
       params,
     ),
-  });
+  };
 }
 
 /** Use the Client's complete protocol response while keeping Endpoint internals data-oriented. */
@@ -67,14 +68,3 @@ export function forwardMilkyClientEvents(
 ): () => void {
   return forwardEndpointClientEvents(client, milkyClientEventNames, receive);
 }
-
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly milky: {
-      readonly client: MilkyV1Client;
-      readonly events: MilkyClientEventMap;
-    };
-  }
-}
-
-export const milkyClient = defineEndpointClient<MilkyV1Client, MilkyClientEventMap>('milky');

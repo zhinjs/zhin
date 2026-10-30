@@ -1,10 +1,11 @@
+import type { OperationSession } from 'zhin.js';
 import { defineCommand } from '@zhin.js/command';
 import { defineMiddleware } from '@zhin.js/middleware';
 import {
   createToken, databaseHostToken, definePlugin, outboundHostToken, scheduleHostToken,
 } from '@zhin.js/plugin-runtime';
 import {
-  createFakeMessage, createFakePlugin, fakeResource, runCommand, runMiddleware, runPluginSetup, FakeClock,
+  createFakeMessage, createFakePlugin, fakeResource, runCommand, runMiddleware, runHandler, createCommandContext, runPluginSetup, FakeClock,
 } from '../src/index.js';
 
 const greeterToken = createToken<{ greet(name: string): string }>('test.greeter');
@@ -30,6 +31,36 @@ const plugin = definePlugin<{ target: string }>({
 let disposed = false;
 
 describe('testing fakes', () => {
+  it('does not manufacture an operation Session for direct fake runners', async () => {
+    const fake = createFakePlugin();
+    expect(createCommandContext(fake).session).toBeUndefined();
+    await runMiddleware(fake, defineMiddleware({ handle(context) {
+      expect(context.session).toBeUndefined();
+    } }));
+    await runHandler(fake, { $feature: 'zhin.handler/1', handle() {
+      expect(this.session).toBeUndefined();
+    } });
+    await fake.dispose();
+  });
+
+  it('reads a supplied operation hook without copying its Session in fake runners', async () => {
+    const fake = createFakePlugin();
+    const session: OperationSession<string> = {
+      adapterName: 'test', adapter: {}, endpoint: {}, scene: { endpoint: { id: 'ep', adapter: 'test' }, kind: 'private', id: 'u' },
+      message: { text: 'hello', receivedAt: 1 }, event: {}, signal: fake.signal, reply: async () => undefined,
+    };
+    const input = Object.assign(createFakeMessage(), { [Symbol.for('zhin.operation-session/1')]: () => session });
+    expect(createCommandContext(fake, { input }).session).toBe(session);
+    await runMiddleware(fake, defineMiddleware({ handle(context) {
+      expect(context.session).toBe(session);
+    } }), input);
+    await runHandler(fake, { $feature: 'zhin.handler/1', handle(first) {
+      expect(first).toBe(input);
+      expect(this.session).toBe(session);
+    } }, input);
+    await fake.dispose();
+  });
+
   it('runs setup on a real Scope with fake hosts, clock and outbound recording', async () => {
     disposed = false;
     const fake = await runPluginSetup(plugin, { config: { target: 'g1' } });

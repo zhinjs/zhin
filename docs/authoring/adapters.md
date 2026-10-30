@@ -1,6 +1,6 @@
 ---
 title: "适配器开发"
-description: "为 Zhin 还不支持的平台编写适配器：最小实现、连接与清理、收发消息、多账号，以及什么时候需要更底层的 Endpoint"
+description: "为 Zhin 还不支持的平台编写适配器：最小实现、连接与清理、收发消息、多账号，原生 Client 与框架钩子的职责"
 ---
 
 # 适配器开发
@@ -20,56 +20,45 @@ description: "为 Zhin 还不支持的平台编写适配器：最小实现、连
 在插件里创建 `adapters/<平台名>/index.ts`，默认导出 `defineAdapter()`：
 
 ```ts
-// adapters/example/index.ts
-import { defineAdapter } from 'zhin.js/adapter';
-import { ExampleClient } from 'example-sdk';
+// adapters/terminal/index.ts
+import { Adapter, defineAdapter } from 'zhin.js/adapter';
+import { TerminalEndpoint } from './endpoint.js';
 
-export default defineAdapter<{ readonly token: string }>({
+interface TerminalConfig {
+  readonly terminal?: { readonly interactive?: boolean; readonly prompt?: string };
+}
+
+class TerminalAdapter extends Adapter<TerminalEndpoint, TerminalConfig, { readonly line: string }> {
+  protected createEndpoint(config: TerminalConfig): TerminalEndpoint {
+    return new TerminalEndpoint({
+      input: process.stdin, output: process.stdout, error: process.stderr,
+      interactive: config.terminal?.interactive ?? true,
+      prompt: config.terminal?.prompt ?? 'zhin> ',
+    });
+  }
+}
+
+declare module 'zhin.js/adapter' {
+  interface AdapterRegistry { readonly terminal: TerminalAdapter; }
+}
+
+export default defineAdapter<TerminalConfig>({
   capabilities: ['inbound', 'outbound'],
-
-  create(context) {
-    const client = new ExampleClient(context.config.token);
-
-    return {
-      client,
-
-      async connect({ events, signal, onCleanup }) {
-        await client.login({ signal });
-        onCleanup(() => client.logout());
-        const unsubscribe = client.onMessage((message) => {
-          void events.message({
-            conversation: {
-              kind: message.groupId ? 'group' : 'private',
-              id: message.groupId ?? message.userId,
-            },
-            content: message.text,
-            sender: { id: message.userId, name: message.nickname },
-          });
-        });
-        onCleanup(unsubscribe);
-      },
-
-      send({ conversation, payload }) {
-        return client.sendMessage(conversation.id, payload);
-      },
-    };
-  },
+  createAdapter: () => new TerminalAdapter(),
 });
 ```
 
-逐段说明：
+`TerminalEndpoint` 继承真正拥有终端 IO 的 `TerminalClient`，并 `implements Endpoint`；完整定义见 [终端示例](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts)。平台有 SDK 时继承真实 SDK Client；没有 SDK 时，Client 应真正拥有协议 IO、请求和取消，不能只是回调 Endpoint 的空壳。
 
 | 部分 | 作用 |
 | --- | --- |
-| `capabilities` | 声明支持收（`inbound`）、发（`outbound`）或两者，至少一个；直播弹幕平台再加 `liveDanmaku`（需同时有 `inbound`），Agent 会按弹幕模式把弹幕收进窗口、一窗只回一次（ADR 0038 §5，配置 `ai.agent.inboundQueue.live`） |
-| `create(context)` | 每个账号调用一次；`context.config` 是这个账号的配置 |
-| `client` | 平台 SDK 实例。命令里通过 `context.$client` 取得，事件处理里通过 `event.client` 取得 |
-| `connect()` | 连接平台，**等平台可用后再返回** |
-| `onCleanup(fn)` | 每拿到一个资源就立即登记清理。之后的初始化失败时，框架会按逆序回滚 |
-| `events.message()` | 上报一条收到的消息，框架会自动补上账号身份 |
-| `send()` | 发送消息，返回平台消息 id；拆分发送时返回有序 `{ parts }` 回执 |
-
-只有一个清理动作时，也可以直接把它作为 `connect()` 的返回值。
+| `capabilities` | 声明收、发或两者；直播弹幕另加 `liveDanmaku`，需同时声明 `inbound` |
+| `createAdapter(context)` | 创建所属插件的 Adapter，接收配置和注入依赖 |
+| `Adapter.createEndpoint(config, execution)` | 只在账号启动时构造真实 Endpoint；execution 固定 canonical identity、instance 和取消信号 |
+| `Endpoint` | 只有结构 interface，框架不提供公开可继承基类 |
+| `[endpointSpec]` | 通过 `createEndpointSpecification(this, hooks)` 绑定框架钩子，不覆盖原生 SDK API |
+| `events.message()` | 上报规范化消息，框架补全账号身份；发送者只能来自真实用户身份 |
+| specification 的 `send()` | 转换并发送消息，返回确认的消息 id 或有序 `{ parts }` 证据 |
 
 ## 常见需求
 
@@ -80,20 +69,21 @@ export default defineAdapter<{ readonly token: string }>({
 ```yaml
 configVersion: 2
 plugins:
-  example: '@example/adapter'
-example:
-  token: ${EXAMPLE_TOKEN}
+  terminal: '@example/adapter-terminal'
+terminal:
+  terminal:
+    interactive: true
 ```
 
 启动后在 Console 的"聊天账号"里确认账号在线、消息能收到。完整的挂载方式见 [第一个插件 · 挂载到你的 Bot](../getting-started/first-plugin.md)。
 
 ### 一个适配器挂多个账号
 
-不需要改代码。在配置里写 `endpoints` 数组，每一项会创建一个独立的账号连接，`create(context)` 拿到的就是合并后的单账号配置。规则见 [端点生命周期 · 一个适配器挂多个账号](./endpoint-lifecycle.md#一个适配器挂多个账号)。
+不需要改代码。在配置里写 `endpoints` 数组，每一项会创建一个独立的账号连接，所属 Adapter 的 `createEndpoint(config, execution)` 拿到合并后的单账号配置。规则见 [端点生命周期 · 一个适配器挂多个账号](./endpoint-lifecycle.md#一个适配器挂多个账号)。
 
 ### 只允许当前版本持有的监听器
 
-某些监听器或输入流在热重载切换时只能由一个版本持有。这种情况实现同步的 `activate({ events })` 并返回释放函数，框架会在切换和回滚时调用它。普通的 SDK 监听器直接写在 `connect()` 里即可。
+将需要独占的监听器订阅放在 specification 的 `open` 钩子，在 `close` 中解除，`stop` 最终释放 IO。不要另建全局 live Endpoint Map。已经接纳的完整回调由 `events.run` 跟踪，关闭边界见下文。
 
 ### WebSocket / SSE 长连接、心跳与重连
 
@@ -101,15 +91,31 @@ example:
 
 ### 平台特有的消息格式
 
-`share`、音频、卡片等平台特有结构，在 `send()` 这个边界里转换成平台格式。插件发消息仍然统一走 `Message.$reply` 或 `Adapter.sendMessage`，不要另开发送通道。
+`share`、音频、卡片等平台特有结构，在 specification 的 `send()` 边界里转换成平台格式。插件发消息仍然统一走 `Message.$reply` 或 Host 的 `outboundHostToken`，不要另开发送通道。
 
 ### 在聊天里管理账号
 
 用 `createEndpointCommands` 为适配器生成 `<适配器> endpoint list / add / remove` 命令，见 [命令 · 适配器的 endpoint 管理命令](./commands.md#适配器的-endpoint-管理命令)。
 
-## 什么时候需要继承 Endpoint
+## 继承平台 Client 与账号所有权
 
-上面的 `defineAdapter` 写法覆盖绝大多数平台。只有当协议需要**自定义的多阶段连接流程**时，才继承 `Endpoint` 类自己实现 `start` / `open` / `close` / `stop`，生命周期钩子说明见 [端点生命周期](./endpoint-lifecycle.md#endpoint-的生命周期钩子)。
+平台统一定义 `Adapter<E, Config, Events>` 子类，由它创建与管理所有 Endpoint。Endpoint 继承实际 SDK Client，并通过 `endpointSpec` / `createEndpointSpecification` 注册框架钩子；不覆盖 SDK 的 `on`、`off`、`emit`。通过公开 `zhin.js/adapter` 的 `AdapterRegistry` 注册一次 Adapter 类型，Command 的字符串平台声明即可推导子类与 Endpoint。
+
+新增账号只保存停用配置，不创建 SDK 对象；显式启动才连接。停止、更新、删除和替换都由所属 Adapter 控制。更新运行账号只重连该账号，旧操作固定到原 incarnation。`defineAdapter` 只接受 `createAdapter`；不要另建全局账号 Controller、Client token 或可写 Endpoint 目录。
+
+SDK 的 `emit/on/off` 与原生方法保持原合同。通过 `AdapterRegistry` 的 `Adapter<Endpoint, Config, Events>` 泛型一次推断 Client 和 EventMap；公开导出重用同一个 registry，不另注册 Client descriptor 或 token。
+
+对应的适配器类型声明须进入 TypeScript 编译项目。同项目的适配器目录会自然参与；跨包可在 `tsconfig` 的 `compilerOptions.types` 加载适配器包，或在项目入口导入一次包类型。之后每条 Command 只写 `adapter: 'icqq'`，无需导入具体 Adapter 类；运行时加载插件不会自动改变编辑器的类型项目。
+
+## 完整接纳一次 SDK 回调
+
+在 SDK listener 入口用 `events.run(async () => { ... })` 包住整个异步回调，包括解析、原生事件转发和规范化消息提交，并等待或处理它返回的 Promise。只给最后一次 `events.message()` 加包装，不能覆盖此前仍在进行的解析或读取。
+
+`close` 先关闭新的框架接纳，再调用平台关闭钩子，并等待已经接纳的回调及其规范化延续结束；`stop` 先退休该 incarnation 并取消信号，再排空操作租约、释放资源。平台请求也要响应这个信号。不要从本账号自己的入站回调同步等待其 `close/stop`，这会自等并被框架拒绝。
+
+原生事件指 SDK 公开事件与它实际给出的对象：保留同一事件 payload，不删字段、不从规范化消息反推。它不等于原始 wire packet；SDK 没有公开的加密帧、HTTP bytes 或内部对象，不能宣称已经保真暴露。XML webhook、ParsedMail 等由平台自行解析的输入也应在原始事件路径保留实际原对象。
+
+`events.message()` 负责规范化消息；`events.platform(name, event)` 保留平台原生事件。需要等实际准入和派发完成后再确认游标或 ACK 时，使用 `events.emitAccepted()`，失败不得推进游标。长连接重连与心跳仍用 `createEndpointLifecycle`，详见 [生命周期钩子](./endpoint-lifecycle.md#endpoint-的生命周期钩子)。
 
 ## 参考实现
 

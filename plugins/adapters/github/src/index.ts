@@ -21,7 +21,7 @@ export {
 export * from './types.js';
 
 export { GhClient } from './gh-client.js';
-export { GithubClient, githubClient, type GithubClientEventMap } from './client.js';
+export type { GithubClientEventMap } from './client.js';
 export { WorkspaceManager } from './workspace-manager.js';
 export {
   parseMessageChannel,
@@ -49,3 +49,4 @@ export {
   dispatchGithubWebhookPayload,
   type GithubWebhookHandler,
 } from './webhook.js';
+export { GithubAdapter } from './adapter.js';

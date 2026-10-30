@@ -1,4 +1,4 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { icqqFixture } from './fixture.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService, SideEventGateway } from '@zhin.js/core/runtime';
@@ -45,20 +45,20 @@ function createSideEvents(): SideEventGateway & {
 
 async function startEndpoint(
   options?: { systemMsg?: unknown[]; sideEvents?: SideEventGateway },
-): Promise<IcqqEndpoint> {
+) {
   const gateway: OutboundMessageService = {
     receive: vi.fn(async () => Object.freeze({ matched: true })),
     send: vi.fn(async () => 'sent'),
   };
-  const endpoint = bindTestEndpoint(new IcqqEndpoint({
+  const endpoint = await icqqFixture({
     id: endpointKey,
     gateway,
     config: baseConfig,
     sideEvents: options?.sideEvents ?? createSideEvents(),
     loginAssist: new LoginAssist(null, { defaultTimeoutMs: 60_000 }),
-  }), gateway, options?.sideEvents ?? createSideEvents());
+  }, gateway, options?.sideEvents ?? createSideEvents());
   if (options?.systemMsg) {
-    vi.mocked(endpoint.client.getSystemMsg).mockResolvedValue(options.systemMsg as never);
+    vi.mocked(endpoint.endpoint.getSystemMsg).mockResolvedValue(options.systemMsg as never);
   }
   await endpoint.start(new AbortController().signal);
   endpoint.open();
@@ -190,8 +190,8 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
     const sideEvents = createSideEvents();
     const endpoint = await startEndpoint({ sideEvents });
     try {
-      endpoint.client.emit('system.login.qrcode', { image: Buffer.from('test-qr') });
-      endpoint.client.emit('system.online', {});
+      endpoint.endpoint.emit('system.login.qrcode', { image: Buffer.from('test-qr') });
+      endpoint.endpoint.emit('system.online', {});
       await flush();
       expect(sideEvents.systems).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: 'system', name: 'system.login.qrcode', endpointId: '10001' }),
@@ -212,7 +212,7 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
     const sideEvents = createSideEvents();
     const endpoint = await startEndpoint({ sideEvents });
     try {
-      endpoint.client.emit('request.friend.add', {
+      endpoint.endpoint.emit('request.friend.add', {
         post_type: 'request',
         request_type: 'friend',
         user_id: 20002,
@@ -229,7 +229,7 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
         endpointId: '10001',
       });
 
-      endpoint.client.emit('request.friend.add', {
+      endpoint.endpoint.emit('request.friend.add', {
         post_type: 'request',
         request_type: 'friend',
         user_id: 20002,
@@ -246,7 +246,7 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
   it('dispatches notice events to SideEventGateway', async () => {
     const sideEvents = createSideEvents();
     const endpoint = await startEndpoint({ sideEvents });
-    endpoint.client.emit('notice.group.increase', {
+    endpoint.endpoint.emit('notice.group.increase', {
       post_type: 'notice',
       notice_type: 'group',
       sub_type: 'increase',
@@ -276,7 +276,7 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
       sideEvents,
     });
     await flush();
-    expect(endpoint.client.getSystemMsg).toHaveBeenCalled();
+    expect(endpoint.endpoint.getSystemMsg).toHaveBeenCalled();
     expect(sideEvents.requests).toHaveLength(2);
     await endpoint.stop();
   });
@@ -298,7 +298,7 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
 
   it('ignores request/notice when SideEventGateway is absent', async () => {
     const endpoint = await startEndpoint();
-    expect(() => endpoint.client.emit('request.friend.add', {
+    expect(() => endpoint.endpoint.emit('request.friend.add', {
       post_type: 'request', request_type: 'friend', user_id: 1, flag: 'f', time: 1,
     })).not.toThrow();
     await flush();
@@ -312,11 +312,11 @@ describe('icqq scene events (#996)', () => {
     const endpoint = await startEndpoint({ sideEvents });
     try {
       const base = { post_type: 'notice', notice_type: 'group', group_id: 888, self_id: 10001 };
-      endpoint.client.emit('notice.group.poke', { ...base, sub_type: 'poke', operator_id: 20002, target_id: 10001, user_id: 10001, action: '戳了戳', time: 1_700_000_001 });
-      endpoint.client.emit('notice.group.reaction', { ...base, sub_type: 'reaction', user_id: 20002, id: '76', seq: 321, set: false, time: 1_700_000_002 });
-      endpoint.client.emit('notice.group.admin', { ...base, sub_type: 'admin', user_id: 20003, set: true, time: 1_700_000_003 });
-      endpoint.client.emit('notice.group.ban', { ...base, sub_type: 'ban', operator_id: 20002, user_id: 10001, duration: 600, time: 1_700_000_004 });
-      endpoint.client.emit('request.group.add', {
+      endpoint.endpoint.emit('notice.group.poke', { ...base, sub_type: 'poke', operator_id: 20002, target_id: 10001, user_id: 10001, action: '戳了戳', time: 1_700_000_001 });
+      endpoint.endpoint.emit('notice.group.reaction', { ...base, sub_type: 'reaction', user_id: 20002, id: '76', seq: 321, set: false, time: 1_700_000_002 });
+      endpoint.endpoint.emit('notice.group.admin', { ...base, sub_type: 'admin', user_id: 20003, set: true, time: 1_700_000_003 });
+      endpoint.endpoint.emit('notice.group.ban', { ...base, sub_type: 'ban', operator_id: 20002, user_id: 10001, duration: 600, time: 1_700_000_004 });
+      endpoint.endpoint.emit('request.group.add', {
         post_type: 'request', request_type: 'group', sub_type: 'add', group_id: 888, user_id: 30003, comment: '想进群', flag: 'flag-996', time: 1_700_000_005,
       });
       await flush();

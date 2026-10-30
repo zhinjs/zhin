@@ -1,3 +1,4 @@
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import type { ConsoleAccess } from '@zhin.js/host-http';
 import { parsePluginConsoleRpcType } from '@zhin.js/console-protocol';
 import { ConsoleCatalog } from '@zhin.js/pagemanager/plugin-runtime';
@@ -8,6 +9,7 @@ import {
   pluginConsoleRpcToken,
   type NormalizedPluginConsoleRpcMethod,
   type PluginConsoleRpc,
+  type PluginConsoleRpcCall,
   type PluginId,
   type RuntimeSnapshot,
   type SnapshotLease,
@@ -20,7 +22,7 @@ export const PLUGIN_CONSOLE_RPC_OUTPUT_LIMIT = 256 * 1024;
 export const PLUGIN_CONSOLE_RPC_TIMEOUT_MS = 10_000;
 
 export type PluginConsoleRpcFailureCode =
-  | 'forbidden' | 'invalid_input' | 'conflict' | 'not_found' | 'unsupported' | 'unavailable' | 'timeout' | 'failed';
+  | 'forbidden' | 'invalid_input' | 'conflict' | 'not_found' | 'unsupported' | 'unavailable' | 'timeout' | 'failed' | 'commit_unknown';
 
 export type PluginConsoleRpcResult =
   | { readonly status: 200; readonly body: { readonly success: true; readonly data: unknown; readonly requestId?: unknown } }
@@ -48,7 +50,7 @@ const catalogPagesOwnedBy = (snapshot: RuntimeSnapshot, owner: PluginId) =>
 
 const failureStatus: Readonly<Record<PluginConsoleRpcFailureCode, number>> = {
   forbidden: 403, invalid_input: 400, conflict: 409, not_found: 404,
-  unsupported: 400, unavailable: 503, timeout: 504, failed: 500,
+  unsupported: 400, unavailable: 503, timeout: 504, failed: 500, commit_unknown: 504,
 };
 
 class Failure extends Error {
@@ -80,7 +82,16 @@ export async function dispatchPluginConsoleRpcRequest(
     if (!method) throw new Failure('not_found', '插件未提供该操作');
     authorize(snapshot, pluginId, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
     if (provider) releases.push(...admit(provider));
-    const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS);
+    const runtime: NonNullable<PluginConsoleRpcCall['runtime']> = Object.freeze({
+      owner: pluginId, generation: snapshot.generation, operator: options.access.unrestricted,
+      project(feature) {
+        if (feature !== adapterFeatureId) throw new PluginConsoleRpcError('unsupported', '该运行投影未授权');
+        const projection = snapshot.projections.get(adapterFeatureId);
+        if (!isAdapterIndex(projection)) throw new PluginConsoleRpcError('unsupported', '账号运行目录不可用');
+        return projection.forOwner(pluginId);
+      },
+    });
+    const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS, runtime);
     return { status: 200, body: { success: true, data: output, ...(requestId === undefined ? {} : { requestId }) } };
   } catch (error) {
     const failure = toFailure(error);
@@ -190,18 +201,22 @@ async function callWithTimeout(
   method: NormalizedPluginConsoleRpcMethod,
   input: Readonly<Record<string, unknown>>,
   timeoutMs: number,
+  runtime: NonNullable<PluginConsoleRpcCall['runtime']>,
 ): Promise<unknown> {
   const controller = new AbortController();
+  let commitStarted = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
       controller.abort();
-      reject(new Failure('timeout', '插件响应超时'));
+      reject(commitStarted
+        ? new Failure('commit_unknown', '提交结果尚未确认，请刷新状态，勿重复提交')
+        : new Failure('timeout', '插件响应超时'));
     }, timeoutMs);
   });
   try {
     const result = await Promise.race([
-      Promise.resolve().then(() => method.handler(input as never, { signal: controller.signal })),
+      Promise.resolve().then(() => method.handler(input as never, { signal: controller.signal, runtime, commitStarted: () => { commitStarted = true; } })),
       timeout,
     ]);
     return encodeOutput(result);

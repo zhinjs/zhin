@@ -27,4 +27,15 @@ describe('AgentTurn configuration', () => {
     expect(second).toMatchObject({ activeBinding: { name: 'second' }, bootstrapContext: 'second bootstrap' });
     expect(getAgentTurnConfiguration()).toBeUndefined();
   });
+  it('captures binding authority before external mutation', async () => {
+    const binding = { name: 'zhin', providerAlias: 'host', model: 'original', mcpServers: ['original'],
+      permission: { task: { worker: 'allow' as const } } };
+    await runWithAgentTurnConfiguration({ activeBinding: binding }, async () => {
+      binding.mcpServers.push('new-server');
+      binding.model = 'mutated';
+      expect(getAgentTurnConfiguration()?.activeBinding).toMatchObject({ model: 'original', mcpServers: ['original'] });
+      expect(Object.isFrozen(getAgentTurnConfiguration()?.activeBinding?.permission?.task)).toBe(true);
+    });
+  });
+
 });

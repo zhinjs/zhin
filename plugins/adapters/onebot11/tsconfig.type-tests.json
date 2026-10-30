@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "../../..", "types": ["node"] },
+  "include": ["tests/protocol-public.types.ts"],
+  "exclude": ["lib", "node_modules"]
+}

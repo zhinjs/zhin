@@ -1,5 +1,5 @@
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { createCapabilityContext } from '@zhin.js/feature-kit';
+import { createCapabilityContext, bindOperationInput, readOperationSession, operationClientAdapter } from '@zhin.js/feature-kit';
 import type { HandlerDefinition } from './definition.js';
 import type {
   HandlerContext,
@@ -97,13 +97,19 @@ export class HandlerIndex {
     const records = this.#byEvent.get(event);
     if (!records) return;
     for (const record of records) {
-      const base = createCapabilityContext(options?.snapshot ?? this.#snapshot, record.owner);
-      const interaction = options?.resolveInteraction?.(event, args, record.owner);
-      const context: HandlerContext = Object.freeze({
-        ...base,
-        ...(interaction !== undefined ? { interaction } : {}),
-      });
-      await record.slot.definition.handle.call(context, ...args);
+      const operationSnapshot = options?.snapshot ?? this.#snapshot;
+      const authorInput = args.length ? bindOperationInput(args[0], record.owner, operationSnapshot) : undefined;
+      const authorArgs = args.length ? [authorInput, ...args.slice(1)] : args;
+      const expectedAdapter = record.slot.definition.adapter;
+      const session = readOperationSession(authorInput);
+      const actualAdapter = session?.adapterName ?? operationClientAdapter(authorInput);
+      if (expectedAdapter && actualAdapter !== expectedAdapter) continue;
+      const base = createCapabilityContext(operationSnapshot, record.owner, undefined, session?.signal);
+      const interaction = options?.resolveInteraction?.(event, authorArgs, record.owner);
+      const context = { ...base, ...(interaction !== undefined ? { interaction } : {}) } as HandlerContext;
+      Object.defineProperty(context, 'session', { enumerable: true, get: () => readOperationSession(authorInput, expectedAdapter) });
+      Object.freeze(context);
+      await record.slot.definition.handle.call(context, ...authorArgs);
     }
   }
 }

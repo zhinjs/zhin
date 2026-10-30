@@ -23,7 +23,7 @@ const logger = getLogger('github');
 export interface GithubWebhookHandler {
   readonly config: ResolvedGithubConfig;
   admitPlatform(name: string, event: unknown): void;
-  admit(comment: GithubInboundComment): void;
+  admit(comment: GithubInboundComment, nativeEvent?: unknown): void;
 }
 
 export function registerGithubWebhookRoutes(
@@ -114,17 +114,17 @@ export async function dispatchGithubWebhookPayload(
 
   if (event === 'issue_comment') {
     const inbound = parseIssueCommentInbound(payload as IssueCommentPayload);
-    if (inbound) handler.admit(inbound);
+    if (inbound) handler.admit(inbound, payload);
     return;
   }
   if (event === 'pull_request_review_comment') {
     const inbound = parsePrReviewCommentInbound(payload as PRReviewCommentPayload);
-    if (inbound) handler.admit(inbound);
+    if (inbound) handler.admit(inbound, payload);
     return;
   }
   if (event === 'pull_request_review') {
     const inbound = parsePrReviewInbound(payload as PRReviewPayload);
-    if (inbound) handler.admit(inbound);
+    if (inbound) handler.admit(inbound, payload);
   }
   // Cross-adapter subscription fan-out deferred (needs multi-adapter send in Runtime).
 }

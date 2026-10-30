@@ -259,7 +259,7 @@ describe('CLI new command integration', () => {
 
     const pluginDir = path.join(testDir, 'plugins', adapterName)
 
-    // adapters/<name>.ts：defineAdapter + Endpoint 骨架，入站经 Endpoint.emit
+    // Native Client inheritance, Adapter ownership and framework-namespaced ingress.
     const adapterTs = await fs.readFile(
       path.join(pluginDir, 'adapters', adapterName, 'index.ts'),
       'utf-8'
@@ -267,12 +267,22 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(path.join(pluginDir, 'adapters', `${adapterName}.ts`))).toBe(false)
     expect(adapterTs).toContain('defineAdapter')
     expect(adapterTs).toContain('zhin.js/adapter')
-    expect(adapterTs).toContain('extends Endpoint')
-    expect(adapterTs).toContain('this.emit(name, payload)')
+    const publicAdapterTs = await fs.readFile(path.join(pluginDir, 'src', 'adapter.ts'), 'utf8')
+    const publicIndexTs = await fs.readFile(path.join(pluginDir, 'src', 'index.ts'), 'utf8')
+    expect(publicIndexTs).toContain("export * from './adapter.js'")
+    expect(publicAdapterTs).toContain('extends TestAdapterClient implements Endpoint')
+    expect(publicAdapterTs).toContain('extends Adapter<TestAdapterEndpoint, TestAdapterAdapterConfig>')
+    expect(publicAdapterTs).toContain('events.run(() => events.message(message))')
+    expect(publicAdapterTs).toContain("declare module 'zhin.js/adapter'")
+    expect(publicAdapterTs).not.toContain('extends Endpoint<')
+    expect(publicAdapterTs).toContain('async connect(')
+    expect(publicAdapterTs).toContain('async disconnect()')
+    expect(publicAdapterTs).toContain('async send(')
+    expect(adapterTs).toContain("from '../../src/adapter.js'")
+    expect(adapterTs).toContain('createAdapter:')
     expect(adapterTs).toContain("capabilities: ['inbound', 'outbound']")
-    expect(adapterTs).toContain('async start(')
-    expect(adapterTs).toContain('async stop()')
-    expect(adapterTs).toContain('async send(')
+    expect(adapterTs).not.toContain('export class ')
+    expect(adapterTs).not.toContain('interface AdapterRegistry')
 
     // schema.json 使用 endpoint 的稳定 id 字段
     const schema = await fs.readJson(path.join(pluginDir, 'schema.json'))
@@ -295,6 +305,7 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(testFilePath)).toBe(true)
     const testFile = await fs.readFile(testFilePath, 'utf-8')
     expect(testFile).toContain('parseAdapterDefinition')
+    expect(testFile).toContain("from '../src/index.js'")
   }, 30000)
 
   it('should create official plugin with @zhin.js scope', async () => {

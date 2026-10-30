@@ -2,6 +2,8 @@
 
 适配器把外部平台接入 Zhin 的统一消息与 Endpoint 模型。先按部署条件选择接入方式，再检查能力和维护档位；不要只按平台名称选包。
 
+所属 `Adapter` 管理账号期望状态与运行实例；Endpoint 是实现 `endpointSpec` 的实际 SDK 或协议 Client，原生 API 保持自身语义。框架入站通过 `endpoint[endpointSpec].events`，完整回调使用 `events.run(...)` 接纳，详见[适配器开发](/authoring/adapters)。
+
 ## 先做选择
 
 | 你的条件 | 优先方向 | 代表适配器 |

@@ -13,6 +13,6 @@ export default defineAgentTool<{ channel_id: string }>({
   permissions: [platformPermission('qq', 'guild_admin')],
   async execute({ channel_id  }: { channel_id: string }, context) {
     const client = context.$client;
-    return client.getChannelInfo(channel_id);
+    return client.channelService.getInfo(channel_id);
   },
 });

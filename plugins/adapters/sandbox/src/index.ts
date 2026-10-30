@@ -15,7 +15,6 @@ export {
 
 export {
   SandboxClient,
-  sandboxClient,
   type SandboxClientEventMap,
   type SandboxClientConnection,
 } from './client.js';
@@ -24,3 +23,4 @@ export {
   SandboxWsEndpoint,
   type SandboxEndpointOptions,
 } from './endpoint.js';
+export { SandboxAdapter } from './adapter.js';

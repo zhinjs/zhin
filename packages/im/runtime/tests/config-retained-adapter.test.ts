@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import { definePlugin, applyConfigPatches, type ConfigDocumentPort, type ConfigDocumentSnapshot, type ConfigPatch, type PreparedConfigDocument, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
-import adapterFeature, { AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointEventSink } from '@zhin.js/adapter';
+import adapterFeature, { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec, endpointEventGatewayToken, type EndpointEventSink } from '@zhin.js/adapter';
 import handlerFeature, { HandlerIndex, handlerFeatureId, defineHandler } from '@zhin.js/handler';
 import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { RootRuntime, primaryConfigToken, type PrimaryConfig, type ModuleRuntime } from '../src/index.js';
@@ -41,9 +41,23 @@ it('retains the untouched adapter transport across config source HMR, patches an
     modules.set(join(root, 'plugins/reminder/plugin.ts'), { default: definePlugin({ name: 'reminder', setup({ config, handoff }) { const label = (config.get() as { label: string }).label; if (label === 'broken') throw new Error('reminder setup failed'); if (label === 'activation-broken') handoff.add({ activateNext() { throw new Error('reminder activation failed'); } }); } }) });
     modules.set(join(root, 'packages/adapter/index.ts'), { default: adapterFeature });
     modules.set(join(root, 'packages/command/index.ts'), { default: commandFeature });
-    modules.set(adapterSource, { default: defineAdapter({ capabilities: ['inbound', 'outbound'], create(context) {
-      transports.create++;
-      return { client: { account: (context.config as { label: string }).label, readProjection: () => (context as unknown as { project(feature: unknown): unknown }).project(commandFeatureId) }, connect({ events }) { transports.connect++; sinks.push(events); return () => { transports.stop++; }; }, send: () => 'synthetic-id' };
+    modules.set(adapterSource, { default: defineAdapter<{ label: string }>({ capabilities: ['inbound', 'outbound'], createAdapter(context) {
+      class TestClient {
+        readonly account: string;
+        constructor(account: string) { this.account = account; }
+        readProjection() { return (context as unknown as { project(feature: unknown): unknown }).project(commandFeatureId); }
+        send() { return 'synthetic-id'; }
+      }
+      class TestEndpoint extends TestClient {
+        readonly [endpointSpec] = createEndpointSpecification(this, {
+          start: () => { transports.connect++; sinks.push(this[endpointSpec].events); },
+          open() {}, close() {}, stop: () => { transports.stop++; }, send: () => this.send(),
+        });
+      }
+      class TestAdapter extends Adapter<TestEndpoint, { label: string }> {
+        protected createEndpoint(config: { label: string }): TestEndpoint { transports.create++; return new TestEndpoint(config.label); }
+      }
+      return new TestAdapter();
     } }) });
     modules.set(commandSource, { default: defineCommand({ execute: ({ config }) => (config as { label: string }).label }) });
     const handlerSource = join(root, 'plugins/watcher/handlers/diagnostic/index.ts');

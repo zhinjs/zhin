@@ -173,7 +173,7 @@ export class TopologyGenerationPreparer {
         )
         || !sameFeatureSlots(provider.id, current.capabilities, capabilities));
       const retained = new Map([...current.projections].filter(([id]) => featureTopology.providers.has(id)));
-      const projected = await new FeatureProjector(providers).project(
+      const projected = await new FeatureProjector(providers, plugins.scopes.get(current.root)).project(
         current.generation + 1,
         {
           root: current.root,

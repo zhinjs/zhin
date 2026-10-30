@@ -5,7 +5,7 @@ tier: Advanced
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=0ef7b8aac897f9dc -->
@@ -31,13 +31,15 @@ pnpm add @zhin.js/adapter-qq
 
 ## Plugin Runtime
 
+The owning `Adapter` manages desired accounts and running incarnations. The actual SDK or protocol Client implements structural `Endpoint`; framework hooks use `endpointSpec` without replacing native SDK APIs. Complete accepted callbacks enter through `events.run(...)` before deduplication and asynchronous normalization; see [Adapter authoring](/en/authoring/adapters).
+
 - `@zhin.js/adapter` — convention-based `adapters/qq/index.ts` (`defineAdapter`)
-- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
+- `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 - **Does not require** `@zhin.js/host-http` / `@zhin.js/host-router` (WebSocket path)
 
-Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'|'channel'`; the owning guild lands in `parent`)
+Inbound: `endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })` (`kind: 'private'|'group'|'channel'`; the owning guild lands in `parent`)
 Outbound: `send({ conversation, payload })` -> `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
 
 ## Prerequisites
@@ -91,10 +93,10 @@ The adapter comes with a `qq endpoint` command group (used directly in chat, no 
 
 | Command | Description |
 |---------|-------------|
-| `qq endpoint add [name]` | Bind via QR code on mobile QQ: sends a QR code link -> after confirmation, credentials are written to `.env` (`QQ_<NAME>_APPID/SECRET`) and appended to `qq.endpoints` (restart required to take effect) |
+| `qq endpoint add [name]` | Bind via mobile QQ QR code; confirmation saves the account to Host runtime storage, disabled until explicitly started |
 | `qq endpoint cancel` | Cancel an in-progress QR code binding (only one process allowed at a time) |
 | `qq endpoint list` | List running and configured endpoints |
-| `qq endpoint remove <name>` | Remove an endpoint from configuration (`.env` keys are preserved; manual cleanup possible) |
+| `qq endpoint remove <name>` | Remove the runtime account and cancel its running operations; retain historical records |
 
 add/cancel/remove are restricted by `master`: when the instance configuration declares a `master` (top-level or `endpoints[i]`), only the master can execute these; if unconfigured, access is open (the first person to bind via QR code becomes the owner). QR codes are currently delivered as link text (outbound rich media migration pending) — open the link on mobile QQ to scan.
 
@@ -131,8 +133,10 @@ QQ Endpoints declare native Markdown and keyboard support. `UserInteraction.ask(
 Open the Console **QQ** page (route `/qq`) to:
 
 - view running connections and test connectivity;
-- view or remove `plugins.qq.endpoints`;
-- scan-bind a new bot from **Platform actions**.
+- view, edit, start, stop, replace, or remove accounts from Host runtime storage;
+- scan-bind a new bot from **Platform actions**; save it disabled and start it explicitly.
+
+Reads require `qq:read`; writes require `qq:write`, with full administrator tokens unrestricted. The first migration requires an administrator to confirm the existing account list and retains identity and history. Account changes do not rewrite startup files or `.env`. Connection updates reconnect only that account; replacement assigns a new identity without inheriting Sessions or settings. Refresh to verify an unknown commit outcome instead of retrying automatically.
 
 ## Outage notifications
 

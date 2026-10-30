@@ -1,15 +1,12 @@
+import { WecomAdapter } from '../../src/adapter.js';
 /**
  * Convention entry: discover `adapters/wecom/index.ts` → defineAdapter.
  * Implementation lives under `src/` (endpoint / webhook / protocol).
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
-import { WecomEndpoint } from '../../src/endpoint.js';
 import {
-  resolveWecomConfig,
   type WecomEndpointConfig,
 } from '../../src/protocol.js';
-import { wecomRuntimeStateToken } from '../../src/wecom-runtime-state.js';
 
 export { WecomEndpoint } from '../../src/endpoint.js';
 export type { WecomEndpointOptions, WecomFetch } from '../../src/endpoint.js';
@@ -23,17 +20,5 @@ export default defineAdapter<WecomEndpointConfig>({
     outboundMedia: ['upload'],
     interactive: 'text',
   },
-  create(context) {
-    const config = resolveWecomConfig(context.config);
-    // 注册到插件运行时状态（wecom endpoint list 的"运行中"数据源）
-    context.use(wecomRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: 'webhook',
-    });
-    return new WecomEndpoint({
-      id: context.id,
-      http: context.use(httpHostToken),
-      config,
-    });
-  },
+  createAdapter: context => new WecomAdapter(context),
 });

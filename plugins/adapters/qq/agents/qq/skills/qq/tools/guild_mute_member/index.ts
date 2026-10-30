@@ -19,7 +19,7 @@ export default defineAgentTool({
   }),
   async execute({ user_id, duration }, context) {
     const { guildId } = currentGuildChannel(context);
-    const members = context.$client.api.memberService;
+    const members = context.$client.memberService;
     const seconds = duration ?? 0;
     const ok = seconds === 0
       ? await members.unmuteGuildMember(guildId, user_id)

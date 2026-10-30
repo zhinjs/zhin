@@ -4,7 +4,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { wechatMpRuntimeStateToken } from '../../../src/wechat-mp-runtime-state.js';
 
 export const wechatMpEndpointCommands = createEndpointCommands({
   adapterKey: 'wechat-mp',
@@ -15,6 +14,5 @@ export const wechatMpEndpointCommands = createEndpointCommands({
     { key: 'token', required: true, env: true, description: '服务器配置 token', descriptionI18n: { en: "Server configuration token" } },
     { key: 'encodingAESKey', env: true, description: '消息加解密 key', descriptionI18n: { en: "Message encryption key" } },
   ],
-  running: (use) => use(wechatMpRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `appId: ${String(entry.appId)}`,
 }, defineCommand);

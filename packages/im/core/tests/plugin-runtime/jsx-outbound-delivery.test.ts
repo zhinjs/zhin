@@ -13,7 +13,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
-  Endpoint,
+  Adapter, endpointSpec, createEndpointSpecification, type Endpoint,
   adapterFeatureId,
   defineAdapter,
   endpointEventGatewayToken,
@@ -54,16 +54,14 @@ interface FixtureOptions {
 async function fixture(options: FixtureOptions = {}) {
   const root = rootPluginId();
   const sent: EndpointSendRequest[] = [];
-  class MemoryEndpoint extends Endpoint<object> {
-    readonly client = {};
-    start() {}
-    open() {}
-    close() {}
-    stop() {}
+  class MemoryClient {
     async send(request: EndpointSendRequest) {
       sent.push(request);
       return options.onSend ? options.onSend(request) : 'message-1';
     }
+  }
+  class MemoryEndpoint extends MemoryClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request) });
   }
   const adapter = createCapabilitySlot({
     owner: root,
@@ -73,7 +71,7 @@ async function fixture(options: FixtureOptions = {}) {
     definition: defineAdapter({
       capabilities: ['outbound'],
       segments: { outboundMedia: ['base64'], ...options.segments },
-      create: () => new MemoryEndpoint(),
+      createAdapter: () => new class extends Adapter<MemoryEndpoint> { protected createEndpoint() { return new MemoryEndpoint(); } }(),
     }),
   });
   const middleware = createCapabilitySlot({

@@ -14,7 +14,9 @@ import sendCommand from '../commands/bili-draft/send/[id]/index.js';
 import dropCommand from '../commands/bili-draft/drop/[id]/index.js';
 import loginStartCommand from '../commands/bili-login/start/index.js';
 import loginStatusCommand from '../commands/bili-login/status/index.js';
-import { BilibiliEndpoint, bilibiliEndpointRegistryToken, resolveBilibiliConfig, type BilibiliEndpointRegistry } from '../src/index.js';
+import { adapterFeature, AdapterIndex, adapterFeatureId, endpointEventGatewayToken } from 'zhin.js/adapter';
+import { BilibiliAdapter } from '../src/adapter.js';
+import adapterDefinition from '../adapters/bilibili/index.js';
 
 const definitions = new Map([
   ['bili-draft/list', listCommand], ['bili-draft/show/[id]', showCommand], ['bili-draft/edit/[id]', editCommand],
@@ -49,29 +51,35 @@ it('discovers the published plugin entry and protects localized review commands 
   await write(join(directory, 'plugin.ts'), '');
   modules.values.set(join(directory, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
   await write(join(directory, 'plugins/bilibili/package.json'), manifest);
+  await write(join(directory, 'plugins/bilibili/schema.json'), await readFile(new URL('../schema.json', import.meta.url), 'utf8'));
   await write(join(directory, 'plugins/bilibili/plugin.js'), '');
   modules.values.set(join(directory, 'plugins/bilibili/plugin.js'), { default: plugin });
   for (const [path, definition] of definitions) {
     const source = join(directory, `plugins/bilibili/commands/${path}/index.ts`);
     await write(source, ''); modules.values.set(source, { default: definition });
   }
-  const syntheticAdapter = defineFeatureProvider({ protocol: 1, id: featureId('zhin.adapter'),
-    authoring: { conventions: [], validate(value) { return value; } }, runtime: { project() { return { value: undefined }; } } });
   const syntheticPage = defineFeatureProvider({ protocol: 1, id: featureId('zhin.page'),
     authoring: { conventions: [], validate(value) { return value; } }, runtime: { project() { return { value: undefined }; } } });
-  for (const [name, definition] of [['adapter', syntheticAdapter], ['command', commandFeature], ['page', syntheticPage]] as const) {
+  for (const [name, definition] of [['adapter', adapterFeature], ['command', commandFeature], ['page', syntheticPage]] as const) {
     await write(join(directory, `packages/${name}/package.json`), { name: `@zhin.js/${name}`, zhin: { protocol: 1, type: 'feature', featureApi: '1.0.0', entry: './index.ts' } });
     await write(join(directory, `packages/${name}/index.ts`), '');
     modules.values.set(join(directory, `packages/${name}/index.ts`), { default: definition });
   }
+  const adapterSource = join(directory, 'plugins/bilibili/adapters/bilibili/index.ts');
+  await write(adapterSource, ''); modules.values.set(adapterSource, { default: adapterDefinition });
   const runtime = new RootRuntime({ projectRoot: directory, modules,
-    config: { configVersion: 2, plugins: { bilibili: '@zhin.js/adapter-bilibili' }, bilibili: { commandNamespace: 'review' } },
+    config: { configVersion: 2, plugins: { bilibili: '@zhin.js/adapter-bilibili' }, bilibili: { commandNamespace: 'review', endpoints: [{ id: 'bili', videos: [], sessdata: 'synthetic', biliJct: 'synthetic', dataDir: join(directory, 'data') }] } },
     environment: { name: 'test', mode: 'test', platform: 'node' },
-    installResources(context) { context.resources.provide(permissionHostToken, new PermissionHost()); } });
+    installResources(context) {
+      context.resources.provide(permissionHostToken, new PermissionHost());
+      context.resources.provide(endpointEventGatewayToken, { receive: async () => undefined });
+    } });
   const posts: string[] = [];
-  const endpoint = new BilibiliEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'bili'), autoPoll: false,
-    config: resolveBilibiliConfig({ id: 'bili', sessdata: 'synthetic', biliJct: 'synthetic' }),
-    fetch: async (_url, init) => { posts.push(String(init?.body)); return { ok: true, status: 200, json: async () => ({ code: 0, data: { rpid_str: '777' } }) }; } });
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url.includes('/x/web-interface/nav')) return new Response(JSON.stringify({ code: 0, data: { isLogin: true, mid: 99 } }));
+    if (!url.includes('/x/v2/reply/add')) throw new Error('Unexpected offline Bilibili request');
+    posts.push(String(init?.body)); return new Response(JSON.stringify({ code: 0, data: { rpid_str: '777' } }));
+  }));
   const input = (locale: 'zh-CN' | 'en', master = true) => ({ locale,
     conversation: { endpoint: { adapter: 'chat', id: 'chat-bot' }, kind: 'private' as const, id: 'reviewer' },
     sender: { id: 'reviewer', roles: master ? ['master'] : [] } });
@@ -82,14 +90,18 @@ it('discovers the published plugin entry and protects localized review commands 
     const index = commands as CommandIndex;
     expect(index.list()).toHaveLength(7);
     const resources = runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'bilibili'));
-    const registry = resources?.get(bilibiliEndpointRegistryToken.id) as BilibiliEndpointRegistry;
     const rpc = resources?.get(pluginConsoleRpcToken.id) as PluginConsoleRpc;
     expect([...rpc.methods.keys()].sort()).toEqual(['drop', 'edit', 'login', 'login-cancel', 'logout', 'send', 'status']);
     for (const [name, method] of rpc.methods) {
       expect(method.page).toBe('index');
       expect(method.requiredPermissions.length, name).toBeGreaterThan(0);
     }
-    registry.set('bili', endpoint);
+    const adapters = runtime.snapshot.projections.get(adapterFeatureId);
+    if (!(adapters instanceof AdapterIndex)) throw new Error('Real AdapterIndex is missing');
+    const adapter = adapters.adapters().find(candidate => candidate instanceof BilibiliAdapter);
+    if (!(adapter instanceof BilibiliAdapter)) throw new Error('Real Bilibili Adapter is missing');
+    const endpoint = adapter.getEndpoint(adapter.list()[0]!.instanceId);
+    if (!endpoint) throw new Error('Real Bilibili Endpoint is missing');
     const draft = endpoint.drafts.add({ oid: '123', root: '1', parent: '1', message: '回复原文 保持不变', context: { author: '原作者', text: '原评论 {command}' } });
     const denied = await index.dispatch(`review bili-draft send ${draft.id}`, input('en', false), undefined, '!');
     expect(denied.status).toBe('denied');
@@ -124,5 +136,5 @@ it('discovers the published plugin entry and protects localized review commands 
     const group = { ...input('zh-CN'), conversation: { ...input('zh-CN').conversation, kind: 'group' as const, id: 'g1' } };
     expect((await index.dispatch('review bili-login start', group, undefined, '!')).value).toContain('只能在私聊');
     expect((await index.dispatch('review bili-login status', input('en', false), undefined, '!')).status).toBe('denied');
-  } finally { endpoint.stop(); await runtime.stop(); await rm(directory, { recursive: true, force: true }); }
+  } finally { await runtime.stop(); vi.unstubAllGlobals(); await rm(directory, { recursive: true, force: true }); }
 });

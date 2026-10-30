@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { milkyRuntimeStateToken } from './milky-runtime-state.js';
 import { milkyConsoleSpec } from './console-spec.js';
 
 export function createMilkyConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(milkyRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...milkyConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

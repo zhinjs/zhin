@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { Message } from 'kook-client';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { kookFixture } from './fixture.js';
+import { RuntimeKookClient } from '../src/ws.js';
 import { KookWebsocketEndpoint, KookWebhookEndpoint } from '../src/endpoint.js';
 import { sendKookOutbound } from '../src/outbound.js';
 import { resolveKookConfig } from '../src/protocol.js';
@@ -13,7 +14,8 @@ const click = { channel_type: 'GROUP', type: 255, target_id: 'channel', msg_id: 
 
 it('serializes native return-val buttons and link shares through the installed SDK preserving quotes', async () => {
   const sendChannelMsg = vi.fn(async () => ({ msg_id: 'sent-card' }));
-  const client = { sendChannelMsg } as unknown as KookClientTransport;
+  const client = new RuntimeKookClient({ token: 'synthetic', mode: 'websocket', logLevel: 'off' });
+  vi.spyOn(client, 'sendChannelMsg').mockImplementation(sendChannelMsg);
   await sendKookOutbound(client, { conversation, payload: [
     { type: 'reply', data: { message_id: 'parent' } }, { type: 'markdown', data: { content: '**choose**' } },
     { type: 'keyboard', data: { rows: [[{ label: '确认', payload: 'acceptance:button', style: 'primary' }]] } },
@@ -30,16 +32,17 @@ it('serializes native return-val buttons and link shares through the installed S
     { type: 'section', mode: 'left', text: { type: 'plain-text', content: '打开官网' } },
     { type: 'action-group', elements: [{ type: 'button', theme: 'secondary', value: 'https://zhin.dev/', click: 'link', text: { type: 'plain-text', content: '打开链接' } }] },
   ]);
+  await client.disconnect();
 });
 
 it('routes native clicks through reliable canonical action ingress with the actual sender and source card', async () => {
-  const receiver = new EventEmitter();
-  const client = { receiver, sendChannelMsg: async () => ({ msg_id: 'sent-card' }), connect: async () => {}, disconnect: async () => {}, removeAllListeners: () => {}, on: () => {} } as unknown as KookClientTransport;
+  const client = { sendChannelMsg: async () => ({ msg_id: 'sent-card' }), connect: async () => {}, disconnect: async () => {}, removeAllListeners: () => {}, on: () => {} } as unknown as KookClientTransport;
   const receive = vi.fn(async () => {});
   const id = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'kook');
   const config = resolveKookConfig({ id: 'test', token: 'fixture', connection: 'websocket' });
   if (config.connection !== 'websocket') throw new Error('Wrong fixture');
-  const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({ id, config, createClient: () => client }), { receive });
+  const endpoint = await kookFixture(() => new KookWebsocketEndpoint({ id, config }), () => client, { receive });
+  const receiver = endpoint.endpoint.receiver;
   await endpoint.start(); endpoint.open();
   await endpoint.send({ conversation: { ...conversation, parent: { kind: 'channel', id: 'guild' } }, payload: [{ type: 'text', data: { text: 'choose' } }, { type: 'keyboard', data: { rows: [[{ label: '确认', payload: 'acceptance:button' }]] } }] });
   receiver.emit('event', { ...click, channel_type: 'PERSON', target_id: 'actor' });
@@ -58,10 +61,10 @@ it('webhook buttons await admission and route private clicks to the user rather 
   const config = resolveKookConfig({ id: 'test', token: 'fixture', connection: 'webhook', verify_token: 'fixture' });
   if (config.connection !== 'webhook') throw new Error('Wrong fixture');
   const client = { init: async () => {}, connect: async () => {}, disconnect: async () => {}, removeAllListeners: () => {} } as unknown as KookClientTransport;
-  const endpoint = bindTestEndpoint(new KookWebhookEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'kook'), config, http: { route: () => () => {} } as never, createClient: () => client }), { receive });
+  const endpoint = await kookFixture(() => new KookWebhookEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'kook'), config, http: { route: () => () => {} } as never }), () => client, { receive });
   await endpoint.start(); endpoint.open();
   let admitted = false;
-  const pending = endpoint.admitEvent({ ...click, channel_type: 'PERSON', target_id: 'bot', extra: { ...click.extra, body: { ...click.extra.body, target_id: '' } } }).then(() => { admitted = true; });
+  const pending = endpoint.endpoint.admitEvent({ ...click, channel_type: 'PERSON', target_id: 'bot', extra: { ...click.extra, body: { ...click.extra.body, target_id: '' } } }).then(() => { admitted = true; });
   await vi.waitFor(() => expect(receive).toHaveBeenCalled());
   expect(admitted).toBe(false);
   expect(receive.mock.calls[0]![0]).toMatchObject({ conversation: { kind: 'private', id: 'actor' }, sender: { id: 'actor' } });

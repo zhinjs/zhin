@@ -10,8 +10,11 @@ import { R2ImageAssetPublisher } from './media/r2-image-assets.js';
 import type { ImageAssetPublisher, R2ImageStorageConfig } from './media/image-assets.js';
 import { DEFAULT_CONFIG, findDeprecatedAgentBindingKeys, findDeprecatedAgentConfigKeys } from './config/index.js';
 import { getLogger } from '@zhin.js/logger';
+import { runWithAgentTurnConfiguration } from './turn/agent-turn-context.js';
+import { ModelRuntimeService } from './model-runtime/service.js';
+import type { ModelRuntimeConfig, ModelRuntimeServiceOptions, ModelExecutionLease } from './model-runtime/types.js';
 import { registerProviderInstances } from './config/provider-instance.js';
-import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
+import { normalizeAiRoutingConfig, normalizeProviderEntry, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
 import { validateAiRoutingConfig } from './config/validate-ai-config.js';
 import { AgentBindingRegistry } from './config/agent-binding-registry.js';
 import { resolvePerceptionConfig, type ResolvedPerceptionConfig } from './config/perception-config.js';
@@ -30,8 +33,10 @@ import {
 } from './plugin-loop-hooks.js';
 
 const logger = getLogger('AIService');
-export interface AIServiceConfig extends AIConfig {
+export interface AIServiceConfig extends ModelRuntimeConfig {
   imageStorage?: R2ImageStorageConfig;
+  /** Administrator-authored Console principal bindings; never inferred from a request body. */
+  personalPrincipals?: Readonly<Record<string, readonly import('./personal-session/types.js').PersonalSessionOwner[]>>;
 }
 /** AIService 程序化 Agent 句柄（agentLoop 隔离上下文，非 legacy `Agent` 类） */
 export interface ServiceAgent {
@@ -48,6 +53,8 @@ export interface ServiceAgentResult {
 }
 
 export interface CreateServiceAgentOptions {
+  /** Canonical invocation preset for prepared model runtimes. */
+  preset?: string;
   provider?: string;
   model?: string;
   systemPrompt?: string;
@@ -67,6 +74,15 @@ export interface CreateServiceAgentOptions {
 export class AIService {
   readonly imageAssets?: ImageAssetPublisher;
   private providers: Map<string, AIProvider> = new Map();
+  private readonly ownedLegacyProviders = new Set<AIProvider>();
+  private readonly providerRegistrations = new Set<Promise<void>>();
+  private readonly sourceConfig: AIServiceConfig;
+  private modelRuntime: ModelRuntimeService | null = null;
+  private modelRuntimeOwnerId?: string;
+  private readonly compatibilityLeases: ModelExecutionLease[] = [];
+  private modelPreparation?: Promise<void>;
+  private disposal?: Promise<void>;
+  private closing = false;
   private defaultProvider: string;
   private routing: NormalizedAiRoutingConfig;
   private bindingRegistry: AgentBindingRegistry;
@@ -82,23 +98,30 @@ export class AIService {
   readonly loopHooks = new PluginAILoopHookRegistry();
 
   constructor(config: AIServiceConfig = {}) {
+    this.sourceConfig = config;
     this.imageAssets = config.imageStorage ? new R2ImageAssetPublisher(config.imageStorage) : undefined;
     for (const { agent, key, reason } of findDeprecatedAgentBindingKeys((config as { agents?: unknown }).agents)) {
       logger.warn(`ai.agents.${agent}.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
     }
-    this.routing = normalizeAiRoutingConfig(config);
-    const validationErrors = validateAiRoutingConfig(this.routing);
-    if (validationErrors.length > 0) {
-      throw new Error(`Invalid AI routing config:\n${validationErrors.map(e => `  - ${e}`).join('\n')}`);
+    const canonical = config.modelCatalog !== undefined || config.modelPolicy !== undefined
+      || Object.values(config.agents ?? {}).some(binding => binding.preset !== undefined);
+    this.routing = canonical ? { providers: {}, agents: {}, mcpServerNames: [] } : normalizeAiRoutingConfig(config as AIConfig);
+    if (!canonical) {
+      const validationErrors = validateAiRoutingConfig(this.routing);
+      if (validationErrors.length > 0) {
+        throw new Error(`Invalid AI routing config:\n${validationErrors.map(e => `  - ${e}`).join('\n')}`);
+      }
     }
 
-    this.providers = registerProviderInstances(this.routing.providers);
+    const legacyProviders = canonical ? Object.fromEntries(Object.entries(config.providers ?? {}).map(([alias, entry]) => [alias, normalizeProviderEntry(alias, entry)])) : this.routing.providers;
+    this.providers = registerProviderInstances(legacyProviders);
+    for (const provider of this.providers.values()) this.ownedLegacyProviders.add(provider);
     this.refreshLlmApiRuntime();
     const zhinProvider = this.routing.agents[DEFAULT_ZHIN_AGENT_NAME]?.provider;
     this.defaultProvider =
       zhinProvider
       || this.providers.keys().next().value
-      || 'openai';
+      || '';
 
     this.bindingRegistry = new AgentBindingRegistry(this.routing.agents);
     this.contextConfig = config.context || {};
@@ -111,8 +134,64 @@ export class AIService {
     this.imageGenerationGlobal = config.imageGeneration;
     this.perceptionConfig = resolvePerceptionConfig(
       config.multimodal?.perception,
-      Object.keys(this.routing.providers),
+      Object.keys(legacyProviders),
     );
+  }
+
+
+  /** Host supplies its namespace and execution ports before constructing Agent runtimes. */
+  prepareModelRuntime(options: Omit<ModelRuntimeServiceOptions, 'config' | 'hostProviders'>): Promise<void> {
+    if (this.closing) return Promise.reject(new Error('AI service is disposed'));
+    if (this.modelPreparation) return this.modelPreparation;
+    this.modelPreparation = this.prepareModels(options);
+    return this.modelPreparation;
+  }
+
+  private async prepareModels(options: Omit<ModelRuntimeServiceOptions, 'config' | 'hostProviders'>): Promise<void> {
+    await Promise.all([...this.providerRegistrations]);
+    const runtime = new ModelRuntimeService({ ...options, config: this.sourceConfig, hostProviders: this.providers,
+      takeHostProviderOwnership: provider => {
+        if (!this.ownedLegacyProviders.delete(provider)) return undefined;
+        return () => provider instanceof SdkProviderAdapter ? provider.dispose() : undefined;
+      },
+    });
+    const leases: ModelExecutionLease[] = [];
+    try {
+      const routing = runtime.getCompatibilityRouting();
+      const primary = runtime.presetForBinding(DEFAULT_ZHIN_AGENT_NAME);
+      // The primary Host connection is always admitted first. Remaining compatibility
+      // entries serve management/authoring callers, never per-turn model selection.
+      const presets = [primary, ...Object.keys(runtime.getCatalogConfig().presets).filter(preset => preset !== primary)];
+      const providers = new Map(this.providers);
+      const seenConnections = new Set<string>();
+      for (const preset of presets) {
+        const model = runtime.getCatalogConfig().models[runtime.getCatalogConfig().presets[preset].modelId];
+        const connection = runtime.getCatalogConfig().connections[model.connectionId];
+        if (connection.ownerId !== options.hostOwnerId || seenConnections.has(connection.id)) continue;
+        seenConnections.add(connection.id);
+        const lease = await runtime.acquirePreset(preset, { ownerId: options.hostOwnerId });
+        leases.push(lease);
+        providers.set(lease.provider.name, lease.provider);
+      }
+      if (this.closing) throw new Error('AI service is disposed');
+      this.routing = routing;
+      this.bindingRegistry = new AgentBindingRegistry(routing.agents);
+      this.providers = providers;
+      this.defaultProvider = routing.agents[DEFAULT_ZHIN_AGENT_NAME].provider;
+      this.refreshLlmApiRuntime();
+      this.compatibilityLeases.push(...leases);
+      this.modelRuntimeOwnerId = options.hostOwnerId;
+      this.modelRuntime = runtime;
+    } catch (error) {
+      await Promise.all(leases.map(lease => lease.release().catch(() => undefined)));
+      await runtime.dispose().catch(() => undefined);
+      throw error;
+    }
+  }
+
+  getModelRuntime(): ModelRuntimeService {
+    if (!this.modelRuntime) throw new Error('AI model runtime is not prepared');
+    return this.modelRuntime;
   }
 
   /** Validated `ai.multimodal.perception`, or undefined when the pre-pass is off. */
@@ -176,15 +255,27 @@ export class AIService {
 
   /** 文生图默认：ai.imageGeneration + providers.<alias>.imageGeneration */
   getImageGenerationDefaults(providerAlias: string): ImageGenerationDefaults {
-    const inst = this.routing.providers[providerAlias]?.imageGeneration;
+    const inst = this.sourceConfig.providers?.[providerAlias]?.imageGeneration;
     return { ...this.imageGenerationGlobal, ...inst };
   }
 
   async registerProvider(provider: SdkProviderAdapter): Promise<void> {
+    if (this.closing) throw new Error('AI service is disposed');
+    if (this.modelPreparation) throw new Error('Prepared model connections require a new configuration snapshot');
+    const registration = this.replaceProvider(provider);
+    this.providerRegistrations.add(registration);
+    try { await registration; }
+    finally { this.providerRegistrations.delete(registration); }
+  }
+
+  private async replaceProvider(provider: SdkProviderAdapter): Promise<void> {
     const previous = this.providers.get(provider.name);
     if (previous === provider) return;
     if (previous instanceof SdkProviderAdapter) await previous.dispose();
+    if (previous) this.ownedLegacyProviders.delete(previous);
+    if (this.closing) throw new Error('AI service is disposed');
     this.providers.set(provider.name, provider);
+    this.ownedLegacyProviders.add(provider);
     const entry = sdkEntryFromProvider(provider);
     this.llmRuntime.registerProvider(entry.alias, entry.config, entry.models, entry.fetch);
   }
@@ -249,9 +340,41 @@ export class AIService {
   }
 
   createAgent(options: CreateServiceAgentOptions = {}): ServiceAgent {
-    const provider = this.getProvider(options.provider);
     const tools = this.resolveServiceAgentTools(options);
     const config = { ...DEFAULT_CONFIG, ...(this.agentConfig ?? {}) } as typeof DEFAULT_CONFIG;
+    if (this.modelRuntime) {
+      const runtime = this.modelRuntime;
+      const ownerId = this.modelRuntimeOwnerId!;
+      const preset = options.preset ?? (options.provider !== undefined || options.model !== undefined
+        ? runtime.presetForLegacyModel(options.provider ?? this.defaultProvider, options.model)
+        : undefined);
+      return {
+        run: async (userInput) => {
+          const execution = preset === undefined ? await runtime.acquireDefaultForTurn(options.signal)
+            : await runtime.acquirePreset(preset, { ownerId }, options.signal);
+          const lease = 'chat' in execution ? execution.chat : execution;
+          try {
+            const run = () => runAgentLoopStandaloneTurn({
+              provider: lease.provider, llmRuntime: lease.llmRuntime,
+              imageAssets: this.imageAssets, model: lease.invocation.model.model,
+              systemPrompt: options.systemPrompt ?? '', tools, userInput,
+              maxIterations: options.maxIterations ?? config.maxIterations, signal: options.signal,
+            });
+            const result = 'chat' in execution ? await runWithAgentTurnConfiguration({ models: execution }, run) : await run();
+            return toServiceAgentResult(result);
+          } finally {
+            try { await execution.release(); }
+            catch {
+              // Cleanup cannot change a completed operation or replace its primary error.
+              try { logger.warn('AI model lease cleanup failed'); } catch { /* Reporting is advisory. */ }
+            }
+          }
+        },
+        dispose: () => undefined,
+      };
+    }
+    if (options.preset !== undefined) throw new Error('AI model runtime is not prepared');
+    const provider = this.getProvider(options.provider);
     const model = options.model ?? provider.models[0];
     const systemPrompt = options.systemPrompt ?? '';
     const maxIterations = options.maxIterations ?? config.maxIterations;
@@ -293,12 +416,32 @@ export class AIService {
     return results;
   }
 
-  async dispose(): Promise<void> {
-    const providers = [...this.providers.values()];
+  dispose(): Promise<void> {
+    if (this.disposal) return this.disposal;
+    this.closing = true;
+    this.disposal = this.disposeResources();
+    return this.disposal;
+  }
+
+  private async disposeResources(): Promise<void> {
+    await this.modelPreparation?.catch(() => undefined);
+    // Replacements admitted before shutdown finish before their old owners are closed.
+    await Promise.allSettled([...this.providerRegistrations]);
+    const failures: unknown[] = [];
+    const cleanup = async (operation: () => Promise<void>): Promise<void> => {
+      try { await operation(); } catch (error) { failures.push(error); }
+    };
+    await Promise.all(this.compatibilityLeases.splice(0).map(lease => cleanup(() => lease.release())));
+    await cleanup(() => this.modelRuntime?.dispose() ?? Promise.resolve());
+    const providers = [...this.ownedLegacyProviders];
+    this.ownedLegacyProviders.clear();
     this.providers.clear();
-    await Promise.all(providers.map((provider) => (
-      provider instanceof SdkProviderAdapter ? provider.dispose() : Promise.resolve()
-    )));
+    await Promise.all(providers.map(provider => cleanup(async () => {
+      if (!(provider instanceof SdkProviderAdapter)) return;
+      try { await provider.dispose(); }
+      catch { throw new Error('AI provider cleanup failed'); }
+    })));
+    if (failures.length) throw failures[0];
   }
 }
 

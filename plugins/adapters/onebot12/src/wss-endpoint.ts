@@ -2,7 +2,8 @@
  * OneBot12 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
 import {
-  ClientEndpoint,
+  createEndpointSpecification, endpointSpec,
+  type Endpoint, type EndpointSpecification,
   createEndpointLifecycle,
   createRecallEndpointControl,
   type EndpointLifecycle,
@@ -16,6 +17,7 @@ import type { CapabilityId } from 'zhin.js';
 import { createOneBot12EndpointManagement } from './endpoint-management.js';
 import {
   buildSendMessageParams,
+  matchesOneBot12Self,
   formatInboundContent,
   formatOutboundSegments,
   isBotMentioned,
@@ -29,7 +31,7 @@ import {
 } from './protocol.js';
 import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { createOneBot12ContentPort } from './content-port.js';
-import { callOnebot12Client, createOnebot12EndpointClient, forwardOnebot12ClientEvents, type Onebot12Client } from './client.js';
+import { callOnebot12Client, onebot12ClientOptions, forwardOnebot12ClientEvents, Onebot12Client } from './client.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
 import { type OneBot12PendingAction, type OneBot12WsSocket } from './ws-types.js';
 import {
@@ -44,14 +46,15 @@ export interface OneBot12WssEndpointOptions {
   readonly config: OneBot12WssConfig;
 }
 
-export class OneBot12WssEndpoint extends ClientEndpoint<Onebot12Client> {
-  readonly client: Onebot12Client;
+export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  #open = false;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: OneBot12WssEndpointOptions;
-  readonly management: EndpointManagement;
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content;
+  readonly #management: EndpointManagement;
+  readonly #control: EndpointControl = createRecallEndpointControl((id) => this.#recallMessage(id));
+  readonly #content;
   #ws?: OneBot12WsSocket;
   #wsRelease?: () => void;
   readonly #connectionLifecycle: EndpointLifecycle;
@@ -61,27 +64,35 @@ export class OneBot12WssEndpoint extends ClientEndpoint<Onebot12Client> {
   #started = false;
 
   constructor(options: OneBot12WssEndpointOptions) {
-    super();
+    super(onebot12ClientOptions(options.config, (action, params) => this.#callAction(action, params ?? {})));
     this.#logger = getAdapterLogger('onebot12', options.config.id);
     this.#options = options;
     this.#connectionLifecycle = createEndpointLifecycle({
       name: `${options.config.id}:inbound`,
       reconnect: false,
     });
-    this.client = createOnebot12EndpointClient(options.config, (action, params) => this.#callAction(action, params ?? {}));
-    const callApi = (action: string, params?: Record<string, unknown>) => callOnebot12Client(this.client, action, params);
-    this.management = createOneBot12EndpointManagement({ callApi });
-    this.content = createOneBot12ContentPort(callApi);
-    this.bindClientEvents(
-      (receive) => forwardOnebot12ClientEvents(this.client, receive),
-      (name, payload) => {
+    const callApi = (action: string, params?: Record<string, unknown>) => callOnebot12Client(this, action, params);
+    this.#management = createOneBot12EndpointManagement({ callApi });
+    this.#content = createOneBot12ContentPort(callApi);
+    const readTransportState = () => this.#connectionLifecycle.state;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => { this.#open = true; },
+      close: () => { this.#open = false; }, stop: () => this.#stop(),
+      send: request => this.#send(request),
+      get transportState() { return readTransportState(); },
+      management: this.#management, control: this.#control, content: this.#content,
+    });
+    forwardOnebot12ClientEvents(this, (name, payload) => {
+      void this[endpointSpec].events.run(() => {
+        if (!this.#open && !this.#started) return;
+        void this[endpointSpec].events.platform(name, payload).catch(error => this.#warnPlatformEvent(error));
         if (name === 'event') this.#admitRaw(payload as OneBot12Event);
-      },
-      (_name, error) => this.#warnPlatformEvent(error),
-    );
+      }).catch(error => this.#warnPlatformEvent(error));
+    });
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#started) return;
     if (!this.#options.config.access_token) {
       // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
@@ -113,8 +124,8 @@ export class OneBot12WssEndpoint extends ClientEndpoint<Onebot12Client> {
     }));
   }
 
-  async stop(): Promise<void> {
-    this.close();
+  async #stop(): Promise<void> {
+    this.#open = false;
     this.#wsRelease?.();
     this.#wsRelease = undefined;
     await this.#connectionTask;
@@ -124,10 +135,10 @@ export class OneBot12WssEndpoint extends ClientEndpoint<Onebot12Client> {
     this.#started = false;
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const materialized = await uploadOneBot12MediaSegments(
       payload,
-      (action, params) => callOnebot12Client(this.client, action, params),
+      (action, params) => callOnebot12Client(this, action, params),
       (error) => {
         this.#logger.warn(formatCompact({
           op: 'onebot12_upload_failed',
@@ -138,30 +149,34 @@ export class OneBot12WssEndpoint extends ClientEndpoint<Onebot12Client> {
     );
     const message = formatOutboundSegments(materialized);
     const params = buildSendMessageParams(conversation, message);
-    const data = await callOnebot12Client<{ message_id?: string }>(this.client, 'send_message', params);
+    const data = await callOnebot12Client<{ message_id?: string }>(this, 'send_message', params);
     return data?.message_id ?? '';
   }
 
-  async recallMessage(messageId: string): Promise<void> {
+  async #recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await callOnebot12Client(this.client, 'delete_message', { message_id: messageId });
+    await callOnebot12Client(this, 'delete_message', { message_id: messageId });
   }
 
   #admitRaw(ev: OneBot12Event): void {
+    if (!matchesOneBot12Self(this.#options.config, ev)) return;
+    this[endpointSpec].reportSelfUserId(ev.self.user_id);
     if (!isMessageEvent(ev)) {
       receiveOneBot12SideEvent(
-        (name, payload) => this.emit(name, payload),
+        (name, payload) => this[endpointSpec].events.emit(name, payload),
         this.#options.config.id,
-        { callApi: (action, params) => callOnebot12Client(this.client, action, params) },
+        { callApi: (action, params) => callOnebot12Client(this, action, params) },
         ev,
         this.#logger,
       );
       return;
     }
-    const conversation = onebot12InboundConversation(String(this.#options.id), ev);
+    const conversation = { ...onebot12InboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const nickname = senderNickname(ev);
     const mentioned = isBotMentioned(ev);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event: ev,
+      ...(typeof ev.time === 'number' ? { platformSentAt: ev.time * 1000 } : {}),
       conversation,
       message: { conversation, id: ev.message_id },
       content: formatInboundContent(ev),
@@ -221,9 +236,9 @@ export class OneBot12WssEndpoint extends ClientEndpoint<Onebot12Client> {
         handleOneBot12WsMessage(data, {
           endpointId: this.#options.config.id,
           pending: this.#pending,
-          ingest: (event) => this.client.ingest(
-            event as Parameters<Onebot12Client['ingest']>[0],
-          ),
+          ingest: event => {
+            if (matchesOneBot12Self(this.#options.config, event)) this.ingest(event as Parameters<Onebot12Client['ingest']>[0]);
+          },
         });
       });
       socket.on('close', () => {
@@ -242,7 +257,7 @@ export class OneBot12WssEndpoint extends ClientEndpoint<Onebot12Client> {
   }
 
   #callAction(action: string, params: Record<string, unknown>) {
-    return callOneBot12WsAction(this.#ws, this.#pending, this.#requestId, action, params);
+    return callOneBot12WsAction(this.#ws, this.#pending, this.#requestId, action, params, { platform: this.#options.config.platform, user_id: this.#options.config.userId });
   }
 
 }

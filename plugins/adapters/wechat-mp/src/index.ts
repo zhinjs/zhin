@@ -33,7 +33,6 @@ export {
 
 export {
   WeChatMpClient,
-  wechatMpClient,
   type WeChatMpClientEventMap,
   type WeChatMpFetch,
 } from './client.js';
@@ -58,3 +57,4 @@ export {
   collectPassiveReply,
   type WeChatMpWebhookHandler,
 } from './webhook.js';
+export { WeChatMpAdapter } from './adapter.js';

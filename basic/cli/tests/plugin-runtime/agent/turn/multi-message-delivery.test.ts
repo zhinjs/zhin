@@ -1,7 +1,8 @@
+import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId,
   type CapabilityId, type CapabilitySlot, type FeatureId, type SnapshotState } from '@zhin.js/plugin-runtime';
-import { AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
+import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec, type Endpoint } from '@zhin.js/adapter';
 import { ToolIndex, defineAgentTool, toolFeatureId } from '../../../../../../packages/im/tool/src/index.js';
 import { MemoryConversationEventStore, type MessageRef, type Segment } from '@zhin.js/im-contract';
 import { ImRuntime } from '@zhin.js/core/runtime';
@@ -29,15 +30,26 @@ describe('physical reply aliases through Core, CLI and Agent', () => {
     const im = new ImRuntime({ conversationEvents: events });
     const nativeRecall = vi.fn(async (_message: MessageRef) => undefined);
     const nativeSends: unknown[] = [];
+    class ReplyClient extends EventEmitter {
+      recall(message: MessageRef) { return nativeRecall(message); }
+      send(payload: unknown) {
+        nativeSends.push(payload);
+        return { parts: [{ messageId: ['native-one', 'native-two', 'native-confirmation'][nativeSends.length - 1]!, sourceIndices: [0] }] };
+      }
+    }
+    class ReplyEndpoint extends ReplyClient implements Endpoint {
+      readonly [endpointSpec] = createEndpointSpecification(this, {
+        start() {}, open() {}, close() {}, stop() {},
+        control: { recall: message => this.recall(message) },
+        send: request => this.send(request.payload),
+      });
+    }
+    class ReplyAdapter extends Adapter<ReplyEndpoint> {
+      protected createEndpoint() { return new ReplyEndpoint(); }
+    }
     const adapter = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'sandbox',
       source: '/project/adapters/sandbox/index.ts', definition: defineAdapter({
-        capabilities: ['outbound'], operations: ['recall'],
-        create: () => ({ client: {}, control: { recall: nativeRecall },
-          send: request => {
-            nativeSends.push(request.payload);
-            return { parts: [{ messageId: ['native-one', 'native-two', 'native-confirmation'][nativeSends.length - 1]!, sourceIndices: [0] }] };
-          },
-        }),
+        capabilities: ['outbound'], operations: ['recall'], createAdapter: () => new ReplyAdapter(),
       }) });
     const conversation = { endpoint: { adapter: 'sandbox', id: String(adapter.id) }, kind: 'private' as const, id: 'owner' };
     const toolInputs: string[] = [];
@@ -70,6 +82,7 @@ describe('physical reply aliases through Core, CLI and Agent', () => {
     agent.activeBinding = { name: 'zhin', providerAlias: 'mock', model: 'mock-model', mcpServers: [] };
     agent.markMemoryPersistenceReady();
     const host = asPrivate(agent);
+    if (!host.sessionSystem || !host.contextSystem) throw new Error('Synthetic Agent session systems did not initialize');
     const engine = createFullAgentTurnEngine({ host,
       core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
       sessionSystem: host.sessionSystem, contextSystem: host.contextSystem,

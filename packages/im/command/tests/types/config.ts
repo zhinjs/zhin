@@ -23,7 +23,7 @@ const curried = defineCommand.withConfig<Config>()({
     return `${config.prefix}${params.count}`;
   },
 });
-expectTypeOf(curried.execute).returns.toEqualTypeOf<string | Promise<string>>();
+expectTypeOf(curried.execute).returns.toEqualTypeOf<`${string}${number}` | Promise<`${string}${number}`>>();
 
 // The definer is reusable across files of one plugin.
 const definePluginCommand = defineCommand.withConfig<Config>();
@@ -64,4 +64,4 @@ definePluginCommand({ description: 'no execute' });
 
 // defineCommand stays a single-signature value for factories such as createEndpointCommands.
 declare function acceptsDefiner<T>(define: (definition: { execute(context: never): unknown }) => T): T;
-expectTypeOf(acceptsDefiner(defineCommand)).toEqualTypeOf<Readonly<import('../../src/index.js').CommandDefinition<unknown, unknown, import('../../src/index.js').CommandMessage, string | undefined>>>();
+expectTypeOf(acceptsDefiner(defineCommand)).toEqualTypeOf<Readonly<import('../../src/index.js').TypedCommandDefinition<unknown, unknown, import('../../src/index.js').CommandMessage, undefined, {}, {}>>>();

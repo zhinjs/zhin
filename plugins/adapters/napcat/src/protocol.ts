@@ -430,6 +430,7 @@ export function buildWsConnectOptions(config: NapCatWsConfig): {
 export interface NapCatHttpOptions {
   readonly http_url: string;
   readonly access_token?: string;
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -448,7 +449,7 @@ export async function callNapCatHttpAction(
     headers.Authorization = `Bearer ${options.access_token}`;
   }
   const res = await fetch(url, {
-    signal: AbortSignal.timeout(30_000),
+    signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
     method: 'POST',
     headers,
     body: JSON.stringify(params),

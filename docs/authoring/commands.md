@@ -52,6 +52,33 @@ export default definePlugin({
 两种写法共用同一套命令表和冲突检测。命令变多后移到 `commands/` 目录，修改单个命令时只会重载这一个文件。
 :::
 
+## 平台类型与单次 Session
+
+在项目统一声明入口加载已安装的适配器类型，业务命令不需要引入 Adapter 类。例如项目 `tsconfig.json` 的 `compilerOptions.types` 可包含 `"node"`、`"@zhin.js/adapter-icqq"`；保留原有类型条目。仅安装 npm 包并不会让 TypeScript 自动扫描它。
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  adapter: 'icqq',
+  params: { text: { type: 'text' } },
+  options: { silent: { type: 'boolean', default: false } },
+  async execute({ session, params, options }) {
+    if (!session) return;
+    session.adapter;  // IcqqAdapter
+    session.endpoint; // IcqqEndpoint，继承实际 ICQQ Client
+    session.scene;    // 当前群、私聊或频道；使用群字段前仍需收窄 kind
+    session.sender;   // platformRoles 与 authorizationRoles 分开
+    session.event;    // 同一次 SDK 回调的原生对象
+    if (!options.silent) await session.reply(params.text);
+  },
+});
+```
+
+`params`、`options`、`withConfig` 与命令工厂保留各自的类型推断。没有实际 IM 输入的直接调用中，`session` 为 `undefined`。规范化 `message.receive` Handler 和入站 Middleware 使用同一 Session；未形成规范消息的原生事件不伪造 Session。
+
+Session 是当前操作的只读视图。账号停止或重连会取消它的 `signal`；之后框架回复不会发送到替代连接。直接保存 SDK 引用并调用原生方法不经过框架租约，插件作者仍需遵守统一发送链路。
+
 ## 常见需求
 
 ### 查看已加载的指令菜单
@@ -504,43 +531,39 @@ flowchart LR
 ### 适配器的 endpoint 管理命令
 
 ::: details 给适配器生成 list / add / remove 命令
-`@zhin.js/adapter` 的 `createEndpointCommands(spec, defineCommand)` 为适配器生成 `<adapter> endpoint list / add / remove` 三个命令，用来在聊天里管理账号。除 email（配置是嵌套对象）和 sandbox（无凭据）外，所有平台适配器都已接入：qq、icqq、napcat、onebot11、onebot12、milky、satori、slack、telegram、discord、kook、lark、dingtalk、line、wecom、wechat-mp、weixin-ilink、github。
+`createEndpointCommands(spec, defineCommand)` 生成 `<adapter> endpoint list / add / remove`，与 Console 使用同一所属 Adapter 和持久化配置。平台特有的扫码或登录命令另行声明，不把它们藏在通用 `bindFlow` 回调中。
 
-- `list`：列出运行中的账号，以及 `<adapterKey>.endpoints` 中配置的账号。
-- `add <name> <key=value...>`：录入字段。标记为 `env: true` 的凭据写入 `.env`（键名如 `TELEGRAM_BOT1_TOKEN`），配置文件中保存 `${REF}` 引用；YAML 会保留原有注释；重名拒绝。
-- `remove <name>`：从配置中移除，重启后生效；`.env` 中的键需手动清理。
-- 特殊的添加流程（如 QQ 扫码绑定）通过 `spec.bindFlow` 接管 `add`，QQ 因此多一个 `qq endpoint cancel`。
-- `add` / `remove` 只允许 master 执行；未配置 master 时放行，首个绑定者会被写为新账号的 `master`。
-
-这些命令只依赖 `EndpointConfigurationStore`，不直接读写文件。官方 CLI 会提供 `endpointConfigurationStoreToken`；自行组装 `RootRuntime` 时需要提供同一接口的实现。`plugins` 必须是对象映射，旧的数组形态需要先显式迁移。
-
-接入步骤（以 telegram 为例）：
+- `list` 读取所属 Adapter 的账号配置与运行状态，不维护第二份 Endpoint Map。
+- `add <id> <key=value...>` 只保存配置，账号停用；之后在 Console 手动启动。
+- `remove <id>` 取消目标 incarnation 并关闭连接，历史保留；同名重建也获得新身份。
+- 首次修改前由管理员在 Console 核对已有账号清单并确认迁移，聊天命令不能代替确认。
+- 后续变更加密持久化，不写启动配置或 `.env`，不重启 Root。没有运行目录或数据库能力时拒绝写入，不回退文件。
+- `add/remove` 保留 master 权限规则；revision 冲突需刷新，提交结果未知需先读取权威状态核实，不能自动重试。
 
 ```ts
-// 1. src/telegram-runtime-state.ts：运行中账号的注册表
-export const telegramRuntimeStateToken = defineEndpointRuntimeStateToken('telegram');
+// src/telegram-endpoint-commands.ts
+import { createEndpointCommands } from 'zhin.js/adapter';
+import { defineCommand } from 'zhin.js/command';
 
-// 2. plugin.ts setup() 中提供状态；adapters/telegram/index.ts 的 create() 中登记
-context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState());
-// create(): context.use(telegramRuntimeStateToken).endpoints.set(config.name, { name: config.name, mode: config.mode });
-
-// 3. src/telegram-endpoint-commands.ts：生成命令（defineCommand 由适配器传入，避免包之间互相依赖）
 export const telegramEndpointCommands = createEndpointCommands({
-  adapterKey: 'telegram',          // = zhin.config.yml 的顶层实例名
+  adapterKey: 'telegram',
   adapterDisplayName: 'Telegram',
-  fields: [{ key: 'token', required: true, env: true, description: 'Telegram bot token' }],
-  running: (use) => use(telegramRuntimeStateToken).endpoints.values(),
-  describeEntry: (entry) => `token: ${String(entry.token)}`,
+  fields: [{ key: 'token', required: true, env: true,
+    description: 'Telegram bot token' }],
 }, defineCommand);
 
-// 4. commands/telegram/endpoint/list/index.ts、add/[[name]]/index.ts、remove/[name]/index.ts
-export default telegramEndpointCommands.list; // / .add / .remove
+// commands/telegram/endpoint/list/index.ts
+export default telegramEndpointCommands.list;
+// add/[id]/index.ts exports .add; remove/[id]/index.ts exports .remove
 ```
 
-`fields` 应与适配器 `schema.json` 中 `endpoints.items.properties` 一致；`add` 的 `key=value` 参数从 `args` 读取，值中含 `=` 时按第一个 `=` 切分。
+`adapterKey` 是当前 owner 内注册的 Adapter 名称，框架从真实 command operation 的 owner、generation 和 AdapterIndex 解析目录，不按显示名猜账号。平台只注册实际 `AdapterRegistry` 类型，不需要 RuntimeState token 或额外 Client token。
 
-需要更细的业务权限时，可以在 `execute` 里自行判断，例如 endpoint 管理命令的 `isEndpointOperator`：用 `config` 取出 `master` 名单，用 `input` 取出发送者 id，比对后返回拒绝文案。
+`fields` 是与平台 schema 对齐的闭合字段列表。嵌套字段可用明确声明的 dotpath，例如 `smtp.port`；`type` 支持 `string | number | boolean`，省略为 string，不允许任意对象合并。`env: true` 或 `secret: true` 表示敏感字段，管理响应遮蔽其值，由 Host 私有存储保存，不是写 `.env` 的开关。`add` 从 `args` 读取 `key=value`，按第一个 `=` 切分。
+
+Master 检查由通用 `isEndpointOperator` 在真实入口执行；平台额外业务权限不能替代或扩大该门禁。
 :::
+
 
 ## 下一步
 

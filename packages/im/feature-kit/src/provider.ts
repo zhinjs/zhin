@@ -5,6 +5,7 @@ import type {
   GenerationHandoffParticipant,
   PluginId,
   RuntimeSnapshot,
+  Token,
 } from '@zhin.js/plugin-runtime';
 
 export type SourceTarget = 'server' | 'client';
@@ -68,6 +69,8 @@ export interface FeatureAuthoring<TDefinition> {
 }
 
 export interface ProjectionContext {
+  /** Exact-token, Feature-scoped Host resource, available only during projection and excluded from snapshots. */
+  featureResource?<T>(token: Token<T>): T | undefined;
   readonly snapshot: RuntimeSnapshot;
   readonly signal: AbortSignal;
 }

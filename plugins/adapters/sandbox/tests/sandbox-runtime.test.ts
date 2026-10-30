@@ -1,4 +1,4 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -22,7 +22,7 @@ const endpointKey = String(capabilityId(rootPluginId(), adapterFeature, 'sandbox
 
 function sandboxConversation(id: string, kind: ConversationRef['kind'] = 'private'): ConversationRef {
   return {
-    endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
+    endpoint: { id: endpointKey, adapter: 'sandbox' },
     kind,
     id,
   };
@@ -40,24 +40,23 @@ describe('sandbox plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway,
       http,
       defaults: resolveSandboxEndpoint({ id: 'self-bot', owner: 'sandbox-user' }),
-    }), gateway, undefined);
-    expect(endpoint.selfUserId).toBeUndefined();
-    endpoint.start();
-    expect(endpoint.selfUserId).toBeUndefined();
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    expect(endpoint.index.connection('sandbox', endpoint.canonicalId)?.selfUserId).toBeUndefined();
+    await endpoint.start();
+    expect(endpoint.index.connection('sandbox', endpoint.canonicalId)?.selfUserId).toBeUndefined();
     endpoint.open();
-    expect(endpoint.selfUserId).toBe('self-bot');
-    expect(getProcessPeerRegistry().selfOf('test-endpoint')).toBe('self-bot');
-    endpoint.stop();
-    expect(endpoint.selfUserId).toBeUndefined();
-    expect(getProcessPeerRegistry().isReady('test-endpoint')).toBe(false);
+    expect(endpoint.index.connection('sandbox', endpoint.canonicalId)?.selfUserId).toBe('self-bot');
+    expect(getProcessPeerRegistry().selfOf(endpoint.canonicalId)).toBe('self-bot');
+    await endpoint.stop();
+    expect(endpoint.index.connection('sandbox', endpoint.canonicalId)?.selfUserId).toBeUndefined();
+    expect(getProcessPeerRegistry().isReady(endpoint.canonicalId)).toBe(false);
   });
 
-  it('keeps the replacement path claim when the previous HMR endpoint stops', () => {
+  it('keeps the replacement path claim when the previous HMR endpoint stops', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const ws = vi.spyOn(http, 'ws');
@@ -65,29 +64,28 @@ describe('sandbox plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const createEndpoint = (id: string) => bindTestEndpoint(new SandboxWsEndpoint({
+    const createEndpoint = async (id: string) => await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, `sandbox-${id}`),
-      gateway,
       http,
       defaults: resolveSandboxEndpoint({ id, owner: 'sandbox-user' }),
-    }), gateway, undefined);
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
 
-    const previous = createEndpoint('demo-bot');
-    const replacement = createEndpoint('demo-bot');
-    previous.start();
-    replacement.start();
-    previous.stop();
+    const previous = await createEndpoint('demo-bot');
+    const replacement = await createEndpoint('demo-bot');
+    await previous.start();
+    await replacement.start();
+    await previous.stop();
 
-    const other = createEndpoint('other-bot');
-    other.start();
+    const other = await createEndpoint('other-bot');
+    await other.start();
     expect(ws.mock.calls.map(([path]) => path)).toEqual([
       '/sandbox',
       '/sandbox',
       '/sandbox/other-bot',
     ]);
 
-    replacement.stop();
-    other.stop();
+    await replacement.stop();
+    await other.stop();
   });
 
   it('shares a delayed readiness probe and lets callers suppress stale delivery', async () => {
@@ -137,13 +135,12 @@ describe('sandbox plugin runtime adapter', () => {
     });
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
-    const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway,
       http,
       defaults,
-    }), gateway, undefined);
-    endpoint.start();
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
 
@@ -203,13 +200,12 @@ describe('sandbox plugin runtime adapter', () => {
       send: vi.fn(async () => 'sent'),
     };
     const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
-    const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway,
       http,
       defaults,
-    }), gateway, undefined);
-    endpoint.start();
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
 
@@ -219,9 +215,9 @@ describe('sandbox plugin runtime adapter', () => {
       const timer = setTimeout(() => reject(new Error('timeout waiting for websocket reply')), 3000);
       let retry: ReturnType<typeof setTimeout> | undefined;
       client.once('open', () => {
-        const sendWhenAccepted = () => {
+        const sendWhenAccepted = async () => {
           try {
-            messageId = endpoint.send({ conversation: sandboxConversation('sandbox-user'), payload: outbound });
+            messageId = await endpoint.send({ conversation: sandboxConversation('sandbox-user'), payload: outbound });
           } catch (error) {
             if (!(error instanceof Error) || error.message !== 'Sandbox Endpoint has no live connection') {
               clearTimeout(timer);
@@ -300,13 +296,12 @@ describe('sandbox plugin runtime adapter', () => {
     });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       defaults: resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' }),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
-    endpoint.start();
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
+    await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
 
@@ -343,21 +338,19 @@ describe('sandbox plugin runtime adapter', () => {
     const receiveB = vi.fn(async () => Object.freeze({ matched: false }));
     const gatewayA: OutboundMessageService = { receive: receiveA, send: vi.fn(async () => 'sent') };
     const gatewayB: OutboundMessageService = { receive: receiveB, send: vi.fn(async () => 'sent') };
-    const endpointA = bindTestEndpoint(new SandboxWsEndpoint({
+    const endpointA = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway: gatewayA,
       http,
       defaults: resolveSandboxEndpoint({ id: 'alpha-bot', owner: 'user-a' }),
-    }), gatewayA, undefined);
-    const endpointB = bindTestEndpoint(new SandboxWsEndpoint({
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gatewayA, undefined) });
+    const endpointB = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway: gatewayB,
       http,
       defaults: resolveSandboxEndpoint({ id: 'beta-bot', owner: 'user-b' }),
-    }), gatewayB, undefined);
-    endpointA.start();
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gatewayB, undefined) });
+    await endpointA.start();
     endpointA.open();
-    endpointB.start();
+    await endpointB.start();
     endpointB.open();
     const { port } = await http.listen();
 
@@ -438,8 +431,8 @@ describe('sandbox plugin runtime adapter', () => {
 
     clientA.close();
     clientB.close();
-    endpointA.stop();
-    endpointB.stop();
+    await endpointA.stop();
+    await endpointB.stop();
   });
 
   it('passes through already-wrapped outbound envelopes', () => {
@@ -538,17 +531,16 @@ describe('sandbox plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway, http, defaults: resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' }),
-    }), gateway, undefined);
-    endpoint.start();
+    const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'), http, defaults: resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' }),
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
     const first = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
     const second = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
     try {
-      await vi.waitFor(() => expect(endpoint.client.connections()).toHaveLength(2));
+      await vi.waitFor(() => expect(endpoint.endpoint.connections()).toHaveLength(2));
       expect(first.readyState).toBe(WebSocket.OPEN);
       expect(second.readyState).toBe(WebSocket.OPEN);
     } finally {
@@ -578,13 +570,12 @@ describe('sandbox plugin runtime adapter', () => {
     });
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
-    const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway,
       http,
       defaults,
-    }), gateway, undefined);
-    endpoint.start();
+    }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
 

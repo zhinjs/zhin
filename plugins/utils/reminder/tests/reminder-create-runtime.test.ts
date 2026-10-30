@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AdapterIndex, Endpoint, defineAdapter, adapterFeatureId, endpointEventGatewayToken, type EndpointSendRequest } from '../../../../packages/im/adapter/src/index.js';
+import { Adapter, AdapterIndex, createEndpointSpecification, defineAdapter, endpointSpec, adapterFeatureId, endpointEventGatewayToken, type EndpointSendRequest } from '../../../../packages/im/adapter/src/index.js';
 import { CommandIndex, commandFeatureId } from '../../../../packages/im/command/src/index.js';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '../../../../packages/im/middleware/src/index.js';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, childPluginId, PluginDatabaseHost, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
@@ -24,9 +24,7 @@ async function fixture(options: { afterSend?: (count: number) => void; locale?: 
     maxTasksPerSender: 10, batchSize: 5, missedGraceSeconds: 15, commandPrefix: options.prefix ?? '/', locale: options.locale ?? 'zh-CN' };
   const service = new ReminderService(new PluginDatabaseHost(owner, database).state, outbound, config);
   const added = vi.spyOn(service, 'add');
-  class MemoryEndpoint extends Endpoint<object> {
-    readonly client = {};
-    start() {} stop() {} open() {} close() {}
+  class MemoryClient {
     async send(request: EndpointSendRequest) {
       sent.push(request);
       options.afterSend?.(sent.length);
@@ -34,9 +32,15 @@ async function fixture(options: { afterSend?: (count: number) => void; locale?: 
       return `message-${sent.length}`;
     }
   }
+  class MemoryEndpoint extends MemoryClient {
+    readonly [endpointSpec] = createEndpointSpecification(this, {
+      start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request),
+    });
+  }
+  class MemoryAdapter extends Adapter<MemoryEndpoint> { protected createEndpoint() { return new MemoryEndpoint(); } }
   const slots = ['first', 'second'].map(localName => createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName,
     source: `/adapters/${localName}/index.ts`, definition: defineAdapter({ capabilities: ['inbound', 'outbound'],
-      segments: { interactive: 'text', markdown: 'text', outboundMedia: ['url'] }, create: () => new MemoryEndpoint() }) }));
+      segments: { interactive: 'text', markdown: 'text', outboundMedia: ['url'] }, createAdapter: () => new MemoryAdapter() }) }));
   const command = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'remind/create',
     source: '/commands/remind/create/index.ts', definition: create });
   const requesters: string[] = [];
@@ -65,7 +69,7 @@ async function fixture(options: { afterSend?: (count: number) => void; locale?: 
   const receive = async (content: string, overrides: Partial<IncomingMessage> = {}) => {
     const payload = { conversation, sender: { id: 'alice' }, content, ...overrides };
     const endpoint = im.endpoints.list().find(item => item.id === payload.conversation.endpoint.id)!.endpoint;
-    return im.endpointEvents.receive({ name: 'message.receive', endpoint, payload, client: {} });
+    return im.endpointEvents.receive({ name: 'message.receive', endpoint, payload, client: adapters.clientById(endpoint.id as typeof slots[number]['id']) });
   };
   return { sent, requesters, service, added, outbound, index, store, im, conversation, receive, owner,
     failPrompt: (after = 1) => { uncertainIn = after; },

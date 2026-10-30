@@ -1,13 +1,11 @@
+import { WeixinIlinkAdapter } from '../../src/adapter.js';
 /**
  * Convention entry: discover `adapters/weixin-ilink/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { WeixinIlinkEndpoint } from '../../src/endpoint.js';
 import {
-  resolveWeixinIlinkConfig,
   type WeixinIlinkEndpointConfig,
 } from '../../src/protocol.js';
-import { weixinIlinkRuntimeStateToken } from '../../src/weixin-ilink-runtime-state.js';
 
 export { WeixinIlinkEndpoint } from '../../src/endpoint.js';
 export type {
@@ -27,17 +25,5 @@ export default defineAdapter<WeixinIlinkEndpointConfig>({
     outboundMedia: ['upload'],
     interactive: 'text',
   },
-  create(context) {
-    const config = resolveWeixinIlinkConfig(context.config);
-    // 注册到插件运行时状态（weixin-ilink endpoint list 的"运行中"数据源）
-    context.use(weixinIlinkRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      // iLink 仅长轮询一种接入方式，无 config.connection 字段
-      mode: 'long-poll',
-    });
-    return new WeixinIlinkEndpoint({
-      id: context.id,
-      config,
-    });
-  },
+  createAdapter: () => new WeixinIlinkAdapter(),
 });

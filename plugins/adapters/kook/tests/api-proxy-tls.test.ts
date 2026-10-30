@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { sendKookOutbound } from '../src/outbound.js';
-import { RuntimeKookClient, defaultCreateClient, type KookClientTransport } from '../src/ws.js';
+import { RuntimeKookClient, kookWebsocketClientOptions } from '../src/ws.js';
 import { resolveKookConfig } from '../src/protocol.js';
 import { createTcpFaultProxy } from '../../../../scripts/platform-acceptance/tcp-fault-proxy.mjs';
 
@@ -29,7 +29,7 @@ it.each(['www.kookapp.cn', 'wrong.invalid'])('actual KOOK SDK verifies TLS ident
   const agent = client.request.defaults.httpsAgent as https.Agent;
   try {
     expect(client.request.defaults.baseURL).toBe('https://www.kookapp.cn/api');
-    const failure = await sendKookOutbound(client as unknown as KookClientTransport, { conversation: { endpoint: { id: 'fixture', adapter: 'kook' }, kind: 'channel', id: 'fixture' }, payload: 'fixture' }).catch(error => error);
+    const failure = await sendKookOutbound(client, { conversation: { endpoint: { id: 'fixture', adapter: 'kook' }, kind: 'channel', id: 'fixture' }, payload: 'fixture' }).catch(error => error);
     expect(failure).toBeInstanceOf(Error);
     if (hostname === 'wrong.invalid') { expect(failure.disposition).toBe('unknown'); expect(calls).toBe(0); return; }
     expect(failure.disposition).toBe('unknown');
@@ -44,7 +44,8 @@ it.each(['www.kookapp.cn', 'wrong.invalid'])('actual KOOK SDK verifies TLS ident
   } finally { agent.destroy(); connect.mockRestore(); await proxy.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); rmSync(dir, { recursive: true, force: true }); }
 });
 it('defaults to direct SDK API transport', () => {
-  const client = defaultCreateClient(resolveKookConfig({ id: 'fixture', token: 'fixture' }) as never) as unknown as RuntimeKookClient;
+  const config = resolveKookConfig({ id: 'fixture', token: 'fixture' });
+  const client = new RuntimeKookClient(kookWebsocketClientOptions(config), undefined, config.apiProxy);
   expect(client.request.defaults.httpsAgent).toBeUndefined();
 });
 it.each([0, -1, 65536, 1.5, '18000'])('rejects invalid API proxy port %j', port => {

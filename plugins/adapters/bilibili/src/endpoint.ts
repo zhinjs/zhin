@@ -8,7 +8,7 @@
  * - 风控错误码立即熔断，停止轮询与发送，不自动重试。
  */
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import { Endpoint, type EndpointSendRequest, type EndpointTransportState } from 'zhin.js/adapter';
+import { createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, type EndpointSendRequest, type EndpointTransportState, type EndpointPreviousIdentity } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { generateQrCode } from 'zhin.js/qrcode';
@@ -33,6 +33,7 @@ import {
   threadRootOf,
   type BilibiliNotificationKind,
   type BilibiliReply,
+  type BilibiliEndpointConfig,
   type ResolvedBilibiliConfig,
 } from './protocol.js';
 
@@ -100,6 +101,13 @@ export type BilibiliNotice =
 
 export interface BilibiliEndpointOptions {
   readonly id: CapabilityId;
+  readonly signal?: AbortSignal;
+  /** Original authoring configuration, captured by the owning Adapter. */
+  readonly configuration?: BilibiliEndpointConfig;
+  readonly reconcileLogin?: (input: { readonly userId: string; readonly config: BilibiliEndpointConfig;
+    readonly previousIdentity: EndpointPreviousIdentity;
+    readonly signal?: AbortSignal;
+  }) => Promise<'retained' | 'replaced'>;
   readonly config: ResolvedBilibiliConfig;
   readonly fetch?: BilibiliFetch;
   /** 轮询抖动随机源（测试注入）。 */
@@ -108,8 +116,6 @@ export interface BilibiliEndpointOptions {
   readonly autoPoll?: boolean;
   /** 时钟（测试注入）。 */
   readonly now?: () => number;
-  /** stop() 时从插件实例的审批注册表里移除自己。 */
-  readonly registry?: Map<string, BilibiliEndpoint>;
   /**
    * 本地状态目录（草稿、扫码凭据）。省略 = 只存内存（测试用）；adapter 默认传 `config.dataDir`。
    */
@@ -118,8 +124,8 @@ export interface BilibiliEndpointOptions {
   readonly notify?: (notice: BilibiliNotice) => void | Promise<void>;
 }
 
-export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
-  readonly client: BilibiliClient;
+export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   readonly drafts: BilibiliDraftQueue;
   readonly #files?: BilibiliStateFiles;
   readonly #options: BilibiliEndpointOptions;
@@ -133,6 +139,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   readonly #notificationCursor = new Map<BilibiliNotificationKind, number>();
   #lastSentAt = 0;
   #selfMid?: string;
+  // A failed nav or logout does not make a previously bound account unbound.
+  #previousIdentity: EndpointPreviousIdentity;
   #timer?: ReturnType<typeof setTimeout>;
   #state: EndpointTransportState = 'idle';
   #open = false;
@@ -143,13 +151,22 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   #qrKey?: string;
   #qrTimer?: ReturnType<typeof setTimeout>;
   #qrSeq = 0;
+  #qrAbort?: AbortController;
 
   constructor(options: BilibiliEndpointOptions) {
-    super();
+    super(options.config, options.fetch ?? (globalThis.fetch as unknown as BilibiliFetch), options.signal);
     this.#options = options;
+    this.#previousIdentity = options.config.sessdata ? { kind: 'unknown' } : { kind: 'unbound' };
+    const readTransportState = () => this.#transportState;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => this.#openEndpoint(),
+      close: () => this.#close(), stop: () => this.#stop(),
+      send: request => this.#send(request),
+      get transportState() { return readTransportState(); },
+    });
     this.#logger = getAdapterLogger('bilibili', options.config.id);
-    this.client = new BilibiliClient(options.config, options.fetch ?? (globalThis.fetch as unknown as BilibiliFetch));
-    this.#files = options.stateDir ? new BilibiliStateFiles(options.stateDir, options.config.id) : undefined;
+    this.#files = options.stateDir ? new BilibiliStateFiles(options.stateDir, options.config.stateDirectoryId ?? options.config.id) : undefined;
     this.drafts = new BilibiliDraftQueue({
       ...(this.#files ? { file: this.#files.draftsFile } : {}),
       onPersistError: (error) => this.#logger.warn(formatCompact({
@@ -192,7 +209,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     return this.#options.config.id;
   }
 
-  override get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     return this.#state;
   }
 
@@ -201,15 +218,15 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     return this.#tripped;
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
     this.#state = 'connecting';
     try {
       await this.#resolveLogin();
-      this.reportSelfUserId(this.#selfMid);
+      this[endpointSpec].reportSelfUserId(this.#selfMid);
       for (const video of this.#options.config.videos) {
-        this.#aids.push(video.kind === 'aid' ? video.aid : await this.client.resolveAid(video.bvid));
+        this.#aids.push(video.kind === 'aid' ? video.aid : await this.resolveAid(video.bvid));
       }
     } catch (error) {
       this.#handleError('start', error);
@@ -226,23 +243,21 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     if (this.#options.autoPoll !== false && this.#aids.length > 0) this.#schedule(0);
   }
 
-  open(): void {
+  #openEndpoint(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #close(): void {
     this.#open = false;
   }
 
-  stop(): void {
+  #stop(): void {
     this.#open = false;
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = undefined;
     this.#cancelQr();
     this.#started = false;
     this.#state = 'stopped';
-    const registry = this.#options.registry;
-    if (registry?.get(this.#options.config.id) === this) registry.delete(this.#options.config.id);
   }
 
   get #now(): number {
@@ -258,6 +273,11 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     if (!this.#files) return undefined;
     const raw = readJson(this.#files.credentialsFile);
     if (!isCredentials(raw)) return undefined;
+    if (typeof raw.mid === 'string' && /^\d+$/u.test(raw.mid)) {
+      this.#previousIdentity = { kind: 'verified', userId: raw.mid };
+    } else if (this.#previousIdentity.kind === 'unbound') {
+      this.#previousIdentity = { kind: 'unknown' };
+    }
     if (typeof raw.expiresAt === 'number' && raw.expiresAt <= this.#now) {
       removeFile(this.#files.credentialsFile);
       this.#logger.warn(formatCompact({ op: 'bilibili_login_expired', source: 'qr', hint: '扫码登录已过期，请重新扫码' }));
@@ -274,8 +294,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     const { sessdata, biliJct } = this.#options.config;
     let expiredSource: BilibiliCookieSource | undefined;
     if (sessdata) {
-      this.client.setCookie({ sessdata, ...(biliJct ? { biliJct } : {}) });
-      const nav = await this.client.getNav();
+      this.setCookie({ sessdata, ...(biliJct ? { biliJct } : {}) });
+      const nav = await this.getNav();
       if (nav) {
         this.#setLoggedIn(nav.mid, nav.uname, 'config');
         return;
@@ -285,8 +305,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     }
     const stored = this.#readStoredCredentials();
     if (stored) {
-      this.client.setCookie(stored);
-      const nav = await this.client.getNav();
+      this.setCookie(stored);
+      const nav = await this.getNav();
       if (nav) {
         this.#setLoggedIn(nav.mid, nav.uname, 'qr', stored.expiresAt);
         return;
@@ -296,13 +316,14 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', source: 'qr', hint: '扫码登录已失效，请重新扫码' }));
     }
     // 回到配置 Cookie（可能已失效，但保持「配置优先」的语义），否则清空。
-    this.client.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
+    this.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
     this.#selfMid = undefined;
     this.#login = Object.freeze(expiredSource ? { state: 'expired' as const, source: expiredSource } : { state: 'none' as const });
   }
 
   #setLoggedIn(mid: string, uname: string | undefined, source: BilibiliCookieSource, expiresAt?: number): void {
     this.#selfMid = mid;
+    this.#previousIdentity = { kind: 'verified', userId: mid };
     this.#login = Object.freeze({
       state: 'ok' as const, source, mid,
       ...(uname ? { uname } : {}),
@@ -317,7 +338,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     if (source === 'qr') {
       if (this.#files) removeFile(this.#files.credentialsFile);
       const { sessdata, biliJct } = this.#options.config;
-      this.client.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
+      this.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
     }
     this.#login = Object.freeze({ state: 'expired' as const, ...(source ? { source } : {}) });
     this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', stage, source, hint: 'Cookie 已失效，请在 Console「评论审批」页或用 bili-login 重新扫码登录' }));
@@ -345,9 +366,10 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     }
     this.#cancelQr();
     const seq = ++this.#qrSeq;
+    this.#qrAbort = new AbortController();
     let code;
     try {
-      code = await generateLoginQr(this.client.fetch, this.#options.config.passportBaseUrl);
+      code = await generateLoginQr(this.fetch, this.#options.config.passportBaseUrl);
     } catch (error) {
       this.#handleQrFailure(error);
       return this.#qr;
@@ -381,7 +403,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       return this.#qr;
     }
     try {
-      const result = await pollLoginQr(this.client.fetch, this.#options.config.passportBaseUrl, key, this.#now);
+      const result = await pollLoginQr(this.fetch, this.#options.config.passportBaseUrl, key, this.#now);
       if (seq !== this.#qrSeq) return this.#qr;
       switch (result.state) {
         case 'waiting': break;
@@ -389,7 +411,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
           if (this.#qr.state !== 'scanned') this.#qr = Object.freeze({ ...this.#qr, state: 'scanned' as const });
           break;
         case 'expired': this.#finishQr({ state: 'expired' }); break;
-        case 'confirmed': await this.#applyQrCredentials(result.credentials); break;
+        case 'confirmed': await this.#applyQrCredentials(result.credentials, seq, this.#qrAbort?.signal); break;
       }
     } catch (error) {
       if (seq === this.#qrSeq) this.#handleQrFailure(error);
@@ -397,14 +419,21 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     return this.#qr;
   }
 
-  async #applyQrCredentials(credentials: BilibiliCredentials): Promise<void> {
-    this.client.setCookie(credentials);
-    const nav = await this.client.getNav();
+  async #applyQrCredentials(credentials: BilibiliCredentials, seq: number, signal?: AbortSignal): Promise<void> {
+    const { configuration, reconcileLogin } = this.#options;
+    if (!configuration || !reconcileLogin) throw new Error('Bilibili login identity reconciliation is unavailable');
+    const probe = new BilibiliClient({ ...this.config, sessdata: credentials.sessdata, biliJct: credentials.biliJct }, this.fetch);
+    const nav = await probe.getNav();
+    if (seq !== this.#qrSeq || signal?.aborted) return;
     if (!nav) {
       this.#finishQr({ state: 'failed', error: '登录未生效，请重新扫码' });
-      await this.#resolveLogin().catch(() => undefined);
       return;
     }
+    const decision = await reconcileLogin({ userId: nav.mid, previousIdentity: this.#previousIdentity, signal,
+      config: { ...configuration, sessdata: credentials.sessdata, biliJct: credentials.biliJct } });
+    if (decision === 'replaced') { this.#finishQr({ state: 'confirmed' }); return; }
+    this.#options.signal?.throwIfAborted();
+    this.setCookie(credentials);
     if (this.#files) {
       try {
         writeJsonAtomic(this.#files.credentialsFile, { ...credentials, mid: nav.mid }, 0o600);
@@ -413,7 +442,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       }
     }
     this.#setLoggedIn(nav.mid, nav.uname, 'qr', credentials.expiresAt);
-    this.reportSelfUserId(nav.mid);
+    this[endpointSpec].reportSelfUserId(nav.mid);
     this.#finishQr({ state: 'confirmed' });
     this.#logger.info(formatCompact({ op: 'bilibili_qr_login_ok', mid: nav.mid }));
     this.#emitNotice({ kind: 'login_ok', mid: nav.mid, ...(nav.uname ? { uname: nav.uname } : {}) });
@@ -436,6 +465,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   }
 
   #cancelQr(): void {
+    this.#qrAbort?.abort(new Error('Bilibili QR login canceled'));
+    this.#qrAbort = undefined;
     this.#qrSeq += 1;
     this.#finishQr({ state: 'idle' });
   }
@@ -453,7 +484,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     this.#cancelQr();
     if (this.#files) removeFile(this.#files.credentialsFile);
     await this.#resolveLogin().catch(() => {
-      this.client.setCookie(undefined);
+      this.setCookie(undefined);
       this.#login = Object.freeze({ state: 'none' as const });
     });
     this.#logger.info(formatCompact({ op: 'bilibili_logout' }));
@@ -477,19 +508,21 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     for (const aid of this.#aids) {
       if (this.#tripped) return;
       try {
-        const page = await this.client.listLatestVideoReplies(aid);
-        const replies = flattenReplies(page.replies).sort((a, b) => a.ctime - b.ctime);
-        if (!this.#baselined.has(aid)) {
-          for (const reply of replies) this.#markSeen(String(reply.rpid));
-          this.#baselined.add(aid);
-          continue;
-        }
-        for (const reply of replies) {
-          const rpid = String(reply.rpid);
-          if (this.#seen.has(rpid)) continue;
-          this.#markSeen(rpid);
-          await this.#admit(aid, reply, { via: 'video', upperMid: page.upper?.mid });
-        }
+        const page = await this.listLatestVideoReplies(aid);
+        await this[endpointSpec].events.run(async () => {
+          const replies = flattenReplies(page.replies).sort((a, b) => a.ctime - b.ctime);
+          if (!this.#baselined.has(aid)) {
+            for (const reply of replies) this.#markSeen(String(reply.rpid));
+            this.#baselined.add(aid);
+            return;
+          }
+          for (const reply of replies) {
+            const rpid = String(reply.rpid);
+            if (this.#seen.has(rpid)) continue;
+            this.#markSeen(rpid);
+            await this.#admit(aid, reply, { via: 'video', upperMid: page.upper?.mid });
+          }
+        });
       } catch (error) {
         this.#handleError('poll', error, aid);
       }
@@ -503,27 +536,29 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
    */
   async pollNotificationsOnce(): Promise<void> {
     const { notifications, notificationScope } = this.#options.config;
-    if (notifications.length === 0 || !this.client.hasCookie || !this.#selfMid || this.#login.state !== 'ok') return;
+    if (notifications.length === 0 || !this.hasCookie || !this.#selfMid || this.#login.state !== 'ok') return;
     for (const kind of notifications) {
       if (this.#tripped) return;
       try {
-        const page = await this.client.listNotifications(kind);
-        const items = [...(page.items ?? [])].filter((entry) => Number.isFinite(entry?.id)).sort((a, b) => a.id - b.id);
-        const cursor = this.#notificationCursor.get(kind);
-        const newest = items.reduce((max, entry) => Math.max(max, entry.id), cursor ?? 0);
-        this.#notificationCursor.set(kind, newest);
-        if (cursor === undefined) continue; // 首轮基线
-        for (const entry of items) {
-          if (entry.id <= cursor) continue;
-          const reply = notificationToReply(entry);
-          if (!reply) continue;
-          const aid = String(reply.oid);
-          if (notificationScope === 'whitelist' && !this.#aids.includes(aid)) continue;
-          const rpid = String(reply.rpid);
-          if (this.#seen.has(rpid)) continue;
-          this.#markSeen(rpid);
-          await this.#admit(aid, reply, { via: kind });
-        }
+        const page = await this.listNotifications(kind);
+        await this[endpointSpec].events.run(async () => {
+          const items = [...(page.items ?? [])].filter((entry) => Number.isFinite(entry?.id)).sort((a, b) => a.id - b.id);
+          const cursor = this.#notificationCursor.get(kind);
+          const newest = items.reduce((max, entry) => Math.max(max, entry.id), cursor ?? 0);
+          this.#notificationCursor.set(kind, newest);
+          if (cursor === undefined) return; // 首轮基线
+          for (const entry of items) {
+            if (entry.id <= cursor) continue;
+            const reply = notificationToReply(entry);
+            if (!reply) continue;
+            const aid = String(reply.oid);
+            if (notificationScope === 'whitelist' && !this.#aids.includes(aid)) continue;
+            const rpid = String(reply.rpid);
+            if (this.#seen.has(rpid)) continue;
+            this.#markSeen(rpid);
+            await this.#admit(aid, reply, { via: kind });
+          }
+        });
       } catch (error) {
         this.#handleError(`notify_${kind}`, error);
       }
@@ -553,16 +588,18 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     reply: BilibiliReply,
     options: { readonly via: InboundVia; readonly upperMid?: number },
   ): Promise<void> {
-    if (!this.#open) return;
+    if (!this.#open && !this.#started) return;
     const mid = String(reply.mid);
     if (this.#selfMid && mid === this.#selfMid) return; // 防自回环
     this.#remember(reply);
     const rootId = threadRootOf(reply);
     const parentId = String(reply.parent || reply.rpid);
-    const conversation = bilibiliThreadConversation(String(this.#options.id), aid, rootId);
+    const conversation = { ...bilibiliThreadConversation(String(this.#options.id), aid, rootId), endpoint: this[endpointSpec].identity };
     const addressedToMe = options.via !== 'video';
-    void this.emitPlatform('reply', reply).catch(() => undefined);
-    await this.emit('message.receive', {
+    void this[endpointSpec].events.platform('reply', reply).catch(() => undefined);
+    await this[endpointSpec].events.message({
+      event: reply,
+      platformSentAt: reply.ctime * 1000,
       conversation,
       message: { conversation, id: String(reply.rpid) },
       content: reply.content?.message ?? '',
@@ -614,7 +651,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
    * 出站 = 回复评论楼。**永远**只进草稿队列，返回 not_sent（approval_pending），不调用平台写接口；
    * 真正发出必须由人调用 {@link approveDraft}（`bili-draft send <id>`）。
    */
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const thread = parseThreadConversationId(conversation.id);
     if (!thread) {
       throw new EndpointDeliveryError('invalid_recipient',
@@ -680,7 +717,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       throw new BilibiliReviewError('circuit_open',
         `Circuit breaker open (${this.#tripped.code}); check the account on bilibili.com and restart`);
     }
-    if (!this.client.canWrite || this.#login.state === 'expired') {
+    if (!this.canWrite || this.#login.state === 'expired') {
       throw new BilibiliReviewError('no_cookie', 'A valid login (SESSDATA and bili_jct) is required to post replies');
     }
     const invalid = validateReplyText(draft.message);
@@ -692,7 +729,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     this.drafts.update(id, { status: 'sending' }, this.#now);
     this.#lastSentAt = this.#now;
     try {
-      const rpid = await this.client.addReply({
+      const rpid = await this.addReply({
         oid: draft.oid,
         root: draft.root,
         parent: draft.parent,

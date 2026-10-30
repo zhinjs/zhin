@@ -9,7 +9,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
-  Endpoint,
+  Adapter, endpointSpec, createEndpointSpecification, type Endpoint,
   adapterFeatureId,
   defineAdapter,
   endpointEventGatewayToken,
@@ -172,17 +172,13 @@ describe('ImRuntime side-event handlers', () => {
     const systems: Array<{ payload: SystemEvent }> = [];
     const systemInteractions: unknown[] = [];
     const root = rootPluginId();
-    const liveClient = Object.freeze({ tag: 'live-memory' });
-    class MemoryEndpoint extends Endpoint<typeof liveClient> {
-      readonly client = liveClient;
-      start(): void {}
-      open(): void {}
-      close(): void {}
-      stop(): void {}
-      receive(name: string, payload: unknown) { return this.emit(name, payload); }
-      send() { return 'ok'; }
+    class MemoryClient { readonly tag = 'live-memory'; send() { return 'ok'; } }
+    class MemoryEndpoint extends MemoryClient implements Endpoint {
+      readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: () => this.send() });
+      receive(name: string, payload: unknown) { return this[endpointSpec].events.emit(name, payload); }
     }
     const liveEndpoint = new MemoryEndpoint();
+    const liveClient = liveEndpoint;
     const adapter = createCapabilitySlot({
       owner: root,
       feature: adapterFeatureId,
@@ -190,7 +186,7 @@ describe('ImRuntime side-event handlers', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => liveEndpoint,
+        createAdapter: () => new class extends Adapter<MemoryEndpoint> { protected createEndpoint() { return liveEndpoint; } }(),
       }),
     });
     const noticeHandler = createCapabilitySlot({
@@ -274,7 +270,7 @@ describe('ImRuntime side-event handlers', () => {
     const { receive, noticed, liveClient, liveEndpoint, close } = await createFixture();
     const notice = buildNotice({}, {
       id: 'n1',
-      clientAdapter: liveEndpoint.identity.adapter,
+      clientAdapter: liveEndpoint[endpointSpec].identity.adapter,
       endpointId: 'memory',
       type: 'notice',
       conversation: sideEventConversation('group', 'g1'),
@@ -285,7 +281,7 @@ describe('ImRuntime side-event handlers', () => {
     expect(noticed).toHaveLength(1);
     expect(noticed[0]).toMatchObject({
       name: 'notice.receive',
-      payload: { ...notice, conversation: { ...notice.conversation, endpoint: liveEndpoint.identity }, generation: 0 },
+      payload: { ...notice, conversation: { ...notice.conversation, endpoint: liveEndpoint[endpointSpec].identity }, generation: 0 },
       client: liveClient,
     });
     expect(() => (noticed[0] as { payload: Notice }).payload.$client).toThrow('expired');

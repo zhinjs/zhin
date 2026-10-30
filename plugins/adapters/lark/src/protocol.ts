@@ -186,10 +186,10 @@ export function larkInboundConversation(endpointKey: string, msg: LarkMessage): 
   };
 }
 
-export function resolveSender(msg: LarkMessage): string {
+export function resolveSender(msg: LarkMessage): string | undefined {
   return msg.sender?.sender_id?.open_id
     || msg.sender?.sender_id?.user_id
-    || 'unknown';
+    || undefined;
 }
 
 export function generateMessageId(msg: LarkMessage): string {

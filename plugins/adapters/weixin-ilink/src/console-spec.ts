@@ -7,7 +7,7 @@ export const weixinIlinkConsoleSpec = {
   adapterKey: 'weixin-ilink',
   adapterDisplayName: '微信 iLink',
   fields: [
-    { key: 'botToken', required: true, env: true, description: 'iLink bot token' },
+    { key: 'botToken', env: true, description: 'iLink bot token' },
   ] as readonly AdapterConsoleField[],
   docsUrl: 'https://zhin.js.org/adapters/weixin-ilink',
   readPermission: 'weixin-ilink:read',

@@ -126,7 +126,7 @@ export interface EvalExpectations {
   readonly termination?: EvalTermination;
   /** Exact number of model requests across the case. */
   readonly modelSteps?: number;
-  /** Model id of every request, in order (fallback cases). */
+  /** Model id of every request, in order (including fixed-model assertions). */
   readonly modelIds?: readonly string[];
   /** Bound on model requests across the case. */
   readonly maxModelSteps?: number;
@@ -212,8 +212,8 @@ export interface EvalCase {
   readonly bashOutput?: string;
   readonly approval?: EvalApprovalBehaviour;
   /**
-   * Extra model ids registered after the primary `scripted-model`, in fallback
-   * order. They become the turn's later `modelCandidates`.
+   * Extra model ids registered after the primary `scripted-model`, in registration
+   * order (legacy `modelCandidates`). Fixed chat selection must not call them.
    */
   readonly models?: readonly string[];
   /** Prompt sections contributed by third-party plugins (owned by a child plugin, not the agent's owner). */
@@ -228,7 +228,7 @@ export interface EvalCase {
   readonly sessionOps?: Readonly<{ defaults?: unknown; sessions?: readonly unknown[] }>;
   /** Context window of the scripted model (default: the provider preset), for compaction cases. */
   readonly contextWindow?: number;
-  /** Per-model input overrides, e.g. `{ 'scripted-fallback': ['text'] }` for a text-only fallback. */
+  /** Per-model input overrides, e.g. `{ 'scripted-fallback': ['text'] }` for a text-only alternative. */
   readonly modelInputs?: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>;
   /**
    * Enable the `ai.multimodal.perception` pre-pass with a scripted perception

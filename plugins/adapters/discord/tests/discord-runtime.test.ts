@@ -1,11 +1,11 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { discordFixture, managedDiscordFixture } from './fixture.js';
+import { Status } from 'discord.js';
+import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
-  createEndpointRuntimeState,
   listEndpointManagementCapabilities,
   resolveAdapterOperations,
 } from 'zhin.js/adapter';
-import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
@@ -14,7 +14,6 @@ import defineDiscordAdapter from '../adapters/discord/index.js';
 import {
   DiscordGatewayEndpoint,
   DiscordInteractionsEndpoint,
-  type CreateDiscordClient,
   type DiscordClientTransport,
 } from '../src/endpoint.js';
 import {
@@ -28,7 +27,6 @@ import {
   verifyDiscordInteractionSignature,
   type DiscordInboundMessage,
 } from '../src/protocol.js';
-import { discordClient } from '../src/client.js';
 import { toMessageCreateOptions } from '../src/gateway.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -95,6 +93,7 @@ function createMockClient(): DiscordClientTransport & {
         id,
         type: 0,
         isTextBased: () => true,
+        isSendable: () => true,
         send: vi.fn(async (options: unknown) => {
           sent.push({ channelId: id, options });
           return { id: `sent-${sent.length}` };
@@ -416,21 +415,18 @@ describe('discord protocol helpers', () => {
 
 describe('discord plugin runtime adapter', () => {
   it('resolves scoped message content and attachment media through Discord REST', async () => {
-    const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway: { receive: vi.fn(), send: vi.fn() } as never,
-      config: baseConfig,
-      createClient: () => createMockClient(),
-      fetch: vi.fn(async () => new Response(JSON.stringify({
+    const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig,
+fetch: vi.fn(async () => new Response(JSON.stringify({
         id: 'm1',
         content: 'quoted',
         timestamp: '2026-01-01T00:00:00.000Z',
         author: { id: 'u1', global_name: 'Alice' },
         attachments: [{ url: 'https://cdn.discord.test/a.png', filename: 'a.png', content_type: 'image/png', size: 3 }],
-      }), { status: 200, headers: { 'content-type': 'application/json' } })),
-    }), { receive: vi.fn(), send: vi.fn() } as never, undefined);
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))}), () => createMockClient(), { receive: vi.fn(), send: vi.fn() } as never, undefined);
     const conversation = { endpoint: { id: 'main', adapter: 'discord' }, kind: 'channel' as const, id: 'c1' };
-    await expect(endpoint.content.resolve({ kind: 'message', message: { conversation, id: 'm1' } }, {
+    await endpoint.start();
+    await expect(endpoint.index.resolveContent(endpoint.canonicalId, { kind: 'message', message: { conversation, id: 'm1' } }, {
       signal: new AbortController().signal,
       maxDepth: 2,
       maxEntries: 50,
@@ -445,30 +441,25 @@ describe('discord plugin runtime adapter', () => {
         ],
       },
     });
+    await endpoint.stop();
   });
 
   it('routes admitted messages through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
-    const createClient: CreateDiscordClient = () => mock;
-    let ready = true;
-    Object.assign(mock, { isReady: () => ready });
-    const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway,
-      config: baseConfig,
-      createClient,
-    }), gateway, undefined);
+    const createClient = () => mock;
+    const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig}), createClient, gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
     expect(endpoint.transportState).toBe('open');
-    ready = false;
+    endpoint.endpoint.ws.status = Status.Connecting;
     expect(endpoint.transportState).toBe('reconnecting');
-    ready = true;
+    endpoint.endpoint.ws.status = Status.Ready;
     expect(endpoint.transportState).toBe('open');
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
@@ -488,16 +479,12 @@ describe('discord plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway,
-      config: baseConfig,
-      createClient: () => mock,
-    }), gateway, undefined);
+    const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig}), () => mock, gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
-    mock.emitMessage({
+    endpoint.endpoint.emit('messageCreate', {
       id: 'msg-at',
       content: '<@bot-1> hi',
       author: { id: 'user-1', username: 'alice', displayName: 'alice', bot: false },
@@ -523,16 +510,12 @@ describe('discord plugin runtime adapter', () => {
   it('does not mark mentioned when mentions target someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig}), () => mock, { receive, send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     endpoint.open();
-    mock.emitMessage({
+    endpoint.endpoint.emit('messageCreate', {
       id: 'msg-at-other',
       content: '<@user-2> hi',
       author: { id: 'user-1', username: 'alice', displayName: 'alice', bot: false },
@@ -556,26 +539,18 @@ describe('discord plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig}), () => mock, { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
   it('sends outbound payloads via channel.send', async () => {
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     const messageId = await endpoint.send({
       conversation: {
@@ -594,12 +569,8 @@ describe('discord plugin runtime adapter', () => {
 
   it('derives the legacy message id from the structured conversation', async () => {
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     await expect(endpoint.send({
       conversation: {
@@ -615,16 +586,12 @@ describe('discord plugin runtime adapter', () => {
 
   it('projects the real gateway client into agent operations', async () => {
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    const client = discordClient.get(endpointClientContext(endpoint), 'test-discord-bot');
+    const client = endpoint.index.clientById<DiscordGatewayEndpoint>(endpoint.canonicalId);
     if (!('guilds' in client)) throw new Error('Expected Discord Gateway Client');
-    expect(client).toBe(mock);
+    expect(client).toBe(endpoint.endpoint);
     const guild = await client.guilds.fetch('guild-1');
     await guild.roles.fetch();
     expect([...(guild.roles.cache as Map<string, { name: string }>).values()])
@@ -635,32 +602,9 @@ describe('discord plugin runtime adapter', () => {
   it('creates interactions endpoint when httpHostToken provided', async () => {
     const { default: adapter } = await import('../adapters/discord/index.js');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = adapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      name: 'discord',
-      config: {
-        id: 'discord',
-        token: 'tok',
-        connection: 'interactions',
-        applicationId: 'app',
-        publicKey: 'a'.repeat(64),
-      },
-      use: (token: unknown) => {
-        if (token === httpHostToken) return http;
-        if (token === outboundMessageToken) {
-          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-        }
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === discordRuntimeStateToken) return createEndpointRuntimeState();
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
+    const endpoint = await createAdapterHarness(adapter, { id: 'discord', token: 'tok', connection: 'interactions', applicationId: 'app', publicKey: 'a'.repeat(64) }, { name: 'discord', resources: new Map([[httpHostToken.id, http]]) });
+    expect(endpoint.endpoint).toBeInstanceOf(DiscordInteractionsEndpoint);
+    await endpoint.stop();
     expect(endpoint).toBeDefined();
   });
 
@@ -668,22 +612,20 @@ describe('discord plugin runtime adapter', () => {
     const { publicKey, privateKey } = generateKeyPairSync('ed25519');
     const publicKeyHex = publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('hex');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = bindTestEndpoint(new DiscordInteractionsEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
-      http,
-      config: resolveDiscordConfig({
+    const receive = vi.fn(async () => Object.freeze({ matched: false }));
+    const endpoint = await discordFixture(() => new DiscordInteractionsEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+http,
+config: resolveDiscordConfig({
         id: 'discord',
         token: 'tok',
         connection: 'interactions',
         applicationId: 'app',
         publicKey: publicKeyHex,
-      }) as ReturnType<typeof resolveDiscordConfig> & { connection: 'interactions' },
-    }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
+      }) as ReturnType<typeof resolveDiscordConfig> & { connection: 'interactions' }}), undefined, { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     const { port } = await http.listen();
 
-    let body = JSON.stringify({ type: 1 });
+    let body = JSON.stringify({ type: 1, application_id: 'app' });
     const post = (timestamp: string) => fetch(`http://127.0.0.1:${port}/discord/interactions`, {
       method: 'POST',
       headers: {
@@ -702,13 +644,12 @@ describe('discord plugin runtime adapter', () => {
     const stale = String(Math.floor(Date.now() / 1000) - 600);
     const staleRes = await post(stale);
     expect(staleRes.status).toBe(401);
-    const emit = vi.spyOn(endpoint, 'emit');
-    body = JSON.stringify({ type: 3, id: 'click', channel_id: 'channel', guild_id: 'guild', member: { user: { id: 'user', username: 'Tester' } }, message: { id: 'source' }, data: { component_type: 2, custom_id: 'canonical-callback' } });
+    body = JSON.stringify({ type: 3, application_id: 'app', id: 'click', channel_id: 'channel', guild_id: 'guild', member: { user: { id: 'user', username: 'Tester' } }, message: { id: 'source' }, data: { component_type: 2, custom_id: 'canonical-callback' } });
     expect((await post(fresh)).status).toBe(503);
     endpoint.open();
     const clicked = await post(fresh);
     expect(await clicked.json()).toEqual({ type: 6 });
-    expect(emit).toHaveBeenCalledWith('message.receive', expect.objectContaining({ conversation: expect.objectContaining({ parent: { kind: 'channel', id: 'guild' } }), segments: [{ type: 'action', data: { id: 'click', payload: 'canonical-callback', sourceMessageId: 'source' } }] }));
+    expect(receive).toHaveBeenCalledWith(expect.objectContaining({ conversation: expect.objectContaining({ parent: { kind: 'channel', id: 'guild' } }), segments: [{ type: 'action', data: { id: 'click', payload: 'canonical-callback', sourceMessageId: 'source' } }] }));
     await endpoint.stop();
     await http.close();
   });
@@ -718,19 +659,15 @@ describe('discord plugin runtime adapter', () => {
     const warnSpy = vi.spyOn(getLogger('discord'), 'warn');
     try {
       const mock = createMockClient(); // guilds.cache 为空
-      const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
-        id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-        gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-        config: resolveDiscordConfig({
+      const endpoint = await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: resolveDiscordConfig({
           id: 'slash-bot',
           token: 'tok',
           connection: 'gateway',
           enableSlashCommands: true,
           globalCommands: false,
           slashCommands: [{ name: 'ping', description: 'pong' }],
-        }) as ReturnType<typeof resolveDiscordConfig> & { connection: 'gateway' },
-        createClient: () => mock,
-      }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+        }) as ReturnType<typeof resolveDiscordConfig> & { connection: 'gateway' }}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
       await endpoint.start();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('slash'));
       await endpoint.stop();
@@ -759,19 +696,15 @@ describe('discord endpoint management', () => {
     return mock;
   }
 
-  function createManagementEndpoint(mock: DiscordClientTransport) {
-    return bindTestEndpoint(new DiscordGatewayEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+  async function createManagementEndpoint(mock: DiscordClientTransport) {
+    return await discordFixture(() => new DiscordGatewayEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
+config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
   }
 
   it('advertises only implemented management capabilities', async () => {
-    const endpoint = createManagementEndpoint(managementMock());
+    const endpoint = await createManagementEndpoint(managementMock());
     await endpoint.start();
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+    expect(endpoint.index.describe()[0]?.managementCapabilities).toEqual([
       'listGroups',
       'listChannels',
       'listGroupMembers',
@@ -780,7 +713,7 @@ describe('discord endpoint management', () => {
   });
 
   it('lists guilds without losing snowflake precision', async () => {
-    const endpoint = createManagementEndpoint(managementMock());
+    const endpoint = await createManagementEndpoint(managementMock());
     await endpoint.start();
     // snowflake 超 Number.MAX_SAFE_INTEGER，保留原始字符串
     await expect(endpoint.management.listGroups?.()).resolves.toEqual([
@@ -790,7 +723,7 @@ describe('discord endpoint management', () => {
   });
 
   it('lists only guild text channels with guild parent', async () => {
-    const endpoint = createManagementEndpoint(managementMock());
+    const endpoint = await createManagementEndpoint(managementMock());
     await endpoint.start();
     await expect(endpoint.management.listChannels?.()).resolves.toEqual([
       {
@@ -803,7 +736,7 @@ describe('discord endpoint management', () => {
   });
 
   it('lists guild members through the SDK', async () => {
-    const endpoint = createManagementEndpoint(managementMock());
+    const endpoint = await createManagementEndpoint(managementMock());
     await endpoint.start();
     await expect(endpoint.management.listGroupMembers?.('guild-1')).resolves.toEqual([
       {
@@ -818,8 +751,8 @@ describe('discord endpoint management', () => {
   });
 
   it('rejects management calls before the client connects', async () => {
-    const endpoint = createManagementEndpoint(managementMock());
-    await expect(endpoint.management.listGroups?.()).rejects.toThrow('not connected');
+    const endpoint = await createManagementEndpoint(managementMock());
+    await expect(endpoint.management.listGroups?.()).rejects.toMatchObject({ code: 'endpoint_inactive', disposition: 'not_sent' });
   });
 });
 
@@ -828,41 +761,60 @@ it('maps canonical share to a Discord embed alongside markdown', () => {
 });
 
 
-it('shared lifecycle stops during pending login and a late old login cannot damage its replacement', async () => {
-  const first = createMockClient(); const second = createMockClient();
+it('shared lifecycle stops pending native login and its late completion cannot damage the replacement incarnation', async () => {
+  const first = createMockClient(), second = createMockClient();
   let finishLogin!: (value: string) => void;
   first.login = vi.fn(() => new Promise<string>(resolve => { finishLogin = resolve; }));
   const factory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
-  const gateway = { receive: vi.fn(async () => ({})), send: vi.fn(async () => 'sent') } as unknown as OutboundMessageService;
-  const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'discord'), gateway, config: baseConfig, createClient: factory }), gateway, undefined);
-  const starting = endpoint.start(); await vi.waitFor(() => expect(first.login).toHaveBeenCalled());
-  expect(endpoint.transportState).toBe('connecting');
-  await endpoint.start(); expect(factory).toHaveBeenCalledTimes(1);
-  await endpoint.stop(); await starting; expect(endpoint.transportState).toBe('stopped');
-  await endpoint.start(); expect(endpoint.transportState).toBe('open');
-  finishLogin('old'); await vi.waitFor(() => expect(first.destroy).toHaveBeenCalledTimes(2));
-  expect(second.destroy).not.toHaveBeenCalled(); expect(endpoint.client).toBe(second); expect(endpoint.transportState).toBe('open');
-  await endpoint.stop(); expect(second.destroy).toHaveBeenCalledTimes(1);
+  const { fixture, account } = await managedDiscordFixture(baseConfig, factory);
+  try {
+    await fixture.adapter.start(account.instanceId, fixture.adapter.revision, { waitForExecution: false });
+    await vi.waitFor(() => expect(first.login).toHaveBeenCalledOnce());
+    const previous = fixture.endpoint;
+    expect(fixture.index.describe()[0]?.transportState).toBe('connecting');
+    await fixture.adapter.start(account.instanceId, fixture.adapter.revision, { waitForExecution: false });
+    expect(factory).toHaveBeenCalledTimes(1);
+    await fixture.adapter.stop(account.instanceId, fixture.adapter.revision);
+    expect(first.destroy).toHaveBeenCalledTimes(1);
+    await fixture.adapter.start(account.instanceId, fixture.adapter.revision);
+    expect(fixture.endpoint).not.toBe(previous);
+    finishLogin('old'); await vi.waitFor(() => expect(first.destroy).toHaveBeenCalledTimes(2));
+    expect(second.destroy).not.toHaveBeenCalled();
+    expect(fixture.index.describe()[0]?.transportState).toBe('open');
+  } finally { await fixture.stop(); }
+  expect(second.destroy).toHaveBeenCalledTimes(1);
 });
 
-it('shared lifecycle recovers a failed startup with a fresh client', async () => {
+it('an explicit start after failed native startup creates a fresh Client', async () => {
   const first = createMockClient(); first.login = vi.fn(async () => { throw new Error('fixture refusal'); });
-  const second = createMockClient(); const factory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
-  const gateway = { receive: vi.fn(async () => ({})), send: vi.fn(async () => 'sent') } as unknown as OutboundMessageService;
-  const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'discord'), gateway, config: baseConfig, createClient: factory }), gateway, undefined);
-  await expect(endpoint.start()).rejects.toThrow('Discord'); expect(first.destroy).toHaveBeenCalledTimes(1);
-  await endpoint.start(); expect(endpoint.transportState).toBe('open'); expect(endpoint.client).toBe(second);
-  await endpoint.stop();
+  const second = createMockClient(), factory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+  const { fixture, account } = await managedDiscordFixture(baseConfig, factory);
+  try {
+    expect(await fixture.adapter.start(account.instanceId, fixture.adapter.revision)).toMatchObject({ execution: { status: 'failed' } });
+    expect(first.destroy).toHaveBeenCalledTimes(1);
+    const previous = fixture.endpoint;
+    expect(await fixture.adapter.start(account.instanceId, fixture.adapter.revision)).toMatchObject({ execution: { status: 'applied' } });
+    expect(fixture.endpoint).not.toBe(previous);
+    expect(fixture.index.describe()[0]?.transportState).toBe('open');
+  } finally { await fixture.stop(); }
 });
 
-it('waits for old SDK destruction before a concurrent restart and keeps replacement cleanup', async () => {
-  const first = createMockClient(); const second = createMockClient(); let finishDestroy!: () => void;
+it('the owning Adapter waits for old SDK destruction before concurrent start and retains replacement cleanup', async () => {
+  const first = createMockClient(), second = createMockClient(); let finishDestroy!: () => void;
   first.destroy = vi.fn(() => new Promise<void>(resolve => { finishDestroy = resolve; }));
   const factory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
-  const gateway = { receive: vi.fn(async () => ({})), send: vi.fn(async () => 'sent') } as unknown as OutboundMessageService;
-  const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'discord'), gateway, config: baseConfig, createClient: factory }), gateway, undefined);
-  await endpoint.start(); const stopping = endpoint.stop(); const restarting = endpoint.start();
-  await vi.waitFor(() => expect(first.destroy).toHaveBeenCalled()); expect(factory).toHaveBeenCalledTimes(1);
-  finishDestroy(); await stopping; await restarting; expect(endpoint.client).toBe(second);
-  await endpoint.stop(); expect(second.destroy).toHaveBeenCalledTimes(1);
+  const { fixture, account } = await managedDiscordFixture(baseConfig, factory);
+  try {
+    await fixture.adapter.start(account.instanceId, fixture.adapter.revision);
+    const previous = fixture.endpoint;
+    const stopping = fixture.adapter.stop(account.instanceId, fixture.adapter.revision);
+    await vi.waitFor(() => expect(first.destroy).toHaveBeenCalled());
+    const restarting = fixture.adapter.start(account.instanceId, fixture.adapter.revision);
+    await Promise.resolve(); await Promise.resolve();
+    expect(factory).toHaveBeenCalledTimes(1);
+    finishDestroy(); await stopping; await restarting;
+    expect(fixture.endpoint).not.toBe(previous);
+    expect(factory).toHaveBeenCalledTimes(2);
+  } finally { await fixture.stop(); }
+  expect(second.destroy).toHaveBeenCalledTimes(1);
 });

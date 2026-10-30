@@ -14,6 +14,6 @@ export default defineAgentTool<{ guild_id: string; user_id: string }>({
   permissions: [platformPermission('qq', 'guild_admin')],
   async execute({ guild_id, user_id  }: { guild_id: string; user_id: string }, context) {
     const client = context.$client;
-    return client.getGuildMember(guild_id, user_id);
+    return client.memberService.getGuildMemberInfo(guild_id, user_id);
   },
 });

@@ -1,4 +1,4 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -263,18 +263,18 @@ describe('email plugin runtime adapter', () => {
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const smtp = createMockSmtp();
     const imap = createMockImap();
-    const endpoint = bindTestEndpoint(new EmailEndpoint({
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'email'),
       gateway,
       config: baseConfig,
       createSmtp: () => smtp,
       createImap: () => imap,
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
 
     await endpoint.start();
     endpoint.open();
-    expect(endpoint.transportState).toBe('open');
-    endpoint.admit({
+    expect(endpoint.endpoint.transportState).toBe('open');
+    endpoint.endpoint.admit({
       messageId: '<msg001@mock.com>',
       from: 'sender@example.com',
       to: ['bot@mock.com'],
@@ -297,7 +297,7 @@ describe('email plugin runtime adapter', () => {
     }));
 
     await endpoint.stop();
-    expect(endpoint.transportState).toBe('stopped');
+    expect(endpoint.endpoint.transportState).toBe('stopped');
     expect(smtp.close).toHaveBeenCalled();
     expect(imap.end).toHaveBeenCalled();
   });
@@ -324,17 +324,17 @@ describe('email plugin runtime adapter', () => {
         },
         attachments: { enabled: true, downloadPath: dir, maxFileSize: 16 },
       });
-      const endpoint = bindTestEndpoint(new EmailEndpoint({
+      const endpoint = await createEndpointHarness(() => new EmailEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'email'),
         gateway,
         config,
         createSmtp: () => createMockSmtp(),
         createImap: () => createMockImap(),
-      }), gateway, undefined);
+      }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
 
       await endpoint.start();
       endpoint.open();
-      endpoint.admit({
+      endpoint.endpoint.admit({
         messageId: '<attach@mock.com>',
         from: 'sender@example.com',
         to: ['bot@mock.com'],
@@ -388,17 +388,17 @@ describe('email plugin runtime adapter', () => {
         },
         attachments: { enabled: true, downloadPath: dir },
       });
-      const endpoint = bindTestEndpoint(new EmailEndpoint({
+      const endpoint = await createEndpointHarness(() => new EmailEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'email'),
         gateway,
         config,
         createSmtp: () => createMockSmtp(),
         createImap: () => createMockImap(),
-      }), gateway, undefined);
+      }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
 
       await endpoint.start();
       endpoint.open();
-      endpoint.admit({
+      endpoint.endpoint.admit({
         messageId: '<seg@mock.com>',
         from: 'sender@example.com',
         to: ['bot@mock.com'],
@@ -453,17 +453,17 @@ describe('email plugin runtime adapter', () => {
         },
         attachments: { enabled: true, downloadPath: dir },
       });
-      const endpoint = bindTestEndpoint(new EmailEndpoint({
+      const endpoint = await createEndpointHarness(() => new EmailEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'email'),
         gateway,
         config,
         createSmtp: () => createMockSmtp(),
         createImap: () => createMockImap(),
-      }), gateway, undefined);
+      }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
 
       await endpoint.start();
       endpoint.open();
-      endpoint.admit({
+      endpoint.endpoint.admit({
         messageId: '<evil@mock.com>',
         from: 'attacker@example.com',
         to: ['bot@mock.com'],
@@ -495,7 +495,7 @@ describe('email plugin runtime adapter', () => {
 
   it('reconnects IMAP after end with backoff and resumes listening', async () => {
     const imaps: Array<ReturnType<typeof createMockImap>> = [];
-    const endpoint = bindTestEndpoint(new EmailEndpoint({
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'email'),
       gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
       config: {
@@ -508,7 +508,7 @@ describe('email plugin runtime adapter', () => {
         imaps.push(imap);
         return imap;
       },
-    }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
 
     await endpoint.start();
     expect(imaps).toHaveLength(1);
@@ -525,7 +525,7 @@ describe('email plugin runtime adapter', () => {
   it('ignores a stale end from the replaced IMAP transport after reconnect', async () => {
     vi.useFakeTimers();
     const imaps: Array<ReturnType<typeof createMockImap>> = [];
-    const endpoint = bindTestEndpoint(new EmailEndpoint({
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'email'),
       gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
       config: {
@@ -538,7 +538,7 @@ describe('email plugin runtime adapter', () => {
         imaps.push(imap);
         return imap;
       },
-    }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
 
     await endpoint.start();
     imaps[0]!.emitError(new Error('socket reset'));
@@ -553,7 +553,7 @@ describe('email plugin runtime adapter', () => {
 
   it('disarms pending reconnect when stop runs before the backoff fires', async () => {
     const imaps: Array<ReturnType<typeof createMockImap>> = [];
-    const endpoint = bindTestEndpoint(new EmailEndpoint({
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'email'),
       gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
       config: {
@@ -566,7 +566,7 @@ describe('email plugin runtime adapter', () => {
         imaps.push(imap);
         return imap;
       },
-    }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
 
     await endpoint.start();
     imaps[0]!.emit('end');
@@ -583,13 +583,13 @@ describe('email plugin runtime adapter', () => {
       releaseSearch = () => callback(null, []);
     });
 
-    const endpoint = bindTestEndpoint(new EmailEndpoint({
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'email'),
       gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createSmtp: () => createMockSmtp(),
       createImap: () => imap,
-    }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
 
     await endpoint.start();
     expect(imap.search).not.toHaveBeenCalled();
@@ -605,15 +605,15 @@ describe('email plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new EmailEndpoint({
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'email'),
       gateway,
       config: baseConfig,
       createSmtp: () => createMockSmtp(),
       createImap: () => createMockImap(),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
-    endpoint.admit({
+    endpoint.endpoint.admit({
       messageId: '<1>',
       from: 'a@b.com',
       to: [],
@@ -629,7 +629,7 @@ describe('email plugin runtime adapter', () => {
 
   it('sends outbound payloads via SMTP', async () => {
     const smtp = createMockSmtp();
-    const endpoint = bindTestEndpoint(new EmailEndpoint({
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'email'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -638,10 +638,10 @@ describe('email plugin runtime adapter', () => {
       config: baseConfig,
       createSmtp: () => smtp,
       createImap: () => createMockImap(),
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'email');
@@ -723,13 +723,13 @@ describe('email plugin runtime adapter', () => {
       }),
     };
 
-    const endpoint = bindTestEndpoint(new EmailEndpoint({
+    const endpoint = await createEndpointHarness(() => new EmailEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'email'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createSmtp: () => smtp,
       createImap: () => imap,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());

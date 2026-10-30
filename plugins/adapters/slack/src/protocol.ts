@@ -121,6 +121,9 @@ export interface SlackWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
+/** Every block emitted by the encoder has Slack's required native block discriminator. */
+export interface SlackBlock { readonly type: string; readonly block_id?: string; readonly [key: string]: unknown }
+
 export function resolveSlackConfig(config: SlackEndpointConfig): ResolvedSlackConfig {
   if (config.webApiProxy && (!Number.isInteger(config.webApiProxy.port) || config.webApiProxy.port < 1 || config.webApiProxy.port > 65535)) throw new TypeError('Invalid Slack webApiProxy port');
   if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
@@ -225,7 +228,7 @@ export function formatSlashContent(cmd: SlackSlashCommand): string {
 export function formatOutboundWire(payload: unknown): {
   replyTo?: string;
   text: string;
-  blocks: Record<string, unknown>[];
+  blocks: SlackBlock[];
   attachments: Record<string, unknown>[];
   files: Array<{ buffer?: Buffer; url?: string; path?: string; name?: string }>;
 } {
@@ -249,7 +252,7 @@ export function formatOutboundWire(payload: unknown): {
   }
 
   let text = '';
-  const blocks: Record<string, unknown>[] = [];
+  const blocks: SlackBlock[] = [];
   const attachments: Record<string, unknown>[] = [];
   const files: Array<{ buffer?: Buffer; url?: string; path?: string; name?: string }> = [];
   let replyTo: string | undefined;
@@ -328,11 +331,11 @@ export function formatOutboundWire(payload: unknown): {
   return { text, blocks, attachments, files, ...(replyTo ? { replyTo } : {}) };
 }
 
-export function keyboardToBlockKitBlocks(data: Record<string, unknown>): Record<string, unknown>[] {
+export function keyboardToBlockKitBlocks(data: Record<string, unknown>): SlackBlock[] {
   const rows = data.rows as Array<Array<Record<string, unknown>>> | undefined;
   if (!rows?.length) return [];
 
-  const blocks: Record<string, unknown>[] = [];
+  const blocks: SlackBlock[] = [];
   for (const row of rows) {
     const elements = row.slice(0, 5).map((btn, index) => ({
       type: 'button',

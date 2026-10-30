@@ -176,8 +176,8 @@ export function dingtalkInboundConversation(endpointKey: string, msg: DingTalkMe
   };
 }
 
-export function resolveSender(msg: DingTalkMessage): string {
-  return msg.senderId || msg.senderStaffId || 'unknown';
+export function resolveSender(msg: DingTalkMessage): string | undefined {
+  return msg.senderId || msg.senderStaffId || undefined;
 }
 
 export function generateMessageId(msg: DingTalkMessage): string {

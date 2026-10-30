@@ -5,6 +5,7 @@ import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
 import type { MemoryStore, MemorySystemConfig } from './contracts.js';
 import { ContextRepositoryMemoryStore } from './context-repository-store.js';
 import { AiCompactionStrategy } from './ai-compaction-strategy.js';
+import { resolveTurnSummaryExecution } from './summary-model.js';
 export class MemorySystem {
   private stores = new Map<string, MemoryStore>();
 
@@ -60,8 +61,7 @@ export class MemorySystem {
     return host.compactionRuntime.compactSession(host.contextRepository, {
       host,
       sessionId,
-      transport: host.llmRuntime,
-      model: llmModel,
+      ...resolveTurnSummaryExecution({ transport: host.llmRuntime, model: llmModel }),
       compactionConfig: host.config.compaction,
       contextWindow,
       mode: 'text',

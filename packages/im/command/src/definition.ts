@@ -6,6 +6,8 @@ import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from 
 import {
   createCapabilityContext,
   readOperationClient,
+  readOperationSession,
+  type OperationSession,
   readOperationInputSignal,
   type AdapterClient,
   type RegisteredAdapterName,
@@ -291,6 +293,8 @@ export interface CommandContext<
   readonly input?: TInput;
   /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
   readonly $client: AdapterClient<TAdapter>;
+  /** Bound by the actual IM operation; direct CommandIndex.execute calls may have no Session. */
+  readonly session: OperationSession<TAdapter> | undefined;
   /**
    * 对话式交互输入。IM 派发时自动注入；无消息来源时为 `undefined`。
    */
@@ -378,28 +382,40 @@ type TypedCommandContext<TConfig, TInput extends CommandMessage, TAdapter extend
     readonly options: InferCommandOptions<O>;
   };
 
+/** The returned declaration retains its platform, parameter schemas and callback result. */
+type DeclaredCommandAdapter<D> = D extends { readonly adapter: infer A extends string } ? A
+  : D extends { readonly adapter?: infer A extends string | undefined } ? A : undefined;
+export type TypedCommandDefinition<TConfig, TResult, TInput extends CommandMessage, TAdapter extends string | undefined, P extends CommandParams, O extends CommandOptions> =
+  Omit<CommandDefinition<TConfig, TResult, TInput, TAdapter>, 'params' | 'options' | 'execute'> & {
+    readonly params?: P;
+    readonly options?: O;
+    execute(context: TypedCommandContext<TConfig, TInput, TAdapter, P, O>): TResult | Promise<TResult>;
+  };
+
 /**
  * `defineCommand.withConfig<Config>()` 返回的定义函数：config 类型已固定，params / options / 返回值
  * 仍从定义推断。
  * @public
  */
 export type CommandDefiner<TConfig, TInput extends CommandMessage = CommandMessage> = <
-  TResult = unknown,
+  const TResult = unknown,
   const P extends CommandParams = {},
   const O extends CommandOptions = {},
+  const D extends CommandAuthoringDefinition<TConfig, TResult, TInput, P, O> = CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
 >(
-  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
-) => Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>>;
+  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O> & D,
+) => Readonly<TypedCommandDefinition<TConfig, TResult, TInput, DeclaredCommandAdapter<D>, P, O> & Pick<D, keyof D & 'adapter'>>;
 
 export function defineCommand<
   TConfig = unknown,
-  TResult = unknown,
+  const TResult = unknown,
   TInput extends CommandMessage = CommandMessage,
   const P extends CommandParams = {},
   const O extends CommandOptions = {},
+  const D extends CommandAuthoringDefinition<TConfig, TResult, TInput, P, O> = CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
 >(
-  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
-): Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>> {
+  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O> & D,
+): Readonly<TypedCommandDefinition<TConfig, TResult, TInput, DeclaredCommandAdapter<D>, P, O> & Pick<D, keyof D & 'adapter'>> {
   if (typeof definition.execute !== 'function') {
     throw new TypeError('Command execute must be a function');
   }
@@ -423,7 +439,7 @@ export function defineCommand<
   validateCommandShortcutShape(definition.shortcut);
   const execution = normalizeExecutionPolicy(definition.execution);
   return Object.freeze({ $feature: commandBrand, ...definition, ...(execution ? { execution } : {}) }) as Readonly<
-    CommandDefinition<TConfig, TResult, TInput, string | undefined>
+    TypedCommandDefinition<TConfig, TResult, TInput, DeclaredCommandAdapter<D>, P, O> & Pick<D, keyof D & 'adapter'>
   >;
 }
 
@@ -599,6 +615,10 @@ export function createCommandContext(
     ...(input !== undefined ? { input: input as CommandMessage } : {}),
     ...(interaction !== undefined ? { interaction } : {}),
   } as CommandContext;
+  Object.defineProperty(result, 'session', {
+    enumerable: true,
+    get: () => readOperationSession(input, adapter),
+  });
   Object.defineProperty(result, '$client', {
     enumerable: true,
     get: () => readOperationClient(input, adapter),
@@ -612,6 +632,20 @@ export function createCommandContext(
  * @internal Command dispatcher projection helper.
  */
 export function resolveCommandSession(input: unknown): CommandSession {
+  const operation = readOperationSession(input);
+  if (operation) {
+    const endpoint = input && typeof input === 'object' ? (input as { readonly endpointId?: unknown }).endpointId : undefined;
+    const sender = operation.sender;
+    const roles = [...new Set([...sender?.authorizationRoles ?? [], ...sender?.platformRoles ?? []])];
+    return Object.freeze({
+      adapter: operation.scene.endpoint.adapter,
+      ...(typeof endpoint === 'string' && endpoint ? { endpoint } : {}),
+      scene: Object.freeze({ id: operation.scene.id, type: operation.scene.kind,
+        ...(operation.scene.name !== undefined ? { name: operation.scene.name } : {}) }),
+      ...(sender ? { sender: Object.freeze({ id: sender.id, ...(sender.name !== undefined ? { name: sender.name } : {}),
+        role: Object.freeze(roles.length ? roles : ['user']) }) } : {}),
+    });
+  }
   if (!isCommandMessageLike(input)) return Object.freeze({});
 
   const metadata = input.metadata && typeof input.metadata === 'object'

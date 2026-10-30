@@ -8,16 +8,16 @@ import {
   userLocalePreferencesToken,
   type UserLocalePreferences,
   type CapabilitySlot,
+  type FeatureId,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
-  Endpoint,
+  Adapter, endpointSpec, createEndpointSpecification, type Endpoint,
+  type EndpointSendRequest,
   adapterFeatureId,
-  defineAdapter as defineAdapterContract,
+  defineAdapter,
   endpointEventGatewayToken,
-  type AdapterContext,
-  type AdapterDefinition,
   type EndpointEvent,
 } from '@zhin.js/adapter';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
@@ -31,35 +31,23 @@ import {
 import { RuntimeInteractiveRouter } from '../../src/plugin-runtime/im/interactive-router.js';
 import { RuntimeInteractionCoordinator } from '../../src/plugin-runtime/im/interaction-runtime.js';
 
-type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
-  create(context: AdapterContext<TConfig>): object | Promise<object>;
-};
-
-class TestEndpoint extends Endpoint<object> {
-  readonly client: object;
-
-  constructor(surface: object) {
-    super();
-    this.client = surface;
-    Object.assign(this, surface);
-  }
+class InteractionClient {
+  constructor(readonly sent: unknown[]) {}
+  send(request: EndpointSendRequest) { this.sent.push(request); return `sent-${this.sent.length}`; }
 }
-
-function defineAdapter<TConfig = unknown>(
-  definition: TestAdapterDefinition<TConfig>,
-): Readonly<AdapterDefinition<TConfig>> {
-  return defineAdapterContract<TConfig>({
-    ...definition,
-    async create(context) {
-      const value = await definition.create(context);
-      return value instanceof Endpoint ? value : new TestEndpoint(value);
-    },
-  });
+class InteractionEndpoint extends InteractionClient implements Endpoint {
+  readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request) });
+}
+class InteractionAdapter extends Adapter<InteractionEndpoint> {
+  constructor(private readonly sent: unknown[]) { super(); }
+  protected createEndpoint() { return new InteractionEndpoint(this.sent); }
 }
 
 const ignoredEndpointEvents = Object.freeze({
   receive: async (_event: EndpointEvent) => undefined,
 });
+
+const fixtureStores = new WeakMap<ImRuntime, SnapshotStore>();
 
 function receive(
   im: ImRuntime,
@@ -72,7 +60,7 @@ function receive(
     name: 'message.receive',
     payload,
     endpoint: { ...endpoint, id: endpoint.id as Parameters<ImRuntime['endpointEvents']['receive']>[0]['endpoint']['id'] },
-    client: ignoredEndpointEvents,
+    client: (fixtureStores.get(im)!.current.projections.get(adapterFeatureId) as AdapterIndex).clientById(endpoint.id as never),
   })) as Promise<MessageDispatchResult>;
 }
 
@@ -133,16 +121,7 @@ describe('UserInteraction via ImRuntime', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
+        createAdapter: () => new InteractionAdapter(sent),
       }),
     });
     const command = createCapabilitySlot({
@@ -175,13 +154,14 @@ describe('UserInteraction via ImRuntime', () => {
     ])]]) };
     const view = createSnapshotView(0, base);
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
+    const projections = new Map<FeatureId, unknown>([
       [adapterFeatureId, adapters],
       [commandFeatureId, new CommandIndex([command], view)],
     ]);
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
     return {
@@ -315,13 +295,7 @@ describe('UserInteraction via ImRuntime', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {}, open() {}, close() {}, stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
+        createAdapter: () => new InteractionAdapter(sent),
       }),
     });
     const handler = createCapabilitySlot({
@@ -343,13 +317,14 @@ describe('UserInteraction via ImRuntime', () => {
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
     const store = new SnapshotStore({
       ...base,
-      projections: new Map([
+      projections: new Map<FeatureId, unknown>([
         [adapterFeatureId, adapters],
         [handlerFeatureId, new HandlerIndex([handler], view)],
       ]),
     });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -375,16 +350,7 @@ describe('UserInteraction via ImRuntime', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
+        createAdapter: () => new InteractionAdapter(sent),
       }),
     });
     const command = createCapabilitySlot({
@@ -409,13 +375,14 @@ describe('UserInteraction via ImRuntime', () => {
     const base = baseState(slots);
     const view = createSnapshotView(0, base);
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
+    const projections = new Map<FeatureId, unknown>([
       [adapterFeatureId, adapters],
       [commandFeatureId, new CommandIndex([command], view)],
     ]);
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -440,16 +407,7 @@ describe('UserInteraction via ImRuntime', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
+        createAdapter: () => new InteractionAdapter(sent),
       }),
     });
     const command = createCapabilitySlot({
@@ -468,13 +426,14 @@ describe('UserInteraction via ImRuntime', () => {
     const base = baseState(slots);
     const view = createSnapshotView(0, base);
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
+    const projections = new Map<FeatureId, unknown>([
       [adapterFeatureId, adapters],
       [commandFeatureId, new CommandIndex([command], view)],
     ]);
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -497,16 +456,7 @@ describe('UserInteraction via ImRuntime', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
+        createAdapter: () => new InteractionAdapter(sent),
       }),
     });
     const command = createCapabilitySlot({
@@ -525,13 +475,14 @@ describe('UserInteraction via ImRuntime', () => {
     const base = baseState(slots);
     const view = createSnapshotView(0, base);
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
+    const projections = new Map<FeatureId, unknown>([
       [adapterFeatureId, adapters],
       [commandFeatureId, new CommandIndex([command], view)],
     ]);
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -581,16 +532,7 @@ describe('UserInteraction via ImRuntime', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
+        createAdapter: () => new InteractionAdapter(sent),
       }),
     });
     const command = createCapabilitySlot({
@@ -626,13 +568,14 @@ describe('UserInteraction via ImRuntime', () => {
     const base = baseState(slots);
     const view = createSnapshotView(0, base);
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
+    const projections = new Map<FeatureId, unknown>([
       [adapterFeatureId, adapters],
       [commandFeatureId, new CommandIndex([command], view)],
     ]);
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 
@@ -668,16 +611,7 @@ describe('UserInteraction via ImRuntime', () => {
       source: '/adapters/memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
+        createAdapter: () => new InteractionAdapter(sent),
       }),
     });
     const command = createCapabilitySlot({
@@ -705,13 +639,14 @@ describe('UserInteraction via ImRuntime', () => {
     const base = baseState(slots);
     const view = createSnapshotView(0, base);
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
+    const projections = new Map<FeatureId, unknown>([
       [adapterFeatureId, adapters],
       [commandFeatureId, new CommandIndex([command], view)],
     ]);
     const store = new SnapshotStore({ ...base, projections });
     const im = new ImRuntime();
     im.attach(store);
+    fixtureStores.set(im, store);
     await adapters.start();
     adapters.open();
 

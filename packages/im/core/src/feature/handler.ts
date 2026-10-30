@@ -67,7 +67,7 @@ export interface ClientHandlerOptions<
   readonly adapter: TAdapter;
   readonly event: TName;
   handle(
-    this: HandlerContext,
+    this: HandlerContext<unknown, TAdapter>,
     event: ClientHandlerEvent<TAdapter, TName>,
   ): void | Promise<void>;
 }
@@ -83,7 +83,7 @@ export interface ClientHandlerWildcardOptions<TAdapter extends RegisteredAdapter
   readonly adapter: TAdapter;
   readonly event: '*';
   handle(
-    this: HandlerContext,
+    this: HandlerContext<unknown, TAdapter>,
     event: ClientHandlerWildcardEvent<TAdapter>,
   ): void | Promise<void>;
 }
@@ -96,8 +96,22 @@ export interface ClientHandlerWildcardOptions<TAdapter extends RegisteredAdapter
 interface RuntimeClientHandlerOptions {
   readonly adapter: string;
   readonly event: string;
-  handle(this: HandlerContext, event: unknown): void | Promise<void>;
+  readonly handle: unknown;
 }
+
+type CanonicalHandlerEvent = 'message.receive' | 'notice.receive' | 'request.receive' | 'system.receive' | 'platform.receive';
+type BoundCanonicalHandler<K extends CanonicalHandlerEvent> = {
+  [A in RegisteredAdapterName]: {
+    readonly adapter: A;
+    readonly event: K;
+    handle(this: HandlerContext<unknown, A>, ...args: HandlerEventMap[K]): void | Promise<void>;
+  }
+}[RegisteredAdapterName];
+
+/** Canonical messages share the captured operation Session; native callbacks retain their original payload. */
+export function defineHandler<K extends CanonicalHandlerEvent>(
+  options: BoundCanonicalHandler<K>,
+): Readonly<HandlerDefinition<K>>;
 
 export function defineHandler<
   TAdapter extends RegisteredAdapterName,
@@ -120,11 +134,13 @@ export function defineHandler<K extends keyof HandlerEventMap & string>(options:
 export function defineHandler(
   options:
     | RuntimeClientHandlerOptions
-    | { readonly event?: string; handle(this: HandlerContext, ...args: unknown[]): void | Promise<void> },
+    | { readonly event?: string; readonly handle: unknown },
 ): Readonly<HandlerDefinition> {
-  if (!('adapter' in options) || typeof options.adapter !== 'string') {
+  if (!('adapter' in options) || typeof options.adapter !== 'string'
+    || ['message.receive', 'notice.receive', 'request.receive', 'system.receive', 'platform.receive'].includes(options.event ?? '')) {
     return defineHandlerFeature(options as {
       readonly event?: string;
+      readonly adapter?: string;
       handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
     });
   }

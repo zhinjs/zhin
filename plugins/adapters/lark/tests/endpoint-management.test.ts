@@ -1,10 +1,13 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
-import { describe, expect, it, vi } from 'vitest';
+import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import type { HttpHost } from '@zhin.js/host-http';
 import { LarkEndpoint, type LarkFetch } from '../src/endpoint.js';
 import { resolveLarkConfig } from '../src/protocol.js';
+
+const harnesses: Awaited<ReturnType<typeof createEndpointHarness>>[] = [];
+afterEach(async () => { await Promise.all(harnesses.splice(0).map(harness => harness.stop())); });
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -38,34 +41,36 @@ function mockLarkApi(
   });
 }
 
-function createEndpoint(fetch: LarkFetch): LarkEndpoint {
-  return bindTestEndpoint(new LarkEndpoint({
+async function createEndpoint(fetch: LarkFetch) {
+  const harness = await createEndpointHarness(() => new LarkEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'lark'),
     gateway: {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     },
     // management 只走 OpenAPI，不触碰 HttpHost；start() 才会注册路由。
-    http: {} as HttpHost,
+    http: createHttpHost({ host: '127.0.0.1', port: 0 }),
     config: baseConfig,
     fetch,
-  }), {
+  }), { gateway: createTestEventGateway({
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
-    }, undefined);
+    }, undefined), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
+  await harness.start(); harness.open(); harnesses.push(harness);
+  return harness;
 }
 
 describe('lark endpoint management', () => {
-  it('advertises only listGroups/listGroupMembers and keeps the port frozen', () => {
-    const endpoint = createEndpoint(mockLarkApi(() => ({ code: 0, data: { items: [] } })));
-    expect(Object.isFrozen(endpoint.management)).toBe(true);
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+  it('advertises only listGroups/listGroupMembers and keeps the port frozen', async () => {
+    const endpoint = await createEndpoint(mockLarkApi(() => ({ code: 0, data: { items: [] } })));
+    expect(Object.isFrozen(endpoint.index.management(endpoint.canonicalId))).toBe(true);
+    expect(listEndpointManagementCapabilities({ management: endpoint.index.management(endpoint.canonicalId) })).toEqual([
       'listGroups',
       'listGroupMembers',
     ]);
-    expect(endpoint.management.listFriends).toBeUndefined();
-    expect(endpoint.management.listChannels).toBeUndefined();
-    expect(endpoint.management.kickGroupMember).toBeUndefined();
+    expect(endpoint.index.management(endpoint.canonicalId).listFriends).toBeUndefined();
+    expect(endpoint.index.management(endpoint.canonicalId).listChannels).toBeUndefined();
+    expect(endpoint.index.management(endpoint.canonicalId).kickGroupMember).toBeUndefined();
   });
 
   it('listGroups paginates /im/v1/chats and normalizes chat_id/name', async () => {
@@ -84,9 +89,9 @@ describe('lark endpoint management', () => {
         },
       };
     });
-    const endpoint = createEndpoint(fetchMock as unknown as LarkFetch);
+    const endpoint = await createEndpoint(fetchMock as unknown as LarkFetch);
 
-    const groups = await endpoint.management.listGroups!();
+    const groups = await endpoint.index.management(endpoint.canonicalId).listGroups!();
 
     expect(groups).toEqual([
       { group_id: 'oc_1', name: '产品一群' },
@@ -105,9 +110,9 @@ describe('lark endpoint management', () => {
       seen.push(url);
       return { code: 0, data: { items: [member], has_more: false } };
     });
-    const endpoint = createEndpoint(fetchMock as unknown as LarkFetch);
+    const endpoint = await createEndpoint(fetchMock as unknown as LarkFetch);
 
-    const members = await endpoint.management.listGroupMembers!('oc_1');
+    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!('oc_1');
 
     expect(members).toEqual([member]);
     expect(seen[0]).toContain('/im/v1/chats/oc_1/members');
@@ -115,9 +120,9 @@ describe('lark endpoint management', () => {
   });
 
   it('propagates OpenAPI errors so the RPC layer can surface them', async () => {
-    const endpoint = createEndpoint(
+    const endpoint = await createEndpoint(
       mockLarkApi(() => ({ code: 99991663, msg: 'token invalid' })) as unknown as LarkFetch,
     );
-    await expect(endpoint.management.listGroups!()).rejects.toMatchObject({ disposition: 'rejected', platformCode: 99991663 });
+    await expect(endpoint.index.management(endpoint.canonicalId).listGroups!()).rejects.toMatchObject({ disposition: 'rejected', platformCode: 99991663 });
   });
 });

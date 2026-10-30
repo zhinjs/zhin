@@ -45,6 +45,11 @@
       "types": "./lib/journal-store.d.ts",
       "development": "./src/journal-store.ts",
       "import": "./lib/journal-store.js"
+    },
+    "./model-catalog": {
+      "types": "./lib/model-catalog/index.d.ts",
+      "development": "./src/model-catalog/index.ts",
+      "import": "./lib/model-catalog/index.js"
     }
   },
   "files": [
@@ -143,6 +148,10 @@
       "./journal-store": {
         "types": "./lib/journal-store.d.ts",
         "import": "./lib/journal-store.js"
+      },
+      "./model-catalog": {
+        "types": "./lib/model-catalog/index.d.ts",
+        "import": "./lib/model-catalog/index.js"
       }
     }
   },

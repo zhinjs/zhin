@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import type { DeliveryTarget } from 'zhin.js';
 import { resolveGroupSuiteConfig } from '../src/config.js';
 import { normalizeWelcomeConversations, welcomeConversationAllowed } from '../src/welcome-scope.js';
-import { AdapterIndex, Endpoint, defineAdapter, adapterFeatureId, endpointEventGatewayToken, type EndpointSendRequest } from '../../../../packages/im/adapter/src/index.js';
+import { Adapter, AdapterIndex, createEndpointSpecification, defineAdapter, endpointSpec, adapterFeatureId, endpointEventGatewayToken, type EndpointSendRequest } from '../../../../packages/im/adapter/src/index.js';
 import { HandlerIndex, handlerFeatureId } from '../../../../packages/im/handler/src/index.js';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '../../../../packages/im/middleware/src/index.js';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, childPluginId, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
@@ -79,18 +79,22 @@ async function fixture(session?: SessionWelcomeOptions) {
   const alpha = childPluginId(root, 'alpha'); const beta = childPluginId(root, 'beta');
   const im = new ImRuntime(); const sent: EndpointSendRequest[] = []; const requesters: string[] = [];
   let failure: 'unknown' | 'not_sent' | undefined;
-  class MemoryEndpoint extends Endpoint<object> {
-    readonly client = {};
-    start() {} stop() {} open() {} close() {}
+  class MemoryClient {
     async send(request: EndpointSendRequest) {
       sent.push(request);
       if (failure) throw new EndpointDeliveryError('synthetic_delivery_failure', 'synthetic delivery failure', failure);
       return `message-${sent.length}`;
     }
   }
+  class MemoryEndpoint extends MemoryClient {
+    readonly [endpointSpec] = createEndpointSpecification(this, {
+      start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request),
+    });
+  }
+  class MemoryAdapter extends Adapter<MemoryEndpoint> { protected createEndpoint() { return new MemoryEndpoint(); } }
   const adapters = ([[first, 'memory'], [second, 'memory'], [first, 'another']] as const).map(([owner, localName]) => createCapabilitySlot({
     owner, feature: adapterFeatureId, localName, source: `/adapters/${localName}/index.ts`,
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], segments: { markdown: 'text', interactive: 'text' }, create: () => new MemoryEndpoint() }),
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], segments: { markdown: 'text', interactive: 'text' }, createAdapter: () => new MemoryAdapter() }),
   }));
   const handlers = [alpha, beta].map(owner => createCapabilitySlot({ owner, feature: handlerFeatureId, localName: 'welcome',
     source: '/handlers/welcome/index.ts', definition: welcome }));
@@ -123,8 +127,11 @@ async function fixture(session?: SessionWelcomeOptions) {
   store.commit(0, { snapshot: createSnapshotView(1, { ...store.current, config }), dispose() {} });
   const notice: IncomingNotice = { id: 'joined', type: 'notice', name: 'notice.group.member_increase', timestamp: 1, metadata: {},
     conversation: { kind: target.kind, id: target.id, parent: target.parent, threadId: target.threadId }, target: { id: 'new', name: 'Bob' } };
-  const receive = (payload = notice, endpointId = String(adapters[0]!.id)) => im.endpointEvents.receive({ name: 'notice.receive',
-    endpoint: im.endpoints.list().find(item => item.id === endpointId)!.endpoint, payload, client: {} });
+  const receive = (payload = notice, endpointId = String(adapters[0]!.id)) => {
+    const row = im.endpoints.list().find(item => item.id === endpointId)!;
+    return im.endpointEvents.receive({ name: 'notice.receive', endpoint: row.endpoint, payload,
+      client: index.clientById(row.id as typeof adapters[number]['id']) });
+  };
   return { target, alpha, root, sent, requesters, adapters, notice, receive, lifecycle,
     fail: (status: typeof failure) => { failure = status; },
     close: async () => { lifecycle?.dispose(); await store.close(); await index.stop(); },

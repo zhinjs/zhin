@@ -9,13 +9,12 @@ import { defineMiddleware as defineFeatureMiddleware } from '@zhin.js/middleware
 import type { Message, OutboundEnvelope } from '../src/plugin-runtime/im/contracts.js';
 import type { HandlerContext } from '@zhin.js/handler';
 
+declare class RegisteredTestAdapter {
+  readonly adapterEvents: Record<string, unknown>;
+  getEndpoint(instanceId: string): { sendNative(payload: string): void } | undefined;
+}
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly 'typed-middleware': {
-      readonly client: { sendNative(payload: string): void };
-      readonly events: Record<string, unknown>;
-    };
-  }
+  interface AdapterRegistry { readonly 'typed-middleware': RegisteredTestAdapter; }
 }
 
 defineMiddleware({

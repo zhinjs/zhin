@@ -8,11 +8,13 @@ tier: Experimental
 本页由 [`plugins/adapters/bilibili/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=32059f4d2d816477 -->
+<!-- sync-adapter-docs:sha256=345e15bd645ab31b -->
 
 # @zhin.js/adapter-bilibili
 
 > **Experimental** — 基于 B 站 **非官方 Web 接口**（含扫码登录接口），随时可能因平台改版失效；不进 stable smoke，接口与配置可能不兼容变更。
+
+账号由 `BilibiliAdapter` 管理。Endpoint 直接继承实际 `BilibiliClient`，保留原生方法与事件；框架生命周期、规范入站与发送经 `endpointSpec` 和 AdapterIndex 接入，不占用 Client 的原生 `start` / `stop` / `send` 方法。
 
 Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你自己视频**下的评论。契约见 [ADR 0035：评论型平台适配器契约](https://github.com/zhinjs/zhin/blob/main/docs/adr/0035-comment-reply-adapter-contract.md)，讨论见 [#971](https://github.com/zhinjs/zhin/issues/971)。
 
@@ -145,7 +147,7 @@ bilibili:
 | `bili-login start [账号]` | 扫码登录（只在私聊里发二维码） |
 | `bili-login status` | 查看登录状态与待审数量 |
 
-草稿存在 `data/bilibili/<账号>/drafts.json`，重启后自动恢复（最多保留最新 200 条）。发送过程中进程退出的草稿会标记「上次发送中断，可能已经发出」，请先到 B 站确认再决定是否重发。
+已有配置的草稿保留原 `data/bilibili/<账号>/drafts.json` 路径；动态新增或替换身份使用独立实例目录，旧目录不会自动迁移或删除。草稿重启后自动恢复（最多保留最新 200 条）。发送过程中进程退出的草稿会标记「上次发送中断，可能已经发出」，请先到 B 站确认再决定是否重发。
 
 发送保护：`sendMode: off`、已熔断、未登录或登录失效、距上次发送不足 `minSendIntervalSec` 时直接拒绝（草稿保留，不排队、不自动重试）；发送时遇到风控错误码会熔断整个 endpoint。
 
@@ -190,3 +192,5 @@ bilibili:
 ## 参考
 
 扫码登录与整体流程参考了以下开源项目的做法（只借鉴流程，未复制代码，也不依赖它们）：[renmu123/biliAPI](https://github.com/renmu123/biliAPI)（WebQrcodeLogin）、[WittF/bilibili-qr-login](https://github.com/WittF/bilibili-qr-login)、[Ninzore/bilibili-captain](https://github.com/Ninzore/bilibili-captain)（Login.loginQR）、[Janson20/BiliCommentBot](https://github.com/Janson20/BiliCommentBot)。社区接口文档 SocialSisterYi/bilibili-API-collect 已归档，本适配器不依赖它；接口随时可能变化，见顶部 Experimental 说明。
+
+扫码凭据先由只读账号接口核验，再由所属 Adapter 原子保存。同一真实账号保留内部身份；换到其他账号时保存为新的停用实例，原草稿和历史不随账号转移。已有凭据但无法核验原账号时，需要明确替换，不能按首次绑定处理。

@@ -27,14 +27,14 @@ export {
 } from './webhook.js';
 
 export {
-  defaultCreateClient,
-  defaultCreateWebhookClient,
+  kookWebsocketClientOptions,
+  kookWebhookClientOptions,
   normalizeKookMessage,
-  type CreateKookClient,
   type KookClientTransport,
 } from './ws.js';
 
-export { kookClient, type KookClientEventMap } from './client.js';
+export { type KookClientEventMap } from './client.js';
+export { KookAdapter } from './adapter.js';
 
 export {
   checkKookPlatformPermit,

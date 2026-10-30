@@ -3,7 +3,7 @@ import { hostProtectedPathsToken, type HostProtectedPaths } from '../security/ho
 import { AgentUsageCollector, agentUsageStoreToken, type AgentUsageStore } from '../usage/usage-store.js';
 import { getLogger } from '@zhin.js/logger';
 import { logTurnUsage, type UsageLogContext } from '../trace/turn-usage-log.js';
-import { createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { readLeasedRootResource, createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { applyTurnTrust } from '../security/trust-level.js';
 import type { JournalStore } from '@zhin.js/ai/journal-store';
 import { PersistentTurnJournal } from '../journal/persistent-turn-journal.js';
@@ -26,6 +26,8 @@ import {
 import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime.js';
 import { requireToolInputSchema, type ToolDescriptor, type ToolInvocationContext } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
+import { turnModelPortToken } from '../model-runtime/turn-resource.js';
+import type { ModelExecutionScope } from '../model-runtime/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
 import { createConversationReferenceCapability } from '../tool/conversation-reference-tool.js';
@@ -307,10 +309,11 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     admit: () => void = () => undefined,
   ): Promise<TurnOutcome> {
     let active = true;
+    let models: ModelExecutionScope | undefined;
+    let mediaPerception: import('../media/perception.js').MediaPerceptionPort | undefined;
     const usageStore = lease.value.resources.get(lease.value.root)?.get(agentUsageStoreToken.id) as AgentUsageStore | undefined;
-    const usage = usageStore ? new AgentUsageCollector(String(owner), request, {
-      provider: selection.binding.providerAlias, model: selection.binding.model,
-    }) : undefined;
+    const selected = { provider: selection.binding.providerAlias, model: selection.binding.model };
+    const usage = usageStore ? new AgentUsageCollector(String(owner), request, selected) : undefined;
     let usageStatus = 'failed';
     let activeTrace: TurnTraceCollector | undefined;
     let releaseTrace: (() => void) | undefined;
@@ -322,6 +325,14 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     };
     try {
       if (!active) throw new Error('Agent generation operation is not active');
+      const modelPort = readLeasedRootResource(this.requireSnapshots(), lease, turnModelPortToken);
+      models = await modelPort?.acquire(request, selection.binding);
+      if (models) {
+        mediaPerception = modelPort?.createPerception?.(models, request);
+        selected.provider = models.chat.provider.name;
+        selected.model = models.chat.invocation.model.model;
+        logContext.selectedModel = `${models.chat.provider.name}/${models.chat.invocation.model.model}`;
+      }
       const discovered = await this.#ingress.read(
         lease.value,
         owner,
@@ -365,7 +376,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       const disabled = Boolean(request.session.key.startsWith('workroom:') || request.input.metadata?.workroom
         || request.principal.roles.includes('workroom_assignment') || request.execution?.kind === 'schedule');
       outcome = await runWithAgentDecisionTurn(lease.value, request.identity.turnId, decision => runWithAgentTurnConfiguration(
-        { activeBinding: selection.binding },
+        { activeBinding: selection.binding, models, mediaPerception },
         () => executeAgentTurn(turn, async function* () {
           const stream = engine.run({
           turn,
@@ -407,6 +418,11 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       throw error;
     } finally {
       active = false;
+      try { await models?.release(); }
+      catch {
+        // Resource cleanup cannot turn an already delivered reply into a retryable failure.
+        try { this.#usageLogger.error('op=model_resource_release status=failed'); } catch { /* Diagnostic only. */ }
+      }
       releaseTrace?.();
       if (activeTrace) this.#saveTrace(activeTrace, { ...logContext, status: outcome?.status });
       if (usage && usageStore) {

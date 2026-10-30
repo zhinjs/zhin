@@ -1,12 +1,14 @@
 import { defineCommand } from 'zhin.js/command';
 import { raw } from '@zhin.js/core/runtime';
-import { bilibiliEndpointRegistryToken, startLoginForChat } from '@zhin.js/adapter-bilibili';
+import { bilibiliEndpoints, startLoginForChat } from '@zhin.js/adapter-bilibili';
 
 export default defineCommand({
   description: '扫码登录 B 站（只在私聊里发二维码）', descriptionI18n: { en: 'Sign in to Bilibili with a QR code (private chats only)' },
   permit: ['role(master)'],
-  async execute({ args, use, locale, input, formatCommand }) {
-    const result = await startLoginForChat(use(bilibiliEndpointRegistryToken), {
+  async execute(context) {
+    const { args, locale, input, formatCommand } = context;
+    const directory = bilibiliEndpoints(context);
+    const result = await startLoginForChat(directory, {
       id: args[0]?.trim() || undefined,
       locale,
       isPrivate: input?.conversation.kind === 'private',

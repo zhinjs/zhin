@@ -16,6 +16,8 @@ export function trackTurnCompletionUsage(
   trace?: Readonly<{ turnId?: string; recordBodies?: boolean }>,
 ): {
   transport: LlmCompletionPort;
+  /** Alternate purpose transport sharing this turn's accounting and trace. */
+  forTransport(delegate: LlmCompletionPort): LlmCompletionPort;
   readonly usage: TokenUsage;
   drainEvents(): UsageEvent[];
   hasReported(message: object): boolean;
@@ -48,7 +50,7 @@ export function trackTurnCompletionUsage(
     reported.add(result);
     return result;
   };
-  const complete = (method: keyof LlmCompletionPort): LlmCompletionPort['complete'] => async (model, context, options) => {
+  const complete = (method: keyof LlmCompletionPort, target: LlmCompletionPort): LlmCompletionPort['complete'] => async (model, context, options) => {
     const requestId = randomUUID();
     const started = performance.now();
     const request = { request_id: requestId, provider: model.provider, model: model.id, started_at: Date.now(), status: 'running' as const };
@@ -66,7 +68,7 @@ export function trackTurnCompletionUsage(
     };
     let assistant: AssistantMessage;
     try {
-      assistant = await delegate[method](model, context, {
+      assistant = await target[method](model, context, {
         ...options,
         ...((recordBody && trace?.turnId) || options?.onRequest ? { onRequest } : {}),
       });
@@ -81,11 +83,13 @@ export function trackTurnCompletionUsage(
       duration_ms: durationMs, stop_reason: assistant.stopReason });
     return projectRecorded(record(assistant, durationMs, requestId), options?.signal);
   };
+  const forTransport = (target: LlmCompletionPort): LlmCompletionPort => ({
+    complete: complete('complete', target),
+    completeSimple: complete('completeSimple', target),
+  });
   return {
-    transport: {
-      complete: complete('complete'),
-      completeSimple: complete('completeSimple'),
-    },
+    transport: forTransport(delegate),
+    forTransport,
     get usage() { return { ...total, cost: { ...total.cost } }; },
     drainEvents: () => pending.splice(0),
     hasReported: assistant => reported.has(assistant),

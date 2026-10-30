@@ -1,168 +1,108 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createAdapterConsoleRpc,
-  endpointConfigurationStoreToken,
-  type AdapterConsoleResources,
-  type AdapterConsoleSpec,
-  type ConfiguredEndpointEntry,
-  type EndpointConfigurationStore,
-} from '../src/index.js';
-import { PluginConsoleRpcError, type Token } from '@zhin.js/plugin-runtime';
+import { PluginConsoleRpcError } from '@zhin.js/plugin-runtime';
+import { createAdapterConsoleRpc, AdapterManagementError, type AdapterConsoleSpec } from '../src/index.js';
+import { accountRuntimeFixture } from './account-runtime-fixture.js';
 
-function fakeStore(initial: ConfiguredEndpointEntry[] = []): EndpointConfigurationStore & {
-  entries: ConfiguredEndpointEntry[];
-  added: Parameters<EndpointConfigurationStore['add']>[0][];
-  removed: string[];
-} {
-  const entries = [...initial];
-  const added: Parameters<EndpointConfigurationStore['add']>[0][] = [];
-  const removed: string[] = [];
-  return {
-    entries,
-    added,
-    removed,
-    async list() { return entries; },
-    async add(request) {
-      if (entries.some((entry) => entry.id === request.entry.id)) {
-        const { EndpointConfigurationError } = await import('../src/index.js');
-        throw new EndpointConfigurationError('duplicate_entry', {
-          adapterKey: request.adapterKey,
-          endpointId: request.entry.id,
-        });
-      }
-      added.push(request);
-      entries.push(request.entry);
-      return { filePath: '/tmp/zhin.config.yml' };
-    },
-    async remove(_adapterKey, endpointId) {
-      removed.push(endpointId);
-      const index = entries.findIndex((entry) => entry.id === endpointId);
-      if (index < 0) return { filePath: '/tmp/zhin.config.yml', removed: false };
-      entries.splice(index, 1);
-      return { filePath: '/tmp/zhin.config.yml', removed: true };
-    },
-  };
-}
+const spec: AdapterConsoleSpec = { adapterKey: 'demo', adapterDisplayName: 'Demo',
+  readPermission: 'demo:read', writePermission: 'demo:write', fields: [{ key: 'token', required: true, env: true }, { key: 'label' }] };
 
-function resources(store?: EndpointConfigurationStore): AdapterConsoleResources {
-  return {
-    has: <T>(token: Token<T>) => store !== undefined && token === endpointConfigurationStoreToken,
-    use: <T>(token: Token<T>) => {
-      if (token !== endpointConfigurationStoreToken || !store) throw new Error('unexpected token');
-      return store as unknown as T;
-    },
-  };
-}
 
-const baseSpec: AdapterConsoleSpec = {
-  adapterKey: 'telegram',
-  adapterDisplayName: 'Telegram',
-  fields: [
-    { key: 'token', required: true, env: true, description: 'bot token' },
-  ],
-  readPermission: 'telegram:read',
-  writePermission: 'telegram:write',
-  running: () => [{ id: 'bot', mode: 'polling' }],
-  getConfig: () => ({ endpoints: [{ id: 'bot', token: '${TELEGRAM_BOT_TOKEN}' }] }),
-};
-
-function statusOf(rpc: ReturnType<typeof createAdapterConsoleRpc>) {
-  const method = rpc.methods.get('status');
-  if (!method) throw new Error('missing status');
-  return method.handler({}, { signal: new AbortController().signal }) as Promise<Record<string, unknown>>;
-}
-
-describe('createAdapterConsoleRpc', () => {
-  it('reports running/configured endpoints and masks secret fields', async () => {
-    const store = fakeStore([
-      { id: 'bot', token: '${TELEGRAM_BOT_TOKEN}' },
-      { id: 'inline', token: '123456:secret' },
-    ]);
-    const rpc = createAdapterConsoleRpc(baseSpec, resources(store));
-    const status = await statusOf(rpc);
-    expect(status).toMatchObject({
-      adapterKey: 'telegram',
-      displayName: 'Telegram',
-      canAdd: true,
-      canRemove: true,
-      configStore: true,
-      running: [{ id: 'bot', mode: 'polling' }],
-      readPermission: 'telegram:read',
-      writePermission: 'telegram:write',
-    });
-    const configured = status.configured as Array<{ id: string; values: Record<string, string> }>;
-    expect(configured.find((entry) => entry.id === 'bot')?.values.token).toBe('${TELEGRAM_BOT_TOKEN}');
-    expect(configured.find((entry) => entry.id === 'inline')?.values.token).toBe('••••••');
-  });
-
-  it('writes credentials to .env and the endpoint entry to config', async () => {
-    const store = fakeStore();
-    const rpc = createAdapterConsoleRpc(baseSpec, resources(store));
-    const add = rpc.methods.get('endpoint-add');
-    expect(add?.requiredPermissions).toEqual(['telegram:write']);
-    const result = await add!.handler({ id: 'my-bot', values: { token: '123:abc' } }, { signal: new AbortController().signal });
-    expect(result).toMatchObject({ id: 'my-bot', restartRequired: true });
-    expect(store.added).toHaveLength(1);
-    expect(store.added[0]).toMatchObject({
-      adapterKey: 'telegram',
-      entry: { id: 'my-bot', token: '${TELEGRAM_MY_BOT_TOKEN}' },
-      environment: { TELEGRAM_MY_BOT_TOKEN: '123:abc' },
-    });
-  });
-
-  it('rejects missing required fields, unknown fields and duplicate ids', async () => {
-    const store = fakeStore([{ id: 'bot', token: '${TELEGRAM_BOT_TOKEN}' }]);
-    const rpc = createAdapterConsoleRpc(baseSpec, resources(store));
+describe('createAdapterConsoleRpc uses the exact owned runtime account authority', () => {
+  it('reports only owned configuration/runtime metadata and masks both inline credentials and env references', async () => {
+    const f = await accountRuntimeFixture(); const rpc = createAdapterConsoleRpc(spec), call = f.call();
     const add = rpc.methods.get('endpoint-add')!;
-    const signal = new AbortController().signal;
-    await expect(add.handler({ id: 'x', values: {} }, { signal })).rejects.toBeInstanceOf(PluginConsoleRpcError);
-    await expect(add.handler({ id: 'x', values: { nope: '1' } }, { signal })).rejects.toThrow(/未知字段/u);
-    await expect(add.handler({ id: 'bot', values: { token: '1' } }, { signal })).rejects.toMatchObject({ code: 'conflict' });
+    await add.handler(f.request({ id: 'inline', values: { token: 'synthetic-secret', label: 'before' } }), call);
+    await add.handler(f.request({ id: 'reference', values: { token: '${SYNTHETIC_TOKEN}' } }), call);
+    await f.otherAdapter.add(f.otherAdapter.revision, { endpointId: 'other-account', config: { id: 'other-account', token: 'other-secret' } });
+    const status = await rpc.methods.get('status')!.handler({}, call);
+    expect(status).toMatchObject({ adapterKey: 'demo', displayName: 'Demo', canAdd: true, canRemove: true, configStore: true,
+      readPermission: 'demo:read', writePermission: 'demo:write', running: [],
+      configured: [expect.objectContaining({ id: 'inline', instanceId: expect.any(String), values: { token: '••••••', label: 'before' } }), expect.objectContaining({ id: 'reference', values: { token: '••••••' } })] });
+    expect(JSON.stringify(status)).not.toContain('synthetic-secret'); expect(JSON.stringify(status)).not.toContain('SYNTHETIC_TOKEN'); expect(JSON.stringify(status)).not.toContain('other-account');
+    expect(rpc.methods.get('status')!.requiredPermissions).toEqual(['demo:read']); expect(add.requiredPermissions).toEqual(['demo:write']); expect(f.use).not.toHaveBeenCalled();
   });
-
-  it('removes configured endpoints and reports missing ids', async () => {
-    const store = fakeStore([{ id: 'bot', token: '${TOKEN}' }]);
-    const rpc = createAdapterConsoleRpc(baseSpec, resources(store));
-    const remove = rpc.methods.get('endpoint-remove')!;
-    const signal = new AbortController().signal;
-    await expect(remove.handler({ id: 'bot' }, { signal })).resolves.toMatchObject({ removed: true });
-    await expect(remove.handler({ id: 'bot' }, { signal })).rejects.toMatchObject({ code: 'not_found' });
+  it('saves inactive accounts via one CAS and starts/stops only the explicitly selected instance', async () => {
+    const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call(); const pid = process.pid;
+    expect(await rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'bot', values: { token: 'synthetic' } }), call)).toMatchObject({ saved: true, restartRequired: false });
+    const row = f.adapter.list()[0]!; expect(row.desiredEnabled).toBe(false); expect(f.adapter.created).toHaveLength(0); expect(f.repository.compareAndSet).toHaveBeenCalledTimes(1);
+    await rpc.methods.get('endpoint-start')!.handler(f.request({ instanceId: row.instanceId }), call);
+    await vi.waitFor(() => expect(f.adapter.list()[0]!.started).toBe(true));
+    expect(f.adapter.created).toHaveLength(1); const native = f.adapter.created[0]!; expect(native.connect).toHaveBeenCalledOnce();
+    await rpc.methods.get('endpoint-stop')!.handler(f.request({ instanceId: row.instanceId }), call);
+    await vi.waitFor(() => expect(native.disconnect).toHaveBeenCalledOnce()); expect(f.adapter.list()[0]!.desiredEnabled).toBe(false);
+    expect(f.source).toEqual({ endpoints: [] }); expect(f.store.current.generation).toBe(0); expect(process.pid).toBe(pid); expect(f.use).not.toHaveBeenCalled();
   });
-
-  it('degrades to read-only when no config store is available', async () => {
-    const rpc = createAdapterConsoleRpc(baseSpec, resources());
-    const status = await statusOf(rpc);
-    expect(status).toMatchObject({ canAdd: false, canRemove: false, configStore: false });
-    expect(rpc.methods.has('endpoint-add')).toBe(false);
-    expect(rpc.methods.has('endpoint-remove')).toBe(false);
-    const configured = status.configured as Array<{ id: string; values: Record<string, string> }>;
-    expect(configured[0]?.id).toBe('bot');
-    // 没有配置存储时仍只返回安全视图：env 字段不是 `${ENV}` 引用就遮蔽。
-    expect(configured[0]?.values).toEqual({ token: '${TELEGRAM_BOT_TOKEN}' });
+  it('preserves untouched credentials on patch and rejects identity/policy or cross-owner updates before persistence', async () => {
+    const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call();
+    await rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'bot', values: { token: 'synthetic', label: 'before' } }), call);
+    const row = f.adapter.list()[0]!;
+    await rpc.methods.get('endpoint-update')!.handler(f.request({ instanceId: row.instanceId, values: { label: 'after', token: '' } }), call);
+    expect(f.repository.state.get(f.adapter.descriptor.id)!.endpoints[0]!.config).toMatchObject({ token: 'synthetic', label: 'after' });
+    const writes = f.repository.compareAndSet.mock.calls.length;
+    for (const values of [{ id: 'another' }, { master: 'intruder' }, { unknown: 'field' }]) await expect(rpc.methods.get('endpoint-update')!.handler(f.request({ instanceId: row.instanceId, values }), call)).rejects.toMatchObject({ code: 'invalid_input' });
+    await f.otherAdapter.add(f.otherAdapter.revision, { endpointId: 'other', config: { id: 'other', token: 'other' } });
+    const other = f.otherAdapter.list()[0]!;
+    await expect(rpc.methods.get('endpoint-stop')!.handler(f.request({ instanceId: other.instanceId }), call)).rejects.toMatchObject({ code: 'not_found' });
+    expect(f.repository.compareAndSet).toHaveBeenCalledTimes(writes + 1);
   });
-
-  it('exposes adapter actions and filters them by availableActions', async () => {
+  it('rejects missing/undeclared fields, duplicate ids and stale revisions without a second write', async () => {
+    const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call(), add = rpc.methods.get('endpoint-add')!;
+    for (const values of [{}, { token: 'synthetic', unknown: 'field' }]) await expect(add.handler(f.request({ id: 'bot', values }), call)).rejects.toBeInstanceOf(PluginConsoleRpcError);
+    expect(f.repository.compareAndSet).not.toHaveBeenCalled();
+    const original = f.request({ id: 'bot', values: { token: 'synthetic' } }); await add.handler(original, call);
+    await expect(add.handler(original, call)).rejects.toMatchObject({ code: 'conflict' });
+    await expect(add.handler(f.request({ id: 'bot', values: { token: 'another' } }), call)).rejects.toMatchObject({ code: 'conflict' });
+    await expect(add.handler(f.request({ expectedGeneration: 1, id: 'another', values: { token: 'synthetic' } }), call)).rejects.toMatchObject({ code: 'conflict' });
+    expect(f.repository.compareAndSet).toHaveBeenCalledTimes(1);
+  });
+  it('removes the selected desired account and reports a later missing instance without touching source files', async () => {
+    const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call();
+    await rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'bot', values: { token: 'synthetic' } }), call); const row = f.adapter.list()[0]!;
+    const request = () => f.request({ instanceId: row.instanceId }); await rpc.methods.get('endpoint-remove')!.handler(request(), call);
+    expect(f.adapter.list()).toEqual([]); await expect(rpc.methods.get('endpoint-remove')!.handler(request(), call)).rejects.toMatchObject({ code: 'not_found' }); expect(f.use).not.toHaveBeenCalled();
+  });
+  it('requires operator confirmation for the first static-account migration', async () => {
+    const f = await accountRuntimeFixture({ migration: true, config: { endpoints: [{ id: 'old', token: 'synthetic-old' }] } }), rpc = createAdapterConsoleRpc(spec);
+    const add = rpc.methods.get('endpoint-add')!, request = f.request({ id: 'new', values: { token: 'synthetic-new' } });
+    await expect(add.handler(request, f.call())).rejects.toMatchObject({ code: 'conflict' });
+    await expect(add.handler({ ...request, confirmMigration: true }, f.call({ runtime: { ...f.call().runtime!, operator: false } }))).rejects.toMatchObject({ code: 'forbidden' });
+    expect(f.repository.compareAndSet).not.toHaveBeenCalled(); const old = f.adapter.list()[0]!;
+    await add.handler({ ...request, confirmMigration: true }, f.call()); expect(f.adapter.list()[0]!.canonicalId).toBe(old.canonicalId);
+    expect(f.adapter.list().find(row => row.endpointId === 'new')!.desiredEnabled).toBe(false);
+  });
+  it('keeps commit_unknown distinct from failure and never retries when status cannot verify persistence', async () => {
+    const f = await accountRuntimeFixture(), rpc = createAdapterConsoleRpc(spec), call = f.call();
+    f.repository.compareAndSet.mockRejectedValue(new AdapterManagementError('commit_unknown', 'synthetic unknown commit'));
+    await expect(rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'bot', values: { token: 'synthetic' } }), call)).rejects.toMatchObject({ code: 'commit_unknown' });
+    f.repository.load.mockRejectedValue(new Error('synthetic DB read failure'));
+    await expect(rpc.methods.get('status')!.handler({}, call)).rejects.toMatchObject({ code: 'commit_unknown' });
+    expect(f.repository.compareAndSet).toHaveBeenCalledTimes(1); expect(f.adapter.list()).toEqual([]);
+  });
+  it('degrades to read-only without persistence while retaining the safe static configured view', async () => {
+    const rpc = createAdapterConsoleRpc({ ...spec, getConfig: () => ({ endpoints: [{ id: 'bot', token: 'synthetic' }] }) });
+    const call = { signal: new AbortController().signal }; const status = await rpc.methods.get('status')!.handler({}, call);
+    expect(status).toMatchObject({ canAdd: false, canRemove: false, configStore: false, configured: [{ id: 'bot', values: { token: '••••••' } }] });
+    await expect(rpc.methods.get('endpoint-add')!.handler({ id: 'new', values: { token: 'synthetic' } }, call)).rejects.toMatchObject({ code: 'unsupported' });
+    const f = await accountRuntimeFixture({ noDatabase: true }); await expect(rpc.methods.get('endpoint-add')!.handler(f.request({ id: 'new', values: { token: 'synthetic' } }), f.call())).rejects.toMatchObject({ code: 'unsupported' });
+  });
+  it('exposes platform actions with existing permission metadata and filters the displayed action list', async () => {
     const handler = vi.fn(async () => ({ message: 'ok', details: { state: 'waiting' } }));
-    const rpc = createAdapterConsoleRpc({
-      ...baseSpec,
-      availableActions: () => ['bind'],
-      actions: {
-        bind: { label: 'Bind', handler },
-      },
-    }, resources(fakeStore()));
-    const status = await statusOf(rpc);
-    expect(status.actions).toEqual([
-      expect.objectContaining({ name: 'bind', label: 'Bind', fields: [], options: [] }),
-    ]);
-    const action = rpc.methods.get('bind')!;
-    await expect(action.handler({}, { signal: new AbortController().signal }))
-      .resolves.toEqual({ message: 'ok', details: { state: 'waiting' } });
+    const rpc = createAdapterConsoleRpc({ ...spec, availableActions: () => ['bind'], actions: { bind: { label: 'Bind', handler }, hidden: { label: 'Hidden', handler } } });
+    expect(await rpc.methods.get('status')!.handler({}, { signal: new AbortController().signal })).toMatchObject({ actions: [{ name: 'bind', label: 'Bind', fields: [], options: [] }] });
+    expect(rpc.methods.get('bind')!.requiredPermissions).toEqual(['demo:write']);
+    await expect(rpc.methods.get('bind')!.handler({}, { signal: new AbortController().signal })).resolves.toEqual({ message: 'ok', details: { state: 'waiting' } });
   });
-
   it('rejects reserved action names', () => {
-    expect(() => createAdapterConsoleRpc({
-      ...baseSpec,
-      actions: { 'endpoint-add': { label: 'x', handler: async () => ({}) } },
-    }, resources(fakeStore()))).toThrow(/Reserved/u);
+    expect(() => createAdapterConsoleRpc({ ...spec, actions: { 'endpoint-add': { label: 'Invalid', handler: async () => ({}) } } })).toThrow(/Reserved/);
   });
+});
+
+it('does not use the removed configuration-file account writer when a runtime directory is absent', async () => {
+  const writer = { list: vi.fn(), add: vi.fn(), remove: vi.fn() };
+  // A JavaScript caller can still pass an extra argument; the runtime must never consult it.
+  const rpc: ReturnType<typeof createAdapterConsoleRpc> = Reflect.apply(createAdapterConsoleRpc, undefined, [spec, { has: () => true, use: () => writer }]);
+  const call = { signal: new AbortController().signal };
+  await expect(rpc.methods.get('endpoint-add')!.handler({ id: 'new', values: { token: 'synthetic-only' } }, call)).rejects.toMatchObject({ code: 'unsupported' });
+  await expect(rpc.methods.get('endpoint-remove')!.handler({ id: 'bot' }, call)).rejects.toMatchObject({ code: 'unsupported' });
+  expect(writer.list).not.toHaveBeenCalled(); expect(writer.add).not.toHaveBeenCalled(); expect(writer.remove).not.toHaveBeenCalled();
 });

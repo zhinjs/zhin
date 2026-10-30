@@ -21,7 +21,7 @@ export default defineAgentTool({
     const seconds = duration ?? 0;
     const [self, member] = await Promise.all([
       requireGroupManager(context, group),
-      client.api.groupService.getMemberInfo(group, user_id),
+      client.groupService.getMemberInfo(group, user_id),
     ]);
     if (!self) return { success: false, message: t(context.locale, 'botNotManager') };
     // 官方：新增 / 更新禁言只能作用于普通成员；解除不限制。
@@ -29,7 +29,7 @@ export default defineAgentTool({
       return { success: false, message: t(context.locale, 'targetNotMember') };
     }
     context.signal.throwIfAborted();
-    await muteQqGroupMember(client.api, group, user_id, seconds);
+    await muteQqGroupMember(client, group, user_id, seconds);
     const user = member.username || user_id;
     return { success: true, message: seconds === 0 ? t(context.locale, 'unmuted', { user }) : t(context.locale, 'muted', { user, seconds }) };
   },

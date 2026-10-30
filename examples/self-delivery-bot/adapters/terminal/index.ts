@@ -1,15 +1,13 @@
-import { defineAdapter, type EndpointImplementation } from 'zhin.js/adapter';
+import { Adapter, createEndpointSpecification, defineAdapter, endpointSpec,
+  type Endpoint, type EndpointSpecification, type EndpointTransportState } from 'zhin.js/adapter';
+import { EventEmitter } from 'node:events';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
 
 interface TerminalConfig {
-  readonly terminal?: {
-    readonly interactive?: boolean;
-    readonly prompt?: string;
-  };
+  readonly terminal?: { readonly interactive?: boolean; readonly prompt?: string };
 }
-
-interface TerminalOptions {
+export interface TerminalEndpointOptions {
   readonly input: Readable;
   readonly output: Writable;
   readonly error: Writable;
@@ -17,106 +15,93 @@ interface TerminalOptions {
   readonly prompt: string;
 }
 
-class TerminalClient {
+/** Owns terminal IO; the Endpoint never supplies a callback to find Client state. */
+export class TerminalClient extends EventEmitter<{ line: [line: string] }> {
+  readonly input: Readable;
   readonly output: Writable;
-  private readonly resolveReadline: () => ReadlineInterface | undefined;
+  readonly error: Writable;
+  readonly #options: TerminalEndpointOptions;
+  #readline?: ReadlineInterface;
+  #promptTimer?: ReturnType<typeof setTimeout>;
+  #state: EndpointTransportState = 'idle';
+  #sequence = 0;
 
-  constructor(output: Writable, resolveReadline: () => ReadlineInterface | undefined) {
-    this.output = output;
-    this.resolveReadline = resolveReadline;
+  constructor(options: TerminalEndpointOptions) {
+    super(); this.#options = options;
+    this.input = options.input; this.output = options.output; this.error = options.error;
   }
-
-  get readline(): ReadlineInterface | undefined {
-    return this.resolveReadline();
-  }
-
-  write(payload: unknown): void {
+  get readline(): ReadlineInterface | undefined { return this.#readline; }
+  get transportState(): EndpointTransportState { return this.#state; }
+  write(payload: unknown): string {
     this.output.write(`${formatPayload(payload)}\n`);
+    return `terminal-${++this.#sequence}`;
+  }
+  openInput(): void {
+    this.#state = 'open';
+    if (!this.#options.interactive) return;
+    this.#readline = createInterface({ input: this.input, output: this.output,
+      crlfDelay: Infinity, terminal: isTerminal(this.input) && isTerminal(this.output) });
+    this.#readline.setPrompt(this.#options.prompt);
+    this.#readline.on('close', () => {
+      this.#clearPrompt();
+      if (this.#state === 'open') this.#state = 'closed';
+    });
+    this.#readline.on('line', line => this.emit('line', line));
+    this.schedulePrompt();
+  }
+  closeInput(): void {
+    this.#state = 'closed'; this.#clearPrompt(); this.#readline?.close(); this.#readline = undefined;
+  }
+  stopInput(): void { this.closeInput(); this.#state = 'stopped'; }
+  protected schedulePrompt(): void {
+    this.#clearPrompt();
+    if (this.#state !== 'open') return;
+    // Let the CLI print its startup summary before the interactive prompt.
+    this.#promptTimer = setTimeout(() => { this.#promptTimer = undefined; this.#readline?.prompt(); }, 0);
+  }
+  #clearPrompt(): void {
+    if (this.#promptTimer !== undefined) clearTimeout(this.#promptTimer);
+    this.#promptTimer = undefined;
   }
 }
 
-function createTerminalEndpoint(options: TerminalOptions): EndpointImplementation<TerminalClient> {
-  let readline: ReadlineInterface | undefined;
-  let promptTimer: ReturnType<typeof setTimeout> | undefined;
-  let messageSequence = 0;
-  const client = new TerminalClient(options.output, () => readline);
-  const clearPrompt = () => {
-    if (!promptTimer) return;
-    clearTimeout(promptTimer);
-    promptTimer = undefined;
-  };
-  const schedulePrompt = () => {
-    clearPrompt();
-    promptTimer = setTimeout(() => {
-      promptTimer = undefined;
-      readline?.prompt();
-    }, 0);
-  };
-
-  return {
-    client,
-    activate({ events }) {
-      if (!options.interactive) return;
-      readline = createInterface({
-        input: options.input,
-        output: options.output,
-        crlfDelay: Infinity,
-        terminal: isTerminal(options.input) && isTerminal(options.output),
-      });
-      readline.setPrompt(options.prompt);
-      readline.on('line', (line) => {
-        void events.platform('line', line).catch((error) => {
-          options.error.write(`${formatError(error)}\n`);
-        });
-        const content = line.trim();
-        if (!content) {
-          schedulePrompt();
-          return;
-        }
-        void events.message({
-          conversation: { kind: 'private', id: 'terminal' },
-          content,
-          sender: { id: 'local-user' },
-        }).catch((error: unknown) => {
-          options.error.write(`${formatError(error)}\n`);
-        }).finally(schedulePrompt);
-      });
-      schedulePrompt();
-      return () => {
-        clearPrompt();
-        readline?.close();
-        readline = undefined;
-      };
-    },
-    send({ payload }) {
-      client.write(payload);
-      messageSequence += 1;
-      return `terminal-${messageSequence}`;
-    },
+export class TerminalEndpoint extends TerminalClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  constructor(options: TerminalEndpointOptions) {
+    super(options);
+    const endpoint = this;
+    this[endpointSpec] = createEndpointSpecification(this, {
+    start: signal => signal.throwIfAborted(),
+    open: () => { this.on('line', this.#receiveLine); this.openInput(); },
+    close: () => { this.off('line', this.#receiveLine); this.closeInput(); },
+    stop: () => { this.off('line', this.#receiveLine); this.stopInput(); },
+    send: request => this.write(request.payload),
+    get transportState() { return endpoint.transportState; },
+    });
+  }
+  readonly #receiveLine = (line: string): void => {
+    const events = this[endpointSpec].events;
+    void events.platform('line', line).catch(error => this.error.write(`${formatError(error)}\n`));
+    const content = line.trim();
+    if (!content) { this.schedulePrompt(); return; }
+    void events.message({ conversation: { kind: 'private', id: 'terminal' }, content, sender: { id: 'local-user' } })
+      .catch(error => this.error.write(`${formatError(error)}\n`)).finally(() => this.schedulePrompt());
   };
 }
 
-export default defineAdapter<TerminalConfig, TerminalClient>({
-  capabilities: ['inbound', 'outbound'],
-  create(context) {
-    return createTerminalEndpoint({
-      input: process.stdin,
-      output: process.stdout,
-      error: process.stderr,
-      interactive: context.config.terminal?.interactive ?? true,
-      prompt: context.config.terminal?.prompt ?? 'delivery> ',
-    });
-  },
-});
+export function createTerminalEndpoint(options: TerminalEndpointOptions): TerminalEndpoint {
+  return new TerminalEndpoint(options);
+}
+class TerminalAdapter extends Adapter<TerminalEndpoint, TerminalConfig> {
+  protected createEndpoint(config: TerminalConfig): TerminalEndpoint {
+    return new TerminalEndpoint({ input: process.stdin, output: process.stdout, error: process.stderr,
+      interactive: config.terminal?.interactive ?? true, prompt: config.terminal?.prompt ?? 'delivery> ' });
+  }
+}
+export default defineAdapter<TerminalConfig>({ capabilities: ['inbound', 'outbound'], createAdapter: () => new TerminalAdapter() });
 
 function isTerminal(stream: Readable | Writable): boolean {
   return (stream as Readable & { readonly isTTY?: boolean }).isTTY === true;
 }
-
-function formatPayload(payload: unknown): string {
-  return typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.stack ?? error.message : String(error);
-}
+function formatPayload(payload: unknown): string { return typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2); }
+function formatError(error: unknown): string { return error instanceof Error ? error.stack ?? error.message : String(error); }

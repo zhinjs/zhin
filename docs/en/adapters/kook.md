@@ -5,7 +5,7 @@ tier: Advanced
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=c41f6b275a7c318d -->
@@ -30,14 +30,16 @@ pnpm add @zhin.js/adapter-kook
 
 ## Plugin Runtime
 
+The owning `Adapter` manages desired accounts and running incarnations. The actual SDK or protocol Client implements structural `Endpoint`; framework hooks use `endpointSpec` without replacing native SDK APIs. Complete accepted callbacks enter through `events.run(...)` before deduplication and asynchronous normalization; see [Adapter authoring](/en/authoring/adapters).
+
 - `@zhin.js/adapter` — convention-based `adapters/kook/index.ts` (`defineAdapter`)
-- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
+- `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — Webhook mode POST route (not needed for WebSocket)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 - **WebSocket path does not require** `@zhin.js/host-http` / `@zhin.js/host-router`
 
-Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'channel'` carries the guild in `parent`)
+Inbound: `endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })` (`kind: 'channel'` carries the guild in `parent`)
 Outbound: `send({ conversation, payload })` -> `sendChannelMsg` / `sendPrivateMsg`
 
 ## Prerequisites
@@ -96,7 +98,7 @@ kook:
       # encrypt_key: ${KOOK_ENCRYPT_KEY}   # Required when message encryption is enabled
 ```
 
-The Host must inject `httpHostToken`. The Challenge (`type: 255`) validates `verify_token` and echoes back the `challenge`; regular events are received via `gateway.receive`, while outbound still uses the KOOK HTTP API.
+The Host must inject `httpHostToken`. The Challenge (`type: 255`) validates `verify_token` and echoes back the `challenge`; regular events are received via `endpoint[endpointSpec].events.emit`, while outbound still uses the KOOK HTTP API.
 
 ## AI Tools (Skill)
 
@@ -119,8 +121,10 @@ Outbound uses `outboundMessageToken` and encodes canonical Markdown as KMarkdown
 Open the Console **KOOK** page (route `/kook`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.kook.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `kook:read`; writes require `kook:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `kook endpoint add` command.
 

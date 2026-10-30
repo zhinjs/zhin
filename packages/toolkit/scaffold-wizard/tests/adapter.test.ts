@@ -364,6 +364,8 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
     mockPrompt({
       connection: 'webhook',
       endpointId: 'ob12-bot',
+      platform: 'qq',
+      userId: '12345',
       path: '/onebot12/webhook',
       api_url: 'http://127.0.0.1:6700',
       accessToken: 'x',
@@ -375,6 +377,8 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
       connection: 'webhook',
       endpoints: [{
         id: 'ob12-bot',
+        platform: 'qq',
+        userId: '12345',
         path: '/onebot12/webhook',
         api_url: 'http://127.0.0.1:6700',
         access_token: '${ONEBOT12_ACCESS_TOKEN}',
@@ -404,6 +408,8 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
     mockPrompt({
       connection: 'webhook',
       endpointId: 'satori-bot',
+      platform: 'qq',
+      userId: '12345',
       baseUrl: 'http://127.0.0.1:5140',
       path: '/satori/webhook',
       token: 't',
@@ -415,11 +421,21 @@ describe('connection-aware configurers (napcat / onebot12 / milky / satori)', ()
       connection: 'webhook',
       endpoints: [{
         id: 'satori-bot',
+        platform: 'qq',
+        userId: '12345',
         baseUrl: 'http://127.0.0.1:5140',
         path: '/satori/webhook',
         token: '${SATORI_TOKEN}',
       }],
     });
     expect(ctx.envVars.SATORI_TOKEN).toBe('t');
+  });
+});
+
+describe('confirmed target account configuration', () => {
+  it('requires an application agentId separately from the WeCom secret', () => {
+    const definition = ADAPTERS.find(adapter => adapter.value === 'wecom')!;
+    expect(definition.fields.find(field => field.key === 'agentId')).toMatchObject({ required: true });
+    expect(definition.fields.find(field => field.key === 'agentSecret')).toMatchObject({ required: true, type: 'password' });
   });
 });

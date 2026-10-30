@@ -11,11 +11,13 @@ import {
   createSnapshotView,
   rootPluginId,
   type CapabilitySlot,
+  type TokenId,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
-  Endpoint,
+  Adapter, endpointSpec, createEndpointSpecification, type Endpoint,
+  type EndpointSendRequest,
   adapterFeatureId,
   defineAdapter,
   endpointEventGatewayToken,
@@ -27,15 +29,6 @@ import { ImRuntime, ingressRouteToken, roomMembershipToken, type Message } from 
 import type { RoomDefinition } from '../../src/room/room-definition.js';
 import { createRoomRegistry } from '../../src/room/room-registry.js';
 import { createRoomMembershipPort } from '../../src/room/room-membership.js';
-
-class TestEndpoint extends Endpoint<object> {
-  readonly client: object;
-  constructor(surface: object) {
-    super();
-    this.client = surface;
-    Object.defineProperties(this, Object.getOwnPropertyDescriptors(surface));
-  }
-}
 
 const ignored = Object.freeze({ receive: async (_event: EndpointEvent) => undefined });
 
@@ -60,6 +53,12 @@ export async function createRoomImFixture(options: {
   const root = rootPluginId();
   const sent: Array<{ conversation: { endpoint: { id: string }; kind: string; id: string }; payload: unknown }> = [];
   let outSeq = 0;
+  class MemoryClient {
+    send(request: EndpointSendRequest) { sent.push(request); return `out-${++outSeq}`; }
+  }
+  class TestEndpoint extends MemoryClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request) });
+  }
   const adapter = createCapabilitySlot({
     owner: root,
     feature: adapterFeatureId,
@@ -68,15 +67,9 @@ export async function createRoomImFixture(options: {
     definition: defineAdapter({
       capabilities: ['inbound', 'outbound'],
       segments: { interactive: 'text' },
-      async create() {
-        return new TestEndpoint({
-          start() {}, open() {}, close() {}, stop() {},
-          send(request: never) {
-            sent.push(request);
-            return `out-${++outSeq}`;
-          },
-        });
-      },
+      createAdapter: () => new class extends Adapter<TestEndpoint> {
+        protected createEndpoint() { return new TestEndpoint(); }
+      }(),
     }),
   });
   const slots: readonly CapabilitySlot[] = [adapter];
@@ -121,7 +114,7 @@ export async function createRoomImFixture(options: {
   };
   const registry = createRoomRegistry({ dev: room }, (bot) => ids[bot.endpoint as 'a' | 'b' | 'c']);
 
-  const commit = (key: string, value: unknown) => {
+  const commit = (key: TokenId, value: unknown) => {
     const current = store.current;
     const resources = new Map(current.resources);
     resources.set(current.root, new Map([...resources.get(current.root)!, [key, value]]));
@@ -149,7 +142,7 @@ export async function createRoomImFixture(options: {
       name: 'message.receive',
       payload: { conversation: conv, content, sender: { id: sender }, message: { conversation: conv, id: messageId }, ...rest },
       endpoint: Object.freeze({ id: endpointId as never, name: 'test' }),
-      client: ignored,
+      client: adapters.clientById(endpointId as typeof adapter.id),
     }) as never) as Promise<{ matched: boolean }>;
   };
   /**

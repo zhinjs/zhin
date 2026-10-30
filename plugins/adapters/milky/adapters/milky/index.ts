@@ -2,18 +2,10 @@
  * Convention entry: discover `adapters/milky/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
+import { MilkyAdapter } from '../../src/adapter.js';
 import {
-  MilkySseEndpoint,
-  MilkyWebhookEndpoint,
-  MilkyWssEndpoint,
-  MilkyWsEndpoint,
-} from '../../src/endpoint.js';
-import {
-  resolveMilkyConfig,
   type MilkyEndpointConfig,
 } from '../../src/protocol.js';
-import { milkyRuntimeStateToken } from '../../src/milky-runtime-state.js';
 
 export {
   MilkySseEndpoint,
@@ -39,36 +31,5 @@ export default defineAdapter<MilkyEndpointConfig>({
     outboundMedia: ['url', 'base64'],
     interactive: 'text',
   },
-  create(context) {
-    const config = resolveMilkyConfig(context.config);
-    // 注册到插件运行时状态（milky endpoint list 的"运行中"数据源）
-    context.use(milkyRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: config.connection,
-    });
-    if (config.connection === 'webhook') {
-      return new MilkyWebhookEndpoint({
-        id: context.id,
-        http: context.use(httpHostToken),
-        config,
-      });
-    }
-    if (config.connection === 'wss') {
-      return new MilkyWssEndpoint({
-        id: context.id,
-        http: context.use(httpHostToken),
-        config,
-      });
-    }
-    if (config.connection === 'sse') {
-      return new MilkySseEndpoint({
-        id: context.id,
-        config,
-      });
-    }
-    return new MilkyWsEndpoint({
-      id: context.id,
-      config,
-    });
-  },
+  createAdapter: context => new MilkyAdapter(context),
 });

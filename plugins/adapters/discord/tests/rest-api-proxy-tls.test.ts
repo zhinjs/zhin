@@ -6,14 +6,14 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDiscordRestApiAgent } from '../src/rest-api-proxy.js';
-import { defaultCreateClient } from '../src/gateway.js';
-import type { Client } from 'discord.js';
+import { discordClientOptions } from '../src/gateway.js';
+import { Client } from 'discord.js';
 import { Agent } from 'undici';
 import { createTcpFaultProxy } from '../../../../scripts/platform-acceptance/tcp-fault-proxy.mjs';
 import { resolveDiscordConfig } from '../src/protocol.js';
 
 const create = (agent: Agent, api?: string) => {
-  const client = defaultCreateClient([], undefined, { agent, ...(api ? { api } : {}) }) as unknown as Client;
+  const client = new Client(discordClientOptions([], undefined, { agent, ...(api ? { api } : {}) }));
   client.rest.setToken('fixture-only'); return client;
 };
 const post = (client: Client) => client.rest.post('/channels/fixture/messages', { body: { content: 'fixture' } });

@@ -38,8 +38,6 @@ export { imageSizeFromBytes, probeImageSize, type QqImageSize } from './image-si
 export {
   QqHttpEndpoint,
   QqWebsocketEndpoint,
-  type CreateQqBot,
-  type CreateQqHttpBot,
   type QqBotTransport,
   type QqOfficialApi,
   type QqEndpointOptions,
@@ -51,17 +49,17 @@ export {
   registerQqWebhookRoutes,
   handleQqWebhookRequest,
   readRequestBodyText,
-  defaultCreateHttpBot,
+  qqHttpBotOptions,
   type QqWebhookHandler,
 } from './webhook.js';
 
 export {
   bindQqBotInboundEvents,
-  defaultCreateBot,
+  qqWebsocketBotOptions,
   normalizeQqMessage,
 } from './ws.js';
 
-export { qqClient, type QqClientEventMap } from './client.js';
+export { type QqClientEventMap } from './client.js';
 
 export {
   checkQqPlatformPermit,
@@ -69,3 +67,5 @@ export {
   platformPermit,
   qqGuildPermitResolver,
 } from './platform-permit.js';
+
+export { QqAdapter } from './adapter.js';

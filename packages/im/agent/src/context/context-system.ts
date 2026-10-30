@@ -13,6 +13,7 @@ import {
   type TurnContextView,
 } from './turn-envelope.js';
 import { getGitStatusLine } from '../prompt/git-context.js';
+import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { resolveModelCandidates } from './model-resolver.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
@@ -102,14 +103,17 @@ export class ContextSystem {
     const extraMessages = isScheduleTurn ? [] : await this.runPipeline(buildCtx, host);
     const personaEnhanced = host.buildDisciplinedPrompt(host.config.persona);
 
-    const modelCandidates = resolveModelCandidates(
+    const selected = getAgentTurnConfiguration()?.models?.chat;
+    const resolvedCandidates = selected ? [selected.invocation.model.model] : resolveModelCandidates(
       host.getTurnProvider().models,
       host.modelRegistry,
       host.getTurnProvider().name,
       host.config,
       mode === 'vision' ? 'vision' : 'chat',
     );
-    const modelId = modelCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini';
+    const modelId = resolvedCandidates[0] || host.getTurnProvider().models[0];
+    if (!modelId) throw new Error('Chat model is not configured');
+    const modelCandidates = [modelId];
     const providerAlias = host.getTurnProvider().name;
     const llmModel = host.llmRuntime.model(providerAlias, modelId);
     // The host bootstrap section (system prompt) already includes the root AGENTS.md: keep only nearer ones here.

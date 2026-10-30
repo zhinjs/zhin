@@ -4,7 +4,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { napcatRuntimeStateToken } from '../../../src/napcat-runtime-state.js';
 
 export const napcatEndpointCommands = createEndpointCommands({
   adapterKey: 'napcat',
@@ -16,7 +15,6 @@ export const napcatEndpointCommands = createEndpointCommands({
     { key: 'post_path', description: 'HTTP POST 事件路径（connection: http 入站）', descriptionI18n: { en: "HTTP POST event path (inbound connection: http)" } },
     { key: 'access_token', env: true, description: 'NapCat access token' },
   ],
-  running: (use) => use(napcatRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => {
     if (entry.url) return `url: ${String(entry.url)}`;
     if (entry.path) return `path: ${String(entry.path)}`;

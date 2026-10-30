@@ -2,10 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { AdapterIndex, Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
+import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { createHttpHost } from '@zhin.js/host-http';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, PluginStateStore, rootPluginId, childPluginId,
-  pluginTaskProviderToken, type SnapshotState } from '@zhin.js/plugin-runtime';
+  pluginTaskProviderToken, type PluginId, type TokenId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { ReminderService } from '../../../../../plugins/utils/reminder/src/service.js';
 import type { ReminderConfig } from '../../../../../plugins/utils/reminder/src/config.js';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
@@ -28,18 +28,17 @@ async function fixture() {
   const stateStore = new PluginStateStore(owner, db.state!);
   const config: ReminderConfig = { timezone: 'UTC', maxTasks: 32, adminMaxTasks: 20, maxTasksPerSender: 10, batchSize: 1, missedGraceSeconds: 15 };
   const service = new ReminderService(stateStore, { send, sendTarget: send }, config);
-  class TestEndpoint extends Endpoint<object> {
-    readonly client = {};
-    start() {} open() {} close() {} stop() {}
-    send() { throw new Error('Host task setup must not send a probe'); }
+  class TaskClient { send(): never { throw new Error('Host task setup must not send a probe'); } }
+  class TestEndpoint extends TaskClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: () => this.send() });
   }
   const adapter = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'memory', source: '/adapters/memory/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => new TestEndpoint() }) });
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(); } }() }) });
   const base: SnapshotState = {
     root, tree: new Map([
       [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: directory, children: [owner] }],
       [owner, { id: owner, instanceKey: 'reminder', packageName: '@zhin.js/plugin-reminder', packageRoot: directory, parent: root, children: [] }],
-    ]), config: new Map(), resources: new Map([
+    ]), config: new Map(), resources: new Map<PluginId, ReadonlyMap<TokenId, unknown>>([
       [root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])],
       [owner, new Map([[pluginTaskProviderToken.id, service.administratorTasks]])],
     ]), capabilities: new Map([[adapter.id, adapter]]), projections: new Map(),

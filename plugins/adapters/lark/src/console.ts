@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { larkRuntimeStateToken } from './lark-runtime-state.js';
 import { larkConsoleSpec } from './console-spec.js';
 
 export function createLarkConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(larkRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...larkConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

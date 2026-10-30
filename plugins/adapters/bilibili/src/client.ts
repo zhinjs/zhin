@@ -3,7 +3,6 @@
  * 读：白名单视频评论、「回复我的 / @我的」通知；写：`addReply`，只在人工审批草稿后由 endpoint 调用。
  * 永远不要记录 Cookie。
  */
-import { defineEndpointClient } from 'zhin.js/adapter';
 import {
   BILIBILI_RISK_CODES,
   BILIBILI_VIDEO_COMMENT_TYPE,
@@ -55,11 +54,14 @@ export interface BilibiliNav {
 
 export class BilibiliClient {
   #cookie: BilibiliCookie;
+  readonly fetch: BilibiliFetch;
 
   constructor(
     readonly config: ResolvedBilibiliConfig,
-    readonly fetch: BilibiliFetch,
+    fetch: BilibiliFetch,
+    signal?: AbortSignal,
   ) {
+    this.fetch = bindBilibiliFetch(fetch, signal);
     this.#cookie = Object.freeze({
       ...(config.sessdata ? { sessdata: config.sessdata } : {}),
       ...(config.biliJct ? { biliJct: config.biliJct } : {}),
@@ -192,13 +194,15 @@ export class BilibiliClient {
 
 export type BilibiliClientEventMap = Record<string, BilibiliReply>;
 
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly bilibili: {
-      readonly client: BilibiliClient;
-      readonly events: BilibiliClientEventMap;
-    };
-  }
+/** Bind the actual account incarnation without changing existing request timeouts. */
+function bindBilibiliFetch(fetch: BilibiliFetch, signal: AbortSignal | undefined): BilibiliFetch {
+  if (!signal) return fetch;
+  return async (url, init) => {
+    signal.throwIfAborted();
+    const response = await fetch(url, { ...init, signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal });
+    signal.throwIfAborted();
+    return { ok: response.ok, status: response.status, async json() {
+      const body = await response.json(); signal.throwIfAborted(); return body;
+    } };
+  };
 }
-
-export const bilibiliClient = defineEndpointClient<BilibiliClient, BilibiliClientEventMap>('bilibili');

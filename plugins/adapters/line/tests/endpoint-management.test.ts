@@ -1,11 +1,14 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
-import { describe, expect, it, vi } from 'vitest';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost } from '@zhin.js/host-http';
 import { LineEndpoint, type LineFetch } from '../src/endpoint.js';
 import { resolveLineConfig } from '../src/protocol.js';
+
+const harnesses: Awaited<ReturnType<typeof createEndpointHarness>>[] = [];
+afterEach(async () => { await Promise.all(harnesses.splice(0).map(harness => harness.stop())); });
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -28,16 +31,17 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
 describe('line endpoint management', () => {
   it('只暴露 listGroupMembers（Bot API 无群列表）', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: gateway(),
       http,
       config: baseConfig,
       fetch: vi.fn(async () => jsonResponse({ memberIds: [] })) as unknown as LineFetch,
-    }), gateway(), undefined);
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual(['listGroupMembers']);
-    expect(endpoint.management.listGroups).toBeUndefined();
-    expect(endpoint.management.listFriends).toBeUndefined();
+    }), { gateway: createTestEventGateway(gateway(), undefined), capabilities: ['inbound', 'outbound'] });
+    await endpoint.start(); endpoint.open(); harnesses.push(endpoint);
+    expect(listEndpointManagementCapabilities({ management: endpoint.index.management(endpoint.canonicalId) })).toEqual(['listGroupMembers']);
+    expect(endpoint.index.management(endpoint.canonicalId).listGroups).toBeUndefined();
+    expect(endpoint.index.management(endpoint.canonicalId).listFriends).toBeUndefined();
     await http.close();
   });
 
@@ -56,15 +60,16 @@ describe('line endpoint management', () => {
       throw new Error(`unexpected url: ${url}`);
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: gateway(),
       http,
       config: baseConfig,
       fetch: fetchFn as unknown as LineFetch,
-    }), gateway(), undefined);
+    }), { gateway: createTestEventGateway(gateway(), undefined), capabilities: ['inbound', 'outbound'] });
+    await endpoint.start(); endpoint.open(); harnesses.push(endpoint);
 
-    const members = await endpoint.management.listGroupMembers!('G123');
+    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!('G123');
 
     expect(members).toEqual([
       { user_id: 'U1', nickname: 'Alice' },
@@ -87,15 +92,16 @@ describe('line endpoint management', () => {
       return jsonResponse({ displayName: 'Roomie' });
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: gateway(),
       http,
       config: baseConfig,
       fetch: fetchFn as unknown as LineFetch,
-    }), gateway(), undefined);
+    }), { gateway: createTestEventGateway(gateway(), undefined), capabilities: ['inbound', 'outbound'] });
+    await endpoint.start(); endpoint.open(); harnesses.push(endpoint);
 
-    const members = await endpoint.management.listGroupMembers!('R999');
+    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!('R999');
 
     expect(members).toEqual([{ user_id: 'U9', nickname: 'Roomie' }]);
     expect(calls[0]).toBe('https://api.line.me/v2/bot/room/R999/members/ids');

@@ -1,6 +1,4 @@
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
-import { satoriRuntimeStateToken } from './src/satori-runtime-state.js';
 import { createSatoriConsoleRpc } from './src/console.js';
 
 export default definePlugin({
@@ -9,8 +7,6 @@ export default definePlugin({
     displayName: 'Satori Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（satori endpoint list 的"运行中"数据源）
-    context.resources.provide(satoriRuntimeStateToken, createEndpointRuntimeState());
     context.resources.provide(pluginConsoleRpcToken, createSatoriConsoleRpc(context.resources, () => context.config.get()));
   },
 });

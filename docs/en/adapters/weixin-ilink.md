@@ -5,7 +5,7 @@ tier: Experimental
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=36c986830b317252 -->
@@ -21,7 +21,7 @@ The protocol implementation is ported from [Tencent/openclaw-weixin](https://git
 | Item | weixin-ilink | wechat-mp |
 |------|-------------|-----------|
 | Account type | Personal WeChat (ClawBot) | WeChat Official Account |
-| Inbound | Long polling `getupdates` -> `Endpoint.emit(...)` | Webhook (`httpHostToken`) |
+| Inbound | Long polling `getupdates` -> `endpoint[endpointSpec].events.emit(...)` | Webhook (`httpHostToken`) |
 | Login | QR code / sidecar credentials / `botToken` | AppId/Secret/Token |
 | Group chat | Not supported (private chat only) | Supported |
 
@@ -67,7 +67,7 @@ data/weixin-ilink/<id>/credentials.json
 
 Replies must carry the `context_token` cached at inbound time (keyed by `endpointId + peerUserId`). If the user has not sent a message for a long time, causing the token to be missing, outbound will be rejected with a warning.
 
-Outbound goes through the Runtime: `OutboundMessageService` -> `endpoint.send({ conversation, payload })` (always `kind: 'private'`, `conversation.id` is the peer user_id).
+Outbound goes through the Runtime: `OutboundMessageService` -> the send hook registered through `createEndpointSpecification` (always `kind: 'private'`, `conversation.id` is the peer user_id).
 
 **Image-text limitation**: WeChat does not support mixed image-text in a single message. The adapter automatically:
 
@@ -79,8 +79,10 @@ Outbound goes through the Runtime: `OutboundMessageService` -> `endpoint.send({ 
 Open the Console **Weixin iLink** page (route `/weixin-ilink`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.weixin-ilink.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `weixin-ilink:read`; writes require `weixin-ilink:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `weixin-ilink endpoint add` command.
 

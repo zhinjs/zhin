@@ -1,3 +1,5 @@
+import { turnModelPortToken } from '../../src/model-runtime/turn-resource.js';
+import type { ModelExecutionScope } from '../../src/model-runtime/types.js';
 import { agentUsageStoreToken } from '../../src/usage/usage-store.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -47,7 +49,7 @@ import {
   promptSectionFeatureId,
 } from '@zhin.js/prompt-section';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { compactAgentMessages } from '@zhin.js/ai';
+import { compactAgentMessages, createLlmApiRuntime } from '@zhin.js/ai';
 import { createTurnIngress, type TurnContextState } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
@@ -71,6 +73,95 @@ import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src
 import { createConversationReferenceCapability } from '../../src/tool/conversation-reference-tool.js';
 import { createProviderHarness, anthropicMessages } from '../../../ai/tests/helpers/provider-harness/index.js';
 import type { TurnTrace } from '../../src/trace/turn-trace.js';
+
+describe('leased turn model execution', () => {
+  it('keeps legacy chat retries on the selected model at the real SDK boundary', async () => {
+    const fixture = await createFixture();
+    const h = createProviderHarness({ sdk: 'anthropic', model: 'primary-model', config: { maxRetries: 1 } })
+      .reply(anthropicMessages.error(503, { type: 'overloaded_error', message: 'temporary outage' }))
+      .reply(anthropicMessages.error(503, { type: 'overloaded_error', message: 'temporary outage' }))
+      .reply(anthropicMessages.reply({ text: 'Other model must not answer.' }));
+    const provider = h.adapter();
+    provider.models.push('other-model');
+    const llm = createLlmApiRuntime([{ alias: h.alias, config: h.config, models: provider.models, fetch: h.server.fetch }]);
+    const agent = new ZhinAgent(provider, { outputSchema: false, maxIterations: 2,
+      providerResilience: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 } }, undefined, llm);
+    agent.markMemoryPersistenceReady();
+    const host = asPrivate(agent);
+    const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
+      sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, context => engine.run(context)));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+    try {
+      const result = await runtime.execute(fixture.child, { ...externalRequest('fixed-model'), input: { text: 'Reply briefly.' } }, {
+        binding: { name: 'zhin', providerAlias: h.alias, model: h.modelId, mcpServers: [] }, mcpServers: [],
+      });
+      expect(result.status).toBe('completed');
+      expect(h.requests.map(request => request.body.model)).toEqual(['primary-model', 'primary-model']);
+      expect(JSON.stringify(result)).not.toContain('Other model must not answer.');
+    } finally { await agent.dispose(); await fixture.mcp.stop(); await store.close(); }
+  });
+
+  it.each([false, true])('uses the scoped provider at the real SDK boundary and preserves completion when cleanup fails=%s', async cleanupFails => {
+    const fixture = await createFixture();
+    const old = createProviderHarness({ sdk: 'anthropic' });
+    const chosen = createProviderHarness({ sdk: 'anthropic', alias: 'personal-provider', model: 'personal-model' })
+      .reply(anthropicMessages.reply({ text: 'Scoped answer.' }));
+    const agent = new ZhinAgent(old.adapter(), { outputSchema: false, maxIterations: 2 }, undefined, old.runtime);
+    agent.markMemoryPersistenceReady();
+    const host = asPrivate(agent);
+    const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
+      sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
+    const release = vi.fn(async () => { if (cleanupFails) throw new Error('synthetic cleanup failure'); });
+    const scope: ModelExecutionScope = {
+      chat: { provider: chosen.adapter(), llmRuntime: chosen.runtime, invocation: {
+        connection: { id: 'connection', ownerId: 'person', revision: 1, sdk: 'anthropic' },
+        model: { id: 'model', connectionId: 'connection', model: chosen.modelId, capabilities: { input: ['text'] } },
+        preset: { id: 'preset', modelId: 'model' },
+      } },
+      summary: { provider: old.adapter(), llmRuntime: old.runtime, invocation: {
+        connection: { id: 'host-connection', ownerId: 'host', revision: 1, sdk: 'anthropic' },
+        model: { id: 'host-model', connectionId: 'host-connection', model: old.modelId, capabilities: { input: ['text'] } },
+        preset: { id: 'host-summary', modelId: 'host-model' },
+      } },
+      policy: { refs: { chat: 'preset', summary: 'host-summary' }, sources: {} }, release,
+    };
+    const state = stateWithEngine(fixture.snapshot, context => engine.run(context));
+    const root = new Map(state.resources.get(state.root));
+    root.set(turnModelPortToken.id, { acquire: async () => scope });
+    const store = new SnapshotStore({ ...state, resources: new Map(state.resources).set(state.root, root) });
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+    try {
+      const result = await runtime.execute(fixture.child, { ...externalRequest('scope'), input: { text: 'Reply briefly.' } }, selection([]));
+      expect(result.status, JSON.stringify(result)).toBe('completed');
+      expect(chosen.requests).toHaveLength(1);
+      expect(chosen.requests[0]!.body).toMatchObject({ model: 'personal-model' });
+      expect(old.requests).toHaveLength(0);
+      expect(release).toHaveBeenCalledOnce();
+      expect(agent.getTurnProvider().name).toBe(old.alias);
+      expect(getAgentTurnConfiguration()).toBeUndefined();
+    } finally { await agent.dispose(); await fixture.mcp.stop(); await store.close(); }
+  });
+
+  it('releases the selected model when the engine fails without trying another model', async () => {
+    const fixture = await createFixture();
+    const release = vi.fn(async () => undefined);
+    const h = createProviderHarness({ sdk: 'anthropic' });
+    const scope = { chat: { provider: h.adapter(), invocation: { model: { model: h.modelId } } }, release };
+    const state = stateWithEngine(fixture.snapshot, async function* () {
+      yield { type: 'text_delta', delta: 'partial' };
+      throw new Error('engine failed');
+    });
+    const root = new Map(state.resources.get(state.root));
+    root.set(turnModelPortToken.id, { acquire: async () => scope });
+    const store = new SnapshotStore({ ...state, resources: new Map(state.resources).set(state.root, root) });
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+    try {
+      expect(await runtime.execute(fixture.child, externalRequest('scope-failure'), selection([]))).toMatchObject({ status: 'failed', error: { message: 'engine failed' } });
+      expect(release).toHaveBeenCalledOnce();
+    } finally { await fixture.mcp.stop(); await store.close(); }
+  });
+});
 
 describe('full Agent request tracing', () => {
   it.each([

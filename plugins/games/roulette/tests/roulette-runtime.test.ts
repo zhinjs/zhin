@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+import { RuntimeMessage } from '@zhin.js/core/runtime';
 import { runRouletteCommand } from '../src/roulette-command.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -9,7 +11,8 @@ import {
   type FakeMessage,
   type FakePlugin,
 } from '@zhin.js/testing';
-import { adapterFeatureId } from 'zhin.js/adapter';
+import { adapterFeatureId, type EndpointManagement } from 'zhin.js/adapter';
+import { capabilityId, rootPluginId, type CapabilityId } from 'zhin.js';
 import plugin from '../plugin.ts';
 import deadlineSchedule from '../schedules/deadlines/index.ts';
 import rouletteCommand from '../commands/roulette/[[action]]/index.ts';
@@ -48,29 +51,30 @@ interface MuteCall {
   readonly durationSeconds: number;
 }
 
-/**
- * Stands in for the Adapter Feature projection (`AdapterIndex`). Only
- * `connection()` matters to the game: a capable Endpoint exposes
- * `management.muteGroupMember`, an incapable one has no management port.
- */
+/** The game resolves canonical IDs and receives guarded management, never an executable connection. */
 const adapters = {
   canMute: false,
   refuseNextMute: false,
   muteCalls: [] as MuteCall[],
   lookups: [] as string[],
-  connection(adapter: string, endpointKey: string): unknown {
+  resolved: new Map<CapabilityId, { adapter: string; endpointKey: string }>(),
+  resolve(adapter: string, endpointKey: string): CapabilityId {
     this.lookups.push(`${adapter} ${endpointKey}`);
-    if (!this.canMute) return { name: endpointKey };
+    const existing = [...this.resolved].find(([, target]) => target.adapter === adapter && target.endpointKey === endpointKey);
+    const id = existing?.[0] ?? capabilityId(rootPluginId(), adapterFeatureId, `fixture-${this.resolved.size}`);
+    this.resolved.set(id, { adapter, endpointKey });
+    return id;
+  },
+  management(id: CapabilityId): EndpointManagement | undefined {
+    const target = this.resolved.get(id);
+    if (!this.canMute || !target) return undefined;
     return {
-      name: endpointKey,
-      management: {
-        muteGroupMember: async (groupId: string, userId: string, durationSeconds: number) => {
-          if (this.refuseNextMute) {
-            this.refuseNextMute = false;
-            throw new Error('permission denied');
-          }
-          this.muteCalls.push({ adapter, endpointKey, groupId, userId, durationSeconds });
-        },
+      muteGroupMember: async (groupId: string, userId: string, durationSeconds: number) => {
+        if (this.refuseNextMute) {
+          this.refuseNextMute = false;
+          throw new Error('permission denied');
+        }
+        this.muteCalls.push({ ...target, groupId, userId, durationSeconds });
       },
     };
   },
@@ -81,6 +85,7 @@ function resetAdapters(): void {
   adapters.refuseNextMute = false;
   adapters.muteCalls = [];
   adapters.lookups = [];
+  adapters.resolved.clear();
 }
 
 /** Plugin setup plus the convention `schedules/deadlines` job, run by the fake cron with a capability context. */
@@ -112,6 +117,13 @@ function message(
     sender: { id: senderId, name: senderId.toUpperCase(), roles: options.roles ?? [] },
     conversation: { kind: options.kind ?? 'group', id: options.group ?? 'g1' },
   });
+}
+
+function middlewareMessage(input: FakeMessage): RuntimeMessage {
+  const client = new EventEmitter();
+  return new RuntimeMessage(input.conversation, input.content ?? '', 1, async content => {
+    await input.$reply?.(content); return { status: 'sent' };
+  }, input.sender, {}, undefined, undefined, undefined, false, undefined, () => client, 'test', { locale: input.locale });
 }
 
 async function say(
@@ -422,12 +434,12 @@ describe('timeouts (FakeClock)', () => {
 
 describe('chat entry points', () => {
   it('the 轮盘 alias runs actions and lets unknown words through', async () => {
-    const open = await runMiddleware(fake, aliasMiddleware, createFakeMessage({
+    const open = await runMiddleware(fake, aliasMiddleware, middlewareMessage(createFakeMessage({
       content: '轮盘 开局',
       sender: { id: 'alice', name: 'ALICE', roles: [] },
       conversation: { kind: 'group', id: 'g1' },
-    }));
-    const chat = await runMiddleware(fake, aliasMiddleware, createFakeMessage({ content: '轮盘 好玩吗' }));
+    })));
+    const chat = await runMiddleware(fake, aliasMiddleware, middlewareMessage(createFakeMessage({ content: '轮盘 好玩吗' })));
 
     expect(open.continued).toBe(false);
     expect((await activeState())?.phase).toBe('lobby');
@@ -436,9 +448,9 @@ describe('chat entry points', () => {
 
   it('a bare 开枪 fires only for the player on turn', async () => {
     await seatThreeAndStart();
-    const fromBob = await runMiddleware(fake, fireMiddleware, { ...message('bob'), content: '开枪' });
+    const fromBob = await runMiddleware(fake, fireMiddleware, middlewareMessage({ ...message('bob'), content: '开枪' }));
     const aliceMessage = { ...message('alice'), content: '开枪' };
-    const fromAlice = await runMiddleware(fake, fireMiddleware, aliceMessage);
+    const fromAlice = await runMiddleware(fake, fireMiddleware, middlewareMessage(aliceMessage));
 
     expect(fromBob.continued).toBe(true);
     expect(fromAlice.continued).toBe(false);

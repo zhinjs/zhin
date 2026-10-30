@@ -17,6 +17,72 @@
       "@zhin.js/adapter": [
         "./packages/im/adapter/src/index.ts"
       ],
+      "@zhin.js/adapter-bilibili": [
+        "./plugins/adapters/bilibili/src/index.ts"
+      ],
+      "@zhin.js/adapter-bilibili-live": [
+        "./plugins/adapters/bilibili-live/src/index.ts"
+      ],
+      "@zhin.js/adapter-dingtalk": [
+        "./plugins/adapters/dingtalk/src/index.ts"
+      ],
+      "@zhin.js/adapter-discord": [
+        "./plugins/adapters/discord/src/index.ts"
+      ],
+      "@zhin.js/adapter-email": [
+        "./plugins/adapters/email/src/index.ts"
+      ],
+      "@zhin.js/adapter-github": [
+        "./plugins/adapters/github/src/index.ts"
+      ],
+      "@zhin.js/adapter-icqq": [
+        "./plugins/adapters/icqq/src/index.ts"
+      ],
+      "@zhin.js/adapter-kook": [
+        "./plugins/adapters/kook/src/index.ts"
+      ],
+      "@zhin.js/adapter-lark": [
+        "./plugins/adapters/lark/src/index.ts"
+      ],
+      "@zhin.js/adapter-line": [
+        "./plugins/adapters/line/src/index.ts"
+      ],
+      "@zhin.js/adapter-milky": [
+        "./plugins/adapters/milky/src/index.ts"
+      ],
+      "@zhin.js/adapter-napcat": [
+        "./plugins/adapters/napcat/src/index.ts"
+      ],
+      "@zhin.js/adapter-onebot11": [
+        "./plugins/adapters/onebot11/src/index.ts"
+      ],
+      "@zhin.js/adapter-onebot12": [
+        "./plugins/adapters/onebot12/src/index.ts"
+      ],
+      "@zhin.js/adapter-qq": [
+        "./plugins/adapters/qq/src/index.ts"
+      ],
+      "@zhin.js/adapter-sandbox": [
+        "./plugins/adapters/sandbox/src/index.ts"
+      ],
+      "@zhin.js/adapter-satori": [
+        "./plugins/adapters/satori/src/index.ts"
+      ],
+      "@zhin.js/adapter-slack": [
+        "./plugins/adapters/slack/src/index.ts"
+      ],
+      "@zhin.js/adapter-telegram": [
+        "./plugins/adapters/telegram/src/index.ts"
+      ],
+      "@zhin.js/adapter-wechat-mp": [
+        "./plugins/adapters/wechat-mp/src/index.ts"
+      ],
+      "@zhin.js/adapter-wecom": [
+        "./plugins/adapters/wecom/src/index.ts"
+      ],
+      "@zhin.js/adapter-weixin-ilink": [
+        "./plugins/adapters/weixin-ilink/src/index.ts"
+      ],
       "@zhin.js/agent": [
         "./packages/im/agent/src/index.ts"
       ],
@@ -280,6 +346,15 @@
       ],
       "zhin.js/i18n": [
         "./packages/im/zhin/src/i18n.ts"
+      ],
+      "@zhin.js/agent/model-policy": [
+        "./packages/im/agent/src/model-policy/index.ts"
+      ],
+      "@zhin.js/agent/model-runtime": [
+        "./packages/im/agent/src/model-runtime/index.ts"
+      ],
+      "@zhin.js/agent/personal-session": [
+        "./packages/im/agent/src/personal-session/index.ts"
       ]
     },
     "types": [],

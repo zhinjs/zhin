@@ -1,3 +1,4 @@
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { NapCatWssEndpoint } from '../src/wss-endpoint.js';
@@ -20,12 +21,12 @@ function socket() {
   } satisfies NapCatWsSocket & { emit(event: string, ...args: unknown[]): void };
 }
 const config = resolveNapCatConfig({ connection: 'ws', id: 'fault-bot', url: 'ws://localhost:1234', access_token: 'test', reconnect_interval: 10, heartbeat_interval: 10 }) as NapCatWsConfig;
-function endpoint(sockets: ReturnType<typeof socket>[]) {
+async function endpoint(sockets: ReturnType<typeof socket>[]) {
   let next = 0;
-  return new NapCatWsEndpoint({
+  return await createEndpointHarness(() => new NapCatWsEndpoint({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), config,
     createWebSocket: () => { const ws = sockets[next++]!; queueMicrotask(() => ws.emit('open')); return ws; },
-  });
+  }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway() });
 }
 const request = { conversation: { endpoint: { adapter: 'napcat', id: 'fault-bot' }, kind: 'private' as const, id: '123' }, payload: 'hello' };
 afterEach(() => vi.useRealTimers());
@@ -43,7 +44,7 @@ describe('napcat transport fault ownership', () => {
   it('rejects interrupted sends immediately and isolates retired sockets after reconnect', async () => {
     vi.useFakeTimers();
     const old = socket(), current = socket();
-    const bot = endpoint([old, current]);
+    const bot = await endpoint([old, current]);
     await bot.start(); bot.open();
     const sending = bot.send(request);
     const rejected = expect(sending).rejects.toThrow();
@@ -51,25 +52,25 @@ describe('napcat transport fault ownership', () => {
     old.emit('close', 1006, 'offline'); await rejected;
     expect(old.send).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(10); current.emit('open'); await vi.advanceTimersByTimeAsync(0);
-    expect(bot.transportState).toBe('open');
+    expect(bot.index.describe()[0]?.transportState).toBe('open');
     const send = bot.send(request);
     await vi.advanceTimersByTimeAsync(0);
     const echo = JSON.parse(current.send.mock.calls[0]![0]).echo;
     old.emit('message', JSON.stringify({ echo, status: 'ok', retcode: 0, data: { message_id: 99 } }));
     old.emit('close', 1006, 'late');
-    expect(bot.transportState).toBe('open');
+    expect(bot.index.describe()[0]?.transportState).toBe('open');
     current.emit('message', JSON.stringify({ echo, status: 'ok', retcode: 0, data: { message_id: 42 } }));
     await expect(send).resolves.toBe('42');
     await bot.stop();
   });
   it('retires half-open transport without retrying an in-flight message', async () => {
     vi.useFakeTimers();
-    const ws = socket(); const bot = endpoint([ws]);
+    const ws = socket(); const bot = await endpoint([ws]);
     await bot.start();
     const sending = bot.send(request);
     const rejected = expect(sending).rejects.toThrow();
     await vi.advanceTimersByTimeAsync(30); await rejected;
-    expect(bot.transportState).toBe('closed');
+    expect(bot.index.describe()[0]?.transportState).toBe('closed');
     expect(ws.close).toHaveBeenCalledOnce();
     expect(ws.send).toHaveBeenCalledOnce();
     await expect(bot.send(request)).rejects.toThrow();
@@ -77,14 +78,14 @@ describe('napcat transport fault ownership', () => {
   });
   it('keeps an idle live transport open when pong acknowledges heartbeats', async () => {
     vi.useFakeTimers();
-    const ws = socket(); const bot = endpoint([ws]);
+    const ws = socket(); const bot = await endpoint([ws]);
     await bot.start();
     for (let i = 0; i < 8; i++) { await vi.advanceTimersByTimeAsync(10); ws.emit('pong'); }
-    expect(bot.transportState).toBe('open'); expect(ws.close).not.toHaveBeenCalled();
+    expect(bot.index.describe()[0]?.transportState).toBe('open'); expect(ws.close).not.toHaveBeenCalled();
     await bot.stop();
   });
   it('rejects missing platform receipts without resending', async () => {
-    const ws = socket(); const bot = endpoint([ws]);
+    const ws = socket(); const bot = await endpoint([ws]);
     await bot.start();
     const send = bot.send(request);
     await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
@@ -99,28 +100,28 @@ describe('napcat transport fault ownership', () => {
     vi.useFakeTimers();
     let accept!: (connection: unknown) => void;
     const http = { ws: () => ({ onConnection(fn: typeof accept) { accept = fn; return vi.fn(); } }) };
-    const bot = new NapCatWssEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), http: http as never,
-      config: resolveNapCatConfig({ connection: 'wss', id: 'reverse', path: '/test', access_token: 'test', heartbeat_interval: 10 }) as never });
+    const bot = await createEndpointHarness(() => new NapCatWssEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), http: http as never,
+      config: resolveNapCatConfig({ connection: 'wss', id: 'reverse', path: '/test', access_token: 'test', heartbeat_interval: 10 }) as never }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway() });
     const connect = (ws: ReturnType<typeof socket>) => accept({ socket: ws, request: { headers: { authorization: 'Bearer test' }, url: '/', socket: { remoteAddress: '127.0.0.1' } } });
     const first = socket(), second = socket();
     await bot.start(); connect(first); await vi.advanceTimersByTimeAsync(0);
-    expect(bot.transportState).toBe('open');
+    expect(bot.index.describe()[0]?.transportState).toBe('open');
     const initial = bot.send(request); const rejected = expect(initial).rejects.toThrow();
     await vi.advanceTimersByTimeAsync(0); connect(second); await vi.advanceTimersByTimeAsync(0); await rejected;
     const next = bot.send(request); await vi.advanceTimersByTimeAsync(0);
     const echo = JSON.parse(second.send.mock.calls[0]![0]).echo;
     first.emit('message', JSON.stringify({ echo, status: 'ok', retcode: 0, data: { message_id: 99 } }));
-    first.emit('close'); expect(bot.transportState).toBe('open');
+    first.emit('close'); expect(bot.index.describe()[0]?.transportState).toBe('open');
     second.emit('message', JSON.stringify({ echo, status: 'ok', retcode: 0, data: { message_id: 88 } }));
     await expect(next).resolves.toBe('88');
     const interrupted = bot.send(request); const interruptedRejection = expect(interrupted).rejects.toThrow();
     await vi.advanceTimersByTimeAsync(0); second.emit('close'); await interruptedRejection;
-    expect(second.send).toHaveBeenCalledTimes(2); await bot.stop(); expect(bot.transportState).toBe('stopped');
+    expect(second.send).toHaveBeenCalledTimes(2); await bot.stop(); expect(bot.index.describe()[0]?.transportState).toBe('stopped');
   });
 
 it('keeps two simultaneous account action maps isolated despite identical echo counters', async () => {
   const left = socket(), right = socket();
-  const first = endpoint([left]), second = endpoint([right]);
+  const first = await endpoint([left]), second = await endpoint([right]);
   await Promise.all([first.start(), second.start()]);
   const sendingLeft = first.send(request), sendingRight = second.send(request);
   await vi.waitFor(() => expect(right.send).toHaveBeenCalled());
@@ -135,12 +136,12 @@ it('keeps two simultaneous account action maps isolated despite identical echo c
 
 it('hands off the first frame in the same turn as socket open', async () => {
   const ws = socket();
-  const bot = new NapCatWsEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), config,
+  const bot = await createEndpointHarness(() => new NapCatWsEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), config,
     createWebSocket: () => { queueMicrotask(() => {
       ws.emit('open');
       ws.emit('message', JSON.stringify({ post_type: 'message', message_type: 'private', message_id: 111, user_id: 123, message: 'first' }));
-    }); return ws; } });
-  const handoff = vi.spyOn(bot, 'admit');
+    }); return ws; } }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway() });
+  const handoff = vi.spyOn(bot.endpoint, 'ingest');
   await bot.start(); expect(handoff).toHaveBeenCalledOnce(); await bot.stop();
 });
 
@@ -148,19 +149,19 @@ it('serializes concurrent reverse replacements and refuses connections queued du
   vi.useFakeTimers();
   let accept!: (connection: unknown) => void;
   const http = { ws: () => ({ onConnection(fn: typeof accept) { accept = fn; return vi.fn(); } }) };
-  const bot = new NapCatWssEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), http: http as never,
-    config: resolveNapCatConfig({ connection: 'wss', id: 'reverse', path: '/test', access_token: 'test', heartbeat_interval: 10 }) as never });
+  const bot = await createEndpointHarness(() => new NapCatWssEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), http: http as never,
+    config: resolveNapCatConfig({ connection: 'wss', id: 'reverse', path: '/test', access_token: 'test', heartbeat_interval: 10 }) as never }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway() });
   const connect = (ws: ReturnType<typeof socket>) => accept({ socket: ws, request: { headers: { authorization: 'Bearer test' }, url: '/', socket: { remoteAddress: '127.0.0.1' } } });
   const first = socket(), second = socket(), third = socket();
   await bot.start(); connect(first); connect(second); connect(third); await vi.advanceTimersByTimeAsync(0);
   expect(first.close).toHaveBeenCalledOnce(); expect(second.close).toHaveBeenCalledOnce(); expect(third.close).not.toHaveBeenCalled();
   const late = socket(); connect(late); const stopping = bot.stop(); await stopping;
   expect(third.close).toHaveBeenCalledOnce(); expect(late.close).toHaveBeenCalledOnce();
-  expect(bot.transportState).toBe('stopped'); expect(vi.getTimerCount()).toBe(0);
+  expect(bot.index.describe()[0]?.transportState).toBe('stopped'); expect(vi.getTimerCount()).toBe(0);
 });
 
 it('preserves a zero platform message id without imposing an undocumented range', async () => {
-  const ws = socket(); const bot = endpoint([ws]); await bot.start();
+  const ws = socket(); const bot = await endpoint([ws]); await bot.start();
   const sending = bot.send(request); await vi.waitFor(() => expect(ws.send).toHaveBeenCalled());
   const echo = JSON.parse(ws.send.mock.calls[0]![0]).echo;
   ws.emit('message', JSON.stringify({ echo, status: 'ok', retcode: 0, data: { message_id: 0 } }));
@@ -170,10 +171,11 @@ it('preserves a zero platform message id without imposing an undocumented range'
 it('owns initial connection refusal and resets lifecycle without orphan rejection', async () => {
   const ws = socket();
   const refused = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
-  const bot = new NapCatWsEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), config,
-    createWebSocket: () => { queueMicrotask(() => { ws.emit('error', refused); ws.emit('close', 1006, ''); }); return ws; } });
+  const bot = await createEndpointHarness(() => new NapCatWsEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat'), config,
+    createWebSocket: () => { queueMicrotask(() => { ws.emit('error', refused); ws.emit('close', 1006, ''); }); return ws; } }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway() });
   await expect(bot.start()).rejects.toBe(refused);
-  expect(bot.transportState).toBe('idle');
+  // The owning Index retires the failed initial execution rather than retaining an idle SDK.
+  expect(bot.index.describe()[0]?.transportState).toBe('stopped');
   await bot.stop(); await new Promise(resolve => setImmediate(resolve));
-  expect(bot.transportState).toBe('stopped');
+  expect(bot.index.describe()[0]?.transportState).toBe('stopped');
 });

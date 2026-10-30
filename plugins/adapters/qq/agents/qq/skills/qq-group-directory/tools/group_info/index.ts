@@ -10,7 +10,7 @@ export default defineAgentTool({
   readOnly: true,
   inputSchema: z.object({}),
   async execute(_input, context) {
-    const info = await context.$client.api.groupService.getInfo(currentGroup(context));
+    const info = await context.$client.groupService.getInfo(currentGroup(context));
     return { success: true, group: info };
   },
 });

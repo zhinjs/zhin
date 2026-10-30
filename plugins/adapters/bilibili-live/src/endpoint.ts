@@ -9,7 +9,7 @@
  */
 import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 import {
-  Endpoint,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   createEndpointLifecycle,
   type EndpointLifecycle,
   type EndpointSendRequest,
@@ -42,6 +42,7 @@ export type LiveSocketFactory = (url: string) => LiveSocket;
 
 export interface BilibiliLiveEndpointOptions {
   readonly id: CapabilityId;
+  readonly signal?: AbortSignal;
   readonly config: ResolvedBilibiliLiveConfig;
   readonly fetch?: BilibiliLiveFetch;
   readonly socket?: LiveSocketFactory;
@@ -56,8 +57,8 @@ const SEEN_CAPACITY = 500;
 const AUTH_TIMEOUT_MS = 15_000;
 const DEFAULT_CHUNK_DELAY_MS = 1_200;
 
-export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
-  readonly client: BilibiliLiveClient;
+export class BilibiliLiveEndpoint extends BilibiliLiveClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   readonly #options: BilibiliLiveEndpointOptions;
   readonly #logger: ReturnType<typeof getAdapterLogger>;
   readonly #lifecycle: EndpointLifecycle;
@@ -71,21 +72,24 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
   #tripped?: { readonly code: number; readonly message: string };
 
   constructor(options: BilibiliLiveEndpointOptions) {
-    super();
+    super(options.config, options.fetch ?? (globalThis.fetch as unknown as BilibiliLiveFetch), options.now, options.signal);
     this.#options = options;
+    const readTransportState = () => this.#transportState;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => this.#openEndpoint(),
+      close: () => this.#close(), stop: () => this.#stop(),
+      send: request => this.#send(request),
+      get transportState() { return readTransportState(); },
+    });
     this.#logger = getAdapterLogger('bilibili-live', options.config.id);
-    this.client = new BilibiliLiveClient(
-      options.config,
-      options.fetch ?? (globalThis.fetch as unknown as BilibiliLiveFetch),
-      options.now,
-    );
     this.#lifecycle = createEndpointLifecycle({
       name: `bilibili-live:${options.config.id}`,
       heartbeat: { intervalMs: BILIBILI_LIVE_HEARTBEAT_MS, watchdogMisses: 3 },
     });
   }
 
-  override get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     return this.#lifecycle.state;
   }
 
@@ -103,10 +107,10 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
     return (this.#options.now ?? Date.now)();
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     await this.#lifecycle.start((handle) => this.#connect(handle));
-    this.reportSelfUserId(this.client.selfUid);
-    if (!this.client.selfUid) {
+    this[endpointSpec].reportSelfUserId(this.selfUid);
+    if (!this.selfUid) {
       this.#logger.warn(formatCompact({
         op: 'bilibili_live_anonymous',
         hint: '未登录：弹幕发送者昵称会被平台打码、uid 为 0，且无法发弹幕',
@@ -114,15 +118,15 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
     }
   }
 
-  open(): void {
+  #openEndpoint(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #close(): void {
     this.#open = false;
   }
 
-  async stop(): Promise<void> {
+  async #stop(): Promise<void> {
     this.#open = false;
     await this.#lifecycle.stop();
     this.#socket = undefined;
@@ -131,9 +135,9 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
 
   /** 每次（重）连都重新取 token：token 会过期。 */
   async #connect(handle: Parameters<Parameters<EndpointLifecycle['start']>[0]>[0]): Promise<void> {
-    if (!this.#roomId) this.#roomId = (await this.client.resolveRoom()).roomId;
+    if (!this.#roomId) this.#roomId = (await this.resolveRoom()).roomId;
     const roomId = this.#roomId;
-    const server = await this.client.getDanmuServer(roomId);
+    const server = await this.getDanmuServer(roomId);
     const factory = this.#options.socket ?? ((url: string) => new globalThis.WebSocket(url) as unknown as LiveSocket);
     const socket = factory(server.url);
     socket.binaryType = 'arraybuffer';
@@ -154,9 +158,11 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
         try { socket.close(); } catch { /* ignore */ }
       }, AUTH_TIMEOUT_MS);
       socket.addEventListener('open', () => {
-        socket.send(encodeLivePacket(LIVE_OP.auth, this.client.authBody(roomId, server.token)));
+        if (this.#socket !== socket || !this.#lifecycle.started) return;
+        socket.send(encodeLivePacket(LIVE_OP.auth, this.authBody(roomId, server.token)));
       });
       socket.addEventListener('message', (event) => {
+        if (this.#socket !== socket || !this.#lifecycle.started) return;
         this.#lifecycle.notifyHeartbeatAck();
         const frame = toBytes(event.data);
         if (!frame) return;
@@ -174,7 +180,7 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
             }
           } else if (packet.op === LIVE_OP.message) {
             const danmaku = parseDanmaku(packet.body);
-            if (danmaku) void this.#admit(roomId, danmaku).catch((error: unknown) => this.#logger.debug(formatCompact({
+            if (danmaku) void this[endpointSpec].events.run(() => this.#admit(roomId, danmaku)).catch((error: unknown) => this.#logger.debug(formatCompact({
               op: 'bilibili_live_dispatch_failed', error: error instanceof Error ? error.message : String(error),
             })));
           }
@@ -192,17 +198,16 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
   }
 
   #conversation(roomId: string): ConversationRef {
-    const endpointKey = String(this.#options.id);
     return {
-      endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
+      endpoint: this[endpointSpec].identity,
       kind: 'channel',
       id: roomId,
     };
   }
 
   async #admit(roomId: string, danmaku: LiveDanmaku): Promise<void> {
-    if (!this.#open) return;
-    const self = this.client.selfUid;
+    if (!this.#open && !this.#lifecycle.started) return;
+    const self = this.selfUid;
     if (self && danmaku.uid === self) return; // 防自回环
     this.#sequence += 1;
     const id = danmaku.id ?? `${danmaku.timestamp}-${danmaku.uid}-${this.#sequence}`;
@@ -215,8 +220,10 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
     // 未登录时平台给 uid 0：按打码昵称区分观众，避免所有人被当成同一个人。
     const senderId = danmaku.uid !== '0' ? danmaku.uid : `anon:${danmaku.uname}`;
     const conversation = this.#conversation(roomId);
-    void this.emitPlatform('danmaku', danmaku).catch(() => undefined);
-    await this.emit('message.receive', {
+    void this[endpointSpec].events.platform('danmaku', danmaku).catch(() => undefined);
+    await this[endpointSpec].events.message({
+      event: danmaku,
+      platformSentAt: danmaku.timestamp,
       conversation,
       message: { conversation, id },
       content: danmaku.text,
@@ -227,7 +234,7 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
   }
 
   /** 出站 = 在直播间发弹幕。 */
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const config = this.#options.config;
     if (config.sendMode === 'off') {
       throw new EndpointDeliveryError('send_disabled', 'Bilibili live sendMode is off', 'not_sent');
@@ -240,7 +247,7 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
     if (this.#tripped) {
       throw new EndpointDeliveryError('circuit_open', `Bilibili live sending stopped after code ${this.#tripped.code}`, 'not_sent');
     }
-    if (!this.client.canWrite) {
+    if (!this.canWrite) {
       throw new EndpointDeliveryError('not_logged_in', 'Sending danmaku requires SESSDATA and bili_jct', 'not_sent');
     }
     const { text, replyUid } = formatOutboundDanmaku(payload);
@@ -255,8 +262,10 @@ export class BilibiliLiveEndpoint extends Endpoint<BilibiliLiveClient> {
     let delivered = 0;
     try {
       for (const chunk of chunks) {
-        if (delivered > 0) await delay(this.#options.chunkDelayMs ?? DEFAULT_CHUNK_DELAY_MS);
-        await this.client.sendDanmaku(roomId, chunk, delivered === 0 ? replyUid : undefined);
+        signal?.throwIfAborted();
+        if (delivered > 0) await delay(this.#options.chunkDelayMs ?? DEFAULT_CHUNK_DELAY_MS, signal);
+        signal?.throwIfAborted();
+        await this.sendDanmaku(roomId, chunk, delivered === 0 ? replyUid : undefined);
         delivered += 1;
       }
     } catch (error) {
@@ -281,6 +290,12 @@ function toBytes(data: unknown): Uint8Array | undefined {
   return undefined;
 }
 
-function delay(ms: number): Promise<void> {
-  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const abort = () => { clearTimeout(timer); reject(signal?.reason); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, ms);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
 }

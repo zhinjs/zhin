@@ -5,7 +5,7 @@
 import {
   GhClient,
   GITHUB_OAUTH_USERS_TABLE,
-  type GithubClient,
+  type GithubEndpoint,
 } from '@zhin.js/adapter-github';
 import {
   type DatabaseHostModel,
@@ -22,7 +22,7 @@ export interface GithubOauthRow {
   readonly created_at: number;
 }
 
-export function requireOauthModel(endpoint: GithubClient): DatabaseHostModel | string {
+export function requireOauthModel(endpoint: GithubEndpoint): DatabaseHostModel | string {
   const host = endpoint.database;
   if (!host) return '数据库未就绪（缺少 DatabaseHost）';
   if (!host.started) return '数据库尚未启动';
@@ -76,7 +76,7 @@ export async function findOauthBinding(
 }
 
 export async function bindWithPat(
-  endpoint: GithubClient,
+  endpoint: GithubEndpoint,
   model: DatabaseHostModel,
   platform: string,
   uid: string,
@@ -101,7 +101,7 @@ export async function bindWithPat(
 }
 
 export async function startDeviceFlowBind(
-  endpoint: GithubClient,
+  endpoint: GithubEndpoint,
   model: DatabaseHostModel,
   platform: string,
   uid: string,
@@ -181,13 +181,13 @@ export async function unbindOauth(
 }
 
 export async function whoamiOauth(
-  endpoint: GithubClient,
+  endpoint: GithubEndpoint,
   model: DatabaseHostModel,
   platform: string,
   uid: string,
 ): Promise<string> {
   const existing = await findOauthBinding(model, platform, uid);
-  const appAuth = await endpoint.api.verifyAuth();
+  const appAuth = await endpoint.verifyAuth();
   const appLine = appAuth.ok ? `Bot / App: ${appAuth.user}` : `Bot / App: ${appAuth.message}`;
   if (!existing) {
     return `${appLine}\n用户绑定: 无（gh bind <PAT> 或 Device Flow）`;

@@ -5,7 +5,6 @@ import {
 } from '@imhelper/onebot-v12';
 import { EventFactory, type EventMap, type ImHelperEventMap } from 'imhelper';
 import {
-  defineEndpointClient,
   forwardEndpointClientEvents,
   type ClientEventPayloads,
 } from 'zhin.js/adapter';
@@ -25,22 +24,23 @@ type Onebot12ClientEvents = ImHelperEventMap<
 >;
 export type Onebot12ClientEventMap = ClientEventPayloads<Onebot12ClientEvents>;
 
-export function createOnebot12EndpointClient(
+export function onebot12ClientOptions(
   config: ResolvedOneBot12Config,
   request: Onebot12ApiCall,
-): OneBotV12Client {
+): ConstructorParameters<typeof OneBotV12Client>[0] {
   const baseUrl = config.connection === 'ws'
     ? config.url.replace(/^ws(s?):/, 'http$1:')
     : config.connection === 'webhook'
       ? config.api_url
       : 'http://localhost';
-  return new OneBotV12Client({
+  return {
     baseUrl,
-    selfId: config.id,
+    platform: config.platform,
+    selfId: config.userId,
     accessToken: config.access_token,
     receiveMode: 'manual',
     call: request,
-  });
+  };
 }
 
 export async function callOnebot12Client<T = unknown>(
@@ -68,14 +68,3 @@ export function forwardOnebot12ClientEvents(
 ): () => void {
   return forwardEndpointClientEvents(client, onebot12ClientEventNames, receive);
 }
-
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly onebot12: {
-      readonly client: OneBotV12Client;
-      readonly events: Onebot12ClientEventMap;
-    };
-  }
-}
-
-export const onebot12Client = defineEndpointClient<OneBotV12Client, Onebot12ClientEventMap>('onebot12');

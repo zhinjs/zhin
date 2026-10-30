@@ -4,7 +4,6 @@ import {
 } from '@imhelper/satori-v1';
 import { EventFactory, type EventMap, type ImHelperEventMap } from 'imhelper';
 import {
-  defineEndpointClient,
   forwardEndpointClientEvents,
   type ClientEventPayloads,
 } from 'zhin.js/adapter';
@@ -19,18 +18,19 @@ export { SatoriV1Client as SatoriClient } from '@imhelper/satori-v1';
 type SatoriClientEvents = ImHelperEventMap<string, SatoriV1Event, EventMap<string>>;
 export type SatoriClientEventMap = ClientEventPayloads<SatoriClientEvents>;
 
-export function createSatoriEndpointClient(
+export function satoriClientOptions(
   config: ResolvedSatoriConfig,
   request: typeof callSatoriApi,
   apiOptions: () => SatoriApiOptions,
-): SatoriV1Client {
-  return new SatoriV1Client({
+): ConstructorParameters<typeof SatoriV1Client>[0] {
+  return {
     baseUrl: config.baseUrl,
-    selfId: config.id,
+    selfId: config.userId,
+    platform: config.platform,
     accessToken: config.token,
     receiveMode: 'manual',
     call: (resource, method, params) => request(apiOptions(), resource, method, params ?? {}),
-  });
+  };
 }
 
 const satoriClientEventNames = Object.freeze([
@@ -44,14 +44,3 @@ export function forwardSatoriClientEvents(
 ): () => void {
   return forwardEndpointClientEvents(client, satoriClientEventNames, receive);
 }
-
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly satori: {
-      readonly client: SatoriV1Client;
-      readonly events: SatoriClientEventMap;
-    };
-  }
-}
-
-export const satoriClient = defineEndpointClient<SatoriV1Client, SatoriClientEventMap>('satori');

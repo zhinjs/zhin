@@ -1,3 +1,4 @@
+import { createEndpointHarness } from '../../../plugins/adapters/test-utils/endpoint.js';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -6,15 +7,10 @@ import { fileURLToPath } from 'node:url';
 import {
   AdapterIndex,
   adapterFeatureId,
-  bindEndpoint,
   isAdapterIndex,
-  materializeEndpoint,
-  type AdapterContext,
-  type Endpoint,
   type EndpointEventGateway,
 } from 'zhin.js/adapter';
 import { ImRuntime } from 'zhin.js/core/runtime';
-import { capabilityId, rootPluginId } from 'zhin.js';
 import {
   NativeDevelopmentModuleRuntime,
   RootRuntime,
@@ -24,7 +20,6 @@ import { MigrationReadiness, runStartCommand } from '@zhin.js/cli';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createTerminalEndpoint,
-  type TerminalClient,
   type TerminalEndpointOptions,
 } from '../adapters/terminal/index.js';
 
@@ -57,7 +52,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     const input = Object.assign(new PassThrough(), { isTTY: true, setRawMode: vi.fn() });
     const output = Object.assign(new PassThrough(), { isTTY: true });
     const emit = vi.spyOn(process, 'emit').mockReturnValue(true);
-    const endpoint = createBoundTerminalEndpoint({
+    const endpoint = await createBoundTerminalEndpoint({
       input, output, error: output, interactive: true, prompt: 'zhin> ',
     });
     try {
@@ -67,7 +62,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       expect(emit).toHaveBeenCalledWith('SIGINT');
     } finally {
       await endpoint.stop();
-      expect(endpoint.transportState).toBe('stopped');
+      expect(endpoint.endpoint.transportState).toBe('stopped');
     }
     expect(input.setRawMode).toHaveBeenLastCalledWith(false);
     expect(input.isPaused()).toBe(true);
@@ -143,7 +138,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
         name: 'message.receive',
         payload: Object.freeze({ conversation: conversationOf('terminal'), content }),
         endpoint: endpoint.identity,
-        client: endpoint.client,
+        client: (adapters as AdapterIndex).client('terminal', 'terminal'),
       }));
       const hello = await receive('/hello');
       expect(hello).toMatchObject({ matched: true, command: 'hello' });
@@ -168,7 +163,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     const writes: string[] = [];
     output.on('data', (chunk: Buffer) => writes.push(chunk.toString()));
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const endpoint = createBoundTerminalEndpoint({
+    const endpoint = await createBoundTerminalEndpoint({
       input,
       output,
       error: output,
@@ -176,10 +171,10 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       prompt: 'zhin> ',
     }, receive);
 
-    expect(endpoint.transportState).toBe('idle');
+    expect(endpoint.endpoint.transportState).toBe('idle');
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    expect(endpoint.transportState).toBe('open');
+    expect(endpoint.endpoint.transportState).toBe('open');
     await vi.waitFor(() => expect(writes.join('')).toContain('zhin> '));
     input.write('/hello\n');
     await vi.waitFor(() => expect(receive).toHaveBeenCalledWith(expect.objectContaining({
@@ -192,10 +187,10 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     await vi.waitFor(() => {
       expect(writes.join('').match(/zhin> /gu)).toHaveLength(2);
     });
-    endpoint.client.readline?.close();
-    expect(endpoint.transportState).toBe('closed');
+    endpoint.endpoint.readline?.close();
+    expect(endpoint.endpoint.transportState).toBe('closed');
     await endpoint.stop();
-    expect(endpoint.transportState).toBe('stopped');
+    expect(endpoint.endpoint.transportState).toBe('stopped');
   });
 
   it('hands the current process stream to the next Adapter generation', async () => {
@@ -212,8 +207,8 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       interactive: true,
       prompt: 'zhin> ',
     }, receive);
-    const previous = createEndpoint(previousReceive);
-    const next = createEndpoint(nextReceive);
+    const previous = await createEndpoint(previousReceive);
+    const next = await createEndpoint(nextReceive);
 
     await previous.start(new AbortController().signal);
     previous.open();
@@ -236,7 +231,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     Object.defineProperty(input, 'isTTY', { value: true });
     Object.defineProperty(output, 'isTTY', { value: true });
     const receive = vi.fn(async () => Object.freeze({ matched: true }));
-    const previous = createBoundTerminalEndpoint({
+    const previous = await createBoundTerminalEndpoint({
       input,
       output,
       error: output,
@@ -285,14 +280,8 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
 function createBoundTerminalEndpoint(
   options: TerminalEndpointOptions,
   receive: EndpointEventGateway['receive'] = async () => undefined,
-): Endpoint<TerminalClient> {
-  const context = {
-    id: capabilityId(rootPluginId(), adapterFeatureId, 'terminal'),
-    endpointId: 'terminal',
-    name: 'terminal',
-    use: () => Object.freeze({ receive }),
-  } as unknown as AdapterContext;
-  const endpoint = materializeEndpoint(createTerminalEndpoint(options), context);
-  bindEndpoint(endpoint, context);
-  return endpoint;
+) {
+  return createEndpointHarness(() => createTerminalEndpoint(options), {
+    name: 'terminal', gateway: { receive }, capabilities: ['inbound', 'outbound'],
+  });
 }

@@ -1,98 +1,70 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
-import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
+import { childPluginId, rootPluginId } from 'zhin.js';
+import definition from '../adapters/napcat/index.js';
 import listCommand from '../commands/napcat/endpoint/list/index.js';
 import addCommand from '../commands/napcat/endpoint/add/[id]/index.js';
 import removeCommand from '../commands/napcat/endpoint/remove/[id]/index.js';
-import { napcatRuntimeStateToken } from '../src/napcat-runtime-state.js';
+import { runtimeCommandFixture } from './runtime-command-fixture.js';
 
-/**
- * commands/ 下的命令定义冒烟 + kv add / remove 基本行为（通用套件逻辑见
- * packages/im/adapter/tests/endpoint-commands.test.ts）。
- */
-
-let store: MemoryEndpointConfigurationStore;
-
-beforeEach(() => {
-  store = new MemoryEndpointConfigurationStore();
-});
-
-function fakeContext(overrides: Record<string, unknown> = {}) {
-  const state = createEndpointRuntimeState();
-  return {
-    state,
-    use: (token: unknown) => {
-      if (token === napcatRuntimeStateToken) return state;
-      if (token === endpointConfigurationStoreToken) return store;
-      throw new Error(`unexpected token: ${String(token)}`);
-    },
-    params: Object.freeze({}),
-    args: Object.freeze([]),
-    input: undefined,
-    config: undefined,
-    ...overrides,
-  } as never;
-}
-
-describe('napcat endpoint command definitions', async () => {
-  it('三个命令模块均为合法 defineCommand', async () => {
-    for (const definition of [listCommand, addCommand, removeCommand]) {
-      expect(() => parseCommandDefinition(definition)).not.toThrow();
-    }
+const args = ['url=ws://127.0.0.1:1', 'access_token=private-fixture'];
+const fixture = () => runtimeCommandFixture(definition, 'napcat', { id: 'baseline' });
+describe('napcat commands through the real Adapter directory', () => {
+  it('keeps the three published command definitions valid', () => {
+    for (const command of [listCommand, addCommand, removeCommand]) expect(() => parseCommandDefinition(command)).not.toThrow();
   });
-
-  it('add 走 kv 参数：凭据写 .env，yaml 存 ${REF}，连接字段内联', async () => {
-    const text = await addCommand.execute(fakeContext({
-      params: { id: 'bot1' },
-      args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'],
-    })) as string;
-
-    expect(text).toContain('✅');
-    expect(store.environmentText()).toContain('NAPCAT_BOT1_ACCESS_TOKEN=sec-1');
-    const config = store.configurationText('napcat');
-    expect(config).toContain('id: bot1');
-    expect(config).toContain('url: ws://127.0.0.1:3001');
-    expect(config).toContain('${NAPCAT_BOT1_ACCESS_TOKEN}');
+  it('persists add as disabled without creating a Client or touching startup storage', async () => {
+    const f = await fixture();
+    const text = await addCommand.execute(f.context({ params: { id: 'bot1' }, args }));
+    expect(text).toContain('已保存'); expect(text).toContain('尚未启动');
+    expect(f.saved().endpoints[0]).toMatchObject({ endpointId: 'bot1', desiredEnabled: false, config: { access_token: 'private-fixture' } });
+    expect(f.harness.endpoint).toBeUndefined(); expect(f.compareAndSet).toHaveBeenCalledOnce();
+    expect(JSON.stringify(f.harness.adapter.list())).not.toContain('private-fixture');
+    expect(f.harness.adapter.configurationView([{ key: 'access_token', env: true }])[0]?.values.access_token).toBe('••••••');
   });
-
-  it('add 遇到未知字段时报错', async () => {
-    expect(await addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['ghost=x'] })))
-      .toContain('未知字段「ghost」');
+  it('rejects undeclared fields before any CAS', async () => {
+    const f = await fixture();
+    const text = await addCommand.execute(f.context({ params: { id: 'bot1' }, args: [...args, 'ghost=x'] }));
+    expect(text).toContain('未声明'); expect(f.compareAndSet).not.toHaveBeenCalled(); expect(f.saved().endpoints).toHaveLength(0);
   });
-
-
-  it('list 显示运行中 + 配置中的 endpoints', async () => {
-    const context = fakeContext();
-    (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('bot1', { id: 'bot1', mode: 'ws' });
-    await addCommand.execute(fakeContext({ params: { id: 'conf-bot' }, args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'] }));
-
-    const text = await listCommand.execute(context) as string;
-
-    expect(text).toContain('bot1（ws）');
-    expect(text).toContain('conf-bot');
+  it('does not save incomplete configuration', async () => {
+    const f = await fixture();
+    const text = await addCommand.execute(f.context({ params: { id: 'bot1' }, args: [] }));
+    expect(text).not.toContain('已保存'); expect(f.compareAndSet).not.toHaveBeenCalled();
   });
-
-  it('remove 从配置移除并提示重启', async () => {
-    await addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'] }));
-
-    const text = await removeCommand.execute(fakeContext({ params: { id: 'bot1' } })) as string;
-
-    expect(text).toContain('移除');
-    expect(text).toContain('重启');
-    expect(store.configurationText('napcat')).not.toContain('bot1');
+  it('lists configured accounts from the owning Adapter instead of a second running Map', async () => {
+    const f = await fixture();
+    await addCommand.execute(f.context({ params: { id: 'bot1' }, args }));
+    await addCommand.execute(f.context({ params: { id: 'conf-bot' }, args }));
+    const text = await listCommand.execute(f.context());
+    expect(text).toContain('bot1'); expect(text).toContain('conf-bot'); expect(text).toContain('持久账号配置');
+    expect(text).not.toContain('private-fixture'); expect(f.harness.endpoint).toBeUndefined();
   });
-
-  it('配置 master 后非 master 拒绝 add/remove', async () => {
-    const denied = fakeContext({
-      config: { master: 'alice' },
-      input: { sender: { id: 'bob' } },
-      params: { id: 'bot1' },
-      args: ['url=ws://127.0.0.1:3001', 'access_token=sec-1'],
-    });
-
+  it('removes only the selected persisted account without requesting a process restart', async () => {
+    const f = await fixture();
+    await addCommand.execute(f.context({ params: { id: 'bot1' }, args }));
+    await addCommand.execute(f.context({ params: { id: 'keep' }, args }));
+    const text = await removeCommand.execute(f.context({ params: { id: 'bot1' } }));
+    expect(text).toContain('删除配置已保存'); expect(text).not.toContain('重启');
+    expect(f.saved().endpoints.map(row => row.endpointId)).toEqual(['keep']);
+  });
+  it('preserves the configured master boundary for add and remove', async () => {
+    const f = await fixture();
+    const denied = f.context({ config: { master: 'alice' }, input: { sender: { id: 'bob' } }, params: { id: 'bot1' }, args });
     expect(await addCommand.execute(denied)).toBe('仅 master 可执行 NapCat endpoint 管理命令');
     expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 NapCat endpoint 管理命令');
+    expect(f.compareAndSet).not.toHaveBeenCalled();
+  });
+  it('fails explicitly without a runtime directory instead of falling back to startup files', async () => {
+    const f = await fixture(); const absent = f.context({ project: undefined, params: { id: 'bot1' }, args });
+    await expect(addCommand.execute(absent)).rejects.toMatchObject({ code: 'unsupported' });
+    await expect(removeCommand.execute(absent)).rejects.toMatchObject({ code: 'unsupported' });
+    await expect(listCommand.execute(absent)).rejects.toMatchObject({ code: 'unsupported' });
+    expect(f.compareAndSet).not.toHaveBeenCalled();
+  });
+  it("does not select another owner's Adapter", async () => {
+    const f = await fixture();
+    await expect(addCommand.execute(f.context({ owner: childPluginId(rootPluginId(), 'other'), params: { id: 'bot1' }, args }))).rejects.toThrow();
+    expect(f.compareAndSet).not.toHaveBeenCalled();
   });
 });

@@ -52,7 +52,7 @@
     "endpoints": {
       "type": "array",
       "minItems": 1,
-      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
+      "description": "多账号：每项明确选择 platform/userId，id 为本地账号名称，其余连接字段覆盖实例默认值",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -121,15 +121,27 @@
           "id": {
             "type": "string",
             "description": "OneBot12 bot name"
+          },
+          "platform": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Selected OneBot12 bot platform"
+          },
+          "userId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Selected OneBot12 bot user ID"
           }
         },
         "required": [
-          "id"
+          "id",
+          "platform",
+          "userId"
         ]
       },
       "x-i18n": {
         "en": {
-          "description": "Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults."
+          "description": "Each endpoint explicitly selects platform and userId. id is the local account name; other connection fields override instance defaults."
         }
       }
     },

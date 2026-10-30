@@ -10,8 +10,8 @@
  * 4. Active message refused (no permission, quota, user switched it off): remember the conversation
  *    for a while and fail fast instead of calling the platform again.
  */
-import type { ConversationRef } from '@zhin.js/im-contract';
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
+import type { Sendable } from 'qq-official-bot';
 import type { QqOutboundElem, QqOutboundMessage } from './outbound.js';
 import {
   QQ_ACTIVE_UNAVAILABLE_CODES,
@@ -71,12 +71,12 @@ export function markdownAsText(message: QqOutboundMessage): QqOutboundMessage | 
 
 function dispatch(bot: QqBotTransport, kind: Kind, id: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown> {
   switch (kind) {
-    case 'private': return bot.sendPrivateMessage(id, message, source, options);
-    case 'group': return bot.sendGroupMessage(id, message, source, options);
-    case 'channel': return bot.sendGuildMessage(id, message, source, options);
+    case 'private': return bot.sendPrivateMessage(id, message as Sendable, source, options);
+    case 'group': return bot.sendGroupMessage(id, message as Sendable, source, options);
+    case 'channel': return bot.sendGuildMessage(id, message as Sendable, source, options);
     case 'direct':
       if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-      return bot.sendDirectMessage(id, message, source, options);
+      return bot.sendDirectMessage(id, message as Sendable, source, options);
   }
 }
 

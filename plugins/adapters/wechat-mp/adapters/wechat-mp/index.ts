@@ -1,14 +1,11 @@
+import { WeChatMpAdapter } from '../../src/adapter.js';
 /**
  * Convention entry: discover `adapters/wechat-mp/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
-import { WeChatMpEndpoint } from '../../src/endpoint.js';
 import {
-  resolveWeChatMpConfig,
   type WeChatMpEndpointConfig,
 } from '../../src/protocol.js';
-import { wechatMpRuntimeStateToken } from '../../src/wechat-mp-runtime-state.js';
 
 export { WeChatMpEndpoint } from '../../src/endpoint.js';
 export type { WeChatMpEndpointOptions } from '../../src/endpoint.js';
@@ -22,17 +19,5 @@ export default defineAdapter<WeChatMpEndpointConfig>({
     outboundMedia: ['upload'],
     interactive: 'text',
   },
-  create(context) {
-    const config = resolveWeChatMpConfig(context.config);
-    // 注册到插件运行时状态（wechat-mp endpoint list 的"运行中"数据源）
-    context.use(wechatMpRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: 'webhook',
-    });
-    return new WeChatMpEndpoint({
-      id: context.id,
-      http: context.use(httpHostToken),
-      config,
-    });
-  },
+  createAdapter: context => new WeChatMpAdapter(context),
 });

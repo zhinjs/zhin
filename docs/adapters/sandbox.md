@@ -8,11 +8,13 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=56708b0efd9174ab -->
+<!-- sync-adapter-docs:sha256=f645f4614f359b06 -->
 
 # @zhin.js/adapter-sandbox
 
 Zhin.js Sandbox 适配器，为 **[Remote Console](https://console.zhin.dev)** 提供会话工作区。Host 承载 WebSocket、真实聊天记录和执行状态，Console 提供聊天与工作界面。
+
+账号由 `SandboxAdapter` 管理。Endpoint 直接继承实际 `SandboxClient`，保留原生方法与事件；框架生命周期、规范入站与发送经 `endpointSpec` 和 AdapterIndex 接入，不占用 Client 的原生 `start` / `stop` / `send` 方法。
 
 ## 功能特性
 
@@ -38,7 +40,7 @@ Sandbox 不需要外部账号。只需由 `zhin runtime start` 装配 HTTP Host�
 
 - `@zhin.js/adapter` — 约定式 `adapters/sandbox/index.ts`
 - `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
 
 Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 与

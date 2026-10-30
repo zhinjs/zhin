@@ -1,8 +1,7 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { kookFixture } from './fixture.js';
+import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { checkBuiltinPermit, toPermissionSubject } from '@zhin.js/permission';
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
@@ -12,7 +11,6 @@ import {
   KookWebsocketEndpoint,
 } from '../src/endpoint.js';
 import {
-  type CreateKookClient,
   type KookClientTransport,
 } from '../src/ws.js';
 import {
@@ -26,7 +24,6 @@ import {
   type KookInboundMessage,
   type KookWebhookEventData,
 } from '../src/protocol.js';
-import { kookClient } from '../src/client.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -250,17 +247,15 @@ describe('kook plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
-    const createClient: CreateKookClient = () => mock;
-    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      gateway,
-      config: baseConfig,
-      createClient,
-    }), gateway, undefined);
+    const createClient = () => mock;
+    const endpoint = await kookFixture(() => new KookWebsocketEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+    config: baseConfig
+  }), createClient, gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
@@ -279,23 +274,21 @@ describe('kook plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient(); // self_id = 'bot-1'
-    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      gateway,
-      config: baseConfig,
-      createClient: () => mock,
-    }), gateway, undefined);
+    const endpoint = await kookFixture(() => new KookWebsocketEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+    config: baseConfig
+  }), () => mock, gateway, undefined);
     await endpoint.start();
     endpoint.open();
 
-    endpoint.admit(textMessage({ content: '(met)bot-1(met) 在吗' }));
+    endpoint.endpoint.admit(textMessage({ content: '(met)bot-1(met) 在吗' }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     expect(receive).toHaveBeenNthCalledWith(1, expect.objectContaining({
       conversation: expect.objectContaining({ kind: 'channel', id: 'chan-1' }),
       mentioned: true,
     }));
 
-    endpoint.admit(textMessage({ id: 'msg-2', content: '(met)someone-else(met) 在吗' }));
+    endpoint.endpoint.admit(textMessage({ id: 'msg-2', content: '(met)someone-else(met) 在吗' }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
     const metadata = receive.mock.calls[1]?.[0]?.metadata as Record<string, unknown>;
     expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
@@ -305,26 +298,22 @@ describe('kook plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await kookFixture(() => new KookWebsocketEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+    config: baseConfig
+  }), () => mock, { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
   it('sends outbound payloads via channel / private APIs', async () => {
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await kookFixture(() => new KookWebsocketEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+    config: baseConfig
+  }), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     const channelId = await endpoint.send({
       conversation: {
@@ -364,12 +353,10 @@ describe('kook plugin runtime adapter', () => {
       createRole: vi.fn(async (name: string) => ({ role_id: 'x', name })),
       deleteRole: vi.fn(async () => true),
     }));
-    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      gateway,
-      config: baseConfig,
-      createClient: () => mock,
-    }), gateway, undefined);
+    const endpoint = await kookFixture(() => new KookWebsocketEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+    config: baseConfig
+  }), () => mock, gateway, undefined);
     await endpoint.start();
     endpoint.open();
     const cases: Array<[string, number[], boolean]> = [
@@ -379,7 +366,7 @@ describe('kook plugin runtime adapter', () => {
       ['member-2', [], false],
     ];
     for (const [index, [authorId, authorRoles]] of cases.entries()) {
-      endpoint.admit(textMessage({ id: `m-${index}`, authorId, authorRoles, guildId: 'guild-1' }));
+      endpoint.endpoint.admit(textMessage({ id: `m-${index}`, authorId, authorRoles, guildId: 'guild-1' }));
       await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(index + 1));
     }
     const results = receive.mock.calls.map((call) =>
@@ -396,15 +383,13 @@ describe('kook plugin runtime adapter', () => {
 
   it('registers agent endpoint for tools', async () => {
     const mock = createMockClient();
-    const endpoint = bindTestEndpoint(new KookWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await kookFixture(() => new KookWebsocketEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+    config: baseConfig
+  }), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    const client = kookClient.get(endpointClientContext(endpoint), 'test-kook-bot');
-    expect(client).toBe(mock);
+    const client = endpoint.index.clientById<KookWebsocketEndpoint>(endpoint.canonicalId);
+    expect(client).toBe(endpoint.endpoint);
     const roles = await client.pickGuild('guild-1').getRoleList();
     expect(roles).toHaveLength(1);
     expect(roles[0].name).toBe('Admin');
@@ -418,30 +403,9 @@ describe('kook plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const endpoint = defineKookAdapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      name: 'kook',
-      config: {
-        id: 'kook',
-        token: 'tok',
-        connection: 'webhook',
-        verify_token: VERIFY_TOKEN,
-      },
-      use: (token: unknown) => {
-        if (token === httpHostToken) return http;
-        if (token === outboundMessageToken) return gateway;
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === kookRuntimeStateToken) return createEndpointRuntimeState();
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
-    expect(endpoint).toBeInstanceOf(KookWebhookEndpoint);
+    const endpoint = await createAdapterHarness(defineKookAdapter, { id: 'test-kook-bot', token: 'tok', connection: 'webhook', verify_token: VERIFY_TOKEN }, { name: 'kook', resources: new Map([[httpHostToken.id, http]]) });
+    expect(endpoint.endpoint).toBeInstanceOf(KookWebhookEndpoint);
+    await endpoint.stop();
     await http.close().catch(() => undefined);
   });
 
@@ -451,14 +415,12 @@ describe('kook plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
-    const createClient: CreateKookClient = () => mock;
-    const endpoint = bindTestEndpoint(new KookWebhookEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      gateway,
-      http,
-      config: webhookConfig,
-      createClient,
-    }), gateway, undefined);
+    const createClient = () => mock;
+    const endpoint = await kookFixture(() => new KookWebhookEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+    http,
+    config: webhookConfig
+  }), createClient, gateway, undefined);
 
     await endpoint.start();
     const { port } = await http.listen();
@@ -521,19 +483,17 @@ describe('kook plugin runtime adapter', () => {
 describe('kook endpoint management', () => {
   const GUILD_ID = '9876543210987654321';
 
-  function createManagementEndpoint(mock: KookClientTransport) {
-    return bindTestEndpoint(new KookWebsocketEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
-      config: baseConfig,
-      createClient: () => mock,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+  async function createManagementEndpoint(mock: KookClientTransport) {
+    return await kookFixture(() => new KookWebsocketEndpoint({
+    id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
+    config: baseConfig
+  }), () => mock, { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
   }
 
   it('advertises only implemented management capabilities', async () => {
-    const endpoint = createManagementEndpoint(createMockClient());
+    const endpoint = await createManagementEndpoint(createMockClient());
     await endpoint.start();
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+    expect(endpoint.index.describe()[0]?.managementCapabilities).toEqual([
       'listGroups',
       'listChannels',
       'listGroupMembers',
@@ -542,7 +502,7 @@ describe('kook endpoint management', () => {
   });
 
   it('lists guilds without losing snowflake precision', async () => {
-    const endpoint = createManagementEndpoint(createMockClient());
+    const endpoint = await createManagementEndpoint(createMockClient());
     await endpoint.start();
     // snowflake 超 Number.MAX_SAFE_INTEGER，保留原始字符串
     await expect(endpoint.management.listGroups?.()).resolves.toEqual([
@@ -552,7 +512,7 @@ describe('kook endpoint management', () => {
   });
 
   it('lists only text channels with guild parent', async () => {
-    const endpoint = createManagementEndpoint(createMockClient());
+    const endpoint = await createManagementEndpoint(createMockClient());
     await endpoint.start();
     await expect(endpoint.management.listChannels?.()).resolves.toEqual([
       {
@@ -566,7 +526,7 @@ describe('kook endpoint management', () => {
 
   it('lists guild members in platform shape', async () => {
     const mock = createMockClient();
-    const endpoint = createManagementEndpoint(mock);
+    const endpoint = await createManagementEndpoint(mock);
     await endpoint.start();
     await expect(endpoint.management.listGroupMembers?.(GUILD_ID)).resolves.toEqual([
       { id: 'user-1', username: 'alice', nickname: 'Alice', online: true },
@@ -576,8 +536,8 @@ describe('kook endpoint management', () => {
   });
 
   it('rejects management calls before the client connects', async () => {
-    const endpoint = createManagementEndpoint(createMockClient());
-    await expect(endpoint.management.listGroups?.()).rejects.toThrow('not connected');
+    const endpoint = await createManagementEndpoint(createMockClient());
+    await expect(endpoint.management.listGroups?.()).rejects.toMatchObject({ code: 'endpoint_inactive', disposition: 'not_sent' });
   });
 });
 
@@ -585,12 +545,12 @@ describe('kook endpoint management', () => {
 it.each(['websocket', 'webhook'] as const)('preserves operation locale through the %s endpoint send boundary', async (connection) => {
   const gateway: OutboundMessageService = { receive: vi.fn(async () => ({ matched: false })), send: vi.fn(async () => 'sent') };
   const client = createMockClient();
-  const shared = { id: capabilityId(rootPluginId(), adapterFeature, 'kook'), gateway, createClient: () => client };
+  const shared = { id: capabilityId(rootPluginId(), adapterFeature, 'kook') };
   const http = createHttpHost();
   hosts.push(http);
-  const endpoint = bindTestEndpoint(connection === 'websocket'
+  const endpoint = await kookFixture(() => connection === 'websocket'
     ? new KookWebsocketEndpoint({ ...shared, config: baseConfig })
-    : new KookWebhookEndpoint({ ...shared, http, config: webhookConfig }), gateway, undefined);
+    : new KookWebhookEndpoint({ ...shared, http, config: webhookConfig }), () => client, gateway, undefined);
   await endpoint.start();
   endpoint.open();
   try {

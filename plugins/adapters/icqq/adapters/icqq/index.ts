@@ -1,26 +1,14 @@
-import { projectLocaleToken } from 'zhin.js/i18n';
+import { IcqqAdapter } from '../../src/adapter.js';
 /**
  * Convention entry: discover `adapters/icqq/index.ts` → defineAdapter.
  */
-import { createAdapterOutageNotifier, defineAdapter } from 'zhin.js/adapter';
-import { loginAssistToken } from '@zhin.js/core/runtime';
-import { outboundHostToken } from 'zhin.js';
-import { IcqqEndpoint } from '../../src/endpoint.js';
-import { icqqRuntimeStateToken } from '../../src/icqq-runtime-state.js';
-import { icqqLoginControlToken } from '../../src/icqq-login-control.js';
+import { defineAdapter } from 'zhin.js/adapter';
 import {
-  resolveIcqqConfig,
   type IcqqEndpointConfig,
 } from '../../src/protocol.js';
 
 export { IcqqEndpoint } from '../../src/endpoint.js';
 export type { IcqqEndpointOptions } from '../../src/endpoint.js';
-
-declare module '@zhin.js/core' {
-  interface AdapterEndpoints {
-    icqq: import('../../src/endpoint.js').IcqqEndpoint;
-  }
-}
 
 export default defineAdapter<IcqqEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
@@ -50,24 +38,5 @@ export default defineAdapter<IcqqEndpointConfig>({
       },
     },
   },
-  create(context) {
-    const config = resolveIcqqConfig(context.config);
-    // 注册到插件运行时状态（icqq endpoint list 的"运行中"数据源）
-    context.use(icqqRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: 'direct',
-    });
-    const outbound = context.has?.(outboundHostToken) ? context.use(outboundHostToken) : undefined;
-    const endpoint = new IcqqEndpoint({
-      id: context.id,
-      loginAssist: context.use(loginAssistToken),
-      locale: context.use(projectLocaleToken),
-      config,
-      notifier: createAdapterOutageNotifier(outbound, config.notify),
-    });
-    if (context.has?.(icqqLoginControlToken)) {
-      context.use(icqqLoginControlToken).set(config.id, endpoint.loginControl);
-    }
-    return endpoint;
-  },
+  createAdapter: context => new IcqqAdapter(context),
 });

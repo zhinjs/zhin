@@ -1,6 +1,6 @@
 ---
 title: "Adapter Authoring"
-description: "Write an adapter for a platform Zhin doesn't support yet: the minimal implementation, connecting and cleanup, sending and receiving, multiple accounts, and when you need the lower-level Endpoint"
+description: "Write an adapter for a platform Zhin doesn't support yet: the minimal implementation, connecting and cleanup, sending and receiving, multiple accounts, native Client ownership and framework hooks"
 ---
 
 # Adapter authoring
@@ -20,56 +20,45 @@ Hot reload, account identity, version switching and resource cleanup are handled
 Create `adapters/<platform>/index.ts` in your plugin and default-export `defineAdapter()`:
 
 ```ts
-// adapters/example/index.ts
-import { defineAdapter } from 'zhin.js/adapter';
-import { ExampleClient } from 'example-sdk';
+// adapters/terminal/index.ts
+import { Adapter, defineAdapter } from 'zhin.js/adapter';
+import { TerminalEndpoint } from './endpoint.js';
 
-export default defineAdapter<{ readonly token: string }>({
+interface TerminalConfig {
+  readonly terminal?: { readonly interactive?: boolean; readonly prompt?: string };
+}
+
+class TerminalAdapter extends Adapter<TerminalEndpoint, TerminalConfig, { readonly line: string }> {
+  protected createEndpoint(config: TerminalConfig): TerminalEndpoint {
+    return new TerminalEndpoint({
+      input: process.stdin, output: process.stdout, error: process.stderr,
+      interactive: config.terminal?.interactive ?? true,
+      prompt: config.terminal?.prompt ?? 'zhin> ',
+    });
+  }
+}
+
+declare module 'zhin.js/adapter' {
+  interface AdapterRegistry { readonly terminal: TerminalAdapter; }
+}
+
+export default defineAdapter<TerminalConfig>({
   capabilities: ['inbound', 'outbound'],
-
-  create(context) {
-    const client = new ExampleClient(context.config.token);
-
-    return {
-      client,
-
-      async connect({ events, signal, onCleanup }) {
-        await client.login({ signal });
-        onCleanup(() => client.logout());
-        const unsubscribe = client.onMessage((message) => {
-          void events.message({
-            conversation: {
-              kind: message.groupId ? 'group' : 'private',
-              id: message.groupId ?? message.userId,
-            },
-            content: message.text,
-            sender: { id: message.userId, name: message.nickname },
-          });
-        });
-        onCleanup(unsubscribe);
-      },
-
-      send({ conversation, payload }) {
-        return client.sendMessage(conversation.id, payload);
-      },
-    };
-  },
+  createAdapter: () => new TerminalAdapter(),
 });
 ```
 
-Piece by piece:
+`TerminalEndpoint` extends the `TerminalClient` that owns terminal IO and `implements Endpoint`; see the complete [terminal example](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts). When a platform has an SDK, extend its real Client. Without an SDK, the Client must own protocol IO, requests and cancellation, rather than call back into the Endpoint to find its implementation.
 
-| Part | Purpose |
+| Part | Responsibility |
 | --- | --- |
-| `capabilities` | Declares receiving (`inbound`), sending (`outbound`), or both — at least one. Live-stream danmaku platforms add `liveDanmaku` (requires `inbound`): the Agent then collects danmaku in a window and replies once per window (ADR 0038 §5, configured by `ai.agent.inboundQueue.live`) |
-| `create(context)` | Called once per account; `context.config` is that account's config |
-| `client` | The platform SDK instance. Commands get it as `context.$client`, event handlers as `event.client` |
-| `connect()` | Connects to the platform and **returns only once it is usable** |
-| `onCleanup(fn)` | Register cleanup right after acquiring each resource. If later setup fails, the framework rolls back in reverse order |
-| `events.message()` | Reports an incoming message; the framework fills in the account identity |
-| `send()` | Sends a message and returns the platform message id |
-
-With a single cleanup action you can also just return it from `connect()`.
+| `capabilities` | Declare inbound, outbound or both; `liveDanmaku` also requires `inbound` |
+| `createAdapter(context)` | Construct the plugin-owned Adapter with configuration and injected dependencies |
+| `Adapter.createEndpoint(config, execution)` | Construct the real Endpoint only when its account starts; execution fixes canonical identity, instance and cancellation |
+| `Endpoint` | A structural interface, with no public framework base class |
+| `[endpointSpec]` | Attach framework hooks with `createEndpointSpecification(this, hooks)` without overriding SDK APIs |
+| `events.message()` | Publish normalized messages with framework-supplied account identity; sender identity must come from a real user |
+| specification `send()` | Encode and send messages, returning confirmed ids or ordered `{ parts }` evidence |
 
 ## Common tasks
 
@@ -80,20 +69,21 @@ Mount the plugin containing the adapter on your bot and configure it in `zhin.co
 ```yaml
 configVersion: 2
 plugins:
-  example: '@example/adapter'
-example:
-  token: ${EXAMPLE_TOKEN}
+  terminal: '@example/adapter-terminal'
+terminal:
+  terminal:
+    interactive: true
 ```
 
 After startup, check in Console's **Chat accounts** that the account is online and receiving. Mounting is covered in [First plugin · Mount it on your bot](../getting-started/first-plugin.md).
 
 ### Several accounts on one adapter
 
-No code changes. Add an `endpoints` array in config; each entry creates a separate account connection, and `create(context)` receives the merged per-account config. Rules: [Endpoint lifecycle · Several accounts on one adapter](./endpoint-lifecycle.md#several-accounts-on-one-adapter).
+No code changes. Add an `endpoints` array in config; each entry creates a separate account connection, and the owning Adapter’s `createEndpoint(config, execution)` receives the merged per-account config. Rules: [Endpoint lifecycle · Several accounts on one adapter](./endpoint-lifecycle.md#several-accounts-on-one-adapter).
 
-### Listeners only the active version may hold
+### Only the current version owns a listener
 
-Some listeners or input streams may be held by only one version during a hot-reload switch. Implement a synchronous `activate({ events })` returning a release function; the framework calls it on switch and rollback. Ordinary SDK listeners belong in `connect()`.
+Subscribe exclusive listeners in the specification’s `open` hook, unsubscribe in `close`, and release IO in `stop`. Do not add a global live Endpoint Map. Track each complete accepted callback with `events.run`, as described below.
 
 ### WebSocket / SSE, heartbeats and reconnection
 
@@ -101,15 +91,31 @@ Don't write your own reconnect state machine — use [`createEndpointLifecycle`]
 
 ### Platform-specific message formats
 
-Convert platform-specific structures such as `share`, audio or cards at the `send()` boundary. Plugins still send through `Message.$reply` or `Adapter.sendMessage`; never open a separate send path.
+Convert platform-specific structures such as `share`, audio or cards at the `send()` boundary. Plugins still send through `Message.$reply` or the Host’s `outboundHostToken`; never open a separate send path.
 
 ### Manage accounts from chat
 
 `createEndpointCommands` generates `<adapter> endpoint list / add / remove` commands; see [Commands · Endpoint management commands for adapters](./commands.md#endpoint-management-commands-for-adapters).
 
-## When to extend Endpoint
+## Native Client inheritance and account ownership
 
-`defineAdapter` as above covers most platforms. Only when a protocol needs a **custom multi-stage connection flow** should you extend the `Endpoint` class and implement `start` / `open` / `close` / `stop` yourself; see [Endpoint lifecycle hooks](./endpoint-lifecycle.md#endpoint-lifecycle-hooks).
+Implement `Adapter<E, Config, Events>` and let it own every Endpoint. An Endpoint extends the actual SDK Client and uses `endpointSpec` / `createEndpointSpecification` for framework hooks without replacing native `on`, `off`, or `emit`. Register the Adapter type once through the public `zhin.js/adapter` `AdapterRegistry`; literal platform declarations in commands infer its Endpoint.
+
+Adding an account saves disabled configuration without constructing an SDK object. Explicit start connects it. The owning Adapter handles update, stop, removal, and replacement. Updating a running account reconnects only that account; existing operations remain bound to their original incarnation. `defineAdapter` accepts only `createAdapter`; do not add another global account controller, Client token, or writable Endpoint directory.
+
+SDK `emit/on/off` and native methods retain their own contracts. Register the actual Adapter once in `AdapterRegistry`; its `Adapter<Endpoint, Config, Events>` parameters infer Client and EventMap through that same registry, without another Client descriptor or token.
+
+The adapter declarations must belong to the TypeScript project. Local convention directories are included normally; across packages, load the adapter through `compilerOptions.types` or a single package import. Each command then needs only `adapter: 'icqq'`, without importing a concrete Adapter class. Runtime plugin loading does not modify the editor's type project.
+
+## Admit the complete SDK callback
+
+Wrap the whole asynchronous SDK listener in `events.run(async () => { ... })`, including decoding, native-event forwarding and normalized message submission. Await or handle its Promise. Wrapping only the final `events.message()` leaves earlier asynchronous decoding outside the receipt lifetime.
+
+`close` first closes new framework admission, calls the platform close hook, then drains already accepted callbacks and their normalized continuations. `stop` retires that incarnation and cancels its signal before draining operation leases and releasing resources. Platform requests must honor this signal. Do not wait for an account’s own `close/stop` inside its inbound callback: that would wait on itself and is rejected.
+
+A native event means the SDK’s public event and the object it actually supplies. Preserve that payload and its fields rather than reconstructing it from a normalized message. It is not necessarily a raw wire packet: do not claim preservation of encrypted frames, HTTP bytes or SDK internals that the SDK never exposes. For platform-parsed XML webhooks or ParsedMail, preserve the actual original object on the native-event path too.
+
+`events.message()` publishes normalized messages; `events.platform(name, event)` preserves native events. Use `events.emitAccepted()` when a cursor or ACK must wait for real admission and dispatch; failed dispatch must not advance that cursor. Continue using `createEndpointLifecycle` for reconnect and heartbeat; see [lifecycle hooks](./endpoint-lifecycle.md#endpoint-lifecycle-hooks).
 
 ## Reference implementations
 

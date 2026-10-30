@@ -4,7 +4,7 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
-  Endpoint,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   createRecallEndpointControl,
   type EndpointControl,
   type EndpointManagement,
@@ -38,43 +38,55 @@ import { receiveNapCatSideEvent } from './side-event-dispatch.js';
 import { createNapCatContentPort } from './onebot-get-msg.js';
 import { NapcatClient } from './client.js';
 import { readRequestBody } from './webhook.js';
-import { NapCatWsEndpoint } from './ws-endpoint.js';
 import { verifyNapCatAccessToken } from './wss-auth.js';
 
 export interface NapCatHttpEndpointOptions {
   readonly id: CapabilityId;
+  readonly signal?: AbortSignal;
   readonly http: HttpHost;
   readonly config: NapCatHttpConfig;
   readonly callHttpAction?: typeof callNapCatHttpAction;
 }
 
-export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
-  readonly client = new NapcatClient((action, params) => this.#callApi(action, params));
+export class NapCatHttpEndpoint extends NapcatClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: NapCatHttpEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
-  readonly management: EndpointManagement = createNapCatEndpointManagement(this.client);
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content = createNapCatContentPort((action, params) => this.client.callApi(action, params));
-  readonly #callHttpAction: typeof callNapCatHttpAction;
+  readonly #management: EndpointManagement = createNapCatEndpointManagement(this);
+  readonly #control: EndpointControl = createRecallEndpointControl((id) => this.#recallMessage(id));
+  readonly #content = createNapCatContentPort((action, params) => this.callApi(action, params));
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;
   #stopped = false;
 
   constructor(options: NapCatHttpEndpointOptions) {
-    super();
+    super(options.config, options.callHttpAction ?? callNapCatHttpAction, options.signal);
     this.#logger = getAdapterLogger('napcat', options.config.id);
     this.#options = options;
-    this.#callHttpAction = options.callHttpAction ?? callNapCatHttpAction;
+    const readTransportState = () => this.#transportState;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => this.#openEndpoint(),
+      close: () => this.#close(), stop: () => this.#stop(),
+      send: request => this.#send(request),
+      management: this.#management, control: this.#control, content: this.#content,
+      get transportState() { return readTransportState(); },
+    });
+    this.on('event', event => {
+      void this[endpointSpec].events.run(() => this.#admit(event)).catch((error: unknown) => {
+        this.#logger.debug(formatCompact({ op: 'napcat_receive_failed', error: error instanceof Error ? error.message : String(error) }));
+      });
+    });
   }
 
-  get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     return this.#stopped ? 'stopped' : this.#started ? 'open' : 'idle';
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#started) return;
     this.#stopped = false;
     this.#started = true;
@@ -87,15 +99,15 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
     }));
   }
 
-  open(): void {
+  #openEndpoint(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #close(): void {
     this.#open = false;
   }
 
-  async stop(): Promise<void> {
+  async #stop(): Promise<void> {
     this.#stopped = true;
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
@@ -104,18 +116,10 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
-    const resp = await this.#callHttpAction(
-      {
-        http_url: this.#options.config.http_url,
-        access_token: this.#options.config.access_token,
-      },
-      action,
-      params,
-    );
-    const data = resp.data as { message_id?: number | string } | undefined;
+    const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
     const rawId = data?.message_id;
     if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
       throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
@@ -130,25 +134,17 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
     return messageId;
   }
 
-  async recallMessage(messageId: string): Promise<void> {
+  async #recallMessage(messageId: string): Promise<void> {
     if (!messageId) return;
-    await this.client.callApi('delete_msg', { message_id: Number(messageId) });
+    await this.callApi('delete_msg', { message_id: Number(messageId) });
   }
 
-  #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
-    return this.#callHttpAction(
-      {
-        http_url: this.#options.config.http_url,
-        access_token: this.#options.config.access_token,
-      },
-      action,
-      params,
-    ).then((resp) => resp.data);
-  }
 
-  admit(ev: NapCatEvent): void {
-    if (!this.#open) return;
-    void this.emitPlatform(napCatPlatformEventName(ev), ev).catch((error) => {
+
+  #admit(ev: NapCatEvent): void {
+    const nativeEvent = ev;
+    if (!this.#started) return;
+    void this[endpointSpec].events.platform(napCatPlatformEventName(ev), ev).catch((error) => {
       this.#logger.warn(formatCompact({
         op: 'napcat_platform_event_failed',
         error: error instanceof Error ? error.message : String(error),
@@ -156,9 +152,9 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
     });
     if (!isMessageEvent(ev)) {
       receiveNapCatSideEvent(
-        (name, payload) => this.emit(name, payload),
+        (name, payload) => this[endpointSpec].events.emit(name, payload),
         this.#options.config.id,
-        this.client,
+        this,
         ev,
         this.#logger,
       );
@@ -170,10 +166,12 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
     if (Array.isArray(ev.message) || typeof ev.message === 'string') {
       ev = { ...ev, message: normalizeMessage(ev.message) };
     }
-    const conversation = napcatInboundConversation(String(this.#options.id), ev);
+    const conversation = { ...napcatInboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const nickname = senderNickname(ev);
     const mentioned = isNapCatBotMentioned(ev);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event: nativeEvent,
+      ...(typeof nativeEvent.time === 'number' ? { platformSentAt: nativeEvent.time * 1000 } : {}),
       conversation,
       message: { conversation, id: msgId },
       content: formatInboundContent(ev),
@@ -227,7 +225,11 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
         response.end(JSON.stringify({ message: 'Invalid JSON' }));
         return;
       }
-      if (this.#open) this.admit(ev);
+      if (this.#open) {
+        void this[endpointSpec].events.run(() => this.ingest(ev)).catch((error: unknown) => {
+          this.#logger.debug(formatCompact({ op: 'napcat_receive_failed', error: error instanceof Error ? error.message : String(error) }));
+        });
+      }
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ status: 'ok' }));
     } catch (error) {

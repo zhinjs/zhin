@@ -43,7 +43,7 @@ flowchart LR
 
 各环节的真实代码位置：
 
-1. **Client 与 Endpoint 分工**。Client 是真实平台 SDK 或干净的协议 Client，负责平台 API 与原始事件；Endpoint 负责账号、Transport、热重载生命周期和框架边界。所有 Endpoint 继承 `Endpoint<TClient>`，并通过唯一的 `emit(name, payload)` 入站。每个事件统一包装为：
+1. **Adapter、原生 Client 与 Endpoint**。所属 `Adapter` 管理账号期望状态、运行实例与生命周期。平台 Endpoint 继承真实 SDK 或实际拥有协议 IO 的 Client，实现结构接口 `Endpoint`；框架钩子由 `endpointSpec` 注册，不覆盖 SDK 原生方法。规范入站经 `endpoint[endpointSpec].events`，每个事件统一包装为：
 
    ```ts
    interface EndpointEvent<TPayload, TClient> {
@@ -54,7 +54,7 @@ flowchart LR
    }
    ```
 
-   原生事件先以 `platform.receive` 无损上送（payload 为 `{ name, event }`），已知事件再可选投影为 `message.receive`、`notice.receive`、`request.receive`、`system.receive`。因此消息、入群申请、成员变动、上线/离线和平台扩展事件都能在插件中访问同一个 Client。候选 generation 在 `start()` 期间产生的首批事件由 Endpoint 基座暂存，提交时按序回放；退役代的迟到事件被丢弃。
+   原生事件先以 `platform.receive` 无损上送（payload 为 `{ name, event }`），已知事件再可选投影为 `message.receive`、`notice.receive`、`request.receive`、`system.receive`。因此消息、入群申请、成员变动、上线/离线和平台扩展事件都能在插件中访问同一个 Client。完整的已解析、已认证平台回调从 `events.run(...)` 接纳，去重与异步归一化均在其内；`close` 排空已接纳回调，`stop` 取消该运行实例。原始 HTTP 读取与验签仍由 Host 或 SDK 持有，平台原有 ACK 时机不变。这里的原生事件指 SDK 或协议 Client 实际公开的对象，不承诺未公开的底层网络包。候选 generation 启动期间的首批事件由内部接纳运行时暂存，提交时按序回放；退役代的迟到事件被拒绝。
 
 2. **消息归一化**。对于 `message.receive`，Endpoint 把平台消息投影为以下 payload：
 
@@ -103,14 +103,14 @@ flowchart LR
     N --> V["createOutboundEnvelope<br/>conversation·requester·generation"]
     V --> MW["中间件 outbound<br/>可 envelope.replace(payload)"]
     MW --> S[AdapterIndex.send<br/>校验 outbound 能力与在线状态]
-    S --> E["endpoint.send({conversation, payload})"]
+    S --> E["注册的 send 钩子({conversation, payload})"]
 ```
 
 - **SendContent 形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；canonical `Segment`（一等公民，见下文「多模态」）；消息 JSX（默认映射 Segment，仅 `<html>` / `<Html>` 子树转 HTML）；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及它们的数组嵌套。
 - **Envelope** 携带 `conversation`（结构化会话寻址 `ConversationRef`，`@zhin.js/im-contract`）、`requester`（发起方插件，用于组件权限与审计）、`generation`，并提供 `replace(payload)` 给出站中间件改写内容。
 - **出站中间件**与入站共用一套定义，`target: 'outbound'` 即拦截出站。
 - **运行时所有权**集中在 `OutboundDeliveryRuntime`：它独占渲染、媒体与交互策略投影、出站中间件、Endpoint 投递、会话事实记账和消息观察事件发布。`ImRuntime` 只负责取得正确的 generation 租约并委托投递。
-- **最终一公里**在 `AdapterIndex.send`：endpoint 必须声明 `outbound` 能力、且处于 `started && !stopped`，否则抛错；通过后调用 `endpoint.send()` 落到平台。
+- **最终一公里**在 `AdapterIndex.send`：endpoint 必须声明 `outbound` 能力、且处于 `started && !stopped`，否则抛错；通过后由该运行实例的租约调用 `createEndpointSpecification` 注册的 send 钩子落到平台，SDK 原生方法保持自身合同。
 
 普通消息发送都应走这条统一管道（`$reply` / `$replyFrom` / `OutboundMessageService.send`），避免绕过渲染、中间件与事件广播。入群审批、角色管理、平台查询等非消息业务则应从当前事件/命令/工具 operation 解析 Client，直接调用平台 SDK；不要把 Client 缓存到 operation 之外。
 

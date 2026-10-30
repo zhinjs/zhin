@@ -1056,6 +1056,10 @@ function errorReply(
 export function isDemoHttpAllowed(method: string, pathname: string, apiBase: string): boolean {
   const normalizedBase = apiBase.replace(/\/$/u, '') || '/api';
   const m = method.toUpperCase();
+  // These handlers require an authenticated principal and verify its bound personal owner.
+  if ((m === 'GET' || m === 'PUT') && (pathname === `${normalizedBase}/agent/personal-models`
+    || pathname === `${normalizedBase}/agent/personal-session`)) return true;
+  if (m === 'GET' && pathname === `${normalizedBase}/agent/personal-sessions`) return true;
   if (m === 'GET' && pathname === `${normalizedBase}/events`) return true;
   if (m === 'GET' && pathname === `${normalizedBase}/events/history`) return true;
   if (m === 'GET' && DEMO_INTROSPECTION_PATHS.has(pathname.slice(normalizedBase.length))) return true;

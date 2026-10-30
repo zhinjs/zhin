@@ -4,97 +4,74 @@ Zhin Plugin Runtime 的平台接入创作面。项目只需在 `adapters/**/*/in
 `defineAdapter()`；框架负责发现、多账号展开、热重载切代、事件准入和资源清理。
 
 ```ts
-import { defineAdapter } from 'zhin.js/adapter';
+import { Adapter, defineAdapter } from 'zhin.js/adapter';
+import { ChannelEndpoint } from './endpoint.js';
+import type { ChannelConfig } from './config.js';
 
-export default defineAdapter({
+class ChannelAdapter extends Adapter<ChannelEndpoint, ChannelConfig> {
+  protected createEndpoint(config: ChannelConfig): ChannelEndpoint {
+    return new ChannelEndpoint(config);
+  }
+}
+
+export default defineAdapter<ChannelConfig>({
   capabilities: ['inbound', 'outbound'],
-  create: () => {
-    const client = createPlatformClient();
-    return {
-      client,
-      connect({ events }) {
-        const unsubscribe = client.onMessage((message) => void events.message({
-          conversation: { kind: 'private', id: message.userId },
-          content: message.text,
-          sender: { id: message.userId },
-        }));
-        return unsubscribe;
-      },
-      send: ({ conversation, payload }) => client.send(conversation.id, payload),
-    };
-  },
+  createAdapter: () => new ChannelAdapter(),
 });
 ```
 
-普通适配器只实现 `client`、`connect` 和 `send`。`connect` 返回一个清理函数即可；
-`Endpoint` 身份、`start/open/close/stop`、切代期间的事件缓冲均由框架处理。需要精细控制
-连接状态的复杂协议仍可返回 `Endpoint` 子类，现有适配器无需迁移。
+这里的 `ChannelEndpoint` 是平台自己的类：继承真实 SDK Client，或继承真正拥有 IO、
+请求与取消的协议 Client，并 `implements Endpoint`。它通过 `[endpointSpec]` 持有
+`createEndpointSpecification(this, hooks)` 的结果；框架生命周期、出站、管理与消息
+规范化钩子放在该命名空间，不覆盖 SDK 原生 `emit/on/off` 或其他方法。
+没有 SDK 的平台不需要伪造 SDK 外壳。完整可运行示例见
+[`examples/minimal-bot/adapters/terminal/index.ts`](../../../examples/minimal-bot/adapters/terminal/index.ts)。
+
+`createAdapter` 必填；公开 `Endpoint` 只有结构 interface，没有可继承的框架基类，
+也没有紧凑对象 materializer。Adapter 拥有账号配置、启动/停止、更新、销毁与 child
+incarnation；AdapterIndex 只投影目录、租约路由和 generation 准入。
+新增账号仅持久化，不构造 Client。配置通过注入的 desired Repository 做一次 CAS；
+公开结果不含私有配置或凭据。Repository 在数据库就绪的 activation 阶段读取，
+停用或删除的持久账号不会先按启动配置创建连接。
 
 完整入门见 [适配器开发](../../../docs/authoring/adapters.md)，重连与心跳见
 [端点生命周期](../../../docs/authoring/endpoint-lifecycle.md)。
 
 ## 源码地图
 
-适配器包保持单层目录，避免为了分类制造更深的相对路径；文件按稳定责任划分：
-
 | 文件 | 只负责 |
 | --- | --- |
-| `definition.ts` | `defineAdapter()`、能力声明和配置策略；作者入口 |
-| `endpoint-contract.ts` | Client、事件、消息与紧凑实现的纯类型契约；不含运行时状态 |
-| `endpoint.ts` | 可继承的 Endpoint 平台边界、身份绑定与代际事件准入 |
-| `managed-endpoint.ts` | 把 `{ client, connect, activate?, send }` 转成完整 Endpoint；框架内部 |
-| `adapter-index.ts` | 展开配置并编排一代 Endpoint；框架内部 |
-| `endpoint-{client,control,content,management}.ts` | 四个相互独立的可选端口 |
+| `definition.ts` | `defineAdapter()`、能力声明、`createAdapter` 作者入口 |
+| `endpoint-contract.ts` | 原始事件、规范化消息与出站证据的类型契约 |
+| `endpoint-specification.ts` | 公开 Endpoint interface、symbol 与原生 Client 规范附件 |
+| `endpoint.ts` | 包内事件准入、缓冲和生命周期运行时，不是公开继承入口 |
+| `adapter.ts`、`adapter-types.ts` | 账号 desired Repository、CAS、child incarnation 与操作租约 |
+| `adapter-index.ts` | Adapter/Endpoint 目录、generation 投影和租约路由 |
+| `endpoint-{client,control,content,management}.ts` | 原生事件桥接与可选控制、内容、管理端口 |
 | `endpoint-lifecycle.ts` | WebSocket/SSE 的连接、重连与心跳基座 |
-| `endpoint-configuration.ts` | Endpoint 配置持久化端口；不包含文件系统实现 |
-| `endpoint-commands.ts` | Endpoint 配置命令语义与运行态投影；通过端口持久化 |
+| `endpoint-configuration.ts` | 不含持久化行为的配置行 DTO |
+| `endpoint-commands.ts`、`adapter-runtime-console.ts` | 聊天与 Console 共用的账号管理语义 |
 
-核心 import 依赖固定为：
-
-```text
-adapter-index → managed-endpoint → endpoint → endpoint-contract
-definition ─────────────────────→ endpoint
-definition ───────────────────────────────→ endpoint-contract
-```
-
-平台包只从 `zhin.js/adapter` 导入，不引用这些源码路径。阅读普通适配器时先看
-`definition.ts` 和 `endpoint-contract.ts`；只有实现自定义生命周期时才需要看
-`endpoint.ts`，`managed-endpoint.ts` 与 `adapter-index.ts` 属于 Runtime 装配细节。
-
-本包只依赖 Kernel 与 Feature Kit，不包含具体平台 SDK。生产 manifest 指向
-`lib/provider.js`；开发时可通过 conditional export 读取源码。
-
-单文件插件可用 `setup({ addAdapter })` 注册 `defineAdapter(...)`；Endpoint 仍由同一个
-AdapterIndex 和 generation lifecycle 管理。
+平台包只从 `zhin.js/adapter` 导入，不引用内部源码路径。本包不包含具体平台 SDK。
+生产 manifest 指向 `lib/provider.js`；开发时可通过 conditional export 读取源码。
+单文件插件也可用 `setup({ addAdapter })` 注册同一 `defineAdapter(...)`。
 
 ## Adapter 与 Endpoint 职责
 
-二者不是同一个运行时对象的两种叫法。固定职责如下：
-
 | Module | 负责 | 禁止承担 |
 | --- | --- | --- |
-| Adapter definition | 声明平台能力与段策略；解析单个 endpoint 配置；注入依赖；返回紧凑实现对象或高级 Endpoint 子类 | 保存 live Endpoint Map、展开多账号配置 |
-| Endpoint implementation | 代表一个具体账号/连接；拥有平台 client、协议编解码、connect/send/control/content/management | 理解 generation、手写准入门、注册全局 Endpoint |
-| Framework Endpoint | 为紧凑实现补齐身份、start/open/close/stop、切代准入与清理；高级适配器可直接继承 | 理解平台协议、鉴权或媒体上传 |
-| AdapterIndex | 展开 1:N 配置；作为当前 generation 的 Endpoint directory；校验能力；编排 admission 与生命周期；提供 Runtime 查询 | 理解平台协议、鉴权、媒体上传或 SDK 类型 |
-| Plugin composition | 提供 schema、Resource、命令、HTTP Host 和平台专属 Agent tools | 绕过 AdapterIndex 保存另一份 live Endpoint 权威状态 |
+| Adapter definition | 声明能力、配置类型和 Adapter 构造入口 | 保存另一份 live Endpoint Map |
+| Adapter | 验证配置、账号 CAS、构造真实 Client、编排 child 生命周期 | 写项目 YAML/JSON 或 `.env` |
+| Endpoint | 具体账号的真实 Client、协议 IO、原始事件与规范化消息 | 理解 Root generation 或注册平行目录 |
+| AdapterIndex | owner 目录、能力校验、准入、租约路由 | 平台协议、鉴权或媒体上传 |
+| Plugin composition | schema、Resource、命令、HTTP 与平台工具 | 绕过 Adapter 保存 live Endpoint 权威状态 |
 
-`defineAdapter().create()` 是 Adapter 与 Endpoint 的唯一 Seam：调用前属于配置、能力和
-依赖装配，返回后属于具体 Endpoint 的运行期。默认返回紧凑实现对象；只有协议确实需要
-自定义生命周期时才继承 `Endpoint`。Adapter definition 应保持无连接状态；
-Endpoint 不得把自己注册进模块级 Map。需要从命令、Agent tool 或 Host 查找当前 Endpoint
-时，应解析当前 generation 的 AdapterIndex/Resource View，不能建立 second source of truth。
-
-已移除的 `@zhin.js/core` `Adapter` class 曾同时承担集合、消息管线、发送和 Registry。
-新代码不得重新引入、继承或伪造该 class；运行
-期协作应依赖 `OutboundMessageService`、`OutboundHost`、`EndpointControl` 等窄 Interface。
-`pnpm check:adapter-endpoint-boundaries` 对现存 legacy Adapter consumer 与模块级 Agent
-Endpoint registry 使用基线 allowlist 做单调收缩门禁：允许逐项删除，但禁止新增。
-
-Endpoint 管理命令只依赖异步 `EndpointConfigurationStore`。Root 配置文件定位、YAML/JSON
-事务、YAML 注释保留和 `.env` 写入由 CLI composition root 的实现负责，并以根 Resource
-注入。平台适配器不得直接导入 `node:fs`、`node:path` 或序列化库来修改项目配置；非
-canonical 的 `plugins` 结构直接报错，由显式迁移命令处理。
+首次修改已有静态账号前，Console 列出清单并由管理员确认迁移；迁移保留身份和历史。
+之后 Console 与聊天命令使用同一持久化账号配置，变更不写启动文件、不重启 Root。
+新增只保存，启动由用户明确操作；普通连接配置更新只重连目标账号。身份替换关闭旧
+账号，产生新 instance/canonical identity，历史保留且不继承旧 Session，新账号仍须手动启动。
+身份字段与普通可更新字段由平台明确声明，opaque 凭据核验由真实只读协议接口负责。
+配置冲突或提交结果未知时应读取权威状态核实，不能自动重放写操作。
 
 ## Transport Contract
 
@@ -121,22 +98,23 @@ preserves completed parts with `disposition: 'unknown'`; callers must not resend
 
 ## Endpoint Control Port
 
-`Endpoint.control` owns actions addressed to an existing message:
+`createEndpointSpecification(..., { control })` supplies framework actions addressed to an existing message:
 `recall`, `addReaction`, and `removeReaction`. IM Core consumes only this port;
 adapter-specific method names and compound message ids stay at the protocol
 boundary.
 
-New adapters should provide `control` directly and declare matching
+Adapters provide the specification’s `control` hook and declare matching
 `operations`. Protocol-specific methods and compound string identifiers are not
 inspected by the runtime. `createRecallEndpointControl()` bridges the common
 platform `recall(messageId)` shape without leaking that shape into Core.
 
 ## Operation-scoped Client resolution
 
-每个平台包公开一个由 `defineEndpointClient<Client, EventMap>()` 创建的 token，并通过
-`AdapterClientRegistry` 注册 Client/EventMap 类型。当前 IM operation 不需要手动查找
-Endpoint：Handler 的事件参数直接携带 `client`，Command、Middleware 和 Agent Tool 的
-`context.$client` 是按需解析的属性 getter：
+每个平台通过公开 `zhin.js/adapter` 的 `AdapterRegistry` 注册实际 Adapter 类；
+这是同一底层注册表的公开导出，不新增另一处 registry。
+Client 和 EventMap 从该类的泛型推断，不再有独立 Client token 或 descriptor lookup。
+Handler 的事件参数携带原生 `client`；Command、Middleware 和 Agent Tool 的
+`context.$client` 按当前 operation 的 Endpoint 解析：
 
 ```ts
 defineCommand({
@@ -145,15 +123,12 @@ defineCommand({
     return context.$client.getGroupList();
   },
 });
-
-const client = icqqClient.get(context, id);  // task / schedule / Host / 跨账号
-const client = icqqClient.find(context, id); // 可选显式查找；不存在时返回 undefined
 ```
 
-声明字面量 `adapter` 后 `$client` 会反射为确切 Client；不声明时保持 `unknown`。
-Token 的 `get()` 会校验 Endpoint adapter，并从当前 generation 的 AdapterIndex 解析；
-返回值不得缓存到当前 operation 之外。平台 SDK 方法直接在 Client 上调用，Endpoint 不复制
-SDK interface。普通消息发送仍必须走统一 outbound chain。
+声明字面量 `adapter` 后 `$client` 推断为确切原生 Client；不声明时保持 `unknown`。
+跨账号任务通过当前 owner 的 AdapterIndex 查询真实 canonical identity，并在 operation
+租约内使用，不能缓存到 operation 之外。SDK 方法直接在 Client 上调用；普通消息发送
+仍走统一 outbound chain。SDK 外部副作用不能靠取消信号撤回。
 
 ## Endpoint 生命周期基座（createEndpointLifecycle）
 
@@ -172,19 +147,17 @@ stop 主动断开不重连、心跳 PONG 看门狗、定时器集中清理、陈
   `master`、`intents`）。
 - `plugins.<adapter> endpoints[index]` 配置单个 endpoint 的**特殊配置**，逐项覆盖通用
   配置，`id` 必填。
-- 不写 `endpoints` 时退化为单 endpoint（历史行为），实例 config 原样传给 `create()`。
+- 不写 `endpoints` 时退化为单 endpoint（历史行为），实例 config 交给 Adapter 构造对应 Endpoint。
 
-展开由 `expandEndpointConfigs`（`src/adapter-index.ts`）完成：endpoint record id 为
-`<slotId>~<id>`，合并顺序 `{...通用, ...项}`（项优先），`endpoints` 键不下传给适配器。
-record name 即 entry.id——Console 展示、endpoint identity 解析、inbox 落库都按它命中
-唯一 endpoint（适配器实例的 live name 如 icqq uin 优先于它展示）。entry.id 不得含
-`~`/`\0`（会破坏 id 结构），重复、缺失或非法 id 会使候选配置失败。
+静态配置展开使用通用字段与单项覆盖（项优先）；运行时账号以 Repository 中的
+instanceId 和 canonicalId 为身份依据。配置项 id、显示名与 SDK nickname 不能代替
+canonical identity，重建账号也不能凭这些值继承旧身份。
 多账号示例见 `plugins/adapters/icqq` / `plugins/adapters/qq` 的 README 与 schema。
 
-Endpoint 可通过 `transportState` getter 报告本地传输状态：`idle / connecting / open / reconnecting / closed / stopped`。
+Endpoint specification 可通过 `transportState` getter 报告本地传输状态：`idle / connecting / open / reconnecting / closed / stopped`。
 `AdapterIndex.describe()` 分开报告 `admitted` 与 `transportState`，只有准入开放且传输为 `open` 才是 `connected`。
-class 与 compact Endpoint 均需提供健康 getter，否则报告 `unknown`，不会假报在线。
-`connect()` 完成仅表示启动调用完成；HTTP/反向连接需区分 listener 挂载与实际连接等待。
+未提供健康 getter 时报告 `unknown`，不会假报在线。
+specification 的 `start()` 完成仅表示启动调用完成；HTTP/反向连接需区分 listener 挂载与实际连接等待。
 候选代事件缓冲有界（256）；`eventDiagnostics` 提供 buffered/dropped/dispatchFailures，无事件正文。
 
 ## 命令前缀（commandPrefix）
@@ -205,17 +178,20 @@ import { telegramConsoleSpec } from './src/console-spec.js';
 
 context.resources.provide(pluginConsoleRpcToken, createAdapterConsoleRpc({
   ...telegramConsoleSpec,
-  running: () => context.resources.use(telegramRuntimeStateToken).endpoints.values(),
   getConfig: () => context.config.get(),
-}, context.resources));
+}));
 ```
 
-生成的 `status` / `endpoint-add` / `endpoint-remove` 约定：
+生成的 `status` 和 `endpoint-add/update/start/stop/remove/replace` 约定：
 
 - 页面读取需要 `<adapterKey>:read`，写操作需要 `<adapterKey>:write`；
-- `env: true` 的字段写入 `.env`，配置里只保留 `${ENV}` 引用；`secret: true` 的字段只展示遮蔽值；
-- 没有 `endpointConfigurationStoreToken` 时只读降级（`canAdd` / `canRemove` 为 `false`）；
-- 适配器自有动作通过 `actions` 声明，`availableActions` 控制当前状态下页面展示哪些动作（例如 QQ 扫码绑定）。
+- Host 从调用者所属插件的运行目录解析 Adapter，不能跨 owner 选择账号；
+- mutation 携带 `expectedGeneration`、`expectedRevision`，首次迁移另需管理员确认；
+- `env: true` / `secret: true` 是敏感字段声明：响应只返回遮蔽值，凭据由 Host 私有存储保存；
+- 新增与替换只保存且未启动；普通更新仅作用于目标账号；
+- 无运行目录或持久化能力时拒绝修改，不回退项目文件写入；
+- 返回的 `saved` 与 `execution` 分别表示配置提交和运行执行状态；`commit_unknown` 必须先核实；
+- 平台自有动作由 `actions` 声明，`availableActions` 控制显示（例如 QQ 扫码绑定）。
 
 浏览器侧使用 [`@zhin.js/client`](../../console/client/README.md) 的 `createAdapterConsolePage(adapterKey)`。
 
@@ -244,7 +220,7 @@ await notifier.send('ICQQ 10001 已掉线');
 
 ### Transport 创建上下文
 
-`create(context)` 只提供 `owner`、`config`、`generation`、`signal` 和 `use(token)`；
+`createAdapter(context)` 只提供 `owner`、`config`、`generation`、`signal` 和 `use(token)`；
 Adapter 还提供端点的 `id`、`endpointId` 和 `name`。这些值属于 owner 的创建生命周期，
 不是每次消息或工具调用的 operation snapshot。未改 owner 的连接可跨局部热重载保留。
 

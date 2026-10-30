@@ -424,7 +424,7 @@ Calls stopped by the hard gate (ADR 0036 §3) leave an approval card here. The a
 
 ## Adapter Console pages
 
-Every built-in platform adapter (`plugins/adapters/*`) ships a `pages/index/index.ts`. Pages use `createAdapterConsolePage(adapterKey)` from `@zhin.js/client`; the server side uses `createAdapterConsoleRpc(spec, resources)` from `@zhin.js/adapter`:
+Every built-in platform adapter (`plugins/adapters/*`) ships a `pages/index/index.ts`. Pages use `createAdapterConsolePage(adapterKey)` from `@zhin.js/client`; the server side uses `createAdapterConsoleRpc(spec)` from `@zhin.js/adapter`:
 
 ```ts
 // pages/index/index.ts
@@ -444,14 +444,16 @@ export default createAdapterConsolePage('telegram');
 From the page you can:
 
 - see the adapter's running endpoints from Host `endpoint.list` and run `endpoint.test` for connectivity;
-- read `plugin.<pluginId>.status` for configured `plugins.<adapter>.endpoints` (secret fields only show `${ENV}` references or `••••••`);
-- add or remove endpoints through `endpoint-add` / `endpoint-remove`; credentials go to `.env` and the config keeps only a reference;
+- read the owning Adapter’s account directory and runtime state from `plugin.<pluginId>.status`, with sensitive fields masked;
+- manage accounts through `endpoint-add` / `endpoint-update` / `endpoint-start` / `endpoint-stop` / `endpoint-remove` / `endpoint-replace`; Host persistence uses CAS and leaves startup files and `.env` unchanged;
 - consume LoginAssist tasks from `login.list` with `login.submit` / `login.cancel` (QR code, slider, SMS, device confirmation);
 - render adapter-specific actions from `status.actions` (for example QQ QR binding and public/private selection).
 
-Permissions are per adapter: page reads need `<adapterKey>:read`; writes (endpoint changes and custom actions) need `<adapterKey>:write`. A full admin token is unrestricted. Environments without configuration storage degrade to read-only: `status.canAdd` / `canRemove` are `false`.
+Permissions are per adapter: page reads need `<adapterKey>:read`; writes (account changes and custom actions) need `<adapterKey>:write`. A full admin token is unrestricted. An administrator must review and confirm the existing account list before its first migration. Without a persistence management port, `runtime.canManage` is false or the request explicitly fails as unavailable; there is no configuration-file fallback.
 
-Keep `createAdapterConsoleRpc` specs limited to public field metadata. `env: true` fields are written to `.env` and returned as `${ENV}` references; other sensitive fields use `secret: true` and are masked. `extraStatus` should expose only a few state values (for example `bindState` or `scanUrl`), never logs, chat text or secrets.
+Each mutation supplies the directory’s `expectedGeneration` and `expectedRevision` and targets an `instanceId`; the first migration adds `confirmMigration: true` only after user confirmation. New and replacement accounts are saved disabled; connection updates reconnect only the target account. Refresh to verify conflicts or unknown commit outcomes rather than automatically retrying. Persistence acknowledgment and asynchronous startup or cleanup completion are separate states.
+
+Keep `createAdapterConsoleRpc` specs limited to public field metadata. Fields marked `env: true` or `secret: true` are masked; `env` no longer grants file-writing behavior. Editing submits only fields declared mutable by the platform; blank or masked secrets retain their current value. Replacement requires a complete new configuration. `extraStatus` should expose only a few state values (for example `bindState` or `scanUrl`), never logs, chat text or secrets.
 
 ## Saving settings from a page (config:patch)
 

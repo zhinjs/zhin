@@ -23,7 +23,6 @@ export {
 export * from './types.js';
 
 export {
-  icqqClient,
   type IcqqClient,
   type IcqqClientEventMap,
 } from './client.js';
@@ -31,3 +30,5 @@ export {
 export {
   resolveIcqqInboundMessageId,
 } from './icqq-inbound.js';
+
+export { IcqqAdapter } from './adapter.js';

@@ -187,9 +187,11 @@ export class LlmApiRuntime implements LlmCompletionPort {
   readonly #providers = new Map<string, RegisteredProvider>();
   readonly #languageModels = new Map<string, LanguageModel>();
   readonly #resolveLiveModels?: (alias: string) => string[];
+  readonly #validateRequest?: (model: Model, context: Context) => void;
 
-  constructor(resolveLiveModels?: (alias: string) => string[]) {
+  constructor(resolveLiveModels?: (alias: string) => string[], validateRequest?: (model: Model, context: Context) => void) {
     this.#resolveLiveModels = resolveLiveModels;
+    this.#validateRequest = validateRequest;
   }
 
   registerApiProvider(registration: ApiProviderRegistration): this {
@@ -244,12 +246,14 @@ export class LlmApiRuntime implements LlmCompletionPort {
   }
 
   stream(model: Model, context: Context, options?: StreamOptions): AssistantMessageEventStream {
+    this.#validateRequest?.(model, context);
     const registration = this.#apiProviders.get(model.api);
     if (!registration) throw new Error(`No ApiProvider registered for api: ${model.api}`);
     return registration.stream(model, context, options);
   }
 
   streamSimple(model: Model, context: Context, options?: StreamOptions): AssistantMessageEventStream {
+    this.#validateRequest?.(model, context);
     const registration = this.#apiProviders.get(model.api);
     if (!registration) throw new Error(`No ApiProvider registered for api: ${model.api}`);
     return (registration.streamSimple ?? registration.stream)(model, context, options);

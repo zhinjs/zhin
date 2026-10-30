@@ -1,3 +1,4 @@
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { LarkEndpoint } from '../src/endpoint.js';
 import { formatOutboundBody, resolveLarkConfig } from '../src/protocol.js';
@@ -21,23 +22,23 @@ it.each(['share', 'keyboard'])('rejects malformed %s without a placeholder', typ
   expect(() => formatOutboundBody([{ type, data: {} }])).toThrow('malformed');
 });
 it('correlates actual card action to original full conversation, source and actor', async () => {
-  const endpoint = new LarkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'lark'),
+  const emit = vi.fn(async (_name: string, _payload: unknown) => undefined);
+  const endpoint = await createEndpointHarness(() => new LarkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'lark'),
     config: resolveLarkConfig({ id: 'bot', appId: 'fixture', appSecret: 'fixture', mode: 'websocket' }),
     longConnectionFactory: () => ({ connect: async () => {}, close: () => {} }),
     fetch: async url => ({ ok: true, status: 200, text: async () => '', json: async () => url.includes('/auth/') ? { code: 0, tenant_access_token: 'fixture', expire: 7200 } : { code: 0, data: { message_id: 'om_sent' } } }),
-  });
+  }), { gateway: { receive: event => emit(event.name, event.payload) }, capabilities: ['inbound', 'outbound'], operations: ['recall'] });
   await endpoint.start(); endpoint.open();
-  const emit = vi.spyOn(endpoint, 'emit').mockResolvedValue(undefined);
   const conversation = { endpoint: { id: 'endpoint', adapter: 'lark' }, kind: 'private' as const, id: 'oc_chat', threadId: 'thread' };
   await endpoint.send({ conversation, payload: [{ type: 'keyboard', data: { rows: [[{ label: '确认', payload: 'confirm' }]] } }] });
   const event = { token: 'click1', context: { open_message_id: 'om_sent', open_chat_id: 'oc_chat' }, operator: { open_id: 'ou_actor' }, action: { tag: 'button', value: { zhin_payload: 'confirm' } } };
-  endpoint.admitCardAction({ ...event, context: { ...event.context, open_chat_id: 'wrong' } });
-  endpoint.admitCardAction({ ...event, context: { ...event.context, open_message_id: 'unknown' } });
+  endpoint.endpoint.admitCardAction({ ...event, context: { ...event.context, open_chat_id: 'wrong' } });
+  endpoint.endpoint.admitCardAction({ ...event, context: { ...event.context, open_message_id: 'unknown' } });
   expect(emit).not.toHaveBeenCalled();
-  endpoint.admitCardAction(event); endpoint.admitCardAction(event);
-  expect(emit).toHaveBeenCalledTimes(1);
+  endpoint.endpoint.admitCardAction(event); endpoint.endpoint.admitCardAction(event);
+  await vi.waitFor(() => expect(emit).toHaveBeenCalledTimes(1));
   expect(emit).toHaveBeenCalledWith('message.receive', expect.objectContaining({ conversation, sender: { id: 'ou_actor' }, segments: [{ type: 'action', data: { payload: 'confirm' } }], metadata: { eventType: 'card.action.trigger', sourceMessageId: 'om_sent' } }));
-  await endpoint.stop(); endpoint.admitCardAction(event); expect(emit).toHaveBeenCalledTimes(1);
+  await endpoint.stop(); endpoint.endpoint.admitCardAction(event); expect(emit).toHaveBeenCalledTimes(1);
 });
 
 it('routes v2 card actions over authenticated HTTP and immediately acknowledges', async () => {

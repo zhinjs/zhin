@@ -1,19 +1,22 @@
 import botKindReply from '../middlewares/bot-kind-reply/index.js';
-import { endpointConfigurationStoreToken } from 'zhin.js/adapter';
-import { qqRuntimeStateToken } from '../src/qq-runtime-state.js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { rootPluginId } from 'zhin.js';
+import { AdapterManagementError } from 'zhin.js/adapter';
+import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { MemoryDesiredRepository } from '../../test-utils/desired-repository.js';
+import definition from '../adapters/qq/index.js';
+import listCommand from '../commands/qq/endpoint/list/index.js';
+import removeCommand from '../commands/qq/endpoint/remove/[id]/index.js';
+import type { QqEndpointSavePort } from '../src/qq-endpoint-write.js';
 import type { QqBindCallbacks } from '../src/qq-bind-flow.js';
-import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 import {
   completeQqPendingBotKind,
   extractQqCommandReply,
   isQqEndpointOperator,
   runQqEndpointAdd,
   runQqEndpointCancel,
-  runQqEndpointList,
-  runQqEndpointRemove,
 } from '../commands/qq/endpoint/definition.js';
-import { createQqRuntimeState } from '../src/qq-runtime-state.js';
 
 const { startQqBindFlowMock } = vi.hoisted(() => ({
   startQqBindFlowMock: vi.fn(),
@@ -23,12 +26,20 @@ vi.mock('../src/qq-bind-flow.js', () => ({
   startQqBindFlow: startQqBindFlowMock,
 }));
 
-let store: MemoryEndpointConfigurationStore;
-
-beforeEach(() => {
-  store = new MemoryEndpointConfigurationStore();
-  startQqBindFlowMock.mockReset();
-});
+async function fixture() {
+  const repository = new MemoryDesiredRepository();
+  const harness = await createAdapterHarness(definition, { id: 'deferred', appid: 'synthetic-placeholder', secret: 'synthetic-placeholder' }, { name: 'qq', repository });
+  await harness.start(); harness.open(); const revision = harness.adapter.revision;
+  const save: QqEndpointSavePort = vi.fn(config => harness.adapter.add(revision, { endpointId: config.id, config: { ...config } }, { waitForExecution: false }));
+  return { harness, repository, save, stored: () => repository.snapshot?.endpoints.map(row => row.config) ?? [] };
+}
+let f: Awaited<ReturnType<typeof fixture>>;
+beforeEach(async () => { f = await fixture(); startQqBindFlowMock.mockReset(); });
+afterEach(async () => { await f.harness.stop(); });
+function commandContext(state: ReturnType<typeof createQqRuntimeState>, id?: string) {
+  return { owner: rootPluginId(), generation: 1, project: () => f.harness.index, config: {}, input: undefined, params: id ? { id } : {}, args: [],
+    use: (token: unknown) => { if (token === qqRuntimeStateToken) return state; throw new Error('No file/env account writer'); } } as never;
+}
 
 function lastCallbacks(): QqBindCallbacks {
   return startQqBindFlowMock.mock.calls.at(-1)![0] as QqBindCallbacks;
@@ -106,7 +117,7 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(stop);
     const { replies, reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, store, chatInput);
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, f.save, chatInput);
     expect(state.bindFlow).not.toBeNull();
 
     lastCallbacks().onQrDisplayed?.('https://q.qq.com/connect?task_id=t1');
@@ -121,31 +132,31 @@ describe('runQqEndpointAdd', () => {
       appId: '102000009',
       appSecret: 'sec-9',
     });
-    expect(store.entries.size).toBe(0);
-    expect(store.environment.size).toBe(0);
+    expect(f.repository.writes).toHaveLength(0);
+    expect(state.pendingBotKind?.save).toBe(f.save);
     expect(replies.some((text) => text.includes('扫码成功') && text.includes('public'))).toBe(true);
   });
 
-  it('用户选择 private 后一次性写 .env 与配置', async () => {
+  it('用户选择 private 后通过捕获的CAS一次保存未启动账号', async () => {
     const state = createQqRuntimeState();
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, store, chatInput);
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, f.save, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await firstReplyPromise;
     await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
 
-    const text = await completeQqPendingBotKind(state.pendingBotKind!, 'private', store);
+    const text = await completeQqPendingBotKind(state.pendingBotKind!, 'private');
     state.pendingBotKind = null;
 
     expect(text).toContain('botKind=private');
     expect(text).toContain('GUILD_MESSAGES');
-    expect(store.environment.get('QQ_NEWBOT_APPID')).toBe('102000009');
-    expect(store.environment.get('QQ_NEWBOT_SECRET')).toBe('sec-9');
-    await expect(store.list('qq')).resolves.toEqual([
+    expect(f.repository.writes).toHaveLength(1);
+    expect(f.harness.adapter.list()[0]?.desiredEnabled).toBe(false); expect(f.harness.endpoint).toBeUndefined();
+    expect(f.stored()).toEqual([
       expect.objectContaining({
-        id: 'newbot',
+        id: 'newbot', appid: '102000009', secret: 'sec-9',
         botKind: 'private',
         intents: expect.arrayContaining(['GUILD_MESSAGES']),
       }),
@@ -157,14 +168,16 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { replies, reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, store);
+    const firstReplyPromise = runQqEndpointAdd(state, 'newbot', reply, f.save);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await firstReplyPromise;
     await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
 
     expect(state.pendingBotKind).toBeNull();
-    expect(store.environment.has('QQ_NEWBOT_APPID')).toBe(true);
-    expect((await store.list('qq'))[0]).toMatchObject({ botKind: 'public' });
+    expect(f.repository.writes).toHaveLength(1);
+    expect(f.stored()[0]?.appid).toBe('102000009');
+    expect(f.harness.adapter.list()[0]?.desiredEnabled).toBe(false);
+    expect(f.stored()[0]).toMatchObject({ botKind: 'public' });
     expect(replies.some((text) => text.includes('无法交互'))).toBe(true);
   });
 
@@ -173,12 +186,12 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, undefined, reply, store, chatInput);
+    const firstReplyPromise = runQqEndpointAdd(state, undefined, reply, f.save, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await firstReplyPromise;
     await lastCallbacks().onSuccess([{ appId: '102000010', appSecret: 's' }]);
 
-    expect(store.environment.size).toBe(0);
+    expect(f.repository.writes).toHaveLength(0);
     expect(state.pendingBotKind?.endpointId).toBe('102000010');
   });
 
@@ -187,11 +200,11 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { reply } = collectReplies();
 
-    const pending = runQqEndpointAdd(state, 'a', reply, store, chatInput);
+    const pending = runQqEndpointAdd(state, 'a', reply, f.save, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await pending;
 
-    const second = await runQqEndpointAdd(state, 'b', reply, store, chatInput);
+    const second = await runQqEndpointAdd(state, 'b', reply, f.save, chatInput);
     expect(second).toContain('已有进行中');
     expect(startQqBindFlowMock).toHaveBeenCalledTimes(1);
   });
@@ -201,7 +214,7 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { replies, reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, store, chatInput);
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, f.save, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await firstReplyPromise;
 
@@ -218,7 +231,7 @@ describe('runQqEndpointAdd', () => {
       throw new Error('Message reply scope has ended');
     };
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, store, chatInput);
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, f.save, chatInput);
     lastCallbacks().onQrDisplayed?.('https://example/qr');
     await firstReplyPromise;
 
@@ -234,7 +247,7 @@ describe('runQqEndpointAdd', () => {
     startQqBindFlowMock.mockReturnValue(vi.fn());
     const { reply } = collectReplies();
 
-    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, store, chatInput);
+    const firstReplyPromise = runQqEndpointAdd(state, 'a', reply, f.save, chatInput);
     lastCallbacks().onFailure(new Error('获取绑定任务失败: boom'));
 
     await expect(firstReplyPromise).resolves.toContain('获取绑定任务失败');
@@ -259,7 +272,7 @@ describe('runQqEndpointCancel', () => {
       endpointId: 'x',
       appId: '1',
       appSecret: '2',
-      sessionKey: 'k',
+      sessionKey: 'k', save: f.save,
     };
 
     expect(runQqEndpointCancel(state)).toContain('尚未写入');
@@ -272,72 +285,26 @@ describe('runQqEndpointCancel', () => {
   });
 });
 
-describe('runQqEndpointRemove', () => {
-  it('存在时从配置移除并提示重启', async () => {
-    store.entries.set('qq', [{ id: 'a', appid: '1', secret: '2' }]);
-    const state = createQqRuntimeState();
-
-    const text = await runQqEndpointRemove(state, 'a', store);
-
-    expect(text).toContain('移除');
-    expect(text).toContain('重启');
-    await expect(store.list('qq')).resolves.toEqual([]);
+describe('QQ list/remove use the actual owning runtime commands', () => {
+  it('removes an existing saved account without restarting or touching a file writer', async () => {
+    await f.save({ id: 'a', appid: 'synthetic-app', secret: 'synthetic-secret' }); const state = createQqRuntimeState();
+    const text = await removeCommand.execute(commandContext(state, 'a')); expect(text).toContain('删除配置已保存'); expect(text).not.toContain('重启'); expect(f.stored()).toEqual([]); expect(f.repository.writes).toHaveLength(2);
   });
-
-  it('不存在时提示未找到', async () => {
-    const state = createQqRuntimeState();
-
-    await expect(runQqEndpointRemove(state, 'ghost', store)).resolves.toContain('不存在');
+  it('keeps a missing account distinct from persistence failure', async () => {
+    await expect(removeCommand.execute(commandContext(createQqRuntimeState(), 'ghost'))).resolves.toContain('不存在'); expect(f.repository.writes).toHaveLength(0);
   });
-});
-
-describe('runQqEndpointList', () => {
-  it('同时列出运行中与配置中的 endpoints', async () => {
-    const state = createQqRuntimeState();
-    state.endpoints.set('running-bot', { id: 'running-bot', mode: 'websocket' });
-    store.entries.set('qq', [{
-      id: 'conf-bot',
-      appid: '${QQ_CONF_BOT_APPID}',
-      secret: '${QQ_CONF_BOT_SECRET}',
-    }]);
-
-    const text = await runQqEndpointList(state, store);
-
-    expect(text).toContain('running-bot');
-    expect(text).toContain('conf-bot');
-    expect(text).toContain('${QQ_CONF_BOT_APPID}');
+  it('lists actual persisted accounts without a second running map or secret exposure', async () => {
+    await f.save({ id: 'conf-bot', appid: 'synthetic-app', secret: 'synthetic-secret' });
+    const text = await listCommand.execute(commandContext(createQqRuntimeState())); expect(text).toContain('conf-bot'); expect(text).toContain('synthetic-app'); expect(text).not.toContain('synthetic-secret'); expect(f.harness.endpoint).toBeUndefined();
   });
-
-  it('空列表时占位提示', async () => {
-    const state = createQqRuntimeState();
-
-    const text = await runQqEndpointList(state, store);
-
-    expect(text).toContain('（无）');
+  it('keeps empty-directory placeholders', async () => { expect(await listCommand.execute(commandContext(createQqRuntimeState()))).toContain('（无）'); });
+  it('uses only the flow’s captured verified cancel invocation in the footer', async () => {
+    const state = createQqRuntimeState(); state.bindFlow = { id: 'a', stop: vi.fn(), cancelCommand: '!work qq endpoint cancel' };
+    expect(await listCommand.execute(commandContext(state))).toContain('!work qq endpoint cancel');
   });
-
-  it('有进行中绑定时 footer 只使用捕获的真实取消命令', async () => {
-    const state = createQqRuntimeState();
-    state.bindFlow = { id: 'a', stop: vi.fn(), cancelCommand: '!work qq endpoint cancel' };
-
-    const text = await runQqEndpointList(state, store);
-
-    expect(text).toContain('!work qq endpoint cancel');
-  });
-
-  it('待选 botKind 时 footer 提示', async () => {
-    const state = createQqRuntimeState();
-    state.pendingBotKind = {
-      endpointId: 'wait-bot',
-      appId: '1',
-      appSecret: '2',
-      sessionKey: 'k',
-    };
-
-    const text = await runQqEndpointList(state, store);
-
-    expect(text).toContain('wait-bot');
-    expect(text).toContain('公域/私域');
+  it('keeps the pending bot-kind footer without saving or exposing its secret', async () => {
+    const state = createQqRuntimeState(); state.pendingBotKind = { endpointId: 'wait-bot', appId: '1', appSecret: 'synthetic-secret', sessionKey: 'k', save: f.save };
+    const text = await listCommand.execute(commandContext(state)); expect(text).toContain('wait-bot'); expect(text).toContain('公域/私域'); expect(text).not.toContain('synthetic-secret'); expect(f.repository.writes).toHaveLength(0);
   });
 });
 
@@ -347,25 +314,36 @@ it('keeps binding language and real cancel head across follow-ups without accept
   const { replies, reply } = collectReplies();
   const input = { sender: { id: 'alice' }, locale: 'en', conversation: { endpoint: { adapter: 'sandbox', id: 'bot' },
     kind: 'channel', id: 'room', parent: { kind: 'channel', id: 'guild' }, threadId: 'thread' } };
-  const first = runQqEndpointAdd(state, 'english', reply, store, input, 'en', '!ops qq endpoint cancel', ['!ops qq endpoint cancel']);
+  const first = runQqEndpointAdd(state, 'english', reply, f.save, input, 'en', '!ops qq endpoint cancel', ['!ops qq endpoint cancel']);
   lastCallbacks().onQrDisplayed?.('https://example.test/synthetic-qr');
   expect(await first).toContain('Open this link');
   await lastCallbacks().onSuccess([{ appId: 'fixture-app', appSecret: 'fixture-secret' }]);
   expect(replies.at(-1)).toContain('!ops qq endpoint cancel');
   expect(state.pendingBotKind?.locale).toBe('en');
   const context = (message: object) => ({ input: { ...input, locale: 'zh-CN', content: 'private', $reply: reply, ...message },
-    use(token: unknown) { if (token === qqRuntimeStateToken) return state; if (token === endpointConfigurationStoreToken) return store; throw new Error('unexpected resource'); } });
+    use(token: unknown) { if (token === qqRuntimeStateToken) return state; throw new Error('unexpected resource'); } });
   for (const other of [{ sender: { id: 'bob' } }, { conversation: { ...input.conversation, threadId: 'other' } },
     { conversation: { ...input.conversation, parent: { kind: 'channel', id: 'other' } } }]) {
     const next = vi.fn(); await botKindReply.handle(context(other) as never, next);
-    expect(next).toHaveBeenCalledOnce(); expect(await store.list('qq')).toEqual([]);
+    expect(next).toHaveBeenCalledOnce(); expect(f.stored()).toEqual([]);
   }
   await botKindReply.handle(context({ content: '私域' }) as never, vi.fn());
-  expect(replies.at(-1)).toContain('Unrecognized answer'); expect(await store.list('qq')).toEqual([]);
+  expect(replies.at(-1)).toContain('Unrecognized answer'); expect(f.stored()).toEqual([]);
   const next = vi.fn(); await botKindReply.handle(context({ content: '!ops qq endpoint cancel' }) as never, next);
   expect(next).toHaveBeenCalledOnce();
   await botKindReply.handle(context({}) as never, vi.fn());
-  expect(replies.at(-1)).toContain('Saved endpoint');
-  expect((await store.list('qq'))[0]).toMatchObject({ id: 'english', botKind: 'private' });
+  expect(replies.at(-1)).toContain('Saved account');
+  expect(f.stored()[0]).toMatchObject({ id: 'english', botKind: 'private' });
   expect(state.pendingBotKind).toBeNull();
+});
+
+
+it('keeps an unresolved bot-kind choice after commit_unknown and never automatically resubmits it', async () => {
+  const state = createQqRuntimeState(); startQqBindFlowMock.mockReturnValue(vi.fn()); const { reply, replies } = collectReplies();
+  const input = { sender: { id: 'alice' }, conversation: { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private', id: 'alice' } };
+  const started = runQqEndpointAdd(state, 'pending', reply, f.save, input); lastCallbacks().onQrDisplayed?.('https://example.test/synthetic-qr'); await started;
+  await lastCallbacks().onSuccess([{ appId: 'synthetic-app', appSecret: 'synthetic-secret' }]);
+  const compare = vi.spyOn(f.repository, 'compareAndSet').mockRejectedValue(new AdapterManagementError('commit_unknown', 'synthetic unknown commit outcome'));
+  const context = { input: { ...input, content: 'private', $reply: reply }, use: (token: unknown) => { if (token === qqRuntimeStateToken) return state; throw new Error('No file/env writer'); } };
+  await botKindReply.handle(context as never, vi.fn()); expect(state.pendingBotKind?.endpointId).toBe('pending'); expect(replies.at(-1)).toContain('unknown'); expect(compare).toHaveBeenCalledTimes(1); expect(f.stored()).toEqual([]);
 });

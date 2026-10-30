@@ -1,3 +1,4 @@
+import { endpointSpec, type Endpoint } from 'zhin.js/adapter';
 /**
  * KOOK webhook HTTP: verify → parse → admit.
  */
@@ -17,8 +18,8 @@ import {
 
 const logger = getLogger('kook');
 
-export interface KookWebhookHandler {
-  readonly config: ResolvedKookWebhookConfig;
+export interface KookWebhookHandler extends Endpoint {
+  readonly endpointConfig: ResolvedKookWebhookConfig;
   readonly isOpen: boolean;
   readonly selfId?: string;
   admit(msg: KookInboundMessage): void;
@@ -31,7 +32,7 @@ export function registerKookWebhookRoutes(
   http: HttpHost,
   handler: KookWebhookHandler,
 ): HttpRouteRegistration[] {
-  const path = handler.config.webhookPath;
+  const path = handler.endpointConfig.webhookPath;
   return [
     http.route('POST', path, async (request, response) => {
       await handleKookWebhookRequest(request, response, handler);
@@ -48,7 +49,7 @@ export async function handleKookWebhookRequest(
     const rawBody = await readRequestBody(request);
     let frame: KookWebhookFrame;
     try {
-      frame = parseKookWebhookBody(rawBody, handler.config.encryptKey);
+      frame = parseKookWebhookBody(rawBody, handler.endpointConfig.encryptKey);
     } catch (error) {
       logger.warn(formatCompact({
         op: 'kook_webhook',
@@ -68,7 +69,7 @@ export async function handleKookWebhookRequest(
     }
 
     if (isKookWebhookChallenge(event)) {
-      if (!verifyKookWebhookToken(handler.config.verifyToken, event.verify_token)) {
+      if (!verifyKookWebhookToken(handler.endpointConfig.verifyToken, event.verify_token)) {
         response.writeHead(403, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ message: 'Invalid verify_token' }));
         return;
@@ -78,7 +79,7 @@ export async function handleKookWebhookRequest(
       return;
     }
 
-    if (!verifyKookWebhookToken(handler.config.verifyToken, event.verify_token)) {
+    if (!verifyKookWebhookToken(handler.endpointConfig.verifyToken, event.verify_token)) {
       response.writeHead(403, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify({ message: 'Invalid verify_token' }));
       return;
@@ -89,25 +90,27 @@ export async function handleKookWebhookRequest(
       response.end(JSON.stringify({ message: 'Endpoint unavailable' }));
       return;
     }
-    if (frame.sn != null) {
-      if (!handler.checkAndRememberSn(frame.sn)) {
-        response.writeHead(200, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ message: 'OK' }));
+    await handler[endpointSpec].events.run(async () => {
+      if (frame.sn != null) {
+        if (!handler.checkAndRememberSn(frame.sn)) {
+          response.writeHead(200, { 'Content-Type': 'application/json' });
+          response.end(JSON.stringify({ message: 'OK' }));
+          return;
+        }
+      }
+
+      try {
+        await handler.admitEvent(event);
+      } catch {
+        if (frame.sn != null) handler.forgetSn?.(frame.sn);
+        response.writeHead(503, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ message: 'Admission unavailable' }));
         return;
       }
-    }
 
-    try {
-      await handler.admitEvent(event);
-    } catch {
-      if (frame.sn != null) handler.forgetSn?.(frame.sn);
-      response.writeHead(503, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'Admission unavailable' }));
-      return;
-    }
-
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ message: 'OK' }));
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ message: 'OK' }));
+    });
   } catch (error) {
     logger.error('KOOK webhook error:', error);
     response.writeHead(200, { 'Content-Type': 'application/json' });

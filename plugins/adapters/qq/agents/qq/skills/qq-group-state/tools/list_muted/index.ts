@@ -10,7 +10,7 @@ export default defineAgentTool({
   readOnly: true,
   inputSchema: z.object({}),
   async execute(_input, context) {
-    const setting = await context.$client.api.groupService.getMuteSetting(currentGroup(context));
+    const setting = await context.$client.groupService.getMuteSetting(currentGroup(context));
     const now = Date.now();
     const muted = (setting.members ?? []).filter((m) => {
       const until = Date.parse(m.mute_expire_at);

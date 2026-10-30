@@ -4,7 +4,6 @@
  * 永远不要记录 Cookie。
  */
 import { createHash } from 'node:crypto';
-import { defineEndpointClient } from 'zhin.js/adapter';
 import { BILIBILI_LIVE_RISK_CODES, type LiveDanmaku, type ResolvedBilibiliLiveConfig } from './protocol.js';
 
 export type BilibiliLiveFetch = (
@@ -82,9 +81,9 @@ export class BilibiliLiveClient {
   #buvid3?: string;
   #selfUid?: string;
 
-  constructor(config: ResolvedBilibiliLiveConfig, fetch: BilibiliLiveFetch, now: () => number = Date.now) {
+  constructor(config: ResolvedBilibiliLiveConfig, fetch: BilibiliLiveFetch, now: () => number = Date.now, signal?: AbortSignal) {
     this.config = config;
-    this.fetch = fetch;
+    this.fetch = bindBilibiliLiveFetch(fetch, signal);
     this.now = now;
     this.#buvid3 = config.buvid3;
   }
@@ -97,6 +96,18 @@ export class BilibiliLiveClient {
   /** 登录账号 uid（`nav` 成功后可用）。 */
   get selfUid(): string | undefined {
     return this.#selfUid;
+  }
+
+  /** Read-only identity probe; unlike live startup this creates no visitor ID or socket. */
+  async identifySelf(): Promise<string | undefined> {
+    if (!this.config.sessdata) return undefined;
+    const data = await this.#request(`${this.config.apiBaseUrl}/x/web-interface/nav`) as { isLogin?: boolean; mid?: unknown };
+    if (data?.isLogin === false) return undefined;
+    if (data?.isLogin !== true || (typeof data.mid !== 'number' && typeof data.mid !== 'string')
+      || !String(data.mid).trim() || data.mid === 0 || data.mid === '0') {
+      throw new Error('Bilibili live returned an invalid logged-in identity');
+    }
+    return String(data.mid);
   }
 
   #cookie(): string {
@@ -228,13 +239,15 @@ export class BilibiliLiveClient {
 /** 原生事件：`danmaku`（解析后的 `DANMU_MSG`）。 */
 export type BilibiliLiveClientEventMap = Record<string, LiveDanmaku>;
 
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly 'bilibili-live': {
-      readonly client: BilibiliLiveClient;
-      readonly events: BilibiliLiveClientEventMap;
-    };
-  }
+/** Bind the actual account incarnation without changing existing request timeouts. */
+function bindBilibiliLiveFetch(fetch: BilibiliLiveFetch, signal: AbortSignal | undefined): BilibiliLiveFetch {
+  if (!signal) return fetch;
+  return async (url, init) => {
+    signal.throwIfAborted();
+    const response = await fetch(url, { ...init, signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal });
+    signal.throwIfAborted();
+    return { ok: response.ok, status: response.status, async json() {
+      const body = await response.json(); signal.throwIfAborted(); return body;
+    } };
+  };
 }
-
-export const bilibiliLiveClient = defineEndpointClient<BilibiliLiveClient, BilibiliLiveClientEventMap>('bilibili-live');

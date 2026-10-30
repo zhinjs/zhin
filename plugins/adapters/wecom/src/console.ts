@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { wecomRuntimeStateToken } from './wecom-runtime-state.js';
 import { wecomConsoleSpec } from './console-spec.js';
 
 export function createWecomConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(wecomRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...wecomConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

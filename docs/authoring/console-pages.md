@@ -424,7 +424,7 @@ interface SkillsStatus {
 
 ## 适配器 Console 页面
 
-内置平台适配器（`plugins/adapters/*`）各自带一个 `pages/index/index.ts`，统一用 `@zhin.js/client` 的 `createAdapterConsolePage(adapterKey)` 渲染，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec, resources)` 提供数据：
+内置平台适配器（`plugins/adapters/*`）各自带一个 `pages/index/index.ts`，统一用 `@zhin.js/client` 的 `createAdapterConsolePage(adapterKey)` 渲染，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec)` 提供数据：
 
 ```ts
 // pages/index/index.ts
@@ -444,14 +444,16 @@ export default createAdapterConsolePage('telegram');
 页面里能做的事：
 
 - 查看 Host `endpoint.list` 里该适配器的运行中连接，点「测试连接」调用 `endpoint.test`；
-- 读取 `plugin.<pluginId>.status`，展示 `plugins.<adapter>.endpoints` 的配置项（密钥字段只显示 `${ENV}` 引用或 `••••••`）；
-- 调 `endpoint-add` / `endpoint-remove` 增删 endpoint；凭据写入 `.env`，配置里只保留引用；
+- 读取 `plugin.<pluginId>.status` 的所属 Adapter 账号清单与运行状态；敏感配置一律遮蔽；
+- 调 `endpoint-add` / `endpoint-update` / `endpoint-start` / `endpoint-stop` / `endpoint-remove` / `endpoint-replace` 管理账号；经 Host 持久化 CAS 保存，不改启动文件或 `.env`；
 - 显示 LoginAssist 的 `login.list` 待办，并用 `login.submit` / `login.cancel` 完成扫码、滑块、短信或设备确认；
 - 渲染适配器自定义动作（`status.actions`），例如 QQ 的扫码绑定、公域 / 私域选择。
 
-权限按适配器分开：页面读取需要 `<adapterKey>:read`，写操作（增删 endpoint、自定义动作）需要 `<adapterKey>:write`；管理员 full token 不受限。没有配置存储的环境（例如单元测试）只读降级：`status.canAdd` / `canRemove` 为 `false`。
+权限按适配器分开：页面读取需要 `<adapterKey>:read`，写操作（账号变更、自定义动作）需要 `<adapterKey>:write`；管理员 full token 不受限。首次修改启动账号需管理员核对清单并确认迁移；缺少持久化管理端口时，`runtime.canManage` 为 `false` 或请求明确不可用，不回退写配置文件。
 
-`createAdapterConsoleRpc` 的 `spec` 只放可公开的字段元数据：`env: true` 的字段写 `.env` 并返回 `${ENV}` 引用；非 env 但含敏感内容的字段加 `secret: true`，返回值一律遮蔽。`extraStatus` 只返回少量状态（如 `bindState`、`scanUrl`），不要放日志、聊天原文或密钥。
+每次变更提交清单中的 `expectedGeneration` 与 `expectedRevision`，目标使用 `instanceId`；首次迁移经用户确认附 `confirmMigration: true`。新增与替换只保存为未启动状态；普通配置更新只重连目标账号。冲突或提交结果未知时先刷新核实，不自动重试；持久化保存成功与异步启动、关闭完成是不同状态。
+
+`createAdapterConsoleRpc` 的 `spec` 只放可公开的字段元数据：`env: true` 或 `secret: true` 的字段按敏感内容遮蔽，前者不再授予写 `.env` 的能力。编辑仅提交平台声明的可更新字段，空白或遮蔽的 secret 保留原值；替换账号需完整填写新配置。`extraStatus` 只返回少量状态（如 `bindState`、`scanUrl`），不要放日志、聊天原文或密钥。
 
 ## 在页面里保存设置 (config:patch)
 

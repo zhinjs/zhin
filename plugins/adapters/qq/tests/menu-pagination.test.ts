@@ -1,3 +1,4 @@
+import { qqFixture } from './fixture.js';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { collectOutboundImageSizes, formatOutbound, formatOutboundMessages } from '../src/outbound.js';
@@ -126,7 +127,7 @@ describe('image menu (image + markdown + keyboard) on QQ official', () => {
     const { resolveQqConfig } = await import('../src/protocol.js');
     const { capabilityId, rootPluginId, featureId } = await import('zhin.js');
     const sent: unknown[] = [];
-    const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'), config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any, createBot: () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendGroupMessage: async (_id: string, message: unknown) => { sent.push(message); return { id: `m${sent.length}` }; } }) as any });
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'),config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any}), () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendGroupMessage: async (_id: string, message: unknown) => { sent.push(message); return { id: `m${sent.length}` }; } }) as any);
     try {
       await endpoint.start();
       const id = await endpoint.send({ conversation: { endpoint: { id: 'fixture', adapter: 'root/qq' }, kind: 'group', id: 'g1' } as any, payload: imageMenuPayload });
@@ -194,7 +195,7 @@ describe('image menu with a public URL: embedded in the markdown', () => {
     const { resolveQqConfig } = await import('../src/protocol.js');
     const { capabilityId, rootPluginId, featureId } = await import('zhin.js');
     const sent: unknown[] = [];
-    const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'), config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any, createBot: () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendGroupMessage: async (_id: string, message: unknown) => { sent.push(message); return { id: `m${sent.length}` }; } }) as any });
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'),config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any}), () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendGroupMessage: async (_id: string, message: unknown) => { sent.push(message); return { id: `m${sent.length}` }; } }) as any);
     try {
       await endpoint.start();
       await endpoint.send({ conversation: { endpoint: { id: 'fixture', adapter: 'root/qq' }, kind: 'group', id: 'g1' } as any, payload: urlMenuPayload });

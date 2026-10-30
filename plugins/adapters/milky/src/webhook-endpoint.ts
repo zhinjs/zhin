@@ -2,8 +2,9 @@
  * Milky webhook endpoint — httpHostToken POST inbound + baseUrl HTTP API outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { acceptHttpIngress } from 'imhelper';
 import {
-  ClientEndpoint,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   createRecallEndpointControl,
   type EndpointControl,
   type EndpointManagement,
@@ -14,7 +15,7 @@ import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { verifyMilkyAccessToken } from './milky-auth.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
-import { callMilkyClient, createMilkyEndpointClient, forwardMilkyClientEvents, type MilkyClient } from './client.js';
+import { callMilkyClient, milkyClientOptions, forwardMilkyClientEvents, MilkyClient } from './client.js';
 import {
   buildSendAction,
   callApi,
@@ -36,41 +37,47 @@ import {
 
 export interface MilkyWebhookEndpointOptions {
   readonly id: CapabilityId;
+  readonly signal?: AbortSignal;
   readonly http: HttpHost;
   readonly config: MilkyWebhookConfig;
   readonly callApi?: typeof callApi;
 }
 
-export class MilkyWebhookEndpoint extends ClientEndpoint<MilkyClient> {
-  readonly client: MilkyClient;
+export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  #open = false;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: MilkyWebhookEndpointOptions;
-  readonly #callApi: typeof callApi;
-  readonly management: EndpointManagement;
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
+  readonly #management: EndpointManagement;
+  readonly #control: EndpointControl = createRecallEndpointControl((id) => this.#recallMessage(id));
   #routeReleases: HttpRouteRegistration[] = [];
   #started = false;
 
   constructor(options: MilkyWebhookEndpointOptions) {
-    super();
+    super(milkyClientOptions(options.config, options.callApi ?? callApi, options.signal));
     this.#logger = getAdapterLogger('milky', options.config.id);
     this.#options = options;
-    this.#callApi = options.callApi ?? callApi;
-    this.client = createMilkyEndpointClient(options.config, this.#callApi);
-    this.management = createMilkyEndpointManagement({
-      callApi: (action, params) => callMilkyClient(this.client, action, params),
+    this.#management = createMilkyEndpointManagement({
+      callApi: (action, params) => callMilkyClient(this, action, params),
     });
-    this.bindClientEvents(
-      (receive) => forwardMilkyClientEvents(this.client, receive),
-      (name, payload) => {
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => { this.#open = true; },
+      close: () => { this.#open = false; }, stop: () => this.#stop(),
+      send: request => this.#send(request),
+      management: this.#management, control: this.#control,
+    });
+    forwardMilkyClientEvents(this, (name, payload) => {
+      void this[endpointSpec].events.run(() => {
+        if (!this.#started) return;
+        void this[endpointSpec].events.platform(name, payload).catch(error => this.#warnPlatformEvent(error));
         if (name === 'event') this.#admitRaw(payload as MilkyEvent);
-      },
-      (_name, error) => this.#warnPlatformEvent(error),
-    );
+      }).catch(error => this.#warnPlatformEvent(error));
+    });
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
     this.#setupRoutes();
@@ -82,17 +89,17 @@ export class MilkyWebhookEndpoint extends ClientEndpoint<MilkyClient> {
     }));
   }
 
-  async stop(): Promise<void> {
-    this.close();
+  async #stop(): Promise<void> {
+    this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await callMilkyClient<{ message_seq?: number }>(this.client, action, params);
+    const data = await callMilkyClient<{ message_seq?: number }>(this, action, params);
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
     this.#logger.debug(formatCompact({
       op: 'milky_send',
@@ -103,16 +110,16 @@ export class MilkyWebhookEndpoint extends ClientEndpoint<MilkyClient> {
     return messageId;
   }
 
-  async recallMessage(id: string): Promise<void> {
+  async #recallMessage(id: string): Promise<void> {
     const parsed = parseMilkyMessageId(id);
     if (!parsed) throw new Error(`Invalid message id: ${id}`);
     if (parsed.message_scene === 'group') {
-      await callMilkyClient(this.client, 'recall_group_message', {
+      await callMilkyClient(this, 'recall_group_message', {
         group_id: parsed.peer_id,
         message_seq: parsed.message_seq,
       });
     } else {
-      await callMilkyClient(this.client, 'recall_private_message', {
+      await callMilkyClient(this, 'recall_private_message', {
         user_id: parsed.peer_id,
         message_seq: parsed.message_seq,
       });
@@ -120,6 +127,7 @@ export class MilkyWebhookEndpoint extends ClientEndpoint<MilkyClient> {
   }
 
   #admitRaw(event: MilkyEvent): void {
+    if (event.self_id != null) this[endpointSpec].reportSelfUserId(String(event.self_id));
     const data = parseMessageReceiveData(event);
     if (!data) return;
     this.#admitMessage(data, event);
@@ -130,14 +138,16 @@ export class MilkyWebhookEndpoint extends ClientEndpoint<MilkyClient> {
   }
 
   #admitMessage(data: MilkyIncomingMessage, event: MilkyEvent): void {
-    const conversation = milkyInboundConversation(String(this.#options.id), data);
+    const conversation = { ...milkyInboundConversation(String(this.#options.id), data), endpoint: this[endpointSpec].identity };
     const target = `${conversation.kind}:${conversation.id}`;
     const content = formatInboundContent(data);
     const segments = formatInboundSegments(data);
     const audioUrl = extractInboundAudioUrl(data);
     const nickname = senderNickname(data);
     const mentioned = isMentioned(data, event.self_id);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event,
+      ...(typeof event.time === 'number' ? { platformSentAt: event.time * 1000 } : {}),
       conversation,
       message: { conversation, id: formatInboundMessageId(data) },
       content,
@@ -179,12 +189,15 @@ export class MilkyWebhookEndpoint extends ClientEndpoint<MilkyClient> {
         response.end(JSON.stringify({ message: 'Unauthorized' }));
         return;
       }
-      if (!this.clientEventsOpen) {
+      if (!this.#open) {
         response.writeHead(200, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ status: 'ok' }));
         return;
       }
-      await this.client.acceptHttp(request, response);
+      await acceptHttpIngress<MilkyEvent>(request, response, event => {
+        void this[endpointSpec].events.run(() => this.ingest(event as Parameters<MilkyClient['ingest']>[0]))
+          .catch(error => this.#warnPlatformEvent(error));
+      });
     } catch (error) {
       this.#logger.error('Milky webhook error:', error);
       if (!response.headersSent) {

@@ -106,7 +106,7 @@ describe('aiCompletion.completeText', () => {
       usageShares: [{ subject, text: 'hello' }] })).rejects.toThrow('choose');
   });
 
-  it('runs one tool-free completion on the zhin binding with the conversation path fallback candidates', async () => {
+  it('runs one tool-free completion on the fixed zhin model with same-model resilience', async () => {
     const { calls, service } = fixture({}, { providerResilience: { maxRetries: 1 } });
     const result = await createAiCompletion({ service }).completeText({
       purpose: 'summarize',
@@ -117,9 +117,9 @@ describe('aiCompletion.completeText', () => {
     expect(result).toMatchObject({ text: 'answer', model: 'main', usage: { totalTokens: 15 } });
     expect(calls).toHaveLength(1);
     const { opts } = calls[0]!;
-    expect(opts).toMatchObject({ model: 'main', maxTokens: 200, fallbackModels: ['backup'], resilience: { maxRetries: 1 } });
+    expect(opts).toMatchObject({ model: 'main', maxTokens: 200, resilience: { maxRetries: 1 } });
     // The provider port has no tools parameter at all; nothing beyond these options is forwarded.
-    expect(Object.keys(opts).sort()).toEqual(['fallbackModels', 'maxTokens', 'model', 'resilience', 'signal', 'temperature', 'timeoutMs']);
+    expect(Object.keys(opts).sort()).toEqual(['maxTokens', 'model', 'resilience', 'signal', 'temperature', 'timeoutMs']);
   });
 
   it('uses another binding when asked and rejects unknown bindings', async () => {

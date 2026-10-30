@@ -1,4 +1,4 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -12,7 +12,6 @@ import {
   verifySignature,
   type LineMessageEvent,
 } from '../src/protocol.js';
-import { lineClient } from '../src/client.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -149,13 +148,13 @@ describe('line plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway,
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -186,13 +185,13 @@ describe('line plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -215,16 +214,16 @@ describe('line plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
-    endpoint.admit(textEvent());
+    endpoint.endpoint.admit(textEvent());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
@@ -233,7 +232,7 @@ describe('line plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const fetchFn = mockFetchOk('reply-id');
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -242,14 +241,14 @@ describe('line plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchFn,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
     endpoint.open();
-    endpoint.admit(textEvent());
+    endpoint.endpoint.admit(textEvent());
     const messageId = await endpoint.send({
       conversation: userConversation,
       payload: 'pong',
@@ -269,7 +268,7 @@ describe('line plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const fetchFn = mockFetchOk('push-id');
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -278,10 +277,10 @@ describe('line plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchFn,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
     endpoint.open();
@@ -304,7 +303,7 @@ describe('line plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const fetchFn = mockFetchOk('push-id');
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -313,14 +312,14 @@ describe('line plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchFn,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
     endpoint.open();
-    endpoint.admit(textEvent());
+    endpoint.endpoint.admit(textEvent());
     vi.useFakeTimers();
     try {
       vi.setSystemTime(Date.now() + 61_000);
@@ -354,7 +353,7 @@ describe('line plugin runtime adapter', () => {
         json: async () => ({ sentMessages: [{ id: 'push-id' }] }),
       };
     });
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -363,14 +362,14 @@ describe('line plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchFn,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
     endpoint.open();
-    endpoint.admit(textEvent());
+    endpoint.endpoint.admit(textEvent());
     await expect(endpoint.send({ conversation: userConversation, payload: 'pong' })).rejects.toMatchObject({ disposition: 'rejected' });
     const calledUrls = fetchFn.mock.calls.map((call) => String(call[0]));
     expect(calledUrls.some((url) => url.includes('/message/reply'))).toBe(true);
@@ -381,7 +380,7 @@ describe('line plugin runtime adapter', () => {
   it('projects the live platform Client for detached operations', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new LineEndpoint({
+    const endpoint = await createEndpointHarness(() => new LineEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'line'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -390,14 +389,14 @@ describe('line plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
-    expect(lineClient.get(endpointClientContext(endpoint), 'test-line-bot'))
-      .toBe(endpoint.client);
+    expect(endpoint.index.client('test-endpoint', endpoint.canonicalId))
+      .toBe(endpoint.endpoint);
     await endpoint.stop();
   });
 });

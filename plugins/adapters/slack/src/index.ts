@@ -37,7 +37,6 @@ export {
 } from './webhook.js';
 
 export {
-  slackClient,
   type SlackClientEventMap,
   type SlackUserInfo,
 } from './client.js';
@@ -57,3 +56,4 @@ export {
   shouldDropSlackInboundMessage,
 } from './slack-inbound-filter.js';
 export { editSlackContent, sendSlackContent } from './slack-outbound.js';
+export { SlackAdapter } from './adapter.js';

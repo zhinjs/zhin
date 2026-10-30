@@ -1,5 +1,5 @@
 {
   "extends": "../../../../../tsconfig.base.json",
   "compilerOptions": { "noEmit": true, "types": ["node"] },
-  "include": ["./declarations.ts", "./config.ts"]
+  "include": ["./declarations.ts", "./config.ts", "./session-registry.ts", "./session.ts"]
 }

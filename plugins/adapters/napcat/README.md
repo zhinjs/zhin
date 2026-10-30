@@ -2,13 +2,15 @@
 
 Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 适配器（Plugin Runtime，OneBot 11 + NapCat 扩展）。默认 **正向 WebSocket 客户端**（`connection: ws`）；亦支持 **反向 WS** 与 **HTTP POST 上报**（经 `httpHostToken`）。
 
+账号由 `NapcatAdapter` 管理。Endpoint 直接继承实际 `NapcatClient`，保留原生方法与事件；框架生命周期、规范入站与发送经 `endpointSpec` 和 AdapterIndex 接入，不占用 Client 的原生 `start` / `stop` / `send` 方法。
+
 ## 功能特性
 
 - OneBot 11 + go-cqhttp 扩展 + NapCat 独有 API
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连 NapCat WS
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `Endpoint.emit(...)`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
+- 入站经 `endpointSpec.events`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
 - 41 个 AI 工具（`tools/`）
 
 ## 安装
@@ -20,11 +22,12 @@ pnpm add @zhin.js/adapter-napcat
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/napcat/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
-入站：`gateway.receive({ conversation, message: { conversation, id }, content, sender, metadata })`（`conversation` 为 ConversationRef：私聊 `kind: 'private'`、群聊 `kind: 'group'`，临时会话群容器进 `parent`）  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message: { conversation, id }, content, sender, metadata })`（`conversation` 为 ConversationRef：私聊 `kind: 'private'`、群聊 `kind: 'group'`，临时会话群容器进 `parent`）
+
 出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`
 
 ## 前置条件
@@ -78,7 +81,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 
 ## 迁移说明（Plugin Runtime）
 
-- **notice / request / meta 侧事件**：经 the unified `Endpoint.emit(...)` ingress 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
+- **notice / request / meta 侧事件**：经统一 `endpointSpec.events` 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `tools/` 仅覆盖 NapCat 扩展 API，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
 - **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('napcat', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 
@@ -92,7 +95,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 启动后打开 Console 的「NapCat」页（地址 `/napcat`），可以：
 
 - 查看运行中的连接、点「测试连接」做连通性诊断；
-- 增删 `plugins.napcat.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
 读取需要 `napcat:read`，写操作需要 `napcat:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `napcat endpoint add`。

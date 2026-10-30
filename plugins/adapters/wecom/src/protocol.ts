@@ -12,6 +12,7 @@ import type { ConversationRef } from '@zhin.js/im-contract';
 export interface WecomEndpointConfig {
   readonly id: string;
   readonly corpId: string;
+  readonly agentId: string;
   readonly agentSecret: string;
   readonly token: string;
   readonly encodingAESKey: string;
@@ -23,6 +24,7 @@ export interface ResolvedWecomConfig {
   readonly context: 'wecom';
   readonly id: string;
   readonly corpId: string;
+  readonly agentId: string;
   readonly agentSecret: string;
   readonly token: string;
   readonly encodingAESKey: string;
@@ -31,6 +33,8 @@ export interface ResolvedWecomConfig {
 }
 
 export interface WecomMessage {
+  /** Complete decrypted callback XML; preserved before field projection. */
+  readonly rawXml?: string;
   readonly ToUserName: string;
   readonly FromUserName: string;
   readonly CreateTime: number;
@@ -84,6 +88,7 @@ export interface WecomSendBody {
 export function resolveWecomConfig(config: WecomEndpointConfig): ResolvedWecomConfig {
   const id = requiredEndpointField(config.id, 'id');
   const corpId = requiredEndpointField(config.corpId, 'corpId');
+  const agentId = requiredEndpointField(config.agentId, 'agentId');
   const agentSecret = requiredEndpointField(config.agentSecret, 'agentSecret');
   const token = requiredEndpointField(config.token, 'token');
   const encodingAESKey = requiredEndpointField(config.encodingAESKey, 'encodingAESKey');
@@ -91,6 +96,7 @@ export function resolveWecomConfig(config: WecomEndpointConfig): ResolvedWecomCo
     context: 'wecom',
     id,
     corpId,
+    agentId,
     agentSecret,
     token,
     encodingAESKey,
@@ -103,7 +109,7 @@ export function resolveWecomConfig(config: WecomEndpointConfig): ResolvedWecomCo
 
 function requiredEndpointField(
   value: unknown,
-  field: 'id' | 'corpId' | 'agentSecret' | 'token' | 'encodingAESKey',
+  field: 'id' | 'corpId' | 'agentId' | 'agentSecret' | 'token' | 'encodingAESKey',
 ): string {
   const resolved = optionalEndpointField(value);
   if (!resolved) {
@@ -198,6 +204,7 @@ export function parseXmlMessage(xml: string): WecomMessage | null {
     if (!msgType) return null;
 
     const msg: WecomMessage = {
+      rawXml: xml,
       ToUserName: get('ToUserName') || '',
       FromUserName: get('FromUserName') || '',
       CreateTime: Number(get('CreateTime') || Date.now()),

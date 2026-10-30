@@ -1,10 +1,9 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { telegramFixture, telegramDeliveryFixture } from './fixture.js';
+import { createAdapterHarness } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
@@ -22,7 +21,6 @@ import {
   resolveTelegramConfig,
   type TelegramMessage,
 } from '../src/protocol.js';
-import { telegramClient } from '../src/client.js';
 import defineTelegramAdapter from '../adapters/telegram/index.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -392,14 +390,14 @@ describe('telegram conversation content port', () => {
         headers: { get: (name) => name.toLowerCase() === 'content-type' ? 'image/jpeg' : null },
       };
     };
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramDeliveryFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram') as never,
-      gateway: { receive: vi.fn() } as never,
+
       config: baseConfig,
       fetch,
-    }), { receive: vi.fn() } as never, undefined);
+    }, { receive: vi.fn() } as never, undefined);
     const conversation = testConversation('private', '1001');
-    await expect(endpoint.content.resolve({
+    await expect(endpoint.index.resolveContent(endpoint.canonicalId, {
       kind: 'media',
       conversation,
       media: { kind: 'file', value: 'telegram-file-id', file_name: 'a.jpg' },
@@ -412,6 +410,7 @@ describe('telegram conversation content port', () => {
       status: 'resolved',
       value: { kind: 'base64', value: 'YWJj', mime_type: 'image/jpeg', file_name: 'a.jpg', size: 3 },
     });
+    await endpoint.stop();
   });
 });
 
@@ -420,16 +419,15 @@ describe('telegram plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const fetch = mockApiFetch();
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway,
       config: baseConfig,
-      fetch,
-    }), gateway, undefined);
+      fetch
+    }, gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
@@ -447,16 +445,15 @@ describe('telegram plugin runtime adapter', () => {
   it('marks mentioned when entities @ the bot username', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway,
       config: baseConfig,
-      fetch: mockApiFetch(),
-    }), gateway, undefined);
+      fetch: mockApiFetch()
+    }, gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit(textMessage({
+    endpoint.endpoint.admit(textMessage({
       text: '@test_bot hello',
       entities: [{ type: 'mention', offset: 0, length: 9 }],
     }));
@@ -472,16 +469,16 @@ describe('telegram plugin runtime adapter', () => {
 
   it('does not mark mentioned when @ targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
+
       config: baseConfig,
       fetch: mockApiFetch(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }, { receive, send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit(textMessage({
+    endpoint.endpoint.admit(textMessage({
       text: '@someone_else hello',
       entities: [{ type: 'mention', offset: 0, length: 13 }],
     }));
@@ -495,29 +492,25 @@ describe('telegram plugin runtime adapter', () => {
 
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
+
       config: baseConfig,
       fetch: mockApiFetch(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }, { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
   it('sends outbound payloads via Bot API', async () => {
     const fetch = mockApiFetch({ sendMessage: { message_id: 77 } });
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
-      fetch,
-    }), {
+      fetch
+    }, {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
@@ -536,12 +529,13 @@ describe('telegram plugin runtime adapter', () => {
   it.each([{}, { message_id: 0 }, { message_id: -1 }, { message_id: '77' }])(
     'does not fabricate a receipt when Telegram returns %j', async (result) => {
       const fetch = mockApiFetch({ sendMessage: result });
-      const endpoint = new TelegramEndpoint({
+      const endpoint = await telegramDeliveryFixture({
         id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
       });
       await expect(endpoint.send({ conversation: testConversation('private', '1001'), payload: 'pong' }))
         .rejects.toThrow('delivery is unconfirmed');
       expect(fetch.calls).toHaveLength(1);
+      await endpoint.stop();
     },
   );
 
@@ -551,25 +545,22 @@ describe('telegram plugin runtime adapter', () => {
       text: async () => JSON.stringify({ ok: false, error_code: status, description: 'send rejected' }),
       json: async () => ({ ok: false }),
     }));
-    const endpoint = new TelegramEndpoint({
+    const endpoint = await telegramDeliveryFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
     });
     await expect(endpoint.send({ conversation: testConversation('private', '1001'), payload: 'pong' }))
       .rejects.toThrow(`failed (${status})`);
     expect(fetch).toHaveBeenCalledTimes(1);
+    await endpoint.stop();
   });
 
   it('uses the native chat id from the structured conversation', async () => {
     const fetch = mockApiFetch({ sendMessage: { message_id: 78 } });
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
-      fetch,
-    }), {
+      fetch
+    }, {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
@@ -585,15 +576,11 @@ describe('telegram plugin runtime adapter', () => {
 
   it('uploads base64 image via multipart sendPhoto', async () => {
     const fetch = mockApiFetch({ sendPhoto: { message_id: 88 } });
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
-      fetch,
-    }), {
+      fetch
+    }, {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
@@ -634,15 +621,11 @@ describe('telegram plugin runtime adapter', () => {
       const filePath = path.join(dir, 'local.png');
       await writeFile(filePath, 'disk-bytes');
       const fetch = mockApiFetch({ sendPhoto: { message_id: 89 } });
-      const endpoint = bindTestEndpoint(new TelegramEndpoint({
-        id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-        gateway: {
-          receive: vi.fn(async () => Object.freeze({ matched: false })),
-          send: vi.fn(async () => 'sent'),
-        },
-        config: baseConfig,
-        fetch,
-      }), {
+      const endpoint = await telegramFixture({
+      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
+      config: baseConfig,
+      fetch
+    }, {
           receive: vi.fn(async () => Object.freeze({ matched: false })),
           send: vi.fn(async () => 'sent'),
         }, undefined);
@@ -671,21 +654,16 @@ describe('telegram plugin runtime adapter', () => {
         user: { id: 1, username: 'admin', first_name: 'Admin' },
       }],
     });
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
-      fetch,
-    }), {
+      fetch
+    }, {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
     await endpoint.start();
-    const admins = await telegramClient
-      .get(endpointClientContext(endpoint), 'test-telegram-bot').getChatAdmins(9);
+    const admins = await endpoint.endpoint.getChatAdmins(9);
     expect(admins).toHaveLength(1);
     expect(admins[0]?.user.username).toBe('admin');
     await endpoint.stop();
@@ -697,13 +675,12 @@ describe('telegram plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const apiFetch = mockApiFetch();
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway,
       http,
       config: webhookConfig,
-      fetch: apiFetch,
-    }), gateway, undefined);
+      fetch: apiFetch
+    }, gateway, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -737,13 +714,13 @@ describe('telegram plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const apiFetch = mockApiFetch();
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
+
       http,
       config: webhookConfig,
       fetch: apiFetch,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }, { receive, send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
     endpoint.open();
@@ -766,30 +743,11 @@ describe('telegram plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const endpoint = defineTelegramAdapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      name: 'telegram',
-      config: {
-        id: 'telegram',
-        token: 'tok',
-        polling: false,
-        webhook: { domain: 'https://x.com' },
-      },
-      use: (token: unknown) => {
-        if (token === httpHostToken) return http;
-        if (token === outboundMessageToken) return gateway;
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === telegramRuntimeStateToken) return createEndpointRuntimeState();
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
-    expect(endpoint).toBeInstanceOf(TelegramEndpoint);
+    const endpoint = await createAdapterHarness(defineTelegramAdapter, {
+      id: 'telegram', token: 'tok', polling: false, webhook: { domain: 'https://x.com' },
+    }, { name: 'telegram', resources: new Map([[httpHostToken.id, http]]) });
+    expect(endpoint.endpoint).toBeInstanceOf(TelegramEndpoint);
+    await endpoint.stop();
     await http.close().catch(() => undefined);
   });
 });
@@ -807,12 +765,8 @@ describe('telegram webhook auth', () => {
     hosts.push(http);
     const { getAdapterLogger } = await import('@zhin.js/logger');
     const warn = vi.spyOn(getAdapterLogger('telegram', 'no-secret-bot'), 'warn');
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       http,
       config: resolveTelegramConfig({
         id: 'no-secret-bot',
@@ -821,8 +775,8 @@ describe('telegram webhook auth', () => {
         polling: false,
         webhook: { domain: 'https://bot.example.com', path: '/telegram/webhook' },
       }),
-      fetch: mockApiFetch(),
-    }), {
+      fetch: mockApiFetch()
+    }, {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
@@ -839,7 +793,7 @@ describe('telegram webhook auth', () => {
 });
 
 describe('telegram permission lookup isolation', () => {
-  it.each(['close', 'reopen', 'restart'] as const)('drops a late lookup after %s without repopulating permissions', async (transition) => {
+  it.each(['close', 'reopen', 'restart'] as const)('drains accepted roles on local %s and cancels retired roles without repopulating permissions', async (transition) => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const fallback = mockApiFetch({ getChatMember: { status: 'member' } });
@@ -856,55 +810,62 @@ describe('telegram permission lookup isolation', () => {
       }
       return fallback(url, init);
     };
-    const endpoint = bindTestEndpoint(new TelegramEndpoint({
+    const create = () => telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
-    }), gateway, undefined);
+    }, gateway, undefined);
+    let endpoint = await create();
     const message = textMessage({ chat: { id: -1001, type: 'supergroup' } });
-    await endpoint.start();
-    endpoint.open();
-    endpoint.admit(message);
+    await endpoint.start(); endpoint.open(); endpoint.endpoint.admit(message);
     await vi.waitFor(() => expect(lookups).toBe(1));
-    if (transition === 'restart') {
-      await endpoint.stop();
-      await endpoint.start();
-    } else endpoint.close();
-    if (transition !== 'close') endpoint.open();
-    finish();
-    // Allow the old HTTP response, parser and permission continuation to settle.
-    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    let closing: Promise<void> | undefined;
     try {
-      expect(oldSignal?.aborted).toBe(true);
-      expect(receive).not.toHaveBeenCalled();
-      endpoint.open();
-      endpoint.admit({ ...message, message_id: 43 });
-      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
+      if (transition === 'restart') {
+        const previous = endpoint.endpoint;
+        await endpoint.stop();
+        expect(oldSignal?.aborted).toBe(true);
+        expect(receive).not.toHaveBeenCalled();
+        endpoint = await create();
+        expect(endpoint.endpoint).not.toBe(previous);
+        await endpoint.start();
+        finish();
+      } else {
+        let closed = false;
+        closing = endpoint.close().then(() => { closed = true; });
+        await new Promise(resolve => setImmediate(resolve));
+        expect(closed).toBe(false);
+        expect(oldSignal?.aborted).toBe(false);
+        finish(); await closing;
+        expect(receive).toHaveBeenCalledTimes(1);
+        expect(receive).toHaveBeenCalledWith(expect.objectContaining({ message: expect.objectContaining({ id: String(message.message_id) }),
+          metadata: expect.objectContaining({ senderRole: 'admin' }) }));
+        if (transition === 'reopen') endpoint.open();
+      }
+      const accepted = transition === 'restart' ? 0 : 1;
+      endpoint.open(); endpoint.endpoint.admit({ ...message, message_id: 43 });
+      await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(accepted + 1));
       expect(lookups).toBe(2);
-      expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-        message: expect.objectContaining({ id: '43' }),
-        metadata: expect.objectContaining({ senderRole: 'member' }),
-      }));
-    } finally {
-      await endpoint.stop();
-    }
+      expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.objectContaining({ id: '43' }),
+        metadata: expect.objectContaining({ senderRole: 'member' }) }));
+    } finally { finish(); await closing; await endpoint.stop(); }
   });
 
   it('keeps group permissions separate for two accounts sharing chat and user IDs', async () => {
-    const endpoints: TelegramEndpoint[] = [];
+    const endpoints: Awaited<ReturnType<typeof telegramFixture>>[] = [];
     try {
       for (const [account, status, role] of [['admin-bot', 'administrator', 'admin'], ['member-bot', 'member', 'member']]) {
         const receive = vi.fn(async () => Object.freeze({ matched: false }));
         const fetch = mockApiFetch({ getChatMember: { status } });
-        const endpoint = bindTestEndpoint(new TelegramEndpoint({
+        const endpoint = await telegramFixture({
           id: capabilityId(rootPluginId(), adapterFeature, account!),
           config: { ...baseConfig, id: account!, token: `test-${account}` }, fetch,
-        }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+        }, { receive, send: vi.fn(async () => 'sent') }, undefined);
         endpoints.push(endpoint);
         await endpoint.start();
         endpoint.open();
         const message = textMessage({ chat: { id: -1001, type: 'supergroup' } });
-        endpoint.admit(message);
+        endpoint.endpoint.admit(message);
         await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
-        endpoint.admit({ ...message, message_id: 43 });
+        endpoint.endpoint.admit({ ...message, message_id: 43 });
         await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
         expect(fetch.calls.filter((call) => call.method === 'getChatMember')).toHaveLength(1);
         expect(receive).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -937,13 +898,15 @@ describe('telegram polling backoff', () => {
       }
       return fallback(url, init);
     };
-    const endpoint = new TelegramEndpoint({
+    const create = () => telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       config: webhookConfig, http, fetch,
     });
+    let endpoint = await create();
     try {
       await expect(endpoint.start()).rejects.toThrow('registration failed');
       expect(released).toHaveBeenCalledTimes(1);
+      endpoint = await create();
       await endpoint.start();
       expect(released).toHaveBeenCalledTimes(1);
       await endpoint.stop();
@@ -975,11 +938,12 @@ describe('telegram polling backoff', () => {
       }
       return fallback(url, init);
     };
-    const endpoint = new TelegramEndpoint({
+    const create = () => telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       config: mode === 'webhook' ? webhookConfig : baseConfig, http, fetch,
     });
-    const starting = endpoint.start();
+    let endpoint = await create();
+    const starting = expect(endpoint.start()).rejects.toMatchObject({ code: 'inactive' });
     await requested;
     await endpoint.stop();
     complete();
@@ -990,7 +954,10 @@ describe('telegram polling backoff', () => {
       if (method === 'getMe') {
         expect(fallback.calls.map((call) => call.method)).toEqual(['getMe']);
       }
-      // Reusing the same instance must not retain the cancelled request or route.
+      // A new incarnation must not retain the cancelled request or route.
+      const previous = endpoint.endpoint;
+      endpoint = await create();
+      expect(endpoint.endpoint).not.toBe(previous);
       await endpoint.start();
     } finally {
       await endpoint.stop();
@@ -1014,14 +981,16 @@ describe('telegram polling backoff', () => {
       if (url.endsWith('/getUpdates')) pollSignal = init?.signal;
       return fallback(url, init);
     };
-    const endpoint = new TelegramEndpoint({
+    const create = () => telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
     });
+    let endpoint = await create();
     const oldStart = endpoint.start();
     // Attach rejection observation before injecting the late failure.
     const settled = oldStart.catch(() => undefined);
     await requested;
     await endpoint.stop();
+    endpoint = await create();
     await endpoint.start();
     reject(new Error('late authentication failure'));
     await settled;
@@ -1041,7 +1010,7 @@ describe('telegram polling backoff', () => {
       if (url.endsWith('/getUpdates')) pollSignal = init?.signal;
       return fallback(url, init);
     };
-    const endpoint = new TelegramEndpoint({
+    const endpoint = await telegramFixture({
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'), config: baseConfig, fetch,
     });
     try {

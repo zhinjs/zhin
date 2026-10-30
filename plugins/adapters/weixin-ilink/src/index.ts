@@ -31,7 +31,6 @@ export {
 
 export {
   WeixinIlinkClient,
-  weixinIlinkClient,
   type WeixinIlinkClientEventMap,
 } from './client.js';
 
@@ -43,3 +42,4 @@ export {
   type WeixinIlinkNotifyStop,
   type WeixinIlinkSendText,
 } from './endpoint.js';
+export { WeixinIlinkAdapter } from './adapter.js';

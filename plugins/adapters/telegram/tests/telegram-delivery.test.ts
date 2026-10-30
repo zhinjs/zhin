@@ -1,9 +1,9 @@
 import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getEventListeners } from 'node:events';
-import { bindTestEndpointEvents } from '../../test-utils/endpoint.js';
+import { telegramFixture, telegramDeliveryFixture } from './fixture.js';
 import { capabilityId, featureId, rootPluginId, createCapabilitySlot, SnapshotStore, type RuntimeSnapshot } from 'zhin.js';
-import { AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointEvent } from 'zhin.js/adapter';
+import { Adapter, AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointEvent } from 'zhin.js/adapter';
 import type { HttpHost } from '@zhin.js/host-http';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { TelegramEndpoint, type TelegramFetch } from '../src/endpoint.js';
@@ -21,11 +21,14 @@ const update: TelegramUpdate = {
 };
 const id = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'telegram');
 
-function makeEndpoint(receive: (name: string) => Promise<unknown> = async () => undefined) {
-  const endpoint = bindTestEndpointEvents(new TelegramEndpoint({ id, config }), {
+async function makeEndpoint(receive: (name: string) => Promise<unknown> = async () => undefined) {
+  const endpoint = await telegramFixture({ id, config,
+    http: { route: () => () => undefined } as unknown as HttpHost,
+    fetch: async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result: {} }), json: async () => ({}) }),
+  }, undefined, undefined, {
     receive: async (event) => receive(event.name),
   });
-  endpoint.open();
+  await endpoint.start(); endpoint.open();
   return endpoint;
 }
 
@@ -50,14 +53,15 @@ async function candidate(receive: (event: EndpointEvent) => Promise<unknown>) {
     http: { route: () => () => undefined } as unknown as HttpHost,
     fetch: async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result: {} }), json: async () => ({}) }),
   });
+  class CandidateAdapter extends Adapter<TelegramEndpoint> { protected createEndpoint() { return endpoint; } }
   const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'telegram',
     source: '/adapters/telegram/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], operations: ['recall'], create: () => endpoint }),
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], operations: ['recall'], createAdapter: () => new CandidateAdapter() }),
   });
   const snapshot: RuntimeSnapshot = {
     generation: 1, root,
     tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@test/root', packageRoot: '/test', children: [] }]]),
-    config: new Map([[root, {}]]), resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive }]])]]),
+    config: new Map([[root, { id: config.id }]]), resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive }]])]]),
     capabilities: new Map([[slot.id, slot]]), projections: new Map(),
   };
   const index = await AdapterIndex.create([slot], snapshot, new AbortController().signal);
@@ -94,8 +98,8 @@ describe('Telegram update admission and acknowledgement', () => {
 
   it('does not confirm the webhook after platform.receive alone succeeds', async () => {
     const message = deferred<void>();
-    const endpoint = makeEndpoint(async (name) => name === 'message.receive' ? message.promise : undefined);
-    const { response, done } = webhook(endpoint);
+    const endpoint = await makeEndpoint(async (name) => name === 'message.receive' ? message.promise : undefined);
+    const { response, done } = webhook(endpoint.endpoint);
     await new Promise((resolve) => setImmediate(resolve));
     expect(response.writeHead).not.toHaveBeenCalled();
     message.resolve();
@@ -106,11 +110,11 @@ describe('Telegram update admission and acknowledgement', () => {
 
   it('returns 503 for failed canonical admission and permits a retry', async () => {
     const receive = vi.fn().mockRejectedValueOnce(new Error('storage unavailable')).mockResolvedValue(undefined);
-    const endpoint = makeEndpoint(async (name) => name === 'message.receive' ? receive() : undefined);
-    const first = webhook(endpoint);
+    const endpoint = await makeEndpoint(async (name) => name === 'message.receive' ? receive() : undefined);
+    const first = webhook(endpoint.endpoint);
     await first.done;
     expect(first.response.writeHead).toHaveBeenCalledWith(503, expect.any(Object));
-    const retry = webhook(endpoint);
+    const retry = webhook(endpoint.endpoint);
     await retry.done;
     expect(retry.response.writeHead).toHaveBeenCalledWith(200, expect.any(Object));
     expect(receive).toHaveBeenCalledTimes(2);
@@ -141,22 +145,22 @@ describe('Telegram update admission and acknowledgement', () => {
   it('coalesces concurrent delivery and suppresses already admitted update ids', async () => {
     const message = deferred<void>();
     const receive = vi.fn(async (name) => name === 'message.receive' ? message.promise : undefined);
-    const endpoint = makeEndpoint(receive);
-    const first = endpoint.handleUpdate(update);
-    const duplicate = endpoint.handleUpdate(update);
+    const endpoint = await makeEndpoint(receive);
+    const first = endpoint.endpoint.handleUpdate(update);
+    const duplicate = endpoint.endpoint.handleUpdate(update);
     await new Promise((resolve) => setImmediate(resolve));
     expect(receive.mock.calls.filter(([name]) => name === 'message.receive')).toHaveLength(1);
     message.resolve();
     await Promise.all([first, duplicate]);
-    await endpoint.handleUpdate(update);
+    await endpoint.endpoint.handleUpdate(update);
     expect(receive).toHaveBeenCalledTimes(2); // platform + canonical once each
     await endpoint.stop();
   });
 
   it('acknowledges successfully drained canonical processing even if the endpoint closes meanwhile', async () => {
     const message = deferred<void>();
-    const endpoint = makeEndpoint(async (name) => name === 'message.receive' ? message.promise : undefined);
-    const first = webhook(endpoint);
+    const endpoint = await makeEndpoint(async (name) => name === 'message.receive' ? message.promise : undefined);
+    const first = webhook(endpoint.endpoint);
     await new Promise((resolve) => setImmediate(resolve));
     endpoint.close();
     message.resolve();
@@ -167,14 +171,15 @@ describe('Telegram update admission and acknowledgement', () => {
 
   it('rejects an update closed during permission lookup before canonical dispatch enters Core', async () => {
     const receive = vi.fn(async () => undefined);
-    const endpoint = bindTestEndpointEvents(new TelegramEndpoint({ id, config,
-      fetch: async () => new Promise(() => {}),
-    }), { receive });
-    endpoint.open();
+    const endpoint = await telegramFixture({ id, config,
+      http: { route: () => () => undefined } as unknown as HttpHost,
+      fetch: async (url) => url.endsWith('/getChatMember') ? new Promise(() => {}) : ({ ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result: {} }), json: async () => ({}) }),
+    }, undefined, undefined, { receive });
+    await endpoint.start(); endpoint.open();
     const groupUpdate = { ...update, message: { ...update.message!,
       chat: { id: 1, type: 'group' as const }, from: { id: 1, first_name: 'Alice' },
     } };
-    const request = webhook(endpoint, JSON.stringify(groupUpdate));
+    const request = webhook(endpoint.endpoint, JSON.stringify(groupUpdate));
     await new Promise((resolve) => setImmediate(resolve));
     await endpoint.stop();
     await request.done;
@@ -184,22 +189,22 @@ describe('Telegram update admission and acknowledgement', () => {
 
   it('rejects excess concurrent admissions and frees capacity after completion', async () => {
     const message = deferred<void>();
-    const endpoint = makeEndpoint(async (name) => name === 'message.receive' ? message.promise : undefined);
-    const requests = Array.from({ length: 256 }, (_, index) => endpoint.handleUpdate({ ...update, update_id: index }));
-    await expect(endpoint.handleUpdate({ ...update, update_id: 256 })).rejects.toThrow('capacity exhausted');
+    const endpoint = await makeEndpoint(async (name) => name === 'message.receive' ? message.promise : undefined);
+    const requests = Array.from({ length: 256 }, (_, index) => endpoint.endpoint.handleUpdate({ ...update, update_id: index }));
+    await expect(endpoint.endpoint.handleUpdate({ ...update, update_id: 256 })).rejects.toThrow('capacity exhausted');
     message.resolve();
     await Promise.all(requests);
-    await expect(endpoint.handleUpdate({ ...update, update_id: 256 })).resolves.toBeUndefined();
+    await expect(endpoint.endpoint.handleUpdate({ ...update, update_id: 256 })).resolves.toBeUndefined();
     await endpoint.stop();
   });
 
   it('bounds admitted-update deduplication by evicting the oldest accepted id', async () => {
     const deliveries = vi.fn(async () => undefined);
-    const endpoint = makeEndpoint(async (name) => name === 'message.receive' ? deliveries() : undefined);
-    for (let next = 0; next <= 2048; next += 1) await endpoint.handleUpdate({ ...update, update_id: next });
-    await endpoint.handleUpdate({ ...update, update_id: 2048 });
+    const endpoint = await makeEndpoint(async (name) => name === 'message.receive' ? deliveries() : undefined);
+    for (let next = 0; next <= 2048; next += 1) await endpoint.endpoint.handleUpdate({ ...update, update_id: next });
+    await endpoint.endpoint.handleUpdate({ ...update, update_id: 2048 });
     expect(deliveries).toHaveBeenCalledTimes(2049);
-    await endpoint.handleUpdate({ ...update, update_id: 0 });
+    await endpoint.endpoint.handleUpdate({ ...update, update_id: 0 });
     expect(deliveries).toHaveBeenCalledTimes(2050);
     await endpoint.stop();
   });
@@ -207,7 +212,7 @@ describe('Telegram update admission and acknowledgement', () => {
   it('projects polling failure and recovery independently from generation admission', async () => {
     vi.useFakeTimers();
     let polls = 0;
-    const endpoint = bindTestEndpointEvents(new TelegramEndpoint({ id,
+    const endpoint = await telegramFixture({ id,
       config: resolveTelegramConfig({ id: 'poll-health', token: '123:PRIVATE' }),
       fetch: async (url) => {
         if (url.endsWith('/getUpdates')) {
@@ -218,17 +223,17 @@ describe('Telegram update admission and acknowledgement', () => {
         const result = url.endsWith('/getUpdates') ? [update] : {};
         return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result }), json: async () => ({}) };
       },
-    }), { receive: async () => undefined });
+    }, undefined, undefined, { receive: async () => undefined });
     try {
       await endpoint.start();
       endpoint.open();
       await vi.advanceTimersByTimeAsync(0);
-      expect(endpoint.transportState).toBe('reconnecting');
+      expect(endpoint.index.connection('telegram', endpoint.canonicalId)?.transportState).toBe('reconnecting');
       await vi.advanceTimersByTimeAsync(2_000);
-      expect(endpoint.transportState).toBe('open');
-      expect(endpoint.getUpdateOffset()).toBe(124);
+      expect(endpoint.index.connection('telegram', endpoint.canonicalId)?.transportState).toBe('open');
+      expect(endpoint.endpoint.getUpdateOffset()).toBe(124);
       await endpoint.stop();
-      expect(endpoint.transportState).toBe('stopped');
+      expect(endpoint.index.connection('telegram', endpoint.canonicalId)?.transportState).toBe('stopped');
       expect(vi.getTimerCount()).toBe(0);
     } finally { await endpoint.stop(); vi.useRealTimers(); }
   });
@@ -259,11 +264,11 @@ describe('Telegram update admission and acknowledgement', () => {
     async function generation() {
       const abort = new AbortController();
       let offset = 0;
-      const endpoint = makeEndpoint(async (name) => name === 'message.receive' ? deliveries() : undefined);
+      const endpoint = await makeEndpoint(async (name) => name === 'message.receive' ? deliveries() : undefined);
       const host: TelegramPollingHost = {
         allowedUpdates: [], getUpdateOffset: () => offset,
         setUpdateOffset: (next) => { offset = next; abort.abort(); },
-        handleUpdate: (next) => endpoint.handleUpdate(next),
+        handleUpdate: (next) => endpoint.endpoint.handleUpdate(next),
         callApi: async <T>(_method: string, params?: Record<string, unknown>) => {
           const confirmedOffset = Number(params?.offset) || 0;
           while (pending[0] && pending[0].update_id < confirmedOffset) pending.shift();
@@ -284,11 +289,11 @@ describe('Telegram update admission and acknowledgement', () => {
 describe('Telegram Bot API deadlines and failure classification', () => {
   it('bounds response body parsing and cancels even if the fetch headers already arrived', async () => {
     vi.useFakeTimers();
-    const endpoint = new TelegramEndpoint({ id, config, requestTimeoutMs: 10,
+    const endpoint = await telegramFixture({ id, config, requestTimeoutMs: 10,
       fetch: async () => ({ ok: true, status: 200, text: async () => new Promise(() => {}), json: async () => ({}) }),
     });
     try {
-      const failed = expect(endpoint.callApi('sendMessage')).rejects.toMatchObject({ kind: 'timeout', disposition: 'unknown' });
+      const failed = expect(endpoint.endpoint.callApi('sendMessage')).rejects.toMatchObject({ kind: 'timeout', disposition: 'unknown' });
       await vi.advanceTimersByTimeAsync(10);
       await failed;
       expect(vi.getTimerCount()).toBe(0);
@@ -296,13 +301,13 @@ describe('Telegram Bot API deadlines and failure classification', () => {
   });
 
   it('stop cancels outstanding API requests even before connection startup', async () => {
-    const endpoint = new TelegramEndpoint({ id, config, fetch: async () => new Promise(() => {}) });
-    const request = endpoint.callApi('sendMessage');
+    const endpoint = await telegramFixture({ id, config, fetch: async () => new Promise(() => {}) });
+    const request = endpoint.endpoint.callApi('sendMessage');
     const failed = expect(request).rejects.toMatchObject({ kind: 'cancelled', disposition: 'unknown' });
     await Promise.resolve();
     await endpoint.stop();
     await failed;
-    expect(endpoint.transportState).toBe('stopped');
+    expect(endpoint.index.connection('telegram', endpoint.canonicalId)?.transportState).toBe('stopped');
   });
   it.each(['json', 'form'] as const)('cancels a hung %s request at the deadline without retry', async (kind) => {
     vi.useFakeTimers();
@@ -311,9 +316,9 @@ describe('Telegram Bot API deadlines and failure classification', () => {
       signal = init!.signal!;
       return new Promise(() => {}); // transport ignores cancellation; the caller must still settle
     });
-    const endpoint = new TelegramEndpoint({ id, config, fetch, requestTimeoutMs: 10 });
+    const endpoint = await telegramFixture({ id, config, fetch, requestTimeoutMs: 10 });
     try {
-      const request = kind === 'json' ? endpoint.callApi('sendMessage') : endpoint.callApiForm('sendPhoto', new FormData());
+      const request = kind === 'json' ? endpoint.endpoint.callApi('sendMessage') : endpoint.endpoint.callApiForm('sendPhoto', new FormData());
       const failed = expect(request).rejects.toMatchObject({ kind: 'timeout', disposition: 'unknown' });
       await vi.advanceTimersByTimeAsync(10);
       await failed;
@@ -326,8 +331,8 @@ describe('Telegram Bot API deadlines and failure classification', () => {
   it('propagates client cancellation and removes source listeners', async () => {
     const abort = new AbortController();
     const fetch = vi.fn<TelegramFetch>(async () => new Promise(() => {}));
-    const endpoint = new TelegramEndpoint({ id, config, fetch });
-    const request = endpoint.client.callApi('sendMessage', {}, abort.signal);
+    const endpoint = await telegramFixture({ id, config, fetch });
+    const request = endpoint.endpoint.callApi('sendMessage', {}, abort.signal);
     const failed = expect(request).rejects.toMatchObject({ kind: 'cancelled', disposition: 'unknown' });
     await Promise.resolve();
     abort.abort();
@@ -346,17 +351,17 @@ describe('Telegram Bot API deadlines and failure classification', () => {
         description: 'rejected', parameters: { retry_after: retryAfterSeconds } }),
       json: async () => undefined,
     }));
-    const endpoint = new TelegramEndpoint({ id, config, fetch });
-    await expect(endpoint.callApi('sendMessage')).rejects.toMatchObject({ kind, status, retryAfterSeconds, disposition: 'rejected' });
+    const endpoint = await telegramFixture({ id, config, fetch });
+    await expect(endpoint.endpoint.callApi('sendMessage')).rejects.toMatchObject({ kind, status, retryAfterSeconds, disposition: 'rejected' });
     expect(fetch).toHaveBeenCalledOnce();
     await endpoint.stop();
   });
 
   it('redacts credential-bearing transport errors', async () => {
-    const endpoint = new TelegramEndpoint({ id, config,
+    const endpoint = await telegramFixture({ id, config,
       fetch: async (url) => { throw new Error(`failed request ${url}`); },
     });
-    const error = await endpoint.callApi('sendMessage').catch((failure: Error) => failure);
+    const error = await endpoint.endpoint.callApi('sendMessage').catch((failure: Error) => failure);
     expect(error).toBeInstanceOf(EndpointDeliveryError);
     expect(error).toMatchObject({ kind: 'network', disposition: 'unknown' });
     expect(String(error)).not.toContain(config.token);
@@ -367,8 +372,8 @@ describe('Telegram Bot API deadlines and failure classification', () => {
     const abort = new AbortController();
     abort.abort();
     const fetch = vi.fn<TelegramFetch>();
-    const endpoint = new TelegramEndpoint({ id, config, fetch });
-    await expect(endpoint.callApi('sendMessage', {}, abort.signal)).rejects.toMatchObject({
+    const endpoint = await telegramFixture({ id, config, fetch });
+    await expect(endpoint.endpoint.callApi('sendMessage', {}, abort.signal)).rejects.toMatchObject({
       code: 'endpoint_cancelled', disposition: 'not_sent',
     });
     expect(fetch).not.toHaveBeenCalled();
@@ -388,7 +393,7 @@ describe('Telegram structured outbound delivery', () => {
     }).mockResolvedValueOnce({
       ok: false, status: 403, text: async () => JSON.stringify({ ok: false, error_code: 403, description: 'forbidden' }), json: async () => ({}),
     });
-    const endpoint = new TelegramEndpoint({ id, config, fetch });
+    const endpoint = await telegramDeliveryFixture({ id, config, fetch });
     const error = await endpoint.send({ conversation, payload: images }).catch((failure: unknown) => failure);
     expect(error).toBeInstanceOf(EndpointDeliveryError);
     expect(error).toMatchObject({ code: 'partial_delivery', disposition: 'unknown',
@@ -403,7 +408,7 @@ describe('Telegram structured outbound delivery', () => {
     const fetch = vi.fn<TelegramFetch>().mockResolvedValueOnce({
       ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result: { message_id: 10 } }), json: async () => ({}),
     }).mockImplementationOnce(async () => new Promise(() => {}));
-    const endpoint = new TelegramEndpoint({ id, config, fetch, requestTimeoutMs: 10 });
+    const endpoint = await telegramDeliveryFixture({ id, config, fetch, requestTimeoutMs: 10 });
     try {
       const failed = expect(endpoint.send({ conversation, payload: images })).rejects.toMatchObject({
         code: 'partial_delivery', disposition: 'unknown', cause: { kind: 'timeout', disposition: 'unknown' },
@@ -418,7 +423,7 @@ describe('Telegram structured outbound delivery', () => {
     const fetch = vi.fn<TelegramFetch>(async () => ({
       ok: false, status: 429, text: async () => JSON.stringify({ ok: false, error_code: 429, description: 'limited' }), json: async () => ({}),
     }));
-    const endpoint = new TelegramEndpoint({ id, config, fetch });
+    const endpoint = await telegramDeliveryFixture({ id, config, fetch });
     await expect(endpoint.send({ conversation, payload: images })).rejects.toMatchObject({
       code: 'platform_rejected', disposition: 'rejected', kind: 'rate_limit',
     });
@@ -430,7 +435,7 @@ describe('Telegram structured outbound delivery', () => {
     const fetch = vi.fn<TelegramFetch>(async () => ({
       ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result: {} }), json: async () => ({}),
     }));
-    const endpoint = new TelegramEndpoint({ id, config, fetch });
+    const endpoint = await telegramDeliveryFixture({ id, config, fetch });
     await expect(endpoint.send({ conversation, payload: '' })).rejects.toMatchObject({ disposition: 'not_sent' });
     expect(fetch).not.toHaveBeenCalled();
     await expect(endpoint.send({ conversation, payload: 'hello' })).rejects.toMatchObject({

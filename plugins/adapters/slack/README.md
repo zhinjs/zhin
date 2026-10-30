@@ -6,7 +6,7 @@ Zhin.js Slack 适配器（Plugin Runtime），优先 Socket Mode，也可经 Run
 
 - **Socket Mode**（默认）：WebSocket 长连接，无需公网 URL
 - **HTTP Events API**：`httpHostToken` POST（签名验证），**非** legacy host-router/Koa
-- 入站经 `Endpoint.emit(...)`；出站 `send({ conversation, payload })` → `chat.postMessage` / Block Kit
+- 入站经 `endpoint[endpointSpec].events`；出站 `send({ conversation, payload })` → `chat.postMessage` / Block Kit
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Block Kit 按钮、斜杠命令、消息编辑、表情反应等（见 `tools/`）
 
@@ -19,12 +19,13 @@ pnpm add @zhin.js/adapter-slack
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/slack/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpoint[endpointSpec].events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — 仅 HTTP 模式需要 `httpHostToken` 注册 Events 路由
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
-入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`（`conversation` 为 ConversationRef：`channel_type: im` → kind `private`，其余 → kind `group`；线程根 ts 进 `threadId`）  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message: { conversation, id }, content: text, sender, metadata })`（`conversation` 为 ConversationRef：`channel_type: im` → kind `private`，其余 → kind `group`；线程根 ts 进 `threadId`）
+
 出站：`send({ conversation, payload })` → Web API（`conversation.id` 为 channel，`conversation.threadId` 为 thread_ts）
 
 ### 平台权限（platform permit）
@@ -129,17 +130,23 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 - 入站 mrkdwn → Markdown 为启发式转换
 - Modals / Select menus — 暂不支持
 - OAuth 安装流程 — 暂不支持
-- 旧 `usePlugin` / `extends Adapter` / host-router 生产入口已删除
+- 旧 `usePlugin`、`defineAdapter.create`、公开 Endpoint 基类与 host-router 生产入口已删除；平台 Adapter 继承统一 `Adapter` 基类，Endpoint 继承实际原生 Client
 
 ## Console 页面
 
 启动后打开 Console 的「Slack」页（地址 `/slack`），可以：
 
 - 查看运行中的连接、点「测试连接」做连通性诊断；
-- 增删 `plugins.slack.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 在账号库保存、修改、启动、停止、替换或删除该 Adapter 的账号；新增仅保存，不创建 SDK Client，需手动启动；
 - 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
 
 读取需要 `slack:read`，写操作需要 `slack:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `slack endpoint add`。
+
+首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
+
+启停意图在进程重启后恢复。停止或删除会取消并关闭目标账号的在途操作，其他账号继续运行；删除保留历史。已启动账号的连接配置更新先关闭旧 incarnation，再仅重连该账号；平台身份变化按替换处理，分配新内部身份、保留旧历史，新账号不继承旧 Session、个人设置或启动意图。提交结果未知时先刷新核实，不自动重复 CAS 或平台操作。
+
+Slack 的 bot token 更新通过只读 `auth.test` 核验 workspace 与 bot user。App-Level Token 和 HTTP signing secret 没有对应的只读身份核验接口，变更须使用显式账号替换；不以 bot token 的身份结果冒充这两项凭据的身份。
 
 ## 故障排查
 

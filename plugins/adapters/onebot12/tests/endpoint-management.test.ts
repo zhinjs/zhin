@@ -1,4 +1,5 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { EventEmitter } from 'node:events';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { OneBotV12Client } from '@imhelper/onebot-v12';
 import { describe, expect, it, vi } from 'vitest';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
@@ -19,7 +20,12 @@ import { OneBot12WssEndpoint } from '../src/wss-endpoint.js';
 const adapterFeature = featureId('zhin.adapter');
 const endpointKey = capabilityId(rootPluginId(), adapterFeature, 'onebot12');
 const gateway: OutboundMessageService = { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-const httpStub = { ws: vi.fn(), route: vi.fn() } as unknown as HttpHost;
+const httpStub = { ws: vi.fn(() => ({ onConnection: vi.fn(() => () => undefined) })), route: vi.fn(() => () => undefined) } as unknown as HttpHost;
+
+function createSocket() {
+  const socket = Object.assign(new EventEmitter(), { readyState: 1, send: vi.fn(), ping: vi.fn(), close: vi.fn() });
+  queueMicrotask(() => socket.emit('open')); return socket;
+}
 
 const expectedCapabilities = ['listFriends', 'listGroups', 'listGroupMembers'];
 
@@ -88,38 +94,40 @@ describe('createOneBot12EndpointManagement', () => {
 
 describe('onebot12 endpoint management wiring', () => {
   it('ws/wss 传输经公共 callApi 暴露 management', async () => {
-    const wsConfig = resolveOneBot12Config({
+    const wsConfig = resolveOneBot12Config({ platform: 'qq', userId: 'bot-1',
       connection: 'ws',
       id: 'test-ob12',
       url: 'ws://127.0.0.1:6701',
     }) as OneBot12WsConfig;
-    const wssConfig = resolveOneBot12Config({
+    const wssConfig = resolveOneBot12Config({ platform: 'qq', userId: 'bot-1',
       connection: 'wss',
       id: 'test-ob12',
       path: '/onebot12',
     }) as OneBot12WssConfig;
 
     const endpoints = [
-      bindTestEndpoint(new OneBot12WsEndpoint({ id: endpointKey, gateway, config: wsConfig }), gateway, undefined),
-      bindTestEndpoint(new OneBot12WssEndpoint({ id: endpointKey, gateway, http: httpStub, config: wssConfig }), gateway, undefined),
+      await createEndpointHarness(() => new OneBot12WsEndpoint({ id: endpointKey, config: wsConfig, createWebSocket: createSocket }), { name: 'onebot12', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
+      await createEndpointHarness(() => new OneBot12WssEndpoint({ id: endpointKey, http: httpStub, config: wssConfig }), { name: 'onebot12', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) }),
     ];
     for (const endpoint of endpoints) {
-      expect(endpoint.client).toBeInstanceOf(OneBotV12Client);
-      expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
-      const call = vi.spyOn(endpoint.client, 'call').mockResolvedValue({
+      await endpoint.start(); endpoint.open();
+      expect(endpoint.endpoint).toBeInstanceOf(OneBotV12Client);
+      expect(listEndpointManagementCapabilities(endpoint.endpoint)).toEqual(expectedCapabilities);
+      const call = vi.spyOn(endpoint.endpoint, 'call').mockResolvedValue({
         status: 'ok',
         retcode: 0,
         data: [{ group_id: '20001', group_name: '技术群' }],
       });
-      await expect(endpoint.management.listGroups?.()).resolves.toEqual([
+      await expect(endpoint.index.management(endpoint.canonicalId)!.listGroups?.()).resolves.toEqual([
         { group_id: 20001, name: '技术群' },
       ]);
       expect(call).toHaveBeenCalledWith('get_group_list', undefined);
+      await endpoint.stop();
     }
   });
 
   it('webhook 传输经 api_url + callAction 暴露 management', async () => {
-    const config = resolveOneBot12Config({
+    const config = resolveOneBot12Config({ platform: 'qq', userId: 'bot-1',
       connection: 'webhook',
       id: 'test-ob12',
       path: '/onebot12/webhook',
@@ -131,26 +139,27 @@ describe('onebot12 endpoint management wiring', () => {
       message: '',
       data: [{ user_id: '10001', user_name: 'Alice' }],
     }));
-    const endpoint = bindTestEndpoint(new OneBot12WebhookEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot12WebhookEndpoint({
       id: endpointKey,
-      gateway,
       http: httpStub,
       config,
       callAction,
-    }), gateway, undefined);
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual(expectedCapabilities);
-    await expect(endpoint.management.listFriends?.()).resolves.toEqual([
+    }), { name: 'onebot12', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
+    await endpoint.start(); endpoint.open();
+    expect(listEndpointManagementCapabilities(endpoint.endpoint)).toEqual(expectedCapabilities);
+    await expect(endpoint.index.management(endpoint.canonicalId)!.listFriends?.()).resolves.toEqual([
       { user_id: 10001, nickname: 'Alice', remark: '' },
     ]);
     expect(callAction).toHaveBeenCalledWith(
-      { url: 'http://127.0.0.1:5701', access_token: undefined },
+      { url: 'http://127.0.0.1:5701', access_token: undefined, self: { platform: 'qq', user_id: 'bot-1' } },
       'get_friend_list',
       {},
     );
+    await endpoint.stop();
   });
 
   it('webhook 未配置 api_url 时在创建 endpoint 前拒绝配置', () => {
-    expect(() => resolveOneBot12Config({
+    expect(() => resolveOneBot12Config({ platform: 'qq', userId: 'bot-1',
       connection: 'webhook',
       id: 'test-ob12',
       path: '/onebot12/webhook',

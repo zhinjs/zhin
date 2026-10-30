@@ -4,7 +4,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { dingtalkRuntimeStateToken } from '../../../src/dingtalk-runtime-state.js';
 
 export const dingtalkEndpointCommands = createEndpointCommands({
   adapterKey: 'dingtalk',
@@ -12,8 +11,7 @@ export const dingtalkEndpointCommands = createEndpointCommands({
   fields: [
     { key: 'appKey', required: true, env: true, description: '钉钉 AppKey', descriptionI18n: { en: "DingTalk app key" } },
     { key: 'appSecret', required: true, env: true, description: '钉钉 AppSecret', descriptionI18n: { en: "DingTalk app secret" } },
-    { key: 'robotCode', required: true, env: true, description: '机器人 Code（出站 senderStaffId）', descriptionI18n: { en: "Robot code (outbound senderStaffId)" } },
+    { key: 'robotCode', env: true, description: '机器人 Code（出站 senderStaffId）', descriptionI18n: { en: "Robot code (outbound senderStaffId)" } },
   ],
-  running: (use) => use(dingtalkRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `appKey: ${String(entry.appKey)}`,
 }, defineCommand);

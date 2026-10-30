@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { napcatRuntimeStateToken } from './napcat-runtime-state.js';
 import { napcatConsoleSpec } from './console-spec.js';
 
 export function createNapcatConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(napcatRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...napcatConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

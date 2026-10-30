@@ -4,7 +4,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { kookRuntimeStateToken } from '../../../src/kook-runtime-state.js';
 
 export const kookEndpointCommands = createEndpointCommands({
   adapterKey: 'kook',
@@ -14,6 +13,5 @@ export const kookEndpointCommands = createEndpointCommands({
     { key: 'encrypt_key', env: true, description: 'webhook 加密密钥（connection: webhook）', descriptionI18n: { en: "Webhook encryption secret (connection: webhook)" } },
     { key: 'verify_token', env: true, description: 'webhook 验证 token（connection: webhook）', descriptionI18n: { en: "Webhook verification token (connection: webhook)" } },
   ],
-  running: (use) => use(kookRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);

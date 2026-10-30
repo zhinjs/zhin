@@ -5,7 +5,7 @@ tier: Advanced
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=893adf860ad70fcb -->
@@ -18,7 +18,7 @@ Zhin.js Slack adapter (Plugin Runtime). Prefers Socket Mode; can also send and r
 
 - **Socket Mode** (default): persistent WebSocket connection, no public URL needed
 - **HTTP Events API**: `httpHostToken` POST (signature verification), **not** legacy host-router/Koa
-- Inbound via `Endpoint.emit(...)`; outbound `send({ conversation, payload })` -> `chat.postMessage` / Block Kit
+- Inbound via `endpoint[endpointSpec].events.emit(...)`; outbound through the registered send hook -> `chat.postMessage` / Block Kit
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
 - Block Kit buttons, slash commands, message editing, emoji reactions, etc. (see `tools/`)
 
@@ -30,13 +30,15 @@ pnpm add @zhin.js/adapter-slack
 
 ## Plugin Runtime
 
+The owning `Adapter` manages desired accounts and running incarnations. The actual SDK or protocol Client implements structural `Endpoint`; framework hooks use `endpointSpec` without replacing native SDK APIs. Complete accepted callbacks enter through `events.run(...)` before deduplication and asynchronous normalization; see [Adapter authoring](/en/authoring/adapters).
+
 - `@zhin.js/adapter` — convention-based `adapters/slack/index.ts` (`defineAdapter`)
-- `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
+- `@zhin.js/core` — `endpoint[endpointSpec].events.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — only needed for HTTP mode to register Events route via `httpHostToken`
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to the top-level `<instanceKey>` block via the plugin's `schema.json`
 
-Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`conversation.id` is the channelId, threads land in `conversation.threadId`)
+Inbound: `endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })` (`conversation.id` is the channelId, threads land in `conversation.threadId`)
 Outbound: `send({ conversation, payload })` -> Web API (`conversation.id` is the channel, `conversation.threadId` maps to thread_ts)
 
 ### Platform Permissions (platform permit)
@@ -149,8 +151,10 @@ Common Markdown (e.g., `**bold**`) is converted to Slack mrkdwn and sent via Blo
 Open the Console **Slack** page (route `/slack`) to:
 
 - view running connections and test connectivity;
-- add or remove `plugins.slack.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
 - complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
 
 Reading requires `slack:read`; writes require `slack:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `slack endpoint add` command.
 

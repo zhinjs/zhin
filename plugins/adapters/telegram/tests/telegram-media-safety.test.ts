@@ -1,6 +1,7 @@
 import { getEventListeners } from 'node:events';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { TelegramEndpoint, type TelegramFetch } from '../src/endpoint.js';
+import type { TelegramFetch } from '../src/endpoint.js';
+import { telegramDeliveryFixture } from './fixture.js';
 import { resolveTelegramConfig } from '../src/protocol.js';
 
 const config = resolveTelegramConfig({ id: 'media-safety', token: '123:PRIVATE-BOT-TOKEN' });
@@ -30,10 +31,10 @@ describe('Telegram credential-bearing file download boundary', () => {
         arrayBuffer: async () => new Promise(() => {}),
       };
     });
-    const endpoint = new TelegramEndpoint({ id, config, fetch, requestTimeoutMs: 10 });
+    const endpoint = await telegramDeliveryFixture({ id, config, fetch, requestTimeoutMs: 10 });
     const abort = new AbortController();
     try {
-      const result = endpoint.content.resolve(reference, context(abort.signal));
+      const result = endpoint.index.resolveContent(endpoint.canonicalId, reference, context(abort.signal));
       await vi.advanceTimersByTimeAsync(10);
       expect(await result).toEqual({ status: 'failed', code: 'telegram_file_resolution_failed', message: 'Telegram file resolution failed' });
       expect(downloadSignal.aborted).toBe(true);
@@ -48,8 +49,8 @@ describe('Telegram credential-bearing file download boundary', () => {
       if (url.endsWith('/getFile')) return getFileResponse;
       throw new Error(`failed downloading ${url}; private diagnostic payload`);
     });
-    const endpoint = new TelegramEndpoint({ id, config, fetch });
-    const result = await endpoint.content.resolve(reference, context(new AbortController().signal));
+    const endpoint = await telegramDeliveryFixture({ id, config, fetch });
+    const result = await endpoint.index.resolveContent(endpoint.canonicalId, reference, context(new AbortController().signal));
     expect(result).toEqual({ status: 'failed', code: 'telegram_file_resolution_failed', message: 'Telegram file resolution failed' });
     expect(JSON.stringify(result)).not.toContain(config.token);
     expect(JSON.stringify(result)).not.toContain('photos/private.jpg');
@@ -67,9 +68,9 @@ describe('Telegram credential-bearing file download boundary', () => {
         arrayBuffer: async () => new Promise(() => {}),
       };
     };
-    const endpoint = new TelegramEndpoint({ id, config, fetch });
+    const endpoint = await telegramDeliveryFixture({ id, config, fetch });
     const abort = new AbortController();
-    const result = endpoint.content.resolve(reference, context(abort.signal));
+    const result = endpoint.index.resolveContent(endpoint.canonicalId, reference, context(abort.signal));
     await new Promise((resolve) => setImmediate(resolve));
     abort.abort();
     expect(await result).toEqual({ status: 'expired', code: 'turn_aborted' });

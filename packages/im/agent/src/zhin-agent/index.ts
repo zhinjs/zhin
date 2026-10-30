@@ -156,7 +156,14 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private provider: AIProvider;
   providerResolver: ((alias: string) => AIProvider) | null = null;
   private configuredActiveBinding: ResolvedAgentBinding | null = null;
-  config: Required<ZhinAgentConfig>;
+  private configuredConfig!: Required<ZhinAgentConfig>;
+
+  get config(): Required<ZhinAgentConfig> {
+    const model = getAgentTurnConfiguration()?.models?.chat.invocation.model;
+    return model ? { ...this.configuredConfig, chatModel: model.model } : this.configuredConfig;
+  }
+
+  set config(value: Required<ZhinAgentConfig>) { this.configuredConfig = value; }
   /** ideal 模块槽位；经 getter/setter 供 configure 与 asPrivate(host) 读写 */
   private readonly runtimeModules: ZhinAgentRuntimeModules;
   agentSessionStore: AgentSessionRepository;
@@ -183,9 +190,22 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   alwaysSkillsBaseline: string = '';
   skillsSummaryXML: string = '';
   modelRegistry: ModelRegistry | null = null;
-  llmRuntime: LlmApiRuntime;
+  private configuredLlmRuntime!: LlmApiRuntime;
+
+  get llmRuntime(): LlmApiRuntime {
+    return getAgentTurnConfiguration()?.models?.chat.llmRuntime ?? this.configuredLlmRuntime;
+  }
+
+  set llmRuntime(value: LlmApiRuntime) { this.configuredLlmRuntime = value; }
   audioTranscriber?: AudioTranscriptionPort;
-  mediaPerception?: MediaPerceptionPort;
+  private configuredMediaPerception?: MediaPerceptionPort;
+
+  get mediaPerception(): MediaPerceptionPort | undefined {
+    const turn = getAgentTurnConfiguration();
+    return turn?.models ? turn.mediaPerception : this.configuredMediaPerception;
+  }
+
+  set mediaPerception(value: MediaPerceptionPort | undefined) { this.configuredMediaPerception = value; }
   imageAssets?: ImageAssetPublisher;
   localAssets?: LocalImageAssetStore;
   readonly emitter: ZhinAgentEventEmitter;
@@ -320,14 +340,10 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   getTurnProvider(): AIProvider {
+    const models = getAgentTurnConfiguration()?.models;
+    if (models) return models.chat.provider;
     const alias = this.activeBinding?.providerAlias;
-    if (alias && this.providerResolver) {
-      try {
-        return this.providerResolver(alias);
-      } catch {
-        return this.provider;
-      }
-    }
+    if (alias && this.providerResolver) return this.providerResolver(alias);
     return this.provider;
   }
 

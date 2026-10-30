@@ -3,7 +3,7 @@ import { defineEvalCase } from '../framework/index.js';
 /**
  * Gemini per-day quota: still a 429 RESOURCE_EXHAUSTED with a short RetryInfo,
  * but the QuotaFailure names a `PerDay` quota, so waiting cannot help today.
- * Quotas are per project and model, so another model may still answer.
+ * The selected chat model is fixed even if another registered model has quota.
  */
 const DAILY_QUOTA = {
   error: {
@@ -25,20 +25,20 @@ const DAILY_QUOTA = {
 
 export default defineEvalCase({
   id: 'provider-gemini-daily-quota-fallback',
-  description: 'A Gemini per-day quota 429 is not retried on the same model; the turn falls back to the next candidate model.',
-  source: '#724 provider resilience, Gemini primary (#770): daily quota → fallback without retry',
+  description: 'A Gemini per-day quota 429 fails on the fixed primary without retrying or calling a registered alternative.',
+  source: '2026-10-30 approved fixed chat model policy (including legacy config); #724/#770 daily quota remains non-retryable',
   tags: ['long-task'],
-  inbound: { text: '帮我写一句早安问候' },
+  inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', roles: ['master'] } },
+  // Registered alternatives must never receive a chat request under the fixed-model policy.
   models: ['scripted-fallback'],
   script: [
     { model: 'scripted-model', fault: { kind: 'error', message: DAILY_QUOTA.error.message, status: 429, body: DAILY_QUOTA } },
-    { model: 'scripted-fallback', text: '早上好，备用模型来接班啦！' },
   ],
   expect: {
-    modelIds: ['scripted-model', 'scripted-fallback'],
-    outboundContains: ['早上好，备用模型来接班啦'],
-    outboundNotContains: ['exceeded your current quota', '模型调用失败'],
+    modelIds: ['scripted-model'],
+    outboundContains: ['（模型额度用完了）'],
+    outboundNotContains: ['早上好', 'exceeded your current quota', '模型调用失败'],
     termination: 'turn_end',
-    modelSteps: 2,
+    modelSteps: 1,
   },
 });

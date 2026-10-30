@@ -4,30 +4,22 @@
  * One adapter augments this interface once; every authoring Feature then
  * derives the same Client and native event types from its literal `adapter`.
  */
-export interface AdapterClientRegistry {
-  // Augmented by platform adapter packages.
-}
+/** Each platform registers its Adapter class once for all authoring Features. */
+export interface AdapterRegistry {}
 
-export interface AdapterClientTypes<TClient = unknown, TEvents extends object = Record<string, unknown>> {
-  readonly client: TClient;
-  readonly events: TEvents;
-}
-
-export type RegisteredAdapterName = Extract<keyof AdapterClientRegistry, string>;
-
-export type AdapterClient<TAdapter extends string | undefined> =
-  TAdapter extends keyof AdapterClientRegistry
-    ? AdapterClientRegistry[TAdapter] extends AdapterClientTypes<infer TClient, object>
-      ? TClient
-      : unknown
-    : unknown;
-
-export type AdapterEvents<TAdapter extends string | undefined> =
-  TAdapter extends keyof AdapterClientRegistry
-    ? AdapterClientRegistry[TAdapter] extends AdapterClientTypes<unknown, infer TEvents>
-      ? TEvents
-      : Record<string, unknown>
-    : Record<string, unknown>;
+export type RegisteredAdapterName = Extract<keyof AdapterRegistry, string>;
+export type EndpointOf<TAdapter> = TAdapter extends { getEndpoint(...args: never[]): infer TEndpoint }
+  ? NonNullable<TEndpoint> : unknown;
+export type EventsOf<TAdapter> = TAdapter extends { readonly adapterEvents: infer TEvents extends object }
+  ? TEvents : Record<string, unknown>;
+export type AdapterInstance<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
+  ? AdapterRegistry[TAdapter] extends { getEndpoint(...args: never[]): unknown } ? AdapterRegistry[TAdapter] : unknown
+  : unknown;
+export type AdapterClient<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
+  ? EndpointOf<AdapterRegistry[TAdapter]>
+  : unknown;
+export type AdapterEvents<TAdapter extends string | undefined> = TAdapter extends keyof AdapterRegistry
+  ? EventsOf<AdapterRegistry[TAdapter]> : Record<string, unknown>;
 
 /** Runtime-only Client accessor carried by the current operation. */
 export interface OperationClientPort {

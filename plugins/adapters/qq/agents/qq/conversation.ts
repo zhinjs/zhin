@@ -93,7 +93,7 @@ export async function sendToConversation(context: QqToolContext, content: SendCo
 
 /** Live check: the bot must be owner/admin of the current group. */
 export async function requireGroupManager(context: QqToolContext, groupId: string) {
-  const state = await context.$client.api.groupService.getBotState(groupId);
+  const state = await context.$client.groupService.getBotState(groupId);
   context.signal.throwIfAborted();
   return state.member_role === 'owner' || state.member_role === 'admin' ? state : undefined;
 }

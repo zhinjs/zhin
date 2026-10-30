@@ -5,17 +5,14 @@
  */
 import { createAdapterConsoleRpc, type AdapterConsoleResources } from 'zhin.js/adapter';
 import type { PluginConsoleRpc } from 'zhin.js';
-import { bilibiliLiveRuntimeStateToken } from './bilibili-live-runtime-state.js';
 import { bilibiliLiveConsoleSpec } from './console-spec.js';
 
 export function createBilibiliLiveConsoleRpc(
-  resources: AdapterConsoleResources,
+  _resources: AdapterConsoleResources,
   getConfig: () => unknown,
 ): PluginConsoleRpc {
-  const state = resources.use(bilibiliLiveRuntimeStateToken);
   return createAdapterConsoleRpc({
     ...bilibiliLiveConsoleSpec,
-    running: () => state.endpoints.values(),
     getConfig,
-  }, resources);
+  });
 }

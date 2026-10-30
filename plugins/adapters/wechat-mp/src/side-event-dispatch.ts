@@ -19,11 +19,12 @@ export function receiveWeChatMpSideEvent(
   configId: string,
   msg: WeChatMessage,
   logger: ReturnType<typeof getAdapterLogger>,
+  nativeEvent: unknown = msg,
 ): boolean {
   if (msg.MsgType !== 'event') return false;
   const eventName = msg.Event ?? 'unknown';
   const parts = mapWeChatMpEventParts(eventName);
-  void emit('notice.receive', buildNotice(msg, {
+  void emit('notice.receive', buildNotice(typeof nativeEvent === 'string' ? { ...msg, rawXml: nativeEvent } : msg, {
     id: `wechat-mp:${formatInboundId(msg)}`,
     clientAdapter: 'wechat-mp',
     endpointId: configId,

@@ -1,6 +1,6 @@
 import { defineCommand } from 'zhin.js/command';
 import {
-  icqqLoginControlToken,
+  icqqLoginControls,
   icqqLoginForbidden,
   isIcqqLoginOperator,
   pickIcqqLoginControl,
@@ -11,9 +11,9 @@ const QR_IMAGE = /^data:image\/[a-z0-9.+-]+;base64,(.+)$/iu;
 export default defineCommand({
   description: '获取 ICQQ 登录二维码（发给当前会话）',
   descriptionI18n: { en: 'Fetch the ICQQ login QR code into this conversation' },
-  async execute({ args, config, input, use }) {
+  async execute({ args, config, input, project, owner }) {
     if (!isIcqqLoginOperator(config, input)) return icqqLoginForbidden();
-    const picked = pickIcqqLoginControl(use(icqqLoginControlToken), args[0]);
+    const picked = pickIcqqLoginControl(icqqLoginControls({ project, owner }), args[0]);
     if (!picked.control) return picked.text ?? 'ICQQ 适配器还没有启动';
     const control = picked.control;
     const findQr = () => control.pending().find((task) => task.type === 'qrcode' || task.type === 'auth');

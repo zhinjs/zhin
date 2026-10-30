@@ -134,7 +134,7 @@ export default defineHandler({
   - `endpoint`、`generation`：事件所属的连接与版本；`endpointId` 是平台账号标识，`clientAdapter` 是平台标识。
   - Notice / Request 的 `conversation?`、`actor?`、`target?` 只在实际存在时提供；Request 的 `actor` 必有。SystemEvent 没有这三个字段。
 - `$client`、Request 的 `$approve()` / `$reject()` 只在本次处理期间有效，处理结束后失效。平台原始字段从 `metadata` 读取；需要平台 SDK 的强类型事件时，使用带 `adapter` 的原生事件 handler。
-- 适配器统一通过 `Endpoint.emit(...)` 上报事件，由运行时构造上面这些标准对象。
+- 适配器统一通过 `endpoint[endpointSpec].events` 上报事件，由运行时构造上面这些标准对象。
 - 也可以在 `setup` 里用 `addHandler(name, defineHandler(...))` 注册，效果相同。
 :::
 
@@ -160,14 +160,15 @@ export default defineComponent<{ title: string }>({
 ### adapters/：接入新平台
 
 ```ts
-// adapters/napcat/index.ts（节选）
+// adapters/napcat/index.ts
 import { defineAdapter } from 'zhin.js/adapter';
+import { NapcatAdapter } from '../../src/adapter.js';
+import type { NapCatEndpointConfig } from '../../src/protocol.js';
 
 export default defineAdapter<NapCatEndpointConfig>({
-  capabilities: ['inbound', 'outbound'], // 至少包含其中一个
-  create(context) {
-    return new NapCatWsEndpoint({ id: context.id, config: resolveNapCatConfig(context.config) });
-  },
+  capabilities: ['inbound', 'outbound'],
+  operations: ['recall'],
+  createAdapter: context => new NapcatAdapter(context),
 });
 ```
 

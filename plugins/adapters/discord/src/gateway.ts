@@ -1,3 +1,4 @@
+import type { EndpointEventSink } from 'zhin.js/adapter';
 import { DiscordFaultProxyStrategy } from './gateway-fault-proxy.js';
 import { createReadStream, promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -12,6 +13,7 @@ import {
   ButtonStyle,
   REST,
   type RESTOptions,
+  type ClientOptions,
   Routes,
   PermissionFlagsBits,
   type MessageCreateOptions,
@@ -38,85 +40,10 @@ export const DEFAULT_INTENTS = [
   GatewayIntentBits.GuildMessageReactions,
 ];
 
-/** Minimal client surface used by the endpoint (real discord.js or test mock). */
-export interface DiscordClientTransport {
-  isReady?(): boolean;
-  login(token: string): Promise<string>;
-  destroy(): Promise<void>;
-  on(event: string, listener: (...args: unknown[]) => void): void;
-  once(event: string, listener: (...args: unknown[]) => void): void;
-  removeAllListeners(): void;
-  readonly user?: {
-    readonly id: string;
-    readonly tag?: string;
-    setActivity?(name: string, options?: { type?: number; url?: string }): void;
-  } | null;
-  channels: {
-    fetch(id: string): Promise<{
-      id: string;
-      type: number;
-      isTextBased(): boolean;
-      send?(options: MessageCreateOptions): Promise<{ id: string }>;
-      messages?: {
-        fetch(id: string): Promise<{
-          delete(): Promise<unknown>;
-          react(emoji: string): Promise<unknown>;
-          reactions: {
-            resolve(emoji: unknown): { users: { remove(userId: string): Promise<unknown> } } | null;
-            cache: { find(fn: (r: { emoji: { toString(): string; name?: string | null; id?: string | null } }) => boolean): { users: { remove(userId: string): Promise<unknown> } } | undefined };
-          };
-        }>;
-      };
-      threads?: {
-        create(options: Record<string, unknown>): Promise<{ id: string }>;
-      };
-      availableTags?: Array<{ id: string; name: string }>;
-    } | null>;
-  };
-  guilds: {
-    fetch(id: string): Promise<{
-      id: string;
-      name: string;
-      ownerId: string;
-      memberCount: number;
-      createdAt?: Date | null;
-      iconURL?(options?: { size?: number }): string | null;
-      roles: {
-        fetch(): Promise<unknown>;
-        cache: Map<string, {
-          id: string;
-          name: string;
-          hexColor: string;
-          position: number;
-          permissions: { bitfield: bigint };
-        }> | { map(fn: (role: {
-          id: string;
-          name: string;
-          hexColor: string;
-          position: number;
-          permissions: { bitfield: bigint };
-        }) => unknown): unknown[] };
-      };
-      members: {
-        fetch(userId: string | { limit?: number }): Promise<unknown>;
-        ban(userId: string, options?: { reason?: string; deleteMessageSeconds?: number }): Promise<unknown>;
-        unban(userId: string, reason?: string): Promise<unknown>;
-      };
-    }>;
-    cache: { values(): IterableIterator<{
-      id: string;
-      name: string;
-      channels: {
-        cache: { values(): IterableIterator<{ id: string; name?: string; type: number }> };
-      };
-    }> };
-  };
-}
-
-export type CreateDiscordClient = (intents: readonly number[], gatewayFaultProxyUrl?: string, restOptions?: Partial<RESTOptions>) => DiscordClientTransport;
-
-export function defaultCreateClient(intents: readonly number[], gatewayFaultProxyUrl?: string, restOptions: Partial<RESTOptions> = {}): DiscordClientTransport {
-  return new Client({ rest: { ...restOptions, retries: 0, rejectOnRateLimit: () => true }, intents: [...intents], partials: [Partials.Channel], ...(gatewayFaultProxyUrl ? { ws: { buildStrategy: manager => new DiscordFaultProxyStrategy(manager, gatewayFaultProxyUrl) } } : {}) }) as unknown as DiscordClientTransport;
+/** Native SDK surface; tests inject transport below the Client rather than replacing its identity. */
+export type DiscordClientTransport = Client;
+export function discordClientOptions(intents: readonly number[], gatewayFaultProxyUrl?: string, restOptions: Partial<RESTOptions> = {}): ClientOptions {
+  return { rest: { ...restOptions, retries: 0, rejectOnRateLimit: () => true }, intents: [...intents], partials: [Partials.Channel], ...(gatewayFaultProxyUrl ? { ws: { buildStrategy: manager => new DiscordFaultProxyStrategy(manager, gatewayFaultProxyUrl) } } : {}) };
 }
 
 export function resolveSenderRole(msg: DiscordInboundMessage): string | undefined {
@@ -155,6 +82,8 @@ export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | n
 
   return {
     id: msg.id,
+    event: raw,
+    platformSentAt: msg.createdTimestamp,
     content: msg.content ?? '',
     channelId: msg.channel.id,
     channelKind: resolveChannelKind(msg.channel.type),
@@ -290,6 +219,7 @@ function decodeBase64(value: string): Buffer {
 }
 
 export interface DiscordGatewayConnectHandlers {
+  readonly receive: EndpointEventSink['run'];
   onPlatformEvent(name: string, event: unknown): void;
   onMessage(msg: DiscordInboundMessage): void;
   onButton(interaction: DiscordButtonInbound): void;
@@ -311,85 +241,96 @@ export async function connectDiscordGatewayClient(
     const releaseAbort = () => signal?.removeEventListener('abort', onAbort);
 
     client.on('messageCreate', (raw) => {
-      handlers.onPlatformEvent('messageCreate', raw);
-      const msg = normalizeDiscordMessage(raw);
-      if (!msg) return;
-      // clientReady 之后 client.user 一定可用；消息事件只会在此之后到达
-      const botId = client.user?.id;
-      const mentions = (raw as DiscordMessage).mentions;
-      const mentionedBot = !!botId && mentions?.users?.has?.(botId) === true;
-      handlers.onMessage(mentionedBot ? { ...msg, mentionedBot: true } : msg);
+      void handlers.receive(() => {
+        handlers.onPlatformEvent('messageCreate', raw);
+        const msg = normalizeDiscordMessage(raw);
+        if (!msg) return;
+        // clientReady 之后 client.user 一定可用；消息事件只会在此之后到达
+        const botId = client.user?.id;
+        const mentions = (raw as DiscordMessage).mentions;
+        const mentionedBot = !!botId && mentions?.users?.has?.(botId) === true;
+        handlers.onMessage(mentionedBot ? { ...msg, mentionedBot: true } : msg);
+      }).catch(() => logger.debug('Native callback was not admitted'));
     });
 
     client.on('interactionCreate', (raw) => {
-      handlers.onPlatformEvent('interactionCreate', raw);
-      const interaction = raw as {
-        isButton?(): boolean;
-        deferUpdate?(): Promise<unknown>;
-        id: string;
-        customId: string;
-        channel?: { id: string; type: number } | null;
-        channelId?: string;
-        guildId?: string | null;
-        user: { id: string; username?: string; displayName?: string };
-        message?: { id: string };
-      };
-      const isButton = interaction.isButton?.() === true;
-      logger.info(formatCompact({ op: 'discord_gateway_interaction_received', button: isButton, cachedChannel: !!interaction.channel, hasChannelId: !!interaction.channelId }));
-      if (!isButton) return;
-      void interaction.deferUpdate?.().then(() => {
-        logger.info(formatCompact({ op: 'discord_gateway_button_ack', status: 'confirmed' }));
-      }).catch(() => {
-        // SDK errors may contain token-bearing callback URLs; log no raw error.
-        logger.warn(formatCompact({ op: 'discord_gateway_button_ack', status: 'failed' }));
-      });
-      const channelId = interaction.channelId ?? interaction.channel?.id;
-      if (!channelId) {
-        logger.warn(formatCompact({ op: 'discord_gateway_button_dropped', reason: 'missing_channel_id' }));
-        return;
-      }
-      handlers.onButton({
-        id: interaction.id,
-        customId: interaction.customId,
-        channelId,
-        channelKind: interaction.channel ? resolveChannelKind(interaction.channel.type) : interaction.guildId ? 'channel' : 'private',
-        ...(interaction.guildId ? { guildId: interaction.guildId } : {}),
-        userId: interaction.user.id,
-        userName: interaction.user.username || interaction.user.displayName || interaction.user.id,
-        sourceMessageId: interaction.message?.id,
-      });
+      void handlers.receive(() => {
+        handlers.onPlatformEvent('interactionCreate', raw);
+        const interaction = raw as {
+          isButton?(): boolean;
+          deferUpdate?(): Promise<unknown>;
+          id: string;
+          customId: string;
+          channel?: { id: string; type: number } | null;
+          channelId?: string;
+          guildId?: string | null;
+          user: { id: string; username?: string; displayName?: string };
+          message?: { id: string };
+        };
+        const isButton = interaction.isButton?.() === true;
+        logger.info(formatCompact({ op: 'discord_gateway_interaction_received', button: isButton, cachedChannel: !!interaction.channel, hasChannelId: !!interaction.channelId }));
+        if (!isButton) return;
+        const ack = interaction.deferUpdate?.().then(() => {
+          logger.info(formatCompact({ op: 'discord_gateway_button_ack', status: 'confirmed' }));
+        }).catch(() => {
+          // SDK errors may contain token-bearing callback URLs; log no raw error.
+          logger.warn(formatCompact({ op: 'discord_gateway_button_ack', status: 'failed' }));
+        });
+        const channelId = interaction.channelId ?? interaction.channel?.id;
+        if (!channelId) {
+          logger.warn(formatCompact({ op: 'discord_gateway_button_dropped', reason: 'missing_channel_id' }));
+          return ack ? awaitOwnedAck(ack, signal) : undefined;
+        }
+        handlers.onButton({
+          event: raw,
+          platformSentAt: raw.createdTimestamp,
+          id: interaction.id,
+          customId: interaction.customId,
+          channelId,
+          channelKind: interaction.channel ? resolveChannelKind(interaction.channel.type) : interaction.guildId ? 'channel' : 'private',
+          ...(interaction.guildId ? { guildId: interaction.guildId } : {}),
+          userId: interaction.user.id,
+          userName: interaction.user.username || interaction.user.displayName || interaction.user.id,
+          sourceMessageId: interaction.message?.id,
+        });
+        return ack ? awaitOwnedAck(ack, signal) : undefined;
+      }).catch(() => logger.debug('Native callback was not admitted'));
     });
 
     client.on('guildMemberAdd', (raw) => {
-      handlers.onPlatformEvent('guildMemberAdd', raw);
-      const member = raw as {
-        guild?: { id?: string };
-        user?: { id?: string; username?: string; displayName?: string };
-      };
-      const guildId = member.guild?.id;
-      const userId = member.user?.id;
-      if (!guildId || !userId) return;
-      handlers.onGuildMemberAdd?.({
-        guildId,
-        userId,
-        userName: member.user?.username || member.user?.displayName,
-      });
+      void handlers.receive(() => {
+        handlers.onPlatformEvent('guildMemberAdd', raw);
+        const member = raw as {
+          guild?: { id?: string };
+          user?: { id?: string; username?: string; displayName?: string };
+        };
+        const guildId = member.guild?.id;
+        const userId = member.user?.id;
+        if (!guildId || !userId) return;
+        handlers.onGuildMemberAdd?.({
+          guildId,
+          userId,
+          userName: member.user?.username || member.user?.displayName,
+        });
+      }).catch(() => logger.debug('Native callback was not admitted'));
     });
 
     client.on('guildMemberRemove', (raw) => {
-      handlers.onPlatformEvent('guildMemberRemove', raw);
-      const member = raw as {
-        guild?: { id?: string };
-        user?: { id?: string; username?: string; displayName?: string };
-      };
-      const guildId = member.guild?.id;
-      const userId = member.user?.id;
-      if (!guildId || !userId) return;
-      handlers.onGuildMemberRemove?.({
-        guildId,
-        userId,
-        userName: member.user?.username || member.user?.displayName,
-      });
+      void handlers.receive(() => {
+        handlers.onPlatformEvent('guildMemberRemove', raw);
+        const member = raw as {
+          guild?: { id?: string };
+          user?: { id?: string; username?: string; displayName?: string };
+        };
+        const guildId = member.guild?.id;
+        const userId = member.user?.id;
+        if (!guildId || !userId) return;
+        handlers.onGuildMemberRemove?.({
+          guildId,
+          userId,
+          userName: member.user?.username || member.user?.displayName,
+        });
+      }).catch(() => logger.debug('Native callback was not admitted'));
     });
 
     client.once('clientReady', () => {
@@ -453,5 +394,16 @@ export async function connectDiscordGatewayClient(
         );
       }
     });
+  });
+}
+
+/** Logical cancellation only; the native SDK still owns its already-started ACK. */
+function awaitOwnedAck<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return operation;
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener('abort', abort, { once: true });
+    void operation.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    if (signal.aborted) abort();
   });
 }

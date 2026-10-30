@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
+import { usesSupportedAdapterBase, declaresAdapterTypeRegistry } from './lib/adapter-authoring-contract.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
@@ -16,7 +17,7 @@ for (const file of typescriptFiles(adapterFeatureRoot)) {
   if (/from\s+['"](?:node:(?:fs|path)|yaml)['"]/u.test(source)
     || /\b(?:process\.cwd|ZHIN_PROJECT_ROOT|ZHIN_CONFIG)\b/u.test(source)) {
     errors.push(
-      `${relative}: platform-neutral Adapter code must use EndpointConfigurationStore; `
+      `${relative}: platform-neutral Adapter code must use its desired-state repository; `
       + 'project files and YAML belong to the composition root',
     );
   }
@@ -41,9 +42,8 @@ for (const file of typescriptFiles(adaptersRoot)) {
     }
   }
 
-  if (/\bextends\s+Adapter\b/u.test(source)
-    || importsLegacyAdapter(source)) {
-    errors.push(`${relative}: platform adapters must use defineAdapter + Endpoint, not the legacy Adapter class`);
+  if (!usesSupportedAdapterBase(source) || importsLegacyAdapter(source)) {
+    errors.push(`${relative}: Adapter subclasses must import the generic base from zhin.js/adapter; the legacy root Adapter is forbidden`);
   }
 
   if (/^const\s+endpoints\s*=\s*new\s+Map\b/mu.test(source)
@@ -82,10 +82,10 @@ for (const file of typescriptFiles(adaptersRoot)) {
     }
     if (/\breadonly\s+client\s*=\s*this\b/u.test(source)
       || /\bget\s+client\s*\([^)]*\)\s*\{\s*return\s+this\s*;/su.test(source)) {
-      errors.push(`${relative}: Endpoint must produce a distinct SDK/protocol Client, not expose itself as Client`);
+      errors.push(`${relative}: Endpoint is the actual Client; a compatibility client alias must not be added`);
     }
     if (/\bclass\s+\w+Endpoint\s+extends\s+Endpoint\s*\{/u.test(source)) {
-      errors.push(`${relative}: Endpoint must declare Endpoint<TClient> explicitly`);
+      errors.push(`${relative}: Endpoint must inherit its native Client and implement the structural Endpoint contract`);
     }
   }
 }
@@ -101,10 +101,10 @@ for (const entry of fs.readdirSync(adaptersRoot, { withFileTypes: true })) {
   const src = path.join(adaptersRoot, entry.name, 'src');
   if (!fs.existsSync(src)) continue;
   const hasClientRegistry = typescriptFiles(src).some((file) => (
-    /\binterface\s+AdapterClientRegistry\b/u.test(fs.readFileSync(file, 'utf8'))
+    declaresAdapterTypeRegistry(fs.readFileSync(file, 'utf8'))
   ));
   if (!hasClientRegistry) {
-    errors.push(`plugins/adapters/${entry.name}: adapter must register its public Client in AdapterClientRegistry`);
+    errors.push(`plugins/adapters/${entry.name}: adapter must register its actual Adapter class in AdapterRegistry`);
   }
 }
 
@@ -138,7 +138,7 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Adapter/Endpoint responsibility check passed `
-    + `(distinct registered Clients, no Agent Endpoint registries; `
+    + `(registered Adapter/Client types, no Agent Endpoint registries; `
     + `${legacyAdapterConsumers.size} legacy Adapter consumers and `
     + `${directEnvironmentConsumers.size} direct environment consumers remain ratcheted debt).`,
   );

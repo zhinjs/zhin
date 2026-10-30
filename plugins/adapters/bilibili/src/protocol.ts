@@ -34,6 +34,8 @@ export type BilibiliNotificationScope = 'whitelist' | 'all';
 /** One endpoint config after AdapterIndex expands `<instanceKey>.endpoints`. */
 export interface BilibiliEndpointConfig {
   readonly id: string;
+  /** @internal Assigned only for fresh Adapter identities; imported records retain their original data path. */
+  readonly stateDirectoryId?: string;
   /** Cookie SESSDATA（请用 ${ENV} 注入，切勿写进仓库）。 */
   readonly sessdata?: string;
   /** Cookie bili_jct（即 csrf token）。 */
@@ -74,6 +76,7 @@ export interface BilibiliNotifyTarget {
 export interface ResolvedBilibiliConfig {
   readonly context: 'bilibili';
   readonly id: string;
+  readonly stateDirectoryId?: string;
   readonly sessdata?: string;
   readonly biliJct?: string;
   readonly videos: readonly BilibiliVideoRef[];
@@ -160,6 +163,7 @@ export function resolveBilibiliConfig(config: BilibiliEndpointConfig): ResolvedB
   return {
     context: 'bilibili',
     id,
+    ...(config.stateDirectoryId ? { stateDirectoryId: config.stateDirectoryId } : {}),
     ...(sessdata ? { sessdata } : {}),
     ...(biliJct ? { biliJct } : {}),
     videos: (config.videos ?? []).map(parseVideoRef),

@@ -198,10 +198,14 @@ export class RootRuntime {
     this.#installResources = options.installResources;
     this.#isolation = options.isolation;
     this.#disabledPluginInstanceKeys = Object.freeze([...(options.disabledPluginInstanceKeys ?? [])]);
-    this.#controller = new RootController(
+    this.#controller = new RootController<RuntimeGenerationState>(
       emptyState(),
       options.onControlError,
       Object.freeze({ ownership: SourceOwnershipIndex.empty() }),
+      (state, root, token) => {
+        const scope = state.model?.scopes.get(root);
+        return scope?.has(token) ? scope.use(token) : undefined;
+      },
     );
   }
 
@@ -931,7 +935,7 @@ class GenerationAssembler {
       this.#plugins.installSetupFeatureAliases(featureSetupAliases(this.#catalog.values()), this.#rootsByFeature);
       await this.#plugins.setupTree(this.graph.root, signal);
       await this.#discover(signal);
-      const projected = await new FeatureProjector(this.#catalog.values())
+      const projected = await new FeatureProjector(this.#catalog.values(), this.#plugins.scopes.get(this.graph.root.id))
         .project(this.generation, this.#projectionState(), signal);
       for (const [feature, dispose] of projected.disposers) {
         this.#projectionDisposers.set(feature, dispose);

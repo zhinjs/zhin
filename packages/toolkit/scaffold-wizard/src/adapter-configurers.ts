@@ -676,9 +676,18 @@ export async function configureOneBot12Bot(ctx: EndpointConfigureContext): Promi
     },
   ]);
 
-  // schema：connection 为顶层共享字段；id / url / path / api_url / access_token 为 endpoint 级
+  const { platform, userId } = await inquirer.prompt([
+    { type: 'input', name: 'platform', message: '  OneBot12 platform:',
+      validate: (value: string) => value.trim() ? true : wizardText(locale, "platform 不能为空") },
+    { type: 'input', name: 'userId', message: '  OneBot12 userId:',
+      validate: (value: string) => value.trim() ? true : wizardText(locale, "userId 不能为空") },
+  ]);
+
+  // One shared transport may serve many bots; each Endpoint selects exactly one.
   const endpointConfig: Record<string, unknown> = {
     id: endpointId.trim(),
+    platform: platform.trim(),
+    userId: userId.trim(),
   };
 
   if (connection === 'ws') {
@@ -829,13 +838,21 @@ export async function configureSatoriBot(ctx: EndpointConfigureContext): Promise
     },
   ]);
 
-  const { endpointId, baseUrl } = await inquirer.prompt([
+  const { endpointId, baseUrl, platform, userId } = await inquirer.prompt([
     {
       type: 'input',
       name: 'endpointId',
       message: wizardText(locale, "  Endpoint 标识名称:"),
       default: 'satori-bot',
       validate: (v: string) => (v.trim() ? true : wizardText(locale, "名称不能为空")),
+    },
+    {
+      type: 'input', name: 'platform', message: '  Satori platform:',
+      validate: (value: string) => value.trim() ? true : wizardText(locale, "platform 不能为空"),
+    },
+    {
+      type: 'input', name: 'userId', message: '  Satori userId:',
+      validate: (value: string) => value.trim() ? true : wizardText(locale, "userId 不能为空"),
     },
     {
       type: 'input',
@@ -849,6 +866,8 @@ export async function configureSatoriBot(ctx: EndpointConfigureContext): Promise
   // schema：connection 为顶层共享字段；id / baseUrl / token / path 为 endpoint 级
   const endpointConfig: Record<string, unknown> = {
     id: endpointId.trim(),
+    platform: platform.trim(),
+    userId: userId.trim(),
     baseUrl: baseUrl.trim(),
   };
 

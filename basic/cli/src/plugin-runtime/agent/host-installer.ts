@@ -1,3 +1,11 @@
+import { RuntimePolicyManagementService } from '../runtime-model-policy/service.js';
+import { runtimePolicyManagementToken } from '../runtime-model-policy/token.js';
+import { createPersonalSessionDirectory } from '../personal-models/directory.js';
+import { PersonalModelManagementService } from '../personal-models/service.js';
+import { personalModelManagementToken } from '../personal-models/token.js';
+import { createPersonalModelHost } from '../personal-models/host.js';
+import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
+import { databaseRootHostToken } from '@zhin.js/plugin-runtime';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
@@ -97,6 +105,7 @@ export interface InstallAgentHostOptions {
   readonly workroomStorageMode: WorkroomStorageMode;
   readonly im: ImRuntime;
   readonly projectRoot: string;
+  readonly resolveModelSecret?: (reference: string) => string | undefined | Promise<string | undefined>;
   /**
    * Resolve Endpoint Owner id for `/approve` + bashAlways key.
    * Key: `localName` (e.g. icqq) or live endpoint name (uin).
@@ -169,7 +178,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     resources.provide(hostProtectedPathsToken, hostProtectedPaths);
     lifecycle.add(await localAssets.acquire());
     resources.provide(localImageAssetsToken, localAssets);
+    const personalModels = createPersonalModelHost({
+      projectRoot: options.projectRoot,
+      state: () => resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken).state : undefined,
+      resolveHostSecret: reference => options.resolveModelSecret?.(reference),
+    });
     const agentFoundation = await AgentRuntimeFoundation.create({
+      modelRuntime: personalModels.runtimeOptions,
       config: aiConfig,
       localAssets,
       assistantConfig,
@@ -190,6 +205,19 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       homeTools,
       assistantEnabled,
     } = agentFoundation;
+    resources.provide(turnModelPortToken, personalModels.turnPort(service));
+    resources.provide(runtimePolicyManagementToken, new RuntimePolicyManagementService({
+      rootId: personalModels.rootId, repository: personalModels.runtimePolicy, runtime: () => service.getModelRuntime(),
+    }));
+    resources.provide(personalModelManagementToken, new PersonalModelManagementService({
+      rootId: personalModels.rootId,
+      hostOwnerId: personalModels.hostOwnerId,
+      bindings: aiConfig.personalPrincipals ?? {},
+      state: personalModels.state,
+      directory: createPersonalSessionDirectory(() => resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken) : undefined),
+      vault: personalModels.vault,
+      hostCatalog: () => service.getModelRuntime().getCatalogConfig(),
+    }));
     zhinAgent.hostProtectedPaths = hostProtectedPaths;
     // ADR 0040 §6a: the self-change staging area is bounded — prune on start, then every 6 hours.
     const selfChanges = new SelfChangeStore({

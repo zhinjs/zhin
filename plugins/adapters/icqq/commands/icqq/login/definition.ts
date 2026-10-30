@@ -6,9 +6,9 @@
  * master can fetch the QR image and confirm/send verification codes without the
  * Console or terminal.
  */
-import { icqqLoginControlToken, type IcqqLoginControl } from '../../../src/icqq-login-control.js';
+import { icqqLoginControls, type IcqqLoginControl } from '../../../src/icqq-login-control.js';
 
-export { icqqLoginControlToken };
+export { icqqLoginControls };
 
 /** Master = framework master(s), or the configured outage-notify conversation id(s). */
 export function isIcqqLoginOperator(config: unknown, input: unknown): boolean {

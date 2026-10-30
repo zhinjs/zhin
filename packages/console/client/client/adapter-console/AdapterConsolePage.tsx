@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConsoleEndpointSummary } from '@zhin.js/console-protocol';
-import { apiFetch, consoleRpc, pluginRpc } from '../console-utils/remoteApi.js';
+import { apiFetch, consoleRpc, getApiBase, getToken, pluginRpc, PluginRpcError } from '../console-utils/remoteApi.js';
 import {
   adapterConsoleLocale,
   adapterConsoleText as t,
@@ -14,6 +14,10 @@ import type {
   AdapterConsoleLoginTask,
   AdapterConsolePageEntry,
   AdapterConsoleStatus,
+  AdapterConsoleRuntimeView,
+  AdapterConsoleRuntimeEndpoint,
+  AdapterConsoleMutationResult,
+  AdapterConsoleExecution,
 } from './types.js';
 
 type Notice = {
@@ -43,32 +47,43 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const pluginIdCache = new Map<string, Promise<string | undefined>>();
-
-/** Resolve the PluginId that owns this adapter's `pages/index` page. */
-export function resolveAdapterConsolePluginId(adapterKey: string): Promise<string | undefined> {
+/** No cross-Host owner cache: ownership is read from the current authenticated Host. */
+export async function resolveAdapterConsolePluginId(adapterKey: string): Promise<string | undefined> {
   const pathname = typeof location === 'undefined' ? '' : location.pathname.replace(/\/+$/u, '') || '/';
-  const cacheKey = `${adapterKey}\0${pathname}`;
-  const cached = pluginIdCache.get(cacheKey);
-  if (cached) return cached;
-  const pending = (async () => {
-    try {
-      const response = await apiFetch('/console/api/pages');
-      if (!response.ok) return undefined;
-      const body = await response.json() as { pages?: readonly AdapterConsolePageEntry[] };
-      const pattern = new RegExp(`adapters[\\\\/]${escapeRegExp(adapterKey)}[\\\\/]pages[\\\\/]`, 'u');
-      const candidates = (body.pages ?? []).filter((page) =>
-        page.localName === 'index'
-        && typeof page.owner === 'string'
-        && typeof page.source === 'string'
-        && pattern.test(page.source));
-      return (candidates.find((page) => page.route === pathname) ?? candidates[0])?.owner;
-    } catch {
-      return undefined;
-    }
-  })();
-  pluginIdCache.set(cacheKey, pending);
-  return pending;
+  const response = await apiFetch('/console/api/pages');
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const body = await response.json() as { pages?: readonly AdapterConsolePageEntry[] };
+  const pattern = new RegExp(`adapters[\\\\/]${escapeRegExp(adapterKey)}[\\\\/]pages[\\\\/]`, 'u');
+  const candidates = (body.pages ?? []).filter(page => page.localName === 'index'
+    && typeof page.owner === 'string' && typeof page.source === 'string' && pattern.test(page.source));
+  const exact = candidates.filter(page => page.route === pathname);
+  return exact.length === 1 ? exact[0]?.owner : exact.length === 0 && candidates.length === 1 ? candidates[0]?.owner : undefined;
+}
+
+/** Private closure; credentials never become React keys, DTOs or persisted state. */
+export function captureAdapterConsoleContext(): () => boolean {
+  const base = typeof localStorage === 'undefined' ? '' : getApiBase();
+  const token = getToken();
+  const path = typeof location === 'undefined' ? '' : location.pathname;
+  return () => base === (typeof localStorage === 'undefined' ? '' : getApiBase())
+    && token === getToken() && path === (typeof location === 'undefined' ? '' : location.pathname);
+}
+
+export function runtimeLoginMatches(task: AdapterConsoleLoginTask, runtime: AdapterConsoleRuntimeView): boolean {
+  const identity = task.endpointIdentity;
+  return !!identity && typeof identity.incarnationId === 'string' && !!identity.incarnationId && runtime.endpoints.some(endpoint => endpoint.desiredEnabled && !endpoint.retiring && !endpoint.removed
+    && endpoint.canonicalId === identity.canonicalId && endpoint.instanceId === identity.instanceId && endpoint.epoch === identity.epoch && endpoint.incarnationId === identity.incarnationId);
+}
+
+function operationLabel(action: AdapterConsoleExecution['action'], locale: AdapterConsoleLocale): string {
+  const labels = { add: '保存', update: '保存', start: '启动', stop: '停止', remove: '删除', replace: '替换' };
+  return t(locale, labels[action] ?? '操作');
+}
+
+function executionLabel(execution: AdapterConsoleExecution, locale: AdapterConsoleLocale): string {
+  if (execution.status === 'failed') return execution.code === 'endpoint_cleanup_failed'
+    ? t(locale, '关闭未完成') : t(locale, '{0}失败', operationLabel(execution.action, locale));
+  return t(locale, execution.status === 'pending' ? '操作进行中' : '已完成');
 }
 
 function Badge({ tone, children }: { tone: 'ok' | 'warn' | 'muted' | 'bad'; children: React.ReactNode }) {
@@ -142,7 +157,7 @@ function isLink(value: string): boolean {
 
 function NoticeBar({ notice }: { notice: Notice }) {
   return (
-    <div className={`rounded-md px-3 py-2 text-sm ${notice.kind === 'ok'
+    <div role={notice.kind === 'error' ? 'alert' : 'status'} className={`rounded-md px-3 py-2 text-sm ${notice.kind === 'ok'
       ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
       : 'bg-red-500/10 text-red-700 dark:text-red-300'}`}>
       {notice.message}
@@ -165,13 +180,44 @@ export interface AdapterConsolePageProps {
  * Adapter-specific controls come from `status.actions` (for example QQ QR binding).
  */
 export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
+  const [connection, setConnection] = useState(0);
+  const context = useRef(captureAdapterConsoleContext());
+  useEffect(() => {
+    const check = () => {
+      if (context.current()) return;
+      context.current = captureAdapterConsoleContext();
+      setConnection(value => value + 1);
+    };
+    window.addEventListener('storage', check);
+    window.addEventListener('zhin:auth-required', check);
+    window.addEventListener('focus', check);
+    const timer = setInterval(check, PAGE_POLL_MS);
+    return () => {
+      window.removeEventListener('storage', check);
+      window.removeEventListener('zhin:auth-required', check);
+      window.removeEventListener('focus', check);
+      clearInterval(timer);
+    };
+  }, []);
+  return <AdapterConsoleSession key={`${adapterKey}:${connection}`} adapterKey={adapterKey} isCurrent={context.current} />;
+}
+
+function AdapterConsoleSession({ adapterKey, isCurrent }: AdapterConsolePageProps & { readonly isCurrent: () => boolean }) {
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const current = useCallback(() => alive.current && isCurrent(), [isCurrent]);
+  const statusRead = useRef(0);
+  const hostRead = useRef(0);
   const locale = useMemo(adapterConsoleLocale, []);
   const [pluginId, setPluginId] = useState<string | undefined>();
   const [resolving, setResolving] = useState(true);
   const [status, setStatus] = useState<AdapterConsoleStatus | undefined>(EMPTY_STATUS);
+  // Event handlers may outlive their render; admit login only against the latest accepted response.
+  const latestRuntime = useRef<AdapterConsoleRuntimeView | undefined>(undefined);
   const [endpoints, setEndpoints] = useState<readonly ConsoleEndpointSummary[]>([]);
   const [loginTasks, setLoginTasks] = useState<readonly AdapterConsoleLoginTask[]>([]);
   const [error, setError] = useState<string | undefined>();
+  const [hostError, setHostError] = useState<string | undefined>();
   const [notice, setNotice] = useState<Notice | undefined>();
   const [busy, setBusy] = useState<string>('');
   const [addOpen, setAddOpen] = useState(false);
@@ -181,53 +227,73 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
   const [actionResults, setActionResults] = useState<Record<string, AdapterConsoleActionResult>>({});
   const [loginValues, setLoginValues] = useState<Record<string, string>>({});
   const [now, setNow] = useState(Date.now());
+  const [runtimeBlocked, setRuntimeBlocked] = useState(false);
+  const [migration, setMigration] = useState<{ run: () => Promise<void>; ids: readonly string[] }>();
+  const [editor, setEditor] = useState<{ instanceId: string; id: string; originalId: string; values: Record<string, string>; originalValues: Readonly<Record<string, string>>; generation: number; revision: number | null }>();
+  const [addBase, setAddBase] = useState<{ generation: number; revision: number | null }>();
 
   useEffect(() => {
     let cancelled = false;
+    if (!current()) return;
     setResolving(true);
     void resolveAdapterConsolePluginId(adapterKey).then((resolved) => {
-      if (cancelled) return;
+      if (cancelled || !current()) return;
       setPluginId(resolved);
       setResolving(false);
+    }).catch(loadError => {
+      if (cancelled || !current()) return;
+      setError(errorMessage(loadError, locale)); setResolving(false);
     });
     return () => { cancelled = true; };
-  }, [adapterKey]);
+  }, [adapterKey, current, locale]);
 
   const loadStatus = useCallback(async () => {
-    if (!pluginId) return;
+    if (!pluginId || !current()) return false;
+    const read = ++statusRead.current;
     try {
       const next = await pluginRpc<AdapterConsoleStatus>(pluginId, 'status');
-      setStatus(next);
-      setError(undefined);
+      if (!current() || read !== statusRead.current) return false;
+      latestRuntime.current = next.runtime;
+      setStatus(next); setError(undefined); return true;
     } catch (loadError) {
-      setError(errorMessage(loadError, locale));
+      if (current() && read === statusRead.current) setError(errorMessage(loadError, locale));
+      return false;
     }
-  }, [pluginId, locale]);
+  }, [pluginId, locale, current]);
 
   const loadHost = useCallback(async () => {
-    await Promise.all([
+    if (!current()) return;
+    const read = ++hostRead.current;
+    const loaded = await Promise.all([
       (async () => {
         try {
           const result = await consoleRpc<{ endpoints?: readonly ConsoleEndpointSummary[] }>('endpoint.list');
-          setEndpoints(result.endpoints ?? []);
-        } catch {
-          setEndpoints([]);
+          if (current() && read === hostRead.current) setEndpoints(result.endpoints ?? []);
+          return true;
+        } catch (loadError) {
+          if (current() && read === hostRead.current) setHostError(errorMessage(loadError, locale));
+          return false;
         }
       })(),
       (async () => {
         try {
           const result = await consoleRpc<{ tasks?: readonly AdapterConsoleLoginTask[] }>('login.list');
-          setLoginTasks((result.tasks ?? []).filter((task) => task.adapter === adapterKey));
-        } catch {
-          setLoginTasks([]);
+          if (current() && read === hostRead.current) setLoginTasks((result.tasks ?? []).filter(task => task.adapter === adapterKey));
+          return true;
+        } catch (loadError) {
+          if (current() && read === hostRead.current) setHostError(errorMessage(loadError, locale));
+          return false;
         }
       })(),
     ]);
-  }, [adapterKey]);
+    if (current() && read === hostRead.current && loaded.every(Boolean)) setHostError(undefined);
+  }, [adapterKey, current, locale]);
 
-  const refresh = useCallback(async () => {
-    await Promise.all([loadStatus(), loadHost()]);
-  }, [loadStatus, loadHost]);
+  const refresh = useCallback(async () => { await Promise.all([loadStatus(), loadHost()]); }, [loadStatus, loadHost]);
+  const reread = async () => {
+    if (await loadStatus()) { setRuntimeBlocked(false); setMigration(undefined); setNotice(undefined); }
+    await loadHost();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -253,7 +319,7 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
   }, [loginTasks.length]);
 
   useEffect(() => {
-    if (!notice) return;
+    if (!notice || notice.kind === 'error') return;
     const timer = setTimeout(() => setNotice(undefined), 8_000);
     return () => clearTimeout(timer);
   }, [notice]);
@@ -280,21 +346,23 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
   );
 
   const run = useCallback(async (key: string, action: () => Promise<void>) => {
+    if (!current()) return;
     setBusy(key);
     try {
       await action();
     } catch (runError) {
-      setNotice({ kind: 'error', message: errorMessage(runError, locale) });
+      if (current()) setNotice({ kind: 'error', message: errorMessage(runError, locale) });
     } finally {
-      setBusy('');
+      if (current()) setBusy('');
     }
-  }, [locale]);
+  }, [locale, current]);
 
   const testConnection = (id: string) => run(`test:${id}`, async () => {
     const result = await consoleRpc<AdapterConsoleConnectionTest>('endpoint.test', {
       adapter: adapterKey,
       endpointKey: id,
     });
+    if (!current()) return;
     setNotice({
       kind: result.connected ? 'ok' : 'error',
       message: t(locale, '连接测试：{0}（{1} ms）', result.message ?? (result.connected ? t(locale, '在线') : t(locale, '离线')), result.latencyMs ?? 0),
@@ -303,7 +371,7 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
   });
 
   const addEndpoint = () => run('add', async () => {
-    if (!pluginId) return;
+    if (!pluginId || !status?.runtime) return;
     const id = addId.trim();
     if (!id) {
       setNotice({ kind: 'error', message: t(locale, '请填写 {0}', 'id') });
@@ -321,31 +389,22 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
         return;
       }
     }
-    const result = await pluginRpc<{ message?: string }>(pluginId, 'endpoint-add', { id, values: addValues });
-    setNotice({ kind: 'ok', message: result?.message ?? t(locale, '已添加，重启或热重载后生效。') });
-    setAddOpen(false);
-    setAddId('');
-    setAddValues({});
-    await refresh();
-  });
-
-  const removeEndpoint = (id: string) => run(`remove:${id}`, async () => {
-    if (!pluginId) return;
-    if (typeof window !== 'undefined' && !window.confirm(t(locale, '确定删除 endpoint「{0}」？配置会从 zhin.config.yml 移除。', id))) return;
-    const result = await pluginRpc<{ message?: string }>(pluginId, 'endpoint-remove', { id });
-    setNotice({ kind: 'ok', message: result?.message ?? t(locale, '已删除') });
-    await refresh();
+    await runtimeMutation('add', { id, values: addValues }, addBase ?? status.runtime, () => { setAddOpen(false); setAddId(''); setAddValues({}); });
   });
 
   const submitLogin = (task: AdapterConsoleLoginTask, value: string) => run(`login:${task.id}`, async () => {
-    await consoleRpc('login.submit', { taskId: task.id, value });
+    if (!latestRuntime.current || !runtimeLoginMatches(task, latestRuntime.current)) return;
+    await consoleRpc('login.submit', { taskId: task.id, value, ...(task.endpointIdentity ? { endpointIdentity: task.endpointIdentity } : {}) });
+    if (!current()) return;
     setLoginValues((current) => ({ ...current, [task.id]: '' }));
     setNotice({ kind: 'ok', message: t(locale, '已提交。') });
     await refresh();
   });
 
   const cancelLogin = (task: AdapterConsoleLoginTask) => run(`login-cancel:${task.id}`, async () => {
-    await consoleRpc('login.cancel', { taskId: task.id, reason: 'console_cancelled' });
+    if (!latestRuntime.current || !runtimeLoginMatches(task, latestRuntime.current)) return;
+    await consoleRpc('login.cancel', { taskId: task.id, reason: 'console_cancelled', ...(task.endpointIdentity ? { endpointIdentity: task.endpointIdentity } : {}) });
+    if (!current()) return;
     await refresh();
   });
 
@@ -366,18 +425,107 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
         return;
       }
     }
-    const result = await pluginRpc<AdapterConsoleActionResult>(pluginId, action.name, input);
-    setActionResults((current) => ({ ...current, [action.name]: result ?? {} }));
-    if (result?.message) {
-      setNotice({
-        kind: result.tone === 'error' ? 'error' : 'ok',
-        message: result.message,
-        ...(result.url ? { url: result.url } : {}),
-        ...(result.image ? { image: result.image } : {}),
+    const base = status?.runtime;
+    const perform = async (confirmed = false) => {
+      if (!current()) return;
+      const result = await pluginRpc<AdapterConsoleActionResult>(pluginId, action.name, {
+        ...input,
+        ...(base ? { expectedGeneration: base.generation, expectedRevision: base.revision } : {}),
+        ...(confirmed ? { confirmMigration: true } : {}),
       });
+      if (!current()) return;
+      setActionResults((current) => ({ ...current, [action.name]: result ?? {} }));
+      if (result?.message) {
+        setNotice({
+          kind: result.tone === 'error' ? 'error' : 'ok',
+          message: result.message,
+          ...(result.url ? { url: result.url } : {}),
+          ...(result.image ? { image: result.image } : {}),
+        });
+      }
+      await refresh();
+      setMigration(undefined);
+    };
+    if (action.accountMutation) {
+      if (!status || !base?.canManage || runtimeBlocked) return;
+      if (base.needsMigration) {
+        if (!base.canMigrate) { setNotice({ kind: 'error', message: t(locale, '首次迁移需要管理员确认。') }); return; }
+        setMigration({ ids: status.configured.map(entry => entry.id), run: () => perform(true) });
+        return;
+      }
     }
-    await refresh();
+    await perform();
   });
+
+  const runtime = status?.runtime;
+  const visibleLogins = runtime ? loginTasks.filter(task => runtimeLoginMatches(task, runtime)) : [];
+
+  const runtimeMutation = async (action: string, payload: Record<string, unknown>, base: { generation: number; revision: number | null }, done?: () => void) => {
+    if (!pluginId || !runtime || !runtime.canManage || runtimeBlocked || !current()) return;
+    const perform = async (confirmed = false) => {
+      if (!current()) return;
+      setBusy(`runtime:${action}`);
+      try {
+        const result = await pluginRpc<AdapterConsoleMutationResult>(pluginId, `endpoint-${action}`, {
+          ...payload, expectedGeneration: base.generation, expectedRevision: base.revision,
+          ...(confirmed ? { confirmMigration: true } : {}),
+        });
+        if (!current()) return;
+        ++statusRead.current;
+        latestRuntime.current = result.runtime;
+        setStatus(previous => previous ? { ...previous, runtime: result.runtime } : previous);
+        done?.();
+        setMigration(undefined);
+        setNotice({ kind: result.execution.status === 'failed' ? 'error' : 'ok', message: t(locale,
+          result.execution.status === 'failed' ? '配置已保存，执行失败。请查看账号状态。'
+            : action === 'add' || action === 'replace' ? '已保存，请手动启动账号。'
+              : result.execution.status === 'pending' ? '已保存，操作进行中。' : '已保存。') });
+        await refresh();
+      } catch (mutationError) {
+        if (!current()) return;
+        const knownInvalid = mutationError instanceof PluginRpcError && mutationError.code === 'invalid_input';
+        if (!knownInvalid) setRuntimeBlocked(true);
+        setMigration(undefined);
+        setNotice({ kind: 'error', message: t(locale, knownInvalid ? '输入无效，请检查账号字段。'
+          : mutationError instanceof PluginRpcError && mutationError.code === 'conflict' ? '账号清单已变化，请刷新后重新操作。'
+            : mutationError instanceof PluginRpcError && mutationError.code === 'forbidden' ? '没有此操作的权限。'
+              : !(mutationError instanceof PluginRpcError) || mutationError.code === 'commit_unknown' ? '提交结果尚未确认，请刷新核实，不要重复提交。'
+              : '操作未能完成，请刷新账号清单。') });
+      } finally { if (current()) setBusy(''); }
+    };
+    if (runtime.needsMigration) {
+      if (!runtime.canMigrate) { setNotice({ kind: 'error', message: t(locale, '首次迁移需要管理员确认。') }); return; }
+      setMigration({ ids: status.configured.map(entry => entry.id), run: () => perform(true) });
+    } else await perform();
+  };
+
+  const openEdit = (endpoint: AdapterConsoleRuntimeEndpoint) => {
+    if (!runtime) return;
+    const entry = status.configured.find(value => value.instanceId === endpoint.instanceId);
+    if (!entry) return;
+    const values = Object.fromEntries(status.fields.filter(field => !field.secret && !field.env && field.key !== 'id')
+      .map(field => [field.key, entry.values[field.key] ?? '']));
+    setEditor({ instanceId: endpoint.instanceId, id: endpoint.endpointId, originalId: endpoint.endpointId,
+      values, originalValues: entry.values, generation: runtime.generation, revision: runtime.revision });
+  };
+  const editorReplacing = !!editor && !!runtime && (editor.id.trim() !== editor.originalId
+    || runtime.identityFields.some(key => key !== 'id' && Object.hasOwn(editor.values, key) && editor.values[key] !== (editor.originalValues[key] ?? '')));
+  const saveEdit = async () => {
+    if (!editor || !runtime || !status) return;
+    const replacing = editorReplacing;
+    if (replacing && !runtime.canReplace) return;
+    const allowed = replacing ? status.fields : status.fields.filter(field => runtime.mutableFields.includes(field.key));
+    const values: Record<string, string> = {};
+    for (const field of allowed) {
+      if (field.key === 'id') continue;
+      const value = editor.values[field.key] ?? '';
+      if (replacing && field.required && !value.trim()) { setNotice({ kind: 'error', message: t(locale, '请填写 {0}', field.key) }); return; }
+      if (!replacing && (field.secret || field.env) && !value.trim()) continue;
+      if (replacing || value !== (editor.originalValues[field.key] ?? '')) values[field.key] = value;
+    }
+    if (replacing && !window.confirm(t(locale, '替换账号「{0}」？旧账号将关闭，历史保留；新账号不继承会话和设置，保存后需手动启动。', editor.originalId))) return;
+    await runtimeMutation(replacing ? 'replace' : 'update', { instanceId: editor.instanceId, ...(replacing ? { id: editor.id.trim() } : {}), values }, editor, () => setEditor(undefined));
+  };
 
   const title = status?.displayName ?? adapterKey;
   const docsUrl = status?.docsUrl;
@@ -388,7 +536,7 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
         <div>
           <h1 className="text-2xl font-semibold">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {t(locale, '管理 {0} 的连接、登录待办和 endpoint 配置。', title)}
+            {t(locale, runtime ? '管理 {0} 的账号与登录。' : '查看 {0} 的连接与账号配置。', title)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -397,20 +545,21 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
               {t(locale, '文档')}
             </a>
           )}
-          <Button onClick={() => void refresh()} disabled={busy !== ''}>{t(locale, '刷新')}</Button>
+          <Button onClick={() => void reread()} disabled={busy !== ''}>{t(locale, '刷新')}</Button>
         </div>
       </header>
 
       {notice && <NoticeBar notice={notice} />}
       {resolving && <p className="text-sm text-muted-foreground">{t(locale, '正在解析插件…')}</p>}
       {!resolving && !pluginId && <p className="text-sm text-red-600 dark:text-red-400">{t(locale, '找不到页面所属插件。')}</p>}
+      {hostError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{t(locale, '加载失败：{0}', hostError)}</p>}
       {error && <p className="text-sm text-red-600 dark:text-red-400">{t(locale, '加载失败：{0}', error)}</p>}
       {!status && pluginId && !error && <p className="text-sm text-muted-foreground">{t(locale, '加载中…')}</p>}
 
-      <section className="space-y-3">
+      {!runtime && <section className="space-y-3">
         <h2 className="text-lg font-semibold">{t(locale, '运行中的连接')}</h2>
         {runningIds.length === 0
-          ? <p className="text-sm text-muted-foreground">{t(locale, '还没有运行中的连接。请检查配置并重启、或等待适配器启动。')}</p>
+          ? <p className="text-sm text-muted-foreground">{t(locale, '还没有运行中的连接。')}</p>
           : (
             <ul className="space-y-2">
               {runningIds.map((id) => {
@@ -429,13 +578,13 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
               })}
             </ul>
           )}
-      </section>
+      </section>}
 
-      {loginTasks.length > 0 && (
+      {visibleLogins.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">{t(locale, '登录待办')}</h2>
           <ul className="space-y-3">
-            {loginTasks.map((task) => {
+            {visibleLogins.map((task) => {
               const image = typeof task.payload.image === 'string' ? task.payload.image : undefined;
               const url = typeof task.payload.url === 'string' ? task.payload.url : undefined;
               const message = typeof task.payload.message === 'string' ? task.payload.message : undefined;
@@ -535,7 +684,7 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
                       ))}
                     </select>
                   )}
-                  <Button variant="primary" disabled={busy !== ''} onClick={() => runAction(action)}>
+                  <Button variant="primary" disabled={busy !== '' || !!(action.accountMutation && (!runtime?.canManage || runtimeBlocked || migration || (runtime.needsMigration && !runtime.canMigrate)))} onClick={() => runAction(action)}>
                     {pickI18n(locale, action.label, action.labelI18n)}
                   </Button>
                   {result && (
@@ -582,7 +731,58 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
         </section>
       )}
 
-      <section className="space-y-3">
+      {runtime && <section className="space-y-3">
+        <h2 className="text-lg font-semibold">{t(locale, '账号')}</h2>
+        {runtime.needsMigration && <div className="rounded-md border p-3 text-sm">
+          <p>{t(locale, '首次修改前需迁移以下账号，保留身份和历史。')}</p>
+          <ul>{status?.configured.map(entry => <li key={entry.instanceId ?? entry.id}>{entry.id}</li>)}</ul>
+          {!runtime.canMigrate && <p>{t(locale, '首次迁移需要管理员确认。')}</p>}
+        </div>}
+        {runtimeBlocked && <p role="alert" className="text-sm text-red-600">{t(locale, '请刷新账号清单后再操作。')}</p>}
+        {migration && <div role="alertdialog" aria-label={t(locale, '确认迁移')} className="space-y-3 rounded-lg border p-4">
+          <p>{t(locale, '确认迁移以下账号并执行本次操作？身份和历史将保留。')}</p>
+          <ul>{migration.ids.map(id => <li key={id}>{id}</li>)}</ul>
+          <div className="flex gap-2"><Button variant="primary" disabled={busy !== ''} onClick={() => void migration.run()}>{t(locale, '确认迁移')}</Button>
+            <Button disabled={busy !== ''} onClick={() => setMigration(undefined)}>{t(locale, '取消')}</Button></div>
+        </div>}
+        {!runtime.canManage && <p className="text-sm text-muted-foreground">{t(locale, '配置存储不可用：当前环境只能查看，不能增删 endpoint。')}</p>}
+        {!runtime.endpoints.length && <p className="text-sm text-muted-foreground">{t(locale, '暂无')}</p>}
+        <ul className="space-y-2">{runtime.endpoints.map(endpoint => {
+          const connection = endpoints.find(value => value.endpoint?.id === endpoint.canonicalId);
+          const configured = status?.configured.find(entry => entry.instanceId === endpoint.instanceId);
+          const editable = !endpoint.retiring && !endpoint.removed;
+          const disabled = !runtime.canManage || busy !== '' || runtimeBlocked || !!migration || (runtime.needsMigration && !runtime.canMigrate);
+          return <li key={`${endpoint.instanceId}:${endpoint.epoch}`} className="space-y-2 rounded-lg border p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{endpoint.endpointId}</span>
+              <Badge tone={endpoint.retiring ? 'warn' : connectionTone(connection)}>{endpoint.retiring ? t(locale, '正在关闭') : !endpoint.desiredEnabled ? t(locale, '已停止') : connectionLabel(connection, locale)}</Badge>
+              {endpoint.execution && <Badge tone={endpoint.execution.status === 'failed' ? 'bad' : endpoint.execution.status === 'pending' ? 'warn' : 'muted'}>{executionLabel(endpoint.execution, locale)}</Badge>}
+              <span className="grow" />
+              {editable && <>
+                {endpoint.started && <Button disabled={busy !== ''} onClick={() => void testConnection(endpoint.canonicalId)}>{t(locale, '测试连接')}</Button>}
+                {(runtime.canUpdate || runtime.canReplace) && <Button disabled={disabled} onClick={() => openEdit(endpoint)}>{t(locale, '编辑')}</Button>}
+                <Button disabled={disabled} onClick={() => void runtimeMutation(endpoint.desiredEnabled ? 'stop' : 'start', { instanceId: endpoint.instanceId }, runtime)}>{t(locale, endpoint.desiredEnabled ? '停止' : '启动')}</Button>
+                {status?.canRemove && <Button variant="danger" disabled={disabled} onClick={() => { if (window.confirm(t(locale, '删除账号「{0}」？账号将关闭，历史保留。', endpoint.endpointId))) void runtimeMutation('remove', { instanceId: endpoint.instanceId }, runtime); }}>{t(locale, '删除')}</Button>}
+              </>}
+            </div>
+            {configured && Object.keys(configured.values).length > 0 && <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-xs">
+              {Object.entries(configured.values).map(([key, value]) => <React.Fragment key={key}><dt className="text-muted-foreground">{key}</dt><dd className="break-all">{value}</dd></React.Fragment>)}
+            </dl>}
+          </li>;
+        })}</ul>
+        {runtime.lastMutation && <p role="status" className="text-sm text-muted-foreground">{t(locale, '最近操作：{0}', operationLabel(runtime.lastMutation.action, locale))} · {executionLabel(runtime.lastMutation, locale)}</p>}
+        {editor && <div className="space-y-3 rounded-lg border p-4">
+          <h3 className="font-medium">{t(locale, '编辑账号')}</h3>
+          {(editor.generation !== runtime.generation || editor.revision !== runtime.revision) && <p role="alert" className="text-sm text-red-600">{t(locale, '账号清单已变化，请取消编辑后重新打开。')}</p>}
+          <label className="block space-y-1"><span className="text-sm">id</span><input aria-label="id" disabled={busy !== '' || !!migration || !runtime.canReplace || !runtime.identityFields.includes('id')} value={editor.id} onChange={event => setEditor({ ...editor, id: event.target.value })} className="w-full rounded-md border bg-background px-3 py-2 text-sm" /></label>
+          {status?.fields.filter(field => field.key !== 'id' && (runtime.mutableFields.includes(field.key) || runtime.identityFields.includes(field.key) || editorReplacing)).map(field => <label key={field.key} className="block space-y-1">
+            <span className="text-sm">{field.key}</span><input disabled={busy !== '' || !!migration} type={field.secret || field.env ? 'password' : field.type === 'number' ? 'number' : 'text'} value={editor.values[field.key] ?? ''} placeholder={pickI18n(locale, field.description, field.descriptionI18n) ?? field.placeholder} onChange={event => setEditor({ ...editor, values: { ...editor.values, [field.key]: event.target.value } })} className="w-full rounded-md border bg-background px-3 py-2 text-sm" />
+          </label>)}
+          <div className="flex gap-2"><Button variant="primary" disabled={busy !== '' || runtimeBlocked || !!migration || editor.generation !== runtime.generation || editor.revision !== runtime.revision} onClick={() => void saveEdit()}>{t(locale, '保存')}</Button><Button disabled={busy !== ''} onClick={() => setEditor(undefined)}>{t(locale, '取消')}</Button></div>
+        </div>}
+      </section>}
+
+      {!runtime && <section className="space-y-3">
         <h2 className="text-lg font-semibold">{t(locale, '配置中的 endpoint')}</h2>
         {!status?.configured.length
           ? <p className="text-sm text-muted-foreground">{t(locale, '配置里还没有 endpoint。')}</p>
@@ -594,13 +794,9 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
                   <li key={entry.id} className="space-y-2 rounded-lg border p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{entry.id}</span>
-                      <Badge tone={running ? 'ok' : 'muted'}>{running ? t(locale, '运行中') : t(locale, '重启后生效')}</Badge>
+                      <Badge tone={running ? 'ok' : 'muted'}>{running ? t(locale, '运行中') : t(locale, '未运行')}</Badge>
                       <span className="grow" />
-                      {status.canRemove && (
-                        <Button variant="danger" disabled={busy !== ''} onClick={() => removeEndpoint(entry.id)}>
-                          {t(locale, '删除')}
-                        </Button>
-                      )}
+
                     </div>
                     {Object.keys(entry.values).length > 0 && (
                       <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-xs">
@@ -617,38 +813,37 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
               })}
             </ul>
           )}
-        {status && !status.configStore && (
-          <p className="text-xs text-muted-foreground">{t(locale, '配置存储不可用：当前环境只能查看，不能增删 endpoint。')}</p>
-        )}
-        <p className="text-xs text-muted-foreground">{t(locale, '写入配置后需要重启进程或等待热重载。')}</p>
-      </section>
+        <p className="text-xs text-muted-foreground">{t(locale, '当前环境只能查看账号配置。')}</p>
+      </section>}
 
-      {status?.canAdd && (
+      {runtime && status?.canAdd && (
         <section className="space-y-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">{t(locale, '添加 endpoint')}</h2>
+            <h2 className="text-lg font-semibold">{t(locale, '添加账号')}</h2>
             <span className="grow" />
-            <Button onClick={() => setAddOpen((open) => !open)}>{addOpen ? t(locale, '取消') : t(locale, '添加')}</Button>
+            <Button disabled={!runtime.canManage || busy !== '' || runtimeBlocked || !!migration || (runtime.needsMigration && !runtime.canMigrate)} onClick={() => { setAddOpen(open => !open); setAddBase({ generation: runtime.generation, revision: runtime.revision }); }}>{addOpen ? t(locale, '取消') : t(locale, '添加')}</Button>
           </div>
           {addOpen && (
             <div className="space-y-3 rounded-lg border p-4">
               <label className="block space-y-1">
                 <span className="text-sm">id</span>
                 <input
+                  disabled={busy !== '' || !!migration}
                   value={addId}
                   onChange={(event) => setAddId(event.target.value)}
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 {status.idHint && <span className="text-xs text-muted-foreground">{pickI18n(locale, status.idHint, status.idHintI18n)}</span>}
               </label>
-              {status.fields.map((field) => (
+              {status.fields.filter(field => field.key !== 'id').map((field) => (
                 <label key={field.key} className="block space-y-1">
                   <span className="text-sm">
                     {field.key}
                     {field.required && <span className="ml-1 text-red-600">*</span>}
                   </span>
                   <input
-                    type={field.secret ? 'password' : 'text'}
+                    disabled={busy !== '' || !!migration}
+                    type={field.secret || field.env ? 'password' : field.type === 'number' ? 'number' : 'text'}
                     value={addValues[field.key] ?? ''}
                     placeholder={pickI18n(locale, field.description, field.descriptionI18n) ?? field.placeholder}
                     onChange={(event) => setAddValues((current) => ({ ...current, [field.key]: event.target.value }))}
@@ -657,14 +852,13 @@ export function AdapterConsolePage({ adapterKey }: AdapterConsolePageProps) {
                   {field.description && <span className="text-xs text-muted-foreground">{pickI18n(locale, field.description, field.descriptionI18n)}</span>}
                 </label>
               ))}
-              <p className="text-xs text-muted-foreground">{t(locale, '凭据会写入 .env，配置里只保留引用。')}</p>
-              <Button variant="primary" disabled={busy !== ''} onClick={addEndpoint}>{t(locale, '添加')}</Button>
+              <Button variant="primary" disabled={busy !== '' || runtimeBlocked || !!migration} onClick={addEndpoint}>{t(locale, '添加')}</Button>
             </div>
           )}
         </section>
       )}
 
-      <p className="text-xs text-muted-foreground">{t(locale, '此页面由适配器提供；敏感凭据不会展示。')}</p>
+      {!runtime && <p className="text-xs text-muted-foreground">{t(locale, '此页面由适配器提供；敏感凭据不会展示。')}</p>}
     </div>
   );
 }

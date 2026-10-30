@@ -1,6 +1,4 @@
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
-import { bilibiliLiveRuntimeStateToken } from './src/bilibili-live-runtime-state.js';
 import { createBilibiliLiveConsoleRpc } from './src/console.js';
 
 /**
@@ -14,7 +12,6 @@ export default definePlugin({
     displayName: 'Bilibili Live Danmaku Adapter (Experimental)',
   },
   setup(context) {
-    context.resources.provide(bilibiliLiveRuntimeStateToken, createEndpointRuntimeState());
     context.resources.provide(pluginConsoleRpcToken, createBilibiliLiveConsoleRpc(context.resources, () => context.config.get()));
   },
 });

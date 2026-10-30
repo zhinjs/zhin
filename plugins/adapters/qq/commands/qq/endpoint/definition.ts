@@ -2,27 +2,16 @@ import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { messages as t } from '../../../src/i18n.js';
 /**
  * `qq endpoint` 命令的业务逻辑（与命令定义文件分离，便于测试）。
- * 通用部分（权限 / list / remove / 配置写回 / .env 持久化）已迁移到
- * @zhin.js/adapter 的 createEndpointCommands 套件；本文件保留 QQ 特化的
- * 扫码绑定 add 流程（经套件 bindFlow 钩子接入）与 cancel，并导出
+ * list / remove 与权限共用 @zhin.js/adapter 的账号管理入口；
+ * 本文件保留 QQ 扫码绑定 add 与 cancel，保存委派捕获的所属 Adapter CAS，并导出
  * qqEndpointCommands 供 commands/qq/endpoint/ 下的命令文件默认导出。
  */
-import {
-  createEndpointCommands,
-  endpointCommandForbidden,
-  endpointConfigurationStoreToken,
-  extractEndpointCommandReply,
-  formatEndpointList,
-  isEndpointOperator,
-  removeEndpointById,
-  type ConfiguredEndpointEntry,
-  type EndpointCommandReply,
-  type EndpointConfigurationStore,
-} from 'zhin.js/adapter';
+import { createEndpointCommands, endpointCommandForbidden, createDurableEndpointCommandReply, isEndpointOperator, extractEndpointCommandReply,
+  adapterFeatureId, isAdapterIndex, type ConfiguredEndpointEntry, type EndpointCommandReply } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
 import { qqBotKindPrompt, qqCommandSessionKey } from '../../../src/qq-bot-kind-prompt.js';
 import { startQqBindFlow } from '../../../src/qq-bind-flow.js';
-import { writeQqEndpointWithBotKind } from '../../../src/qq-endpoint-write.js';
+import { writeQqEndpointWithBotKind, type QqEndpointSavePort } from '../../../src/qq-endpoint-write.js';
 import type { QqBotKind } from '../../../src/qq-intents.js';
 import { cancelQqConsoleBind } from '../../../src/qq-console.js';
 import {
@@ -76,19 +65,6 @@ function busyFooter(state: QqRuntimeState, locale?: Locale): string | undefined 
   return undefined;
 }
 
-/** `qq endpoint list`：运行中的 endpoints（本 generation adapter create 注册）+ 配置里的 endpoints */
-export async function runQqEndpointList(
-  state: QqRuntimeState,
-  store: EndpointConfigurationStore,
-  locale?: Locale,
-): Promise<string> {
-  return formatEndpointList(qqEndpointListSpec, {
-    running: state.endpoints.values(),
-    configured: await store.list('qq'),
-    footer: busyFooter(state, locale), locale,
-  });
-}
-
 const qqEndpointListSpec = {
   adapterKey: 'qq',
   adapterDisplayName: 'QQ',
@@ -98,45 +74,43 @@ const qqEndpointListSpec = {
 async function writeEndpointWithBotKind(
   pending: QqPendingBotKind,
   botKind: QqBotKind,
-  store: EndpointConfigurationStore,
+  save: QqEndpointSavePort,
 ): Promise<string> {
   const result = await writeQqEndpointWithBotKind({
     endpointId: pending.endpointId,
     appId: pending.appId,
     appSecret: pending.appSecret,
     botKind,
-  }, store);
+  }, save);
   return t(pending.locale, 'endpointSaved', {
     kind: result.botKind,
     id: result.endpointId,
-    file: result.filePath,
     intents: result.intents.join(', '),
   });
 }
 
 /**
- * 完成 pending 的公域/私域选择：一次性写 .env + yaml。
+ * 完成 pending 的公域/私域选择：通过已捕获的所属 Adapter 保存一次账号配置。
  * @returns 成功文案；调用方负责清 pending。
  */
 export async function completeQqPendingBotKind(
   pending: QqPendingBotKind,
   botKind: QqBotKind,
-  store: EndpointConfigurationStore,
 ): Promise<string> {
-  return await writeEndpointWithBotKind(pending, botKind, store);
+  return await writeEndpointWithBotKind(pending, botKind, pending.save);
 }
 
 /**
  * `qq endpoint add [id]`：启动扫码绑定流程。
  * 返回的 Promise 在二维码链接就绪（或前置失败）时 resolve 为首条回复；
  * 后续状态（已扫码 / 成功 / 失败 / 过期刷新）通过 reply 推回当前会话。
- * 扫码成功后凭据暂存内存并询问公域/私域；确认后一次性写 .env + yaml。
+ * 扫码成功后凭据暂存内存并询问公域/私域；确认后保存到账号库，等待显式启动。
  */
 export function runQqEndpointAdd(
   state: QqRuntimeState,
   id: string | undefined,
   reply: QqCommandReply,
-  store: EndpointConfigurationStore,
+  save: QqEndpointSavePort,
   input?: unknown,
   locale: Locale = 'zh-CN',
   cancelCommand?: string,
@@ -192,10 +166,10 @@ export function runQqEndpointAdd(
                     endpointId: finalName,
                     appId,
                     appSecret,
-                    sessionKey: '', locale, cancelCommand,
+                    sessionKey: '', locale, cancelCommand, save,
                   },
                   'public',
-                  store,
+                  save,
                 ) +
                 t(locale, 'noInteractiveKind'),
               );
@@ -206,7 +180,7 @@ export function runQqEndpointAdd(
               endpointId: finalName,
               appId,
               appSecret,
-              sessionKey, locale, cancelCommand, commandHeads,
+              sessionKey, locale, cancelCommand, commandHeads, save,
             };
             settle(
               t(locale, 'scanned', { id: finalName, prompt: qqBotKindPrompt(locale, cancelCommand) }),
@@ -247,37 +221,37 @@ export function runQqEndpointCancel(state: QqRuntimeState, preference?: Locale):
   return t(locale, 'noFlow');
 }
 
-/** `qq endpoint remove <id>`：从 zhin.config.yml 移除对应 endpoints 项 */
-export async function runQqEndpointRemove(
-  _state: QqRuntimeState,
-  id: string,
-  store: EndpointConfigurationStore,
-): Promise<string> {
-  return await removeEndpointById(qqEndpointListSpec, id, store);
-}
-
 /**
  * 通用套件生成的 QQ endpoint 命令（add 经 bindFlow 钩子走扫码绑定）。
  * commands/qq/endpoint/ 下的 list / add / remove 直接默认导出这三项；cancel 为 QQ 特化，单独定义。
  */
-export const qqEndpointCommands = createEndpointCommands({
+const standard = createEndpointCommands({
   ...qqEndpointListSpec,
-  fields: [
-    { key: 'appid', required: true, env: true, description: 'QQ 机器人 appid', descriptionI18n: { en: "QQ bot app ID" } },
-    { key: 'secret', required: true, env: true, description: 'QQ 机器人 secret', descriptionI18n: { en: "QQ bot secret" } },
-  ],
-  running: (use) => use(qqRuntimeStateToken).endpoints.values(),
+  fields: [{ key: 'appid', required: true }, { key: 'secret', required: true, secret: true }],
   listFooter: (use, locale) => busyFooter(use(qqRuntimeStateToken), locale),
-  addDescriptionI18n: { en: 'Bind a bot through mobile QQ, choose public/private, then save configuration; restart to apply' },
-  addDescription:
-    '手机 QQ 扫码绑定机器人：确认公域/私域后一次性写入 .env 与 zhin.config.yml（重启生效）',
-  bindFlow: ({ id, reply, input, use, locale, formatCommand }) =>
-    runQqEndpointAdd(
-      use(qqRuntimeStateToken),
-      id,
-      reply,
-      use(endpointConfigurationStoreToken),
-      input, locale, formatCommand?.('qq endpoint cancel'),
-      ['qq endpoint list', 'qq endpoint add', 'qq endpoint remove', 'qq endpoint cancel'].flatMap(path => { const head = formatCommand?.(path); return head ? [head] : []; }),
-    ),
 }, defineCommand);
+
+export const qqEndpointCommands = {
+  ...standard,
+  add: defineCommand({
+    description: '手机 QQ 扫码绑定；确认公域/私域后保存账号，手动启动',
+    descriptionI18n: { en: 'Scan with mobile QQ, choose public/private, save the account and start explicitly' },
+    params: { id: { type: 'string', description: 'endpoint ID' } },
+    async execute(context) {
+      if (!isEndpointOperator(context.config, context.input)) return endpointCommandForbidden('QQ', context.locale);
+      const index = context.project<unknown>(adapterFeatureId);
+      if (!isAdapterIndex(index)) throw new Error('QQ Adapter projection is unavailable');
+      const own = index.forOwner(context.owner.id).adapters().filter(adapter => adapter.descriptor.name === 'qq');
+      if (own.length !== 1) throw new Error('QQ Adapter ownership is ambiguous');
+      const adapter = own[0];
+      if (adapter.needsMigration) return '首次修改账号前，请由管理员在 Console 确认迁移账号清单';
+      if (!adapter.canManage) return '此环境未提供持久化账号管理';
+      const revision = adapter.revision;
+      const save: QqEndpointSavePort = config => adapter.add(revision, { endpointId: config.id, config: { ...config } }, { waitForExecution: false });
+      return runQqEndpointAdd(context.use(qqRuntimeStateToken), context.params.id,
+        createDurableEndpointCommandReply(context.input, context.use), save, context.input, context.locale,
+        context.formatCommand?.('qq endpoint cancel'),
+        ['qq endpoint list', 'qq endpoint add', 'qq endpoint remove', 'qq endpoint cancel'].flatMap(path => { const head = context.formatCommand?.(path); return head ? [head] : []; }));
+    },
+  }),
+};

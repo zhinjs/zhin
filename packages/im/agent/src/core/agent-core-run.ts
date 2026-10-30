@@ -7,7 +7,7 @@ import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchem
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { createPromptContextBlock, createLlmMessageProjection, estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { createPromptContextBlock, createLlmMessageProjection, estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -21,6 +21,7 @@ import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
 import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
+import { resolveTurnSummaryExecution } from '../memory/summary-model.js';
 import { LocalImageInspection, type ImageInspectionBudget } from '../media/local-image-inspection.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
@@ -98,54 +99,15 @@ function resolveAssistantReplyText(assistant: AssistantMessage, chat?: ChatFailu
   return text;
 }
 
-/** Media kinds the turn's prompt carries as real media blocks (accepted by the primary model). */
-export function requiredTurnInputModalities(messages: readonly AgentMessage[]): ModelInputModality[] {
-  const kinds = new Set<ModelInputModality>();
-  for (const message of messages) {
-    if (message.role !== 'user') continue;
-    const media = (message as { media?: ReadonlyArray<{ type: ModelInputModality }> }).media;
-    for (const block of media ?? []) kinds.add(block.type);
-  }
-  return [...kinds];
-}
-
-/**
- * Wrap the turn's completion port with retry / timeout / fallback. Fallback models come
- * from the already-resolved `modelCandidates`; candidates the provider does not know are
- * skipped rather than failing the turn, and so are candidates that cannot take the
- * media the turn carries (an accepted image must never silently become a placeholder
- * on fallback).
- */
+/** Wrap the selected chat model with same-model retries and timeouts only. */
 function createTurnCompletionPort(input: {
   host: ZhinAgentPrivate;
   providerAlias: string;
-  modelId: string;
-  modelCandidates: readonly string[];
   harness: Readonly<{ emptyReplyRetries?: number; requestTimeoutMs?: number }>;
   sessionId: string;
-  requiredInput?: readonly ModelInputModality[];
   transport: LlmCompletionPort;
 }): LlmCompletionPort {
-  const { host, providerAlias, modelId, sessionId } = input;
-  const requiredInput = input.requiredInput ?? [];
-  const fallbackModels: Model[] = [];
-  for (const candidate of input.modelCandidates) {
-    if (!candidate || candidate === modelId) continue;
-    let model: Model;
-    try {
-      model = host.llmRuntime.model(providerAlias, candidate);
-    } catch {
-      logger.debug(formatCompact({ op: 'provider_fallback_skip', model: candidate }));
-      continue;
-    }
-    const modelInput: readonly string[] = Array.isArray(model.input) ? model.input : ['text'];
-    const missing = requiredInput.filter((kind) => !modelInput.includes(kind));
-    if (missing.length > 0) {
-      logger.debug(formatCompact({ op: 'provider_fallback_skip', model: candidate, reason: 'input_modalities', missing: missing.join(',') }));
-      continue;
-    }
-    fallbackModels.push(model);
-  }
+  const { host, providerAlias, sessionId } = input;
   // Precedence: ai.providerResilience < provider `timeout` / `maxRetries` < model harness quirks.
   const providerConfig = host.llmRuntime.providerConfig?.(providerAlias);
   const config = resolveProviderResilienceConfig(
@@ -158,7 +120,6 @@ function createTurnCompletionPort(input: {
   );
   return createResilientCompletionPort(input.transport, {
     config,
-    fallbackModels,
     timers: host.config.providerTimers,
     onEvent: (event) => {
       const { type, error, ...fields } = event;
@@ -452,28 +413,9 @@ async function* runAgentLoopVisionTurnOnceRun(
 export async function* runAgentLoopVisionTurnRun(
   input: AgentLoopVisionTurnInput,
 ): AsyncGenerator<TurnEvent, AgentLoopVisionTurnResult> {
-  const candidates = input.modelCandidates.filter(Boolean);
-  if (candidates.length === 0) {
-    throw new Error('No vision model candidates configured');
-  }
-
-  let lastError: Error | undefined;
-  for (let i = 0; i < candidates.length; i++) {
-    const modelId = candidates[i]!;
-    try {
-      return yield* runAgentLoopVisionTurnOnceRun({ ...input, modelId });
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      const isLast = i === candidates.length - 1;
-      if (isLast) break;
-      logger.warn(formatCompact({
-        mode: 'multimodal',
-        fallback: `${modelId}→${candidates[i + 1]}`,
-        error: lastError.message.slice(0, 120),
-      }));
-    }
-  }
-  throw lastError ?? new Error('All vision model candidates failed');
+  const modelId = input.modelCandidates.find(Boolean);
+  if (!modelId) throw new Error('No vision model candidates configured');
+  return yield* runAgentLoopVisionTurnOnceRun({ ...input, modelId });
 }
 
 export async function collectAgentLoopTurnRun<R>(
@@ -776,12 +718,9 @@ export async function* runAgentLoopTextTurnRun(
   const completionPort = createTurnCompletionPort({
     host,
     providerAlias,
-    modelId,
-    modelCandidates: input.modelCandidates,
     harness,
     sessionId,
     transport: completionUsage.transport,
-    requiredInput: requiredTurnInputModalities(promptMessages),
   });
 
   // Progress-aware budget: maxIterations is soft, extended while progressing.
@@ -813,6 +752,10 @@ export async function* runAgentLoopTextTurnRun(
   const recordProgress = (toolName: string, args: unknown, ok: boolean, output?: string) =>
     progress.record(iterations, { toolName, args, ok, output });
 
+  const summaryExecution = () => {
+    const summary = resolveTurnSummaryExecution({ transport: host.llmRuntime, model: llmModel });
+    return { transport: completionUsage.forTransport(summary.transport), model: summary.model };
+  };
   const loopConfig = {
     model: llmModel,
     transport: completionPort,
@@ -834,8 +777,7 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
-        transport: completionUsage.transport,
-        model: llmModel,
+        ...summaryExecution(),
         compactionConfig: host.config.compaction,
         contextWindow,
         reservedTokens: await fixedPromptTokens(),
@@ -847,8 +789,7 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
-        transport: completionUsage.transport,
-        model: llmModel,
+        ...summaryExecution(),
         compactionConfig: host.config.compaction,
         contextWindow,
         reservedTokens: await fixedPromptTokens(),

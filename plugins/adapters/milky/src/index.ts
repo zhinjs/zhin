@@ -47,7 +47,6 @@ export {
 
 export {
   MilkyClient,
-  milkyClient,
   type MilkyClientEventMap,
 } from './client.js';
 
@@ -63,3 +62,4 @@ export type {
 } from '@imhelper/milky-v1';
 export { ProtocolError } from '@imhelper/milky-v1';
 export type { ProtocolErrorKind, ProtocolErrorOptions } from 'imhelper';
+export { MilkyAdapter } from './adapter.js';

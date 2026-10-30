@@ -31,9 +31,12 @@ export async function downloadMediaFromItem(
     log: (msg: string) => void;
     errLog: (msg: string) => void;
     label: string;
+    signal?: AbortSignal;
   },
 ): Promise<WeixinInboundMediaOpts> {
-  const { cdnBaseUrl, saveMedia, log, errLog, label } = deps;
+  const { cdnBaseUrl, saveMedia: persistMedia, log, errLog, label, signal } = deps;
+  signal?.throwIfAborted();
+  const saveMedia: SaveMediaFn = (...args) => { signal?.throwIfAborted(); return persistMedia(...args); };
   const result: WeixinInboundMediaOpts = {};
 
   if (item.type === MessageItemType.IMAGE) {
@@ -53,17 +56,20 @@ export async function downloadMediaFromItem(
             cdnBaseUrl,
             `${label} image`,
             img.media.full_url,
+            signal,
           )
         : await downloadPlainCdnBuffer(
             img.media.encrypt_query_param ?? "",
             cdnBaseUrl,
             `${label} image-plain`,
             img.media.full_url,
+            signal,
           );
       const saved = await saveMedia(buf, undefined, "inbound", WEIXIN_MEDIA_MAX_BYTES);
       result.decryptedPicPath = saved.path;
       logger.debug(`${label} image saved: ${saved.path}`);
     } catch (err) {
+      signal?.throwIfAborted();
       logger.error(`${label} image download/decrypt failed: ${String(err)}`);
       errLog(`weixin ${label} image download/decrypt failed: ${String(err)}`);
     }
@@ -78,6 +84,7 @@ export async function downloadMediaFromItem(
         cdnBaseUrl,
         `${label} voice`,
         voice.media.full_url,
+        signal,
       );
       logger.debug(`${label} voice: decrypted ${silkBuf.length} bytes, attempting silk transcode`);
       const wavBuf = await silkToWav(silkBuf);
@@ -93,6 +100,7 @@ export async function downloadMediaFromItem(
         logger.debug(`${label} voice: silk transcode unavailable, saved raw SILK to ${saved.path}`);
       }
     } catch (err) {
+      signal?.throwIfAborted();
       logger.error(`${label} voice download/transcode failed: ${String(err)}`);
       errLog(`weixin ${label} voice download/transcode failed: ${String(err)}`);
     }
@@ -107,6 +115,7 @@ export async function downloadMediaFromItem(
         cdnBaseUrl,
         `${label} file`,
         fileItem.media.full_url,
+        signal,
       );
       const mime = getMimeFromFilename(fileItem.file_name ?? "file.bin");
       const saved = await saveMedia(
@@ -120,6 +129,7 @@ export async function downloadMediaFromItem(
       result.fileMediaType = mime;
       logger.debug(`${label} file: saved to ${saved.path} mime=${mime}`);
     } catch (err) {
+      signal?.throwIfAborted();
       logger.error(`${label} file download failed: ${String(err)}`);
       errLog(`weixin ${label} file download failed: ${String(err)}`);
     }
@@ -134,11 +144,13 @@ export async function downloadMediaFromItem(
         cdnBaseUrl,
         `${label} video`,
         videoItem.media.full_url,
+        signal,
       );
       const saved = await saveMedia(buf, "video/mp4", "inbound", WEIXIN_MEDIA_MAX_BYTES);
       result.decryptedVideoPath = saved.path;
       logger.debug(`${label} video: saved to ${saved.path}`);
     } catch (err) {
+      signal?.throwIfAborted();
       logger.error(`${label} video download failed: ${String(err)}`);
       errLog(`weixin ${label} video download failed: ${String(err)}`);
     }

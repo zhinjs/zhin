@@ -1,4 +1,5 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { idleIlinkTransport } from './transport-fixture.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -132,7 +133,8 @@ describe('weixin-ilink protocol helpers', () => {
 
 describe('weixin-ilink plugin runtime adapter', () => {
   it('maps canonical typing control to the iLink typing status', async () => {
-    const endpoint = bindTestEndpoint(new WeixinIlinkEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeixinIlinkEndpoint({
+      ...idleIlinkTransport,
       id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -140,31 +142,35 @@ describe('weixin-ilink plugin runtime adapter', () => {
       },
       config: baseConfig,
       resolveCredentials: async () => ({ botToken: 'tok' }),
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
-    const sendTyping = vi.spyOn(endpoint.client, 'sendTyping').mockResolvedValue(undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['typing'] });
+    const sendTyping = vi.spyOn(endpoint.endpoint, 'sendTyping').mockResolvedValue(false);
+    await endpoint.start(); endpoint.open();
 
-    await endpoint.control.typing?.(privateConversation('user-1'), true);
-    await endpoint.control.typing?.(privateConversation('user-1'), false);
+    await endpoint.index.control(endpoint.canonicalId, 'typing').typing?.(privateConversation('user-1'), true);
+    await endpoint.index.control(endpoint.canonicalId, 'typing').typing?.(privateConversation('user-1'), false);
 
     expect(sendTyping).toHaveBeenNthCalledWith(1, 'user-1', 1);
     expect(sendTyping).toHaveBeenNthCalledWith(2, 'user-1', 2);
+    await endpoint.stop();
   });
 
   it('routes admitted messages through OutboundMessageService when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new WeixinIlinkEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeixinIlinkEndpoint({
+      ...idleIlinkTransport,
       id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
       gateway,
       config: baseConfig,
       resolveCredentials: async () => ({ botToken: 'tok' }),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'], operations: ['typing'] });
 
+    await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.endpoint.admit({
       from_user_id: 'user-1',
       to_user_id: 'bot',
       client_id: 'c1',
@@ -188,14 +194,15 @@ describe('weixin-ilink plugin runtime adapter', () => {
   it('does not admit when closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new WeixinIlinkEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeixinIlinkEndpoint({
+      ...idleIlinkTransport,
       id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
       gateway,
       config: baseConfig,
       resolveCredentials: async () => ({ botToken: 'tok' }),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'], operations: ['typing'] });
 
-    endpoint.admit({
+    endpoint.endpoint.admit({
       from_user_id: 'user-1',
       to_user_id: 'bot',
       client_id: 'c1',
@@ -213,7 +220,8 @@ describe('weixin-ilink plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const endpoint = bindTestEndpoint(new WeixinIlinkEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeixinIlinkEndpoint({
+      ...idleIlinkTransport,
       id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
       gateway,
       config: baseConfig,
@@ -221,7 +229,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
       notifyStart: vi.fn(async () => undefined),
       notifyStop: vi.fn(async () => undefined),
       getUpdates: idleGetUpdates as never,
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'], operations: ['typing'] });
     await endpoint.start();
     endpoint.open();
 
@@ -237,7 +245,8 @@ describe('weixin-ilink plugin runtime adapter', () => {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const endpoint = bindTestEndpoint(new WeixinIlinkEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeixinIlinkEndpoint({
+      ...idleIlinkTransport,
       id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
       gateway,
       config: baseConfig,
@@ -246,11 +255,11 @@ describe('weixin-ilink plugin runtime adapter', () => {
       notifyStop: vi.fn(async () => undefined),
       getUpdates: idleGetUpdates as never,
       sendText: sendText as never,
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'], operations: ['typing'] });
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.endpoint.admit({
       from_user_id: 'user-1',
       context_token: 'ctx-token',
       item_list: [],
@@ -271,7 +280,8 @@ describe('weixin-ilink plugin runtime adapter', () => {
     const state = new WeixinIlinkStateStore(baseConfig.id, baseConfig.dataDir);
     const saveSyncBuf = vi.spyOn(state, 'saveSyncBuf');
     let polled = 0;
-    const endpoint = bindTestEndpoint(new WeixinIlinkEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeixinIlinkEndpoint({
+      ...idleIlinkTransport,
       id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
@@ -297,7 +307,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
         }
         return idleGetUpdates(opts);
       }) as never,
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'], operations: ['typing'] });
 
     endpoint.open();
     await endpoint.start();
@@ -337,7 +347,8 @@ describe('weixin-ilink plugin runtime adapter', () => {
     const oldTime = new Date(Date.now() - 48 * 3_600_000);
     fs.utimesSync(oldFile, oldTime, oldTime);
 
-    const endpoint = bindTestEndpoint(new WeixinIlinkEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeixinIlinkEndpoint({
+      ...idleIlinkTransport,
       id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -348,10 +359,10 @@ describe('weixin-ilink plugin runtime adapter', () => {
       notifyStart: vi.fn(async () => undefined),
       notifyStop: vi.fn(async () => undefined),
       getUpdates: idleGetUpdates as never,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'], operations: ['typing'] });
     await endpoint.start();
     expect(fs.existsSync(oldFile)).toBe(false);
     expect(fs.existsSync(newFile)).toBe(true);
