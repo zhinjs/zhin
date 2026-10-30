@@ -52,9 +52,11 @@ describe('scenarios', () => {
     expect(userMessagePlainText(messages[0]!)).not.toContain('你好呀');
     const current = messages[1]!;
     const bodyIndex = current.content.findIndex(block => block.presentation === 'user-input');
-    expect(bodyIndex).toBeGreaterThan(0);
-    // ADR 0041: no Session snapshot in the message (the scene line is the system prompt tail);
-    // the stored body stays canonical and the projection renders the participant header.
+    // ADR 0045: the owned body comes first; runtime context (scene line included) follows it.
+    expect(bodyIndex).toBe(0);
+    expect(userMessagePlainText(current).indexOf('[scene_id:')).toBeGreaterThan(userMessagePlainText(current).indexOf('你好呀'));
+    // No Session snapshot in the message; the stored body stays canonical and the projection
+    // renders the participant header.
     expect(userMessagePlainText(current)).not.toContain('[Session snapshot]');
     expect(current.name).toBeUndefined();
     expect(current.actor).toMatchObject({ subjectId: 'person', displayName: 'Alice' });
