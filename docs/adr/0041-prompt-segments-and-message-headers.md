@@ -72,7 +72,8 @@ Fin 2026-10-29 拍板：
 
 1. **按 provider 能力降级**。provider 能力新增 `midConversationSystem: 'system' | 'developer' | 'none'`：
    - OpenAI Chat Completions / Responses：`system`（o 系列推理模型为 `developer`）。
-   - OpenAI 兼容接口（DeepSeek、Groq、OpenRouter 等）：默认 `system`，可按模型覆盖。
+   - 远程 OpenAI 兼容接口（Groq、OpenRouter 等）：默认 `system`，可按模型覆盖。
+   - DeepSeek：默认 `none`（降级为 user 消息）——实测 context 中不能放多段 system；显式配置 `compat.midConversationSystem` 仍优先。
    - 本地模型（vLLM / Ollama）：默认 `none`——Mistral、部分 Llama / Qwen 的 chat template 会拒绝或丢弃中间的 system，需按模型显式开启。
    - Anthropic Messages、Gemini：`none`（messages / contents 里没有 system 角色）。
    - `none` 时渲染为一条 user 消息，但**发送者必须一眼可辨不是群成员**：头固定为 `[id:<event_id>;user_id:system;time:<time>;]`，正文 `[state change] <行>`。与相邻 user 消息合并时，每段保留各自的头（真实成员头与 `user_id:system` 头分开），不能把事件挂到某个成员名下。
