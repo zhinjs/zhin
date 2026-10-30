@@ -1033,8 +1033,8 @@
             },
             "toolBudget": {
               "type": "object",
-              "description": "Progress-aware tool-call budget. maxIterations is a soft budget extended while the turn makes progress; hard caps always apply.",
-              "x-descriptionZh": "进度感知的工具调用预算。maxIterations 为软上限，回合有进展时自动延长；硬上限始终生效。",
+              "description": "Interactive runtime turns and their synchronous children have no fixed step or total wall-clock cap. They share configured token quotas. Step/time caps and continuation settings apply to bounded and legacy executions.",
+              "x-descriptionZh": "交互运行时及其同步子任务不设固定轮数和总时长上限，共享配置的 token 额度。步数、时间和续跑设置用于有界任务及旧兼容入口。",
               "properties": {
                 "extendBy": {
                   "type": "integer",
@@ -1118,8 +1118,8 @@
                     "all"
                   ],
                   "default": "private",
-                  "description": "Brief natural-language progress updates during long turns: off, private chats only, or all chats (groups opt in).",
-                  "x-descriptionZh": "长回合中的简短进度更新：off 关闭；private 仅私聊；all 包括群聊（群聊需显式开启）。"
+                  "description": "off disables progress. Continuous interactive turns report in their current conversation; private/all select scope for bounded turns.",
+                  "x-descriptionZh": "off 关闭进度；持续交互任务在当前会话报告。private/all 用于选择有界任务的通知范围。"
                 },
                 "progressMinIntervalMs": {
                   "type": "integer",
@@ -1132,8 +1132,8 @@
                   "type": "integer",
                   "minimum": 0,
                   "default": 3,
-                  "description": "Maximum progress updates per turn; 0 disables.",
-                  "x-descriptionZh": "每回合最多进度更新次数；0 关闭。"
+                  "description": "0 disables progress. Positive values cap bounded turns only; continuous interactive turns use the configured interval without a count cap.",
+                  "x-descriptionZh": "0 关闭进度。正数仅限制有界任务的更新次数；持续交互任务按配置的间隔报告，不限次数。"
                 }
               }
             },

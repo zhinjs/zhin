@@ -1,6 +1,7 @@
 import { EMPTY_DEFERRED_TOOL_SNAPSHOT, createUserMessage } from '@zhin.js/ai';
 import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
 import type { AgentCore } from '../core/agent-core.js';
+import type { InteractiveRun } from '../core/interactive-run.js';
 import { collectAgentLoopTurnRun } from '../core/agent-core-run.js';
 import { resolveToolBudget } from '../core/turn-progress.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -29,6 +30,7 @@ export interface SubagentModelSelection {
 }
 
 export interface SubagentTurnCapabilityOptions {
+  readonly interactiveRun?: InteractiveRun;
   readonly imageInspectionBudget?: ImageInspectionBudget;
   readonly host: ZhinAgentPrivate;
   readonly core: AgentCore;
@@ -83,14 +85,15 @@ export function createSubagentTurnCapability(options: SubagentTurnCapabilityOpti
     spawned += 1;
     active += 1;
     try {
-      const reply = await runSubagentTurn(options, {
+      const result = await runSubagentTurn(options, {
         index: spawned,
         task,
         readOnly: args.read_only === true,
         model,
       });
       // The report is external_content: instructions in it never raise the parent's authority.
-      return `子任务${label}已完成（同步等待）。\n\n${renderExternalContent('subagent_report', clip(reply))}`;
+      const status = result.stoppedReason ? '未完成，已暂停' : '已完成';
+      return `子任务${label}${status}（同步等待）。\n\n${renderExternalContent('subagent_report', clip(result.reply))}`;
     } catch (error) {
       if (options.parentTurn.signal.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);
@@ -116,7 +119,7 @@ export function createSubagentTurnCapability(options: SubagentTurnCapabilityOpti
 async function runSubagentTurn(
   options: SubagentTurnCapabilityOptions,
   run: Readonly<{ index: number; task: string; readOnly: boolean; model: SubagentModelSelection }>,
-): Promise<string> {
+): Promise<{ reply: string; stoppedReason?: string }> {
   const { host, parentTurn } = options;
   // #726: a sub-agent keeps its initiator's trust level even if the parent's
   // policy or tool list was not already narrowed.
@@ -135,6 +138,7 @@ async function runSubagentTurn(
   const turn = createTurnIngress({
     identity: Object.freeze({ ...parentTurn.identity, turnId }),
     origin: parentTurn.origin,
+    execution: parentTurn.execution,
     principal: parentTurn.principal,
     intent: Object.freeze({ kind: 'new' as const }),
     input: Object.freeze({ text: run.task, locale: parentTurn.input.locale, commandPrefix: parentTurn.input.commandPrefix, commandMenu: parentTurn.input.commandMenu }),
@@ -193,9 +197,10 @@ async function runSubagentTurn(
     // an unfinished sub-agent reports back to the parent instead.
     maxTotalIterations: resolveToolBudget(host.config.toolBudget).maxSubagentTotalIterations,
     autoContinuation: false,
+    interactiveRun: options.interactiveRun,
     generation: parentTurn.identity.generation,
   }));
-  return result.reply.trim() || '子任务结束，但没有生成报告。';
+  return { reply: result.reply.trim() || '子任务结束，但没有生成报告。', stoppedReason: result.stoppedReason };
 }
 
 function clip(text: string): string {

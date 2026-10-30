@@ -164,7 +164,7 @@ outline: [2, 3]
 | `ai.agent.network.enabled` | boolean | 否 | `false` | 是否允许 IM 回合 HTTPS 出网。 |
 | `ai.agent.network.allowedDomains` | array&lt;string&gt; | 否 | — | 非空时只允许访问这些域名（含子域名）。 |
 | `ai.agent.masterShell` | string: `"off"`, `"isolated"` | 否 | `"off"` | IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。 |
-| `ai.agent.toolBudget` | object | 否 | — | 进度感知的工具调用预算。maxIterations 为软上限，回合有进展时自动延长；硬上限始终生效。 |
+| `ai.agent.toolBudget` | object | 否 | — | 交互运行时及其同步子任务不设固定轮数和总时长上限，共享配置的 token 额度。步数、时间和续跑设置用于有界任务及旧兼容入口。 |
 | `ai.agent.toolBudget.extendBy` | integer | 否 | `10` | 有进展时每次延长的步数；0 关闭。 |
 | `ai.agent.toolBudget.progressWindow` | integer | 否 | `5` | 最近多少步内有进展才延长。 |
 | `ai.agent.toolBudget.maxTotalIterations` | integer | 否 | `40` | 每段回合的硬步数上限。 |
@@ -175,9 +175,9 @@ outline: [2, 3]
 | `ai.agent.toolBudget.repeatLimit` | integer | 否 | `2` | 连续重复相同调用多少次后不再延长。 |
 | `ai.agent.toolBudget.autoContinue` | string: `"off"`, `"master_dm"`, `"on"` | 否 | `"master_dm"` | 回合有进展但预算用尽时自动续跑：off 关闭；master_dm 仅主人私聊；on 总是。续跑沿用同一回合的策略与审批。 |
 | `ai.agent.toolBudget.maxContinuations` | integer | 否 | `2` | 每回合最多自动续跑次数。 |
-| `ai.agent.toolBudget.progressUpdates` | string: `"off"`, `"private"`, `"all"` | 否 | `"private"` | 长回合中的简短进度更新：off 关闭；private 仅私聊；all 包括群聊（群聊需显式开启）。 |
+| `ai.agent.toolBudget.progressUpdates` | string: `"off"`, `"private"`, `"all"` | 否 | `"private"` | off 关闭进度；持续交互任务在当前会话报告。private/all 用于选择有界任务的通知范围。 |
 | `ai.agent.toolBudget.progressMinIntervalMs` | integer | 否 | `45000` | 两次进度更新的最小间隔（毫秒）。 |
-| `ai.agent.toolBudget.progressMaxUpdates` | integer | 否 | `3` | 每回合最多进度更新次数；0 关闭。 |
+| `ai.agent.toolBudget.progressMaxUpdates` | integer | 否 | `3` | 0 关闭进度。正数仅限制有界任务的更新次数；持续交互任务按配置的间隔报告，不限次数。 |
 | `ai.agent.injectionGuard` | object | 否 | — | 注入防护。外部内容（工具结果、网页、文件、子 agent 报告、群聊背景消息）进入回合后，高危动作（执行命令、向其他会话发消息、改配置、定时任务）必须审批；出站回复检查系统提示、密钥与其他会话记忆泄露。 |
 | `ai.agent.injectionGuard.confirmHighRisk` | string: `"external_content"`, `"off"` | 否 | `"external_content"` | external_content：读取外部内容后的高危动作一律审批（无人值守回合直接拒绝）；off：关闭。 |
 | `ai.agent.injectionGuard.outboundCheck` | string: `"redact"`, `"off"` | 否 | `"redact"` | redact：在回复和外发工具消息中屏蔽泄露的系统提示、密钥和其他会话记忆；off：关闭。 |

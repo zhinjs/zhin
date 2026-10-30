@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createInteractiveRun, type InteractiveRun } from '../../src/core/interactive-run.js';
+import { AgentCompactionRuntime } from '../../src/memory/compaction-runtime.js';
+import { UsageQuota, InMemoryUsageQuotaStore } from '../../src/security/usage-quota.js';
 import { createUserMessage, type AgentMessage, type AgentTool, type Context } from '@zhin.js/ai';
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
 
@@ -71,9 +74,15 @@ async function run(options: {
   progressSink?: (text: string) => Promise<void>;
   autoContinuation?: boolean;
   maxTotalIterations?: number;
+  continuous?: boolean;
+  interactiveRun?: InteractiveRun;
+  signal?: AbortSignal;
+  isolated?: boolean;
+  transform?: (messages: AgentMessage[], signal: AbortSignal | undefined, options: Record<string, unknown>) => Promise<AgentMessage[]>;
 }) {
   const executed: string[] = [];
   const appended: AgentMessage[] = [];
+  const events: Array<{ type: string; maxIterations?: number }> = [];
   const host = {
     contextRepository: {
       loadContext: async () => ({ messages: options.history ?? [] }),
@@ -89,7 +98,7 @@ async function run(options: {
       contextTokens: 100_000,
       toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, ...options.toolBudget },
     },
-    compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },
+    compactionRuntime: { transformContext: options.transform ?? (async (messages: AgentMessage[]) => messages) },
     getActiveTurnTracker: () => undefined,
     promptTraceConfig: {},
     phaseConfig: {},
@@ -124,11 +133,15 @@ async function run(options: {
     modelCandidates: ['m'],
     toolLoading: 'direct',
     progressSink: options.progressSink,
+    onTurnEvent: (event: { type: string; maxIterations?: number }) => { events.push(event); },
+    signal: options.signal,
+    conversationPersistence: options.isolated ? 'none' : 'session',
+    interactiveRun: options.interactiveRun ?? (options.continuous ? { check: () => undefined, recordUsage: () => undefined } : undefined),
     autoContinuation: options.autoContinuation,
     maxTotalIterations: options.maxTotalIterations,
   } as never));
   await result.projectConversation?.();
-  return { result, executed, appended };
+  return { result, executed, appended, events };
 }
 
 const writes = (until: number, reply = 'done') => (index: number): Step =>
@@ -434,4 +447,189 @@ it('retains an applicable earlier language request in summary context', async ()
   expect(lastUserText(summary.context)).toContain('Reply language fallback: zh-CN.');
   expect(result.reply).toBe('Completed the first part. Shall I continue?');
   expect(history).toHaveLength(1);
+});
+
+
+describe('continuous interactive task', () => {
+  it('finishes research beyond the old total step and wall-clock limits without closing nudges', async () => {
+    let now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const llm = scripted(index => index < 45
+        ? { tool: 'read_file', args: { path: `file-${index}` } }
+        : { reply: 'research complete' });
+      const { result, events } = await run({ llm, continuous: true,
+        tools: [tool('read_file', args => { now += 60_000; return `facts:${args.path}`; })],
+      });
+      expect(result.reply).toBe('research complete');
+      expect(result.iterations).toBe(46);
+      expect(events.filter(event => event.type === 'iteration_start')).toHaveLength(46);
+      expect(events.filter(event => event.type === 'iteration_start').every(event => !('maxIterations' in event))).toBe(true);
+      const sent = JSON.stringify(llm.calls.map(call => call.context));
+      expect(sent).not.toContain('Stop exploring broadly');
+      expect(sent).not.toContain('One step left: reply now');
+      expect(llm.calls).toHaveLength(46);
+    } finally { clock.mockRestore(); }
+  });
+
+  it('allows changing read results at the same path, but stops identical repetition', async () => {
+    let read = 0;
+    const llm = scripted(index => index < 8 ? { tool: 'read_file', args: { path: 'status' } } : { reply: 'complete' });
+    const { result } = await run({ llm, continuous: true,
+      tools: [tool('read_file', () => `version:${read++}`)],
+    });
+    expect(result.reply).toBe('complete');
+    expect(result.iterations).toBe(9);
+    const repeat = scripted(() => ({ tool: 'read_file', args: { path: 'status' } }));
+    const stopped = await run({ llm: repeat, continuous: true, tools: [tool('read_file')] });
+    expect(stopped.result.iterations).toBe(3);
+    expect(stopped.result.reply).toContain('未完成');
+    expect(repeat.calls).toHaveLength(3);
+  });
+});
+
+
+it('charges each completion once and stops without paid recovery or a second group rate slot', async () => {
+  const store = new InMemoryUsageQuotaStore();
+  const quota = new UsageQuota({ perUserTokens: 20, perGroupRequestsPerMinute: 1 }, store);
+  const subject = { userId: 'u', groupId: 'g', owner: false };
+  expect(quota.check(subject).allowed).toBe(true);
+  const interactiveRun = createInteractiveRun(quota, subject, 0);
+  let index = 0;
+  const llm = wireMockLlmApi({ models: ['m'], responder: () => ({
+    ...assistantToolCallReply([{ id: `quota-${index}`, name: 'read_file', arguments: { path: `f${index++}` } }]),
+    usage: { ...assistantTextReply('').usage, input: 8, output: 2, totalTokens: 10 },
+  }) });
+  const { result, executed, appended } = await run({ llm, interactiveRun, tools: [tool('read_file')] });
+  expect(llm.calls).toHaveLength(2);
+  expect(executed).toHaveLength(1);
+  expect(result.reply).toContain('用量已达上限');
+  expect(result.usage.total_tokens).toBe(20);
+  expect(store.get('tokens:user:u')?.used).toBe(20);
+  expect(store.get('rate:group:g')?.used).toBe(1);
+  expect(appended.filter(message => message.role === 'assistant')).toHaveLength(2);
+});
+
+it('continues reporting during one slow tool, beyond three updates, and stops reporting on completion', async () => {
+  vi.useFakeTimers();
+  try {
+    const sent: string[] = [];
+    let finish!: () => void;
+    const waiting = new Promise<void>(resolve => { finish = resolve; });
+    const llm = scripted(index => index === 0 ? { tool: 'read_file' } : { reply: 'done' });
+    const pending = run({ llm, continuous: true, tools: [tool('read_file', async () => { await waiting; return 'facts'; })],
+      toolBudget: { progressMinIntervalMs: 45_000, progressMaxUpdates: 3 }, progressSink: async text => { sent.push(text); },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(4 * 45_000);
+    expect(sent).toHaveLength(4);
+    expect(sent.every(text => text.includes('当前操作返回'))).toBe(true);
+    finish();
+    expect((await pending).result.reply).toBe('done');
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(sent).toHaveLength(4);
+    expect(llm.calls).toHaveLength(2); // no extra model calls for heartbeat text
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers(); }
+});
+
+it('uses compaction for an isolated interactive child without persisting a session summary', async () => {
+  const transform = vi.spyOn(AgentCompactionRuntime.prototype, 'transformContext').mockImplementation(async messages => messages);
+  try {
+    const llm = scripted(writes(4));
+    const { result } = await run({ llm, continuous: true, isolated: true, tools: [tool('write_file')] });
+    expect(result.reply).toBe('done');
+    expect(transform).toHaveBeenCalledWith(expect.any(Array), undefined, expect.objectContaining({ persistSummary: false }));
+  } finally { transform.mockRestore(); }
+});
+
+
+it('reports quota exhaustion during compaction instead of suggesting a provider retry', async () => {
+  const quota = new UsageQuota({ perUserTokens: 10 });
+  const interactiveRun = createInteractiveRun(quota, { userId: 'u', owner: false }, 0);
+  const llm = scripted(writes(1));
+  const { result } = await run({ llm, interactiveRun, tools: [tool('write_file')],
+    transform: async messages => { interactiveRun.recordUsage(10); return messages; },
+  });
+  expect(llm.calls).toHaveLength(0);
+  expect(result.reply).toContain('用量已达上限');
+  expect(result.stoppedReason).toBe(result.reply);
+});
+
+it('does not let an unresolved progress delivery block task completion or cancellation', async () => {
+  vi.useFakeTimers();
+  try {
+    const controller = new AbortController();
+    let finish!: () => void;
+    const waiting = new Promise<void>(resolve => { finish = resolve; });
+    let deliveries = 0;
+    const llm = scripted(index => index === 0 ? { tool: 'read_file' } : { reply: 'done' });
+    const pending = run({ llm, continuous: true, signal: controller.signal,
+      tools: [tool('read_file', async () => { await waiting; return 'facts'; })],
+      toolBudget: { progressMinIntervalMs: 45_000, progressMaxUpdates: 3 },
+      progressSink: async () => { deliveries++; await new Promise<void>(() => {}); },
+    });
+    await vi.advanceTimersByTimeAsync(45_000);
+    expect(deliveries).toBe(1);
+    finish();
+    expect((await pending).result.reply).toBe('done');
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(deliveries).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers(); }
+});
+
+
+it('does not submit a new progress send after watcher closure', async () => {
+  vi.useFakeTimers();
+  try {
+    let resolve!: (text: string) => void;
+    const summary = new Promise<string>(done => { resolve = done; });
+    const sink = vi.fn(async () => undefined);
+    const reporter = new TurnProgressReporter({ sink, minIntervalMs: 45_000, summarize: () => summary });
+    const stop = reporter.watch(() => ({ steps: 1 }));
+    await vi.advanceTimersByTimeAsync(45_000);
+    stop();
+    resolve('正在核对结果，接下来继续验证。');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sink).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers(); }
+});
+
+it('shares quota across root and child requests without counting child aggregation twice', async () => {
+  const store = new InMemoryUsageQuotaStore();
+  const quota = new UsageQuota({ perUserTokens: 30 }, store);
+  const interactiveRun = createInteractiveRun(quota, { userId: 'u', owner: false }, 30);
+  const makeLlm = () => wireMockLlmApi({ models: ['m'], responder: () => ({
+    ...assistantTextReply('done'), usage: { ...assistantTextReply('').usage, input: 8, output: 2, totalTokens: 10 },
+  }) });
+  await run({ llm: makeLlm(), interactiveRun, tools: [] });
+  await run({ llm: makeLlm(), interactiveRun, isolated: true, tools: [] });
+  expect(store.get('tokens:user:u')?.used).toBe(20);
+  expect(interactiveRun.check()).toBeUndefined();
+  await run({ llm: makeLlm(), interactiveRun, tools: [] });
+  expect(store.get('tokens:user:u')?.used).toBe(30);
+  expect(interactiveRun.check()).toContain('用量已达上限');
+});
+
+it('honors an explicit zero progress-update limit during a continuous task', async () => {
+  vi.useFakeTimers();
+  try {
+    const sent: string[] = [];
+    let finish!: () => void;
+    const waiting = new Promise<void>(resolve => { finish = resolve; });
+    const llm = scripted(index => index === 0 ? { tool: 'read_file' } : { reply: 'done' });
+    const pending = run({ llm, continuous: true,
+      tools: [tool('read_file', async () => { await waiting; return 'facts'; })],
+      toolBudget: { progressMinIntervalMs: 45_000, progressMaxUpdates: 0 },
+      progressSink: async text => { sent.push(text); },
+    });
+    await vi.advanceTimersByTimeAsync(4 * 45_000);
+    finish();
+    expect((await pending).result.reply).toBe('done');
+    expect(sent).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers(); }
 });

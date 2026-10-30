@@ -52,7 +52,7 @@ export function createTurnActivityProjector(options: TurnActivityProjectorOption
       options.publish('ai.processing.start', {
         ...context,
         iterations: event.iteration,
-        iterationProgress: { current: event.iteration, total: event.maxIterations },
+        ...(event.maxIterations !== undefined ? { iterationProgress: { current: event.iteration, total: event.maxIterations } } : {}),
       });
       return;
     }

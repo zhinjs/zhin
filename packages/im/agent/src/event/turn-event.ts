@@ -65,7 +65,8 @@ export interface ChunkEvent {
 export interface IterationStartEvent {
   type: 'iteration_start';
   iteration: number;
-  maxIterations: number;
+  /** Absent for continuous interactive execution. */
+  maxIterations?: number;
 }
 
 /** Immutable capability plan selected before model execution. */

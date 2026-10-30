@@ -52,9 +52,9 @@ describe('scenarios', () => {
     expect(userMessagePlainText(messages[0]!)).not.toContain('你好呀');
     const current = messages[1]!;
     const bodyIndex = current.content.findIndex(block => block.presentation === 'user-input');
-    // ADR 0045: the owned body comes first; runtime context (scene line included) follows it.
+    // The owned body comes first; identity is system-stable and current context follows the body.
     expect(bodyIndex).toBe(0);
-    expect(userMessagePlainText(current).indexOf('[scene_id:')).toBeGreaterThan(userMessagePlainText(current).indexOf('你好呀'));
+    expect(userMessagePlainText(current)).not.toContain('[scene_id:');
     // No Session snapshot in the message; the stored body stays canonical and the projection
     // renders the participant header.
     expect(userMessagePlainText(current)).not.toContain('[Session snapshot]');
@@ -93,6 +93,13 @@ describe('scenarios', () => {
       expect(host).toContain(`Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
       expect(buildUserMessages(newYork)[1]!.timestamp).toBe(Date.parse('2026-10-23T07:10:00Z'));
     } finally { await rm(workspace, { recursive: true, force: true }); }
+  });
+
+  it('keys session-stable identity by conversation without splitting a group by sender role', () => {
+    const first = { ...scenario, scope: 'private' as const, sender: { ...scenario.sender, id: 'alice' } };
+    const second = { ...first, sender: { ...first.sender, id: 'bob' } };
+    expect(scenarioPromptKey(first)).not.toBe(scenarioPromptKey(second));
+    expect(scenarioPromptKey({ ...first, scope: 'group' })).toBe(scenarioPromptKey({ ...second, scope: 'group' }));
   });
 
   it.each(['tomorrow', '2026/02/30 03:10:00 (Asia/Shanghai)', '2026/10/23 03:10:00 (Unknown/Zone)',

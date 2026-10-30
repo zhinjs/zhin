@@ -127,7 +127,7 @@ export interface ZhinAgentConfig {
   maxSubagentIterations?: number;
   /** Plugin-runtime turns: `sync` offers spawn_task as an in-turn sub-agent; `off` (default) hides it. */
   subagentTurnMode?: 'off' | 'sync';
-  /** Progress-aware tool budget (soft maxIterations + extensions, hard caps, auto-continuation). */
+  /** Token quota/progress settings; step/time caps apply to bounded and legacy execution. */
   toolBudget?: Partial<ToolBudgetSettings>;
   subagentTools?: string[];
   subagentTurnWaitMs?: number;

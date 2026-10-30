@@ -511,8 +511,9 @@ describe('FullAgentTurnEngine', () => {
       },
     });
     const core = {
-      runText() {
+      runText(input: { interactiveRun?: { recordUsage(tokens: number): void } }) {
         return (async function* () {
+          input.interactiveRun?.recordUsage(2);
           yield {
             type: 'turn_end' as const,
             output: [{ type: 'text' as const, content: '你好' }],
@@ -601,7 +602,9 @@ describe('FullAgentTurnEngine', () => {
       }
     }
 
-    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 314);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 312);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 2);
+    expect(record.mock.calls.reduce((sum, call) => sum + call[1], 0)).toBe(314);
     expect(finalizeActiveTurn).toHaveBeenCalledWith(expect.objectContaining({
       usage: { prompt_tokens: 301, completion_tokens: 13, total_tokens: 314 },
     }));

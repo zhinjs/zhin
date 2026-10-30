@@ -57,7 +57,12 @@ export class LocalImageInspection {
     if (!this.#pending.length) return context;
     const media: MediaContentBlock[] = [];
     const observations: string[] = [];
+    const projected = new Set<string>();
     for (const reference of this.#pending) {
+      // Several tool calls can request the same asset before the next model call.
+      // Preserve admission accounting; only its request-local payload is deduplicated.
+      if (projected.has(reference.asset_id)) continue;
+      projected.add(reference.asset_id);
       signal?.throwIfAborted();
       try {
         const { bytes } = await this.store.read(reference.asset_id, this.scope, signal);

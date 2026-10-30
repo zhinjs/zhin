@@ -12,6 +12,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
 import type { AgentCore } from '../core/agent-core.js';
+import { createInteractiveRun } from '../core/interactive-run.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime, type TurnToolRuntimeOptions } from '../tool/turn-tool-runtime.js';
 import type { DecisionAuditSink } from '../security/tool-hard-gate.js';
 import type { ContextSystem } from '../context/context-system.js';
@@ -140,6 +141,9 @@ async function* runInteractiveTurn(
     };
   }
 
+  const interactiveRun = context.turn.execution.kind === 'interactive' && !context.turn.policy.unattended
+    ? createInteractiveRun(host.usageQuota, quotaSubject, resolveToolBudget(host.config.toolBudget).maxTotalTokens)
+    : undefined;
   const snapshot = await host.contextRepository.getDeferredToolSnapshot(prep.sessionId);
   const subagentModel: { current?: SubagentModelSelection } = {};
   const subagentCapability = subagentsEnabled(host, context.turn)
@@ -151,6 +155,7 @@ async function* runInteractiveTurn(
       loopHooks: options.loopHooks,
       resolveModel: () => subagentModel.current,
       imageInspectionBudget,
+      interactiveRun,
     })
     : undefined;
   const projected = {
@@ -222,6 +227,7 @@ async function* runInteractiveTurn(
   }
   imageInspectionBudget.remaining = Math.max(0, imageInspectionBudget.remaining
     - (media.perceptionItems ?? 0) - media.blocks.filter(block => block.type === 'image').length);
+  if (media.perceptionUsage) interactiveRun?.recordUsage(media.perceptionUsage.total_tokens);
   const background = pendingContext ? conversationContextMessage(pendingContext.blocks) : undefined;
   const userMessages = applyInboundMediaInjection(
     background ? [background, ...prompt.userMessages] : prompt.userMessages,
@@ -317,6 +323,7 @@ async function* runInteractiveTurn(
       toolLoading: 'deferred',
       conversationPersistence: 'session',
       progressSink: createProgressSink(host, context.turn, reply),
+      interactiveRun,
       generation: context.turn.identity.generation,
     }),
   });
@@ -333,7 +340,7 @@ async function* runInteractiveTurn(
     project: async () => {
       try {
         // The perception pre-pass is billed to the same subject as the turn itself.
-        host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
+        if (!interactiveRun) host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
         let deliveredMessageId: string | undefined;
         let deliveredMessageIds: readonly (string | null)[] | undefined;
         let deliveredContextRefs: readonly string[] | undefined;
@@ -740,8 +747,10 @@ function createProgressSink(
   reply: TurnIngress['ports']['reply'],
 ): ((text: string) => Promise<void>) | undefined {
   if (!reply || turn.policy.unattended) return undefined;
-  if (!progressUpdatesAllowed(resolveToolBudget(host.config.toolBudget).progressUpdates, turn)) return undefined;
+  const mode = resolveToolBudget(host.config.toolBudget).progressUpdates;
+  if (turn.execution.kind === 'interactive' ? mode === 'off' : !progressUpdatesAllowed(mode, turn)) return undefined;
   return async (text) => {
+    turn.signal.throwIfAborted();
     const delivery = await reply.send([{ type: 'text', content: text }]);
     if (delivery.status !== 'sent') throw new Error(`progress update not sent: ${delivery.status}`);
   };

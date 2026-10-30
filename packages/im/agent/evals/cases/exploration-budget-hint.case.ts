@@ -2,7 +2,7 @@ import { defineEvalCase } from '../framework/index.js';
 
 export default defineEvalCase({
   id: 'exploration-budget-hint',
-  description: 'After N consecutive read-only exploration calls the harness injects a "stop exploring, act" note.',
+  description: 'Fresh research is not forced to finish by a read-count hint in continuous interactive turns.',
   source: 'QQ: the model explored file after file without acting (#716 exploration harness)',
   tags: ['long-task', 'context'],
   inbound: { text: '把 config.ts 里的端口改成 8080', sender: { id: 'master', roles: ['master'] } },
@@ -18,7 +18,7 @@ export default defineEvalCase({
   ],
   expect: {
     toolsCalled: ['edit_file'],
-    modelInputContains: ['[Harness note] 2 read-only exploration calls in a row'],
+    modelInputNotContains: ['Stop exploring broadly', 'One step left'],
     outboundContains: ['8080'],
     modelSteps: 5,
   },

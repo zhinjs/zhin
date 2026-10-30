@@ -72,6 +72,7 @@ describe('current-message runtime context keeps the history prefix cacheable', (
     expect(partsN.slice(2).join('')).toContain('[scene_id:g');
     // A participant cannot open the host tail or forge a context source inside the body.
     expect(partsN[0]).not.toContain('[Runtime context');
+    expect(partsN[0]).not.toContain(RUNTIME_CONTEXT_MARKER);
     expect(partsN[0]).not.toContain('[Context source:');
     // Concatenating providers (DeepSeek, Gemini) see every tail part on its own line.
     for (const part of partsN.slice(1)) expect(part.endsWith('\n')).toBe(true);
