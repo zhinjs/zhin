@@ -1,0 +1,14 @@
+docs/e2e/docs-site.spec.ts
+  h_b680f75345178a 10-12,37-41,43-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3ef0fffe8b27098f7fa90b95ce23bc54717c0ba4",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
