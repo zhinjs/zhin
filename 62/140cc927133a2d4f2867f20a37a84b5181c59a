@@ -1,0 +1,938 @@
+packages/im/adapter/src/endpoint-commands.ts
+  s_9622fd28aba994::t_601377ca9464e0 410-412
+  s_9622fd28aba994::t_43557798242872 339-344,352-358
+  s_9622fd28aba994::t_d057713d560355 409
+  s_9622fd28aba994::t_a1e972f6b3b179 2-5,23,76,141,158,161,172,176,277,290,298,306,308,374,388,393-397,405,414
+plugins/adapters/milky/src/protocol.ts
+  s_9622fd28aba994::t_ba02c220c2ef58 107,212
+plugins/adapters/qq/src/console.ts
+  s_9622fd28aba994::t_ba02c220c2ef58 6-7,49-51,57,74-82,84-85
+  s_9622fd28aba994::t_cb40bf53389fe2 52-56,58-60,65,102
+plugins/adapters/test-utils/endpoint.test.ts
+  s_9622fd28aba994::t_8a612c700ddf46 46-61
+  s_9622fd28aba994::t_50667ebeae6c76 1-27
+  s_9622fd28aba994::t_597804922dee10 62,64-75,81-89,106-119
+  s_9622fd28aba994::t_991c47e566c499 28-45
+  s_9622fd28aba994::t_39f070b9fe519e 63,76-80,90-105
+  s_9622fd28aba994::t_7aca16c01dcd12 120-146
+packages/im/adapter/tests/adapter-console-rpc.test.ts
+  s_9622fd28aba994::t_8e13c1d0c91bbd 99-100,104-106,108
+  s_9622fd28aba994::t_8181dc34cfc512 101-103
+  s_9622fd28aba994::t_ef46816f0378c7 107
+packages/toolkit/scaffold-wizard/src/adapter.ts
+  s_9622fd28aba994::t_803126a84e5f79 292
+packages/im/runtime/scripts/compact-schema.mjs
+  s_9622fd28aba994::t_c64cb5f110c1d9 1-7
+plugins/adapters/qq/src/adapter.ts
+  s_9622fd28aba994::t_88afeb1ca5a4af 1-12,14-23
+  s_9622fd28aba994::t_e53f83610cc7f1 13
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_0d323800017661 19-21,23-25
+packages/im/adapter/src/endpoint-specification.ts
+  s_9622fd28aba994::t_ad57b922a4f99e 2,12,17-18,20,36,70,79-80,84,86-93,99-101,103,105-106,108
+  s_9622fd28aba994::t_18e2805b24b055 54-59,64,82
+  s_9622fd28aba994::t_562e9784d7fe1b 53
+  s_9622fd28aba994::t_3cb2377d5405c4 60-63
+scripts/check-adapter-endpoint-boundaries.mjs
+  s_9622fd28aba994::t_ad589ae3c626de 20,85,88,107
+packages/im/adapter/tests/configuration-fields.test.ts
+  s_9622fd28aba994::t_40e7ca6e4700ac 1-19
+plugins/adapters/email/tests/identity.test.ts
+  s_9622fd28aba994::t_57ac81af23b1e5 12
+  s_9622fd28aba994::t_89a547b484ac2a 9-11
+  s_9622fd28aba994::t_9bdca356b2e781 13-15
+  s_9622fd28aba994::t_d212ee5a11e997 1-8,16-55
+examples/minimal-bot/tests/stable-path.test.ts
+  s_9622fd28aba994::t_97d5c81442ef40 1,55,65,141,166,174,177,190-191,193,210-211,234,283-286
+examples/minimal-bot/adapters/terminal/index.ts
+  s_9622fd28aba994::t_56964efd98acdd 1,3,8,18-19,23-27,29-31,33-35,37,39-60,62-67,70,76-81,84-91,94-101,103,105-106,108-109
+  s_9622fd28aba994::t_17d82a211c471b 2,71-75,83
+packages/im/adapter/tests/target-contract.test.ts
+  s_9622fd28aba994::t_a10bd6e27bd503 1-33,35-52
+  s_9622fd28aba994::t_f5c2a00bea25f3 34
+packages/im/runtime/package.json
+  s_9622fd28aba994::t_c64cb5f110c1d9 19
+plugins/adapters/milky/src/wss-endpoint.ts
+  s_9622fd28aba994::t_a10bd6e27bd503 18,50-51,55-56,72-73,76-81,83-84,87,90,93,116-117,126,129,140,144,149,175-177,212
+  s_9622fd28aba994::t_ba02c220c2ef58 43,65,157
+  s_9622fd28aba994::t_80974da705d90b 49
+  s_9622fd28aba994::t_7c2c6c9e0048b3 75
+  s_9622fd28aba994::t_0963c3ab6c0695 82
+  s_9622fd28aba994::t_8bba565ec234f2 85-86
+  s_9622fd28aba994::t_3b4c7a491644d6 89
+  s_147a5b4537b628::t_497284dbf79f3f 5,168
+plugins/adapters/qq/src/endpoint.ts
+  s_9622fd28aba994::t_88afeb1ca5a4af 300,329-334,337-349,354,364-365,378-379,383-384,386,394-395,398,402-409,417,421-422,424-427,430-431,435-436,442,447,453-454,472,476,480-489,492,545,547-548,587-590,594-595
+  s_9622fd28aba994::t_43bb87c74fc99e 299
+packages/im/adapter/src/adapter-types.ts
+  s_9622fd28aba994::t_af3abb994ebcab 36-37,78
+  s_9622fd28aba994::t_eaa09d0301d3b8 8-9,68
+  s_9622fd28aba994::t_e19e784677a90e 47-49
+packages/im/feature-kit/src/adapter-client.ts
+  s_9622fd28aba994::t_641f7fd57de9ce 7-8,14,19
+plugins/adapters/milky/src/adapter.ts
+  s_9622fd28aba994::t_ba02c220c2ef58 3,15,18-34,36
+  s_9622fd28aba994::t_105d65c42351c5 1-2
+  s_9622fd28aba994::t_5209c3b65b32c0 4-6,12-14
+  s_9622fd28aba994::t_f80c265f67c819 16-17
+  s_9622fd28aba994::t_2d6eef1b0f72cc 35
+  s_9622fd28aba994::t_9f5ea4fa2da28b 37-39
+scripts/check-adapter-endpoint-boundaries.test.ts
+  s_9622fd28aba994::t_8a1cd0806fe795 3,6-9,14,16-17
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  s_9622fd28aba994::t_38d32a97bacffc 93-95
+  s_9622fd28aba994::t_9a7f9d2b893aec 90-92
+  s_9622fd28aba994::t_839701bbb961bb 96
+  s_147a5b4537b628::t_00057427466df5 7-8,47,60-62,66-68,76,79-89,98-99,114,118,138,140,145,148,151,166,168,180,183,185,191,194-196,220,226-227,286
+packages/console/client/client/adapter-console/messages.ts
+  s_9622fd28aba994::t_1a38f164422e76 25-28
+plugins/adapters/milky/src/webhook-endpoint.ts
+  s_9622fd28aba994::t_a10bd6e27bd503 18,47-48,52-53,61-62,64-71,74,77,80,92-93,99,102,113,117,122,148-150,192
+  s_9622fd28aba994::t_ba02c220c2ef58 40,58,130
+  s_9622fd28aba994::t_1fa6ec9398e3b9 46
+  s_9622fd28aba994::t_6af7faf23613f6 72-73
+  s_9622fd28aba994::t_1e75d065af703d 76
+packages/im/adapter/src/index.ts
+  s_9622fd28aba994::t_5a778463c0652f 10-12,29-30
+  s_9622fd28aba994::t_e9a345bc7b8762 31
+  s_9622fd28aba994::t_a39a103ebc8fd2 32
+packages/toolkit/scaffold-wizard/tests/adapter.test.ts
+  s_9622fd28aba994::t_6c5e1e27ede15a 367-368,380-381
+  s_9622fd28aba994::t_46815374c8322a 411-412,424-425,434-439
+  s_9622fd28aba994::t_0712cc9c7d0d0c 440-441
+plugins/adapters/wechat-mp/src/webhook.ts
+  s_9622fd28aba994::t_eaa09d0301d3b8 39,184,186,222,228
+plugins/adapters/qq/src/qq-console.ts
+  s_9622fd28aba994::t_ba02c220c2ef58 10,12,89,92,104,106,108-113,128
+  s_9622fd28aba994::t_053952f2e48751 6
+packages/im/adapter/src/adapter.ts
+  s_9622fd28aba994::t_dc80b203da968b 257-258,326-327,487-491
+  s_9622fd28aba994::t_f012f9247b1096 213
+  s_9622fd28aba994::t_a3d60e078d17a9 364-371,373,386,492,535-537
+  s_9622fd28aba994::t_5a778463c0652f 9,77
+  s_9622fd28aba994::t_e9a345bc7b8762 4,273,343-345,608
+  s_9622fd28aba994::t_44ff8a42304cca 76,78-84
+  s_9622fd28aba994::t_8486f943a530eb 10,614
+  s_9622fd28aba994::t_eaa09d0301d3b8 85-86,88-93,95-99,105-115
+  s_9622fd28aba994::t_88afeb1ca5a4af 688
+  s_9622fd28aba994::t_87a17d369baa5c 1-3
+  s_9622fd28aba994::t_cd76090383f818 87
+  s_9622fd28aba994::t_9e389a24e4cccd 94
+  s_9622fd28aba994::t_3a669801f55690 100-104
+  s_9622fd28aba994::t_e6266ee33b4c24 538
+  s_147a5b4537b628::t_f6ab5441dbbf7e 16,128,136-137,216,267,270,278,285-299,388,542-543,579,585,716,757
+packages/im/adapter/src/configuration-identity.ts
+  s_9622fd28aba994::t_af3abb994ebcab 1-38
+packages/console/client/client/adapter-console/AdapterConsolePage.test.ts
+  s_9622fd28aba994::t_1a38f164422e76 273
+  s_9622fd28aba994::t_0c87b95e1edecb 270-272
+  s_9622fd28aba994::t_2ffccb5c438576 274-276
+  s_9622fd28aba994::t_8ed2cb37669932 213-269
+plugins/adapters/qq/src/ws.ts
+  s_9622fd28aba994::t_88afeb1ca5a4af 94,147-148
+  s_9622fd28aba994::t_6aecd1c8e7b69a 45,249-252,256-257,259-264,268-269,271,275,277,280-285
+packages/im/adapter/src/adapter-runtime-console.ts
+  s_9622fd28aba994::t_f012f9247b1096 1,88,101,140,153-154,158,169-176,183-187
+  s_9622fd28aba994::t_a39a103ebc8fd2 57-59,76-82,188
+packages/im/adapter/src/definition.ts
+  s_9622fd28aba994::t_8ddd019d4dc8f5 160-161,196-197
+  s_9622fd28aba994::t_5a778463c0652f 14
+  s_9622fd28aba994::t_ac06afe1f68846 129,141,163-167,342-343
+  s_147a5b4537b628::t_dbd80f1841e245 12
+plugins/adapters/wechat-mp/src/endpoint.ts
+  s_9622fd28aba994::t_eaa09d0301d3b8 20
+  s_9622fd28aba994::t_4cf1d1d24a291f 17-19
+  s_9622fd28aba994::t_b89fadc35fa3da 21-23
+  s_9622fd28aba994::t_a15a3589447121 1-16,24-33
+packages/toolkit/scaffold-wizard/src/adapter-configurers.ts
+  s_9622fd28aba994::t_803126a84e5f79 689-690,841,849-856,869-870
+  s_9622fd28aba994::t_abbd5226a62b6c 679-686
+examples/self-delivery-bot/adapters/terminal/index.ts
+  s_9622fd28aba994::t_17d82a211c471b 1-3,8,10,18-20,22-27,29-31,33-35,37-64,68-88,92-93,95-99,101,103-104,106-107
+plugins/adapters/dingtalk/tests/sender-identity.test.ts
+  s_9622fd28aba994::t_b75e570178003b 1-24
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  s_9622fd28aba994::t_1a38f164422e76 374,392,396,405,428-434,436-455,457,461,539,562,687,779,797,799,816,819,822,824
+  s_9622fd28aba994::t_31a9e8a3d1c96e 846
+plugins/adapters/qq/adapters/qq/index.ts
+  s_9622fd28aba994::t_88afeb1ca5a4af 4-5,32
+basic/cli/src/commands/new.ts
+  s_9622fd28aba994::t_21201004d4a0cb 421,423,431-434,436-442,444,449-456,458-464,466,468-470,472,474-475,478-483,486,494,657,660,668-669,671-672,675-676
+  s_9622fd28aba994::t_94b63824f367fd 422
+  s_9622fd28aba994::t_9b20b3eae229c5 658-659
+  s_9622fd28aba994::t_ec7a7841204bce 661-663,665-667
+  s_9622fd28aba994::t_3ec6d4f2a97432 670
+  s_9622fd28aba994::t_f2b24456a12445 673-674
+  s_9622fd28aba994::t_a418a1b0ceac19 292,417-419,531,645-646,648-649,664
+plugins/adapters/milky/src/sse-endpoint.ts
+  s_9622fd28aba994::t_a10bd6e27bd503 17,56-57,61-62,70-71,74-79,81-82,85,88,101,111-112,118,121,133,137,142,168-170,259
+  s_9622fd28aba994::t_ba02c220c2ef58 49,67,150
+  s_9622fd28aba994::t_8c48767a118bd8 55
+  s_9622fd28aba994::t_c64f568b4e82b5 73
+  s_9622fd28aba994::t_dd6ac726051a00 80
+  s_9622fd28aba994::t_e2bab91ed92362 83-84
+  s_9622fd28aba994::t_61bcd64b54e5c5 87
+  s_147a5b4537b628::t_b05d9dec8da37c 5,161
+plugins/adapters/wechat-mp/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_eaa09d0301d3b8 22
+  s_9622fd28aba994::t_aa7b28a1734af8 27
+docs/plans/adapter-target-mode-migration.md
+  s_9622fd28aba994::t_5f57d5b9f897e5 1-6,8-68,70-126
+  s_9622fd28aba994::t_78b02cf25aa6e9 7,127-129
+  s_9622fd28aba994::t_a3aacc7a086c4e 69
+packages/im/adapter/src/endpoint-command-messages.ts
+  s_9622fd28aba994::t_43557798242872 10-11,13,22-24
+packages/im/adapter/src/endpoint.ts
+  s_9622fd28aba994::t_18e2805b24b055 1,86-87,163,202-203,206-213,215-218,220-233,235-236,242,247-250,253-254,262-264
+  s_9622fd28aba994::t_ad57b922a4f99e 69-70,182-185,310,318,320
+  s_9622fd28aba994::t_736943a148f70f 85
+  s_9622fd28aba994::t_68d8230de83df7 199-201
+  s_9622fd28aba994::t_cd53aa7c136138 204-205
+  s_9622fd28aba994::t_1deb91cfd4bc34 214
+  s_9622fd28aba994::t_36fa54ff9808ea 219
+  s_9622fd28aba994::t_367c7bffba12d8 234
+  s_9622fd28aba994::t_931e7b11d222b1 251-252
+  s_9622fd28aba994::t_a6e71b97149e26 255
+  s_9622fd28aba994::t_7c4955cd765229 265
+  s_147a5b4537b628::t_e7a0c8022d4238 41,72,197-198
+packages/im/adapter/src/endpoint-contract.ts
+  s_9622fd28aba994::t_88afeb1ca5a4af 2
+  s_9622fd28aba994::t_ad57b922a4f99e 77-78
+  s_9622fd28aba994::t_18e2805b24b055 73-74
+docs/authoring/adapters.md
+  s_9622fd28aba994::t_6ff5bfd8af699d 108-109
+  s_9622fd28aba994::t_1df48815af9f3e 3,23-45,47,51,55-61,72-75,82,86,94,102-107,110,112,114,116,118
+plugins/adapters/qq/src/index.ts
+  s_9622fd28aba994::t_88afeb1ca5a4af 52,58,62,70-71
+packages/im/adapter/tests/controller/adapter-runtime.test.ts
+  s_9622fd28aba994::t_ba02c220c2ef58 304-307
+  s_9622fd28aba994::t_57ac81af23b1e5 360,549,552,555-556,558,562,567-568,577,586,590,594,602,611-612,620,639,653,667,678,680-686,689-744
+  s_9622fd28aba994::t_a7e90c66d70397 301-303
+  s_9622fd28aba994::t_a989eaf8e46044 357-359
+  s_9622fd28aba994::t_e8cda23265e2d6 361
+  s_9622fd28aba994::t_7bc21480c46bb3 546-548
+  s_9622fd28aba994::t_ec2d9a9c483591 550-551
+  s_9622fd28aba994::t_dd157bc98c41e0 553-554
+  s_9622fd28aba994::t_e31d3d4181f464 557
+  s_9622fd28aba994::t_d4eb5a7d3de3a9 559-561
+  s_9622fd28aba994::t_3058fbf75100ec 563-566
+  s_9622fd28aba994::t_d7ac6a384529a3 569-571,574-576
+  s_9622fd28aba994::t_969c1249ab0c38 578-580,583-585
+  s_9622fd28aba994::t_93814c3405398f 587-589
+  s_9622fd28aba994::t_d877c54595c52d 591-593
+  s_9622fd28aba994::t_4d7d96dc44b4d2 595-597,599-601
+  s_9622fd28aba994::t_87ef2a019aca1b 603-605,608-610
+  s_9622fd28aba994::t_c47b28bf12bf4f 613-615,617-619
+  s_9622fd28aba994::t_6e65069deb5f62 621-623,636-638
+  s_9622fd28aba994::t_8060247c5fe7cc 640-642,650-652
+  s_9622fd28aba994::t_25d6d0179c7a8a 654-656,664-666
+  s_9622fd28aba994::t_983d7ab3609dcd 668-670,675-677
+  s_9622fd28aba994::t_c9092c50226e3b 679
+  s_9622fd28aba994::t_c4eca446f14ed8 687-688
+  s_147a5b4537b628::t_b36d865ac952b2 1,5,7,28,32,66,298,341-356,539-545,572-573,581-582,598,606-607,616,624-635,643-649,657-663,671-674
+basic/cli/tests/plugin-runtime/console/adapter-account-runtime.test.ts
+  s_9622fd28aba994::t_5c333da64ced60 185
+  s_9622fd28aba994::t_1d3cf1bb646d6f 183-184,186-187
+  s_147a5b4537b628::t_15ba17bb085705 4,7-8,34,48,52,55-60,68,79,83,89,115,169-170,199,203,329-362
+plugins/adapters/line/tests/sender-identity.test.ts
+  s_9622fd28aba994::t_b75e570178003b 1-23
+packages/im/adapter/src/adapter-console-rpc.ts
+  s_9622fd28aba994::t_f012f9247b1096 2,346
+  s_9622fd28aba994::t_b75e570178003b 13,20,32,241,248,289-291
+  s_9622fd28aba994::t_e9a345bc7b8762 42,44,84-85,95,263
+  s_9622fd28aba994::t_503f4cba86b419 1,39,121,158,169,355,382,398
+packages/im/adapter/src/adapter-index.ts
+  s_9622fd28aba994::t_44ff8a42304cca 44-45,161
+  s_9622fd28aba994::t_b4fff4e013c617 321-322,324-325,332-334
+  s_9622fd28aba994::t_5a778463c0652f 25,67
+  s_9622fd28aba994::t_a3d60e078d17a9 369,375
+  s_9622fd28aba994::t_09ebacba19e79b 46
+  s_9622fd28aba994::t_0ba97d8d198a5b 320
+  s_9622fd28aba994::t_78f8ebc1031adc 16,21,74-82,136-137,147,164,169,171,236-237,239-248,259,269,289,400,481
+plugins/adapters/milky/src/ws-endpoint.ts
+  s_9622fd28aba994::t_a10bd6e27bd503 20,22,59-60,64-65,74-75,78-83,85-86,89,92,105,110-111,116-117,129,132,143,147,152,181-183,256
+  s_9622fd28aba994::t_ba02c220c2ef58 49,71,160
+  s_9622fd28aba994::t_bd5e91f0c77d6a 58
+  s_9622fd28aba994::t_0d4dfc6f0a75bc 77
+  s_9622fd28aba994::t_b194a9a322e7f2 84
+  s_9622fd28aba994::t_db005c5a160809 87-88
+  s_9622fd28aba994::t_64748225b19848 91
+  s_147a5b4537b628::t_b56d9bdb97b735 6,174
+plugins/adapters/test-utils/endpoint.ts
+  s_9622fd28aba994::t_649dff2828763e 3-4,9-12,14-15,30-32,34-36,39-40,51,54,63
+  s_9622fd28aba994::t_fd52bcaed8578c 5,17-21,24-26,29,33,37,43-44
+  s_9622fd28aba994::t_62ecc140dcf952 13
+  s_9622fd28aba994::t_a39a103ebc8fd2 1,50,55-58,60-61
+  s_9622fd28aba994::t_c379ae409c730f 6
+  s_9622fd28aba994::t_acdcc79905e9a6 16
+  s_9622fd28aba994::t_6296af1c58a177 27-28
+  s_9622fd28aba994::t_7fa9653d40d94e 38
+  s_9622fd28aba994::t_f8b89530a95bae 41-42
+  s_9622fd28aba994::t_32a1d9ab2fe834 45-49
+  s_9622fd28aba994::t_bc813c546bdfe9 52-53
+  s_9622fd28aba994::t_d085ef2b76dacb 62
+  s_147a5b4537b628::t_d19854db60ffd7 66-79
+plugins/adapters/wechat-mp/src/client.ts
+  s_9622fd28aba994::t_eaa09d0301d3b8 77,131,136-177,179-210,212-214,230
+  s_9622fd28aba994::t_d25edf37f2e858 76
+  s_9622fd28aba994::t_c4f03ab73bd280 78-80
+  s_9622fd28aba994::t_1a1b876f193a47 128-130
+  s_9622fd28aba994::t_07d2b91bd03e0f 132-135
+  s_9622fd28aba994::t_aaca66e50f9136 215-217,227-229
+  s_9622fd28aba994::t_5bc58fe23d3ad8 231
+  s_9622fd28aba994::t_e8d0f679076cd6 1-17,19-30,32-41,43-50,52-61,63-64,66-74,81-83,85-87,89-92,95-119,123-127,218-226,234-306,308,310-321,323-324,328-338,341-343
+plugins/adapters/qq/src/qq-runtime-state.ts
+  s_9622fd28aba994::t_ba02c220c2ef58 6,18,21,51-53,57,63,72
+  s_9622fd28aba994::t_3144eb8177454b 2-3
+plugins/adapters/qq/src/client.ts
+  s_9622fd28aba994::t_88afeb1ca5a4af 1-2,4,7
+docs/plans/adapter-session-runtime-refactor.md
+  s_9622fd28aba994::t_5f57d5b9f897e5 7
+packages/im/adapter/src/endpoint-management.ts
+  s_9622fd28aba994::t_bfcdd688b03ca8 1-2,150
+.changeset/adapter-session-runtime.md
+  s_9622fd28aba994::t_6ff5bfd8af699d 16-37,45-48
+packages/im/adapter/src/configuration-fields.ts
+  s_9622fd28aba994::t_40e7ca6e4700ac 1-25
+plugins/adapters/lark/tests/long-connection.test.ts
+  s_9622fd28aba994::t_57ac81af23b1e5 42-43,45
+  s_9622fd28aba994::t_ae53a107510298 1,9-10,12,20-21,24,26,32,36,41,47,51,53,57,60,62
+plugins/adapters/email/src/identity.ts
+  s_9622fd28aba994::t_57ac81af23b1e5 15-51
+  s_9622fd28aba994::t_2c346a36353897 1-14,52-75
+plugins/adapters/milky/src/client.ts
+  s_9622fd28aba994::t_ba02c220c2ef58 26,37
+  s_9622fd28aba994::t_a10bd6e27bd503 23,27-28,42
+scripts/lib/adapter-authoring-contract.mjs
+  s_9622fd28aba994::t_ad589ae3c626de 1-3,5-24,27,29-30
+packages/im/adapter/tests/configuration-identity.test.ts
+  s_9622fd28aba994::t_0c87f6e37566d8 1-51
+basic/cli/tests/plugin-runtime/agent/turn/scene-fact-cache.test.ts
+  s_9622fd28aba994::t_8d152802688750 16-17
+packages/console/client/client/adapter-console/types.ts
+  s_9622fd28aba994::t_ee9de9cb3885b0 6,31
+packages/im/adapter/src/configuration-metadata.ts
+  s_9622fd28aba994::t_d0e40addcc14e7 1-23
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_9622fd28aba994::t_05e8fc3dcc60a7 115
+packages/toolkit/testing/src/index.ts
+  s_9622fd28aba994::t_5d8b78bc94566f 3,84-91,94-118
+plugins/adapters/bilibili-live/tests/bilibili-live-endpoint.test.ts
+  s_9622fd28aba994::t_7f94370fcbd5ff 2,84,99,116-118,152,197
+plugins/adapters/bilibili/src/console.ts
+  s_9622fd28aba994::t_db80b38cb0befb 8,10-11,34,59,102-111,119,122,127,135,139,148,152,159,163,167,171,174,178,182
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/create_thread/index.ts
+  s_9622fd28aba994::t_6f5932b2355700 6,23-25,28
+plugins/adapters/discord/agents/discord/skills/discord-guild/tools/forum_post/index.ts
+  s_9622fd28aba994::t_50fff6b2cac04b 22
+plugins/adapters/discord/agents/discord/skills/discord/tools/send_embed/index.ts
+  s_9622fd28aba994::t_411b380db45569 33
+plugins/adapters/discord/src/adapter.ts
+  s_9622fd28aba994::t_8cfcfe88f95c24 1-38
+plugins/adapters/discord/src/console-spec.ts
+  s_9622fd28aba994::t_bc63b8535a566a 11-19
+plugins/adapters/github/tests/github-runtime.test.ts
+  s_9622fd28aba994::t_c78a47fdaa27a4 1,36,46-52,57,149,154,200,204,209,229,231,235,237,252,256,273-275,279,281
+plugins/adapters/icqq/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_a1807873a752db 1-2,4-6,11-22,25-58
+plugins/adapters/icqq/tests/icqq-login-command.test.ts
+  s_9622fd28aba994::t_28960ac4bdbf99 1-9,16-31,33-35,37,40,46-47,49-51,53-54,56-57,59
+plugins/adapters/icqq/tests/icqq-outbound-images.test.ts
+  s_9622fd28aba994::t_d886ed3cc792a3 8,169
+plugins/adapters/kook/src/adapter.ts
+  s_9622fd28aba994::t_99e4b27ed134df 1-35
+plugins/adapters/kook/src/console-spec.ts
+  s_9622fd28aba994::t_89510caa3b4cd1 13-22
+plugins/adapters/kook/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_0bb0696d3fdde5 1-2,4-6,11-22,25-27,29-38,40-43,45-51,53-55,58
+plugins/adapters/kook/tests/fixture.ts
+  s_9622fd28aba994::t_a9e1b5c6b3254f 1-26
+plugins/adapters/kook/tests/kook-runtime.test.ts
+  s_9622fd28aba994::t_4836f62714960b 1-2,250-254,258,277-280,284,291,301-304,306,313-316,356-359,369,386-389,391-392,406-408,418-423,486-490,494,496,505,515,529,539-540,548,551,553
+plugins/adapters/kook/tests/native-buttons.test.ts
+  s_9622fd28aba994::t_d49a48829c4839 4-5,17-18,35,39,44-45,64,67
+plugins/adapters/lark/src/sdk-http.ts
+  s_9622fd28aba994::t_1c0b40eb67e1d2 1-65
+plugins/adapters/line/src/api-client.ts
+  s_9622fd28aba994::t_90d3329ba66f33 1-3,5-8,10-22,24-25,27-45,48-49,52-60,63-71,73-82
+plugins/adapters/napcat/src/client.ts
+  s_9622fd28aba994::t_6e03539bcee49c 1-4,12-42
+plugins/adapters/onebot11/tests/protocol-public.types.ts
+  s_9622fd28aba994::t_24df0727cdea1b 1-248
+plugins/adapters/qq/src/qq-console-spec.ts
+  s_9622fd28aba994::t_78c9243e37aa87 12-23
+plugins/adapters/qq/tests/qq-bot-kind-prompt.test.ts
+  s_9622fd28aba994::t_4e80305fe032b4 52-54,57
+plugins/adapters/qq/tests/qq-endpoint-command-defs.test.ts
+  s_9622fd28aba994::t_c2848baa4ca6be 1-2,5-7,13-14,16-37,40-44,46-48,50-53,55-57,59-66,68-72,74-94
+plugins/adapters/qq/tests/qq-endpoint-commands.test.ts
+  s_9622fd28aba994::t_db8c75ea7da336 2-11,29-42,120,135-136,140,145,150,155-157,159,171,177-180,189,194,203,207,217,234,250,275,288-291,293-294,296-298,300-303,305-307,317,324,328,331,335-336,339-349
+plugins/adapters/satori/schema.json
+  s_9622fd28aba994::t_753e36724021f0 51,112-121,126-128,133
+plugins/adapters/slack/src/adapter.ts
+  s_9622fd28aba994::t_a363f807befe29 1-38
+plugins/adapters/slack/src/console-spec.ts
+  s_9622fd28aba994::t_fd176991caebe2 13-18
+plugins/adapters/telegram/src/adapter.ts
+  s_9622fd28aba994::t_788334f7994d58 1-27
+plugins/adapters/telegram/src/console-spec.ts
+  s_9622fd28aba994::t_ac970504e173ea 11-15
+plugins/adapters/wechat-mp/src/api-client.ts
+  s_9622fd28aba994::t_63b636a13598b3 1-39,41-42,44-45,48-49,52-60,62-63,65-79,81-88,91-95,98-109,112-124,126,129-138,141-157
+scripts/check-plugin-scaffold.mjs
+  s_9622fd28aba994::t_5ca3e6f7497687 17,20,115-173,257
+tsconfig.typecheck.json
+  s_9622fd28aba994::t_808257157858b3 20-85
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9622fd28aba994::t_6a271003337231 247-249
+basic/cli/tests/new-integration.test.ts
+  s_9622fd28aba994::t_b10e79e02e42fb 262,270-282,284-285,308
+basic/cli/tests/plugin-management.test.ts
+  s_9622fd28aba994::t_78faaead6702a3 13,37,166-173,178
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9622fd28aba994::t_61ed32638cafd8 4,45,47-48,111,121-123,235,249,260,277,294,305,394,404,473,489,718
+basic/cli/tests/plugin-runtime/agent/turn/endpoint-cancellation.test.ts
+  s_978d35ae37df1d::t_ce906852411866 3,9
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_9622fd28aba994::t_a93384a942dfcd 7,24,30,85-86,92,168-169,174,186,191,198-199,206,212-216,281
+basic/cli/tests/plugin-runtime/agent/turn/multi-message-delivery.test.ts
+  s_9622fd28aba994::t_d0149adcb85f16 1,5,33-49,52,85
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts-connection.test.ts
+  s_9622fd28aba994::t_9ad3667de595bb 1-105
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts.test.ts
+  s_9622fd28aba994::t_01f219f3a5a250 13-15
+basic/cli/tests/plugin-runtime/console/permission-explanation-routes.test.ts
+  s_9622fd28aba994::t_d57d99647f1a11 1,4,6,9-19,21,32,34,50,56-57,171
+basic/cli/tests/plugin-runtime/console/plugin-task-reminder-integration.test.ts
+  s_9622fd28aba994::t_e55d7595d98cc4 5,8,31-33,36,41
+basic/cli/tests/plugin-runtime/console/workspace-conversation-routes.test.ts
+  s_9622fd28aba994::t_bb3e005996f821 4,6,33-40,44-45
+basic/cli/tests/plugin-runtime/console/workspace-history.test.ts
+  s_9622fd28aba994::t_019a94475b5b3f 4,18-23,27
+basic/cli/tests/plugin-runtime/runtime-endpoints/runtime.test.ts
+  s_978d35ae37df1d::t_9bd15211a9ee8f 5,18
+basic/cli/tests/plugin-runtime/sender-enrichment.test.ts
+  s_9622fd28aba994::t_aa12ba5a8f64d8 2-3,10-12,20,22
+docs/adapters/bilibili-live.md
+  s_147a5b4537b628::t_6e194148b608f0 11,17-20,115
+docs/adapters/bilibili.md
+  s_147a5b4537b628::t_be54d61c943736 11,17-18,150,195-196
+docs/adapters/email.md
+  s_147a5b4537b628::t_bbf75c0cacbc3e 11,33-34,36,40,95,97,99,101
+docs/adapters/github.md
+  s_147a5b4537b628::t_3c2abc0356d9e3 11,20,109,114,116,118
+docs/adapters/sandbox.md
+  s_147a5b4537b628::t_4e81eba8dc4377 11,17-18,43
+docs/authoring/conventions.md
+  s_9622fd28aba994::t_0dd0430c954e16 137,163,165-166,169-171
+docs/concepts/message-flow.md
+  s_9622fd28aba994::t_02f24fc2170073 46,57,106,113
+docs/configuration/generated.md
+  s_9622fd28aba994::t_1dd1e2a1264fdd 1095,1107-1108,1190,1200-1201,1313
+docs/contributing/public-api-surface.md
+  s_9622fd28aba994::t_870035f7fd9ab6 150
+docs/en/authoring/adapters.md
+  s_147a5b4537b628::t_4dad3a5aedae8d 3,23-45,47,51,53,55-61,72-75,82,84,86,94,102-110,112,114,116,118
+docs/en/authoring/conventions.md
+  s_9622fd28aba994::t_fb5eeedae063b5 137,163,165-166,169-171
+docs/en/concepts/message-flow.md
+  s_9622fd28aba994::t_b2fa2d3969885f 46,48,97,104
+docs/en/configuration/generated.md
+  s_9622fd28aba994::t_02f60573b3bb64 1095,1107-1108,1190,1200-1201,1313
+docs/en/contributing/public-api-surface.md
+  s_9622fd28aba994::t_6a19bc5e8fc94b 134
+examples/multi-agent-room/tests/support/sandbox-im.ts
+  s_9622fd28aba994::t_b6b889b6fec0b7 15,21-22,73-78,87-89,129
+examples/test-bot/lib/github-api.ts
+  s_147a5b4537b628::t_4dc0f7e33a8b46 2,6,8-11,49,51,57
+examples/test-bot/lib/github-oauth.ts
+  s_147a5b4537b628::t_f83bcb9025eacf 8,25,79,104,184,190
+examples/test-bot/tests/github-oauth-endpoint.test.ts
+  s_147a5b4537b628::t_cb262f8b42c03c 160,166,173
+packages/im/adapter/README.md
+  s_9622fd28aba994::t_fe41ecf45b6e00 7-9,11-17,19,23-28,30-35,44-50,52-53,55-57,63-74,101,106,113-117,128-131,150,152-154,157,159-160,182,185,188-194,223
+packages/im/command/tests/command.test.ts
+  s_978d35ae37df1d::t_427c4bb5d1427e 33-36,38
+packages/im/core/README.md
+  s_147a5b4537b628::t_9e10cc6be999d4 23,59,62-65,67,69-70,74-76,90
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_978d35ae37df1d::t_9fbe73291a804a 8,36
+packages/im/core/tests/canonical-event-endpoint.test.ts
+  s_9622fd28aba994::t_1cb2bc40cb6923 3,6,12,15,17-25,69,88,95,102,209
+packages/im/core/tests/client-handler.test.ts
+  s_e079a9119330be::t_df50a8e263a7e4 1,13-16,18
+packages/im/core/tests/middleware-types.fixture.ts
+  s_978d35ae37df1d::t_6f4602f98d009d 12-15,17
+packages/im/core/tests/operation-session-runtime.test.ts
+  s_978d35ae37df1d::t_5c4999c31d9f09 4,22
+packages/im/core/tests/plugin-runtime/endpoint-locale.test.ts
+  s_9622fd28aba994::t_667279c79eb550 2-3,9-11,16-18,23,30,45-48,61,66,73
+packages/im/core/tests/plugin-runtime/endpoint-publication.test.ts
+  s_e079a9119330be::t_86db37a6c608c4 2,19-29,31-33
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_9622fd28aba994::t_5176a3ffee8aba 23,31-32,34,66-68,87-95,98,100,1134,1189,1236,1275,1317,1412,1420,1424,1529,1856,1874,1883,2269-2275,3090-3092,3094-3099,3831,4112,4130,4150,4866
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_9622fd28aba994::t_877b0b8c0e15b1 11,16-17,19,34-36,38-43,124,157,298,320,353,378,410,429,459,478,535,571,614,642
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_9622fd28aba994::t_70bc6e4a9f008b 16,57,63-65,74
+packages/im/core/tests/plugin-runtime/outbound-locale.test.ts
+  s_9622fd28aba994::t_a41fc1b3b83cac 2-3,15,18-20,22,39,46,49
+packages/im/core/tests/plugin-runtime/side-event-gateway.test.ts
+  s_9622fd28aba994::t_42baf10fab631f 12,175-178,181,189,273,284
+packages/im/feature-kit/tests/construction-types.fixture.ts
+  s_147a5b4537b628::t_bc18dc142fb927 3,5,17-34,39-40
+packages/im/middleware/tests/middleware.test.ts
+  s_978d35ae37df1d::t_32a9d39ca73e31 32-35,37
+packages/im/runtime/tests/config-retained-adapter.test.ts
+  s_147a5b4537b628::t_85c81018225387 6,44-60
+packages/im/runtime/tests/im-feature-hmr.test.ts
+  s_9622fd28aba994::t_98b34be2e37ce4 8,194-199,201-203
+packages/im/tool/tests/tool.test.ts
+  s_978d35ae37df1d::t_5f3212a2f5a0fb 27-30,32
+packages/im/workroom/tests/room/room-im-fixture.ts
+  s_9622fd28aba994::t_6e092cc6bf4c16 14,19-20,56-61,70-72,117
+packages/im/zhin/src/index.ts
+  s_147a5b4537b628::t_8f7df4efe3681e 18-20
+plugins/adapters/README.md
+  s_9622fd28aba994::t_0b7239cd8cd725 31
+plugins/adapters/bilibili-live/src/endpoint.ts
+  s_147a5b4537b628::t_12f6a80a515c7a 12,45,60-61,75,77-84,92,110,112-113,121,125,129,138,140,161-162,165,183,202,209-210,223-226,237,250,265-268,293-300
+plugins/adapters/bilibili-live/src/index.ts
+  s_9622fd28aba994::t_edaffa42f121f3 17
+plugins/adapters/bilibili/commands/bili-draft/drop/[id]/index.ts
+  s_9622fd28aba994::t_5f8eec74c61771 2,8-11
+plugins/adapters/bilibili/commands/bili-draft/edit/[id]/index.ts
+  s_9622fd28aba994::t_4070938a32bf7a 2,8-10,13
+plugins/adapters/bilibili/commands/bili-draft/list/index.ts
+  s_9622fd28aba994::t_e0154edaa2bcbb 2,7-10
+plugins/adapters/bilibili/commands/bili-draft/send/[id]/index.ts
+  s_9622fd28aba994::t_534f184defa45e 2,8-11
+plugins/adapters/bilibili/commands/bili-draft/show/[id]/index.ts
+  s_9622fd28aba994::t_ca4f442aa35d5e 2,8-11
+plugins/adapters/bilibili/commands/bili-login/start/index.ts
+  s_9622fd28aba994::t_18dc9391d5e232 3,8-11
+plugins/adapters/bilibili/commands/bili-login/status/index.ts
+  s_9622fd28aba994::t_f2108531b9975f 2,7-10
+plugins/adapters/bilibili/plugin.ts
+  s_9622fd28aba994::t_98cbc9cd4b4a39 32
+plugins/adapters/bilibili/src/bilibili-runtime-state.ts
+  s_9622fd28aba994::t_f31c93c95b61d9 1
+plugins/adapters/bilibili/src/endpoint.ts
+  s_147a5b4537b628::t_9475437b8dc471 11,36,104-110,127-128,142-143,154,157,159-167,169,212,221,227,229,246,250,254,276-280,297-298,308-309,319,326,341,369,372,406,414,422-427,432-436,445,468-469,487,511-525,539,543-561,591,597,599-602,654,720,732
+plugins/adapters/bilibili/src/index.ts
+  s_9622fd28aba994::t_95f63ab2496233 64-66
+plugins/adapters/bilibili/src/login-text.ts
+  s_9622fd28aba994::t_0f0e8b9bb519fa 3,23,31,44,55
+plugins/adapters/bilibili/src/review.ts
+  s_9622fd28aba994::t_42302f1440f692 4-5,85,98,113,117,128,134
+plugins/adapters/dingtalk/src/endpoint.ts
+  s_9622fd28aba994::t_5ba49e2b593036 1-32
+plugins/adapters/dingtalk/tests/cards.test.ts
+  s_9622fd28aba994::t_8106540e495135 1-2,48,53-55,61,63,74-75,77
+plugins/adapters/dingtalk/tests/dingtalk-runtime.test.ts
+  s_9622fd28aba994::t_99d3de7b06adb1 1,187,193,233,239,262,268,287,293,318,324,329,339,349,355,358,367,376,379,408-409,411,422,431,434,438,457,460,469,472,475-476
+plugins/adapters/dingtalk/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_83253426fe0756 1,3-6,11-31,34-36,38-44,46-50,52-55,57-61,63-64,66
+plugins/adapters/dingtalk/tests/target-session.test.ts
+  s_9622fd28aba994::t_8bde88dbbd5496 1-105
+plugins/adapters/discord/plugin.ts
+  s_9622fd28aba994::t_1f9b7fd4f944f3 12
+plugins/adapters/discord/src/console.ts
+  s_9622fd28aba994::t_e2728858d4f8f9 6,16
+plugins/adapters/discord/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_9e9b0f396395d6 1-2,4-6,11-22,25-27,29-38,40-43,45-51,53-55,58
+plugins/adapters/discord/tests/identity.test.ts
+  s_9622fd28aba994::t_8d30ea1d8dfd2e 1-48
+plugins/adapters/discord/tests/receipt-lifecycle.test.ts
+  s_9622fd28aba994::t_f4ad3be4200e15 1-33
+plugins/adapters/discord/tests/target-mode.test.ts
+  s_9622fd28aba994::t_abc42fe9e9adca 1-43
+plugins/adapters/email/README.md
+  s_9622fd28aba994::t_78031b2e11a993 21-22,24,28,83,85,87,89
+plugins/adapters/email/src/endpoint.ts
+  s_9622fd28aba994::t_428cf65f35fe00 1-32
+plugins/adapters/email/tests/admission-lifecycle.test.ts
+  s_9622fd28aba994::t_7eb09c46d53db1 6,46-47,52,74,83-84,86-87,93-94,97,104,113,125,129,134-144
+plugins/adapters/email/tests/console-runtime.test.ts
+  s_9622fd28aba994::t_c035d1ddd6b67b 1-57
+plugins/adapters/email/tests/delivery-receipt.test.ts
+  s_978d35ae37df1d::t_227f4275d00b91 12
+plugins/adapters/email/tests/receipt-lifecycle.test.ts
+  s_9622fd28aba994::t_a4a7cd13dbc775 1-55
+plugins/adapters/email/tests/runtime-delivery.ts
+  s_978d35ae37df1d::t_76f90444baa93b 1,7-8,10
+plugins/adapters/email/tests/smtp-uncertain-fixture.test.ts
+  s_978d35ae37df1d::t_146f27233776d1 34
+plugins/adapters/github/README.md
+  s_9622fd28aba994::t_8083c7283c8446 8,97,102,104,106
+plugins/adapters/github/src/endpoint.ts
+  s_9622fd28aba994::t_9141023cb67cce 1,19-20,33-45,54,57,61,64-65,69-70,72,78,80,84,87,91,97,101,105,112,117-118,122,130-137,139-141,146,150-151,156,173
+plugins/adapters/github/src/gh-client.ts
+  s_9622fd28aba994::t_8144efe409503c 38,48-50,65-66,71-75,78,86,91,216-217,421,430,432,503-504,506,533-534,551
+plugins/adapters/github/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_8604b2eac28598 1,3-6,11-31,34-36,38-44,46-50,52-55,57-61,63-64,66
+plugins/adapters/github/tests/tool-localization.test.ts
+  s_9622fd28aba994::t_81ecb58eebe7e7 33
+plugins/adapters/icqq/README.md
+  s_9622fd28aba994::t_8d5338d1c6593e 8,100,102,143,148,152,166,181,188-191
+plugins/adapters/icqq/commands/icqq/endpoint/definition.ts
+  s_978d35ae37df1d::t_04edf5e95df1c9 2,9-10
+plugins/adapters/icqq/commands/icqq/login/code/index.ts
+  s_9622fd28aba994::t_545ea7e231f121 3,13,15
+plugins/adapters/icqq/commands/icqq/login/confirm/index.ts
+  s_9622fd28aba994::t_c9b2f2ec4f8e47 3,12,14
+plugins/adapters/icqq/commands/icqq/login/definition.ts
+  s_9622fd28aba994::t_ecfc116eabf492 9,11
+plugins/adapters/icqq/commands/icqq/login/qr/index.ts
+  s_9622fd28aba994::t_1ee24014e5c366 3,14,16
+plugins/adapters/icqq/commands/icqq/login/retry/index.ts
+  s_9622fd28aba994::t_d0595bc67e9aee 3,12,14
+plugins/adapters/icqq/commands/icqq/login/status/index.ts
+  s_9622fd28aba994::t_0c07aa11240cc3 3,13,15
+plugins/adapters/icqq/plugin.ts
+  s_9622fd28aba994::t_f4fc9531c90595 11
+plugins/adapters/icqq/src/adapter.ts
+  s_9622fd28aba994::t_28e9620738fda2 9
+plugins/adapters/icqq/src/console-spec.ts
+  s_9622fd28aba994::t_90f13ee9fd43f8 10-18
+plugins/adapters/icqq/src/console.ts
+  s_9622fd28aba994::t_f89b2bda9f83f4 6,16
+plugins/adapters/icqq/tests/endpoint-social.test.ts
+  s_9622fd28aba994::t_a5922ec0412a9c 1,29-30,35,38-39,42,45,49,89-90,101,128,141-142,154-155,167,179,189-190,197,204,211,218,232-233
+plugins/adapters/icqq/tests/fixture.ts
+  s_9622fd28aba994::t_04cc11d9b75a3c 1-20
+plugins/adapters/icqq/tests/icqq-heartbeat.test.ts
+  s_9622fd28aba994::t_1449942a8a59f2 10,122,126-129,133,146,150-152,155,170,174-175,177,180
+plugins/adapters/icqq/tests/icqq-login-assist.test.ts
+  s_9622fd28aba994::t_b035d109cd6c90 1,19,24,30,36-37,46-48,50,60,62,65,83,90-92,100-101,108-110,115,118-119,129-131,137-140,144,146
+plugins/adapters/icqq/tests/owner-lifecycle.test.ts
+  s_9622fd28aba994::t_f80bf45606ba5f 1-45
+plugins/adapters/icqq/tests/receipt-lifecycle.test.ts
+  s_9622fd28aba994::t_d94d6cce200b87 1-42
+plugins/adapters/kook/plugin.ts
+  s_9622fd28aba994::t_47db4f6a2a3536 12
+plugins/adapters/kook/src/client.ts
+  s_9622fd28aba994::t_c2cf27aa2350be 1-2,4,7
+plugins/adapters/kook/src/console.ts
+  s_9622fd28aba994::t_807abde038223b 6,16
+plugins/adapters/kook/src/endpoint.ts
+  s_9622fd28aba994::t_6b7718be8e7c89 6,32,55-56,77-78,83,85,87-88,93,96-102,105,107,110-112,116-117,122,125,131,135,139,142-143,148,163-178,188-192,196-204,209-213,217,227-228,238-239,244,248,250-251,256,259-263,271,276,279-281,285,292,295,301,305,309,314-315,320,334-358,364-379,400-401,425
+plugins/adapters/kook/src/index.ts
+  s_9622fd28aba994::t_1c93a319c92403 30-31,36-37
+plugins/adapters/kook/src/protocol.ts
+  s_9622fd28aba994::t_3ab188195b391e 117-118,450-451,467,480
+plugins/adapters/kook/src/webhook.ts
+  s_9622fd28aba994::t_c5678a0052f47a 1,21-22,35,52,72,82,93-99,102-109,111-113
+plugins/adapters/kook/tests/identity.test.ts
+  s_9622fd28aba994::t_4e6ad93e8490f7 1-55
+plugins/adapters/lark/src/client.ts
+  s_9622fd28aba994::t_220948f7057543 1-42,44-45,47-412,415-720,723
+plugins/adapters/lark/src/endpoint.ts
+  s_9622fd28aba994::t_82d1be699b4a2a 1-17,19-20,22-24,26-27,29-30,32-34
+plugins/adapters/lark/src/protocol.ts
+  s_9622fd28aba994::t_acf5c38e731188 189,192
+plugins/adapters/lark/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_e4ba9e639c774d 1,3-6,11-31,34-36,38-44,46-50,52-55,57-61,63-64,66
+plugins/adapters/lark/tests/lark-runtime.test.ts
+  s_9622fd28aba994::t_f65be08eea9a84 1,219,228,231,252,258,296,302,330,336,372,378,406,412,425,431,434,462,468,473,503,509,513,527,533,536,545,554,557,596,605,608,671,680,683,702,705,714,717,720-721
+plugins/adapters/lark/tests/localized-presentation.test.ts
+  s_978d35ae37df1d::t_4acf4617035736 1,3,10-11,16-17
+plugins/adapters/lark/tests/outbound-http.test.ts
+  s_978d35ae37df1d::t_4abec111fd2d51 1,20,22,25
+plugins/adapters/lark/tests/sdk-http.test.ts
+  s_9622fd28aba994::t_d55ecb5ae53c8e 1-49
+plugins/adapters/lark/tests/sdk-long-connection.test.ts
+  s_9622fd28aba994::t_f949ec63345047 30
+plugins/adapters/lark/tests/share-keyboard.test.ts
+  s_978d35ae37df1d::t_aad96a03f78452 1,25-26,30,35-36,38-39,41
+plugins/adapters/lark/tests/web-api-proxy-tls.test.ts
+  s_978d35ae37df1d::t_b87a3ef870fa8e 1-2,61,63,112-113
+plugins/adapters/line/src/client.ts
+  s_9622fd28aba994::t_9ca144dad1c1f0 1-23,25-28,30-32,34,37-110,114-119,122-128,131-150,153-157,160-166,168-171,173-282,285-309
+plugins/adapters/line/src/endpoint.ts
+  s_9622fd28aba994::t_3429371fcd0853 1-34
+plugins/adapters/line/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_bf40cae68ae271 1,3-6,11-31,34-36,38-44,46-50,52-55,57-61,63-64,66
+plugins/adapters/line/tests/event-dedup.test.ts
+  s_9622fd28aba994::t_058a4b8325d17d 3-4,8-10,16-18,21,27-29,32-33,37,39,41,43
+plugins/adapters/line/tests/line-runtime.test.ts
+  s_9622fd28aba994::t_56b2df36486341 1,151,157,188,194,217,223,226,235,244,247,251,271,280,283,306,315,318,322,356,365,368,372,383,392,395,398-399
+plugins/adapters/milky/adapters/milky/index.ts
+  s_9622fd28aba994::t_11decd35e082e1 5,34
+plugins/adapters/milky/src/index.ts
+  s_9622fd28aba994::t_31c0e0dc9ca49f 65
+plugins/adapters/milky/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_b10c2031eef869 1,3-4,8,10-14,16-23,25-28,30-33,35-41,43-53,56-68
+plugins/adapters/milky/tests/milky-runtime.test.ts
+  s_9622fd28aba994::t_cf67c2c01a3ae3 1,5,37,345,349-350,352,366,370-371,388-392,399,402-404,407-408,411-412,416-417,419,421,446,454,458,492,500,502,526,534,537,560,568,595,603,606,635,643,646,671,676-677,683,688-689,697,713,743,747-748,776,786,835,848-849,855-858,860,865,877,887,902,931,942,972,982,985,1014,1031-1032,1038-1041,1043,1051,1064
+plugins/adapters/napcat/src/identity.ts
+  s_9622fd28aba994::t_e634140612379c 1-29
+plugins/adapters/napcat/src/index.ts
+  s_9622fd28aba994::t_58126887c487e2 30
+plugins/adapters/napcat/src/protocol.ts
+  s_9622fd28aba994::t_5040492bc65a1d 433,452
+plugins/adapters/napcat/src/ws-endpoint.ts
+  s_147a5b4537b628::t_ab30bf498545e5 7,53,61-62,67-69,74,77-90,104,108-112,117,121,125,128,130,132,136,140,143,158,160,163,166-169,177,179,191,195-197,235,237-238,248,276,279,283-284,289-291,318
+plugins/adapters/napcat/src/wss-endpoint.ts
+  s_147a5b4537b628::t_4e17f00863e08c 6,51,56-57,62-64,73,76-89,97,101,105-109,133,137,141,148,150,154,157,165,167,171-175,183,185,197,200-202,242,244,246-247,263,266,270-271,275,279-281
+plugins/adapters/napcat/tests/napcat-runtime.test.ts
+  s_9622fd28aba994::t_752ae3662f69cb 1,4,304,311,315,342,349,351,365,372,375,390,397,400,426,433,436,457,464,467,487,494,497,532,539,562-563,569,574-575,588,598,641,650,660,671,681,695,724,733
+plugins/adapters/napcat/tests/runtime-command-fixture.ts
+  s_9622fd28aba994::t_659e4f6f48f527 1-25
+plugins/adapters/onebot11/adapters/onebot11/index.ts
+  s_9622fd28aba994::t_dfbefb055d4d42 5,24
+plugins/adapters/onebot11/src/adapter.ts
+  s_9622fd28aba994::t_a070773f04e3e2 1-32
+plugins/adapters/onebot11/src/client.ts
+  s_9622fd28aba994::t_45e6229991facf 27,30-31,39
+plugins/adapters/onebot11/src/index.ts
+  s_9622fd28aba994::t_e766ea0090e761 66
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  s_147a5b4537b628::t_40a71dcbe00a51 6-7,45,55-57,61-63,74,82-97,99-100,103,111,144,146,154,157,160,168,170,182,185,187,193,195-197,221,227-228,279
+plugins/adapters/onebot11/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_5435b5368afcc5 1-2,21-23,111-112,115-118,123,127
+plugins/adapters/onebot11/tests/protocol-core-session.test.ts
+  s_9622fd28aba994::t_ab827fc91af18b 1-104
+plugins/adapters/onebot11/tests/transport-faults.test.ts
+  s_9622fd28aba994::t_1515589c04b5ee 1,24,26,29,47,55,61,68,73,81,84,88,103-104,108,114,119,124,139,143-144,152-153,160,164
+plugins/adapters/onebot12/commands/onebot12/endpoint/definition.ts
+  s_9622fd28aba994::t_a2dfff3f1ecae9 12-13
+plugins/adapters/onebot12/schema.json
+  s_9622fd28aba994::t_66b750ffa3a310 55,124-133,137-139,144
+plugins/adapters/onebot12/src/adapter.ts
+  s_9622fd28aba994::t_df7be950ebfbc3 1-36
+plugins/adapters/onebot12/src/client.ts
+  s_9622fd28aba994::t_da781e49822c2d 27,30,36,38-39,43
+plugins/adapters/onebot12/src/console-spec.ts
+  s_9622fd28aba994::t_32ad4eaa1e3f81 10-11
+plugins/adapters/onebot12/src/identity.ts
+  s_9622fd28aba994::t_8de62656ec3dba 1-47
+plugins/adapters/onebot12/src/index.ts
+  s_9622fd28aba994::t_81a0b261486759 66
+plugins/adapters/onebot12/src/protocol.ts
+  s_9622fd28aba994::t_2232f385572c87 13-14,26-27,85,100-101,114-115,121,135,147,161,540,547,584-589
+plugins/adapters/onebot12/src/ws-endpoint.ts
+  s_147a5b4537b628::t_4953c66976358f 6-7,21,36,57-59,63-65,72,75-90,92-93,108,126-127,134,137,148,160,162,166-167,170,172,178,182-184,255-257,298
+plugins/adapters/onebot12/src/ws-transport.ts
+  s_9622fd28aba994::t_091f85559815dc 5,57,63
+plugins/adapters/onebot12/src/wss-endpoint.ts
+  s_147a5b4537b628::t_bb4328e408481b 5-6,20,34,49-51,55-57,67,74-89,91-92,95,127-128,138,141,152,156,158,162-163,166,168,174,177-179,239-241,260
+plugins/adapters/onebot12/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_0862510e96fe7c 1,3-4,8,10-14,16-23,25-28,30-33,35-41,43-53,56-68
+plugins/adapters/onebot12/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_435abec3e37af4 1-2,23-28,97,102,109-110,113-116,121,125,130,142,147-150,154,158,162
+plugins/adapters/onebot12/tests/onebot12-runtime.test.ts
+  s_9622fd28aba994::t_3dea48eef92f1b 1,5,37,44,101,116,127,146,151,163,185,198,214,347,354,358,389,396,399,429,436,439,465,472,474,491,498,501,537,544,547,571-572,576,578,580,603,610,613,667,674,677,721,728,759,764-765,771-772,786,789,796,840,849,858,862,872,883,897,900,905,920,923,929,940,952,955,962,979,996-997
+plugins/adapters/onebot12/tests/protocol-identity.test.ts
+  s_9622fd28aba994::t_c5d357f8bec73f 1-84
+plugins/adapters/qq/agents/qq/conversation.ts
+  s_9622fd28aba994::t_9f1031184ded61 96
+plugins/adapters/qq/agents/qq/skills/qq-conversation/tools/conversation_info/index.ts
+  s_9622fd28aba994::t_efa89d4b350f34 39
+plugins/adapters/qq/agents/qq/skills/qq-directory/tools/list_guilds/index.ts
+  s_9622fd28aba994::t_f5824ca443a17f 11
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/group_kick/index.ts
+  s_9622fd28aba994::t_6710df782dec9f 24,31
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/handle_join_request/index.ts
+  s_9622fd28aba994::t_9b252bc37c6112 24
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/set_mute/index.ts
+  s_9622fd28aba994::t_5f05cc473af6b1 24,32
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/tools/group_info/index.ts
+  s_9622fd28aba994::t_e4f6cd85d07c42 13
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/tools/group_member_info/index.ts
+  s_9622fd28aba994::t_c35bfdc7c6a661 16
+plugins/adapters/qq/agents/qq/skills/qq-group-directory/tools/group_members/index.ts
+  s_9622fd28aba994::t_e7c103c3e0033f 16
+plugins/adapters/qq/agents/qq/skills/qq-group-state/tools/group_blacklist/index.ts
+  s_9622fd28aba994::t_3c9dd64ce2d57c 16
+plugins/adapters/qq/agents/qq/skills/qq-group-state/tools/list_join_requests/index.ts
+  s_9622fd28aba994::t_3fb6b20acb193e 16
+plugins/adapters/qq/agents/qq/skills/qq-group-state/tools/list_muted/index.ts
+  s_9622fd28aba994::t_fcac01bd7a06e1 13
+plugins/adapters/qq/agents/qq/skills/qq/tools/add_role/index.ts
+  s_9622fd28aba994::t_f727409e09a8d1 20-21
+plugins/adapters/qq/agents/qq/skills/qq/tools/channel_info/index.ts
+  s_9622fd28aba994::t_ae840d7e84146b 16
+plugins/adapters/qq/agents/qq/skills/qq/tools/create_role/index.ts
+  s_9622fd28aba994::t_aee9ce65901f7b 19
+plugins/adapters/qq/agents/qq/skills/qq/tools/guild_kick_member/index.ts
+  s_9622fd28aba994::t_f167e1a3305378 25
+plugins/adapters/qq/agents/qq/skills/qq/tools/guild_mute_member/index.ts
+  s_9622fd28aba994::t_1430c803f9291f 22
+plugins/adapters/qq/agents/qq/skills/qq/tools/list_channels/index.ts
+  s_9622fd28aba994::t_46127bc9f8e3a7 16
+plugins/adapters/qq/agents/qq/skills/qq/tools/list_roles/index.ts
+  s_9622fd28aba994::t_c44b99b8a460ea 16
+plugins/adapters/qq/agents/qq/skills/qq/tools/member_detail/index.ts
+  s_9622fd28aba994::t_67c0b96add0d02 17
+plugins/adapters/qq/agents/qq/skills/qq/tools/remove_role/index.ts
+  s_9622fd28aba994::t_3a11d2fa2ed13c 20-21
+plugins/adapters/qq/commands/qq/endpoint/definition.ts
+  s_9622fd28aba994::t_eac9fca6f2b2d2 5-6,9-10,14,77,84,93,100,107,113,169,172,183,228,230,233-257
+plugins/adapters/qq/plugin.ts
+  s_9622fd28aba994::t_230bea830365cd 6,16-19
+plugins/adapters/qq/src/i18n.ts
+  s_9622fd28aba994::t_309ecad78c05e4 6-7,22-23
+plugins/adapters/qq/src/interaction.ts
+  s_978d35ae37df1d::t_6fe0f8b0625542 14
+plugins/adapters/qq/src/protocol.ts
+  s_978d35ae37df1d::t_023759d378b6b6 60-61
+plugins/adapters/qq/src/qq-endpoint-write.ts
+  s_9622fd28aba994::t_8fa11d98b42956 1-2,4,12,17,19-23
+plugins/adapters/qq/src/qq-send.ts
+  s_9622fd28aba994::t_279e15971e928e 13-14,74-76,79
+plugins/adapters/qq/src/webhook.ts
+  s_9622fd28aba994::t_33cb9e90d5b046 6,14,52,78-81
+plugins/adapters/qq/tests/media-delivery.test.ts
+  s_9622fd28aba994::t_4aa17f4c5b76bd 1,37
+plugins/adapters/qq/tests/menu-pagination.test.ts
+  s_9622fd28aba994::t_e75d5aded61cb9 1,130,198
+plugins/adapters/qq/tests/qq-group-admin.test.ts
+  s_9622fd28aba994::t_2a424e8db347a5 1,43,65,69,71,77,79,81,87-88,91,93,102,107,111,125
+plugins/adapters/qq/tests/receipt-lifecycle.test.ts
+  s_9622fd28aba994::t_632ed536ce4d65 1-31
+plugins/adapters/qq/tests/target-mode.test.ts
+  s_978d35ae37df1d::t_8817fd605a408a 1-38
+plugins/adapters/sandbox/src/client.ts
+  s_9622fd28aba994::t_edd31f4b8ca1a5 8,12-15,18,22-25
+plugins/adapters/sandbox/src/endpoint.ts
+  s_147a5b4537b628::t_6f5bb914c3d32c 2,22,141-142,158-165,169,173,179,190,194,197,201,203,208,218,223,255,291-292,295-327,329-332,334-344,346-372,377,380,393,397,415,427-428,442
+plugins/adapters/sandbox/src/index.ts
+  s_9622fd28aba994::t_00a0283276e871 26
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  s_9622fd28aba994::t_0f24b03343341d 1,25,43,47-50,52-56,59,67,71,73-77,79-80,87-88,138,142-143,203,207-208,218,220,299,303-304,341,345-346,350-351,353,434-435,534-537,543,573,577-578
+plugins/adapters/satori/src/adapter.ts
+  s_9622fd28aba994::t_997bc321feebf7 1-32
+plugins/adapters/satori/src/client.ts
+  s_9622fd28aba994::t_95b627e693266a 21,25-26,28-29,33
+plugins/adapters/satori/src/index.ts
+  s_9622fd28aba994::t_68b1ecfaa800d0 64
+plugins/adapters/satori/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_8d0e165bb0dde8 1,3-4,8,10-14,16-23,25-28,30-33,35-41,43-53,56-68
+plugins/adapters/satori/tests/satori-runtime.test.ts
+  s_9622fd28aba994::t_fdcae38d9fea98 1,4,6,29,77,93,114,122,160-161,165,167,169,192,196,200,203,208,225,229,231-232,245,249,252,254-255,274,278,281,283-284,298,302,305,317,321,327,346,351,354,357,378,383,386-388,395,408,414-415,423,426,434,448,494,498,501,514,516,524,527,585-586,589-590,593-596,605-606,608,618-620,631-633,641,644,647,655-656
+plugins/adapters/slack/adapters/slack/index.ts
+  s_9622fd28aba994::t_d71eb71009e187 5,24
+plugins/adapters/slack/plugin.ts
+  s_9622fd28aba994::t_464cb017fa4046 12
+plugins/adapters/slack/src/client.ts
+  s_9622fd28aba994::t_08f64e04388a00 1,21
+plugins/adapters/slack/src/console.ts
+  s_9622fd28aba994::t_8e985721c8afa4 6,16
+plugins/adapters/slack/src/protocol.ts
+  s_9622fd28aba994::t_84fa45af57141f 124-126,231,255,334,338
+plugins/adapters/slack/src/slack-outbound.ts
+  s_9622fd28aba994::t_012816a76f82e8 5,7,19-20,65,76,100
+plugins/adapters/slack/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_ba4dbb139b82fb 1,65-66,69-70,78,144-150
+plugins/adapters/slack/tests/identity.test.ts
+  s_9622fd28aba994::t_69b07c731452e5 1-44
+plugins/adapters/slack/tests/slack-runtime.test.ts
+  s_9622fd28aba994::t_0e7e8386524eb1 1,208-212,244-248,269-273,275,282-286,309-313,346-350,355,366-370,402-406,429-433,458-462,467,470-471,473,478-480,496-500,502
+plugins/adapters/telegram/plugin.ts
+  s_9622fd28aba994::t_7d421fd1702e18 12
+plugins/adapters/telegram/src/console.ts
+  s_9622fd28aba994::t_09a611f82f4b8a 6,16
+plugins/adapters/telegram/src/endpoint.ts
+  s_9622fd28aba994::t_3bbbdb2a577ad3 1,3,64,71-72,81,89,92,97,101-107,115,141-143,148,215,218,222,227-230,242,297-298,360-370,373,378-380,461-468,471,478-479,496-499,501-523,533,535,541,547,551
+plugins/adapters/telegram/src/telegram-client.ts
+  s_9622fd28aba994::t_8a53dcfc64af23 1-41,44-47,49-64,66-132,134-140,142-150,152-159,161,163,165-180,183,185-187,190-194,196,199-201,204-210,213-214,217-218,221-222,225-231,233-252
+plugins/adapters/telegram/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_64eff96b9c7d84 1-2,4-6,11-22,25-27,29-38,40-43,45-51,53-55,58
+plugins/adapters/telegram/tests/identity.test.ts
+  s_9622fd28aba994::t_97bdd38557410e 1-38
+plugins/adapters/telegram/tests/target-mode.test.ts
+  s_978d35ae37df1d::t_cd172432bdaaa7 1-41
+plugins/adapters/telegram/tests/telegram-delivery.test.ts
+  s_9622fd28aba994::t_ae8c4b52b9a9ea 4,6,24-28,31,56,59,64,101-102,113-114,117,148-150,155,162-163,174-178,182,192-194,197,203-205,207,215,226,231,233-234,236,267,271,292,296,304-305,310,319,321,334-335,354-355,361,364,375-376,396,411,426,438
+plugins/adapters/wechat-mp/tests/client-token.test.ts
+  s_9622fd28aba994::t_3b52cd9e9997f1 2,4,6,10,22,32,48,73
+plugins/adapters/wechat-mp/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_8118cb23003878 1,3-6,11-31,34-36,38-44,46-50,52-55,57-61,63-64,66
+plugins/adapters/wecom/src/client.ts
+  s_9622fd28aba994::t_1be64a10c42ba3 1-31,33-70,72-100,103-405,408
+plugins/adapters/wecom/src/endpoint.ts
+  s_9622fd28aba994::t_ce1416bf722fb9 1-33
+plugins/adapters/wecom/tests/agent-identity.test.ts
+  s_9622fd28aba994::t_cb1ab4d0e03003 1-11
+plugins/adapters/wecom/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_3e6f6d143a46ce 1,3-6,11-31,34-36,38-44,46-50,52-55,57-61,63-64,66
+plugins/adapters/wecom/tests/wecom-runtime.test.ts
+  s_9622fd28aba994::t_a35ffa6b2bb00c 1,30,108,125,133,223,229,252,258,302,308,332,338,342,351,360,363,402,411,414,451,460,463,488,497,500,549,558,561,586,589,598,601,604-605,616
+plugins/adapters/weixin-ilink/README.md
+  s_9622fd28aba994::t_4854fb791a2a70 12,62,71,73,75-77
+plugins/adapters/weixin-ilink/adapters/weixin-ilink/index.ts
+  s_9622fd28aba994::t_f08a5b3bbbf87c 1,28
+plugins/adapters/weixin-ilink/src/adapter.ts
+  s_9622fd28aba994::t_0bfc5713674cd3 1-24
+plugins/adapters/weixin-ilink/src/endpoint.ts
+  s_9622fd28aba994::t_600a55d8d3ebb8 1-34
+plugins/adapters/weixin-ilink/src/pic-decrypt.ts
+  s_9622fd28aba994::t_6ee529684f7add 8-9,12,14,29-31,68,80,95,106
+plugins/adapters/weixin-ilink/tests/admission-cursor.test.ts
+  s_9622fd28aba994::t_094f2f8d314eb5 1-49
+plugins/adapters/weixin-ilink/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_22b01a69241223 1,3-6,11-31,34-36,38-44,46-50,52-55,57-61,63-64,66
+plugins/adapters/weixin-ilink/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_baa94bfc909a6b 1-3,21-23,37-39,45-47,65-69,76,80,91-92
+plugins/adapters/weixin-ilink/tests/receipt-lifecycle.test.ts
+  s_9622fd28aba994::t_a280ccea41a45c 1-58
+plugins/adapters/weixin-ilink/tests/transport-fixture.ts
+  s_9622fd28aba994::t_b9bde955a3b6cd 1-11
+plugins/adapters/weixin-ilink/tests/weixin-ilink-runtime.test.ts
+  s_9622fd28aba994::t_dd1af0e79a688a 1-2,136-137,145,148-150,152-153,157,163-164,169,171,173,197-198,203,205,223-224,232,248-249,258,262,283-284,310,350-351,362,365
+plugins/games/roulette/src/mute-penalty.ts
+  s_9622fd28aba994::t_6becdf498406db 1,38,56,64,66-67,86
+plugins/games/roulette/tests/mute-penalty-connection.test.ts
+  s_9622fd28aba994::t_f8fbd8c2e7cd95 1-51
+plugins/utils/group-suite/tests/welcome.test.ts
+  s_147a5b4537b628::t_89df4065efeeb1 11,82,89-94,97
+plugins/utils/reminder/tests/reminder-create-runtime.test.ts
+  s_147a5b4537b628::t_169a77bd9b38e4 4,27,35-40,43
+plugins/utils/rss/tests/admin-task-host.test.ts
+  s_147a5b4537b628::t_737e13e07af160 5,26,29-34,36
+scripts/check-api-docs-surface.mjs
+  s_9622fd28aba994::t_56b00a45df5d03 42,44,47
+scripts/sync-adapter-docs.mjs
+  s_9622fd28aba994::t_41593ebe931564 134-135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "62140cc927133a2d4f2867f20a37a84b5181c59a",
+  "prompts": {},
+  "sessions": {
+    "s_147a5b4537b628": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18cf2-a9f0-7752-a313-9a78ecef776d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_978d35ae37df1d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18c83-c03c-7861-833b-0779c8f7932c",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e079a9119330be": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18cbc-ea42-79d3-92a3-99be6b2afea9",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
