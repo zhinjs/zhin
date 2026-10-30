@@ -65,9 +65,19 @@ function userBlocksToAiContent(
   mediaCapabilities: readonly ProviderMediaKind[],
 ): UserModelMessage['content'] {
   const parts: AiSdkUserPart[] = [];
+  let previous: string | undefined;
   for (const block of message.content) {
     if (block.type === 'text') {
-      parts.push({ type: 'text', text: block.text });
+      // Several providers (DeepSeek, Gemini) concatenate text parts: every part after the first
+      // starts on its own line and ends with a newline. The first part (header + body) is left
+      // untouched so it stays byte-identical to the same message sent later as history.
+      let text = block.text;
+      if (previous !== undefined) {
+        if (!previous.endsWith('\n') && !text.startsWith('\n')) text = `\n${text}`;
+        if (!text.endsWith('\n')) text = `${text}\n`;
+      }
+      parts.push({ type: 'text', text });
+      previous = text;
     }
   }
   const { accepted, placeholders } = filterMediaBlocksForProvider(message.media, mediaCapabilities);

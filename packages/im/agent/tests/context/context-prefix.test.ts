@@ -1,12 +1,12 @@
 import { expect, it, vi } from 'vitest';
-import { createUserMessage, projectPromptContext, userMessagePlainText, serializeAgentMessage, agentMessageRowToLlm, type UserMessage, renderUserMessageForLlm, createPromptContextBlock } from '@zhin.js/ai';
+import { createUserMessage, projectPromptContext, userMessagePlainText, serializeAgentMessage, agentMessageRowToLlm, type UserMessage, renderUserMessageForLlm, createPromptContextBlock, RUNTIME_CONTEXT_MARKER } from '@zhin.js/ai';
 import { ContextSystem } from '../../src/context/context-system.js';
 import { buildAgentsEnvelopeContext } from '../../src/context/agents-instruction.js';
 import { buildTurnContextBlocks } from '../../src/context/turn-envelope.js';
 import { sceneLineForTurn } from '../../src/context/turn-envelope.js';
 import { resolveIngressUserMessage } from '../../src/session/turn-ingress-session.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
-import { buildTurnUserMessages, prependTurnContextBlocks } from '../../src/context/turn-user-message.js';
+import { buildTurnUserMessages, appendTurnContextBlocks } from '../../src/context/turn-user-message.js';
 import { getGitStatusLine } from '../../src/prompt/git-context.js';
 import { runEvalCase } from '../../evals/framework/index.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
@@ -80,43 +80,44 @@ it('preserves prebuilt text blocks, provenance and current media during envelope
   const user = createUserMessage('first block', [{ type: 'image', data: { media: { kind: 'url', value: 'https://example.test/image.png' } } }]);
   user.content.push(createPromptContextBlock('custom', 'custom rule'), { type: 'text', text: 'second block\nwith linebreaks' });
   const before = structuredClone(user);
-  const result = prependTurnContextBlocks([user], [{ type: 'text', text: '[Turn context] current' }])[0] as UserMessage;
-  expect(result.content[0]).toBe(user.content[1]);
-  expect(result.content[1]?.text).toBe('[Turn context] current');
-  expect(result.content[2]?.text).toContain('first block');
-  expect(result.content[3]).toEqual({ ...user.content[2], presentation: 'user-input' });
+  const result = appendTurnContextBlocks([user], [{ type: 'text', text: '[Turn context] current' }])[0] as UserMessage;
+  // Body first, then what is stored with the message, then the runtime-context tail.
+  expect(result.content[0]?.text).toContain('first block');
+  expect(result.content[1]).toEqual({ ...user.content[2], presentation: 'user-input' });
+  expect(result.content[2]).toBe(user.content[1]);
+  expect(result.content[3]).toEqual({ type: 'text', text: RUNTIME_CONTEXT_MARKER, perTurn: true });
+  expect(result.content[4]).toMatchObject({ text: '[Turn context] current', perTurn: true });
   expect(result.media).toBe(user.media);
   expect(user).toEqual(before);
   const restored = agentMessageRowToLlm(serializeAgentMessage(result)) as UserMessage;
   expect(restored.media).toBeUndefined();
-  expect(restored.content).toEqual(result.content);
+  expect(restored.content).toEqual(result.content.slice(0, 3));
 });
 
 
-it('orders state and guidance before the owned body while retaining unknown state and ephemeral context', () => {
+it('puts the owned body first and every per-turn block after the runtime-context marker', () => {
   const actor = { subjectId: 'alice', displayName: 'Alice', authorizationRoles: ['master'], scope: 'group' as const };
   const base = turnContextViewFromMessage(mockCommMessage({ senderId: 'alice' }));
   if (base.origin.kind !== 'im') throw new Error('expected IM fixture');
   const turn = { ...base, origin: { ...base.origin, conversation: { ...base.origin.conversation!, name: 'Before' } },
     input: { text: 'question', contextState: { bot: { id: 'real-bot-id' } } } };
   const input = createUserMessage('actual question', undefined, 1, actor);
-  const result = prependTurnContextBlocks([input], buildTurnContextBlocks({ turn, observedAt: 1, agentsContext: 'stable rules', profileSummary: 'ephemeral relationships' }))[0] as UserMessage;
-  const body = result.content.findIndex(block => block.presentation === 'user-input');
-  expect(result.content.slice(0, body).every(block => block.contextRef)).toBe(true);
-  expect(result.content[body]?.text).toBe('actual question');
-  const projectedBody = (projectPromptContext([result])[0] as UserMessage).content[body]?.text;
+  const result = appendTurnContextBlocks([input], buildTurnContextBlocks({ turn, observedAt: 1, agentsContext: 'stable rules', profileSummary: 'ephemeral relationships' }))[0] as UserMessage;
+  expect(result.content[0]).toMatchObject({ text: 'actual question', presentation: 'user-input' });
+  expect(result.content[1]).toEqual({ type: 'text', text: RUNTIME_CONTEXT_MARKER, perTurn: true });
+  expect(result.content.slice(1).every(block => block.perTurn === true || block.ephemeral === true)).toBe(true);
+  const projectedBody = (projectPromptContext([result])[0] as UserMessage).content[0]?.text;
   expect(projectedBody).toMatch(/^\[user_id:alice;name:Alice;role:master;/u);
   expect(projectedBody).toContain('actual question');
-  // ADR 0041 §5: the scene line moved to the system prompt tail.
+  // The scene line is added by the core run (runtime tail), not by the envelope.
   expect(userMessagePlainText(result)).not.toContain('[scene_id:');
   expect(sceneLineForTurn(turn)).toContain('scene_name:Before');
   expect(sceneLineForTurn(turn)).not.toContain('assistant_role');
   expect(result.content.at(-1)).toMatchObject({ text: 'ephemeral relationships', ephemeral: true });
   expect(userMessagePlainText(result)).not.toMatch(/Sender: id=|DisplayName:|Model:|Sdk:/);
   const nextTurn = { ...turn, origin: { ...turn.origin, conversation: { ...turn.origin.conversation, name: 'After' } } };
-  const next = prependTurnContextBlocks([input], buildTurnContextBlocks({ turn: nextTurn, observedAt: 2, agentsContext: 'stable rules' }))[0] as UserMessage;
+  const next = appendTurnContextBlocks([input], buildTurnContextBlocks({ turn: nextTurn, observedAt: 2, agentsContext: 'stable rules' }))[0] as UserMessage;
   const latest = projectPromptContext([result, next])[1] as UserMessage;
-  // A renamed scene changes only the system prompt tail; the message keeps no scene copy.
   expect(sceneLineForTurn(nextTurn)).toContain('scene_name:After');
   // The earlier message loses its per-turn rules; the current one carries them.
   expect(userMessagePlainText(projectPromptContext([result, next])[0] as UserMessage)).not.toContain('stable rules');
@@ -124,17 +125,24 @@ it('orders state and guidance before the owned body while retaining unknown stat
   expect(userMessagePlainText(latest)).not.toContain('[scene_id:');
 });
 
-it('places the deferred catalog before the actual question on the full engine model path', async () => {
+it('places the deferred catalog and turn facts after the actual question on the full engine model path', async () => {
   const result = await runEvalCase({
-    id: 'deferred-context-layout', description: 'Versioned catalog precedes user input and turn facts',
+    id: 'deferred-context-layout', description: 'User input precedes the runtime-context tail (catalog, turn facts)',
     inbound: { text: 'CURRENT_BODY_SENTINEL' },
     tools: [{ name: 'deferred_lookup', deferred: true, description: 'CATALOG_SENTINEL', result: 'found' }],
     script: [{ segments: [{ type: 'text', data: { text: 'ok' } }] }], expect: {},
   });
   const input = result.modelRequests[0]?.lastUserText ?? '';
   expect(input).toContain('deferred_lookup (1)');
-  expect(input.indexOf('deferred_lookup (1)')).toBeLessThan(input.indexOf('CURRENT_BODY_SENTINEL'));
-  expect(input.indexOf('"observedAt"')).toBeLessThan(input.indexOf('CURRENT_BODY_SENTINEL'));
+  const body = input.indexOf('CURRENT_BODY_SENTINEL');
+  const marker = input.indexOf(RUNTIME_CONTEXT_MARKER);
+  expect(body).toBeGreaterThanOrEqual(0);
+  expect(marker).toBeGreaterThan(body);
+  expect(input.indexOf('deferred_lookup (1)')).toBeGreaterThan(marker);
+  expect(input.indexOf('[scene_id:')).toBeGreaterThan(marker);
+  // Nothing scene-, sender- or catalog-specific is left in the system prompt in front of history.
+  expect(result.modelRequests[0]?.systemPrompt).not.toContain('[scene_id:');
+  expect(result.modelRequests[0]?.systemPrompt).not.toContain('deferred_lookup');
   expect(input).not.toContain('Time:');
   expect(input).not.toContain('presentation');
 });

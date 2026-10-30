@@ -293,7 +293,9 @@ function applySceneGroupFacts(record: SessionProfileRecord, facts: SceneGroupFac
   if (facts.adminIds) {
     const owners = next.admins.filter((item) => item.role === 'owner');
     const names = new Map(record.admins.map((item) => [item.id, item.name]));
-    const ids = [...new Set(facts.adminIds.map(validId).filter((id) => id && id !== next.ownerId))].slice(0, MAX_SCENE_ADMIN_IDS);
+    // Sorted: platforms return admins in arbitrary order; the scene line must not churn on it.
+    const ids = [...new Set(facts.adminIds.map(validId).filter((id) => id && id !== next.ownerId))]
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).slice(0, MAX_SCENE_ADMIN_IDS);
     next.admins = [...owners, ...ids.map((id) => ({ id, name: names.get(id) ?? '', role: 'admin' as const }))];
     known = true;
   }

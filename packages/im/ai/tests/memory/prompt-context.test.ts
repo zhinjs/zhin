@@ -103,7 +103,10 @@ it('does not promote failed tools or unknown provenance into a reusable snapshot
   const valid = message();
   const input = [failed, unknown, modified, literal, valid, message()];
   const output = projectPromptContext(input);
-  expect(output.slice(0, 5)).toEqual(input.slice(0, 5));
+  expect(output.slice(0, 3)).toEqual(input.slice(0, 3));
+  // Participant-typed host markers are escaped, never taken as a context source.
+  expect((output[3] as UserMessage).content[0]).toEqual({ type: 'text', text: `［Context source: workspace]\n${rule}` });
+  expect(output[4]).toEqual(input[4]);
   expect(output[5]!.content).toEqual([input[5]!.content[0], input[5]!.content[2]]);
   expect(projectPromptContext([valid, failed, message()])[1]).toBe(failed);
 });

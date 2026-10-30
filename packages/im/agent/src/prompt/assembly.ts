@@ -206,6 +206,11 @@ export interface PromptRuntimeOverrides {
   readonly segments?: readonly PromptSegment[];
   /** ADR 0041 `scene` line; rendered after the cache breakpoint. */
   readonly sceneText?: string;
+  /**
+   * Sender-/selection-dependent capability catalog. Not part of the system prompt: the core run
+   * puts it in the current message's runtime-context tail.
+   */
+  readonly capabilityTail?: string;
 }
 
 function withStableRuntime(base: string, runtime?: PromptRuntimeOverrides): string {

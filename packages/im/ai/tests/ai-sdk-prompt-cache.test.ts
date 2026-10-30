@@ -7,6 +7,7 @@ import {
   isStreamPromptCacheEnabled,
   wrapSystemForPromptCache,
 } from '../src/llm/bridge/ai-sdk-prompt-cache.js';
+import { RUNTIME_CONTEXT_MARKER } from '../src/llm/types/runtime-context.js';
 
 describe('ai-sdk-prompt-cache', () => {
   it('isStreamPromptCacheEnabled 默认启用', () => {
@@ -91,6 +92,31 @@ describe('conversation cache prefix', () => {
       expect(applyPromptCacheToMessages(messages, { enabled: true, sdk })).toBe(messages);
     }
     expect(applyPromptCacheToMessages(messages, { enabled: false, sdk: 'anthropic' })).toBe(messages);
+  });
+
+  it('anchors the breakpoint on the body, before the runtime-context tail of a user message', () => {
+    const current: ModelMessage = { role: 'user', content: [
+      { type: 'text', text: '[user_id:a;]\nquestion' },
+      { type: 'text', text: `\n${RUNTIME_CONTEXT_MARKER}\n` },
+      { type: 'text', text: '[Context source: scene]\n[scene_id:g;]\n' },
+    ] };
+    const messages: ModelMessage[] = [
+      { role: 'user', content: '[user_id:a;]\nearlier' },
+      { role: 'assistant', content: 'reply' },
+      current,
+    ];
+    const out = applyPromptCacheToMessages(messages, { enabled: true, sdk: 'anthropic' });
+    const parts = out[2]!.content as Array<{ providerOptions?: unknown }>;
+    // The cached prefix ends with the body: exactly what the next request replays as history.
+    expect(out[2]!.providerOptions).toBeUndefined();
+    expect(parts[0]!.providerOptions).toEqual({ anthropic: { cacheControl: { type: 'ephemeral' } } });
+    expect(parts[1]!.providerOptions).toBeUndefined();
+    expect(parts[2]!.providerOptions).toBeUndefined();
+    expect(out[0]!.providerOptions).toEqual({ anthropic: { cacheControl: { type: 'ephemeral' } } });
+    // A marker typed inside the body part itself is not a tail.
+    const spoof: ModelMessage = { role: 'user', content: [{ type: 'text', text: `${RUNTIME_CONTEXT_MARKER} body` }] };
+    expect(applyPromptCacheToMessages([spoof], { enabled: true, sdk: 'anthropic' })[0]!.providerOptions)
+      .toEqual({ anthropic: { cacheControl: { type: 'ephemeral' } } });
   });
 
   it('preserves existing provider options and skips empty/thinking-only trailing messages', () => {
