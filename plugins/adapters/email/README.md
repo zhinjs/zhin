@@ -76,6 +76,17 @@ email:
 - `maxFileSize`：单附件上限（字节），默认 10MB，超限跳过
 - `allowedTypes`：允许的 MIME 类型白名单，不在列表内跳过
 
+## Console 页面
+
+启动后打开 Console 的「Email」页（地址 `/email`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 只读查看 `plugins.email.endpoints` 与运行状态；
+
+Email 的 SMTP/IMAP 是嵌套配置，页面只读展示连接与 endpoint；增删请直接改配置文件。
+
+读取需要 `email:read`；管理员 full token 不受限。
+
 ## 故障排查
 
 | 现象 | 排查 |

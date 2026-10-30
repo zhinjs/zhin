@@ -101,6 +101,16 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 - [OneBot 11 Standard](https://github.com/botuniverse/onebot-11)
 - [Adapter Overview](https://zhin.js.org/essentials/adapters)
 
+## Console page
+
+Open the Console **OneBot 11** page (route `/onebot11`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.onebot11.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `onebot11:read`; writes require `onebot11:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `onebot11 endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

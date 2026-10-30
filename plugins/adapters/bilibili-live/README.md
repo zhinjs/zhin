@@ -91,6 +91,17 @@ ai:
 - 未登录时平台给的 uid 是 0、昵称打码，同名打码观众会被当成同一个人。
 - 平台接口随时可能改版（例如 WBI 签名、`getDanmuInfo` 风控），失效时连接会反复失败并退避重连，请关注日志。
 
+## Console 页面
+
+启动后打开 Console 的「Bilibili 直播弹幕」页（地址 `/bilibili-live`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.bilibili-live.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+
+扫码登录仍复用 B 站评论适配器页面；这里只管理直播弹幕连接与 endpoint。
+
+读取需要 `bilibili-live:read`，写操作需要 `bilibili-live:write`；管理员 full token 不受限。
+
 ## 故障排查
 
 | 现象 | 原因与处理 |

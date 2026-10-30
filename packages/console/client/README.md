@@ -1,6 +1,6 @@
 # @zhin.js/client
 
-Remote Console **浏览器 SDK**（entries 加载、路由/工具注册、带 Token 的 REST）。**不含 UI** — 壳层在独立仓库 [zhin-console](https://github.com/zhinjs/console)。
+Remote Console **浏览器 SDK**（entries 加载、路由/工具注册、带 Token 的 REST，以及少量可复用页面组件）。完整壳层在独立仓库 [zhin-console](https://github.com/zhinjs/console)。
 
 > **路径约定**：本包位于 `packages/console/client/`（npm `@zhin.js/client`）。源码在 `client/`，构建产物在 `dist/`。
 
@@ -29,10 +29,32 @@ Peer：`react >= 18`（`createPluginRegisterHostApi` 需要 React 引用）。
 | `ConsoleTransport.onConsoleEvent` | 订阅带 `live/history` 投递来源的强类型事件 |
 | `ConsoleTransport.onConsoleEventRecoveryGap` | 观察不可续接游标并触发领域全量重同步 |
 | `ConsoleInboxNoticesQuery` / `ConsoleInboxNoticesResult` | 以 `unreadOnly` 从持久 Inbox 重建未读通知 |
+| `createAdapterConsolePage` / `AdapterConsolePage` | 平台适配器 Console 页的共享页面（连接、endpoint 增删、登录待办、适配器动作） |
+| `resolveAdapterConsolePluginId` | 从 `/console/api/pages` 解析当前适配器页所属的 PluginId |
 
 类型与 Entry 契约来自 `@zhin.js/contract`。
 
 业务 UI 应使用 SDK 导出的协议常量和 Endpoint 类型，不要复制 RPC 字符串或 `EndpointInfo`。请求使用顶层 camelCase payload，Host 推送使用 `message.receive` / `request.receive` / `notice.receive` 和 canonical `adapter`、`endpointKey`、`channelId` 字段。
+
+## 适配器 Console 页面
+
+平台适配器包用 `createAdapterConsolePage(adapterKey)` 生成页面，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc` 提供 `plugin.<pluginId>.status` / `endpoint-add` / `endpoint-remove`：
+
+```ts
+// plugins/adapters/telegram/pages/index/index.ts
+import { definePage } from '@zhin.js/console-contract';
+import { createAdapterConsolePage } from '@zhin.js/client';
+
+export const meta = definePage({
+  title: 'Telegram',
+  icon: 'Send',
+  requiredPermissions: ['telegram:read'],
+});
+
+export default createAdapterConsolePage('telegram');
+```
+
+页面会读取 `endpoint.list` / `endpoint.test` / `login.list`，并调用适配器自己的 `plugin.<pluginId>.*` RPC；凭据永远不会展示，只显示 `${ENV}` 引用或遮蔽值。
 
 ## 启动：加载插件 Console Entry
 

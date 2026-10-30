@@ -115,6 +115,16 @@ WeCom callbacks are always encrypted:
 
 Access Token is automatically refreshed 5 minutes before expiration.
 
+## Console page
+
+Open the Console **WeCom** page (route `/wecom`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.wecom.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `wecom:read`; writes require `wecom:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `wecom endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Investigation |

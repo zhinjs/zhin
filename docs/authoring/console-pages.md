@@ -422,6 +422,37 @@ interface SkillsStatus {
 | `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` 或 `ops:approve` |
 | `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` 或 `tool_approvals:resolve`（动作；管理员令牌总可调用） |
 
+## 适配器 Console 页面
+
+内置平台适配器（`plugins/adapters/*`）各自带一个 `pages/index/index.ts`，统一用 `@zhin.js/client` 的 `createAdapterConsolePage(adapterKey)` 渲染，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec, resources)` 提供数据：
+
+```ts
+// pages/index/index.ts
+import { definePage } from '@zhin.js/console-contract';
+import { createAdapterConsolePage } from '@zhin.js/client';
+
+export const meta = definePage({
+  title: 'Telegram',
+  icon: 'Send',
+  order: 74,
+  requiredPermissions: ['telegram:read'],
+});
+
+export default createAdapterConsolePage('telegram');
+```
+
+页面里能做的事：
+
+- 查看 Host `endpoint.list` 里该适配器的运行中连接，点「测试连接」调用 `endpoint.test`；
+- 读取 `plugin.<pluginId>.status`，展示 `plugins.<adapter>.endpoints` 的配置项（密钥字段只显示 `${ENV}` 引用或 `••••••`）；
+- 调 `endpoint-add` / `endpoint-remove` 增删 endpoint；凭据写入 `.env`，配置里只保留引用；
+- 显示 LoginAssist 的 `login.list` 待办，并用 `login.submit` / `login.cancel` 完成扫码、滑块、短信或设备确认；
+- 渲染适配器自定义动作（`status.actions`），例如 QQ 的扫码绑定、公域 / 私域选择。
+
+权限按适配器分开：页面读取需要 `<adapterKey>:read`，写操作（增删 endpoint、自定义动作）需要 `<adapterKey>:write`；管理员 full token 不受限。没有配置存储的环境（例如单元测试）只读降级：`status.canAdd` / `canRemove` 为 `false`。
+
+`createAdapterConsoleRpc` 的 `spec` 只放可公开的字段元数据：`env: true` 的字段写 `.env` 并返回 `${ENV}` 引用；非 env 但含敏感内容的字段加 `secret: true`，返回值一律遮蔽。`extraStatus` 只返回少量状态（如 `bindState`、`scanUrl`），不要放日志、聊天原文或密钥。
+
 ## 在页面里保存设置 (config:patch)
 
 页面要改几项设置时，用 `config:patch` 只写具体路径，不要用 `config:set` 覆盖整块配置。`zhin.config.yml` 里其他内容和注释都会保留；YAML/配置页仍然保留给高级用户。

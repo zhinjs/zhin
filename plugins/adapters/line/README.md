@@ -99,6 +99,16 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 - **单次最多 5 条消息**：LINE 限制单次 Reply/Push 最多 5 条
 - **文本长度限制**：单条文本消息最多 5000 字符
 
+## Console 页面
+
+启动后打开 Console 的「LINE」页（地址 `/line`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.line.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `line:read`，写操作需要 `line:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `line endpoint add`。
+
 ## 故障排查
 
 | 问题 | 排查方法 |

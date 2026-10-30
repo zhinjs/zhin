@@ -93,6 +93,16 @@ See `skills/onebot12/SKILL.md` for skill documentation.
 - [OneBot Connect WebSocket](https://12.onebot.dev/connect/communication/websocket/)
 - [Adapters overview](https://zhin.js.org/essentials/adapters)
 
+## Console page
+
+Open the Console **OneBot 12** page (route `/onebot12`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.onebot12.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `onebot12:read`; writes require `onebot12:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `onebot12 endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

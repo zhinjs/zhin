@@ -8,7 +8,6 @@ import { messages as t } from '../../../src/i18n.js';
  * qqEndpointCommands 供 commands/qq/endpoint/ 下的命令文件默认导出。
  */
 import {
-  buildEndpointEnvKey,
   createEndpointCommands,
   endpointCommandForbidden,
   endpointConfigurationStoreToken,
@@ -23,7 +22,9 @@ import {
 import { defineCommand } from 'zhin.js/command';
 import { qqBotKindPrompt, qqCommandSessionKey } from '../../../src/qq-bot-kind-prompt.js';
 import { startQqBindFlow } from '../../../src/qq-bind-flow.js';
-import { defaultQqEndpointIntentFields, type QqBotKind } from '../../../src/qq-intents.js';
+import { writeQqEndpointWithBotKind } from '../../../src/qq-endpoint-write.js';
+import type { QqBotKind } from '../../../src/qq-intents.js';
+import { cancelQqConsoleBind } from '../../../src/qq-console.js';
 import {
   qqRuntimeStateToken,
   type QqPendingBotKind,
@@ -57,6 +58,9 @@ function busyFooter(state: QqRuntimeState, locale?: Locale): string | undefined 
   if (state.pendingBotKind) {
     return t(locale, 'kindBusy', { id: state.pendingBotKind.endpointId });
   }
+  if (state.consoleBind?.state === 'scanned') {
+    return t(locale, 'kindBusy', { id: state.consoleBind.pending?.endpointId ?? 'QQ' });
+  }
   return undefined;
 }
 
@@ -84,25 +88,18 @@ async function writeEndpointWithBotKind(
   botKind: QqBotKind,
   store: EndpointConfigurationStore,
 ): Promise<string> {
-  const locale = pending.locale;
-  const appidKey = buildEndpointEnvKey('qq', pending.endpointId, 'appid');
-  const secretKey = buildEndpointEnvKey('qq', pending.endpointId, 'secret');
-  const intentFields = defaultQqEndpointIntentFields(botKind);
-  const { filePath } = await store.add({
-    adapterKey: 'qq',
-    entry: {
-      id: pending.endpointId,
-      appid: `\${${appidKey}}`,
-      secret: `\${${secretKey}}`,
-      botKind: intentFields.botKind,
-      intents: [...intentFields.intents],
-    },
-    environment: {
-      [appidKey]: pending.appId,
-      [secretKey]: pending.appSecret,
-    },
+  const result = await writeQqEndpointWithBotKind({
+    endpointId: pending.endpointId,
+    appId: pending.appId,
+    appSecret: pending.appSecret,
+    botKind,
+  }, store);
+  return t(pending.locale, 'endpointSaved', {
+    kind: result.botKind,
+    id: result.endpointId,
+    file: result.filePath,
+    intents: result.intents.join(', '),
   });
-  return t(locale, 'endpointSaved', { kind: intentFields.botKind, id: pending.endpointId, file: filePath, intents: intentFields.intents.join(', ') });
 }
 
 /**
@@ -133,11 +130,12 @@ export function runQqEndpointAdd(
   cancelCommand?: string,
   commandHeads?: readonly string[],
 ): Promise<string> {
-  if (state.bindFlow || state.pendingBotKind) {
+  if (state.bindFlow || state.pendingBotKind || state.consoleBind?.pending || state.consoleBind?.state === 'waiting') {
     return Promise.resolve(
       t(locale, 'existingFlow'),
     );
   }
+  state.consoleBind = null;
   const endpointId = id?.trim() || undefined;
   const sessionKey = qqCommandSessionKey(input);
   return new Promise<string>((resolve) => {
@@ -222,12 +220,17 @@ export function runQqEndpointCancel(state: QqRuntimeState, preference?: Locale):
   if (state.bindFlow) {
     state.bindFlow.stop();
     state.bindFlow = null;
+    cancelQqConsoleBind(state);
     return t(locale, 'cancelled');
   }
   if (state.pendingBotKind) {
     const name = state.pendingBotKind.endpointId;
     state.pendingBotKind = null;
     return t(locale, 'pendingCancelled', { name });
+  }
+  if (state.consoleBind) {
+    cancelQqConsoleBind(state);
+    return t(locale, 'cancelled');
   }
   return t(locale, 'noFlow');
 }

@@ -100,6 +100,16 @@ Tools use Discord Snowflake IDs to identify `guild_id`, `user_id`, `channel_id`.
 3. Enable **MESSAGE CONTENT INTENT**
 4. Invite the Bot to your server via the OAuth2 URL
 
+## Console page
+
+Open the Console **Discord** page (route `/discord`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.discord.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `discord:read`; writes require `discord:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `discord endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

@@ -74,6 +74,16 @@ Outbound goes through the Runtime: `OutboundMessageService` -> `endpoint.send({ 
 - **Outbound**: Sends text first, then sends pure media (without caption) separately
 - **Inbound**: Writes both text and media paths into a single gateway `content` text
 
+## Console page
+
+Open the Console **Weixin iLink** page (route `/weixin-ilink`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.weixin-ilink.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `weixin-ilink:read`; writes require `weixin-ilink:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `weixin-ilink endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Possible Cause |

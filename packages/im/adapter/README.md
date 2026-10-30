@@ -190,6 +190,31 @@ class 与 compact Endpoint 均需提供健康 getter，否则报告 `unknown`，
 解析在 `@zhin.js/core` 的 `MessageDispatcher`（`defaultCommandPrefixResolver`）；
 `ImRuntime({ commandPrefix })` 可设全局静态前缀覆盖该行为。
 
+## Console RPC（适配器页面）
+
+适配器可以在 `plugin.ts` 的 `setup` 里发布一个 Console RPC，把原本只能靠聊天命令完成的 endpoint 管理搬到 Console：
+
+```ts
+import { createAdapterConsoleRpc } from 'zhin.js/adapter';
+import { pluginConsoleRpcToken } from 'zhin.js';
+import { telegramConsoleSpec } from './src/console-spec.js';
+
+context.resources.provide(pluginConsoleRpcToken, createAdapterConsoleRpc({
+  ...telegramConsoleSpec,
+  running: () => context.resources.use(telegramRuntimeStateToken).endpoints.values(),
+  getConfig: () => context.config.get(),
+}, context.resources));
+```
+
+生成的 `status` / `endpoint-add` / `endpoint-remove` 约定：
+
+- 页面读取需要 `<adapterKey>:read`，写操作需要 `<adapterKey>:write`；
+- `env: true` 的字段写入 `.env`，配置里只保留 `${ENV}` 引用；`secret: true` 的字段只展示遮蔽值；
+- 没有 `endpointConfigurationStoreToken` 时只读降级（`canAdd` / `canRemove` 为 `false`）；
+- 适配器自有动作通过 `actions` 声明，`availableActions` 控制当前状态下页面展示哪些动作（例如 QQ 扫码绑定）。
+
+浏览器侧使用 [`@zhin.js/client`](../../console/client/README.md) 的 `createAdapterConsolePage(adapterKey)`。
+
 验证：`pnpm --filter @zhin.js/adapter test && pnpm --filter @zhin.js/adapter build`。
 
 架构说明见 [Plugin Monorepo 与 Feature Provider](../../../docs/architecture/target-implementation/plugin-monorepo-and-features.md)。

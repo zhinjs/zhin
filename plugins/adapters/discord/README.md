@@ -87,6 +87,16 @@ discord:
 3. 开启 **MESSAGE CONTENT INTENT**
 4. 通过 OAuth2 URL 邀请 Bot 加入服务器
 
+## Console 页面
+
+启动后打开 Console 的「Discord」页（地址 `/discord`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.discord.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `discord:read`，写操作需要 `discord:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `discord endpoint add`。
+
 ## 故障排查
 
 | 现象 | 排查 |

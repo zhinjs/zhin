@@ -112,6 +112,16 @@ See `skills/satori/SKILL.md` for skill documentation.
 - [Overview](https://satori.chat/zh-CN/protocol/overview.html)
 - [API](https://satori.chat/zh-CN/protocol/api.html)
 
+## Console page
+
+Open the Console **Satori** page (route `/satori`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.satori.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `satori:read`; writes require `satori:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `satori endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

@@ -114,6 +114,16 @@ The platform permit checker is registered by the `plugin.ts` generation lifecycl
 
 Outbound uses `outboundMessageToken` and encodes canonical Markdown as KMarkdown. Remote media URLs can be represented as links. Card messages and attachment upload are not yet part of the unified outbound path.
 
+## Console page
+
+Open the Console **KOOK** page (route `/kook`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.kook.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `kook:read`; writes require `kook:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `kook endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

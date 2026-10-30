@@ -104,6 +104,16 @@ pnpm --filter @zhin.js/adapter-lark build
 pnpm --filter @zhin.js/adapter-lark test
 ```
 
+## Console page
+
+Open the Console **Lark** page (route `/lark`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.lark.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `lark:read`; writes require `lark:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `lark endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

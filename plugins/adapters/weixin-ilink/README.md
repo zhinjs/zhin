@@ -66,6 +66,16 @@ data/weixin-ilink/<id>/credentials.json
 - **出站**：先单独发文本，再发纯媒体（不带 caption）
 - **入站**：文字与媒体路径写入同一条 gateway `content` 文本
 
+## Console 页面
+
+启动后打开 Console 的「微信 iLink」页（地址 `/weixin-ilink`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.weixin-ilink.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `weixin-ilink:read`，写操作需要 `weixin-ilink:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `weixin-ilink endpoint add`。
+
 ## 故障排查
 
 | 现象 | 可能原因 |
