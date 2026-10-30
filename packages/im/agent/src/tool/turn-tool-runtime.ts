@@ -249,6 +249,10 @@ export class TurnToolRuntime {
       effectiveInput = this.#leakInspector.inspectArguments(effectiveInput).input;
     }
 
+    // Keep the policy-approved identity even if a tool mutates its input while executing.
+    const fileChange = (name === 'write_file' || name === 'edit_file') && typeof effectiveInput.file_path === 'string'
+      ? Object.freeze({ path: effectiveInput.file_path })
+      : undefined;
     const startedAt = Date.now();
     try {
       const output = await tool.execute(effectiveInput, toolInvocationFromTurn(this.turn));
@@ -256,7 +260,8 @@ export class TurnToolRuntime {
       const durationMs = Date.now() - startedAt;
       // A tool that ignores cancellation may already have committed side effects.
       // Record its real settlement so the audit trail never invites an unsafe retry.
-      await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId }, causedBy);
+      await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId,
+        ...(fileChange ? { fileChange } : {}) }, causedBy);
       if (this.turn.signal.aborted) return this.#cancelledOutcome();
       return Object.freeze({ status: 'completed', output, durationMs });
     } catch (error) {

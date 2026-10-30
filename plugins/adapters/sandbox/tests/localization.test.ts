@@ -3,6 +3,20 @@ import ts from 'typescript';
 import { sandboxText, sandboxEnglish } from '../pages/index/messages.js';
 import * as traces from '../pages/index/agentTrace.js';
 import * as playground from '../pages/index/playgroundState.js';
+import * as transport from '../pages/index/sandboxTransport.js';
+import { createWorkspaceDirectoryController } from '../pages/index/workspaceDirectoryState.js';
+
+it('labels the conversation workspace and its existing details entry in both locales', () => {
+  for (const [source, english] of [
+    ['会话', 'Conversations'],
+    ['会话列表', 'Conversation list'],
+    ['新建会话', 'New conversation'],
+    ['对话与轨迹', 'Conversation and trace'],
+  ]) {
+    expect(sandboxText('zh-CN', source!)).toBe(source);
+    expect(sandboxText('en', source!)).toBe(english);
+  }
+});
 
 it('localizes authored trace copy while retaining task content, identity and ISO timestamps', () => {
   const snapshot = {sessionKey:'sandbox:test:group:room',latestSequence:2,activeTurnIds:[],events:[
@@ -39,8 +53,12 @@ it('uses ready.locale without remounting or replacing stored conversations and d
   const original=playground.createDefaultPlaygroundState();
   const state={...original,sessions:original.sessions.map((item,index)=>index===0?{...item,name:'用户保留的会话'}:item)};
   const bindings={
-    sandboxText, ...traces, ...playground,
+    sandboxText, ...traces, ...playground, ...transport,
+    getSandboxApiBase:()=>'http://localhost',
+    captureSandboxRequestContext:()=>({apiBase:'http://localhost',headers:{}}),
     loadPlaygroundState:()=>state,
+    createWorkspaceDirectoryController,
+    useSandboxHistory: () => ({ loading: false, error: null, hasMore: false, loadEarlier: async () => {}, refresh: async () => {} }),
     useState:(initial:any)=>{const index=cursor++;if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;return[slots[index],(next:any)=>{slots[index]=typeof next==='function'?next(slots[index]):next}];},
     useRef:(initial:any)=>{const index=cursor++;return slots[index]??(slots[index]={current:initial});},
     useMemo:(fn:()=>unknown)=>fn(),useCallback:(fn:unknown)=>fn,useEffect:()=>{},

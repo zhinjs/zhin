@@ -96,7 +96,20 @@ The Console Sandbox page and any test client you write use this protocol. Every 
 
 - **URL**: `ws://<host>:<port>/sandbox`. On one HTTP Host the first Sandbox endpoint mounts `/sandbox`; the others mount `/sandbox/<endpoint id>` (with `-2`, `-3`… on a name clash). The startup log prints `ws mounted <path>`.
 - **Auth**: when the Host has a token, the handshake must carry `Authorization: Bearer <token>` or the `?token=<token>` query parameter, otherwise it gets `401`. A demo-scope token can only connect to `/sandbox` and is read-only: messages are received but never reach commands or the Agent, and the server answers with `type: "error"`.
-- **One connection**: with a fixed endpoint name (the default) an endpoint keeps only the newest browser connection. A new connection closes the old one with close code `4000` (`replaced by new sandbox client`); stopping the endpoint closes with `1001`; when a hot reload retires the current generation the Host closes with `1012` — just reconnect.
+- **Concurrent connections**: pages sharing an endpoint keep separate `connectionId`s and the configured `owner`. The connection ID does not change the Bot or Agent session identity. Closing a page removes only that connection, without cancelling or restarting a task. Endpoint stop closes all connections with `1001`; generation retirement still closes them through the Host with `1012`.
+- **Conversation delivery**: each full-scope connection subscribes to one `type` + `id`, initially `private` + `owner`. Sending a normal input also selects its conversation. Replies reach matching full-scope connections only; demo connections cannot subscribe or receive these messages. No matching connection means `not_sent`; all send attempts failing leaves delivery `unknown`. There is no automatic retry.
+
+### Client → server: subscribe to a conversation
+
+Send this only after the current connection advertises `ready.protocol: "scoped-conversations-v1"`:
+
+```json
+{"op":"subscribe","conversation":{"type":"group","id":"test-group"}}
+```
+
+The type is `private`, `group`, or `channel`. This replaces the connection's subscription; the server acknowledges with `type: "subscribed"` and the same `conversation`. Control frames never enter commands, the Agent, or platform message hooks.
+
+Subscribed pages receive user-input echoes marked `direction: "inbound"`, with the configured `senderId` and the original `messageId`. These update the view without submitting another input. Legacy clients still send their existing message format and receive replies but do not receive input echoes. New pages connected to an older Host keep the original send path and do not send unsupported control frames. Reconnection restores the subscription without resubmitting messages.
 
 ### Client → server: send a message
 
@@ -118,7 +131,7 @@ The Console Sandbox page and any test client you write use this protocol. Every 
 | `text` | string | Optional. Plain text when `content` is missing; also used as the message text when `content` has no text segment |
 | `messageId` | string | Optional client-generated id matching `^[A-Za-z0-9._:-]{1,160}$` (ignored otherwise). It becomes the id of this inbound message, so a quoted reply can find it |
 | `timestamp` | number | Optional. Milliseconds; defaults to the time the server received it |
-| `agentRun` | object | Optional **Try a chat** (formerly Agent playground) run config, see below |
+| `agentRun` | object | Optional **Conversations** run config, see below |
 
 - A frame that is not JSON is handled as one plain-text message.
 - The sender is always the endpoint `owner`.
@@ -142,6 +155,8 @@ Unrecognised values fall back to the defaults.
 ```json
 {
   "type": "ready",
+  "protocol": "scoped-conversations-v1",
+  "connectionId": "connection-uuid",
   "id": "sandbox-user",
   "endpoint": "sandbox-bot",
   "workingDirectory": "/path/to/bot",
@@ -152,7 +167,7 @@ Unrecognised values fall back to the defaults.
 }
 ```
 
-`canExecute` tells whether the connection has full scope (can run commands and Agent tasks); `shellIsolation` is the Docker isolation probe result, for display only.
+`canExecute` tells whether the connection has full scope (can run commands and Agent tasks); `shellIsolation` is the Docker isolation probe result, for display only. Ready and subscription acknowledgements do not confirm task completion or approval.
 
 **Replies**:
 
@@ -167,10 +182,13 @@ Unrecognised values fall back to the defaults.
 }
 ```
 
-- `type` / `id` identify the conversation of the reply (`direct` already normalised to `private`, `guild` to `channel`); clients file the message under that conversation. `bot` is the endpoint id and `endpoint` the name of the connection that received the message.
+- `conversation: { type, id }` identifies the canonical conversation from the framework's send request. New clients use it even if a legacy envelope supplies conflicting `type` / `id` fields. `bot` and `endpoint` are the configured endpoint ID; the original address fields remain readable by older clients.
+- `messageId` is shared by the live frame and canonical delivery receipt; valid explicit IDs from legacy envelopes remain unchanged.
 - `content` is a segment array. Text, `html` (JSX cards, see `html: direct` above), buttons and other segments pass through unchanged.
 - `image` / `audio` / `video` / `file` segments read only `data.media` (MediaRef): `url` passes through; `base64` is inlined with a `base64://` prefix; `path` is read by the server and inlined as `base64`; other kinds and media segments without `data.media` are dropped and logged as `sandbox_outbound_media_dropped`.
 - When a plugin sends a complete message object, its other fields are kept as they are.
+
+Clients merge optimistic messages and input echoes by conversation, direction, and `messageId`. Approval decisions remain on the existing server interaction path; submitting a button does not mean approval succeeded. This change does not add offline result storage, cross-browser history restoration, or multiple operator accounts.
 
 **Read-only notice**: after a demo-scope connection sends a message, the server replies:
 

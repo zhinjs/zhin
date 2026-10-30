@@ -188,7 +188,14 @@ describe('sandbox plugin runtime adapter', () => {
     }));
   });
 
-  it('sends outbound payloads to the active websocket connection', async () => {
+  it.each([
+    { label: 'text', outbound: 'pong' },
+    { label: 'segments', outbound: [{ type: 'text', data: { text: 'pong' } }] },
+    { label: 'legacy envelope', outbound: { content: [{ type: 'text', data: { text: 'pong' } }], messageId: 'legacy-message-id' } },
+    { label: 'envelope without an explicit ID', outbound: { content: [{ type: 'text', data: { text: 'pong' } }], messageId: undefined } },
+    { label: 'envelope with an empty ID', outbound: { content: [{ type: 'text', data: { text: 'pong' } }], messageId: '' } },
+    { label: 'envelope with a whitespace ID', outbound: { content: [{ type: 'text', data: { text: 'pong' } }], messageId: '  ' } },
+  ])('keeps the receipt and websocket message IDs consistent for $label', async ({ outbound }) => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const gateway: OutboundMessageService = {
@@ -206,6 +213,7 @@ describe('sandbox plugin runtime adapter', () => {
     endpoint.open();
     const { port } = await http.listen();
 
+    let messageId: string | undefined;
     const payload = await new Promise<string>((resolve, reject) => {
       const client = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
       const timer = setTimeout(() => reject(new Error('timeout waiting for websocket reply')), 3000);
@@ -213,7 +221,7 @@ describe('sandbox plugin runtime adapter', () => {
       client.once('open', () => {
         const sendWhenAccepted = () => {
           try {
-            endpoint.send({ conversation: sandboxConversation('sandbox-user'), payload: 'pong' });
+            messageId = endpoint.send({ conversation: sandboxConversation('sandbox-user'), payload: outbound });
           } catch (error) {
             if (!(error instanceof Error) || error.message !== 'Sandbox Endpoint has no live connection') {
               clearTimeout(timer);
@@ -246,6 +254,12 @@ describe('sandbox plugin runtime adapter', () => {
     expect(JSON.parse(payload).content).toEqual([
       { type: 'text', data: { text: 'pong' } },
     ]);
+    expect(messageId).toEqual(expect.any(String));
+    expect(messageId!.trim().length).toBeGreaterThan(0);
+    expect(JSON.parse(payload).messageId).toBe(messageId);
+    if (typeof outbound === 'object' && 'messageId' in outbound && outbound.messageId?.trim()) {
+      expect(messageId).toBe(outbound.messageId);
+    }
   });
 
   it('keeps sandbox payload parsing stable', () => {
@@ -517,42 +531,30 @@ describe('sandbox plugin runtime adapter', () => {
     });
   });
 
-  it('closes the previous fixed-name client when a new one connects', async () => {
+  it('keeps existing fixed-name clients when another one connects', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const gateway: OutboundMessageService = {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
     const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway,
-      http,
-      defaults,
+      gateway, http, defaults: resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' }),
     }), gateway, undefined);
     endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
-
-    const firstClosed = await new Promise<number>((resolve, reject) => {
-      const first = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
-      const timer = setTimeout(() => reject(new Error('timeout waiting for replace close')), 3000);
-      first.once('open', () => {
-        const second = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
-        second.once('open', () => {
-          // second client owns the target; first should be closed by server
-        });
-        second.once('error', reject);
-      });
-      first.once('close', (code) => {
-        clearTimeout(timer);
-        resolve(code);
-      });
-      first.once('error', reject);
-    });
-
-    expect(firstClosed).toBe(4000);
+    const first = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
+    const second = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
+    try {
+      await vi.waitFor(() => expect(endpoint.client.connections()).toHaveLength(2));
+      expect(first.readyState).toBe(WebSocket.OPEN);
+      expect(second.readyState).toBe(WebSocket.OPEN);
+    } finally {
+      first.close();
+      second.close();
+    }
   });
 
   it('uses action segment payload as text when no text segments', () => {

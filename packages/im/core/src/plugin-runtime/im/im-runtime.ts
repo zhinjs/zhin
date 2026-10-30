@@ -40,7 +40,7 @@ import { loginAssistToken } from './login-assist-host.js';
 import { LoginAssist } from '../../built/login-assist.js';
 import type { UserInteraction } from '@zhin.js/interaction';
 import type { OutboundRenderer } from './outbound-renderer.js';
-import { RuntimeInteractionCoordinator } from './interaction-runtime.js';
+import { RuntimeInteractionCoordinator, type PendingUserInteraction } from './interaction-runtime.js';
 import { ConversationRuntime } from './conversation-runtime.js';
 import {
   EndpointRuntime,
@@ -328,6 +328,11 @@ export class ImRuntime implements OutboundMessageService {
     bind?: { readonly subjectId: string },
   ): UserInteraction | undefined {
     return this.#inbound.createInteraction(message, bind);
+  }
+
+  /** Reads a prompt within the caller's current generation lease; answering uses the original IM ingress. */
+  readPendingInteraction(conversation: ConversationRef, subjectId: string, generation: number): PendingUserInteraction | undefined {
+    return this.#interactions.readPendingInteraction(conversation, subjectId, generation);
   }
 
   async send(request: SendRequest): Promise<DeliveryReceipt> {

@@ -8,7 +8,9 @@ import {
   pickMediaRawUrl,
   type MessageSegment,
 } from '@zhin.js/client';
-import { buildSandboxWebSocketUrl } from './sandboxTransport';
+import { buildSandboxWebSocketUrl, captureSandboxRequestContext, createSandboxMessageId, submitSandboxFrame, SANDBOX_SCOPED_PROTOCOL, type SandboxRequestContext } from './sandboxTransport';
+import { createWorkspaceDirectoryController, type DirectoryStatus } from './workspaceDirectoryState.js';
+import type { SandboxWorkspaceScope } from './workspaceDirectory.js';
 import {
   User, Bot, Users, Trash2, Send, Hash, MessageSquare,
   Wifi, WifiOff, Smile, Image, X, Check, Info, Search,
@@ -20,8 +22,10 @@ import {
 } from 'lucide-react';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor';
 import HtmlMessage from './HtmlMessage.js';
+import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';
+import { useSandboxHistory } from './useSandboxHistory.js';
 import {
-  agentStudioPath,
+  agentSessionsPath,
   buildAgentRunReport,
   buildSandboxSessionKey,
   cancelAgentTask,
@@ -41,6 +45,8 @@ import {
   createDefaultPlaygroundState,
   loadPlaygroundState,
   savePlaygroundState,
+  mergePlaygroundMessage,
+  retirePlaygroundInteractions,
   type PlaygroundMessage,
   type PlaygroundSession,
 } from './playgroundState.js';
@@ -50,10 +56,14 @@ type Message = PlaygroundMessage
 type Channel = PlaygroundSession
 interface Face { id: number; emojiId: number; stickerId: number; emojiType: string; name: string; describe: string; png: boolean; apng: boolean; lottie: boolean; }
 
-export default function Sandbox() {
+export interface SandboxPageProps {
+    readonly renderConversationDetails?: (context: { readonly sessionKey: string; readonly canExecute: boolean; readonly connectionId?: string }) => React.ReactNode
+}
+
+export default function Sandbox(props: SandboxPageProps = {}) {
     const [locale, setLocale] = useState<SandboxLocale>('zh-CN')
     const localeRef = useRef<SandboxLocale>('zh-CN')
-    const [initialState] = useState(() => loadPlaygroundState())
+    const [initialState] = useState(() => createDefaultPlaygroundState())
     const [messages, setMessages] = useState<Message[]>(() => [...initialState.messages])
     const [channels, setChannels] = useState<Channel[]>(() => [...initialState.sessions])
     const [faceList, setFaceList] = useState<Face[]>([])
@@ -67,8 +77,10 @@ export default function Sandbox() {
     const [inputText, setInputText] = useState('')
     const [endpointId, setBotName] = useState('sandbox-bot')
     const [connected, setConnected] = useState(false)
-    const [canExecute, setCanExecute] = useState(true)
+    const [canExecute, setCanExecute] = useState(false)
     const [persistenceStatus, setPersistenceStatus] = useState<'saved' | 'error'>('saved')
+    const [directoryStatus, setDirectoryStatus] = useState<DirectoryStatus>({ mode: 'loading', error: null })
+    const [workspaceScope, setWorkspaceScope] = useState<SandboxWorkspaceScope | null>(null)
     const [transportNotice, setTransportNotice] = useState<string | null>(null)
     const [shellIsolation, setShellIsolation] = useState<{ available: boolean; provider: string; message: string } | null>(null)
     const [inspectorView, setInspectorView] = useState<'runs' | 'artifacts'>('runs')
@@ -90,6 +102,8 @@ export default function Sandbox() {
     const [composerMode, setComposerMode] = useState<'write' | 'preview'>('write')
     const [showChannelList, setShowChannelList] = useState(false)
     const [showInspector, setShowInspector] = useState(false)
+    const [showConversationDetails, setShowConversationDetails] = useState(false)
+    const [pendingRefreshEpoch, setPendingRefreshEpoch] = useState(0)
     const [showRunSettings, setShowRunSettings] = useState(false)
     const [showNewSession, setShowNewSession] = useState(false)
     const [newSessionName, setNewSessionName] = useState('')
@@ -98,16 +112,87 @@ export default function Sandbox() {
     const [trace, setTrace] = useState<AgentTraceSnapshot | null>(null)
     const [traceLoading, setTraceLoading] = useState(true)
     const [traceNotice, setTraceNotice] = useState<string | null>(null)
+    const [cancellationFeedback, setCancellationFeedback] = useState<{ kind: 'error' | 'status'; message: string } | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
+    const connectionRef = useRef<{ protocol?: string; connectionId?: string; ownerId?: string; canExecute: boolean }>({ canExecute: false })
     const editorRef = useRef<RichTextEditorRef>(null)
     const traceRef = useRef<AgentTraceSnapshot | null>(null)
+    const traceReadOwnerRef = useRef<{
+        sessionKey: string; socket: WebSocket | null; controller: AbortController;
+        pending?: Promise<void>; cancelRefresh?: ReturnType<typeof window.setTimeout>;
+    } | null>(null)
     const activeChannelRef = useRef(activeChannel)
     const endpointIdRef = useRef(endpointId)
+    const directoryModeRef = useRef(directoryStatus.mode)
+    const directoryHostRef = useRef<string | null>(null)
+    const readyWorkingDirectoryRef = useRef('')
+    const readyIdentityRef = useRef<{ host: string; ownerId: string } | null>(null)
+    const socketRequestContextRef = useRef<SandboxRequestContext | null>(null)
+    const directoryControllerRef = useRef<ReturnType<typeof createWorkspaceDirectoryController> | null>(null)
+    if (!directoryControllerRef.current) directoryControllerRef.current = createWorkspaceDirectoryController({
+        loaded: (directory, sameScope) => {
+            const fallback = directory ? createDefaultPlaygroundState(readyWorkingDirectoryRef.current) : loadPlaygroundState()
+            const sessions: Channel[] = directory?.items.length
+                ? directory.items.map((item) => ({ id: item.id, type: item.type, name: item.name, runConfig: item.runConfig, unread: 0 }))
+                : [...fallback.sessions]
+            const previous = activeChannelRef.current
+            if (sameScope && !sessions.some((session) => session.id === previous.id && session.type === previous.type)) sessions.push(previous)
+            const selected = sameScope
+                ? sessions.find((session) => session.id === previous.id && session.type === previous.type)!
+                : sessions.find((session) => session.id === fallback.activeSessionId && session.type === fallback.activeSessionType) ?? sessions[0]!
+            activeChannelRef.current = selected
+            setActiveChannel(selected)
+            if (!sameScope) setMessages(directory ? [] : [...fallback.messages])
+            setChannels(sessions)
+            setWorkspaceScope(directory?.scope ?? null)
+            subscribeToScene(selected)
+        },
+        status: (status) => {
+            directoryModeRef.current = status.mode
+            setDirectoryStatus(status)
+            if (status.error) setPersistenceStatus('error')
+            else if (status.mode === 'server') setPersistenceStatus('saved')
+        },
+    })
     const sessionKey = useMemo(
         () => buildSandboxSessionKey(endpointId, activeChannel.type, activeChannel.id),
         [activeChannel.id, activeChannel.type, endpointId],
     )
+    const history = useSandboxHistory(canExecute && directoryStatus.mode === 'server' && workspaceScope
+        && workspaceScope.connectionId === connectionRef.current.connectionId ? {
+            connectionId: workspaceScope.connectionId, sessionKey, scope: workspaceScope.endpoint,
+            scene: { id: activeChannel.id, type: activeChannel.type, name: activeChannel.name },
+            ownerId: workspaceScope.ownerId, requestContext: socketRequestContextRef.current ?? undefined,
+        } : undefined, setMessages, locale)
+    const retireTraceReads = () => {
+        const owner = traceReadOwnerRef.current
+        traceReadOwnerRef.current = null
+        owner?.controller.abort()
+        if (owner?.cancelRefresh !== undefined) window.clearTimeout(owner.cancelRefresh)
+        traceRef.current = null
+    }
+    const currentTraceOwner = () => {
+        const scene = activeChannelRef.current
+        const key = buildSandboxSessionKey(endpointIdRef.current, scene.type, scene.id)
+        let owner = traceReadOwnerRef.current
+        if (!owner || owner.sessionKey !== key || owner.socket !== wsRef.current) {
+            retireTraceReads()
+            owner = { sessionKey: key, socket: wsRef.current, controller: new AbortController() }
+            traceReadOwnerRef.current = owner
+            setTrace(null)
+            setTraceNotice(null)
+            setCancellationFeedback(null)
+            setStoppingTask(false)
+        }
+        return owner
+    }
+    const ownsCurrentTrace = (owner: NonNullable<typeof traceReadOwnerRef.current>) => {
+        const scene = activeChannelRef.current
+        return traceReadOwnerRef.current === owner && !owner.controller.signal.aborted
+            && owner.socket === wsRef.current
+            && owner.sessionKey === buildSandboxSessionKey(endpointIdRef.current, scene.type, scene.id)
+    }
     const traceSummary = useMemo(() => summarizeTrace(trace), [trace])
     const taskRuns = useMemo(() => deriveTaskRuns(trace), [trace])
     const workbenchArtifacts = useMemo(() => deriveWorkbenchArtifacts(trace, locale), [trace, locale])
@@ -125,13 +210,14 @@ export default function Sandbox() {
     useEffect(() => { setInlineRunExpanded(currentTask?.status === 'running') }, [currentTask?.id])
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [currentTask?.id])
     useEffect(() => {
+        if (directoryModeRef.current !== 'browser') return
         setPersistenceStatus(savePlaygroundState({
             activeSessionId: activeChannel.id,
             activeSessionType: activeChannel.type,
             sessions: channels,
             messages,
         }) ? 'saved' : 'error')
-    }, [activeChannel.id, channels, messages])
+    }, [activeChannel.id, channels, messages, directoryStatus.mode])
 
     const fetchFaceList = async () => {
         try { const res = await fetch('https://face.viki.moe/metadata.json'); setFaceList(await res.json()) }
@@ -140,16 +226,38 @@ export default function Sandbox() {
 
     useEffect(() => { fetchFaceList() }, [])
 
+    const subscribeToScene = (scene: Pick<Channel, 'id' | 'type'>) => {
+        // Old Hosts parse unknown JSON as chat, so control frames require this explicit handshake.
+        if (connectionRef.current.protocol !== SANDBOX_SCOPED_PROTOCOL || !connectionRef.current.canExecute) return
+        if (!submitSandboxFrame(wsRef.current, { op: 'subscribe', conversation: { type: scene.type, id: scene.id } })) {
+            setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，会话切换未发送。"))
+        }
+    }
+
     const handleInboundPayload = (data: {
         type: string; id: string; locale?: unknown; content?: unknown; endpoint?: string; workingDirectory?: string; canExecute?: boolean;
         shellIsolation?: { available?: boolean; provider?: string; message?: string }; timestamp: number;
-        messageId?: string; bot?: string;
+        messageId?: string; bot?: string; protocol?: string; connectionId?: string; direction?: string; senderId?: string;
+        conversation?: { type: Channel['type']; id: string };
     }) => {
         const locale = data.type === 'ready' && data.locale === 'en' ? 'en' : data.type === 'ready' ? 'zh-CN' : localeRef.current
         if (data.type === 'ready') {
             localeRef.current = locale
             setLocale(locale)
-            setBotName(data.endpoint || data.bot || 'sandbox-bot')
+            const requestContext = socketRequestContextRef.current ?? captureSandboxRequestContext()
+            const host = requestContext.apiBase || window.location.origin
+            const previousIdentity = readyIdentityRef.current
+            if (previousIdentity && (previousIdentity.host !== host || previousIdentity.ownerId !== data.id)) {
+                const fresh = createDefaultPlaygroundState(data.workingDirectory?.trim())
+                activeChannelRef.current = fresh.sessions[0]!
+                setActiveChannel(fresh.sessions[0]!)
+                setChannels([...fresh.sessions])
+                setMessages([])
+            }
+            readyIdentityRef.current = { host, ownerId: data.id }
+            endpointIdRef.current = data.endpoint || data.bot || 'sandbox-bot'
+            setBotName(endpointIdRef.current)
+            connectionRef.current = { protocol: data.protocol, connectionId: data.connectionId, ownerId: data.id, canExecute: data.canExecute !== false }
             setCanExecute(data.canExecute !== false)
             setTransportNotice(data.canExecute === false ? sandboxText(locale, "当前 Token 只有演示权限，任务运行已禁用。") : null)
             if (data.shellIsolation) {
@@ -159,18 +267,14 @@ export default function Sandbox() {
                     message: data.shellIsolation.message || sandboxText(locale, "未检测到隔离执行环境"),
                 })
             }
-            if (data.workingDirectory?.trim()) {
-                const workingDirectory = data.workingDirectory.trim()
-                setChannels((current) => current.map((session) => session.runConfig.workingDirectory
-                    ? session
-                    : { ...session, runConfig: { ...session.runConfig, workingDirectory } }))
-                setActiveChannel((current) => current.runConfig.workingDirectory
-                    ? current
-                    : { ...current, runConfig: { ...current.runConfig, workingDirectory } })
-            }
+            readyWorkingDirectoryRef.current = data.workingDirectory?.trim() ?? ''
+            void directoryControllerRef.current!.begin({ host,
+                connectionId: data.connectionId, canExecute: data.canExecute !== false, requestContext })
             return
         }
+        if (data.type === 'subscribed') return
         if (data.type === 'error') {
+            setPendingRefreshEpoch((epoch) => epoch + 1)
             const notice = Array.isArray(data.content)
                 ? String((data.content[0] as { data?: { text?: unknown } } | undefined)?.data?.text ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
                 : String(data.content ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
@@ -181,62 +285,67 @@ export default function Sandbox() {
             const content: MessageSegment[] = Array.isArray(data.content)
                 ? data.content as MessageSegment[]
                 : parseTextToSegments(String(data.content ?? ''))
-            setMessages((prev) => prev.map((m) => (m.id === data.messageId ? { ...m, content } : m)))
+            const scene = data.conversation ?? activeChannelRef.current
+            if (!data.conversation && data.id && data.id !== scene.id) return
+            setMessages((prev) => prev.map((message) => message.id === data.messageId
+                && message.channelType === scene.type && message.channelId === scene.id && message.type === 'received'
+                ? { ...message, content } : message))
             return
         }
 
+        // A received message invalidates the projection; only Core decides whether a claim remains live.
+        setPendingRefreshEpoch((epoch) => epoch + 1)
         const content: MessageSegment[] = typeof data.content === 'string'
             ? parseTextToSegments(data.content)
             : Array.isArray(data.content) ? data.content as MessageSegment[] : parseTextToSegments(String(data.content ?? ''))
 
-        const channelType: Channel['type'] = data.type === 'group' || data.type === 'channel' ? data.type : 'private'
+        const channelType: Channel['type'] = data.conversation?.type ?? (data.type === 'group' || data.type === 'channel' ? data.type : 'private')
+        const sceneId = data.conversation?.id ?? data.id
+        const isInput = data.direction === 'inbound'
+        // Interactive choices are transport inputs, not another chat turn or an approval result.
+        if (isInput && content.every((segment) => segment.type === 'action')) return
         const channelName = channelType === 'private'
-            ? sandboxText(locale, "会话 {0}", [data.id])
+            ? sandboxText(locale, "会话 {0}", [sceneId])
             : channelType === 'group'
-            ? sandboxText(locale, "群组场景 {0}", [data.id])
-            : sandboxText(locale, "频道场景 {0}", [data.id])
+            ? sandboxText(locale, "群组场景 {0}", [sceneId])
+            : sandboxText(locale, "频道场景 {0}", [sceneId])
 
         setChannels((prev) => {
-            if (prev.some((c) => c.id === data.id && c.type === channelType)) return prev
+            if (prev.some((c) => c.id === sceneId && c.type === channelType)) return prev
             const created: Channel = {
-                id: data.id, name: channelName, type: channelType, unread: 0,
+                id: sceneId, name: channelName, type: channelType, unread: 0,
                 runConfig: { ...activeChannelRef.current.runConfig },
             }
+            activeChannelRef.current = created
             setActiveChannel(created)
             return [...prev, created]
         })
 
-        setMessages((prev) => [...prev, {
-            id: data.messageId ?? `bot_${data.timestamp}`, type: 'received', channelType,
-            channelId: data.id, channelName, senderId: 'endpoint',
-            senderName: data.bot || endpointIdRef.current, content, timestamp: data.timestamp,
-        }])
+        setMessages((prev) => mergePlaygroundMessage(prev, {
+            id: data.messageId ?? createSandboxMessageId(), type: isInput ? 'sent' : 'received', channelType,
+            interactionReadOnly: false,
+            channelId: sceneId, channelName, senderId: isInput ? data.senderId || connectionRef.current.ownerId || 'owner' : 'endpoint',
+            senderName: isInput ? sandboxText(locale, "当前用户") : data.bot || endpointIdRef.current, content, timestamp: data.timestamp,
+        }))
     }
 
     const sendInteractiveAction = (payload: string, messageId?: string) => {
-        const ws = wsRef.current
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-            setTransportNotice(sandboxText(locale, "Sandbox 连接尚未就绪，审批选择未发送。"))
-            return
-        }
+        if (!connectionRef.current.canExecute) return false
+        const scene = activeChannelRef.current
         const segments: MessageSegment[] = [{ type: 'action', data: { id: payload, payload } }]
-        const payloadJson = JSON.stringify({
-            type: activeChannel.type,
-            id: activeChannel.id,
-            content: segments,
-            agentRun: activeChannel.runConfig,
-            timestamp: Date.now(),
-        })
-        try {
-            ws.send(payloadJson)
-            if (messageId) {
-                setMessages((current) => current.map((message) => message.id === messageId
-                    ? { ...message, interactionResolved: true }
-                    : message))
-            }
-        } catch {
-            setTransportNotice(sandboxText(locale, "审批选择发送失败，请等待连接恢复后重试。"))
+        if (!submitSandboxFrame(wsRef.current, {
+            type: scene.type, id: scene.id, messageId: createSandboxMessageId(), content: segments,
+            agentRun: scene.runConfig, timestamp: Date.now(),
+        })) {
+            setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，审批选择未发送。"))
+            return false
         }
+        if (messageId) {
+            setMessages((current) => current.map((message) => message.id === messageId
+                && message.channelType === scene.type && message.channelId === scene.id && message.type === 'received'
+                ? { ...message, interactionResolved: true } : message))
+        }
+        return true
     }
 
     useEffect(() => {
@@ -248,13 +357,30 @@ export default function Sandbox() {
 
         const connect = () => {
             if (closed) return
+            retireTraceReads()
+            directoryControllerRef.current?.retire()
+            directoryModeRef.current = 'loading'
+            setDirectoryStatus({ mode: 'loading', error: null })
+            setWorkspaceScope(null)
+            const requestContext = captureSandboxRequestContext()
+            const nextHost = requestContext.apiBase || window.location.origin
+            if (directoryHostRef.current !== nextHost) {
+                const fresh = createDefaultPlaygroundState()
+                activeChannelRef.current = fresh.sessions[0]!
+                setActiveChannel(fresh.sessions[0]!)
+                setChannels([...fresh.sessions])
+                setMessages([])
+            }
+            directoryHostRef.current = nextHost
             if (retryTimer) {
                 clearTimeout(retryTimer)
                 retryTimer = undefined
             }
-            const wsUrl = buildSandboxWebSocketUrl()
-            // Tear down previous socket before opening a new one so we don't
-            // leave two concurrent /sandbox sessions for fixed-name endpoints.
+            connectionRef.current = { canExecute: false }
+            setCanExecute(false)
+            setConnected(false)
+            const wsUrl = buildSandboxWebSocketUrl(nextHost)
+            // This page owns one connection; replacing its credentials must retire only that socket.
             const previous = wsRef.current
             if (previous) {
                 replaceInFlight = true
@@ -266,18 +392,29 @@ export default function Sandbox() {
                 replaceInFlight = false
             }
             const ws = new WebSocket(wsUrl)
+            socketRequestContextRef.current = requestContext
             wsRef.current = ws
+            void loadTrace()
             ws.onopen = () => {
+                if (wsRef.current !== ws) return
                 attempt = 0
                 setConnected(true)
             }
             ws.onmessage = (event) => {
+                if (wsRef.current !== ws) return
                 try { handleInboundPayload(JSON.parse(String(event.data))) }
                 catch (err) { console.error('[Sandbox] Failed to parse message:', err) }
             }
             ws.onclose = () => {
                 if (wsRef.current !== ws) return
+                retireTraceReads()
+                directoryControllerRef.current?.retire()
+                directoryModeRef.current = 'loading'
+                setDirectoryStatus({ mode: 'loading', error: null })
+                setWorkspaceScope(null)
                 setConnected(false)
+                setCanExecute(false)
+                connectionRef.current = { canExecute: false }
                 wsRef.current = null
                 if (closed || replaceInFlight) return
                 const delay = Math.min(8_000, 500 * 2 ** attempt)
@@ -318,6 +455,8 @@ export default function Sandbox() {
         }
         return () => {
             closed = true
+            retireTraceReads()
+            directoryControllerRef.current?.retire()
             if (retryTimer) clearTimeout(retryTimer)
             if (typeof window !== 'undefined') {
                 window.removeEventListener('storage', onAuthOrStorage)
@@ -327,6 +466,8 @@ export default function Sandbox() {
             }
             wsRef.current?.close()
             wsRef.current = null
+            connectionRef.current = { canExecute: false }
+            setCanExecute(false)
             setConnected(false)
         }
     }, [])
@@ -335,37 +476,50 @@ export default function Sandbox() {
     useEffect(() => { setPreviewSegments(inputText.trim() ? parseTextToSegments(inputText) : []) }, [inputText])
 
     const loadTrace = useCallback(async (quiet = false) => {
+        const owner = currentTraceOwner()
         const locale = localeRef.current
         if (!quiet) setTraceLoading(true)
-        try {
-            const current = traceRef.current?.sessionKey === sessionKey ? traceRef.current : null
-            let incoming = await fetchAgentTrace(sessionKey, quiet ? current?.latestSequence ?? 0 : 0, locale)
-            if (quiet && current?.runtimeId && incoming.runtimeId && current.runtimeId !== incoming.runtimeId) {
-                incoming = await fetchAgentTrace(sessionKey, 0, locale)
+        if (owner.pending) return owner.pending
+        owner.pending = (async () => {
+            try {
+                const current = traceRef.current?.sessionKey === owner.sessionKey ? traceRef.current : null
+                let incoming = await fetchAgentTrace(owner.sessionKey, quiet ? current?.latestSequence ?? 0 : 0, locale, owner.controller.signal)
+                if (!ownsCurrentTrace(owner)) return
+                if (quiet && current?.runtimeId && incoming.runtimeId && current.runtimeId !== incoming.runtimeId) {
+                    incoming = await fetchAgentTrace(owner.sessionKey, 0, locale, owner.controller.signal)
+                    if (!ownsCurrentTrace(owner)) return
+                }
+                const baseline = traceRef.current?.sessionKey === owner.sessionKey ? traceRef.current : null
+                const merged = mergeTraceSnapshot(baseline, incoming)
+                traceRef.current = merged
+                setTrace(merged)
+                saveCachedAgentTrace(merged)
+                setTraceNotice(null)
+            } catch (error) {
+                if (ownsCurrentTrace(owner)) setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "Agent Trace 暂不可用"))
+            } finally {
+                owner.pending = undefined
+                if (ownsCurrentTrace(owner)) setTraceLoading(false)
             }
-            const merged = mergeTraceSnapshot(current, incoming)
-            traceRef.current = merged
-            setTrace(merged)
-            saveCachedAgentTrace(merged)
-            setTraceNotice(null)
-        } catch (error) {
-            setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "Agent Trace 暂不可用"))
-        } finally {
-            if (!quiet) setTraceLoading(false)
-        }
-    }, [sessionKey])
+        })()
+        return owner.pending
+    }, [])
 
     useEffect(() => {
+        const owner = currentTraceOwner()
         const cached = loadCachedAgentTrace(sessionKey)
-        traceRef.current = cached
+        // Cached display is not an incremental baseline for this connection.
         setTrace(cached)
         setTraceNotice(null)
         void loadTrace()
         const timer = window.setInterval(() => {
             if (document.visibilityState === 'visible') void loadTrace(true)
         }, 2_000)
-        return () => window.clearInterval(timer)
-    }, [loadTrace])
+        return () => {
+            window.clearInterval(timer)
+            if (traceReadOwnerRef.current === owner) retireTraceReads()
+        }
+    }, [sessionKey, loadTrace])
 
     const parseTextToSegments = (text: string): MessageSegment[] => {
         const segments: MessageSegment[] = []
@@ -405,6 +559,8 @@ export default function Sandbox() {
         isSent: boolean,
         messageId?: string,
         interactionResolved = false,
+        onInteractionSubmitted?: () => void,
+        allowInteraction = true,
     ) => {
         const ring = isSent ? 'ring-1 ring-primary-foreground/25' : 'ring-1 ring-border/60'
         return segments.map((segment, index) => {
@@ -519,8 +675,8 @@ export default function Sandbox() {
                                         <button
                                             key={btn.payload}
                                             type="button"
-                                            disabled={btn.disabled || isSent || resolved}
-                                            onClick={() => sendInteractiveAction(btn.payload, messageId)}
+                                            disabled={btn.disabled || isSent || resolved || !canExecute || !allowInteraction}
+                                            onClick={() => { if (sendInteractiveAction(btn.payload, messageId)) onInteractionSubmitted?.() }}
                                             className={cn(
                                                 (btn.style === 'primary' || /^允许/u.test(btn.label)) && 'is-primary',
                                                 (btn.style === 'danger' || /拒绝|取消/u.test(btn.label)) && 'is-danger',
@@ -541,21 +697,26 @@ export default function Sandbox() {
         })
     }
 
-    const handleSendMessage = (text: string, segments: MessageSegment[]) => {
-        if (!canExecute || !hasRenderableSegments(segments)) return
-        const newMessage: Message = { id: `msg_${Date.now()}`, type: 'sent', channelType: activeChannel.type, channelId: activeChannel.id, channelName: activeChannel.name, senderId: 'test_user', senderName: sandboxText(locale, "测试用户"), content: segments, timestamp: Date.now() }
-        setMessages((prev) => [...prev, newMessage]); setInputText(''); setPreviewSegments([]); setComposerMode('write')
+    const handleSendMessage = (_text: string, segments: MessageSegment[]) => {
+        if (!connectionRef.current.canExecute || directoryModeRef.current === 'loading' || !hasRenderableSegments(segments)) return
+        const scene = activeChannelRef.current
+        const newMessage: Message = {
+            id: createSandboxMessageId(), type: 'sent', channelType: scene.type, channelId: scene.id,
+            channelName: scene.name, senderId: connectionRef.current.ownerId || 'test_user',
+            senderName: sandboxText(localeRef.current, "测试用户"), content: segments, timestamp: Date.now(),
+        }
+        if (!submitSandboxFrame(wsRef.current, {
+            type: scene.type, id: scene.id, messageId: newMessage.id, content: segments,
+            agentRun: scene.runConfig, timestamp: newMessage.timestamp,
+        })) {
+            setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，消息未发送。"))
+            return
+        }
+        void directoryControllerRef.current?.save(scene, true)
+        setPendingRefreshEpoch((epoch) => epoch + 1)
+        setMessages((prev) => mergePlaygroundMessage(prev, newMessage))
+        setInputText(''); setPreviewSegments([]); setComposerMode('write')
         editorRef.current?.clear()
-        // Stamp type+id so Host sandbox endpoint preserves channel context for outbound replies.
-        const payload = JSON.stringify({
-            type: activeChannel.type,
-            id: activeChannel.id,
-            messageId: newMessage.id,
-            content: segments,
-            agentRun: activeChannel.runConfig,
-            timestamp: Date.now(),
-        })
-        wsRef.current?.send(payload)
     }
 
 
@@ -565,21 +726,35 @@ export default function Sandbox() {
         )))
         setConfirmClear(false)
     }
-    const switchChannel = (channel: Channel) => { setActiveChannel(channel); setChannels((prev) => prev.map((c) => c.id === channel.id && c.type === channel.type ? { ...c, unread: 0 } : c)); if (window.innerWidth < 900) setShowChannelList(false) }
+    const switchChannel = (channel: Channel) => {
+        activeChannelRef.current = channel
+        subscribeToScene(channel)
+        setActiveChannel(channel)
+        setChannels((prev) => prev.map((c) => c.id === channel.id && c.type === channel.type ? { ...c, unread: 0 } : c))
+        if (window.innerWidth < 900) setShowChannelList(false)
+    }
     const updateRunConfig = (patch: Partial<SandboxAgentRunConfig>) => {
-        const next = { ...activeChannel, runConfig: { ...activeChannel.runConfig, ...patch } }
+        if (directoryModeRef.current === 'loading') return
+        const current = activeChannelRef.current
+        const next = { ...current, runConfig: { ...current.runConfig, ...patch } }
+        activeChannelRef.current = next
         setActiveChannel(next)
-        setChannels((sessions) => sessions.map((session) => session.id === activeChannel.id && session.type === activeChannel.type ? next : session))
+        setChannels((sessions) => sessions.map((session) => session.id === current.id && session.type === current.type ? next : session))
+        void directoryControllerRef.current?.save(next)
     }
     const addSession = () => {
+        if (directoryModeRef.current === 'loading') return
         const label = newSessionName.trim() || sandboxText(locale, "未命名试验")
-        const id = `${newSessionScope}-${Date.now().toString(36)}`
+        const id = `${newSessionScope}-${createSandboxMessageId()}`
         const session: Channel = {
             id, name: label, type: newSessionScope, unread: 0,
             runConfig: { ...activeChannel.runConfig },
         }
         setChannels((current) => [...current, session])
+        activeChannelRef.current = session
+        subscribeToScene(session)
         setActiveChannel(session)
+        void directoryControllerRef.current?.save(session)
         setNewSessionName('')
         setShowNewSession(false)
     }
@@ -611,16 +786,24 @@ export default function Sandbox() {
     const runPrompt = (prompt: string) => handleSendMessage(prompt, [{ type: 'text', data: { text: prompt } }])
     const recentTraceEvents = trace?.events.slice(-8).reverse() ?? []
     const stopActiveTask = async () => {
+        const owner = currentTraceOwner()
+        setCancellationFeedback(null)
         setStoppingTask(true)
         try {
-            const cancelled = await cancelAgentTask(sessionKey, locale)
-            setTraceNotice(cancelled ? sandboxText(locale, "已发送停止请求，正在等待任务结束。") : sandboxText(locale, "当前会话没有运行中的任务。"))
-            window.setTimeout(() => void loadTrace(true), 240)
+            const cancelled = await cancelAgentTask(owner.sessionKey, locale)
+            if (!ownsCurrentTrace(owner)) return
+            setCancellationFeedback({ kind: 'status', message: cancelled ? sandboxText(locale, "停止请求已提交。") : sandboxText(locale, "当前会话没有运行中的任务。") })
+            if (owner.cancelRefresh !== undefined) window.clearTimeout(owner.cancelRefresh)
+            owner.cancelRefresh = window.setTimeout(() => {
+                owner.cancelRefresh = undefined
+                if (ownsCurrentTrace(owner)) void loadTrace(true)
+            }, 240)
         } catch (error) {
-            setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "无法停止任务"))
+            if (!ownsCurrentTrace(owner)) return
+            setCancellationFeedback({ kind: 'error', message: error instanceof Error ? error.message : sandboxText(locale, "无法停止任务") })
             setShowInspector(true)
         } finally {
-            setStoppingTask(false)
+            if (ownsCurrentTrace(owner)) setStoppingTask(false)
         }
     }
     const retryLastTask = () => {
@@ -701,20 +884,21 @@ export default function Sandbox() {
         </article>
     ) : null
 
+    const recoveryConnectionId = connectionRef.current.connectionId
     return (
-        <section className="agent-playground-shell">
+        <section className={cn("agent-playground-shell", showInspector && "has-inspector")}>
             <div className="agent-playground-mobilebar">
-                <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "测试会话")}</button>
-                <strong>{sandboxText(locale, "试聊一下")}</strong>
-                <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />{sandboxText(locale, "检查器")}</button>
+                <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "会话列表")}</button>
+                <strong>{sandboxText(locale, "会话")}</strong>
+                <button type="button" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />{sandboxText(locale, "检查器")}</button>
             </div>
 
-            <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label={sandboxText(locale, "测试会话")}>
+            <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label={sandboxText(locale, "会话列表")}>
                 <div className="agent-playground-brand">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <span className="agent-playground-mark"><Sparkles size={16} /></span>
-                            <div><h2>{sandboxText(locale, "试聊一下")}</h2><small>Try a chat</small></div>
+                            <div><h2>{sandboxText(locale, "会话")}</h2><small>Conversations</small></div>
                         </div>
                         <span className={cn("agent-playground-connection", connected && "is-online")} title={connected ? sandboxText(locale, "Sandbox WebSocket 已连接") : sandboxText(locale, "正在重连 Sandbox WebSocket")}>
                             {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
@@ -722,12 +906,12 @@ export default function Sandbox() {
                     </div>
                 </div>
 
-                <div className="agent-playground-section-label"><span>{sandboxText(locale, "测试会话")}</span><span>{channels.length}</span></div>
+                <div className="agent-playground-section-label"><span>{sandboxText(locale, "会话列表")}</span><span>{channels.length}</span><button type="button" disabled={directoryStatus.mode === 'loading'} aria-label={sandboxText(locale, "刷新会话目录")} onClick={() => void directoryControllerRef.current?.refresh()}><RefreshCw size={13} /></button></div>
                 <div className="agent-playground-session-list">
                     {channels.map((channel) => {
                         const isActive = activeChannel.id === channel.id && activeChannel.type === channel.type
                         return (
-                            <button type="button" key={`${channel.type}:${channel.id}`} aria-current={isActive ? 'page' : undefined} className={cn("agent-playground-session", isActive && "active")} onClick={() => switchChannel(channel)}>
+                            <button type="button" key={`${channel.type}:${channel.id}`} disabled={directoryStatus.mode === 'loading'} aria-current={isActive ? 'page' : undefined} className={cn("agent-playground-session", isActive && "active")} onClick={() => switchChannel(channel)}>
                                 <span className="agent-playground-session-icon">{getChannelIcon(channel.type)}</span>
                                 <div className="flex-1 min-w-0">
                                     <div className="text-sm font-medium truncate">{channel.name}</div>
@@ -756,11 +940,11 @@ export default function Sandbox() {
                             </div>
                         </div>
                     ) : (
-                        <button type="button" className="agent-playground-add" onClick={() => setShowNewSession(true)}><Plus size={15} />{sandboxText(locale, "新建测试会话")}</button>
+                        <button type="button" disabled={directoryStatus.mode === 'loading'} className="agent-playground-add" onClick={() => setShowNewSession(true)}><Plus size={15} />{sandboxText(locale, "新建会话")}</button>
                     )}
                 </div>
                 <div className="agent-playground-endpoint">
-                    <span>{persistenceStatus === 'saved' ? sandboxText(locale, "会话已持久化") : sandboxText(locale, "会话保存失败")}</span>
+                    <span>{directoryStatus.mode === 'loading' ? sandboxText(locale, "正在读取会话目录") : directoryStatus.mode === 'server' && !directoryStatus.error ? sandboxText(locale, "Host 会话目录") : persistenceStatus === 'saved' ? sandboxText(locale, "会话已持久化") : sandboxText(locale, "会话保存失败")}</span>
                     <strong>{endpointId}</strong>
                 </div>
             </nav>
@@ -771,9 +955,8 @@ export default function Sandbox() {
                 <header className="agent-playground-runbar">
                     <div className="agent-playground-run-identity">
                         <span className="agent-playground-run-icon">{getChannelIcon(activeChannel.type)}</span>
-                        <div>
-                            <div className="agent-playground-run-title"><h1>{activeChannel.name}</h1><span>{scopeLabel}</span></div>
-                            <code>{sessionKey}</code>
+                        <div title={sessionKey}>
+                            <div className="agent-playground-run-title"><h1 title={activeChannel.name}>{activeChannel.name}</h1><span>{scopeLabel}</span></div>
                         </div>
                     </div>
                     <div className="agent-playground-run-actions">
@@ -786,12 +969,19 @@ export default function Sandbox() {
                         ) : lastUserMessage ? (
                             <button type="button" onClick={retryLastTask} aria-label={sandboxText(locale, "重新运行上一个任务")}><RotateCcw size={14} />{sandboxText(locale, "重试")}</button>
                         ) : null}
-                        <a href={agentStudioPath(sessionKey)}><ExternalLink size={14} />Agent Studio</a>
+                        {props.renderConversationDetails
+                            ? <button type="button" disabled={!canExecute} aria-expanded={showConversationDetails} aria-controls="sandbox-conversation-details" onClick={() => setShowConversationDetails((visible) => !visible)}><ListChecks size={14} />{sandboxText(locale, "对话与轨迹")}</button>
+                            : <a href={agentSessionsPath(sessionKey)}><ExternalLink size={14} />{sandboxText(locale, "对话与轨迹")}</a>}
                         <button type="button" className={cn(showRunSettings && 'active')} aria-expanded={showRunSettings} onClick={() => setShowRunSettings((visible) => !visible)} aria-label={sandboxText(locale, "配置运行环境")}><SlidersHorizontal size={16} /></button>
-                        <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
+                        <button type="button" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
                         <button type="button" onClick={() => setConfirmClear(true)} aria-label={sandboxText(locale, "清空当前会话")}><Trash2 size={15} /></button>
                     </div>
                 </header>
+
+                {cancellationFeedback && <div className="agent-playground-confirm" role={cancellationFeedback.kind === 'error' ? 'alert' : 'status'}>
+                    <div><span>{cancellationFeedback.message}</span></div>
+                    <button type="button" onClick={() => setCancellationFeedback(null)}>{sandboxText(locale, "知道了")}</button>
+                </div>}
 
                 {confirmClear && (
                     <div className="agent-playground-confirm" role="alert">
@@ -808,11 +998,17 @@ export default function Sandbox() {
                     </div>
                 )}
 
+                {directoryStatus.error && <div className="agent-playground-confirm" role="alert">
+                    <div><strong>{sandboxText(locale, "会话目录")}</strong><span>{directoryStatus.error}</span></div>
+                    <button type="button" onClick={() => void directoryControllerRef.current?.refresh()}>{sandboxText(locale, "重新读取")}</button>
+                </div>}
+
                 {showRunSettings && (
                     <section className="agent-playground-run-settings" aria-label={sandboxText(locale, "运行配置")}>
                         <label className="agent-playground-directory-field">
                             <span><FolderOpen size={14} />{sandboxText(locale, "工作目录")}</span>
                             <input
+                                disabled={directoryStatus.mode === 'loading'}
                                 value={activeChannel.runConfig.workingDirectory}
                                 onChange={(event) => updateRunConfig({ workingDirectory: event.target.value })}
                                 placeholder={sandboxText(locale, "使用 Host 项目目录")}
@@ -821,7 +1017,7 @@ export default function Sandbox() {
                         </label>
                         <label>
                             <span><ShieldCheck size={14} />{sandboxText(locale, "安全策略")}</span>
-                            <select value={activeChannel.runConfig.safetyMode} onChange={(event) => {
+                            <select disabled={directoryStatus.mode === 'loading'} value={activeChannel.runConfig.safetyMode} onChange={(event) => {
                                 const safetyMode = event.target.value as SandboxAgentRunConfig['safetyMode']
                                 updateRunConfig({ safetyMode, ...(safetyMode === 'danger-full-access' ? { networkAccess: true } : {}) })
                             }}>
@@ -861,9 +1057,37 @@ export default function Sandbox() {
                     </section>
                 )}
 
-                {/* Messages */}
-                <section className="agent-playground-conversation" aria-label={sandboxText(locale, "Agent 对话")}>
-                    <div className="agent-playground-message-scroll">
+                {canExecute && recoveryConnectionId && (
+                    <ConversationRecoveryPanel key={JSON.stringify([recoveryConnectionId, sessionKey])}
+                        connectionId={recoveryConnectionId} sessionKey={sessionKey} locale={locale} hidden={showConversationDetails}
+                        pendingRefreshEpoch={pendingRefreshEpoch}
+                        onRetiredInteractions={(retired) => {
+                            const segments = retired.flatMap(interaction => interaction.segments)
+                            setMessages(previous => {
+                                const current = activeChannelRef.current
+                                if (connectionRef.current.connectionId !== recoveryConnectionId
+                                    || buildSandboxSessionKey(endpointIdRef.current, current.type, current.id) !== sessionKey) return previous
+                                return retirePlaygroundInteractions(previous, activeChannel, segments)
+                            })
+                        }}
+                        requestContext={socketRequestContextRef.current ?? undefined}
+                        renderInteraction={(segments, id, submitted, onSubmitted) => renderMessageSegments(segments, false, id, submitted, onSubmitted)} />
+                )}
+
+                {showConversationDetails && props.renderConversationDetails && (
+                    <section id="sandbox-conversation-details" className="agent-playground-conversation-details" aria-label={sandboxText(locale, "对话与轨迹")}>
+                        <button type="button" className="agent-playground-details-back" onClick={() => setShowConversationDetails(false)}><MessageSquare size={14} />{sandboxText(locale, "返回会话")}</button>
+                        {props.renderConversationDetails({ sessionKey, canExecute, connectionId: connectionRef.current.connectionId })}
+                    </section>
+                )}
+
+                {/* Keep the live editor mounted while reading details so its draft survives. */}
+                <section className="agent-playground-conversation" hidden={showConversationDetails} aria-label={sandboxText(locale, "Agent 对话")}>
+                    <div className="agent-playground-message-scroll" aria-busy={history.loading}>
+                        {history.hasMore || history.error ? <div className="agent-playground-history-navigation">
+                            {history.error ? <p role="alert">{history.error} <button type="button" disabled={history.loading} onClick={() => void history.refresh()}>{sandboxText(locale, '重试')}</button></p> : null}
+                            {history.hasMore ? <button type="button" disabled={history.loading} onClick={() => void history.loadEarlier()}>{sandboxText(locale, '加载更早记录')}</button> : null}
+                        </div> : null}
                         {channelMessages.length === 0 ? (
                             <div className="agent-playground-empty">
                                 <span className="agent-playground-empty-mark"><Sparkles size={24} /></span>
@@ -877,18 +1101,20 @@ export default function Sandbox() {
                         ) : (
                             <div className="agent-playground-message-list">
                                 {channelMessages.map((msg) => {
-                                    const isApproval = msg.type === 'received' && msg.content.some((segment) => segment.type === 'keyboard')
+                                    if (msg.recalledMessageId) return <p key={msg.id} className="agent-playground-history-notice">{sandboxText(locale, '消息已撤回')}</p>
+                                    const isApproval = msg.type === 'received' && msg.interactionReadOnly !== true && msg.content.some((segment) => segment.type === 'keyboard')
                                     return (
-                                    <React.Fragment key={msg.id}>
+                                    <React.Fragment key={JSON.stringify([msg.channelType, msg.channelId, msg.type, msg.id])}>
                                     <article className={cn("agent-playground-message", msg.type === 'sent' ? "is-user" : "is-agent", isApproval && "is-approval")}>
                                         <span className="agent-playground-message-avatar">{msg.type === 'received' ? <Bot size={16} /> : <User size={16} />}</span>
                                         <div className="agent-playground-message-main">
                                             <div className="agent-playground-message-meta">
-                                                <strong>{isApproval ? sandboxText(locale, "需要你的确认") : msg.type === 'received' ? endpointId : sandboxText(locale, "你")}</strong>
+                                                <strong>{isApproval ? sandboxText(locale, "需要你的确认") : msg.type === 'received' ? endpointId : msg.senderId === connectionRef.current.ownerId ? sandboxText(locale, "你") : msg.senderName || msg.senderId}</strong>
                                                 {isApproval && <span>approval required</span>}
+                                                {msg.recalled && <span>{sandboxText(locale, '已撤回')}</span>}
                                                 <time>{new Date(msg.timestamp).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</time>
                                             </div>
-                                            <div className="agent-playground-message-content">{renderMessageSegments(msg.content, msg.type === 'sent', msg.id, msg.interactionResolved === true)}</div>
+                                            <div className="agent-playground-message-content">{renderMessageSegments(msg.content, msg.type === 'sent', msg.id, msg.interactionResolved === true, undefined, msg.interactionReadOnly !== true)}</div>
                                         </div>
                                     </article>
                                     {currentTaskMessage?.id === msg.id && inlineRunCard}
@@ -903,7 +1129,7 @@ export default function Sandbox() {
                 </section>
 
                 {/* Input area */}
-                <section className="agent-playground-composer" aria-label={sandboxText(locale, "任务输入")}>
+                <section className="agent-playground-composer" hidden={showConversationDetails} aria-label={sandboxText(locale, "任务输入")}>
                     {/* Toolbar */}
                     <div className="flex gap-2 items-center flex-wrap">
                         <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", showFacePicker ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
@@ -1017,7 +1243,7 @@ export default function Sandbox() {
                         <button
                             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 transition-colors hover:bg-primary/90"
                             onClick={() => { const c = editorRef.current?.getContent(); if (c) handleSendMessage(c.text, c.segments) }}
-                            disabled={!canExecute || !hasRenderableSegments(previewSegments)}>
+                            disabled={!canExecute || directoryStatus.mode === 'loading' || !hasRenderableSegments(previewSegments)}>
                             <Send size={16} /> {sandboxText(locale, "发送")}</button>
                     </div>
 
@@ -1029,7 +1255,7 @@ export default function Sandbox() {
                 </section>
             </main>
 
-            <aside className={cn("agent-playground-inspector", showInspector && "show")} aria-label={sandboxText(locale, "运行检查器")}>
+            <aside id="sandbox-run-inspector" className={cn("agent-playground-inspector", showInspector && "show")} hidden={!showInspector} aria-hidden={!showInspector} aria-label={sandboxText(locale, "运行检查器")}>
                 <div className="agent-playground-inspector-head">
                     <div><span>Run inspector</span><h2>{sandboxText(locale, "运行检查器")}</h2></div>
                     <div>
@@ -1091,10 +1317,9 @@ export default function Sandbox() {
 
                 <section className="agent-playground-inspector-section agent-playground-trace-section">
                     <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "最近执行")}</span><small>2s sync</small></div>
+                    {traceNotice && <div className="agent-playground-trace-notice" role="alert"><CircleAlert size={16} /><span>{traceNotice}</span></div>}
                     {traceLoading && !trace ? (
                         <div className="agent-playground-trace-loading"><i /><i /><i /></div>
-                    ) : traceNotice && !trace?.events.length ? (
-                        <div className="agent-playground-trace-notice"><CircleAlert size={16} /><span>{traceNotice}</span></div>
                     ) : recentTraceEvents.length ? (
                         <div className="agent-playground-trace-list">
                             {recentTraceEvents.map((event) => {
@@ -1133,6 +1358,11 @@ export default function Sandbox() {
                                             {expanded && (
                                                 <div className="agent-playground-artifact-detail">
                                                     {artifact.path && <code>{artifact.path}</code>}
+                                                    {canExecute && artifact.projectFilePath && (
+                                                        <a href={`/files?${new URLSearchParams({ path: artifact.projectFilePath })}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                                            <ExternalLink size={13} />{sandboxText(locale, "打开当前文件")}
+                                                        </a>
+                                                    )}
                                                     {artifact.diff ? <pre>{artifact.diff}</pre> : <pre>{artifact.detail || sandboxText(locale, "暂无输出")}</pre>}
                                                     <footer><span>{artifact.durationMs === undefined ? sandboxText(locale, "等待结果") : `${artifact.durationMs.toLocaleString(locale)} ms`}</span><code>{artifact.turnId.slice(0, 12)}</code></footer>
                                                 </div>
@@ -1145,7 +1375,7 @@ export default function Sandbox() {
                     </section>
                 </div>
 
-                <a className="agent-playground-studio-link" href={agentStudioPath(sessionKey)}><span><ExternalLink size={15} />{sandboxText(locale, "在 Agent Studio 中完整诊断")}</span><code>{sessionKey}</code></a>
+                <a className="agent-playground-studio-link" href={agentSessionsPath(sessionKey)}><span><ExternalLink size={15} />{sandboxText(locale, "对话与轨迹")}</span><code>{sessionKey}</code></a>
             </aside>
             {showInspector && <div className="agent-playground-inspector-overlay" onClick={() => setShowInspector(false)} />}
         </section>

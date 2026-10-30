@@ -8,14 +8,16 @@ import { execFile } from 'node:child_process';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import {
   bindSandboxWsSocket,
   formatSandboxOutbound,
-  parseSandboxWsPayload,
+  parseSandboxWsFrame,
   sandboxInboundConversation,
   whenWsOpen,
   type ResolvedSandboxBot,
   type SandboxWsSocket,
+  type SandboxConversation,
 } from './protocol.js';
 import { SandboxClient, type SandboxClientConnection } from './client.js';
 
@@ -71,10 +73,14 @@ function claimSandboxWsPath(
 }
 
 interface SandboxConnection {
+  readonly connectionId: string;
   readonly target: string;
   readonly owner: string;
   readonly socket: SandboxWsSocket;
   readonly release: () => void;
+  readonly canExecute: boolean;
+  conversation: SandboxConversation;
+  scoped: boolean;
   /** true = 占位连接（尚无真实 WS 客户端），send 命中时按 miss 处理。 */
   readonly placeholder?: boolean;
 }
@@ -116,7 +122,8 @@ const messages = createMessages({
   readOnly: { 'zh-CN': '当前连接是只读演示权限，不能运行 Agent 任务。', en: 'This connection is a read-only demo and cannot run Agent tasks.' },
   connected: { 'zh-CN': '已连接 Sandbox「{target}」', en: 'Connected to Sandbox “{target}”' },
   protocol: { 'zh-CN': '与 Node Host 控制台沙盒协议一致（{path}）', en: 'Using the Node Host Console sandbox protocol ({path})' },
-  profile: { 'zh-CN': '「试聊一下」会话已启用持久化运行配置。', en: 'The “Try a chat” session uses a persistent runtime profile.' },
+  profile: { 'zh-CN': '会话已启用持久化运行配置。', en: 'The conversation uses a persistent runtime profile.' },
+  invalidFrame: { 'zh-CN': '会话订阅或消息格式无效。', en: 'The conversation subscription or message format is invalid.' },
 });
 
 export interface SandboxEndpointOptions {
@@ -153,6 +160,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
     this.client = new SandboxClient(
       () => this.#wsPath,
       () => [...this.#connections.values()].map((connection) => ({
+        connectionId: connection.connectionId,
         target: connection.target,
         owner: connection.owner,
         socket: connection.socket,
@@ -223,46 +231,57 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
 
   send({ conversation, payload }: EndpointSendRequest): string {
     if (!this.#open) throw new Error('Sandbox Endpoint is not open');
-    // Reply targets this endpoint's own live socket (fixed bot name, or the
-    // only live random-name connection); conversation carries kind/id stamp.
-    const connection = this.#connections.get(this.#options.defaults.id)
-      ?? this.#findLiveConnection();
-    if (!connection) {
-      this.#logger.debug(formatCompact({
-        op: 'sandbox_send_miss',
-        target: `${conversation.kind}:${conversation.id}`,
-      }));
-      throw new Error('Sandbox Endpoint has no live connection');
+    const scene = { type: conversation.kind, id: conversation.id };
+    const subscribers = this.#subscribers(scene);
+    if (!subscribers.length) {
+      throw new EndpointDeliveryError('sandbox_delivery_unavailable', 'Sandbox Endpoint has no live connection', 'not_sent');
     }
-    if (connection.placeholder) {
-      this.#logger.debug(formatCompact({
-        op: 'sandbox_send_placeholder',
-        target: `${conversation.kind}:${conversation.id}`,
-      }));
-      throw new Error('Sandbox Endpoint has no live connection');
-    }
-    // Console UI filters by type+id; stamp the conversation onto outbound wire.
-    connection.socket.send(formatSandboxOutbound(payload, {
-      type: conversation.kind,
-      id: conversation.id,
+    // Use the same identity for live messages and the canonical delivery receipt.
+    const explicitMessageId = payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as { readonly messageId?: unknown }).messageId
+      : undefined;
+    const messageId = typeof explicitMessageId === 'string' && explicitMessageId.trim()
+      ? explicitMessageId
+      : randomUUID();
+    const wire = formatSandboxOutbound(payload, {
+      ...scene,
       bot: this.#options.defaults.id,
-      endpoint: connection.target,
-    }));
-    this.#logger.debug(formatCompact({
-      op: 'sandbox_send',
-      target: connection.target,
-      channelType: conversation.kind,
-      channelId: conversation.id,
-    }));
-    return randomUUID();
+      endpoint: this.#options.defaults.id,
+      messageId,
+      conversation: scene,
+    });
+    if (this.#broadcast(subscribers, wire) === 0) {
+      throw new EndpointDeliveryError(
+        'sandbox_delivery_unavailable',
+        'Sandbox Endpoint has no live connection',
+        'unknown',
+      );
+    }
+    return messageId;
   }
 
-  /** Prefer a real (non-placeholder) socket when reply target key is wrong/stale. */
-  #findLiveConnection(): SandboxConnection | undefined {
-    for (const connection of this.#connections.values()) {
-      if (!connection.placeholder) return connection;
+  #subscribers(scene: { readonly type: string; readonly id: string }, echo = false): SandboxConnection[] {
+    return [...this.#connections.values()].filter(connection => !connection.placeholder && connection.canExecute
+      && (!echo || connection.scoped)
+      && connection.conversation.type === scene.type && connection.conversation.id === scene.id
+      && (connection.socket.readyState === undefined || connection.socket.readyState === 1));
+  }
+
+  /** A failing page must not prevent delivery to another subscriber or admit another turn. */
+  #broadcast(subscribers: readonly SandboxConnection[], wire: string): number {
+    let delivered = 0;
+    for (const connection of subscribers) {
+      try {
+        connection.socket.send(wire);
+        delivered += 1;
+      } catch (error) {
+        this.#logger.warn(formatCompact({
+          op: 'sandbox_send_failed', connectionId: connection.connectionId,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      }
     }
-    return undefined;
+    return delivered;
   }
 
   #acceptConnection(connection: WsConnection): void {
@@ -272,24 +291,16 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
     const owner = this.#options.defaults.owner;
     const canExecute = connection.authScope === 'full';
     const socket = connection.socket as SandboxWsSocket;
-    // Fixed-name mode reuses `target`; dropping the prior entry without
-    // closing its socket leaves a zombie browser tab that still looks
-    // connected but never receives outbound traffic.
-    const previous = this.#connections.get(target);
-    if (previous) {
-      previous.release();
-      if (!previous.placeholder) {
-        try {
-          previous.socket.close(4000, 'replaced by new sandbox client');
-        } catch {
-          /* already closed */
-        }
-      }
-      this.#connections.delete(target);
-    }
+    const connectionId = randomUUID();
+    const subscription: SandboxConnection = {
+      connectionId, target, owner, socket, canExecute, scoped: false,
+      conversation: { type: 'private', id: owner },
+      release: () => release(),
+    };
+    const placeholder = this.#connections.get(this.#options.defaults.id);
+    if (placeholder?.placeholder) this.#connections.delete(this.#options.defaults.id);
     const release = bindSandboxWsSocket(socket, {
       onMessage: (raw) => {
-        void this.#emitPlatformEvent('message', raw);
         if (!canExecute) {
           socket.send(JSON.stringify({
             type: 'error',
@@ -300,7 +311,26 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
           }));
           return;
         }
-        const parsed = parseSandboxWsPayload(raw);
+        const frame = parseSandboxWsFrame(raw);
+        if (frame.kind === 'invalid') {
+          socket.send(JSON.stringify({
+            type: 'error', endpoint: target, connectionId,
+            content: [{ type: 'text', data: { text: messages(this.#locale, 'invalidFrame') } }],
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+        if (frame.kind === 'subscribe') {
+          subscription.conversation = frame.conversation;
+          subscription.scoped = true;
+          socket.send(JSON.stringify({
+            type: 'subscribed', id: frame.conversation.id, conversation: frame.conversation,
+            endpoint: target, connectionId, timestamp: Date.now(),
+          }));
+          return;
+        }
+        const parsed = frame.message;
+        void this.#emitPlatformEvent('message', raw);
         const sceneId = parsed.id || owner;
         const conversation = sandboxInboundConversation(String(this.#options.id), {
           type: parsed.type,
@@ -314,12 +344,20 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
           channelId: sceneId,
           text: parsed.text.slice(0, 80),
         }));
+        const scene: SandboxConversation = { type: conversation.kind as SandboxConversation['type'], id: sceneId };
+        subscription.conversation = scene;
+        const messageId = parsed.messageId ?? randomUUID();
+        this.#broadcast(this.#subscribers(scene, true), JSON.stringify({
+          ...scene, conversation: scene, direction: 'inbound', senderId: owner,
+          messageId, endpoint: this.#options.defaults.id, content: parsed.content, timestamp: parsed.timestamp,
+        }));
         // Don't gate on #open — inbound must always reach the gateway so
         // Command/AI dispatch and outbound replies work.
         void this.emit('message.receive', {
           conversation,
-          ...(parsed.messageId ? { message: { conversation, id: parsed.messageId } } : {}),
+          message: { conversation, id: messageId },
           content: parsed.text,
+          segments: parsed.content,
           sender: { id: owner },
           endpointId: target,
           metadata: Object.freeze({
@@ -341,12 +379,11 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
       },
       onClose: () => {
         void this.#emitPlatformEvent('connection.close', { target, owner });
-        // Only drop the map entry if we still own this socket — a replace
-        // may have already swapped in a newer connection for the same target.
-        const current = this.#connections.get(target);
-        if (current && current.socket === socket) {
-          this.#connections.delete(target);
-          this.#logger.debug(formatCompact({ op: 'sandbox_ws_closed', target }));
+        const current = this.#connections.get(connectionId);
+        if (current === subscription) {
+          current.release();
+          this.#connections.delete(connectionId);
+          this.#logger.debug(formatCompact({ op: 'sandbox_ws_closed', target, connectionId }));
         }
       },
       onError: (err) => {
@@ -358,14 +395,17 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
         }));
       },
     });
-    this.#connections.set(target, { target, owner, socket, release });
+    this.#connections.set(connectionId, subscription);
     void this.#emitPlatformEvent('connection.open', { target, owner, socket });
     this.#logger.debug(formatCompact({ op: 'sandbox_ws_connected', target, owner }));
     this.#readiness.afterProbe((shellIsolation) => {
-      const current = this.#connections.get(target);
+      const current = this.#connections.get(connectionId);
       if (!current || current.socket !== socket) return;
       const readyPayload = JSON.stringify({
         type: 'ready',
+        protocol: 'scoped-conversations-v1',
+        connectionId,
+        conversation: subscription.conversation,
         locale: this.#locale,
         id: owner,
         endpoint: target,
@@ -391,6 +431,10 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
   #ensurePlaceholder(name: string, owner: string): void {
     if (this.#connections.has(name)) return;
     this.#connections.set(name, {
+      connectionId: name,
+      canExecute: false,
+      scoped: false,
+      conversation: { type: 'private', id: owner },
       target: name,
       owner,
       socket: { send: () => undefined, close: () => undefined },

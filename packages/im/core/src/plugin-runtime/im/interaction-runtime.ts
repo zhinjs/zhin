@@ -16,6 +16,7 @@ import {
   projectUserInteraction,
   renderUserInteraction,
   type UserInteractionProgress,
+  type UserInteractionView,
 } from '../../built/user-interaction.js';
 import { randomUUID } from 'node:crypto';
 import { generationAdmissionSource, outboundHostToken, PluginOutboundHost, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
@@ -37,6 +38,17 @@ interface UserInteractionClaim {
   readonly answer: Promise<InteractionAnswer>;
   readonly check: () => void;
   readonly dispose: () => void;
+  readonly project: (generation: number) => PendingUserInteraction | undefined;
+}
+
+/** A live conversational prompt; its callbacks still require the original subject and generation. */
+export interface PendingUserInteraction {
+  readonly id: string;
+  readonly generation: number;
+  readonly conversation: ConversationRef;
+  readonly subjectId: string;
+  readonly expiresAt: number;
+  readonly segments: SendContent;
 }
 
 const ASK_ACTION_PREFIX = 'zhin:ask:';
@@ -158,6 +170,11 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     return input !== undefined && this.#router.resolvesLiveFallback(conversation, generation, input);
   }
 
+  /** Read-only current prompt; never re-delivers, renews its deadline or accepts an answer. */
+  readPendingInteraction(conversation: ConversationRef, subjectId: string, generation: number): PendingUserInteraction | undefined {
+    return this.#claims.get(`${conversationRefKey(conversation)}:${subjectId}`)?.project(generation);
+  }
+
   createForMessage(
     message: Message,
     bind?: { readonly subjectId: string },
@@ -199,7 +216,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       const view = projectUserInteraction(request, progress, locale);
       let prompt = view;
       while (true) {
-        const claim = this.#reserveClaim(source, deadline, timeoutText, request.signal, subjectId, operation, view.actions);
+        const claim = this.#reserveClaim(source, deadline, timeoutText, prompt, locale, request.signal, subjectId, operation, view.actions);
         try {
           claim.check();
           const actions = [...claim.actions.keys()];
@@ -280,6 +297,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     source: UserInteractionSource,
     deadline: number,
     timeoutText: string,
+    prompt: UserInteractionView,
+    locale: Locale,
     signal?: AbortSignal,
     subjectId?: string,
     operation?: InteractionOperationScope,
@@ -288,6 +307,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     const key = this.#conversationKey(source, subjectId);
     this.#claims.get(key)?.reject(new UserInteractionSupersededError());
     const id = randomUUID();
+    const generation = operation?.snapshot.generation ?? source.generation;
     const answers = new Map(actions?.map((action, index) => [`${ASK_ACTION_PREFIX}${id}:${index}`, action.value]));
     let resolve!: (value: InteractionAnswer) => void;
     let reject!: (error: Error) => void;
@@ -312,7 +332,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     };
     const timer = setTimeout(() => fail(new UserInteractionTimeoutError(timeoutText)), Math.max(1, deadline - Date.now()));
     const claim: UserInteractionClaim = {
-      generation: operation?.snapshot.generation ?? source.generation,
+      generation,
       actions: answers,
       answer,
       accept: (raw, action = false) => {
@@ -329,6 +349,16 @@ export class RuntimeInteractionCoordinator<Admission = never> {
         if (failure) throw failure;
       },
       dispose,
+      project: currentGeneration => {
+        if (generation === undefined || generation !== currentGeneration || !delivered || failure
+          || buffered !== undefined || Date.now() >= deadline) return undefined;
+        return {
+          id, generation, subjectId: subjectId ?? source.sender?.id ?? '', expiresAt: deadline,
+          conversation: { ...source.conversation, endpoint: { ...source.conversation.endpoint },
+            ...(source.conversation.parent ? { parent: { ...source.conversation.parent } } : {}) },
+          segments: renderUserInteraction(prompt, (_value, index) => [...answers.keys()][index]!, locale),
+        };
+      },
     };
     this.#claims.set(key, claim);
     if (deadline <= Date.now()) fail(new UserInteractionTimeoutError(timeoutText));
