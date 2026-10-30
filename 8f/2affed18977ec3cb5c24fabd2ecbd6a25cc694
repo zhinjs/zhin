@@ -1,0 +1,43 @@
+.changeset/sandbox-outbound-message-identity.md
+  s_9622fd28aba994::t_2ae3cf9014bb50 1-7
+docs/adapters/sandbox.md
+  s_9622fd28aba994::t_0d52f106ba53d7 11,90,94-95,128,178
+plugins/adapters/sandbox/README.md
+  s_9622fd28aba994::t_9150c3ee680c25 78,82-83,116,166
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  s_9622fd28aba994::t_9849627429f436 24,707-708,712,717,725,759,789,1148
+plugins/adapters/sandbox/pages/index/agentTrace.ts
+  s_9622fd28aba994::t_701bf6561e7439 102,104,409
+plugins/adapters/sandbox/pages/index/index.tsx
+  s_9622fd28aba994::t_daab87acb3c6db 5-6
+plugins/adapters/sandbox/pages/index/messages.ts
+  s_9622fd28aba994::t_26caa0aa08cb5f 53-54,67,153,204
+plugins/adapters/sandbox/src/endpoint.ts
+  s_9622fd28aba994::t_2a1584f65abcc9 119,244-250,257,265
+plugins/adapters/sandbox/src/protocol.ts
+  s_9622fd28aba994::t_2ec7cc0dedd6c0 365-367
+plugins/adapters/sandbox/tests/agent-trace.test.ts
+  s_9622fd28aba994::t_4f9b53d5af320a 2,35-41
+plugins/adapters/sandbox/tests/localization.test.ts
+  s_9622fd28aba994::t_5b180de9925b44 7-18
+plugins/adapters/sandbox/tests/sandbox-console.test.ts
+  s_9622fd28aba994::t_076b93fcec9d49 33-34,55,92-93,98
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  s_9622fd28aba994::t_7bcb0af237d737 191-198,216,224,257-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8f2affed18977ec3cb5c24fabd2ecbd6a25cc694",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
