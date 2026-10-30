@@ -4,6 +4,8 @@ import { sandboxText } from '../pages/index/messages.js';
 import * as traces from '../pages/index/agentTrace.js';
 import * as playground from '../pages/index/playgroundState.js';
 import * as transport from '../pages/index/sandboxTransport.js';
+import * as directories from '../pages/index/workspaceDirectory.js';
+import { createWorkspaceDirectoryController } from '../pages/index/workspaceDirectoryState.js';
 
 const file = new URL('../pages/index/SandboxChat.tsx', import.meta.url);
 const source = await readFile(file, 'utf8');
@@ -14,7 +16,8 @@ const renderBoundary = declaration.body!.statements.find(node => ts.isVariableSt
 const prefix = source.slice(declaration.getStart(ast), renderBoundary.getStart(ast)).replace('export default ', '');
 const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,channels,messages,inputText,previewSegments,transportNotice,
   trace,traceNotice,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
-  handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,setInputText,setPreviewSegments,editorRef};}`, {
+  handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,
+  directoryStatus,workspaceScope,activeChannel,directoryControllerRef};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
 }).outputText;
 
@@ -43,14 +46,19 @@ function fixture(options: {
   cancelAgentTask?: typeof traces.cancelAgentTask;
   loadCachedAgentTrace?: typeof traces.loadCachedAgentTrace;
   saveCachedAgentTrace?: typeof traces.saveCachedAgentTrace;
+  readWorkspaceDirectory?: typeof directories.readWorkspaceDirectory;
+  saveWorkspaceConversation?: typeof directories.saveWorkspaceConversation;
+  legacyState?: ReturnType<typeof playground.createDefaultPlaygroundState>;
 } = {}) {
   const slots: any[] = [], listeners = new Map<string, Set<() => void>>();
   let cursor = 0, pending: Array<() => void> = [], stateWrites = 0;
   const intervals = new Map<number, () => void>();
   let intervalId = 0;
   const storage = new Map<string, string>();
+  if (options.legacyState) storage.set(playground.PLAYGROUND_STORAGE_KEY, JSON.stringify(options.legacyState));
   vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) });
   vi.stubGlobal('window', {
+    localStorage: globalThis.localStorage,
     location: { origin: 'http://localhost' }, innerWidth: 1200,
     setInterval(callback: () => void) { const id = ++intervalId; intervals.set(id, callback); return id; },
     clearInterval(id: number) { intervals.delete(id); },
@@ -64,7 +72,11 @@ function fixture(options: {
   vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => [] })));
   const bindings = {
     sandboxText, ...traces, ...playground, ...transport,
-    loadPlaygroundState: () => playground.createDefaultPlaygroundState('/workspace'),
+    useSandboxHistory: () => ({ loading: false, error: null, hasMore: false, loadEarlier: async () => {}, refresh: async () => {} }),
+    loadPlaygroundState: () => options.legacyState ?? playground.createDefaultPlaygroundState('/workspace'),
+    createWorkspaceDirectoryController: (callbacks: Parameters<typeof createWorkspaceDirectoryController>[0]) => createWorkspaceDirectoryController({
+      ...callbacks, read: options.readWorkspaceDirectory ?? (async () => null), save: options.saveWorkspaceConversation,
+    }),
     fetchAgentTrace: options.fetchAgentTrace ?? (async (sessionKey: string) => ({ sessionKey, latestSequence: 0, activeTurnIds: [], events: [] })),
     cancelAgentTask: options.cancelAgentTask ?? traces.cancelAgentTask,
     loadCachedAgentTrace: options.loadCachedAgentTrace ?? traces.loadCachedAgentTrace,
@@ -96,10 +108,11 @@ function fixture(options: {
     socket: () => FakeSocket.instances.at(-1)!,
     poll() { intervals.forEach(callback => callback()); },
     get stateWrites() { return stateWrites; },
+    storage,
     dispatch(type: string) { listeners.get(type)?.forEach(callback => callback()); },
     ready(protocol: string | null = transport.SANDBOX_SCOPED_PROTOCOL, canExecute = true) {
       const socket = f.socket(); socket.open();
-      socket.receive({ type: 'ready', id: 'owner', endpoint: 'stable-bot', connectionId: 'page-connection', protocol: protocol ?? undefined, canExecute, timestamp: 1 });
+      socket.receive({ type: 'ready', id: 'owner', endpoint: 'stable-bot', connectionId: options.readWorkspaceDirectory ? 'page-connection' : undefined, protocol: protocol ?? undefined, canExecute, timestamp: 1 });
       return f.render();
     },
     close() { slots.forEach(slot => slot?.cleanup?.()); },
@@ -121,6 +134,92 @@ async function settle() { for (let index = 0; index < 8; index++) await Promise.
 const traceSnapshot = (sessionKey: string, turnId: string): traces.AgentTraceSnapshot => ({
   sessionKey, runtimeId: 'test-runtime', latestSequence: 1, activeTurnIds: [turnId],
   events: [{ sessionKey, runtimeId: 'test-runtime', turnId, sequence: 1, recordedAt: 1, type: 'turn_start', data: {} }],
+});
+
+describe('Sandbox server conversation directory handlers', () => {
+  const scope = { endpoint: { adapter: 'sandbox', id: 'canonical-bot' }, endpointKey: 'stable-bot', ownerId: 'owner', connectionId: 'page-connection' };
+  const stored = { ...playground.createDefaultPlaygroundState('/host').sessions[0]!, id: 'stored-scene', name: 'Host conversation', revision: 'revision-1', updatedAt: 1 };
+
+  it('does not restore or overwrite Hostless browser state for an empty server directory, nor create metadata on ready', async () => {
+    const legacy = { ...playground.createDefaultPlaygroundState(), sessions: [{ ...stored, id: 'legacy', name: 'Private old browser conversation' }], activeSessionId: 'legacy', messages: [] };
+    const result = deferred<directories.WorkspaceDirectory | null>();
+    const save = vi.fn<typeof directories.saveWorkspaceConversation>(async (_connection, input) => ({ scope, item: { ...input, revision: 'new-revision', updatedAt: 2 } }));
+    const f = fixture({ legacyState: legacy, readWorkspaceDirectory: () => result.promise, saveWorkspaceConversation: save });
+    try {
+      const original = f.storage.get(playground.PLAYGROUND_STORAGE_KEY);
+      expect(f.view.channels.some((scene: playground.PlaygroundSession) => scene.id === 'legacy')).toBe(false);
+      f.ready();
+      expect(f.view.directoryStatus.mode).toBe('loading');
+      result.resolve({ scope, items: [] }); await settle(); f.render();
+      expect(f.view.directoryStatus.mode).toBe('server');
+      expect(f.view.channels.some((scene: playground.PlaygroundSession) => scene.id === 'legacy')).toBe(false);
+      expect(save).not.toHaveBeenCalled();
+      f.view.handleSendMessage('first real message', text('first real message')); await settle(); f.render();
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(save.mock.calls[0]?.[2]).toBeNull();
+      f.view.handleSendMessage('second message', text('second message')); await settle();
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(f.storage.get(playground.PLAYGROUND_STORAGE_KEY)).toBe(original);
+    } finally { f.close(); }
+  });
+
+  it('restores browser data only for a confirmed unavailable/old Host fallback', async () => {
+    const legacy = { ...playground.createDefaultPlaygroundState(), sessions: [{ ...stored, id: 'legacy', name: 'Browser conversation' }], activeSessionId: 'legacy', messages: [] };
+    const f = fixture({ legacyState: legacy, readWorkspaceDirectory: async () => null });
+    try {
+      f.ready(); await settle(); f.render();
+      expect(f.view.directoryStatus.mode).toBe('browser');
+      expect(f.view.activeChannel.id).toBe('legacy');
+      f.view.updateRunConfig({ workingDirectory: '/browser-change' }); f.render();
+      expect(JSON.parse(f.storage.get(playground.PLAYGROUND_STORAGE_KEY)!).sessions[0].runConfig.workingDirectory).toBe('/browser-change');
+    } finally { f.close(); }
+  });
+
+  it('keeps the same Host and canonical owner selection on reconnect, but does not select the legacy active scene', async () => {
+    const another = { ...stored, id: 'other-scene', name: 'Second Host conversation' };
+    const f = fixture({ readWorkspaceDirectory: async () => ({ scope, items: [stored, another] }) });
+    try {
+      f.ready(); await settle(); f.render();
+      expect(f.view.activeChannel.id).toBe(stored.id);
+      f.view.switchChannel(f.view.channels[1]); f.view.setInputText('unsent draft'); f.render();
+      f.dispatch('zhin:auth-changed'); f.ready(); await settle(); f.render();
+      expect(f.view.activeChannel.id).toBe(another.id);
+      expect(f.view.inputText).toBe('unsent draft');
+    } finally { f.close(); }
+  });
+
+  it('does not let a slow old Host read replace the new catalog or its visible messages', async () => {
+    const pending = deferred<directories.WorkspaceDirectory | null>();
+    const read = vi.fn<typeof directories.readWorkspaceDirectory>().mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce({ scope: { ...scope, endpoint: { ...scope.endpoint, id: 'host-B-bot' } }, items: [{ ...stored, name: 'Host B' }] });
+    const f = fixture({ readWorkspaceDirectory: read });
+    try {
+      f.ready();
+      f.storage.set('zhin_api_base', 'http://host-B');
+      f.dispatch('zhin:api-base-changed'); f.ready(); await settle(); f.render();
+      pending.resolve({ scope, items: [{ ...stored, name: 'Late Host A' }] }); await settle(); f.render();
+      expect(f.view.channels.map((scene: playground.PlaygroundSession) => scene.name)).toEqual(['Host B']);
+      expect(f.view.messages).toEqual([]);
+      expect(f.view.workspaceScope.endpoint.id).toBe('host-B-bot');
+    } finally { f.close(); }
+  });
+
+  it('preserves a directory write error and authoritative canExecute without retrying queued edits or overwriting legacy cache', async () => {
+    const write = deferred<Awaited<ReturnType<typeof directories.saveWorkspaceConversation>>>();
+    const save = vi.fn<typeof directories.saveWorkspaceConversation>(() => write.promise);
+    const f = fixture({ readWorkspaceDirectory: async () => ({ scope, items: [stored] }), saveWorkspaceConversation: save });
+    try {
+      f.ready(); await settle(); f.render();
+      f.view.updateRunConfig({ workingDirectory: '/first' }); await settle();
+      f.view.updateRunConfig({ workingDirectory: '/queued' });
+      write.reject(Error('save outcome unknown')); await settle(); f.render();
+      expect(f.view.canExecute).toBe(true);
+      expect(f.view.directoryStatus.error).toBe('save outcome unknown');
+      f.view.updateRunConfig({ workingDirectory: '/do-not-retry' }); await settle(); f.render();
+      expect(save).toHaveBeenCalledTimes(1);
+      expect(f.storage.has(playground.PLAYGROUND_STORAGE_KEY)).toBe(false);
+    } finally { f.close(); }
+  });
 });
 
 describe('Sandbox trace and cancellation ownership', () => {

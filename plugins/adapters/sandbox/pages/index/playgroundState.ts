@@ -30,6 +30,11 @@ export interface PlaygroundMessage {
   readonly timestamp: number;
   /** Legacy field name: the choice was submitted; this never reports policy acceptance. */
   readonly interactionResolved?: boolean;
+  /** Stored controls are display data; only the live pending authority may accept their answers. */
+  readonly interactionReadOnly?: boolean;
+  readonly historySequence?: number;
+  readonly recalled?: boolean;
+  readonly recalledMessageId?: string;
 }
 
 export interface PlaygroundState {
@@ -161,7 +166,17 @@ function parseMessage(value: unknown): PlaygroundMessage | undefined {
     content: item.content as MessageSegment[],
     timestamp: Number.isFinite(item.timestamp) ? Number(item.timestamp) : Date.now(),
     ...(item.interactionResolved === true ? { interactionResolved: true } : {}),
+    ...(hasPlaygroundKeyboard(item.content as MessageSegment[]) ? { interactionReadOnly: true } : {}),
+    ...(Number.isSafeInteger(item.historySequence) && Number(item.historySequence) > 0 ? { historySequence: Number(item.historySequence) } : {}),
+    ...(item.recalled === true ? { recalled: true } : {}),
+    ...(typeof item.recalledMessageId === 'string' ? { recalledMessageId: item.recalledMessageId } : {}),
   };
+}
+
+export function hasPlaygroundKeyboard(content: readonly MessageSegment[]): boolean {
+  return content.some(segment => segment?.type === 'keyboard' || (segment?.type === 'forward'
+    && Array.isArray(segment.data?.entries) && segment.data.entries.some((entry: { segments?: MessageSegment[] }) =>
+      Array.isArray(entry?.segments) && hasPlaygroundKeyboard(entry.segments))));
 }
 
 function browserStorage(): PlaygroundStorage | undefined {

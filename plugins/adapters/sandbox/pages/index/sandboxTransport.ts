@@ -30,6 +30,16 @@ export function getSandboxAuthHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+export interface SandboxRequestContext {
+  readonly apiBase: string;
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/** Capture once for a request owner; credentials stay in its closure, never UI state or storage. */
+export function captureSandboxRequestContext(): SandboxRequestContext {
+  return Object.freeze({ apiBase: getSandboxApiBase(), headers: Object.freeze(getSandboxAuthHeaders()) });
+}
+
 /**
  * Browser WebSocket cannot set Authorization reliably; pass token in query when needed.
  * Uses stored Console API base so Remote Console (different origin) still hits the bot Host.
