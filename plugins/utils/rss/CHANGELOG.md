@@ -1,5 +1,13 @@
 # @zhin.js/plugin-rss
 
+## 1.1.12
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/im-contract@1.1.9
+  - @zhin.js/tool@1.1.12
+
 ## 1.1.11
 
 ### Patch Changes
