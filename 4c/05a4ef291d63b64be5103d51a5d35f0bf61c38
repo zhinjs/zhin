@@ -1,0 +1,37 @@
+packages/im/agent/src/context/context-system.ts
+  s_9622fd28aba994::t_98ec9134e6b53a 7,144
+packages/im/agent/src/context/turn-envelope.ts
+  s_9622fd28aba994::t_1325208e85a589 65-68,79-80,93-95
+packages/im/agent/src/context/turn-user-message.ts
+  s_9622fd28aba994::t_73a103eb989473 1,75-111,120-123,126,128-165
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_c310d11b60d8d4 15,45,237-238,659-663,665-667,671,673-675
+packages/im/agent/src/session-profile.ts
+  s_9622fd28aba994::t_3c11fdd59f209e 296-298
+packages/im/agent/tests/scene-events.test.ts
+  s_9622fd28aba994::t_c73ac02102721b 43,47
+packages/im/agent/tests/session-profile.test.ts
+  s_9622fd28aba994::t_85de065e72f459 172,181
+packages/im/agent/tests/zhin-agent/file-memory-context.test.ts
+  s_9622fd28aba994::t_cf6860df7058ed 12,29
+packages/im/ai/src/index.ts
+  s_9622fd28aba994::t_385a2069ecf347 366-370
+packages/im/ai/src/llm/types/runtime-context.ts
+  s_9622fd28aba994::t_dfa363cb3801f9 1-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4c05a4ef291d63b64be5103d51a5d35f0bf61c38",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
