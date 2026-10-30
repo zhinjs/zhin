@@ -79,3 +79,18 @@ describe('resolveQqConfig intents', () => {
     }
   });
 });
+
+describe('resolveQqConfig notify', () => {
+  it('normalizes the outage notify target', () => {
+    const resolved = resolveQqConfig({
+      id: 'bot', appid: 'a', secret: 's',
+      notify: { adapter: 'icqq', endpoint: '10001', id: 123456 },
+    });
+    expect(resolved.notify).toEqual({
+      adapter: 'icqq',
+      endpoint: '10001',
+      kind: 'private',
+      id: '123456',
+    });
+  });
+});
