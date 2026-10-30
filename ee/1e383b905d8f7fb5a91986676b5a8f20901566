@@ -1,0 +1,19 @@
+plugins/adapters/bilibili/tests/bilibili-runtime-localization.test.ts
+  s_9622fd28aba994::t_28e63900cd2ff9 34,36-38,52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ee1e383b905d8f7fb5a91986676b5a8f20901566",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
