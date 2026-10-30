@@ -1,0 +1,94 @@
+packages/im/agent/tests/scene-events.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 43,47
+packages/im/ai/src/llm/bridge/ai-sdk-prompt-cache.ts
+  s_9622fd28aba994::t_38393e63d4a38d 3,181-191,194-218
+  s_9622fd28aba994::t_1cc3b0a09ab707 219
+packages/im/ai/tests/llm/runtime-context-wire.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 1-60
+packages/im/ai/src/llm/types/runtime-context.ts
+  s_9622fd28aba994::t_38393e63d4a38d 1-25
+packages/im/agent/src/context/turn-envelope.ts
+  s_9622fd28aba994::t_38393e63d4a38d 65-68,79-80,93-95
+packages/im/ai/tests/ai-sdk-prompt-cache.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 10,97-119
+  s_9622fd28aba994::t_692cb1993037a9 120-121
+packages/im/agent/src/session-profile.ts
+  s_9622fd28aba994::t_38393e63d4a38d 296-298
+evals/chat/src/turn.ts
+  s_9622fd28aba994::t_38393e63d4a38d 9,25,61-63,125-127
+packages/im/agent/src/context/turn-user-message.ts
+  s_9622fd28aba994::t_38393e63d4a38d 1,75-111,120-123,126,128-165
+packages/im/agent/src/plugin-runtime/skill-tool-resolution.ts
+  s_9622fd28aba994::t_38393e63d4a38d 4-6,10,20
+docs/en/concepts/what-zhin-is.md
+  s_9622fd28aba994::t_c5499b29b827a6 100
+  s_9622fd28aba994::t_38393e63d4a38d 99
+packages/im/agent/tests/prompt/stable-prefix.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 8-11,97-160
+  s_9622fd28aba994::t_dbbdef34cd1432 161
+docs/adr/0041-prompt-segments-and-message-headers.md
+  s_9622fd28aba994::t_38393e63d4a38d 75-76,141
+packages/im/agent/src/context/context-system.ts
+  s_9622fd28aba994::t_38393e63d4a38d 7,148
+packages/im/ai/tests/llm/mid-conversation-system.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 12,14-18
+evals/chat/tests/eval.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 55-59
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 2,9,83-89,94,98,105-109,112,119,128,130,137-145
+docs/adr/0045-current-message-runtime-context.md
+  s_9622fd28aba994::t_38393e63d4a38d 1-53
+.changeset/prompt-cache-runtime-context-tail.md
+  s_9622fd28aba994::t_38393e63d4a38d 1-6
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_38393e63d4a38d 15,46,198-199,601-605,607-609,613,615-617
+packages/im/agent/tests/context/runtime-context-cache-prefix.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 1-102
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 244,256,259-264,269-271,287
+packages/im/agent/tests/session-profile.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 172,181
+packages/im/agent/tests/zhin-agent/file-memory-context.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 12,29
+packages/im/ai/src/llm/mid-conversation-system.ts
+  s_9622fd28aba994::t_38393e63d4a38d 37-39
+.changeset/deepseek-mid-conversation-system-none.md
+  s_9622fd28aba994::t_38393e63d4a38d 1-5
+packages/im/ai/src/memory/prompt-context.ts
+  s_9622fd28aba994::t_38393e63d4a38d 6,57-88
+packages/im/ai/tests/memory/prompt-context.test.ts
+  s_9622fd28aba994::t_38393e63d4a38d 12,21-30,117-120
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  s_9622fd28aba994::t_38393e63d4a38d 20,69-73,94-104
+  s_9622fd28aba994::t_43189628f3b225 105
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_38393e63d4a38d 7,254,256-259,264,273-274,645-670,674-677,684,686,688-692,696-703
+.changeset/prompt-cache-participant-boundaries.md
+  s_9622fd28aba994::t_38393e63d4a38d 1-6
+packages/im/ai/src/index.ts
+  s_9622fd28aba994::t_38393e63d4a38d 368-371
+  s_9622fd28aba994::t_c57ab163b6a120 367
+packages/im/agent/evals/cases/web-tools-hidden-without-network.case.ts
+  s_9622fd28aba994::t_38393e63d4a38d 16-21
+docs/concepts/what-zhin-is.md
+  s_9622fd28aba994::t_c5499b29b827a6 99
+  s_9622fd28aba994::t_38393e63d4a38d 98
+packages/im/agent/src/prompt/assembly.ts
+  s_9622fd28aba994::t_38393e63d4a38d 209-213
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bab7eee2140128e0e255103c01bf97ffea3bd56e",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
