@@ -1,0 +1,351 @@
+.changeset/adapter-console-pages.md
+  s_9622fd28aba994::t_2cf53caf95caf6 1-37
+docs/adapters/bilibili-live.md
+  s_9622fd28aba994::t_4908dc6c1cfdc6 11,106-116
+docs/adapters/dingtalk.md
+  s_9622fd28aba994::t_9f1840db9af690 11,113-122
+docs/adapters/discord.md
+  s_9622fd28aba994::t_47f7bbaab014c2 11,102-111
+docs/adapters/email.md
+  s_9622fd28aba994::t_ed2c4a02c636e0 11,91-101
+docs/adapters/github.md
+  s_9622fd28aba994::t_b49f74f8efed63 11,112-121
+docs/adapters/icqq.md
+  s_9622fd28aba994::t_ca53c999b56aaa 11,188-199
+docs/adapters/kook.md
+  s_9622fd28aba994::t_c5436e167f4caa 11,120-129
+docs/adapters/lark.md
+  s_9622fd28aba994::t_19e329d1c2dcf4 11,108-117
+docs/adapters/line.md
+  s_9622fd28aba994::t_1da8e107445877 11,114-123
+docs/adapters/milky.md
+  s_9622fd28aba994::t_5ab7e4982ee237 11,105-114
+docs/adapters/napcat.md
+  s_9622fd28aba994::t_b5b6c885265dee 11,102-111
+docs/adapters/onebot11.md
+  s_9622fd28aba994::t_eb25bfbae58a0c 11,108-117
+docs/adapters/onebot12.md
+  s_9622fd28aba994::t_73f632d12e0bfb 11,100-109
+docs/adapters/qq.md
+  s_9622fd28aba994::t_b97a19a86df550 11,211-220
+docs/adapters/satori.md
+  s_9622fd28aba994::t_161932cb027d6c 11,119-128
+docs/adapters/slack.md
+  s_9622fd28aba994::t_e15ac2bbfafe64 11,146-155
+docs/adapters/telegram.md
+  s_9622fd28aba994::t_605c99d14fabab 11,149-158
+docs/adapters/wechat-mp.md
+  s_9622fd28aba994::t_1139b4bb5d2c8d 11,90-99
+docs/adapters/wecom.md
+  s_9622fd28aba994::t_41ea12bb4a11da 11,117-126
+docs/adapters/weixin-ilink.md
+  s_9622fd28aba994::t_e00f194dcc5110 11,81-90
+docs/authoring/console-pages.md
+  s_9622fd28aba994::t_6e9d8996fe0220 425-455
+docs/console/index.md
+  s_9622fd28aba994::t_32f6664491376e 99
+docs/en/authoring/console-pages.md
+  s_9622fd28aba994::t_b344324b0a265d 425-455
+docs/en/console/index.md
+  s_9622fd28aba994::t_a0cf7623a75249 99
+packages/console/client/README.md
+  s_9622fd28aba994::t_c810aa248d494f 3,32-33,39-58
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  s_9622fd28aba994::t_0442402dadd7fa 1-677
+packages/console/client/client/adapter-console/messages.ts
+  s_9622fd28aba994::t_a00917a52f44be 1-93
+packages/console/client/client/adapter-console/types.ts
+  s_9622fd28aba994::t_52416a2972f487 1-102
+packages/console/client/client/index.ts
+  s_9622fd28aba994::t_344b28ea3c277e 105,113-130
+packages/im/adapter/README.md
+  s_9622fd28aba994::t_4ecad5262fc7ad 193-217
+packages/im/adapter/src/adapter-console-rpc.ts
+  s_9622fd28aba994::t_8d3d842496ff93 1-488
+packages/im/adapter/src/index.ts
+  s_9622fd28aba994::t_f0737e3e229cbd 17
+packages/im/adapter/tests/adapter-console-rpc.test.ts
+  s_9622fd28aba994::t_0845756a29c492 1-168
+plugins/adapters/bilibili-live/README.md
+  s_9622fd28aba994::t_86e55ed0ca0358 94-104
+plugins/adapters/bilibili-live/adapters/bilibili-live/index.ts
+  s_9622fd28aba994::t_c9facb3726ca42 8,23-27,30
+plugins/adapters/bilibili-live/package.json
+  s_9622fd28aba994::t_ad7823c5d2e82f 47-48,52-53,77-78,103-106
+plugins/adapters/bilibili-live/pages/index/index.ts
+  s_9622fd28aba994::t_cb580267a39824 1-16
+plugins/adapters/bilibili-live/plugin.ts
+  s_9622fd28aba994::t_61c45067bcca99 1-4,9,16-19
+plugins/adapters/bilibili-live/src/bilibili-live-runtime-state.ts
+  s_9622fd28aba994::t_11de773120b681 1-7
+plugins/adapters/bilibili-live/src/console-spec.ts
+  s_9622fd28aba994::t_e65fd71e41fd7d 1-18
+plugins/adapters/bilibili-live/src/console.ts
+  s_9622fd28aba994::t_3f91d3c179cf33 1-21
+plugins/adapters/dingtalk/README.md
+  s_9622fd28aba994::t_c770f9d17b8f31 101-110
+plugins/adapters/dingtalk/package.json
+  s_9622fd28aba994::t_4f4b4e5e71afcd 46-47,53,89,138-141
+plugins/adapters/dingtalk/pages/index/index.ts
+  s_9622fd28aba994::t_040868a89ab2dc 1-16
+plugins/adapters/dingtalk/plugin.ts
+  s_9622fd28aba994::t_5bbf04afda333e 2,6,15
+plugins/adapters/dingtalk/src/console-spec.ts
+  s_9622fd28aba994::t_c2b7fdfe781855 1-17
+plugins/adapters/dingtalk/src/console.ts
+  s_9622fd28aba994::t_33344a2d710467 1-21
+plugins/adapters/discord/README.md
+  s_9622fd28aba994::t_ebd9d6a939e428 90-99
+plugins/adapters/discord/package.json
+  s_9622fd28aba994::t_82b864fe89365c 43-44,47-48,54,90,139-142
+plugins/adapters/discord/pages/index/index.ts
+  s_9622fd28aba994::t_c2d14eda70b3f4 1-16
+plugins/adapters/discord/plugin.ts
+  s_9622fd28aba994::t_47c76887c87ea6 2,6,15
+plugins/adapters/discord/src/console-spec.ts
+  s_9622fd28aba994::t_13466f2ae411d2 1-15
+plugins/adapters/discord/src/console.ts
+  s_9622fd28aba994::t_194b90ed6c5a4f 1-21
+plugins/adapters/email/README.md
+  s_9622fd28aba994::t_55e7f0bfcc7cfc 79-89
+plugins/adapters/email/adapters/email/index.ts
+  s_9622fd28aba994::t_964ea92cab5441 10,33-37,40
+plugins/adapters/email/package.json
+  s_9622fd28aba994::t_42ddff026ffe5f 18-19,24-25,28,72,115-118
+plugins/adapters/email/pages/index/index.ts
+  s_9622fd28aba994::t_ee296e2419ccbb 1-16
+plugins/adapters/email/plugin.ts
+  s_9622fd28aba994::t_4c3e343a0016f6 1-4,11-14
+plugins/adapters/email/src/console-spec.ts
+  s_9622fd28aba994::t_378646564e5d03 1-16
+plugins/adapters/email/src/console.ts
+  s_9622fd28aba994::t_cae543e8a32263 1-20
+plugins/adapters/email/src/email-runtime-state.ts
+  s_9622fd28aba994::t_8445c4198f163b 1-7
+plugins/adapters/github/README.md
+  s_9622fd28aba994::t_4170136576e0a1 100-109
+plugins/adapters/github/package.json
+  s_9622fd28aba994::t_376f4608015570 54-55,61,104,158-161
+plugins/adapters/github/pages/index/index.ts
+  s_9622fd28aba994::t_cfb23dfafb0875 1-16
+plugins/adapters/github/plugin.ts
+  s_9622fd28aba994::t_4d9df66e2a0c3a 2,5,34
+plugins/adapters/github/src/console-spec.ts
+  s_9622fd28aba994::t_58a9833ddb0bb2 1-17
+plugins/adapters/github/src/console.ts
+  s_9622fd28aba994::t_3a1372c96013b0 1-21
+plugins/adapters/icqq/README.md
+  s_9622fd28aba994::t_a02f598c53ef21 176-187
+plugins/adapters/icqq/package.json
+  s_9622fd28aba994::t_24e057b5f11519 48-49,54,97,147-150
+plugins/adapters/icqq/pages/index/index.ts
+  s_9622fd28aba994::t_49a4cd86c4d9c2 1-16
+plugins/adapters/icqq/plugin.ts
+  s_9622fd28aba994::t_13c3e6a8d57553 2,5,15
+plugins/adapters/icqq/src/console-spec.ts
+  s_9622fd28aba994::t_008bf8ffb10ca3 1-17
+plugins/adapters/icqq/src/console.ts
+  s_9622fd28aba994::t_4bae045a5655f4 1-21
+plugins/adapters/kook/README.md
+  s_9622fd28aba994::t_8aab338fc79773 108-117
+plugins/adapters/kook/package.json
+  s_9622fd28aba994::t_1fe07da82176b4 46-47,53,88,138-141
+plugins/adapters/kook/pages/index/index.ts
+  s_9622fd28aba994::t_dbfea128278db8 1-16
+plugins/adapters/kook/plugin.ts
+  s_9622fd28aba994::t_650bb689cbb8a1 2,6,15
+plugins/adapters/kook/src/console-spec.ts
+  s_9622fd28aba994::t_62e1cd85fc809b 1-17
+plugins/adapters/kook/src/console.ts
+  s_9622fd28aba994::t_368222ffac2a2d 1-21
+plugins/adapters/lark/README.md
+  s_9622fd28aba994::t_d15dd41e8eb1c0 96-105
+plugins/adapters/lark/package.json
+  s_9622fd28aba994::t_52b73a8e377ba6 45,48-49,55,58,90,140-143
+plugins/adapters/lark/pages/index/index.ts
+  s_9622fd28aba994::t_dbde0922967b62 1-16
+plugins/adapters/lark/plugin.ts
+  s_9622fd28aba994::t_f27bc575055aed 2,6,15
+plugins/adapters/lark/src/console-spec.ts
+  s_9622fd28aba994::t_b05f2ca62ef2d4 1-18
+plugins/adapters/lark/src/console.ts
+  s_9622fd28aba994::t_256b3a01eca1a0 1-21
+plugins/adapters/line/README.md
+  s_9622fd28aba994::t_80c187ce7ce954 102-111
+plugins/adapters/line/package.json
+  s_9622fd28aba994::t_b812cf158825fe 45-46,52,85,135-138
+plugins/adapters/line/pages/index/index.ts
+  s_9622fd28aba994::t_7b8eab9e596ef6 1-16
+plugins/adapters/line/plugin.ts
+  s_9622fd28aba994::t_1cd5f6909f36c9 2,4,14
+plugins/adapters/line/src/console-spec.ts
+  s_9622fd28aba994::t_0bdc9ce50914ce 1-16
+plugins/adapters/line/src/console.ts
+  s_9622fd28aba994::t_e06dadbd7cbe1a 1-21
+plugins/adapters/milky/README.md
+  s_9622fd28aba994::t_1b018b7ac81866 93-102
+plugins/adapters/milky/package.json
+  s_9622fd28aba994::t_6370348a62f369 26,54-55,61-62,64,134-137
+plugins/adapters/milky/pages/index/index.ts
+  s_9622fd28aba994::t_19cf5f612f96e3 1-16
+plugins/adapters/milky/plugin.ts
+  s_9622fd28aba994::t_7849794b0504c5 2,4,14
+plugins/adapters/milky/src/console-spec.ts
+  s_9622fd28aba994::t_fb16e0b356a509 1-17
+plugins/adapters/milky/src/console.ts
+  s_9622fd28aba994::t_606c23568c4277 1-21
+plugins/adapters/napcat/README.md
+  s_9622fd28aba994::t_2da2f8e30f6562 90-99
+plugins/adapters/napcat/package.json
+  s_9622fd28aba994::t_8d699aae26bd37 26,58-59,65,142-145
+plugins/adapters/napcat/pages/index/index.ts
+  s_9622fd28aba994::t_9264cb07b8d9f8 1-16
+plugins/adapters/napcat/plugin.ts
+  s_9622fd28aba994::t_e87792344053d9 2,5,14
+plugins/adapters/napcat/src/console-spec.ts
+  s_9622fd28aba994::t_3a82e3f1d7e9be 1-19
+plugins/adapters/napcat/src/console.ts
+  s_9622fd28aba994::t_b4bd7e5f1c863b 1-21
+plugins/adapters/onebot11/README.md
+  s_9622fd28aba994::t_cbd882fd19828c 96-105
+plugins/adapters/onebot11/package.json
+  s_9622fd28aba994::t_6958924c1897fc 26,57-58,64,142-145
+plugins/adapters/onebot11/pages/index/index.ts
+  s_9622fd28aba994::t_59e039bcb8afd2 1-16
+plugins/adapters/onebot11/plugin.ts
+  s_9622fd28aba994::t_c9a4c60fcf69cc 2,5,14
+plugins/adapters/onebot11/src/console-spec.ts
+  s_9622fd28aba994::t_cb2d55d34f4fe1 1-17
+plugins/adapters/onebot11/src/console.ts
+  s_9622fd28aba994::t_cf2eb219b70e08 1-21
+plugins/adapters/onebot12/README.md
+  s_9622fd28aba994::t_0a6cfaa6f00c53 88-97
+plugins/adapters/onebot12/package.json
+  s_9622fd28aba994::t_36969b2fb71dcc 26,53-54,60-61,63,123-126
+plugins/adapters/onebot12/pages/index/index.ts
+  s_9622fd28aba994::t_979e5a5fa43a64 1-16
+plugins/adapters/onebot12/plugin.ts
+  s_9622fd28aba994::t_3cd7d7d614332d 2,4,14
+plugins/adapters/onebot12/src/console-spec.ts
+  s_9622fd28aba994::t_8b11099968715d 1-18
+plugins/adapters/onebot12/src/console.ts
+  s_9622fd28aba994::t_cf67514476bde6 1-21
+plugins/adapters/qq/README.md
+  s_9622fd28aba994::t_04dbb7454cbfca 199-208
+plugins/adapters/qq/commands/qq/endpoint/definition.ts
+  s_9622fd28aba994::t_028f7b232b1678 25-27,61-63,91-101,133,138,223,231-234
+plugins/adapters/qq/package.json
+  s_9622fd28aba994::t_ea182eff23054f 47-48,54,94,148-151
+plugins/adapters/qq/pages/index/index.ts
+  s_9622fd28aba994::t_27a4797dac5756 1-16
+plugins/adapters/qq/plugin.ts
+  s_9622fd28aba994::t_9ddbc3c852cb71 1,5,13-15
+plugins/adapters/qq/src/console.ts
+  s_9622fd28aba994::t_b4f201fb146aa3 1-96
+plugins/adapters/qq/src/qq-console-spec.ts
+  s_9622fd28aba994::t_77bf4e3998d223 1-18
+plugins/adapters/qq/src/qq-console.ts
+  s_9622fd28aba994::t_1d959bdfdb5983 1-124
+plugins/adapters/qq/src/qq-endpoint-write.ts
+  s_9622fd28aba994::t_3709c31fbb4d8f 1-52
+plugins/adapters/qq/src/qq-runtime-state.ts
+  s_9622fd28aba994::t_4bfb83e1dde901 37-54,62-63,71
+plugins/adapters/satori/README.md
+  s_9622fd28aba994::t_2d46e4d4571bc4 107-116
+plugins/adapters/satori/package.json
+  s_9622fd28aba994::t_f32de319e1acc3 26,52-53,59-60,62,122-125
+plugins/adapters/satori/pages/index/index.ts
+  s_9622fd28aba994::t_c2e29c2f3f09fa 1-16
+plugins/adapters/satori/plugin.ts
+  s_9622fd28aba994::t_3136d14535db50 2,4,14
+plugins/adapters/satori/src/console-spec.ts
+  s_9622fd28aba994::t_ec7c6b7cb2487e 1-17
+plugins/adapters/satori/src/console.ts
+  s_9622fd28aba994::t_9015eb10d17266 1-21
+plugins/adapters/slack/README.md
+  s_9622fd28aba994::t_9cc9dce3e50614 134-143
+plugins/adapters/slack/package.json
+  s_9622fd28aba994::t_a35292876fa331 47-48,54,88,138-141
+plugins/adapters/slack/pages/index/index.ts
+  s_9622fd28aba994::t_37bdda7edd40a3 1-16
+plugins/adapters/slack/plugin.ts
+  s_9622fd28aba994::t_c764a3d0a1beea 2,6,15
+plugins/adapters/slack/src/console-spec.ts
+  s_9622fd28aba994::t_c4edaff415020f 1-17
+plugins/adapters/slack/src/console.ts
+  s_9622fd28aba994::t_10ed57bc789d0f 1-21
+plugins/adapters/telegram/README.md
+  s_9622fd28aba994::t_33bf59215afbd7 137-146
+plugins/adapters/telegram/package.json
+  s_9622fd28aba994::t_26332a232b3f9f 45-46,52,78,87,137-140
+plugins/adapters/telegram/pages/index/index.ts
+  s_9622fd28aba994::t_1287a9dbcb4861 1-16
+plugins/adapters/telegram/plugin.ts
+  s_9622fd28aba994::t_2443271537a91c 2,6,15
+plugins/adapters/telegram/src/console-spec.ts
+  s_9622fd28aba994::t_f6f95abc3dba22 1-15
+plugins/adapters/telegram/src/console.ts
+  s_9622fd28aba994::t_cfba5dc0a28976 1-21
+plugins/adapters/telegram/tests/telegram-console-page.test.ts
+  s_9622fd28aba994::t_6be2683cd05f95 1-55
+plugins/adapters/wechat-mp/README.md
+  s_9622fd28aba994::t_754b9981ca2a98 78-87
+plugins/adapters/wechat-mp/package.json
+  s_9622fd28aba994::t_0789be9a689cf2 18-19,25-26,28,78,125-128
+plugins/adapters/wechat-mp/pages/index/index.ts
+  s_9622fd28aba994::t_d7c765b09c5332 1-16
+plugins/adapters/wechat-mp/plugin.ts
+  s_9622fd28aba994::t_72519dfa7d2fca 2,4,14
+plugins/adapters/wechat-mp/src/console-spec.ts
+  s_9622fd28aba994::t_1fac974435ab9d 1-18
+plugins/adapters/wechat-mp/src/console.ts
+  s_9622fd28aba994::t_f7ed6baf19db8d 1-21
+plugins/adapters/wecom/README.md
+  s_9622fd28aba994::t_1bfd8a385f4e6b 105-114
+plugins/adapters/wecom/package.json
+  s_9622fd28aba994::t_7af603846ea463 47-48,54,88,138-141
+plugins/adapters/wecom/pages/index/index.ts
+  s_9622fd28aba994::t_c8904be23460ac 1-16
+plugins/adapters/wecom/plugin.ts
+  s_9622fd28aba994::t_c5be234afc4b45 2,6,15
+plugins/adapters/wecom/src/console-spec.ts
+  s_9622fd28aba994::t_a25c4deefe6d76 1-18
+plugins/adapters/wecom/src/console.ts
+  s_9622fd28aba994::t_0912da49fdacf8 1-21
+plugins/adapters/weixin-ilink/README.md
+  s_9622fd28aba994::t_fd628977b27741 69-78
+plugins/adapters/weixin-ilink/package.json
+  s_9622fd28aba994::t_a15842fc65a3e1 40,68-69,73-74,114-117
+plugins/adapters/weixin-ilink/pages/index/index.ts
+  s_9622fd28aba994::t_b57bc8732a2d6f 1-16
+plugins/adapters/weixin-ilink/plugin.ts
+  s_9622fd28aba994::t_cb304dd83ef362 2,4,14
+plugins/adapters/weixin-ilink/src/console-spec.ts
+  s_9622fd28aba994::t_3ed1cc13cd9832 1-15
+plugins/adapters/weixin-ilink/src/console.ts
+  s_9622fd28aba994::t_09473443cf76cf 1-21
+pnpm-lock.yaml
+  s_9622fd28aba994::t_9709273ec8a808 2161-2166,2179-2181,2204-2206,2210-2212,2228-2230,2277-2279,2283-2285,2301-2303,2341-2346,2359-2361,2405-2407,2411-2413,2429-2431,2469-2471,2475-2477,2490-2492,2533-2535,2539-2541,2557-2559,2600-2602,2606-2608,2624-2626,2664-2666,2670-2672,2688-2690,2722-2724,2728-2730,2746-2748,2789-2791,2795-2797,2813-2815,2859-2861,2865-2867,2883-2885,2929-2931,2935-2937,2953-2955,2990-2992,2996-2998,3017-3019,3121-3123,3127-3129,3145-3147,3188-3190,3194-3196,3212-3214,3249-3251,3255-3257,3273-3275,3289-3291,3310-3312,3316-3318,3334-3336,3371-3373,3377-3379,3395-3397,3429-3431,3435-3437,3450-3452
+tests/docs/adapter-console-pages.test.ts
+  s_9622fd28aba994::t_84ea4700804468 1-62
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_9972a68b2efd8c 3
+plugins/adapters/qq/tests/qq-console.test.ts
+  s_9622fd28aba994::t_b7bef347d660d6 1-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f62e24fa30ef47ba8313ff6d0ad67563748a6c2a",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
