@@ -15,7 +15,7 @@ const renderBoundary = declaration.body!.statements.find(node => ts.isVariableSt
   && node.declarationList.declarations.some(item => ts.isIdentifier(item.name) && item.name.text === 'inlineRunCard'))!;
 const prefix = source.slice(declaration.getStart(ast), renderBoundary.getStart(ast)).replace('export default ', '');
 const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,channels,messages,inputText,previewSegments,transportNotice,
-  trace,traceNotice,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
+  trace,traceNotice,cancellationFeedback,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
   handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,
   directoryStatus,workspaceScope,activeChannel,directoryControllerRef};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
@@ -312,10 +312,10 @@ describe('Sandbox trace and cancellation ownership', () => {
       f.view.switchChannel(f.view.channels[1]); f.render(); await settle(); f.render();
       const secondKey = f.view.sessionKey, stopSecond = f.view.stopActiveTask();
       first.resolve(true); await stopFirst;
-      expect(f.render().traceNotice).toBeNull();
+      expect(f.render().cancellationFeedback).toBeNull();
       expect(f.view.stoppingTask).toBe(true);
       second.resolve(false); await stopSecond;
-      expect(f.render().traceNotice).toBe('当前会话没有运行中的任务。');
+      expect(f.render().cancellationFeedback).toEqual({ kind: 'status', message: '当前会话没有运行中的任务。' });
       expect(f.view.stoppingTask).toBe(false);
       expect(cancel.mock.calls.map(([key]) => key)).toEqual([firstKey, secondKey]);
     } finally { f.close(); }
@@ -328,12 +328,12 @@ describe('Sandbox trace and cancellation ownership', () => {
     try {
       await settle(); f.render();
       await f.view.stopActiveTask();
-      expect(f.render().traceNotice).toBe('已发送停止请求，正在等待任务结束。');
+      expect(f.render().cancellationFeedback).toEqual({ kind: 'status', message: '停止请求已提交。' });
       f.view.switchChannel(f.view.channels[1]); f.render(); await settle(); f.render();
       const requests = fetchTrace.mock.calls.length;
       await vi.advanceTimersByTimeAsync(240);
       expect(fetchTrace).toHaveBeenCalledTimes(requests);
-      expect(f.render().traceNotice).toBeNull();
+      expect(f.render().cancellationFeedback).toBeNull();
     } finally { f.close(); }
   });
 
@@ -354,6 +354,33 @@ describe('Sandbox trace and cancellation ownership', () => {
     } finally { f.close(); }
   });
 
+  it('keeps current cancellation errors independent of successful trace refreshes with events, then clears them for a new owner', async () => {
+    const cancel = vi.fn<typeof traces.cancelAgentTask>(async () => { throw new Error('cancellation rejected by server'); });
+    const fetchTrace = vi.fn<typeof traces.fetchAgentTrace>(async key => traceSnapshot(key, 'current'));
+    const f = fixture({ fetchAgentTrace: fetchTrace, cancelAgentTask: cancel });
+    try {
+      await settle(); f.render();
+      const originalKey = f.view.sessionKey;
+      expect(f.view.trace.events.length).toBeGreaterThan(0);
+      await f.view.stopActiveTask();
+      expect(f.render().cancellationFeedback).toEqual({ kind: 'error', message: 'cancellation rejected by server' });
+      expect(f.view.traceNotice).toBeNull();
+      fetchTrace.mockRejectedValueOnce(new Error('trace lookup unavailable'));
+      await f.view.loadTrace(); await settle(); f.render();
+      expect(f.view.traceNotice).toBe('trace lookup unavailable');
+      expect(f.view.cancellationFeedback).toEqual({ kind: 'error', message: 'cancellation rejected by server' });
+      await f.view.loadTrace(); await settle(); f.render();
+      expect(f.view.trace.events.length).toBeGreaterThan(0);
+      expect(f.view.traceNotice).toBeNull();
+      expect(f.view.cancellationFeedback).toEqual({ kind: 'error', message: 'cancellation rejected by server' });
+      f.poll(); await settle(); f.render();
+      expect(f.view.cancellationFeedback).toEqual({ kind: 'error', message: 'cancellation rejected by server' });
+      f.view.switchChannel(f.view.channels[1]); f.render(); await settle(); f.render();
+      expect(f.view.cancellationFeedback).toBeNull();
+      expect(cancel).toHaveBeenCalledExactlyOnceWith(originalKey, 'zh-CN');
+    } finally { f.close(); }
+  });
+
   it.each(['scene', 'connection', 'unmount'])('ignores a cancellation error after its %s retires without retrying the POST', async (retirement) => {
     const result = deferred<boolean>();
     const cancel = vi.fn<typeof traces.cancelAgentTask>(() => result.promise);
@@ -370,7 +397,7 @@ describe('Sandbox trace and cancellation ownership', () => {
       expect(cancel).toHaveBeenCalledExactlyOnceWith(key, 'zh-CN');
       if (retirement === 'unmount') expect(f.stateWrites).toBe(writes);
       else {
-        expect(f.render().traceNotice).toBeNull();
+        expect(f.render().cancellationFeedback).toBeNull();
         expect(f.view.showInspector).toBe(false);
         expect(f.view.stoppingTask).toBe(false);
       }

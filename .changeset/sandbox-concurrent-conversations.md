@@ -9,3 +9,5 @@ Reuse Console conversation, usage and request readers within the active workspac
 Recover Host-scoped conversation metadata, canonical chat history, read-only offline results and current live interactions without migrating browser caches or replaying execution. Keep historical controls read-only and use the existing server authority for live answers.
 
 Retire matching native prompt controls when an authoritative read confirms they are no longer pending, without disabling unrelated plugin messages or inferring approval success.
+
+Keep cancellation feedback separate from trace-read errors, so cached events and subsequent trace refreshes cannot hide a failed stop request. Show read errors alongside the available trace and keep feedback scoped to the original connection and conversation.

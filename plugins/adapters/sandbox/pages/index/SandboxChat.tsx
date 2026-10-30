@@ -112,6 +112,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const [trace, setTrace] = useState<AgentTraceSnapshot | null>(null)
     const [traceLoading, setTraceLoading] = useState(true)
     const [traceNotice, setTraceNotice] = useState<string | null>(null)
+    const [cancellationFeedback, setCancellationFeedback] = useState<{ kind: 'error' | 'status'; message: string } | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
     const connectionRef = useRef<{ protocol?: string; connectionId?: string; ownerId?: string; canExecute: boolean }>({ canExecute: false })
@@ -181,6 +182,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             traceReadOwnerRef.current = owner
             setTrace(null)
             setTraceNotice(null)
+            setCancellationFeedback(null)
             setStoppingTask(false)
         }
         return owner
@@ -785,11 +787,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
     const recentTraceEvents = trace?.events.slice(-8).reverse() ?? []
     const stopActiveTask = async () => {
         const owner = currentTraceOwner()
+        setCancellationFeedback(null)
         setStoppingTask(true)
         try {
             const cancelled = await cancelAgentTask(owner.sessionKey, locale)
             if (!ownsCurrentTrace(owner)) return
-            setTraceNotice(cancelled ? sandboxText(locale, "已发送停止请求，正在等待任务结束。") : sandboxText(locale, "当前会话没有运行中的任务。"))
+            setCancellationFeedback({ kind: 'status', message: cancelled ? sandboxText(locale, "停止请求已提交。") : sandboxText(locale, "当前会话没有运行中的任务。") })
             if (owner.cancelRefresh !== undefined) window.clearTimeout(owner.cancelRefresh)
             owner.cancelRefresh = window.setTimeout(() => {
                 owner.cancelRefresh = undefined
@@ -797,7 +800,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             }, 240)
         } catch (error) {
             if (!ownsCurrentTrace(owner)) return
-            setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "无法停止任务"))
+            setCancellationFeedback({ kind: 'error', message: error instanceof Error ? error.message : sandboxText(locale, "无法停止任务") })
             setShowInspector(true)
         } finally {
             if (ownsCurrentTrace(owner)) setStoppingTask(false)
@@ -974,6 +977,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         <button type="button" onClick={() => setConfirmClear(true)} aria-label={sandboxText(locale, "清空当前会话")}><Trash2 size={15} /></button>
                     </div>
                 </header>
+
+                {cancellationFeedback && <div className="agent-playground-confirm" role={cancellationFeedback.kind === 'error' ? 'alert' : 'status'}>
+                    <div><span>{cancellationFeedback.message}</span></div>
+                    <button type="button" onClick={() => setCancellationFeedback(null)}>{sandboxText(locale, "知道了")}</button>
+                </div>}
 
                 {confirmClear && (
                     <div className="agent-playground-confirm" role="alert">
@@ -1309,10 +1317,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
                 <section className="agent-playground-inspector-section agent-playground-trace-section">
                     <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "最近执行")}</span><small>2s sync</small></div>
+                    {traceNotice && <div className="agent-playground-trace-notice" role="alert"><CircleAlert size={16} /><span>{traceNotice}</span></div>}
                     {traceLoading && !trace ? (
                         <div className="agent-playground-trace-loading"><i /><i /><i /></div>
-                    ) : traceNotice && !trace?.events.length ? (
-                        <div className="agent-playground-trace-notice"><CircleAlert size={16} /><span>{traceNotice}</span></div>
                     ) : recentTraceEvents.length ? (
                         <div className="agent-playground-trace-list">
                             {recentTraceEvents.map((event) => {

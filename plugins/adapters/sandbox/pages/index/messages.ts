@@ -41,7 +41,7 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "单用户": "Single user",
   "群组上下文": "Group context",
   "频道上下文": "Channel context",
-  "已发送停止请求，正在等待任务结束。": "Stop requested. Waiting for the task to finish.",
+  "停止请求已提交。": "Stop request submitted.",
   "当前会话没有运行中的任务。": "No running task in this conversation.",
   "无法停止任务": "Could not stop the task",
   "停止中": "Stopping",
