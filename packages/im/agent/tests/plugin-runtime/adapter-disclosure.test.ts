@@ -34,7 +34,12 @@ async function loadAdapter(platform: string): Promise<RuntimeSnapshot> {
       const loaded = await import(pathToFileURL(toolSource).href);
       const parsed = parseAgentToolDefinition(loaded.default, context);
       // A private tool must not outlive its Skill's scene ceiling, nor silently mix scenes back in.
-      expect(parsed.scopes ?? [], toolSource).toEqual(definition.scopes ?? []);
+      // Tools may narrow the Skill's scenes (for example group-only admin actions under a
+      // group + channel skill), but every tool scene must be declared by the Skill.
+      const skillScopes = new Set(definition.scopes ?? []);
+      for (const scope of parsed.scopes ?? []) {
+        expect(skillScopes.has(scope), `${toolSource}: ${scope}`).toBe(true);
+      }
       toolSlots.push(createCapabilitySlot({ ...context, definition: parsed }));
     }
   }
