@@ -11,9 +11,11 @@ vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 
 import defineIcqqAdapter from '../adapters/icqq/index.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
+import * as outboundMedia from '../src/outbound-media.js';
 import {
   formatOutboundBody,
   formatOutboundMessages,
+  formatOutboundMessageParts,
   icqqInboundConversation,
   icqqOutboundTarget,
   resolveIcqqConfig,
@@ -730,7 +732,7 @@ describe('icqq plugin runtime adapter', () => {
       },
       payload: 'pong',
     });
-    expect(id).toBe('sent-1');
+    expect(id).toEqual({ parts: [{ messageId: 'sent-1', sourceIndices: [0] }] });
     expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, 'pong');
     await endpoint.stop();
   });
@@ -809,10 +811,23 @@ describe('icqq plugin runtime adapter', () => {
     expect(formatOutboundMessages([{ type: 'reply', data: { message_id: 'm1' } }, share]))
       .toEqual([{ type: 'share', title: '晴天', url: 'https://music.example/1' }]);
     expect(formatOutboundMessages('hi')).toEqual(['hi']);
+    expect(formatOutboundMessageParts([{ type: 'reply', data: { message_id: 'm1' } }, share]))
+      .toEqual([{ message: { type: 'share', title: '晴天', url: 'https://music.example/1' }, sourceIndices: [1] }]);
     expect(() => formatOutboundBody([{ type: 'text', data: { text: 'x' } }, share])).toThrow('standalone');
   });
 
-  it('sends text followed by a share as two messages and reports the text id', async () => {
+  it('marks primitive text as exact only when ICQQ preserves every byte', () => {
+    expect(formatOutboundMessageParts('hello')).toEqual([{ message: 'hello', sourceIndices: [0] }]);
+    expect(formatOutboundMessageParts('  hello  ')).toEqual([{ message: 'hello' }]);
+    expect(formatOutboundMessageParts(' \n ')).toEqual([{ message: '\u200b' }]);
+    // Canonical text elements bypass primitive-string trimming.
+    expect(formatOutboundMessageParts([{ type: 'text', data: { text: '  hello  ' } }]))
+      .toEqual([{ message: '  hello  ', sourceIndices: [0] }]);
+    expect(formatOutboundMessageParts([{ type: 'text', data: { text: ' \n ' } }]))
+      .toEqual([{ message: '\u200b', sourceIndices: [] }]);
+  });
+
+  it('sends text followed by a share as two messages and preserves its unknown id slot', async () => {
     const endpoint = createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
@@ -820,10 +835,69 @@ describe('icqq plugin runtime adapter', () => {
       conversation: { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group', id: '100' },
       payload: [{ type: 'text', data: { text: '找到了：' } }, { type: 'share', data: { title: '晴天', url: 'https://music.example/1' } }],
     });
-    expect(id).toBe('sent-1');
+    expect(id).toEqual({ parts: [{ messageId: 'sent-1', sourceIndices: [0] }, { sourceIndices: [1] }] });
     expect(endpoint.client.sendGroupMsg).toHaveBeenCalledWith(100, '找到了：');
     expect(endpoint.client.share).toHaveBeenCalledWith({ type: 'share', title: '晴天', url: 'https://music.example/1' });
     expect(endpoint.client.sendGroupMsg.mock.invocationCallOrder[0]).toBeLessThan(endpoint.client.share.mock.invocationCallOrder[0]!);
+    await endpoint.stop();
+  });
+
+  it('retains every split bubble id with its own ordered source segments', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    endpoint.client.sendGroupMsg.mockResolvedValueOnce({ message_id: 'text-image' })
+      .mockResolvedValueOnce({ message_id: 'audio' }).mockResolvedValueOnce({ message_id: 'tail' });
+    const payload = [
+      { type: 'text', data: { text: 'Before' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/image.png' } } },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://example.com/audio.mp3' } } },
+      { type: 'text', data: { text: 'After' } },
+    ];
+    const result = await endpoint.send({ conversation: { endpoint: { id: 'test', adapter: 'icqq' }, kind: 'group', id: '100' }, payload });
+    expect(result).toEqual({ parts: [
+      { messageId: 'text-image', sourceIndices: [0, 1] },
+      { messageId: 'audio', sourceIndices: [2] },
+      { messageId: 'tail', sourceIndices: [3] },
+    ] });
+    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledTimes(3);
+    await endpoint.stop();
+  });
+
+  it('preserves unconfirmed share slots between confirmed text bubbles', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    endpoint.client.sendGroupMsg.mockResolvedValueOnce({ message_id: 'before' }).mockResolvedValueOnce({ message_id: 'after' });
+    const result = await endpoint.send({ conversation: { endpoint: { id: 'test', adapter: 'icqq' }, kind: 'group', id: '100' },
+      payload: [{ type: 'text', data: { text: 'Before' } },
+        { type: 'share', data: { title: 'Card', url: 'https://example.com/card' } },
+        { type: 'text', data: { text: 'After' } }],
+    });
+    expect(result).toEqual({ parts: [
+      { messageId: 'before', sourceIndices: [0] }, { sourceIndices: [1] }, { messageId: 'after', sourceIndices: [2] },
+    ] });
+    expect(endpoint.client.getChatHistory).not.toHaveBeenCalled();
+    await endpoint.stop();
+  });
+
+  it('keeps file upload identifiers separate from platform message identities', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    const group = endpoint.client.pickGroup(100);
+    const sendFile = vi.fn(async () => 'native-file-id');
+    endpoint.client.pickGroup.mockReturnValue({ ...group, sendFile } as never);
+    endpoint.client.sendGroupMsg.mockResolvedValueOnce({ message_id: 'before' }).mockResolvedValueOnce({ message_id: 'after' });
+    const conversation = { endpoint: { id: 'test', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
+    const file = { type: 'file', data: { media: { kind: 'url', value: 'https://example.com/file.pdf' } } };
+    const result = await endpoint.send({ conversation, payload: [
+      { type: 'text', data: { text: 'Before' } }, file, { type: 'text', data: { text: 'After' } },
+    ] });
+    expect(result).toEqual({ parts: [
+      { messageId: 'before', sourceIndices: [0] }, { sourceIndices: [1] }, { messageId: 'after', sourceIndices: [2] },
+    ] });
+    await expect(endpoint.send({ conversation, payload: file })).rejects.toMatchObject({
+      code: 'delivery_unconfirmed', disposition: 'unknown', parts: [{ sourceIndices: [0] }],
+    });
+    expect(sendFile).toHaveBeenCalledTimes(2);
     await endpoint.stop();
   });
 
@@ -835,14 +909,50 @@ describe('icqq plugin runtime adapter', () => {
     const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
     const share = { type: 'share', data: { title: '晴天', url: 'https://music.example/1' } };
     await expect(endpoint.send({ conversation, payload: [{ type: 'text', data: { text: '找到了' } }, share] }))
-      .rejects.toMatchObject({ code: 'partial_delivery', disposition: 'unknown' });
+      .rejects.toMatchObject({ code: 'partial_delivery', disposition: 'unknown',
+        parts: [{ messageId: 'sent-1', sourceIndices: [0] }], cause: { message: 'share rejected' } });
     endpoint.client.share.mockRejectedValueOnce(new Error('share rejected'));
     await expect(endpoint.send({ conversation, payload: [share, { type: 'text', data: { text: '找到了' } }] }))
       .rejects.toThrow('share rejected');
     await endpoint.stop();
   });
 
-  it('confirms a share with the id of the bot\'s own card read back from chat history', async () => {
+  it('retains unconfirmed completed sends when the next part fails and never retries either part', async () => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    endpoint.client.sendGroupMsg.mockRejectedValueOnce(new Error('text outcome unknown'));
+    const conversation = { endpoint: { id: 'test', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
+    await expect(endpoint.send({ conversation, payload: [
+      { type: 'share', data: { title: 'Card', url: 'https://example.com/card' } },
+      { type: 'text', data: { text: 'Never retry' } },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://example.com/a.mp3' } } },
+    ] })).rejects.toMatchObject({ code: 'partial_delivery', disposition: 'unknown',
+      parts: [{ sourceIndices: [0] }], cause: { message: 'text outcome unknown' } });
+    expect(endpoint.client.share).toHaveBeenCalledOnce();
+    expect(endpoint.client.sendGroupMsg).toHaveBeenCalledOnce();
+    await endpoint.stop();
+  });
+
+  it.each([false, true])('preserves send evidence when temporary media cleanup throws (partial=%s)', async partial => {
+    const endpoint = createEndpoint();
+    await endpoint.start(new AbortController().signal);
+    const payload = [{ type: 'text', data: { text: 'Before' } },
+      ...(partial ? [{ type: 'share', data: { title: 'Card', url: 'https://example.com/card' } }] : [])];
+    const sendFailure = new Error('share send outcome unknown');
+    if (partial) endpoint.client.share.mockRejectedValueOnce(sendFailure);
+    const dispose = vi.fn(() => { throw new Error('temporary file cleanup failed'); });
+    const prepare = vi.spyOn(outboundMedia, 'prepareIcqqOutboundMedia').mockReturnValue({ content: payload as never, dispose });
+    try {
+      const sending = endpoint.send({ conversation: { endpoint: { id: 'test', adapter: 'icqq' }, kind: 'group', id: '100' }, payload });
+      if (partial) await expect(sending).rejects.toMatchObject({ code: 'partial_delivery', cause: sendFailure,
+        parts: [{ messageId: 'sent-1', sourceIndices: [0] }] });
+      else await expect(sending).resolves.toEqual({ parts: [{ messageId: 'sent-1', sourceIndices: [0] }] });
+      expect(dispose).toHaveBeenCalledOnce();
+      expect(endpoint.client.sendGroupMsg).toHaveBeenCalledOnce();
+    } finally { prepare.mockRestore(); await endpoint.stop(); }
+  });
+
+  it('does not mistake a concurrent or similar own card for the share acknowledgement', async () => {
     const endpoint = createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
@@ -856,20 +966,22 @@ describe('icqq plugin runtime adapter', () => {
     ]);
     const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
     await expect(endpoint.send({ conversation, payload: { type: 'share', data: { title: '晴天', url: 'https://y.qq.com/x' } } }))
-      .resolves.toBe('own-card');
+      .rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown', parts: [{ sourceIndices: [0] }] });
+    expect(endpoint.client.getChatHistory).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
-  it('keeps a share unconfirmed when the card cannot be found or history is unavailable', async () => {
+  it('keeps a share unconfirmed without searching history or retrying the send', async () => {
     const endpoint = createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
     const conversation = { endpoint: { id: 'test-endpoint', adapter: 'test' }, kind: 'group' as const, id: '100' };
     const share = { type: 'share', data: { title: '晴天', url: 'https://y.qq.com/x' } };
     await expect(endpoint.send({ conversation, payload: share })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
-    expect(endpoint.client.getChatHistory).toHaveBeenCalledTimes(2);
+    expect(endpoint.client.getChatHistory).not.toHaveBeenCalled();
     endpoint.client.getChatHistory.mockImplementation(() => { throw new Error('history api missing'); });
     await expect(endpoint.send({ conversation, payload: share })).rejects.toMatchObject({ code: 'delivery_unconfirmed' });
+    expect(endpoint.client.share).toHaveBeenCalledTimes(2);
     endpoint.client.getChatHistory.mockReset();
     await endpoint.stop();
   });

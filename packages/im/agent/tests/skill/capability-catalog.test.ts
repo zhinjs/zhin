@@ -92,9 +92,18 @@ describe('capability catalog', () => {
     it('derives the domain from the MCP server, else the tool owner', () => {
       const fullTool = (source?: string) => ({ source });
       expect(toolIndexGroup({ mcpServer: 'git', fullTool: fullTool('mcp:git') })).toBe('mcp:git');
+      expect(toolIndexGroup({ owner: 'root/calendar', fullTool: fullTool('/packages/calendar/tools/add/index.js') })).toBe('root/calendar');
+      expect(toolIndexGroup({ owner: 'root/calendar', mcpServer: 'git', fullTool: fullTool('/packages/calendar/tools/add/index.js') })).toBe('mcp:git');
       expect(toolIndexGroup({ fullTool: fullTool('plugin:calendar') })).toBe('calendar');
       expect(toolIndexGroup({ fullTool: fullTool('builtin:context') })).toBe('builtin:context');
+      expect(toolIndexGroup({ fullTool: fullTool('mcp:git') })).toBe('mcp:git');
       expect(toolIndexGroup({ fullTool: fullTool() })).toBe('other');
+    });
+
+    it('does not use diagnostic source paths as model-visible domains', () => {
+      for (const source of ['/workspace/node_modules/.pnpm/example@1/tools/add/index.js', './tools/add/index.ts', 'C:\\workspace\\tools\\add.ts']) {
+        expect(toolIndexGroup({ fullTool: { source } })).toBe('other');
+      }
     });
   });
 });

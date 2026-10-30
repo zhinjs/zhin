@@ -63,6 +63,8 @@ export interface ContextBlock {
   readonly text: string;
   /** Trust label of the event's source (e.g. `external_content`), rendered next to the event. */
   readonly source?: string;
+  /** Host-owned opaque identity of an immutable external message, never execution authority. */
+  readonly reference?: string;
 }
 
 export interface ContextMessage {
@@ -85,6 +87,8 @@ export interface UserMessage extends AgentMessageBase {
   /** Native message identity supplied by a trusted ingress, absent for synthetic/legacy messages. */
   messageId?: string;
   content: UserContentBlock[];
+  /** Full untrusted events retained for lossless, window-dependent model projection. */
+  contextBlocks?: readonly ContextBlock[];
   actor?: ConversationActor;
   cause?: ConversationTurnCause;
   /**
@@ -105,6 +109,8 @@ export interface UserMessage extends AgentMessageBase {
    * Runtime-only: stripped before storage.
    */
   aliasSeq?: number;
+  /** Runtime-only physical-message aliases derived from the full active path; never persisted. */
+  aliasParts?: readonly (string | null)[];
 }
 
 export interface AssistantMessage extends AgentMessageBase {
@@ -115,8 +121,16 @@ export interface AssistantMessage extends AgentMessageBase {
   assistantActor?: ConversationActor;
   /** Platform id of the message this reply was delivered as (ADR 0043 §5), when delivery reported one. */
   messageId?: string;
+  /** Completed physical delivery slots; null has no confirmed id. `messageId` is the first known id. */
+  messageIds?: readonly (string | null)[];
+  /** Opaque facts represented by this delivered reply; stamped by the host, never the provider. */
+  contextRefs?: readonly string[];
+  /** Binds coverage to the exact assistant content; a later transform invalidates it. */
+  contextDigest?: string;
   /** Runtime-only session message sequence, see {@link UserMessage.aliasSeq}. */
   aliasSeq?: number;
+  /** Runtime-only physical-message aliases derived from the full active path; never persisted. */
+  aliasParts?: readonly (string | null)[];
   content: ContentBlock[];
   api: string;
   provider: string;

@@ -1,7 +1,7 @@
 import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { ConversationRef } from '@zhin.js/im-contract';
+import type { ConversationRef, TextSegment } from '@zhin.js/im-contract';
 import {
   createAutoApprovalPort,
   createBypassApprovalPort,
@@ -1383,7 +1383,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
                         }
                         let sent: Awaited<ReturnType<typeof deliveryOutcomeFromReceipt>>;
                         try {
-                          sent = deliveryOutcomeFromReceipt(await reply(content));
+                          const plannedText = content.length && content.every((segment): segment is TextSegment => segment.type === 'text')
+                            ? content.map(segment => String(segment.data.text)).join('') : undefined;
+                          sent = deliveryOutcomeFromReceipt(await reply(content), plannedText);
                         } catch (error) {
                           auditOutbound(audit, { status: 'failed', code: error instanceof Error ? error.message : String(error), retryable: false });
                           throw error;

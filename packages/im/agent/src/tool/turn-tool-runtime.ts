@@ -8,7 +8,7 @@ import {
   isApprovalPortAvailable,
   requestApprovalOutcome,
 } from '../session/approval-port.js';
-import { resolveMessageAliasArguments, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
+import { resolveMessageAliasArguments, UnconfirmedMessageAliasError, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
@@ -123,7 +123,15 @@ export class TurnToolRuntime {
     await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId }, causedBy);
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
     // The journal keeps what the model wrote; policies and the tool see platform ids.
-    if (this.#messageAliases) input = resolveMessageAliasArguments(input, this.#messageAliases);
+    if (this.#messageAliases) {
+      try {
+        input = resolveMessageAliasArguments(input, this.#messageAliases);
+      } catch (error) {
+        if (!(error instanceof UnconfirmedMessageAliasError)) throw error;
+        await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: error.message, durationMs: 0 }, causedBy);
+        return Object.freeze({ status: 'failed', error: error.message, retryable: false });
+      }
+    }
     let actingFor: string | undefined;
     const merge = this.turn.policy.merge;
     if (merge) {

@@ -1,10 +1,14 @@
+import { createHash } from 'node:crypto';
 import { resolveLocale } from '@zhin.js/plugin-runtime';
 import { projectLocale } from './locale.js';
 import {
   type CapabilityId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
-import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt, type DeliveryPart, type EndpointSendPart, type EndpointSendResult, type Segment, type TextSegment } from '@zhin.js/im-contract';
+import { isCanonicalSegment } from '../../built/segment-contract/assert.js';
+import { collectSegmentMedia } from '../../built/segment-contract/media.js';
+import { isStrictCanonicalSegment } from '../../built/segment-contract/validate.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement } from '@zhin.js/jsx';
 import { createOutboundEnvelope, isComponentCall, isRawContent, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
@@ -33,7 +37,7 @@ function logRejectedPayload(conversation: ConversationRef, stage: 'render' | 'mi
 interface OutboundDeliveryContext {
   readonly diagnostics?: RuntimeMessageDiagnostics;
   prepareButtons?(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch;
-  record(request: SendRequest, receipt: DeliveryReceipt): Promise<void>;
+  record(request: SendRequest, receipt: DeliveryReceipt, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void>;
   /** Side-channel correlation ledger for inbound origin; failures never affect the receipt. */
   ledger?(conversation: ConversationRef, receipt: DeliveryReceipt, payload: unknown): void;
   rememberFallback(
@@ -154,33 +158,48 @@ export class OutboundDeliveryRuntime {
           }
 
           const revokeButtons = buttons?.activate(buttonPayloads);
+          const canonicalContent: readonly Segment[] | undefined = typeof payload === 'string'
+            ? [{ type: 'text', data: { text: payload } }]
+            : Array.isArray(payload) && payload.every(isCanonicalSegment) ? payload : undefined;
+          // Capture known canonical content before the endpoint can mutate it.
+          // Inline rendering bytes and opaque extensions never become new history.
+          const contentSources = canonicalContent?.map(snapshotHistorySource);
+          const payloadLength = Array.isArray(payload) ? payload.length : 1;
           try {
             const result = await requireAdapters(snapshot).send(adapter, {
               conversation: request.conversation,
               locale: resolveLocale(request.locale ?? projectLocale(snapshot)),
               payload,
             });
-            receipt = receiptFromEndpointResult(result, request.conversation);
+            receipt = receiptFromEndpointResult(result, request.conversation, payloadLength);
           } catch (error) {
-            receipt = receiptFromEndpointError(error);
+            receipt = receiptFromEndpointError(error, true, request.conversation, payloadLength);
           }
 
-          if (receipt.status !== 'sent' && !receipt.failure?.deliveryUnknown) revokeButtons?.();
+          const evidence = projectPartEvidence(receipt, contentSources);
+          receipt = evidence.receipt;
+          if (receipt.status !== 'sent' && !receipt.failure?.deliveryUnknown && !receipt.parts?.length) revokeButtons?.();
 
-          if (receipt.status === 'sent') {
-            await this.context.record(request, receipt);
+          for (const part of evidence.parts) {
+            const partReceipt: DeliveryReceipt = { status: 'sent', ...(part.part.message ? { message: part.part.message } : {}),
+              ...(part.part.outboundTextDigest ? { outboundTextDigest: part.part.outboundTextDigest } : {}) };
+            if (part.part.message) {
+              await this.context.record(request, partReceipt, part.content ?? (receipt.parts ? 'unavailable' : undefined));
+            }
             try {
-              this.context.ledger?.(request.conversation, receipt, payload);
+              this.context.ledger?.(request.conversation, partReceipt,
+                part.content ?? (receipt.parts ? undefined : payload));
             } catch (error) {
               logger.warn(`outbound ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
             }
-            this.context.publish({
+            if (part.part.message) this.context.publish({
               direction: 'outbound',
               rendering: projection.rendering,
               conversation: request.conversation,
               requester: request.requester,
-              contentPreview: previewMessageContent(payload),
-              ...(receipt.message?.id ? { messageId: receipt.message.id } : {}),
+              contentPreview: part.content ? previewMessageContent(part.content)
+                : receipt.parts ? '[Message content unavailable; inspect its reference.]' : previewMessageContent(payload),
+              messageId: part.part.message.id,
               timestamp: Date.now(),
             });
           }
@@ -232,30 +251,40 @@ export function failedDeliveryReceipt(code: string, retryable = false): Delivery
 }
 
 function receiptFromEndpointResult(
-  messageId: string,
+  result: EndpointSendResult,
   conversation: ConversationRef,
+  payloadLength: number | undefined,
 ): DeliveryReceipt {
-  if (typeof messageId !== 'string' || messageId.trim() === '') {
+  if (typeof result !== 'string') {
+    const parts = normalizeEndpointParts(result?.parts, conversation, payloadLength);
+    if (!parts.length) return unknownDeliveryReceipt('delivery_unconfirmed');
+    const message = parts.find(part => part.message)?.message;
+    if (!message) return Object.freeze({ ...unknownDeliveryReceipt('delivery_unconfirmed'), parts });
+    return Object.freeze({ status: 'sent', ...(message ? { message } : {}), parts });
+  }
+  if (result.trim() === '') {
     return unknownDeliveryReceipt('delivery_unconfirmed');
   }
   return Object.freeze({
     status: 'sent' as const,
-    message: Object.freeze({ conversation, id: messageId }),
+    message: Object.freeze({ conversation, id: result }),
   });
 }
 
-function receiptFromEndpointError(error: unknown, attempted = true): DeliveryReceipt {
+function receiptFromEndpointError(error: unknown, attempted = true, conversation?: ConversationRef, payloadLength?: number): DeliveryReceipt {
   if (error instanceof EndpointDeliveryError) {
+    const parts = attempted && conversation ? normalizeEndpointParts(error.parts, conversation, payloadLength) : [];
     // Disposition is transport evidence; an error code alone cannot override it.
-    if (error.disposition === 'unknown') return unknownDeliveryReceipt(error.code);
-    if (error.disposition === 'rejected') return rejectedDeliveryReceipt(error.code, 'Endpoint rejected outbound delivery.');
-    if (error.code === 'outbound_unsupported' || error.code === 'endpoint_not_found') {
-      return unsupportedDeliveryReceipt('outbound_unsupported');
-    }
-    if (error.code === 'unsupported_operation' && error.disposition === 'not_sent') {
-      return unsupportedDeliveryReceipt(error.code);
-    }
-    return failedDeliveryReceipt(error.code);
+    let receipt: DeliveryReceipt;
+    if (error.disposition === 'unknown') receipt = unknownDeliveryReceipt(error.code);
+    else if (error.disposition === 'rejected') receipt = rejectedDeliveryReceipt(error.code, 'Endpoint rejected outbound delivery.');
+    else if (error.code === 'outbound_unsupported' || error.code === 'endpoint_not_found') receipt = unsupportedDeliveryReceipt('outbound_unsupported');
+    else if (error.code === 'unsupported_operation') receipt = unsupportedDeliveryReceipt(error.code);
+    else receipt = failedDeliveryReceipt(error.code);
+    if (!parts.length) return receipt;
+    const message = parts.find(part => part.message)?.message;
+    return Object.freeze({ ...receipt, ...(message ? { message } : {}), parts,
+      failure: Object.freeze({ ...receipt.failure!, retryable: false }) });
   }
   // imhelper ProtocolError exposes stable protocol facts without a Core SDK dependency.
   if (error && typeof error === 'object' && 'protocol' in error && 'kind' in error && 'response' in error
@@ -269,6 +298,51 @@ function receiptFromEndpointError(error: unknown, attempted = true): DeliveryRec
   if (!attempted) return failedDeliveryReceipt('endpoint_send_failed');
   // Unknown SDK/network failures provide no evidence that replay is safe.
   return unknownDeliveryReceipt('endpoint_send_failed');
+}
+
+/** Unknown identities stay as slots; a bad mapping cannot erase a real platform id. */
+function normalizeEndpointParts(parts: readonly EndpointSendPart[] | undefined, conversation: ConversationRef, payloadLength?: number): readonly DeliveryPart[] {
+  if (!Array.isArray(parts)) return [];
+  return Object.freeze(Array.from(parts, part => {
+    const indices: unknown[] | undefined = Array.isArray(part?.sourceIndices) ? [...part.sourceIndices] : undefined;
+    return Object.freeze({
+      ...(typeof part?.messageId === 'string' && part.messageId.trim() !== ''
+        ? { message: Object.freeze({ conversation, id: part.messageId }) } : {}),
+      ...(indices && payloadLength !== undefined
+        && indices.every((index): index is number => typeof index === 'number' && Number.isSafeInteger(index) && index >= 0 && index < payloadLength)
+        ? { sourceIndices: Object.freeze(indices) } : {}),
+    });
+  }));
+}
+
+function snapshotHistorySource(segment: Segment): Segment | undefined {
+  // Forward entries and opaque card/extensions have no bounded, simple content contract here.
+  if (!isStrictCanonicalSegment(segment) || segment.type === 'forward') return undefined;
+  if (collectSegmentMedia([segment]).some(({ media }) => media.kind === 'base64' || media.value.startsWith('data:'))) return undefined;
+  const values = [...Object.values(segment.data), ...Object.values(segment.platform ?? {})];
+  if (values.some(value => ArrayBuffer.isView(value) || value instanceof ArrayBuffer)) return undefined;
+  try { return structuredClone(segment); } catch { return undefined; }
+}
+
+function projectPartEvidence(receipt: DeliveryReceipt, sources: readonly (Segment | undefined)[] | undefined): {
+  receipt: DeliveryReceipt;
+  parts: readonly { part: DeliveryPart; content?: readonly Segment[] }[];
+} {
+  const parts = receipt.parts ?? (receipt.status === 'sent' ? [{ message: receipt.message,
+    ...(sources ? { sourceIndices: sources.map((_, index) => index) } : {}) }] : []);
+  const projected = parts.map(part => {
+    const selected = part.sourceIndices?.length && sources ? part.sourceIndices.map(index => sources[index]) : undefined;
+    const content = selected?.every((segment): segment is Segment => segment !== undefined) ? selected : undefined;
+    const outboundTextDigest = content?.every((segment): segment is TextSegment => segment.type === 'text')
+      ? createHash('sha256').update(content.map(segment => segment.data.text).join('')).digest('hex') : undefined;
+    return { part: Object.freeze({ ...part, ...(outboundTextDigest ? { outboundTextDigest } : {}) }), ...(content ? { content } : {}) };
+  });
+  return {
+    receipt: { ...receipt, ...(receipt.parts ? { parts: Object.freeze(projected.map(part => part.part)) } : {}),
+      ...(receipt.status === 'sent' && projected.length === 1 && projected[0]?.part.outboundTextDigest
+        ? { outboundTextDigest: projected[0].part.outboundTextDigest } : {}) },
+    parts: projected,
+  };
 }
 
 function unknownDeliveryReceipt(code: string): DeliveryReceipt {

@@ -62,7 +62,7 @@ import {
   defineHandler,
   handlerFeatureId,
 } from '@zhin.js/handler';
-import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationAddress, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationAddress, type ConversationRef, type EndpointSendResult } from '@zhin.js/im-contract';
 import type { RoomInboundRouteInput, RoomRouteDecision } from '../../src/plugin-runtime/im/inbound-origin.js';
 import {
   ImRuntime,
@@ -144,6 +144,30 @@ function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<un
 }
 
 describe('IM Runtime', () => {
+  it('reads a rich bubble from the platform when its receipt retained an ID without a verified local body', async () => {
+    const resolve = vi.fn(async (reference: import('@zhin.js/im-contract').ConversationReference) => ({
+      status: 'resolved' as const, reference,
+      value: { ref: reference.kind === 'message' ? reference.message : { conversation: {} as ConversationRef, id: '' },
+        segments: [{ type: 'text' as const, data: { text: 'actual platform body' } }], timestamp: Date.now() },
+    }));
+    const fixture = await createFixture([], [], undefined, undefined, undefined, { middleware: false,
+      endpointSend: () => ({ parts: [{ messageId: 'rich-message' }] }),
+      endpointContent: { resolve },
+    });
+    const conversation = fixtureInput(fixture, '').conversation;
+    const lease = fixture.store.acquire();
+    try {
+      const receipt = await fixture.im.send({ requester: rootPluginId(), conversation, content: [{ type: 'dice', data: {} }] });
+      expect(receipt.status).toBe('sent');
+      const result = await fixture.im.resolveConversationReference(lease, { kind: 'message', message: receipt.message! },
+        { signal: new AbortController().signal, maxDepth: 1, maxEntries: 10, maxChars: 1000 });
+      expect(resolve).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ status: 'resolved', value: { segments: [{ type: 'text', data: { text: 'actual platform body' } }] } });
+      const pending = await fixture.im.readConversationContext(conversation, 'consumer', 1);
+      expect(pending.blocks[0]!.text).toContain('Message content unavailable');
+    } finally { lease.release(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('keeps the Root menu presenter and content author across native page callbacks', async () => {
     const events: string[] = [];
     const sent: unknown[] = [];
@@ -3057,7 +3081,8 @@ async function createFixture(
     additionalAdapters?: readonly CapabilitySlot<AdapterDefinition>[];
     additionalAdapterConfig?: { readonly owner: PluginId; readonly config: Readonly<Record<string, unknown>> };
     adapterOperations?: readonly AdapterOperation[];
-    endpointSend?: (request: unknown) => string | Promise<string>;
+    endpointSend?: (request: unknown) => EndpointSendResult | Promise<EndpointSendResult>;
+    endpointContent?: import('@zhin.js/adapter').EndpointContentPort;
     endpointControl?: EndpointControl;
     endpointManagement?: EndpointManagement;
     outboundMiddleware?: (input: OutboundEnvelope, next: () => Promise<void>) => Promise<void> | void;
@@ -3080,6 +3105,7 @@ async function createFixture(
       create: () => ({
         ...(options?.endpointControl ? { control: options.endpointControl } : {}),
         ...(options?.endpointManagement ? { management: options.endpointManagement } : {}),
+        ...(options?.endpointContent ? { content: options.endpointContent } : {}),
         start() { events.push('endpoint:start'); },
         open() { events.push('endpoint:open'); },
         close() { events.push('endpoint:close'); },

@@ -5,8 +5,12 @@ export interface ConversationMessage {
   readonly ref: MessageRef;
   readonly actor?: ActorRef;
   readonly segments: readonly Segment[];
+  /** The native identity is confirmed, but this store has no verified per-message body. */
+  readonly contentStatus?: 'unavailable';
   readonly timestamp: number;
   readonly replyTo?: MessageRef;
+  /** SHA-256 of the exact final plain-text outbound payload; absent when content is unverified/rich. */
+  readonly outboundTextDigest?: string;
 }
 
 export type ConversationReference =
@@ -54,4 +58,7 @@ export interface ConversationContextBlock {
   readonly sequence: number;
   readonly eventType: ConversationEvent['type'];
   readonly text: string;
+  /** Canonical source of a created message, retained separately from its display text. */
+  readonly message?: MessageRef;
+  readonly messageTextDigest?: string;
 }

@@ -21,7 +21,7 @@ import {
 } from 'zhin.js/adapter';
 import type { EndpointContentPort } from '@zhin.js/adapter';
 import { receiveOneBotLikeSideEvent, buildSystem, toCanonicalSegments, type LoginAssist, type PendingLoginTask } from '@zhin.js/core';
-import { EndpointDeliveryError, type MessageRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type EndpointSendPart, type EndpointSendResult, type MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import type { IcqqLoginControl } from './icqq-login-control.js';
@@ -55,7 +55,7 @@ import {
 } from './outbound-media.js';
 import {
   formatInboundContent,
-  formatOutboundMessages,
+  formatOutboundMessageParts,
   normalizeIcqqImageMedia,
   icqqInboundConversation,
   icqqOutboundTarget,
@@ -518,7 +518,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
     });
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async send({ conversation, payload }: EndpointSendRequest): Promise<EndpointSendResult> {
     if (!this.#started) throw new EndpointDeliveryError('endpoint_disconnected', 'icqq endpoint 未连接', 'not_sent');
     const mediaMode = resolveIcqqOutboundMediaMode(this.#options.config);
     const prepared = isIcqqSegmentPayload(payload)
@@ -526,10 +526,10 @@ export class IcqqEndpoint extends Endpoint<Client> {
       : { content: payload, dispose() {} };
     try {
       // Standalone elements (share / file / …) are split into ordered messages.
-      const messages = formatOutboundMessages(prepared.content);
+      const messages = formatOutboundMessageParts(prepared.content);
       const parsed = icqqOutboundTarget(conversation);
-      let messageId: string | undefined;
-      for (const [index, message] of messages.entries()) {
+      const parts: EndpointSendPart[] = [];
+      for (const [index, { message, sourceIndices }] of messages.entries()) {
         const preview = formatIcqqSendablePreview(message);
         let result: { message_id?: unknown };
         try {
@@ -543,48 +543,30 @@ export class IcqqEndpoint extends Endpoint<Client> {
             preview: truncatePreview(preview, 120),
           }));
           if (index === 0) throw error;
-          // Earlier parts are already delivered: a retry would duplicate them.
-          throw new EndpointDeliveryError('partial_delivery', `ICQQ delivered ${index} of ${messages.length} message parts`, 'unknown', { cause: error });
+          // Earlier sends completed; retrying can duplicate accepted messages, even without ids.
+          throw new EndpointDeliveryError('partial_delivery', `ICQQ completed ${index} of ${messages.length} message sends`, 'unknown', { cause: error, parts });
         }
         const rawId = result?.message_id;
         const id = (typeof rawId === 'string' || (typeof rawId === 'number' && Number.isFinite(rawId))) && String(rawId).trim() !== ''
           ? String(rawId) : undefined;
-        messageId ??= id;
+        parts.push({ ...(id ? { messageId: id } : {}), ...(sourceIndices ? { sourceIndices } : {}) });
         this.#logger.info(
           `send ${conversation.kind}:${conversation.id} | id: ${id ?? '-'} | ${truncatePreview(preview, 80)}`,
         );
       }
-      // Native share / file APIs return no id; the reply is confirmed by any part that has one.
-      if (!messageId) {
-        throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: ICQQ returned no message_id', 'unknown');
+      // A resolved share/file call has no message identity; retain that unknown slot in the batch.
+      if (!parts.some(part => part.messageId)) {
+        throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: ICQQ returned no message_id', 'unknown', { parts });
       }
-      return messageId;
+      return { parts };
     } finally {
-      prepared.dispose();
+      try {
+        prepared.dispose();
+      } catch (error) {
+        // Temporary-file cleanup cannot change an already observed platform send outcome.
+        this.#logger.warn(formatCompact({ op: 'icqq_media_cleanup_failed', error: describeUnknownError(error) }));
+      }
     }
-  }
-
-  /**
-   * ICQQ's share API returns no message id; a resolved call only means the server accepted it.
-   * The card is the bot's own newest card message in the conversation history, so read the id
-   * from there (once more after a short wait, history can lag). Undefined keeps the delivery
-   * unconfirmed rather than inventing an id.
-   */
-  async #findOwnCard(
-    history: () => Promise<readonly { message_id?: unknown; time?: number; message?: readonly { type?: string }[]; sender?: { user_id?: number }; user_id?: number }[]>,
-    sentAt: number,
-  ): Promise<string | undefined> {
-    const self = Number(this.client.uin);
-    for (const wait of [0, 500]) {
-      if (wait) await new Promise(resolve => setTimeout(resolve, wait));
-      // A missing or throwing history API must not turn an accepted share into a send failure.
-      const messages = await Promise.resolve().then(history).catch(() => []);
-      const card = [...messages].reverse().find(item => Number(item.sender?.user_id ?? item.user_id) === self
-        && (item.time ?? 0) >= sentAt - 2
-        && (item.message ?? []).some(element => element.type === 'json' || element.type === 'xml' || element.type === 'share'));
-      if (card && card.message_id != null && String(card.message_id).trim()) return String(card.message_id);
-    }
-    return undefined;
   }
 
   async #sendNative(
@@ -594,16 +576,14 @@ export class IcqqEndpoint extends Endpoint<Client> {
     if (isIcqqShareElement(message)) {
       switch (target.kind) {
         case 'private': {
-          const sentAt = Math.floor(Date.now() / 1000);
           const friend = this.client.pickFriend(target.userId);
           await friend.share(message);
-          return { message_id: await this.#findOwnCard(() => friend.getChatHistory(), sentAt) };
+          return {};
         }
         case 'group': {
-          const sentAt = Math.floor(Date.now() / 1000);
           const group = this.client.pickGroup(target.groupId);
           await group.share(message);
-          return { message_id: await this.#findOwnCard(() => group.getChatHistory(), sentAt) };
+          return {};
         }
         case 'temp':
           await this.client.pickMember(target.groupId, target.userId).share(message);

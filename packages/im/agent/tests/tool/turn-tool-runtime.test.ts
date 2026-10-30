@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
+import { MessageAliasTable } from '@zhin.js/ai';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
@@ -14,6 +15,22 @@ import { createHostProtectedPaths, type HostProtectedPaths } from '../../src/sec
 import { createBypassApprovalPort } from '../../src/session/approval-review-agent.js';
 
 describe('TurnToolRuntime', () => {
+  it('does not execute a known unconfirmed bubble reference or shift a later confirmed bubble into its slot', async () => {
+    const aliases = new MessageAliasTable();
+    aliases.index([{ role: 'assistant', messageId: 'native-first', messageIds: ['native-first', null, 'native-third'],
+      aliasSeq: 2, content: [{ type: 'text', text: 'reply' }] } as never]);
+    const execute = vi.fn<ToolCapability['execute']>(async () => 'found');
+    const { turn, events } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'lookup_message')], { messageAliases: aliases });
+    await expect(runtime.execute('lookup_message', { message_id: 'm2.2' }, 'unknown-bubble'))
+      .resolves.toMatchObject({ status: 'failed', retryable: false, error: expect.stringContaining('m2.2') });
+    expect(execute).not.toHaveBeenCalled();
+    expect(events.map(event => event.type)).toEqual(['tool_call', 'tool_failed']);
+    await expect(runtime.execute('lookup_message', { message_id: 'm2.3' }, 'known-bubble'))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(execute).toHaveBeenCalledExactlyOnceWith({ message_id: 'native-third' }, expect.anything());
+  });
+
   it.each([false, true])('binds human approval to an isolated nested argument snapshot (provenance: %s)', async (tainted) => {
     const execute = vi.fn<ToolCapability['execute']>(async () => 'done');
     const args = { group_id: 129043431, user_id: 123456789, reason: '明确广告', evidence: [{ message: { id: 'original' } }] };

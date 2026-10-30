@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { SessionToldLedger, TOLD_LEDGER_HEADING, extractToldEntries } from '../../src/memory/told-ledger.js';
+import { createUserMessage, EMPTY_TOKEN_USAGE, projectPromptContext, type AssistantMessage } from '@zhin.js/ai';
+import { deliveredReplyContextRef } from '../../src/session/context-provenance.js';
+import { stampDeliveredMessageId } from '../../src/session/participant-header-stamp.js';
 
 describe('extractToldEntries', () => {
   it('keeps the lead sentence as a conclusion and promises as commitments', () => {
@@ -51,5 +54,24 @@ describe('SessionToldLedger', () => {
     const block = ledger.render('s1')!;
     expect(block.startsWith(TOLD_LEDGER_HEADING)).toBe(true);
     expect(block).toContain('- (commitment) 我会明天提醒你。');
+  });
+
+  it('projects only ledger entries not covered by a visible delivered reply, preserving entries for a later tail', () => {
+    const ledger = new SessionToldLedger();
+    ledger.record('session', 'Covered conclusion.', 'reply', 'turn-a');
+    ledger.record('session', 'Older conclusion.', 'reply', 'turn-old');
+    ledger.record('session', '⏳ independent progress', 'progress', 'turn-a');
+    const raw: AssistantMessage = { role: 'assistant', timestamp: 1, content: [{ type: 'text', text: 'Covered conclusion.' }],
+      api: 'test', model: 'test', provider: 'test', usage: EMPTY_TOKEN_USAGE, stopReason: 'stop' };
+    const reply = stampDeliveredMessageId([raw], 'native', [deliveredReplyContextRef('session', 'turn-a')])[0] as AssistantMessage;
+    const user = { ...createUserMessage('current'), content: [...ledger.renderBlocks('session'), { type: 'text' as const, text: 'current', presentation: 'user-input' as const }] };
+    const current = projectPromptContext([reply, user]);
+    expect(JSON.stringify(current[1]?.content)).not.toContain('Covered conclusion.');
+    expect(JSON.stringify(current[1]?.content)).toContain('Older conclusion.');
+    expect(JSON.stringify(current[1]?.content)).toContain('independent progress');
+    expect(JSON.stringify(projectPromptContext([user]))).toContain('Covered conclusion.');
+    expect(ledger.entries('session')).toHaveLength(3);
+    // A reply in a different canonical session cannot hide this session's entry.
+    expect(JSON.stringify(projectPromptContext([{ ...reply, contextRefs: [deliveredReplyContextRef('other', 'turn-a')] }, user])[1]?.content)).toContain('Covered conclusion.');
   });
 });

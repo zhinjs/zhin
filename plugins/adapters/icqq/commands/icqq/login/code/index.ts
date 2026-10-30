@@ -1,6 +1,6 @@
 import { defineCommand } from 'zhin.js/command';
-import { icqqLoginControlToken } from '../../../../src/icqq-login-control.js';
 import {
+  icqqLoginControlToken,
   icqqLoginForbidden,
   isIcqqLoginOperator,
   pendingTaskLabel,

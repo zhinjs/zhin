@@ -1,7 +1,6 @@
 {
   "name": "@zhin.js/adapter-bilibili",
   "version": "0.1.0",
-  "private": true,
   "description": "Zhin.js Bilibili comment adapter for Plugin Runtime (Experimental; QR login, video comments, review-then-send with a Console approval page)",
   "type": "module",
   "main": "./lib/index.js",
@@ -83,7 +82,7 @@
     "adapters",
     "commands",
     "pages",
-    "plugin.ts",
+    "plugin.js",
     "schema.json",
     "src",
     "lib",
@@ -105,7 +104,7 @@
   "zhin": {
     "protocol": 1,
     "type": "plugin",
-    "entry": "./plugin.ts",
+    "entry": "./plugin.js",
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [

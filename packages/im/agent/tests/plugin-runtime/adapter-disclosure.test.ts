@@ -33,10 +33,11 @@ async function loadAdapter(platform: string): Promise<RuntimeSnapshot> {
       const context = { owner, feature: toolFeatureId, localName: `agent/${platform}/skill/${name}/${tool}`, source: toolSource };
       const loaded = await import(pathToFileURL(toolSource).href);
       const parsed = parseAgentToolDefinition(loaded.default, context);
-      // A private tool must not outlive its Skill's scene ceiling, nor silently mix scenes back in.
-      // Tools may narrow the Skill's scenes (for example group-only admin actions under a
-      // group + channel skill), but every tool scene must be declared by the Skill.
+      // Tools may narrow the Skill's scenes, but must not escape its scene ceiling.
       const skillScopes = new Set(definition.scopes ?? []);
+      if (skillScopes.size) {
+        expect(parsed.scopes?.length ?? 0, toolSource).toBeGreaterThan(0);
+      }
       for (const scope of parsed.scopes ?? []) {
         expect(skillScopes.has(scope), `${toolSource}: ${scope}`).toBe(true);
       }
@@ -88,6 +89,13 @@ describe('adapter-owned scene disclosure (#949)', () => {
       expect(capabilities.skills.map(skill => skill.qualifiedName)).toEqual(expected.map(skill => skill.qualifiedName));
       expect(capabilities.tools.map(tool => tool.name)).toEqual(tools.list()
         .filter(tool => !tool.scopes || tool.scopes.includes(scope)).map(tool => tool.qualifiedName));
+      if (platform === 'qq' && scope === 'channel') {
+        const disclosed = capabilities.tools.map(tool => tool.name);
+        expect(disclosed).toContain('agent__qq__skill__qq-group-admin__recall_member_message');
+        for (const name of ['group_kick', 'set_mute', 'handle_join_request']) {
+          expect(disclosed).not.toContain(`agent__qq__skill__qq-group-admin__${name}`);
+        }
+      }
       const plan = createDeferredCapabilityPlan({
         capabilities, platform, config: { deferredTools: {} },
         // Simulate a persisted session that had loaded every category before this turn.

@@ -144,7 +144,7 @@ export class ImRuntime implements OutboundMessageService {
     this.#outbound = new OutboundDeliveryRuntime({
       diagnostics: this.#messageDiagnostics,
       ledger: (conversation, receipt, payload) => ledger.record(conversation, receipt, payload),
-      record: (request, receipt) => this.#conversations.recordOutbound(request, receipt),
+      record: (request, receipt, canonicalContent) => this.#conversations.recordOutbound(request, receipt, canonicalContent),
       rememberFallback: (conversation, generation, map) =>
         this.#interactions.rememberFallback(conversation, generation, map),
       publish: (event) => this.#messageEventStream.publish(event),

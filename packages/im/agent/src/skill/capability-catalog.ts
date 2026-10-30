@@ -74,10 +74,14 @@ function renderEntries(
  * Domain of a catalog tool: its MCP server, else its owner (plugin id, or the `builtin:` area),
  * else ungrouped. Skill membership is not a tool property, so the owner is the grouping data.
  */
-export function toolIndexGroup(item: { readonly mcpServer?: string; readonly fullTool: { readonly source?: string } }): string {
+export function toolIndexGroup(item: { readonly owner?: string; readonly mcpServer?: string; readonly fullTool: { readonly source?: string } }): string {
   if (item.mcpServer) return `mcp:${item.mcpServer}`;
+  if (item.owner) return item.owner;
+  // Legacy catalogs carry semantic sources; entry paths are diagnostics, never domains.
   const source = item.fullTool.source?.trim();
-  return source ? source.replace(/^plugin:/, '') : TOOL_INDEX_UNGROUPED;
+  if (source?.startsWith('plugin:')) return source.slice('plugin:'.length) || TOOL_INDEX_UNGROUPED;
+  if (source?.startsWith('builtin:') || source?.startsWith('mcp:')) return source;
+  return TOOL_INDEX_UNGROUPED;
 }
 
 const byName = (a: CatalogEntry, b: CatalogEntry): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);

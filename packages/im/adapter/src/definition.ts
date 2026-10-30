@@ -23,6 +23,8 @@ export type {
   EndpointImplementation,
   EndpointIncomingMessage,
   EndpointSendRequest,
+  EndpointSendPart,
+  EndpointSendResult,
   PlatformEvent,
 } from './endpoint-contract.js';
 export { defineEndpointClient } from './endpoint-client.js';

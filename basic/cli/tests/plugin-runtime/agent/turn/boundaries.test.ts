@@ -149,6 +149,7 @@ describe('runtime reply delivery outcome bridge', () => {
   it('maps successful receipts to sent with message id when available', () => {
     expect(deliveryOutcomeFromReceipt({
       status: 'sent',
+      outboundTextDigest: '9b0f1b10aff55228716a1fbbc59bda8fe735ed14ccd5e2c5226a9ab72a48d47e',
       message: {
         conversation: {
           endpoint: { id: 'sandbox~main', adapter: 'sandbox' },
@@ -157,7 +158,33 @@ describe('runtime reply delivery outcome bridge', () => {
         },
         id: 'message-1',
       },
-    })).toEqual({ status: 'sent', messageId: 'message-1' });
+    }, 'planned')).toEqual({ status: 'sent', messageId: 'message-1', messages: [{
+      conversation: { endpoint: { id: 'sandbox~main', adapter: 'sandbox' }, kind: 'private', id: 'user-1' }, id: 'message-1',
+    }], messageContexts: [{
+      message: { conversation: { endpoint: { id: 'sandbox~main', adapter: 'sandbox' }, kind: 'private', id: 'user-1' }, id: 'message-1' }, plannedText: 'planned',
+    }] });
+  });
+  it('does not claim planned text when final delivery content is unknown or different', () => {
+    const message = { conversation: { endpoint: { id: 'main', adapter: 'sandbox' }, kind: 'private' as const, id: 'user' }, id: 'native' };
+    expect(deliveryOutcomeFromReceipt({ status: 'sent', message }, 'planned')).toEqual({ status: 'sent', messageId: 'native', messages: [message] });
+    expect(deliveryOutcomeFromReceipt({ status: 'sent', message, outboundTextDigest: 'different-body' }, 'planned'))
+      .toEqual({ status: 'sent', messageId: 'native', messages: [message] });
+  });
+
+  it('keeps ordered known part identities across unknown slots and partial delivery', () => {
+    const conversation = { endpoint: { id: 'bot', adapter: 'icqq' }, kind: 'group' as const, id: 'room' };
+    const refs = ['first', 'last'].map(id => ({ conversation, id }));
+    const parts = [{ message: refs[0] }, {}, { message: refs[1] }];
+    expect(deliveryOutcomeFromReceipt({ status: 'sent', message: refs[0], parts }))
+      .toEqual({ status: 'sent', messageId: 'first', messages: [refs[0], null, refs[1]] });
+    expect(deliveryOutcomeFromReceipt({ status: 'failed', message: refs[0], parts,
+      failure: { code: 'partial_delivery', message: 'later part failed', retryable: true } }))
+      .toEqual({ status: 'failed', code: 'partial_delivery', retryable: false, messages: [refs[0], null, refs[1]] });
+    for (const status of ['rejected', 'unsupported'] as const) {
+      expect(deliveryOutcomeFromReceipt({ status, message: refs[0], parts,
+        failure: { code: 'later_part_rejected', message: 'later part rejected' } }))
+        .toEqual({ status, code: 'later_part_rejected', messages: [refs[0], null, refs[1]] });
+    }
   });
 });
 

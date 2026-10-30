@@ -43,7 +43,7 @@ const expectedSurface = new Map([
     'EndpointActivationContext',
     'EndpointCleanup', 'EndpointClientContext', 'EndpointClientToken', 'EndpointConnectionContext',
     'EndpointConversation', 'EndpointEvent', 'EndpointEventSink', 'EndpointIdentity',
-    'EndpointImplementation', 'EndpointIncomingMessage', 'EndpointSendRequest',
+    'EndpointImplementation', 'EndpointIncomingMessage', 'EndpointSendPart', 'EndpointSendRequest', 'EndpointSendResult',
     'PlatformEvent', 'AdapterCapability', 'AdapterInteractiveMode',
     'AdapterMarkdownMode', 'AdapterOperation', 'AdapterOperationDeclaration',
     'AdapterOutboundMedia', 'AdapterReactionDeclaration', 'HtmlOutboundMode', 'defineAdapter', 'defineEndpointClient',

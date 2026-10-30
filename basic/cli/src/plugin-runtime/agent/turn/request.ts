@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   collectSegmentMedia,
   toCanonicalSegments,
@@ -809,13 +810,19 @@ function normalizeApprovalDecision(value: unknown, sharedConversation: boolean):
 
 export function deliveryOutcomeFromReceipt(
   receipt: Awaited<ReturnType<Message['$reply']>>,
+  plannedText?: string,
 ): DeliveryOutcome {
+  const messages = receipt.parts
+    ? receipt.parts.map(part => part.message ?? null)
+    : receipt.message ? [receipt.message] : [];
   switch (receipt.status) {
     case 'sent':
       return {
         status: 'sent' as const,
+        ...(messages.length ? { messages } : {}),
         ...(receipt.message?.id
-          ? { messageId: receipt.message.id }
+          ? { messageId: receipt.message.id, ...(plannedText !== undefined && receipt.outboundTextDigest === createHash('sha256').update(plannedText).digest('hex')
+            ? { messageContexts: [{ message: receipt.message, plannedText }] } : {}) }
           : {}),
       };
     case 'suppressed':
@@ -824,17 +831,20 @@ export function deliveryOutcomeFromReceipt(
       return {
         status: 'unsupported' as const,
         code: receipt.failure?.code ?? 'outbound_unsupported',
+        ...(messages.length ? { messages } : {}),
       };
     case 'rejected':
       return {
         status: 'rejected' as const,
         code: receipt.failure?.code ?? 'outbound_payload_rejected',
+        ...(messages.length ? { messages } : {}),
       };
     case 'failed':
       return {
         status: 'failed' as const,
         code: receipt.failure?.code ?? 'endpoint_send_failed',
-        retryable: receipt.failure?.retryable === true,
+        retryable: !messages.some(message => message !== null) && receipt.failure?.retryable === true,
+        ...(messages.length ? { messages } : {}),
       };
   }
 }

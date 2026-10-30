@@ -462,19 +462,37 @@ export function formatOutboundBody(payload: unknown): Sendable {
  * quote or whitespace are dropped: a standalone element cannot carry the quote.
  */
 export function formatOutboundMessages(payload: unknown): Sendable[] {
+  return formatOutboundMessageParts(payload).map(part => part.message);
+}
+
+/** Native bubble and the exact source segment positions which produced it. */
+export interface IcqqOutboundMessagePart {
+  readonly message: Sendable;
+  readonly sourceIndices?: readonly number[];
+}
+
+export function formatOutboundMessageParts(payload: unknown): IcqqOutboundMessagePart[] {
   if (!Array.isArray(payload)) {
-    return isWireSegment(payload) ? formatOutboundMessages([payload]) : [formatOutboundBody(payload)];
+    if (isWireSegment(payload)) return formatOutboundMessageParts([payload]);
+    const message = formatOutboundBody(payload);
+    return [{ message, ...(typeof payload === 'string' && message !== payload ? {} : { sourceIndices: [0] }) }];
   }
-  const groups: (string | MessageElem)[][] = [[]];
-  for (const element of formatOutboundElements(payload)) {
-    if (isStandaloneElement(element)) groups.push([element], []);
-    else groups.at(-1)!.push(element);
+  const groups: { element: string | MessageElem; sourceIndex: number }[][] = [[]];
+  for (const [sourceIndex, source] of payload.entries()) {
+    for (const element of formatOutboundElements([source])) {
+      const item = { element, sourceIndex };
+      if (isStandaloneElement(element)) groups.push([item], []);
+      else groups.at(-1)!.push(item);
+    }
   }
-  const messages = groups.filter(group => group.some(element => typeof element === 'string'
+  const messages = groups.filter(group => group.some(({ element }) => typeof element === 'string'
     ? element.trim() !== ''
     : element.type !== 'reply' && element.type !== 'quote'));
-  if (messages.length === 0) return ['\u200b'];
-  return messages.map(group => group.length === 1 ? group[0]! : group);
+  if (messages.length === 0) return [{ message: '\u200b', sourceIndices: [] }];
+  return messages.map(group => ({
+    message: group.length === 1 ? group[0]!.element : group.map(item => item.element),
+    sourceIndices: [...new Set(group.map(item => item.sourceIndex))],
+  }));
 }
 
 function isStandaloneElement(element: string | MessageElem): element is MessageElem {

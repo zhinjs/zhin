@@ -44,6 +44,8 @@ import { captureMcpImages } from '../media/mcp-image-results.js';
 import { resolveSkillTools } from './skill-tool-resolution.js';
 
 export interface ToolCapability extends ToolDescriptor {
+  /** MCP connection identity for catalog grouping; ownership still governs execution. */
+  readonly mcpServer?: string;
   execute<TInput = unknown, TResult = unknown>(
     input: TInput,
     invocation: ToolInvocationContext,
@@ -301,6 +303,10 @@ async function bindTools(
   );
   return Object.freeze(accessResults
     .filter((r) => r.allowed)
+    // Static capability queries have no session. Actual TurnRequest ingress always supplies one.
+    // Apply eligibility after access checks so all resident/deferred/load paths share this ceiling.
+    .filter(({ descriptor }) => !turn?.session
+      || index.isAvailable(descriptor.owner, descriptor.name, { sessionKey: turn.session.key, origin: turn.origin }))
     .map((r) => Object.freeze({
       ...r.descriptor,
       hidden: isSelectedAgentTool(r.descriptor.placement, selectedAgent)

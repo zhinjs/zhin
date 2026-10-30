@@ -1,4 +1,5 @@
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
+import { plannedReplyTexts } from '../../src/session/context-provenance.js';
 /**
  * Engine driver: assembles the smallest real host (ZhinAgent + AgentCore +
  * session/context systems) around the scripted model, builds a canonical
@@ -274,6 +275,7 @@ function buildTurn(
   const policy = trust.policy;
   const turnTools = trust.tools;
   const turnId = `${definition.id}:turn-${index + 1}`;
+  let replySequence = 0;
   const turn = createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: turnId, turnId },
@@ -301,7 +303,13 @@ function buildTurn(
         send: async (output) => {
           const text = renderAgentOutput(output);
           outbound.push(text);
-          return { status: 'sent' as const };
+          // This local port delivers the captured output unchanged. Supply the same
+          // plain-text evidence the production receipt bridge verifies after sending.
+          const messageContexts = plannedReplyTexts(output).flatMap(plannedText => plannedText === undefined ? [] : [{
+            message: { conversation: { endpoint: { adapter: PLATFORM, id: ENDPOINT }, kind: scope, id: sceneId }, id: `${turnId}:reply-${++replySequence}` },
+            plannedText,
+          }]);
+          return { status: 'sent' as const, ...(messageContexts.length ? { messageContexts } : {}) };
         },
       },
       ...(approval ? { approval } : {}),

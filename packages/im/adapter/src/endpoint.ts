@@ -9,6 +9,7 @@ import type {
   EndpointEvent,
   EndpointIdentity,
   EndpointSendRequest,
+  EndpointSendResult,
   EndpointTransportState,
 } from './endpoint-contract.js';
 import { getProcessPeerRegistry } from './peer-registry.js';
@@ -27,6 +28,8 @@ export type {
   EndpointImplementation,
   EndpointIncomingMessage,
   EndpointSendRequest,
+  EndpointSendPart,
+  EndpointSendResult,
   EndpointTransportState,
   PlatformEvent,
 } from './endpoint-contract.js';
@@ -256,7 +259,7 @@ export abstract class Endpoint<TClient = unknown> {
   abstract open(): void;
   abstract close(): void | Promise<void>;
   abstract stop(): void | Promise<void>;
-  send?(_request: EndpointSendRequest): string | Promise<string>;
+  send?(_request: EndpointSendRequest): EndpointSendResult | Promise<EndpointSendResult>;
 }
 
 /** @internal AdapterIndex binding hook; deliberately not exported by name. */

@@ -11,6 +11,7 @@ import { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 import { DEFAULT_CONFIG, SECTION_SEP } from '../../src/config/index.js';
 import { buildAgentPathSystemPrompt, type PromptRuntimeOverrides } from '../../src/prompt/assembly.js';
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
+import { deliveredMessageContextRef, deliveredReplyContextRef, deliveredTextDigest } from '../../src/session/context-provenance.js';
 
 function selection() {
   return {
@@ -32,8 +33,11 @@ describe('FullAgentTurnEngine', () => {
     agentEvents.clear();
   });
 
-  it.each(['catalog', 'specialist', 'withdrawn'] as const)('runs canonical ingress with the current %s capability context after stable system rules', async (mode) => {
+  it.each(['catalog', 'specialist', 'withdrawn', 'mutated'] as const)('runs canonical ingress with the current %s capability context after stable system rules', async (mode) => {
     const order: string[] = [];
+    const deliveryRef = { conversation: { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private' as const, id: 'user' }, id: 'sent-1' };
+    const deliveryRefs = [deliveryRef, { ...deliveryRef, id: 'sent-2' }];
+    const projectConversation = vi.fn(async () => undefined);
     const turn = createTurnIngress({
     intent: { kind: 'new' },
       identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
@@ -46,7 +50,12 @@ describe('FullAgentTurnEngine', () => {
       signal: new AbortController().signal,
       ports: {
         journal: { append: async () => undefined },
-        reply: { send: async () => { order.push('reply'); return { status: 'sent' }; } },
+        reply: { send: async output => {
+          order.push('reply');
+          if (mode === 'mutated' && output[0]?.type === 'text') output[0].content = 'changed by a send hook';
+          return { status: 'sent', messageId: deliveryRef.id, messages: deliveryRefs,
+            messageContexts: [{ message: deliveryRef, plannedText: mode === 'mutated' ? 'changed by a send hook' : 'done' }] };
+        } },
         conversationContext: {
           readPending: async () => {
             order.push('context-read');
@@ -116,6 +125,7 @@ describe('FullAgentTurnEngine', () => {
             iterations: 1,
             model: 'model',
             toolCalls: [],
+            projectConversation,
           };
         })();
       },
@@ -193,6 +203,9 @@ describe('FullAgentTurnEngine', () => {
 
     expect(events).toEqual(['tool_call', 'tool_result', 'chunk', 'turn_end']);
     expect(order).toEqual(['context-read', 'terminal', 'reply', 'touch', 'context-commit:9', 'finalize', 'finish']);
+    expect(projectConversation).toHaveBeenCalledWith({ messageId: 'sent-1', messageIds: ['sent-1', 'sent-2'], contextRefs: mode === 'mutated' ? [] : [
+      deliveredMessageContextRef(deliveryRef, deliveredTextDigest('done')), deliveredReplyContextRef('session-id', 'turn'),
+    ] });
     expect(started).toHaveLength(1);
     expect(started[0]).toMatchObject({
       locale: 'en',

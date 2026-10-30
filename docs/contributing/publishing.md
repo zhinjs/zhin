@@ -135,7 +135,7 @@ done < names.txt
 
 ## 包清单
 
-以下 101 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
+以下 103 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
 
 ### `basic/`（5）
 
@@ -204,8 +204,10 @@ done < names.txt
 - [ ] `@zhin.js/speech` — `packages/toolkit/speech`
 - [ ] `@zhin.js/tailwind` — `packages/toolkit/tailwind`
 
-### `plugins/adapters/`（20）
+### `plugins/adapters/`（22）
 
+- [ ] `@zhin.js/adapter-bilibili` — `plugins/adapters/bilibili`
+- [ ] `@zhin.js/adapter-bilibili-live` — `plugins/adapters/bilibili-live`
 - [ ] `@zhin.js/adapter-dingtalk` — `plugins/adapters/dingtalk`
 - [ ] `@zhin.js/adapter-discord` — `plugins/adapters/discord`
 - [ ] `@zhin.js/adapter-email` — `plugins/adapters/email`

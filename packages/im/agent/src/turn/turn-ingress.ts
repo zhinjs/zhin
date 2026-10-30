@@ -9,7 +9,7 @@ import type {
   ToolQuestionPort,
 } from '@zhin.js/tool';
 import type { ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
-import type { ConversationContextBlock } from '@zhin.js/im-contract';
+import type { ConversationContextBlock, MessageRef } from '@zhin.js/im-contract';
 import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 
 export type TurnScope = 'private' | 'group' | 'channel';
@@ -211,11 +211,27 @@ export interface FrozenCapabilityCatalog {
 }
 
 export type DeliveryOutcome =
-  | Readonly<{ status: 'sent'; messageId?: string }>
+  | Readonly<{
+      status: 'sent';
+      messageId?: string;
+      /** Completed sends in physical order; null preserves an unconfirmed native identity. */
+      messages?: readonly (MessageRef | null)[];
+      messageContexts?: readonly Readonly<{
+        message: MessageRef;
+        /** Text submitted to the unified send chain; final delivery may have been transformed. */
+        plannedText: string;
+      }>[];
+    }>
   | Readonly<{ status: 'suppressed' }>
-  | Readonly<{ status: 'unsupported'; code: string }>
-  | Readonly<{ status: 'rejected'; code: string }>
-  | Readonly<{ status: 'failed'; code: string; retryable: boolean }>;
+  | Readonly<{ status: 'unsupported'; code: string; messages?: readonly (MessageRef | null)[] }>
+  | Readonly<{ status: 'rejected'; code: string; messages?: readonly (MessageRef | null)[] }>
+  | Readonly<{
+      status: 'failed';
+      code: string;
+      retryable: boolean;
+      /** Confirmed prefix slots survive a later failure; the full reply is not marked delivered. */
+      messages?: readonly (MessageRef | null)[];
+    }>;
 
 export interface ReplyPort {
   send(output: readonly AgentOutputElement[]): Promise<DeliveryOutcome>;
@@ -300,6 +316,7 @@ export interface TurnRequest {
 
 export type TurnAccessContext = Pick<TurnRequest, 'origin' | 'principal' | 'policy'> & Readonly<{
   input?: Pick<TurnInput, 'contextState'>;
+  session?: TurnSessionAddress;
 }>;
 
 export type TurnOutcome =

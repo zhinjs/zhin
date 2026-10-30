@@ -53,7 +53,7 @@ export class ConversationRuntime {
   ): Promise<ConversationResolution | undefined> {
     if (reference.kind !== 'message') return undefined;
     const message = await this.#events.getMessage(reference.message);
-    return message
+    return message && message.contentStatus !== 'unavailable'
       ? Object.freeze({ status: 'resolved', reference, value: message })
       : undefined;
   }
@@ -154,7 +154,7 @@ export class ConversationRuntime {
     return appended.sequence;
   }
 
-  async recordOutbound(request: SendRequest, receipt: DeliveryReceipt): Promise<void> {
+  async recordOutbound(request: SendRequest, receipt: DeliveryReceipt, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void> {
     if (receipt.status !== 'sent' || !receipt.message?.id) return;
     const timestamp = Date.now();
     await this.#events.append(Object.freeze({
@@ -164,8 +164,12 @@ export class ConversationRuntime {
       type: 'message.created',
       message: Object.freeze({
         ref: receipt.message,
-        segments: segmentsFromContent(request.content),
+        segments: canonicalContent === 'unavailable' ? [] : canonicalContent ?? segmentsFromContent(request.content),
+        ...(canonicalContent === 'unavailable' ? { contentStatus: 'unavailable' as const } : {}),
         timestamp,
+        ...(canonicalContent !== 'unavailable' && canonicalContent?.length && canonicalContent.every(segment => segment.type === 'text') && receipt.outboundTextDigest ? {
+          outboundTextDigest: receipt.outboundTextDigest,
+        } : {}),
       }),
     }));
   }
@@ -346,6 +350,8 @@ function aggregateConversationContext(
         sequence,
         eventType: event.type,
         text,
+        message: event.message.ref,
+        ...(event.message.outboundTextDigest ? { messageTextDigest: event.message.outboundTextDigest } : {}),
       }));
       continue;
     }
@@ -428,7 +434,8 @@ function describeConversationMessage(message: ConversationMessage): string {
   const attachmentNote = attachmentTypes.length > 0
     ? ` [message also contains ${attachmentTypes.join(', ')} data; inspect its reference before relying on that content]`
     : '';
-  return `${actor} [message_id=${JSON.stringify(message.ref.id)}]: ${text || '(no plain-text content)'}${attachmentNote}`;
+  return `${actor} [message_id=${JSON.stringify(message.ref.id)}]: ${message.contentStatus === 'unavailable'
+    ? '[Message content unavailable; inspect its reference.]' : text || '(no plain-text content)'}${attachmentNote}`;
 }
 
 function segmentsFromContent(content: unknown): readonly Segment[] {
