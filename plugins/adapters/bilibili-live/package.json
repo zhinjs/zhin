@@ -1,7 +1,6 @@
 {
   "name": "@zhin.js/adapter-bilibili-live",
   "version": "0.1.0",
-  "private": true,
   "description": "Zhin.js Bilibili live danmaku adapter for Plugin Runtime (Experimental; danmaku WebSocket, one reply per danmaku window)",
   "type": "module",
   "main": "./lib/index.js",
@@ -70,7 +69,7 @@
   },
   "files": [
     "adapters",
-    "plugin.ts",
+    "plugin.js",
     "schema.json",
     "src",
     "lib",
@@ -93,7 +92,7 @@
   "zhin": {
     "protocol": 1,
     "type": "plugin",
-    "entry": "./plugin.ts",
+    "entry": "./plugin.js",
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
