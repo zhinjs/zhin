@@ -357,6 +357,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
           conversation,
           message: { conversation, id: messageId },
           content: parsed.text,
+          segments: parsed.content,
           sender: { id: owner },
           endpointId: target,
           metadata: Object.freeze({
