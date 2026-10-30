@@ -320,7 +320,7 @@ function scriptedUsage(step: ScriptStep): AssistantMessage['usage'] {
 
 /** JSON of the tool definitions a request carries (what the provider bills as tool schema). */
 export function toolSchemaTextOf(context: Context): string {
-  return JSON.stringify((context.tools ?? []).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters })));
+  return JSON.stringify((context.tools ?? []).map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.inputJsonSchema ?? tool.parameters })));
 }
 
 /** Image media blocks across the request's messages. */
