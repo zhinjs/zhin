@@ -1,0 +1,19 @@
+plugins/adapters/sandbox/tests/conversation-recovery.test.ts
+  s_9622fd28aba994::t_e18c7ae642d8e7 74-75,173,185,190-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c0c1c9f1094b958f6578bf9f4bfb00f9cd504fc3",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
