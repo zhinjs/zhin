@@ -75,6 +75,7 @@ function textMessage(overrides: Partial<QqInboundMessage> = {}): QqInboundMessag
 
 function createMockBot(): QqBotTransport & {
   sent: Array<{ kind: string; id: string; message: QqOutboundMessage }>;
+  emit(event: string, ...args: unknown[]): void;
 } {
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
   const sent: Array<{ kind: string; id: string; message: QqOutboundMessage }> = [];
@@ -92,6 +93,9 @@ function createMockBot(): QqBotTransport & {
     removeAllListeners: vi.fn(() => {
       listeners.clear();
     }),
+    emit(event: string, ...args: unknown[]) {
+      for (const listener of listeners.get(event) ?? []) listener(...args);
+    },
     sendPrivateMessage: vi.fn(async (id: string, message: QqOutboundMessage) => {
       sent.push({ kind: 'private', id, message });
       return { id: `sent-${sent.length}` };
@@ -789,4 +793,27 @@ it('cancels QQ startup deadline immediately when endpoint stops', async () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(endpoint.transportState).toBe('stopped');
   } finally { vi.useRealTimers(); }
+});
+
+describe('qq outage notification', () => {
+  it('notifies the configured master through another adapter on transport close', async () => {
+    const notifier = { configured: true, send: vi.fn(async () => true) };
+    const bot = createMockBot();
+    const endpoint = new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'),
+      config: resolveQqConfig({
+        id: 'test-qq-bot',
+        appid: 'app-1',
+        secret: 'secret-1',
+        notify: { adapter: 'icqq', endpoint: '10001', id: 'master-uin' },
+      }) as typeof baseConfig,
+      createBot: () => bot,
+      notifier,
+    });
+    await endpoint.start();
+    bot.emit('transport.close');
+    expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('QQ 机器人 test-qq-bot 掉线'));
+    expect(notifier.send).toHaveBeenCalledWith(expect.stringContaining('qq endpoint add'));
+    await endpoint.stop();
+  });
 });

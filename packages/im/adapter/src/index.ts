@@ -15,6 +15,7 @@ export * from './endpoint-configuration.js';
 export { materializeEndpoint } from './managed-endpoint.js';
 export * from './endpoint-commands.js';
 export * from './adapter-console-rpc.js';
+export * from './adapter-notify.js';
 export * from './endpoint-lifecycle.js';
 export * from './endpoint-management.js';
 export * from './endpoint-control.js';

@@ -41,7 +41,19 @@ export type QqCommandReply = EndpointCommandReply;
  * legacy applyBindOwnership 会把 operator 写为新端点的 master）。
  */
 export function isQqEndpointOperator(config: unknown, input: unknown): boolean {
-  return isEndpointOperator(config, input);
+  if (isEndpointOperator(config, input)) return true;
+  // The outage-notify target is the operator's conversation on another adapter.
+  const cfg = (config ?? {}) as {
+    notify?: { id?: unknown };
+    endpoints?: readonly { notify?: { id?: unknown } }[];
+  };
+  const notifyIds = [
+    cfg.notify?.id,
+    ...(Array.isArray(cfg.endpoints) ? cfg.endpoints.map((endpoint) => endpoint.notify?.id) : []),
+  ];
+  const senderRaw = (input as { sender?: { id?: unknown } } | null | undefined)?.sender;
+  const senderId = (typeof senderRaw === 'object' && senderRaw?.id) ? String(senderRaw.id).trim() : '';
+  return senderId !== '' && notifyIds.some((id) => id != null && String(id) === senderId);
 }
 
 export const QQ_ENDPOINT_FORBIDDEN = endpointCommandForbidden('QQ');

@@ -109,6 +109,35 @@ Reading requires `icqq:read`; writes require `icqq:write`. A full admin token is
 
 First-login QR codes, slider challenges and device confirmations appear under **Pending logins**, so you do not need to return to the terminal.
 
+## Outage notifications and re-login
+
+With `notify` configured, ICQQ sends an out-of-band notice through another adapter instance when the account is kicked offline, login fails, or startup fails. For example, notify via a QQ official bot:
+
+```yaml
+qq:
+  # ... a configured QQ official bot
+icqq:
+  master: 123456
+  autoReconnect: true   # default true: retry login after a kickoff
+  notify:
+    adapter: qq
+    endpoint: bot-1
+    kind: private
+    id: "${QQ_MASTER_OPENID}"   # master openid on the QQ official bot
+```
+
+With `autoReconnect: true`, the endpoint retries login automatically. When a QR code, slider or device confirmation is ready, the notice tells you what to send. Reply in QQ to finish login:
+
+| Command | Purpose |
+|---------|---------|
+| `icqq login qr` | send the ICQQ login QR code to the current conversation (when images are supported) |
+| `icqq login confirm` | confirm after scanning the QR code |
+| `icqq login code <value>` | submit a slider ticket, SMS code or device-confirmation value |
+| `icqq login status` | show online state and pending login tasks |
+| `icqq login retry` | trigger another login attempt |
+
+Only the master (top-level or `endpoints[i].master`) or the `notify.id` account may run these commands; when neither is configured, use the Console ICQQ page. Without `notify`, outages are only logged and shown as pending logins on the Console ICQQ page.
+
 ## Troubleshooting
 
 | Symptom | Check |
