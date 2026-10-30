@@ -139,9 +139,9 @@ it('places the deferred catalog and turn facts after the actual question on the 
   expect(body).toBeGreaterThanOrEqual(0);
   expect(marker).toBeGreaterThan(body);
   expect(input.indexOf('deferred_lookup (1)')).toBeGreaterThan(marker);
-  expect(input.indexOf('[scene_id:')).toBeGreaterThan(marker);
-  // Nothing scene-, sender- or catalog-specific is left in the system prompt in front of history.
-  expect(result.modelRequests[0]?.systemPrompt).not.toContain('[scene_id:');
+  expect(input).not.toContain('[scene_id:');
+  // Bound identity is session-stable; sender/capability differences stay per-turn.
+  expect(result.modelRequests[0]?.systemPrompt).toContain('[scene_id:eval-user;scene_type:private;]');
   expect(result.modelRequests[0]?.systemPrompt).not.toContain('deferred_lookup');
   expect(input).not.toContain('Time:');
   expect(input).not.toContain('presentation');

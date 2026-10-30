@@ -28,7 +28,7 @@ export interface TurnEventMapperState {
   accumulatedThinking: string;
   toolStartTimes: Map<string, number>;
   iteration: number;
-  maxIterations: number;
+  maxIterations?: number;
 }
 
 export function createTurnEventMapperState(maxIterations = 15): TurnEventMapperState {
@@ -47,7 +47,7 @@ export function* mapAgentEventToTurnEvents(
       yield {
         type: 'iteration_start',
         iteration: state.iteration,
-        maxIterations: state.maxIterations,
+        ...(state.maxIterations !== undefined ? { maxIterations: state.maxIterations } : {}),
       };
       break;
     case 'message_end':

@@ -76,3 +76,52 @@ it('rejects forged inspection results and shares the inspection limit with child
   expect(JSON.stringify(llm.calls[0].context)).toContain('no configured vision capability');
   expect(context.messages).toEqual([]);
 });
+
+it.each([true, false])('projects repeated reads of one private asset once per request (vision=%s)', async vision => {
+  const store = new LocalImageAssetStore(directory);
+  const asset = await store.capture(image, scope, 'screenshot');
+  const budget = { remaining: 4 };
+  const onUsage = vi.fn();
+  const perception: MediaPerceptionPort = { kinds: ['image'], maxItemsPerTurn: 4, accepts: () => true,
+    describe: vi.fn(async () => ({ text: 'A tiny private image.', provider: 'vision', model: 'vision-model',
+      usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 } })) };
+  const inspection = new LocalImageInspection(store, scope, budget, perception, onUsage);
+  inspection.accept(await store.inspect(asset.asset_id, scope));
+  inspection.accept(await store.inspect(asset.asset_id, scope));
+  expect(budget.remaining).toBe(2); // Accepted inspection attempts still consume the existing limit.
+  const read = vi.spyOn(store, 'read');
+  const llm = wireMockLlmApi();
+  const model = { ...llm.runtime.model('mock', 'mock-model'), input: vision ? ['text', 'image'] as const : ['text'] as const };
+  const context: Context = { messages: [] };
+  const transport = inspection.wrap(llm.runtime);
+
+  await transport.complete(model, context);
+  expect(read).toHaveBeenCalledOnce();
+  const first = llm.calls[0].context.messages.at(-1);
+  if (vision) expect(first).toMatchObject({ media: [{ type: 'image' }] });
+  else expect(JSON.stringify(first).match(/A tiny private image\./gu)).toHaveLength(1);
+  expect(perception.describe).toHaveBeenCalledTimes(vision ? 0 : 1);
+  expect(onUsage).toHaveBeenCalledTimes(vision ? 0 : 1);
+
+  await transport.complete(model, context);
+  expect(llm.calls[1].context.messages).toEqual([]);
+  inspection.accept(await store.inspect(asset.asset_id, scope));
+  await transport.complete(model, context);
+  expect(read).toHaveBeenCalledTimes(2); // A later explicit inspection is still allowed.
+  expect(perception.describe).toHaveBeenCalledTimes(vision ? 0 : 2);
+  expect(budget.remaining).toBe(1);
+  expect(context.messages).toEqual([]);
+});
+
+it('keeps distinct private resources separate even when their bytes match', async () => {
+  const store = new LocalImageAssetStore(directory);
+  const first = await store.capture(image, scope, 'first screenshot');
+  const second = await store.capture(image, scope, 'second screenshot');
+  expect(first.asset_id).not.toBe(second.asset_id);
+  const inspection = new LocalImageInspection(store, scope, { remaining: 4 });
+  inspection.accept(await store.inspect(first.asset_id, scope));
+  inspection.accept(await store.inspect(second.asset_id, scope));
+  const llm = wireMockLlmApi();
+  await inspection.wrap(llm.runtime).complete({ ...llm.runtime.model('mock', 'mock-model'), input: ['text', 'image'] }, { messages: [] });
+  expect(llm.calls[0].context.messages.at(-1)).toMatchObject({ media: [{ type: 'image' }, { type: 'image' }] });
+});

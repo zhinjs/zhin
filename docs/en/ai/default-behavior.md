@@ -6,11 +6,13 @@ This is the **single authoritative document** for `ai.agent.*` default behavior 
 
 | Scenario | Trust level | Default behavior |
 | --- | --- | --- |
-| Owner DM | owner | All enabled tools; no shell while `execSecurity: deny`; with `masterShell: isolated`, an isolated bash only in the owner's DM; auto-continue on tool-budget exhaustion (`autoContinue: master_dm`, max 2); progress updates in private only |
+| Owner DM | owner | All enabled tools; no shell while `execSecurity: deny`; with `masterShell: isolated`, an isolated bash only in the owner's DM; interactive tasks continue with periodic progress, subject to cancellation, quotas and permissions |
 | Group chat | group_member | Inbound queue `groupMode: supersede` (newer message replaces queued turns, max 5 queued); high-risk external content needs confirmation; outbound content redacted (`outboundCheck: redact`) |
 | Trusted member | trusted_member | Same guardrails as group members plus trusted tools; non-IM ingress (CLI, HTTP) counts as trusted_member |
 | Stranger DM | group_member | Treated as a group member; no elevation |
 | Unattended schedule | — | `maxTokens 32000`, `maxToolCalls 15`, `timeoutMs 120000`, `execPreset: readonly` |
+
+The current CLI/Sandbox interactive runtime and its synchronous children have no fixed iteration or ten-minute deadline. Existing compaction, failure/repetition checks and quotas remain. Progress uses `progressMinIntervalMs` (45 seconds by default), without a three-update cap; `progressUpdates: off` or `progressMaxUpdates: 0` disables it. Quotas remain disabled by default and owners exempt; this is not a strict real-time spending cap, and in-flight requests can exceed the remaining allowance. An already submitted platform progress send may arrive late, but cannot block the final result. Scheduled, unattended, independent background workers and the legacy `ZhinAgent.process()/prompt()` APIs retain their budgets.
 
 ## Core defaults
 

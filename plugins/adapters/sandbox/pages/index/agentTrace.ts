@@ -423,7 +423,7 @@ export function presentTraceEvent(event: AgentTraceEvent, locale: SandboxLocale 
   switch (event.type) {
     case 'turn_start': return { title: sandboxText(locale, "开始处理"), detail: shortTurn(event.turnId), tone: 'running' };
     case 'capability_resolution': return { title: sandboxText(locale, "能力已解析"), detail: `${arrayLength(data.tools)} tools · ${arrayLength(data.skills)} skills`, tone: 'capability' };
-    case 'iteration_start': return { title: sandboxText(locale, "推理迭代 {0}", [String(data.iteration ?? '')]), detail: sandboxText(locale, "上限 {0}", [String(data.maxIterations ?? '—')]), tone: 'thinking' };
+    case 'iteration_start': return { title: sandboxText(locale, "推理迭代 {0}", [String(data.iteration ?? '')]), detail: data.maxIterations == null ? '' : sandboxText(locale, "上限 {0}", [String(data.maxIterations)]), tone: 'thinking' };
     case 'thinking': return { title: sandboxText(locale, "模型思考"), detail: preview(data.text), tone: 'thinking' };
     case 'tool_call': return { title: sandboxText(locale, "调用 {0}", [tool]), detail: preview(data.toolUseId), tone: 'tool' };
     case 'tool_result': return { title: sandboxText(locale, "{0} 完成", [tool]), detail: duration(data.durationMs, locale), tone: 'success' };

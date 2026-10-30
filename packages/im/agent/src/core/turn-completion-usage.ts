@@ -4,6 +4,7 @@ import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type 
 import type { UsageEvent } from '../event/turn-event.js';
 import { turnUsageEvent } from './turn-event-mapper.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
+import type { InteractiveRun } from './interactive-run.js';
 
 /**
  * Counts completed provider responses before reply validation, including rejected replies.
@@ -14,6 +15,7 @@ export function trackTurnCompletionUsage(
   delegate: LlmCompletionPort,
   project?: (message: AssistantMessage, signal?: AbortSignal) => Promise<AssistantMessage>,
   trace?: Readonly<{ turnId?: string; recordBodies?: boolean }>,
+  run?: InteractiveRun,
 ): {
   transport: LlmCompletionPort;
   /** Alternate purpose transport sharing this turn's accounting and trace. */
@@ -28,6 +30,7 @@ export function trackTurnCompletionUsage(
   const reported = new WeakSet<object>();
   const record = (assistant: AssistantMessage, durationMs: number, requestId: string): AssistantMessage => {
     const usage = assistant.usage;
+    run?.recordUsage(usage.totalTokens);
     pending.push(turnUsageEvent(usage, {
       provider: assistant.provider, model: assistant.model, stopReason: assistant.stopReason, durationMs, requestId,
     }));
@@ -51,6 +54,8 @@ export function trackTurnCompletionUsage(
     return result;
   };
   const complete = (method: keyof LlmCompletionPort, target: LlmCompletionPort): LlmCompletionPort['complete'] => async (model, context, options) => {
+    const stopped = run?.check();
+    if (stopped) throw new Error(stopped);
     const requestId = randomUUID();
     const started = performance.now();
     const request = { request_id: requestId, provider: model.provider, model: model.id, started_at: Date.now(), status: 'running' as const };
@@ -94,6 +99,7 @@ export function trackTurnCompletionUsage(
     drainEvents: () => pending.splice(0),
     hasReported: assistant => reported.has(assistant),
     recordMediaUsage: (usage, provider, model) => {
+      run?.recordUsage(usage.total_tokens);
       const tokens: TokenUsage = { input: usage.prompt_tokens, output: usage.completion_tokens,
         totalTokens: usage.total_tokens, cacheRead: 0, cacheWrite: 0, cost: { ...EMPTY_TOKEN_USAGE.cost } };
       total.input += tokens.input;

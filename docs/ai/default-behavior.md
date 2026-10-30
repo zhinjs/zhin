@@ -6,11 +6,13 @@
 
 | 场景 | 信任级别 | 默认行为 |
 | --- | --- | --- |
-| 主人私聊 | owner | 可使用全部已启用工具；`execSecurity: deny` 时不执行 shell；`masterShell: isolated` 时仅在主人私聊中提供隔离 bash；工具预算超限时自动续跑（`autoContinue: master_dm`，最多 2 次）；进度消息仅私聊发送 |
+| 主人私聊 | owner | 可使用全部已启用工具；`execSecurity: deny` 时不执行 shell；`masterShell: isolated` 时仅在主人私聊中提供隔离 bash；交互任务持续执行，按间隔报告进度，受取消、额度和权限约束 |
 | 群聊 | group_member | 入站队列 `groupMode: supersede`（新消息替换排队中的旧轮次，最多排队 5 轮）；高风险外部内容需确认；外发内容自动脱敏（`outboundCheck: redact`） |
 | 受信成员 | trusted_member | 与群成员相同的护栏，但可使用受信工具；非 IM 入口（CLI、HTTP）按 trusted_member 处理 |
 | 陌生人私聊 | group_member | 按群成员处理，不提升权限 |
 | 无人值守定时任务 | — | `maxTokens 32000`、`maxToolCalls 15`、`timeoutMs 120000`、`execPreset: readonly` |
+
+当前 CLI／Sandbox 的交互运行时及本回合同步子任务不再按固定轮数或 10 分钟结束；沿用自动压缩、失败／重复调用保护与配额。进度使用现有 `progressMinIntervalMs`（默认 45 秒），不限三次，`progressUpdates: off` 或 `progressMaxUpdates: 0` 可关闭。配额仍默认关闭且主人默认豁免，并不构成实时费用硬上限；在途请求可能超过剩余额度。已交给平台的进度消息无法撤销，可能晚到，但不会阻塞最终结果。定时、无人值守、独立后台 worker 与旧 `ZhinAgent.process()/prompt()` 兼容入口保留原预算。
 
 ## 核心默认值
 

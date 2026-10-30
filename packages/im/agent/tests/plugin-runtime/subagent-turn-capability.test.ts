@@ -62,7 +62,7 @@ async function runQqTurn(options: {
     signal: new AbortController().signal,
     ports: {
       journal: { append: async () => undefined },
-      reply: { send: async () => ({ status: 'sent' }) },
+      ...(!options.policy.unattended ? { reply: { send: async () => ({ status: 'sent' as const }) } } : {}),
       ...(options.approval ? { approval: options.approval } : {}),
     },
   });
@@ -281,12 +281,25 @@ describe('spawn_task on the plugin-runtime (QQ) turn path', () => {
     });
   });
 
-  it('surfaces sub-agent progress only through the parent and caps the sub-agent budget', async () => {
+  it('surfaces child progress through the parent and retains bounded defaults alongside the shared interactive run', async () => {
     const { parent, child } = await runQqTurn({ policy: NO_SHELL, tools: [capability('read_file')] });
     expect(typeof parent?.progressSink).toBe('function');
     expect(child!.progressSink).toBeUndefined();
     expect(child!.autoContinuation).toBe(false);
     expect(child!.maxTotalIterations).toBe(30);
+    expect(child!.interactiveRun).toBe(parent!.interactiveRun);
   });
 });
 
+
+
+it('shares the admitted interactive budget with synchronous children only', async () => {
+  const { parent, child } = await runQqTurn({ policy: NO_SHELL, tools: [capability('read_file')] });
+  expect(parent!.interactiveRun).toBeDefined();
+  expect(child!.interactiveRun).toBe(parent!.interactiveRun);
+  expect(child!.turnContext.execution).toEqual(parent!.turnContext.execution);
+  expect(child!.progressSink).toBeUndefined();
+  const unattended = await runQqTurn({ policy: { ...NO_SHELL, unattended: true }, tools: [capability('read_file')] });
+  expect(unattended.parent!.interactiveRun).toBeUndefined();
+  expect(unattended.child?.interactiveRun).toBeUndefined();
+});

@@ -16,10 +16,11 @@ import {
 import { loadBootstrapFiles, buildStableBootstrapSection } from '../../../packages/im/agent/src/bootstrap.js';
 import { DEFAULT_CONFIG } from '../../../packages/im/agent/src/config/index.js';
 import { buildRichSystemPrompt } from '../../../packages/im/agent/src/prompt/system-prompt.js';
+import { joinSystemPrompt } from '../../../packages/im/agent/src/prompt/assembly.js';
 import {
   AMBIENT_ENGAGEMENT_METADATA_KEY,
   buildTurnContextBlocks,
-  sceneLineForTurn,
+  scenePromptPartsForTurn,
   type TurnContextView,
 } from '../../../packages/im/agent/src/context/turn-envelope.js';
 import { appendRuntimeContext, appendTurnContextBlocks } from '../../../packages/im/agent/src/context/turn-user-message.js';
@@ -58,9 +59,9 @@ export async function buildSystemPrompt(workspaceDir: string, nickname: string |
     timeZone: scenarioTime(time).timeZone,
     ...(nickname ? { agentNickname: nickname } : {}),
   });
-  // Same as production: the structured reply contract ends the system prompt; the scene line rides
-  // in the current message's runtime-context tail (ADR 0045), see buildUserMessages.
-  return `${prompt}\n\n${structuredReplyInstruction()}`;
+  // Mirror production: only the bound identity belongs to the session-stable system tail.
+  return joinSystemPrompt({ stable: `${prompt}\n\n${structuredReplyInstruction()}`,
+    scene: scenePromptPartsForTurn(turn)?.identity ?? '' }).text;
 }
 
 export function scenarioTurn(scenario: Scenario): TurnContextView {
@@ -102,7 +103,8 @@ function scenarioTime(time: string | undefined): { observedAt: number; timeZone?
 
 /** Runtime timezone is stable per scenario; wall-clock changes do not invalidate system text. */
 export function scenarioPromptKey(scenario: Scenario): string {
-  return `${scenario.scope}:${scenario.addressed}:${scenarioTime(scenario.time).timeZone ?? 'host'}`;
+  return JSON.stringify([scenePromptPartsForTurn(scenarioTurn(scenario))?.identity,
+    scenario.addressed, scenarioTime(scenario.time).timeZone ?? 'host']);
 }
 
 export function buildUserMessages(scenario: Scenario): UserMessage[] {
@@ -122,9 +124,9 @@ export function buildUserMessages(scenario: Scenario): UserMessage[] {
     roles: turn.principal.roles, authorizationRoles: turn.principal.roles,
   });
   // The host stores only the actor; the projection renders the participant header (ADR 0041 §4, amended).
-  const scene = sceneLineForTurn(turn);
+  const scene = scenePromptPartsForTurn(turn);
   const current = appendRuntimeContext(appendTurnContextBlocks([stampUserHeader(input)], blocks),
-    scene ? [createPromptContextBlock('scene', scene)] : []) as UserMessage[];
+    scene?.state ? [createPromptContextBlock('scene', scene.state)] : []) as UserMessage[];
   return context ? [createUserMessage(context), ...current] : current;
 }
 

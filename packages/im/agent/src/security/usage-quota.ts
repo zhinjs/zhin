@@ -97,6 +97,11 @@ export class UsageQuota {
     return this.#check(subject, true, this.#now());
   }
 
+  /** An admitted turn may continue without consuming or checking another turn-rate slot. */
+  checkTokens(subject: UsageSubject): UsageQuotaDecision {
+    return this.#check(subject, false, this.#now(), false);
+  }
+
   /** Preflight the whole request before consuming one rate slot per non-exempt group. */
   checkBatch(subjects: readonly UsageSubject[]): UsageQuotaDecision & { readonly deniedUserIds?: readonly string[] } {
     const now = this.#now();
@@ -113,7 +118,7 @@ export class UsageQuota {
     return { allowed: true };
   }
 
-  #check(subject: UsageSubject, countRequest: boolean, now: number): UsageQuotaDecision {
+  #check(subject: UsageSubject, countRequest: boolean, now: number, checkRate = true): UsageQuotaDecision {
     if (!this.enabled || (subject.owner && this.settings.exemptOwner)) return { allowed: true };
     const { perUserTokens, perGroupTokens, perGroupRequestsPerMinute, windowMs } = this.settings;
     if (perUserTokens > 0) {
@@ -130,7 +135,7 @@ export class UsageQuota {
           `本群在本周期内的 AI 用量已达上限，约 ${formatWait(bucket, windowMs, now)}后恢复。私聊和其他群不受影响。`);
       }
     }
-    if (subject.groupId && perGroupRequestsPerMinute > 0) {
+    if (checkRate && subject.groupId && perGroupRequestsPerMinute > 0) {
       const key = `rate:group:${subject.groupId}`;
       const bucket = this.#current(key, RATE_WINDOW_MS, now);
       if (bucket.used >= perGroupRequestsPerMinute) {

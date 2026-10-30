@@ -69,7 +69,7 @@ function stableSet(values: readonly string[]): string[] {
 type SceneFields = Readonly<Record<string, string | number | boolean | null | readonly string[]>>;
 
 /** ADR 0041 §6 scene facts; `null` = unknown (omitted from the rendered line). */
-function sceneFields(origin: Extract<TurnContextView['origin'], { kind: 'im' }>, state: TurnContextState | undefined): SceneFields {
+function sceneFields(origin: Extract<TurnContextView['origin'], { kind: 'im' }>, state: TurnContextState | undefined) {
   const address = origin.conversation;
   return {
     scene_id: address?.id ?? origin.sceneId,
@@ -90,13 +90,25 @@ export function formatSceneLine(fields: SceneFields): string {
 }
 
 /**
- * The scene line rides in the current message's runtime-context tail (after the body), so a scene
- * change (member count, admins…) never invalidates the cached history prefix. It used to be the
- * system-prompt tail (ADR 0041 §5), which sits before every history message. Undefined outside IM turns.
+ * Full observed scene line. Model prompts use scenePromptPartsForTurn to separate the bound
+ * identity from mutable state. Undefined outside IM turns.
  */
 export function sceneLineForTurn(turn: TurnContextView | undefined): string | undefined {
   if (turn?.origin.kind !== 'im') return undefined;
   return formatSceneLine(sceneFields(turn.origin, turn.input?.contextState));
+}
+
+/** Only conversation identity is session-stable; observed state always belongs to this turn. */
+export function scenePromptPartsForTurn(
+  turn: TurnContextView | undefined,
+): Readonly<{ identity: string; state?: string }> | undefined {
+  if (turn?.origin.kind !== 'im') return undefined;
+  const { scene_id, scene_type, ...state } = sceneFields(turn.origin, turn.input?.contextState);
+  const text = formatSceneLine(state);
+  return {
+    identity: formatSceneLine({ scene_id, scene_type }),
+    ...(text === '[;]' ? {} : { state: text }),
+  };
 }
 
 export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): string | null {

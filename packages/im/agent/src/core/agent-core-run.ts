@@ -12,7 +12,7 @@ import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { iterationSceneOf, resolveModelHarness, resolveTurnMaxIterations } from '../config/model-harness-runtime.js';
-import { appendStable, buildAgentPathSystemPromptParts, buildChatPathSystemPromptParts, describeAgentPathPromptSections, joinSystemPrompt } from '../prompt/assembly.js';
+import { appendScene, appendStable, buildAgentPathSystemPromptParts, buildChatPathSystemPromptParts, describeAgentPathPromptSections, joinSystemPrompt } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
@@ -21,7 +21,10 @@ import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { decodeLenientStructuredReply, recoverStructuredReply } from './structured-reply-recovery.js';
 import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../outbound/chat-failure.js';
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
+import { turnReplyMessages } from './turn-reply-messages.js';
+import type { InteractiveRun } from './interactive-run.js';
 import { resolveTurnSummaryExecution } from '../memory/summary-model.js';
+import { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import { LocalImageInspection, type ImageInspectionBudget } from '../media/local-image-inspection.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
@@ -42,7 +45,7 @@ import {
   mapAgentEventToTurnEvents,
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
-import { sceneLineForTurn, type TurnContextView } from '../context/turn-envelope.js';
+import { scenePromptPartsForTurn, type TurnContextView } from '../context/turn-envelope.js';
 import { appendRuntimeContext } from '../context/turn-user-message.js';
 import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
@@ -227,6 +230,8 @@ export interface AgentLoopTurnInput {
   autoContinuation?: boolean;
   /** Sends a brief progress update to the conversation; absent = no updates (sub-agents, unattended). */
   progressSink?: (text: string) => Promise<void>;
+  /** Admitted interactive root's live budget; inherited only by synchronous children. */
+  interactiveRun?: InteractiveRun;
   /** Tool name aliases: LLM-facing name → actual tool name */
   toolAliases?: Record<string, string>;
   /** Optional TurnEvent tap (processStream / diagnostics) */
@@ -251,6 +256,8 @@ export interface AgentLoopTurnResult {
   model: string;
   toolCalls: ToolCallRecord[];
   thinking?: string;
+  /** Explicitly unfinished task; unlike a natural final answer, children must not label it complete. */
+  stoppedReason?: string;
   /** Conversation projection applied only after the durable terminal commits. */
   projectConversation?: (delivered?: { readonly messageId?: string; readonly messageIds?: readonly (string | null)[]; readonly contextRefs?: readonly string[] }) => Promise<void>;
 }
@@ -592,19 +599,20 @@ export async function* runAgentLoopTextTurnRun(
       configured: host.config.maxIterations,
     }))
     : 1;
-  const explorationBudget = hasTools
+  const explorationBudget = hasTools && !input.interactiveRun
     ? new ExplorationBudget(harness.explorationBudget ?? DEFAULT_EXPLORATION_BUDGET)
     : undefined;
   const spinDetector = hasTools && harness.explorationBudget !== 0 ? new SpinDetector() : undefined;
   let nudgedIteration = 0;
   if (hasTools && harness.explorationGuidance) promptParts = appendStable(promptParts, EXPLORATION_GUIDANCE);
-  // Prompt-cache layout: everything that varies by turn, scene or sender (scene line, capability
+  // Prompt-cache layout: everything that varies by turn or sender (observed scene state, capability
   // availability, deferred tool index, pre-fetched data, network note) rides in the runtime-context
   // tail of the current user message, after the body. A change there no longer invalidates the
-  // cached history prefix (it used to sit in the system tail, before every history message).
+  // cached history prefix. Only the bound conversation identity belongs in the session-stable tail.
   const runtimeTail: import('@zhin.js/ai').TextContentBlock[] = [];
-  const sceneText = sceneLineForTurn(input.turnContext);
-  if (sceneText) runtimeTail.push(createPromptContextBlock('scene', sceneText));
+  const scene = scenePromptPartsForTurn(input.turnContext);
+  if (scene) promptParts = appendScene(promptParts, scene.identity);
+  if (scene?.state) runtimeTail.push(createPromptContextBlock('scene', scene.state));
   const capabilityTail = input.promptRuntime?.capabilityTail?.trim();
   if (capabilityTail) runtimeTail.push(createPromptContextBlock('turn-capabilities', capabilityTail));
   if (hasTools && !directTools) {
@@ -652,9 +660,10 @@ export async function* runAgentLoopTextTurnRun(
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
+  let activeTools = 0;
   const completionUsage = trackTurnCompletionUsage(host.llmRuntime, host.imageAssets
     ? (message, replySignal) => publishReplyImages(message, host.imageAssets!, replySignal)
-    : undefined, { turnId: traceTurnId(input.turnContext), recordBodies: host.config.recordRequestBodies });
+    : undefined, { turnId: traceTurnId(input.turnContext), recordBodies: host.config.recordRequestBodies }, input.interactiveRun);
   const localInspection = host.localAssets ? new LocalImageInspection(
     host.localAssets, { ...input.turnContext, sessionKey: input.turnContext.session.key },
     input.imageInspectionBudget ?? { remaining: host.mediaPerception?.maxItemsPerTurn ?? DEFAULT_PERCEPTION_SETTINGS.maxItemsPerTurn },
@@ -723,20 +732,26 @@ export async function* runAgentLoopTextTurnRun(
     transport: completionUsage.transport,
   });
 
+  // An isolated child owns its circuit breaker; later turns must not inherit its failures.
+  const compactionRuntime = !persistentConversation && input.interactiveRun
+    ? new AgentCompactionRuntime() : host.compactionRuntime;
+
   // Progress-aware budget: maxIterations is soft, extended while progressing.
   const toolBudget = resolveToolBudget(host.config.toolBudget, harness);
-  const progress = new TurnProgressTracker(toolBudget);
+  const progress = new TurnProgressTracker(toolBudget, !!input.interactiveRun);
   const turnStartedAt = Date.now();
   let segmentStartIteration = 0;
   let extensionPending = false;
   let lastReportIteration = 0;
   const segmentHardCap = Math.max(maxIterations, input.maxTotalIterations ?? toolBudget.maxTotalIterations);
   const hardLimitReached = () =>
-    (toolBudget.maxWallClockMs > 0 && Date.now() - turnStartedAt >= toolBudget.maxWallClockMs)
-    || (toolBudget.maxTotalTokens > 0 && completionUsage.usage.totalTokens >= toolBudget.maxTotalTokens);
+    input.interactiveRun ? !!input.interactiveRun.check()
+      : (toolBudget.maxWallClockMs > 0 && Date.now() - turnStartedAt >= toolBudget.maxWallClockMs)
+        || (toolBudget.maxTotalTokens > 0 && completionUsage.usage.totalTokens >= toolBudget.maxTotalTokens);
   let currentLimit = maxIterations;
   const nextIterationLimit = (iteration: number, limit: number): number => {
     currentLimit = limit;
+    if (input.interactiveRun) return hardLimitReached() || progress.stalled ? iteration : iteration + 1;
     if (iteration > 0 && hardLimitReached()) return iteration;
     if (iteration < limit) return limit;
     if (toolBudget.extendBy === 0 || limit >= segmentHardCap || progress.stalled) return limit;
@@ -774,7 +789,7 @@ export async function* runAgentLoopTextTurnRun(
       ? ((base) => (messages: AgentMessage[]) => base(historyTracker.select(sessionId, messages, historyWindow).messages))(createLlmMessageProjection(llmModel, input.messageAliases))
       : createLlmMessageProjection(llmModel, input.messageAliases),
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
+      persistentConversation || input.interactiveRun ? compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
         ...summaryExecution(),
@@ -783,10 +798,11 @@ export async function* runAgentLoopTextTurnRun(
         reservedTokens: await fixedPromptTokens(),
         toldLedger: host.toldLedger?.render(sessionId),
         mode: 'text',
+        persistSummary: persistentConversation,
         loopHooks,
       }) : messages,
     onContextOverflow: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
+      persistentConversation || input.interactiveRun ? compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
         ...summaryExecution(),
@@ -796,11 +812,14 @@ export async function* runAgentLoopTextTurnRun(
         toldLedger: host.toldLedger?.render(sessionId),
         mode: 'text',
         force: true,
+        persistSummary: persistentConversation,
         loopHooks,
       }) : messages,
     getSteeringMessages: promptHooks?.getSteeringMessages,
     getFollowUpMessages: promptHooks?.getFollowUpMessages,
     executeTool: async (toolCall: ParsedToolCall, _tools: typeof llmTools, toolSignal?: AbortSignal, cause?: ToolExecutionCause) => {
+      const stopped = input.interactiveRun?.check();
+      if (stopped) return toolResultToAgentMessage(toolCall, stopped, true);
       const hookRegistry = host.resourceHub?.hooks;
       const currentAliases = input.toolAliases;
       const resolvedName = currentAliases?.[toolCall.name] ?? toolCall.name;
@@ -834,6 +853,7 @@ export async function* runAgentLoopTextTurnRun(
       }
 
       try {
+        activeTools += 1;
         const outcome = await input.toolExecution.execute(tool, effectiveArgs, toolCall.id, cause);
         if (outcome.status === 'cancelled') {
           const cancellation = signal?.reason instanceof Error
@@ -883,7 +903,7 @@ export async function* runAgentLoopTextTurnRun(
         const spin = spinDetector?.record(resolvedName, effectiveArgs, resultText);
         if (spin) noteTurnTrace(traceTurnId(input.turnContext), { kind: 'spin_hint', family: spin.family, calls: spin.calls, reason: spin.reason });
         const localIteration = iterations - segmentStartIteration;
-        const lastStep = hasTools && currentLimit > 2 && localIteration === currentLimit - 1 && nudgedIteration !== iterations;
+        const lastStep = !input.interactiveRun && hasTools && currentLimit > 2 && localIteration === currentLimit - 1 && nudgedIteration !== iterations;
         if (lastStep) {
           nudgedIteration = iterations;
           noteTurnTrace(traceTurnId(input.turnContext), { kind: 'last_iteration_nudge', iteration: localIteration, limit: currentLimit });
@@ -908,6 +928,8 @@ export async function* runAgentLoopTextTurnRun(
         recordProgress(resolvedName, effectiveArgs, false);
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: failure });
         return toolResultToAgentMessage(toolCall, failure, true);
+      } finally {
+        activeTools -= 1;
       }
     },
     beforeToolCall: async ({ toolCall }: { toolCall: ParsedToolCall }) =>
@@ -941,12 +963,14 @@ export async function* runAgentLoopTextTurnRun(
   };
 
   const mapperState = createTurnEventMapperState(maxIterations);
+  if (input.interactiveRun) mapperState.maxIterations = undefined;
 
   const emitTurnEvent = (event: TurnEvent) => {
     input.onTurnEvent?.(event);
   };
 
   const autoContinue = hasTools
+    && !input.interactiveRun
     && input.autoContinuation !== false
     && autoContinueAllowed(toolBudget.autoContinue, input.turnContext);
   let continuations = 0;
@@ -954,13 +978,14 @@ export async function* runAgentLoopTextTurnRun(
   let segmentContext = loopContext;
   let lastAssistantHadToolCalls = false;
   let lastAssistantNeedsHostReply = false;
-  const reporter = input.progressSink && hasTools && toolBudget.progressMaxUpdates > 0
+  const reporter = input.progressSink && toolBudget.progressMaxUpdates > 0 && (input.interactiveRun || hasTools)
     ? new TurnProgressReporter({
       locale: input.turnContext.input?.locale,
       sink: input.progressSink,
       minIntervalMs: toolBudget.progressMinIntervalMs,
-      maxUpdates: toolBudget.progressMaxUpdates,
-      summarize: () => summarizeProgress({
+      maxUpdates: input.interactiveRun ? undefined : toolBudget.progressMaxUpdates,
+      signal,
+      summarize: () => input.interactiveRun ? Promise.resolve(undefined) : summarizeProgress({
         locale: input.turnContext.input?.locale,
         transport: completionUsage.transport,
         model: llmModel,
@@ -973,6 +998,11 @@ export async function* runAgentLoopTextTurnRun(
     : undefined;
   // Messages of the running segment, for progress summaries before agent_end.
   let segmentMessages: AgentMessage[] = [];
+  const stopProgress = input.interactiveRun ? reporter?.watch(() => ({
+    steps: iterations,
+    interimText: lastAssistantHadToolCalls ? lastAssistantText : undefined,
+    activityText: turnReplyMessages(input.turnContext.input?.locale, activeTools > 0 ? 'waiting' : 'working'),
+  })) : undefined;
   function* drainCompletionUsage(): Generator<TurnEvent> {
     for (const event of completionUsage.drainEvents()) {
       emitTurnEvent(event);
@@ -981,114 +1011,119 @@ export async function* runAgentLoopTextTurnRun(
   }
   // Each segment is one agentLoop run; continuations add segments to the same
   // Turn, so policy, approval ports and persisted history stay those of the Turn.
-  while (true) {
-    segmentStartIteration = iterations;
-    progress.startSegment();
-    lastAssistantHadToolCalls = false;
-    segmentMessages = [...segmentPrompt];
-    for await (const event of agentLoop(segmentPrompt, segmentContext, loopConfig, signal)) {
-      yield* drainCompletionUsage();
-      for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
-        if (te.type === 'usage' && event.type === 'message_end' && event.message.role === 'assistant'
-          && completionUsage.hasReported(event.message)) continue;
-        if (imReply && te.type === 'chunk') continue;
-        if (input.toolEventSource === 'authority'
-          && (te.type === 'tool_call' || te.type === 'tool_result')) continue;
-        emitTurnEvent(te);
-        yield te;
-      }
-      if (event.type === 'turn_start') {
-        // Milestone updates between iterations keep long Turns from looking frozen.
-        if (reporter && progress.progressedSince(lastReportIteration + 1)) {
-          const sent = await reporter.report(extensionPending ? 'extension' : 'progress', {
-            steps: iterations,
-            interimText: !imReply && lastAssistantHadToolCalls ? lastAssistantText : undefined,
-          });
-          if (sent) lastReportIteration = iterations;
+  try {
+    while (true) {
+      segmentStartIteration = iterations;
+      progress.startSegment();
+      lastAssistantHadToolCalls = false;
+      segmentMessages = [...segmentPrompt];
+      for await (const event of agentLoop(segmentPrompt, segmentContext, loopConfig, signal)) {
+        yield* drainCompletionUsage();
+        for (const te of mapAgentEventToTurnEvents(event, mapperState)) {
+          if (te.type === 'usage' && event.type === 'message_end' && event.message.role === 'assistant'
+            && completionUsage.hasReported(event.message)) continue;
+          if (imReply && te.type === 'chunk') continue;
+          if (input.toolEventSource === 'authority'
+            && (te.type === 'tool_call' || te.type === 'tool_result')) continue;
+          emitTurnEvent(te);
+          yield te;
         }
-        extensionPending = false;
-        iterations += 1;
-      }
-      if (event.type === 'message_end') segmentMessages.push(event.message as AgentMessage);
-      if (!imReply && event.type === 'message_update' && event.delta?.type === 'text_delta') {
-        onChunk?.(event.delta.text, lastAssistantText + event.delta.text);
-      }
-      if (event.type === 'message_end' && event.message.role === 'assistant') {
-        const assistant = event.message as AssistantMessage;
-        lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
-        const answerText = assistant.content
-          .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
-          .map(block => block.text).join('');
-        lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
-          || (!lastAssistantHadToolCalls && !answerText.trim());
-        lastAssistantText = imReply && !lastAssistantNeedsHostReply ? answerText
-          : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant, chatFailure);
-        logAssistantIterationFailure(assistant, modelId, sessionId);
-        const toolNames = assistant.content
-          .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
-          .map((b) => b.name)
-          .join(',');
-        logAgentLoopIterationEnd(host.phaseConfig, sessionId, {
-          iteration: iterations,
-          model: modelId,
-          label: hasTools ? 'orchestrator' : 'chat',
-          usage: assistant.usage,
-          stopReason: assistant.stopReason,
-          toolNames: toolNames || undefined,
-        });
-        if (!imReply) onChunk?.(lastAssistantText, lastAssistantText);
-      }
-      if (event.type === 'agent_end') {
-        if (signal?.aborted) continue;
-        const userBatch = event.userMessages ?? segmentPrompt;
-        const batch = [...userBatch, ...event.messages];
-        turnTranscript = [...turnTranscript, ...batch];
-        const messageExtras = batch.map((msg, i) => (
-          msg.role === 'user' && i === 0 && continuations === 0 ? userMessageExtra : undefined
-        ));
-        if (persistentConversation) {
-          conversationBatches.push({
-            messages: input.turnContext.origin.kind === 'im' ? stampAssistantHeaders(batch, input.turnContext.input?.contextState?.bot) : batch,
-            messageExtras,
+        if (event.type === 'turn_start') {
+          // Milestone updates between iterations keep long Turns from looking frozen.
+          if (!input.interactiveRun && reporter && progress.progressedSince(lastReportIteration + 1)) {
+            const sent = await reporter.report(extensionPending ? 'extension' : 'progress', {
+              steps: iterations,
+              interimText: !imReply && lastAssistantHadToolCalls ? lastAssistantText : undefined,
+            });
+            if (sent) lastReportIteration = iterations;
+          }
+          extensionPending = false;
+          iterations += 1;
+        }
+        if (event.type === 'message_end') segmentMessages.push(event.message as AgentMessage);
+        if (!imReply && event.type === 'message_update' && event.delta?.type === 'text_delta') {
+          onChunk?.(event.delta.text, lastAssistantText + event.delta.text);
+        }
+        if (event.type === 'message_end' && event.message.role === 'assistant') {
+          const assistant = event.message as AssistantMessage;
+          lastAssistantHadToolCalls = assistant.content.some((block) => block.type === 'toolCall');
+          const answerText = assistant.content
+            .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
+            .map(block => block.text).join('');
+          lastAssistantNeedsHostReply = Boolean(assistant.errorMessage)
+            || (!lastAssistantHadToolCalls && !answerText.trim());
+          lastAssistantText = imReply && !lastAssistantNeedsHostReply ? answerText
+            : resolveAssistantReplyText(imReply ? { ...assistant, content: [] } : assistant, chatFailure);
+          logAssistantIterationFailure(assistant, modelId, sessionId);
+          const toolNames = assistant.content
+            .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
+            .map((b) => b.name)
+            .join(',');
+          logAgentLoopIterationEnd(host.phaseConfig, sessionId, {
+            iteration: iterations,
+            model: modelId,
+            label: hasTools ? 'orchestrator' : 'chat',
+            usage: assistant.usage,
+            stopReason: assistant.stopReason,
+            toolNames: toolNames || undefined,
           });
+          if (!imReply) onChunk?.(lastAssistantText, lastAssistantText);
+        }
+        if (event.type === 'agent_end') {
+          if (signal?.aborted) continue;
+          const userBatch = event.userMessages ?? segmentPrompt;
+          const batch = [...userBatch, ...event.messages];
+          turnTranscript = [...turnTranscript, ...batch];
+          const messageExtras = batch.map((msg, i) => (
+            msg.role === 'user' && i === 0 && continuations === 0 ? userMessageExtra : undefined
+          ));
+          if (persistentConversation) {
+            conversationBatches.push({
+              messages: input.turnContext.origin.kind === 'im' ? stampAssistantHeaders(batch, input.turnContext.input?.contextState?.bot) : batch,
+              messageExtras,
+            });
+          }
         }
       }
+      // Auto-continue only a Turn that stopped mid-task (model still calling tools)
+      // after real progress, within the continuation and hard caps.
+      if (!autoContinue
+        || signal?.aborted
+        || !lastAssistantHadToolCalls
+        || !progress.segmentProgressed
+        || continuations >= toolBudget.maxContinuations
+        || hardLimitReached()
+        || shouldSuppressReplyForSpawnDelegation(toolCalls)) break;
+      const checkpoint = await summarizeExhaustedTurn({
+        locale: input.turnContext.input?.locale,
+        transport: completionUsage.transport,
+        model: llmModel,
+        systemPrompt: proseSystemPrompt,
+        messages: [...loaded.messages, ...turnTranscript],
+        maxIterations: iterations - segmentStartIteration,
+        sessionId,
+        signal,
+      });
+      if (!checkpoint.assistant || signal?.aborted) break;
+      conversationBatches.at(-1)?.messages.push(checkpoint.assistant);
+      conversationBatches.at(-1)?.messageExtras.push(undefined);
+      turnTranscript = [...turnTranscript, checkpoint.assistant];
+      continuations += 1;
+      await reporter?.report('continuation', { steps: iterations, interimText: checkpoint.reply });
+      lastReportIteration = iterations;
+      noteTurnTrace(traceTurnId(input.turnContext), { kind: 'continuation', index: continuations });
+      logPhase(host.phaseConfig, 'agent_loop.budget.continue', sessionId, { continuation: continuations });
+      segmentPrompt = [createUserMessage(buildContinuationInstruction(continuations, toolBudget.maxContinuations, reporter?.reported))];
+      segmentContext = agentContextFrom({
+        systemPrompt,
+        systemPromptCacheBreakpoint,
+        messages: [...loaded.messages, ...turnTranscript],
+        tools: llmTools,
+      });
     }
-    // Auto-continue only a Turn that stopped mid-task (model still calling tools)
-    // after real progress, within the continuation and hard caps.
-    if (!autoContinue
-      || signal?.aborted
-      || !lastAssistantHadToolCalls
-      || !progress.segmentProgressed
-      || continuations >= toolBudget.maxContinuations
-      || hardLimitReached()
-      || shouldSuppressReplyForSpawnDelegation(toolCalls)) break;
-    const checkpoint = await summarizeExhaustedTurn({
-      locale: input.turnContext.input?.locale,
-      transport: completionUsage.transport,
-      model: llmModel,
-      systemPrompt: proseSystemPrompt,
-      messages: [...loaded.messages, ...turnTranscript],
-      maxIterations: iterations - segmentStartIteration,
-      sessionId,
-      signal,
-    });
-    if (!checkpoint.assistant || signal?.aborted) break;
-    conversationBatches.at(-1)?.messages.push(checkpoint.assistant);
-    conversationBatches.at(-1)?.messageExtras.push(undefined);
-    turnTranscript = [...turnTranscript, checkpoint.assistant];
-    continuations += 1;
-    await reporter?.report('continuation', { steps: iterations, interimText: checkpoint.reply });
-    lastReportIteration = iterations;
-    noteTurnTrace(traceTurnId(input.turnContext), { kind: 'continuation', index: continuations });
-    logPhase(host.phaseConfig, 'agent_loop.budget.continue', sessionId, { continuation: continuations });
-    segmentPrompt = [createUserMessage(buildContinuationInstruction(continuations, toolBudget.maxContinuations, reporter?.reported))];
-    segmentContext = agentContextFrom({
-      systemPrompt,
-      systemPromptCacheBreakpoint,
-      messages: [...loaded.messages, ...turnTranscript],
-      tools: llmTools,
-    });
+
+  } finally {
+    stopProgress?.();
   }
 
   // Progress updates already reached the user, finished or not (#730 ledger).
@@ -1132,13 +1167,16 @@ export async function* runAgentLoopTextTurnRun(
   // The loop ran tools but never produced visible text (usually maxIterations
   // was hit mid-exploration). Ask the model for a tools-off summary instead of
   // showing raw tool output.
-  const needsReplyRecovery = !delegatedOnly
+  const stopped = input.interactiveRun && (lastAssistantHadToolCalls || lastAssistantNeedsHostReply || iterations === 0)
+    ? input.interactiveRun.check() ?? (progress.stalled ? turnReplyMessages(input.turnContext.input?.locale, 'stalled') : undefined)
+    : undefined;
+  const needsReplyRecovery = !stopped && !(input.interactiveRun && lastAssistantNeedsHostReply) && !delegatedOnly
     && hasTools
     && (toolCalls.length > 0 || iterations >= maxIterations)
     && (!lastAssistantText.trim() || (imReply && lastAssistantHadToolCalls));
 
-  let rawReply = lastAssistantText;
-  let hostReply = lastAssistantNeedsHostReply;
+  let rawReply = stopped ?? lastAssistantText;
+  let hostReply = !!stopped || lastAssistantNeedsHostReply;
   if (needsReplyRecovery) {
     const summary = await summarizeExhaustedTurn({
       locale: input.turnContext.input?.locale,
@@ -1237,6 +1275,7 @@ export async function* runAgentLoopTextTurnRun(
     model: modelId,
     toolCalls,
     thinking,
+    stoppedReason: stopped ?? (input.interactiveRun && lastAssistantNeedsHostReply ? lastAssistantText : undefined),
     // A host fallback is absent from the model transcript, so it cannot cover its canonical event.
     projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches,
       hostReply && delivered ? { ...delivered, contextRefs: undefined } : delivered),
