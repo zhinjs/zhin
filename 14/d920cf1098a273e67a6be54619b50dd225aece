@@ -1,0 +1,33 @@
+.changeset/sandbox-concurrent-conversations.md
+  s_9622fd28aba994::t_4cb6062704ffc9 12-13
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  s_079f1dc5e6308d::t_70a58805062dc1 115,185,790,795,803,981-985,1320
+plugins/adapters/sandbox/pages/index/messages.ts
+  s_079f1dc5e6308d::t_e5257526a02d13 44
+plugins/adapters/sandbox/tests/sandbox-page-transport.test.ts
+  s_079f1dc5e6308d::t_f6cd7f2b2229e9 18,315,318,331,336,357-383,400
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "14d920cf1098a273e67a6be54619b50dd225aece",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
