@@ -1,0 +1,27 @@
+.changeset/sandbox-concurrent-conversations.md
+  s_9622fd28aba994::t_27bb75884757ed 6-7
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  s_9622fd28aba994::t_a33dc46a83a107 54-58,98,112-115,122-148,303,325,338,382,402,405-425,427-429,432,434,441-445,702,705-706,708-712,714,718,800,804,869-870,883-885,887,960-968,1009,1135,1239-1243
+plugins/adapters/sandbox/pages/index/agentTrace.ts
+  s_9622fd28aba994::t_1daad14bcde805 64-65,161,253-256,262,446,452,643,647-653
+plugins/adapters/sandbox/pages/index/messages.ts
+  s_9622fd28aba994::t_50d12334e48f8b 156-157
+plugins/adapters/sandbox/tests/agent-trace.test.ts
+  s_9622fd28aba994::t_6b5083282352e9 87-111,170-191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b9736fe57b71306f363853f43112a9c6b5857535",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
