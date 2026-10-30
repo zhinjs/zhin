@@ -87,6 +87,16 @@ The Runtime Host (`http`) must already be listening for the Webhook to be reacha
 4. Set the Token (must match the `token` in the configuration file)
 5. If message encryption is needed, set the EncodingAESKey
 
+## Console page
+
+Open the Console **WeChat MP** page (route `/wechat-mp`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.wechat-mp.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `wechat-mp:read`; writes require `wechat-mp:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `wechat-mp endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Investigation |

@@ -1,7 +1,8 @@
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin, databaseHostToken } from 'zhin.js';
+import { definePlugin, databaseHostToken, pluginConsoleRpcToken } from 'zhin.js';
 import { githubRuntimeStateToken } from './src/github-runtime-state.js';
 import { defineGithubOauthUsersTable } from './src/oauth-users.js';
+import { createGithubConsoleRpc } from './src/console.js';
 
 /**
  * github_subscriptions — repo event subscriptions per chat channel
@@ -30,6 +31,7 @@ export default definePlugin({
   setup(context) {
     // 运行中 endpoint 注册表（github endpoint list 的"运行中"数据源）
     context.resources.provide(githubRuntimeStateToken, createEndpointRuntimeState());
+    context.resources.provide(pluginConsoleRpcToken, createGithubConsoleRpc(context.resources, () => context.config.get()));
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);
       defineGithubOauthUsersTable(host);

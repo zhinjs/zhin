@@ -14,6 +14,7 @@ export * from './endpoint-configuration.js';
 /** @internal Compact Endpoint materialization; exported for Runtime and test harness compatibility. */
 export { materializeEndpoint } from './managed-endpoint.js';
 export * from './endpoint-commands.js';
+export * from './adapter-console-rpc.js';
 export * from './endpoint-lifecycle.js';
 export * from './endpoint-management.js';
 export * from './endpoint-control.js';

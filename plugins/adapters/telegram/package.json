@@ -42,11 +42,14 @@
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
@@ -72,6 +75,7 @@
   "devDependencies": {
     "@types/node": "^26.1.2",
     "@zhin.js/host-http": "workspace:*",
+    "@zhin.js/pagemanager": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",
@@ -80,6 +84,7 @@
   "files": [
     "adapters",
     "commands",
+    "pages",
     "plugin.js",
     "schema.json",
     "src",
@@ -128,6 +133,10 @@
       },
       {
         "package": "@zhin.js/agent-feature",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

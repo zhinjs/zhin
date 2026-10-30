@@ -96,6 +96,16 @@ The root plugin the main configuration `plugins` map (or project graph) must ref
 - [Milky Communication](https://milky.ntqqrev.org/guide/communication)
 - [Adapters overview](https://zhin.js.org/essentials/adapters)
 
+## Console page
+
+Open the Console **Milky** page (route `/milky`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.milky.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `milky:read`; writes require `milky:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `milky endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

@@ -144,6 +144,16 @@ Common Markdown (e.g., `**bold**`) is converted to Slack mrkdwn and sent via Blo
 - OAuth installation flow — not yet supported
 - Old `usePlugin` / `extends Adapter` / host-router production entry points have been removed
 
+## Console page
+
+Open the Console **Slack** page (route `/slack`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.slack.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `slack:read`; writes require `slack:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `slack endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

@@ -1,5 +1,5 @@
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
-import { createUserMessage, MessageAliasTable, type AgentMessage, type Usage } from '@zhin.js/ai';
+import { MessageAliasTable, type AgentMessage, type Usage } from '@zhin.js/ai';
 import { conversationContextMessage, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
 import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';

@@ -111,6 +111,16 @@ After setup, click **Verify** in the LINE Developers Console to test connectivit
 - **Maximum 5 messages per request**: LINE limits Reply/Push to at most 5 messages per request
 - **Text length limit**: A single text message can have at most 5000 characters
 
+## Console page
+
+Open the Console **LINE** page (route `/line`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.line.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `line:read`; writes require `line:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `line endpoint add` command.
+
 ## Troubleshooting
 
 | Issue | Investigation |

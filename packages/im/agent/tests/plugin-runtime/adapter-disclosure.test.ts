@@ -33,10 +33,13 @@ async function loadAdapter(platform: string): Promise<RuntimeSnapshot> {
       const context = { owner, feature: toolFeatureId, localName: `agent/${platform}/skill/${name}/${tool}`, source: toolSource };
       const loaded = await import(pathToFileURL(toolSource).href);
       const parsed = parseAgentToolDefinition(loaded.default, context);
-      // Tools may narrow a multi-scene Skill, but must never widen its scene ceiling.
-      if (definition.scopes?.length) {
+      // Tools may narrow the Skill's scenes, but must not escape its scene ceiling.
+      const skillScopes = new Set(definition.scopes ?? []);
+      if (skillScopes.size) {
         expect(parsed.scopes?.length ?? 0, toolSource).toBeGreaterThan(0);
-        expect(parsed.scopes?.filter(scope => !definition.scopes!.includes(scope)), toolSource).toEqual([]);
+      }
+      for (const scope of parsed.scopes ?? []) {
+        expect(skillScopes.has(scope), `${toolSource}: ${scope}`).toBe(true);
       }
       toolSlots.push(createCapabilitySlot({ ...context, definition: parsed }));
     }

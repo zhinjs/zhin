@@ -85,6 +85,18 @@ The adapter writes nothing to disk. The dedupe table (the latest 500 danmaku ids
 - Without login the platform reports uid 0 and masked nicknames, so anonymous viewers with the same masked nickname count as one person.
 - The platform may change its APIs at any time (for example WBI signing or risk control on `getDanmuInfo`). The connection then keeps failing and backing off; watch the logs.
 
+## Console page
+
+Open the Console **Bilibili Live** page (route `/bilibili-live`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.bilibili-live.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `bilibili-live:read`; writes require `bilibili-live:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `bilibili-live endpoint add` command.
+
+QR login still lives on the Bilibili comment adapter page; this page manages live-danmaku connections and endpoints.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |

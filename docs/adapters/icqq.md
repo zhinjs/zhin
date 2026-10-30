@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e31aa86659d36bb3 -->
+<!-- sync-adapter-docs:sha256=cf896e9207b77c75 -->
 
 # @zhin.js/adapter-icqq
 
@@ -184,6 +184,18 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 ICQQ Agent 可按需加载 `icqq-conversation` 查询当前群／频道和 Bot 自身角色。`icqq-messages` 提供当前会话的引用回复、真实消息合并转发和撤回自己发言；自己的消息撤回不要求群管身份或逐次审批，时限由平台决定。
 
 `icqq-group-admin` 新增撤回他人消息与退群：前者保留群管发起权限、实时平台角色检查，无需逐次审批；退群仅主人可发起、每次审批，Bot 为群主时拒绝执行。引用／转发走统一发送链路，不支持跨会话转发。当前 guild-channel 接入仅提供身份查询，不能使用这些群／私聊操作。详见 [权限与能力说明](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/PERMITS.md)。
+
+## Console 页面
+
+启动后打开 Console 的「ICQQ」页（地址 `/icqq`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.icqq.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 处理登录待办（扫码 / 滑块 / 设备确认等，来自 LoginAssist）；
+
+ICQQ 首次登录的二维码、滑块、设备确认会出现在「登录待办」里，不需要再回到终端确认。
+
+读取需要 `icqq:read`，写操作需要 `icqq:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `icqq endpoint add`。
 
 ## 故障排查
 

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=85b694ac4f026e90 -->
+<!-- sync-adapter-docs:sha256=a2217b5dc0e84666 -->
 
 # @zhin.js/adapter-slack
 
@@ -142,6 +142,16 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 - Modals / Select menus — 暂不支持
 - OAuth 安装流程 — 暂不支持
 - 旧 `usePlugin` / `extends Adapter` / host-router 生产入口已删除
+
+## Console 页面
+
+启动后打开 Console 的「Slack」页（地址 `/slack`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.slack.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `slack:read`，写操作需要 `slack:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `slack endpoint add`。
 
 ## 故障排查
 

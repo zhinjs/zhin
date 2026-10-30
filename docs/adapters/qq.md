@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=0f2c3c49e34e8c56 -->
+<!-- sync-adapter-docs:sha256=28d3bf9b33aead65 -->
 
 # @zhin.js/adapter-qq
 
@@ -230,6 +230,16 @@ QQ 开放平台按有没有带上用户消息的 `msg_id`（或事件的 `event_
 
 公域机器人在群里只能收到 @ 它的消息，所以群聊旁听（`ai.trigger.ambient`）只对拥有全量
 消息权限的私域机器人有意义。
+
+## Console 页面
+
+启动后打开 Console 的「QQ」页（地址 `/qq`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 查看 / 删除 `plugins.qq.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；新增走扫码绑定；
+- 「平台操作」里扫码绑定新机器人：扫码 → 选择公域 / 私域 → 写入配置；原来的 `qq endpoint add` 仍然保留。
+
+读取需要 `qq:read`，写操作需要 `qq:write`；管理员 full token 不受限。页面里的「扫码绑定新机器人」等价于原来的 `qq endpoint add`。
 
 ## 故障排查
 

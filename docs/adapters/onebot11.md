@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4f35bfbe536605a1 -->
+<!-- sync-adapter-docs:sha256=28c8941873e2c9c9 -->
 
 # @zhin.js/adapter-onebot11
 
@@ -104,6 +104,16 @@ onebot11:
 
 - [OneBot 11 标准](https://github.com/botuniverse/onebot-11)
 - [适配器概览](https://zhin.js.org/essentials/adapters)
+
+## Console 页面
+
+启动后打开 Console 的「OneBot 11」页（地址 `/onebot11`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.onebot11.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `onebot11:read`，写操作需要 `onebot11:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `onebot11 endpoint add`。
 
 ## 故障排查
 

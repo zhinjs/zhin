@@ -107,6 +107,16 @@ See `tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_prepare_
 - Inbound: `httpHostToken` POST -> `Endpoint.emit(...)`
 - Outbound: `send({ conversation, payload })`
 
+## Console page
+
+Open the Console **GitHub** page (route `/github`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.github.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `github:read`; writes require `github:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `github endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

@@ -5,6 +5,7 @@
 import { defineAdapter } from 'zhin.js/adapter';
 import { BilibiliLiveEndpoint } from '../../src/endpoint.js';
 import { resolveBilibiliLiveConfig, type BilibiliLiveEndpointConfig } from '../../src/protocol.js';
+import { bilibiliLiveRuntimeStateToken } from '../../src/bilibili-live-runtime-state.js';
 
 export { BilibiliLiveEndpoint } from '../../src/endpoint.js';
 export type { BilibiliLiveEndpointOptions } from '../../src/endpoint.js';
@@ -19,9 +20,14 @@ export default defineAdapter<BilibiliLiveEndpointConfig>({
     interactive: 'text',
   },
   create(context) {
+    const config = resolveBilibiliLiveConfig(context.config);
+    context.use(bilibiliLiveRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
+      mode: 'ws',
+    });
     return new BilibiliLiveEndpoint({
       id: context.id,
-      config: resolveBilibiliLiveConfig(context.config),
+      config,
     });
   },
 });
