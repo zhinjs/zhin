@@ -17,12 +17,14 @@ import {
   type EndpointPendingRequest,
   type EndpointSendRequest,
   type EndpointTransportState,
+  type AdapterOutageNotifier,
 } from 'zhin.js/adapter';
 import type { EndpointContentPort } from '@zhin.js/adapter';
-import { receiveOneBotLikeSideEvent, buildSystem, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
+import { receiveOneBotLikeSideEvent, buildSystem, toCanonicalSegments, type LoginAssist, type PendingLoginTask } from '@zhin.js/core';
 import { EndpointDeliveryError, type MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
+import type { IcqqLoginControl } from './icqq-login-control.js';
 import { runIcqqLoginAssistStep } from './icqq-login-assist.js';
 import { IcqqContentResolver } from './content-resolver.js';
 import {
@@ -70,6 +72,8 @@ export interface IcqqEndpointOptions {
   readonly config: ResolvedIcqqConfig;
   readonly loginAssist: LoginAssist;
   readonly locale?: import('zhin.js/i18n').Locale;
+  /** Out-of-band outage notifier; absent in tests/hosts without outbound. */
+  readonly notifier?: AdapterOutageNotifier;
 }
 
 const BOUND_EVENTS = [
@@ -114,6 +118,12 @@ export class IcqqEndpoint extends Endpoint<Client> {
   readonly #inboundOwner = new AsyncLocalStorage<symbol>();
   readonly #contentResolver: IcqqContentResolver;
   readonly content: EndpointContentPort;
+  readonly loginControl: IcqqLoginControl;
+  #reloginTimer?: ReturnType<typeof setTimeout>;
+  #reloginAttempts = 0;
+  #reloginInFlight?: Promise<void>;
+  #offlineNoticeAt = 0;
+  #challengeNoticeAt = 0;
 
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
     inspectGroupMember: (group, user, signal) => inspectGroupMember(this.client, group, user, signal),
@@ -210,6 +220,19 @@ export class IcqqEndpoint extends Endpoint<Client> {
     this.#logger = getAdapterLogger('icqq', options.config.id);
     this.#options = options;
     this.endpointName = options.config.id;
+    this.loginControl = Object.freeze({
+      endpointId: this.endpointName,
+      state: () => ({
+        endpointId: this.endpointName,
+        transportState: this.transportState,
+        online: this.client.isOnline(),
+        pending: this.#pendingLoginTasks(),
+      }),
+      pending: () => this.#pendingLoginTasks(),
+      relogin: () => this.relogin(),
+      submit: (taskId: string, value: string | Record<string, unknown>) => this.#options.loginAssist.submit(taskId, value),
+      cancel: (taskId: string, reason?: string) => this.#options.loginAssist.cancel(taskId, reason),
+    });
   }
 
   #handleBackgroundFailure(operation: IcqqBackgroundOperation, error: unknown): void {
@@ -226,6 +249,141 @@ export class IcqqEndpoint extends Endpoint<Client> {
     // Delegate to the SDK's existing transport termination, offline event and
     // reconn_interval policy. No account-level logout or second retry timer.
     this.client.emit('internal.error.network', -2, `ICQQ ${operation} failed`);
+  }
+
+  /** Force a login attempt (manual recovery command). */
+  relogin(): Promise<void> {
+    return this.#startRelogin(true);
+  }
+
+  #startRelogin(resetAttempts: boolean): Promise<void> {
+    if (this.#stopped || this.#retiring) {
+      return Promise.reject(new Error('ICQQ endpoint 已停止'));
+    }
+    if (this.#reloginInFlight) return this.#reloginInFlight;
+    if (resetAttempts) this.#reloginAttempts = 0;
+    const task = this.#performRelogin();
+    this.#reloginInFlight = task;
+    void task.catch(() => undefined).finally(() => {
+      if (this.#reloginInFlight === task) this.#reloginInFlight = undefined;
+      if (this.#started && !this.#stopped && !this.#retiring && !this.client.isOnline()) {
+        this.#scheduleRelogin('relogin_failed');
+      }
+    });
+    return task;
+  }
+
+  async #performRelogin(): Promise<void> {
+    this.#clearReloginTimer();
+    this.client.cancelReconnect();
+    this.#logger.info(formatCompact({ op: 'icqq_relogin', endpoint: this.endpointName }));
+    try {
+      await this.client.login(this.#options.config.password);
+    } catch (error) {
+      this.#logger.warn(formatCompact({
+        op: 'icqq_relogin_failed',
+        endpoint: this.endpointName,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      throw error;
+    }
+  }
+
+  #scheduleRelogin(reason: string): void {
+    if (!this.#options.config.autoReconnect || this.#stopped || this.#retiring) return;
+    if (this.#reloginTimer || this.#reloginInFlight) return;
+    if (this.#reloginAttempts >= 8) return;
+    const attempt = this.#reloginAttempts++;
+    const delayMs = Math.min(300_000, 5_000 * (2 ** Math.min(attempt, 5)));
+    this.#logger.info(formatCompact({
+      op: 'icqq_relogin_scheduled',
+      endpoint: this.endpointName,
+      reason,
+      attempt: attempt + 1,
+      delay_ms: delayMs,
+    }));
+    this.#reloginTimer = setTimeout(() => {
+      this.#reloginTimer = undefined;
+      void this.#startRelogin(false).catch(() => {
+        // #performRelogin already scheduled the next attempt.
+      });
+    }, delayMs);
+    this.#reloginTimer.unref?.();
+  }
+
+  #clearReloginTimer(): void {
+    if (!this.#reloginTimer) return;
+    clearTimeout(this.#reloginTimer);
+    this.#reloginTimer = undefined;
+  }
+
+  #pendingLoginTasks(): readonly PendingLoginTask[] {
+    return this.#options.loginAssist.listPending()
+      .filter((task) => task.adapter === 'icqq' && task.endpointKey === this.endpointName);
+  }
+
+  #notifyOffline(reason: string, willRetry: boolean): void {
+    const notifier = this.#options.notifier;
+    if (!notifier?.configured) return;
+    const now = Date.now();
+    if (now - this.#offlineNoticeAt < 60_000) return;
+    this.#offlineNoticeAt = now;
+    const recovery = willRetry
+      ? '已开始自动重新登录。'
+      : '请手动重新登录。';
+    const qrCommand = `icqq login qr ${this.endpointName}`;
+    const confirmCommand = `icqq login confirm ${this.endpointName}`;
+    const codeCommand = `icqq login code ${this.endpointName} <内容>`;
+    const text = `[Zhin] ICQQ ${this.endpointName} 掉线（${reason}）。${recovery}\n`
+      + `恢复：在 QQ 回复 \`${qrCommand}\` 获取二维码，扫码后回复 \`${confirmCommand}\`；`
+      + `滑块/短信验证请回复 \`${codeCommand}\`。也可以打开 Console 的 ICQQ 页面完成登录。`;
+    void notifier.send(text).then((sent) => {
+      if (sent) return;
+      this.#logger.warn(formatCompact({
+        op: 'icqq_notify_failed',
+        endpoint: this.endpointName,
+        reason,
+      }));
+    });
+  }
+
+  #notifyChallenge(step: 'qrcode' | 'slider' | 'device' | 'auth'): void {
+    const notifier = this.#options.notifier;
+    if (!notifier?.configured) return;
+    const now = Date.now();
+    if (now - this.#challengeNoticeAt < 30_000) return;
+    this.#challengeNoticeAt = now;
+    const label = step === 'qrcode' ? '二维码验证'
+      : step === 'slider' ? '滑块验证'
+        : step === 'device' ? '设备确认'
+          : '登录确认';
+    const qrCommand = `icqq login qr ${this.endpointName}`;
+    const confirmCommand = `icqq login confirm ${this.endpointName}`;
+    const codeCommand = `icqq login code ${this.endpointName} <内容>`;
+    const text = `[Zhin] ICQQ ${this.endpointName} 需要${label}。\n`
+      + (step === 'qrcode' || step === 'auth'
+        ? `在 QQ 回复 \`${qrCommand}\` 获取二维码，完成后回复 \`${confirmCommand}\`。`
+        : `在 QQ 回复 \`icqq login status ${this.endpointName}\` 查看验证链接，再用 \`${codeCommand}\` 提交验证码；也可以打开 Console 的 ICQQ 页面。`);
+    void notifier.send(text).then((sent) => {
+      if (sent) return;
+      this.#logger.warn(formatCompact({
+        op: 'icqq_notify_failed',
+        endpoint: this.endpointName,
+        reason: `login_${step}`,
+      }));
+    });
+  }
+
+  #notifyRecovered(): void {
+    const notifier = this.#options.notifier;
+    const hadOfflineNotice = this.#offlineNoticeAt > 0;
+    this.#offlineNoticeAt = 0;
+    this.#challengeNoticeAt = 0;
+    if (!notifier?.configured || !hadOfflineNotice) return;
+    void notifier.send(`[Zhin] ICQQ ${this.endpointName} 已重新上线。`).then((sent) => {
+      if (sent) return;
+      this.#logger.warn(formatCompact({ op: 'icqq_notify_failed', endpoint: this.endpointName, reason: 'recovered' }));
+    });
   }
 
   #ignoreReactionAck(action: 'add' | 'remove', task: Promise<unknown> | unknown): void {
@@ -274,6 +432,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
         `connected (direct) | friends: ${this.client.fl.size} | groups: ${this.client.gl.size}`,
       );
     } catch (error) {
+      this.#notifyOffline('start_failed', false);
       await this.stop();
       this.#logger.debug(`Failed to connect ICQQ client: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
       throw error;
@@ -308,6 +467,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
 
   async stop(): Promise<void> {
     this.#stopped = true;
+    this.#clearReloginTimer();
     this.#assertExternalLifecycle('stop');
     this.#armRetirementFence();
     await Promise.allSettled([...this.#inflightInbound]);
@@ -614,12 +774,16 @@ export class IcqqEndpoint extends Endpoint<Client> {
     this.#bindSystemOnlineEvent();
     this.client.on('system.offline', (event) => {
       this.#logSystemEvent('offline', event);
+      this.#notifyOffline('offline', this.#options.config.autoReconnect);
     });
     this.client.on('system.offline.network', (event) => {
       this.#logSystemEvent('offline.network', event);
+      this.#notifyOffline('network', this.#options.config.autoReconnect);
     });
     this.client.on('system.offline.kickoff', (event) => {
       this.#logSystemEvent('offline.kickoff', event);
+      this.#notifyOffline('kickoff', this.#options.config.autoReconnect);
+      this.#scheduleRelogin('kickoff');
     });
     this.client.on('system.login.qrcode', (event) => {
       this.#logger.info('icqq 收到二维码登录事件，等待 LoginAssist / 终端确认后继续');
@@ -634,6 +798,8 @@ export class IcqqEndpoint extends Endpoint<Client> {
     this.client.on('system.login.error', (event) => {
       this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'login_error');
       this.#logSystemEvent('login.error', event);
+      this.#notifyOffline('login_error', this.#options.config.autoReconnect);
+      this.#scheduleRelogin('login_error');
     });
     this.client.on('system.login.auth', (event) => {
       this.#handleLoginChallenge('auth', event);
@@ -644,6 +810,9 @@ export class IcqqEndpoint extends Endpoint<Client> {
     this.client.on('system.online', (event) => {
       if (this.#retiring) return;
       this.#everOnline = true;
+      this.#clearReloginTimer();
+      this.#reloginAttempts = 0;
+      this.#notifyRecovered();
       try {
         this.#resolveStartOnline?.();
         this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'online');
@@ -707,6 +876,8 @@ export class IcqqEndpoint extends Endpoint<Client> {
       ? event as Record<string, unknown>
       : null);
     this.#logSystemEvent(`login.${step}`, event);
+    this.#clearReloginTimer();
+    this.#notifyChallenge(step);
     void runIcqqLoginAssistStep({
       assist: this.#options.loginAssist,
       locale: this.#options.locale,

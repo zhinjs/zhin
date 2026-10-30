@@ -2,10 +2,12 @@ import { projectLocaleToken } from 'zhin.js/i18n';
 /**
  * Convention entry: discover `adapters/icqq/index.ts` → defineAdapter.
  */
-import { defineAdapter } from 'zhin.js/adapter';
+import { createAdapterOutageNotifier, defineAdapter } from 'zhin.js/adapter';
 import { loginAssistToken } from '@zhin.js/core/runtime';
+import { outboundHostToken } from 'zhin.js';
 import { IcqqEndpoint } from '../../src/endpoint.js';
 import { icqqRuntimeStateToken } from '../../src/icqq-runtime-state.js';
+import { icqqLoginControlToken } from '../../src/icqq-login-control.js';
 import {
   resolveIcqqConfig,
   type IcqqEndpointConfig,
@@ -55,11 +57,17 @@ export default defineAdapter<IcqqEndpointConfig>({
       id: config.id,
       mode: 'direct',
     });
-    return new IcqqEndpoint({
+    const outbound = context.has?.(outboundHostToken) ? context.use(outboundHostToken) : undefined;
+    const endpoint = new IcqqEndpoint({
       id: context.id,
       loginAssist: context.use(loginAssistToken),
       locale: context.use(projectLocaleToken),
       config,
+      notifier: createAdapterOutageNotifier(outbound, config.notify),
     });
+    if (context.has?.(icqqLoginControlToken)) {
+      context.use(icqqLoginControlToken).set(config.id, endpoint.loginControl);
+    }
+    return endpoint;
   },
 });

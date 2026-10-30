@@ -3,6 +3,7 @@
 import { EndpointDeliveryError, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveQqIntents } from './qq-intents.js';
+import { resolveAdapterNotifyTarget, type AdapterNotifyTarget, type ResolvedAdapterNotifyTarget } from 'zhin.js/adapter';
 
 const logger = getLogger('qq');
 
@@ -22,6 +23,8 @@ export interface QqEndpointConfig {
   readonly gatewayUrl?: string;
   readonly streamProxy?: import('./stream-proxy.js').QqStreamProxy;
   readonly webhookPath?: string;
+  /** Optional out-of-band outage notification target (usually an ICQQ instance). */
+  readonly notify?: AdapterNotifyTarget;
 }
 
 export interface ResolvedQqWebsocketConfig {
@@ -35,6 +38,7 @@ export interface ResolvedQqWebsocketConfig {
   readonly accessTokenUrl?: string;
   readonly gatewayUrl?: string;
   readonly streamProxy?: import('./stream-proxy.js').QqStreamProxy;
+  readonly notify?: ResolvedAdapterNotifyTarget;
 }
 
 export interface ResolvedQqHttpConfig {
@@ -45,6 +49,7 @@ export interface ResolvedQqHttpConfig {
   readonly secret: string;
   readonly webhookPath: string;
   readonly sandbox: boolean;
+  readonly notify?: ResolvedAdapterNotifyTarget;
 }
 
 export type ResolvedQqConfig = ResolvedQqWebsocketConfig | ResolvedQqHttpConfig;
@@ -83,6 +88,7 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
   const appid = requiredEndpointField(config.appid, 'appid');
   const secret = requiredEndpointField(config.secret, 'secret');
   const mode = config.mode ?? 'websocket';
+  const notify = resolveAdapterNotifyTarget(config.notify);
 
   if (mode === 'webhook' || mode === 'middleware') {
     const webhookPathRaw = config.webhookPath ?? '/qq/webhook';
@@ -95,6 +101,7 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
       secret,
       webhookPath,
       sandbox: config.sandbox === true,
+      ...(notify ? { notify } : {}),
     };
   }
 
@@ -114,6 +121,7 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
     accessTokenUrl: config.accessTokenUrl,
     gatewayUrl: config.gatewayUrl,
     ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
+    ...(notify ? { notify } : {}),
   };
 }
 

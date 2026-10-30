@@ -836,7 +836,23 @@ outline: [2, 3]
 | `icqq.endpoints[].qqnt` | boolean | 否 | — | 是否使用 QQNT 协议 |
 | `icqq.endpoints[].ntLogin` | boolean | 否 | — | 是否使用 NT 登录方式 |
 | `icqq.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
+| `icqq.endpoints[].notify` | object | 否 | — | 掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话） |
+| `icqq.endpoints[].notify.adapter` | string | 是 | — | 通知使用的适配器类型，如 qq / icqq |
+| `icqq.endpoints[].notify.endpoint` | string | 是 | — | 该适配器的 endpoint id |
+| `icqq.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型，默认 private |
+| `icqq.endpoints[].notify.id` | string \| number | 是 | — | master 在该平台上的会话 id（QQ 官方为 openid，ICQQ 为 QQ 号） |
+| `icqq.endpoints[].notify.parent` | object | 否 | — | 可选的父频道/群容器 |
+| `icqq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
+| `icqq.endpoints[].notify.parent.id` | string \| number | 是 | — | — |
 | `icqq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖 |
+| `icqq.notify` | object | 否 | — | 掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话） |
+| `icqq.notify.adapter` | string | 是 | — | 通知使用的适配器类型，如 qq / icqq |
+| `icqq.notify.endpoint` | string | 是 | — | 该适配器的 endpoint id |
+| `icqq.notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型，默认 private |
+| `icqq.notify.id` | string \| number | 是 | — | master 在该平台上的会话 id（QQ 官方为 openid，ICQQ 为 QQ 号） |
+| `icqq.notify.parent` | object | 否 | — | 可选的父频道/群容器 |
+| `icqq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
+| `icqq.notify.parent.id` | string \| number | 是 | — | — |
 
 ### kook
 
@@ -1063,10 +1079,26 @@ outline: [2, 3]
 | `qq.endpoints[].streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.endpoints[].streamProxy.port` | integer | 是 | — | — |
 | `qq.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `qq.endpoints[].notify` | object | 否 | — | 掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话） |
+| `qq.endpoints[].notify.adapter` | string | 是 | — | 通知使用的适配器类型，如 qq / icqq |
+| `qq.endpoints[].notify.endpoint` | string | 是 | — | 该适配器的 endpoint id |
+| `qq.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型，默认 private |
+| `qq.endpoints[].notify.id` | string \| number | 是 | — | master 在该平台上的会话 id（QQ 官方为 openid，ICQQ 为 QQ 号） |
+| `qq.endpoints[].notify.parent` | object | 否 | — | 可选的父频道/群容器 |
+| `qq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
+| `qq.endpoints[].notify.parent.id` | string \| number | 是 | — | — |
 | `qq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `qq.streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.streamProxy.port` | integer | 是 | — | — |
 | `qq.streamProxy.serverName` | string | 是 | — | — |
+| `qq.notify` | object | 否 | — | 掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话） |
+| `qq.notify.adapter` | string | 是 | — | 通知使用的适配器类型，如 qq / icqq |
+| `qq.notify.endpoint` | string | 是 | — | 该适配器的 endpoint id |
+| `qq.notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型，默认 private |
+| `qq.notify.id` | string \| number | 是 | — | master 在该平台上的会话 id（QQ 官方为 openid，ICQQ 为 QQ 号） |
+| `qq.notify.parent` | object | 否 | — | 可选的父频道/群容器 |
+| `qq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
+| `qq.notify.parent.id` | string \| number | 是 | — | — |
 
 ### sandbox
 

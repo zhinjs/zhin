@@ -2,6 +2,7 @@
   "adapter": [
     "export * from './adapter-console-rpc.js';",
     "export * from './adapter-index.js';",
+    "export * from './adapter-notify.js';",
     "export * from './credentials.js';",
     "export * from './definition.js';",
     "export * from './endpoint-client.js';",
