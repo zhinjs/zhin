@@ -67,7 +67,7 @@ export default defineAdapter<{ readonly token: string }>({
 | `connect()` | 连接平台，**等平台可用后再返回** |
 | `onCleanup(fn)` | 每拿到一个资源就立即登记清理。之后的初始化失败时，框架会按逆序回滚 |
 | `events.message()` | 上报一条收到的消息，框架会自动补上账号身份 |
-| `send()` | 发送消息，返回平台消息 id |
+| `send()` | 发送消息，返回平台消息 id；拆分发送时返回有序 `{ parts }` 回执 |
 
 只有一个清理动作时，也可以直接把它作为 `connect()` 的返回值。
 

@@ -1,8 +1,9 @@
 import { RED_CIRCLE_PNG } from '../../evals/fixtures/images.js';
 import { describe, expect, it, vi } from 'vitest';
 import { aiOutboundJsonSchema, buildAiOutboundJsonSchema, DEFAULT_AI_OUTBOUND_SEGMENT_TYPES, type AiOutboundSegmentProfile } from '@zhin.js/core';
-import { describeProviderFailure, type AgentMessage, type AgentTool, type StreamOptions } from '@zhin.js/ai';
+import { createMemoryContextRepository, createUserMessage, describeProviderFailure, projectPromptContext, type AgentMessage, type AgentTool, type ContextRepository, type StreamOptions } from '@zhin.js/ai';
 import { chatFailureLine } from '../../src/outbound/chat-failure.js';
+import { conversationContextMessage, deliveredMessageContextRef, deliveredTextDigest } from '../../src/session/context-provenance.js';
 
 /** IM turns say a format failure in the chat voice (the host notice is for non-chat callers). */
 const STRUCTURED_REPLY_FAILURE = chatFailureLine('format', { random: 0 });
@@ -36,6 +37,8 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   locale?: 'zh-CN' | 'en';
   initialMessages?: AgentMessage[];
   deferred?: boolean;
+  conversation?: { repository: ContextRepository; sessionId: string };
+  delivered?: { messageId?: string; messageIds?: readonly (string | null)[]; contextRefs?: readonly string[] };
 } = {}) {
   const llm = wireMockLlmApi({ models: ['m'], responder: () => responses.shift()! });
   const streamOptions: (StreamOptions | undefined)[] = [];
@@ -46,7 +49,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   });
   const persisted: AgentMessage[] = [];
   const host = {
-    contextRepository: {
+    contextRepository: options.conversation?.repository ?? {
       loadContext: async () => ({ messages: [] }),
       appendMessages: async (_session: string, messages: AgentMessage[]) => { persisted.push(...messages); },
     },
@@ -64,7 +67,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
   const chunks: string[] = [];
   const tools = options.tools ?? [];
   const result = await collectAgentLoopTurnRun(runAgentLoopTextTurnRun({
-    host: host as never, sessionId: 's', rawContent: '请 @ Alice 提醒她',
+    host: host as never, sessionId: options.conversation?.sessionId ?? 's', rawContent: '请 @ Alice 提醒她',
     promptProfile: { kind: 'interactive' },
     turnContext: {
       input: { text: 'Please respond', locale: options.locale },
@@ -84,7 +87,7 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
     conversationPersistence: options.detached ? 'none' : 'session',
     onChunk: chunk => { chunks.push(chunk); },
   }), event => { events.push(event); });
-  await result.projectConversation?.();
+  await result.projectConversation?.(options.delivered);
   return { result, events, chunks, calls: llm.calls, streamOptions, persisted };
 }
 
@@ -132,11 +135,27 @@ describe('structured Agent final replies', () => {
   it.each([false, true])('keeps the existing empty-reply notice without retrying (thinking: %s)', async thinking => {
     const assistant = assistantTextReply('');
     if (thinking) assistant.content = [{ type: 'thinking', thinking: 'private reasoning is not a JSON reply' }];
-    const { result, chunks, calls } = await run([assistant]);
+    const { repository, sessionStore } = createMemoryContextRepository();
+    const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'empty-reply' });
+    const fallback = formatToolCallsForUser([]);
+    const message = { conversation: { endpoint: { adapter: 'icqq', id: 'bot' }, kind: 'group' as const, id: 'g' }, id: 'host-fallback' };
+    const messageTextDigest = deliveredTextDigest(fallback);
+    const { result, chunks, calls } = await run([assistant], {
+      conversation: { repository, sessionId },
+      delivered: { messageId: message.id, messageIds: [message.id], contextRefs: [deliveredMessageContextRef(message, messageTextDigest)] },
+    });
     expect(result.reply).not.toContain('private reasoning');
     expect(chunks.join('')).not.toContain('private reasoning');
     expect(result.reply).toBe(formatToolCallsForUser([]));
     expect(calls).toHaveLength(1);
+    const loaded = await repository.loadContext(sessionId);
+    const stored = loaded.messages.find(message => message.role === 'assistant');
+    expect(stored).not.toHaveProperty('contextRefs');
+    expect(stored).not.toHaveProperty('contextDigest');
+    if (!thinking) expect(stored).toMatchObject({ messageId: message.id, messageIds: [message.id] });
+    const background = conversationContextMessage([{ kind: 'conversation_event', sequence: 1, eventType: 'message.created', text: `Host said: ${fallback}`, message, messageTextDigest }])!;
+    const projected = projectPromptContext([...loaded.messages, background, createUserMessage('continue')]);
+    expect(JSON.stringify(projected)).toContain(`Host said: ${fallback}`);
   });
   describe('reactions', () => {
     const profile = { types: ['text' as const], reaction: { values: [{ value: '76', label: '赞' }, { value: '182', label: '笑哭' }] } };

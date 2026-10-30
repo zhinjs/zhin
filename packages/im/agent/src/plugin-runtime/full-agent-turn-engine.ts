@@ -1,5 +1,6 @@
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
-import { createUserMessage, MessageAliasTable, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
+import { createUserMessage, MessageAliasTable, type AgentMessage, type Usage } from '@zhin.js/ai';
+import { conversationContextMessage, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
 import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
@@ -191,7 +192,7 @@ async function* runInteractiveTurn(
     mode: context.turn.input.media?.some((item) => item.kind === 'image') ? 'vision' : undefined,
     activeSkillsContext,
     activeSkillBlocks: plan.controller.loadedSkillBlocks(),
-    toldLedger: host.toldLedger?.render(prep.sessionId),
+    toldLedgerBlocks: host.toldLedger?.renderBlocks(prep.sessionId),
     relevantMemory,
     systemBootstrap: options.bootstrapContext,
   });
@@ -220,24 +221,14 @@ async function* runInteractiveTurn(
   }
   imageInspectionBudget.remaining = Math.max(0, imageInspectionBudget.remaining
     - (media.perceptionItems ?? 0) - media.blocks.filter(block => block.type === 'image').length);
-  const contextText = pendingContext?.blocks.length
-    ? renderContextMessage({
-        role: 'user-context',
-        blocks: pendingContext.blocks.map((block) => ({
-          type: 'untrusted_conversation_event',
-          eventType: block.eventType,
-          text: block.text,
-          source: 'external_content',
-        })),
-      } satisfies ContextMessage)
-    : '';
+  const background = pendingContext ? conversationContextMessage(pendingContext.blocks) : undefined;
   const userMessages = applyInboundMediaInjection(
-    contextText ? [createUserMessage(contextText), ...prompt.userMessages] : prompt.userMessages,
+    background ? [background, ...prompt.userMessages] : prompt.userMessages,
     media,
   );
   subagentModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   const provenance = new TurnProvenance();
-  if (contextText) provenance.record({ kind: 'conversation_context' });
+  if (background) provenance.record({ kind: 'conversation_context' });
   // Perception descriptions are generated from user media (text in an image is an injection path).
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
     provenance.record({ kind: 'media_perception' });
@@ -339,15 +330,23 @@ async function* runInteractiveTurn(
         // The perception pre-pass is billed to the same subject as the turn itself.
         host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
         let deliveredMessageId: string | undefined;
+        let deliveredMessageIds: readonly (string | null)[] | undefined;
+        let deliveredContextRefs: readonly string[] | undefined;
         if (completion.terminal.type === 'turn_end' && reply) {
           const outbound = completion.terminal.output.length > 0
             ? completion.terminal.output
             : buildTextTurnOutbound(completion.result.reply, completion.result);
+          const plannedTexts = plannedReplyTexts(outbound);
           const delivery = await reply.send(outbound);
-          if (delivery.status === 'sent') deliveredMessageId = delivery.messageId;
+          if (delivery.status === 'sent') {
+            deliveredMessageId = delivery.messageId;
+            deliveredMessageIds = delivery.messages?.map(message => message?.id ?? null);
+            deliveredContextRefs = deliveredReplyContextRefs(prep.sessionId, context.turn.identity.turnId, plannedTexts, delivery);
+          }
           if (
             delivery.status === 'failed'
             || delivery.status === 'rejected'
+            || (delivery.status === 'unsupported' && delivery.messages?.some(message => message !== null))
             || (delivery.status === 'suppressed' && outbound.length > 0)
           ) {
             const code = 'code' in delivery ? delivery.code : delivery.status;
@@ -366,7 +365,8 @@ async function* runInteractiveTurn(
             { messageExtras: [prep.turnUser.userMessageExtra] },
           );
         } else {
-          await completion.result.projectConversation?.(deliveredMessageId ? { messageId: deliveredMessageId } : undefined);
+          await completion.result.projectConversation?.(deliveredMessageId || deliveredMessageIds?.length || deliveredContextRefs?.length
+            ? { messageId: deliveredMessageId, messageIds: deliveredMessageIds, contextRefs: deliveredContextRefs } : undefined);
         }
         await sessionSystem.touchAfterTurn(host, prep.sessionId);
         if (

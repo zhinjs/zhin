@@ -12,6 +12,8 @@
  * The ledger lives in process memory; after a restart the persisted history
  * (and its compaction summary) still carries the same facts.
  */
+import { createPromptContextBlock, type TextContentBlock } from '@zhin.js/ai';
+import { deliveredReplyContextRef } from '../session/context-provenance.js';
 
 export type ToldEntryKind = 'conclusion' | 'commitment' | 'progress';
 
@@ -122,6 +124,23 @@ export class SessionToldLedger {
       `${TOLD_LEDGER_HEADING} Do not repeat these unless asked; if something changed, say so explicitly instead of contradicting them.`,
       ...entries.map((entry) => `- (${entry.kind}) ${entry.text}`),
     ].join('\n');
+  }
+
+  /** Per-entry projection lets retained assistant history cover only the facts it still contains. */
+  renderBlocks(sessionId: string): TextContentBlock[] {
+    return this.entries(sessionId).map(entry => {
+      const block = createPromptContextBlock('already-told',
+        `${TOLD_LEDGER_HEADING} Do not repeat unless asked; say explicitly when something changed.\n- (${entry.kind}) ${entry.text}`);
+      return {
+        ...block,
+        perTurn: true,
+        contextRef: {
+          ...block.contextRef!,
+          ...(entry.turnId && entry.kind !== 'progress'
+            ? { representedBy: deliveredReplyContextRef(sessionId, entry.turnId) } : {}),
+        },
+      };
+    });
   }
 
   clear(sessionId?: string): void {

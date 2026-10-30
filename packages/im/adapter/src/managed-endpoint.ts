@@ -13,6 +13,7 @@ import type {
   EndpointImplementation,
   EndpointIncomingMessage,
   EndpointSendRequest,
+  EndpointSendResult,
   EndpointTransportState,
 } from './endpoint-contract.js';
 
@@ -162,7 +163,7 @@ class ManagedEndpoint<TClient> extends Endpoint<TClient> {
     }
   }
 
-  send(request: EndpointSendRequest): string | Promise<string> {
+  send(request: EndpointSendRequest): EndpointSendResult | Promise<EndpointSendResult> {
     if (!this.#implementation.send) {
       throw new EndpointDeliveryError('outbound_unsupported', `Endpoint ${this.#endpointId} does not support outbound messages`, 'not_sent');
     }

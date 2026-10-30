@@ -83,6 +83,22 @@ describe('ICQQ inline image projection', () => {
 });
 
 describe('unified IM image delivery to ICQQ', () => {
+  it.each(['  hello  ', ' \n '])('does not certify rewritten primitive text as exact canonical history: %j', async text => {
+    const fixture = await imageFixture('base64', async (input, next) => { input.replace(text); await next(); });
+    try {
+      const receipt = await fixture.im.send({ requester: fixture.root, conversation: fixture.conversation, content: 'planned' });
+      expect(fixture.endpoint.client.sendGroupMsg).toHaveBeenCalledExactlyOnceWith(100, text.trim() || '\u200b');
+      expect(receipt).toMatchObject({ status: 'sent', message: { id: 'sent-1' }, parts: [{ message: { id: 'sent-1' } }] });
+      expect(receipt.parts?.[0]?.sourceIndices).toBeUndefined();
+      expect(receipt.parts?.[0]?.outboundTextDigest).toBeUndefined();
+      expect(receipt.outboundTextDigest).toBeUndefined();
+      const pending = await fixture.im.readConversationContext(fixture.conversation, 'test-consumer', Number.MAX_SAFE_INTEGER);
+      expect(pending.blocks).toHaveLength(1);
+      expect(pending.blocks[0]?.text).toContain('content unavailable');
+      expect(pending.blocks[0]?.messageTextDigest).toBeUndefined();
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it.each(['base64', 'file'] as const)('routes native, JSX, HTML and tool images through middleware in %s mode', async mode => {
     const seen: unknown[] = [];
     const fixture = await imageFixture(mode, async (input, next) => { seen.push(input.payload); await next(); });

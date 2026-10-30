@@ -11,13 +11,17 @@ import {
 import { createMemoryContextRepository, type MemoryContextRepository } from '../../src/memory/context-repository.js';
 import {
   MessageAliasTable,
+  assignRowAliasMetadata,
   assignRowAliasSeqs,
   indexMessageAliases,
+  isMessageAlias,
+  payloadMessageId,
   resolveMessageAliasArguments,
 } from '../../src/memory/message-alias.js';
 import { projectParticipantHeaders, renderQuoteLine } from '../../src/memory/participant-header.js';
 import { createLlmMessageProjection } from '../../src/memory/event-rendering.js';
 import { serializeAgentMessage } from '../../src/memory/agent-db-models.js';
+import { agentMessagesToAiSdk } from '../../src/llm/bridge/ai-sdk-messages.js';
 
 const UTC = { timeZone: 'UTC' };
 const T0 = Date.UTC(2026, 9, 29, 9, 0, 0, 0);
@@ -66,6 +70,154 @@ describe('time granularity (ADR 0043 §5)', () => {
 });
 
 describe('message aliases (ADR 0043 §5)', () => {
+  it('advances past every retained part group before naming a new message after the history window slides', async () => {
+    const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 1 });
+    const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'cross-group-repeat-tail' });
+    const history = [
+      { ...bot('first group', T0, 'A'), messageIds: ['A', 'B'] },
+      { ...bot('second group', T0 + 1, 'C'), messageIds: ['C', 'D'] },
+      { ...bot('repeated physical messages', T0 + 2, 'B'), messageIds: ['B', 'D'] },
+    ];
+    await repository.appendMessages(sessionId, history);
+    const loaded = await repository.loadContext(sessionId);
+    expect(loaded.messages).toHaveLength(1);
+    expect(loaded.messages[0]).toMatchObject({ aliasSeq: 1, aliasParts: ['m1.2', 'm2.2'] });
+    const current = user('current message', T0 + 3, 'E');
+    const full = indexMessageAliases([...history, current]);
+    const tail = indexMessageAliases([...loaded.messages, current]);
+    expect(full.aliasOf('E')).toBe('m3');
+    expect(tail.aliasOf('E')).toBe(full.aliasOf('E'));
+    expect(tail.aliasOf('D')).toBe('m2.2');
+    const table = new MessageAliasTable();
+    table.index(history);
+    table.index([...loaded.messages, current]);
+    expect(table.aliasOf('C')).toBe('m2');
+    expect(table.aliasOf('E')).toBe('m3');
+    expect(table.idOf('m2')).toBe('C');
+    expect(table.idOf('m3')).toBe('E');
+  });
+
+  it('maps each delivered bubble to one alias without renumbering the next conversation row', () => {
+    const reply = { ...bot('first\nsecond\nthird', T0 + 1000, 'native-reply-first'),
+      messageIds: ['native-reply-first', 'native-reply-second', 'native-reply-third'] };
+    const history = [user('hi', T0, 'native-user'), reply,
+      user('about your second message', T0 + 2000, 'native-next', { id: 'native-reply-second', text: 'second' })];
+    const index = indexMessageAliases(history);
+    expect(index.aliasOf('native-reply-first')).toBe('m2');
+    expect(index.aliasOf('native-reply-second')).toBe('m2.2');
+    expect(index.aliasOf('native-reply-third')).toBe('m2.3');
+    expect(index.aliasOf('native-next')).toBe('m3');
+    expect(index.aliasOf('')).toBeUndefined();
+    const table = new MessageAliasTable();
+    table.index(history);
+    expect(table.idOf('m2')).toBe('native-reply-first');
+    expect(table.idOf('m2.2')).toBe('native-reply-second');
+    expect(table.idOf('m2.3')).toBe('native-reply-third');
+    expect(resolveMessageAliasArguments({ message_id: 'm2.2' }, table)).toEqual({ message_id: 'native-reply-second' });
+    expect(resolveMessageAliasArguments({ message_ids: ['m2', 'm2.3'] }, table))
+      .toEqual({ message_ids: ['native-reply-first', 'native-reply-third'] });
+    expect(isMessageAlias('m2.2')).toBe(true);
+    expect(isMessageAlias('m2.1')).toBe(false);
+    const rendered = projectParticipantHeaders(history, UTC);
+    expect(lines(rendered[1]!)[0]).toContain('id:m2;parts:m2,m2.2,m2.3;');
+    expect(lines(rendered[2]!)[0]).toContain('id:m3;user_id:10002;reply_to:m2.2;');
+    expect(JSON.stringify(rendered.map(textOf))).not.toContain('native-reply');
+  });
+
+  it.each([
+    { ids: ['first', null, 'third'], display: 'm2,unknown,m2.3', first: 'first' },
+    { ids: [null, 'second', 'third'], display: 'unknown,m2,m2.3', first: 'second' },
+  ])('preserves physical delivery slots in $display through persistence and tail projection', async ({ ids, display, first }) => {
+    const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 2 });
+    const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: display });
+    await repository.appendMessages(sessionId, [user('start', T0, 'inbound'),
+      { ...bot('three physical bubbles', T0 + 1, first), messageIds: ids }, user('next', T0 + 2, 'next')]);
+    const loaded = await repository.loadContext(sessionId);
+    const aliases = indexMessageAliases(loaded.messages);
+    expect(aliases.idOf('m2')).toBe(first);
+    expect(aliases.idOf('m2.3')).toBe('third');
+    expect(aliases.idOf('m2.2')).toBeUndefined();
+    expect(aliases.idOf('m3')).toBe('next');
+    expect(lines(projectParticipantHeaders(loaded.messages, UTC)[0]!)[0]).toContain(`parts:${display};`);
+    const table = new MessageAliasTable();
+    table.index(loaded.messages);
+    const unconfirmed = ids[0] === null ? 'm2.1' : 'm2.2';
+    expect(() => table.resolve(unconfirmed)).toThrowError(expect.objectContaining({ code: 'unconfirmed_message_alias', alias: unconfirmed }));
+    expect(table.resolve('m99.2')).toBe('m99.2');
+    expect(table.resolve('literal-platform-id')).toBe('literal-platform-id');
+    expect(table.resolve('m2.3')).toBe('third');
+  });
+
+  it('shows confirmed reply aliases when bot identity is unknown without inventing a participant', () => {
+    const reply = { ...bot('delivered reply', T0, 'platform-first'), assistantActor: undefined,
+      messageIds: ['platform-first', 'platform-second'] };
+    const unknown = { ...bot('legacy reply without a receipt', T0 + 1), assistantActor: undefined };
+    const rendered = projectParticipantHeaders([reply, unknown,
+      user('second message', T0 + 2000, 'platform-next', { id: 'platform-second', text: 'second' })], UTC);
+    expect(lines(rendered[0]!)[0]).toBe('[id:m1;parts:m1,m1.2;]');
+    expect(textOf(rendered[0]!)).not.toContain('user_id');
+    expect(textOf(rendered[1]!)).toBe('legacy reply without a receipt');
+    expect(lines(rendered[2]!)[0]).toContain('reply_to:m1.2;');
+    const unknownUser = { ...createUserMessage('unattributed inbound'), messageId: 'incoming-id' };
+    expect(projectParticipantHeaders([unknownUser], UTC)[0]).toBe(unknownUser);
+  });
+
+  it('retains ordered physical ids in one stored row and stable part aliases across tails, branches and compaction', async () => {
+    const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 3 });
+    const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'multipart-alias' });
+    await repository.appendMessages(sessionId, [user('start', T0, 'native-start')]);
+    const branchPoint = (await repository.loadMessageRows(sessionId))[0]!.id!;
+    const firstReply = { ...bot('first / second', T0 + 1000, 'native-first'), messageIds: ['native-first', 'native-second'] };
+    await repository.appendMessages(sessionId, [firstReply, user('next', T0 + 2000, 'native-next', { id: 'native-second', text: 'second' })]);
+    const firstBranch = (await repository.loadMessageRows(sessionId)).at(-1)!.id!;
+    const rows = await repository.loadMessageRows(sessionId);
+    expect(rows).toHaveLength(3);
+    expect(JSON.parse(String(rows[1]!.payload)).messageIds).toEqual(['native-first', 'native-second']);
+    const initial = await repository.loadContext(sessionId);
+    expect(lines(projectParticipantHeaders(initial.messages, UTC)[1]!)[0]).toContain('parts:m2,m2.2;');
+    expect(await repository.setActiveLeaf(sessionId, branchPoint)).toBe(true);
+    await repository.appendMessages(sessionId, [{ ...bot('branch reply', T0 + 3000, 'other-first'), messageIds: ['other-first', 'other-second'] }]);
+    const other = indexMessageAliases((await repository.loadContext(sessionId)).messages);
+    expect(other.idOf('m2.2')).toBe('other-second');
+    expect(other.aliasOf('native-second')).toBeUndefined();
+    expect(await repository.setActiveLeaf(sessionId, firstBranch)).toBe(true);
+    const restored = await repository.loadContext(sessionId);
+    expect(indexMessageAliases(restored.messages).idOf('m2.2')).toBe('native-second');
+    expect(await repository.saveCompactionSummary(sessionId, 'Earlier greeting', restored.messages.slice(0, 1))).toBe(true);
+    const compacted = await repository.loadContext(sessionId);
+    const aliases = indexMessageAliases(compacted.messages);
+    expect(aliases.idOf('m2')).toBe('native-first');
+    expect(aliases.idOf('m2.2')).toBe('native-second');
+    expect(aliases.idOf('m3')).toBe('native-next');
+    expect(textOf(projectParticipantHeaders(compacted.messages, UTC).at(-1)!)).toContain('reply_to:m2.2;');
+    expect(await repository.loadMessageRows(sessionId)).toHaveLength(4);
+  });
+
+  it('keeps the original part alias when a later row repeats only part of the same physical reply', async () => {
+    const { repository, sessionStore } = createMemoryContextRepository({ tailMessageLimit: 2 });
+    const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'repeated-parts' });
+    const complete = { ...bot('first / second / third', T0 + 1000, 'B1'), messageIds: ['B1', 'B2', 'B3'] };
+    const repeated = { ...bot('same first / third', T0 + 2000, 'B1'), messageIds: ['B1', 'B3'] };
+    const history = [user('start', T0, 'A'), complete, repeated, user('next', T0 + 3000, 'C')];
+    expect(indexMessageAliases(history).aliasOf('B3')).toBe('m2.3');
+    await repository.appendMessages(sessionId, history);
+    const tail = await repository.loadContext(sessionId);
+    const aliases = indexMessageAliases(tail.messages);
+    expect(aliases.aliasOf('B3')).toBe('m2.3');
+    expect(aliases.idOf('m2.2')).toBeUndefined();
+    expect(aliases.aliasOf('C')).toBe('m3');
+    expect(lines(projectParticipantHeaders(tail.messages, UTC)[0]!)[0]).toContain('parts:m2,m2.3;');
+    const wire = JSON.stringify(agentMessagesToAiSdk(projectParticipantHeaders(tail.messages, UTC)));
+    expect(wire).not.toContain('aliasParts');
+    expect(wire).not.toContain('aliasSeq');
+    expect(wire).not.toContain('messageIds');
+    for (const message of tail.messages) {
+      const stored = JSON.parse(String(serializeAgentMessage(message).payload));
+      expect(stored).not.toHaveProperty('aliasSeq');
+      expect(stored).not.toHaveProperty('aliasParts');
+    }
+  });
+
   it('numbers messages that carry a platform id in order and reuses the number for a repeated id', () => {
     const history = [user('a', T0, 'native-A'), user('no id', T0 + 1), bot('b', T0 + 2, 'native-B'), user('again', T0 + 3, 'native-A')];
     const index = indexMessageAliases(history);
@@ -122,6 +274,24 @@ describe('message aliases (ADR 0043 §5)', () => {
     ];
     const seqs = assignRowAliasSeqs(rows);
     expect(rows.map(row => seqs.get(row))).toEqual([1, undefined, 2, undefined, 3]);
+  });
+
+  it('does not mistake nested tool arguments for top-level delivered message identities', () => {
+    const toolCall = { ...bot('', T0), content: [{ type: 'toolCall', id: 'call', name: 'recall', arguments: {
+      messageId: 'not-a-delivery', messageIds: ['also-not-a-delivery'],
+    } }] };
+    expect(payloadMessageId(JSON.stringify(toolCall))).toBeUndefined();
+    const rows = [{ payload: JSON.stringify(toolCall) }, { payload: JSON.stringify(user('real', T0 + 1, 'actual')) }];
+    expect(rows.map(row => assignRowAliasSeqs(rows).get(row))).toEqual([undefined, 1]);
+  });
+
+  it('reads escaped top-level identities and nullable slots without interpreting body or nested keys', () => {
+    const id = 'native]"\\escaped';
+    const source = { ...bot('body "messageId":"wrong" and [braces] {nested}', T0, id),
+      messageIds: [id, null, 'last'], diagnostics: { messageId: 'nested-wrong' } };
+    const row = { payload: JSON.stringify(source, null, 2) };
+    expect(payloadMessageId(row.payload)).toBe(id);
+    expect(assignRowAliasMetadata([row]).get(row)).toEqual({ aliasSeq: 1, aliasParts: ['m1', null, 'm1.3'] });
   });
 
   it('resolves aliases in tool arguments; platform ids and unknown values pass through', () => {

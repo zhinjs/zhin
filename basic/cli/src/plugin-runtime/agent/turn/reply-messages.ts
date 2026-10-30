@@ -20,15 +20,28 @@ export async function sendOutputMessages(
 ): Promise<DeliveryOutcome> {
   const pause = port.pause ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
   let first: DeliveryOutcome | undefined;
+  const messages: NonNullable<Extract<DeliveryOutcome, { status: 'sent' }>['messages']>[number][] = [];
+  const messageContexts: NonNullable<Extract<DeliveryOutcome, { status: 'sent' }>['messageContexts']>[number][] = [];
   for (const message of splitOutputMessages(output)) {
     if (first?.status === 'sent') await pause(followUpPauseMs(port.render(message)));
-    const outcome = await port.send(message);
+    let outcome: DeliveryOutcome;
+    try {
+      outcome = await port.send(message);
+    } catch (error) {
+      if (first?.status !== 'sent') throw error;
+      // The port may fail before reaching transport; earlier bubbles are still delivered.
+      return { status: 'failed', code: 'partial_delivery', retryable: false, ...(messages.length ? { messages } : {}) };
+    }
+    if ('messages' in outcome) messages.push(...outcome.messages ?? []);
     if (outcome.status === 'suppressed') continue;
     if (outcome.status !== 'sent' && first?.status === 'sent') {
-      return { status: 'failed', code: 'partial_delivery', retryable: false };
+      return { status: 'failed', code: 'partial_delivery', retryable: false, ...(messages.length ? { messages } : {}) };
     }
     if (outcome.status !== 'sent') return outcome;
     first ??= outcome;
+    messageContexts.push(...outcome.messageContexts ?? []);
   }
-  return first ?? { status: 'suppressed' };
+  return first?.status === 'sent' && (messageContexts.length || messages.length)
+    ? { ...first, ...(messages.length ? { messages } : {}), ...(messageContexts.length ? { messageContexts } : {}) }
+    : first ?? { status: 'suppressed' };
 }

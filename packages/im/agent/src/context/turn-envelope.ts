@@ -38,6 +38,7 @@ export interface TurnContextEnvelopeInput {
   agentsContext?: string;
   /** Rendered "already told the user" ledger (#730). */
   toldLedger?: string;
+  toldLedgerBlocks?: readonly TextContentBlock[];
   /** BM25-recalled semantic memory for this message (#734). */
   relevantMemory?: string;
 }
@@ -163,7 +164,8 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
   if (input.deferredStats?.trim()) blocks.push(createPromptContextBlock('deferred-catalog-summary', `Deferred catalog: ${input.deferredStats.trim()}`));
   if (input.quoteSystemHint?.trim()) blocks.push(createPromptContextBlock('quote-guidance', input.quoteSystemHint.trim()));
   if (input.toneHint?.trim()) current.push(`[Tone hint] ${input.toneHint.trim()}`);
-  if (input.toldLedger?.trim()) current.push(input.toldLedger.trim());
+  if (input.toldLedgerBlocks) blocks.push(...input.toldLedgerBlocks);
+  else if (input.toldLedger?.trim()) current.push(input.toldLedger.trim());
   if (input.relevantMemory?.trim()) current.push(input.relevantMemory.trim());
   if (current.length) blocks.push({ type: 'text', text: [TURN_CONTEXT_BEGIN, ...current, TURN_CONTEXT_END].join('\n') });
   const people = [input.profileSummary?.trim(), input.sessionSummary?.trim(), input.sceneEvents?.trim()].filter(Boolean);

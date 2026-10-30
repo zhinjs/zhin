@@ -1,5 +1,6 @@
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
-import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
+import type { ConversationRef, MessageRef, EndpointSendResult } from '@zhin.js/im-contract';
+export type { EndpointSendPart, EndpointSendResult } from '@zhin.js/im-contract';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointContentPort } from './endpoint-content.js';
@@ -116,5 +117,5 @@ export interface EndpointImplementation<TClient = unknown> {
   connect?(context: EndpointConnectionContext): void | EndpointCleanup | Promise<void | EndpointCleanup>;
   /** Acquire listeners that must belong only to the active generation. */
   activate?(context: EndpointActivationContext): void | EndpointCleanup;
-  send?(request: EndpointSendRequest): string | Promise<string>;
+  send?(request: EndpointSendRequest): EndpointSendResult | Promise<EndpointSendResult>;
 }

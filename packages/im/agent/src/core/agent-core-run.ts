@@ -288,7 +288,7 @@ export interface AgentLoopTurnResult {
   toolCalls: ToolCallRecord[];
   thinking?: string;
   /** Conversation projection applied only after the durable terminal commits. */
-  projectConversation?: (delivered?: { readonly messageId?: string }) => Promise<void>;
+  projectConversation?: (delivered?: { readonly messageId?: string; readonly messageIds?: readonly (string | null)[]; readonly contextRefs?: readonly string[] }) => Promise<void>;
 }
 
 /** @deprecated No production caller: image turns run through `runText` with media
@@ -1173,7 +1173,7 @@ export async function* runAgentLoopTextTurnRun(
       model: modelId,
       toolCalls,
       thinking,
-      projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches, delivered?.messageId),
+      projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches, delivered),
     };
   }
 
@@ -1297,7 +1297,9 @@ export async function* runAgentLoopTextTurnRun(
     model: modelId,
     toolCalls,
     thinking,
-    projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches, delivered?.messageId),
+    // A host fallback is absent from the model transcript, so it cannot cover its canonical event.
+    projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches,
+      hostReply && delivered ? { ...delivered, contextRefs: undefined } : delivered),
   };
 }
 
@@ -1308,7 +1310,7 @@ function resolveReplyAliases(output: AgentOutputElement[], aliases: import('@zhi
       ...element,
       segments: element.segments.map((segment) => {
         const id = (segment.data as { message_id?: unknown } | undefined)?.message_id;
-        return segment.type === 'reply' && typeof id === 'string' && aliases.idOf(id.trim())
+        return segment.type === 'reply' && typeof id === 'string'
           ? { ...segment, data: { ...segment.data, message_id: aliases.resolve(id) } }
           : segment;
       }),
@@ -1323,11 +1325,12 @@ async function appendConversationBatches(
     messages: AgentMessage[];
     messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
   }[],
-  deliveredMessageId?: string,
+  delivered?: { readonly messageId?: string; readonly messageIds?: readonly (string | null)[]; readonly contextRefs?: readonly string[] },
 ): Promise<void> {
   const lastIndex = batches.length - 1;
   for (const [index, batch] of batches.entries()) {
-    const messages = index === lastIndex ? stampDeliveredMessageId(batch.messages, deliveredMessageId) : batch.messages;
+    const messages = stampDeliveredMessageId(batch.messages, index === lastIndex ? delivered?.messageId : undefined,
+      index === lastIndex ? delivered?.contextRefs : undefined, index === lastIndex ? delivered?.messageIds : undefined);
     await repo.appendMessages(sessionId, messages, { messageExtras: batch.messageExtras });
   }
 }

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { AgentMessage } from '../llm/types/agent-message.js';
+import { renderContextMessage, type AgentMessage, type AssistantMessage, type UserMessage } from '../llm/types/agent-message.js';
 import type { PromptContextState, TextContentBlock } from '../llm/types/content-block.js';
 import { projectParticipantHeaders, type HeaderFormatOptions } from './participant-header.js';
 import { trimFinishedToolResults } from './tool-result-trim.js';
@@ -53,7 +53,41 @@ function validState(block: TextContentBlock): PromptContextState | undefined {
  * retains both changes. Ordinary rules and memory always keep their full new versions.
  */
 export function projectPromptContext(messages: AgentMessage[], options?: HeaderFormatOptions): AgentMessage[] {
-  return projectParticipantHeaders(trimFinishedToolResults(projectContextState(stripHistoricalTurnContext(messages))), options);
+  return projectParticipantHeaders(trimFinishedToolResults(projectContextState(projectRepresentedContext(stripHistoricalTurnContext(messages)))), options);
+}
+
+/** Only the currently visible delivered replies can cover an external event or a ledger entry. */
+function projectRepresentedContext(messages: AgentMessage[]): AgentMessage[] {
+  const represented = new Set(messages.flatMap(message => {
+    if (message.role !== 'assistant') return [];
+    const assistant = message as AssistantMessage;
+    return assistant.contextDigest === digest(JSON.stringify(assistant.content.filter(block => block.type === 'text').map(block => block.text)))
+      ? assistant.contextRefs ?? [] : [];
+  }));
+  if (!represented.size) return messages;
+  let changed = false;
+  const out = messages.flatMap(message => {
+    if (message.role !== 'user') return [message];
+    const user = message as UserMessage;
+    const blocks = user.contextBlocks;
+    if (blocks && user.content.length === 1 && user.content[0]?.type === 'text'
+      && user.content[0].text === renderContextMessage({ role: 'user-context', blocks })) {
+      const retained = blocks.filter(block => block.eventType !== 'message.created'
+        || !block.reference || !represented.has(block.reference));
+      if (retained.length !== blocks.length) {
+        changed = true;
+        // This is a standalone background message, not a user/tool boundary.
+        return retained.length ? [{ ...user, contextBlocks: retained, content: [{ type: 'text' as const,
+          text: renderContextMessage({ role: 'user-context', blocks: retained }) }] }] : [];
+      }
+    }
+    const content = user.content.filter(block => block.type !== 'text' || !block.contextRef?.representedBy
+      || block.contextRef.digest !== digest(block.text) || !represented.has(block.contextRef.representedBy));
+    if (content.length === user.content.length) return [message];
+    changed = true;
+    return [{ ...user, content }];
+  });
+  return changed ? out : messages;
 }
 
 /** contextRef keys (or key prefixes ending in `:`) that only ever described one turn (ADR 0043 §1). */

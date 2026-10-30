@@ -136,6 +136,7 @@ export class ContextSystem {
       gitStatus: !isScheduleTurn && host.config.gitStatus ? await getGitStatusLine(process.cwd()) : undefined,
       agentsContext: agentsContext ?? undefined,
       toldLedger: input.toldLedger,
+      toldLedgerBlocks: input.toldLedgerBlocks,
       relevantMemory: input.relevantMemory,
     });
 
@@ -182,6 +183,7 @@ export interface TextTurnContextInput {
   activeSkillBlocks?: readonly import('@zhin.js/ai').TextContentBlock[];
   /** Rendered "already told the user" ledger for this session (#730). */
   toldLedger?: string;
+  toldLedgerBlocks?: readonly import('@zhin.js/ai').TextContentBlock[];
   /** BM25-recalled semantic memory for this message (#734). */
   relevantMemory?: string;
 }

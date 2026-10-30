@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   createCapabilitySlot,
   createSnapshotView,
@@ -20,7 +21,7 @@ import {
   type EndpointSendRequest,
 } from '@zhin.js/adapter';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '@zhin.js/middleware';
-import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type EndpointSendResult } from '@zhin.js/im-contract';
 import { getLogger } from '@zhin.js/logger';
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { segment } from '../../src/utils.js';
@@ -29,6 +30,8 @@ import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.
 import { raw, type OutboundEnvelope, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
 import { outboundPresentationToken, type OutboundPresentation } from '../../src/plugin-runtime/im/outbound-presentation.js';
 import { JsxButtonRegistry } from '../../src/plugin-runtime/im/jsx-button-registry.js';
+import { ConversationRuntime } from '../../src/plugin-runtime/im/conversation-runtime.js';
+import { OutboundLedger, ledgerScopeOf } from '../../src/plugin-runtime/im/outbound-ledger.js';
 
 const activeAdapters: AdapterIndex[] = [];
 afterEach(async () => {
@@ -40,7 +43,7 @@ interface FixtureOptions {
   readonly renderer?: HtmlRendererHost;
   readonly replace?: unknown;
   readonly mutate?: (payload: unknown) => void;
-  readonly onSend?: (request: EndpointSendRequest) => string | Promise<string>;
+  readonly onSend?: (request: EndpointSendRequest) => EndpointSendResult | Promise<EndpointSendResult>;
   readonly presentation?: OutboundPresentation;
   readonly childPresentation?: OutboundPresentation;
   readonly target?: Pick<ConversationRef, 'kind' | 'id' | 'parent' | 'threadId'>;
@@ -117,12 +120,13 @@ async function fixture(options: FixtureOptions = {}) {
       [middlewareFeatureId, new MiddlewareIndex([middleware], view)],
     ]),
   });
-  const record = vi.fn(async () => undefined);
+  const record = vi.fn<ConstructorParameters<typeof OutboundDeliveryRuntime>[0]['record']>(async () => undefined);
   const publish = vi.fn();
+  const ledger = vi.fn();
   const buttons = new JsxButtonRegistry();
   const activate = vi.fn<(payloads: ReadonlySet<string>) => void>();
   const rememberFallback = vi.fn<(conversation: ConversationRef, generation: number, map: Record<string, string>) => void>();
-  const runtime = new OutboundDeliveryRuntime({ record, publish, rememberFallback,
+  const runtime = new OutboundDeliveryRuntime({ record, publish, ledger, rememberFallback,
     prepareButtons(request, current) {
       const batch = buttons.prepare(request, current);
       return { bind: batch.bind, activate(payloads) { activate(payloads); return batch.activate(payloads); } };
@@ -133,6 +137,7 @@ async function fixture(options: FixtureOptions = {}) {
     sent,
     record,
     publish,
+    ledger,
     activate,
     rememberFallback,
     preview: (content: SendContent, signal?: AbortSignal) => new OutboundRenderer().preview(content, root, snapshot,
@@ -156,6 +161,181 @@ function rasterRenderer() {
 }
 
 describe('JSX outbound delivery through a real Endpoint', () => {
+  it.each(['plain', 'replace'] as const)('keeps an ICQQ-style single-slot %s string reply as verified text history', async mode => {
+    const facts = new ConversationRuntime();
+    const expected = mode === 'replace' ? 'replacement command reply' : 'normal command reply';
+    const f = await fixture({ ...(mode === 'replace' ? { replace: expected } : {}),
+      onSend: () => ({ parts: [{ messageId: 'single-string-message', sourceIndices: [0] }] }),
+    });
+    f.record.mockImplementation((request, receipt, canonical) => facts.recordOutbound(request, receipt, canonical));
+    const receipt = await f.send('normal command reply');
+    expect(f.sent[0]?.payload).toBe(expected);
+    expect(receipt.parts?.[0]?.sourceIndices).toEqual([0]);
+    expect(receipt.parts?.[0]?.outboundTextDigest).toBe(createHash('sha256').update(expected).digest('hex'));
+    expect(receipt.outboundTextDigest).toBe(receipt.parts?.[0]?.outboundTextDigest);
+    const stored = await facts.reader.getMessage(receipt.message!);
+    expect(stored?.segments).toEqual([segment.text(expected)]);
+    expect(stored?.contentStatus).toBeUndefined();
+    expect(await facts.resolveLocal({ kind: 'message', message: receipt.message! })).toMatchObject({ status: 'resolved', value: { segments: [segment.text(expected)] } });
+  });
+
+  it('preserves an explicitly rejected later send while recording its completed prefix without retry', async () => {
+    const f = await fixture({ onSend: () => { throw new EndpointDeliveryError('platform_rejected', 'later bubble rejected', 'rejected', {
+      parts: [{ messageId: 'sent-prefix', sourceIndices: [0] }],
+    }); } });
+    const receipt = await f.send([segment.text('delivered prefix'), segment.text('rejected later part')]);
+    expect(receipt).toMatchObject({ status: 'rejected', message: { id: 'sent-prefix' }, failure: { code: 'platform_rejected', retryable: false } });
+    expect(receipt.failure?.deliveryUnknown).toBeUndefined();
+    expect(f.record).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ status: 'sent', message: { conversation: receipt.message!.conversation, id: 'sent-prefix' } }), [segment.text('delivered prefix')]);
+    expect(f.sent).toHaveLength(1);
+  });
+
+  it('keeps all-unknown completed slots unconfirmed without inventing a canonical message', async () => {
+    const f = await fixture({ onSend: () => ({ parts: [{ sourceIndices: [0] }, {}] }) });
+    const receipt = await f.send([segment.text('unconfirmed native identity')]);
+    expect(receipt).toMatchObject({ status: 'failed', failure: { code: 'delivery_unconfirmed', retryable: false, deliveryUnknown: true } });
+    expect(receipt.message).toBeUndefined();
+    expect(receipt.parts).toHaveLength(2);
+    expect(receipt.parts?.every(part => part.message === undefined)).toBe(true);
+    expect(f.record).not.toHaveBeenCalled();
+    expect(f.publish).not.toHaveBeenCalled();
+    expect(f.sent).toHaveLength(1);
+  });
+
+  it.each(['sent', 'partial'] as const)('preserves ordered multi-bubble %s receipts and records only each completed part body', async status => {
+    const parts = [
+      { messageId: 'native-a', sourceIndices: [0] },
+      { sourceIndices: [1] },
+      { messageId: 'native-c', sourceIndices: [2] },
+    ];
+    const facts = new ConversationRuntime();
+    const ledger = new OutboundLedger();
+    const f = await fixture({ onSend: () => {
+      if (status === 'partial') throw new EndpointDeliveryError('partial_delivery', 'fourth bubble failed', 'unknown', { parts });
+      return { parts };
+    } });
+    f.record.mockImplementation((request, receipt, canonical) => facts.recordOutbound(request, receipt, canonical));
+    f.ledger.mockImplementation((conversation, receipt, content) => ledger.record(conversation, receipt, content));
+    const receipt = await f.send([segment.text('first bubble'), segment.text('unknown id bubble'), segment.text('third bubble'),
+      ...(status === 'partial' ? [segment.text('not delivered')] : [])]);
+    expect(receipt.status).toBe(status === 'sent' ? 'sent' : 'failed');
+    expect(receipt.message?.id).toBe('native-a');
+    expect(receipt.parts?.map(part => part.message?.id)).toEqual(['native-a', undefined, 'native-c']);
+    if (status === 'partial') expect(receipt.failure).toMatchObject({ code: 'partial_delivery', retryable: false, deliveryUnknown: true });
+    expect(receipt.outboundTextDigest).toBeUndefined();
+    expect(f.sent).toHaveLength(1);
+    const conversation = receipt.message!.conversation;
+    expect(ledger.matchById(ledgerScopeOf(conversation), 'native-a')).toEqual({ endpointId: conversation.endpoint.id });
+    expect(ledger.matchById(ledgerScopeOf(conversation), 'native-c')).toEqual({ endpointId: conversation.endpoint.id });
+    expect(ledger.matchByDigest(ledgerScopeOf(conversation), 'unknown id bubble')).toEqual({ endpointId: conversation.endpoint.id });
+    expect(ledger.matchByDigest(ledgerScopeOf(conversation), 'not delivered')).toBeUndefined();
+    expect((await facts.reader.getMessage({ conversation, id: 'native-a' }))?.segments).toEqual([segment.text('first bubble')]);
+    expect((await facts.reader.getMessage({ conversation, id: 'native-c' }))?.segments).toEqual([segment.text('third bubble')]);
+    const pending = await facts.readContext(conversation, 'consumer', 2);
+    expect(pending.blocks).toHaveLength(2);
+    expect(JSON.stringify(pending.blocks)).not.toContain('unknown id bubble');
+    expect(JSON.stringify(pending.blocks)).not.toContain('not delivered');
+    expect(f.ledger.mock.calls.map(call => call[1].message?.id)).toEqual(['native-a', undefined, 'native-c']);
+  });
+
+  it('does not persist rasterized base64 as the body of a mapped rich bubble', async () => {
+    const facts = new ConversationRuntime();
+    const f = await fixture({ renderer: rasterRenderer(), segments: { html: 'image', outboundMedia: ['base64'] },
+      onSend: () => ({ parts: [{ messageId: 'rendered-image', sourceIndices: [0] }] }),
+    });
+    f.record.mockImplementation((request, receipt, canonical) => facts.recordOutbound(request, receipt, canonical));
+    const receipt = await f.send(jsx(Html, { children: 'original HTML body' }));
+    expect(receipt.status).toBe('sent');
+    const stored = await facts.reader.getMessage(receipt.message!);
+    expect(stored).toMatchObject({ contentStatus: 'unavailable', segments: [] });
+    expect(JSON.stringify(stored)).not.toContain(Buffer.from('synthetic-png').toString('base64'));
+    expect(receipt.parts?.[0]?.outboundTextDigest).toBeUndefined();
+  });
+
+  it('retains real IDs with invalid/missing body mappings without copying the whole batch or rich bytes', async () => {
+    const facts = new ConversationRuntime();
+    const f = await fixture({ onSend: () => ({ parts: [
+      { messageId: 'invalid-index', sourceIndices: [9] }, { messageId: 'unmapped' },
+      { messageId: 'empty-map', sourceIndices: [] }, { messageId: 'rich', sourceIndices: [1] },
+    ] }) });
+    f.record.mockImplementation((request, receipt, canonical) => facts.recordOutbound(request, receipt, canonical));
+    const receipt = await f.send([segment.text('whole-batch text must not be copied'), { type: 'dice', data: {} }]);
+    expect(receipt.status).toBe('sent');
+    expect(receipt.parts?.[0]?.sourceIndices).toBeUndefined();
+    for (const part of receipt.parts!.slice(0, 3)) {
+      const stored = await facts.reader.getMessage(part.message!);
+      expect(stored).toMatchObject({ contentStatus: 'unavailable', segments: [] });
+      expect(stored?.outboundTextDigest).toBeUndefined();
+      expect(await facts.resolveLocal({ kind: 'message', message: part.message! })).toBeUndefined();
+    }
+    expect(await facts.reader.getMessage(receipt.parts![3]!.message!)).toMatchObject({ segments: [{ type: 'dice', data: {} }] });
+    expect(JSON.stringify((await facts.readContext(receipt.message!.conversation, 'consumer', 4)).blocks)).not.toContain('whole-batch text');
+    expect(f.ledger.mock.calls.slice(0, 3).every(call => call[2] === undefined)).toBe(true);
+  });
+
+  it('retains each mapped R2 image/share/mention body without giving rich messages a plain-text coverage digest', async () => {
+    const payload = [segment.text('hello '), { type: 'mention', data: { target: 'member' } },
+      segment.image({ kind: 'url', value: 'https://s1.l2cl.link/asset.png' }),
+      { type: 'share', data: { url: 'https://example.test/article', title: 'Article' } }];
+    const facts = new ConversationRuntime();
+    const f = await fixture({ segments: { outboundMedia: ['url'] }, onSend: () => ({ parts: [
+      { messageId: 'mention-bubble', sourceIndices: [0, 1] }, { messageId: 'r2-image', sourceIndices: [2] }, { messageId: 'shared-link', sourceIndices: [3] },
+    ] }) });
+    f.record.mockImplementation((request, receipt, canonical) => facts.recordOutbound(request, receipt, canonical));
+    const receipt = await f.send(payload);
+    expect(receipt.status).toBe('sent');
+    const expected = [payload.slice(0, 2), [payload[2]], [payload[3]]];
+    for (const [index, part] of receipt.parts!.entries()) {
+      const stored = await facts.reader.getMessage(part.message!);
+      expect(stored?.segments).toEqual(expected[index]);
+      expect(stored?.contentStatus).toBeUndefined();
+      expect(stored?.outboundTextDigest).toBeUndefined();
+      expect(part.outboundTextDigest).toBeUndefined();
+      expect(await facts.resolveLocal({ kind: 'message', message: part.message! })).toMatchObject({ status: 'resolved', value: { segments: expected[index] } });
+    }
+  });
+
+  it.each(['replace', 'mutate'] as const)('records final canonical text after middleware %s and binds the receipt to it', async mode => {
+    const facts = new ConversationRuntime();
+    const f = await fixture(mode === 'replace' ? { replace: [segment.text('final text')] } : {
+      mutate(payload) { (payload as Array<{ data: { text: string } }>)[0]!.data.text = 'final text'; },
+    });
+    f.record.mockImplementation((request, receipt, canonical) => facts.recordOutbound(request, receipt, canonical));
+    const receipt = await f.send([segment.text('planned text')]);
+    expect(receipt).toMatchObject({ status: 'sent', outboundTextDigest: createHash('sha256').update('final text').digest('hex') });
+    const message = await facts.reader.getMessage(receipt.message!);
+    expect(message?.segments).toEqual([segment.text('final text')]);
+    const pending = await facts.readContext(receipt.message!.conversation, 'consumer', 1);
+    expect(pending.blocks[0]).toMatchObject({ message: receipt.message, messageTextDigest: receipt.outboundTextDigest });
+    expect(pending.blocks[0]!.text).toContain('final text');
+    expect(pending.blocks[0]!.text).not.toContain('planned text');
+  });
+
+  it('does not attest rich/native payload text and preserves multiple final text segments in order', async () => {
+    const rich = await fixture({ replace: [segment.text('caption'), { type: 'dice', data: {} }] });
+    const richReceipt = await rich.send('planned');
+    expect(richReceipt.status).toBe('sent');
+    expect(richReceipt.outboundTextDigest).toBeUndefined();
+    const native = await fixture({ replace: { native: 'opaque' } });
+    const nativeReceipt = await native.send('planned');
+    expect(nativeReceipt.status).toBe('sent');
+    expect(nativeReceipt.outboundTextDigest).toBeUndefined();
+    expect(native.record).toHaveBeenCalledWith(expect.anything(), expect.anything(), undefined);
+    const stringReplacement = await fixture({ replace: 'changed primitive string' });
+    expect((await stringReplacement.send('planned')).outboundTextDigest).toBe(createHash('sha256').update('changed primitive string').digest('hex'));
+    expect(stringReplacement.record).toHaveBeenCalledWith(expect.anything(), expect.anything(), [segment.text('changed primitive string')]);
+    const opaquePart = await fixture({ replace: { native: 'opaque' }, onSend: () => ({ parts: [{ messageId: 'opaque-part', sourceIndices: [0] }] }) });
+    const opaqueReceipt = await opaquePart.send('planned');
+    expect(opaqueReceipt.parts?.[0]?.sourceIndices).toEqual([0]);
+    expect(opaqueReceipt.parts?.[0]?.outboundTextDigest).toBeUndefined();
+    expect(opaquePart.record).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'unavailable');
+    const text = await fixture();
+    const input = [segment.text('first\n'), segment.text('second')];
+    const receipt = await text.send(input);
+    expect(receipt.outboundTextDigest).toBe(createHash('sha256').update('first\nsecond').digest('hex'));
+    expect(text.record).toHaveBeenCalledWith(expect.anything(), expect.anything(), input);
+  });
+
   it('applies Root text preferences before rasterizing and reuses the same decision after JSX replacement', async () => {
     const renderer = rasterRenderer();
     const preferences = { html: 'text' as const, markdown: 'text' as const, interactive: 'text' as const };

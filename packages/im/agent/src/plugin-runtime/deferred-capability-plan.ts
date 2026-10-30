@@ -188,7 +188,11 @@ export function createDeferredCapabilityPlan(
     alwaysLoaded.add(name);
   }
   const publicTools = publicCapabilities.map(capabilityAsAgentTool);
-  const publicCatalog = buildToolCatalog({ tools: publicTools, alwaysLoaded });
+  const publicCatalog = buildToolCatalog({
+    tools: publicTools,
+    ...capabilityCatalogMetadata(publicCapabilities),
+    alwaysLoaded,
+  });
   let snapshot = projectSessionSnapshot(options.sessionSnapshot, projected);
 
   const persist = async (next: DeferredToolSessionSnapshot): Promise<void> => {
@@ -211,7 +215,7 @@ export function createDeferredCapabilityPlan(
   });
   const capabilities = Object.freeze([...executableCapabilities, ...metaCapabilities]);
   const allTools = capabilities.map(capabilityAsAgentTool);
-  const catalog = buildToolCatalog({ tools: allTools, alwaysLoaded });
+  const catalog = buildToolCatalog({ tools: allTools, ...capabilityCatalogMetadata(capabilities), alwaysLoaded });
   const publicToolNames = new Set(publicCatalog.map(item => item.name));
   const controller: DeferredCapabilityController = Object.freeze({
     loadedToolNames: () => getLoadedToolNamesInLoadOrder(snapshot),
@@ -363,6 +367,16 @@ export function capabilityAsAgentTool(tool: ToolCapability): AgentTool {
       throw new Error(`AgentCore must execute capability ${tool.name} through ToolExecutionAuthority`);
     },
   });
+}
+
+function capabilityCatalogMetadata(tools: readonly ToolCapability[]) {
+  const ownerByTool = new Map<string, string>();
+  const mcpServerByTool = new Map<string, string>();
+  for (const tool of tools) {
+    ownerByTool.set(tool.name, tool.owner);
+    if (tool.mcpServer) mcpServerByTool.set(tool.name, tool.mcpServer);
+  }
+  return { ownerByTool, mcpServerByTool };
 }
 
 interface MetaCapabilityOptions {
@@ -551,7 +565,11 @@ function disclosedToolCatalog(options: MetaCapabilityOptions): ToolCatalogItem[]
   const loaded = new Set(getLoadedToolNamesInLoadOrder(options.getSnapshot()));
   const privateTools = options.tools.filter(tool => tool.hidden && loaded.has(tool.name));
   return [...options.catalog,
-    ...buildToolCatalog({ tools: privateTools.map(capabilityAsAgentTool), alwaysLoaded: new Set<string>() })];
+    ...buildToolCatalog({
+      tools: privateTools.map(capabilityAsAgentTool),
+      ...capabilityCatalogMetadata(privateTools),
+      alwaysLoaded: new Set<string>(),
+    })];
 }
 
 function uniqueBestAgentSkill(

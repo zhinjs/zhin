@@ -184,6 +184,12 @@ export interface AgentToolDefinition<
    * tools that declare `readOnly: true`; undeclared counts as not read-only.
    */
   readonly readOnly?: boolean;
+  /**
+   * Optional synchronous, side-effect-free eligibility check before this turn's model tools
+   * are projected. Read existing state only: do not reserve capacity, start I/O or draw randomness.
+   * This narrows disclosure, never grants permission; execute must recheck mutable conditions.
+   */
+  readonly isAvailable?: (context: Pick<ToolInvocationContext, 'sessionKey' | 'origin'>) => boolean;
   /** @internal Filesystem-derived private capability binding. */
   readonly placement?: ToolPlacement;
   execute(
@@ -294,6 +300,9 @@ export function defineAgentTool<
   if (definition.readOnly !== undefined && typeof definition.readOnly !== 'boolean') {
     throw new TypeError('Agent Tool readOnly must be a boolean');
   }
+  if (definition.isAvailable !== undefined && typeof definition.isAvailable !== 'function') {
+    throw new TypeError('Agent Tool isAvailable must be a function');
+  }
   if (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel')) {
     throw new TypeError('Agent Tool scopes must be private, group, or channel');
   }
@@ -355,6 +364,7 @@ export function parseAgentToolDefinition(
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')
     || (definition.alwaysLoaded !== undefined && typeof definition.alwaysLoaded !== 'boolean')
     || (definition.readOnly !== undefined && typeof definition.readOnly !== 'boolean')
+    || (definition.isAvailable !== undefined && typeof definition.isAvailable !== 'function')
     || (definition.risk !== undefined && !isToolRisk(definition.risk))
     || (definition.riskCategory !== undefined && !isToolRiskCategory(definition.riskCategory))
   ) throw invalidTool();

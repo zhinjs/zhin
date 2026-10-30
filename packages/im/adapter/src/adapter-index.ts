@@ -18,6 +18,7 @@ import {
   type AdapterOperation,
   type AdapterSegmentPolicy,
   type EndpointSendRequest,
+  type EndpointSendResult,
 } from './definition.js';
 import { bindEndpoint, retireEndpoint, type Endpoint, type EndpointTransportState } from './endpoint.js';
 import { materializeEndpoint } from './managed-endpoint.js';
@@ -69,6 +70,19 @@ interface AdapterRecord extends AdapterDescriptor {
   stopped: boolean;
   stopping?: Promise<void>;
   startAttempted: boolean;
+}
+
+function isEndpointSendResult(value: unknown): value is EndpointSendResult {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (!value || typeof value !== 'object' || !('parts' in value) || !Array.isArray(value.parts)
+    || value.parts.length === 0) return false;
+  return value.parts.every((part: unknown) => {
+    if (!part || typeof part !== 'object' || Array.isArray(part)) return false;
+    const { messageId, sourceIndices } = part as { messageId?: unknown; sourceIndices?: unknown };
+    return (messageId === undefined || (typeof messageId === 'string' && messageId.trim().length > 0))
+      && (sourceIndices === undefined || (Array.isArray(sourceIndices)
+        && sourceIndices.every(index => Number.isSafeInteger(index) && index >= 0)));
+  });
 }
 
 export class AdapterIndex {
@@ -334,7 +348,7 @@ export class AdapterIndex {
     await stack.dispose();
   }
 
-  async send(id: CapabilityId, request: EndpointSendRequest): Promise<string> {
+  async send(id: CapabilityId, request: EndpointSendRequest): Promise<EndpointSendResult> {
     const record = this.#records.get(id);
     if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
     if (!record.capabilities.includes('outbound') || !record.endpoint.send) {
@@ -343,11 +357,11 @@ export class AdapterIndex {
     if (!record.started || record.stopped) {
       throw new EndpointDeliveryError('endpoint_inactive', `Adapter Endpoint is not active: ${id}`, 'not_sent');
     }
-    const messageId = await record.endpoint.send(request);
-    if (typeof messageId !== 'string' || !messageId.trim()) {
-      throw new EndpointDeliveryError('delivery_unconfirmed', `Adapter Endpoint send() must return a non-empty platform message id: ${id}`, 'unknown');
+    const result = await record.endpoint.send(request);
+    if (!isEndpointSendResult(result)) {
+      throw new EndpointDeliveryError('delivery_unconfirmed', `Adapter Endpoint send() returned invalid message evidence: ${id}`, 'unknown');
     }
-    return messageId;
+    return result;
   }
 
   async resolveContent(
