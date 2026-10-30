@@ -33,8 +33,11 @@ async function loadAdapter(platform: string): Promise<RuntimeSnapshot> {
       const context = { owner, feature: toolFeatureId, localName: `agent/${platform}/skill/${name}/${tool}`, source: toolSource };
       const loaded = await import(pathToFileURL(toolSource).href);
       const parsed = parseAgentToolDefinition(loaded.default, context);
-      // A private tool must not outlive its Skill's scene ceiling, nor silently mix scenes back in.
-      expect(parsed.scopes ?? [], toolSource).toEqual(definition.scopes ?? []);
+      // Tools may narrow a multi-scene Skill, but must never widen its scene ceiling.
+      if (definition.scopes?.length) {
+        expect(parsed.scopes?.length ?? 0, toolSource).toBeGreaterThan(0);
+        expect(parsed.scopes?.filter(scope => !definition.scopes!.includes(scope)), toolSource).toEqual([]);
+      }
       toolSlots.push(createCapabilitySlot({ ...context, definition: parsed }));
     }
   }
@@ -83,6 +86,13 @@ describe('adapter-owned scene disclosure (#949)', () => {
       expect(capabilities.skills.map(skill => skill.qualifiedName)).toEqual(expected.map(skill => skill.qualifiedName));
       expect(capabilities.tools.map(tool => tool.name)).toEqual(tools.list()
         .filter(tool => !tool.scopes || tool.scopes.includes(scope)).map(tool => tool.qualifiedName));
+      if (platform === 'qq' && scope === 'channel') {
+        const disclosed = capabilities.tools.map(tool => tool.name);
+        expect(disclosed).toContain('agent__qq__skill__qq-group-admin__recall_member_message');
+        for (const name of ['group_kick', 'set_mute', 'handle_join_request']) {
+          expect(disclosed).not.toContain(`agent__qq__skill__qq-group-admin__${name}`);
+        }
+      }
       const plan = createDeferredCapabilityPlan({
         capabilities, platform, config: { deferredTools: {} },
         // Simulate a persisted session that had loaded every category before this turn.
