@@ -1,0 +1,23 @@
+docs/adr/0041-prompt-segments-and-message-headers.md
+  s_9622fd28aba994::t_27288f48b09b18 75-76
+packages/im/ai/src/llm/mid-conversation-system.ts
+  s_9622fd28aba994::t_9a18668e01311a 37-39
+packages/im/ai/tests/llm/mid-conversation-system.test.ts
+  s_9622fd28aba994::t_a80a52b618e82b 12,14-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c7944a5c4fd8491ca5cdcd258d1faad72a20b37d",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
