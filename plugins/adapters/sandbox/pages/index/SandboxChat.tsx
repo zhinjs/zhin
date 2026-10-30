@@ -46,6 +46,7 @@ import {
   loadPlaygroundState,
   savePlaygroundState,
   mergePlaygroundMessage,
+  retirePlaygroundInteractions,
   type PlaygroundMessage,
   type PlaygroundSession,
 } from './playgroundState.js';
@@ -880,6 +881,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         </article>
     ) : null
 
+    const recoveryConnectionId = connectionRef.current.connectionId
     return (
         <section className={cn("agent-playground-shell", showInspector && "has-inspector")}>
             <div className="agent-playground-mobilebar">
@@ -1047,10 +1049,19 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     </section>
                 )}
 
-                {canExecute && connectionRef.current.connectionId && (
-                    <ConversationRecoveryPanel key={JSON.stringify([connectionRef.current.connectionId, sessionKey])}
-                        connectionId={connectionRef.current.connectionId} sessionKey={sessionKey} locale={locale} hidden={showConversationDetails}
+                {canExecute && recoveryConnectionId && (
+                    <ConversationRecoveryPanel key={JSON.stringify([recoveryConnectionId, sessionKey])}
+                        connectionId={recoveryConnectionId} sessionKey={sessionKey} locale={locale} hidden={showConversationDetails}
                         pendingRefreshEpoch={pendingRefreshEpoch}
+                        onRetiredInteractions={(retired) => {
+                            const segments = retired.flatMap(interaction => interaction.segments)
+                            setMessages(previous => {
+                                const current = activeChannelRef.current
+                                if (connectionRef.current.connectionId !== recoveryConnectionId
+                                    || buildSandboxSessionKey(endpointIdRef.current, current.type, current.id) !== sessionKey) return previous
+                                return retirePlaygroundInteractions(previous, activeChannel, segments)
+                            })
+                        }}
                         requestContext={socketRequestContextRef.current ?? undefined}
                         renderInteraction={(segments, id, submitted, onSubmitted) => renderMessageSegments(segments, false, id, submitted, onSubmitted)} />
                 )}

@@ -71,7 +71,8 @@ function fixture(options: { connectionId?: string; sessionKey?: string; requestC
   let handlers!: { reloadPending: () => Promise<void>; reloadResults: () => Promise<void>; earlier: () => Promise<void> };
   const renderedInteractions = vi.fn((segments, id, submitted, onSubmitted) => createElement('interaction', { segments, id, submitted, onSubmitted }));
   const props = { connectionId: options.connectionId ?? 'connection-A', sessionKey: options.sessionKey ?? 'sandbox:bot:group:room',
-    locale: 'zh-CN', requestContext: options.requestContext, pendingRefreshEpoch: 0, renderInteraction: renderedInteractions };
+    locale: 'zh-CN', requestContext: options.requestContext, pendingRefreshEpoch: 0, renderInteraction: renderedInteractions,
+    onRetiredInteractions: vi.fn() };
   const bindings = { React: { createElement }, ...hooks, ...recovery, captureSandboxRequestContext, sandboxText,
     MarkdownContent: 'markdown', captureHandlers: (value: typeof handlers) => { handlers = value; } };
   const exports: Record<string, any> = {};
@@ -169,6 +170,7 @@ it('a settlement event replaces an already in-flight read and cannot restore its
     f.respond(0, { generation: 1, pending: [prompt('retired-read')] });
     f.respond(1, page(f.props.sessionKey, [])); f.respond(2, { generation: 1, pending: [] }); await f.settle();
     expect(f.all('interaction')).toEqual([]);
+    expect(f.props.onRetiredInteractions).not.toHaveBeenCalled();
   } finally { f.close(); }
 });
 
@@ -180,7 +182,18 @@ it('refreshes after a normal text answer follow-up without submitting any recove
     expect(f.requests).toHaveLength(3);
     f.respond(2, { generation: 1, pending: [] }); await f.settle();
     expect(f.all('interaction')).toEqual([]);
+    expect(f.props.onRetiredInteractions).toHaveBeenCalledExactlyOnceWith([expect.objectContaining({ id: 'text-question', generation: 1 })]);
     expect(f.requests.filter(request => request.url.pathname.endsWith('/results'))).toHaveLength(1);
+  } finally { f.close(); }
+});
+
+it('does not treat an unsupported pending API as proof that a previously observed interaction ended', async () => {
+  const f = fixture();
+  try {
+    f.respond(0, { generation: 1, pending: [prompt()] }); f.respond(1, page(f.props.sessionKey, [])); await f.settle();
+    f.props.pendingRefreshEpoch++; f.render();
+    f.respond(2, 'not supported', 404); await f.settle();
+    expect(f.props.onRetiredInteractions).not.toHaveBeenCalled();
   } finally { f.close(); }
 });
 

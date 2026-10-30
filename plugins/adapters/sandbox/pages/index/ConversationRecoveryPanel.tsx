@@ -13,6 +13,7 @@ export interface ConversationRecoveryProps {
   readonly requestContext?: SandboxRequestContext;
   /** Existing transport activity invalidates this read; it is not an approval acknowledgement. */
   readonly pendingRefreshEpoch?: number;
+  readonly onRetiredInteractions?: (interactions: readonly PendingInteraction[]) => void;
   readonly renderInteraction: (segments: MessageSegment[], id: string, submitted: boolean, onSubmitted: () => void) => React.ReactNode;
 }
 
@@ -25,7 +26,9 @@ export default function ConversationRecoveryPanel(props: ConversationRecoveryPro
   const [resultError, setResultError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<ReadonlySet<string>>(new Set());
   const [loadingEarlier, setLoadingEarlier] = useState(false);
-  const owner = useRef<{ controller: AbortController; context: SandboxRequestContext; pendingController?: AbortController; pending?: Promise<void>; results?: Promise<void> } | null>(null);
+  const retiredListener = useRef(props.onRetiredInteractions);
+  retiredListener.current = props.onRetiredInteractions;
+  const owner = useRef<{ controller: AbortController; context: SandboxRequestContext; interactions: readonly PendingInteraction[]; pendingController?: AbortController; pending?: Promise<void>; results?: Promise<void> } | null>(null);
   const reloadPending = useCallback(async (explicit = false) => {
     const current = owner.current;
     if (!current) return;
@@ -40,11 +43,14 @@ export default function ConversationRecoveryPanel(props: ConversationRecoveryPro
         const data = await readPendingInteractions(connectionId, sessionKey, controller.signal, current.context);
         if (!active()) return;
         const pending = data?.pending ?? [];
+        const retired = data ? current.interactions.filter(previous => !pending.some(next => next.generation === previous.generation && next.id === previous.id)) : [];
+        if (data) current.interactions = pending;
         setPending(pending);
         // Only an explicit successful authority read can release a still-current submitted choice.
         const ids = new Set(pending.map(interaction => interaction.id));
         setSubmitted(previous => new Set([...previous].filter(id => !explicit && ids.has(id))));
         setPendingError(null);
+        if (retired.length) retiredListener.current?.(retired);
       } catch (error) {
         if (active()) setPendingError(error instanceof Error ? error.message : String(error));
       } finally { if (current.pendingController === controller) current.pending = undefined; }
@@ -71,7 +77,7 @@ export default function ConversationRecoveryPanel(props: ConversationRecoveryPro
   }, [connectionId, sessionKey]);
 
   useEffect(() => {
-    const current: NonNullable<typeof owner.current> = { controller: new AbortController(), context: props.requestContext ?? captureSandboxRequestContext() };
+    const current: NonNullable<typeof owner.current> = { controller: new AbortController(), context: props.requestContext ?? captureSandboxRequestContext(), interactions: [] };
     owner.current = current;
     return () => { current.pendingController?.abort(); if (owner.current === current) owner.current = null; current.controller.abort(); };
   }, [reloadPending, reloadResults, props.requestContext]);

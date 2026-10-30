@@ -179,6 +179,38 @@ export function hasPlaygroundKeyboard(content: readonly MessageSegment[]): boole
       Array.isArray(entry?.segments) && hasPlaygroundKeyboard(entry.segments))));
 }
 
+/** Retire only controls previously issued by the current authoritative prompt reader. */
+export function retirePlaygroundInteractions(
+  current: readonly PlaygroundMessage[],
+  scene: Pick<PlaygroundSession, 'id' | 'type'>,
+  retiredSegments: readonly MessageSegment[],
+): PlaygroundMessage[] {
+  const retired = new Set(keyboardPayloads(retiredSegments));
+  return current.map(message => message.type === 'received' && message.channelType === scene.type && message.channelId === scene.id
+    && message.interactionReadOnly !== true && keyboardPayloads(message.content).some(payload => retired.has(payload))
+    ? { ...message, interactionReadOnly: true } : message);
+}
+
+function keyboardPayloads(segments: readonly MessageSegment[]): string[] {
+  const payloads: string[] = [];
+  for (const segment of segments) {
+    if (segment?.type === 'keyboard' && Array.isArray(segment.data?.rows)) {
+      for (const row of segment.data.rows) {
+        if (!Array.isArray(row)) continue;
+        for (const button of row) if (typeof button?.payload === 'string') payloads.push(button.payload);
+      }
+    } else if (segment?.type === 'forward') {
+      if (Array.isArray(segment.data?.entries)) {
+        for (const entry of segment.data.entries) if (Array.isArray(entry?.segments)) payloads.push(...keyboardPayloads(entry.segments));
+      }
+      if (Array.isArray(segment.data?.messages)) {
+        for (const batch of segment.data.messages) if (Array.isArray(batch)) payloads.push(...keyboardPayloads(batch));
+      }
+    }
+  }
+  return payloads;
+}
+
 function browserStorage(): PlaygroundStorage | undefined {
   return typeof window === 'undefined' ? undefined : window.localStorage;
 }

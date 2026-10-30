@@ -7,3 +7,5 @@ Support concurrent Console connections with per-conversation subscriptions and n
 Reuse Console conversation, usage and request readers within the active workspace when available, with a standalone-page fallback for older shells. Isolate trace reads and cancellation feedback across scene and connection changes without repeating cancellation requests.
 
 Recover Host-scoped conversation metadata, canonical chat history, read-only offline results and current live interactions without migrating browser caches or replaying execution. Keep historical controls read-only and use the existing server authority for live answers.
+
+Retire matching native prompt controls when an authoritative read confirms they are no longer pending, without disabling unrelated plugin messages or inferring approval success.
