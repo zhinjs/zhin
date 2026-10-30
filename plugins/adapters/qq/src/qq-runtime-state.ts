@@ -34,6 +34,24 @@ export interface QqPendingBotKind {
   readonly commandHeads?: readonly string[];
 }
 
+/**
+ * Console 发起的扫码绑定进度。凭据（appSecret）只留在内存，
+ * status 只暴露状态、扫码链接与目标 endpoint id。
+ */
+export interface QqConsoleBindState {
+  readonly state: 'waiting' | 'scanned' | 'failed';
+  readonly url?: string;
+  readonly message?: string;
+  readonly error?: string;
+  readonly startedAt: number;
+  /** 扫码成功后暂存，确认公域/私域后写配置。 */
+  readonly pending?: {
+    readonly endpointId: string;
+    readonly appId: string;
+    readonly appSecret: string;
+  };
+}
+
 export interface QqRuntimeState {
   /** 当前 generation 已成功创建的 endpoint（id → 描述） */
   readonly endpoints: Map<string, QqRunningEndpoint>;
@@ -41,6 +59,8 @@ export interface QqRuntimeState {
   bindFlow: QqBindFlowHandle | null;
   /** 扫码完成后等待 botKind 选择（凭据仅在内存） */
   pendingBotKind: QqPendingBotKind | null;
+  /** Console 页面的扫码绑定进度（与 bindFlow 共享单例）。 */
+  consoleBind: QqConsoleBindState | null;
 }
 
 export function createQqRuntimeState(): QqRuntimeState {
@@ -48,6 +68,7 @@ export function createQqRuntimeState(): QqRuntimeState {
     endpoints: new Map(),
     bindFlow: null,
     pendingBotKind: null,
+    consoleBind: null,
   };
 }
 

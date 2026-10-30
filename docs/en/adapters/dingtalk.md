@@ -101,6 +101,16 @@ pnpm --filter @zhin.js/adapter-dingtalk build
 pnpm --filter @zhin.js/adapter-dingtalk test
 ```
 
+## Console page
+
+Open the Console **DingTalk** page (route `/dingtalk`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.dingtalk.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `dingtalk:read`; writes require `dingtalk:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `dingtalk endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Check |

@@ -88,6 +88,10 @@ When `attachments.enabled: true`, inbound email attachments are saved to disk an
 - `maxFileSize`: Maximum size per attachment (bytes), default 10MB; oversized attachments are skipped
 - `allowedTypes`: MIME type allowlist; types not in the list are skipped
 
+## Console page
+
+Open the Console **Email** page (route `/email`) to view running connections, test connectivity, and inspect configured endpoints. SMTP/IMAP is nested configuration, so adding or removing accounts still happens in the config file.
+
 ## Troubleshooting
 
 | Symptom | Investigation |

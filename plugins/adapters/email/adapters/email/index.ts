@@ -7,6 +7,7 @@ import {
   resolveEmailConfig,
   type EmailEndpointConfig,
 } from '../../src/protocol.js';
+import { emailRuntimeStateToken } from '../../src/email-runtime-state.js';
 
 export { EmailEndpoint } from '../../src/endpoint.js';
 export type { EmailEndpointOptions } from '../../src/endpoint.js';
@@ -29,9 +30,14 @@ export default defineAdapter<EmailEndpointConfig>({
     interactive: 'text',
   },
   create(context) {
+    const config = resolveEmailConfig(context.config);
+    context.use(emailRuntimeStateToken).endpoints.set(config.id, {
+      id: config.id,
+      mode: 'imap',
+    });
     return new EmailEndpoint({
       id: context.id,
-      config: resolveEmailConfig(context.config),
+      config,
     });
   },
 });

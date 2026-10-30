@@ -107,6 +107,16 @@ The next milestone will register a POST route via `httpHostToken`, instead of us
 | Platform tools (10) | `tools/` (invite / pin / admins / sticker / poll, etc.) |
 | Skill doc | `agents/telegram/skills/telegram-chat-admin/SKILL.md`, `agents/telegram/skills/telegram-messages/SKILL.md` |
 
+## Console page
+
+Open the Console **Telegram** page (route `/telegram`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.telegram.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+Reading requires `telegram:read`; writes require `telegram:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `telegram endpoint add` command.
+
 ## Troubleshooting
 
 | Symptom | Investigation |

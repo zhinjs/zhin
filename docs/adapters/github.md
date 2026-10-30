@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=032c014d6bb69e4c -->
+<!-- sync-adapter-docs:sha256=2cb9a9ebf19182ae -->
 
 # @zhin.js/adapter-github
 
@@ -108,6 +108,16 @@ github:
 
 - 入站：`httpHostToken` POST → `Endpoint.emit(...)`
 - 出站：`send({ conversation, payload })`
+
+## Console 页面
+
+启动后打开 Console 的「GitHub」页（地址 `/github`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.github.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `github:read`，写操作需要 `github:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `github endpoint add`。
 
 ## 故障排查
 

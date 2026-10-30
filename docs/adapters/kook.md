@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=9f78a49ae32356a6 -->
+<!-- sync-adapter-docs:sha256=034adc88dd0d4e5c -->
 
 # @zhin.js/adapter-kook
 
@@ -116,6 +116,16 @@ platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；Capa
 canonical `keyboard` 映射为原生 Card `action-group`，每行 1–4 个按钮，`click: return-val` 将 payload 原样返回。WebSocket 和 Webhook 的 `message_btn_click` 事件进入可靠的 canonical `action` 消息段，携带实际点击人、会话和 `sourceMessageId`。按钮显示成功不能算交互通过，必须实际点击并核对回调。disabled 和 command 模式按钮当前明确 `unsupported_operation`。官方合同：[卡片按钮](https://developer.kookapp.cn/doc/cardmessage)、[按钮点击事件](https://developer.kookapp.cn/doc/event/user)。
 
 canonical `share` 映射为含标题、描述/正文与“打开链接”按钮的 Card；只支持 HTTP(S) URL，不代表平台原生应用/音乐名片。share 的 image/audio/app metadata 尚未接线，明确拒绝。实机分享验收需核对标题、描述与点击后的目标 URL。
+
+## Console 页面
+
+启动后打开 Console 的「KOOK」页（地址 `/kook`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.kook.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `kook:read`，写操作需要 `kook:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `kook endpoint add`。
 
 ## 故障排查
 

@@ -23,6 +23,7 @@
   "files": [
     "adapters",
     "commands",
+    "pages",
     "plugin.js",
     "schema.json",
     "src",
@@ -50,14 +51,17 @@
   "dependencies": {
     "@imhelper/milky-v1": "1.0.7",
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
     "imhelper": "1.0.7",
-    "ws": "^8.21.1",
-    "@zhin.js/skill": "workspace:*"
+    "ws": "^8.21.1"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
@@ -126,6 +130,10 @@
       },
       {
         "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=bb342e0167807f8a -->
+<!-- sync-adapter-docs:sha256=97b11a25099eabaa -->
 
 # @zhin.js/adapter-wecom
 
@@ -113,6 +113,16 @@ wecom:
 - **解密**：AES-256-CBC（Key = `encodingAESKey` + `=` 的 Base64，IV = Key 前 16 字节）
 
 Access Token 在过期前 5 分钟自动刷新。
+
+## Console 页面
+
+启动后打开 Console 的「企业微信」页（地址 `/wecom`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.wecom.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `wecom:read`，写操作需要 `wecom:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `wecom endpoint add`。
 
 ## 故障排查
 

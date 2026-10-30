@@ -126,6 +126,14 @@ The platform permit checker is registered by the `plugin.ts` generation lifecycl
 
 QQ Endpoints declare native Markdown and keyboard support. `UserInteraction.ask()` renders confirm/select controls as Markdown buttons. Adapters without native buttons degrade the same keyboard semantics to numbered choices.
 
+## Console page
+
+Open the Console **QQ** page (route `/qq`) to:
+
+- view running connections and test connectivity;
+- view or remove `plugins.qq.endpoints`;
+- scan-bind a new bot from **Platform actions**.
+
 ## Troubleshooting
 
 | Symptom | Check |

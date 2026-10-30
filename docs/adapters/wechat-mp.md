@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f3a184a7d63cccb6 -->
+<!-- sync-adapter-docs:sha256=0e64d1164137fd38 -->
 
 # @zhin.js/adapter-wechat-mp
 
@@ -86,6 +86,16 @@ Runtime Host（`http`）须已 listen，Webhook 才可达。
 3. 配置服务器地址（URL）：`https://your-server/wechat/webhook`（无 `/api` 前缀；经反向代理时自行映射）
 4. 设置 Token（与配置文件中的 `token` 一致）
 5. 如需消息加解密，设置 EncodingAESKey
+
+## Console 页面
+
+启动后打开 Console 的「微信公众号」页（地址 `/wechat-mp`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.wechat-mp.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `wechat-mp:read`，写操作需要 `wechat-mp:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `wechat-mp endpoint add`。
 
 ## 故障排查
 

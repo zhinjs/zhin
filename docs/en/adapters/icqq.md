@@ -97,6 +97,18 @@ Start with `src/endpoint.ts` when reading the implementation, then follow the ca
 - Friend and group requests enter the unified Endpoint event gateway and expose approval through `Request` and `EndpointManagement`.
 - Login QR, slider, device, and auth challenges persist as Console login tasks and can also continue through terminal input.
 
+## Console page
+
+Open the Console **ICQQ** page (route `/icqq`) to:
+
+- view running connections and test connectivity;
+- add or remove `plugins.icqq.endpoints` (credentials go to `.env`; the config keeps only `${ENV}` references);
+- complete LoginAssist tasks (QR code, slider, SMS or device confirmation) without returning to the terminal;
+
+Reading requires `icqq:read`; writes require `icqq:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `icqq endpoint add` command.
+
+First-login QR codes, slider challenges and device confirmations appear under **Pending logins**, so you do not need to return to the terminal.
+
 ## Troubleshooting
 
 | Symptom | Check |

@@ -75,6 +75,16 @@ Runtime Host（`http`）须已 listen，Webhook 才可达。
 4. 设置 Token（与配置文件中的 `token` 一致）
 5. 如需消息加解密，设置 EncodingAESKey
 
+## Console 页面
+
+启动后打开 Console 的「微信公众号」页（地址 `/wechat-mp`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.wechat-mp.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `wechat-mp:read`，写操作需要 `wechat-mp:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `wechat-mp endpoint add`。
+
 ## 故障排查
 
 | 现象 | 排查 |

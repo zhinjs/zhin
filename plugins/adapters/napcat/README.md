@@ -87,6 +87,16 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 - [NapCatQQ](https://github.com/NapNeko/NapCatQQ)
 - [适配器概览](https://zhin.js.org/essentials/adapters)
 
+## Console 页面
+
+启动后打开 Console 的「NapCat」页（地址 `/napcat`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.napcat.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `napcat:read`，写操作需要 `napcat:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `napcat endpoint add`。
+
 ## 故障排查
 
 | 现象 | 排查 |

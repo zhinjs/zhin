@@ -104,6 +104,16 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适�
 - [总览](https://satori.chat/zh-CN/protocol/overview.html)
 - [API](https://satori.chat/zh-CN/protocol/api.html)
 
+## Console 页面
+
+启动后打开 Console 的「Satori」页（地址 `/satori`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 增删 `plugins.satori.endpoints`（凭据写入 `.env`，配置里只保留 `${ENV}` 引用）；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `satori:read`，写操作需要 `satori:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `satori endpoint add`。
+
 ## 故障排查
 
 | 现象 | 排查 |

@@ -102,12 +102,31 @@ export { cn } from "./console-utils/cn.js";
 
 export {
   apiFetch,
+  consoleRpc,
   getApiBase,
   getToken,
   pluginRpc,
   PluginRpcError,
   resolveApiUrl,
 } from "./console-utils/remoteApi.js";
+
+export {
+  AdapterConsolePage,
+  createAdapterConsolePage,
+  resolveAdapterConsolePluginId,
+  type AdapterConsolePageProps,
+} from "./adapter-console/AdapterConsolePage.js";
+export type {
+  AdapterConsoleActionResult,
+  AdapterConsoleActionView,
+  AdapterConsoleConfiguredEndpoint,
+  AdapterConsoleConnectionTest,
+  AdapterConsoleEndpoint,
+  AdapterConsoleFieldView,
+  AdapterConsoleLoginTask,
+  AdapterConsolePageEntry,
+  AdapterConsoleStatus,
+} from "./adapter-console/types.js";
 
 export {
   fetchConsoleEntries,

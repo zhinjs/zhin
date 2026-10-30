@@ -422,6 +422,37 @@ Calls stopped by the hard gate (ADR 0036 §3) leave an approval card here. The a
 | `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` or `ops:approve` |
 | `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` or `tool_approvals:resolve` (action; the admin token can always call it) |
 
+## Adapter Console pages
+
+Every built-in platform adapter (`plugins/adapters/*`) ships a `pages/index/index.ts`. Pages use `createAdapterConsolePage(adapterKey)` from `@zhin.js/client`; the server side uses `createAdapterConsoleRpc(spec, resources)` from `@zhin.js/adapter`:
+
+```ts
+// pages/index/index.ts
+import { definePage } from '@zhin.js/console-contract';
+import { createAdapterConsolePage } from '@zhin.js/client';
+
+export const meta = definePage({
+  title: 'Telegram',
+  icon: 'Send',
+  order: 74,
+  requiredPermissions: ['telegram:read'],
+});
+
+export default createAdapterConsolePage('telegram');
+```
+
+From the page you can:
+
+- see the adapter's running endpoints from Host `endpoint.list` and run `endpoint.test` for connectivity;
+- read `plugin.<pluginId>.status` for configured `plugins.<adapter>.endpoints` (secret fields only show `${ENV}` references or `••••••`);
+- add or remove endpoints through `endpoint-add` / `endpoint-remove`; credentials go to `.env` and the config keeps only a reference;
+- consume LoginAssist tasks from `login.list` with `login.submit` / `login.cancel` (QR code, slider, SMS, device confirmation);
+- render adapter-specific actions from `status.actions` (for example QQ QR binding and public/private selection).
+
+Permissions are per adapter: page reads need `<adapterKey>:read`; writes (endpoint changes and custom actions) need `<adapterKey>:write`. A full admin token is unrestricted. Environments without configuration storage degrade to read-only: `status.canAdd` / `canRemove` are `false`.
+
+Keep `createAdapterConsoleRpc` specs limited to public field metadata. `env: true` fields are written to `.env` and returned as `${ENV}` references; other sensitive fields use `secret: true` and are masked. `extraStatus` should expose only a few state values (for example `bindState` or `scanUrl`), never logs, chat text or secrets.
+
 ## Saving settings from a page (config:patch)
 
 When a page changes a few settings, use `config:patch` to write exact paths instead of overwriting a whole section with `config:set`. Everything else in `zhin.config.yml`, including comments, is kept; the YAML/Config page stays available for advanced users.
