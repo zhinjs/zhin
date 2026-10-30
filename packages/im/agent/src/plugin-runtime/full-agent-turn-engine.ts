@@ -4,6 +4,7 @@ import { conversationContextMessage, deliveredReplyContextRefs, plannedReplyText
 import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
+import { resolveSkillTools, type SkillToolCandidate } from './skill-tool-resolution.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import { isTurnTerminalEvent, type TurnEndEvent, type TurnEvent, type TurnTerminalEvent } from '../event/turn-event.js';
@@ -250,15 +251,17 @@ async function* runInteractiveTurn(
     context.capabilities.agents,
     context.capabilities.skills,
     context.selection.agent,
+    context.capabilities.tools,
   );
-  if (capabilityContext) {
-    // Capabilities vary with the current principal and selected specialist. Keep
-    // their system role and retention, but place them after stable instructions.
+  if (capabilityContext.stable) {
+    // Only sender-neutral (scene-tier) capabilities stay in the cached system prefix, so master and
+    // members speaking in the same group get identical system bytes. Sender-/selection-dependent
+    // entries go to the current message's runtime-context tail; load/execute still enforce access.
     promptRegistry.register('§11_capabilities', {
       layer: 'system',
       kind: 'platform',
       title: 'Turn capabilities',
-      content: fillPromptSlots(capabilityContext, host.activeBinding?.nickname),
+      content: fillPromptSlots(capabilityContext.stable, host.activeBinding?.nickname),
       order: BOOTSTRAP_PROMPT_ORDER.task - 1,
       budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat : BOOTSTRAP_PROMPT_ORDER.task,
       retention: 'preferred',
@@ -267,6 +270,8 @@ async function* runInteractiveTurn(
   const promptRuntime = Object.freeze({
     bootstrapContext: options.bootstrapContext?.trim() ?? '',
     activeSkillsContext,
+    capabilityTail: capabilityContext.tail
+      ? fillPromptSlots(capabilityContext.tail, host.activeBinding?.nickname) : undefined,
     agentNickname: host.activeBinding?.nickname,
     modelId: prompt.modelId,
     providerAlias: prompt.providerAlias,
@@ -637,29 +642,65 @@ function emitActivityStop(
   });
 }
 
-function buildCapabilityContext(
+type AccessGated = {
+  readonly permissions?: readonly string[];
+  readonly currentConversationBotRoles?: readonly string[];
+};
+
+/** Visible to every sender of this scene: no permission or bot-role gate (platform/scope only). */
+function isSenderNeutral(descriptor: AccessGated): boolean {
+  return !descriptor.permissions?.length && !descriptor.currentConversationBotRoles?.length;
+}
+
+type CatalogTool = SkillToolCandidate & AccessGated;
+
+function isSenderNeutralSkill(skill: SkillDescriptor, tools: readonly CatalogTool[]): boolean {
+  if (!isSenderNeutral(skill as AccessGated) || skill.agentName) return false;
+  // A skill is only listed while one of its tools is available; that tool must be ungated as well.
+  return !skill.toolNames?.length || resolveSkillTools(skill, tools.filter(isSenderNeutral)).length > 0;
+}
+
+const byQualifiedName = <T extends { qualifiedName: string }>(a: T, b: T): number =>
+  (a.qualifiedName < b.qualifiedName ? -1 : a.qualifiedName > b.qualifiedName ? 1 : 0);
+
+/**
+ * `stable`: sender-neutral catalog (system prefix, cached). `tail`: entries that depend on the
+ * sender's permissions, the bot's role or the selected specialist (current message runtime tail).
+ */
+export function buildCapabilityContext(
   agents: readonly AgentDescriptor[],
   skills: readonly SkillDescriptor[],
   selectedName?: string,
-): string {
-  const parts: string[] = [];
+  tools: readonly CatalogTool[] = [],
+): { stable: string; tail: string } {
+  const stable: string[] = [];
+  const tail: string[] = [];
   const selected = selectedName
     ? agents.find((agent) => agent.qualifiedName === selectedName || agent.name === selectedName)
     : undefined;
   if (selectedName && !selected) {
     throw new Error(`Selected Agent capability is not visible: ${selectedName}`);
   }
+  const entry = (item: { qualifiedName: string; description: string }) => ({ name: item.qualifiedName, description: item.description });
   if (selected) {
-    parts.push(`## Active specialist: ${selected.qualifiedName}\n${selected.description}\n${selected.instructions}`);
+    tail.push(`## Active specialist: ${selected.qualifiedName}\n${selected.description}\n${selected.instructions}`);
   } else {
-    const agentCatalog = renderAgentCatalog(agents.map((agent) => ({ name: agent.qualifiedName, description: agent.description })));
-    if (agentCatalog) parts.push(agentCatalog);
+    const sorted = [...agents].sort(byQualifiedName);
+    const neutral = renderAgentCatalog(sorted.filter(agent => isSenderNeutral(agent as AccessGated)).map(entry));
+    if (neutral) stable.push(neutral);
+    const gated = renderAgentCatalog(sorted.filter(agent => !isSenderNeutral(agent as AccessGated)).map(entry));
+    if (gated) tail.push(gated);
   }
   // Progressive disclosure (#729): names and one-line triggers only; the full
   // instructions arrive through load_skill or intent priming.
-  const skillCatalog = renderSkillCatalog(skills.map((skill) => ({ name: skill.qualifiedName, description: skill.description })));
-  if (skillCatalog) parts.push(skillCatalog);
-  return parts.join('\n\n');
+  const neutralSkills = renderSkillCatalog(skills.filter(skill => isSenderNeutralSkill(skill, tools)).map(entry));
+  if (neutralSkills) stable.push(neutralSkills);
+  const gatedSkills = renderSkillCatalog(skills.filter(skill => !isSenderNeutralSkill(skill, tools)).map(entry));
+  if (gatedSkills) tail.push(gatedSkills);
+  return {
+    stable: stable.join('\n\n'),
+    tail: tail.length ? ['Also available in this turn (depends on the sender, bot role or selected specialist):', ...tail].join('\n\n') : '',
+  };
 }
 
 function terminal(text: string, usage: Usage): TurnEndEvent {

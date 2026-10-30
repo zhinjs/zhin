@@ -40,11 +40,11 @@ describe('#996 [Scene events] block', () => {
   it('is ephemeral: shown to the model, never stored in agent_messages', async () => {
     const { createUserMessage, serializeAgentMessage } = await import('@zhin.js/ai');
     const { buildTurnContextBlocks } = await import('../src/context/turn-envelope.js');
-    const { prependTurnContextBlocks } = await import('../src/context/turn-user-message.js');
+    const { appendTurnContextBlocks } = await import('../src/context/turn-user-message.js');
     const blocks = buildTurnContextBlocks({ sceneEvents: formatSceneEventsBlock(['阿强 joined']) });
     const sceneBlock = blocks.find((block) => block.text.includes('[Scene events]'));
     expect(sceneBlock?.ephemeral).toBe(true);
-    const [prompt] = prependTurnContextBlocks([createUserMessage('(scene events)')], blocks, {} as any);
+    const [prompt] = appendTurnContextBlocks([createUserMessage('(scene events)')], blocks, {} as any);
     expect(JSON.stringify(prompt)).toContain('[Scene events]');
     const row = serializeAgentMessage(prompt!);
     expect(row.payload).not.toContain('[Scene events]');

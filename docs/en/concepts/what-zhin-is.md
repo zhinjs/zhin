@@ -96,6 +96,7 @@ Goal: **cost grows linearly with groups and messages, not with accumulated histo
 | [0042](../../adr/0042-first-turn-token-budget.md) | First-turn token budget |
 | [0043](../../adr/0043-history-token-budget.md) | Conversation-only history, token-budget window, quotes |
 | [0044](../../adr/0044-adapter-capability-profile.md) | Adapter capability profile |
+| [0045](../../adr/0045-current-message-runtime-context.md) | Current-message runtime context after the body (prompt cache) |
 
 ADRs are written in Chinese.
 
