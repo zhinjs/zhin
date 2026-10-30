@@ -3,13 +3,21 @@ import { projectQqGuildSenderRoles } from './platform-permit.js';
 import { qqDeliveryFailure } from './delivery-error.js';
 import { normalizeQqInteraction } from './interaction.js';
 import { awaitQqStartup } from './start-deadline.js';
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type MessageRef } from '@zhin.js/im-contract';
+import {
+  inspectQqGroupMember,
+  inspectQqGroupMemberProfile,
+  inspectQqGroupScene,
+  kickQqGroupMember,
+  moderateQqGroupMember,
+  muteQqGroupMember,
+  qqGroupService,
+} from './group-admin.js';
 /**
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
  */
 import {
   Endpoint, createEndpointLifecycle, type EndpointLifecycle,
-  createRecallEndpointControl,
   type EndpointControl,
   type EndpointChannel,
   type EndpointManagement,
@@ -74,8 +82,8 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   readonly #activeGate = new QqActiveMessageGate();
   readonly #lifecycle: EndpointLifecycle;
   #cleanup?: () => Promise<void>;
-  readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
+  readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot(), () => this.#open && this.#bot !== null);
+  readonly control: EndpointControl = createQqEndpointControl(() => this.#requireBot(), (id) => this.recallMessage(id));
 
   constructor(options: QqEndpointOptions) {
     super();
@@ -332,8 +340,8 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   readonly #activeGate = new QqActiveMessageGate();
   readonly #lifecycle: EndpointLifecycle;
   #cleanup?: () => Promise<void>;
-  readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
+  readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot(), () => this.#open && this.#bot !== null);
+  readonly control: EndpointControl = createQqEndpointControl(() => this.#requireBot(), (id) => this.recallMessage(id));
 
   constructor(options: QqHttpEndpointOptions) {
     super();
@@ -569,9 +577,25 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
 }
 
 function createQqEndpointManagement(
-  requireClient: () => Pick<QqBotTransport, 'getGuilds' | 'getChannels'>,
+  requireClient: () => Pick<QqBotTransport, 'getGuilds' | 'getChannels' | 'api'>,
+  isActive: () => boolean,
 ): EndpointManagement {
+  const api = () => requireClient().api;
   return Object.freeze<EndpointManagement>({
+    // QQ 群（group_openid / member_openid）：官方 v2 群管理接口，部分为白名单能力（11253）。
+    inspectGroupMember: (group, user, signal) => inspectQqGroupMember(api(), group, user, signal),
+    inspectGroupScene: (group, signal) => inspectQqGroupScene(api(), group, signal),
+    inspectGroupMemberProfile: (group, user, signal) => inspectQqGroupMemberProfile(api(), group, user, signal),
+    moderateGroupMember: (group, user, action, signal) => moderateQqGroupMember(api(), group, user, action, signal, isActive),
+    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
+      return qqGroupService(api()).getMembers(groupId);
+    },
+    async kickGroupMember(groupId: string, userId: string): Promise<void> {
+      await kickQqGroupMember(api(), groupId, userId);
+    },
+    async muteGroupMember(groupId: string, userId: string, durationSeconds: number): Promise<void> {
+      await muteQqGroupMember(api(), groupId, userId, durationSeconds);
+    },
     async listChannels(): Promise<readonly EndpointChannel[]> {
       const channels: EndpointChannel[] = [];
       const client = requireClient();
@@ -602,6 +626,59 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object'
     ? value as Record<string, unknown>
     : {};
+}
+
+/**
+ * Recall + 频道表情回应。recall 同时接受 send() 的复合 ID 与入站原生消息 ID（目标取自 MessageRef.conversation），
+ * 因此群管理员机器人可撤回普通成员 2 分钟内的消息（官方限制由平台执行）。
+ * 表情回应只有频道子频道消息支持（官方无群 / 单聊表情回应接口）。
+ */
+function createQqEndpointControl(
+  requireBot: () => QqBotTransport,
+  recallById: (messageId: string) => Promise<void>,
+): EndpointControl {
+  return Object.freeze<EndpointControl>({
+    recall: async (message: MessageRef) => {
+      if (isCompoundMessageId(message.id)) return recallById(message.id);
+      const kind = qqOutboundKind(message.conversation);
+      await recallQqMessage(requireBot(), kind, message.conversation.id, message.id);
+    },
+    addReaction: async (message: MessageRef, emoji: string) => {
+      const target = qqGuildReactionTarget(message, emoji);
+      if (!target) return null;
+      await requireBot().api.reactionService.addGuildMessageReaction(target.channelId, target.messageId, target.type, target.id);
+      return `${target.type}:${target.id}`;
+    },
+    removeReaction: async (message: MessageRef, reactionId: string) => {
+      const target = qqGuildReactionTarget(message, reactionId);
+      if (!target) return;
+      await requireBot().api.reactionService.deleteGuildMessageReaction(target.channelId, target.messageId, target.type, target.id);
+    },
+  });
+}
+
+function isCompoundMessageId(id: string): boolean {
+  try { parseCompoundMessageId(id); return true; } catch { return false; }
+}
+
+/** `type:id`（1 系统表情 / 2 emoji）或单个 Unicode emoji（→ type 2 + 码点）。 */
+export function parseQqEmoji(value: string): { type: 1 | 2; id: `${number}` } | null {
+  const explicit = /^([12]):(\d+)$/.exec(value.trim());
+  if (explicit) return { type: Number(explicit[1]) as 1 | 2, id: explicit[2] as `${number}` };
+  const chars = [...value.trim().replace(/\uFE0F/g, '')];
+  if (chars.length !== 1) return null;
+  const code = chars[0]!.codePointAt(0)!;
+  return code > 0x7f ? { type: 2, id: String(code) as `${number}` } : null;
+}
+
+function qqGuildReactionTarget(message: MessageRef, emoji: string) {
+  let kind = qqOutboundKind(message.conversation);
+  let channelId = message.conversation.id;
+  let messageId = message.id;
+  if (isCompoundMessageId(message.id)) ({ kind, channelId, qqMsgId: messageId } = parseCompoundMessageId(message.id));
+  if (kind !== 'channel' || !channelId || !messageId) return null;
+  const parsed = parseQqEmoji(emoji);
+  return parsed ? { channelId, messageId, ...parsed } : null;
 }
 
 async function recallQqMessage(bot: QqBotTransport, kind: ReturnType<typeof qqOutboundKind>, channelId: string, messageId: string): Promise<void> {
