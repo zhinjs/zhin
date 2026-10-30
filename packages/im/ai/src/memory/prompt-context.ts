@@ -74,9 +74,16 @@ function escapeParticipantText(messages: AgentMessage[]): AgentMessage[] {
       messageChanged = true;
       return { ...block, text };
     });
-    if (!messageChanged) return message;
+    // Quote text is participant-authored too; headers render it after this projection.
+    const quote = (message as UserMessage).quote;
+    const quoteText = quote?.text;
+    const escapedQuote = quoteText === undefined ? undefined : escapeHostMarkers(quoteText);
+    const quoteChanged = escapedQuote !== quoteText;
+    if (!messageChanged && !quoteChanged) return message;
     changed = true;
-    return { ...message, content } as AgentMessage;
+    return { ...message, content,
+      ...(quoteChanged ? { quote: { ...quote!, text: escapedQuote } } : {}),
+    } as AgentMessage;
   });
   return changed ? out : messages;
 }

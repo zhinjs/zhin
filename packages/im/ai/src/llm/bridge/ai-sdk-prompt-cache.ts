@@ -194,14 +194,16 @@ export function applyPromptCacheToMessages(
 
 /**
  * A current user message is `body` + runtime-context tail. The tail is dropped once the message
- * becomes history, so the breakpoint goes on the part right before the tail marker: the cached
- * prefix (…, header + body) is exactly what the next request replays as history.
+ * becomes history. Anchor the first body text part, rather than the part before the marker:
+ * runtime-only participant media and unavailable-media placeholders may sit between them.
+ * The owned header + body text is exactly what the next request replays as history.
  */
 function anchorBeforeRuntimeContext(message: ModelMessage): ModelMessage | undefined {
   if (message.role !== 'user' || !Array.isArray(message.content)) return undefined;
   const marker = message.content.findIndex((part, index) => index > 0 && part.type === 'text' && isRuntimeContextMarkerText(part.text));
   if (marker < 1) return undefined;
-  const anchor = marker - 1;
+  const anchor = message.content.findIndex(part => part.type === 'text');
+  if (anchor < 0 || anchor >= marker) return undefined;
   const part = message.content[anchor]!;
   if (part.type === 'text' && !part.text.trim()) return undefined;
   return {

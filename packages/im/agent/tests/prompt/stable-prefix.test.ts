@@ -112,7 +112,8 @@ describe('stable system prompt prefix (ADR 0042 §1)', () => {
     expect(master.stable).not.toMatch(/deploy|ops/);
     expect(master.tail).toMatch(/deploy/);
     expect(master.tail).toMatch(/ops/);
-    expect(member.tail).toBe('');
+    expect(member.tail).toContain('helper');
+    expect(member.tail).not.toMatch(/deploy|ops/);
 
     const systemFor = (turn: Turn, stable: string) => {
       const registry = new PromptAssemblyRegistry();
@@ -141,6 +142,21 @@ describe('stable system prompt prefix (ADR 0042 §1)', () => {
     } as unknown as Turn);
     expect(withAdmins(['30', '10', '20', '10'])).toBe(withAdmins(['10', '20', '30']));
     expect(withAdmins(['30', '10', '20'])).toContain('admins:10,20,30');
+  });
+
+  it('keeps the system catalog stable when selecting a specialist without exposing other agents', () => {
+    const owner = rootPluginId();
+    const agent = (name: string) => ({
+      $feature: 'zhin.agent/1', owner, name, qualifiedName: name, description: `${name} agent`, instructions: `${name} instructions`, source: 'test',
+      displayName: name, version: '1', triggerRules: {}, entryPoints: [], workflows: [], knowledge: [],
+    }) as never;
+    const agents = [agent('helper'), agent('researcher')];
+    const normal = buildCapabilityContext(agents, []);
+    const selected = buildCapabilityContext(agents, [], 'helper');
+    expect(selected.stable).toBe(normal.stable);
+    expect(`${selected.stable}\n${selected.tail}`).toContain('Active specialist: helper');
+    expect(`${selected.stable}\n${selected.tail}`).not.toContain('researcher');
+    expect(`${normal.stable}\n${normal.tail}`).toContain('researcher');
   });
 
   it('reports the stable prefix size', () => {

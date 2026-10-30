@@ -686,10 +686,10 @@ export function buildCapabilityContext(
     tail.push(`## Active specialist: ${selected.qualifiedName}\n${selected.description}\n${selected.instructions}`);
   } else {
     const sorted = [...agents].sort(byQualifiedName);
-    const neutral = renderAgentCatalog(sorted.filter(agent => isSenderNeutral(agent as AccessGated)).map(entry));
-    if (neutral) stable.push(neutral);
-    const gated = renderAgentCatalog(sorted.filter(agent => !isSenderNeutral(agent as AccessGated)).map(entry));
-    if (gated) tail.push(gated);
+    // The whole Agent catalog disappears when a specialist is selected. Keep that
+    // selection-dependent section in the tail without exposing it to specialists.
+    const catalog = renderAgentCatalog(sorted.map(entry));
+    if (catalog) tail.push(catalog);
   }
   // Progressive disclosure (#729): names and one-line triggers only; the full
   // instructions arrive through load_skill or intent priming.

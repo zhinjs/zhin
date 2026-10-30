@@ -266,9 +266,9 @@ describe('FullAgentTurnEngine', () => {
         expect(prompt.indexOf('# Platform rules')).toBeGreaterThan(prompt.indexOf('Find primary sources'));
         expect(prompt.endsWith('Use the current bot client.')).toBe(true);
       } else {
-        expect(prompt.indexOf('researcher')).toBeGreaterThan(prompt.indexOf('# Security'));
-        expect(runtime.capabilityTail).toBeUndefined();
-        expect(prompt).toContain('## Available specialist agents');
+        expect(prompt).not.toContain('researcher');
+        expect(runtime.capabilityTail).toContain('## Available specialist agents');
+        expect(runtime.capabilityTail).toContain('researcher');
         expect(prompt).not.toContain('Verify the evidence before reporting.');
       }
     }
@@ -284,6 +284,7 @@ describe('FullAgentTurnEngine', () => {
       expect(prompt.startsWith(`${withoutCapabilities}${SECTION_SEP}`)).toBe(true);
       expect(withoutCapabilities).not.toContain('researcher');
       expect(withoutCapabilities).not.toContain('lookup');
+      expect((coreInput?.promptRuntime as PromptRuntimeOverrides).capabilityTail).toBeUndefined();
     }
   });
 

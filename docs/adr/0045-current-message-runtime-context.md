@@ -29,14 +29,14 @@ sidebar: false
 
 - 尾巴是**同一条 user 消息的后续 part**，不是中途 system（DeepSeek / Gemini / Anthropic 的 `midConversationSystem` 为 `none`）。
 - 尾巴里的块一律 `perTurn`，存储前丢弃（ADR 0043 §1 不变）。
-- 桥接层：第一个 part（正文）原样；之后每个 part 另起一行并以 `\n` 结尾（DeepSeek、Gemini 会把 part 直接拼接）。
-- Anthropic：若 user 消息含尾巴标记，`cacheControl` 打在标记前一个 part（正文），不打在消息末尾；断点总数不变。
-- 防伪：参与者文本（user 消息里非宿主块）中的 `[Runtime context`、`[Context source:`、`[Turn context]`、`[/Turn context]` 在投影时把 `[` 转义为 `［`；当前消息与历史走同一个纯函数，字节一致。
+- 桥接层：参与者正文的所有 part 原样保留；只对带宿主 `perTurn` 元数据的运行时尾巴补充分隔换行。普通多段文字或参与者输入的同名标记不触发此处理。参与者媒体及不可用占位在宿主尾巴之前；媒体仍不持久化，因此媒体内容不保证跨轮缓存复用。
+- Anthropic：若 user 消息含尾巴标记，`cacheControl` 打在第一个正文 text part，不打在媒体、不可用占位或消息末尾；断点总数不变。
+- 防伪：参与者文本（user 消息里非宿主块，包括引用正文）中的 `[Runtime context`、`[Context source:`、`[Turn context]`、`[/Turn context]` 在投影时把 `[` 转义为 `［`；当前消息与历史走同一个纯函数，字节一致。
 
 ### 2. 系统稳定前缀不随发送者变
 
 - 「Turn capabilities」只保留**与发送者无关**的条目（无 `permissions`、无 `currentConversationBotRoles`、不属于某个专家；带工具的技能至少有一个同样无门槛的工具）。
-- 依赖发送者权限、Bot 角色或所选专家的条目（含 `Active specialist`）进当前消息尾巴。
+- 依赖发送者权限、Bot 角色或所选专家的条目（含 `Active specialist`）进当前消息尾巴。Agent 目录整体随专家选择显示或隐藏，因此也放在尾巴；保留专家模式不展示其他 Agent 目录的行为。
 - 授权不变：加载与执行时照旧校验（`DeferredCapabilityPlan` ceiling、工具权限与审批）。
 
 ### 3. 场景行

@@ -13,7 +13,12 @@ export default defineEvalCase({
   ],
   expect: {
     toolsNotCalled: ['web_fetch', 'web_search'],
-    systemPromptContains: ['ai.agent.network.enabled: true'],
+    // Network authority varies by turn: every request receives the note in its runtime tail.
+    requestInputContains: {
+      1: ['ai.agent.network.enabled: true'],
+      2: ['ai.agent.network.enabled: true'],
+    },
+    systemPromptNotContains: ['ai.agent.network.enabled: true'],
     outboundContains: ['ai.agent.network.enabled'],
     modelSteps: 2,
   },
