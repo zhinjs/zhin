@@ -394,7 +394,7 @@ interface MetaCapabilityOptions {
   readonly decision?: AgentDecisionRuntime;
 }
 
-/** Best discover matches whose schema is attached (and loaded) in the same result. */
+/** Maximum best discover matches auto-loaded for the next model request. */
 export const DISCOVER_SCHEMA_LIMIT = 3;
 
 function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCapability[] {
@@ -439,8 +439,8 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const rows = [...tools, ...skills];
       if (rows.length === 0) return 'No matches.';
       const listing = rows.map((item) => `- [${item.kind}] ${item.name}: ${item.brief}`).join('\n');
-      // ADR 0042 §3: the best matches are loaded and their schemas attached, so the
-      // model can call them right away instead of spending a load_tool round.
+      // ADR 0042 §3: load the best matches so the next request carries their full
+      // definitions in tools. Do not duplicate those schemas in message history.
       const loadedNow = new Set(getLoadedToolNamesInLoadOrder(options.getSnapshot()));
       const attach = tools
         .slice(0, DISCOVER_SCHEMA_LIMIT)
@@ -454,12 +454,8 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
         attach.map(entry => entry.name),
         options.maxLoaded,
       ));
-      const schemas = attach.map(entry => JSON.stringify({
-        name: entry.name,
-        description: entry.fullTool.description,
-        parameters: entry.fullTool.parameters,
-      })).join('\n');
-      return `${listing}\n\nLoaded (callable now; schemas):\n${schemas}\n__zhin_tools_mutated__`;
+      const names = attach.map(entry => entry.name).join(', ');
+      return `${listing}\n\nLoaded: ${names}. Use their tool definitions for arguments.\n__zhin_tools_mutated__`;
     }),
     metaCapability(options.owner, 'load_tool', 'Load a deferred tool schema into this session.', {
       type: 'object',
