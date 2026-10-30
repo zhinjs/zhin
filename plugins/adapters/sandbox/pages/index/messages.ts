@@ -3,6 +3,8 @@ export type SandboxLocale = 'zh-CN' | 'en';
 /** Authored interface copy only; unknown/user text is returned unchanged. */
 export const sandboxEnglish: Readonly<Record<string, string>> = {
   "当前用户": "Current user",
+  "Sandbox 连接尚未就绪，会话切换未发送。": "Sandbox is not connected. The conversation switch was not sent.",
+  "Sandbox 连接尚未就绪，消息未发送。": "Sandbox is not connected. Your message was not sent.",
   "审阅者": "Reviewer",
   "协作者": "Collaborator",
   "当前 Token 只有演示权限，任务运行已禁用。": "This token has demo access only. Task execution is disabled.",

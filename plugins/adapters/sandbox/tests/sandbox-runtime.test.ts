@@ -531,42 +531,30 @@ describe('sandbox plugin runtime adapter', () => {
     });
   });
 
-  it('closes the previous fixed-name client when a new one connects', async () => {
+  it('keeps existing fixed-name clients when another one connects', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const gateway: OutboundMessageService = {
       receive: vi.fn(async () => Object.freeze({ matched: false })),
       send: vi.fn(async () => 'sent'),
     };
-    const defaults = resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' });
     const endpoint = bindTestEndpoint(new SandboxWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'),
-      gateway,
-      http,
-      defaults,
+      gateway, http, defaults: resolveSandboxEndpoint({ id: 'demo-bot', owner: 'sandbox-user' }),
     }), gateway, undefined);
     endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
-
-    const firstClosed = await new Promise<number>((resolve, reject) => {
-      const first = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
-      const timer = setTimeout(() => reject(new Error('timeout waiting for replace close')), 3000);
-      first.once('open', () => {
-        const second = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
-        second.once('open', () => {
-          // second client owns the target; first should be closed by server
-        });
-        second.once('error', reject);
-      });
-      first.once('close', (code) => {
-        clearTimeout(timer);
-        resolve(code);
-      });
-      first.once('error', reject);
-    });
-
-    expect(firstClosed).toBe(4000);
+    const first = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
+    const second = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
+    try {
+      await vi.waitFor(() => expect(endpoint.client.connections()).toHaveLength(2));
+      expect(first.readyState).toBe(WebSocket.OPEN);
+      expect(second.readyState).toBe(WebSocket.OPEN);
+    } finally {
+      first.close();
+      second.close();
+    }
   });
 
   it('uses action segment payload as text when no text segments', () => {

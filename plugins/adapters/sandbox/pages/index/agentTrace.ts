@@ -366,7 +366,8 @@ export function deriveAgentRunSteps(snapshot: AgentTraceSnapshot | null, run: Ag
 
 export function buildAgentRunReport(snapshot: AgentTraceSnapshot | null, context: AgentRunReportContext = {}, locale: SandboxLocale = 'zh-CN'): string {
   const runs = deriveTaskRuns(snapshot);
-  const run = context.run ? runs.find((candidate) => candidate.id === runIdentityKey(context.run)) : runs[0];
+  const requestedRun = context.run;
+  const run = requestedRun ? runs.find((candidate) => candidate.id === runIdentityKey(requestedRun)) : runs[0];
   const identity = run ?? context.run;
   const turnId = identity?.turnId;
   const steps = deriveAgentRunSteps(snapshot, identity, locale);

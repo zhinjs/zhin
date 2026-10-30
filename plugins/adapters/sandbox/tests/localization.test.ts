@@ -3,6 +3,7 @@ import ts from 'typescript';
 import { sandboxText, sandboxEnglish } from '../pages/index/messages.js';
 import * as traces from '../pages/index/agentTrace.js';
 import * as playground from '../pages/index/playgroundState.js';
+import * as transport from '../pages/index/sandboxTransport.js';
 
 it('labels the conversation workspace and its existing details entry in both locales', () => {
   for (const [source, english] of [
@@ -51,7 +52,7 @@ it('uses ready.locale without remounting or replacing stored conversations and d
   const original=playground.createDefaultPlaygroundState();
   const state={...original,sessions:original.sessions.map((item,index)=>index===0?{...item,name:'用户保留的会话'}:item)};
   const bindings={
-    sandboxText, ...traces, ...playground,
+    sandboxText, ...traces, ...playground, ...transport,
     loadPlaygroundState:()=>state,
     useState:(initial:any)=>{const index=cursor++;if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;return[slots[index],(next:any)=>{slots[index]=typeof next==='function'?next(slots[index]):next}];},
     useRef:(initial:any)=>{const index=cursor++;return slots[index]??(slots[index]={current:initial});},

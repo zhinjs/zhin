@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a2539c6f62060535 -->
+<!-- sync-adapter-docs:sha256=f2ce855f3091fc03 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -103,7 +103,20 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 
 - **地址**：`ws://<host>:<port>/sandbox`。同一个 HTTP Host 上的第一个 Sandbox endpoint 挂在 `/sandbox`，其余 endpoint 挂在 `/sandbox/<endpoint id>`（重名时依次加 `-2`、`-3`），启动日志会打印 `ws mounted <path>`。
 - **鉴权**：Host 配置了 token 时，握手请求需带 `Authorization: Bearer <token>` 或查询参数 `?token=<token>`，否则返回 `401`。demo 权限的 token 只能连 `/sandbox`，而且是只读的：消息会被接收，但不会进入命令和 Agent，服务端回一条 `type: "error"`。
-- **单连接**：endpoint 使用固定名称（默认），同一 endpoint 只保留最新的浏览器连接。新连接接入时，旧连接以关闭码 `4000`（`replaced by new sandbox client`）断开；endpoint 停止时以 `1001` 断开；插件热重载使当前 generation 退役时，Host 以 `1012` 断开，客户端重连即可。
+- **多连接**：同一 endpoint 的浏览器连接可以并存，共用已配置的 `owner`；`connectionId` 只标识连接，不改变 Bot 或 Agent 会话身份。关闭一个页面只移除该连接，不取消或重跑任务；endpoint 停止时关闭全部连接（`1001`），generation 退役继续由 Host 关闭（`1012`）。
+- **会话投递**：每个 full 连接订阅一个 `type` + `id`；默认订阅 `private` + `owner`，发送普通消息也会更新该连接的订阅。回复只投递到同会话的 full 连接，demo 连接不能订阅或接收这些消息。无匹配连接时不确认发送，所有发送尝试失败时保留结果未知，不自动重试。
+
+### 客户端 → 服务端：订阅当前会话
+
+仅在本次 `ready.protocol` 为 `scoped-conversations-v1` 时发送：
+
+```json
+{"op":"subscribe","conversation":{"type":"group","id":"test-group"}}
+```
+
+`type` 为 `private`、`group` 或 `channel`。订阅替换该连接的当前会话，服务端返回 `type: "subscribed"` 和同一个 `conversation`。这类控制帧及无效控制帧不会进入命令、Agent 或平台消息钩子。
+
+已订阅新协议的页面会收到同会话用户消息的 `direction: "inbound"` 回声，用于同步显示；回声不会再次进入框架。旧客户端无需修改即可发送原消息格式、接收当前会话回复，服务端不会向其发送无法识别的用户回声。新页面连接旧服务端时不发送订阅控制帧，沿用原发送方式。重连只恢复订阅，不重新提交消息。
 
 ### 客户端 → 服务端：发送消息
 
@@ -149,6 +162,8 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 ```json
 {
   "type": "ready",
+  "protocol": "scoped-conversations-v1",
+  "connectionId": "connection-uuid",
   "id": "sandbox-user",
   "endpoint": "sandbox-bot",
   "workingDirectory": "/path/to/bot",
@@ -159,7 +174,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 }
 ```
 
-`canExecute` 表示当前连接是否为 full 权限（能运行命令和 Agent 任务）；`shellIsolation` 是 Docker 隔离环境的探测结果，仅供展示。
+`canExecute` 表示当前连接是否为 full 权限（能运行命令和 Agent 任务）；`shellIsolation` 是 Docker 隔离环境的探测结果，仅供展示。`ready` 与 `subscribed` 仅确认连接和订阅，不代表任务或审批成功。
 
 **回复消息**：
 
@@ -174,11 +189,29 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 }
 ```
 
-- `type` / `id` 是回复所在的会话（`direct` 已归一为 `private`，`guild` 已归一为 `channel`），客户端按这两个字段把消息放进对应会话；`bot` 是 endpoint id，`endpoint` 是收到消息的连接名。
+- `conversation: { type, id }` 是框架发送请求确定的真实会话；新客户端优先用它归并消息，即使 legacy envelope 的 `type` / `id` 指向别处。`bot` 和 `endpoint` 是配置的 endpoint id。旧客户端仍可读取原 `type` / `id` 字段。
 - `messageId` 与框架记录的发送回执使用同一个消息 ID，可用于关联实时回复和已保存的聊天记录；已有 wire envelope 的非空显式字符串 ID 保持不变。
 - `content` 是消息段数组。文本、`html`（JSX 卡片，见上文 `html: direct`）、按钮等段原样透传。
 - `image` / `audio` / `video` / `file` 段只读 `data.media`（MediaRef）：`url` 原样透传；`base64` 补上 `base64://` 前缀后内联；`path` 由服务端读取文件后转成 `base64` 内联；其他类型和缺少 `data.media` 的媒体段会被丢弃，并在日志中记录 `sandbox_outbound_media_dropped`。
 - 插件直接发送完整消息对象时，其他字段会原样保留。
+
+**用户消息回声**：只发给已完成新协议订阅的同会话 full 连接。
+
+```json
+{
+  "type": "group",
+  "id": "test-group",
+  "conversation": { "type": "group", "id": "test-group" },
+  "direction": "inbound",
+  "senderId": "sandbox-user",
+  "messageId": "client-msg-001",
+  "endpoint": "sandbox-bot",
+  "content": [{ "type": "text", "data": { "text": "/hello" } }],
+  "timestamp": 1700000000000
+}
+```
+
+客户端按会话、消息方向及 `messageId` 合并本页乐观消息和回声。按钮操作仍由原服务端交互与审批逻辑裁决，页面显示「已提交」不代表审批通过。本次不增加离线结果保存、跨浏览器历史恢复或多人账号体系。
 
 **只读连接的提示**：demo 权限的连接发送消息后，服务端回复：
 

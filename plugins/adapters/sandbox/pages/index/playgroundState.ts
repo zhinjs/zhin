@@ -28,6 +28,7 @@ export interface PlaygroundMessage {
   readonly senderName: string;
   readonly content: MessageSegment[];
   readonly timestamp: number;
+  /** Legacy field name: the choice was submitted; this never reports policy acceptance. */
   readonly interactionResolved?: boolean;
 }
 
@@ -81,7 +82,7 @@ export function loadPlaygroundState(
     const sessionKeys = new Set(sessions.map(sessionIdentity));
     const messages = Array.isArray(parsed.messages)
       ? parsed.messages.map(parseMessage).filter((item): item is PlaygroundMessage => (
-          Boolean(item) && sessionKeys.has(sessionIdentity({ id: item.channelId, type: item.channelType }))
+          item !== undefined && sessionKeys.has(sessionIdentity({ id: item.channelId, type: item.channelType }))
         ))
       : [];
     const requestedActive = typeof parsed.activeSessionId === 'string'
@@ -169,4 +170,16 @@ function browserStorage(): PlaygroundStorage | undefined {
 
 function sessionIdentity(value: Pick<PlaygroundSession, 'id' | 'type'>): string {
   return `${value.type}\0${value.id}`;
+}
+
+/** Socket echoes replace their local optimistic row, without crossing scenes or authors. */
+export function mergePlaygroundMessage(
+  messages: readonly PlaygroundMessage[],
+  incoming: PlaygroundMessage,
+): PlaygroundMessage[] {
+  const index = messages.findIndex(message => message.id === incoming.id
+    && message.channelType === incoming.channelType && message.channelId === incoming.channelId
+    && message.type === incoming.type);
+  return index < 0 ? [...messages, incoming]
+    : messages.map((message, offset) => offset === index ? { ...message, ...incoming } : message);
 }

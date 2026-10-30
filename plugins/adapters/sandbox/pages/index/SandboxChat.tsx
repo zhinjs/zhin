@@ -8,7 +8,7 @@ import {
   pickMediaRawUrl,
   type MessageSegment,
 } from '@zhin.js/client';
-import { buildSandboxWebSocketUrl } from './sandboxTransport';
+import { buildSandboxWebSocketUrl, createSandboxMessageId, submitSandboxFrame, SANDBOX_SCOPED_PROTOCOL } from './sandboxTransport';
 import {
   User, Bot, Users, Trash2, Send, Hash, MessageSquare,
   Wifi, WifiOff, Smile, Image, X, Check, Info, Search,
@@ -41,6 +41,7 @@ import {
   createDefaultPlaygroundState,
   loadPlaygroundState,
   savePlaygroundState,
+  mergePlaygroundMessage,
   type PlaygroundMessage,
   type PlaygroundSession,
 } from './playgroundState.js';
@@ -67,7 +68,7 @@ export default function Sandbox() {
     const [inputText, setInputText] = useState('')
     const [endpointId, setBotName] = useState('sandbox-bot')
     const [connected, setConnected] = useState(false)
-    const [canExecute, setCanExecute] = useState(true)
+    const [canExecute, setCanExecute] = useState(false)
     const [persistenceStatus, setPersistenceStatus] = useState<'saved' | 'error'>('saved')
     const [transportNotice, setTransportNotice] = useState<string | null>(null)
     const [shellIsolation, setShellIsolation] = useState<{ available: boolean; provider: string; message: string } | null>(null)
@@ -100,6 +101,7 @@ export default function Sandbox() {
     const [traceNotice, setTraceNotice] = useState<string | null>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const wsRef = useRef<WebSocket | null>(null)
+    const connectionRef = useRef<{ protocol?: string; connectionId?: string; ownerId?: string; canExecute: boolean }>({ canExecute: false })
     const editorRef = useRef<RichTextEditorRef>(null)
     const traceRef = useRef<AgentTraceSnapshot | null>(null)
     const activeChannelRef = useRef(activeChannel)
@@ -140,16 +142,27 @@ export default function Sandbox() {
 
     useEffect(() => { fetchFaceList() }, [])
 
+    const subscribeToScene = (scene: Pick<Channel, 'id' | 'type'>) => {
+        // Old Hosts parse unknown JSON as chat, so control frames require this explicit handshake.
+        if (connectionRef.current.protocol !== SANDBOX_SCOPED_PROTOCOL || !connectionRef.current.canExecute) return
+        if (!submitSandboxFrame(wsRef.current, { op: 'subscribe', conversation: { type: scene.type, id: scene.id } })) {
+            setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，会话切换未发送。"))
+        }
+    }
+
     const handleInboundPayload = (data: {
         type: string; id: string; locale?: unknown; content?: unknown; endpoint?: string; workingDirectory?: string; canExecute?: boolean;
         shellIsolation?: { available?: boolean; provider?: string; message?: string }; timestamp: number;
-        messageId?: string; bot?: string;
+        messageId?: string; bot?: string; protocol?: string; connectionId?: string; direction?: string; senderId?: string;
+        conversation?: { type: Channel['type']; id: string };
     }) => {
         const locale = data.type === 'ready' && data.locale === 'en' ? 'en' : data.type === 'ready' ? 'zh-CN' : localeRef.current
         if (data.type === 'ready') {
             localeRef.current = locale
             setLocale(locale)
-            setBotName(data.endpoint || data.bot || 'sandbox-bot')
+            endpointIdRef.current = data.endpoint || data.bot || 'sandbox-bot'
+            setBotName(endpointIdRef.current)
+            connectionRef.current = { protocol: data.protocol, connectionId: data.connectionId, ownerId: data.id, canExecute: data.canExecute !== false }
             setCanExecute(data.canExecute !== false)
             setTransportNotice(data.canExecute === false ? sandboxText(locale, "当前 Token 只有演示权限，任务运行已禁用。") : null)
             if (data.shellIsolation) {
@@ -168,8 +181,10 @@ export default function Sandbox() {
                     ? current
                     : { ...current, runConfig: { ...current.runConfig, workingDirectory } })
             }
+            subscribeToScene(activeChannelRef.current)
             return
         }
+        if (data.type === 'subscribed') return
         if (data.type === 'error') {
             const notice = Array.isArray(data.content)
                 ? String((data.content[0] as { data?: { text?: unknown } } | undefined)?.data?.text ?? sandboxText(locale, "Sandbox 拒绝了本次操作"))
@@ -181,7 +196,11 @@ export default function Sandbox() {
             const content: MessageSegment[] = Array.isArray(data.content)
                 ? data.content as MessageSegment[]
                 : parseTextToSegments(String(data.content ?? ''))
-            setMessages((prev) => prev.map((m) => (m.id === data.messageId ? { ...m, content } : m)))
+            const scene = data.conversation ?? activeChannelRef.current
+            if (!data.conversation && data.id && data.id !== scene.id) return
+            setMessages((prev) => prev.map((message) => message.id === data.messageId
+                && message.channelType === scene.type && message.channelId === scene.id && message.type === 'received'
+                ? { ...message, content } : message))
             return
         }
 
@@ -189,53 +208,50 @@ export default function Sandbox() {
             ? parseTextToSegments(data.content)
             : Array.isArray(data.content) ? data.content as MessageSegment[] : parseTextToSegments(String(data.content ?? ''))
 
-        const channelType: Channel['type'] = data.type === 'group' || data.type === 'channel' ? data.type : 'private'
+        const channelType: Channel['type'] = data.conversation?.type ?? (data.type === 'group' || data.type === 'channel' ? data.type : 'private')
+        const sceneId = data.conversation?.id ?? data.id
+        const isInput = data.direction === 'inbound'
+        // Interactive choices are transport inputs, not another chat turn or an approval result.
+        if (isInput && content.every((segment) => segment.type === 'action')) return
         const channelName = channelType === 'private'
-            ? sandboxText(locale, "会话 {0}", [data.id])
+            ? sandboxText(locale, "会话 {0}", [sceneId])
             : channelType === 'group'
-            ? sandboxText(locale, "群组场景 {0}", [data.id])
-            : sandboxText(locale, "频道场景 {0}", [data.id])
+            ? sandboxText(locale, "群组场景 {0}", [sceneId])
+            : sandboxText(locale, "频道场景 {0}", [sceneId])
 
         setChannels((prev) => {
-            if (prev.some((c) => c.id === data.id && c.type === channelType)) return prev
+            if (prev.some((c) => c.id === sceneId && c.type === channelType)) return prev
             const created: Channel = {
-                id: data.id, name: channelName, type: channelType, unread: 0,
+                id: sceneId, name: channelName, type: channelType, unread: 0,
                 runConfig: { ...activeChannelRef.current.runConfig },
             }
+            activeChannelRef.current = created
             setActiveChannel(created)
             return [...prev, created]
         })
 
-        setMessages((prev) => [...prev, {
-            id: data.messageId ?? `bot_${data.timestamp}`, type: 'received', channelType,
-            channelId: data.id, channelName, senderId: 'endpoint',
-            senderName: data.bot || endpointIdRef.current, content, timestamp: data.timestamp,
-        }])
+        setMessages((prev) => mergePlaygroundMessage(prev, {
+            id: data.messageId ?? createSandboxMessageId(), type: isInput ? 'sent' : 'received', channelType,
+            channelId: sceneId, channelName, senderId: isInput ? data.senderId || connectionRef.current.ownerId || 'owner' : 'endpoint',
+            senderName: isInput ? sandboxText(locale, "当前用户") : data.bot || endpointIdRef.current, content, timestamp: data.timestamp,
+        }))
     }
 
     const sendInteractiveAction = (payload: string, messageId?: string) => {
-        const ws = wsRef.current
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-            setTransportNotice(sandboxText(locale, "Sandbox 连接尚未就绪，审批选择未发送。"))
+        if (!connectionRef.current.canExecute) return
+        const scene = activeChannelRef.current
+        const segments: MessageSegment[] = [{ type: 'action', data: { id: payload, payload } }]
+        if (!submitSandboxFrame(wsRef.current, {
+            type: scene.type, id: scene.id, messageId: createSandboxMessageId(), content: segments,
+            agentRun: scene.runConfig, timestamp: Date.now(),
+        })) {
+            setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，审批选择未发送。"))
             return
         }
-        const segments: MessageSegment[] = [{ type: 'action', data: { id: payload, payload } }]
-        const payloadJson = JSON.stringify({
-            type: activeChannel.type,
-            id: activeChannel.id,
-            content: segments,
-            agentRun: activeChannel.runConfig,
-            timestamp: Date.now(),
-        })
-        try {
-            ws.send(payloadJson)
-            if (messageId) {
-                setMessages((current) => current.map((message) => message.id === messageId
-                    ? { ...message, interactionResolved: true }
-                    : message))
-            }
-        } catch {
-            setTransportNotice(sandboxText(locale, "审批选择发送失败，请等待连接恢复后重试。"))
+        if (messageId) {
+            setMessages((current) => current.map((message) => message.id === messageId
+                && message.channelType === scene.type && message.channelId === scene.id && message.type === 'received'
+                ? { ...message, interactionResolved: true } : message))
         }
     }
 
@@ -252,9 +268,11 @@ export default function Sandbox() {
                 clearTimeout(retryTimer)
                 retryTimer = undefined
             }
+            connectionRef.current = { canExecute: false }
+            setCanExecute(false)
+            setConnected(false)
             const wsUrl = buildSandboxWebSocketUrl()
-            // Tear down previous socket before opening a new one so we don't
-            // leave two concurrent /sandbox sessions for fixed-name endpoints.
+            // This page owns one connection; replacing its credentials must retire only that socket.
             const previous = wsRef.current
             if (previous) {
                 replaceInFlight = true
@@ -268,16 +286,20 @@ export default function Sandbox() {
             const ws = new WebSocket(wsUrl)
             wsRef.current = ws
             ws.onopen = () => {
+                if (wsRef.current !== ws) return
                 attempt = 0
                 setConnected(true)
             }
             ws.onmessage = (event) => {
+                if (wsRef.current !== ws) return
                 try { handleInboundPayload(JSON.parse(String(event.data))) }
                 catch (err) { console.error('[Sandbox] Failed to parse message:', err) }
             }
             ws.onclose = () => {
                 if (wsRef.current !== ws) return
                 setConnected(false)
+                setCanExecute(false)
+                connectionRef.current = { canExecute: false }
                 wsRef.current = null
                 if (closed || replaceInFlight) return
                 const delay = Math.min(8_000, 500 * 2 ** attempt)
@@ -327,6 +349,8 @@ export default function Sandbox() {
             }
             wsRef.current?.close()
             wsRef.current = null
+            connectionRef.current = { canExecute: false }
+            setCanExecute(false)
             setConnected(false)
         }
     }, [])
@@ -541,21 +565,24 @@ export default function Sandbox() {
         })
     }
 
-    const handleSendMessage = (text: string, segments: MessageSegment[]) => {
-        if (!canExecute || !hasRenderableSegments(segments)) return
-        const newMessage: Message = { id: `msg_${Date.now()}`, type: 'sent', channelType: activeChannel.type, channelId: activeChannel.id, channelName: activeChannel.name, senderId: 'test_user', senderName: sandboxText(locale, "测试用户"), content: segments, timestamp: Date.now() }
-        setMessages((prev) => [...prev, newMessage]); setInputText(''); setPreviewSegments([]); setComposerMode('write')
+    const handleSendMessage = (_text: string, segments: MessageSegment[]) => {
+        if (!connectionRef.current.canExecute || !hasRenderableSegments(segments)) return
+        const scene = activeChannelRef.current
+        const newMessage: Message = {
+            id: createSandboxMessageId(), type: 'sent', channelType: scene.type, channelId: scene.id,
+            channelName: scene.name, senderId: connectionRef.current.ownerId || 'test_user',
+            senderName: sandboxText(localeRef.current, "测试用户"), content: segments, timestamp: Date.now(),
+        }
+        if (!submitSandboxFrame(wsRef.current, {
+            type: scene.type, id: scene.id, messageId: newMessage.id, content: segments,
+            agentRun: scene.runConfig, timestamp: newMessage.timestamp,
+        })) {
+            setTransportNotice(sandboxText(localeRef.current, "Sandbox 连接尚未就绪，消息未发送。"))
+            return
+        }
+        setMessages((prev) => mergePlaygroundMessage(prev, newMessage))
+        setInputText(''); setPreviewSegments([]); setComposerMode('write')
         editorRef.current?.clear()
-        // Stamp type+id so Host sandbox endpoint preserves channel context for outbound replies.
-        const payload = JSON.stringify({
-            type: activeChannel.type,
-            id: activeChannel.id,
-            messageId: newMessage.id,
-            content: segments,
-            agentRun: activeChannel.runConfig,
-            timestamp: Date.now(),
-        })
-        wsRef.current?.send(payload)
     }
 
 
@@ -565,7 +592,13 @@ export default function Sandbox() {
         )))
         setConfirmClear(false)
     }
-    const switchChannel = (channel: Channel) => { setActiveChannel(channel); setChannels((prev) => prev.map((c) => c.id === channel.id && c.type === channel.type ? { ...c, unread: 0 } : c)); if (window.innerWidth < 900) setShowChannelList(false) }
+    const switchChannel = (channel: Channel) => {
+        activeChannelRef.current = channel
+        subscribeToScene(channel)
+        setActiveChannel(channel)
+        setChannels((prev) => prev.map((c) => c.id === channel.id && c.type === channel.type ? { ...c, unread: 0 } : c))
+        if (window.innerWidth < 900) setShowChannelList(false)
+    }
     const updateRunConfig = (patch: Partial<SandboxAgentRunConfig>) => {
         const next = { ...activeChannel, runConfig: { ...activeChannel.runConfig, ...patch } }
         setActiveChannel(next)
@@ -573,12 +606,14 @@ export default function Sandbox() {
     }
     const addSession = () => {
         const label = newSessionName.trim() || sandboxText(locale, "未命名试验")
-        const id = `${newSessionScope}-${Date.now().toString(36)}`
+        const id = `${newSessionScope}-${createSandboxMessageId()}`
         const session: Channel = {
             id, name: label, type: newSessionScope, unread: 0,
             runConfig: { ...activeChannel.runConfig },
         }
         setChannels((current) => [...current, session])
+        activeChannelRef.current = session
+        subscribeToScene(session)
         setActiveChannel(session)
         setNewSessionName('')
         setShowNewSession(false)
