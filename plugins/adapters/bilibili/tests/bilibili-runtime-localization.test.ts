@@ -31,11 +31,11 @@ class Modules implements ModuleRuntime {
   invalidate(): void {}
   async close(): Promise<void> {}
 }
-it('discovers the private source plugin and protects localized review commands in an actual Runtime', async () => {
+it('discovers the published plugin entry and protects localized review commands in an actual Runtime', async () => {
   const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-  expect(manifest.zhin.entry).toBe('./plugin.ts');
-  expect(manifest.files).toContain('plugin.ts');
-  await expect(readFile(new URL(`../${manifest.zhin.entry}`, import.meta.url), 'utf8')).resolves.toContain('definePlugin');
+  expect(manifest.zhin.entry).toBe('./plugin.js');
+  expect(manifest.files).toContain('plugin.js');
+  await expect(readFile(new URL('../plugin.ts', import.meta.url), 'utf8')).resolves.toContain('definePlugin');
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'bili-localization-')));
   const modules = new Modules();
   const write = async (path: string, value: unknown) => {
@@ -49,8 +49,8 @@ it('discovers the private source plugin and protects localized review commands i
   await write(join(directory, 'plugin.ts'), '');
   modules.values.set(join(directory, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
   await write(join(directory, 'plugins/bilibili/package.json'), manifest);
-  await write(join(directory, 'plugins/bilibili/plugin.ts'), '');
-  modules.values.set(join(directory, 'plugins/bilibili/plugin.ts'), { default: plugin });
+  await write(join(directory, 'plugins/bilibili/plugin.js'), '');
+  modules.values.set(join(directory, 'plugins/bilibili/plugin.js'), { default: plugin });
   for (const [path, definition] of definitions) {
     const source = join(directory, `plugins/bilibili/commands/${path}/index.ts`);
     await write(source, ''); modules.values.set(source, { default: definition });
