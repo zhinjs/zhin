@@ -1,5 +1,51 @@
 # @zhin.js/adapter-icqq
 
+## 1.1.18
+
+### Patch Changes
+
+- 6345a38: feat(adapters): add per-adapter Console pages
+
+  Every platform adapter now ships a `pages/index` Console page backed by a shared
+  `createAdapterConsolePage` component and `createAdapterConsoleRpc` server helper:
+
+  - See running endpoints, test connectivity, and manage
+    `plugins.<adapter>.endpoints` (add/remove writes `.env` references) from the
+    Console instead of chat commands.
+  - Surface LoginAssist pending tasks (QR / slider / SMS / device) so ICQQ login no
+    longer requires the terminal.
+  - QQ moves its QR binding flow (`qq endpoint add`) into Console actions with
+    public/private selection.
+  - Pages are permission-gated by `<adapter>:read`; writes need `<adapter>:write`.
+
+- ff3efe7: feat(adapters): notify masters when ICQQ or QQ goes offline and support ICQQ re-login
+
+  - Add an explicit `notify` target to ICQQ and QQ endpoint config: when the
+    transport goes offline or login fails, send a short notice through another
+    adapter instance's Endpoint via `OutboundHost`.
+  - ICQQ automatically retries login after `system.offline.kickoff` when
+    `autoReconnect` is enabled, and exposes pending QR/slider/device challenges.
+  - Add `icqq login status|qr|confirm|code|retry` recovery commands. They can be
+    invoked from the QQ conversation that received the notice; `qr` returns the
+    login QR code as an image when the notifying platform supports it.
+  - `notify.id` also counts as the master identity for the related endpoint
+    management commands, so recovery can happen from the notified conversation.
+  - Document the new config and commands in the ICQQ/QQ READMEs and generated
+    configuration reference.
+
+- c58c589: Group deferred tools by their canonical plugin or MCP server instead of installation paths. Omit already represented delivered text and ledger facts only from the current model projection, preserving full history and restoring facts when their covering reply leaves the active context. Allow tools to declare a synchronous, read-only availability predicate before turn disclosure, with execution-time checks remaining authoritative.
+
+  Preserve every confirmed platform message identity across Agent replies and ICQQ split sends. Give each bubble its own stable single-message alias while retaining the reply's ordered association; preserve confirmed prefixes on partial delivery without retrying or inventing unknown message IDs.
+
+- Updated dependencies [6345a38]
+- Updated dependencies [ff3efe7]
+- Updated dependencies [c58c589]
+  - @zhin.js/adapter@1.1.25
+  - @zhin.js/client@1.1.21
+  - @zhin.js/core@1.1.53
+  - @zhin.js/im-contract@1.1.9
+  - @zhin.js/tool@1.1.12
+
 ## 1.1.17
 
 ### Patch Changes

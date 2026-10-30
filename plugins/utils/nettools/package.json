@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-nettools",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Network tools plugin for Zhin.js — multi-region ping, RDAP whois, DNS-over-HTTPS lookup and domain price comparison (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

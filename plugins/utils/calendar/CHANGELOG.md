@@ -1,5 +1,13 @@
 # @zhin.js/plugin-calendar
 
+## 0.1.9
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/im-contract@1.1.9
+  - @zhin.js/tool@1.1.12
+
 ## 0.1.8
 
 ### Patch Changes

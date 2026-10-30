@@ -1,5 +1,31 @@
 # @zhin.js/adapter-email
 
+## 1.1.18
+
+### Patch Changes
+
+- 6345a38: feat(adapters): add per-adapter Console pages
+
+  Every platform adapter now ships a `pages/index` Console page backed by a shared
+  `createAdapterConsolePage` component and `createAdapterConsoleRpc` server helper:
+
+  - See running endpoints, test connectivity, and manage
+    `plugins.<adapter>.endpoints` (add/remove writes `.env` references) from the
+    Console instead of chat commands.
+  - Surface LoginAssist pending tasks (QR / slider / SMS / device) so ICQQ login no
+    longer requires the terminal.
+  - QQ moves its QR binding flow (`qq endpoint add`) into Console actions with
+    public/private selection.
+  - Pages are permission-gated by `<adapter>:read`; writes need `<adapter>:write`.
+
+- Updated dependencies [6345a38]
+- Updated dependencies [ff3efe7]
+- Updated dependencies [c58c589]
+  - @zhin.js/adapter@1.1.25
+  - @zhin.js/client@1.1.21
+  - @zhin.js/core@1.1.53
+  - @zhin.js/im-contract@1.1.9
+
 ## 1.1.17
 
 ### Patch Changes
