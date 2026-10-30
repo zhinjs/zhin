@@ -153,6 +153,8 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "等待结果": "Waiting for a result",
   "Agent 修改文件、执行命令或测试后，产物会集中出现在这里": "Artifacts appear here when the Agent modifies files, runs commands or executes tests",
   "对话与轨迹": "Conversation and trace",
+  "返回会话": "Back to conversation",
+  "打开当前文件": "Open current file",
   "Agent 运行中": "Agent is running",
   "最近任务已完成": "Latest task completed",
   "最近任务失败": "Latest task failed",

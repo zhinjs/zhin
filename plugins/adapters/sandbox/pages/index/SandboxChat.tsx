@@ -51,7 +51,11 @@ type Message = PlaygroundMessage
 type Channel = PlaygroundSession
 interface Face { id: number; emojiId: number; stickerId: number; emojiType: string; name: string; describe: string; png: boolean; apng: boolean; lottie: boolean; }
 
-export default function Sandbox() {
+export interface SandboxPageProps {
+    readonly renderConversationDetails?: (context: { readonly sessionKey: string; readonly canExecute: boolean }) => React.ReactNode
+}
+
+export default function Sandbox(props: SandboxPageProps = {}) {
     const [locale, setLocale] = useState<SandboxLocale>('zh-CN')
     const localeRef = useRef<SandboxLocale>('zh-CN')
     const [initialState] = useState(() => loadPlaygroundState())
@@ -91,6 +95,7 @@ export default function Sandbox() {
     const [composerMode, setComposerMode] = useState<'write' | 'preview'>('write')
     const [showChannelList, setShowChannelList] = useState(false)
     const [showInspector, setShowInspector] = useState(false)
+    const [showConversationDetails, setShowConversationDetails] = useState(false)
     const [showRunSettings, setShowRunSettings] = useState(false)
     const [showNewSession, setShowNewSession] = useState(false)
     const [newSessionName, setNewSessionName] = useState('')
@@ -104,12 +109,43 @@ export default function Sandbox() {
     const connectionRef = useRef<{ protocol?: string; connectionId?: string; ownerId?: string; canExecute: boolean }>({ canExecute: false })
     const editorRef = useRef<RichTextEditorRef>(null)
     const traceRef = useRef<AgentTraceSnapshot | null>(null)
+    const traceReadOwnerRef = useRef<{
+        sessionKey: string; socket: WebSocket | null; controller: AbortController;
+        pending?: Promise<void>; cancelRefresh?: ReturnType<typeof window.setTimeout>;
+    } | null>(null)
     const activeChannelRef = useRef(activeChannel)
     const endpointIdRef = useRef(endpointId)
     const sessionKey = useMemo(
         () => buildSandboxSessionKey(endpointId, activeChannel.type, activeChannel.id),
         [activeChannel.id, activeChannel.type, endpointId],
     )
+    const retireTraceReads = () => {
+        const owner = traceReadOwnerRef.current
+        traceReadOwnerRef.current = null
+        owner?.controller.abort()
+        if (owner?.cancelRefresh !== undefined) window.clearTimeout(owner.cancelRefresh)
+        traceRef.current = null
+    }
+    const currentTraceOwner = () => {
+        const scene = activeChannelRef.current
+        const key = buildSandboxSessionKey(endpointIdRef.current, scene.type, scene.id)
+        let owner = traceReadOwnerRef.current
+        if (!owner || owner.sessionKey !== key || owner.socket !== wsRef.current) {
+            retireTraceReads()
+            owner = { sessionKey: key, socket: wsRef.current, controller: new AbortController() }
+            traceReadOwnerRef.current = owner
+            setTrace(null)
+            setTraceNotice(null)
+            setStoppingTask(false)
+        }
+        return owner
+    }
+    const ownsCurrentTrace = (owner: NonNullable<typeof traceReadOwnerRef.current>) => {
+        const scene = activeChannelRef.current
+        return traceReadOwnerRef.current === owner && !owner.controller.signal.aborted
+            && owner.socket === wsRef.current
+            && owner.sessionKey === buildSandboxSessionKey(endpointIdRef.current, scene.type, scene.id)
+    }
     const traceSummary = useMemo(() => summarizeTrace(trace), [trace])
     const taskRuns = useMemo(() => deriveTaskRuns(trace), [trace])
     const workbenchArtifacts = useMemo(() => deriveWorkbenchArtifacts(trace, locale), [trace, locale])
@@ -264,6 +300,7 @@ export default function Sandbox() {
 
         const connect = () => {
             if (closed) return
+            retireTraceReads()
             if (retryTimer) {
                 clearTimeout(retryTimer)
                 retryTimer = undefined
@@ -285,6 +322,7 @@ export default function Sandbox() {
             }
             const ws = new WebSocket(wsUrl)
             wsRef.current = ws
+            void loadTrace()
             ws.onopen = () => {
                 if (wsRef.current !== ws) return
                 attempt = 0
@@ -297,6 +335,7 @@ export default function Sandbox() {
             }
             ws.onclose = () => {
                 if (wsRef.current !== ws) return
+                retireTraceReads()
                 setConnected(false)
                 setCanExecute(false)
                 connectionRef.current = { canExecute: false }
@@ -340,6 +379,7 @@ export default function Sandbox() {
         }
         return () => {
             closed = true
+            retireTraceReads()
             if (retryTimer) clearTimeout(retryTimer)
             if (typeof window !== 'undefined') {
                 window.removeEventListener('storage', onAuthOrStorage)
@@ -359,37 +399,50 @@ export default function Sandbox() {
     useEffect(() => { setPreviewSegments(inputText.trim() ? parseTextToSegments(inputText) : []) }, [inputText])
 
     const loadTrace = useCallback(async (quiet = false) => {
+        const owner = currentTraceOwner()
         const locale = localeRef.current
         if (!quiet) setTraceLoading(true)
-        try {
-            const current = traceRef.current?.sessionKey === sessionKey ? traceRef.current : null
-            let incoming = await fetchAgentTrace(sessionKey, quiet ? current?.latestSequence ?? 0 : 0, locale)
-            if (quiet && current?.runtimeId && incoming.runtimeId && current.runtimeId !== incoming.runtimeId) {
-                incoming = await fetchAgentTrace(sessionKey, 0, locale)
+        if (owner.pending) return owner.pending
+        owner.pending = (async () => {
+            try {
+                const current = traceRef.current?.sessionKey === owner.sessionKey ? traceRef.current : null
+                let incoming = await fetchAgentTrace(owner.sessionKey, quiet ? current?.latestSequence ?? 0 : 0, locale, owner.controller.signal)
+                if (!ownsCurrentTrace(owner)) return
+                if (quiet && current?.runtimeId && incoming.runtimeId && current.runtimeId !== incoming.runtimeId) {
+                    incoming = await fetchAgentTrace(owner.sessionKey, 0, locale, owner.controller.signal)
+                    if (!ownsCurrentTrace(owner)) return
+                }
+                const baseline = traceRef.current?.sessionKey === owner.sessionKey ? traceRef.current : null
+                const merged = mergeTraceSnapshot(baseline, incoming)
+                traceRef.current = merged
+                setTrace(merged)
+                saveCachedAgentTrace(merged)
+                setTraceNotice(null)
+            } catch (error) {
+                if (ownsCurrentTrace(owner)) setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "Agent Trace 暂不可用"))
+            } finally {
+                owner.pending = undefined
+                if (ownsCurrentTrace(owner)) setTraceLoading(false)
             }
-            const merged = mergeTraceSnapshot(current, incoming)
-            traceRef.current = merged
-            setTrace(merged)
-            saveCachedAgentTrace(merged)
-            setTraceNotice(null)
-        } catch (error) {
-            setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "Agent Trace 暂不可用"))
-        } finally {
-            if (!quiet) setTraceLoading(false)
-        }
-    }, [sessionKey])
+        })()
+        return owner.pending
+    }, [])
 
     useEffect(() => {
+        const owner = currentTraceOwner()
         const cached = loadCachedAgentTrace(sessionKey)
-        traceRef.current = cached
+        // Cached display is not an incremental baseline for this connection.
         setTrace(cached)
         setTraceNotice(null)
         void loadTrace()
         const timer = window.setInterval(() => {
             if (document.visibilityState === 'visible') void loadTrace(true)
         }, 2_000)
-        return () => window.clearInterval(timer)
-    }, [loadTrace])
+        return () => {
+            window.clearInterval(timer)
+            if (traceReadOwnerRef.current === owner) retireTraceReads()
+        }
+    }, [sessionKey, loadTrace])
 
     const parseTextToSegments = (text: string): MessageSegment[] => {
         const segments: MessageSegment[] = []
@@ -646,16 +699,23 @@ export default function Sandbox() {
     const runPrompt = (prompt: string) => handleSendMessage(prompt, [{ type: 'text', data: { text: prompt } }])
     const recentTraceEvents = trace?.events.slice(-8).reverse() ?? []
     const stopActiveTask = async () => {
+        const owner = currentTraceOwner()
         setStoppingTask(true)
         try {
-            const cancelled = await cancelAgentTask(sessionKey, locale)
+            const cancelled = await cancelAgentTask(owner.sessionKey, locale)
+            if (!ownsCurrentTrace(owner)) return
             setTraceNotice(cancelled ? sandboxText(locale, "已发送停止请求，正在等待任务结束。") : sandboxText(locale, "当前会话没有运行中的任务。"))
-            window.setTimeout(() => void loadTrace(true), 240)
+            if (owner.cancelRefresh !== undefined) window.clearTimeout(owner.cancelRefresh)
+            owner.cancelRefresh = window.setTimeout(() => {
+                owner.cancelRefresh = undefined
+                if (ownsCurrentTrace(owner)) void loadTrace(true)
+            }, 240)
         } catch (error) {
+            if (!ownsCurrentTrace(owner)) return
             setTraceNotice(error instanceof Error ? error.message : sandboxText(locale, "无法停止任务"))
             setShowInspector(true)
         } finally {
-            setStoppingTask(false)
+            if (ownsCurrentTrace(owner)) setStoppingTask(false)
         }
     }
     const retryLastTask = () => {
@@ -737,11 +797,11 @@ export default function Sandbox() {
     ) : null
 
     return (
-        <section className="agent-playground-shell">
+        <section className={cn("agent-playground-shell", showInspector && "has-inspector")}>
             <div className="agent-playground-mobilebar">
                 <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "会话列表")}</button>
                 <strong>{sandboxText(locale, "会话")}</strong>
-                <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />{sandboxText(locale, "检查器")}</button>
+                <button type="button" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />{sandboxText(locale, "检查器")}</button>
             </div>
 
             <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label={sandboxText(locale, "会话列表")}>
@@ -806,9 +866,8 @@ export default function Sandbox() {
                 <header className="agent-playground-runbar">
                     <div className="agent-playground-run-identity">
                         <span className="agent-playground-run-icon">{getChannelIcon(activeChannel.type)}</span>
-                        <div>
-                            <div className="agent-playground-run-title"><h1>{activeChannel.name}</h1><span>{scopeLabel}</span></div>
-                            <code>{sessionKey}</code>
+                        <div title={sessionKey}>
+                            <div className="agent-playground-run-title"><h1 title={activeChannel.name}>{activeChannel.name}</h1><span>{scopeLabel}</span></div>
                         </div>
                     </div>
                     <div className="agent-playground-run-actions">
@@ -821,9 +880,11 @@ export default function Sandbox() {
                         ) : lastUserMessage ? (
                             <button type="button" onClick={retryLastTask} aria-label={sandboxText(locale, "重新运行上一个任务")}><RotateCcw size={14} />{sandboxText(locale, "重试")}</button>
                         ) : null}
-                        <a href={agentSessionsPath(sessionKey)}><ExternalLink size={14} />{sandboxText(locale, "对话与轨迹")}</a>
+                        {props.renderConversationDetails
+                            ? <button type="button" disabled={!canExecute} aria-expanded={showConversationDetails} aria-controls="sandbox-conversation-details" onClick={() => setShowConversationDetails((visible) => !visible)}><ListChecks size={14} />{sandboxText(locale, "对话与轨迹")}</button>
+                            : <a href={agentSessionsPath(sessionKey)}><ExternalLink size={14} />{sandboxText(locale, "对话与轨迹")}</a>}
                         <button type="button" className={cn(showRunSettings && 'active')} aria-expanded={showRunSettings} onClick={() => setShowRunSettings((visible) => !visible)} aria-label={sandboxText(locale, "配置运行环境")}><SlidersHorizontal size={16} /></button>
-                        <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
+                        <button type="button" aria-expanded={showInspector} aria-controls="sandbox-run-inspector" onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
                         <button type="button" onClick={() => setConfirmClear(true)} aria-label={sandboxText(locale, "清空当前会话")}><Trash2 size={15} /></button>
                     </div>
                 </header>
@@ -896,8 +957,15 @@ export default function Sandbox() {
                     </section>
                 )}
 
-                {/* Messages */}
-                <section className="agent-playground-conversation" aria-label={sandboxText(locale, "Agent 对话")}>
+                {showConversationDetails && props.renderConversationDetails && (
+                    <section id="sandbox-conversation-details" className="agent-playground-conversation-details" aria-label={sandboxText(locale, "对话与轨迹")}>
+                        <button type="button" className="agent-playground-details-back" onClick={() => setShowConversationDetails(false)}><MessageSquare size={14} />{sandboxText(locale, "返回会话")}</button>
+                        {props.renderConversationDetails({ sessionKey, canExecute })}
+                    </section>
+                )}
+
+                {/* Keep the live editor mounted while reading details so its draft survives. */}
+                <section className="agent-playground-conversation" hidden={showConversationDetails} aria-label={sandboxText(locale, "Agent 对话")}>
                     <div className="agent-playground-message-scroll">
                         {channelMessages.length === 0 ? (
                             <div className="agent-playground-empty">
@@ -938,7 +1006,7 @@ export default function Sandbox() {
                 </section>
 
                 {/* Input area */}
-                <section className="agent-playground-composer" aria-label={sandboxText(locale, "任务输入")}>
+                <section className="agent-playground-composer" hidden={showConversationDetails} aria-label={sandboxText(locale, "任务输入")}>
                     {/* Toolbar */}
                     <div className="flex gap-2 items-center flex-wrap">
                         <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", showFacePicker ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
@@ -1064,7 +1132,7 @@ export default function Sandbox() {
                 </section>
             </main>
 
-            <aside className={cn("agent-playground-inspector", showInspector && "show")} aria-label={sandboxText(locale, "运行检查器")}>
+            <aside id="sandbox-run-inspector" className={cn("agent-playground-inspector", showInspector && "show")} hidden={!showInspector} aria-hidden={!showInspector} aria-label={sandboxText(locale, "运行检查器")}>
                 <div className="agent-playground-inspector-head">
                     <div><span>Run inspector</span><h2>{sandboxText(locale, "运行检查器")}</h2></div>
                     <div>
@@ -1168,6 +1236,11 @@ export default function Sandbox() {
                                             {expanded && (
                                                 <div className="agent-playground-artifact-detail">
                                                     {artifact.path && <code>{artifact.path}</code>}
+                                                    {canExecute && artifact.projectFilePath && (
+                                                        <a href={`/files?${new URLSearchParams({ path: artifact.projectFilePath })}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                                            <ExternalLink size={13} />{sandboxText(locale, "打开当前文件")}
+                                                        </a>
+                                                    )}
                                                     {artifact.diff ? <pre>{artifact.diff}</pre> : <pre>{artifact.detail || sandboxText(locale, "暂无输出")}</pre>}
                                                     <footer><span>{artifact.durationMs === undefined ? sandboxText(locale, "等待结果") : `${artifact.durationMs.toLocaleString(locale)} ms`}</span><code>{artifact.turnId.slice(0, 12)}</code></footer>
                                                 </div>

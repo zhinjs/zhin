@@ -61,6 +61,8 @@ export interface WorkbenchArtifact {
   readonly kind: 'file-change' | 'test' | 'command';
   readonly title: string;
   readonly path?: string;
+  /** Current Host projection into its existing project-file authority. */
+  readonly projectFilePath?: string;
   readonly status: 'running' | 'completed' | 'failed' | 'denied' | 'cancelled';
   readonly detail?: string;
   readonly diff?: string;
@@ -156,7 +158,7 @@ export function saveCachedAgentTrace(
   try {
     storage.setItem(`${traceCachePrefix}${snapshot.sessionKey}`, JSON.stringify({
       ...snapshot,
-      events: snapshot.events.slice(-300),
+      events: snapshot.events.slice(-300).map(event => ({ ...event, data: cacheTraceData(event.data) })),
       activeTurnIds: snapshot.activeTurnIds.slice(-20),
     }));
     return true;
@@ -248,12 +250,16 @@ export function deriveWorkbenchArtifacts(snapshot: AgentTraceSnapshot | null, lo
       recordedAt: event.recordedAt,
     } as const;
     if (toolName === 'write_file' || toolName === 'edit_file') {
-      const filePath = stringValue(args.file_path ?? args.path) || 'unknown file';
+      const settlement = outcome?.type === 'tool_result' ? outcome.data : undefined;
+      const filePath = stringValue(recordValue(settlement?.fileChange).path)
+        || stringValue(args.file_path ?? args.path) || 'unknown file';
+      const projectFilePath = stringValue(recordValue(settlement?.projectFile).path);
       return [{
         ...common,
         kind: 'file-change',
         title: toolName === 'write_file' ? sandboxText(locale, "写入文件") : sandboxText(locale, "编辑文件"),
         path: filePath,
+        ...(projectFilePath ? { projectFilePath } : {}),
         detail: artifactOutputDetail(outcome),
         diff: fileDiff(toolName, args, filePath),
       }];
@@ -437,13 +443,13 @@ export function presentTraceEvent(event: AgentTraceEvent, locale: SandboxLocale 
   }
 }
 
-export async function fetchAgentTrace(sessionKey: string, afterSequence = 0, locale: SandboxLocale = 'zh-CN'): Promise<AgentTraceSnapshot> {
+export async function fetchAgentTrace(sessionKey: string, afterSequence = 0, locale: SandboxLocale = 'zh-CN', signal?: AbortSignal): Promise<AgentTraceSnapshot> {
   const base = getSandboxApiBase() || window.location.origin;
   const url = new URL('/api/agent/traces', `${base}/`);
   url.searchParams.set('sessionKey', sessionKey);
   url.searchParams.set('limit', '300');
   if (afterSequence > 0) url.searchParams.set('after', String(afterSequence));
-  const response = await fetch(url, { headers: getSandboxAuthHeaders() });
+  const response = await fetch(url, { headers: getSandboxAuthHeaders(), signal });
   const body = await response.json().catch(() => ({})) as { success?: boolean; data?: AgentTraceSnapshot; error?: string };
   if (!response.ok || body.success === false || !body.data) {
     throw new Error(response.status === 503
@@ -634,8 +640,15 @@ function parseCachedTraceEvent(value: unknown): AgentTraceEvent | undefined {
     sessionKey: item.sessionKey,
     turnId: item.turnId,
     type: item.type,
-    data: item.data as Record<string, unknown>,
+    data: cacheTraceData(item.data as Record<string, unknown>),
   };
+}
+
+function cacheTraceData(data: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const cached = { ...data };
+  // Project-file links are granted by the current Host API, not Hostless cache.
+  delete cached.projectFile;
+  return cached;
 }
 
 function nonNegativeNumber(value: unknown): number {

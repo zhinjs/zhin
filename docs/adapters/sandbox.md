@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f2ce855f3091fc03 -->
+<!-- sync-adapter-docs:sha256=aaae30a280ff8462 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -91,7 +91,9 @@ sandbox:
 
 浏览器客户端连接到默认 `sandbox-bot`，也可以通过多个显式 endpoint 使用不同 WebSocket 路径。
 
-会话页的「对话与轨迹」入口打开当前会话的 Console 记录页（`/agent/sessions?sessionKey=...`），可按需查看对话、轨迹和会话分支。页面显示名改为「会话」，路由 `/sandbox`、现有默认场景及存储方式保持不变。
+支持工作区阅读的 Console 会在当前会话内打开「对话与轨迹」：读取真实收发记录，按需查看用量、逐轮轨迹与模型请求正文；返回聊天时保留输入草稿。未提供该阅读能力的旧 Console 仍打开记录页（`/agent/sessions?sessionKey=...`），会话分支操作保留在该页。路由 `/sandbox`、现有默认场景及存储方式保持不变。
+
+「变更与产物」中的成功文件写入、编辑在 Host 提供项目文件引用时，可打开现有文件管理器查看当前文件。入口沿用文件管理器的项目根与读取权限；旧记录或无法映射的文件仍显示执行记录，不推测链接。该入口读取当前内容，不是执行时的历史快照。
 
 每个 endpoint 通过 Root 提供的 HTTP Host（`httpHostToken`）挂载一个 WebSocket 路径，协议见下文「消息格式（wire 协议）」。
 

@@ -9,9 +9,11 @@ const file = new URL('../pages/index/SandboxChat.tsx', import.meta.url);
 const source = await readFile(file, 'utf8');
 const ast = ts.createSourceFile(file.pathname, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const declaration = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'Sandbox') as ts.FunctionDeclaration;
-const returnNode = declaration.body!.statements.find(ts.isReturnStatement)!;
-const prefix = source.slice(declaration.getStart(ast), returnNode.getStart(ast)).replace('export default ', '');
+const renderBoundary = declaration.body!.statements.find(node => ts.isVariableStatement(node)
+  && node.declarationList.declarations.some(item => ts.isIdentifier(item.name) && item.name.text === 'inlineRunCard'))!;
+const prefix = source.slice(declaration.getStart(ast), renderBoundary.getStart(ast)).replace('export default ', '');
 const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,channels,messages,inputText,previewSegments,transportNotice,
+  trace,traceNotice,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
   handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,setInputText,setPreviewSegments,editorRef};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
 }).outputText;
@@ -36,14 +38,24 @@ class FakeSocket {
   close() { this.readyState = 3; this.onclose?.(); }
 }
 
-function fixture() {
+function fixture(options: {
+  fetchAgentTrace?: typeof traces.fetchAgentTrace;
+  cancelAgentTask?: typeof traces.cancelAgentTask;
+  loadCachedAgentTrace?: typeof traces.loadCachedAgentTrace;
+  saveCachedAgentTrace?: typeof traces.saveCachedAgentTrace;
+} = {}) {
   const slots: any[] = [], listeners = new Map<string, Set<() => void>>();
-  let cursor = 0, pending: Array<() => void> = [];
+  let cursor = 0, pending: Array<() => void> = [], stateWrites = 0;
+  const intervals = new Map<number, () => void>();
+  let intervalId = 0;
   const storage = new Map<string, string>();
   vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) });
   vi.stubGlobal('window', {
     location: { origin: 'http://localhost' }, innerWidth: 1200,
-    setInterval: () => 1, clearInterval() {},
+    setInterval(callback: () => void) { const id = ++intervalId; intervals.set(id, callback); return id; },
+    clearInterval(id: number) { intervals.delete(id); },
+    setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
+    clearTimeout: (id: ReturnType<typeof setTimeout>) => clearTimeout(id),
     addEventListener(type: string, callback: () => void) { const items = listeners.get(type) ?? new Set(); items.add(callback); listeners.set(type, items); },
     removeEventListener(type: string, callback: () => void) { listeners.get(type)?.delete(callback); },
   });
@@ -53,10 +65,22 @@ function fixture() {
   const bindings = {
     sandboxText, ...traces, ...playground, ...transport,
     loadPlaygroundState: () => playground.createDefaultPlaygroundState('/workspace'),
-    fetchAgentTrace: async (sessionKey: string) => ({ sessionKey, latestSequence: 0, activeTurnIds: [], events: [] }),
-    useState(initial: any) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial; return [slots[index], (value: any) => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }]; },
+    fetchAgentTrace: options.fetchAgentTrace ?? (async (sessionKey: string) => ({ sessionKey, latestSequence: 0, activeTurnIds: [], events: [] })),
+    cancelAgentTask: options.cancelAgentTask ?? traces.cancelAgentTask,
+    loadCachedAgentTrace: options.loadCachedAgentTrace ?? traces.loadCachedAgentTrace,
+    saveCachedAgentTrace: options.saveCachedAgentTrace ?? traces.saveCachedAgentTrace,
+    useState(initial: any) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial; return [slots[index], (value: any) => { stateWrites++; slots[index] = typeof value === 'function' ? value(slots[index]) : value; }]; },
     useRef(initial: any) { const index = cursor++; return slots[index] ?? (slots[index] = { current: initial }); },
-    useMemo(fn: () => unknown) { return fn(); }, useCallback(fn: unknown) { return fn; },
+    useMemo(fn: () => unknown, deps: unknown[]) {
+      const index = cursor++, previous = slots[index];
+      if (!previous || deps.some((value, offset) => !Object.is(value, previous.deps[offset]))) slots[index] = { deps, value: fn() };
+      return slots[index].value;
+    },
+    useCallback(fn: unknown, deps: unknown[]) {
+      const index = cursor++, previous = slots[index];
+      if (!previous || deps.some((value, offset) => !Object.is(value, previous.deps[offset]))) slots[index] = { deps, value: fn };
+      return slots[index].value;
+    },
     useEffect(fn: () => (() => void) | void, deps: unknown[]) {
       const index = cursor++, previous = slots[index];
       if (!previous || deps.some((value, offset) => !Object.is(value, previous.deps[offset]))) {
@@ -70,6 +94,8 @@ function fixture() {
     view: null as any,
     render() { cursor = 0; f.view = render(); const effects = pending; pending = []; effects.forEach(run => run()); return f.view; },
     socket: () => FakeSocket.instances.at(-1)!,
+    poll() { intervals.forEach(callback => callback()); },
+    get stateWrites() { return stateWrites; },
     dispatch(type: string) { listeners.get(type)?.forEach(callback => callback()); },
     ready(protocol: string | null = transport.SANDBOX_SCOPED_PROTOCOL, canExecute = true) {
       const socket = f.socket(); socket.open();
@@ -84,6 +110,173 @@ function fixture() {
 const text = (value: string) => [{ type: 'text', data: { text: value } }];
 const echo = (messageId: string, id = 'sandbox-user', type = 'private') => ({
   type, id, conversation: { type, id }, direction: 'inbound', messageId, senderId: 'owner', content: text('hello'), timestamp: 5,
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void, reject!: (error: Error) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+async function settle() { for (let index = 0; index < 8; index++) await Promise.resolve(); }
+const traceSnapshot = (sessionKey: string, turnId: string): traces.AgentTraceSnapshot => ({
+  sessionKey, runtimeId: 'test-runtime', latestSequence: 1, activeTurnIds: [turnId],
+  events: [{ sessionKey, runtimeId: 'test-runtime', turnId, sequence: 1, recordedAt: 1, type: 'turn_start', data: {} }],
+});
+
+describe('Sandbox trace and cancellation ownership', () => {
+  it('displays cached trace without merging it into a new connection or its incremental cursor', async () => {
+    const result = deferred<traces.AgentTraceSnapshot>();
+    const fetchTrace = vi.fn<typeof traces.fetchAgentTrace>(() => result.promise);
+    const saveTrace = vi.fn<typeof traces.saveCachedAgentTrace>(() => true);
+    const f = fixture({
+      fetchAgentTrace: fetchTrace,
+      loadCachedAgentTrace: key => ({ ...traceSnapshot(key, 'cached-turn'), runtimeId: 'old-runtime', latestSequence: 8 }),
+      saveCachedAgentTrace: saveTrace,
+    });
+    try {
+      expect(f.render().trace?.events.map((event: traces.AgentTraceEvent) => event.turnId)).toEqual(['cached-turn']);
+      result.resolve(traceSnapshot(f.view.sessionKey, 'fresh-turn')); await settle();
+      expect(f.render().trace?.events.map((event: traces.AgentTraceEvent) => event.turnId)).toEqual(['fresh-turn']);
+      expect(saveTrace.mock.calls.at(-1)?.[0]?.events.map(event => event.turnId)).toEqual(['fresh-turn']);
+      f.poll(); await settle();
+      expect(fetchTrace.mock.calls.at(-1)?.[1]).toBe(1);
+    } finally { f.close(); }
+  });
+
+  it('ignores a slow scene A result after scene B became current', async () => {
+    const requests: Array<{ key: string; signal?: AbortSignal; result: ReturnType<typeof deferred<traces.AgentTraceSnapshot>> }> = [];
+    const f = fixture({ fetchAgentTrace: (key, _after, _locale, signal) => {
+      const result = deferred<traces.AgentTraceSnapshot>(); requests.push({ key, signal, result }); return result.promise;
+    } });
+    try {
+      const first = requests[0]!;
+      f.view.switchChannel(f.view.channels[1]); f.render();
+      const second = requests.at(-1)!;
+      second.result.resolve(traceSnapshot(second.key, 'scene-B')); await settle();
+      expect(f.render().currentTask?.turnId).toBe('scene-B');
+      first.result.resolve(traceSnapshot(first.key, 'scene-A')); await settle();
+      expect(f.render().trace?.sessionKey).toBe(second.key);
+      expect(f.view.currentTask?.turnId).toBe('scene-B');
+      expect(first.signal?.aborted).toBe(true);
+    } finally { f.close(); }
+  });
+
+  it('coalesces polling and manual refresh behind one slow request without restarting it', async () => {
+    const result = deferred<traces.AgentTraceSnapshot>();
+    const fetchTrace = vi.fn<typeof traces.fetchAgentTrace>(() => result.promise);
+    const f = fixture({ fetchAgentTrace: fetchTrace });
+    try {
+      f.poll(); f.poll(); f.poll();
+      void f.view.loadTrace();
+      expect(fetchTrace).toHaveBeenCalledTimes(1);
+      expect(fetchTrace.mock.calls[0]?.[3]?.aborted).toBe(false);
+      result.resolve(traceSnapshot(f.view.sessionKey, 'slow-but-valid')); await settle();
+      expect(f.render().traceLoading).toBe(false);
+      expect(f.view.currentTask?.turnId).toBe('slow-but-valid');
+    } finally { f.close(); }
+  });
+
+  it('retires old connection reads even when a new Host uses the same session key', async () => {
+    const requests: Array<{ key: string; result: ReturnType<typeof deferred<traces.AgentTraceSnapshot>> }> = [];
+    const f = fixture({ fetchAgentTrace: key => {
+      const result = deferred<traces.AgentTraceSnapshot>(); requests.push({ key, result }); return result.promise;
+    } });
+    try {
+      const first = requests[0]!;
+      f.dispatch('zhin:api-base-changed'); f.render();
+      void f.view.loadTrace();
+      const second = requests.at(-1)!;
+      second.result.resolve(traceSnapshot(second.key, 'new-connection')); await settle();
+      first.result.resolve(traceSnapshot(first.key, 'retired-connection')); await settle();
+      expect(f.render().trace?.events.map((event: traces.AgentTraceEvent) => event.turnId)).toEqual(['new-connection']);
+    } finally { f.close(); }
+  });
+
+  it('does not write a completed read after unmount', async () => {
+    const result = deferred<traces.AgentTraceSnapshot>();
+    const f = fixture({ fetchAgentTrace: () => result.promise });
+    await settle();
+    const key = f.view.sessionKey;
+    f.close();
+    const writes = f.stateWrites;
+    result.resolve(traceSnapshot(key, 'after-unmount')); await settle();
+    expect(f.stateWrites).toBe(writes);
+  });
+
+  it('keeps each cancellation POST bound to its scene and does not clear a newer scene stop state', async () => {
+    const first = deferred<boolean>(), second = deferred<boolean>();
+    const cancel = vi.fn<typeof traces.cancelAgentTask>().mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+    const f = fixture({ cancelAgentTask: cancel });
+    try {
+      await settle(); f.render();
+      const firstKey = f.view.sessionKey, stopFirst = f.view.stopActiveTask();
+      f.view.switchChannel(f.view.channels[1]); f.render(); await settle(); f.render();
+      const secondKey = f.view.sessionKey, stopSecond = f.view.stopActiveTask();
+      first.resolve(true); await stopFirst;
+      expect(f.render().traceNotice).toBeNull();
+      expect(f.view.stoppingTask).toBe(true);
+      second.resolve(false); await stopSecond;
+      expect(f.render().traceNotice).toBe('当前会话没有运行中的任务。');
+      expect(f.view.stoppingTask).toBe(false);
+      expect(cancel.mock.calls.map(([key]) => key)).toEqual([firstKey, secondKey]);
+    } finally { f.close(); }
+  });
+
+  it('shows current cancellation feedback and retires its delayed refresh when the scene changes', async () => {
+    vi.useFakeTimers();
+    const fetchTrace = vi.fn<typeof traces.fetchAgentTrace>(async key => traceSnapshot(key, 'current'));
+    const f = fixture({ fetchAgentTrace: fetchTrace, cancelAgentTask: async () => true });
+    try {
+      await settle(); f.render();
+      await f.view.stopActiveTask();
+      expect(f.render().traceNotice).toBe('已发送停止请求，正在等待任务结束。');
+      f.view.switchChannel(f.view.channels[1]); f.render(); await settle(); f.render();
+      const requests = fetchTrace.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(240);
+      expect(fetchTrace).toHaveBeenCalledTimes(requests);
+      expect(f.render().traceNotice).toBeNull();
+    } finally { f.close(); }
+  });
+
+  it('refreshes the original current scene once after normal cancellation feedback', async () => {
+    vi.useFakeTimers();
+    const fetchTrace = vi.fn<typeof traces.fetchAgentTrace>(async key => traceSnapshot(key, 'current'));
+    const cancel = vi.fn<typeof traces.cancelAgentTask>(async () => true);
+    const f = fixture({ fetchAgentTrace: fetchTrace, cancelAgentTask: cancel });
+    try {
+      await settle(); f.render();
+      const key = f.view.sessionKey, requests = fetchTrace.mock.calls.length;
+      await f.view.stopActiveTask();
+      await vi.advanceTimersByTimeAsync(240);
+      expect(fetchTrace).toHaveBeenCalledTimes(requests + 1);
+      expect(fetchTrace.mock.calls.at(-1)?.[0]).toBe(key);
+      expect(cancel).toHaveBeenCalledExactlyOnceWith(key, 'zh-CN');
+      expect(f.render().stoppingTask).toBe(false);
+    } finally { f.close(); }
+  });
+
+  it.each(['scene', 'connection', 'unmount'])('ignores a cancellation error after its %s retires without retrying the POST', async (retirement) => {
+    const result = deferred<boolean>();
+    const cancel = vi.fn<typeof traces.cancelAgentTask>(() => result.promise);
+    const f = fixture({ cancelAgentTask: cancel });
+    try {
+      await settle(); f.render();
+      const key = f.view.sessionKey, stop = f.view.stopActiveTask();
+      if (retirement === 'scene') f.view.switchChannel(f.view.channels[1]);
+      else if (retirement === 'connection') f.dispatch('zhin:auth-changed');
+      else f.close();
+      if (retirement !== 'unmount') { f.render(); await settle(); f.render(); }
+      const writes = f.stateWrites;
+      result.reject(new Error('old cancellation failed')); await stop;
+      expect(cancel).toHaveBeenCalledExactlyOnceWith(key, 'zh-CN');
+      if (retirement === 'unmount') expect(f.stateWrites).toBe(writes);
+      else {
+        expect(f.render().traceNotice).toBeNull();
+        expect(f.view.showInspector).toBe(false);
+        expect(f.view.stoppingTask).toBe(false);
+      }
+    } finally { if (retirement !== 'unmount') f.close(); }
+  });
 });
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); FakeSocket.instances.length = 0; });
