@@ -7,7 +7,9 @@ test.describe('documentation site journeys', () => {
     let searchIndexRequested = false;
     let releaseSearchIndex!: () => void;
     const searchIndexGate = new Promise<void>((resolve) => { releaseSearchIndex = resolve; });
-    await page.route(/\/@localSearchIndex[^/]+\.js$/u, async (route) => {
+    // Match both VitePress preview virtual ids (@localSearchIndex…) and
+    // hashed build assets that still carry localSearchIndex in the path.
+    await page.route(/localSearchIndex/i, async (route) => {
       searchIndexRequested = true;
       await searchIndexGate;
       await route.continue();
@@ -32,10 +34,23 @@ test.describe('documentation site journeys', () => {
     await expect.poll(() => searchIndexRequested).toBe(true);
     await page.waitForTimeout(2_200);
     expect(insights.filter((event) => String(event.event).startsWith('search'))).toEqual([]);
+    // Register before releasing: continue() can finish before waitForResponse attaches.
+    const indexSettled = page.waitForResponse(
+      (response) => /localSearchIndex/i.test(response.url()) && response.ok(),
+      { timeout: 30_000 },
+    );
     releaseSearchIndex();
-    await expect(page.locator('.VPLocalSearchBox .no-results')).toBeVisible();
-    await expect.poll(() => insights.filter((event) => event.event === 'search_no_results'))
-      .toEqual([expect.objectContaining({ searchTerm: 'qzxwvkjhgfds', resultCount: 0 })]);
+    await indexSettled;
+    // VitePress only sets enableNoResults after MiniSearch loads. Re-typing
+    // forces debouncedWatch to run against the loaded index if the cold-load
+    // watch raced past an empty index.
+    await search.fill('');
+    await search.fill('qzxwvkjhgfds');
+    await expect(page.locator('.VPLocalSearchBox .no-results')).toBeVisible({ timeout: 15_000 });
+    await expect.poll(
+      () => insights.filter((event) => event.event === 'search_no_results'),
+      { timeout: 15_000 },
+    ).toEqual([expect.objectContaining({ searchTerm: 'qzxwvkjhgfds', resultCount: 0 })]);
 
     await search.fill('Docker');
     await expect(page.locator('.VPLocalSearchBox .result').first()).toBeVisible();
