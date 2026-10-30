@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=0eb86a616f4d3fdc -->
+<!-- sync-adapter-docs:sha256=a2539c6f62060535 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -87,9 +87,11 @@ sandbox:
 
 1. 启动 Zhin 实例：`pnpm dev`（终端会打印 Host 地址，一般为 `http://127.0.0.1:8086`）
 2. 打开 **[Remote Console](https://console.zhin.dev)**，API Base 与 Host 地址一致，Token 与 `http.token` / `HTTP_TOKEN` 一致
-3. 在 Console **沙盒** 页连接后发送消息进行测试
+3. 在 Console **会话** 页连接后发送消息
 
 浏览器客户端连接到默认 `sandbox-bot`，也可以通过多个显式 endpoint 使用不同 WebSocket 路径。
+
+会话页的「对话与轨迹」入口打开当前会话的 Console 记录页（`/agent/sessions?sessionKey=...`），可按需查看对话、轨迹和会话分支。页面显示名改为「会话」，路由 `/sandbox`、现有默认场景及存储方式保持不变。
 
 每个 endpoint 通过 Root 提供的 HTTP Host（`httpHostToken`）挂载一个 WebSocket 路径，协议见下文「消息格式（wire 协议）」。
 
@@ -123,7 +125,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 | `text` | string | 可选。没有 `content` 时作为纯文本；`content` 里没有文本段时也用它作为消息文本 |
 | `messageId` | string | 可选。客户端生成的消息 id，须匹配 `^[A-Za-z0-9._:-]{1,160}$`，不匹配时忽略；填写后作为这条入站消息的 id，引用回复时可据此定位 |
 | `timestamp` | number | 可选。毫秒时间戳，默认取服务端收到的时间 |
-| `agentRun` | object | 可选。「试聊一下」（原 Agent 试验台）运行配置，见下表 |
+| `agentRun` | object | 可选。「会话」运行配置，见下表 |
 
 - 帧内容不是 JSON 时，整段文本按一条纯文本消息处理。
 - 消息的发送者固定为 endpoint 的 `owner`。
@@ -173,6 +175,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 ```
 
 - `type` / `id` 是回复所在的会话（`direct` 已归一为 `private`，`guild` 已归一为 `channel`），客户端按这两个字段把消息放进对应会话；`bot` 是 endpoint id，`endpoint` 是收到消息的连接名。
+- `messageId` 与框架记录的发送回执使用同一个消息 ID，可用于关联实时回复和已保存的聊天记录；已有 wire envelope 的非空显式字符串 ID 保持不变。
 - `content` 是消息段数组。文本、`html`（JSX 卡片，见上文 `html: direct`）、按钮等段原样透传。
 - `image` / `audio` / `video` / `file` 段只读 `data.media`（MediaRef）：`url` 原样透传；`base64` 补上 `base64://` 前缀后内联；`path` 由服务端读取文件后转成 `base64` 内联；其他类型和缺少 `data.media` 的媒体段会被丢弃，并在日志中记录 `sandbox_outbound_media_dropped`。
 - 插件直接发送完整消息对象时，其他字段会原样保留。

@@ -1,4 +1,5 @@
 import {
+  agentSessionsPath,
   buildSandboxSessionKey,
   buildAgentRunReport,
   deriveAgentRunSteps,
@@ -31,6 +32,13 @@ class MemoryTraceStorage implements AgentTraceStorage {
 }
 
 describe('sandbox agent trace helpers', () => {
+  it.each(['sandbox:bot:private:user', 'sandbox:bot:group:用户 %2F +&?#'])('opens the real conversation details without changing session identity: %s', (sessionKey) => {
+    const url = new URL(agentSessionsPath(sessionKey), 'https://console.invalid');
+    expect(url.pathname).toBe('/agent/sessions');
+    expect([...url.searchParams]).toEqual([['sessionKey', sessionKey]]);
+    expect(url.hash).toBe('');
+  });
+
   it('builds the canonical IM session key', () => {
     expect(buildSandboxSessionKey('sandbox-bot', 'group', 'planning-room')).toBe('sandbox:sandbox-bot:group:planning-room');
   });

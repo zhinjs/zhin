@@ -99,9 +99,9 @@ export function buildSandboxSessionKey(endpointId: string, scope: SandboxScope, 
   return `sandbox:${endpointId || 'sandbox-bot'}:${scope}:${sceneId}`;
 }
 
-export function agentStudioPath(sessionKey: string): string {
+export function agentSessionsPath(sessionKey: string): string {
   const params = new URLSearchParams({ sessionKey });
-  return `/agent/studio?${params}`;
+  return `/agent/sessions?${params}`;
 }
 
 export function mergeTraceSnapshot(
@@ -406,7 +406,7 @@ export function buildAgentRunReport(snapshot: AgentTraceSnapshot | null, context
     lines.push('');
   });
 
-  lines.push('---', sandboxText(locale, "由 Zhin「试聊一下」于 {0} 导出。", [new Date().toISOString()]));
+  lines.push('---', sandboxText(locale, "由 Zhin「会话」于 {0} 导出。", [new Date().toISOString()]));
   return `${lines.join('\n').trim()}\n`;
 }
 

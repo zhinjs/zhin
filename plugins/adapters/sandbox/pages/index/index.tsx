@@ -2,8 +2,8 @@ import { definePage } from '@zhin.js/console-contract';
 import SandboxChat from './SandboxChat';
 
 export const meta = definePage({
-  title: '试聊一下',
-  titleI18n: { en: 'Try a conversation' },
+  title: '会话',
+  titleI18n: { en: 'Conversations' },
   icon: 'Box',
   order: 10,
 });

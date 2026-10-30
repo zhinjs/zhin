@@ -4,6 +4,18 @@ import { sandboxText, sandboxEnglish } from '../pages/index/messages.js';
 import * as traces from '../pages/index/agentTrace.js';
 import * as playground from '../pages/index/playgroundState.js';
 
+it('labels the conversation workspace and its existing details entry in both locales', () => {
+  for (const [source, english] of [
+    ['会话', 'Conversations'],
+    ['会话列表', 'Conversation list'],
+    ['新建会话', 'New conversation'],
+    ['对话与轨迹', 'Conversation and trace'],
+  ]) {
+    expect(sandboxText('zh-CN', source!)).toBe(source);
+    expect(sandboxText('en', source!)).toBe(english);
+  }
+});
+
 it('localizes authored trace copy while retaining task content, identity and ISO timestamps', () => {
   const snapshot = {sessionKey:'sandbox:test:group:room',latestSequence:2,activeTurnIds:[],events:[
     {sequence:1,recordedAt:1700000000000,sessionKey:'sandbox:test:group:room',turnId:'run-1',type:'turn_start',data:{}},

@@ -362,6 +362,9 @@ export function formatSandboxOutbound(
         : {}),
       type: envelope.type ?? stamp.type,
       id: envelope.id ?? stamp.id,
+      messageId: typeof envelope.messageId === 'string' && envelope.messageId.trim()
+        ? envelope.messageId
+        : stamp.messageId,
       timestamp: typeof envelope.timestamp === 'number' ? envelope.timestamp : Date.now(),
     });
   }

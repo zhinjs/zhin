@@ -116,7 +116,7 @@ const messages = createMessages({
   readOnly: { 'zh-CN': '当前连接是只读演示权限，不能运行 Agent 任务。', en: 'This connection is a read-only demo and cannot run Agent tasks.' },
   connected: { 'zh-CN': '已连接 Sandbox「{target}」', en: 'Connected to Sandbox “{target}”' },
   protocol: { 'zh-CN': '与 Node Host 控制台沙盒协议一致（{path}）', en: 'Using the Node Host Console sandbox protocol ({path})' },
-  profile: { 'zh-CN': '「试聊一下」会话已启用持久化运行配置。', en: 'The “Try a chat” session uses a persistent runtime profile.' },
+  profile: { 'zh-CN': '会话已启用持久化运行配置。', en: 'The conversation uses a persistent runtime profile.' },
 });
 
 export interface SandboxEndpointOptions {
@@ -241,12 +241,20 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
       }));
       throw new Error('Sandbox Endpoint has no live connection');
     }
+    // Use the same identity for live messages and the canonical delivery receipt.
+    const explicitMessageId = payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as { readonly messageId?: unknown }).messageId
+      : undefined;
+    const messageId = typeof explicitMessageId === 'string' && explicitMessageId.trim()
+      ? explicitMessageId
+      : randomUUID();
     // Console UI filters by type+id; stamp the conversation onto outbound wire.
     connection.socket.send(formatSandboxOutbound(payload, {
       type: conversation.kind,
       id: conversation.id,
       bot: this.#options.defaults.id,
       endpoint: connection.target,
+      messageId,
     }));
     this.#logger.debug(formatCompact({
       op: 'sandbox_send',
@@ -254,7 +262,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
       channelType: conversation.kind,
       channelId: conversation.id,
     }));
-    return randomUUID();
+    return messageId;
   }
 
   /** Prefer a real (non-placeholder) socket when reply target key is wrong/stale. */

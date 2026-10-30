@@ -21,7 +21,7 @@ import {
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor';
 import HtmlMessage from './HtmlMessage.js';
 import {
-  agentStudioPath,
+  agentSessionsPath,
   buildAgentRunReport,
   buildSandboxSessionKey,
   cancelAgentTask,
@@ -704,17 +704,17 @@ export default function Sandbox() {
     return (
         <section className="agent-playground-shell">
             <div className="agent-playground-mobilebar">
-                <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "测试会话")}</button>
-                <strong>{sandboxText(locale, "试聊一下")}</strong>
+                <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "会话列表")}</button>
+                <strong>{sandboxText(locale, "会话")}</strong>
                 <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)}><PanelRight size={17} />{sandboxText(locale, "检查器")}</button>
             </div>
 
-            <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label={sandboxText(locale, "测试会话")}>
+            <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label={sandboxText(locale, "会话列表")}>
                 <div className="agent-playground-brand">
                     <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                             <span className="agent-playground-mark"><Sparkles size={16} /></span>
-                            <div><h2>{sandboxText(locale, "试聊一下")}</h2><small>Try a chat</small></div>
+                            <div><h2>{sandboxText(locale, "会话")}</h2><small>Conversations</small></div>
                         </div>
                         <span className={cn("agent-playground-connection", connected && "is-online")} title={connected ? sandboxText(locale, "Sandbox WebSocket 已连接") : sandboxText(locale, "正在重连 Sandbox WebSocket")}>
                             {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
@@ -722,7 +722,7 @@ export default function Sandbox() {
                     </div>
                 </div>
 
-                <div className="agent-playground-section-label"><span>{sandboxText(locale, "测试会话")}</span><span>{channels.length}</span></div>
+                <div className="agent-playground-section-label"><span>{sandboxText(locale, "会话列表")}</span><span>{channels.length}</span></div>
                 <div className="agent-playground-session-list">
                     {channels.map((channel) => {
                         const isActive = activeChannel.id === channel.id && activeChannel.type === channel.type
@@ -756,7 +756,7 @@ export default function Sandbox() {
                             </div>
                         </div>
                     ) : (
-                        <button type="button" className="agent-playground-add" onClick={() => setShowNewSession(true)}><Plus size={15} />{sandboxText(locale, "新建测试会话")}</button>
+                        <button type="button" className="agent-playground-add" onClick={() => setShowNewSession(true)}><Plus size={15} />{sandboxText(locale, "新建会话")}</button>
                     )}
                 </div>
                 <div className="agent-playground-endpoint">
@@ -786,7 +786,7 @@ export default function Sandbox() {
                         ) : lastUserMessage ? (
                             <button type="button" onClick={retryLastTask} aria-label={sandboxText(locale, "重新运行上一个任务")}><RotateCcw size={14} />{sandboxText(locale, "重试")}</button>
                         ) : null}
-                        <a href={agentStudioPath(sessionKey)}><ExternalLink size={14} />Agent Studio</a>
+                        <a href={agentSessionsPath(sessionKey)}><ExternalLink size={14} />{sandboxText(locale, "对话与轨迹")}</a>
                         <button type="button" className={cn(showRunSettings && 'active')} aria-expanded={showRunSettings} onClick={() => setShowRunSettings((visible) => !visible)} aria-label={sandboxText(locale, "配置运行环境")}><SlidersHorizontal size={16} /></button>
                         <button type="button" aria-expanded={showInspector} onClick={() => setShowInspector(!showInspector)} aria-label={sandboxText(locale, "切换运行检查器")}><PanelRight size={16} /></button>
                         <button type="button" onClick={() => setConfirmClear(true)} aria-label={sandboxText(locale, "清空当前会话")}><Trash2 size={15} /></button>
@@ -1145,7 +1145,7 @@ export default function Sandbox() {
                     </section>
                 </div>
 
-                <a className="agent-playground-studio-link" href={agentStudioPath(sessionKey)}><span><ExternalLink size={15} />{sandboxText(locale, "在 Agent Studio 中完整诊断")}</span><code>{sessionKey}</code></a>
+                <a className="agent-playground-studio-link" href={agentSessionsPath(sessionKey)}><span><ExternalLink size={15} />{sandboxText(locale, "对话与轨迹")}</span><code>{sessionKey}</code></a>
             </aside>
             {showInspector && <div className="agent-playground-inspector-overlay" onClick={() => setShowInspector(false)} />}
         </section>
