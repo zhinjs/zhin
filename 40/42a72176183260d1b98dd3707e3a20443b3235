@@ -1,0 +1,35 @@
+.changeset/quiet-tools-discover.md
+  s_079f1dc5e6308d::t_1163f95c075724 1-5
+docs/adr/0042-first-turn-token-budget.md
+  s_079f1dc5e6308d::t_3f94374bfb4211 56,115
+docs/ai/agent.md
+  s_079f1dc5e6308d::t_a479b6ea3a2d9e 132
+docs/en/ai/agent.md
+  s_079f1dc5e6308d::t_dd3869506955dc 136
+packages/im/agent/evals/cases/deferred-announcement-discover-schema.case.ts
+  s_079f1dc5e6308d::t_b24d870a0dadcc 5-6,8,28
+packages/im/agent/evals/discover-schema-dedup.test.ts
+  s_079f1dc5e6308d::t_f08bdb77115170 1-29
+packages/im/agent/evals/framework/scripted-model.ts
+  s_079f1dc5e6308d::t_4051db1b131992 323
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_079f1dc5e6308d::t_e63844c7303847 397,442-443,457-458
+packages/im/agent/tests/plugin-runtime/tool-tiers.test.ts
+  s_079f1dc5e6308d::t_366e32a4b341b6 13,217,225,231-233,239-244,247,254-257,260,277,333
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4042a72176183260d1b98dd3707e3a20443b3235",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
