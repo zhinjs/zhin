@@ -12,7 +12,7 @@ import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { iterationSceneOf, resolveModelHarness, resolveTurnMaxIterations } from '../config/model-harness-runtime.js';
-import { appendScene, appendStable, buildAgentPathSystemPromptParts, buildChatPathSystemPromptParts, describeAgentPathPromptSections, joinSystemPrompt } from '../prompt/assembly.js';
+import { appendStable, buildAgentPathSystemPromptParts, buildChatPathSystemPromptParts, describeAgentPathPromptSections, joinSystemPrompt } from '../prompt/assembly.js';
 import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
@@ -43,6 +43,7 @@ import {
 } from './turn-event-mapper.js';
 import type { AgentPromptProfile } from '../prompt/turn-prompt-profile.js';
 import { sceneLineForTurn, type TurnContextView } from '../context/turn-envelope.js';
+import { appendRuntimeContext } from '../context/turn-user-message.js';
 import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
@@ -194,6 +195,8 @@ export interface AgentLoopTurnInput {
     agentNickname?: string;
     modelId?: string;
     providerAlias?: string;
+    /** Sender-/selection-dependent capability catalog: sent in the current message's runtime tail. */
+    capabilityTail?: string;
   }>;
   personaEnhanced: string;
   modelId: string;
@@ -509,7 +512,6 @@ export async function* runAgentLoopTextTurnRun(
         content: input.rawContent,
         sessionId,
         personaEnhanced,
-        preData,
       deferredStats: input.deferredStats,
       modelSdk: llmModel.sdk,
       runtime: input.promptRuntime,
@@ -596,26 +598,23 @@ export async function* runAgentLoopTextTurnRun(
   const spinDetector = hasTools && harness.explorationBudget !== 0 ? new SpinDetector() : undefined;
   let nudgedIteration = 0;
   if (hasTools && harness.explorationGuidance) promptParts = appendStable(promptParts, EXPLORATION_GUIDANCE);
-  // ADR 0041 §5: the scene line goes last so a scene change only invalidates the tail.
+  // Prompt-cache layout: everything that varies by turn, scene or sender (scene line, capability
+  // availability, deferred tool index, pre-fetched data, network note) rides in the runtime-context
+  // tail of the current user message, after the body. A change there no longer invalidates the
+  // cached history prefix (it used to sit in the system tail, before every history message).
+  const runtimeTail: import('@zhin.js/ai').TextContentBlock[] = [];
   const sceneText = sceneLineForTurn(input.turnContext);
-  if (sceneText) promptParts = appendScene(promptParts, sceneText);
+  if (sceneText) runtimeTail.push(createPromptContextBlock('scene', sceneText));
+  const capabilityTail = input.promptRuntime?.capabilityTail?.trim();
+  if (capabilityTail) runtimeTail.push(createPromptContextBlock('turn-capabilities', capabilityTail));
   if (hasTools && !directTools) {
     const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
       .map((item) => ({ name: item.name, description: item.brief, group: toolIndexGroup(item) })));
-    if (toolIndex) {
-      const block = { ...createPromptContextBlock('deferred-tools', toolIndex), perTurn: true as const };
-      const userIndex = promptMessages.map(message => message.role === 'user' && Array.isArray(message.content)).lastIndexOf(true);
-      promptMessages = userIndex < 0
-        ? [...promptMessages, { ...createUserMessage(''), content: [block] }]
-        : promptMessages.map((message, index) => {
-          if (index !== userIndex || !Array.isArray(message.content)) return message;
-          const bodyIndex = message.content.findIndex(part => part.type === 'text' && part.presentation === 'user-input');
-          const insertion = bodyIndex >= 0 ? bodyIndex : 0;
-          return { ...message, content: [...message.content.slice(0, insertion), block, ...message.content.slice(insertion)] };
-        });
-    }
+    if (toolIndex) runtimeTail.push(createPromptContextBlock('deferred-tools', toolIndex));
   }
-  if (networkWithheld) promptParts = appendScene(promptParts, NETWORK_DISABLED_PROMPT_NOTE);
+  if (preData) runtimeTail.push(createPromptContextBlock('pre-fetched-data', `Pre-fetched data:\n${preData}`));
+  if (networkWithheld) runtimeTail.push({ type: 'text', text: NETWORK_DISABLED_PROMPT_NOTE });
+  promptMessages = appendRuntimeContext(promptMessages, runtimeTail);
   const composedPrompt = joinSystemPrompt(promptParts);
   systemPrompt = composedPrompt.text;
   const systemPromptCacheBreakpoint = composedPrompt.cacheBreakpoint;

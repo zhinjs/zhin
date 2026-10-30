@@ -241,7 +241,7 @@ describe('FullAgentTurnEngine', () => {
       personaEnhanced: 'persona', runtime,
     });
     const prompt = await buildPrompt(runtime);
-    const capabilityAt = prompt.indexOf('researcher');
+    const capabilityAt = [prompt.indexOf('researcher'), prompt.indexOf('lookup')].filter(at => at >= 0).sort((a, b) => a - b)[0] ?? -1;
     const stablePrefix = capabilityAt < 0 ? prompt : prompt.slice(0, capabilityAt);
     expect(stablePrefix).toContain('Stable workspace persona.');
     expect(stablePrefix).toContain('Model: provider/model');
@@ -253,16 +253,22 @@ describe('FullAgentTurnEngine', () => {
       expect(prompt).not.toContain('researcher');
       expect(prompt).not.toContain('Find primary sources');
     } else {
-      expect(prompt.indexOf('researcher')).toBeGreaterThan(prompt.indexOf('# Security'));
+      expect(prompt.indexOf('lookup')).toBeGreaterThan(prompt.indexOf('# Security'));
       expect(prompt).toContain('Find primary sources');
       if (mode === 'specialist') {
-        expect(prompt).toContain('## Active specialist: researcher');
-        expect(prompt).toContain('Verify the evidence before reporting.');
+        // The selected specialist depends on the turn: it rides in the current message's
+        // runtime-context tail, never in the cached system prefix.
+        expect(prompt).not.toContain('## Active specialist: researcher');
+        expect(prompt).not.toContain('Verify the evidence before reporting.');
+        expect(runtime.capabilityTail).toContain('## Active specialist: researcher');
+        expect(runtime.capabilityTail).toContain('Verify the evidence before reporting.');
         expect(prompt).not.toContain('## Available specialist agents');
         expect(prompt.indexOf('# Platform rules')).toBeGreaterThan(prompt.indexOf('Find primary sources'));
         expect(prompt.endsWith('Use the current bot client.')).toBe(true);
       } else {
-        expect(prompt).toContain('## Available specialist agents');
+        expect(prompt).not.toContain('researcher');
+        expect(runtime.capabilityTail).toContain('## Available specialist agents');
+        expect(runtime.capabilityTail).toContain('researcher');
         expect(prompt).not.toContain('Verify the evidence before reporting.');
       }
     }
@@ -278,6 +284,7 @@ describe('FullAgentTurnEngine', () => {
       expect(prompt.startsWith(`${withoutCapabilities}${SECTION_SEP}`)).toBe(true);
       expect(withoutCapabilities).not.toContain('researcher');
       expect(withoutCapabilities).not.toContain('lookup');
+      expect((coreInput?.promptRuntime as PromptRuntimeOverrides).capabilityTail).toBeUndefined();
     }
   });
 

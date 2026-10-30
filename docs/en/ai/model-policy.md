@@ -36,7 +36,7 @@ Overrides select complete presets and never deep-merge permissions, secrets or S
 
 Administrators map authenticated Console principals to exact IM owners through `ai.personalPrincipals`; a client cannot assert another owner. Personal connections require public HTTPS services with per-hop DNS checks and same-origin HTTPS redirects only. Credential query parameters must use the encrypted API Key field; ordinary query parameters remain supported. Host-authored local services retain their existing access. Creating a connection or selecting a model does not implicitly call a provider.
 
-Run `zhin config check` before migration. `--fix` preserves the explicit form and does not redistribute shared history or create personal connections. Local tests, deployment and real-provider acceptance remain separate evidence. See [ADR 0045](../../adr/0045-personal-session-model-policy.md).
+Run `zhin config check` before migration. `--fix` preserves the explicit form and does not redistribute shared history or create personal connections. Local tests, deployment and real-provider acceptance remain separate evidence. See [ADR 0046](../../adr/0046-personal-session-model-policy.md).
 
 Personal Console tokens use `http.tokens` entries with `scope: user` and a stable `principalId` matching `ai.personalPrincipals`. An unbound primary/full token is not a personal identity. Use the real Host project path and canonical Adapter entry id rather than display names.
 

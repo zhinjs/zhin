@@ -6,6 +6,7 @@
 import {
   assistantAnswerText,
   createLlmMessageProjection,
+  createPromptContextBlock,
   createUserMessage,
   renderContextMessage,
   type LlmApiRuntime,
@@ -21,7 +22,7 @@ import {
   sceneLineForTurn,
   type TurnContextView,
 } from '../../../packages/im/agent/src/context/turn-envelope.js';
-import { prependTurnContextBlocks } from '../../../packages/im/agent/src/context/turn-user-message.js';
+import { appendRuntimeContext, appendTurnContextBlocks } from '../../../packages/im/agent/src/context/turn-user-message.js';
 import { stampUserHeader } from '../../../packages/im/agent/src/session/participant-header-stamp.js';
 import {
   decodeStructuredReply,
@@ -57,9 +58,9 @@ export async function buildSystemPrompt(workspaceDir: string, nickname: string |
     timeZone: scenarioTime(time).timeZone,
     ...(nickname ? { agentNickname: nickname } : {}),
   });
-  // Same tail order as production (ADR 0041 §5): structured reply contract, then the scene line.
-  const scene = sceneLineForTurn(turn);
-  return `${prompt}\n\n${structuredReplyInstruction()}${scene ? `\n\n${scene}` : ''}`;
+  // Same as production: the structured reply contract ends the system prompt; the scene line rides
+  // in the current message's runtime-context tail (ADR 0045), see buildUserMessages.
+  return `${prompt}\n\n${structuredReplyInstruction()}`;
 }
 
 export function scenarioTurn(scenario: Scenario): TurnContextView {
@@ -121,7 +122,9 @@ export function buildUserMessages(scenario: Scenario): UserMessage[] {
     roles: turn.principal.roles, authorizationRoles: turn.principal.roles,
   });
   // The host stores only the actor; the projection renders the participant header (ADR 0041 §4, amended).
-  const current = prependTurnContextBlocks([stampUserHeader(input)], blocks) as UserMessage[];
+  const scene = sceneLineForTurn(turn);
+  const current = appendRuntimeContext(appendTurnContextBlocks([stampUserHeader(input)], blocks),
+    scene ? [createPromptContextBlock('scene', scene)] : []) as UserMessage[];
   return context ? [createUserMessage(context), ...current] : current;
 }
 

@@ -4,7 +4,7 @@ import { createDefaultContextBuilders } from './default-builders.js';
 import type { BuildContext, ContextBuilder, ContextInjector, ContextSystemConfig, InjectContext } from './contracts.js';
 import type { TurnEnvelopeParts } from './envelope-parts.js';
 import {
-  prependTurnContextBlocks,
+  appendTurnContextBlocks,
 } from './turn-user-message.js';
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
 import { bootstrapSceneFromTurn } from '../bootstrap-scope.js';
@@ -145,7 +145,7 @@ export class ContextSystem {
     });
 
     const turnEnvelope = turnBlocks.map(block => block.text).join('\n');
-    let userMessages = prependTurnContextBlocks(
+    let userMessages = appendTurnContextBlocks(
       preparedMessages,
       turnBlocks,
       isScheduleTurn ? undefined : turnUser.userMessageExtra,

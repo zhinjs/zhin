@@ -9,9 +9,13 @@ describe('midConversationSystem capability defaults', () => {
     expect(resolveMidConversationSystem({ sdk: 'openai', id: 'o3', compat: { supportsDeveloperRole: false } })).toBe('system');
   });
 
-  it('remote OpenAI-compatible and DeepSeek: system', () => {
+  it('remote OpenAI-compatible: system', () => {
     expect(resolveMidConversationSystem({ sdk: 'openai-compatible', id: 'x', baseUrl: 'https://api.groq.com/openai/v1' })).toBe('system');
-    expect(resolveMidConversationSystem({ sdk: 'deepseek', id: 'deepseek-chat' })).toBe('system');
+  });
+
+  it('DeepSeek: none (downgraded to user) unless configured', () => {
+    expect(resolveMidConversationSystem({ sdk: 'deepseek', id: 'deepseek-chat' })).toBe('none');
+    expect(resolveMidConversationSystem({ sdk: 'deepseek', id: 'deepseek-chat', compat: { midConversationSystem: 'system' } })).toBe('system');
   });
 
   it('local servers: none unless configured', () => {

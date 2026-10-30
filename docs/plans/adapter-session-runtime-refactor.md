@@ -6,7 +6,7 @@ sidebar: false
 
 状态：全量目标模式迁移中，尚未完成。用户进一步明确不保留 Adapter 兼容层，完整范围和分工以[全量目标模式迁移](./adapter-target-mode-migration.md)为准。下方本地绿测记录仅对应先前框架与 ICQQ 阶段，不能代表全部平台已完成。
 
-关联：[分层架构](../concepts/architecture.md)、[Plugin 模型](../concepts/plugin-model.md)、[ADR 0045：个人 Session 模型策略](../adr/0045-personal-session-model-policy.md)。
+关联：[分层架构](../concepts/architecture.md)、[Plugin 模型](../concepts/plugin-model.md)、[ADR 0046：个人 Session 模型策略](../adr/0046-personal-session-model-policy.md)。
 
 ## 1. 已确认的目标与边界
 

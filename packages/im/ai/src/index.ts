@@ -365,6 +365,11 @@ export type { MemoryEntryRepository, MemoryEntryLocator, MemoryEntryListInput } 
 export { tokenizeForBm25, rankBm25, rankMemoryEntries, memoryEntryDocument } from './memory/memory-bm25.js';
 export type { Bm25Options, Bm25Hit } from './memory/memory-bm25.js';
 export {
+  RUNTIME_CONTEXT_MARKER,
+  escapeHostMarkers,
+  isRuntimeContextMarkerText,
+} from './llm/types/runtime-context.js';
+export {
   parseAgentMessageExtra,
   renderUserMessageForLlm,
   normalizeUserMessageForStorage,

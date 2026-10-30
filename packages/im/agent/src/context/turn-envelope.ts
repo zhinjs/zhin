@@ -62,6 +62,10 @@ export function formatSenderContextLine(turn: TurnContextView): string {
     : `Sender: id=${principal.subjectId} roles=${roles}`;
 }
 
+function stableSet(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 type SceneFields = Readonly<Record<string, string | number | boolean | null | readonly string[]>>;
 
 /** ADR 0041 §6 scene facts; `null` = unknown (omitted from the rendered line). */
@@ -72,7 +76,8 @@ function sceneFields(origin: Extract<TurnContextView['origin'], { kind: 'im' }>,
     scene_type: address?.kind ?? origin.scope,
     scene_name: state?.conversation?.name ?? address?.name ?? null,
     owner_id: state?.conversation?.ownerId ?? null,
-    admins: state?.conversation?.adminIds?.length ? [...state.conversation.adminIds] : null,
+    // Set-valued: deduplicated and sorted so a platform's member-list order never changes the bytes.
+    admins: state?.conversation?.adminIds?.length ? stableSet(state.conversation.adminIds) : null,
     member_count: state?.conversation?.memberCount ?? null,
     global_mute: state?.conversation?.muteAll ?? null,
     assistant_role: state?.bot?.platformRole ?? null,
@@ -85,8 +90,9 @@ export function formatSceneLine(fields: SceneFields): string {
 }
 
 /**
- * ADR 0041 §5: the scene line is the last part of the system prompt (after a cache breakpoint),
- * so a scene change only invalidates the tail. Undefined outside IM turns.
+ * The scene line rides in the current message's runtime-context tail (after the body), so a scene
+ * change (member count, admins…) never invalidates the cached history prefix. It used to be the
+ * system-prompt tail (ADR 0041 §5), which sits before every history message. Undefined outside IM turns.
  */
 export function sceneLineForTurn(turn: TurnContextView | undefined): string | undefined {
   if (turn?.origin.kind !== 'im') return undefined;

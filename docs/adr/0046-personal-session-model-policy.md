@@ -2,7 +2,7 @@
 sidebar: false
 ---
 
-# ADR 0045: Personal Session model policy
+# ADR 0046: Personal Session model policy
 
 Status: implemented and locally validated; not released or verified against live providers/platforms. Confirmed product boundaries follow.
 

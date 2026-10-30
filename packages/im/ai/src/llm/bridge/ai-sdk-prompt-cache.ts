@@ -1,5 +1,6 @@
 import type { ModelMessage, SystemModelMessage, ToolSet } from 'ai';
 import type { SdkId } from '../sdk-registry.js';
+import { isRuntimeContextMarkerText } from '../types/runtime-context.js';
 
 export type PromptCacheProviderOptions = {
   openai?: Record<string, string>;
@@ -177,11 +178,42 @@ export function applyPromptCacheToMessages(
   if (current < 0) return messages;
   const lastAssistant = messages.map(message => message.role === 'assistant').lastIndexOf(true);
   const previous = lastCacheableMessage(messages, lastAssistant);
-  return messages.map((message, index) => index !== current && index !== previous ? message : {
-    ...message,
-    providerOptions: {
-      ...message.providerOptions,
-      anthropic: { ...message.providerOptions?.anthropic, cacheControl: { type: 'ephemeral' } },
-    },
+  return messages.map((message, index) => {
+    if (index !== current && index !== previous) return message;
+    const anchored = anchorBeforeRuntimeContext(message);
+    if (anchored) return anchored;
+    return {
+      ...message,
+      providerOptions: {
+        ...message.providerOptions,
+        anthropic: { ...message.providerOptions?.anthropic, cacheControl: { type: 'ephemeral' } },
+      },
+    };
   });
+}
+
+/**
+ * A current user message is `body` + runtime-context tail. The tail is dropped once the message
+ * becomes history. Anchor the first body text part, rather than the part before the marker:
+ * runtime-only participant media and unavailable-media placeholders may sit between them.
+ * The owned header + body text is exactly what the next request replays as history.
+ */
+function anchorBeforeRuntimeContext(message: ModelMessage): ModelMessage | undefined {
+  if (message.role !== 'user' || !Array.isArray(message.content)) return undefined;
+  const marker = message.content.findIndex((part, index) => index > 0 && part.type === 'text' && isRuntimeContextMarkerText(part.text));
+  if (marker < 1) return undefined;
+  const anchor = message.content.findIndex(part => part.type === 'text');
+  if (anchor < 0 || anchor >= marker) return undefined;
+  const part = message.content[anchor]!;
+  if (part.type === 'text' && !part.text.trim()) return undefined;
+  return {
+    ...message,
+    content: message.content.map((item, index) => index !== anchor ? item : {
+      ...item,
+      providerOptions: {
+        ...item.providerOptions,
+        anthropic: { ...item.providerOptions?.anthropic, cacheControl: { type: 'ephemeral' } },
+      },
+    }),
+  } as ModelMessage;
 }

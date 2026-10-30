@@ -3,6 +3,7 @@ import { renderContextMessage, type AgentMessage, type AssistantMessage, type Us
 import type { PromptContextState, TextContentBlock } from '../llm/types/content-block.js';
 import { projectParticipantHeaders, type HeaderFormatOptions } from './participant-header.js';
 import { trimFinishedToolResults } from './tool-result-trim.js';
+import { escapeHostMarkers } from '../llm/types/runtime-context.js';
 
 function digest(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -53,7 +54,38 @@ function validState(block: TextContentBlock): PromptContextState | undefined {
  * retains both changes. Ordinary rules and memory always keep their full new versions.
  */
 export function projectPromptContext(messages: AgentMessage[], options?: HeaderFormatOptions): AgentMessage[] {
-  return projectParticipantHeaders(trimFinishedToolResults(projectContextState(projectRepresentedContext(stripHistoricalTurnContext(messages)))), options);
+  return projectParticipantHeaders(escapeParticipantText(trimFinishedToolResults(projectContextState(projectRepresentedContext(stripHistoricalTurnContext(messages))))), options);
+}
+
+/**
+ * Participant-authored user text cannot open a host runtime-context tail or forge a context source:
+ * host markers in it are escaped. Same pure transform for the current message and history, so the
+ * body stays byte-identical once it becomes history (prompt-cache prefix).
+ */
+function escapeParticipantText(messages: AgentMessage[]): AgentMessage[] {
+  let changed = false;
+  const out = messages.map(message => {
+    if (message.role !== 'user' || !Array.isArray(message.content)) return message;
+    let messageChanged = false;
+    const content = (message as UserMessage).content.map(block => {
+      if (block.type !== 'text' || typeof block.text !== 'string' || block.contextRef || block.perTurn || block.ephemeral) return block;
+      const text = escapeHostMarkers(block.text);
+      if (text === block.text) return block;
+      messageChanged = true;
+      return { ...block, text };
+    });
+    // Quote text is participant-authored too; headers render it after this projection.
+    const quote = (message as UserMessage).quote;
+    const quoteText = quote?.text;
+    const escapedQuote = quoteText === undefined ? undefined : escapeHostMarkers(quoteText);
+    const quoteChanged = escapedQuote !== quoteText;
+    if (!messageChanged && !quoteChanged) return message;
+    changed = true;
+    return { ...message, content,
+      ...(quoteChanged ? { quote: { ...quote!, text: escapedQuote } } : {}),
+    } as AgentMessage;
+  });
+  return changed ? out : messages;
 }
 
 /** Only the currently visible delivered replies can cover an external event or a ledger entry. */
