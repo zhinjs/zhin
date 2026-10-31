@@ -1,335 +1,127 @@
-import { enableActivityFeedbackForBot, isGenericActivityFeedbackManager, type ActivityFeedbackManager, type ActivityFeedbackPhase, type ActivityFeedbackSendPort, type EndpointWithActivityFeedback, type PlatformActivityFeedbackManager, type ResolvedActivityFeedbackPhaseConfig, type ActivityFeedbackEventContext } from '@zhin.js/agent';
-import type { OutboundHost } from 'zhin.js';
+import {
+  ActivityFeedbackManager, activityFeedbackSource, createActivityFeedbackAdapter,
+  type ActivityFeedbackEventContext, type ActivityFeedbackIO, type ActivityFeedbackPhase,
+  type ResolvedActivityFeedbackPhaseConfig,
+} from '@zhin.js/agent';
+import { conversationRefKey, type OutboundHost } from 'zhin.js';
 
-/** IM 侧 endpoint 访问 seam（便于测试注入 fake） */
+export interface CapturedFeedbackOperation extends ActivityFeedbackIO {
+  readonly signal: AbortSignal;
+  release(): void;
+}
+
+/** One source capture, never a directory lookup by an alias at execution time. */
 export interface ActivityFeedbackEndpointAccess {
-  resolve(
-    platform: string,
-    endpointKey: string,
-  ): { endpoint: EndpointWithActivityFeedback; outbound: ActivityFeedbackSendPort } | undefined;
+  capture(context: ActivityFeedbackEventContext): CapturedFeedbackOperation | undefined;
 }
-
-/** Slice-2: no Adapter inject — executor start/stop no-op when resolve returns undefined. */
 export function createNoopEndpointAccess(): ActivityFeedbackEndpointAccess {
-  return {
-    resolve() {
-      return undefined;
-    },
-  };
+  return { capture: () => undefined };
 }
 
-function stringifySendContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return content == null ? '' : String(content);
-  return content.map((segment) => {
-    if (typeof segment === 'string') return segment;
-    if (segment && typeof segment === 'object') {
-      const data = (segment as { data?: { text?: string }; text?: string }).data
-        ?? (segment as { text?: string });
-      if (typeof data === 'object' && data && 'text' in data && typeof data.text === 'string') {
-        return data.text;
-      }
-      if (typeof (segment as { text?: string }).text === 'string') {
-        return (segment as { text: string }).text;
-      }
-    }
-    return '';
-  }).join('');
-}
-
-/**
- * Plugin Runtime: resolve endpoints via OutboundHost → ImRuntime.sendEndpointMessage.
- * Typing/reaction text goes through the unified outbound chain (no legacy Adapter.inject).
- *
- * 按 platform:endpointKey 缓存 { endpoint, outbound }：activity manager 挂在
- * endpoint.$activityFeedback 上，start/stop 必须解析到同一个对象，否则
- * stop 时拿不到 manager，typing 指示器永远无法停止。
- */
 export function createOutboundEndpointAccess(
   outbound: OutboundHost,
-  logger?: { debug: (msg: string, ...args: unknown[]) => void },
+  logger?: { debug: (message: string, ...args: unknown[]) => void },
 ): ActivityFeedbackEndpointAccess {
-  const cache = new Map<string, {
-    endpoint: EndpointWithActivityFeedback;
-    outbound: ActivityFeedbackSendPort;
-  }>();
   return {
-    resolve(platform, endpointKey) {
-      const key = JSON.stringify([platform, endpointKey]);
-      const cached = cache.get(key);
-      if (cached) return cached;
-      const declared = outbound.capabilities?.({ adapter: platform, endpointKey })?.operations;
-      const supports = (operation: 'recall' | 'edit' | 'reaction' | 'typing') =>
-        declared?.includes(operation) === true;
-      const recall = outbound.recall;
-      const edit = outbound.edit;
-      const addReaction = outbound.addReaction;
-      const removeReaction = outbound.removeReaction;
-      const typing = outbound.typing;
-      const endpoint = {
-        $id: endpointKey,
-        control: {
-          ...(recall && supports('recall') ? {
-            recall: async (message: Parameters<typeof recall>[0]['message']) => {
-              try {
-                await recall({ adapter: platform, endpointKey, message });
-              } catch (error) {
-                logger?.debug(
-                  `[ActivityFeedback] outbound recall failed (${key}):`,
-                  error instanceof Error ? error.message : String(error),
-                );
-              }
-            },
-          } : {}),
-          ...(edit && supports('edit') ? {
-            edit: async (
-              message: Parameters<typeof edit>[0]['message'],
-              content: unknown,
-            ) => {
-              try {
-                return await edit({ adapter: platform, endpointKey, message, content });
-              } catch (error) {
-                logger?.debug(
-                  `[ActivityFeedback] outbound edit failed (${key}):`,
-                  error instanceof Error ? error.message : String(error),
-                );
-                return null;
-              }
-            },
-          } : {}),
-          ...(addReaction && supports('reaction') ? {
-            addReaction: async (
-              message: Parameters<typeof addReaction>[0]['message'],
-              emoji: string,
-              hint?: { sceneType?: 'private' | 'group' | 'channel'; channelId?: string },
-            ) => {
-              try {
-                return await addReaction({
-                  adapter: platform,
-                  endpointKey,
-                  message,
-                  emoji,
-                  sceneType: hint?.sceneType,
-                  channelId: hint?.channelId,
-                });
-              } catch (error) {
-                logger?.debug(
-                  `[ActivityFeedback] outbound addReaction failed (${key}):`,
-                  error instanceof Error ? error.message : String(error),
-                );
-                return null;
-              }
-            },
-          } : {}),
-          ...(removeReaction && supports('reaction') ? {
-            removeReaction: async (
-              message: Parameters<typeof removeReaction>[0]['message'],
-              reactionId: string,
-            ) => {
-              try {
-                await removeReaction({ adapter: platform, endpointKey, message, reactionId });
-              } catch (error) {
-                logger?.debug(
-                  `[ActivityFeedback] outbound removeReaction failed (${key}):`,
-                  error instanceof Error ? error.message : String(error),
-                );
-              }
-            },
-          } : {}),
-          ...(typing && supports('typing') ? {
-            typing: async (
-              conversation: Parameters<typeof typing>[0]['conversation'],
-              active?: boolean,
-            ) => {
-              try {
-                await typing({ adapter: platform, endpointKey, conversation, active });
-              } catch (error) {
-                logger?.debug(
-                  `[ActivityFeedback] outbound typing failed (${key}):`,
-                  error instanceof Error ? error.message : String(error),
-                );
-              }
-            },
-          } : {}),
-        },
-      } as EndpointWithActivityFeedback;
-      const sendPort: ActivityFeedbackSendPort = {
-        send: async ({ conversation, content, locale }) => {
-          const text = stringifySendContent(content);
-          if (!text || !conversation.id) return null;
-          try {
-            const messageId = await outbound.send({
-              adapter: platform,
-              endpointKey,
-              conversation: {
-                kind: conversation.kind,
-                id: conversation.id,
-              },
-              content: text,
-              locale,
-            });
-            return messageId || null;
-          } catch (error) {
-            logger?.debug(
-              `[ActivityFeedback] outbound send failed (${key}):`,
-              error instanceof Error ? error.message : String(error),
-            );
-            return null;
-          }
-        },
-      };
-      const resolved = { endpoint, outbound: sendPort };
-      cache.set(key, resolved);
-      return resolved;
+    capture(context) {
+      const source = context[activityFeedbackSource];
+      if (!source || source.signal.aborted || !outbound.captureOperation) return undefined;
+      try { return outbound.captureOperation(source); }
+      catch (error) {
+        logger?.debug('[ActivityFeedback] originating account is unavailable:', error instanceof Error ? error.message : String(error));
+        return undefined;
+      }
     },
   };
 }
 
-interface PhaseDriver {
-  start(
-    ctx: ActivityFeedbackEventContext,
-    phase: ActivityFeedbackPhase,
-    phaseConfig: ResolvedActivityFeedbackPhaseConfig,
-  ): Promise<void>;
-  stop(ctx: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase): Promise<void>;
-  updateThinkingText(ctx: ActivityFeedbackEventContext, text: string): Promise<void>;
-}
+type Entry = {
+  readonly key: string;
+  readonly sourceClient: unknown;
+  readonly operation: CapturedFeedbackOperation;
+  readonly manager: ActivityFeedbackManager;
+  readonly phases: Set<ActivityFeedbackPhase>;
+  readonly detach: () => void;
+  closing?: Promise<void>;
+};
 
-class PlatformPhaseDriver implements PhaseDriver {
-  constructor(private readonly manager: PlatformActivityFeedbackManager) {}
-
-  async start(
-    ctx: ActivityFeedbackEventContext,
-    phase: ActivityFeedbackPhase,
-    phaseConfig: ResolvedActivityFeedbackPhaseConfig,
-  ): Promise<void> {
-    const sceneType = ctx.sceneType === 'channel' ? 'group' : ctx.sceneType;
-    await this.manager.start({
-      locale: ctx.locale,
-      messageId: ctx.messageId,
-      sessionId: ctx.sessionId,
-      userId: ctx.userId,
-      groupId: ctx.groupId,
-      sceneType,
-      phase,
-      phaseConfig,
-    });
-  }
-
-  async stop(ctx: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase): Promise<void> {
-    await this.manager.stop({
-      sessionId: ctx.sessionId,
-      userId: ctx.userId,
-      groupId: ctx.groupId,
-      phase,
-    });
-  }
-
-  async updateThinkingText(ctx: ActivityFeedbackEventContext, text: string): Promise<void> {
-    const indicator = this.manager.getActiveIndicator?.('thinking', ctx.options);
-    if (indicator?.update) {
-      await indicator.update(text);
-    }
-  }
-}
-
-class GenericPhaseDriver implements PhaseDriver {
-  private manager?: ActivityFeedbackManager;
-
-  constructor(
-    private readonly endpoint: EndpointWithActivityFeedback,
-    private readonly platform: string,
-    private readonly outbound: ActivityFeedbackSendPort,
-  ) {}
-
-  private async ensureManager(): Promise<ActivityFeedbackManager> {
-    if (this.manager) return this.manager;
-    const existing = this.endpoint.$activityFeedback;
-    if (existing && isGenericActivityFeedbackManager(existing)) {
-      this.manager = existing;
-      return existing;
-    }
-    this.manager = enableActivityFeedbackForBot(this.endpoint, this.platform, this.outbound);
-    return this.manager;
-  }
-
-  async start(
-    ctx: ActivityFeedbackEventContext,
-    phase: ActivityFeedbackPhase,
-    phaseConfig: ResolvedActivityFeedbackPhaseConfig,
-  ): Promise<void> {
-    const manager = await this.ensureManager();
-    if (manager.getActiveIndicator(phase, ctx.options)) return;
-    await manager.start(phase, ctx.options, phaseConfig);
-  }
-
-  async stop(ctx: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase): Promise<void> {
-    const manager = this.endpoint.$activityFeedback;
-    if (!manager || !isGenericActivityFeedbackManager(manager)) return;
-    await manager.stop(phase, ctx.options);
-  }
-
-  async updateThinkingText(ctx: ActivityFeedbackEventContext, text: string): Promise<void> {
-    const manager = this.endpoint.$activityFeedback;
-    if (!manager || !isGenericActivityFeedbackManager(manager)) return;
-    const indicator = manager.getActiveIndicator('thinking', ctx.options);
-    if (indicator?.update) {
-      await indicator.update(text);
-    }
-  }
-}
-
-function createPhaseDriver(
-  endpoint: EndpointWithActivityFeedback,
-  platform: string,
-  outbound: ActivityFeedbackSendPort,
-): PhaseDriver {
-  const manager = endpoint.$activityFeedback;
-  if (manager && !isGenericActivityFeedbackManager(manager)) {
-    return new PlatformPhaseDriver(manager);
-  }
-  return new GenericPhaseDriver(endpoint, platform, outbound);
-}
-
+/** Holds only the bound operations needed by live phases, and releases them on every terminal path. */
 export class ActivityFeedbackExecutor {
+  readonly #entries = new Map<string, Entry>();
   constructor(private readonly access: ActivityFeedbackEndpointAccess) {}
 
-  async start(
-    ctx: ActivityFeedbackEventContext,
-    phase: ActivityFeedbackPhase,
-    phaseConfig: ResolvedActivityFeedbackPhaseConfig,
-  ): Promise<void> {
-    const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
-    if (!resolved) return;
-    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.outbound);
-    await driver.start(ctx, phase, phaseConfig);
-  }
-
-  async stop(ctx: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase): Promise<void> {
-    const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
-    if (!resolved?.endpoint.$activityFeedback) return;
-    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.outbound);
-    await driver.stop(ctx, phase);
-  }
-
-  async updateText(
-    ctx: ActivityFeedbackEventContext,
-    phase: ActivityFeedbackPhase,
-    text: string,
-  ): Promise<void> {
-    const resolved = this.access.resolve(ctx.platform, ctx.endpointKey);
-    if (!resolved) return;
-    const driver = createPhaseDriver(resolved.endpoint, ctx.platform, resolved.outbound);
-    const manager = resolved.endpoint.$activityFeedback;
-    if (!manager || !isGenericActivityFeedbackManager(manager)) {
-      if (phase === 'thinking') await driver.updateThinkingText(ctx, text);
-      return;
+  async start(context: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase,
+    config: ResolvedActivityFeedbackPhaseConfig): Promise<void> {
+    const source = context[activityFeedbackSource];
+    if (!source || source.signal.aborted) return;
+    const key = this.#key(context, source.target);
+    let entry = this.#entries.get(key);
+    while (entry && (entry.sourceClient !== source.client || entry.closing)) {
+      await this.#close(entry);
+      entry = this.#entries.get(key);
     }
-    const indicator = manager.getActiveIndicator(phase, ctx.options);
-    if (indicator?.update) await indicator.update(text);
+    if (!entry) {
+      const operation = this.access.capture(context);
+      if (!operation) return;
+      const manager = new ActivityFeedbackManager();
+      manager.registerAdapter(createActivityFeedbackAdapter({ platform: context.platform, io: operation }));
+      const cancel = () => { void this.#close(created).catch(() => undefined); };
+      const created: Entry = { key, sourceClient: source.client, operation, manager, phases: new Set(),
+        detach: () => operation.signal.removeEventListener('abort', cancel) };
+      operation.signal.addEventListener('abort', cancel, { once: true });
+      this.#entries.set(key, created);
+      entry = created;
+      if (operation.signal.aborted) { await this.#close(entry); return; }
+    }
+    entry.phases.add(phase);
+    try {
+      const indicator = await entry.manager.start(phase, context.options, config);
+      if (!indicator.isActive()) {
+        entry.phases.delete(phase);
+        if (!entry.phases.size) await this.#close(entry);
+      }
+    } catch (error) { await this.#close(entry); throw error; }
   }
 
-  async updateThinkingText(ctx: ActivityFeedbackEventContext, text: string): Promise<void> {
-    await this.updateText(ctx, 'thinking', text);
+  async stop(context: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase): Promise<void> {
+    const source = context[activityFeedbackSource];
+    if (!source) return;
+    const entry = this.#entries.get(this.#key(context, source.target));
+    if (!entry || entry.sourceClient !== source.client) return;
+    try { await entry.manager.stop(phase, context.options); }
+    finally {
+      entry.phases.delete(phase);
+      if (!entry.phases.size) await this.#close(entry);
+    }
+  }
+
+  async updateText(context: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase, text: string): Promise<void> {
+    const source = context[activityFeedbackSource];
+    if (!source) return;
+    const entry = this.#entries.get(this.#key(context, source.target));
+    if (!entry || entry.closing || entry.operation.signal.aborted || entry.sourceClient !== source.client) return;
+    await entry.manager.getActiveIndicator(phase, context.options)?.update?.(text);
+  }
+  updateThinkingText(context: ActivityFeedbackEventContext, text: string): Promise<void> {
+    return this.updateText(context, 'thinking', text);
+  }
+  async dispose(): Promise<void> { await Promise.allSettled([...this.#entries.values()].map(entry => this.#close(entry))); }
+
+  #key(context: ActivityFeedbackEventContext, target: ActivityFeedbackIO['target']): string {
+    return JSON.stringify([conversationRefKey(target), context.sessionId, context.messageId ?? null]);
+  }
+  #close(entry: Entry): Promise<void> {
+    return entry.closing ??= Promise.resolve().then(async () => {
+      entry.detach();
+      try { await entry.manager.dispose(); }
+      finally {
+        entry.operation.release();
+        if (this.#entries.get(entry.key) === entry) this.#entries.delete(entry.key);
+      }
+    });
   }
 }
+
+/** Policy orchestration needs behavior, not the concrete executor's private state. */
+export type ActivityFeedbackExecution = Pick<ActivityFeedbackExecutor,
+  'start' | 'stop' | 'updateText' | 'updateThinkingText' | 'dispose'>;

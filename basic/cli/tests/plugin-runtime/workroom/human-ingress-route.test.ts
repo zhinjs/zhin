@@ -29,20 +29,22 @@ function message(
   replyTo?: string,
 ): Message {
   return new Message(
-    conversation,
-    content,
-    1,
-    async value => {
-      replies?.push(value);
-      return { status: 'sent' as const };
+    {
+      conversation: conversation,
+      content: content,
+      sender: { id: 'alice' },
+      metadata: Object.freeze({}),
+      message: { conversation, id },
+      endpointId: 'main',
+      replyTo: replyTo ? { id: replyTo } : undefined,
     },
-    { id: 'alice' },
-    Object.freeze({}),
-    undefined,
-    { conversation, id },
-    'main',
-    undefined,
-    replyTo ? { id: replyTo } : undefined,
+    {
+      generation: 1,
+      reply: async (value) => {
+        replies?.push(value);
+        return { status: 'sent' as const };
+      },
+    },
   );
 }
 

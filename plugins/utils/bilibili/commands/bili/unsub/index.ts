@@ -1,3 +1,4 @@
+import { subscriptionMigrationScope } from '../../../src/target-migration.js';
 import { messages, commandHint } from '../../../src/i18n.js';
 import { canManageConversation, defineCommand } from 'zhin.js/command';
 import { parseUid } from '../../../src/api.js';
@@ -17,19 +18,23 @@ export default defineCommand<BilibiliConfig>({
     if (!uid) return messages(locale, 'uid') + commandHint(locale, formatCommand('bili unsub'), '<uid>');
     const channel = extractChannelInfo(input);
     if (!channel) return channelSourceError(input, locale);
-    if (!canManageConversation({ adapter, scene, sender })) return messages(locale, 'denied');
+    const run = async () => {
+      if (!canManageConversation({ adapter, scene, sender })) return messages(locale, 'denied');
 
-    const scope = subscriptionScope(channel);
-    const existing = await Subs.select().where({ uid, ...scope });
-    if (existing.length === 0) return messages(locale, 'notSubscribed');
-    await Subs.delete().where({ uid, ...scope });
+      const scope = subscriptionScope(channel);
+      const existing = await Subs.select().where({ uid, ...scope });
+      if (existing.length === 0) return messages(locale, 'notSubscribed');
+      await Subs.delete().where({ uid, ...scope });
 
-    // Drop the watcher cursor and backoff once nobody watches this UP any more.
-    const remaining = await Subs.select().where({ uid });
-    if (remaining.length === 0) {
-      await getBiliState(runtime.db)?.delete().where({ uid });
-      runtime.watcher.forget(uid);
-    }
-    return messages(locale, 'removed', { name: String(existing[0]!.uname || uid) });
+      // Drop the watcher cursor and backoff once nobody watches this UP any more.
+      const remaining = await Subs.select().where({ uid });
+      if (remaining.length === 0) {
+        await getBiliState(runtime.db)?.delete().where({ uid });
+        runtime.watcher.forget(uid);
+      }
+      return messages(locale, 'removed', { name: String(existing[0]!.uname || uid) });
+    };
+    return runtime.migrationScopes ? runtime.migrationScopes.run({ scope: subscriptionMigrationScope({ target: channel.target,
+      adapterName: channel.adapterName, endpointKey: channel.endpointKey, channelType: channel.channelType, channelId: channel.channelId }), run }) : run();
   },
 });

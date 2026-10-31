@@ -101,6 +101,7 @@ class TestEndpoint extends TestClient implements Endpoint {
 }
 
 const ignoredEndpointEvents = Object.freeze({
+  async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
   receive: async (_event: EndpointEvent) => undefined,
 });
 
@@ -605,7 +606,7 @@ describe('IM Runtime', () => {
     } finally { release(); await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
-  it.each(['command', 'shortcut'] as const)('retires the real %s context signal while ordinary leased replies still drain', async (entry) => {
+  it.each(['command', 'shortcut'] as const)('keeps the real %s operation alive across replacement while leased replies drain', async (entry) => {
     const root = rootPluginId();
     const sent: unknown[] = [];
     let signal: AbortSignal | undefined;
@@ -634,7 +635,7 @@ describe('IM Runtime', () => {
       await started;
       expect(signal?.aborted).toBe(false);
       fixture.store.commit(1, { snapshot: snapshotState(fixture.store.current), dispose: () => undefined });
-      expect(signal?.aborted).toBe(true);
+      expect(signal?.aborted).toBe(false);
       expect(signal).toBe(sessionSignal);
       expect(retirementSignal.aborted).toBe(true);
       expect(disposed).toBe(false);
@@ -1385,16 +1386,23 @@ describe('IM Runtime', () => {
     let requester: unknown;
     const message = new Message(
       {
-        endpoint: {
-          id: String(capabilityId(root, adapterFeatureId, 'memory')),
-          adapter: String(root),
+        conversation: {
+          endpoint: {
+            id: String(capabilityId(root, adapterFeatureId, 'memory')),
+            adapter: String(root),
+          },
+          kind: 'private',
+          id: 'room',
         },
-        kind: 'private',
-        id: 'room',
+        content: '/status',
       },
-      '/status',
-      1,
-      async (_content, owner) => { requester = owner; return { status: 'sent' }; },
+      {
+        generation: 1,
+        reply: async (_content, owner) => {
+          requester = owner;
+          return { status: 'sent' };
+        },
+      },
     );
 
     await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({
@@ -1426,7 +1434,18 @@ describe('IM Runtime', () => {
       for (const [endpoint, prefix] of [['test-bot', '!'], ['test-bot-b', '#']]) {
         const id = index.resolve(String(owner), endpoint)!;
         expect(snapshot.capabilities.has(id)).toBe(false);
-        const message = new Message({ endpoint: { id: String(id), adapter: String(owner) }, kind: 'channel', id: 'channel' }, `${prefix}acceptance probe:local0001`, 1, async () => ({ status: 'sent' }), undefined, undefined, undefined, undefined, endpoint);
+        const message = new Message(
+          {
+            conversation: {
+              endpoint: { id: String(id), adapter: String(owner) },
+              kind: 'channel',
+              id: 'channel',
+            },
+            content: `${prefix}acceptance probe:local0001`,
+            endpointId: endpoint,
+          },
+          { generation: 1, reply: async () => ({ status: 'sent' }) },
+        );
         expect(defaultCommandPrefixResolver(message, snapshot)).toBe(prefix);
         await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({ matched: true, command: 'acceptance', value: 'accepted' });
       }
@@ -1441,7 +1460,17 @@ describe('IM Runtime', () => {
       capabilities: new Map([[endpoint.id, endpoint]]),
       config: new Map([[owner, { commandPrefix: '/', endpoints: [{ id: 'bot-a', commandPrefix: '!' }] }]]),
     });
-    const message = new Message({ endpoint: { id: String(endpoint.id), adapter: 'terminal' }, kind: 'private', id: 'room' }, '/hello', 1, async () => ({ status: 'sent' as const }));
+    const message = new Message(
+      {
+        conversation: {
+          endpoint: { id: String(endpoint.id), adapter: 'terminal' },
+          kind: 'private',
+          id: 'room',
+        },
+        content: '/hello',
+      },
+      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
+    );
     expect(defaultCommandPrefixResolver(message, snapshot)).toBe('/');
   });
 
@@ -1477,21 +1506,18 @@ describe('IM Runtime', () => {
     };
     const send = (content: string, opts?: { endpoint?: string }) => new Message(
       {
-        endpoint: {
-          id: String(capabilityId(root, adapterFeatureId, 'memory')),
-          adapter: String(root),
+        conversation: {
+          endpoint: {
+            id: String(capabilityId(root, adapterFeatureId, 'memory')),
+            adapter: String(root),
+          },
+          kind: 'private',
+          id: 'room',
         },
-        kind: 'private',
-        id: 'room',
+        content: content,
+        endpointId: opts?.endpoint,
       },
-      content,
-      1,
-      async () => ({ status: 'sent' as const }),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      opts?.endpoint,
+      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
     );
 
     // 默认 ''：无前缀直接匹配；带 / 反而不匹配
@@ -1552,23 +1578,22 @@ describe('IM Runtime', () => {
     // A platform quote comes first, the typed text second; replyTo carries the quoted id.
     const quoted = (text: string) => new Message(
       {
-        endpoint: {
-          id: String(capabilityId(root, adapterFeatureId, 'memory')),
-          adapter: String(root),
+        conversation: {
+          endpoint: {
+            id: String(capabilityId(root, adapterFeatureId, 'memory')),
+            adapter: String(root),
+          },
+          kind: 'private',
+          id: 'room',
         },
-        kind: 'private',
-        id: 'room',
+        content: text,
+        segments: [
+          { type: 'reply', data: { id: 'notice-1' } },
+          { type: 'text', data: { text } },
+        ],
+        replyTo: { id: 'notice-1' },
       },
-      text,
-      1,
-      async () => ({ status: 'sent' as const }),
-      undefined,
-      undefined,
-      [{ type: 'reply', data: { id: 'notice-1' } }, { type: 'text', data: { text } }],
-      undefined,
-      undefined,
-      undefined,
-      { id: 'notice-1' },
+      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
     );
 
     await expect(new MessageDispatcher().dispatch(quoted('同意'), makeSnapshot({})))
@@ -1616,21 +1641,18 @@ describe('IM Runtime', () => {
     });
     const send = (content: string, endpoint: string) => new Message(
       {
-        endpoint: {
-          id: String(capabilityId(root, adapterFeatureId, 'memory')),
-          adapter: String(root),
+        conversation: {
+          endpoint: {
+            id: String(capabilityId(root, adapterFeatureId, 'memory')),
+            adapter: String(root),
+          },
+          kind: 'private',
+          id: 'room',
         },
-        kind: 'private',
-        id: 'room',
+        content: content,
+        endpointId: endpoint,
       },
-      content,
-      1,
-      async () => ({ status: 'sent' as const }),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      endpoint,
+      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
     );
 
     const hashed = await new MessageDispatcher().dispatch(send('#菜单', 'bot-1'), snapshot);
@@ -1679,22 +1701,21 @@ describe('IM Runtime', () => {
     });
     const message = new Message(
       {
-        endpoint: {
-          id: String(capabilityId(root, adapterFeatureId, 'memory')),
-          adapter: String(root),
+        conversation: {
+          endpoint: {
+            id: String(capabilityId(root, adapterFeatureId, 'memory')),
+            adapter: String(root),
+          },
+          kind: 'private',
+          id: 'room',
         },
-        kind: 'private',
-        id: 'room',
+        content: text.trim(),
+        segments: Object.freeze([
+          { type: 'text', data: { text } },
+          { type: 'image', data: { media } },
+        ]),
       },
-      text.trim(),
-      1,
-      async () => ({ status: 'sent' as const }),
-      undefined,
-      undefined,
-      Object.freeze([
-        { type: 'text', data: { text } },
-        { type: 'image', data: { media } },
-      ]),
+      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
     );
 
     await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({
@@ -1892,8 +1913,16 @@ describe('IM Runtime', () => {
       expect(createDeliveryTarget(origin)).toEqual(firstTarget);
       const content = raw([{ type: 'html', data: { html: '<b>Account content</b>' } }]);
       const renderer = new OutboundRenderer();
-      const firstPreview = await renderer.preview(content, rootPluginId(), fixture.store.current, firstTarget);
-      const secondPreview = await renderer.preview(content, rootPluginId(), fixture.store.current, secondTarget);
+      const firstPreview = await renderer.preview(content, {
+        requester: rootPluginId(),
+        snapshot: fixture.store.current,
+        conversation: firstTarget,
+      });
+      const secondPreview = await renderer.preview(content, {
+        requester: rootPluginId(),
+        snapshot: fixture.store.current,
+        conversation: secondTarget,
+      });
       expect(firstPreview.rendering).toEqual({ forms: ['native'], fallbacks: [] });
       expect(secondPreview.rendering).toEqual({ forms: ['text'], fallbacks: ['html_text_policy'] });
       expect(firstSent).toHaveLength(0);
@@ -1912,7 +1941,14 @@ describe('IM Runtime', () => {
       expect(firstSent).toHaveLength(1);
       const aliasTarget = { ...secondTarget, endpoint: { ...secondTarget.endpoint, id: other.name } };
       await expect(fixture.im.endpoints.sendTarget(aliasTarget, 'invalid local alias')).rejects.toMatchObject({ code: 'endpoint_not_found' });
-      await expect(renderer.preview(content, rootPluginId(), fixture.store.current, { ...firstTarget, endpoint: { ...firstTarget.endpoint, adapter: String(secondOwner) } })).rejects.toThrow('identity mismatch');
+      await expect(renderer.preview(content, {
+        requester: rootPluginId(),
+        snapshot: fixture.store.current,
+        conversation: {
+          ...firstTarget,
+          endpoint: { ...firstTarget.endpoint, adapter: String(secondOwner) },
+        },
+      })).rejects.toThrow('identity mismatch');
       expect(firstSent).toHaveLength(1);
       expect(secondSent).toHaveLength(3);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
@@ -2053,18 +2089,18 @@ describe('IM Runtime', () => {
   it('accepts MessageRef and ConversationRef at Core control methods', async () => {
     const calls: string[] = [];
     const control: EndpointControl = {
-      recall: async (message) => {
+      recall: async ({ message }) => {
         calls.push(`recall:${message.conversation.kind}:${message.conversation.id}:${message.id}`);
       },
-      edit: async (message, content) => {
+      edit: async ({ message, content }) => {
         calls.push(`edit:${message.conversation.kind}:${message.conversation.id}:${message.id}:${String(content)}`);
         return 'edited';
       },
-      addReaction: async (message, emoji) => {
+      addReaction: async ({ message, emoji }) => {
         calls.push(`reaction:${message.conversation.kind}:${message.conversation.id}:${message.id}:${emoji}`);
         return emoji;
       },
-      typing: async (conversation, active) => {
+      typing: async ({ conversation, active }) => {
         const target = `${conversation.kind}:${conversation.id}`;
         calls.push(`typing:${target}:${String(active)}`);
       },
@@ -2087,16 +2123,10 @@ describe('IM Runtime', () => {
         operations: { recall: true, edit: true, reaction: true, typing: true },
       });
 
-    await fixture.im.endpoints.recall({ adapter: 'memory', endpointKey: 'memory', message });
-    await expect(fixture.im.endpoints.edit({
-      adapter: 'memory', endpointKey: 'memory', message, content: 'updated',
-    })).resolves.toBe('edited');
-    await expect(fixture.im.endpoints.addReaction({
-      adapter: 'memory', endpointKey: 'memory', message, emoji: '👍',
-    })).resolves.toBe('👍');
-    await fixture.im.endpoints.typing({
-      adapter: 'memory', endpointKey: 'memory', conversation, active: true,
-    });
+    await fixture.im.endpoints.recall({ message });
+    await expect(fixture.im.endpoints.edit({ message, content: 'updated' })).resolves.toBe('edited');
+    await expect(fixture.im.endpoints.addReaction({ message, emoji: '👍' })).resolves.toBe('👍');
+    await fixture.im.endpoints.typing({ conversation, active: true });
 
     expect(calls).toEqual([
       'recall:group:room-1:message-1',
@@ -2128,18 +2158,14 @@ describe('IM Runtime', () => {
       dispose: () => { disposed = true; },
     });
 
-    const recalling = fixture.im.endpoints.recall({
-      adapter: 'memory',
-      endpointKey: 'memory',
-      message: {
+    const recalling = fixture.im.endpoints.recall({ message: {
         conversation: {
           endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
           kind: 'private',
           id: 'room-1',
         },
         id: 'message-1',
-      },
-    });
+      } });
     await Promise.resolve();
     const current = fixture.store.current;
     fixture.store.commit(1, {
@@ -2177,9 +2203,7 @@ describe('IM Runtime', () => {
 
     const operation = fixture.im.runWithSnapshotView(async () => {
       await pending;
-      await fixture.im.endpoints.recall({
-        adapter: 'memory', endpointKey: 'memory', message,
-      });
+      await fixture.im.endpoints.recall({ message });
     });
     await Promise.resolve();
     const current = fixture.store.current;
@@ -2208,11 +2232,8 @@ describe('IM Runtime', () => {
       id: 'room-1',
     };
 
-    await fixture.im.endpoints.recall({
-      adapter: 'memory',
-      endpointKey: 'memory',
-      message: { conversation, id: 'message-1' },
-    });
+    await expect(fixture.im.endpoints.recall({ message: { conversation, id: 'message-1' } }))
+      .rejects.toMatchObject({ code: 'unsupported_operation', disposition: 'not_sent' });
 
     expect(calls).toEqual([]);
     await fixture.adapters.stop();
@@ -3198,10 +3219,9 @@ async function createFixture(
     scope.seal();
     base = { ...base, resources: new Map([...base.resources, [root, scope.snapshot()]]) };
   }
-  let dispatchEndpointEvent = ignoredEndpointEvents.receive as (event: EndpointEvent) => Promise<unknown>;
   if (options?.adapterOwner || options?.additionalAdapters?.length || options?.routeEndpointEvents) {
     const resources = new Map(base.resources);
-    const gateway = options.routeEndpointEvents ? { receive: (event: EndpointEvent) => dispatchEndpointEvent(event) } : ignoredEndpointEvents;
+    const gateway = options.routeEndpointEvents ? im.endpointEvents : ignoredEndpointEvents;
     for (const slot of [adapter, ...(options.additionalAdapters ?? [])]) resources.set(slot.owner,
       new Map([...resources.get(slot.owner) ?? [], [endpointEventGatewayToken.id, gateway]]));
     base = { ...base, resources };
@@ -3225,7 +3245,6 @@ async function createFixture(
   const store = new SnapshotStore({ ...base, projections });
   im.attach(store);
   fixtureStores.set(im, store);
-  dispatchEndpointEvent = event => im.endpointEvents.receive(event);
   await adapters.start();
   adapters.open();
   return { im, store, adapters, adapter, command, conversationEvents };
@@ -3783,7 +3802,7 @@ describe('full-operation command admission', () => {
       const projections = new Map(current.projections);
       projections.set(commandFeatureId, new CommandIndex([f.command], createSnapshotView(current.generation + 1, state)));
       f.store.commit(current.generation, { snapshot: { ...state, projections }, dispose: () => undefined });
-      expect(signal?.aborted).toBe(true);
+      expect(signal?.aborted).toBe(false);
       expect((await receive(f.im, fixtureInput(f, '/gh issue list open'))).limit).toEqual({ reason: 'busy' });
       gate.resolve(); expect((await first).status).toBe('executed');
       expect(JSON.stringify(sent)).toContain('old final');
@@ -3886,7 +3905,7 @@ describe('full-operation command admission', () => {
     } finally { business.resolve(); feedback.resolve(); await first; vi.useRealTimers(); await f.adapters.stop(); await f.store.close(); }
   });
 
-  it.each(['retirement', 'fast-final', 'failure'] as const)('never retries feedback or starts stale feedback after %s', async mode => {
+  it.each(['retirement', 'fast-final', 'failure'] as const)('never retries feedback and preserves chosen operation lifetime after %s', async mode => {
     const business = admissionDeferred(); const started = admissionDeferred(); const sent: unknown[] = [];
     const f = await createFixture([], sent, undefined, business.promise, started.resolve, {
       execution: { maxConcurrent: 1, progressAfterMs: 50 }, middleware: false, commandResult: () => 'FINAL',
@@ -3899,7 +3918,7 @@ describe('full-operation command admission', () => {
       if (mode === 'fast-final') { business.resolve(); await first; }
       await vi.advanceTimersByTimeAsync(500);
       business.resolve(); await first; await vi.advanceTimersByTimeAsync(1000);
-      expect(sent.filter(value => JSON.stringify(value).includes('正在处理中'))).toHaveLength(mode === 'failure' ? 1 : 0);
+      expect(sent.filter(value => JSON.stringify(value).includes('正在处理中'))).toHaveLength(mode === 'fast-final' ? 0 : 1);
       expect(JSON.stringify(sent)).toContain('FINAL');
     } finally { business.resolve(); await first; vi.useRealTimers(); await f.adapters.stop(); await f.store.close(); }
   });
@@ -3965,15 +3984,16 @@ describe('Message.$sendTo', () => {
       adapter: 'root',
     };
     const message = new Message(
-      { endpoint, kind: 'group', id: 'original-group' },
-      'hello',
-      1,
-      async (content, _requester, targetConversation) => {
-        const effectiveConversation = targetConversation
-          ? { endpoint, ...targetConversation }
-          : { endpoint, kind: 'group' as const, id: 'original-group' };
-        sent.push({ conversation: effectiveConversation, content });
-        return { status: 'sent' as const };
+      { conversation: { endpoint, kind: 'group', id: 'original-group' }, content: 'hello' },
+      {
+        generation: 1,
+        reply: async (content, _requester, targetConversation) => {
+          const effectiveConversation = targetConversation
+            ? { endpoint, ...targetConversation }
+            : { endpoint, kind: 'group' as const, id: 'original-group' };
+          sent.push({ conversation: effectiveConversation, content });
+          return { status: 'sent' as const };
+        },
       },
     );
 
@@ -3991,12 +4011,13 @@ describe('Message.$sendTo', () => {
   it('$reply still targets the original conversation', async () => {
     const sent: Array<{ targetConversation: unknown }> = [];
     const message = new Message(
-      { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
-      'hi',
-      1,
-      async (_content, _requester, targetConversation) => {
-        sent.push({ targetConversation });
-        return { status: 'sent' as const };
+      { conversation: { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' }, content: 'hi' },
+      {
+        generation: 1,
+        reply: async (_content, _requester, targetConversation) => {
+          sent.push({ targetConversation });
+          return { status: 'sent' as const };
+        },
       },
     );
 
@@ -4010,12 +4031,13 @@ describe('Message.$sendTo', () => {
   it('supports parent and threadId in target conversation', async () => {
     const sent: Array<{ targetConversation: unknown }> = [];
     const message = new Message(
-      { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
-      'hi',
-      1,
-      async (_content, _requester, targetConversation) => {
-        sent.push({ targetConversation });
-        return { status: 'sent' as const };
+      { conversation: { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' }, content: 'hi' },
+      {
+        generation: 1,
+        reply: async (_content, _requester, targetConversation) => {
+          sent.push({ targetConversation });
+          return { status: 'sent' as const };
+        },
       },
     );
 
@@ -4039,14 +4061,18 @@ describe('Message.$replyToPrivate', () => {
   function makeMessage(kind: 'group' | 'private' | 'channel', sender?: string) {
     const sent: Array<{ targetConversation: unknown }> = [];
     const message = new Message(
-      { endpoint: { id: 's', adapter: 'a' }, kind, id: 'conv-1' },
-      'hi',
-      1,
-      async (_content, _requester, targetConversation) => {
-        sent.push({ targetConversation });
-        return { status: 'sent' as const };
+      {
+        conversation: { endpoint: { id: 's', adapter: 'a' }, kind, id: 'conv-1' },
+        content: 'hi',
+        sender: sender ? { id: sender } : undefined,
       },
-      sender ? { id: sender } : undefined,
+      {
+        generation: 1,
+        reply: async (_content, _requester, targetConversation) => {
+          sent.push({ targetConversation });
+          return { status: 'sent' as const };
+        },
+      },
     );
     return { message, sent };
   }
@@ -4102,14 +4128,18 @@ describe('Message.$replyToGroup', () => {
   it('向指定群发送消息', async () => {
     const sent: Array<{ targetConversation: unknown }> = [];
     const message = new Message(
-      { endpoint: { id: 's', adapter: 'a' }, kind: 'private', id: 'u1' },
-      'hi',
-      1,
-      async (_content, _requester, targetConversation) => {
-        sent.push({ targetConversation });
-        return { status: 'sent' as const };
+      {
+        conversation: { endpoint: { id: 's', adapter: 'a' }, kind: 'private', id: 'u1' },
+        content: 'hi',
+        sender: { id: 'u1' },
       },
-      { id: 'u1' },
+      {
+        generation: 1,
+        reply: async (_content, _requester, targetConversation) => {
+          sent.push({ targetConversation });
+          return { status: 'sent' as const };
+        },
+      },
     );
     await message.$replyToGroup('group-99', '群通知');
     expect(sent[0]!.targetConversation).toEqual({ kind: 'group', id: 'group-99' });
@@ -4120,14 +4150,18 @@ describe('Message.$replyToChannel', () => {
   it('向指定频道发送消息', async () => {
     const sent: Array<{ targetConversation: unknown }> = [];
     const message = new Message(
-      { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
-      'hi',
-      1,
-      async (_content, _requester, targetConversation) => {
-        sent.push({ targetConversation });
-        return { status: 'sent' as const };
+      {
+        conversation: { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
+        content: 'hi',
+        sender: { id: 'u1' },
       },
-      { id: 'u1' },
+      {
+        generation: 1,
+        reply: async (_content, _requester, targetConversation) => {
+          sent.push({ targetConversation });
+          return { status: 'sent' as const };
+        },
+      },
     );
     await message.$replyToChannel('ch-1', 'guild-1', '频道通知');
     expect(sent[0]!.targetConversation).toEqual({
@@ -4140,14 +4174,18 @@ describe('Message.$replyToChannel', () => {
   it('支持 threadId', async () => {
     const sent: Array<{ targetConversation: unknown }> = [];
     const message = new Message(
-      { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
-      'hi',
-      1,
-      async (_content, _requester, targetConversation) => {
-        sent.push({ targetConversation });
-        return { status: 'sent' as const };
+      {
+        conversation: { endpoint: { id: 's', adapter: 'a' }, kind: 'group', id: 'g1' },
+        content: 'hi',
+        sender: { id: 'u1' },
       },
-      { id: 'u1' },
+      {
+        generation: 1,
+        reply: async (_content, _requester, targetConversation) => {
+          sent.push({ targetConversation });
+          return { status: 'sent' as const };
+        },
+      },
     );
     await message.$replyToChannel('ch-1', 'guild-1', '话题回复', 'thread-42');
     expect(sent[0]!.targetConversation).toEqual({

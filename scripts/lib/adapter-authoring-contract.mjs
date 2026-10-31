@@ -26,6 +26,21 @@ export function usesSupportedAdapterBase(source) {
 
 /** Each platform registers its actual Adapter class, without a descriptor registry. */
 export function declaresAdapterTypeRegistry(source) {
-  return /\binterface\s+AdapterRegistry\b/u.test(source)
-    && !/\binterface\s+AdapterClientRegistry\b/u.test(source);
+  const tree = ts.createSourceFile('adapter.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  let registered = false;
+  let invalid = false;
+  const visit = node => {
+    if (ts.isInterfaceDeclaration(node)) {
+      if (node.name.text === 'AdapterClientRegistry') invalid = true;
+      if (node.name.text === 'AdapterRegistry') {
+        const declaration = node.parent && ts.isModuleBlock(node.parent) ? node.parent.parent : undefined;
+        if (declaration && ts.isModuleDeclaration(declaration) && ts.isStringLiteral(declaration.name)
+          && declaration.name.text === '@zhin.js/feature-kit') registered = true;
+        else invalid = true;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  return registered && !invalid;
 }

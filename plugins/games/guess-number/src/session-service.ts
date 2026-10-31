@@ -1,9 +1,8 @@
 import type { Database, Models } from '@zhin.js/core';
 import {
   BaseSessionService,
-  channelKey,
   generateSessionId,
-  type GameMessageLike,
+  type GamePlayer,
   type GameSessionDatabase,
 } from '@zhin.js/game-kit';
 import { MAX, MAX_ATTEMPTS, MIN, newSecret } from './engine.js';
@@ -37,18 +36,13 @@ export class SessionService extends BaseSessionService<GuessSessionRow> {
     });
   }
 
-  async createSession(message: GameMessageLike): Promise<GuessSessionRow> {
+  async createSession(message: GamePlayer): Promise<GuessSessionRow> {
     const now = Date.now();
-    const row: GuessSessionRow = {
+    const row: Omit<GuessSessionRow, 'channel_key' | 'adapter' | 'endpoint' | 'channel_type' | 'channel_id'> = {
       id: generateSessionId(),
       locale: message.locale ?? 'zh-CN',
-      adapter: String(message.$adapter),
-      endpoint: message.$endpoint,
-      channel_type: message.$channel.type,
-      channel_id: message.$channel.id,
-      channel_key: channelKey(message),
-      player_id: message.$sender.id,
-      player_name: message.$sender.name?.trim() || message.$sender.id,
+      player_id: message.sender.id,
+      player_name: message.sender.name?.trim() || message.sender.id,
       secret: newSecret(),
       range_min: MIN,
       range_max: MAX,
@@ -58,7 +52,7 @@ export class SessionService extends BaseSessionService<GuessSessionRow> {
       updated_at: now,
       created_at: now,
     };
-    return this.createRow(row);
+    return this.createRow({ target: message.target, fields: row });
   }
 }
 

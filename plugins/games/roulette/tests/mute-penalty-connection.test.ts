@@ -11,7 +11,7 @@ class MuteClient extends EventEmitter {
 class MuteEndpoint extends MuteClient implements Endpoint {
   readonly [endpointSpec] = createEndpointSpecification(this, {
     start() {}, open() {}, close() {}, stop() {},
-    management: { muteGroupMember: (group, user, duration) => this.mute(group, user, duration) },
+    management: { muteGroupMember: ({ groupId, userId, durationSeconds }) => this.mute(groupId, userId, durationSeconds) },
   });
 }
 class MuteAdapter extends Adapter<MuteEndpoint> {
@@ -39,7 +39,7 @@ describe('roulette guarded canonical management', () => {
       await adapter.stop(one.instanceId, adapter.revision);
       await adapter.start(one.instanceId, adapter.revision);
       const replacement = adapter.getEndpoint(one.instanceId)!;
-      await expect(captured.muteGroupMember!('group', 'late', 90)).rejects.toMatchObject({ disposition: 'not_sent' });
+      await expect(captured.muteGroupMember!({ groupId: 'group', userId: 'late', durationSeconds: 90 })).rejects.toMatchObject({ disposition: 'not_sent' });
       expect(old.mute).toHaveBeenCalledOnce(); expect(replacement.mute).not.toHaveBeenCalled();
       await penalty.mute(conversation, 'current', 90);
       expect(replacement.mute).toHaveBeenCalledExactlyOnceWith('group', 'current', 90);

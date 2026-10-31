@@ -112,7 +112,7 @@ describe('lark endpoint management', () => {
     });
     const endpoint = await createEndpoint(fetchMock as unknown as LarkFetch);
 
-    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!('oc_1');
+    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!({ groupId: 'oc_1' });
 
     expect(members).toEqual([member]);
     expect(seen[0]).toContain('/im/v1/chats/oc_1/members');

@@ -5,7 +5,6 @@ import {
   defineGame,
   gameFeatureId,
   GameIndex,
-  smokeGameMessage,
   type GameRecordPort,
   type RuntimeRegisteredGame,
   type GameSessionProvider,
@@ -52,7 +51,7 @@ function commandContext(games: GameIndex) {
     },
     args: [] as string[],
     params: {} as Record<string, string | number | boolean>,
-    input: undefined as never,
+    input: { conversation: { endpoint: { adapter: 'synthetic', id: 'test-account' }, kind: 'private', id: 'alice' }, sender: { id: 'alice', name: 'Alice' }, content: '' } as never,
   };
 }
 
@@ -105,3 +104,5 @@ describe('@zhin.js/plugin-game-hub runtime', () => {
     expect(String(missing)).toContain('未找到游戏「扫雷」');
   });
 });
+
+function smokeGameMessage() { return { conversation: { endpoint: { adapter: 'synthetic', id: 'canonical-test' }, kind: 'private' as const, id: 'alice' }, sender: { id: 'alice', name: 'Alice' } }; }

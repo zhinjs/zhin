@@ -9,7 +9,7 @@ const conversation = {
 
 describe('OneBot11 EndpointContentPort', () => {
   it('resolves messages and forwards with neutral actors', async () => {
-    const call = vi.fn(async (action: string) => action === 'get_msg'
+    const call = vi.fn(async ({ action }: { action: string }) => action === 'get_msg'
       ? { time: 10, sender: { user_id: 7, nickname: 'Alice' }, message: [{ type: 'text', data: { text: 'quoted' } }] }
       : { messages: [{ time: 11, sender: { user_id: 8, nickname: 'Bob' }, content: [{ type: 'text', data: { text: 'forwarded' } }] }] });
     const port = createOneBot11ContentPort(call);
@@ -20,5 +20,6 @@ describe('OneBot11 EndpointContentPort', () => {
     const forward = await port.resolve({ kind: 'forward', conversation, forwardId: 'f1' }, context);
     expect(forward).toMatchObject({ status: 'resolved', value: [{ actor: { id: '8', displayName: 'Bob' } }] });
     expect(JSON.stringify(forward)).not.toContain('"role"');
+    expect(call).toHaveBeenCalledWith({ action: 'get_forward_msg', params: { id: 'f1' }, signal: context.signal });
   });
 });

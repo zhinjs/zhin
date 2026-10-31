@@ -1,5 +1,10 @@
+import { createGameTargetMigration } from './target-migration.js';
+import { gameTargetFromKey } from './board-sender.js';
+import { sendGameSessionMessage } from './session-delivery.js';
 import {
   databaseHostToken,
+  pluginDataMigrationProviderToken,
+  TargetMigrationScopes,
   definePlugin,
   outboundHostToken,
   resolveLocale,
@@ -40,6 +45,9 @@ export interface GamePluginSession<
   ): Promise<number>;
   readonly events: import('./game-events.js').GameEventBus;
   readonly gameId: string;
+  readonly storageTable: string;
+  bindMigrationScopes(scopes: TargetMigrationScopes): void;
+  runInScope<T>(input: Readonly<{ scope: string; run: () => Promise<T> }>): Promise<T>;
   getActiveForUser(channelKey: string, userId: string): Promise<{ readonly id: string; readonly channel_key: string } | null>;
   bindAvailability(availability: import('./session-coordinator.js').GameSessionAvailability): void;
 }
@@ -92,8 +100,10 @@ export function defineGamePlugin<
     metadata: options.metadata,
     async setup(context) {
       let database: InMemoryGameDb;
+      let durable: PluginDatabaseHost | undefined;
       if (context.resources.has(databaseHostToken)) {
         const host = context.resources.use(databaseHostToken);
+        durable = host;
         options.defineHostTables(host);
         defineGameRecordTable(host as GameRecordDatabaseHost);
         database = createHostGameDb(host, [...options.tables, 'game_records']);
@@ -105,21 +115,19 @@ export function defineGamePlugin<
       context.resources.provide(options.servicesToken, services);
       const records = new GameRecordStore(database as unknown as GameRecordDatabase);
       const session = options.session(services);
+      if (durable) {
+        const scopes = new TargetMigrationScopes({ pending: scope => !gameTargetFromKey(scope) });
+        session.bindMigrationScopes(scopes);
+        context.resources.provide(pluginDataMigrationProviderToken, createGameTargetMigration({ database: durable,
+          gameId: options.game.id, sessionTable: session.storageTable, tables: options.tables, scopes }));
+      }
       context.addGame(options.game.id, defineGame(options.game, records, session));
       context.lifecycle.add(session.events.on('game:end', async (event) => {
         if (event.gameId !== options.game.id || event.outcomes.length === 0) return;
         const row = event.session;
-        if (!row.adapter || !row.endpoint || !row.channel_type || !row.channel_id) return;
         for (const outcome of event.outcomes) {
-          await records.record({
-            $adapter: row.adapter,
-            $endpoint: row.endpoint,
-            $channel: { type: row.channel_type, id: row.channel_id },
-            $sender: {
-              id: outcome.userId,
-              name: outcome.userName ?? outcome.userId,
-            },
-          }, event.gameId, outcome.result, outcome.score);
+          await records.record({ scope: row.channel_key, player: { id: outcome.userId, name: outcome.userName },
+            gameId: event.gameId, result: outcome.result, score: outcome.score });
         }
       }));
 
@@ -137,24 +145,12 @@ export function defineGamePlugin<
               async (row) => {
                 await stale.onTimeout?.(row, context);
                 if (!context.resources.has(outboundHostToken)) return;
-                if (!row.adapter || !row.endpoint
-                  || !row.channel_type || !row.channel_id) return;
                 const outbound = context.resources.use(outboundHostToken);
                 const locale = resolveLocale(row.locale);
-                await outbound.send({
-                  locale,
-                  adapter: row.adapter,
-                  endpointKey: row.endpoint,
-                  conversation: {
-                    kind: row.channel_type as 'private' | 'group' | 'channel',
-                    id: row.channel_id,
-                  },
-                  content: typeof stale.message === 'function'
-                    ? stale.message(row)
-                    : stale.message
-                      ?? gameMessages(locale, 'stale', { icon: options.game.icon,
-                        title: options.game.titleI18n?.[locale] ?? options.game.title }),
-                });
+                await sendGameSessionMessage({ outbound, session: row,
+                  content: typeof stale.message === 'function' ? stale.message(row) : stale.message
+                    ?? gameMessages(locale, 'stale', { icon: options.game.icon,
+                      title: options.game.titleI18n?.[locale] ?? options.game.title }) });
               },
             );
           },

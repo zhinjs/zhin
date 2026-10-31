@@ -101,25 +101,25 @@ describe('quiz helpers', () => {
 describe('QuizService', () => {
   it('judges once, ignores out-of-range letters and expires stale questions', () => {
     const service = new QuizService();
-    const question = service.ask('k', 'fun', [bank[1]!], 30, 1000);
+    const question = service.ask({ key: 'k', kind: 'fun', bank: [bank[1]!], timeoutSeconds: 30, now: 1000 });
     expect(question.id).toBe('t-2');
     expect(service.answer('k', 'C', 2000)).toBeUndefined();
     expect(service.answer('k', 'A', 2000)).toMatchObject({ correct: true, chosen: 'A' });
     expect(service.answer('k', 'A', 2000)).toBeUndefined();
-    service.ask('k', 'fun', [bank[1]!], 30, 1000);
+    service.ask({ key: 'k', kind: 'fun', bank: [bank[1]!], timeoutSeconds: 30, now: 1000 });
     expect(service.answer('k', 'B', 31_000)).toBeUndefined();
     expect(service.size).toBe(0);
   });
 
   it('bounds memory and refuses work after dispose', () => {
     const service = new QuizService();
-    for (let i = 0; i <= MAX_PENDING_QUIZZES; i++) service.ask(`k${i}`, 'fun', FUN_QUESTIONS, 60, 0);
+    for (let i = 0; i <= MAX_PENDING_QUIZZES; i++) service.ask({ key: `k${i}`, kind: 'fun', bank: FUN_QUESTIONS, timeoutSeconds: 60, now: 0 });
     expect(service.size).toBe(MAX_PENDING_QUIZZES);
     expect(service.peek('k0', 0)).toBeUndefined();
     expect(service.cancel(`k${MAX_PENDING_QUIZZES}`)).toBe(true);
     service.dispose();
     expect(service.size).toBe(0);
     expect(service.answer('k1', 'A', 0)).toBeUndefined();
-    expect(() => service.ask('k', 'fun', FUN_QUESTIONS, 60)).toThrow('已停止');
+    expect(() => service.ask({ key: 'k', kind: 'fun', bank: FUN_QUESTIONS, timeoutSeconds: 60 })).toThrow('已停止');
   });
 });

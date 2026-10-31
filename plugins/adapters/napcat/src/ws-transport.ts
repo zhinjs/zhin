@@ -1,112 +1,51 @@
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import { clearInterval, clearTimeout, setInterval, setTimeout } from 'node:timers';
+import { createPendingRpc, type PendingRpc, type PendingRpcRequest } from 'zhin.js/adapter';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import {
-  type NapCatActionRequest,
-  type NapCatActionResponse,
-  type NapCatEvent,
-} from './protocol.js';
-import {
-  WS_OPEN,
-  type NapCatPendingAction,
-  type NapCatWsSocket,
-} from './ws-types.js';
+import type { NapCatActionResponse, NapCatEvent } from './protocol.js';
+import { WS_OPEN, type NapCatWsSocket } from './ws-types.js';
 
 const logger = getLogger('napcat');
+export interface NapCatRpcOptions {
+  readonly endpointId: string;
+  readonly signal?: AbortSignal;
+  /** Reads the lifecycle-selected socket; RPC does not open or reconnect it. */
+  readonly socket: () => NapCatWsSocket | undefined;
+}
+export interface NapCatRpc {
+  call(request: PendingRpcRequest): Promise<NapCatActionResponse>;
+  receive(data: unknown, ingest: (event: NapCatEvent) => void): void;
+  disconnect: PendingRpc<NapCatActionResponse>['disconnect'];
+  dispose(): void;
+  readonly pendingCount: number;
+}
+
+/** Native SDK and semantic ports share this Client's correlation and cancellation owner. */
+export function createNapCatRpc(options: NapCatRpcOptions): NapCatRpc {
+  const pending = createPendingRpc<NapCatActionResponse>({
+    signal: options.signal, requestPrefix: 'req_', timeoutMs: 30_000,
+    transport: () => { const socket = options.socket(); return socket?.readyState === WS_OPEN ? socket : undefined; },
+    serialize: request => JSON.stringify({ action: request.action, params: request.params ?? {}, echo: request.id }),
+  });
+  return Object.freeze({
+    call: pending.call, disconnect: pending.disconnect, dispose: pending.dispose,
+    get pendingCount() { return pending.pendingCount; },
+    receive(data: unknown, ingest: (event: NapCatEvent) => void) {
+      try {
+        const message = JSON.parse(decodeWsPayload(data)) as NapCatEvent | NapCatActionResponse;
+        if ('echo' in message && typeof message.echo === 'string') {
+          pending.accept({ id: message.echo, value: message as NapCatActionResponse }); return;
+        }
+        ingest(message as NapCatEvent);
+      } catch (error) {
+        logger.warn(formatCompact({ op: 'napcat_parse_failed', endpoint: options.endpointId,
+          error: error instanceof Error ? error.message : String(error) }));
+      }
+    },
+  });
+}
 
 export function decodeWsPayload(data: unknown): string {
   if (typeof data === 'string') return data;
   if (Buffer.isBuffer(data)) return data.toString();
   if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
   return String(data ?? '');
-}
-
-export function handleNapCatWsMessage(
-  data: unknown,
-  options: {
-    readonly endpointId: string;
-    readonly pending: Map<string, NapCatPendingAction>;
-    readonly admit: (ev: NapCatEvent) => void;
-  },
-): void {
-  try {
-    const raw = decodeWsPayload(data);
-    const msg = JSON.parse(raw) as NapCatEvent | NapCatActionResponse;
-    if ('echo' in msg && typeof (msg as NapCatActionResponse).echo === 'string') {
-      const resp = msg as NapCatActionResponse;
-      const pending = options.pending.get(resp.echo!);
-      if (pending) {
-        options.pending.delete(resp.echo!);
-        clearTimeout(pending.timeout);
-        if (resp.status === 'ok') pending.resolve(resp.data);
-        else {
-          pending.reject(new EndpointDeliveryError(
-            'platform_rejected', `API error [${resp.retcode}]: ${resp.message || resp.wording || 'unknown'}`, 'rejected',
-          ));
-        }
-      }
-      return;
-    }
-    options.admit(msg as NapCatEvent);
-  } catch (error) {
-    logger.warn(formatCompact({
-      op: 'napcat_parse_failed',
-      endpoint: options.endpointId,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-  }
-}
-
-export function callNapCatWsAction(
-  ws: NapCatWsSocket | undefined,
-  pending: Map<string, NapCatPendingAction>,
-  requestId: { value: number },
-  action: string,
-  params: Record<string, unknown>,
-): Promise<unknown> {
-  if (!ws || ws.readyState !== WS_OPEN) {
-    return Promise.reject(new EndpointDeliveryError('endpoint_disconnected', 'WebSocket is not connected', 'not_sent'));
-  }
-  const echo = `req_${++requestId.value}`;
-  const req: NapCatActionRequest = { action, params, echo };
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      pending.delete(echo);
-      reject(new EndpointDeliveryError('endpoint_timeout', `API call timeout: ${action}`, 'unknown'));
-    }, 30_000);
-    pending.set(echo, { resolve, reject, timeout });
-    try {
-      ws.send(JSON.stringify(req));
-    } catch (error) {
-      pending.delete(echo);
-      clearTimeout(timeout);
-      reject(error instanceof Error ? error : new Error(String(error)));
-    }
-  });
-}
-
-export function startNapCatHeartbeat(
-  ws: NapCatWsSocket | undefined,
-  intervalMs: number,
-  existingTimer?: NodeJS.Timeout,
-): NodeJS.Timeout {
-  if (existingTimer) clearInterval(existingTimer);
-  return setInterval(() => {
-    try {
-      ws?.ping?.();
-    } catch {
-      /* ignore */
-    }
-  }, intervalMs);
-}
-
-export function rejectAllPending(
-  pending: Map<string, NapCatPendingAction>,
-  message = 'Connection closed',
-): void {
-  for (const [, entry] of pending) {
-    clearTimeout(entry.timeout);
-    entry.reject(new EndpointDeliveryError('endpoint_disconnected', message, 'unknown'));
-  }
-  pending.clear();
 }

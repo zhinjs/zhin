@@ -1,3 +1,4 @@
+import { conversationRefKey } from 'zhin.js';
 import { describe, expect, it, vi } from 'vitest';
 import schema from '../schema.json' with { type: 'json' };
 import Ajv2020 from 'ajv/dist/2020.js';
@@ -43,12 +44,12 @@ describe('@zhin.js/plugin-repeater', () => {
 
   it('resolves group id from metadata with private skip', () => {
     expect(resolveGroupId({
-      conversation: { kind: 'group', id: 'g1' },
+      conversation: { endpoint: { adapter: 'test', id: 'canonical-bot' }, kind: 'group', id: 'g1' },
       content: 'hi',
       metadata: { type: 'group' },
-    })).toBe('g1');
+    })).toBe(conversationRefKey({ endpoint: { adapter: 'test', id: 'canonical-bot' }, kind: 'group', id: 'g1' }));
     expect(resolveGroupId({
-      conversation: { kind: 'private', id: 'u1' },
+      conversation: { endpoint: { adapter: 'test', id: 'canonical-bot' }, kind: 'private', id: 'u1' },
       content: 'hi',
       metadata: { type: 'private' },
     })).toBeNull();
@@ -57,7 +58,7 @@ describe('@zhin.js/plugin-repeater', () => {
   it('repeats after threshold distinct senders', () => {
     const engine = new RepeaterEngine();
     const config = { ...DEFAULT_REPEATER_CONFIG, threshold: 3, cooldown: 5000, maxLength: 200 };
-    const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo', metadata: { type: 'group' as const } };
+    const base = { conversation: { endpoint: { adapter: 'test', id: 'canonical-bot' }, kind: 'group' as const, id: 'g1' }, content: 'echo', metadata: { type: 'group' as const } };
 
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
     expect(engine.tick({ ...base, sender: 'b' }, config).action).toBe('next');
@@ -72,7 +73,7 @@ describe('@zhin.js/plugin-repeater', () => {
   it('ignores same sender double-post', () => {
     const engine = new RepeaterEngine();
     const config = { ...DEFAULT_REPEATER_CONFIG, threshold: 2 };
-    const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo', metadata: { type: 'group' as const } };
+    const base = { conversation: { endpoint: { adapter: 'test', id: 'canonical-bot' }, kind: 'group' as const, id: 'g1' }, content: 'echo', metadata: { type: 'group' as const } };
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
     expect(engine.tick({ ...base, sender: 'b' }, config).action).toBe('repeat');
@@ -83,7 +84,7 @@ describe('@zhin.js/plugin-repeater', () => {
     const first = new RepeaterEngine();
     const second = new RepeaterEngine();
     const config = { ...DEFAULT_REPEATER_CONFIG, threshold: 2 };
-    const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo' };
+    const base = { conversation: { endpoint: { adapter: 'test', id: 'canonical-bot' }, kind: 'group' as const, id: 'g1' }, content: 'echo' };
     first.tick({ ...base, sender: 'a' }, config);
     first.tick({ ...base, sender: 'b' }, config);
 
@@ -144,7 +145,7 @@ describe('@zhin.js/plugin-repeater', () => {
       const t0 = Date.now();
       const engine = new RepeaterEngine();
       const config = { ...DEFAULT_REPEATER_CONFIG, threshold: 2, cooldown: 300_000 };
-      const base = { conversation: { kind: 'group' as const, id: 'g1' }, metadata: { type: 'group' as const } };
+      const base = { conversation: { endpoint: { adapter: 'test', id: 'canonical-bot' }, kind: 'group' as const, id: 'g1' }, metadata: { type: 'group' as const } };
       expect(engine.tick({ ...base, content: 'echo', sender: 'a' }, config).action).toBe('next');
       expect(engine.tick({ ...base, content: 'echo', sender: 'b' }, config).action).toBe('repeat');
 

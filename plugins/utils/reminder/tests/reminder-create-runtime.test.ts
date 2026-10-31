@@ -1,3 +1,4 @@
+import { createTestEventGateway } from '../../../adapters/test-utils/endpoint.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -54,8 +55,8 @@ async function fixture(options: { afterSend?: (count: number) => void; locale?: 
     [owner, { id: owner, parent: root, instanceKey: 'personal', packageName: '@test/reminder', packageRoot: directory, children: [] }],
   ]), config: new Map([[root, config], [owner, config]]), capabilities: new Map(capabilities.map(slot => [slot.id, slot])), projections: new Map(),
     resources: new Map([
-      [root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])],
-      [owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }], [reminderServiceToken.id, service]])],
+      [root, new Map([[endpointEventGatewayToken.id, createTestEventGateway()]])],
+      [owner, new Map([[endpointEventGatewayToken.id, createTestEventGateway()], [reminderServiceToken.id, service]])],
     ]) };
   const view = createSnapshotView(0, state);
   const adapters = await AdapterIndex.create(slots, view, new AbortController().signal);
@@ -283,9 +284,9 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
       const result = await f.index.execute('remind create 10分钟后 正文'); expect(result).toContain('真实聊天'); expect(f.added).not.toHaveBeenCalled();
       const reply = vi.fn(async () => ({ status: 'sent' }));
       const source = { conversation: f.conversation, content: 'remind create 10分钟后 正文', sender: { id: 'alice' }, $reply: reply };
-      const noInteraction = await f.index.dispatch(source.content, source);
+      const noInteraction = await f.index.dispatch({ input: source.content, source });
       expect(noInteraction.value).toContain('真实聊天'); expect(reply).not.toHaveBeenCalled();
-      const noSender = await f.index.dispatch(source.content, { ...source, sender: { id: '' } });
+      const noSender = await f.index.dispatch({ input: source.content, source: { ...source, sender: { id: '' } } });
       expect(noSender.value).toContain('真实聊天'); expect(f.added).not.toHaveBeenCalled();
     } finally { await f.close(); }
   });

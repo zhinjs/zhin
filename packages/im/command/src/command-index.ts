@@ -58,6 +58,24 @@ export interface CommandDescriptor {
   readonly shortcut?: readonly string[];
 }
 
+/** One dispatch reads the caller's exact operation generation and presentation. */
+export interface CommandDispatchRequest {
+  readonly input: CommandMatchInput;
+  readonly source?: unknown;
+  readonly interactionFactory?: UserInteractionFactory;
+  readonly commandPrefix?: string;
+  readonly snapshot?: RuntimeSnapshot;
+  readonly locale?: Locale;
+}
+/** Presentation and generation shared across one menu lookup/render operation. */
+interface CommandMenuContext {
+  readonly commandPrefix: string;
+  readonly keyword: string;
+  readonly snapshot: RuntimeSnapshot;
+  readonly locale: Locale;
+}
+interface CommandMenuSelection { readonly pluginKey?: string; readonly page?: number }
+
 export interface CommandDispatchResult {
   readonly matched: boolean;
   readonly status: 'unmatched' | 'invalid' | 'denied' | 'limited' | 'executed';
@@ -323,26 +341,22 @@ export class CommandIndex {
     const admission = admitDirectCommandExecution(match.command.slot.id, match.command.execution, operationSnapshot);
     if (admission.limit) throw new CommandExecutionLimitedError(admission.limit);
     try {
-      return await definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
-        textArgs(parsed.remaining), parsed.params, undefined, parsed.remaining, undefined, definition.adapter, parsed.options, { locale }));
+      return await definition.execute(createCommandContext({ snapshot: operationSnapshot, ownerId: match.command.slot.owner,
+        adapter: definition.adapter, presentation: { locale } }, {
+        args: textArgs(parsed.remaining), params: parsed.params, segments: parsed.remaining, options: parsed.options,
+      }));
     } finally {
       admission.release();
     }
   }
 
-  async dispatch(
-    input: CommandMatchInput,
-    source: unknown = undefined,
-    interactionFactory?: UserInteractionFactory,
-    commandPrefix?: string,
-    operationSnapshot: RuntimeSnapshot = this.snapshot,
-    localeOverride?: Locale,
-  ): Promise<CommandDispatchResult> {
+  async dispatch({ input, source, interactionFactory, commandPrefix, snapshot: operationSnapshot = this.snapshot,
+    locale: localeOverride }: CommandDispatchRequest): Promise<CommandDispatchResult> {
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const prefix = commandPrefix ?? '';
     if (this.#menu) {
       const keyword = this.#menu.keyword ?? commandMessages(locale, 'menuKeyword');
-      const menuResult = this.#dispatchMenu(input, prefix, operationSnapshot, locale, keyword);
+      const menuResult = this.#dispatchMenu(input, { commandPrefix: prefix, snapshot: operationSnapshot, locale, keyword });
       if (menuResult !== undefined) {
         return Object.freeze({
           matched: true,
@@ -381,10 +395,12 @@ export class CommandIndex {
       owner: match.command.slot.owner, issues: parsed.issues, help });
     const limit = admitCommandExecution(authorSource, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
     if (limit) return Object.freeze({ matched: true, status: 'limited', command: match.command.name, owner: match.command.slot.owner, limit });
-    const value = await definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
-      textArgs(parsed.remaining), parsed.params, authorSource, parsed.remaining, interactionFactory?.(authorSource), definition.adapter, parsed.options,
-      { locale, formatCommand: (localPath, owner = match.command.owner) => this.formatCommand(owner, localPath,
-        source && typeof source === 'object' && 'conversation' in source ? commandPrefix : undefined, locale) }));
+    const value = await definition.execute(createCommandContext({
+      snapshot: operationSnapshot, ownerId: match.command.slot.owner, input: authorSource,
+      interaction: interactionFactory?.(authorSource), adapter: definition.adapter,
+      presentation: { locale, formatCommand: (localPath, owner = match.command.owner) => this.formatCommand(owner, localPath,
+        source && typeof source === 'object' && 'conversation' in source ? commandPrefix : undefined, locale) },
+    }, { args: textArgs(parsed.remaining), params: parsed.params, segments: parsed.remaining, options: parsed.options }));
     return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
   }
 
@@ -496,10 +512,11 @@ export class CommandIndex {
   // 内置菜单命令
   // ==========================================================================
 
-  #dispatchMenu(input: CommandMatchInput, commandPrefix: string, snapshot: RuntimeSnapshot, locale: Locale, keyword: string): CommandMenuResult | undefined {
+  #dispatchMenu(input: CommandMatchInput, context: CommandMenuContext): CommandMenuResult | undefined {
+    const { commandPrefix, keyword, locale } = context;
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (text === undefined) return undefined;
-    if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword, snapshot, locale);
+    if (text === keyword) return this.#buildMenu({}, context);
     if (text.startsWith(keyword + ' ')) {
       const key = text.slice(keyword.length + 1).trim();
       const args = key.split(/\s+/u);
@@ -510,15 +527,15 @@ export class CommandIndex {
           || !Number.isSafeInteger(Number(pageText))) {
           return { value: commandMessages(locale, 'invalidPage', { command: `${commandPrefix}${keyword}` }) };
         }
-        return this.#buildMenu(flag === 1 ? args[0] : undefined, commandPrefix, keyword, snapshot, locale, Number(pageText));
+        return this.#buildMenu({ pluginKey: flag === 1 ? args[0] : undefined, page: Number(pageText) }, context);
       }
-      if (key) return this.#buildMenu(key, commandPrefix, keyword, snapshot, locale);
-      return this.#buildMenu(undefined, commandPrefix, keyword, snapshot, locale);
+      if (key) return this.#buildMenu({ pluginKey: key }, context);
+      return this.#buildMenu({}, context);
     }
     return undefined;
   }
 
-  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string, snapshot: RuntimeSnapshot, locale: Locale, page = 1): CommandMenuResult {
+  #buildMenu({ pluginKey, page = 1 }: CommandMenuSelection, { commandPrefix, keyword, snapshot, locale }: CommandMenuContext): CommandMenuResult {
     const root = snapshot.root;
     const targetId = pluginKey
       ? `${root}/${pluginKey.split('.').join('/')}` as PluginId

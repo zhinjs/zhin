@@ -15,7 +15,7 @@ import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { verifyMilkyAccessToken } from './milky-auth.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
-import { callMilkyClient, milkyClientOptions, forwardMilkyClientEvents, MilkyClient } from './client.js';
+import { createMilkyActionCaller, readMilkyResponse, type MilkyActionCaller, milkyClientOptions, forwardMilkyClientEvents, MilkyClient } from './client.js';
 import {
   buildSendAction,
   callApi,
@@ -53,7 +53,8 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
 
   readonly #options: MilkyWssEndpointOptions;
   readonly #management: EndpointManagement;
-  readonly #control: EndpointControl = createRecallEndpointControl((id) => this.#recallMessage(id));
+  readonly #call: MilkyActionCaller;
+  readonly #control: EndpointControl = createRecallEndpointControl((id, signal) => this.#recallMessage({ id, signal }));
   #ws?: MilkyWsSocket;
   #wsRelease?: () => void;
   #clientSocketRelease?: () => void;
@@ -62,7 +63,9 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
   #started = false;
 
   constructor(options: MilkyWssEndpointOptions) {
-    super(milkyClientOptions(options.config, options.callApi ?? callApi, options.signal));
+    const call = createMilkyActionCaller({ config: options.config, request: options.callApi ?? callApi, signal: options.signal });
+    super(milkyClientOptions({ config: options.config, call }));
+    this.#call = call;
     this.#logger = getAdapterLogger('milky', options.config.id);
     this.#options = options;
     this.#connectionLifecycle = createEndpointLifecycle({
@@ -70,7 +73,7 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
       reconnect: false,
     });
     this.#management = createMilkyEndpointManagement({
-      callApi: (action, params) => callMilkyClient(this, action, params),
+      callApi: request => call(request).then(response => readMilkyResponse(response, request.action)),
     });
     const readTransportState = () => this.#connectionLifecycle.state;
     this[endpointSpec] = createEndpointSpecification(this, {
@@ -123,10 +126,10 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
     this.#started = false;
   }
 
-  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await callMilkyClient<{ message_seq?: number }>(this, action, params);
+    const data = readMilkyResponse<{ message_seq?: number }>(await this.#call({ action, params, signal }), action);
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
     this.#logger.debug(formatCompact({
       op: 'milky_send',
@@ -137,19 +140,19 @@ export class MilkyWssEndpoint extends MilkyClient implements Endpoint {
     return messageId;
   }
 
-  async #recallMessage(id: string): Promise<void> {
+  async #recallMessage({ id, signal }: { readonly id: string; readonly signal?: AbortSignal }): Promise<void> {
     const parsed = parseMilkyMessageId(id);
     if (!parsed) throw new Error(`Invalid message id: ${id}`);
     if (parsed.message_scene === 'group') {
-      await callMilkyClient(this, 'recall_group_message', {
+      readMilkyResponse(await this.#call({ action: 'recall_group_message', signal, params: {
         group_id: parsed.peer_id,
         message_seq: parsed.message_seq,
-      });
+      } }), 'recall_group_message');
     } else {
-      await callMilkyClient(this, 'recall_private_message', {
+      readMilkyResponse(await this.#call({ action: 'recall_private_message', signal, params: {
         user_id: parsed.peer_id,
         message_seq: parsed.message_seq,
-      });
+      } }), 'recall_private_message');
     }
   }
 

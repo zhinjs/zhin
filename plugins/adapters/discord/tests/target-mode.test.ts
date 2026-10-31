@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { Client, Message } from 'discord.js';
 import type { EndpointEvent } from 'zhin.js/adapter';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/discord/index.js';
 import { DiscordAdapter } from '../src/adapter.js';
 import { DiscordGatewayEndpoint } from '../src/endpoint.js';
@@ -14,7 +14,7 @@ it('runs the real Discord gateway action and retains the SDK Message object thro
   });
   const events: EndpointEvent[] = [];
   const harness = await createAdapterHarness(definition, { id: 'bot', token: 'synthetic-token' }, {
-    name: 'discord', gateway: { receive: async event => { events.push(event); } },
+    name: 'discord', gateway: createTestEndpointEventGateway({ receive: async event => { events.push(event); } }),
   });
   try {
     expect(harness.adapter).toBeInstanceOf(DiscordAdapter);

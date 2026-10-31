@@ -1,10 +1,10 @@
 import { createMessages } from 'zhin.js/i18n';
-import type { GameMessageLike } from '@zhin.js/game-kit';
+import type { GamePlayer } from '@zhin.js/game-kit';
 import type { RouletteConfig } from './config.js';
 import { MIN_ROULETTE_PLAYERS, currentPlayer, loserOf, remainingChambers, survivorsOf,
   type RoulettePlayer, type RouletteState } from './engine.js';
 
-type Presentation = Pick<GameMessageLike, 'locale' | 'formatCommand'>;
+type Presentation = Pick<GamePlayer, 'locale' | 'formatCommand'>;
 const messages = createMessages({
   title: { 'zh-CN': '🔫 俄罗斯轮盘', en: '🔫 Russian Roulette' },
   lobby: { 'zh-CN': '{title} · 等待玩家（{count}/{max}）', en: '{title} · Waiting for players ({count}/{max})' },

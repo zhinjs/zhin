@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { httpHostToken } from '@zhin.js/host-http';
 import type { EndpointEvent } from 'zhin.js/adapter';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/telegram/index.js';
 import { TelegramAdapter } from '../src/adapter.js';
 import { TelegramClient } from '../src/telegram-client.js';
@@ -19,7 +19,7 @@ it('runs the actual Telegram factory with its substantive API Client and preserv
   const harness = await createAdapterHarness(definition, { id: 'bot', token: '123:synthetic', polling: false,
     webhook: { domain: 'https://test.invalid', secretToken: 'synthetic-secret' } }, {
     name: 'telegram', resources: new Map([[httpHostToken.id, { route }]]),
-    gateway: { receive: async event => { events.push(event); } },
+    gateway: createTestEndpointEventGateway({ receive: async event => { events.push(event); } }),
   });
   try {
     expect(harness.adapter).toBeInstanceOf(TelegramAdapter);

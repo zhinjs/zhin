@@ -11,11 +11,20 @@ const conversation: ConversationRef = {
   parent: { kind: 'group', id: 'guild' }, threadId: 'thread',
 };
 function message(subjectId = 'alice', account = 'account-a', target = conversation) {
-  return new Message(target, '#hello', 1, async () => ({ status: 'sent' as const }),
-    { id: subjectId }, {}, undefined, { conversation: target, id: 'm1' }, account);
+  return new Message(
+    {
+      conversation: target,
+      content: '#hello',
+      sender: { id: subjectId },
+      metadata: {},
+      message: { conversation: target, id: 'm1' },
+      endpointId: account,
+    },
+    { generation: 1, reply: async () => ({ status: 'sent' as const }) },
+  );
 }
 function request(source = message(), projectRoot = '/host-a') {
-  return createRuntimeTurnRequest(source, 'hello', roles, {
+  return createRuntimeTurnRequest({ message: source, text: 'hello', roles }, {
     traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
     projectRoot, workspaceRoot: '/tool-workspace', ports: {}, intent: { kind: 'new' },
   });
@@ -49,7 +58,7 @@ describe('real IM personal Session request mapping', () => {
     const source = message();
     const alice = request(source);
     const bobAddress = runtimePersonalSessionAddress(createRuntimeTurnAccess(message('bob'), roles), '/host-a');
-    expect(() => createRuntimeTurnRequest(source, 'hello', roles, {
+    expect(() => createRuntimeTurnRequest({ message: source, text: 'hello', roles }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
       projectRoot: '/host-a', workspaceRoot: '/tool-workspace', ports: {}, intent: { kind: 'new' },
       sessionKey: alice.session.key, personalSession: bobAddress,
@@ -69,7 +78,7 @@ describe('real IM personal Session request mapping', () => {
     expect(runtimeSceneTaskSessionKey(bob, '/host-a')).toBe(sceneKey);
     expect(runtimeSceneTaskSessionKey(alice, '/host-b')).not.toBe(sceneKey);
     expect(runtimeSceneTaskSessionKey(createRuntimeTurnAccess(message('alice', 'account-b'), roles), '/host-a')).not.toBe(sceneKey);
-    const mapped = createRuntimeTurnRequest(message(), 'scene input', roles, {
+    const mapped = createRuntimeTurnRequest({ message: message(), text: 'scene input', roles }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
       projectRoot: '/host-a', workspaceRoot: '/tool-workspace', ports: {}, intent: { kind: 'new' }, sessionKey: sceneKey,
     });
@@ -83,7 +92,7 @@ describe('real IM personal Session request mapping', () => {
     const signal = new AbortController().signal;
     const sceneKey = runtimeSceneTaskSessionKey(createRuntimeTurnAccess(source, roles), '/host-a');
     for (const sessionKey of [undefined, sceneKey]) {
-      const mapped = createRuntimeTurnRequest(source, 'hello', roles, {
+      const mapped = createRuntimeTurnRequest({ message: source, text: 'hello', roles }, {
         traceId: 'trace', turnId: 'turn', signal, projectRoot: '/host-a', workspaceRoot: '/tool-workspace',
         ports: {}, intent: { kind: 'new' }, sessionKey, readConversationContext: read, commitConversationContext: commit,
       });

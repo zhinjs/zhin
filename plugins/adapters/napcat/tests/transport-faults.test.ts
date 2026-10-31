@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { NapCatWssEndpoint } from '../src/wss-endpoint.js';
 import { NapCatWsEndpoint } from '../src/ws-endpoint.js';
-import { callNapCatWsAction } from '../src/ws-transport.js';
+import { createNapCatRpc } from '../src/ws-transport.js';
 import { resolveNapCatConfig, type NapCatWsConfig } from '../src/protocol.js';
 import type { NapCatWsSocket } from '../src/ws-types.js';
 
@@ -35,9 +35,9 @@ describe('napcat transport fault ownership', () => {
     vi.useFakeTimers();
     const ws = socket();
     ws.send.mockImplementation(() => { throw new Error('send failed'); });
-    const pending = new Map();
-    await expect(callNapCatWsAction(ws, pending, { value: 0 }, 'send_private_msg', {})).rejects.toThrow('send failed');
-    expect(pending.size).toBe(0);
+    const rpc = createNapCatRpc({ endpointId: 'fault-bot', socket: () => ws });
+    await expect(rpc.call({ action: 'send_private_msg' })).rejects.toThrow('send failed');
+    expect(rpc.pendingCount).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
     expect(ws.send).toHaveBeenCalledTimes(1);
   });
@@ -178,4 +178,22 @@ it('owns initial connection refusal and resets lifecycle without orphan rejectio
   expect(bot.index.describe()[0]?.transportState).toBe('stopped');
   await bot.stop(); await new Promise(resolve => setImmediate(resolve));
   expect(bot.index.describe()[0]?.transportState).toBe('stopped');
+});
+
+it('cancels a semantic request in the native RPC owner while another native request completes', async () => {
+  vi.useFakeTimers();
+  const ws = socket(), bot = await endpoint([ws]);
+  await bot.start();
+  const caller = new AbortController();
+  const send = bot.send({ ...request, signal: caller.signal });
+  const failed = expect(send).rejects.toMatchObject({ disposition: 'unknown' });
+  await vi.advanceTimersByTimeAsync(0);
+  const native = bot.endpoint.callApi('get_login_info');
+  const echo = JSON.parse(ws.send.mock.calls[1]![0]).echo;
+  caller.abort();
+  await failed;
+  ws.emit('message', JSON.stringify({ echo, status: 'ok', retcode: 0, data: { user_id: 123 } }));
+  await expect(native).resolves.toEqual({ user_id: 123 });
+  await bot.stop();
+  expect(vi.getTimerCount()).toBe(0);
 });

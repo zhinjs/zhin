@@ -9,23 +9,26 @@
  * - group → {group_id:number, name: group_name ?? name}
  * - 群成员列表保持 Milky 原生形状，仅保证数组
  */
-import type {
-  EndpointFriend,
-  EndpointGroup,
-  EndpointManagement,
+import {
+  type EndpointFriend,
+  type EndpointGroup,
+  type EndpointManagement,
+  type EndpointManagementRequest,
+  type EndpointGroupRequest,
+  type PendingRpcRequest,
 } from 'zhin.js/adapter';
 
 /** 管理面只依赖 endpoint 的 callApi（ws/wss/sse/webhook 四种传输各自实现）。 */
 export interface MilkyManagementCaller {
-  callApi(action: string, params?: Record<string, unknown>): Promise<unknown>;
+  callApi(request: PendingRpcRequest): Promise<unknown>;
 }
 
 export function createMilkyEndpointManagement(
   endpoint: MilkyManagementCaller,
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
-    async listFriends(): Promise<readonly EndpointFriend[]> {
-      const data = asRecord(await endpoint.callApi('get_friend_list'));
+    async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {
+      const data = asRecord(await endpoint.callApi({ action: 'get_friend_list', signal: request.signal }));
       return toArray(data.friends).map((value) => {
         const friend = asRecord(value);
         return {
@@ -35,8 +38,8 @@ export function createMilkyEndpointManagement(
         };
       });
     },
-    async listGroups(): Promise<readonly EndpointGroup[]> {
-      const data = asRecord(await endpoint.callApi('get_group_list'));
+    async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
+      const data = asRecord(await endpoint.callApi({ action: 'get_group_list', signal: request.signal }));
       return toArray(data.groups).map((value) => {
         const group = asRecord(value);
         return {
@@ -45,10 +48,10 @@ export function createMilkyEndpointManagement(
         };
       });
     },
-    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
-      const data = asRecord(await endpoint.callApi('get_group_member_list', {
+    async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
+      const data = asRecord(await endpoint.callApi({ action: 'get_group_member_list', signal, params: {
         group_id: toNumberId(groupId, 'group_id'),
-      }));
+      } }));
       return toArray(data.members);
     },
   });

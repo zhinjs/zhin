@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { Bot } from 'qq-official-bot';
 import type { EndpointEvent } from 'zhin.js/adapter';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/qq/index.js';
 import { QqAdapter } from '../src/adapter.js';
 import { QqWebsocketEndpoint } from '../src/endpoint.js';
@@ -13,7 +13,7 @@ it('creates an actual QQ Bot subclass and routes the identical native event thro
   const stop = vi.spyOn(Bot.prototype, 'stop').mockResolvedValue();
   const events: EndpointEvent[] = [];
   const harness = await createAdapterHarness(definition, { id: 'bot', appid: 'synthetic-app', secret: 'synthetic-secret' }, {
-    name: 'qq', gateway: { receive: async event => { events.push(event); } },
+    name: 'qq', gateway: createTestEndpointEventGateway({ receive: async event => { events.push(event); } }),
   });
   try {
     expect(harness.adapter).toBeInstanceOf(QqAdapter);

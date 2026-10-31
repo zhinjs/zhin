@@ -698,3 +698,20 @@ notifier}), () => bot);
     await endpoint.stop();
   });
 });
+
+it('cancels a pending native QQ send without admitting a passive-source fallback on its late rejection', async () => {
+  const mock = createMockBot();
+  const endpoint = await qqFixture(() => new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig }), () => mock);
+  await endpoint.start(); const caller = new AbortController(); let fail!: (error: unknown) => void;
+  vi.mocked(mock.sendGroupMessage).mockReturnValueOnce(new Promise((_resolve, reject) => { fail = reject; }));
+  const conversation = { endpoint: { adapter: 'qq', id: endpoint.canonicalId }, kind: 'group' as const, id: 'group-1' };
+  const sending = endpoint.send({ conversation, signal: caller.signal, payload: 'synthetic reply' }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(mock.sendGroupMessage).toHaveBeenCalledTimes(1)); caller.abort();
+    let outcome: Awaited<typeof sending> | undefined; void sending.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'unknown' } }), { timeout: 200 });
+    fail(new Error('Request "/v2/groups/group-1/messages" failed with code(40034025): rejected'));
+    await Promise.resolve(); await Promise.resolve(); expect(mock.sendGroupMessage).toHaveBeenCalledTimes(1);
+    await expect(endpoint.send({ conversation, payload: 'fresh reply' })).resolves.toBe('group-group-1:sent-1');
+  } finally { fail(new Error('synthetic cleanup')); await endpoint.stop(); await sending; }
+});

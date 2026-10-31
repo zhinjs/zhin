@@ -149,11 +149,11 @@ describe('weixin-ilink plugin runtime adapter', () => {
     const sendTyping = vi.spyOn(endpoint.endpoint, 'sendTyping').mockResolvedValue(false);
     await endpoint.start(); endpoint.open();
 
-    await endpoint.index.control(endpoint.canonicalId, 'typing').typing?.(privateConversation('user-1'), true);
-    await endpoint.index.control(endpoint.canonicalId, 'typing').typing?.(privateConversation('user-1'), false);
+    await endpoint.index.control(endpoint.canonicalId, 'typing').typing?.({ conversation: privateConversation('user-1'), active: true });
+    await endpoint.index.control(endpoint.canonicalId, 'typing').typing?.({ conversation: privateConversation('user-1'), active: false });
 
-    expect(sendTyping).toHaveBeenNthCalledWith(1, 'user-1', 1);
-    expect(sendTyping).toHaveBeenNthCalledWith(2, 'user-1', 2);
+    expect(sendTyping).toHaveBeenNthCalledWith(1, 'user-1', 1, { signal: expect.any(AbortSignal) });
+    expect(sendTyping).toHaveBeenNthCalledWith(2, 'user-1', 2, { signal: expect.any(AbortSignal) });
     await endpoint.stop();
   });
 

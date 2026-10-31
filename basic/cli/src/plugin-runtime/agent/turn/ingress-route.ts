@@ -290,11 +290,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   #createGroupRuleEnforcer(): GroupRuleEnforcer {
     const options = this.options;
-    const endpointOf = (target: { platform: string; endpoint: string | null }) => {
-      const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
-      if (!endpointKey) throw new Error('endpoint_unresolved');
-      return endpointKey;
-    };
     return new GroupRuleEnforcer({
       rules: () => options.agent?.agent?.getGroupRules?.(),
       controlPlane: () => options.agent.agent.getControlPlane?.(),
@@ -304,54 +299,44 @@ export class AgentTurnIngressRoute implements IngressRoute {
       approvals: () => options.agent.agent.toolApprovals,
       opsCooldown: () => options.agent.agent.opsCooldown,
       onSpoke: (key) => this.#noteSpoke(key),
-      send: async (target, parts) => {
-        const content = parts.map((part) => (part.type === 'text'
-          ? { type: 'text', data: { text: part.text } }
-          : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }));
-        const result = await options.im.endpoints.send({
-          adapter: target.platform,
-          endpointKey: endpointOf(target),
-          conversation: { kind: 'group', id: target.groupId },
-          content,
-        });
-        return { status: 'sent' as const, ...(result.messageId ? { messageId: result.messageId } : {}) };
-      },
-      inspect: async (target, memberId, signal) => {
-        const result = await options.im.endpoints.withManagement(target.platform, endpointOf(target), (management) =>
-          management.inspectGroupMember ? management.inspectGroupMember(target.groupId, memberId, signal) : undefined);
-        return result ?? undefined;
-      },
-      mute: async (target, memberId, durationSec, signal) => {
-        const done = await options.im.endpoints.withManagement(target.platform, endpointOf(target), async (management) => {
-          // 优先走「执行前复核权限」的接口。
-          if (management.moderateGroupMember) {
-            await management.moderateGroupMember(target.groupId, memberId, { type: 'mute', durationSeconds: durationSec }, signal);
-          } else if (management.muteGroupMember) {
-            await management.muteGroupMember(target.groupId, memberId, durationSec);
-          } else {
-            throw new Error('mute_unsupported');
-          }
-          return true;
-        });
-        if (!done) throw new Error('endpoint_unavailable');
-      },
-      kick: async (target, memberId) => {
-        const done = await options.im.endpoints.withManagement(target.platform, endpointOf(target), async (management) => {
-          if (!management.kickGroupMember) throw new Error('kick_unsupported');
-          await management.kickGroupMember(target.groupId, memberId);
-          return true;
-        });
-        if (!done) throw new Error('endpoint_unavailable');
-      },
+
     });
   }
 
-  /**
-   * 群规执行入口（ADR 0039 §4）：违规判定方（`flood` 检测、content-moderation）报告一次命中，
-   * 这里按该群生效规则的阶梯档执行。没有生效规则时什么都不做。
-   */
-  enforceGroupRule(violation: GroupRuleViolation): Promise<GroupRuleEnforcementResult> {
-    return this.#groupRuleEnforcer.enforce(violation);
+  #executeGroupRule(input: Readonly<{
+    violation: GroupRuleViolation;
+    conversation: ConversationRef;
+    source: Readonly<{ client: unknown; signal: AbortSignal }>;
+  }>): Promise<GroupRuleEnforcementResult> {
+    const { violation, conversation, source } = input;
+    const operation = this.options.im.endpoints.captureOperation({ target: conversation,
+      client: source.client, signal: source.signal, requester: rootPluginId() });
+    const management = operation.management;
+    return this.#groupRuleEnforcer.enforce(violation, {
+      signal: operation.signal,
+      send: async (parts, signal) => deliveryOutcomeFromReceipt(await operation.send(
+        parts.map(part => part.type === 'text'
+          ? { type: 'text', data: { text: part.text } }
+          : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }),
+        { signal },
+      )),
+      ...(management?.inspectGroupMember ? { inspect: async signal =>
+        management.inspectGroupMember!({ groupId: conversation.id, userId: violation.memberId, signal }) } : {}),
+      mute: async (durationSec, signal) => {
+        if (management?.moderateGroupMember) {
+          await management.moderateGroupMember({ groupId: conversation.id, userId: violation.memberId,
+            action: { type: 'mute', durationSeconds: durationSec }, signal });
+        } else if (management?.muteGroupMember) {
+          await management.muteGroupMember({ groupId: conversation.id, userId: violation.memberId, durationSeconds: durationSec, signal });
+        } else throw new Error('mute_unsupported');
+      },
+      kick: async signal => {
+        signal.throwIfAborted();
+        if (!management?.kickGroupMember) throw new Error('kick_unsupported');
+        await management.kickGroupMember({ groupId: conversation.id, userId: violation.memberId, signal });
+      },
+      release: operation.release,
+    });
   }
 
   /**
@@ -361,7 +346,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   async reportGroupRuleViolation(report: GroupRuleViolationReport): Promise<GroupRuleViolationOutcome> {
     const { conversation } = report;
     if (conversation.kind !== 'group' || !report.memberId) return 'no_rule';
-    const result = await this.#groupRuleEnforcer.enforce({
+    const result = await this.#executeGroupRule({ conversation, source: report.source, violation: {
       platform: conversation.endpoint.adapter,
       endpoint: conversation.endpoint.id,
       groupId: conversation.id,
@@ -374,7 +359,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       ...(report.evidence?.length ? { evidence: report.evidence } : {}),
       ...(report.newcomer ? { newcomer: true } : {}),
       ...(report.recall ? { recall: report.recall } : {}),
-    });
+    } });
     if (result.kind !== 'no_rule') {
       logger.info(formatCompact({ op: 'group_rule_moderation', conv: `${conversation.endpoint.adapter}:${conversation.id}`, trigger: report.trigger, result: result.kind }));
     }
@@ -412,7 +397,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
       at,
     });
     if (!verdict.hit) return;
-    void this.#groupRuleEnforcer.enforce({
+    const session = readOperationSession(message);
+    if (!session) return;
+    void this.#executeGroupRule({ conversation: message.conversation, source: { client: session.endpoint, signal: session.signal }, violation: {
       platform,
       ...(endpoint ? { endpoint } : {}),
       groupId: message.conversation.id,
@@ -424,7 +411,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       ...(message.message?.id ? { messageId: message.message.id } : {}),
       evidence: verdict.samples,
       detection: { reasonCode: 'rule_hit_flood', payload: { count: verdict.count, windowMs: verdict.windowMs } },
-    }).then((result) => {
+    } }).then((result) => {
       if (result.kind !== 'no_rule') logger.info(formatCompact({ op: 'group_rule_flood', conv: `${platform}:${message.conversation.id}`, result: result.kind }));
     });
   }
@@ -467,7 +454,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         if (!endpointKey) return { status: 'failed' as const, code: 'endpoint_unresolved', retryable: false };
         const result = await options.im.endpoints.withManagement(target.platform, endpointKey, async (management) => {
           if (typeof management.sendGroupNotice !== 'function') return 'unsupported' as const;
-          await management.sendGroupNotice(target.id, content);
+          await management.sendGroupNotice({ groupId: target.id, content });
           return 'sent' as const;
         });
         if (result === 'sent') return { status: 'sent' as const };
@@ -780,7 +767,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
       const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner, snapshot);
       const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted, snapshot);
-      const senderRoles = resolveRuntimeSenderRoles(message, ownerId, endpointTrusted, trigger);
+      const senderRoles = resolveRuntimeSenderRoles(message, { endpointMaster: ownerId, endpointTrusted, trigger });
       const turnAccess = createRuntimeTurnAccess(message, senderRoles);
       // Unattended live reactions belong to the scene, independently of whichever
       // participant supplied the first candidate in the window.
@@ -884,8 +871,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const approveReply = !workroomAgentTurn && /^approve(?:\s|$)/iu.test(managementCommandText(message.content, message.commandPrefix) ?? '')
         ? zhinAgent.ownerApprovals.handleCommand(
             {
-              platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
-              endpoint: turnAccess.origin.kind === 'im' ? turnAccess.origin.endpoint : '',
+              endpoint: message.conversation.endpoint,
               ownerId,
               subjectId: turnAccess.principal.subjectId,
               scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : 'private',
@@ -1140,12 +1126,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
             timeoutSignal,
             ...(operationSignal ? [operationSignal] : []),
             ...(admission ? [admission.signal] : []),
-            ...(lease.retirementSignal ? [lease.retirementSignal] : []),
+            ...(lease.stopSignal ? [lease.stopSignal] : []),
           ]);
-          const contextState = await resolveRuntimeTurnContextState(
-            snapshot, message.conversation, signal, message.sender?.id,
-            { store: options.agent.agent.getUserProfiles?.()?.scenes, refresher: this.#sceneFactRefresher },
-          );
+          const contextState = await resolveRuntimeTurnContextState({
+            snapshot,
+            conversation: message.conversation,
+            signal,
+            senderId: message.sender?.id,
+            factServices: { store: options.agent.agent.getUserProfiles?.()?.scenes, refresher: this.#sceneFactRefresher },
+          });
           signal.throwIfAborted();
           // Capabilities are read with the resolved conversation facts (bot role, mute) on the access.
           const contextAccess = createRuntimeTurnAccess(message, senderRoles, contextState);
@@ -1258,7 +1247,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               snapshot,
               replyConversation.kind,
             );
-            const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
+            const request = createRuntimeTurnRequest({ message, text: routed.userText, roles: senderRoles }, {
               ...(members || liveAccess ? { access: turnAccessForTurn } : {}),
               traceId,
               turnId,
@@ -1366,8 +1355,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
                             sessionKey,
                             add: message.message
                               ? () => options.im.endpoints.addReaction({
-                                  adapter: effectiveAdapter,
-                                  endpointKey: effectiveEndpoint,
                                   message: message.message!,
                                   emoji: reaction,
                                 }).catch((error: unknown) => {

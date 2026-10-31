@@ -51,8 +51,8 @@ pnpm check:plugin-capability-publish
 - Tool：声明字段是 `requiresApproval: never | on-risk | once | always`；权限、审批与
   Shell/文件/网络专用策略是不同层。builtin 安全检查统一进入
   `packages/im/agent/src/security/policy-facade.ts` 的 `runToolPolicies`。
-- Adapter：优先 `defineAdapter({ capabilities, create })` 的
-  `{ client, connect, activate?, send }` 契约；WS/SSE 生命周期用 `createEndpointLifecycle`。
+- Adapter：`defineAdapter({ capabilities, createAdapter })` 创建账号所有者；Endpoint 继承真实 Client，
+  通过 `endpointSpec` 接入框架。完整合同见 `docs/authoring/adapters.md`。
 - 出站：`Message.$reply` / `Adapter.sendMessage` 必须经过
   `renderSendMessage → before.sendMessage → AdapterIndex/Endpoint`。
 - Console 页面：`pages/<name>/index.tsx` 默认导出组件并命名导出 `meta = definePage(...)`。

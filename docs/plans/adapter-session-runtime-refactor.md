@@ -4,6 +4,8 @@ sidebar: false
 
 # Adapter、Endpoint 与消息 Session 重构实施方案
 
+后续审查：已确认身份、operation 生命周期、下游持久化与多态端口仍有缺口；原有通过记录不代表这些场景已完成。收敛方案和待确认的数据迁移见 [Adapter operation contracts and design review](./adapter-operation-contracts.md)。
+
 状态：全量目标模式迁移中，尚未完成。用户进一步明确不保留 Adapter 兼容层，完整范围和分工以[全量目标模式迁移](./adapter-target-mode-migration.md)为准。下方本地绿测记录仅对应先前框架与 ICQQ 阶段，不能代表全部平台已完成。
 
 关联：[分层架构](../concepts/architecture.md)、[Plugin 模型](../concepts/plugin-model.md)、[ADR 0046：个人 Session 模型策略](../adr/0046-personal-session-model-policy.md)。

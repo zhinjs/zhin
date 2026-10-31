@@ -104,7 +104,7 @@ export class HandlerIndex {
       const session = readOperationSession(authorInput);
       const actualAdapter = session?.adapterName ?? operationClientAdapter(authorInput);
       if (expectedAdapter && actualAdapter !== expectedAdapter) continue;
-      const base = createCapabilityContext(operationSnapshot, record.owner, undefined, session?.signal);
+      const base = createCapabilityContext(operationSnapshot, record.owner, undefined, options?.signal ?? session?.signal);
       const interaction = options?.resolveInteraction?.(event, authorArgs, record.owner);
       const context = { ...base, ...(interaction !== undefined ? { interaction } : {}) } as HandlerContext;
       Object.defineProperty(context, 'session', { enumerable: true, get: () => readOperationSession(authorInput, expectedAdapter) });

@@ -1,3 +1,4 @@
+import { createEndpointOperation, type EndpointManagementRequest, type EndpointOperationOptions } from 'zhin.js/adapter';
 import { EventEmitter } from 'node:events';
 import type {
   ResolvedWeChatMpConfig,
@@ -99,7 +100,8 @@ export class WeChatMpApiClient extends EventEmitter {
     path: string,
     init?: Parameters<WeChatMpFetch>[1],
   ): Promise<{ readonly data: T; readonly token: string | null }> {
-    if (this.tokenExpired) await this.refreshAccessToken();
+    if (this.tokenExpired) await createEndpointOperation({ signal: init?.signal }).prepare(() => this.refreshAccessToken());
+    init?.signal?.throwIfAborted();
     const token = this.#accessToken;
     const separator = path.includes('?') ? '&' : '?';
     const response = await this.fetch(
@@ -109,36 +111,37 @@ export class WeChatMpApiClient extends EventEmitter {
     return { data: response.data as T, token };
   }
 
-  async sendCustomerService(messageData: unknown): Promise<WeChatAPIResponse> {
+  async sendCustomerService(messageData: unknown, request: EndpointOperationOptions = {}): Promise<WeChatAPIResponse> {
     const first = await this.#requestWithToken<WeChatAPIResponse>(
       '/cgi-bin/message/custom/send',
-      { method: 'POST', body: messageData },
+      { method: 'POST', body: messageData, signal: request.signal },
     );
     let result = first.data;
     if (result.errcode && TOKEN_INVALID_ERRCODES.has(Number(result.errcode))) {
+      request.signal?.throwIfAborted();
       // 失败请求使用的 token 若已被其他请求换掉，直接用新 token 重试，不再重复刷新。
-      if (this.#accessToken === first.token) await this.refreshAccessToken();
+      if (this.#accessToken === first.token) await createEndpointOperation(request).prepare(() => this.refreshAccessToken());
+      request.signal?.throwIfAborted();
       result = await this.request<WeChatAPIResponse>(
         '/cgi-bin/message/custom/send',
-        { method: 'POST', body: messageData },
+        { method: 'POST', body: messageData, signal: request.signal },
       );
     }
     return result;
   }
 
   async uploadMedia(
-    type: 'image' | 'voice' | 'video',
-    body: unknown,
+    { type, body, signal }: WeChatMpUploadRequest,
   ): Promise<string> {
     const data = await this.request<WeChatMediaUploadResult>(
       `/cgi-bin/media/upload?type=${type}`,
-      { method: 'POST', body },
+      { method: 'POST', body, signal },
     );
     if (data.media_id) return data.media_id;
     throw new Error(`WeChat media upload failed: ${data.errcode ?? 'unknown'} ${data.errmsg ?? ''}`.trim());
   }
 
-  async getFollowerIds(): Promise<readonly string[]> {
+  async getFollowerIds(request: EndpointManagementRequest = {}): Promise<readonly string[]> {
     const followers: string[] = [];
     let nextOpenid = '';
     do {
@@ -146,7 +149,7 @@ export class WeChatMpApiClient extends EventEmitter {
         count?: number;
         data?: { openid?: string[] };
         next_openid?: string;
-      }>(`/cgi-bin/user/get?next_openid=${encodeURIComponent(nextOpenid)}`);
+      }>(`/cgi-bin/user/get?next_openid=${encodeURIComponent(nextOpenid)}`, { signal: request.signal });
       if (data.errcode && data.errcode !== 0) {
         throw new Error(`WeChat API error: ${data.errcode} - ${data.errmsg}`);
       }
@@ -157,3 +160,5 @@ export class WeChatMpApiClient extends EventEmitter {
     return Object.freeze(followers);
   }
 }
+
+export interface WeChatMpUploadRequest extends EndpointOperationOptions { readonly type: 'image' | 'voice' | 'video'; readonly body: unknown; }

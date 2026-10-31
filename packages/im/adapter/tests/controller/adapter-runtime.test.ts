@@ -46,8 +46,8 @@ class NativeAdapter extends Adapter<NativeEndpoint, Record<string, unknown>, { m
 }
 async function create(repository = new Repository(), adapter = new NativeAdapter()) {
   await adapter.initialize({ descriptor: { id: adapterId, owner: rootPluginId(), name: 'native', source: 'fixture', capabilities: ['inbound', 'outbound'] },
-    repository, initial: [], bind(endpoint, record) {
-      bindPlatformEndpoint(endpoint, { id: record.canonicalId, name: 'native', use: () => ({ receive: async () => undefined }) } as never);
+    repository, initial: [], bind(endpoint, record, signal) {
+      bindPlatformEndpoint(endpoint, { id: record.canonicalId, name: 'native', signal, use: () => ({ async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async () => undefined }) } as never);
       return [];
     } }, new AbortController().signal);
   await adapter.activate(new AbortController().signal);
@@ -286,7 +286,7 @@ describe('Adapter-owned native Endpoint runtime', () => {
       tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
       config: new Map([[root, {}]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
       resources: new Map([[root, new Map<TokenId, unknown>([
-        [endpointEventGatewayToken.id, { receive: async () => undefined }],
+        [endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async () => undefined }],
       ])]]),
     };
     const index = await AdapterIndex.create([slot], snapshot, new AbortController().signal, { repository });
@@ -316,7 +316,7 @@ describe('Adapter-owned native Endpoint runtime', () => {
     expect(enumeration).not.toHaveBeenCalled();
     const control = index.control(one.canonicalId, 'recall')!;
     const message = { conversation: { endpoint: { id: one.canonicalId, adapter: 'native' }, kind: 'private' as const, id: 'user' }, id: 'msg' };
-    await control.recall!(message); expect(original.recalled).toHaveBeenCalledTimes(1);
+    await control.recall!({ message: message }); expect(original.recalled).toHaveBeenCalledTimes(1);
     const listing = gate<never[]>(); original.listed.mockImplementationOnce(() => listing.promise);
     const managed = index.management(one.canonicalId)!;
     const lookup = managed.listGroups!();
@@ -326,7 +326,7 @@ describe('Adapter-owned native Endpoint runtime', () => {
     expect(stopped).toBe(false);
     listing.resolve([]); await lookup; await stopping;
     await adapter.start(one.instanceId, adapter.revision);
-    await expect(control.recall!(message)).rejects.toMatchObject({ disposition: 'not_sent' });
+    await expect(control.recall!({ message: message })).rejects.toMatchObject({ disposition: 'not_sent' });
     await expect(managed.listGroups!()).rejects.toMatchObject({ disposition: 'not_sent' });
     await adapter.remove(one.instanceId, adapter.revision);
     expect(index.resolve('native', 'one')).toBeUndefined();
@@ -368,7 +368,7 @@ describe('Adapter-owned native Endpoint runtime', () => {
     const snapshot: RuntimeSnapshot = { generation: 0, root,
       tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
       config: new Map([[root, {}]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
-      resources: new Map([[root, new Map<TokenId, unknown>([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]) };
+      resources: new Map([[root, new Map<TokenId, unknown>([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async () => undefined }]])]]) };
     const index = await AdapterIndex.create([slot], snapshot, new AbortController().signal, { repository });
     await index.activate(new AbortController().signal);
     const target = await add(adapter, 'pending');
@@ -407,8 +407,8 @@ describe('Adapter-owned native Endpoint runtime', () => {
   it('supports another SDK shape whose native send signature conflicts with canonical send', async () => {
     const adapter = new SocketAdapter();
     await adapter.initialize({ descriptor: { id: adapterId, owner: rootPluginId(), name: 'socket', source: 'fixture', capabilities: ['outbound'] },
-      repository: new Repository(), initial: [], bind(endpoint, record) {
-        bindPlatformEndpoint(endpoint, { id: record.canonicalId, name: 'socket', use: () => ({ receive: async () => undefined }) } as never); return [];
+      repository: new Repository(), initial: [], bind(endpoint, record, signal) {
+        bindPlatformEndpoint(endpoint, { id: record.canonicalId, name: 'socket', signal, use: () => ({ async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async () => undefined }) } as never); return [];
       } }, new AbortController().signal);
     await adapter.activate(new AbortController().signal);
     adapter.open();

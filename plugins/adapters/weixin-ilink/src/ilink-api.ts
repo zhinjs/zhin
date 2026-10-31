@@ -28,6 +28,8 @@ export type WeixinApiOptions = {
   timeoutMs?: number;
   /** Long-poll timeout for getUpdates (server may hold the request up to this). */
   longPollTimeoutMs?: number;
+  /** Owning account and individual caller lifetime. */
+  abortSignal?: AbortSignal;
 };
 
 /** Default timeout for long-poll getUpdates requests. */
@@ -266,6 +268,7 @@ export async function getUploadUrl(
       base_info: params.metadata.buildBaseInfo(),
     }),
     token: params.token,
+    abortSignal: params.abortSignal,
     timeoutMs: params.timeoutMs ?? DEFAULT_API_TIMEOUT_MS,
     label: "getUploadUrl",
   });
@@ -283,6 +286,7 @@ export async function sendMessage(
     endpoint: "ilink/bot/sendmessage",
     body: JSON.stringify({ ...params.body, base_info: params.metadata.buildBaseInfo() }),
     token: params.token,
+    abortSignal: params.abortSignal,
     timeoutMs: params.timeoutMs ?? DEFAULT_API_TIMEOUT_MS,
     label: "sendMessage",
   });
@@ -302,6 +306,7 @@ export async function getConfig(
       base_info: params.metadata.buildBaseInfo(),
     }),
     token: params.token,
+    abortSignal: params.abortSignal,
     timeoutMs: params.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
     label: "getConfig",
   });
@@ -319,6 +324,7 @@ export async function sendTyping(
     endpoint: "ilink/bot/sendtyping",
     body: JSON.stringify({ ...params.body, base_info: params.metadata.buildBaseInfo() }),
     token: params.token,
+    abortSignal: params.abortSignal,
     timeoutMs: params.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
     label: "sendTyping",
   });
@@ -336,6 +342,7 @@ export async function notifyStop(params: WeixinApiOptions): Promise<NotifyStopRe
     endpoint: "ilink/bot/msg/notifystop",
     body: JSON.stringify({ base_info: params.metadata.buildBaseInfo() }),
     token: params.token,
+    abortSignal: params.abortSignal,
     timeoutMs: params.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
     label: "notifyStop",
   });
@@ -352,6 +359,7 @@ export async function notifyStart(params: WeixinApiOptions): Promise<NotifyStart
     endpoint: "ilink/bot/msg/notifystart",
     body: JSON.stringify({ base_info: params.metadata.buildBaseInfo() }),
     token: params.token,
+    abortSignal: params.abortSignal,
     timeoutMs: params.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
     label: "notifyStart",
   });

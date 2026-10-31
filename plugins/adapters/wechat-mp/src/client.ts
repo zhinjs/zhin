@@ -3,7 +3,13 @@ import { WeChatMpApiClient, type WeChatMpFetch } from './api-client.js';
  * WeChatMpClient — lifecycle, outbound, admit, access token refresh.
  */
 import axios from 'axios';
-import type { EndpointManagement, EndpointSendRequest } from 'zhin.js/adapter';
+import {
+  createEndpointOperation,
+  type EndpointOperationOptions,
+  type EndpointManagement,
+  type EndpointSendRequest,
+  type EndpointManagementRequest,
+} from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -166,7 +172,7 @@ export class WeChatMpClient extends WeChatMpApiClient {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  protected async sendPayload({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  protected async sendPayload({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     if (getPassiveReplyCapture()) {
       const text = extractOutboundText(payload);
       recordPassiveReplyText(text);
@@ -174,7 +180,7 @@ export class WeChatMpClient extends WeChatMpApiClient {
     }
 
     if (this.#options.config.replyMode === 'customer_service') {
-      return this.#sendCustomerService(conversation.id, payload);
+      return this.#sendCustomerService({ target: conversation.id, payload, signal });
     }
 
     this.#logger.warn(formatCompact({
@@ -231,11 +237,11 @@ export class WeChatMpClient extends WeChatMpApiClient {
     });
   }
 
-  async #sendCustomerService(target: string, payload: unknown): Promise<string> {
+  async #sendCustomerService({ target, payload, signal }: WeChatCustomerServiceRequest): Promise<string> {
     // 发送前检查过期（不只判 null）：过期 token 直接刷新，不白跑一次 40001。
-    const materialized = await this.#materializeOutboundMedia(payload);
+    const materialized = await createEndpointOperation({ signal }).prepare(() => this.#materializeOutboundMedia(payload, { signal }));
     const messageData = formatCustomerServiceBody(target, materialized);
-    const result = await this.sendCustomerService(messageData);
+    const result = await this.sendCustomerService(messageData, { signal });
     if (result.errcode && result.errcode !== 0) {
       throw new Error(`WeChat API error: ${result.errcode} - ${result.errmsg}`);
     }
@@ -250,7 +256,7 @@ export class WeChatMpClient extends WeChatMpApiClient {
    * - 无 MediaRef / 类型不可投递（file 段）→ warn + 丢弃；
    * - 上传失败降级为文本（alt 优先），不阻断发送。
    */
-  async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
+  async #materializeOutboundMedia(payload: unknown, request: EndpointOperationOptions): Promise<unknown> {
     if (!Array.isArray(payload)) return payload;
     const materialized = await Promise.all(payload.map(async (item) => {
       if (typeof item === 'string' || !item || typeof item !== 'object') return item;
@@ -287,9 +293,10 @@ export class WeChatMpClient extends WeChatMpApiClient {
         return null;
       }
       try {
-        const mediaId = await this.#uploadMedia(uploadType, media);
+        const mediaId = await this.#uploadMedia({ type: uploadType, media, signal: request.signal });
         return { type: seg.type, data: { mediaId } };
       } catch (error) {
+        if (request.signal?.aborted) throw error;
         this.#logger.warn(formatCompact({
           op: 'wechat_mp_media_upload_failed',
           endpoint: this.#options.config.id,
@@ -304,12 +311,11 @@ export class WeChatMpClient extends WeChatMpApiClient {
 
   /** POST /cgi-bin/media/upload（临时素材，3 天有效），返回 media_id。 */
   async #uploadMedia(
-    type: 'image' | 'voice' | 'video',
-    media: Parameters<typeof resolveMediaBinary>[0],
+    { type, media, signal }: WeChatMediaRequest,
   ): Promise<string> {
-    const binary = await resolveMediaBinary(media);
+    const binary = await createEndpointOperation({ signal }).prepare(() => resolveMediaBinary(media, { signal }));
     const form = buildMediaUploadForm(binary);
-    return this.uploadMedia(type, form);
+    return this.uploadMedia({ type, body: form, signal });
   }
 
   #startTokenRefreshTimer(): void {
@@ -330,7 +336,7 @@ function createWeChatMpEndpointManagement(
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     // 公众号无群/频道概念；关注者即"好友"（nickname 为 openid 占位，见 getFollowers）。
-    listFriends: async () => (await requireClient().getFollowerIds()).map((openid) => ({
+    listFriends: async (request: EndpointManagementRequest = {}) => (await requireClient().getFollowerIds(request)).map((openid) => ({
       user_id: openid,
       nickname: openid,
       remark: '',
@@ -341,3 +347,6 @@ function createWeChatMpEndpointManagement(
 export type WeChatMpClientEventMap = Record<string, unknown>;
 
 export type { WeChatMpFetch } from './api-client.js';
+
+interface WeChatCustomerServiceRequest extends EndpointOperationOptions { readonly target: string; readonly payload: unknown; }
+interface WeChatMediaRequest extends EndpointOperationOptions { readonly type: 'image' | 'voice' | 'video'; readonly media: Parameters<typeof resolveMediaBinary>[0]; }

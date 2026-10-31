@@ -86,7 +86,47 @@ try {
 }
 ```
 
-`GenerationHandoffStack` 只组合候选资源的 readiness：`activateNext` 按正序执行，失败时对已经成功激活的参与者逆序执行 `deactivateNext`。旧代在整个事务中不被触碰；补偿也失败时 Root fail-closed，不再接纳新操作。
+`GenerationHandoffStack` 只组合候选资源的 readiness：`activateNext` 按正序执行，失败时对已经成功激活的参与者逆序执行 `deactivateNext`。该栈不暂停旧代，也不决定旧任务的取消；补偿也失败时 Root fail-closed，不再接纳新操作。
+
+### 插件自主处理热更事件
+
+`RootRuntime` 在现有事务内、任何候选模块求值与 setup 之前，等待各插件实例的
+`hmr.pause` 处理器完成；它只等待处理器，不自动排空或取消插件任务。处理器失败则中止
+候选发布。`handoff` 仍只负责候选 readiness，Controller 仍独占提交与回滚。
+
+```ts
+setup({ events }) {
+  events.on('hmr.pause', async ({ signal, details }) => {
+    await jobs.prepareReload({ signal, details });
+  });
+  events.on('hmr.resume', async ({ signal, details }) => {
+    await jobs.completeReload({ signal, details });
+  });
+}
+```
+
+事件属于实际插件 Scope：复用实例保留订阅，子插件不继承父插件的订阅。暂停通知所有现有
+实例，完成通知已尝试暂停的旧实例与已提交实例的并集，每个实例一次；新实例可只收到完成
+事件，被拒绝的候选不收完成通知。通知期间持有对应快照租约，之后保留任务仍须持有自己的
+操作租约，通知不会重新开放旧代准入。
+
+`details` 包括手动／源码触发、变更路径、请求的规划范围、前后代数、接收实例创建代数与
+当前／已替换状态；完成事件还给出实际替换 owner 和 committed、unchanged、rejected、
+cancelled、restart-required 结果。手动 `reload(target)` 沿用完整 Root 构建；显式配置修改
+也沿用手动控制事务，`changed` 为空。`planned.fullRoot` 是保守规划范围，不能代替实际
+`replaced` 列表。启动和普通账号操作不会发热更事件。
+
+持有连接租约的 Host 可监听 `GenerationAdmissionGate.stopSignal` 处理显式 Root 关闭。
+它在首次发布时绑定，与该 Root 的快照租约共享；未发布候选为 `undefined`，复用和退休后
+仍保持原信号。Root 先关闭全部准入再取消该信号，因此连接可释放租约，停止无需等待
+持有这些租约的 Scope disposer 才开始关闭连接。热更退役事实不再替插件决定是否断开连接。
+
+暂停事件的 signal 属于控制事务；完成事件使用独立的 Root stop signal。插件自己选择
+继续、保存或取消任务。完成处理器失败只报告控制错误，不回滚已提交代，不重试处理器，
+也不自动恢复持久化数据迁移的 maintenance。
+
+Worker 与子进程通过独立控制请求交付同一事件，本地重建 AbortSignal。事件取消只通知对应
+处理器，不强杀 isolate，也不重新开放已退休实例的业务 RPC。
 
 ### Adapter 的准入由快照原子切换
 
@@ -110,6 +150,8 @@ Console RPC、SSE 与登录辅助订阅同样由 Process Host 持有，并在首
 commit 只换指针，旧代不立刻销毁——它可能还在服务在途消息。`SnapshotStore` 用租约（lease）管理：
 
 - `acquire()` 拿到当前代快照并 +1 引用；用完 `release()`；
+- `retain(lease)` 为仍有效的自有租约增加独立引用，固定同一代，不解析最新代；
+- `retirementSignal` 表达该代被替换；`stopSignal` 在同一 Root 所有租约间共享，仅关闭 Root 时取消；
 - 被替换的旧代标记 retired，等租约归零才真正 `dispose()`；
 - `RootController.stop()` 会等所有历史代都释放完毕才返回，因此停机不会在消息处理中途掐断资源。
 

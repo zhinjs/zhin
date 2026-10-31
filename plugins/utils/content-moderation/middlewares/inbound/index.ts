@@ -4,7 +4,7 @@ import { aiCompletionToken, createDeliveryTarget, databaseHostToken, getLogger, 
   outboundHostToken, usageSubjectFromMessage } from 'zhin.js';
 import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
 import { groupRuleViolationToken, type GroupRuleViolationSink } from '@zhin.js/core/runtime';
-import { generationAdmissionSource, type CapabilityId } from 'zhin.js/plugin-runtime';
+import { type CapabilityId } from 'zhin.js/plugin-runtime';
 import { resolveLocale } from 'zhin.js/i18n';
 import {
   buildScanContext,
@@ -89,8 +89,6 @@ export default defineMiddleware<Message, ModerationConfig>({
             if (!host.recall) return false;
             const conv = message.conversation;
             await host.recall({
-              adapter: conv.endpoint.adapter,
-              endpointKey: conv.endpoint.id,
               message: {
                 conversation: {
                   kind: conv.kind,
@@ -154,28 +152,30 @@ async function enqueueGroupModeration(
       && hasResource(context, aiCompletionToken) && hasResource(context, databaseHostToken)
       && hasResource(context, outboundHostToken)) {
       const host = context.use(outboundHostToken);
-      if (!host.sendTarget) return;
+      if (!host.captureOperation) return;
       const client = context.$client;
       if (client === undefined) throw new Error('Moderation source Client is unavailable');
       // This work outlives the Message. Its own lease keeps the captured incarnation's
       // cancellation wired after the inbound operation releases its child lease.
+      const sourceOwner = adapters.owner(conversation.endpoint.id as CapabilityId);
       const child = adapters.acquire(conversation.endpoint.id as CapabilityId, context.signal, client);
-      const detach: Array<() => void> = [];
-      const finish = () => {
-        try { detach.forEach(remove => remove()); } finally { child.release(); }
-      };
+      const source = engine.groupReviewQueue.captureSource({ owner: sourceOwner,
+        signal: AbortSignal.any([context.signal, child.signal]) });
+      let operation: ReturnType<NonNullable<typeof host.captureOperation>> | undefined;
+      const finish = () => { try { operation?.release(); } finally { source.release(); child.release(); } };
       try {
-        const lifetime = new AbortController();
-        const gates = adapters[generationAdmissionSource] ?? [];
-        for (const gate of gates) detach.push(gate.onDeactivate(() => lifetime.abort(new Error('Moderation adapter generation retired'))));
-        const signal = AbortSignal.any([context.signal, lifetime.signal, child.signal]);
+        const signal = source.signal;
+        operation = host.captureOperation({ target: destination, client, signal });
+        const captured = operation;
         const messageId = message.id ?? '';
-        const management = adapters.management(conversation.endpoint.id as CapabilityId);
+        const management = adapters.management(conversation.endpoint.id as CapabilityId, {
+          signal, assertActive: () => child.assertActive(),
+        });
         const assertTarget = () => {
           signal.throwIfAborted();
           child.assertActive();
           if (endpoint.identity.id !== conversation.endpoint.id || endpoint.selfUserId !== target.account
-            || endpoint.identity.adapter !== target.adapter || gates.some(gate => !gate.active)) {
+            || endpoint.identity.adapter !== target.adapter) {
             throw new Error('Moderation target account is no longer active');
           }
         };
@@ -185,13 +185,14 @@ async function enqueueGroupModeration(
           signal,
           state: context.use(databaseHostToken).state.forConversation(destination),
           completion: context.use(aiCompletionToken), management: {
-            inspectGroupMember: management?.inspectGroupMember ? async (group, member, operationSignal) => {
-              assertTarget(); return management.inspectGroupMember!(group, member, operationSignal);
+            inspectGroupMember: management?.inspectGroupMember ? async request => {
+              assertTarget(); return management.inspectGroupMember!(request);
             } : undefined,
           },
           ...(rules ? { rules: async (hit) => {
             assertTarget();
             return rules.report({
+              source: { client, signal },
               conversation, memberId: message.sender!.id, trigger: hit.category, newcomer: hit.newcomer,
               sentAt: Number(message.metadata?.platformSentAt), evidence: hit.evidence,
               ...(message.sender?.name ? { memberName: message.sender.name } : {}),
@@ -203,7 +204,7 @@ async function enqueueGroupModeration(
           onBehalfOf: usageSubjectFromMessage(message),
           reply: async (content, mention) => {
             assertTarget();
-            const receipt = await host.sendTarget!(destination, mention ? [
+            const receipt = await captured.send(mention ? [
               { type: 'mention', data: { target: mention } },
               { type: 'text', data: { text: ` ${content}` } },
             ] : content, { locale });
@@ -211,9 +212,8 @@ async function enqueueGroupModeration(
           },
           recall: async () => {
             assertTarget();
-            if (!host.recall || !messageId) throw new Error('Original message cannot be recalled');
-            await host.recall({ adapter: target.adapter, endpointKey: conversation.endpoint.id,
-              message: { conversation, id: messageId } });
+            if (!captured.recall || !messageId) throw new Error('Original message cannot be recalled');
+            await captured.recall({ conversation, id: messageId });
           },
           audit: (event) => logger.info({ ...event, endpoint: conversation.endpoint.id, group: conversation.id }),
         });

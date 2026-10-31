@@ -1,3 +1,4 @@
+import { activityFeedbackSource, type ActivityFeedbackSourceCarrier } from './operation-source.js';
 import type { TypingIndicatorOptions } from '../typing-indicator/index.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import type { ActivitySceneType } from './types.js';
@@ -5,7 +6,7 @@ import { resolveActivityFeedbackSessionId } from './subagent-prefix.js';
 import { isLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 /** 单次 activity phase 操作的归一化上下文（由 AI 事件 payload 解析） */
-export interface ActivityFeedbackEventContext {
+export interface ActivityFeedbackEventContext extends ActivityFeedbackSourceCarrier {
   locale?: Locale;
   platform: string;
   endpointKey: string;
@@ -75,7 +76,7 @@ export function toActivityFeedbackEventContext(
   const activitySessionId = resolveActivityFeedbackSessionId(payload);
   const locale = isLocale(payload.locale) ? payload.locale : defaultLocale;
 
-  return {
+  const context: ActivityFeedbackEventContext = {
     locale,
     platform,
     endpointKey,
@@ -95,4 +96,7 @@ export function toActivityFeedbackEventContext(
       groupId: targets.groupId,
     },
   };
+  const source = payload[activityFeedbackSource];
+  if (source) Object.defineProperty(context, activityFeedbackSource, { value: source, enumerable: false });
+  return context;
 }

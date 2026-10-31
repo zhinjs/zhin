@@ -1,3 +1,4 @@
+import { subscriptionMigrationScope } from '../../../src/target-migration.js';
 import { rssMessages as t } from '../../../src/i18n.js';
 import { defineCommand } from 'zhin.js/command';
 import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
@@ -20,43 +21,44 @@ export default defineCommand<RssConfig>({
 
     const channel = extractChannelInfo(input);
     if (!channel) return channelSourceError(input, locale);
-    const cfg = resolveRssConfig(config);
+    const run = async () => {
+      const cfg = resolveRssConfig(config);
 
-    const existing = await Subs.select().where({
-      url,
-      ...subscriptionScope(channel),
-    });
-    if (existing.length > 0) return t(locale, 'existing');
+      const existing = await Subs.select().where({
+        url,
+        ...subscriptionScope(channel),
+      });
+      if (existing.length > 0) return t(locale, 'existing');
 
-    const currentSubs = await Subs.select().where({
-      ...subscriptionScope(channel),
-    });
-    if (currentSubs.length >= cfg.maxPerGroup) {
-      return t(locale, 'limit', { max: cfg.maxPerGroup });
-    }
+      const currentSubs = await Subs.select().where({
+        ...subscriptionScope(channel),
+      });
+      if (currentSubs.length >= cfg.maxPerGroup) {
+        return t(locale, 'limit', { max: cfg.maxPerGroup });
+      }
 
-    let feedTitle = '';
-    try {
-      const { title, items } = await fetchFeed(url, cfg.timeout);
-      feedTitle = title;
-      await markItemsSeen(runtime, url, items);
-    } catch (e) {
-      return t(locale, 'loadFailed', { error: (e as Error).message });
-    }
+      let feedTitle = '';
+      try {
+        const { title, items } = await fetchFeed(url, cfg.timeout);
+        feedTitle = title;
+        await markItemsSeen(runtime, url, items);
+      } catch (e) {
+        return t(locale, 'loadFailed', { error: (e as Error).message });
+      }
 
-    await Subs.insert({
-      url,
-      feed_title: feedTitle,
-      adapter_name: channel.adapterName,
-      endpoint_id: channel.endpointKey,
-      channel_type: channel.channelType,
-      channel_id: channel.channelId,
-      creator_id: channel.senderId,
-      creator_name: channel.senderName,
-      created_at: new Date().toISOString(),
-      locale,
-    });
+      await Subs.insert({
+        url,
+        feed_title: feedTitle,
+        ...subscriptionScope(channel),
+        creator_id: channel.senderId,
+        creator_name: channel.senderName,
+        created_at: new Date().toISOString(),
+        locale,
+      });
 
-    return t(locale, 'added', { feed: feedTitle || url });
+      return t(locale, 'added', { feed: feedTitle || url });
+    };
+    return runtime.migrationScopes ? runtime.migrationScopes.run({ scope: subscriptionMigrationScope({ target: channel.target,
+      adapterName: channel.adapterName, endpointKey: channel.endpointKey, channelType: channel.channelType, channelId: channel.channelId }), run }) : run();
   },
 });

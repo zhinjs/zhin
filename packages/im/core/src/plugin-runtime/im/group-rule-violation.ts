@@ -13,6 +13,8 @@ export type GroupRuleViolationTrigger = 'advertising' | 'abuse';
 
 /** @public */
 export interface GroupRuleViolationReport {
+  /** Runtime-only authority captured from the actual incoming Client; never persist this object. */
+  readonly source: Readonly<{ client: unknown; signal: AbortSignal }>;
   /** 违规消息所在的群会话（`kind` 必须是 `group`）。 */
   readonly conversation: ConversationRef;
   readonly memberId: string;

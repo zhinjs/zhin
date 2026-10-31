@@ -20,7 +20,7 @@ class FixtureEndpoint {
 class FixtureAdapter extends Adapter<FixtureEndpoint> {
   protected createEndpoint(): FixtureEndpoint { return new FixtureEndpoint(); }
 }
-declare module '@zhin.js/adapter' {
+declare module '@zhin.js/feature-kit' {
   interface AdapterRegistry { 'construction-fixture': FixtureAdapter }
 }
 defineCommand({ adapter: 'construction-fixture', execute({ session }) {

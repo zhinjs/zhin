@@ -15,7 +15,7 @@ export default defineAgentTool<{ nickname: string; company?: string; email?: str
   keywords: ['修改资料', '设置昵称', 'profile', 'set profile'],
   async execute({ nickname, company, email, college, personal_note }: { nickname: string; company?: string; email?: string; college?: string; personal_note?: string }, context) {
     const endpoint = context.$client;
-      await endpoint.setQQProfile(nickname, company, email, college, personal_note);
+      await endpoint.setQQProfile({ nickname, company, email, college, personalNote: personal_note });
       return { success: true };
   },
 });

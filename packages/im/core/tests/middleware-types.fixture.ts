@@ -67,3 +67,19 @@ function hostHandler(context: HandlerContext) {
   if (context.interaction) context.interaction.ask({ type: 'text', title: 'Reply' });
 }
 void hostHandler;
+
+
+// Runtime assembly uses cohesive data/authority objects, without positional compatibility overloads.
+import { RuntimeMessage, OutboundRenderer, type RuntimeMessageFacts, type RuntimeMessageOperation } from '../src/plugin-runtime/im/index.js';
+declare const messageFacts: RuntimeMessageFacts;
+declare const messageOperation: RuntimeMessageOperation;
+new RuntimeMessage(messageFacts, messageOperation);
+// @ts-expect-error removed positional constructor cannot confuse sender, message and endpoint fields
+new RuntimeMessage(messageFacts.conversation, messageFacts.content, messageOperation.generation, messageOperation.reply);
+if (messageOperation.snapshot && messageOperation.requester) {
+  new OutboundRenderer().render(messageFacts.content, {
+    snapshot: messageOperation.snapshot, requester: messageOperation.requester, conversation: messageFacts.conversation,
+  });
+  // @ts-expect-error rendering dependencies belong to one named operation context
+  new OutboundRenderer().render(messageFacts.content, messageOperation.requester, messageOperation.snapshot);
+}

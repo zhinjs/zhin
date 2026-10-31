@@ -1,3 +1,4 @@
+import { extractChannelInfo, subscriptionScope } from '../src/channel.js';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -87,8 +88,7 @@ describe.skipIf(!sqliteAvailable)('administrator RSS through real Runtime and SQ
     expect(await f.chat(list)).toContain('没有订阅'); expect(await f.chat(remove, { url: 'https://example.test/feed.xml' })).toContain('未找到');
     expect(await getRssSubs(f.rss().db)!.select()).toEqual([]); expect(await getRssSeen(f.rss().db)!.select()).toEqual([]);
     expect((await f.provider('beta')!.read()).tasks).toEqual([]);
-    await getRssSubs(f.rss().db)!.insert({ url: 'https://example.test/feed.xml', feed_title: 'Chat feed', adapter_name: 'sandbox', endpoint_id: 'chat-account',
-      channel_type: 'group', channel_id: 'chat', creator_id: 'alice', creator_name: 'Alice', created_at: new Date().toISOString() });
+    await getRssSubs(f.rss().db)!.insert({ url: 'https://example.test/feed.xml', feed_title: 'Chat feed', ...subscriptionScope(extractChannelInfo({ conversation: { endpoint: { adapter: 'sandbox', id: 'chat-account' }, kind: 'group', id: 'chat' } })!), creator_id: 'alice', creator_name: 'Alice', created_at: new Date().toISOString() });
     expect(await f.chat(remove, { url: 'https://example.test/feed.xml' })).toContain('已取消');
     expect((await provider.read()).tasks[0]!.id).toBe(created.tasks[0]!.id);
     await expect(changeTask(f.provider('beta')!, 'cancel', created.tasks[0]!.id)).rejects.toMatchObject({ code: 'not_found' });

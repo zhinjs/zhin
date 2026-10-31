@@ -38,3 +38,5 @@ export {
   platformPermit,
   telegramGroupPermitResolver,
 } from './platform-permit.js';
+
+export type { TelegramPollRequest } from './telegram-client.js';

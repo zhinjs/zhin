@@ -12,6 +12,8 @@ export interface HandlerContext<TConfig = unknown, TAdapter extends string | und
 export interface HandlerDispatchOptions {
   /** Complete, leased snapshot for this operation rather than provider build order. */
   readonly snapshot?: RuntimeSnapshot;
+  /** Cancellation of this actual dispatch, including non-message Endpoint events. */
+  readonly signal?: AbortSignal;
   /** Build a user interaction for this dispatch (message or side-event). */
   resolveInteraction?: (event: string, args: readonly unknown[], owner: PluginId) => UserInteraction | undefined;
 }

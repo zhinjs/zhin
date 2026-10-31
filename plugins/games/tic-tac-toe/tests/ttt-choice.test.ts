@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import {  beforeEach, describe, expect, it } from 'vitest';
 import middleware from '../middlewares/ttt-choice/index.ts';
 import { startBotGame } from '../src/game-flow.js';
-import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { channelKey, createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type SessionServices } from '../src/session-service.js';
 
 const replies: string[] = [];
@@ -9,17 +9,13 @@ let nextCalls = 0;
 let services: SessionServices;
 
 function makeInput(content: string, senderId = 'u1') {
-  return {
-    $adapter: 'test',
-    $endpoint: 'default',
-    $channel: { type: 'group', id: 'g1' },
-    $sender: { id: senderId, name: senderId },
-    content,
-    $reply: async (reply: unknown) => {
+  return { target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' }, conversation: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' },
+sender: { id: senderId, name: senderId },
+content,
+$reply: async (reply: unknown) => {
       replies.push(String(reply));
       return 'mid-1';
-    },
-  };
+    } };
 }
 
 function makeCtx(input: unknown) {
@@ -54,7 +50,7 @@ describe('tic-tac-toe ttt-choice middleware (digit fallback)', () => {
     expect(replies.length).toBe(1);
     expect(replies[0]!.length).toBeGreaterThan(0);
     const session = await services.session.getActiveForUser(
-      'test-default-group:g1',
+      channelKey({ target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' } }),
       'u1',
     );
     // 玩家落子后机器人应手，棋盘上至少已有玩家的 ✕

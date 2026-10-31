@@ -9,6 +9,8 @@ import { aiCompletionToken, databaseHostToken, outboundHostToken, type AiComplet
 import inbound from '../middlewares/inbound/index.ts';
 import { ModerationEngine } from '../src/engine.js';
 import { moderationEngineToken } from '../src/runtime.js';
+import { createOutboundHost } from '../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
+import type { CapturedOutboundOperation, OutboundCaptureInput, Locale } from 'zhin.js/plugin-runtime';
 
 const NOW = Date.UTC(2026, 9, 23, 12);
 function deferred() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
@@ -19,13 +21,14 @@ function result(input: AiCompletionInput) {
   })) }) };
 }
 class ReviewEndpoint implements PlatformEndpoint {
+  readonly sent = vi.fn(async () => 'notice');
   readonly inspect = vi.fn(async (_group: string, _member: string, _signal: AbortSignal) => ({ canModerate: true, joinedAt: NOW - 3600_000 }));
   readonly stopped = vi.fn();
   readonly [endpointSpec]: EndpointSpecification;
   constructor(account: string) {
     this[endpointSpec] = createEndpointSpecification(this, { name: account,
-      start() {}, open() {}, close() {}, stop: () => { this.stopped(); }, send: async () => 'sent',
-      management: { inspectGroupMember: (group, member, signal) => this.inspect(group, member, signal) },
+      start() {}, open() {}, close() {}, stop: () => { this.stopped(); }, send: () => this.sent(),
+      management: { inspectGroupMember: ({ groupId, userId, signal }) => this.inspect(groupId, userId, signal) },
     });
     this[endpointSpec].reportSelfUserId(account);
   }
@@ -43,7 +46,14 @@ async function fixture(options: { hold?: 'handler' | 'middleware' } = {}) {
     sources: [{ id: 'fixture', type: 'local', includeBuiltin: false, words: [] }] };
   const engine = new ModerationEngine(); engine.configure(config);
   const completeText = vi.fn(async (input: AiCompletionInput) => result(input));
-  const sendTarget = vi.fn(async () => 'notice'), recall = vi.fn(async () => undefined);
+  const sendTarget = vi.fn(async (operation: CapturedOutboundOperation, content: unknown, options?: { locale?: Locale; signal?: AbortSignal }) => operation.send(content, options));
+  const rootOutbound = createOutboundHost(im);
+  const recall = vi.fn(async () => undefined);
+  const captureOperation = (input: OutboundCaptureInput) => {
+    if (!rootOutbound.captureOperation) throw new Error('Fixture requires real Core capture');
+    const operation = rootOutbound.captureOperation(input, root);
+    return { ...operation, send: (content: unknown, options?: { locale?: Locale; signal?: AbortSignal }) => sendTarget(operation, content, options) };
+  };
   const rows = new Map<string, StateRecord>(); let revision = 0;
   const state = new PluginStateStore(root, {
     read: async (_owner, scope, key) => rows.get(JSON.stringify([scope, key])),
@@ -75,7 +85,7 @@ async function fixture(options: { hold?: 'handler' | 'middleware' } = {}) {
     config: new Map([[root, config]]),
     resources: new Map([[root, new Map<string, unknown>([[endpointEventGatewayToken.id, im.endpointEvents], [moderationEngineToken.id, engine],
       [aiCompletionToken.id, { supportsUsageShares: true, completeText }], [databaseHostToken.id, { state: { forConversation: () => state } }],
-      [outboundHostToken.id, { sendTarget, recall }]])]]), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map() };
+      [outboundHostToken.id, { captureOperation, recall }]])]]), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map() };
   let saved: EndpointDesiredSnapshot | undefined;
   const repository: EndpointDesiredRepository = { load: async () => saved, compareAndSet: async (_id, expected, endpoints) => {
     if ((saved?.revision ?? null) !== expected) throw new Error('conflict'); return saved = structuredClone({ revision: (expected ?? 0) + 1, endpoints });
@@ -100,12 +110,44 @@ async function fixture(options: { hold?: 'handler' | 'middleware' } = {}) {
     metadata: { platformSentAt: NOW }, event: {},
   });
   cleanups.push(async () => { resume.resolve(); engine.groupReviewQueue.stop(); for (const item of leases) item.lease.release(); await index.stop(); await store.close(); });
-  return { adapter, accounts, one, two, index, signals, held, resume, engine, enqueue, completeText, sendTarget, recall, receive,
+  return { adapter, accounts, one, two, index, store, signals, held, resume, engine, enqueue, completeText, sendTarget, recall, receive,
     activeLeases: () => leases.filter(item => !item.released).length,
     flush: () => vi.advanceTimersByTimeAsync(300) };
 }
 
 describe('deferred moderation Endpoint ownership', () => {
+  it('finishes accepted review through its original captured Client after an unrelated HMR commit', async () => {
+    const f = await fixture(), release = deferred(); let signal: AbortSignal | undefined;
+    f.completeText.mockImplementationOnce(async input => { signal = input.signal; await release.promise; return result(input); });
+    await f.receive(f.one); await f.flush();
+    try {
+      f.store.commit(0, { snapshot: f.store.current, dispose: () => undefined });
+      expect(signal?.aborted).toBe(false);
+    } finally { release.resolve(); }
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.one.sent).toHaveBeenCalledOnce();
+    expect(f.two.sent).not.toHaveBeenCalled();
+    expect(f.sendTarget).toHaveBeenCalledOnce();
+    expect(f.activeLeases()).toBe(0);
+  });
+
+  it('cancels a detached review on explicit Root stop and releases every retained operation', async () => {
+    const f = await fixture(); let signal: AbortSignal | undefined;
+    f.completeText.mockImplementationOnce(async input => {
+      signal = input.signal;
+      await new Promise<void>((_resolve, reject) => {
+        input.signal?.addEventListener('abort', () => reject(input.signal?.reason), { once: true });
+      });
+      return result(input);
+    });
+    await f.receive(f.one); await f.flush();
+    const closing = f.store.close();
+    await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+    await vi.advanceTimersByTimeAsync(0); await closing;
+    expect(f.one.sent).not.toHaveBeenCalled(); expect(f.two.sent).not.toHaveBeenCalled();
+    expect(f.activeLeases()).toBe(0);
+  });
+
   it.each(['stop', 'update'] as const)('cancels pending review after inbound ends on %s without cancelling the other account', async action => {
     const f = await fixture(); await f.receive(f.one); await f.receive(f.two);
     const queued = f.enqueue.mock.calls.map(([input]) => input);

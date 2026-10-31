@@ -1,88 +1,50 @@
-import { clearTimeout, setTimeout } from 'node:timers';
+import { createPendingRpc, type PendingRpc, type PendingRpcRequest } from 'zhin.js/adapter';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type {
-  OneBot12ActionRequest,
-  OneBot12Self,
-  OneBot12ActionResponse,
-  OneBot12Event,
-} from './protocol.js';
-import {
-  type OneBot12PendingAction,
-  type OneBot12WsSocket,
-  WS_OPEN,
-} from './ws-types.js';
+import type { OneBot12ActionResponse, OneBot12Event, OneBot12Self } from './protocol.js';
+import { WS_OPEN, type OneBot12WsSocket } from './ws-types.js';
 
 const logger = getLogger('onebot12');
-
-export interface OneBot12WsMessageOptions {
+export interface OneBot12RpcOptions {
   readonly endpointId: string;
-  readonly pending: Map<string, OneBot12PendingAction>;
-  readonly ingest: (event: OneBot12Event) => void;
+  readonly signal?: AbortSignal;
+  /** Reads the lifecycle's selected socket; RPC never opens or reconnects it. */
+  readonly socket: () => OneBot12WsSocket | undefined;
+  readonly self: OneBot12Self;
+}
+export interface OneBot12Rpc {
+  call(request: PendingRpcRequest): Promise<OneBot12ActionResponse>;
+  receive(data: unknown, ingest: (event: OneBot12Event) => void): void;
+  disconnect: PendingRpc<OneBot12ActionResponse>['disconnect'];
+  dispose(): void;
+  readonly pendingCount: number;
 }
 
-export function handleOneBot12WsMessage(
-  data: unknown,
-  options: OneBot12WsMessageOptions,
-): void {
-  try {
-    const message = JSON.parse(decodeOneBot12WsPayload(data)) as
-      | OneBot12Event
-      | OneBot12ActionResponse;
-    if ('echo' in message && typeof message.echo === 'string') {
-      const response = message as OneBot12ActionResponse;
-      const pending = options.pending.get(response.echo!);
-      if (pending) {
-        options.pending.delete(response.echo!);
-        clearTimeout(pending.timeout);
-        pending.resolve(response);
+/** A Client's one request owner serves native SDK actions and framework operations. */
+export function createOneBot12Rpc(options: OneBot12RpcOptions): OneBot12Rpc {
+  const pending = createPendingRpc<OneBot12ActionResponse>({
+    signal: options.signal, requestPrefix: 'ob12_', timeoutMs: 30_000,
+    transport: () => { const socket = options.socket(); return socket?.readyState === WS_OPEN ? socket : undefined; },
+    serialize: request => JSON.stringify({ action: request.action, params: request.params ?? {}, echo: request.id, self: options.self }),
+  });
+  return Object.freeze({
+    call: pending.call, disconnect: pending.disconnect, dispose: pending.dispose,
+    get pendingCount() { return pending.pendingCount; },
+    receive(data: unknown, ingest: (event: OneBot12Event) => void) {
+      try {
+        const message = JSON.parse(decodeWsPayload(data)) as OneBot12Event | OneBot12ActionResponse;
+        if ('echo' in message && typeof message.echo === 'string') {
+          pending.accept({ id: message.echo, value: message as OneBot12ActionResponse }); return;
+        }
+        ingest(message as OneBot12Event);
+      } catch (error) {
+        logger.warn(formatCompact({ op: 'onebot12_parse_failed', endpoint: options.endpointId,
+          error: error instanceof Error ? error.message : String(error) }));
       }
-      return;
-    }
-    options.ingest(message as OneBot12Event);
-  } catch (error) {
-    logger.warn(formatCompact({
-      op: 'onebot12_parse_failed',
-      endpoint: options.endpointId,
-      error: error instanceof Error ? error.message : String(error),
-    }));
-  }
-}
-
-export function callOneBot12WsAction(
-  ws: OneBot12WsSocket | undefined,
-  pending: Map<string, OneBot12PendingAction>,
-  requestId: { value: number },
-  action: string,
-  params: Record<string, unknown>,
-  self: OneBot12Self,
-): Promise<OneBot12ActionResponse> {
-  if (!ws || ws.readyState !== WS_OPEN) {
-    return Promise.reject(new Error('WebSocket 未连接'));
-  }
-  const echo = `ob12_${++requestId.value}`;
-  const request: OneBot12ActionRequest = { action, params, echo, self };
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      pending.delete(echo);
-      reject(new Error(`OneBot12 动作超时: ${action}`));
-    }, 30_000);
-    pending.set(echo, { resolve, reject, timeout });
-    ws.send(JSON.stringify(request));
+    },
   });
 }
 
-export function rejectAllPending(
-  pending: Map<string, OneBot12PendingAction>,
-  message = '连接已关闭',
-): void {
-  for (const [, entry] of pending) {
-    clearTimeout(entry.timeout);
-    entry.reject(new Error(message));
-  }
-  pending.clear();
-}
-
-function decodeOneBot12WsPayload(data: unknown): string {
+export function decodeWsPayload(data: unknown): string {
   if (typeof data === 'string') return data;
   if (Buffer.isBuffer(data)) return data.toString();
   if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);

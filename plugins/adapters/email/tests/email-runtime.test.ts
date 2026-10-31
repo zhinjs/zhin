@@ -739,3 +739,20 @@ describe('email plugin runtime adapter', () => {
     await endpoint.stop();
   });
 });
+
+it('cancels the logical SMTP waiter without closing another caller transport or observing a late failure as success', async () => {
+  const smtp = createMockSmtp(), imap = createMockImap();
+  const endpoint = await createEndpointHarness(() => new EmailEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'email'), config: baseConfig,
+    createSmtp: () => smtp, createImap: () => imap }), { capabilities: ['inbound', 'outbound'] });
+  await endpoint.start(); const caller = new AbortController(); let fail!: (error: unknown) => void;
+  smtp.sendMail.mockReturnValueOnce(new Promise((_resolve, reject) => { fail = reject; }));
+  const conversation = { endpoint: { adapter: 'email', id: endpoint.canonicalId }, kind: 'private' as const, id: 'user@example.com' };
+  const sending = endpoint.send({ conversation, signal: caller.signal, payload: 'synthetic reply' }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(smtp.sendMail).toHaveBeenCalledTimes(1)); caller.abort();
+    let outcome: Awaited<typeof sending> | undefined; void sending.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'unknown' } }), { timeout: 200 });
+    expect(smtp.close).not.toHaveBeenCalled(); fail(new Error('synthetic late SMTP rejection'));
+    await expect(endpoint.send({ conversation, payload: 'fresh reply' })).resolves.toBe('<sent@mock.com>'); expect(smtp.sendMail).toHaveBeenCalledTimes(2);
+  } finally { fail(new Error('synthetic cleanup')); await endpoint.stop(); await sending; }
+});

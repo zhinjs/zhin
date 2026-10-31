@@ -3,15 +3,21 @@ import { acceptHttpIngress } from 'imhelper';
  * SatoriEndpoint — WebSocket and webhook lifecycle, outbound, admit.
  */
 import {
-  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
+  createEndpointSpecification,
+  endpointSpec,
+  type Endpoint,
+  type EndpointSpecification,
   createEndpointLifecycle,
   type EndpointChannel,
   type EndpointConnectHandle,
   type EndpointControl,
+  type EndpointRecallRequest,
   type EndpointGroup,
   type EndpointLifecycle,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointManagementRequest,
+  type EndpointGroupRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -36,7 +42,7 @@ import {
   type SatoriSignal,
 } from './protocol.js';
 import { registerSatoriWebhookRoutes } from './webhook.js';
-import { satoriClientOptions, forwardSatoriClientEvents, SatoriClient } from './client.js';
+import { satoriClientOptions, createSatoriActionCaller, type SatoriActionCaller, type SatoriActionRequest, forwardSatoriClientEvents, SatoriClient } from './client.js';
 import {
   WS_OPEN,
   defaultCreateWebSocket,
@@ -64,20 +70,18 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
   #ws: SatoriWsSocket | null = null;
   #lastSn: number | undefined;
   readonly #management: EndpointManagement;
+  readonly #call: SatoriActionCaller;
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
-    recall: (message) => this.#recall(message.id, message.conversation.id),
+    recall: request => this.#recall(request),
   });
 
   constructor(options: SatoriWsEndpointOptions) {
-    super(satoriClientOptions(options.config, options.callApi ?? callSatoriApi, () => ({
-      baseUrl: options.config.baseUrl, platform: options.config.platform,
-      userId: options.config.userId, token: options.config.token, signal: options.signal,
-    })));
+    const call = createSatoriActionCaller({ config: options.config, request: options.callApi ?? callSatoriApi, signal: options.signal });
+    super(satoriClientOptions({ config: options.config, call }));
+    this.#call = call;
     this.#logger = getAdapterLogger('satori', options.config.id);
     this.#options = options;
-    this.#management = createSatoriEndpointManagement(
-      (resource, method, params) => this.call(resource, method, params),
-    );
+    this.#management = createSatoriEndpointManagement(call);
     this[endpointSpec] = createEndpointSpecification(this, {
       name: options.config.id,
       start: () => this.#start(), open: () => { this.#open = true; },
@@ -134,12 +138,12 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
     this.#ws = null;
   }
 
-  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.call('message', 'create', {
+    const result = await this.#call({ resource: 'message', method: 'create', signal, params: {
       channel_id: conversation.id,
       content,
-    });
+    } });
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
@@ -182,12 +186,12 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
     });
   }
 
-  async #recall(id: string, fallbackChannelId?: string): Promise<void> {
-    const { channelId, messageId } = parseMessageRef(id);
-    await this.call('message', 'delete', {
-      channel_id: channelId || fallbackChannelId || '',
+  async #recall({ message, signal }: EndpointRecallRequest): Promise<void> {
+    const { channelId, messageId } = parseMessageRef(message.id);
+    await this.#call({ resource: 'message', method: 'delete', signal, params: {
+      channel_id: channelId || message.conversation.id,
       message_id: messageId,
-    });
+    } });
   }
 
   #warnPlatformEvent(name: string, error: unknown): void {
@@ -348,20 +352,18 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
   #routeReleases: HttpRouteRegistration[] = [];
   #started = false;
   readonly #management: EndpointManagement;
+  readonly #call: SatoriActionCaller;
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
-    recall: (message) => this.#recall(message.id, message.conversation.id),
+    recall: request => this.#recall(request),
   });
 
   constructor(options: SatoriWebhookEndpointOptions) {
-    super(satoriClientOptions(options.config, options.callApi ?? callSatoriApi, () => ({
-      baseUrl: options.config.baseUrl, platform: options.config.platform,
-      userId: options.config.userId, token: options.config.token, signal: options.signal,
-    })));
+    const call = createSatoriActionCaller({ config: options.config, request: options.callApi ?? callSatoriApi, signal: options.signal });
+    super(satoriClientOptions({ config: options.config, call }));
+    this.#call = call;
     this.#logger = getAdapterLogger('satori', options.config.id);
     this.#options = options;
-    this.#management = createSatoriEndpointManagement(
-      (resource, method, params) => this.call(resource, method, params),
-    );
+    this.#management = createSatoriEndpointManagement(call);
     this[endpointSpec] = createEndpointSpecification(this, {
       name: options.config.id,
       start: () => this.#start(), open: () => { this.#open = true; },
@@ -418,12 +420,12 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
     }));
   }
 
-  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.call('message', 'create', {
+    const result = await this.#call({ resource: 'message', method: 'create', signal, params: {
       channel_id: conversation.id,
       content,
-    });
+    } });
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
@@ -466,12 +468,12 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
     });
   }
 
-  async #recall(id: string, fallbackChannelId?: string): Promise<void> {
-    const { channelId, messageId } = parseMessageRef(id);
-    await this.call('message', 'delete', {
-      channel_id: channelId || fallbackChannelId || '',
+  async #recall({ message, signal }: EndpointRecallRequest): Promise<void> {
+    const { channelId, messageId } = parseMessageRef(message.id);
+    await this.#call({ resource: 'message', method: 'delete', signal, params: {
+      channel_id: channelId || message.conversation.id,
       message_id: messageId,
-    });
+    } });
   }
 
   #warnPlatformEvent(name: string, error: unknown): void {
@@ -501,15 +503,8 @@ function isPrivateChannelType(body: SatoriEventBody): boolean {
  * 并以字符串回传给 listGroupMembers，因此保留原始字符串（仅按契约类型
  * 声明强转）是全链路最不丢信息的方案。
  */
-function toGroupId(id: string): number {
-  return id as unknown as number;
-}
 
-export type SatoriManagementApi = (
-  resource: string,
-  method: string,
-  params: Record<string, unknown>,
-) => Promise<unknown>;
+export type SatoriManagementApi = SatoriActionCaller;
 
 interface SatoriListPage {
   readonly data?: unknown[];
@@ -519,13 +514,12 @@ interface SatoriListPage {
 /** Satori 分页列表（{data, next?}）聚合；兼容直接返回数组的实现。 */
 async function listSatoriPages(
   api: SatoriManagementApi,
-  resource: string,
-  params: Record<string, unknown>,
+  { resource, params = {}, signal }: Omit<SatoriActionRequest, 'method'>,
 ): Promise<unknown[]> {
   const items: unknown[] = [];
   let next: string | undefined;
   do {
-    const page = await api(resource, 'list', next ? { ...params, next } : params);
+    const page = await api({ resource, method: 'list', params: next ? { ...params, next } : params, signal });
     if (Array.isArray(page)) {
       items.push(...page);
       break;
@@ -549,26 +543,26 @@ function asRecord(value: unknown): Record<string, unknown> {
  */
 export function createSatoriEndpointManagement(api: SatoriManagementApi): EndpointManagement {
   return Object.freeze<EndpointManagement>({
-    async listGroups(): Promise<readonly EndpointGroup[]> {
+    async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
       const groups: EndpointGroup[] = [];
-      for (const value of await listSatoriPages(api, 'guild', {})) {
+      for (const value of await listSatoriPages(api, { resource: 'guild', signal: request.signal })) {
         const guild = asRecord(value);
         if (guild.id == null) continue;
         groups.push({
-          group_id: toGroupId(String(guild.id)),
+          group_id: String(guild.id),
           name: String(guild.name ?? guild.id),
         });
       }
       return groups;
     },
-    async listChannels(): Promise<readonly EndpointChannel[]> {
+    async listChannels(request: EndpointManagementRequest = {}): Promise<readonly EndpointChannel[]> {
       const channels: EndpointChannel[] = [];
-      for (const value of await listSatoriPages(api, 'guild', {})) {
+      for (const value of await listSatoriPages(api, { resource: 'guild', signal: request.signal })) {
         const guild = asRecord(value);
         if (guild.id == null) continue;
         const guildId = String(guild.id);
         const guildName = String(guild.name ?? guildId);
-        for (const channelValue of await listSatoriPages(api, 'channel', { guild_id: guildId })) {
+        for (const channelValue of await listSatoriPages(api, { resource: 'channel', params: { guild_id: guildId }, signal: request.signal })) {
           const channel = asRecord(channelValue);
           if (channel.id == null) continue;
           // Channel.type: 0=TEXT 1=DIRECT 2=CATEGORY 3=VOICE；缺省按 TEXT 处理
@@ -582,9 +576,9 @@ export function createSatoriEndpointManagement(api: SatoriManagementApi): Endpoi
       }
       return channels;
     },
-    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
+    async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
       // 平台形状（GuildMember[]）原样返回
-      return listSatoriPages(api, 'guild-member', { guild_id: groupId });
+      return listSatoriPages(api, { resource: 'guild-member', params: { guild_id: groupId }, signal });
     },
   });
 }

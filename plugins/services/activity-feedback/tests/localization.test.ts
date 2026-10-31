@@ -1,3 +1,5 @@
+import { withOperation, withCapturedOutbound } from './feedback-fixture.js';
+import { inheritActivityFeedbackSource } from '../../../../packages/im/agent/src/activity-feedback/operation-source.js';
 import { fakeOf } from '@zhin.js/testing';
 import type { Message, OutboundHost, OutboundSendInput } from 'zhin.js';
 import type { Locale } from 'zhin.js/i18n';
@@ -18,15 +20,18 @@ function fixture(defaultLocale: Locale = 'zh-CN', customMessage?: string) {
   const logger = { debug: vi.fn(), error: vi.fn() };
   const orchestrator = createActivityFeedbackOrchestratorForRuntime({ defaults: { phases: {
     active: { private: { type: 'message', ...(customMessage === undefined ? {} : { message: customMessage }) } },
-  } } }, logger, createOutboundEndpointAccess(outbound, logger), defaultLocale);
+  } } }, logger, createOutboundEndpointAccess(withCapturedOutbound(outbound), logger), defaultLocale);
   const handlers = createActivityFeedbackAIEventHandlers(orchestrator, defaultLocale);
   const emitter = new ZhinAgentEventEmitter();
-  const source = { locale: 'en' as Locale, sender: { id: 'alice' }, clientAdapter: 'sandbox', endpointId: 'bot',
-    id: 'incoming', conversation: { endpoint: { id: 'bot', adapter: 'sandbox' }, kind: 'private' as const, id: 'alice' } };
+  const source = withOperation({ locale: 'en' as Locale, sender: { id: 'alice' }, clientAdapter: 'sandbox', endpointId: 'bot',
+    id: 'incoming', conversation: { endpoint: { id: 'bot', adapter: 'sandbox' }, kind: 'private' as const, id: 'alice' } });
   const payload = emitter.createPayload('sandbox:bot:private:alice', fakeOf<Message>(source), 'text', {
     hookContext: { activityFeedbackEligible: true },
   });
-  return { source, payload, sent, edit, recall, handlers, orchestrator, logger };
+  const extend = (extra: Partial<AIEventPayload>, base: AIEventPayload = payload) => inheritActivityFeedbackSource({ ...base, ...extra }, base);
+  const makePayload = (message: typeof source, extra: Partial<AIEventPayload>) => emitter.createPayload(extra.sessionId ?? payload.sessionId,
+    fakeOf<Message>(withOperation(message)), 'text', { ...extra, hookContext: { activityFeedbackEligible: true } });
+  return { source, payload, sent, edit, recall, handlers, orchestrator, logger, extend, makePayload };
 }
 
 it('carries the originating personal language through status sends, edits, iteration and child activity', async () => {
@@ -36,8 +41,8 @@ it('carries the originating personal language through status sends, edits, itera
     f.source.locale = 'zh-CN';
     await f.handlers.onProcessingStart?.(f.payload);
     expect(f.sent[0]).toMatchObject({ content: 'Working...', locale: 'en' });
-    await f.handlers.onToolCall?.({ ...f.payload, toolName: '查询工具' });
-    await f.handlers.onToolResult?.({ ...f.payload, toolName: '查询工具', status: 'error', error: '第三方错误' });
+    await f.handlers.onToolCall?.(f.extend({ toolName: '查询工具' }));
+    await f.handlers.onToolResult?.(f.extend({ toolName: '查询工具', status: 'error', error: '第三方错误' }));
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'Calling tool: 查询工具…' }));
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'Tool 查询工具 did not complete; continuing…' }));
 
@@ -48,10 +53,10 @@ it('carries the originating personal language through status sends, edits, itera
     await f.handlers.onProcessingStart?.(iterations[0]!);
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'Working [2/15]...' }));
 
-    await f.handlers.onThinking?.({ ...f.payload, thinking: '模型思考原文' });
+    await f.handlers.onThinking?.(f.extend({ thinking: '模型思考原文' }));
     expect(f.sent.at(-1)).toMatchObject({ content: 'Thinking...', locale: 'en' });
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: '模型思考原文' }));
-    await f.handlers.onSubagentStart?.({ ...f.payload, source: 'subagent', taskId: 'child', agentId: 'researcher', label: '原始任务标题' });
+    await f.handlers.onSubagentStart?.(f.extend({ source: 'subagent', taskId: 'child', agentId: 'researcher', label: '原始任务标题' }));
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: '[researcher] Subtask running: 原始任务标题...' }));
     expect(f.sent.every(input => input.locale === 'en')).toBe(true);
     expect(f.logger.error).not.toHaveBeenCalled();
@@ -70,14 +75,15 @@ it('preserves explicitly authored phase text, including text equal to the old Ch
 it('uses the generation project language only when an older event has no captured language', async () => {
   const f = fixture('en');
   try {
-    const { locale: _locale, ...legacy } = f.payload;
+    const { locale: _locale, ...withoutLocale } = f.payload;
+    const legacy = inheritActivityFeedbackSource(withoutLocale, f.payload);
     await f.handlers.onProcessingStart?.(legacy);
     expect(f.sent[0]).toMatchObject({ content: 'Working...', locale: 'en' });
-    await f.handlers.onToolCall?.({ ...legacy, toolName: 'search' });
+    await f.handlers.onToolCall?.(f.extend({ toolName: 'search' }, legacy));
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: 'Calling tool: search…' }));
     await f.handlers.onScheduleFinish?.({ ...legacy, sessionId: 'schedule:job',
       hookContext: { scheduleJobId: 'job', scheduleActivityFeedback: true } });
-    expect(f.sent.at(-1)).toMatchObject({ content: '✅ Scheduled task completed', locale: 'en' });
+    expect(f.sent).toHaveLength(1);
   } finally { await f.orchestrator.dispose(); }
 });
 
@@ -86,7 +92,7 @@ it('keeps separate users on one endpoint independent', async () => {
   try {
     await Promise.all([
       f.handlers.onProcessingStart?.(f.payload),
-      f.handlers.onProcessingStart?.({ ...f.payload, locale: 'zh-CN', sessionId: 'sandbox:bot:private:bob', userId: 'bob', sceneId: 'bob', messageId: 'incoming-bob' }),
+      f.handlers.onProcessingStart?.(f.makePayload({ ...f.source, locale: 'zh-CN', sender: { id: 'bob' }, id: 'incoming-bob', conversation: { ...f.source.conversation, id: 'bob' } }, { sessionId: 'sandbox:bot:private:bob' })),
     ]);
     expect(f.sent).toEqual(expect.arrayContaining([
       expect.objectContaining({ locale: 'en', content: 'Working...', conversation: { kind: 'private', id: 'alice' } }),
@@ -103,7 +109,7 @@ it.each([
 ] as const)('formats projected iteration progress after resolving project %s / operation %s', async (projectLocale, locale, expected) => {
   const f = fixture(projectLocale);
   try {
-    const payload = { ...f.payload, locale, content: '用户请求原文，不是状态提示' };
+    const payload = f.extend({ locale, content: '用户请求原文，不是状态提示' });
     const events: AIEventPayload[] = [];
     const project = createTurnActivityProjector({ payload, thinkingPreview: false, thinkingMaxLength: 100,
       publish: (_event, value) => { events.push(value); } });
@@ -121,11 +127,12 @@ it.each([
 it('keeps explicitly authored iteration content and model thinking independent of progress localization', async () => {
   const f = fixture('en');
   try {
-    const { locale: _locale, ...legacy } = f.payload;
-    await f.handlers.onProcessingStart?.({ ...legacy, iterations: 2,
-      iterationProgress: { current: 2, total: 15 }, content: '  自定义处理中 [2/15]...  ' });
+    const { locale: _locale, ...withoutLocale } = f.payload;
+    const legacy = inheritActivityFeedbackSource(withoutLocale, f.payload);
+    await f.handlers.onProcessingStart?.(f.extend({ iterations: 2,
+      iterationProgress: { current: 2, total: 15 }, content: '  自定义处理中 [2/15]...  ' }, legacy));
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: '自定义处理中 [2/15]...' }));
-    await f.handlers.onThinking?.({ ...legacy, thinking: '模型原文：处理中 [2/15]...' });
+    await f.handlers.onThinking?.(f.extend({ thinking: '模型原文：处理中 [2/15]...' }, legacy));
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: '模型原文：处理中 [2/15]...' }));
   } finally { await f.orchestrator.dispose(); }
 });

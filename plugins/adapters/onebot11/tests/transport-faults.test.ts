@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { OneBot11WssEndpoint } from '../src/wss-endpoint.js';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
-import { callOneBot11WsAction } from '../src/ws-transport.js';
+import { createOneBot11Rpc } from '../src/ws-transport.js';
 import { resolveOneBot11Config, type OneBot11WsConfig } from '../src/protocol.js';
 import type { OneBot11WsSocket } from '../src/ws-types.js';
 
@@ -35,9 +35,9 @@ describe('onebot11 transport fault ownership', () => {
     vi.useFakeTimers();
     const ws = socket();
     ws.send.mockImplementation(() => { throw new Error('send failed'); });
-    const pending = new Map();
-    await expect(callOneBot11WsAction(ws, pending, { value: 0 }, 'send_private_msg', {})).rejects.toThrow('send failed');
-    expect(pending.size).toBe(0);
+    const rpc = createOneBot11Rpc({ endpointId: 'synthetic', socket: () => ws });
+    await expect(rpc.call({ action: 'send_private_msg', params: {} })).rejects.toThrow('send failed');
+    expect(rpc.pendingCount).toBe(0); rpc.dispose();
     expect(vi.getTimerCount()).toBe(0);
     expect(ws.send).toHaveBeenCalledTimes(1);
   });

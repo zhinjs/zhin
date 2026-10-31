@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import {
+import {  describe, expect, it } from 'vitest';
+import { channelKey,
   createInMemoryGameDb,
   plainTextFromSendContent,
-  type GameMessageLike,
+  type GamePlayer,
 } from '@zhin.js/game-kit';
 import {
   handleDungeonChoice,
@@ -14,12 +14,8 @@ import {
 } from '../src/session-service.js';
 import { dungeonSessionToken } from '../src/view.js';
 
-const message: GameMessageLike = {
-  $adapter: 'sandbox',
-  $endpoint: 'default',
-  $channel: { type: 'group', id: 'room' },
-  $sender: { id: 'alice', name: 'Alice' },
-};
+const message: GamePlayer = { target: { endpoint: { adapter: 'sandbox', id: 'default' }, kind: 'group', id: 'room' },
+sender: { id: 'alice', name: 'Alice' } };
 
 describe('dungeon game flow', () => {
 
@@ -37,7 +33,7 @@ describe('dungeon game flow', () => {
     const service = createService();
     await startDungeon(service, message);
     const session = await service.getActiveByChannel(
-      'sandbox-default-group:room',
+      channelKey({ target: { endpoint: { adapter: 'sandbox', id: 'default' }, kind: 'group', id: 'room' } }),
     );
     if (!session) throw new Error('missing session');
     const staleToken = dungeonSessionToken(session);

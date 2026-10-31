@@ -1,3 +1,4 @@
+import { bindActivityFeedbackTurnSource, inheritActivityFeedbackSource } from '../activity-feedback/operation-source.js';
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
 import { MessageAliasTable, type AgentMessage, type Usage } from '@zhin.js/ai';
 import { conversationContextMessage, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
@@ -604,7 +605,7 @@ function activityPayloadFromImTurn(
   const origin = turn.origin;
   if (origin.kind !== 'im') return undefined;
   const { hookContext: extraHook, ...rest } = extra;
-  return {
+  return bindActivityFeedbackTurnSource<AIEventPayload>({
     sessionId,
     source: 'zhin-agent',
     mode: 'text',
@@ -621,7 +622,7 @@ function activityPayloadFromImTurn(
     },
     ...rest,
     locale: isLocale(turn.input.locale) ? turn.input.locale : undefined,
-  };
+  }, turn);
 }
 
 function emitActivityEvent(
@@ -642,11 +643,11 @@ function emitActivityStop(
   },
 ): void {
   if (!payload) return;
-  emitActivityEvent(host, options.event, { ...payload, ...options.extra });
-  emitActivityEvent(host, 'ai.typing.stop', {
+  emitActivityEvent(host, options.event, inheritActivityFeedbackSource({ ...payload, ...options.extra }, payload));
+  emitActivityEvent(host, 'ai.typing.stop', inheritActivityFeedbackSource({
     ...payload,
     reason: options.reason ?? 'processing_complete',
-  });
+  }, payload));
 }
 
 type AccessGated = {

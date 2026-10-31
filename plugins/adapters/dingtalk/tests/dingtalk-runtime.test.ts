@@ -477,3 +477,27 @@ describe('dingtalk plugin runtime adapter', () => {
     await endpoint.stop();
   });
 });
+
+it('cancels a token waiter without aborting the account shared refresh or posting after it completes', async () => {
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(http); let tokenCalls = 0;
+  let finish!: (value: { ok: boolean; status: number; text(): Promise<string>; json(): Promise<unknown> }) => void;
+  const response = (data: unknown) => ({ ok: true, status: 200, text: async () => '', json: async () => data });
+  let refreshSignal: AbortSignal | undefined;
+  const fetch = vi.fn(async (url: string, init?: { signal?: AbortSignal }) => {
+    if (url.includes('/gettoken')) {
+      if (++tokenCalls === 1) return response({ errcode: 0, access_token: 'synthetic', expires_in: 1 });
+      refreshSignal = init?.signal; return new Promise<ReturnType<typeof response>>(resolve => { finish = resolve; });
+    }
+    return response({ errcode: 0, msgId: 'unexpected' });
+  });
+  const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'), http, config: baseConfig, fetch }), { capabilities: ['inbound', 'outbound'] });
+  await endpoint.start(); const caller = new AbortController();
+  const sending = endpoint.send({ conversation: { endpoint: { adapter: 'dingtalk', id: endpoint.canonicalId }, kind: 'private', id: 'target' }, signal: caller.signal, payload: 'synthetic reply' }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(tokenCalls).toBe(2)); caller.abort();
+    let outcome: Awaited<typeof sending> | undefined; void sending.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'not_sent' } }), { timeout: 200 });
+    expect(refreshSignal?.aborted).not.toBe(true); finish(response({ errcode: 0, access_token: 'late', expires_in: 7200 }));
+    await Promise.resolve(); await Promise.resolve(); expect(fetch.mock.calls.every(([url]) => url.includes('/gettoken'))).toBe(true);
+  } finally { finish(response({ errcode: 0, access_token: 'cleanup', expires_in: 7200 })); await endpoint.stop(); await sending; }
+});

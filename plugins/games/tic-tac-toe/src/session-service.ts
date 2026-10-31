@@ -1,20 +1,24 @@
-import type { Database, Models, RelatedModel } from '@zhin.js/core';
+import type { Models } from '@zhin.js/core';
 import {
   SessionActionGate,
   VersionedSessionService,
-  channelKey,
   generateCompactId,
-  type GameMessageLike,
+  type GamePlayer,
   type GameSessionDatabase,
+  type InMemoryGameDb,
+  type InMemoryGameModel,
   type SessionMutationResult,
 } from '@zhin.js/game-kit';
 import type { TttModelName, TttSessionRow, TttSessionStatus } from './models.js';
 import { BOT_ID } from './player-label.js';
 
 /** 井字棋服务使用的数据库实例（Models 经 models.ts 模块增强） */
-export type TttDatabase = Database<unknown, Models, string>;
+export type TttDatabase = InMemoryGameDb;
 
-type TttModel<K extends TttModelName> = RelatedModel<unknown, Models, K>;
+type TttModel<K extends TttModelName> = Omit<InMemoryGameModel, 'findAll' | 'findOne'> & {
+  findAll(query?: Record<string, unknown>): Promise<Models[K][]>;
+  findOne(query?: Record<string, unknown>): Promise<Models[K] | null>;
+};
 
 export type TttPlayerRef = { id: string; displayName: string };
 
@@ -150,7 +154,7 @@ export class SessionService extends VersionedSessionService<TttSessionRow> {
   }
 
   async createSession(input: {
-    message: GameMessageLike;
+    message: GamePlayer;
     playerX: string;
     playerO: string;
     playerXName?: string;
@@ -159,15 +163,9 @@ export class SessionService extends VersionedSessionService<TttSessionRow> {
   }): Promise<TttSessionRow> {
     const now = Date.now();
     const id = sessionId();
-    const ch = channelKey(input.message);
-    const row: TttSessionRow = {
+    const row: Omit<TttSessionRow, 'channel_key' | 'adapter' | 'endpoint' | 'channel_type' | 'channel_id'> = {
       id,
       locale: input.message.locale ?? 'zh-CN',
-      adapter: String(input.message.$adapter),
-      endpoint: input.message.$endpoint,
-      channel_type: input.message.$channel.type,
-      channel_id: input.message.$channel.id,
-      channel_key: ch,
       player_x: input.playerX,
       player_o: input.playerO,
       player_x_name: input.playerXName?.trim() || input.playerX,
@@ -182,7 +180,7 @@ export class SessionService extends VersionedSessionService<TttSessionRow> {
       updated_at: now,
       created_at: now,
     };
-    return this.createRow(row);
+    return this.createRow({ target: input.message.target, fields: row });
   }
 
   /**
@@ -201,7 +199,7 @@ export class SessionService extends VersionedSessionService<TttSessionRow> {
     readonly status: TttSessionStatus;
     readonly winner: number;
   }): Promise<SessionMutationResult<TttSessionRow>> {
-    const result = await this.mutateSession(input.sessionId, {
+    return this.mutateSession(input.sessionId, {
       actionId: `${input.sessionId}:${input.expectedRevision}:${input.playerId}:${input.cell}`,
       expectedRevision: input.expectedRevision,
       apply: {
@@ -211,20 +209,14 @@ export class SessionService extends VersionedSessionService<TttSessionRow> {
         status: input.status,
         winner: input.winner,
       },
-    });
-    if (result.kind === 'applied') {
-      await this.recordMove(input.sessionId, input.playerId, input.cell, input.moveCount);
-    }
-    return result;
-  }
-
-  async recordMove(sessionId: string, playerId: string, cell: number, moveIndex: number): Promise<void> {
-    await getModel(this.db, 'ttt_moves').create({
-      session_id: sessionId,
-      player_id: playerId,
-      cell,
-      move_index: moveIndex,
-      created_at: Date.now(),
+      writer: request => this.db.transaction(async transaction => {
+        const sessions = getModel(transaction, 'ttt_sessions');
+        const changed = await sessions.updateWhere({ ...request.where }, { ...request.patch });
+        if (changed === 0) return null;
+        await getModel(transaction, 'ttt_moves').create({ session_id: input.sessionId, player_id: input.playerId,
+          cell: input.cell, move_index: input.moveCount, created_at: Date.now() });
+        return sessions.findOne({ id: input.sessionId });
+      }),
     });
   }
 

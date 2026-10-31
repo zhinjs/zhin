@@ -1,6 +1,6 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import { expect, it, vi } from 'vitest';
-import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, type EndpointEvent } from 'zhin.js/adapter';
+import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, type EndpointEvent, type EndpointEventGateway } from 'zhin.js/adapter';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, readOperationSession, type OperationSession, type SnapshotState } from 'zhin.js';
 import { ImRuntime } from '@zhin.js/core/runtime';
 import definition from '../adapters/bilibili-live/index.js';
@@ -38,11 +38,15 @@ it('preserves the actual custom Client danmaku event in a Core channel Session w
   }));
   const root = rootPluginId(), sessions: OperationSession[] = []; let nativeEvent: unknown;
   const im = new ImRuntime({ inboundClaim(message) { const session = readOperationSession(message); if (!session) throw new Error('Core Session is missing'); sessions.push(session); return true; } });
-  const gateway = { async receive(event: EndpointEvent) {
+  const receive = async (event: EndpointEvent, dispatch: EndpointEventGateway['receive']) => {
     const payload = event.payload;
     if (event.name === 'platform.receive' && payload && typeof payload === 'object' && 'name' in payload && payload.name === 'danmaku' && 'event' in payload) nativeEvent = payload.event;
-    return im.endpointEvents.receive(event);
-  } };
+    return dispatch(event);
+  };
+  const gateway: EndpointEventGateway = {
+    run: execute => im.endpointEvents.run(receipt => execute({ receive: event => receive(event, receipt.receive) })),
+    receive: event => receive(event, im.endpointEvents.receive),
+  };
   const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'bilibili-live', source: '/project/adapters/bilibili-live/index.ts', definition });
   const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/project', children: [] }]]),
     config: new Map([[root, { id: 'live-account', roomId: 100, sessdata: 'offline-cookie', biliJct: 'offline-jct', buvid3: 'offline-buvid', apiBaseUrl: 'https://offline.invalid', liveApiBaseUrl: 'https://offline.invalid' }]]),

@@ -11,11 +11,13 @@ import type {
   GroupMemberInfo,
   GroupMemberRole,
 } from 'qq-official-bot';
-import type {
-  GroupMemberProfile,
-  GroupModerationAction,
-  GroupModerationMember,
-  GroupSceneFacts,
+import {
+  createEndpointOperation,
+  type EndpointGroupRequest, type EndpointMemberRequest, type EndpointMuteRequest,
+  type EndpointGroupInspectionRequest, type EndpointMemberInspectionRequest, type EndpointModerationRequest,
+  type GroupMemberProfile,
+  type GroupModerationMember,
+  type GroupSceneFacts,
 } from 'zhin.js/adapter';
 import type { QqOfficialApi } from './ws.js';
 
@@ -54,46 +56,46 @@ export function parseQqTime(value: unknown, { allowFuture = false } = {}): numbe
 }
 
 /** 只读、实时：机器人在群里的状态（角色、是否允许主动消息、接收设置）。 */
-export async function qqGroupBotState(api: Partial<QqOfficialApi> | undefined, groupId: string): Promise<GroupBotState> {
-  return qqGroupService(api).getBotState(requireId(groupId, 'group id'));
+export async function qqGroupBotState(api: Partial<QqOfficialApi> | undefined, { groupId, signal }: EndpointGroupRequest): Promise<GroupBotState> {
+  return createEndpointOperation({ signal }).run(() => qqGroupService(api).getBotState(requireId(groupId, 'group id')));
 }
 
-export async function qqGroupMember(api: Partial<QqOfficialApi> | undefined, groupId: string, userId: string): Promise<GroupMemberInfo> {
-  return qqGroupService(api).getMemberInfo(requireId(groupId, 'group id'), requireId(userId, 'member id'));
+export async function qqGroupMember(api: Partial<QqOfficialApi> | undefined, { groupId, userId, signal }: EndpointMemberRequest): Promise<GroupMemberInfo> {
+  return createEndpointOperation({ signal }).run(() => qqGroupService(api).getMemberInfo(requireId(groupId, 'group id'), requireId(userId, 'member id')));
 }
 
 /** 禁言 / 解除禁言一个普通成员；0 = 解除。 */
 export async function muteQqGroupMember(
-  api: Partial<QqOfficialApi> | undefined, groupId: string, userId: string, durationSeconds: number,
+  api: Partial<QqOfficialApi> | undefined, { groupId, userId, durationSeconds, signal }: EndpointMuteRequest,
 ): Promise<void> {
   if (!Number.isSafeInteger(durationSeconds) || durationSeconds < 0 || durationSeconds > QQ_GROUP_MUTE_MAX_SECONDS) {
     throw new RangeError(`QQ group mute duration must be 0..${QQ_GROUP_MUTE_MAX_SECONDS} seconds`);
   }
   const member = requireId(userId, 'member id');
-  await qqGroupService(api).setMemberMute(requireId(groupId, 'group id'), [durationSeconds === 0
+  await createEndpointOperation({ signal }).run(() => qqGroupService(api).setMemberMute(requireId(groupId, 'group id'), [durationSeconds === 0
     ? { op: 'del', member_openid: member, mute_expire_at: '' }
-    : { op: 'add', member_openid: member, mute_expire_at: new Date(Date.now() + durationSeconds * 1000).toISOString() }]);
+    : { op: 'add', member_openid: member, mute_expire_at: new Date(Date.now() + durationSeconds * 1000).toISOString() }]));
 }
 
 /** 移出一个成员；可选同时加入群黑名单。平台未确认 success 时抛错，不把未确认当成功。 */
 export async function kickQqGroupMember(
-  api: Partial<QqOfficialApi> | undefined, groupId: string, userId: string, addToBlacklist = false,
+  api: Partial<QqOfficialApi> | undefined, { groupId, userId, addToBlacklist = false, signal }: EndpointMemberRequest & { readonly addToBlacklist?: boolean },
 ): Promise<{ blacklistFailed: boolean }> {
   const member = requireId(userId, 'member id');
-  const result = await qqGroupService(api).removeMembers(requireId(groupId, 'group id'), {
+  const result = await createEndpointOperation({ signal }).run(() => qqGroupService(api).removeMembers(requireId(groupId, 'group id'), {
     member_openids: [member],
     ...(addToBlacklist ? { add_to_member_blacklist: true } : {}),
-  });
+  }));
   if (result?.remove_members_result !== 'success') throw new Error('QQ did not confirm the member removal');
   return { blacklistFailed: addToBlacklist && (result.add_to_member_blacklist_fail_openids ?? []).includes(member) };
 }
 
 /** 自动审核用：机器人与目标成员的实时角色；平台只允许管理员处置普通成员（且非机器人）。 */
 export async function inspectQqGroupMember(
-  api: Partial<QqOfficialApi> | undefined, groupId: string, userId: string, signal: AbortSignal,
+  api: Partial<QqOfficialApi> | undefined, { groupId, userId, signal }: EndpointMemberInspectionRequest,
 ): Promise<GroupModerationMember> {
   signal.throwIfAborted();
-  const [self, member] = await Promise.all([qqGroupBotState(api, groupId), qqGroupMember(api, groupId, userId)]);
+  const [self, member] = await Promise.all([qqGroupBotState(api, { groupId, signal }), qqGroupMember(api, { groupId, userId, signal })]);
   signal.throwIfAborted();
   const role = member.member_openid === userId ? platformRole(member.member_role) : undefined;
   const joinedAt = parseQqTime(member.joined_at);
@@ -106,10 +108,10 @@ export async function inspectQqGroupMember(
 }
 
 export async function moderateQqGroupMember(
-  api: Partial<QqOfficialApi> | undefined, groupId: string, userId: string,
-  action: GroupModerationAction, signal: AbortSignal, isActive: () => boolean,
+  { api, isActive }: { readonly api: Partial<QqOfficialApi> | undefined; readonly isActive: () => boolean },
+  { groupId, userId, action, signal }: EndpointModerationRequest,
 ): Promise<void> {
-  const member = await inspectQqGroupMember(api, groupId, userId, signal);
+  const member = await inspectQqGroupMember(api, { groupId: groupId, userId: userId, signal: signal });
   signal.throwIfAborted();
   if (!isActive() || !member.canModerate) throw new Error('Group moderation permission is unavailable');
   if (action.type === 'kick') {
@@ -118,21 +120,21 @@ export async function moderateQqGroupMember(
       || Date.now() - member.joinedAt > action.maxMembershipAgeMs) {
       throw new Error('Group membership no longer matches the approved newcomer window');
     }
-    await kickQqGroupMember(api, groupId, userId);
+    await kickQqGroupMember(api, { groupId, userId, signal });
     return;
   }
   if (!Number.isSafeInteger(action.durationSeconds) || action.durationSeconds <= 0) {
     throw new Error('Invalid group mute duration');
   }
-  await muteQqGroupMember(api, groupId, userId, Math.min(action.durationSeconds, QQ_GROUP_MUTE_MAX_SECONDS));
+  await muteQqGroupMember(api, { groupId: groupId, userId: userId, durationSeconds: Math.min(action.durationSeconds, QQ_GROUP_MUTE_MAX_SECONDS), signal });
 }
 
 /** ADR 0041 场景事实：一次群信息读取；官方群信息不含群主/管理员/全员禁言，留作 unknown。 */
 export async function inspectQqGroupScene(
-  api: Partial<QqOfficialApi> | undefined, groupId: string, signal: AbortSignal,
+  api: Partial<QqOfficialApi> | undefined, { groupId, signal }: EndpointGroupInspectionRequest,
 ): Promise<GroupSceneFacts> {
   signal.throwIfAborted();
-  const info = await qqGroupService(api).getInfo(requireId(groupId, 'group id'));
+  const info = await createEndpointOperation({ signal }).run(() => qqGroupService(api).getInfo(requireId(groupId, 'group id')));
   signal.throwIfAborted();
   if (info?.group_openid && info.group_openid !== groupId) return {};
   const name = typeof info?.group_name === 'string' && info.group_name.trim() ? info.group_name.trim() : undefined;
@@ -142,10 +144,10 @@ export async function inspectQqGroupScene(
 
 /** ADR 0041 成员事实：一次成员读取（群名片/头衔/禁言到期官方不提供）。 */
 export async function inspectQqGroupMemberProfile(
-  api: Partial<QqOfficialApi> | undefined, groupId: string, userId: string, signal: AbortSignal,
+  api: Partial<QqOfficialApi> | undefined, { groupId, userId, signal }: EndpointMemberInspectionRequest,
 ): Promise<GroupMemberProfile> {
   signal.throwIfAborted();
-  const member = await qqGroupMember(api, groupId, userId);
+  const member = await qqGroupMember(api, { groupId, userId, signal });
   signal.throwIfAborted();
   if (member.member_openid !== userId) return {};
   const role = platformRole(member.member_role);

@@ -15,6 +15,6 @@ export default defineAgentTool<{ type: string; title: string; desc: string; pic_
   keywords: ['小程序', 'mini app', '卡片', 'ark'],
   async execute({ type, title, desc, pic_url, jump_url }: { type: string; title: string; desc: string; pic_url: string; jump_url: string }, context) {
     const endpoint = context.$client;
-      return endpoint.getMiniAppArk(type, title, desc, pic_url, jump_url);
+      return endpoint.getMiniAppArk({ type, title, desc, picUrl: pic_url, jumpUrl: jump_url });
   },
 });

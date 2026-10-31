@@ -17,10 +17,17 @@
 
 ## Adapter 与消息链
 
-- [ ] 新适配器遵循 `defineAdapter({ capabilities, create })` 与 `{ client, connect, activate?, send }` 契约。
-- [ ] `connect({ events, signal, onCleanup })` 在取得资源时立即登记清理；入站用 `events.message()` 投影。
+- [ ] `defineAdapter({ capabilities, createAdapter })` 创建所属 Adapter，Endpoint 继承真实 SDK／实质协议 Client，并通过 `endpointSpec` 实现结构规范。
+- [ ] 原生完整回调由 `events.run` 跟踪；消息由 `events.message` 投影。Adapter 持有账号状态，实际 Client 持有 IO／pending 请求，清理由所属实例负责。
 - [ ] WS/SSE、重连与心跳使用 `createEndpointLifecycle`，并通过 `pnpm check:adapter-endpoint-boundaries`。
 - [ ] 出站仍经过 `renderSendMessage → before.sendMessage → AdapterIndex/Endpoint`；运行 `pnpm check:harness-paths`。
+
+## 相关模块的设计质量
+
+- [ ] 闭包捕获具体 operation／连接代次；长生命周期工作有对应取消与释放，不在执行时重查“最新 Client”。
+- [ ] 参数按实际职责组织；位置参数过多时检查数据、依赖和权限是否混杂，不机械套 `options` 或增加全仓数量门禁。
+- [ ] 基类拥有共同不变量，子类只实现真实变化点；包装端口保留原型方法、原始 receiver 和平台类型推断。
+- [ ] 持久地址保留完整 Endpoint／parent／thread；账号选择器、稳定身份和执行租约不互相替代。方案见 `docs/plans/adapter-operation-contracts.md`，待设计不得当成已实现保证。
 
 ## 配置、Console 与发布
 

@@ -7,8 +7,16 @@ import { RuntimeInteractionCoordinator } from '../../src/plugin-runtime/im/inter
 const conversation = { endpoint: { id: 'bot', adapter: 'sandbox' }, kind: 'group' as const, id: 'room',
   parent: { kind: 'channel' as const, id: 'container' }, threadId: 'topic' };
 const reply = async (): Promise<DeliveryReceipt> => ({ status: 'sent' });
-const message = (text: string, payload?: string) => new RuntimeMessage(conversation, text, 1, reply, { id: 'owner' }, {},
-  payload ? [{ type: 'action', data: { payload } }] : undefined);
+const message = (text: string, payload?: string) => new RuntimeMessage(
+  {
+    conversation: conversation,
+    content: text,
+    sender: { id: 'owner' },
+    metadata: {},
+    segments: payload ? [{ type: 'action', data: { payload } }] : undefined,
+  },
+  { generation: 1, reply: reply },
+);
 const token = (content: SendContent) => {
   const keyboard = (content as Segment[]).find(item => item.type === 'keyboard')!;
   return (keyboard.data.rows as { payload: string }[][])[0][0].payload;
@@ -83,18 +91,18 @@ it('keeps expiry and current invalid-answer retry prompt instead of reviving cac
   await expect(answer).resolves.toMatchObject({ name: 'UserInteractionTimeoutError' });
 });
 
-it('retires the old generation projection and cannot resurrect it after reload', async () => {
+it('removes a pending question on explicit Root stop without resurrecting its projection', async () => {
   const root = rootPluginId();
   const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test',
     packageRoot: '/test', children: [] }]]), config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map() };
   const store = new SnapshotStore(state), lease = store.acquire(), coordinator = new RuntimeInteractionCoordinator();
   const answer = coordinator.create({ conversation, generation: 0, sender: { id: 'owner' }, $reply: reply }, undefined,
-    { snapshot: lease.value, retirementSignal: lease.retirementSignal }).ask({ type: 'confirm', title: 'Before reload' }).catch(error => error);
+    { snapshot: lease.value, owner: root, signal: lease.stopSignal }).ask({ type: 'confirm', title: 'Before reload' }).catch(error => error);
   await flush();
   expect(coordinator.readPendingInteraction(conversation, 'owner', 0)).toBeDefined();
-  store.commit(0, { snapshot: state, dispose() {} });
+  const closing = store.close();
   expect(coordinator.readPendingInteraction(conversation, 'owner', 0)).toBeUndefined();
   expect(coordinator.readPendingInteraction(conversation, 'owner', 1)).toBeUndefined();
   await expect(answer).resolves.toMatchObject({ name: 'AbortError' });
-  lease.release(); await store.close();
+  lease.release(); await closing;
 });

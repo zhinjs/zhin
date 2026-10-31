@@ -7,23 +7,27 @@
  * - group → {group_id:number, name: group_name ?? name}
  * - 群成员列表保持 OneBot11 原生形状，仅保证数组
  */
-import type {
-  EndpointFriend,
-  EndpointGroup,
-  EndpointManagement,
+import {
+  type PendingRpcRequest,
+  type EndpointFriend,
+  type EndpointGroup,
+  type EndpointManagement,
+  type EndpointManagementRequest,
+  type EndpointGroupRequest,
+  type EndpointGroupNoticeRequest,
 } from 'zhin.js/adapter';
 
 /** 管理面只依赖 endpoint 的 callApi（ws/wss/http 三种传输各自实现）。 */
 export interface NapCatManagementCaller {
-  callApi(action: string, params?: Record<string, unknown>): Promise<unknown>;
+  requestApi(request: PendingRpcRequest): Promise<unknown>;
 }
 
 export function createNapCatEndpointManagement(
   endpoint: NapCatManagementCaller,
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
-    async listFriends(): Promise<readonly EndpointFriend[]> {
-      const data = await endpoint.callApi('get_friend_list');
+    async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {
+      const data = await endpoint.requestApi({ action: 'get_friend_list', signal: request.signal });
       return toArray(data).map((value) => {
         const friend = asRecord(value);
         return {
@@ -33,8 +37,8 @@ export function createNapCatEndpointManagement(
         };
       });
     },
-    async listGroups(): Promise<readonly EndpointGroup[]> {
-      const data = await endpoint.callApi('get_group_list');
+    async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
+      const data = await endpoint.requestApi({ action: 'get_group_list', signal: request.signal });
       return toArray(data).map((value) => {
         const group = asRecord(value);
         return {
@@ -43,17 +47,17 @@ export function createNapCatEndpointManagement(
         };
       });
     },
-    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
-      const data = await endpoint.callApi('get_group_member_list', {
+    async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
+      const data = await endpoint.requestApi({ action: 'get_group_member_list', params: {
         group_id: toNumberId(groupId, 'group_id'),
-      });
+      }, signal });
       return toArray(data);
     },
-    async sendGroupNotice(groupId: string, content: string): Promise<void> {
-      await endpoint.callApi('_send_group_notice', {
+    async sendGroupNotice({ groupId, content, signal }: EndpointGroupNoticeRequest): Promise<void> {
+      await endpoint.requestApi({ action: '_send_group_notice', params: {
         group_id: toNumberId(groupId, 'group_id'),
         content,
-      });
+      }, signal });
     },
   });
 }

@@ -66,7 +66,7 @@ Packages with `type: "feature"` have fewer fields: `protocol` / `type` / `entry`
     "type": "feature",
     "entry": "./lib/provider.js",
     "engine": "^1.0.0",
-    "featureApi": "1.0.0"
+    "featureApi": "2.0.0"
   }
 }
 ```
@@ -133,7 +133,7 @@ The CLI treats the current directory as the project root, scans its manifest tre
 
 ```json
 "features": [
-  { "package": "@zhin.js/adapter",     "api": "^1.0.0" },
+  { "package": "@zhin.js/adapter",     "api": "^2.0.0" },
   { "package": "@zhin.js/command",     "api": "^1.0.0" },
   { "package": "@zhin.js/component",   "api": "^1.0.0" },
   { "package": "@zhin.js/middleware",  "api": "^1.0.0" },

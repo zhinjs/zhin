@@ -812,3 +812,26 @@ describe('wechat-mp plugin runtime adapter', () => {
       .not.toBe(formatInboundId({ ...base, MsgType: 'event', Event: 'VIEW', EventKey: 'k2' }));
   });
 });
+
+it('aborts an upload through its real request signal and does not send a fallback message after cancellation', async () => {
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(http);
+  const response = (data: unknown) => ({ data });
+  let uploadSignal: AbortSignal | undefined;
+  const fetch = vi.fn((url: string, init?: { signal?: AbortSignal }) => {
+    if (url.includes('/cgi-bin/token')) return Promise.resolve(response({ access_token: 'synthetic', expires_in: 7200, errcode: 0 }));
+    if (url.includes('/cgi-bin/media/upload')) {
+      uploadSignal = init?.signal;
+      return new Promise<never>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason), { once: true }));
+    }
+    return Promise.resolve(response({ errcode: 0, msgid: 'unexpected-fallback' }));
+  });
+  const endpoint = await createEndpointHarness(() => new WeChatMpEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'), http, config: resolveWeChatMpConfig({ id: 'synthetic', appId: 'wx', appSecret: 'synthetic', token: 'synthetic', encrypt: false, replyMode: 'customer_service' }), fetch }), { capabilities: ['inbound', 'outbound'] });
+  await endpoint.start(); const caller = new AbortController();
+  const sending = endpoint.send({ conversation: { endpoint: { adapter: 'wechat-mp', id: endpoint.canonicalId }, kind: 'private', id: 'user' }, signal: caller.signal,
+    payload: [{ type: 'image', data: { alt: 'must not be posted', media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } }] }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(uploadSignal).toBeDefined()); caller.abort();
+    await expect(sending).resolves.toMatchObject({ error: { disposition: 'not_sent' } }); expect(uploadSignal?.aborted).toBe(true);
+    expect(fetch.mock.calls.some(([url]) => url.includes('/message/'))).toBe(false);
+  } finally { await endpoint.stop(); await sending; }
+});

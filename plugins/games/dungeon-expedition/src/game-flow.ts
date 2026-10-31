@@ -3,7 +3,7 @@ import {
   GameSessionConflictError,
   SessionRevisionConflictError,
   channelKey,
-  type GameMessageLike,
+  type GamePlayer,
   type GameReply,
 } from '@zhin.js/game-kit';
 import {
@@ -22,81 +22,87 @@ import {
 
 export async function startDungeon(
   service: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply> {
-  const active = await service.getActiveByChannel(channelKey(message));
-  if (active) return buildDungeonView(active, stateFromSession(active), message.$channel.type);
-  try {
-    const session = await service.createSession(message);
-    return buildDungeonView(session, stateFromSession(session), message.$channel.type);
-  } catch (error) {
-    if (error instanceof GameSessionConflictError) return error.format(message.locale);
-    throw error;
-  }
+  return service.runInScope({ scope: channelKey(message), run: async () => {
+    const active = await service.getActiveByChannel(channelKey(message));
+    if (active) return buildDungeonView(active, stateFromSession(active), message.target.kind);
+    try {
+      const session = await service.createSession(message);
+      return buildDungeonView(session, stateFromSession(session), message.target.kind);
+    } catch (error) {
+      if (error instanceof GameSessionConflictError) return error.format(message.locale);
+      throw error;
+    }
+  } });
 }
 
 export async function continueDungeon(
   service: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply> {
-  const locale = resolveLocale(message.locale);
-  const session = await service.getActiveByChannel(channelKey(message));
-  if (!session) return messages(locale, 'text1');
-  return buildDungeonView(session, stateFromSession(session), message.$channel.type);
+  return service.runInScope({ scope: channelKey(message), run: async () => {
+    const locale = resolveLocale(message.locale);
+    const session = await service.getActiveByChannel(channelKey(message));
+    if (!session) return messages(locale, 'text1');
+    return buildDungeonView(session, stateFromSession(session), message.target.kind);
+  } });
 }
 
 export async function handleDungeonChoice(
   service: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   sessionToken: string,
   choiceId: string,
 ): Promise<GameReply> {
-  let locale = resolveLocale(message.locale);
-  const token = parseDungeonSessionToken(sessionToken);
-  if (!token) return messages(locale, 'text2');
-  const session = await service.getById(token.sessionId);
-  if (!session || session.channel_key !== channelKey(message)) {
-    return messages(locale, 'text3');
-  }
-  locale = resolveLocale(session.locale);
-  if (choiceId === 'restart') {
-    if (session.status === 'active') return messages(locale, 'text4');
-    if (session.owner_id !== message.$sender.id) return messages(locale, 'text5');
-    return startDungeon(service, message);
-  }
-  const action = actionFromChoice(choiceId, message);
-  if (!action) return messages(locale, 'text6');
-  try {
-    const result = await service.performAction({
-      sessionId: session.id,
-      actorId: message.$sender.id,
-      actorName: message.$sender.name?.trim() || message.$sender.id,
-      action,
-      expectedRevision: token.revision,
-      actionId: `${session.id}:${token.revision}:${message.$sender.id}:${choiceId}`,
-    });
-    return buildDungeonView(
-      result.session,
-      stateFromSession(result.session),
-      message.$channel.type,
-    );
-  } catch (error) {
-    if (error instanceof DungeonRuleError) return error.message;
-    if (error instanceof GameSessionConflictError) return error.format(locale);
-    if (error instanceof SessionRevisionConflictError) {
-      const latest = await service.getById(session.id);
-      if (!latest) return messages(locale, 'text7');
-      const view = buildDungeonView(
-        latest,
-        stateFromSession(latest),
-        message.$channel.type,
-      );
-      return Array.isArray(view)
-        ? [messages(locale, 'text8'), ...view]
-        : [messages(locale, 'text8'), view];
+  return service.runInScope({ scope: channelKey(message), run: async () => {
+    let locale = resolveLocale(message.locale);
+    const token = parseDungeonSessionToken(sessionToken);
+    if (!token) return messages(locale, 'text2');
+    const session = await service.getById(token.sessionId);
+    if (!session || session.channel_key !== channelKey(message)) {
+      return messages(locale, 'text3');
     }
-    throw error;
-  }
+    locale = resolveLocale(session.locale);
+    if (choiceId === 'restart') {
+      if (session.status === 'active') return messages(locale, 'text4');
+      if (session.owner_id !== message.sender.id) return messages(locale, 'text5');
+      return startDungeon(service, message);
+    }
+    const action = actionFromChoice(choiceId, message);
+    if (!action) return messages(locale, 'text6');
+    try {
+      const result = await service.performAction({
+        sessionId: session.id,
+        actorId: message.sender.id,
+        actorName: message.sender.name?.trim() || message.sender.id,
+        action,
+        expectedRevision: token.revision,
+        actionId: `${session.id}:${token.revision}:${message.sender.id}:${choiceId}`,
+      });
+      return buildDungeonView(
+        result.session,
+        stateFromSession(result.session),
+        message.target.kind,
+      );
+    } catch (error) {
+      if (error instanceof DungeonRuleError) return error.message;
+      if (error instanceof GameSessionConflictError) return error.format(locale);
+      if (error instanceof SessionRevisionConflictError) {
+        const latest = await service.getById(session.id);
+        if (!latest) return messages(locale, 'text7');
+        const view = buildDungeonView(
+          latest,
+          stateFromSession(latest),
+          message.target.kind,
+        );
+        return Array.isArray(view)
+          ? [messages(locale, 'text8'), ...view]
+          : [messages(locale, 'text8'), view];
+      }
+      throw error;
+    }
+  } });
 }
 
 export function commandActionId(
@@ -109,12 +115,12 @@ export function commandActionId(
 
 function actionFromChoice(
   choiceId: string,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): DungeonAction | null {
   if (choiceId === 'join') {
     return {
       type: 'join',
-      name: message.$sender.name?.trim() || message.$sender.id,
+      name: message.sender.name?.trim() || message.sender.id,
     };
   }
   if (choiceId === 'ready') return { type: 'ready' };

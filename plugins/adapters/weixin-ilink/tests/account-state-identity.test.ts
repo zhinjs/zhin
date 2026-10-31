@@ -1,3 +1,4 @@
+import { createTestEventGateway } from '../../test-utils/endpoint.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -21,7 +22,7 @@ async function fixture() {
     return saved = structuredClone({ revision: revision + 1, endpoints, commitId });
   });
   const repository: EndpointDesiredRepository = { load: async () => saved, compareAndSet: write };
-  const state: SnapshotState = { root: owner, tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: 'fixture', packageRoot: directory, children: [] }]]), config: new Map([[owner, { endpoints: [] }]]), resources: new Map([[owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]), capabilities: new Map([[slot.id, slot]]), projections: new Map() };
+  const state: SnapshotState = { root: owner, tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: 'fixture', packageRoot: directory, children: [] }]]), config: new Map([[owner, { endpoints: [] }]]), resources: new Map([[owner, new Map([[endpointEventGatewayToken.id, createTestEventGateway()]])]]), capabilities: new Map([[slot.id, slot]]), projections: new Map() };
   const index = await AdapterIndex.create([slot], createSnapshotView(1, state), new AbortController().signal, { repository });
   await index.activate(new AbortController().signal); const adapter = index.adapter(slot.id)!;
   return { adapter, slot, old, other, otherDirectory, before, write, saved: () => saved,

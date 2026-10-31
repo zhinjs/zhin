@@ -738,7 +738,7 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
   it('lists guild members through the SDK', async () => {
     const endpoint = await createManagementEndpoint(managementMock());
     await endpoint.start();
-    await expect(endpoint.management.listGroupMembers?.('guild-1')).resolves.toEqual([
+    await expect(endpoint.management.listGroupMembers?.({ groupId: 'guild-1' })).resolves.toEqual([
       {
         id: 'user-1',
         username: 'alice',

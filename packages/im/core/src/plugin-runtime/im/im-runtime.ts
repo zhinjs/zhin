@@ -1,5 +1,6 @@
 import {
   Scope,
+  OwnerOperation,
   createToken,
   generationAdmissionBinder,
   type CapabilityId,
@@ -17,6 +18,7 @@ import {
   endpointEventGatewayToken,
   type EndpointEvent,
   type EndpointEventGateway,
+  type EndpointReceipt,
   getProcessPeerRegistry,
   type PeerRegistry,
 } from '@zhin.js/adapter';
@@ -155,6 +157,7 @@ export class ImRuntime implements OutboundMessageService {
       runCommandOperation: (controller, operation) => this.#commandOperation.run(controller, operation),
       diagnostics: this.#messageDiagnostics,
       interactions: this.#interactions,
+      captureOperation: input => this.endpoints.captureOperation(input),
       inboundClaim: options.inboundClaim,
       originClassifier,
       deduper,
@@ -173,6 +176,7 @@ export class ImRuntime implements OutboundMessageService {
     }, options.commandPrefix);
     this.endpoints = new EndpointRuntime({
       acquire: () => this.#acquire(),
+      retain: () => this.#retainSnapshot(),
       release: (lease) => this.#release(lease),
       send: (request, snapshot) => this.#deliver(request, snapshot),
     });
@@ -281,17 +285,29 @@ export class ImRuntime implements OutboundMessageService {
         self.#release(lease);
       }
     };
+    const runWithReceipt = <T>(receive: (receipt: EndpointReceipt) => T | Promise<T>, gate?: GenerationAdmissionGate): Promise<T> =>
+      self.runWithSnapshotView(async () => {
+        const lease = self.#acquire();
+        return receive(Object.freeze<EndpointReceipt>({ receive: event => {
+          if (!lease.active) throw new Error('Endpoint receipt scope has ended');
+          lease.stopSignal.throwIfAborted();
+          return self.#operationSnapshot.run(lease, () => self.#inbound.receive(event, gate));
+        } }));
+      });
     const gateway: EndpointEventGateway & {
       [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway;
     } = {
-      receive: (event) => self.#inbound.receive(event),
+      run: runWithReceipt,
+      receive: event => self.runWithSnapshotView(() => self.#inbound.receive(event)),
       resolveLocale,
       [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway {
+        const owner = new OwnerOperation(gate, 'Endpoint ingress');
+        const run = <T>(receive: (receipt: EndpointReceipt) => T | Promise<T>): Promise<T> =>
+          owner.run(() => runWithReceipt(receive, gate));
         return Object.freeze<EndpointEventGateway>({
-          receive: async (event: EndpointEvent) => gate.enter(
-            () => self.#inbound.receive(event, gate),
-          ),
-          resolveLocale: async (endpoint, senderId) => gate.enter(() => resolveLocale(endpoint, senderId)),
+          run,
+          receive: event => run(() => self.#inbound.receive(event, gate)),
+          resolveLocale: (endpoint, senderId) => run(() => resolveLocale(endpoint, senderId)),
         });
       },
     };
@@ -409,6 +425,12 @@ export class ImRuntime implements OutboundMessageService {
       ...(source.endpointId ? { endpointId: source.endpointId } : {}),
       selfIds: Object.freeze([...new Set(selfIds)]),
     }));
+  }
+
+  #retainSnapshot(): SnapshotLease {
+    if (!this.#snapshots) throw new Error('ImRuntime is not attached to a Root');
+    const inherited = this.#operationSnapshot.getStore();
+    return inherited?.active ? this.#snapshots.retain(inherited) : this.#snapshots.acquire();
   }
 
   #acquire(): SnapshotLease {

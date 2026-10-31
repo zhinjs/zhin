@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SessionRevisionConflictError,
   createInMemoryGameDb,
-  type GameMessageLike,
+  type GamePlayer,
 } from '@zhin.js/game-kit';
 import {
   SessionService,
@@ -10,12 +10,8 @@ import {
   type DungeonDatabase,
 } from '../src/session-service.js';
 
-const message: GameMessageLike = {
-  $adapter: 'sandbox',
-  $endpoint: 'default',
-  $channel: { type: 'group', id: 'room' },
-  $sender: { id: 'alice', name: 'Alice' },
-};
+const message: GamePlayer = { target: { endpoint: { adapter: 'sandbox', id: 'default' }, kind: 'group', id: 'room' },
+sender: { id: 'alice', name: 'Alice' } };
 
 describe('dungeon SessionService', () => {
 

@@ -21,8 +21,8 @@
   `agents/<name>/agent.json` 加 `system.md`、`boundaries.md`、`conventions.md`。
 - Tool 的审批字段是 `requiresApproval`；平台、场景和身份限制分别使用
   `platforms`、`scopes`、`permissions`。
-- 普通 Adapter default-export `defineAdapter()`，优先返回
-  `{ client, connect, activate?, send }`；长连接状态机使用 `createEndpointLifecycle`。
+- Adapter default-export `defineAdapter({ capabilities, createAdapter })`；Endpoint 继承真实 Client。
+  详细规范见 `docs/authoring/adapters.md`，长连接复用 `createEndpointLifecycle`。
 - 配置由 `schema.json` 声明；setup 使用 `context.resources`，能力回调使用
   `context.use(token)`。代级状态不得放入模块级可变单例。
 

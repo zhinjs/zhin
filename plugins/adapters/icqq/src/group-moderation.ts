@@ -1,17 +1,17 @@
 import type { Client } from '@icqqjs/icqq';
-import type { GroupModerationAction, GroupModerationMember } from 'zhin.js/adapter';
+import { createEndpointOperation, type EndpointMemberInspectionRequest, type EndpointModerationRequest, type GroupModerationMember } from 'zhin.js/adapter';
 
 /** Native role/join facts stay in the adapter; the moderation plugin owns policy. */
 export async function inspectGroupMember(
-  client: Client, groupId: string, userId: string, signal: AbortSignal,
+  client: Client, { groupId, userId, signal }: EndpointMemberInspectionRequest,
 ): Promise<GroupModerationMember> {
-  signal.throwIfAborted();
+  const operation = createEndpointOperation({ signal });
   const group = numericId(groupId);
   const user = numericId(userId);
-  const selfLookup = client.getGroupMemberInfo(group, client.uin, true);
+  const selfLookup = operation.run(() => client.getGroupMemberInfo(group, client.uin, true));
   const [self, member] = await Promise.all([
     selfLookup,
-    user === client.uin ? selfLookup : client.getGroupMemberInfo(group, user, true),
+    user === client.uin ? selfLookup : operation.run(() => client.getGroupMemberInfo(group, user, true)),
   ]);
   signal.throwIfAborted();
   const joinedAt = member.join_time * 1000;
@@ -29,10 +29,10 @@ export async function inspectGroupMember(
 }
 
 export async function moderateGroupMember(
-  client: Client, groupId: string, userId: string, action: GroupModerationAction,
-  signal: AbortSignal, isActive: () => boolean,
+  { client, isActive }: { readonly client: Client; readonly isActive: () => boolean },
+  { groupId, userId, action, signal }: EndpointModerationRequest,
 ): Promise<void> {
-  const member = await inspectGroupMember(client, groupId, userId, signal);
+  const member = await inspectGroupMember(client, { groupId: groupId, userId: userId, signal: signal });
   signal.throwIfAborted();
   if (!isActive() || !member.canModerate) throw new Error('Group moderation permission is unavailable');
   if (action.type === 'kick') {
@@ -45,8 +45,8 @@ export async function moderateGroupMember(
     throw new Error('Invalid group mute duration');
   }
   const ok = action.type === 'kick'
-    ? await client.setGroupKick(numericId(groupId), numericId(userId))
-    : await client.setGroupBan(numericId(groupId), numericId(userId), action.durationSeconds);
+    ? await createEndpointOperation({ signal }).run(() => client.setGroupKick(numericId(groupId), numericId(userId)))
+    : await createEndpointOperation({ signal }).run(() => client.setGroupBan(numericId(groupId), numericId(userId), action.durationSeconds));
   if (!ok) throw new Error('Platform did not confirm the moderation action');
 }
 

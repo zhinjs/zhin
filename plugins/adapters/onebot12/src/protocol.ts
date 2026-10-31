@@ -1,9 +1,10 @@
+import { readOnebot12Response } from './response.js';
 /**
  * OneBot 12 protocol helpers (no legacy Adapter/Endpoint / segment-mapper).
  * Canonicalization is owned by gateway/core before endpoint.send.
  * Spec: https://12.onebot.dev/
  */
-import { isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('onebot12');
@@ -406,11 +407,12 @@ export type OneBot12CallAction = (
 ) => Promise<unknown>;
 
 /** upload_file 文件名：优先段 data.name/filename，URL/路径取 basename，再按 mime 给默认名。 */
-function oneBot12UploadName(
-  segmentType: string,
-  data: Record<string, unknown>,
-  media: MediaRef,
-): string {
+export interface OneBot12MediaSource {
+  readonly type: string;
+  readonly data: Readonly<Record<string, unknown>>;
+  readonly media: MediaRef;
+}
+function oneBot12UploadName({ type, data, media }: OneBot12MediaSource): string {
   const named = data.name ?? data.filename;
   if (typeof named === 'string' && named) return named;
   if (media.kind === 'url') {
@@ -426,16 +428,13 @@ function oneBot12UploadName(
     if (base) return base;
   }
   const ext = media.mime_type?.split('/')[1]?.split(';')[0];
-  return `${segmentType}.${ext || 'bin'}`;
+  return `${type}.${ext || 'bin'}`;
 }
 
 /** canonical MediaRef → OB12 `upload_file` 动作参数（spec: type url/path/data）。 */
-export function mediaRefToOneBot12UploadParams(
-  segmentType: string,
-  data: Record<string, unknown>,
-  media: MediaRef,
-): Record<string, unknown> | undefined {
-  const name = oneBot12UploadName(segmentType, data, media);
+export function mediaRefToOneBot12UploadParams(source: OneBot12MediaSource): Record<string, unknown> | undefined {
+  const { media } = source;
+  const name = oneBot12UploadName(source);
   if (media.kind === 'url') return { type: 'url', name, url: media.value };
   if (media.kind === 'path') {
     const path = media.value.startsWith('file://') ? media.value.slice('file://'.length) : media.value;
@@ -452,8 +451,7 @@ export function mediaRefToOneBot12UploadParams(
 
 async function uploadOneMediaSegment(
   item: unknown,
-  callAction: OneBot12CallAction,
-  onUploadFailed?: (error: unknown) => void,
+  request: OneBot12MediaUpload,
 ): Promise<unknown> {
   if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
   const segment = item as OneBot12WireSegment;
@@ -468,17 +466,18 @@ async function uploadOneMediaSegment(
   if (media.kind === 'file') {
     return { type: segment.type, data: { ...oneBot12MediaExtra(data), file_id: media.value } };
   }
-  const params = mediaRefToOneBot12UploadParams(segment.type, data, media);
+  const params = mediaRefToOneBot12UploadParams({ type: segment.type, data, media });
   if (!params) return item;
   try {
-    const result = await callAction('upload_file', params) as { file_id?: unknown } | undefined;
+    const result = await request.callAction('upload_file', params) as { file_id?: unknown } | undefined;
     if (result && typeof result.file_id === 'string' && result.file_id) {
       return { type: segment.type, data: { ...oneBot12MediaExtra(data), file_id: result.file_id } };
     }
     throw new Error('upload_file 响应缺少 file_id');
   } catch (error) {
+    if (request.signal?.aborted) throw error;
     // 上传失败降级：保留原段，由 formatOutboundSegments 走扩展字段（url/data/path）
-    onUploadFailed?.(error);
+    request.onUploadFailed?.(error);
     return item;
   }
 }
@@ -489,15 +488,17 @@ async function uploadOneMediaSegment(
  * {@link formatOutboundSegments} 编码；kind=file 的 MediaRef 直接按 file_id 复投。
  * 上传失败保留原段（降级扩展字段透传）并回调 onUploadFailed。
  */
-export async function uploadOneBot12MediaSegments(
-  payload: unknown,
-  callAction: OneBot12CallAction,
-  onUploadFailed?: (error: unknown) => void,
-): Promise<unknown> {
-  if (Array.isArray(payload)) {
-    return Promise.all(payload.map((item) => uploadOneMediaSegment(item, callAction, onUploadFailed)));
+export interface OneBot12MediaUpload {
+  readonly payload: unknown;
+  readonly callAction: OneBot12CallAction;
+  readonly signal?: AbortSignal;
+  readonly onUploadFailed?: (error: unknown) => void;
+}
+export async function uploadOneBot12MediaSegments(request: OneBot12MediaUpload): Promise<unknown> {
+  if (Array.isArray(request.payload)) {
+    return Promise.all(request.payload.map(item => uploadOneMediaSegment(item, request)));
   }
-  return uploadOneMediaSegment(payload, callAction, onUploadFailed);
+  return uploadOneMediaSegment(request.payload, request);
 }
 
 /**
@@ -527,40 +528,34 @@ export function buildSendMessageParams(
  * 向 OneBot 实现发送动作请求（HTTP POST），返回动作响应。
  * 供 webhook 出站与纯协议测试使用；WS 路径走 WebSocket echo 请求。
  */
-export async function callOneBot12Action(
-  options: OneBot12HttpOptions,
-  action: string,
-  params: Record<string, unknown> = {},
-  echo?: string,
-): Promise<OneBot12ActionResponse> {
+export interface OneBot12HttpRequest extends OneBot12HttpOptions {
+  readonly action: string;
+  readonly params?: Record<string, unknown>;
+  readonly echo?: string;
+}
+/** HTTP owns submission evidence and cancellation for both SDK and framework callers. */
+export async function callOneBot12Action(request: OneBot12HttpRequest): Promise<OneBot12ActionResponse> {
+  if (request.signal?.aborted) throw new EndpointDeliveryError('endpoint_inactive', 'Endpoint operation cancelled', 'not_sent');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (options.access_token) {
-    headers.Authorization = `Bearer ${options.access_token}`;
-  }
-  const body: OneBot12ActionRequest = { action, params, self: options.self };
-  if (echo) body.echo = echo;
-
-  const res = await fetch(options.url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
-  });
-
-  const text = await res.text();
-  if (res.status === 401) throw new Error(`OneBot12 鉴权失败: ${text}`);
-  if (res.status !== 200) throw new Error(`OneBot12 HTTP ${res.status}: ${text}`);
-
-  let data: OneBot12ActionResponse;
+  if (request.access_token) headers.Authorization = `Bearer ${request.access_token}`;
+  const body: OneBot12ActionRequest = { action: request.action, params: request.params ?? {}, self: request.self,
+    ...(request.echo !== undefined ? { echo: request.echo } : {}) };
   try {
-    data = JSON.parse(text) as OneBot12ActionResponse;
-  } catch {
-    throw new Error(`OneBot12 无效响应: ${text.slice(0, 200)}`);
+    const response = await fetch(request.url, { method: 'POST', headers, body: JSON.stringify(body),
+      signal: request.signal ? AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) });
+    const text = await response.text();
+    if (response.status === 401) throw new EndpointDeliveryError('platform_rejected', `OneBot12 鉴权失败: ${text}`, 'rejected');
+    if (response.status !== 200) throw new EndpointDeliveryError('endpoint_http_failed', `OneBot12 HTTP ${response.status}: ${text}`, 'unknown');
+    let data: OneBot12ActionResponse;
+    try { data = JSON.parse(text) as OneBot12ActionResponse; }
+    catch { throw new EndpointDeliveryError('delivery_unconfirmed', `OneBot12 无效响应: ${text.slice(0, 200)}`, 'unknown'); }
+    readOnebot12Response(data);
+    return data;
+  } catch (cause) {
+    if (cause instanceof EndpointDeliveryError) throw cause;
+    throw new EndpointDeliveryError(request.signal?.aborted ? 'endpoint_inactive' : 'endpoint_transport_failed',
+      cause instanceof Error ? cause.message : String(cause), 'unknown', { cause });
   }
-  if (data.status === 'failed' && data.retcode !== 0) {
-    throw new Error(`OneBot12 动作失败 retcode=${data.retcode}: ${data.message}`);
-  }
-  return data;
 }
 
 /** Build WS connect URL + headers (access_token via Bearer + query). */

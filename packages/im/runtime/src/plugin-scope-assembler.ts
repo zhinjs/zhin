@@ -7,6 +7,7 @@ import {
   capabilityId,
   createGenerationAdmissionGate,
   createToken,
+  createPluginEventChannel,
   projectLocaleToken,
   resolveLocale,
   PluginDatabaseHost,
@@ -34,10 +35,12 @@ import {
   type PluginInstanceView,
   type PluginNodeSnapshot,
   type PluginSetupContext,
+  type PluginEventSubscriptions,
   type SetupCapabilityRegistration,
   type TokenId,
 } from '@zhin.js/plugin-runtime';
 import { runtimeEnvironmentToken, type RuntimeEnvironment } from './environment.js';
+import { pluginEventsToken } from './plugin-events.js';
 import {
   EnvStoreFactory,
   envStoreToken,
@@ -62,6 +65,7 @@ export interface PluginConfigResolver {
 }
 
 export interface RootResourceContext {
+  readonly events: PluginEventSubscriptions;
   /** Whether this generation has loaded a provider for the requested Feature. */
   readonly hasFeature?: (feature: FeatureId | string) => boolean;
   /** Exact shadow generation being assembled; never inferred from a latest snapshot. */
@@ -156,6 +160,9 @@ export class PluginScopeAssembler {
     const parentScope = node.parent ? this.scopes.get(node.parent) : undefined;
     if (node.parent && !parentScope) throw new Error(`Missing parent scope for ${node.id}`);
     const scope = new Scope(node.id, parentScope);
+    const eventChannel = createPluginEventChannel();
+    scope.provide(pluginEventsToken, Object.freeze({ owner: node.id, creationGeneration: this.generation, channel: eventChannel }));
+    scope.disposers.add(() => eventChannel.dispose());
     this.scopes.set(node.id, scope);
     this.#created.push(node.id);
     // Every owner shadows the inherited EnvStore with its exact overlay view.
@@ -176,6 +183,7 @@ export class PluginScopeAssembler {
       scope.provide(rootGenerationAdmissionToken, this.#admission);
       const config = this.#primaryConfig;
       await this.installResources?.({
+        events: eventChannel.events,
         hasFeature: (feature) => this.#setupFeatureRoots.get(featureId(String(feature)))?.some(root => root.owner === node.id) ?? false,
         generation: this.generation,
         readCandidateSnapshot: () => {
@@ -226,6 +234,8 @@ export class PluginScopeAssembler {
       // Ownership transfers to the shadow Scope immediately. Every later
       // validation or binding failure is then covered by normal rollback.
       scope.disposers.add(prepared.dispose);
+      eventChannel.events.on('hmr.pause', event => prepared.controlEvent('hmr.pause', event));
+      eventChannel.events.on('hmr.resume', event => prepared.controlEvent('hmr.resume', event));
       if (!prepared.descriptor.name) {
         throw new TypeError(`Isolated Plugin ${node.package.name} returned an invalid descriptor`);
       }
@@ -250,6 +260,7 @@ export class PluginScopeAssembler {
         }
       }
       const setupContext: Record<string, unknown> = {
+        events: eventChannel.events,
         signal,
         plugin,
         config: view,

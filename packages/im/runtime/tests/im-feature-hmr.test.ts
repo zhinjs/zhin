@@ -59,16 +59,16 @@ describe('IM Feature slot HMR', () => {
       const first = await runtime.start();
       lease = runtime.snapshots.acquire();
       const commands = first.projections.get(commandFeatureId) as CommandIndex;
-      await expect(commands.dispatch('帮助')).resolves.toMatchObject({ matched: true, status: 'executed' });
-      await expect(commands.dispatch('菜单')).resolves.toMatchObject({ matched: false });
+      await expect(commands.dispatch({ input: '帮助' })).resolves.toMatchObject({ matched: true, status: 'executed' });
+      await expect(commands.dispatch({ input: '菜单' })).resolves.toMatchObject({ matched: false });
       expect(first.config.get(first.root)).toMatchObject({ menuStyle });
       for (const value of [false, '']) {
         await runtime.patchConfig([{ op: 'set', path: ['menuKeyword'], value }]);
         const current = runtime.snapshot.projections.get(commandFeatureId) as CommandIndex;
-        await expect(current.dispatch('帮助')).resolves.toMatchObject({ matched: false });
-        await expect(current.dispatch('菜单')).resolves.toMatchObject({ matched: false });
+        await expect(current.dispatch({ input: '帮助' })).resolves.toMatchObject({ matched: false });
+        await expect(current.dispatch({ input: '菜单' })).resolves.toMatchObject({ matched: false });
         await expect(current.execute('ping')).resolves.toBe('pong');
-        await expect(commands.dispatch('帮助')).resolves.toMatchObject({ matched: true });
+        await expect(commands.dispatch({ input: '帮助' })).resolves.toMatchObject({ matched: true });
       }
     } finally {
       lease?.release();

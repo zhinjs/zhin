@@ -349,9 +349,9 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
       }],
     });
 
+    await expect(sending).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
     expect(sendFile).toHaveBeenCalledWith('/tmp/report.pdf', '/', 'report.pdf');
     expect(endpoint.endpoint.sendGroupMsg).not.toHaveBeenCalled();
-    await expect(sending).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
     await endpoint.stop();
   });
 

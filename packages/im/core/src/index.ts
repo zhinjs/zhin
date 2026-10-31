@@ -71,5 +71,6 @@ export type {
 // IM contract / capability types surfaced through `zhin.js` so toolkits (e.g. `@zhin.js/testing`)
 // can type against the app's single core tree instead of pinning their own copies.
 export type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract'
+export { conversationRefKey } from '@zhin.js/im-contract'
 export { readOperationSession } from '@zhin.js/feature-kit'
 export type { CapabilityContext, OperationClientPort, OperationSession, OperationScene, OperationSender, OperationMessage, OperationMessageRef } from '@zhin.js/feature-kit'

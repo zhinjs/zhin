@@ -1,5 +1,5 @@
-import { createMessages, resolveLocale } from 'zhin.js/i18n';
-import { gameCommandHint, type GameMessageLike, type GameReply } from '@zhin.js/game-kit';
+import {  createMessages, resolveLocale } from 'zhin.js/i18n';
+import { channelKey, gameCommandHint, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import { regionLabel, endingLabel } from './story-catalog.js';
 import { itemLabel } from './story-items.js';
 import type { AdvProfileRow, AdvSessionRow } from './models.js';
@@ -14,152 +14,164 @@ import {
 } from './story.js';
 import type { GameServices } from './session-service.js';
 
-export async function sendOrEditScene(
-  services: GameServices,
-  message: GameMessageLike,
-  session: AdvSessionRow,
-  extraNarrative = '',
-  profile?: AdvProfileRow,
-): Promise<GameReply> {
-  const prof = profile
-    ?? await services.profiles.getOrCreate(session.player_id, session.player_name);
-  const content = buildSceneInteractive(session, extraNarrative, prof, message.$channel.type);
-  if (!content) {
-    return messages(resolveLocale(session.locale), 'invalidScene');
-  }
-  return content;
+export interface AdventureSceneView {
+  readonly services: GameServices;
+  readonly player: GamePlayer;
+  readonly session: AdvSessionRow;
+  readonly extraNarrative?: string;
+  /** A profile already loaded by the same action; absent means load it through the service. */
+  readonly profile?: AdvProfileRow;
+}
+
+export async function renderAdventureScene(input: AdventureSceneView): Promise<GameReply> {
+  const { services, player: message, session, extraNarrative = '', profile } = input;
+  return services.sessions.runInScope({ scope: channelKey(message), run: async () => {
+    const prof = profile
+      ?? await services.profiles.getOrCreate(session.player_id, session.player_name);
+    const content = buildSceneInteractive(session, extraNarrative, prof, message.target.kind);
+    if (!content) {
+      return messages(resolveLocale(session.locale), 'invalidScene');
+    }
+    return content;
+  } });
 }
 
 export async function startAdventure(
   services: GameServices,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply | undefined> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const active = await services.sessions.getActiveByChannel(ch);
-  if (active) {
-    if (active.player_id === message.$sender.id) {
-      const locale = resolveLocale(active.locale);
-      const command = message.formatCommand?.('adv');
-      return messages(locale, 'active') + (command === undefined ? '' : messages(locale, 'activeHint', { command }));
+  return services.sessions.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const active = await services.sessions.getActiveByChannel(ch);
+    if (active) {
+      if (active.player_id === message.sender.id) {
+        const locale = resolveLocale(active.locale);
+        const command = message.formatCommand?.('adv');
+        return messages(locale, 'active') + (command === undefined ? '' : messages(locale, 'activeHint', { command }));
+      }
+      return messages(resolveLocale(message.locale), 'channelBusy', { player: active.player_name });
     }
-    return messages(resolveLocale(message.locale), 'channelBusy', { player: active.player_name });
-  }
 
-  await services.profiles.onRunStarted(message.$sender.id, message.$sender.name?.trim() || message.$sender.id);
-  const session = await services.sessions.createSession(message);
-  await services.profiles.onStep(
-    message.$sender.id,
-    session.player_name,
-    'start',
-    [],
-  );
-  return sendOrEditScene(services, message, session);
+    await services.profiles.onRunStarted(message.sender.id, message.sender.name?.trim() || message.sender.id);
+    const session = await services.sessions.createSession(message);
+    await services.profiles.onStep(
+      message.sender.id,
+      session.player_name,
+      'start',
+      [],
+    );
+    return renderAdventureScene({ services: services, player: message, session: session });
+  } });
 }
 
 export async function handleChoice(
   services: GameServices,
-  message: GameMessageLike,
+  message: GamePlayer,
   sessionId: string,
   choiceId: string,
 ): Promise<GameReply | null> {
-  const session = await services.sessions.getById(sessionId);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  // 踏进 terminal 场景时 status 必为 completed，终局需放行「再玩一次」（restart）
-  if (!session || (session.status !== 'active' && !(session.status === 'completed' && choiceId === 'restart'))) {
-    return messages(locale, 'ended');
-  }
-  if (session.player_id !== message.$sender.id) {
-    return messages(locale, 'otherPlayer');
-  }
+  return services.sessions.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.sessions.getById(sessionId);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    // 踏进 terminal 场景时 status 必为 completed，终局需放行「再玩一次」（restart）
+    if (!session || (session.status !== 'active' && !(session.status === 'completed' && choiceId === 'restart'))) {
+      return messages(locale, 'ended');
+    }
+    if (session.player_id !== message.sender.id) {
+      return messages(locale, 'otherPlayer');
+    }
 
-  const state = stateFromSession(session);
-  const scene = getScene(state.sceneId);
-  if (!scene) return messages(locale, 'invalidScene');
+    const state = stateFromSession(session);
+    const scene = getScene(state.sceneId);
+    if (!scene) return messages(locale, 'invalidScene');
 
-  if (scene.terminal && choiceId !== 'restart') {
-    return messages(locale, 'restart');
-  }
+    if (scene.terminal && choiceId !== 'restart') {
+      return messages(locale, 'restart');
+    }
 
-  if (choiceId === 'restart') {
+    if (choiceId === 'restart') {
+      await services.sessions.updateSession(session.id, {
+        scene_id: 'start',
+        locale: resolveLocale(message.locale),
+        hp: 100,
+        inventory: '[]',
+        flags: '{}',
+        ending_id: '',
+        status: 'active',
+        step_count: 0,
+      });
+      const updated = (await services.sessions.getById(session.id))!;
+      await services.profiles.onRunStarted(updated.player_id, updated.player_name);
+      await services.profiles.onStep(updated.player_id, updated.player_name, 'start', []);
+      return renderAdventureScene({ services: services, player: message, session: updated });
+    }
+
+    // 服务端校验：选项必须当前可见（requires 门槛不能只靠视图层过滤，payload 可绕过）
+    if (!visibleChoices(scene, state).some((c) => c.id === choiceId)) {
+      return messages(locale, 'unavailable');
+    }
+
+    const result = resolveChoice(state, choiceId);
+    if (!result) return messages(locale, 'unavailable');
+
+    const next = applyChoiceResult(state, result);
+    const nextScene = getScene(next.sceneId);
+    const completed = !!nextScene?.terminal || next.hp <= 0;
+
+    if (next.hp <= 0 && !nextScene?.terminal) {
+      next.sceneId = 'defeat';
+    }
+
+    const finalScene = getScene(next.sceneId);
+    const status = completed || finalScene?.terminal ? 'completed' : 'active';
+    const newStepCount = session.step_count + 1;
+
     await services.sessions.updateSession(session.id, {
-      scene_id: 'start',
-      locale: resolveLocale(message.locale),
-      hp: 100,
-      inventory: '[]',
-      flags: '{}',
-      ending_id: '',
-      status: 'active',
-      step_count: 0,
+      scene_id: next.sceneId,
+      hp: next.hp,
+      inventory: JSON.stringify(next.inventory),
+      flags: JSON.stringify(next.flags),
+      ending_id: next.endingId,
+      status,
+      step_count: newStepCount,
     });
-    const updated = (await services.sessions.getById(session.id))!;
-    await services.profiles.onRunStarted(updated.player_id, updated.player_name);
-    await services.profiles.onStep(updated.player_id, updated.player_name, 'start', []);
-    return sendOrEditScene(services, message, updated);
-  }
 
-  // 服务端校验：选项必须当前可见（requires 门槛不能只靠视图层过滤，payload 可绕过）
-  if (!visibleChoices(scene, state).some((c) => c.id === choiceId)) {
-    return messages(locale, 'unavailable');
-  }
-
-  const result = resolveChoice(state, choiceId);
-  if (!result) return messages(locale, 'unavailable');
-
-  const next = applyChoiceResult(state, result);
-  const nextScene = getScene(next.sceneId);
-  const completed = !!nextScene?.terminal || next.hp <= 0;
-
-  if (next.hp <= 0 && !nextScene?.terminal) {
-    next.sceneId = 'defeat';
-  }
-
-  const finalScene = getScene(next.sceneId);
-  const status = completed || finalScene?.terminal ? 'completed' : 'active';
-  const newStepCount = session.step_count + 1;
-
-  await services.sessions.updateSession(session.id, {
-    scene_id: next.sceneId,
-    hp: next.hp,
-    inventory: JSON.stringify(next.inventory),
-    flags: JSON.stringify(next.flags),
-    ending_id: next.endingId,
-    status,
-    step_count: newStepCount,
-  });
-
-  const endingId = next.endingId || (finalScene?.terminal ? next.sceneId : '');
-  let newAchievements = await services.profiles.onStep(
-    session.player_id,
-    session.player_name,
-    next.sceneId,
-    next.inventory,
-  );
-  if (status === 'completed') {
-    const more = await services.profiles.onRunCompleted(
+    const endingId = next.endingId || (finalScene?.terminal ? next.sceneId : '');
+    let newAchievements = await services.profiles.onStep(
       session.player_id,
       session.player_name,
-      endingId,
-      newStepCount,
+      next.sceneId,
       next.inventory,
     );
-    newAchievements = [...new Set([...newAchievements, ...more])];
-  }
+    if (status === 'completed') {
+      const more = await services.profiles.onRunCompleted(
+        session.player_id,
+        session.player_name,
+        endingId,
+        newStepCount,
+        next.inventory,
+      );
+      newAchievements = [...new Set([...newAchievements, ...more])];
+    }
 
-  const updated = (await services.sessions.getById(session.id))!;
-  const extra = formatNewAchievements(newAchievements, locale);
-  return sendOrEditScene(services, message, updated, extra);
+    const updated = (await services.sessions.getById(session.id))!;
+    const extra = formatNewAchievements(newAchievements, locale);
+    return renderAdventureScene({ services: services, player: message, session: updated, extraNarrative: extra });
+  } });
 }
 
 export async function continueAdventure(
   services: GameServices,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply> {
-  const session = await services.sessions.getActiveForUser(
-    `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
-    message.$sender.id,
-  );
-  if (!session) return messages(resolveLocale(message.locale), 'noGame') + gameCommandHint(message, 'adv');
-  return sendOrEditScene(services, message, session);
+  return services.sessions.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.sessions.getActiveForUser(
+      channelKey(message),
+      message.sender.id,
+    );
+    if (!session) return messages(resolveLocale(message.locale), 'noGame') + gameCommandHint(message, 'adv');
+    return renderAdventureScene({ services: services, player: message, session: session });
+  } });
 }
 
 export function sessionSummary(session: AdvSessionRow): string {

@@ -1,3 +1,5 @@
+import { invokeGameCommand } from '../../../../packages/game-kit/tests/command-operation-fixture.js';
+import { channelKey, gamePlayerFromInput, gameTargetFromKey } from '@zhin.js/game-kit';
 import { EventEmitter } from 'node:events';
 import { RuntimeMessage } from '@zhin.js/core/runtime';
 import { runRouletteCommand } from '../src/roulette-command.js';
@@ -5,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FakeClock,
   createFakeMessage,
-  runCommand,
+  createCommandContext,
   runMiddleware,
   runPluginSetup,
   type FakeMessage,
@@ -69,7 +71,7 @@ const adapters = {
     const target = this.resolved.get(id);
     if (!this.canMute || !target) return undefined;
     return {
-      muteGroupMember: async (groupId: string, userId: string, durationSeconds: number) => {
+      muteGroupMember: async ({ groupId, userId, durationSeconds }) => {
         if (this.refuseNextMute) {
           this.refuseNextMute = false;
           throw new Error('permission denied');
@@ -121,9 +123,25 @@ function message(
 
 function middlewareMessage(input: FakeMessage): RuntimeMessage {
   const client = new EventEmitter();
-  return new RuntimeMessage(input.conversation, input.content ?? '', 1, async content => {
-    await input.$reply?.(content); return { status: 'sent' };
-  }, input.sender, {}, undefined, undefined, undefined, false, undefined, () => client, 'test', { locale: input.locale });
+  return new RuntimeMessage(
+    {
+      conversation: input.conversation,
+      content: input.content ?? '',
+      sender: input.sender,
+      metadata: {},
+      mentioned: false,
+    },
+    {
+      generation: 1,
+      reply: async (content) => {
+        await input.$reply?.(content);
+        return { status: 'sent' };
+      },
+      client: () => client,
+      clientAdapter: 'test',
+      presentation: { locale: input.locale },
+    },
+  );
 }
 
 async function say(
@@ -131,17 +149,17 @@ async function say(
   action: string,
   options?: Parameters<typeof message>[1],
 ): Promise<string> {
-  const reply = await runCommand(fake, rouletteCommand, {
+  const reply = await invokeGameCommand(rouletteCommand, createCommandContext(fake, {
     input: message(senderId, options),
     params: { action },
-  });
+  }));
   return String(reply);
 }
 
 /** The newest game in a group; Alice sits at every table these tests create. */
 async function activeState(group = 'g1'): Promise<RouletteState | undefined> {
   const services = fake.resources.use(rouletteServicesToken);
-  const latest = await services.sessions.getLatestForUser(`test-default-group:${group}`, 'alice');
+  const latest = await services.sessions.getLatestForUser(channelKey(gamePlayerFromInput(message('alice', { group }))), 'alice');
   return latest ? decodeRouletteState(latest.state_json) : undefined;
 }
 
@@ -170,7 +188,7 @@ function muteCalls(): readonly MuteCall[] {
 
 function sentTexts(): readonly string[] {
   return fake.sent
-    .filter((call) => call.kind === 'send')
+    .filter((call) => call.kind === 'send' || call.kind === 'sendTarget')
     .map((call) => String((call.input as { content: unknown }).content));
 }
 
@@ -379,7 +397,7 @@ describe('timeouts (FakeClock)', () => {
     const real = RouletteGroupSettings.prototype.isMutePenaltyEnabled;
     const read = vi.spyOn(RouletteGroupSettings.prototype, 'isMutePenaltyEnabled')
       .mockImplementation(async function (this: RouletteGroupSettings, key: string) {
-        if (key.endsWith(':g1')) throw new Error('db down');
+        if (gameTargetFromKey(key)?.id === 'g1') throw new Error('db down');
         return real.call(this, key);
       });
     const sentBefore = sentTexts().length;

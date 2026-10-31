@@ -75,6 +75,7 @@ export async function sendMessageWeixin(params: {
       metadata: opts.metadata,
       token: opts.token,
       timeoutMs: opts.timeoutMs,
+      abortSignal: opts.abortSignal,
       body: req,
     });
   } catch (err) {
@@ -105,6 +106,7 @@ async function sendMediaItems(params: {
 
   let lastClientId = "";
   for (const item of items) {
+    opts.abortSignal?.throwIfAborted();
     lastClientId = generateClientId();
     const req: SendMessageReq = {
       msg: {
@@ -123,6 +125,7 @@ async function sendMediaItems(params: {
         metadata: opts.metadata,
         token: opts.token,
         timeoutMs: opts.timeoutMs,
+        abortSignal: opts.abortSignal,
         body: req,
       });
     } catch (err) {

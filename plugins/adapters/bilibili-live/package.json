@@ -98,7 +98,7 @@
     "features": [
       {
         "package": "@zhin.js/adapter",
-        "api": "^1.0.0"
+        "api": "^2.0.0"
       },
       {
         "package": "@zhin.js/page",

@@ -104,6 +104,22 @@ export interface NapCatActionResponse {
   wording?: string;
 }
 
+/** OneBot 11: async/1 is submitted without a known result, not a rejection.
+ * https://github.com/botuniverse/onebot-11/blob/master/communication/http.md#响应
+ */
+export function readNapCatActionResponse(value: unknown): NapCatActionResponse {
+  if (!value || typeof value !== 'object' || !('status' in value) || !('retcode' in value)
+    || !Number.isInteger(value.retcode)) throw new EndpointDeliveryError('delivery_unconfirmed', 'NapCat returned an invalid action response', 'unknown');
+  const response = value as NapCatActionResponse;
+  if (response.status === 'failed' && response.retcode !== 0 && response.retcode !== 1) {
+    throw new EndpointDeliveryError('platform_rejected',
+      `NapCat action failed [${response.retcode}]: ${response.message || response.wording || 'unknown'}`, 'rejected');
+  }
+  if (response.status !== 'ok' || response.retcode !== 0) throw new EndpointDeliveryError('delivery_unconfirmed',
+    'NapCat did not confirm the action result', 'unknown');
+  return response;
+}
+
 export interface NapCatWireSegment {
   readonly type: string;
   readonly data?: Record<string, unknown>;
@@ -455,18 +471,13 @@ export async function callNapCatHttpAction(
     body: JSON.stringify(params),
   });
   const text = await res.text();
-  if (res.status === 401) throw new EndpointDeliveryError('platform_rejected', `NapCat HTTP auth failed: ${text}`, 'rejected');
-  if (res.status !== 200) throw new EndpointDeliveryError(res.status === 429 || res.status === 403 ? 'platform_rejected' : 'delivery_unconfirmed', `NapCat HTTP ${res.status}: ${text}`, res.status === 429 || res.status === 403 ? 'rejected' : 'unknown');
-  let data: NapCatActionResponse;
-  try {
-    data = JSON.parse(text) as NapCatActionResponse;
-  } catch {
-    throw new Error(`NapCat HTTP invalid response: ${text.slice(0, 200)}`);
+  if (res.status !== 200) {
+    const rejected = [400, 401, 403, 404, 406, 429].includes(res.status);
+    throw new EndpointDeliveryError(rejected ? 'platform_rejected' : 'delivery_unconfirmed',
+      `NapCat HTTP ${res.status}: ${text}`, rejected ? 'rejected' : 'unknown');
   }
-  if (data.status !== 'ok' && data.retcode !== 0) {
-    throw new EndpointDeliveryError(
-      'platform_rejected', `NapCat HTTP action failed [${data.retcode}]: ${data.message || data.wording || 'unknown'}`, 'rejected',
-    );
-  }
-  return data;
+  let data: unknown;
+  try { data = JSON.parse(text); }
+  catch (cause) { throw new EndpointDeliveryError('delivery_unconfirmed', 'NapCat returned invalid JSON', 'unknown', { cause }); }
+  return readNapCatActionResponse(data);
 }

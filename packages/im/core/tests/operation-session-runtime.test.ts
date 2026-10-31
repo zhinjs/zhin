@@ -1,10 +1,10 @@
 import { EventEmitter } from 'node:events';
 import { Adapter, AdapterIndex, adapterFeatureId, defineAdapter, createEndpointSpecification, endpointSpec,
-  endpointEventGatewayToken, type EndpointDesiredSnapshot, type EndpointDesiredRepository, type EndpointSendRequest,
+  endpointEventGatewayToken, type EndpointDesiredSnapshot, type EndpointDesiredRepository, type EndpointSendRequest, type EndpointControl, type EndpointManagement,
   type Endpoint as EndpointContract } from '@zhin.js/adapter';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { MiddlewareIndex, middlewareFeatureId, defineMiddleware } from '@zhin.js/middleware';
-import { HandlerIndex, handlerFeatureId } from '@zhin.js/handler';
+import { HandlerIndex, handlerFeatureId, defineHandler as defineLifecycleHandler, type HandlerDefinition } from '@zhin.js/handler';
 import { defineHandler } from '../src/feature/handler.js';
 import { readOperationSession, type OperationSession } from '@zhin.js/feature-kit';
 import { SnapshotStore, createSnapshotView, createCapabilitySlot, rootPluginId, childPluginId,
@@ -22,11 +22,16 @@ class SdkClient extends EventEmitter {
 class NativeEndpoint extends SdkClient implements EndpointContract {
   readonly sent: EndpointSendRequest[] = [];
   readonly stopped = vi.fn();
+  readonly sendNative = vi.fn(async (request: EndpointSendRequest) => { this.sent.push(request); return `sent-${this.sent.length}`; });
+  readonly recall = vi.fn<NonNullable<EndpointControl['recall']>>(async () => undefined);
   readonly setGroupAdmin = vi.fn(async () => undefined);
+  readonly inspectGroupMember = vi.fn<NonNullable<EndpointManagement['inspectGroupMember']>>(async () => ({ canModerate: false }));
   readonly [endpointSpec] = createEndpointSpecification(this, {
     start() {}, open() {}, close() {}, stop: () => { this.stopped(); },
-    management: { setGroupAdmin: () => this.setGroupAdmin() },
-    send: async request => { this.sent.push(request); return `sent-${this.sent.length}`; },
+    control: { recall: request => this.recall(request) },
+    management: { setGroupAdmin: () => this.setGroupAdmin(),
+      inspectGroupMember: request => this.inspectGroupMember(request) },
+    send: request => this.sendNative(request),
   });
 }
 class NativeAdapter extends Adapter<NativeEndpoint> {
@@ -37,7 +42,7 @@ declare module '@zhin.js/feature-kit' { interface AdapterRegistry { native: Nati
 
 class NativeEvent { readonly buffer = Buffer.from('private'); method() { return 'event'; } }
 
-async function fixture(execute: (session: OperationSession<string>, message: Message, signal: AbortSignal) => Promise<unknown>) {
+async function fixture(execute: (session: OperationSession<string>, message: Message, signal: AbortSignal) => Promise<unknown>, sideHandler?: HandlerDefinition) {
   const root = rootPluginId(), author = childPluginId(root, 'command-author');
   const im = new ImRuntime({ enrichSender: sender => sender ? { ...sender, roles: ['trusted', ...(sender.roles ?? [])] } : sender });
   const adapter = new NativeAdapter();
@@ -51,7 +56,7 @@ async function fixture(execute: (session: OperationSession<string>, message: Mes
   };
 
   const adapterSlot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'native', source: '/adapters/native/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => adapter }) });
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], operations: ['recall'], createAdapter: () => adapter }) });
   const command = createCapabilitySlot({ owner: author, feature: commandFeatureId, localName: 'run', source: '/commands/run/index.ts',
     definition: defineCommand<{}, unknown, Message>({ execute: async ({ input, signal }) => execute(readOperationSession(input)!, input!, signal) }) });
   const owners: string[] = [];
@@ -67,7 +72,9 @@ async function fixture(execute: (session: OperationSession<string>, message: Mes
       expect(this.session?.adapter).toBe(adapter);
       handlerReplies.push(this.session!.message.text);
     } }) });
-  const slots = [adapterSlot, command, outbound, handler];
+  const side = sideHandler ? createCapabilitySlot({ owner: author, feature: handlerFeatureId, localName: 'side', source: '/handlers/side/index.ts', definition: sideHandler }) : undefined;
+  const handlerSlots = side ? [handler, side] : [handler];
+  const slots = [adapterSlot, command, outbound, ...handlerSlots];
   const state: SnapshotState = { root, tree: new Map([
     [root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [author] }],
     [author, { id: author, parent: root, instanceKey: 'command-author', packageName: 'command', packageRoot: '/fixture/command', children: [] }],
@@ -79,7 +86,7 @@ async function fixture(execute: (session: OperationSession<string>, message: Mes
   const index = await AdapterIndex.create([adapterSlot], view, new AbortController().signal, { repository });
   const store = new SnapshotStore({ ...state, projections: new Map<string, unknown>([
     [adapterFeatureId, index], [commandFeatureId, new CommandIndex([command], view)],
-    [middlewareFeatureId, new MiddlewareIndex([outbound], view)], [handlerFeatureId, new HandlerIndex([handler], view)],
+    [middlewareFeatureId, new MiddlewareIndex([outbound], view)], [handlerFeatureId, new HandlerIndex(handlerSlots, view)],
   ]) as SnapshotState['projections'] });
   im.attach(store); await index.start(); index.open();
   const rows = adapter.list();
@@ -168,7 +175,7 @@ it('does not execute a retained framework management port after the account has 
   const row = f.rows[0];
   const running = f.im.endpoints.withManagement(String(row.canonicalId), String(row.canonicalId), async management => {
     entered.resolve(); await resume.promise;
-    await management.setGroupAdmin!('room', 'member', true);
+    await management.setGroupAdmin!({ groupId: 'room', userId: 'member', enabled: true });
   });
   try {
     await entered.promise;
@@ -188,7 +195,180 @@ it('expires a framework management port when its Root operation ends even if unr
     const { generation, ...snapshot } = f.store.current;
     f.store.commit(generation, { snapshot, dispose: () => undefined });
     expect(f.adapter.getEndpoint(row.instanceId)).toBe(f.endpoint);
-    await expect(port!.setGroupAdmin!('room', 'member', true)).rejects.toMatchObject({ code: 'operation_scope_ended', disposition: 'not_sent' });
+    await expect(port!.setGroupAdmin!({ groupId: 'room', userId: 'member', enabled: true })).rejects.toMatchObject({ code: 'operation_scope_ended', disposition: 'not_sent' });
     expect(f.endpoint.setGroupAdmin).not.toHaveBeenCalled();
   } finally { await f.close(); }
+});
+
+
+it.each(['platform.receive', 'notice.receive', 'request.receive', 'system.receive'] as const)(
+  'cancels the actual %s Handler operation when its source account stops', async name => {
+    const started = deferred(), resume = deferred();
+    let signal: AbortSignal | undefined;
+    const f = await fixture(async () => undefined, defineLifecycleHandler({ event: name, async handle() {
+      signal = this.signal;
+      expect(this.session).toBeUndefined();
+      started.resolve();
+      await resume.promise;
+    } }));
+    const common = { id: 'event', timestamp: 100, metadata: {} };
+    const receiving = name === 'platform.receive'
+      ? f.endpoint[endpointSpec].events.platform('native.ready', f.event)
+      : f.endpoint[endpointSpec].events.emit(name, name === 'notice.receive'
+        ? { ...common, type: 'notice', name: 'notice.group.member_increase', conversation: { kind: 'group', id: 'room' } }
+        : name === 'request.receive'
+          ? { ...common, type: 'request', name: 'request.group.invite', actor: { id: 'alice' },
+            conversation: { kind: 'group', id: 'room' }, $approve() {}, $reject() {} }
+          : { ...common, type: 'system', name: 'system.online' });
+    let stopping: ReturnType<typeof f.adapter.stop> | undefined;
+    try {
+      await started.promise;
+      stopping = f.adapter.stop(f.rows[0].instanceId, f.adapter.revision);
+      await vi.waitFor(() => expect(signal?.aborted).toBe(true), { timeout: 100 });
+      expect(f.adapter.getEndpoint(f.rows[1].instanceId)).toBe(f.other);
+      resume.resolve();
+      await receiving;
+      expect((await stopping)?.execution.status).toBe('applied');
+    } finally {
+      resume.resolve();
+      await receiving;
+      await stopping;
+      await f.close();
+    }
+  },
+);
+
+
+it('validates native event source incarnation before any Handler dispatch', async () => {
+  const called = vi.fn();
+  const f = await fixture(async () => undefined, defineLifecycleHandler({ event: 'platform.receive', handle: called }));
+  const endpoint = { id: f.rows[0].canonicalId, adapter: 'native' };
+  const payload = { name: 'native.ready', event: f.event };
+  try {
+    await expect(f.im.endpointEvents.receive({ name: 'platform.receive', endpoint, payload, client: f.other }))
+      .rejects.toMatchObject({ code: 'endpoint_inactive' });
+    await f.adapter.stop(f.rows[0].instanceId, f.adapter.revision);
+    await expect(f.im.endpointEvents.receive({ name: 'platform.receive', endpoint, payload, client: f.endpoint }))
+      .rejects.toMatchObject({ code: 'endpoint_inactive' });
+    expect(called).not.toHaveBeenCalled();
+  } finally { await f.close(); }
+});
+
+
+it('propagates captured caller cancellation into an in-flight management inspection', async () => {
+  const f = await fixture(async () => undefined), entered = deferred(), resume = deferred();
+  const owner = new AbortController(), inspector = new AbortController();
+  let receivedSignal: AbortSignal | undefined;
+  f.endpoint.inspectGroupMember.mockImplementationOnce(async ({ signal }) => {
+    receivedSignal = signal;
+    entered.resolve();
+    await resume.promise;
+    return { canModerate: false };
+  });
+  const operation = f.im.endpoints.captureOperation({ target: f.input.conversation,
+    client: f.endpoint, signal: owner.signal, requester: f.author });
+  const inspecting = operation.management!.inspectGroupMember!({ groupId: 'room', userId: 'member', signal: inspector.signal });
+  try {
+    await entered.promise;
+    owner.abort(new Error('Retained work cancelled'));
+    expect(operation.signal.aborted).toBe(true);
+    expect(inspector.signal.aborted).toBe(false);
+    expect(receivedSignal?.aborted).toBe(true);
+  } finally {
+    resume.resolve();
+    await inspecting.catch(() => undefined);
+    operation.release();
+    await f.close();
+  }
+});
+
+
+it('requires the actual source Client when capturing an account operation', async () => {
+  const f = await fixture(async () => undefined);
+  let captured: ReturnType<typeof f.im.endpoints.captureOperation> | undefined;
+  try {
+    expect(() => { captured = f.im.endpoints.captureOperation({ target: f.input.conversation, client: undefined }); })
+      .toThrow();
+  } finally {
+    captured?.release();
+    await f.close();
+  }
+});
+
+
+it('retains the real source and author through send, rejects foreign refs and releases authority idempotently', async () => {
+  const f = await fixture(async () => undefined);
+  const operation = f.im.endpoints.captureOperation({ target: f.input.conversation, client: f.endpoint, requester: f.author });
+  try {
+    expect(() => f.im.endpoints.captureOperation({ target: f.input.conversation, client: f.other })).toThrow();
+    const foreign = { ...f.input.conversation, endpoint: { id: f.rows[1].canonicalId, adapter: 'native' } };
+    await expect(async () => operation.control!.recall!({ message: { conversation: foreign, id: 'foreign-message' } }))
+      .rejects.toMatchObject({ code: 'endpoint_identity_mismatch', disposition: 'not_sent' });
+    expect(f.endpoint.recall).not.toHaveBeenCalled();
+    expect((await operation.send('captured answer')).status).toBe('sent');
+    expect(f.owners).toEqual([f.author]);
+    expect(f.endpoint.sent).toHaveLength(1);
+    expect(f.endpoint.sent[0].payload).toBe('wrapped:captured answer');
+    expect(f.other.sent).toHaveLength(0);
+    operation.release();
+    operation.release();
+    await expect(operation.send('released answer')).rejects.toMatchObject({ code: 'operation_scope_ended' });
+    await expect(operation.management!.setGroupAdmin!({ groupId: 'room', userId: 'member', enabled: true })).rejects.toMatchObject({ code: 'operation_scope_ended' });
+    expect(f.endpoint.setGroupAdmin).not.toHaveBeenCalled();
+    expect(f.adapter.getEndpoint(f.rows[0].instanceId)).toBe(f.endpoint);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('combines a retained control caller and per-call signal without cancelling the independent caller', async () => {
+  const f = await fixture(async () => undefined), entered = deferred(), resume = deferred();
+  const owner = new AbortController(), independent = new AbortController();
+  let platformSignal: AbortSignal | undefined;
+  f.endpoint.recall.mockImplementationOnce(async ({ signal }) => {
+    platformSignal = signal; entered.resolve(); await resume.promise;
+  });
+  const operation = f.im.endpoints.captureOperation({ target: f.input.conversation, client: f.endpoint, signal: owner.signal });
+  const recalling = operation.control!.recall!({ message: { conversation: f.input.conversation, id: 'source-message' }, signal: independent.signal });
+  try {
+    await entered.promise;
+    owner.abort(new Error('Retained control cancelled'));
+    expect(operation.signal.aborted).toBe(true);
+    expect(platformSignal?.aborted).toBe(true);
+    expect(independent.signal.aborted).toBe(false);
+  } finally { resume.resolve(); await recalling.catch(() => undefined); operation.release(); await f.close(); }
+});
+
+it.each(['caller', 'root'] as const)('released capture keeps an admitted inspection owned and cancellable by its %s', async cancellation => {
+  const f = await fixture(async () => undefined), entered = deferred(), finish = deferred();
+  const caller = new AbortController(); let received: AbortSignal | undefined;
+  f.endpoint.inspectGroupMember.mockImplementationOnce(async ({ signal }) => {
+    received = signal; entered.resolve(); await finish.promise; return { canModerate: false };
+  });
+  const operation = f.im.endpoints.captureOperation({ target: f.input.conversation, client: f.endpoint, signal: caller.signal });
+  const pending = operation.management!.inspectGroupMember!({ groupId: 'room', userId: 'member', signal: new AbortController().signal });
+  let retiring: Promise<void> | undefined;
+  try {
+    await entered.promise; operation.release();
+    await expect(operation.management!.inspectGroupMember!({ groupId: 'room', userId: 'late', signal: new AbortController().signal }))
+      .rejects.toMatchObject({ disposition: 'not_sent' });
+    if (cancellation === 'caller') caller.abort(new Error('original caller ended'));
+    else retiring = f.store.close();
+    expect(received?.aborted).toBe(true);
+  } finally { finish.resolve(); await pending.catch(() => undefined); operation.release(); await retiring; await f.close(); }
+});
+
+it.each(['caller', 'root'] as const)('released capture keeps a submitted send owned and cancellable by its %s', async cancellation => {
+  const f = await fixture(async () => undefined), entered = deferred(), finish = deferred();
+  const caller = new AbortController(); let received: AbortSignal | undefined;
+  f.endpoint.sendNative.mockImplementationOnce(async request => {
+    received = request.signal; entered.resolve(); await finish.promise; return 'original-send';
+  });
+  const operation = f.im.endpoints.captureOperation({ target: f.input.conversation, client: f.endpoint, signal: caller.signal });
+  const pending = operation.send('first'); let retiring: Promise<void> | undefined;
+  try {
+    await entered.promise; operation.release();
+    await expect(operation.send('late')).rejects.toMatchObject({ disposition: 'not_sent' });
+    if (cancellation === 'caller') caller.abort(new Error('original caller ended'));
+    else retiring = f.store.close();
+    expect(received?.aborted).toBe(true); expect(f.endpoint.sendNative).toHaveBeenCalledOnce();
+  } finally { finish.resolve(); await pending.catch(() => undefined); operation.release(); await retiring; await f.close(); }
 });

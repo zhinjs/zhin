@@ -73,9 +73,11 @@ function defineFixtureAdapter<TConfig = unknown>(definition: FixtureDefinition<T
 }
 
 const testEndpointEvents = Object.freeze({
+  async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
   receive: async (_event: EndpointEvent) => undefined,
   [generationAdmissionBinder](gate: GenerationAdmissionGate) {
     return Object.freeze({
+      async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
       receive: (event: EndpointEvent) => gate.enter(() => this.receive(event)),
     });
   },
@@ -135,16 +137,16 @@ describe('Adapter Feature', () => {
   it('adapts platform recall-by-id methods to canonical MessageRef control', async () => {
     const recall = vi.fn(async () => undefined);
     const control = createRecallEndpointControl(recall);
-    await control.recall?.({
+    await control.recall?.({ message: {
       conversation: {
         endpoint: { id: 'memory', adapter: 'memory' },
         kind: 'group',
         id: 'room-1',
       },
       id: 'message-1',
-    });
+    } });
 
-    expect(recall).toHaveBeenCalledWith('message-1');
+    expect(recall).toHaveBeenCalledWith('message-1', undefined);
     expect(Object.isFrozen(control)).toBe(true);
   });
 
@@ -872,6 +874,7 @@ describe('Adapter Feature', () => {
       definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }),
     });
     const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, {
+      async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
       receive: async () => { throw new Error('private error'); },
     }]]));
     const index = await createAdapterIndex([slot], candidate);
@@ -892,7 +895,7 @@ describe('Adapter Feature', () => {
     const receive = vi.fn(() => { if (++count === 1) throw new Error('sync receive failure'); return Promise.resolve('accepted'); });
     const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'sync-buffer', source: '/adapters/sync-buffer/index.ts',
       definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }) });
-    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { receive }]]));
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive }]]));
     const index = await createAdapterIndex([slot], candidate); await index.start(); index.open();
     const first = endpoint.publish(); const failed = expect(first).rejects.toThrow('dispatch failed');
     const second = endpoint.publish();
@@ -911,7 +914,7 @@ describe('Adapter Feature', () => {
     const receive = vi.fn(() => { retireEndpoint(endpoint); return Promise.resolve('entered before retirement'); });
     const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'retiring-buffer', source: '/adapters/retiring-buffer/index.ts',
       definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }) });
-    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { receive }]]));
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive }]]));
     const index = await createAdapterIndex([slot], candidate); await index.start(); index.open();
     const first = endpoint.publish(), second = endpoint.publish();
     const rejected = expect(second).rejects.toThrow('retired before event admission');
@@ -953,6 +956,7 @@ describe('Adapter Feature', () => {
       definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }),
     });
     const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, {
+      async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
       receive: () => new Promise<void>((resolve) => { finish = resolve; }),
     }]]));
     const index = await createAdapterIndex([slot], candidate);
@@ -991,7 +995,7 @@ describe('Adapter Feature', () => {
     const received: EndpointEvent[] = [], endpoint = new TestEndpoint({});
     const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'native', source: '/adapters/native/index.ts',
       definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }) });
-    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { receive: async (event: EndpointEvent) => { received.push(event); } }]]));
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async (event: EndpointEvent) => { received.push(event); } }]]));
     const index = await createAdapterIndex([slot], candidate); await index.start();
     await endpoint[endpointSpec].events.message({ conversation: { kind: 'private', id: 'room-1' }, content: 'hello', sender: { id: 'user-1' } });
     expect(received).toEqual([]);

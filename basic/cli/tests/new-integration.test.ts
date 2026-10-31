@@ -273,7 +273,7 @@ describe('CLI new command integration', () => {
     expect(publicAdapterTs).toContain('extends TestAdapterClient implements Endpoint')
     expect(publicAdapterTs).toContain('extends Adapter<TestAdapterEndpoint, TestAdapterAdapterConfig>')
     expect(publicAdapterTs).toContain('events.run(() => events.message(message))')
-    expect(publicAdapterTs).toContain("declare module 'zhin.js/adapter'")
+    expect(publicAdapterTs).toContain("declare module '@zhin.js/feature-kit'")
     expect(publicAdapterTs).not.toContain('extends Endpoint<')
     expect(publicAdapterTs).toContain('async connect(')
     expect(publicAdapterTs).toContain('async disconnect()')
@@ -293,7 +293,7 @@ describe('CLI new command integration', () => {
     const packageJson = await fs.readJson(path.join(pluginDir, 'package.json'))
     expect(packageJson.zhin.features).toEqual([
       { package: '@zhin.js/skill', api: '^1.0.0' },
-      { package: '@zhin.js/adapter', api: '^1.0.0' },
+      { package: '@zhin.js/adapter', api: '^2.0.0' },
     ])
     expect(packageJson.dependencies).toBeUndefined()
     expect(packageJson.peerDependencies['@zhin.js/adapter']).toBeDefined()

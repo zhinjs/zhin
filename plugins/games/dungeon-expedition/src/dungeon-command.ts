@@ -1,5 +1,5 @@
 import { createMessages } from 'zhin.js/i18n';
-import { gameCommandHint, channelKey, type GameMessageLike, type GameReply } from '@zhin.js/game-kit';
+import { gameCommandHint, channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import {
   continueDungeon,
   handleDungeonChoice,
@@ -20,7 +20,7 @@ const messages = createMessages({
   abort: { 'zh-CN': '队长结束远征', en: 'Leader ends the expedition' },
   empty: { 'zh-CN': '当前频道没有远征队。', en: 'This channel has no expedition party.' },
 });
-export function getDungeonHelp(message: Pick<GameMessageLike, 'locale' | 'formatCommand'> = {}): string {
+export function getDungeonHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
   const command = message.formatCommand?.('dungeon');
   const actions = ['start', 'join', 'ready', 'go', 'explore', 'attack', 'defend', 'potion', 'status', 'abort'] as const;
   return [messages(message.locale, 'title'), ...(command === undefined ? [] : actions.map(action => `${command} ${action} — ${messages(message.locale, action)}`))].join('\n');
@@ -65,20 +65,22 @@ export function normalizeDungeonAction(action: string): string | null {
 
 export async function runDungeonCommand(
   service: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   rawAction: string,
 ): Promise<GameReply> {
-  const action = normalizeDungeonAction(rawAction);
-  if (!action || action === 'help') return getDungeonHelp(message);
-  if (action === 'create') return startDungeon(service, message);
-  if (action === 'status') return continueDungeon(service, message);
+  return service.runInScope({ scope: channelKey(message), run: async () => {
+    const action = normalizeDungeonAction(rawAction);
+    if (!action || action === 'help') return getDungeonHelp(message);
+    if (action === 'create') return startDungeon(service, message);
+    if (action === 'status') return continueDungeon(service, message);
 
-  const session = await service.getActiveByChannel(channelKey(message));
-  if (!session) return messages(message.locale, 'empty') + gameCommandHint(message, 'dungeon');
-  return handleDungeonChoice(
-    service,
-    message,
-    dungeonSessionToken(session),
-    action,
-  );
+    const session = await service.getActiveByChannel(channelKey(message));
+    if (!session) return messages(message.locale, 'empty') + gameCommandHint(message, 'dungeon');
+    return handleDungeonChoice(
+      service,
+      message,
+      dungeonSessionToken(session),
+      action,
+    );
+  } });
 }

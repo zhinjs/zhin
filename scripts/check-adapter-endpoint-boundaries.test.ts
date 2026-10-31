@@ -12,8 +12,10 @@ it('permits the generic Adapter base only from its subpath and rejects removed f
   expect(usesSupportedAdapterBase('class IcqqAdapter extends Adapter {}')).toBe(false);
 });
 it('requires the single actual Adapter registry without a legacy descriptor branch', () => {
-  expect(declaresAdapterTypeRegistry('interface AdapterRegistry { icqq: IcqqAdapter }')).toBe(true);
+  expect(declaresAdapterTypeRegistry("declare module '@zhin.js/feature-kit' { interface AdapterRegistry { icqq: IcqqAdapter } }")).toBe(true);
   expect(declaresAdapterTypeRegistry('interface AdapterClientRegistry { qq: ClientTypes }')).toBe(false);
   expect(declaresAdapterTypeRegistry('interface AdapterRegistry {} interface AdapterClientRegistry {}')).toBe(false);
   expect(declaresAdapterTypeRegistry('interface UnrelatedRegistry {}')).toBe(false);
+  expect(declaresAdapterTypeRegistry("declare module 'zhin.js/adapter' { interface AdapterRegistry { icqq: IcqqAdapter } }")).toBe(false);
+  expect(declaresAdapterTypeRegistry("declare module '@zhin.js/adapter' { interface AdapterRegistry { icqq: IcqqAdapter } }")).toBe(false);
 });

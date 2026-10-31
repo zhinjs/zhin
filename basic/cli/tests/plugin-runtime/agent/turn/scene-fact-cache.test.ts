@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { adapterFeatureId } from '@zhin.js/adapter';
+import { adapterFeatureId, type EndpointMemberInspectionRequest, type EndpointGroupInspectionRequest } from '@zhin.js/adapter';
 import { SCENE_FACT_STALE_MS, SceneFactStore, SessionProfileStore } from '@zhin.js/agent';
 import type { ConversationEvent } from '@zhin.js/im-contract';
 import { resolveRuntimeTurnContextState } from '../../../../src/plugin-runtime/agent/turn/request.js';
@@ -21,7 +21,7 @@ function generation(management: object) {
 function port(overrides: Record<string, unknown> = {}) {
   return {
     inspectGroupScene: vi.fn(async () => ({ name: '测试群', ownerId: '10001', adminIds: ['10002'], memberCount: 42, muteAll: false })),
-    inspectGroupMemberProfile: vi.fn(async (_group: string, user: string) => user === BOT
+    inspectGroupMemberProfile: vi.fn(async ({ groupId: _group, userId: user }: EndpointMemberInspectionRequest) => user === BOT
       ? { platformRole: 'admin', card: '小智', mutedUntil: 0 }
       : { platformRole: 'member', card: '明明', title: '老玩家', mutedUntil: 0 }),
     ...overrides,
@@ -35,7 +35,7 @@ function environment() {
   const store = new SceneFactStore(sessions, { now });
   const refresher = new SceneFactRefresher();
   const resolve = (management: object, sender = '10002', abort = new AbortController()) =>
-    resolveRuntimeTurnContextState(generation(management).snapshot, conversation, abort.signal, sender, { store, refresher, now });
+    resolveRuntimeTurnContextState({ snapshot: generation(management).snapshot, conversation, signal: abort.signal, senderId: sender, factServices: { store, refresher, now } });
   return { clock, sessions, store, refresher, resolve };
 }
 
@@ -50,7 +50,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
     const { store, resolve } = environment();
     const management = port();
     const index = generation(management);
-    const state = await resolveRuntimeTurnContextState(index.snapshot, conversation, new AbortController().signal, '10002', { store, now: () => T0 });
+    const state = await resolveRuntimeTurnContextState({ snapshot: index.snapshot, conversation, signal: new AbortController().signal, senderId: '10002', factServices: { store, now: () => T0 } });
     expect(state).toEqual(expectedFacts);
     expect(management.inspectGroupScene).toHaveBeenCalledTimes(1);
     // level 2
@@ -59,7 +59,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
     // level 1: the same generation does not touch level 2 or the platform again
     const getGroup = vi.spyOn(store, 'getGroup');
     const getMember = vi.spyOn(store, 'getMember');
-    const again = await resolveRuntimeTurnContextState(index.snapshot, conversation, new AbortController().signal, '10002', { store, now: () => T0 + 1000 });
+    const again = await resolveRuntimeTurnContextState({ snapshot: index.snapshot, conversation, signal: new AbortController().signal, senderId: '10002', factServices: { store, now: () => T0 + 1000 } });
     expect(again).toEqual(expectedFacts);
     expect(getGroup).not.toHaveBeenCalled();
     expect(getMember).not.toHaveBeenCalled();
@@ -92,10 +92,10 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
     const { store, sessions, resolve } = environment();
     const management = port();
     const index = generation(management);
-    const run = () => resolveRuntimeTurnContextState(index.snapshot, conversation, new AbortController().signal, '10002', { store, now: () => T0 });
+    const run = () => resolveRuntimeTurnContextState({ snapshot: index.snapshot, conversation, signal: new AbortController().signal, senderId: '10002', factServices: { store, now: () => T0 } });
     await run();
     await run();
-    const botCalls = management.inspectGroupMemberProfile.mock.calls.filter(([, user]) => user === BOT);
+    const botCalls = management.inspectGroupMemberProfile.mock.calls.filter(([{ userId }]) => userId === BOT);
     expect(botCalls).toHaveLength(1);
     expect((await store.getMember('endpoint', 'group', '100', BOT))?.facts).toEqual({ platformRole: 'admin', card: '小智', mutedUntil: 0 });
     expect(await sessions.get('endpoint', 'group', '100')).toMatchObject({ botRole: 'admin', muteUntil: 0 });
@@ -114,7 +114,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
 
   it('without a store behaves exactly as before', async () => {
     const management = port();
-    const state = await resolveRuntimeTurnContextState(generation(management).snapshot, conversation, new AbortController().signal, '10002');
+    const state = await resolveRuntimeTurnContextState({ snapshot: generation(management).snapshot, conversation, signal: new AbortController().signal, senderId: '10002' });
     expect(state).toEqual(expectedFacts);
   });
 
@@ -129,7 +129,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
       await seedStale(env);
       const fresh = port({
         inspectGroupScene: vi.fn(async () => ({ name: '改名后', ownerId: '10001', memberCount: 43 })),
-        inspectGroupMemberProfile: vi.fn(async (_g: string, user: string) => user === BOT ? { platformRole: 'admin' } : { platformRole: 'admin', card: '新名片' }),
+        inspectGroupMemberProfile: vi.fn(async ({ groupId: _g, userId: user }: EndpointMemberInspectionRequest) => user === BOT ? { platformRole: 'admin' } : { platformRole: 'admin', card: '新名片' }),
       });
       const state = await env.resolve(fresh);
       expect(state?.conversation?.name).toBe('测试群'); // last known value, served immediately
@@ -165,7 +165,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
       await seedStale(env);
       const broken = port({
         inspectGroupScene: vi.fn(async () => { throw new Error('timeout'); }),
-        inspectGroupMemberProfile: vi.fn(async (_g: string, user: string) => {
+        inspectGroupMemberProfile: vi.fn(async ({ groupId: _g, userId: user }: EndpointMemberInspectionRequest) => {
           if (user === BOT) return { platformRole: 'admin' };
           throw new Error('timeout');
         }),
@@ -183,7 +183,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
       await seedStale(env);
       let seen: AbortSignal | undefined;
       const hanging = port({
-        inspectGroupScene: vi.fn((_g: string, signal: AbortSignal) => { seen = signal; return new Promise(() => undefined); }),
+        inspectGroupScene: vi.fn(({ groupId: _g, signal }: EndpointGroupInspectionRequest) => { seen = signal; return new Promise(() => undefined); }),
       });
       await env.resolve(hanging);
       await vi.waitFor(() => expect(seen).toBeDefined());
@@ -199,7 +199,7 @@ describe('ADR 0041 §6 two-level scene fact cache', () => {
       await seedStale(env);
       const turn = new AbortController();
       let seen: AbortSignal | undefined;
-      const management = port({ inspectGroupScene: vi.fn(async (_g: string, signal: AbortSignal) => { seen = signal; return { name: '新' }; }) });
+      const management = port({ inspectGroupScene: vi.fn(async ({ groupId: _g, signal }: EndpointGroupInspectionRequest) => { seen = signal; return { name: '新' }; }) });
       await env.resolve(management, '10002', turn);
       turn.abort(new Error('turn done'));
       await env.refresher.idle();

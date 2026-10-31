@@ -1,3 +1,4 @@
+import { channelKey } from '../src/board-sender.js';
 import { describe, expect, it, vi } from 'vitest';
 import { GameRecordStore, type GameRecordDatabase } from '../src/game-records.js';
 
@@ -10,17 +11,14 @@ function createDatabase() {
   return { database, create, findAll };
 }
 
-const message = {
-  $adapter: 'process', $endpoint: 'terminal',
-  $sender: { id: 'u1', name: 'User' },
-  $channel: { type: 'private', id: 'u1' },
-} as never;
+const message = { target: { endpoint: { adapter: 'process', id: 'terminal' }, kind: 'private', id: 'u1' },
+sender: { id: 'u1', name: 'User' } } as never;
 
 describe('GameRecordStore ownership', () => {
   it('writes only through its explicitly owned database', async () => {
     const first = createDatabase();
     const second = createDatabase();
-    await new GameRecordStore(first.database).record(message, 'guess', 'won');
+    await new GameRecordStore(first.database).record({ scope: channelKey(message), player: message.sender, gameId: 'guess', result: 'won' });
     expect(first.create).toHaveBeenCalledOnce();
     expect(second.create).not.toHaveBeenCalled();
   });

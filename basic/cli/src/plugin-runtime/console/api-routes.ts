@@ -17,6 +17,7 @@ import { ConsoleConfigurationStore } from './configuration.js';
 import { isKnownConversationSession } from './conversation-session.js';
 import { registerConversationHistoryRoutes } from './conversation-history-routes.js';
 import { registerConversationResultRoutes } from './conversation-result-routes.js';
+import { registerDataMigrationRoutes } from './data-migration-routes.js';
 import { registerInteractionRoutes } from './interaction-routes.js';
 import { registerWorkspaceConversationRoutes } from './workspace-conversation-routes.js';
 import { registerConsoleEntryRoutes } from './entry-routes.js';
@@ -46,7 +47,7 @@ export interface RegisterConsoleRoutesOptions {
   readonly pluginLifecycleFile?: string;
   readonly pluginLifecycleStore?: PluginLifecycleStore;
   readonly configuration: ConsoleConfigurationStore;
-  readonly hostConsoleRpc?: import('@zhin.js/plugin-runtime').PluginConsoleRpc;
+  readonly hostConsoleRpc?: import('./plugin-console-rpc.js').HostConsoleRpcFactory;
 }
 
 /** Registers the Console HTTP surface without installing process-level subscriptions. */
@@ -92,6 +93,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
   registerConversationHistoryRoutes({ http, base, im, databaseHost, snapshots });
   registerConversationResultRoutes({ http, base, projectRoot, snapshots });
   registerInteractionRoutes({ http, base, im, snapshots });
+  registerDataMigrationRoutes({ http, base, projectRoot, snapshots });
   registerWorkspaceConversationRoutes({ http, base, snapshots, databaseHost });
   registerPluginTaskRoutes({ http, base, snapshots });
   registerPermissionExplanationRoutes({ http, base, snapshots });

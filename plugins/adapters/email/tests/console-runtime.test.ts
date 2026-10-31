@@ -1,3 +1,4 @@
+import { createTestEventGateway } from '../../test-utils/endpoint.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdapterIndex, AdapterManagementError, adapterFeatureId, endpointEventGatewayToken,
   type EndpointDesiredSnapshot } from 'zhin.js/adapter';
@@ -22,7 +23,7 @@ async function fixture() {
   const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'email', source: '/fixture/email/adapters/email/index.ts', definition: emailDefinition });
   const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
     config: new Map([[root, source]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
-    resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]) };
+    resources: new Map([[root, new Map([[endpointEventGatewayToken.id, createTestEventGateway()]])]]) };
   const index = await AdapterIndex.create([slot], createSnapshotView(1, state), new AbortController().signal, { repository });
   await index.activate(new AbortController().signal); cleanup.push(() => index.stop());
   const adapter = index.adapter(slot.id)!;

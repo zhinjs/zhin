@@ -6,7 +6,7 @@ import inquirer from 'inquirer';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   CONVENTION_SOURCE_DIRECTORIES,
-  FALLBACK_STACK_RANGE,
+  PLUGIN_STACK_PACKAGES,
   PLUGIN_TOOLING_RANGES,
   RUNTIME_ENTRIES_SCRIPT,
   RUNTIME_ENTRIES_SCRIPT_PATH,
@@ -42,11 +42,12 @@ async function installFake(root: string, name: string, version: string, exportsF
 }
 
 const ranges: PluginStackRanges = {
-  'zhin.js': '^1.1.8',
+  'zhin.js': '^1.1.19',
   '@zhin.js/skill': '^1.1.3',
   '@zhin.js/command': '^1.1.6',
-  '@zhin.js/adapter': '^1.1.4',
-  '@zhin.js/testing': '^1.0.3',
+  '@zhin.js/adapter': '^1.1.26',
+  '@zhin.js/feature-kit': '^1.1.10',
+  '@zhin.js/testing': '^1.1.10',
 };
 
 function manifest(kind: PluginKind) {
@@ -62,24 +63,45 @@ function manifest(kind: PluginKind) {
 }
 
 describe('resolvePluginStackRanges', () => {
-  it('derives ^x.y.z from the host project, even when exports hide package.json', async () => {
+  it('keeps bundled release floors when an older host is installed, even when exports hide package.json', async () => {
     const root = await tempDir();
     await installFake(root, 'zhin.js', '1.1.8', { '.': { import: './lib/index.js' } });
     await installFake(root, '@zhin.js/skill', '1.1.3-beta.1');
     const nested = path.join(root, 'plugins', 'x');
     await fs.ensureDir(nested);
     expect(findInstalledVersion('zhin.js', nested)).toBe('1.1.8');
-    const resolved = resolvePluginStackRanges(nested, []);
-    expect(resolved['zhin.js']).toBe('^1.1.8');
-    expect(resolved['@zhin.js/skill']).toBe('^1.1.3');
-    expect(resolved['@zhin.js/command']).toBe(FALLBACK_STACK_RANGE);
+    const resolved = resolvePluginStackRanges(nested, ranges);
+    expect(resolved['zhin.js']).toBe(ranges['zhin.js']);
+    expect(resolved['@zhin.js/skill']).toBe(ranges['@zhin.js/skill']);
+    expect(resolved['@zhin.js/command']).toBe(ranges['@zhin.js/command']);
   });
 
-  it('falls back to the CLI install location before the wide default', async () => {
+  it('raises a floor to a higher installed version while preserving its prerelease suffix', async () => {
     const host = await tempDir();
-    const cli = await tempDir();
-    await installFake(cli, '@zhin.js/command', '1.1.6');
-    expect(resolvePluginStackRanges(host, [cli])['@zhin.js/command']).toBe('^1.1.6');
+    await installFake(host, '@zhin.js/command', '1.2.0-beta.1');
+    expect(resolvePluginStackRanges(host, ranges)['@zhin.js/command']).toBe('^1.2.0-beta.1');
+    expect(caretRange('1.2.0-beta.1')).toBe('^1.2.0-beta.1');
+  });
+
+  it.each(['2.0.0', '2.0.0-beta.1'])('does not broaden the bundled authoring contract to an installed foreign major: %s', async version => {
+    const host = await tempDir();
+    await installFake(host, '@zhin.js/adapter', version);
+    expect(resolvePluginStackRanges(host, ranges)['@zhin.js/adapter']).toBe(ranges['@zhin.js/adapter']);
+  });
+
+  it.each(['latest', '^1.0', '*', 'not-a-version'])('refuses a missing or invalid bundled release version: %s', async invalid => {
+    const host = await tempDir();
+    expect(() => resolvePluginStackRanges(host, { ...ranges, '@zhin.js/feature-kit': invalid }))
+      .toThrow('release version is unavailable for @zhin.js/feature-kit');
+    expect(() => resolvePluginStackRanges(host, {})).toThrow('release version is unavailable for zhin.js');
+  });
+
+  it('does not relabel an installed prerelease as the corresponding stable minimum', async () => {
+    const host = await tempDir();
+    await installFake(host, '@zhin.js/adapter', '1.1.26-beta.0');
+    expect(resolvePluginStackRanges(host, ranges)['@zhin.js/adapter']).toBe('^1.1.26');
+    expect(resolvePluginStackRanges(host, { ...ranges, '@zhin.js/adapter': '^1.1.26-beta.2' })['@zhin.js/adapter'])
+      .toBe('^1.1.26-beta.2');
   });
 
   it('never yields latest or another non-semver range', async () => {
@@ -88,6 +110,8 @@ describe('resolvePluginStackRanges', () => {
       expect(range).toMatch(/^\^\d+\.\d+\.\d+$/);
     }
     expect(caretRange('latest')).toBeUndefined();
+    expect(caretRange('1.2.3junk')).toBeUndefined();
+    expect(Object.keys(resolvePluginStackRanges(host))).toEqual([...PLUGIN_STACK_PACKAGES]);
   });
 
   it('uses workspace protocols only inside the zhin monorepo root', async () => {
@@ -103,7 +127,7 @@ describe('createPluginManifest', () => {
   it.each(['normal', 'service', 'adapter'] as const)('%s: capability packages are optional peers, never dependencies', (kind) => {
     const pkg = manifest(kind);
     expect(pkg.dependencies).toBeUndefined();
-    expect(pkg.peerDependencies['zhin.js']).toBe('^1.1.8');
+    expect(pkg.peerDependencies['zhin.js']).toBe(ranges['zhin.js']);
     expect(pkg.peerDependenciesMeta['zhin.js']).toBeUndefined();
     for (const feature of pkg.zhin.features as Array<{ package: string }>) {
       expect(pkg.peerDependencies[feature.package]).toBeDefined();
@@ -111,6 +135,22 @@ describe('createPluginManifest', () => {
       expect(pkg.devDependencies[feature.package]).toBe(pkg.peerDependencies[feature.package]);
     }
     expect(JSON.stringify(pkg)).not.toContain('latest');
+  });
+
+  it('adapter registry uses a direct peer and development dependency, without registering FeatureKit as a provider', () => {
+    const pkg = manifest('adapter');
+    expect(pkg.peerDependencies['@zhin.js/feature-kit']).toBe(ranges['@zhin.js/feature-kit']);
+    expect(pkg.devDependencies['@zhin.js/feature-kit']).toBe(ranges['@zhin.js/feature-kit']);
+    expect(pkg.zhin.features).not.toContainEqual(expect.objectContaining({ package: '@zhin.js/feature-kit' }));
+  });
+
+  it('selects Adapter API 2 independently of engine and unchanged Feature APIs', () => {
+    expect(manifest('adapter').zhin).toMatchObject({ engine: '^1.0.0', features: [
+      { package: '@zhin.js/skill', api: '^1.0.0' }, { package: '@zhin.js/adapter', api: '^2.0.0' },
+    ] });
+    for (const kind of ['normal', 'service'] as const) {
+      expect(manifest(kind).zhin.features.every((feature: { api: string }) => feature.api === '^1.0.0')).toBe(true);
+    }
   });
 
   it('publishes built JavaScript, not the TypeScript entry', () => {

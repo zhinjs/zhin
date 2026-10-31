@@ -1,3 +1,4 @@
+import { pluginEventInstances, type PluginEventInstance } from './plugin-events.js';
 import { normalizeSourcePath } from './source-path.js';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -25,6 +26,12 @@ import {
   type RuntimeSnapshot,
   type SnapshotReader,
   type SnapshotState,
+  type SnapshotLease,
+  type PrepareTransaction,
+  type HmrReloadScope,
+  type HmrOutcome,
+  type HmrEventDetails,
+  type HmrResumeDetails,
 } from '@zhin.js/plugin-runtime';
 import {
   FeatureCatalog,
@@ -133,6 +140,16 @@ interface InspectedProject {
   readonly environmentLayers: Readonly<EnvironmentLayers>;
 }
 
+/** Facts for one existing Controller transaction; does not own commit or rollback. */
+interface ReloadEventRequest {
+  readonly target: PluginId | string;
+  readonly trigger: HmrEventDetails['trigger'];
+  readonly changed: readonly string[];
+  readonly planned: HmrReloadScope;
+  readonly prepare: PrepareTransaction<RuntimeGenerationState>;
+  readonly restartRequired?: () => boolean;
+}
+
 interface RuntimeInputCandidate {
   readonly document: RuntimeConfigDocument;
   readonly configSnapshot?: ConfigDocumentSnapshot;
@@ -174,8 +191,10 @@ export class RootRuntime {
   });
   readonly #controller: RootController<RuntimeGenerationState>;
   readonly #disabledPluginInstanceKeys: readonly string[];
+  readonly #onControlError: ControlErrorHandler;
 
   constructor(options: RootRuntimeOptions) {
+    this.#onControlError = options.onControlError ?? (() => undefined);
     void this.#configurationReady.catch(() => undefined);
     this.#projectRoot = normalizeSourcePath(options.projectRoot);
     this.#modules = options.modules;
@@ -265,8 +284,9 @@ export class RootRuntime {
   async reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
     return this.#enqueueControl(async () => {
       const previousInputs = this.#runtimeInputState();
-      return this.#controller.reload(target, async (current, signal) => {
-        return (await this.#prepare(current, signal)).generation;
+      return this.#reloadWithEvents({ target, trigger: 'manual', changed: [],
+        planned: { fullRoot: true, plugins: [rootPluginId()], capabilities: [] },
+        prepare: async (current, signal) => (await this.#prepare(current, signal)).generation,
       }).catch(error => {
         this.#restoreRuntimeInputs(previousInputs);
         throw error;
@@ -284,6 +304,59 @@ export class RootRuntime {
     const result = this.#controlTail.then(operation, operation);
     this.#controlTail = result.catch(() => undefined);
     return result;
+  }
+
+  /** Hold real old/current instances through notification; the Controller alone publishes candidates. */
+  async #reloadWithEvents(request: ReloadEventRequest): Promise<RuntimeSnapshot> {
+    const previous = this.snapshots.acquire();
+    const oldInstances = pluginEventInstances(this.#model?.scopes);
+    const attempted = new Set<PluginEventInstance>();
+    let active: SnapshotLease | undefined;
+    let outcome: HmrOutcome = 'rejected';
+    const facts = (instance: PluginEventInstance, currentInstances: ReadonlySet<PluginEventInstance>, generation: number): HmrEventDetails => Object.freeze({
+      trigger: request.trigger, changed: Object.freeze([...request.changed]),
+      planned: Object.freeze({ ...request.planned, plugins: Object.freeze([...request.planned.plugins]), capabilities: Object.freeze([...request.planned.capabilities]) }),
+      previousGeneration: previous.value.generation, activeGeneration: generation,
+      receiver: Object.freeze({ owner: instance.owner, creationGeneration: instance.creationGeneration,
+        state: currentInstances.has(instance) ? 'current' : 'replaced' }),
+    });
+    try {
+      const snapshot = await this.#controller.reload(request.target, async (current, signal) => {
+        const currentInstances = new Set(oldInstances);
+        const results = await Promise.allSettled(oldInstances.map(instance => {
+          attempted.add(instance);
+          return instance.channel.dispatch('hmr.pause', Object.freeze({ signal, details: facts(instance, currentInstances, current.generation) }));
+        }));
+        const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason] : []);
+        if (errors.length) throw new AggregateError(errors, 'Plugin pause handlers rejected reload');
+        signal.throwIfAborted();
+        return request.prepare(current, signal);
+      });
+      outcome = request.restartRequired?.() ? 'restart-required'
+        : snapshot.generation === previous.value.generation ? 'unchanged' : 'committed';
+      return snapshot;
+    } catch (error) {
+      outcome = this.#stopResult ? 'cancelled' : 'rejected';
+      throw error;
+    } finally {
+      // Acquire before another await: retirement may proceed, but these instances must survive notification.
+      try { active = this.snapshots.acquire(); } catch { if (this.#stopResult) outcome = 'cancelled'; }
+      const current = new Set(pluginEventInstances(this.#model?.scopes));
+      const recipients = new Set([...attempted, ...(active ? current : [])]);
+      const replaced = Object.freeze(oldInstances.filter(instance => !current.has(instance)).map(instance => instance.owner));
+      const results = await Promise.allSettled([...recipients].map(instance => {
+        const details: HmrResumeDetails = Object.freeze({
+          ...facts(instance, current, active?.value.generation ?? this.snapshot.generation),
+          outcome, replaced, ...(!active && this.#stopResult ? { reason: 'root-stopping' as const } : {}),
+        });
+        return instance.channel.dispatch('hmr.resume', Object.freeze({ signal: previous.stopSignal, details }));
+      }));
+      for (const result of results) if (result.status === 'rejected') {
+        try { this.#onControlError(result.reason); } catch { /* Diagnostics cannot reverse a committed transaction. */ }
+      }
+      active?.release();
+      previous.release();
+    }
   }
 
   createHmrCoordinator(options: RootHmrOptions): HmrCoordinator {
@@ -328,22 +401,25 @@ export class RootRuntime {
   async #reloadPlanInQueue(
     plan: GenerationInvalidationPlan,
   ): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
-    const inputs = await this.#planRuntimeInputs(plan.changed);
-    if (inputs && 'kind' in inputs) return inputs;
+    let inputs: RuntimeInputCandidate | undefined;
     const previousInputs = this.#runtimeInputState();
-    const effectiveInputPlan = inputs
-      ? Object.freeze({
-          ...plan,
-          subtrees: collapseInvalidationSubtrees([...plan.subtrees, ...inputs.roots]),
-          fallbacks: Object.freeze(plan.fallbacks.filter(
-            (fallback) => !inputs.inputSources.has(normalizeSourcePath(fallback.source)),
-          )),
-        })
-      : plan;
     let restart: ProcessInvalidationPlan | undefined;
-    const snapshot = await this.#controller.reload(
-      effectiveInputPlan.subtrees[0] ?? effectiveInputPlan.slots[0] ?? rootPluginId(),
-      async (current, signal) => {
+    const snapshot = await this.#reloadWithEvents({
+      target: plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
+      trigger: 'source', changed: plan.changed,
+      planned: { fullRoot: plan.subtrees.includes(rootPluginId()), plugins: plan.subtrees, capabilities: plan.slots },
+      restartRequired: () => restart !== undefined,
+      prepare: async (current, signal) => {
+        const candidate = await this.#planRuntimeInputs(plan.changed);
+        if (candidate && 'kind' in candidate) { restart = candidate; return undefined; }
+        inputs = candidate;
+        const plannedInputs = inputs;
+        const effectiveInputPlan = plannedInputs
+          ? Object.freeze({ ...plan,
+              subtrees: collapseInvalidationSubtrees([...plan.subtrees, ...plannedInputs.roots]),
+              fallbacks: Object.freeze(plan.fallbacks.filter(fallback => !plannedInputs.inputSources.has(normalizeSourcePath(fallback.source)))),
+            })
+          : plan;
         let prepared: PreparedRuntimeGeneration | undefined;
         const resolved = await this.#resolveCapabilityDelta(current, effectiveInputPlan);
         const effective = resolved.plan;
@@ -404,15 +480,16 @@ export class RootRuntime {
           );
         }
         if (!prepared) return undefined;
-        return inputs && previousInputs
+        const adoptedInputs = inputs;
+        return adoptedInputs && previousInputs
           ? withRuntimeInputHandoff(
               prepared.generation,
-              () => this.#adoptRuntimeInputs(inputs),
+              () => this.#adoptRuntimeInputs(adoptedInputs),
               () => this.#restoreRuntimeInputs(previousInputs),
             )
           : prepared.generation;
       },
-    ).catch(error => {
+    }).catch(error => {
       this.#restoreRuntimeInputs(previousInputs);
       throw error;
     });
@@ -659,7 +736,9 @@ export class RootRuntime {
     let plan: ConfigPatchPlan | undefined;
     let documentTransaction: PreparedConfigDocument | undefined;
     let committedDocument: ConfigDocumentSnapshot | undefined;
-    const snapshot = await this.#controller.reload(rootPluginId(), async (current, signal) => {
+    const snapshot = await this.#reloadWithEvents({ target: rootPluginId(), trigger: 'manual', changed: [],
+      planned: { fullRoot: true, plugins: [rootPluginId()], capabilities: [] },
+      prepare: async (current, signal) => {
       let prepared: PreparedRuntimeGeneration | undefined;
       signal.throwIfAborted();
       try {
@@ -738,7 +817,7 @@ export class RootRuntime {
         if (documentTransaction) await documentTransaction.rollback().catch(() => undefined);
         throw error;
       }
-    }).catch(error => {
+    } }).catch(error => {
       this.#restoreRuntimeInputs(previousInputs);
       throw error;
     });

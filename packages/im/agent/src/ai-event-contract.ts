@@ -1,3 +1,4 @@
+import type { ActivityFeedbackSourceCarrier } from './activity-feedback/operation-source.js';
 import type { Locale } from '@zhin.js/plugin-runtime';
 
 /** Agent-owned lifecycle event contract shared by Runtime publishers and subscribers. */
@@ -34,7 +35,7 @@ export type AIEventSource = 'zhin-agent' | 'subagent' | 'ai-hook' | 'orchestrato
 export type AIEventMode = 'text' | 'multimodal';
 export type AIEventPath = 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited';
 
-export interface AIEventPayload {
+export interface AIEventPayload extends ActivityFeedbackSourceCarrier {
   /** Display language captured by the originating turn or scheduled task. */
   readonly locale?: Locale;
   sessionId: string;

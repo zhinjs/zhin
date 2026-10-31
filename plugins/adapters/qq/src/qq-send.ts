@@ -10,6 +10,7 @@
  * 4. Active message refused (no permission, quota, user switched it off): remember the conversation
  *    for a while and fail fast instead of calling the platform again.
  */
+import { createEndpointOperation, type EndpointOperation } from 'zhin.js/adapter';
 import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 import type { Sendable } from 'qq-official-bot';
 import type { QqOutboundElem, QqOutboundMessage } from './outbound.js';
@@ -34,6 +35,20 @@ export interface QqSendContext {
 }
 
 type Kind = ReturnType<typeof qqOutboundKind>;
+interface QqSendExecution extends QqSendContext { readonly operation: EndpointOperation; }
+interface QqMessageDispatch {
+  readonly kind: Kind;
+  readonly id: string;
+  readonly message: QqOutboundMessage;
+  readonly source?: QqReplySource;
+  readonly options?: QqSendOptions;
+}
+export interface QqMessagesRequest {
+  readonly conversation: ConversationRef;
+  readonly messages: readonly QqOutboundMessage[];
+  readonly signal?: AbortSignal;
+}
+
 
 function elements(message: QqOutboundMessage): Array<string | QqOutboundElem> {
   return Array.isArray(message) ? [...message] : [message as string | QqOutboundElem];
@@ -69,7 +84,7 @@ export function markdownAsText(message: QqOutboundMessage): QqOutboundMessage | 
   return text ? [...kept, text] : undefined;
 }
 
-function dispatch(bot: QqBotTransport, kind: Kind, id: string, message: QqOutboundMessage, source?: QqReplySource, options?: QqSendOptions): Promise<unknown> {
+function dispatch(bot: QqBotTransport, { kind, id, message, source, options }: QqMessageDispatch): Promise<unknown> {
   switch (kind) {
     case 'private': return bot.sendPrivateMessage(id, message as Sendable, source, options);
     case 'group': return bot.sendGroupMessage(id, message as Sendable, source, options);
@@ -85,15 +100,15 @@ function platformCode(error: unknown): number | undefined {
 }
 
 /** Sends one message, passive if possible; returns the platform result. */
-async function sendOne(context: QqSendContext, kind: Kind, id: string, message: QqOutboundMessage): Promise<unknown> {
+async function sendOne(context: QqSendExecution, { kind, id, message }: QqMessageDispatch): Promise<unknown> {
   const passive = (body: QqOutboundMessage, grant: PassiveReplyGrant) =>
-    dispatch(context.bot, kind, id, body, grant.source, { msgSeq: grant.msgSeq });
+    context.operation.run(() => dispatch(context.bot, { kind, id, message: body, source: grant.source, options: { msgSeq: grant.msgSeq } }));
   const active = async (body: QqOutboundMessage): Promise<unknown> => {
     if (context.activeGate.blocked(kind, id)) {
       throw new EndpointDeliveryError('platform_rejected', 'QQ active messages are unavailable for this conversation', 'not_sent');
     }
     try {
-      return await dispatch(context.bot, kind, id, body);
+      return await context.operation.run(() => dispatch(context.bot, { kind, id, message: body }));
     } catch (error) {
       const code = platformCode(error);
       if (code !== undefined && QQ_ACTIVE_UNAVAILABLE_CODES.has(code) && context.activeGate.block(kind, id)) {
@@ -130,9 +145,10 @@ async function sendOne(context: QqSendContext, kind: Kind, id: string, message: 
 }
 
 /** Sends every message of one delivery in order; returns the last platform result. */
-export async function sendQqMessages(context: QqSendContext, conversation: ConversationRef, messages: readonly QqOutboundMessage[]): Promise<unknown> {
+export async function sendQqMessages(context: QqSendContext, { conversation, messages, signal }: QqMessagesRequest): Promise<unknown> {
   const kind = qqOutboundKind(conversation);
+  const execution = { ...context, operation: createEndpointOperation({ signal }) };
   let result: unknown;
-  for (const message of messages) result = await sendOne(context, kind, conversation.id, message);
+  for (const message of messages) result = await sendOne(execution, { kind, id: conversation.id, message });
   return result;
 }

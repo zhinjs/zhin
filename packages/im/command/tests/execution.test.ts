@@ -150,7 +150,7 @@ describe('command execution policy', () => {
     const f = setup();
     const index = new CommandIndex([createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'limited', source: '/command/index.ts',
       definition: defineCommand({ execution: { maxConcurrent: 1 }, execute: () => 'ok' }) })], f.snapshot);
-    expect(await index.dispatch('limited', {})).toMatchObject({ matched: true, status: 'limited', limit: { reason: 'operation_unavailable' } });
+    expect(await index.dispatch({ input: 'limited', source: {} })).toMatchObject({ matched: true, status: 'limited', limit: { reason: 'operation_unavailable' } });
     const bare = createSnapshotView(0, { ...f.snapshot, resources: new Map() } as unknown as SnapshotState);
     const bareIndex = new CommandIndex([createCapabilitySlot({ owner: f.root, feature: commandFeatureId, localName: 'limited', source: '/command/index.ts',
       definition: defineCommand({ execution: { maxConcurrent: 1 }, execute: () => 'ok' }) })], bare);

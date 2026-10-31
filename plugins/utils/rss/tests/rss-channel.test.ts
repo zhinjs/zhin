@@ -1,3 +1,4 @@
+import { encodeStorageIdentity } from 'zhin.js/plugin-runtime';
 import { projectLocaleToken } from 'zhin.js/i18n';
 import Parser from 'rss-parser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +8,7 @@ import listCommand from '../commands/rss-list/index.ts';
 import removeCommand from '../commands/rss-remove/[url]/index.ts';
 import checkCommand from '../commands/rss-check/[[url]]/index.ts';
 import { outboundHostToken } from 'zhin.js';
-import { CHANNEL_REQUIRED_MESSAGE, UNSUPPORTED_ADDRESS_MESSAGE, extractChannelInfo } from '../src/channel.js';
+import { CHANNEL_REQUIRED_MESSAGE, UNSUPPORTED_ADDRESS_MESSAGE, extractChannelInfo, subscriptionScope } from '../src/channel.js';
 import { createInMemoryRssDb, getRssSubs } from '../src/db-store.js';
 import { resolveRssConfig } from '../src/feed.js';
 import { checkSubscriptions } from '../src/poll.js';
@@ -56,7 +57,8 @@ describe('RSS canonical conversation addresses', () => {
       },
     };
     expect(extractChannelInfo(input)).toEqual({
-      adapterName: 'icqq', endpointKey: '8596238', channelType: kind,
+      target: input.conversation,
+      adapterName: 'icqq', endpointKey: input.conversation.endpoint.id, channelType: kind,
       channelId: 'destination', senderId: '1659488338', senderName: '归雨',
     });
   });
@@ -67,7 +69,7 @@ describe('RSS canonical conversation addresses', () => {
       ...input,
       sender: undefined,
       conversation: { ...input.conversation, endpoint: { id: 'opaque-identity', adapter: 'owner' } },
-    })).toMatchObject({ adapterName: 'icqq', endpointKey: '8596238', senderId: '', senderName: '' });
+    })).toMatchObject({ adapterName: 'owner', endpointKey: 'opaque-identity', senderId: '', senderName: '' });
   });
 
   it('accepts addresses with absent optional parent and thread fields', () => {
@@ -108,11 +110,11 @@ describe('RSS canonical conversation addresses', () => {
 
   it.each([
     undefined, null, 'message', [], {},
-    { ...rssMessage(), clientAdapter: undefined },
-    { ...rssMessage(), clientAdapter: {} },
-    { ...rssMessage(), endpointId: undefined },
-    { ...rssMessage(), endpointId: ' ' },
-    { ...rssMessage(), endpointId: 8596238 },
+    { ...rssMessage(), conversation: { ...rssMessage().conversation, endpoint: undefined } },
+    { ...rssMessage(), conversation: { ...rssMessage().conversation, endpoint: {} } },
+    { ...rssMessage(), conversation: { ...rssMessage().conversation, endpoint: { adapter: 'icqq' } } },
+    { ...rssMessage(), conversation: { ...rssMessage().conversation, endpoint: { adapter: 'icqq', id: ' ' } } },
+    { ...rssMessage(), conversation: { ...rssMessage().conversation, endpoint: { adapter: 'icqq', id: 8596238 } } },
     { ...rssMessage(), conversation: { kind: 'private', id: {} } },
     { ...rssMessage(), conversation: { kind: 'private', id: '' } },
     { ...rssMessage(), conversation: { kind: 'global', id: 'room' } },
@@ -158,8 +160,8 @@ describe('RSS canonical conversation addresses', () => {
         endpoint: row.endpoint_id, kind: row.channel_type, id: row.channel_id,
         creator: row.creator_id, name: row.creator_name,
       }))).toEqual([
-        { endpoint: 'bot-a', kind, id: 'same-room', creator: '1659488338', name: '归雨' },
-        { endpoint: 'bot-b', kind, id: 'same-room', creator: '1659488338', name: '归雨' },
+        { endpoint: encodeStorageIdentity(rssMessage('bot-a').conversation.endpoint.id), kind, id: 'same-room', creator: '1659488338', name: '归雨' },
+        { endpoint: encodeStorageIdentity(rssMessage('bot-b').conversation.endpoint.id), kind, id: 'same-room', creator: '1659488338', name: '归雨' },
       ]);
       expect(await removeCommand.execute(first)).toContain('已取消订阅');
       expect(await listCommand.execute(first)).toContain('没有订阅');
@@ -167,10 +169,36 @@ describe('RSS canonical conversation addresses', () => {
     },
   );
 
+  it('delivers restored canonical captures exactly and never falls back through a reused alias', async () => {
+    mockFeed('canonical-item');
+    const send = vi.fn(), sendTarget = vi.fn(async () => { throw new Error('exact account offline'); });
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let runtime: RssRuntime | undefined;
+    await plugin.setup!({ config: { get: () => ({}) }, resources: {
+      has: (token: unknown) => token === outboundHostToken,
+      use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : ({ send, sendTarget }),
+      provide: (token: unknown, value: RssRuntime) => { if (token === rssRuntimeToken) runtime = value; },
+    }, lifecycle: { add: () => undefined } } as never);
+    const scene = rssMessage('same-alias').conversation;
+    const first = { ...scene, endpoint: { ...scene.endpoint, id: 'canonical\0first' } };
+    const second = { ...scene, endpoint: { ...scene.endpoint, id: 'canonical\0second' } };
+    const rows = [first, second].map(conversation => ({ url,
+      ...subscriptionScope(extractChannelInfo({ conversation })!),
+    }));
+    const Subs = getRssSubs(runtime!.db)!;
+    for (const row of JSON.parse(JSON.stringify(rows))) await Subs.insert(row);
+    await Subs.insert({ ...rows[0], target_json: '{invalid-json' });
+    const before = await Subs.select();
+    expect((await checkSubscriptions(runtime!, { urls: [url] })).pushed).toBe(0);
+    expect(sendTarget.mock.calls.map(([target]) => target)).toEqual([first, second]);
+    expect(send).not.toHaveBeenCalled(); expect(warning).toHaveBeenCalledTimes(3);
+    expect(await Subs.select()).toEqual(before);
+  });
+
   it('counts only successful sends and preserves exact addresses through OutboundHost', async () => {
     mockFeed('new-item');
-    const send = vi.fn(async (input: { endpointKey: string }) => {
-      if (input.endpointKey === 'bot-a') throw new Error('offline');
+    const send = vi.fn(), sendTarget = vi.fn(async (target: ReturnType<typeof rssMessage>['conversation']) => {
+      if (target.endpoint.id === rssMessage('bot-a').conversation.endpoint.id) throw new Error('offline');
       return null; // Successful transports may not supply a platform message id.
     });
     let runtime: RssRuntime | undefined;
@@ -178,7 +206,7 @@ describe('RSS canonical conversation addresses', () => {
       config: { get: () => ({}) },
       resources: {
         has: (token: unknown) => token === outboundHostToken,
-        use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : ({ send }),
+        use: (token: unknown) => token === projectLocaleToken ? 'zh-CN' : ({ send, sendTarget }),
         provide: (token: unknown, value: RssRuntime) => {
           if (token === rssRuntimeToken) runtime = value;
         },
@@ -190,7 +218,7 @@ describe('RSS canonical conversation addresses', () => {
     for (const [endpoint, kind, id] of [
       ['bot-a', 'private', 'user'], ['bot-b', 'group', 'group'], ['bot-b', 'channel', 'channel'],
     ]) {
-      await Subs.insert({ url, adapter_name: 'icqq', endpoint_id: endpoint, channel_type: kind, channel_id: id, ...(kind === 'group' ? { locale: 'en' } : {}) });
+      await Subs.insert({ url, ...subscriptionScope(extractChannelInfo(rssMessage(endpoint, kind as 'private' | 'group' | 'channel', id))!), ...(kind === 'group' ? { locale: 'en' } : {}) });
     }
     // Old/incomplete rows must never be routed by guessing the bot from the adapter.
     await Subs.insert({ url, adapter_name: 'icqq', channel_type: 'private', channel_id: 'old-target' });
@@ -198,10 +226,12 @@ describe('RSS canonical conversation addresses', () => {
     await Subs.insert({ url, adapter_name: {}, endpoint_id: 'bot-b', channel_type: 'private', channel_id: 'bad-adapter' });
     const result = await checkSubscriptions(runtime!, { urls: [url] });
     expect(result.pushed).toBe(2);
-    expect(send.mock.calls.map(([input]) => input)).toEqual([
-      { adapter: 'icqq', locale: 'zh-CN', endpointKey: 'bot-a', conversation: { kind: 'private', id: 'user' }, content: expect.stringContaining('Update') },
-      { adapter: 'icqq', locale: 'en', endpointKey: 'bot-b', conversation: { kind: 'group', id: 'group' }, content: expect.stringContaining('Update') },
-      { adapter: 'icqq', locale: 'zh-CN', endpointKey: 'bot-b', conversation: { kind: 'channel', id: 'channel' }, content: expect.stringContaining('Update') },
+    expect(send).not.toHaveBeenCalled();
+    expect(sendTarget.mock.calls.map(([target]) => target)).toEqual([
+      rssMessage('bot-a', 'private', 'user').conversation,
+      rssMessage('bot-b', 'group', 'group').conversation,
+      rssMessage('bot-b', 'channel', 'channel').conversation,
     ]);
+    expect(sendTarget.mock.calls.map(call => call[2])).toEqual([{ locale: 'zh-CN' }, { locale: 'en' }, { locale: 'zh-CN' }]);
   });
 });

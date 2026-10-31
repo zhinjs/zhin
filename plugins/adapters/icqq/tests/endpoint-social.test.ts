@@ -124,7 +124,7 @@ describe('icqq endpoint management 接口', () => {
       friends: new Map(), groups: new Map(),
       members: new Map([[7, member]]),
     });
-    expect(await endpoint.management.listGroupMembers!('100')).toEqual([member]);
+    expect(await endpoint.management.listGroupMembers!({ groupId: '100' })).toEqual([member]);
     expect(endpoint.endpoint.getGroupMemberList).toHaveBeenCalledWith(100);
     await endpoint.stop();
   });
@@ -137,7 +137,7 @@ describe('icqq endpoint management 接口', () => {
         { post_type: 'request', request_type: 'group', sub_type: 'add', user_id: 43, group_id: 100, flag: 'flag-g1', seq: 2, time: 0 },
       ],
     });
-    await endpoint.management.approveRequest!('flag-f1', '备注A');
+    await endpoint.management.approveRequest!({ requestId: 'flag-f1', remark: '备注A' });
     expect(endpoint.endpoint.setFriendAddRequest).toHaveBeenCalledWith('flag-f1', true, '备注A');
     expect(endpoint.endpoint.setGroupAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
@@ -150,7 +150,7 @@ describe('icqq endpoint management 接口', () => {
         { post_type: 'request', request_type: 'group', sub_type: 'add', user_id: 43, group_id: 100, flag: 'flag-g1', seq: 2, time: 0 },
       ],
     });
-    await endpoint.management.approveRequest!('flag-g1');
+    await endpoint.management.approveRequest!({ requestId: 'flag-g1' });
     expect(endpoint.endpoint.setGroupAddRequest).toHaveBeenCalledWith('flag-g1', true);
     expect(endpoint.endpoint.setFriendAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
@@ -163,7 +163,7 @@ describe('icqq endpoint management 接口', () => {
         { post_type: 'request', request_type: 'group', sub_type: 'add', user_id: 43, group_id: 100, flag: 'flag-g1', seq: 2, time: 0 },
       ],
     });
-    await endpoint.management.rejectRequest!('flag-g1', '不欢迎');
+    await endpoint.management.rejectRequest!({ requestId: 'flag-g1', reason: '不欢迎' });
     expect(endpoint.endpoint.setGroupAddRequest).toHaveBeenCalledWith('flag-g1', false, '不欢迎');
     await endpoint.stop();
   });
@@ -175,7 +175,7 @@ describe('icqq endpoint management 接口', () => {
         { post_type: 'request', request_type: 'friend', user_id: 42, nickname: 'x', flag: 'flag-f1', seq: 1, time: 0 },
       ],
     });
-    await endpoint.management.rejectRequest!('flag-f1');
+    await endpoint.management.rejectRequest!({ requestId: 'flag-f1' });
     expect(endpoint.endpoint.setFriendAddRequest).toHaveBeenCalledWith('flag-f1', false);
     await endpoint.stop();
   });
@@ -185,7 +185,7 @@ describe('icqq endpoint management 接口', () => {
       friends: new Map(), groups: new Map(),
       systemMsg: [],
     });
-    await expect(endpoint.management.approveRequest!('flag-x')).rejects.toThrow(/未找到待处理请求: flag-x/);
+    await expect(endpoint.management.approveRequest!({ requestId: 'flag-x' })).rejects.toThrow(/未找到待处理请求: flag-x/);
     expect(endpoint.endpoint.setFriendAddRequest).not.toHaveBeenCalled();
     expect(endpoint.endpoint.setGroupAddRequest).not.toHaveBeenCalled();
     await endpoint.stop();
@@ -193,28 +193,28 @@ describe('icqq endpoint management 接口', () => {
 
   it('management.kickGroupMember → setGroupKick（字符串收敛为数字）', async () => {
     const endpoint = await startEndpoint();
-    await endpoint.management.kickGroupMember!('100', '7');
+    await endpoint.management.kickGroupMember!({ groupId: '100', userId: '7' });
     expect(endpoint.endpoint.setGroupKick).toHaveBeenCalledWith(100, 7);
     await endpoint.stop();
   });
 
   it('management.muteGroupMember → setGroupBan', async () => {
     const endpoint = await startEndpoint();
-    await endpoint.management.muteGroupMember!('100', '7', 120);
+    await endpoint.management.muteGroupMember!({ groupId: '100', userId: '7', durationSeconds: 120 });
     expect(endpoint.endpoint.setGroupBan).toHaveBeenCalledWith(100, 7, 120);
     await endpoint.stop();
   });
 
   it('management.setGroupAdmin → setGroupAdmin', async () => {
     const endpoint = await startEndpoint();
-    await endpoint.management.setGroupAdmin!('100', '7', true);
+    await endpoint.management.setGroupAdmin!({ groupId: '100', userId: '7', enabled: true });
     expect(endpoint.endpoint.setGroupAdmin).toHaveBeenCalledWith(100, 7, true);
     await endpoint.stop();
   });
 
   it('management.deleteFriend → deleteFriend', async () => {
     const endpoint = await startEndpoint();
-    await endpoint.management.deleteFriend!('7');
+    await endpoint.management.deleteFriend!({ userId: '7' });
     expect(endpoint.endpoint.deleteFriend).toHaveBeenCalledWith(7);
     await endpoint.stop();
   });
@@ -223,7 +223,7 @@ describe('icqq endpoint management 接口', () => {
     const endpoint = await startEndpoint({
       onKick: () => ({ ok: false, error: 'permission denied' }),
     });
-    await expect(endpoint.management.kickGroupMember!('100', '7')).rejects.toThrow(/permission denied/);
+    await expect(endpoint.management.kickGroupMember!({ groupId: '100', userId: '7' })).rejects.toThrow(/permission denied/);
     await endpoint.stop();
   });
 
@@ -233,4 +233,18 @@ describe('icqq endpoint management 接口', () => {
     expect((endpoint.endpoint.gl.get(100) as any)?.group_name).toBe('g');
     await endpoint.stop();
   });
+});
+
+it('cancels request approval while looking up the request and never submits a later approval', async () => {
+  const endpoint = await startEndpoint(); const caller = new AbortController();
+  let finish!: (value: never) => void;
+  vi.mocked(endpoint.endpoint.getSystemMsg).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const approval = endpoint.management.approveRequest!({ requestId: 'synthetic-request', signal: caller.signal }).then(() => ({ success: true }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(endpoint.endpoint.getSystemMsg).toHaveBeenCalled()); caller.abort();
+    await expect(approval).resolves.toMatchObject({ error: { disposition: 'unknown' } });
+    finish([{ flag: 'synthetic-request', request_type: 'friend' }] as never);
+    await Promise.resolve(); await Promise.resolve();
+    expect(endpoint.endpoint.setFriendAddRequest).not.toHaveBeenCalled(); expect(endpoint.endpoint.setGroupAddRequest).not.toHaveBeenCalled();
+  } finally { await endpoint.stop(); await approval; }
 });

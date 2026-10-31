@@ -29,7 +29,7 @@ export default defineAgentTool({
       return { success: false, message: t(context.locale, 'targetNotMember') };
     }
     context.signal.throwIfAborted();
-    await muteQqGroupMember(client, group, user_id, seconds);
+    await muteQqGroupMember(client, { groupId: group, userId: user_id, durationSeconds: seconds });
     const user = member.username || user_id;
     return { success: true, message: seconds === 0 ? t(context.locale, 'unmuted', { user }) : t(context.locale, 'muted', { user, seconds }) };
   },

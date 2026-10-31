@@ -1,3 +1,4 @@
+import { createTestEventGateway } from '../../../adapters/test-utils/endpoint.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -38,7 +39,7 @@ async function fixture() {
     [root, { id: root, instanceKey: 'root', packageName: '@test/app', packageRoot: directory, children: [owner] }],
     [owner, { id: owner, instanceKey: 'rss', packageName: '@zhin.js/plugin-rss', packageRoot: directory, parent: root, children: [] }],
   ]), config: new Map(), resources: new Map([
-    [root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])],
+    [root, new Map([[endpointEventGatewayToken.id, createTestEventGateway()]])],
     [owner, new Map([[pluginTaskProviderToken.id, provider]])],
   ]), capabilities: new Map([[adapter.id, adapter]]), projections: new Map() };
   const adapters = await AdapterIndex.create([adapter], createSnapshotView(0, state), new AbortController().signal);

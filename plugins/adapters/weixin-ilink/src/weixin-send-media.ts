@@ -27,6 +27,7 @@ export async function sendWeixinMediaFile(params: {
     baseUrl: opts.baseUrl,
     metadata: opts.metadata,
     token: opts.token,
+    abortSignal: opts.abortSignal,
   };
 
   if (mime.startsWith("video/")) {
@@ -40,6 +41,7 @@ export async function sendWeixinMediaFile(params: {
     logger.info(
       `[weixin] sendWeixinMediaFile: video upload done filekey=${uploaded.filekey} size=${uploaded.fileSize}`,
     );
+    opts.abortSignal?.throwIfAborted();
     return sendVideoMessageWeixin({ to, text, uploaded, opts });
   }
 
@@ -54,6 +56,7 @@ export async function sendWeixinMediaFile(params: {
     logger.info(
       `[weixin] sendWeixinMediaFile: image upload done filekey=${uploaded.filekey} size=${uploaded.fileSize}`,
     );
+    opts.abortSignal?.throwIfAborted();
     return sendImageMessageWeixin({ to, text, uploaded, opts });
   }
 
@@ -72,5 +75,6 @@ export async function sendWeixinMediaFile(params: {
   logger.info(
     `[weixin] sendWeixinMediaFile: file upload done filekey=${uploaded.filekey} size=${uploaded.fileSize}`,
   );
+  opts.abortSignal?.throwIfAborted();
   return sendFileMessageWeixin({ to, text, fileName, uploaded, opts });
 }

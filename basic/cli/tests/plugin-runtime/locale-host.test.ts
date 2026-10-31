@@ -70,8 +70,8 @@ it('registers a real language command with actual prefixes, and keeps project la
     const index = commands(runtime.snapshot);
     expect(index.list('en').some(item => item.name === 'language')).toBe(true);
     const input = { conversation: privateChat, sender: { id: 'alice' }, locale: 'en' };
-    expect(await index.dispatch('language', input, undefined, '##')).toMatchObject({ value: 'Usage: ##language zh-CN or ##language en' });
-    expect(await index.dispatch('language zh-CN', input, undefined, '##')).toMatchObject({ value: expect.stringContaining('require SQLite') });
+    expect(await index.dispatch({ input: 'language', source: input, commandPrefix: '##' })).toMatchObject({ value: 'Usage: ##language zh-CN or ##language en' });
+    expect(await index.dispatch({ input: 'language zh-CN', source: input, commandPrefix: '##' })).toMatchObject({ value: expect.stringContaining('require SQLite') });
     expect(await messageLocale(runtime.snapshot, privateChat, 'alice')).toBe('en');
   } finally { await runtime.stop(); await rm(f.directory, { recursive: true, force: true }); }
 });
@@ -98,7 +98,7 @@ it.skipIf(!sqliteAvailable)('keeps endpoint and sender isolation across chats, H
   try {
     await runtime.start();
     const command = commands(runtime.snapshot);
-    expect(await command.dispatch('language en', { conversation: group, sender: { id: 'alice' }, locale: 'zh-CN' }, undefined, '!'))
+    expect(await command.dispatch({ input: 'language en', source: { conversation: group, sender: { id: 'alice' }, locale: 'zh-CN' }, commandPrefix: '!' }))
       .toMatchObject({ value: expect.stringContaining('Your language is now English') });
     for (const conversation of [privateChat, group, channel]) {
       expect(await messageLocale(runtime.snapshot, conversation, 'alice')).toBe('en');
@@ -121,7 +121,7 @@ it.skipIf(!sqliteAvailable)('keeps endpoint and sender isolation across chats, H
     runtime = create();
     await runtime.start();
     expect(await messageLocale(runtime.snapshot, channel, 'alice')).toBe('en');
-    expect(await commands(runtime.snapshot).dispatch('language zh-CN', { conversation: privateChat, sender: { id: 'alice' }, locale: 'en' }, undefined, ''))
+    expect(await commands(runtime.snapshot).dispatch({ input: 'language zh-CN', source: { conversation: privateChat, sender: { id: 'alice' }, locale: 'en' }, commandPrefix: '' }))
       .toMatchObject({ value: expect.stringContaining('个人语言已设置') });
     expect(await messageLocale(runtime.snapshot, group, 'alice')).toBe('zh-CN');
   } finally { await runtime.stop(); await database.stop(); await rm(f.directory, { recursive: true, force: true }); }

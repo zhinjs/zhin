@@ -1,3 +1,4 @@
+import { invokeGameCommand } from '../../../../packages/game-kit/tests/command-operation-fixture.js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
@@ -18,7 +19,7 @@ const emptyCtx = {
   use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
-  input: undefined as never,
+  input: { conversation: { endpoint: { adapter: 'synthetic', id: 'test-account' }, kind: 'private', id: 'alice' }, sender: { id: 'alice', name: 'Alice' }, content: '' } as never,
 };
 
 describe('@zhin.js/plugin-text-adventure runtime (slice-2)', () => {
@@ -35,7 +36,7 @@ describe('@zhin.js/plugin-text-adventure runtime (slice-2)', () => {
   });
 
   it('help action returns help text', async () => {
-    const result = await gameCommand.execute({
+    const result = await invokeGameCommand(gameCommand, {
       ...emptyCtx,
       params: {},
     });
@@ -43,7 +44,7 @@ describe('@zhin.js/plugin-text-adventure runtime (slice-2)', () => {
   });
 
   it('start action returns scene choices', async () => {
-    const result = await gameCommand.execute({
+    const result = await invokeGameCommand(gameCommand, {
       ...emptyCtx,
       params: { action: 'start' },
     });

@@ -100,11 +100,15 @@ for (const entry of fs.readdirSync(adaptersRoot, { withFileTypes: true })) {
   if (!entry.isDirectory() || entry.name === 'test-utils') continue;
   const src = path.join(adaptersRoot, entry.name, 'src');
   if (!fs.existsSync(src)) continue;
+  const manifest = JSON.parse(fs.readFileSync(path.join(adaptersRoot, entry.name, 'package.json'), 'utf8'));
+  if (!manifest.dependencies?.['@zhin.js/feature-kit'] && !manifest.peerDependencies?.['@zhin.js/feature-kit']) {
+    errors.push(`plugins/adapters/${entry.name}: registry augmentation needs a direct @zhin.js/feature-kit dependency or peer`);
+  }
   const hasClientRegistry = typescriptFiles(src).some((file) => (
     declaresAdapterTypeRegistry(fs.readFileSync(file, 'utf8'))
   ));
   if (!hasClientRegistry) {
-    errors.push(`plugins/adapters/${entry.name}: adapter must register its actual Adapter class in AdapterRegistry`);
+    errors.push(`plugins/adapters/${entry.name}: adapter must augment AdapterRegistry only through @zhin.js/feature-kit`);
   }
 }
 

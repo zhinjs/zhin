@@ -67,13 +67,30 @@ describe('trusted Endpoint role identity', () => {
     const resolver = await createEndpointRoleResolver(document(configs));
     const conversation = state.conversation('one', 'a');
     const enrich = (await createSenderEnricher(document(configs), resolver))!;
-    const message = new Message(conversation, 'hi', 7, async () => ({ status: 'sent' }), { id: 'attacker', name: 'b' },
-      { endpoint: 'b', endpointKey: 'b' }, undefined, undefined, 'b');
+    const message = new Message(
+      {
+        conversation: conversation,
+        content: 'hi',
+        sender: { id: 'attacker', name: 'b' },
+        metadata: { endpoint: 'b', endpointKey: 'b' },
+        endpointId: 'b',
+      },
+      { generation: 7, reply: async () => ({ status: 'sent' }) },
+    );
     expect(resolveOwnerForRuntimeMessage(message, resolver.resolveOwner, state.snapshot)).toBe('owner-a');
     expect(resolveTrustedForRuntimeMessage(message, resolver.resolveTrusted, state.snapshot)).toEqual(['trust-a']);
     const unknown = { ...conversation, endpoint: { ...conversation.endpoint, id: 'not-a-real-endpoint' } };
     expect(enrich({ id: 'attacker', name: 'b' }, unknown, state.snapshot)?.roles).toBeUndefined();
-    const staleMessage = new Message(unknown, 'hi', 7, async () => ({ status: 'sent' }), { id: 'attacker' }, {}, undefined, undefined, 'b');
+    const staleMessage = new Message(
+      {
+        conversation: unknown,
+        content: 'hi',
+        sender: { id: 'attacker' },
+        metadata: {},
+        endpointId: 'b',
+      },
+      { generation: 7, reply: async () => ({ status: 'sent' }) },
+    );
     expect(resolveOwnerForRuntimeMessage(staleMessage, resolver.resolveOwner, state.snapshot)).toBeUndefined();
     expect(resolveTrustedForRuntimeMessage(staleMessage, resolver.resolveTrusted, state.snapshot)).toEqual([]);
   });
@@ -90,7 +107,10 @@ describe('trusted Endpoint role identity', () => {
     expect(enrich({ id: 'global' }, conversation, snapshot)?.roles).toEqual(['master']);
     expect(enrich({ id: 'global-trusted' }, conversation, snapshot)?.roles).toEqual(['trusted']);
     const resolve = vi.fn(() => 'owner');
-    const message = new Message(conversation, 'hi', 1, async () => ({ status: 'sent' }), undefined, { endpoint: 'account' });
+    const message = new Message(
+      { conversation: conversation, content: 'hi', metadata: { endpoint: 'account' } },
+      { generation: 1, reply: async () => ({ status: 'sent' }) },
+    );
     expect(resolveOwnerForRuntimeMessage(message, resolve)).toBeUndefined();
     expect(resolve).not.toHaveBeenCalled();
   });

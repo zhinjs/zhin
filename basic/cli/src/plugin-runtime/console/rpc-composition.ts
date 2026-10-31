@@ -23,8 +23,8 @@ export interface ConsoleRpcComposition {
   readonly databaseHost?: DatabaseHost;
   readonly scheduleHost?: unknown;
   readonly snapshots?: SnapshotReader;
-  /** Host-owned read-only Console RPC answered as `plugin.root.<name>`. */
-  readonly hostConsoleRpc?: import('@zhin.js/plugin-runtime').PluginConsoleRpc;
+  /** Host-owned Console methods resolved from each request's captured Root lease. */
+  readonly hostConsoleRpc?: import('./plugin-console-rpc.js').HostConsoleRpcFactory;
 }
 
 export interface ConsoleRpcConfigurationPort {

@@ -1,4 +1,4 @@
-import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
+import { adapterFeatureId, type AdapterIndex, type EndpointMuteRequest } from 'zhin.js/adapter';
 
 /**
  * Where a game was played: the exact Endpoint identity from `message.conversation.endpoint`
@@ -33,7 +33,7 @@ export interface AdapterProjectionContext {
   project<T>(feature: typeof adapterFeatureId): T;
 }
 
-type MuteGroupMember = (groupId: string, userId: string, durationSeconds: number) => Promise<void>;
+type MuteGroupMember = (request: EndpointMuteRequest) => Promise<void>;
 
 type EndpointLookup = Pick<AdapterIndex, 'resolve' | 'management'>;
 
@@ -48,7 +48,7 @@ export function resolveMutePenalty(context: AdapterProjectionContext): MutePenal
       if (!muteGroupMember) {
         throw new Error('This Endpoint cannot mute group members');
       }
-      await muteGroupMember(conversation.id, userId, durationSeconds);
+      await muteGroupMember({ groupId: conversation.id, userId, durationSeconds });
     },
   };
 }

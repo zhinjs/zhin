@@ -13,7 +13,7 @@ export default defineCommand<AnswersConfig>({
     const key = quizKey(input);
     if (!key) return messages(locale, 'conversation');
     const settings = resolveAnswersConfig(config);
-    const question = use(quizServiceToken).ask(key, 'fun', FUN_QUESTIONS, settings.quizTimeoutSeconds, Date.now(), locale);
+    const question = use(quizServiceToken).ask({ key: key, kind: 'fun', bank: FUN_QUESTIONS, timeoutSeconds: settings.quizTimeoutSeconds, now: Date.now(), locale: locale });
     return formatQuestion('fun', question, settings.quizTimeoutSeconds, locale);
   },
 });

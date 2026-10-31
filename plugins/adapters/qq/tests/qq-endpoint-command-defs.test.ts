@@ -58,7 +58,7 @@ describe('QQ actual convention command definitions and runtime authority', () =>
   });
   it('dispatches actual add, captures one CAS save port, and saves only after kind confirmation', async () => {
     const f = await fixture();
-    expect(await f.commands.dispatch('account qq endpoint add named', { sender: { id: 'alice' }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } })).toMatchObject({ status: 'executed', value: expect.stringContaining('synthetic-qr') });
+    expect(await f.commands.dispatch({ input: 'account qq endpoint add named', source: { sender: { id: 'alice' }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('synthetic-qr') });
     expect(f.repository.writes).toHaveLength(0); expect(startFlow).toHaveBeenCalledOnce();
     await (startFlow.mock.calls[0]![0] as QqBindCallbacks).onSuccess([{ appId: 'synthetic-app', appSecret: 'synthetic-secret' }]);
     expect(f.state.pendingBotKind?.endpointId).toBe('named'); expect(f.repository.writes).toHaveLength(0);
@@ -67,18 +67,18 @@ describe('QQ actual convention command definitions and runtime authority', () =>
   });
   it('preserves the original real add master gate even when notify.id matches the caller', async () => {
     const f = await fixture({ master: 'alice', notify: { id: 'bob' } });
-    const result = await f.commands.dispatch('account qq endpoint add named', { sender: { id: 'bob' } });
+    const result = await f.commands.dispatch({ input: 'account qq endpoint add named', source: { sender: { id: 'bob' } } });
     expect(result).toMatchObject({ status: 'executed', value: '仅 master 可执行 QQ endpoint 管理命令' });
     expect(startFlow).not.toHaveBeenCalled(); expect(f.repository.writes).toHaveLength(0);
   });
   it('removes a saved account through the actual command route without requesting a restart or file writer', async () => {
     const f = await fixture(); await f.runtime.adapter.add(f.runtime.adapter.revision, { endpointId: 'bot', config: { id: 'bot', appid: 'synthetic-app', secret: 'synthetic-secret' } });
-    expect(await f.commands.dispatch('account qq endpoint remove bot', { sender: { id: 'alice' } })).toMatchObject({ status: 'executed', value: expect.stringContaining('删除配置已保存') });
+    expect(await f.commands.dispatch({ input: 'account qq endpoint remove bot', source: { sender: { id: 'alice' } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('删除配置已保存') });
     expect(f.runtime.adapter.list()).toEqual([]); expect(f.repository.writes).toHaveLength(2);
   });
   it('does not replace the QR command’s captured CAS revision with the latest account document', async () => {
     const f = await fixture(), input = { sender: { id: 'alice' }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } };
-    await f.commands.dispatch('account qq endpoint add named', input);
+    await f.commands.dispatch({ input: 'account qq endpoint add named', source: input });
     await (startFlow.mock.calls[0]![0] as QqBindCallbacks).onSuccess([{ appId: 'synthetic-app', appSecret: 'synthetic-secret' }]);
     await f.runtime.adapter.add(f.runtime.adapter.revision, { endpointId: 'other', config: { id: 'other', appid: 'other-app', secret: 'synthetic-other' } });
     await expect(completeQqPendingBotKind(f.state.pendingBotKind!, 'private')).rejects.toMatchObject({ code: 'conflict' });
@@ -86,7 +86,7 @@ describe('QQ actual convention command definitions and runtime authority', () =>
   });
   it('cannot save a QR command’s pending choice through a retired Adapter generation', async () => {
     const f = await fixture();
-    await f.commands.dispatch('account qq endpoint add named', { sender: { id: 'alice' }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } });
+    await f.commands.dispatch({ input: 'account qq endpoint add named', source: { sender: { id: 'alice' }, conversation: { endpoint: { id: 'source', adapter: 'sandbox' }, kind: 'private', id: 'alice' } } });
     await (startFlow.mock.calls[0]![0] as QqBindCallbacks).onSuccess([{ appId: 'synthetic-app', appSecret: 'synthetic-secret' }]);
     await f.runtime.stop();
     await expect(completeQqPendingBotKind(f.state.pendingBotKind!, 'private')).rejects.toMatchObject({ code: 'closed' }); expect(f.repository.writes).toHaveLength(0);

@@ -129,7 +129,13 @@ async function checkPackedAdapterConsumer(plugin, manifest, packedFile, scaffold
     target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true,
     noEmit: true, skipLibCheck: false, types: ['node'],
   }, include: ['consumer.ts'] }));
+  await writeFile(path.join(consumer, 'independent-platform.d.ts'), `import type {} from '@zhin.js/feature-kit';
+declare class IndependentEndpoint { independentSdk(value: string): void; }
+declare class IndependentAdapter { getEndpoint(id: string): IndependentEndpoint | undefined; }
+declare module '@zhin.js/feature-kit' { interface AdapterRegistry { 'independent-packed-platform': IndependentAdapter; } }
+`);
   await writeFile(path.join(consumer, 'consumer.ts'), `import '${manifest.name}';
+import './independent-platform.js';
 import { defineCommand } from 'zhin.js/command';
 export const command = defineCommand({ adapter: '${plugin.name}', execute({ session }) {
   if (!session) return;
@@ -142,6 +148,12 @@ export const command = defineCommand({ adapter: '${plugin.name}', execute({ sess
   session.endpoint.send(123, 'native-payload');
   return 'typed' as const;
 } });
+export const independent = defineCommand({ adapter: 'independent-packed-platform', execute({ session }) {
+  if (!session) return;
+  session.endpoint.independentSdk('typed');
+  // @ts-expect-error The second registration must retain its own native Client type.
+  session.endpoint.send('native-target', 'native-payload');
+} });
 `);
   console.log(`${plugin.name}: packed public consumer tsc (positive + negative native inference)`);
   await run(process.execPath, [path.join(scaffold, 'node_modules/typescript/bin/tsc'), '--noEmit', '-p', path.join(consumer, 'tsconfig.json')], consumer);
@@ -153,10 +165,12 @@ import { createCapabilitySlot, rootPluginId } from 'zhin.js';
 import definition from ${JSON.stringify(pathToFileURL(path.join(installed, 'adapters', plugin.name, 'index.js')).href)};
 const root = rootPluginId();
 const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: '${plugin.name}', source: '/fixture/adapters/${plugin.name}/index.js', definition });
+const receiveEvent = async () => undefined;
+const gateway = { receive: receiveEvent, run: async callback => callback({ receive: receiveEvent }) };
 const snapshot = { generation: 1, root,
   tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '${manifest.name}', packageRoot: '/', children: [] }]]),
   config: new Map([[root, { id: 'packed-account' }]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
-  resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]) };
+  resources: new Map([[root, new Map([[endpointEventGatewayToken.id, gateway]])]]) };
 const index = await AdapterIndex.create([slot], snapshot, new AbortController().signal);
 try {
   await index.start();
@@ -210,6 +224,16 @@ try {
   for (const plugin of PLUGINS) {
     console.log(`zhin new ${plugin.name} --standalone --type ${plugin.type}`);
     await run(process.execPath, [cli, 'new', plugin.name, '--standalone', '--type', plugin.type, '--skip-install'], path.join(host, 'plugins'));
+    const generated = JSON.parse(await readFile(path.join(host, 'plugins', plugin.name, 'package.json'), 'utf8'));
+    // This clean author project must advertise this release's real minimum BEFORE tarball overrides
+    // are installed; testing only against newer tarballs would conceal a falsely broad peer claim.
+    for (const field of ['peerDependencies', 'devDependencies']) {
+      for (const [name, range] of Object.entries(generated[field] ?? {})) {
+        if (!isStackPackage(name)) continue;
+        const version = workspace.find(entry => entry.name === name)?.manifest.version;
+        if (!version || range !== `^${version}`) throw new Error(`${plugin.name}: ${field}.${name} declares ${range}, expected release floor ^${version}`);
+      }
+    }
   }
   const hostManifest = JSON.parse(await readFile(path.join(host, 'package.json'), 'utf8'));
   // pnpm overrides do not reach auto-installed peers, so the test kit's peers that the

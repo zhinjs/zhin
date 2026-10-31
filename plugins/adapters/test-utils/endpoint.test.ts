@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { createEndpointSpecification, endpointSpec, type Endpoint, type EndpointEvent } from 'zhin.js/adapter';
-import { createEndpointHarness } from './endpoint.js';
+import { createEndpointHarness, createTestEndpointEventGateway } from './endpoint.js';
 
 class NativeEndpoint extends EventEmitter implements Endpoint {
   readonly [endpointSpec] = createEndpointSpecification(this, {
@@ -10,7 +10,7 @@ class NativeEndpoint extends EventEmitter implements Endpoint {
 
 it('attaches the same canonical conversation to an incoming message and its MessageRef without changing the raw event', async () => {
   const received: EndpointEvent[] = [];
-  const harness = await createEndpointHarness(() => new NativeEndpoint(), { name: 'native', gateway: { receive: async event => { received.push(event); } } });
+  const harness = await createEndpointHarness(() => new NativeEndpoint(), { name: 'native', gateway: createTestEndpointEventGateway({ receive: async event => { received.push(event); } }) });
   const event = { platform_field: 'retained' };
   const input = { event, conversation: { kind: 'group' as const, id: 'room' }, content: 'hello',
     message: { conversation: { endpoint: { id: 'codec-placeholder', adapter: 'wrong' }, kind: 'group' as const, id: 'room' }, id: 'message-id' } };
@@ -46,7 +46,7 @@ it('lists a native Endpoint management capability without exposing its raw port 
 
 it('suspends framework ingress on owner close and resumes the same Client on rollback', async () => {
   const receive = vi.fn(async () => undefined);
-  const harness = await createEndpointHarness(() => new NativeEndpoint(), { gateway: { receive } });
+  const harness = await createEndpointHarness(() => new NativeEndpoint(), { gateway: createTestEndpointEventGateway({ receive }) });
   const events = harness.endpoint[endpointSpec].events;
   try {
     await harness.start(); harness.open();
@@ -68,7 +68,7 @@ it.each(['direct', 'nested'] as const)('drains a complete admitted %s callback w
   class ParsingEndpoint extends EventEmitter implements Endpoint {
     readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close: closeHook, stop() {} });
   }
-  const harness = await createEndpointHarness(() => new ParsingEndpoint(), { gateway: { receive } });
+  const harness = await createEndpointHarness(() => new ParsingEndpoint(), { gateway: createTestEndpointEventGateway({ receive }) });
   const events = harness.endpoint[endpointSpec].events;
   let parsing: Promise<unknown> | undefined, closing: Promise<unknown> | undefined;
   try {
@@ -93,7 +93,7 @@ it('does not let an escaped continuation reuse an already completed receipt afte
   let release!: () => void;
   const ready = new Promise<void>(resolve => { release = resolve; });
   const receive = vi.fn(async () => undefined);
-  const harness = await createEndpointHarness(() => new NativeEndpoint(), { gateway: { receive } });
+  const harness = await createEndpointHarness(() => new NativeEndpoint(), { gateway: createTestEndpointEventGateway({ receive }) });
   let escaped: Promise<unknown> | undefined;
   try {
     await harness.start(); harness.open();
@@ -110,7 +110,7 @@ it.each(['close', 'stop'] as const)('rejects owner %s from its own receive befor
     await expect(harness[action]()).rejects.toThrow(/own inbound receive/u);
     expect(harness.adapter.list()[0].admitted).toBe(true);
   });
-  const harness = await createEndpointHarness(() => new NativeEndpoint(), { gateway: { receive } });
+  const harness = await createEndpointHarness(() => new NativeEndpoint(), { gateway: createTestEndpointEventGateway({ receive }) });
   try {
     await harness.start(); harness.open();
     await harness.endpoint[endpointSpec].events.emit('message.receive', { content: 'self close' });
@@ -126,21 +126,21 @@ it('retains and drains a raw-event publication even when the SDK callback does n
   class RawEndpoint extends EventEmitter implements Endpoint {
     readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close: closeHook, stop() {} });
   }
-  const harness = await createEndpointHarness(() => new RawEndpoint(), { gateway: { receive: async () => {
+  const harness = await createEndpointHarness(() => new RawEndpoint(), { gateway: createTestEndpointEventGateway({ receive: async () => {
     enter(); await ready;
     await expect(harness.close()).rejects.toThrow(/own inbound receive/u);
-  } } });
-  let publication: Promise<unknown> | undefined, closing: Promise<unknown> | undefined;
+  } }) });
+  let receipt: Promise<unknown> | undefined, publication: Promise<unknown> | undefined, closing: Promise<unknown> | undefined;
   try {
     await harness.start(); harness.open();
     const events = harness.endpoint[endpointSpec].events;
-    await events.run(() => { publication = events.platform('raw', { native: true }); });
+    receipt = events.run(() => { publication = events.platform('raw', { native: true }); });
     await entered;
     let closed = false;
     closing = harness.close().then(() => { closed = true; });
     await vi.waitFor(() => expect(closeHook).toHaveBeenCalledOnce());
     expect(closed).toBe(false);
-    release(); await publication; await closing;
+    release(); await receipt; await publication; await closing;
     expect(closed).toBe(true);
-  } finally { release(); await Promise.allSettled([publication, closing]); await harness.stop(); }
+  } finally { release(); await Promise.allSettled([receipt, publication, closing]); await harness.stop(); }
 });

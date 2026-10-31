@@ -25,6 +25,7 @@ import { EndpointDeliveryError, type ConversationRef, type EndpointSendResult } 
 import { getLogger } from '@zhin.js/logger';
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { segment } from '../../src/utils.js';
+import { operationEndpoint } from '../../src/plugin-runtime/im/operation-endpoint.js';
 import { OutboundDeliveryRuntime } from '../../src/plugin-runtime/im/outbound-delivery-runtime.js';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
 import { raw, type OutboundEnvelope, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
@@ -89,7 +90,7 @@ async function fixture(options: FixtureOptions = {}) {
     }),
   });
   const resources = new Map([
-    [endpointEventGatewayToken.id, { receive: async () => undefined } as unknown],
+    [endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async () => undefined } as unknown],
     ...(options.renderer ? [[htmlRendererToken.id, options.renderer] as const] : []),
     ...(options.presentation ? [[outboundPresentationToken.id, options.presentation] as const] : []),
   ]);
@@ -138,8 +139,21 @@ async function fixture(options: FixtureOptions = {}) {
     ledger,
     activate,
     rememberFallback,
-    preview: (content: SendContent, signal?: AbortSignal) => new OutboundRenderer().preview(content, root, snapshot,
-      { endpoint: { id: String(adapter.id), adapter: 'test' }, ...target }, { signal }),
+    preview: (content: SendContent, signal?: AbortSignal) => new OutboundRenderer().preview(content, {
+      requester: root,
+      snapshot: snapshot,
+      conversation: { endpoint: { id: String(adapter.id), adapter: 'test' }, ...target },
+      ...{ signal },
+    }),
+    stop: () => adapters.stop(),
+    sendBound: async (content: SendContent) => {
+      const lease = adapters.acquire(adapter.id);
+      try {
+        return await runtime.deliver({ requester: root,
+          conversation: { endpoint: { id: String(adapter.id), adapter: 'test' }, ...target },
+          content, [operationEndpoint]: lease }, snapshot);
+      } finally { lease.release(); }
+    },
     send: (content: SendContent) => runtime.deliver({
       requester: root,
       conversation: { endpoint: { id: String(adapter.id), adapter: String(root) }, ...target },
@@ -759,4 +773,66 @@ it('delivers sparse raw payloads while still rejecting explicit undefined before
   const invalid = await fixture({ segments: { html: 'direct' } });
   expect(await invalid.send(raw([segment.text('before'), undefined]))).toMatchObject({ status: 'rejected', failure: { code: 'outbound_payload_rejected' } });
   expect(invalid.sent).toHaveLength(0);
+});
+
+
+it('cancels account-bound HTML preparation before transport submission on retirement', async () => {
+  let began!: () => void, complete!: () => void;
+  const started = new Promise<void>(resolve => { began = resolve; });
+  const pending = new Promise<void>(resolve => { complete = resolve; });
+  let rendererSignal: AbortSignal | undefined;
+  const f = await fixture({ segments: { html: 'image' }, renderer: {
+    async render(_html, options) {
+      rendererSignal = options?.signal;
+      began();
+      await pending;
+      return { data: Buffer.from('synthetic-png'), format: 'png', width: 20, height: 20, mimeType: 'image/png' };
+    },
+  } });
+  const sending = f.sendBound(jsx(Html, { children: 'Pending preparation' }));
+  let stopping: Promise<void> | undefined;
+  try {
+    await started;
+    stopping = f.stop();
+    await vi.waitFor(() => expect(rendererSignal?.aborted).toBe(true), { timeout: 100 });
+    const receipt = await sending;
+    expect(receipt).toMatchObject({ status: 'failed', failure: { code: 'endpoint_inactive' } });
+    expect(receipt.failure?.deliveryUnknown).not.toBe(true);
+    expect(f.sent).toEqual([]);
+    await stopping;
+  } finally {
+    complete();
+    await sending;
+    await stopping;
+  }
+});
+
+
+it('preserves an unknown submitted result when account cancellation occurs during platform send', async () => {
+  let began!: () => void, complete!: () => void;
+  const started = new Promise<void>(resolve => { began = resolve; });
+  const pending = new Promise<void>(resolve => { complete = resolve; });
+  let sendSignal: AbortSignal | undefined;
+  const f = await fixture({ async onSend(request) {
+    sendSignal = request.signal;
+    began();
+    await pending;
+    throw new Error('Connection ended without platform acknowledgement');
+  } });
+  const sending = f.sendBound('submitted once');
+  let stopping: Promise<void> | undefined;
+  try {
+    await started;
+    stopping = f.stop();
+    await vi.waitFor(() => expect(sendSignal?.aborted).toBe(true));
+    complete();
+    const receipt = await sending;
+    expect(receipt.failure?.deliveryUnknown).toBe(true);
+    expect(f.sent).toHaveLength(1);
+    await stopping;
+  } finally {
+    complete();
+    await sending;
+    await stopping;
+  }
 });

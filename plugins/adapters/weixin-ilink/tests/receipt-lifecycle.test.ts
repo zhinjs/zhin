@@ -50,7 +50,13 @@ it('passes retirement to the actual CDN fetch without a new timeout or a provide
     init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
   }));
   vi.stubGlobal('fetch', fetch);
-  const request = downloadPlainCdnBuffer('', 'https://synthetic.invalid', 'synthetic', 'https://synthetic.invalid/media', retirement.signal);
+  const request = downloadPlainCdnBuffer({
+    encryptedQueryParam: '',
+    cdnBaseUrl: 'https://synthetic.invalid',
+    label: 'synthetic',
+    fullUrl: 'https://synthetic.invalid/media',
+    signal: retirement.signal,
+  });
   const failed = expect(request).rejects.toThrow('Synthetic account retired');
   retirement.abort(new Error('Synthetic account retired'));
   await failed;

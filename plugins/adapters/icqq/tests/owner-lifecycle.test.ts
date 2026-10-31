@@ -3,7 +3,7 @@ import { rootPluginId } from 'zhin.js';
 import { loginAssistToken } from '@zhin.js/core/runtime';
 import { LoginAssist } from '@zhin.js/core';
 import { projectLocaleToken } from 'zhin.js/i18n';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { MemoryDesiredRepository } from '../../test-utils/desired-repository.js';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
@@ -18,14 +18,14 @@ it('acknowledges an account stop from its own inbound handler and applies outsid
   let incarnation: IcqqEndpoint | undefined;
   const fixture = await createAdapterHarness(definition, {}, { name: 'icqq', repository,
     resources: new Map([[loginAssistToken.id, new LoginAssist(null)], [projectLocaleToken.id, 'zh-CN']]),
-    gateway: { receive: async event => {
+    gateway: createTestEndpointEventGateway({ receive: async event => {
       if (event.name !== 'message.receive') return;
       const source = fixture.index.acquireInbound(event.endpoint.id, event.client);
       try {
         const account = fixture.adapter.list()[0]!;
         admitted = await fixture.adapter.stop(account.instanceId, fixture.adapter.revision, { waitForExecution: false });
       } finally { source.release(); }
-    } },
+    } }),
   });
   try {
     await fixture.start(); fixture.open();

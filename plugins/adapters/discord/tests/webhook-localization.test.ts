@@ -1,5 +1,5 @@
 import { endpointSpec } from 'zhin.js/adapter';
-import { createEndpointHarness } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { DiscordInteractionsEndpoint } from '../src/endpoint.js';
 import { Readable } from 'node:stream';
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -22,7 +22,7 @@ async function invoke(locale: 'en' | 'zh-CN' | undefined, valid = true, type = 2
   const signature = sign(null, Buffer.from(timestamp + body), keys.privateKey).toString('hex');
   const request = Object.assign(Readable.from([Buffer.from(body)]), { headers: { 'x-signature-ed25519': valid ? signature : '00'.repeat(64), 'x-signature-timestamp': timestamp } });
   const h = await createEndpointHarness(() => new DiscordInteractionsEndpoint({ id: 'discord-protocol' as never, config,
-    http: { route: () => () => undefined } as never }), { capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: { receive: async () => undefined, resolveLocale } });
+    http: { route: () => () => undefined } as never }), { capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEndpointEventGateway({ receive: async () => undefined, resolveLocale }) });
   vi.spyOn(h.endpoint, 'admit').mockImplementation(admit);
   vi.spyOn(h.endpoint, 'admitButton').mockImplementation(() => undefined);
   vi.spyOn(h.endpoint, 'admitPlatform').mockImplementation(admitPlatform);

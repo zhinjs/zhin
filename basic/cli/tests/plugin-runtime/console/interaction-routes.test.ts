@@ -24,9 +24,16 @@ async function start(target = 'bot', sceneId = 'room') {
   const { port } = await http.listen();
   const conversation = { endpoint: { adapter: 'sandbox', id: 'canonical-endpoint' }, kind: 'group' as const, id: sceneId };
   const controller = new AbortController(), sent: unknown[] = [];
-  const answer = im.createInteraction(new RuntimeMessage(conversation, 'start', 0, async content => {
-    sent.push(content); return { status: 'sent' };
-  }, { id: connection.owner }))!.ask({ type: 'confirm', title: 'Current approval', signal: controller.signal }).catch(error => error);
+  const answer = im.createInteraction(new RuntimeMessage(
+    { conversation: conversation, content: 'start', sender: { id: connection.owner } },
+    {
+      generation: 0,
+      reply: async (content) => {
+        sent.push(content);
+        return { status: 'sent' };
+      },
+    },
+  ))!.ask({ type: 'confirm', title: 'Current approval', signal: controller.signal }).catch(error => error);
   cleanups.push(async () => { controller.abort(); await answer; });
   await Promise.resolve(); await Promise.resolve();
   const request = (query: Record<string, string> = {}, token = 'operator') => fetch(`http://127.0.0.1:${port}/api/interactions/pending?${new URLSearchParams({

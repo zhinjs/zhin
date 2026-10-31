@@ -109,13 +109,13 @@ export class GithubEndpoint extends GhClient implements Endpoint {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const parsed = parseChannelId(conversation.id);
     if (!parsed) throw new Error(`无效的 GitHub conversation ID: ${conversation.id}`);
     const text = formatOutboundBody(payload);
     const r = parsed.type === 'issue'
-      ? await this.createIssueComment(parsed.repo, parsed.number, text)
-      : await this.createPRComment(parsed.repo, parsed.number, text);
+      ? await this.createIssueComment({ repo: parsed.repo, number: parsed.number, body: text, signal })
+      : await this.createPRComment({ repo: parsed.repo, number: parsed.number, body: text, signal });
     if (!r.ok) throw new Error(`发送失败: ${JSON.stringify(r.data)}`);
     this.#logger.debug(formatCompact({
       op: 'github_send',

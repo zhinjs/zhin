@@ -1,3 +1,4 @@
+import { scopeEndpointControl, scopeEndpointManagement, type EndpointPortInvoker } from './scoped-endpoint-ports.js';
 import {
   DisposeStack,
   GenerationCompensationError,
@@ -42,7 +43,7 @@ import {
 } from '@zhin.js/im-contract';
 
 import type { AdapterInstance } from './adapter.js';
-import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView } from './adapter-types.js';
+import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView, type EndpointPortScope } from './adapter-types.js';
 import { bindPlatformEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 
 /** Trusted composition input, excluded from public snapshot resources and authoring contexts. */
@@ -93,13 +94,36 @@ interface AdapterRecord extends AdapterDescriptor {
   readonly startAttempted: boolean;
 }
 
+/** Concrete receiver and originating lifetime captured before creating port closures. */
+interface EndpointPortBinding {
+  readonly id: CapabilityId;
+  readonly endpoint: AnyEndpoint;
+  readonly scope?: EndpointPortScope;
+}
+
+/** Snapshot-owned directory metadata; account state remains exclusively in Adapter instances. */
+interface AdapterIndexConstruction {
+  readonly adapters: readonly AdapterInstance[];
+  readonly admission: GenerationAdmissionGate;
+  readonly ownerAliases: ReadonlyMap<PluginId, string>;
+}
+
+/** An explicit selector is resolved only when exactly one account matches. */
+interface AdapterEndpointSelector {
+  readonly adapter: string;
+  readonly endpointKey: string;
+  readonly packageAlias?: string;
+}
+
 export class AdapterIndex {
   readonly $projection = 'zhin.adapter-index/1' as const;
   readonly #adapters: readonly AdapterInstance[];
+  readonly #ownerAliases: ReadonlyMap<PluginId, string>;
   readonly [generationAdmissionSource]: readonly GenerationAdmissionGate[];
 
-  private constructor(adapters: readonly AdapterInstance[], admission: GenerationAdmissionGate) {
+  private constructor({ adapters, admission, ownerAliases }: AdapterIndexConstruction) {
     this.#adapters = Object.freeze([...adapters]);
+    this.#ownerAliases = ownerAliases;
     this[generationAdmissionSource] = Object.freeze([admission]);
   }
 
@@ -178,7 +202,12 @@ export class AdapterIndex {
         }, signal);
         adapters.push(adapter);
       }
-      return new AdapterIndex(adapters, admission);
+      const ownerAliases = new Map<PluginId, string>();
+      for (const adapter of adapters) {
+        const packageName = snapshot.tree.get(adapter.descriptor.owner)?.packageName;
+        if (packageName) ownerAliases.set(adapter.descriptor.owner, packageName.replace(/^@[^/]+\/adapter-/, ''));
+      }
+      return new AdapterIndex({ adapters, admission, ownerAliases });
     } catch (error) {
       const stack = new DisposeStack();
       for (const adapter of adapters) stack.add(() => adapter.dispose());
@@ -217,20 +246,15 @@ export class AdapterIndex {
     })));
   }
 
-  /**
-   * Resolve a Console `$adapter` + `$endpoint` pair to a capability id.
-   * Matches local name, capability id, or owner path segments.
-   */
+  /** One snapshot-owned selector contract for Core, Console and plugin callers. */
   resolve(adapter: string, endpointKey: string): CapabilityId | undefined {
+    const matches = (record: AdapterRecord) => matchesEndpoint(record, {
+      adapter, endpointKey, packageAlias: this.#ownerAliases.get(record.owner),
+    });
     const canonical = this.#record(endpointKey as CapabilityId);
-    if (canonical && matchesEndpoint(canonical, adapter, endpointKey)) return canonical.id;
-    const matches = this.#order.filter((record) =>
-      matchesEndpoint(record, adapter, endpointKey));
-    if (matches.length === 1) return matches[0]?.id;
-    if (matches.length === 0) return undefined;
-    // Prefer exact localName === endpointKey when ambiguous.
-    const exact = matches.find((record) => record.name === endpointKey);
-    return exact?.id ?? matches[0]?.id;
+    if (canonical && matches(canonical)) return canonical.id;
+    const candidates = this.#order.filter(matches);
+    return candidates.length === 1 ? candidates[0]?.id : undefined;
   }
 
   /** Read connection facts without exposing SDK objects or unscoped framework operations. */
@@ -303,35 +327,32 @@ export class AdapterIndex {
   }
 
   /** Returns the control port only when the concrete Endpoint declared the operation and is active. */
-  control(id: CapabilityId, operation: AdapterOperation): EndpointControl | undefined {
+  control(id: CapabilityId, operation: AdapterOperation, scope?: EndpointPortScope): EndpointControl | undefined {
     const record = this.#record(id);
     if (!record || !record.started || record.stopped || !record.endpoint) return undefined;
     if (!record.operations.includes(operation)) return undefined;
     const port = endpointControlOf(record.endpoint ? endpointRuntimeOf(record.endpoint) : undefined);
-    return port && record.endpoint ? this.#scopedPort(id, record.endpoint, port) : undefined;
+    return port && record.endpoint ? scopeEndpointControl({ port, invoke: this.#portInvoker({ id, endpoint: record.endpoint, scope }) }) : undefined;
   }
 
-  management(id: CapabilityId, assertScope?: () => void): EndpointManagement | undefined {
+  management(id: CapabilityId, scope?: EndpointPortScope): EndpointManagement | undefined {
     const record = this.#record(id);
     const port = record?.endpoint ? endpointRuntimeOf(record.endpoint).management : undefined;
-    return port && record?.endpoint ? this.#scopedPort(id, record.endpoint, port, assertScope) : undefined;
+    return port && record?.endpoint ? scopeEndpointManagement({ port, invoke: this.#portInvoker({ id, endpoint: record.endpoint, scope }) }) : undefined;
   }
-  #scopedPort<T extends object>(id: CapabilityId, endpoint: AnyEndpoint, port: T, assertScope?: () => void): T {
-    const expectedClient = endpoint;
-    const scoped = { ...port };
-    for (const key of Reflect.ownKeys(scoped)) {
-      const value = Reflect.get(port, key);
-      if (typeof value !== 'function') continue;
-      Reflect.set(scoped, key, async (...args: unknown[]) => {
-        assertScope?.();
-        const callerSignal = args.find((argument): argument is AbortSignal => argument instanceof AbortSignal);
-        const lease = this.acquire(id, callerSignal, expectedClient);
-        const scopedArgs = args.map(argument => argument === callerSignal ? lease.signal : argument);
-        try { return await lease.run(() => Reflect.apply(value, port, scopedArgs)); }
+  /** Each facade captures its original Client; calls cannot resolve a replacement incarnation. */
+  #portInvoker({ id, endpoint, scope }: EndpointPortBinding): EndpointPortInvoker {
+    return async ({ run, signal }) => {
+      scope?.assertActive?.();
+      const releaseScope = scope?.retain?.();
+      try {
+        const callerSignal = scope?.signal
+          ? signal ? AbortSignal.any([scope.signal, signal]) : scope.signal : signal;
+        const lease = this.acquire(id, callerSignal, endpoint);
+        try { return await lease.run((_endpoint, activeSignal) => run(activeSignal)); }
         finally { lease.release(); }
-      });
-    }
-    return Object.freeze(scoped);
+      } finally { releaseScope?.(); }
+    };
   }
 
   /**
@@ -418,16 +439,10 @@ export function isAdapterIndex(value: unknown): value is AdapterIndex {
     && (value as { readonly $projection?: unknown }).$projection === 'zhin.adapter-index/1';
 }
 
-function matchesEndpoint(
-  record: AdapterRecord,
-  adapter: string,
-  endpointKey: string,
-): boolean {
-  // 消息上的 $adapter 是 CapabilityId 的 localName 段（多 endpoint 展开后形如
-  // `icqq~8596238`）。CapabilityId 段分隔符是 \0（owner\0feature\0localName），
-  // 不能用 `/` 去 endsWith，否则永远匹配不上（endpoint not found）。
+function matchesEndpoint(record: AdapterRecord, { adapter, endpointKey, packageAlias }: AdapterEndpointSelector): boolean {
   const localName = record.id.split('\0').pop() ?? record.id;
   const adapterOk = record.adapterName === adapter
+    || packageAlias === adapter
     || record.name === adapter
     || record.id === adapter
     || localName === adapter

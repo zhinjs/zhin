@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
-import { Adapter, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec,
+import { Adapter, adapterFeatureId, type EndpointGroupInspectionRequest, createEndpointSpecification, defineAdapter, endpointSpec,
   type Endpoint, type EndpointManagement } from '@zhin.js/adapter';
 import { createAdapterHarness } from '../../../../../../plugins/adapters/test-utils/endpoint.js';
 import { MemoryDesiredRepository } from '../../../../../../plugins/adapters/test-utils/desired-repository.js';
@@ -25,7 +25,7 @@ class SceneEndpoint extends SceneClient implements Endpoint {
     start: () => this[endpointSpec].reportSelfUserId('synthetic-bot'),
     open() {}, close() {}, stop() {},
     management: {
-      inspectGroupScene: (group, signal) => this.inspect(group, signal),
+      inspectGroupScene: ({ groupId: group, signal }: EndpointGroupInspectionRequest) => this.inspect(group, signal),
       inspectGroupMemberProfile: async () => ({ platformRole: 'member' }),
     } satisfies EndpointManagement,
   });
@@ -45,8 +45,7 @@ describe('scene facts through connection data and guarded management', () => {
     const controller = new AbortController();
     const management = vi.spyOn(h.index, 'management');
     let stopping: ReturnType<SceneAdapter['stop']> | undefined;
-    const request = resolveRuntimeTurnContextState({ projections: new Map([[adapterFeatureId, h.index]]) },
-      { endpoint: { id: row.canonicalId, adapter: 'icqq' }, kind: 'group', id: 'synthetic-group' }, controller.signal, 'synthetic-sender');
+    const request = resolveRuntimeTurnContextState({ snapshot: { projections: new Map([[adapterFeatureId, h.index]]) }, conversation: { endpoint: { id: row.canonicalId, adapter: 'icqq' }, kind: 'group', id: 'synthetic-group' }, signal: controller.signal, senderId: 'synthetic-sender' });
     // Attach rejection handling before cancelling the live operation.
     const settled = request.then(value => ({ value }), error => ({ error }));
     try {
@@ -90,9 +89,7 @@ it('keeps generation-owned queued scene refresh after the requesting turn ends, 
   endpoint.inspect.mockImplementationOnce(async (_group, signal) => { refreshSignal = signal; return { name: 'fresh' }; });
   const turn = new AbortController();
   try {
-    const state = await resolveRuntimeTurnContextState({ projections: new Map([[adapterFeatureId, h.index]]) },
-      { endpoint: { id: row.canonicalId, adapter: 'icqq' }, kind: 'group', id: 'group' }, turn.signal, 'sender',
-      { store, refresher, now: () => now });
+    const state = await resolveRuntimeTurnContextState({ snapshot: { projections: new Map([[adapterFeatureId, h.index]]) }, conversation: { endpoint: { id: row.canonicalId, adapter: 'icqq' }, kind: 'group', id: 'group' }, signal: turn.signal, senderId: 'sender', factServices: { store, refresher, now: () => now } });
     expect(state?.conversation?.name).toBe('old');
     expect(endpoint.inspect).not.toHaveBeenCalled();
     turn.abort(new Error('Synthetic turn completed'));

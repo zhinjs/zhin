@@ -78,21 +78,22 @@ export class OutboundDeliveryRuntime {
     const presentation = resolveOutboundPresentation(snapshot, request.conversation, request.requester);
     const jsxCache = new WeakMap<JSXElement, Promise<unknown>>();
     const buttons = this.context.prepareButtons?.(request, snapshot);
-    const renderOptions = { jsxCache, bindButton: buttons?.bind };
+    const renderOptions = { jsxCache, bindButton: buttons?.bind, signal: boundEndpoint?.signal };
     let initialPayload: unknown;
     let initialProjection: OutboundProjection;
     try {
-      const rendered = await this.#renderer.render(
-        request.content,
-        request.requester,
-        snapshot,
-        request.conversation,
-        request.incoming,
-        renderOptions,
-      );
-      initialProjection = await projectOutboundPayload(rendered, request.conversation, snapshot, { deferInteractive: true, presentation });
+      const rendered = await this.#renderer.render(request.content, {
+        requester: request.requester,
+        snapshot: snapshot,
+        conversation: request.conversation,
+        incoming: request.incoming,
+        ...renderOptions,
+      });
+      initialProjection = await projectOutboundPayload(rendered, request.conversation, snapshot, { deferInteractive: true, presentation, signal: renderOptions.signal });
       initialPayload = initialProjection.payload;
     } catch (error) {
+      // Preparation precedes the transport boundary; cancellation here is confirmed not sent.
+      if (renderOptions.signal?.aborted) return failedDeliveryReceipt('endpoint_inactive');
       if (error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent') return receiptFromEndpointError(error, false);
       logRejectedPayload(request.conversation, 'render', error);
       return rejectedDeliveryReceipt('outbound_payload_rejected');
@@ -139,10 +140,16 @@ export class OutboundDeliveryRuntime {
             // Native payload replacements remain possible; only authoring values need evaluation.
             const replacement = envelope.payload;
             const replaced = replacement !== initialPayload && needsAuthoringRender(replacement)
-              ? await this.#renderer.render(replacement as SendContent, request.requester, snapshot, request.conversation, request.incoming, renderOptions)
+              ? await this.#renderer.render(replacement as SendContent, {
+                requester: request.requester,
+                snapshot: snapshot,
+                conversation: request.conversation,
+                incoming: request.incoming,
+                ...renderOptions,
+              })
               : replacement;
             projection = await projectOutboundPayload(replaced, request.conversation, snapshot, {
-              presentation,
+              presentation, signal: renderOptions.signal,
               inheritedFallbacks: retainsInitialProjection(replacement) ? initialProjection.rendering.fallbacks : [],
               rememberFallback: (map) => {
                 for (const value of Object.values(map)) buttonPayloads.add(value);
@@ -153,6 +160,10 @@ export class OutboundDeliveryRuntime {
             observeRendering(projection.rendering);
             for (const value of collectButtonPayloads(payload)) buttonPayloads.add(value);
           } catch (error) {
+            if (renderOptions.signal?.aborted) {
+              receipt = failedDeliveryReceipt('endpoint_inactive');
+              return;
+            }
             const unsupported = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent';
             if (!unsupported) logRejectedPayload(request.conversation, 'middleware_render', error);
             receipt = unsupported ? receiptFromEndpointError(error as EndpointDeliveryError, false) : rejectedDeliveryReceipt('outbound_payload_rejected');

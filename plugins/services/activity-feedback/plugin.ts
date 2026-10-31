@@ -75,6 +75,9 @@ export default definePlugin<ActivityFeedbackServiceConfig>({
       outbound.runWithView.bind(outbound),
       locale,
     );
+    context.events.on('hmr.resume', async ({ details }) => {
+      if (details.outcome === 'committed' && details.receiver.state === 'replaced') await dispose();
+    });
     context.lifecycle.add(async () => {
       logger.debug('[ActivityFeedback] Disposing Runtime AI event binder');
       await dispose();

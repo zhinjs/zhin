@@ -1,5 +1,5 @@
 import { createMessages, resolveLocale } from 'zhin.js/i18n';
-import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
+import { channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import type { TttSessionRow } from './models.js';
 import { buildBoardInteractive } from './board-view.js';
 import {
@@ -32,14 +32,18 @@ export function isBotSession(session: TttSessionRow): boolean {
   return session.player_o === BOT_ID || session.player_x === BOT_ID;
 }
 
-/** Render the canonical board reply; delivery belongs to the Runtime Host. */
-export function renderBoard(
-  message: GameMessageLike,
-  session: TttSessionRow,
-  statusLine: string,
-  terminal = false,
-  highlight?: number[],
-): GameReply {
+export interface TttBoardView {
+  /** Exact player scene determines the declared platform presentation. */
+  readonly player: Pick<GamePlayer, 'target'>;
+  readonly session: TttSessionRow;
+  readonly statusLine: string;
+  readonly terminal?: boolean;
+  readonly highlight?: number[];
+}
+
+/** Render semantic content; the owning operation performs delivery. */
+export function renderBoard(input: TttBoardView): GameReply {
+  const { player: message, session, statusLine, terminal = false, highlight } = input;
   const board = parseBoard(session.board);
   const content = buildBoardInteractive({
     locale: session.locale ?? undefined,
@@ -48,9 +52,9 @@ export function renderBoard(
     statusLine,
     turnMark: session.turn as Cell,
     terminal,
-    omitAsciiBoard: message.$adapter === 'qq',
+    omitAsciiBoard: message.target.endpoint.adapter === 'qq',
     highlight,
-    channelType: message.$channel.type,
+    channelType: message.target.kind,
   });
 
   return content;
@@ -58,31 +62,33 @@ export function renderBoard(
 
 export async function restartFromTerminal(
   services: SessionServices,
-  message: GameMessageLike,
+  message: GamePlayer,
   sessionId: string,
 ): Promise<GameReply | null> {
-  const session = await services.session.getById(sessionId);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text1');
-  if (session.status === 'active') return messages(locale, 'text2');
-  const mark = playerMark(message.$sender.id, {
-    playerX: session.player_x,
-    playerO: session.player_o,
-  });
-  if (!mark) return messages(locale, 'text3');
-  await services.session.updateSession(session.id, { status: 'aborted', winner: 0 });
-  // PvP 局重开仍是 PvP（原班人马），不静默降级为人机
-  if (!isBotSession(session)) {
-    const board = await startPvpGame(
-      services,
-      message,
-      { id: session.player_x, displayName: session.player_x_name },
-      { id: session.player_o, displayName: session.player_o_name },
-    );
-    return board;
-  }
-  const hint = await startBotGame(services, message);
-  return hint;
+  return services.session.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.session.getById(sessionId);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text1');
+    if (session.status === 'active') return messages(locale, 'text2');
+    const mark = playerMark(message.sender.id, {
+      playerX: session.player_x,
+      playerO: session.player_o,
+    });
+    if (!mark) return messages(locale, 'text3');
+    await services.session.updateSession(session.id, { status: 'aborted', winner: 0 });
+    // PvP 局重开仍是 PvP（原班人马），不静默降级为人机
+    if (!isBotSession(session)) {
+      const board = await startPvpGame(
+        services,
+        message,
+        { id: session.player_x, displayName: session.player_x_name },
+        { id: session.player_o, displayName: session.player_o_name },
+      );
+      return board;
+    }
+    const hint = await startBotGame(services, message);
+    return hint;
+  } });
 }
 
 function turnCell(session: TttSessionRow): Cell {
@@ -95,73 +101,77 @@ function playerIdForTurn(session: TttSessionRow): string {
 
 export async function handleMove(
   services: SessionServices,
-  message: GameMessageLike,
+  message: GamePlayer,
   sessionId: string,
   cell: number,
 ): Promise<GameReply | null> {
-  const session = await services.session.getById(sessionId);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session || session.status !== 'active') {
-    return messages(locale, 'text4');
-  }
-  if (session.channel_key !== `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`) {
-    return messages(locale, 'text5');
-  }
+  return services.session.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.session.getById(sessionId);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session || session.status !== 'active') {
+      return messages(locale, 'text4');
+    }
+    if (session.channel_key !== channelKey(message)) {
+      return messages(locale, 'text5');
+    }
 
-  const mark = playerMark(message.$sender.id, {
-    playerX: session.player_x,
-    playerO: session.player_o,
-  });
-  if (!mark) {
-    return messages(locale, 'text3');
-  }
-  if (mark !== turnCell(session)) {
-    const turn = turnCell(session);
-    const { id, name } = playerRefForMark(session, turn);
-    return messages(locale, 'text6', { p0: formatPlayerWithMark(id, name, cellLabel(turn) as '✕' | '○', locale) });
-  }
+    const mark = playerMark(message.sender.id, {
+      playerX: session.player_x,
+      playerO: session.player_o,
+    });
+    if (!mark) {
+      return messages(locale, 'text3');
+    }
+    if (mark !== turnCell(session)) {
+      const turn = turnCell(session);
+      const { id, name } = playerRefForMark(session, turn);
+      return messages(locale, 'text6', { p0: formatPlayerWithMark(id, name, cellLabel(turn) as '✕' | '○', locale) });
+    }
 
-  const board = parseBoard(session.board);
-  if (!validMove(board, cell)) {
-    return messages(locale, 'text7');
-  }
+    const board = parseBoard(session.board);
+    if (!validMove(board, cell)) {
+      return messages(locale, 'text7');
+    }
 
-  const nextBoard = applyMove(board, cell, mark);
-  const win = checkWinner(nextBoard);
-  const draw = !win && isDraw(nextBoard);
-  const moveCount = session.move_count + 1;
+    const nextBoard = applyMove(board, cell, mark);
+    const win = checkWinner(nextBoard);
+    const draw = !win && isDraw(nextBoard);
+    const moveCount = session.move_count + 1;
 
-  await services.session.recordMove(session.id, message.$sender.id, cell, moveCount);
-  await services.session.updateSession(session.id, {
-    board: JSON.stringify(nextBoard),
-    move_count: moveCount,
-    turn: session.turn === 1 ? 2 : 1,
-    status: win ? 'won' : draw ? 'draw' : 'active',
-    winner: win ? win.winner : 0,
-  });
+    const mutation = await services.session.performMove({
+      sessionId: session.id,
+      playerId: message.sender.id,
+      cell,
+      expectedRevision: session.revision,
+      boardJson: JSON.stringify(nextBoard),
+      moveCount,
+      nextTurn: session.turn === 1 ? 2 : 1,
+      status: win ? 'won' : draw ? 'draw' : 'active',
+      winner: win ? win.winner : 0,
+    });
+    const updated = mutation.session;
 
-  const updated = (await services.session.getById(session.id))!;
+    if (win) {
+      const status = formatWinHeadline(updated, win.winner);
+      return renderBoard({ player: message, session: updated, statusLine: status, terminal: true, highlight: win.line });
+    }
+    if (draw) {
+      return renderBoard({ player: message, session: updated, statusLine: messages(locale, 'text8'), terminal: true });
+    }
 
-  if (win) {
-    const status = formatWinHeadline(updated, win.winner);
-    return renderBoard(message, updated, status, true, win.line);
-  }
-  if (draw) {
-    return renderBoard(message, updated, messages(locale, 'text8'), true);
-  }
+    // 人机：玩家落子后立刻由服务端代下，避免先发「轮到机器人」再发终盘（QQ 被动消息多耗一次）
+    if (isBotSession(updated) && playerIdForTurn(updated) === BOT_ID) {
+      return runBotMove(services, message, updated);
+    }
 
-  // 人机：玩家落子后立刻由服务端代下，避免先发「轮到机器人」再发终盘（QQ 被动消息多耗一次）
-  if (isBotSession(updated) && playerIdForTurn(updated) === BOT_ID) {
-    return runBotMove(services, message, updated);
-  }
-
-  const status = formatTurnStatus(updated, moveCount);
-  return renderBoard(message, updated, status, false);
+    const status = formatTurnStatus(updated, moveCount);
+    return renderBoard({ player: message, session: updated, statusLine: status, terminal: false });
+  } });
 }
 
 async function runBotMove(
   services: SessionServices,
-  message: GameMessageLike,
+  message: GamePlayer,
   session: TttSessionRow,
 ): Promise<GameReply | null> {
   const board = parseBoard(session.board);
@@ -171,58 +181,62 @@ async function runBotMove(
 
   const fakeMessage = {
     ...message,
-    $sender: { ...message.$sender, id: BOT_ID, name: '机器人' },
-  } as GameMessageLike;
+    sender: { ...message.sender, id: BOT_ID, name: '机器人' },
+  } as GamePlayer;
 
   return handleMove(services, fakeMessage, session.id, cell);
 }
 
 export async function startBotGame(
   services: SessionServices,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const active = await services.session.getActiveByChannel(ch);
-  const locale = resolveLocale(active ? active.locale : message.locale);
-  if (active) return messages(locale, 'text9');
+  return services.session.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const active = await services.session.getActiveByChannel(ch);
+    const locale = resolveLocale(active ? active.locale : message.locale);
+    if (active) return messages(locale, 'text9');
 
-  const session = await services.session.createSession({
-    message,
-    playerX: message.$sender.id,
-    playerO: BOT_ID,
-    playerXName: senderDisplayName(message.$sender),
-    playerOName: '机器人',
-    boardJson: JSON.stringify([0, 0, 0, 0, 0, 0, 0, 0, 0]),
-  });
+    const session = await services.session.createSession({
+      message,
+      playerX: message.sender.id,
+      playerO: BOT_ID,
+      playerXName: senderDisplayName(message.sender),
+      playerOName: '机器人',
+      boardJson: JSON.stringify([0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    });
 
-  const status = messages(locale, 'text10', { p0: formatRosterLine(session) });
-  const board = renderBoard(message, session, status, false);
-  const success = messages(locale, 'text11');
-  return Array.isArray(board) ? [...board, success] : [board, success];
+    const status = messages(locale, 'text10', { p0: formatRosterLine(session) });
+    const board = renderBoard({ player: message, session: session, statusLine: status, terminal: false });
+    const success = messages(locale, 'text11');
+    return Array.isArray(board) ? [...board, success] : [board, success];
+  } });
 }
 
 export async function startPvpGame(
   services: SessionServices,
-  message: GameMessageLike,
+  message: GamePlayer,
   playerX: TttPlayerRef,
   playerO: TttPlayerRef,
 ): Promise<GameReply> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const active = await services.session.getActiveByChannel(ch);
-  const locale = resolveLocale(active ? active.locale : message.locale);
-  if (active) return messages(locale, 'text9');
+  return services.session.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const active = await services.session.getActiveByChannel(ch);
+    const locale = resolveLocale(active ? active.locale : message.locale);
+    if (active) return messages(locale, 'text9');
 
-  const session = await services.session.createSession({
-    message,
-    playerX: playerX.id,
-    playerO: playerO.id,
-    playerXName: playerX.displayName,
-    playerOName: playerO.displayName,
-    boardJson: JSON.stringify([0, 0, 0, 0, 0, 0, 0, 0, 0]),
-  });
-  const opener = formatPlayerWithMark(session.player_x, session.player_x_name, '✕');
-  const status = messages(locale, 'text12', { p0: formatRosterLine(session), p1: opener });
-  return renderBoard(message, session, status, false);
+    const session = await services.session.createSession({
+      message,
+      playerX: playerX.id,
+      playerO: playerO.id,
+      playerXName: playerX.displayName,
+      playerOName: playerO.displayName,
+      boardJson: JSON.stringify([0, 0, 0, 0, 0, 0, 0, 0, 0]),
+    });
+    const opener = formatPlayerWithMark(session.player_x, session.player_x_name, '✕');
+    const status = messages(locale, 'text12', { p0: formatRosterLine(session), p1: opener });
+    return renderBoard({ player: message, session: session, statusLine: status, terminal: false });
+  } });
 }
 
 const messages = createMessages({

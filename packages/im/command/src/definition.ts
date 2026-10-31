@@ -586,19 +586,31 @@ export function resolveDynamicParams(
   return Object.freeze(resolved);
 }
 
-/** @internal Command dispatcher assembly helper. */
-export function createCommandContext(
-  snapshot: RuntimeSnapshot,
-  ownerId: PluginId,
-  args: readonly string[],
-  params: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
-  input: unknown = undefined,
-  segments: readonly Readonly<CommandSegment>[] = Object.freeze([]),
-  interaction?: UserInteraction,
-  adapter?: string,
-  options: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
-  presentation?: Readonly<{ locale: Locale; formatCommand?: (localPath: string, owner?: PluginId) => string | undefined }>,
-): CommandContext {
+/** Parsed invocation values, independent of the caller's transport and lifetime. */
+export interface CommandInvocationArguments {
+  readonly args: readonly string[];
+  readonly params?: Readonly<Record<string, CommandParameterValue>>;
+  readonly options?: Readonly<Record<string, CommandParameterValue>>;
+  readonly segments?: readonly Readonly<CommandSegment>[];
+}
+
+/** Author and lifetime authority captured by the dispatcher for this invocation. */
+export interface CommandInvocationOperation {
+  readonly snapshot: RuntimeSnapshot;
+  readonly ownerId: PluginId;
+  readonly input?: unknown;
+  readonly interaction?: UserInteraction;
+  readonly adapter?: string;
+  readonly presentation?: Readonly<{
+    locale: Locale;
+    formatCommand?: (localPath: string, owner?: PluginId) => string | undefined;
+  }>;
+}
+
+/** @internal Command dispatcher assembly helper; each value has one owner. */
+export function createCommandContext(operation: CommandInvocationOperation, invocation: CommandInvocationArguments): CommandContext {
+  const { snapshot, ownerId, input, interaction, adapter, presentation } = operation;
+  const { args, params = {}, options = {}, segments = [] } = invocation;
   const context = createCapabilityContext(snapshot, ownerId, undefined, readOperationInputSignal(input));
   const session = resolveCommandSession(input);
   const parameterValues: Record<string, CommandParameterValue> = { __proto__: null, ...params };

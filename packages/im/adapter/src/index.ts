@@ -8,7 +8,7 @@ export * from './credentials.js';
 /** @public 用户侧创作面：`defineAdapter`（`adapters/` 约定目录默认导出，承诺 semver）。 */
 export * from './definition.js';
 export { endpointEventGatewayToken } from './endpoint.js';
-export type { EndpointEventGateway, EndpointEventEmitter } from './endpoint.js';
+export type { EndpointReceipt, EndpointEventGateway, EndpointEventEmitter } from './endpoint.js';
 export type { EndpointIdentity, EndpointEvent, EndpointEventSink, EndpointIncomingMessage, EndpointConversation, EndpointSendRequest, EndpointSendPart, EndpointSendResult, EndpointTransportState, PlatformEvent } from './endpoint-contract.js';
 /** @internal Process-level Peer Registry (framework mechanism, no semver promise). */
 export * from './peer-registry.js';
@@ -30,3 +30,7 @@ export { endpointSpec, createEndpointSpecification, isEndpoint } from './endpoin
 export type { Endpoint, EndpointSpecification, EndpointHooks } from './endpoint-specification.js';
 
 export { ownedConsoleAdapter, mutateConsoleAdapter, prepareConsoleAdapterMutation } from './adapter-runtime-console.js';
+
+/** @internal Shared request ownership for protocol Clients, without connection/reconnect policy. */
+export { createPendingRpc } from './pending-rpc.js';
+export type { PendingRpc, PendingRpcOptions, PendingRpcRequest, PendingRpcEnvelope, PendingRpcTransport } from './pending-rpc.js';

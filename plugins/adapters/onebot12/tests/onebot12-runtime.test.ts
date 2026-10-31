@@ -290,17 +290,13 @@ describe('onebot12 protocol helpers', () => {
   });
 
   it('builds upload_file params from canonical MediaRef', () => {
-    expect(mediaRefToOneBot12UploadParams('image', {}, { kind: 'url', value: 'https://x/a.png' }))
+    expect(mediaRefToOneBot12UploadParams({ type: 'image', data: {}, media: { kind: 'url', value: 'https://x/a.png' } }))
       .toEqual({ type: 'url', name: 'a.png', url: 'https://x/a.png' });
-    expect(mediaRefToOneBot12UploadParams(
-      'image',
-      { name: 'p.png' },
-      { kind: 'base64', value: 'base64://QUJD' },
-    )).toEqual({ type: 'data', name: 'p.png', data: 'QUJD' });
-    expect(mediaRefToOneBot12UploadParams('video', {}, { kind: 'path', value: 'file:///tmp/a.mp4' }))
+    expect(mediaRefToOneBot12UploadParams({ type: 'image', data: { name: 'p.png' }, media: { kind: 'base64', value: 'base64://QUJD' } })).toEqual({ type: 'data', name: 'p.png', data: 'QUJD' });
+    expect(mediaRefToOneBot12UploadParams({ type: 'video', data: {}, media: { kind: 'path', value: 'file:///tmp/a.mp4' } }))
       .toEqual({ type: 'path', name: 'a.mp4', path: '/tmp/a.mp4' });
     // kind=file 不可上传（走 file_id 复投），返回 undefined
-    expect(mediaRefToOneBot12UploadParams('file', {}, { kind: 'file', value: 'fid' }))
+    expect(mediaRefToOneBot12UploadParams({ type: 'file', data: {}, media: { kind: 'file', value: 'fid' } }))
       .toBeUndefined();
   });
 
@@ -310,12 +306,12 @@ describe('onebot12 protocol helpers', () => {
       calls.push({ action, params });
       return { file_id: 'fid-1' };
     };
-    const out = await uploadOneBot12MediaSegments([
+    const out = await uploadOneBot12MediaSegments({ payload: [
       { type: 'text', data: { text: 'hi' } },
       { type: 'image', data: { media: { kind: 'url', value: 'https://x/a.png' } } },
       { type: 'image', data: { file_id: 'fid-old' } },
       { type: 'file', data: { media: { kind: 'file', value: 'fid-re' }, name: 'a.bin' } },
-    ], okUpload);
+    ], callAction: okUpload });
     expect(calls).toEqual([{
       action: 'upload_file',
       params: { type: 'url', name: 'a.png', url: 'https://x/a.png' },
@@ -330,9 +326,9 @@ describe('onebot12 protocol helpers', () => {
     // 上传失败 → 保留原段，由 formatOutboundSegments 走扩展字段降级
     const onFail = vi.fn();
     const original = [{ type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } }];
-    const degraded = await uploadOneBot12MediaSegments(original, async () => {
+    const degraded = await uploadOneBot12MediaSegments({ payload: original, callAction: async () => {
       throw new Error('no upload');
-    }, onFail);
+    }, onUploadFailed: onFail });
     expect(degraded).toEqual(original);
     expect(onFail).toHaveBeenCalledTimes(1);
     expect(formatOutboundSegments(degraded)).toEqual([{ type: 'image', data: { data: 'QUJD' } }]);
@@ -825,9 +821,8 @@ describe('onebot12 plugin runtime adapter', () => {
 
     await endpoint.send({ conversation: makeConversation('private', '10001'), payload: 'pong' });
     expect(callAction).toHaveBeenCalledWith(
-      expect.objectContaining({ url: 'http://127.0.0.1:6700' }),
-      'send_message',
-      expect.objectContaining({ detail_type: 'private', user_id: '10001' }),
+      expect.objectContaining({ url: 'http://127.0.0.1:6700', action: 'send_message',
+        params: expect.objectContaining({ detail_type: 'private', user_id: '10001' }) }),
     );
 
     await endpoint.stop();

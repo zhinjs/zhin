@@ -52,6 +52,14 @@ interface ChatMemberPermit {
   readonly permissions: string[];
 }
 
+/** One admitted platform message and its original framework lifetime. */
+interface TelegramMessageAdmission {
+  readonly message: TelegramMessage;
+  readonly conversation: ConversationRef;
+  readonly signal: AbortSignal;
+  readonly event?: unknown;
+}
+
 export interface TelegramEndpointOptions {
   readonly id: CapabilityId;
   readonly config: ResolvedTelegramConfig;
@@ -86,8 +94,8 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
   #botUserId?: number;
   #botUsername?: string;
   readonly #chatMemberCache = new Map<string, ChatMemberPermit>();
-  readonly #control: EndpointControl = Object.freeze({
-    recall: (message: MessageRef) => this.recallMessage(message),
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: ({ message, signal }) => this.recallMessage(message, signal),
   });
   readonly #content: EndpointContentPort = Object.freeze({
     resolve: (reference: ConversationReference, context: EndpointContentResolveContext) => this.#resolveContent(reference, context.signal),
@@ -239,16 +247,18 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     let lastId = '';
     let completedActions = 0;
     try {
       const plan = formatOutboundPlan(conversation.id, payload);
       for (const action of plan.actions) {
-        const form = await this.#buildUploadForm(action.params, plan.uploads);
+        signal?.throwIfAborted();
+        const form = await this.#buildUploadForm(action.params, plan.uploads, signal);
+        signal?.throwIfAborted();
         const result = form
-          ? await this.callApiForm<{ message_id?: number }>(action.method, form)
-          : await this.callApi<{ message_id?: number }>(action.method, action.params);
+          ? await this.callApiForm<{ message_id?: number }>(action.method, form, signal)
+          : await this.callApi<{ message_id?: number }>(action.method, action.params, signal);
         if (!result || !Number.isSafeInteger(result.message_id) || result.message_id! <= 0) {
           throw new EndpointDeliveryError('delivery_unconfirmed',
             `Telegram API ${action.method} returned no valid message_id; delivery is unconfirmed`, 'unknown');
@@ -269,12 +279,12 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     }
   }
 
-  async recallMessage(message: MessageRef): Promise<void> {
+  async recallMessage(message: MessageRef, signal?: AbortSignal): Promise<void> {
     if (!message.id || message.id.startsWith('telegram-')) return;
     await this.callApi('deleteMessage', {
       chat_id: message.conversation.id,
       message_id: Number(message.id),
-    });
+    }, signal);
   }
 
   async #resolveContent(
@@ -294,7 +304,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       }, signal);
       if (!file.file_path) return Object.freeze({ status: 'not_found', code: 'telegram_file_not_found' });
       if ((file.file_size ?? 0) > 26_214_400) return Object.freeze({ status: 'forbidden', code: 'media_size_limit' });
-      return await this.withRequestDeadline<ConversationResolution>('downloadFile', async (downloadSignal) => {
+      return await this.withRequestDeadline<ConversationResolution>({ method: 'downloadFile', run: async (downloadSignal) => {
         const response = await this.fetchTransport(
           `${this.#options.config.apiBaseUrl}/file/bot${this.#options.config.token}/${file.file_path}`,
           { signal: downloadSignal },
@@ -316,7 +326,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
             size: bytes.byteLength,
           }),
         });
-      }, signal);
+      }, signal });
     } catch {
       if (signal.aborted) return Object.freeze({ status: 'expired', code: 'turn_aborted' });
       return Object.freeze({ status: 'failed', code: 'telegram_file_resolution_failed', message: 'Telegram file resolution failed' });
@@ -331,6 +341,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
   async #buildUploadForm(
     params: Record<string, unknown>,
     uploads: readonly TelegramOutboundUpload[],
+    signal?: AbortSignal,
   ): Promise<FormData | undefined> {
     const values = Object.values(params);
     if (!values.some((v) => typeof v === 'string' && v.startsWith('attach://'))) return undefined;
@@ -342,7 +353,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         if (!upload) throw new Error(`Telegram upload 未登记: ${value}`);
         const data = upload.source.kind === 'base64'
           ? Buffer.from(upload.source.data, 'base64')
-          : await readFile(upload.source.path);
+          : await readFile(upload.source.path, { signal });
         form.append(
           key,
           new Blob([data], upload.mimeType ? { type: upload.mimeType } : undefined),
@@ -360,7 +371,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     void this[endpointSpec].events.run(() => {
       if (!this.#admission) return;
       const conversation = telegramInboundConversation(String(this.#options.id), msg.chat);
-      return this.#admitWithSenderRole(msg, conversation, AbortSignal.any([this.#admission.signal, this.#executionSignal!])).catch((err) => {
+      return this.#admitWithSenderRole({ message: msg, conversation, signal: AbortSignal.any([this.#admission.signal, this.#executionSignal!]) }).catch((err) => {
         this.#logger.warn(formatCompact({
           op: 'telegram_gateway_receive_failed',
           target: `${conversation.kind}:${conversation.id}`,
@@ -370,7 +381,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     }).catch(() => this.#logger.debug('Inbound callback was not admitted'));
   }
 
-  async #admitWithSenderRole(msg: TelegramMessage, conversation: ConversationRef, signal: AbortSignal, event: unknown = msg): Promise<void> {
+  async #admitWithSenderRole({ message: msg, conversation, signal, event = msg }: TelegramMessageAdmission): Promise<void> {
     const permit = await this.#resolveGroupSenderPermit(msg, signal);
     signal.throwIfAborted();
     // 新 Runtime Message.content 为纯文本：@ 本机只能经 metadata 传递
@@ -538,7 +549,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     signal.throwIfAborted();
     if (update.message) {
       const conversation = telegramInboundConversation(String(this.#options.id), update.message.chat);
-      await this.#admitWithSenderRole(update.message, conversation, signal, update);
+      await this.#admitWithSenderRole({ message: update.message, conversation, signal, event: update });
       return;
     }
     if (update.callback_query) {

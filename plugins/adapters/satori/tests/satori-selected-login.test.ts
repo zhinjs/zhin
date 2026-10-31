@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/satori/index.js';
 import { SatoriClient } from '../src/client.js';
 import { resolveSatoriConfig } from '../src/protocol.js';
@@ -14,7 +14,7 @@ it('selects the configured login before SDK ingest and fixes API headers indepen
   const received: unknown[] = [], requests: Headers[] = [];
   vi.stubGlobal('fetch', vi.fn<typeof globalThis.fetch>(async (_url, init) => { requests.push(new Headers(init?.headers)); return new Response(JSON.stringify([{ id: 'created' }])); }));
   const h = await createAdapterHarness(definition, { id: 'configured', platform: 'qq', userId: 'target', baseUrl: `http://127.0.0.1:${address.port}` },
-    { name: 'satori', gateway: { async receive(event) { if (event.name === 'message.receive') received.push(event.payload); } } });
+    { name: 'satori', gateway: createTestEndpointEventGateway({ async receive(event) { if (event.name === 'message.receive') received.push(event.payload); } }) });
   try {
     await h.start(); h.open();
     const endpoint = h.endpoint; if (!(endpoint instanceof SatoriClient)) throw new Error('Expected actual Satori SDK Client');

@@ -7,16 +7,34 @@ import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
  * operations that address an existing platform message, so Core never needs
  * to know a protocol's method names or identifier layout.
  */
+/** Caller cancellation is part of the semantic request, independent of the account epoch. */
+export interface EndpointControlRequest {
+  readonly signal?: AbortSignal;
+}
+export interface EndpointRecallRequest extends EndpointControlRequest {
+  readonly message: MessageRef;
+}
+export interface EndpointEditRequest extends EndpointRecallRequest {
+  readonly content: unknown;
+}
+export interface EndpointReactionRequest extends EndpointRecallRequest {
+  readonly emoji: string;
+  readonly hint?: Readonly<{ sceneType?: string; channelId?: string }>;
+}
+export interface EndpointRemoveReactionRequest extends EndpointRecallRequest {
+  readonly reactionId: string;
+}
+export interface EndpointTypingRequest extends EndpointControlRequest {
+  readonly conversation: ConversationRef;
+  readonly active?: boolean;
+}
+
 export interface EndpointControl {
-  recall?(message: MessageRef): Promise<void>;
-  edit?(message: MessageRef, content: unknown): Promise<string | null>;
-  addReaction?(
-    message: MessageRef,
-    emoji: string,
-    hint?: { readonly sceneType?: string; readonly channelId?: string },
-  ): Promise<string | null>;
-  removeReaction?(message: MessageRef, reactionId: string): Promise<void>;
-  typing?(conversation: ConversationRef, active?: boolean): Promise<void>;
+  recall?(request: EndpointRecallRequest): Promise<void>;
+  edit?(request: EndpointEditRequest): Promise<string | null>;
+  addReaction?(request: EndpointReactionRequest): Promise<string | null>;
+  removeReaction?(request: EndpointRemoveReactionRequest): Promise<void>;
+  typing?(request: EndpointTypingRequest): Promise<void>;
 }
 
 export interface EndpointWithControl {
@@ -25,10 +43,10 @@ export interface EndpointWithControl {
 
 /** Bridges the common platform `recall(messageId)` shape into canonical control. */
 export function createRecallEndpointControl(
-  recallById: (messageId: string) => void | Promise<void>,
+  recallById: (messageId: string, signal?: AbortSignal) => void | Promise<void>,
 ): Readonly<EndpointControl> {
   return Object.freeze<EndpointControl>({
-    recall: (message) => Promise.resolve(recallById(message.id)),
+    recall: ({ message, signal }) => Promise.resolve(recallById(message.id, signal)),
   });
 }
 

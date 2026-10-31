@@ -15,8 +15,7 @@ const STORE_FILE = 'owner-approve-always.json';
 export type ToolRequesterRole = 'master' | 'trusted' | 'other' | 'unknown';
 
 export interface OwnerApprovalCommandContext extends AgentCommandPresentation {
-  readonly platform: string;
-  readonly endpoint: string;
+  readonly endpoint: OwnerApprovalAddress['endpoint'];
   readonly ownerId?: string;
   readonly subjectId: string;
   readonly scope: 'private' | 'group' | 'channel';
@@ -54,6 +53,9 @@ export class OwnerApprovalRuntime {
     if (!line) return false;
     return entry.bashRules.some((rule) => new RegExp(rule.pattern).test(line));
   }
+
+  /** Historical grants are candidates only; reading them never enables a bypass. */
+  previewHistoricalApprovals() { return this.#store.previewHistoricalApprovals(); }
 
   format(address: OwnerApprovalAddress, locale?: Locale): string {
     const entry = this.#store.entry(address);
@@ -109,13 +111,12 @@ export class OwnerApprovalRuntime {
 }
 
 export function ownerApprovalAddressFromMessage(message: Message): OwnerApprovalAddress | undefined {
-  const platform = String(message.clientAdapter ?? message.conversation.endpoint.adapter).trim();
-  const endpoint = String(message.endpointId ?? message.conversation.endpoint.id).trim();
+  const endpoint = message.conversation.endpoint;
   const ownerId = String(
     (message as { extra?: { endpointMaster?: unknown } }).extra?.endpointMaster ?? '',
   ).trim();
-  return platform && endpoint && ownerId
-    ? Object.freeze({ platform, endpoint, ownerId })
+  return endpoint.adapter && endpoint.id && ownerId
+    ? Object.freeze({ endpoint: Object.freeze({ ...endpoint }), ownerId })
     : undefined;
 }
 
@@ -143,9 +144,8 @@ export function isIcqqSensitiveSubcommand(fullSubCommand: string): boolean {
 }
 
 function ownerCommandAddress(context: OwnerApprovalCommandContext): OwnerApprovalAddress | undefined {
-  if (!context.platform || !context.endpoint || !context.ownerId) return undefined;
+  if (!context.endpoint.adapter || !context.endpoint.id || !context.ownerId) return undefined;
   return Object.freeze({
-    platform: context.platform,
     endpoint: context.endpoint,
     ownerId: context.ownerId,
   });

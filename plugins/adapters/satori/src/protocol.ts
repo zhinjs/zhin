@@ -1,6 +1,6 @@
 /** Satori protocol helpers. Spec: https://satori.chat/zh-CN/protocol/overview.html */
 
-import { isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('satori');
@@ -184,11 +184,14 @@ export function buildWsUrl(baseUrl: string, token?: string): string {
  * Call Satori HTTP API: POST {baseUrl}/v1/{resource}.{method}
  * @see https://satori.chat/en-US/protocol/api.html
  */
+export interface SatoriApiRequest extends SatoriApiOptions {
+  readonly resource: string;
+  readonly method: string;
+  readonly params?: Record<string, unknown>;
+}
+
 export async function callSatoriApi<T = unknown>(
-  options: SatoriApiOptions,
-  resource: string,
-  method: string,
-  params: Record<string, unknown> = {},
+  { resource, method, params = {}, ...options }: SatoriApiRequest,
 ): Promise<T> {
   const { baseUrl, platform, userId, token } = options;
   const url = `${baseUrl.replace(/\/$/, '')}/v1/${resource}.${method}`;
@@ -199,12 +202,14 @@ export async function callSatoriApi<T = unknown>(
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(params),
-    signal: options.signal,
-  });
+  if (options.signal?.aborted) throw new EndpointDeliveryError('endpoint_inactive', 'Satori request ended before submission', 'not_sent', { cause: options.signal.reason });
+  const body = JSON.stringify(params);
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'POST', headers, body, signal: options.signal });
+  } catch (cause) {
+    throw new EndpointDeliveryError('delivery_unconfirmed', 'Satori HTTP request outcome is unknown', 'unknown', { cause });
+  }
 
   const text = await res.text();
   if (res.status === 401) throw new Error(`Satori API 认证失败: ${text}`);

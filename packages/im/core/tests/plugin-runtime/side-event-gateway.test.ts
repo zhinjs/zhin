@@ -1,3 +1,4 @@
+import type { UserInteraction } from '@zhin.js/interaction';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
@@ -167,7 +168,7 @@ describe('ImRuntime side-event handlers', () => {
     expect(emit.mock.calls[0]?.[1]).not.toHaveProperty('conversation');
   });
 
-  async function createFixture(onRequest?: (request: Request) => void) {
+  async function createFixture(onRequest?: (request: Request) => void, onNotice?: (notice: Notice, interaction: UserInteraction | undefined) => void) {
     const noticed: unknown[] = [];
     const systems: Array<{ payload: SystemEvent }> = [];
     const systemInteractions: unknown[] = [];
@@ -198,6 +199,7 @@ describe('ImRuntime side-event handlers', () => {
         event: 'notice.receive',
         handle(event) {
           noticed.push(event);
+          onNotice?.(event.payload, this.interaction);
         },
       }),
     });
@@ -260,7 +262,7 @@ describe('ImRuntime side-event handlers', () => {
     im.attach(store);
     await adapters.start();
     adapters.open();
-    return { im, noticed, systems, systemInteractions, liveClient, liveEndpoint, adapter,
+    return { im, store, noticed, systems, systemInteractions, liveClient, liveEndpoint, adapter,
       receive: liveEndpoint.receive.bind(liveEndpoint),
       close: async () => { await adapters.stop(); await store.close(); },
     };
@@ -286,6 +288,27 @@ describe('ImRuntime side-event handlers', () => {
     });
     expect(() => (noticed[0] as { payload: Notice }).payload.$client).toThrow('expired');
     await close();
+  });
+
+  it('retains a notice question after its handler returns and answers it in the correct scene after replacement', async () => {
+    let question: Promise<string> | undefined;
+    const f = await createFixture(undefined, (_notice, interaction) => {
+      question = interaction!.ask({ type: 'text', title: 'Continue this notice?' });
+      void question.catch(() => undefined);
+    });
+    const notice = buildNotice({}, { id: 'notice-question', clientAdapter: 'memory', endpointId: 'memory',
+      type: 'notice', conversation: sideEventConversation('group', 'g1'), actor: { id: 'member' },
+      name: composeSideEventName('notice', 'group', 'member_increase'), timestamp: Date.now(),
+    });
+    try {
+      await f.receive('notice.receive', notice);
+      const conversation = { ...notice.conversation!, endpoint: f.liveEndpoint[endpointSpec].identity };
+      await vi.waitFor(() => expect(f.im.readPendingInteraction(conversation, 'member', 0)).toBeDefined());
+      f.store.commit(0, { snapshot: f.store.current, dispose() {} });
+      expect(f.im.readPendingInteraction(conversation, 'member', 1)).toBeDefined();
+      await f.liveEndpoint[endpointSpec].events.message({ conversation: { kind: 'group', id: 'g1' }, content: 'notice answer', sender: { id: 'member' } });
+      await expect(question).resolves.toBe('notice answer');
+    } finally { await f.close(); await question?.catch(() => undefined); }
   });
 
   it('keeps ImRuntime request operation open until started actions settle', async () => {

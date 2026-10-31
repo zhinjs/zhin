@@ -37,7 +37,7 @@
     "type": "feature",
     "entry": "./lib/provider.js",
     "engine": "^1.0.0",
-    "featureApi": "1.0.0"
+    "featureApi": "2.0.0"
   },
   "engines": {
     "node": ">=22.19.0"

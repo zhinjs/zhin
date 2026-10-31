@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import {
   createEndpointLifecycle,
+  createEndpointOperation,
   type EndpointLifecycle,
   type EndpointTransportState,
   createRecallEndpointControl,
@@ -17,6 +18,8 @@ import {
   type EndpointGroup,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointManagementRequest,
+  type EndpointGroupRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -101,8 +104,8 @@ export class LarkClient extends SdkClient {
    * listChannels（无频道/guild 概念）、写操作（审批/踢人/禁言等本轮不在范围内）。
    */
   protected readonly endpointManagement: EndpointManagement = Object.freeze<EndpointManagement>({
-    listGroups: async (): Promise<readonly EndpointGroup[]> => {
-      const items = await this.#listAllPages('/im/v1/chats');
+    listGroups: async (request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> => {
+      const items = await this.#listAllPages('/im/v1/chats', request);
       const groups: EndpointGroup[] = [];
       for (const item of items) {
         const chatId = typeof item.chat_id === 'string' ? item.chat_id : '';
@@ -114,12 +117,12 @@ export class LarkClient extends SdkClient {
       }
       return groups;
     },
-    listGroupMembers: (groupId) => this.#listAllPages(
+    listGroupMembers: ({ groupId, signal }: EndpointGroupRequest) => this.#listAllPages(
       `/im/v1/chats/${encodeURIComponent(groupId)}/members`,
-      { member_id_type: 'open_id' },
+      { params: { member_id_type: 'open_id' }, signal },
     ),
   });
-  protected readonly endpointControl: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
+  protected readonly endpointControl: EndpointControl = createRecallEndpointControl((id, signal) => this.recallMessage(id, { signal }));
   #routeReleases: HttpRouteRegistration[] = [];
 
   #open = false;
@@ -251,14 +254,15 @@ export class LarkClient extends SdkClient {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  protected async sendPayload({ conversation, payload, locale }: EndpointSendRequest): Promise<string> {
+  protected async sendPayload({ conversation, payload, locale, signal }: EndpointSendRequest): Promise<string> {
     try {
-      const materialized = await this.#materializeOutboundMedia(payload);
+      const materialized = await createEndpointOperation({ signal }).prepare(() => this.#materializeOutboundMedia(payload, { signal }));
       const content = formatOutboundBody(materialized, locale);
       const data = await this.#request(content.replyTo
         ? `/im/v1/messages/${encodeURIComponent(content.replyTo)}/reply`
         : '/im/v1/messages', {
         method: 'POST',
+        signal,
         ...(content.replyTo ? {} : { params: { receive_id_type: 'chat_id' } }),
         body: {
           ...(content.replyTo ? {} : { receive_id: conversation.id }),
@@ -293,9 +297,9 @@ export class LarkClient extends SdkClient {
     }
   }
 
-  async recallMessage(messageId: string): Promise<void> {
+  async recallMessage(messageId: string, { signal }: EndpointManagementRequest = {}): Promise<void> {
     if (!messageId || messageId.startsWith('outbound:')) return;
-    await this.#request(`/im/v1/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' });
+    await this.#request(`/im/v1/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE', signal });
   }
 
   /**
@@ -303,7 +307,7 @@ export class LarkClient extends SdkClient {
    * 先经 /im/v1/images 物化，产物回写为 MediaRef kind=file（平台不透明引用）；
    * 上传失败阻止消息发送并保留拒绝或未知分类。
    */
-  async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
+  async #materializeOutboundMedia(payload: unknown, request: EndpointManagementRequest): Promise<unknown> {
     if (!Array.isArray(payload)) return payload;
     return Promise.all(payload.map(async (item) => {
       if (typeof item === 'string' || !item || typeof item !== 'object') return item;
@@ -312,7 +316,7 @@ export class LarkClient extends SdkClient {
       const data = seg.data ?? {};
       const media = readOutboundImageMedia(data);
       if (!media) return item;
-      const imageKey = await this.uploadImage(media);
+      const imageKey = await this.uploadImage(media, request);
       if (!imageKey) throw new EndpointDeliveryError('delivery_unconfirmed', 'Lark image upload returned no image key', 'unknown');
       return {
         type: 'image',
@@ -322,15 +326,16 @@ export class LarkClient extends SdkClient {
   }
 
   /** Upload must succeed before issuing a message; dropped media is never confirmed. */
-  async uploadImage(media: Parameters<typeof resolveMediaBinary>[0]): Promise<string> {
-    const token = await this.#ensureAccessToken();
-    const binary = await resolveMediaBinary(media);
+  async uploadImage(media: Parameters<typeof resolveMediaBinary>[0], request: EndpointManagementRequest = {}): Promise<string> {
+    const operation = createEndpointOperation(request);
+    const token = await operation.prepare(() => this.#ensureAccessToken());
+    const binary = await operation.prepare(() => resolveMediaBinary(media, request));
     const form = buildImageUploadForm(binary);
     const response = await this.#fetch(`${this.#options.config.apiBaseUrl}/im/v1/images`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: form,
-      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+      signal: request.signal ? AbortSignal.any([request.signal, AbortSignal.timeout(OUTBOUND_TIMEOUT_MS)]) : AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
     const data = await response.json().catch(() => undefined) as LarkApiResponse | undefined;
     const code = typeof data?.code === 'number' && Number.isFinite(data.code) ? data.code : undefined;
@@ -625,13 +630,14 @@ export class LarkClient extends SdkClient {
   /** 拉取分页列表（items + has_more/page_token）；code!==0 时抛错交由 RPC 层透出。 */
   async #listAllPages(
     path: string,
-    params: Record<string, string | number> = {},
+    { params = {}, signal }: EndpointManagementRequest & { readonly params?: Record<string, string | number> } = {},
   ): Promise<Record<string, unknown>[]> {
     const items: Record<string, unknown>[] = [];
     let pageToken = '';
     do {
       const data = await this.#request(path, {
         method: 'GET',
+        signal,
         params: {
           ...params,
           page_size: 100,
@@ -662,9 +668,12 @@ export class LarkClient extends SdkClient {
       method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
       params?: Record<string, string | number>;
       body?: Record<string, unknown>;
+      signal?: AbortSignal;
     } = {},
   ): Promise<LarkApiResponse> {
-    const token = await this.#ensureAccessToken();
+    const operation = createEndpointOperation(options);
+    // TokenManager refresh is shared by the account; cancel this waiter, not that shared refresh.
+    const token = await operation.prepare(() => this.#ensureAccessToken());
     const { method = 'GET', params = {}, body } = options;
     const urlParams = new URLSearchParams(
       Object.fromEntries(
@@ -680,7 +689,7 @@ export class LarkClient extends SdkClient {
         Authorization: `Bearer ${token}`,
       },
       body: body && method !== 'GET' ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(OUTBOUND_TIMEOUT_MS)]) : AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
     const data = await response.json().catch(() => undefined) as LarkApiResponse | undefined;
     const platformCode = typeof data?.code === 'number' && Number.isFinite(data.code) ? data.code : undefined;

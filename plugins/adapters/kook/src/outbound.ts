@@ -1,13 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import type { Sendable } from 'kook-client';
-import { EndpointDeliveryError, isMediaRef, type MessageRef } from '@zhin.js/im-contract';
-import type { EndpointSendRequest } from 'zhin.js/adapter';
+import { EndpointDeliveryError, isMediaRef } from '@zhin.js/im-contract';
+import { createEndpointOperation, type EndpointRecallRequest, type EndpointSendRequest } from 'zhin.js/adapter';
 import { formatOutboundKmarkdown } from './protocol.js';
 import type { KookClientTransport } from './ws.js';
 import { outboundMessages as t } from './i18n.js';
 
 /** Native cards preserve mixed text/images; SDK's ordinary segments stop at first media. */
-export async function sendKookOutbound(client: KookClientTransport, { conversation, payload, locale }: EndpointSendRequest): Promise<string> {
+export async function sendKookOutbound(client: KookClientTransport, { conversation, payload, locale, signal }: EndpointSendRequest): Promise<string> {
+  const operation = createEndpointOperation({ signal });
   try {
     const items = Array.isArray(payload) ? payload : payload && typeof payload === 'object' ? [payload] : [payload];
     let quote: { message_id: string } | undefined;
@@ -53,13 +54,13 @@ export async function sendKookOutbound(client: KookClientTransport, { conversati
           if (!client.uploadMedia) throw new EndpointDeliveryError('unsupported_media', 'KOOK transport cannot upload images', 'rejected');
           let bytes: Buffer;
           if (media.kind === 'base64') bytes = Buffer.from(media.value.replace(/^data:[^,]*,/, ''), 'base64');
-          else if (media.kind === 'path') bytes = await readFile(media.value);
+          else if (media.kind === 'path') bytes = await operation.prepare(() => readFile(media.value));
           else {
-            const response = await fetch(media.value, { signal: AbortSignal.timeout(30_000) });
+            const response = await operation.prepare(() => fetch(media.value, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) }));
             if (!response.ok) throw new EndpointDeliveryError('media_download_failed', 'KOOK media download failed', 'rejected');
-            bytes = Buffer.from(await response.arrayBuffer());
+            bytes = Buffer.from(await operation.prepare(() => response.arrayBuffer()));
           }
-          url = await client.uploadMedia(bytes);
+          url = await operation.prepare(() => client.uploadMedia!(bytes));
         }
         if (typeof url !== 'string' || !/^https:\/\//.test(url)) throw new EndpointDeliveryError('delivery_unconfirmed', 'KOOK upload returned no media URL', 'unknown');
         modules.push({ type: 'container', elements: [{ type: 'image', src: url, alt: String(item.data?.alt ?? 'image') }] });
@@ -75,8 +76,8 @@ export async function sendKookOutbound(client: KookClientTransport, { conversati
     const body = hasImage || hasCard ? { __isCard: true, type: 'card', theme: 'secondary', size: 'lg', modules } : formatOutboundKmarkdown(payload, locale);
     // SDK 1.0.5 implements __isCard and returns the API's msg_id; its declaration still describes Message.Ret.
     const result: unknown = conversation.kind === 'private'
-      ? await client.sendPrivateMsg(conversation.id, body as unknown as Sendable, quote)
-      : await client.sendChannelMsg(conversation.id, body as unknown as Sendable, quote);
+      ? await operation.run(() => client.sendPrivateMsg(conversation.id, body as unknown as Sendable, quote))
+      : await operation.run(() => client.sendChannelMsg(conversation.id, body as unknown as Sendable, quote));
     const id = result && typeof result === 'object' && 'msg_id' in result && result.msg_id != null ? String(result.msg_id) : '';
     if (!id.trim()) throw new EndpointDeliveryError('delivery_unconfirmed', 'KOOK did not return a real message ID', 'unknown');
     return id;
@@ -91,16 +92,17 @@ export async function sendKookOutbound(client: KookClientTransport, { conversati
 
 
 /** Deletion requires the canonical conversation: KOOK has separate channel/private APIs. */
-export async function recallKookMessage(client: KookClientTransport, message: MessageRef): Promise<void> {
+export async function recallKookMessage(client: KookClientTransport, { message, signal }: EndpointRecallRequest): Promise<void> {
   if (!message.id.trim()) throw new EndpointDeliveryError('invalid_message_id', 'KOOK recall requires a message ID', 'rejected');
+  const operation = createEndpointOperation({ signal });
   try {
     let deleted: boolean;
     if (message.conversation.kind === 'private') {
       if (!client.recallPrivateMsg) throw new EndpointDeliveryError('unsupported_operation', 'KOOK transport cannot delete private messages', 'rejected');
-      deleted = await client.recallPrivateMsg(message.conversation.id, message.id);
+      deleted = await operation.run(() => client.recallPrivateMsg!(message.conversation.id, message.id));
     } else {
       if (!client.recallChannelMsg) throw new EndpointDeliveryError('unsupported_operation', 'KOOK transport cannot delete channel messages', 'rejected');
-      deleted = await client.recallChannelMsg(message.conversation.id, message.id);
+      deleted = await operation.run(() => client.recallChannelMsg!(message.conversation.id, message.id));
     }
     if (deleted !== true) throw new EndpointDeliveryError('platform_rejected', 'KOOK did not confirm message deletion', 'rejected');
   } catch (error) {

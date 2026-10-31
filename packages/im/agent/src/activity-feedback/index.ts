@@ -37,14 +37,12 @@ export {
 export {
   PLATFORM_FEATURES,
   buildTypingSendContent,
-  enableActivityFeedbackForBot,
-  isGenericActivityFeedbackManager,
+  createActivityFeedbackAdapter,
 } from './adapter-integration.js';
 export type {
   PlatformFeatures,
-  EndpointWithActivityFeedback,
-  ActivityFeedbackSendPort,
-  PlatformActivityFeedbackManager,
-  PlatformActivityFeedbackStartOptions,
-  BotActivityFeedbackManager,
+  ActivityFeedbackIO,
 } from './adapter-integration.js';
+
+export { activityFeedbackSource, bindActivityFeedbackSource } from './operation-source.js';
+export type { ActivityFeedbackSource, ActivityFeedbackSourceCarrier } from './operation-source.js';

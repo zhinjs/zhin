@@ -35,6 +35,12 @@ Endpoint 直接继承 `@imhelper/onebot-v12` 的 `OneBotV12Client`；当前操�
 `$client.call(action, params)` 和 Client 的公开平台能力；Webhook 使用 Client 的
 `acceptHttp()`，双工 WS 则由 Endpoint 分离 `echo` 响应后把事件交给 `ingest()`。
 
+## 操作生命周期
+
+每个实际 Client 的请求关联、定时器与取消由同一个实例级 RPC 模块持有。停止、删除或替换账号时，先取消该实例的等待，再关闭连接；已提交但未收到结果的请求保持“结果未知”，不会重试。框架发送与内容读取还绑定各自的操作信号，取消单个操作不影响其他操作或账号。原生 SDK 方法和事件重载保持不变。
+
+图片上传和发送使用同一操作信号，取消上传后不会继续提交 `send_message`；WS、反向 WS 与 HTTP 出站遵循相同规则。好友、群与成员 ID 保持协议字符串，不转为 JavaScript 数字。
+
 ## 前置条件
 
 1. 启动兼容 OneBot 12 的实现，并确认其支持所选 WS 或 Webhook 模式。

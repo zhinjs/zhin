@@ -134,6 +134,15 @@ export interface InboxModel {
   };
 }
 
+/** HTTP's narrow structural seam; implementations keep platform objects and credentials private. */
+export interface EndpointGroupCommand { readonly groupId: string; readonly signal?: AbortSignal }
+export interface EndpointUserCommand { readonly userId: string; readonly signal?: AbortSignal }
+export interface EndpointMemberCommand extends EndpointGroupCommand, EndpointUserCommand {}
+export interface EndpointMuteCommand extends EndpointMemberCommand { readonly durationSeconds: number }
+export interface EndpointAdminCommand extends EndpointMemberCommand { readonly enabled: boolean }
+export interface EndpointApproveCommand { readonly requestId: string; readonly remark?: string; readonly signal?: AbortSignal }
+export interface EndpointRejectCommand { readonly requestId: string; readonly reason?: string; readonly signal?: AbortSignal }
+
 export interface EndpointManagementPort {
   listFriends?(): Promise<readonly { user_id: number | string; nickname: string; remark: string }[]>;
   listGroups?(): Promise<readonly { group_id: number | string; name: string }[]>;
@@ -142,7 +151,7 @@ export interface EndpointManagementPort {
     name?: string;
     parent?: { type: string; id: string; name?: string };
   }[]>;
-  listGroupMembers?(groupId: string): Promise<readonly unknown[]>;
+  listGroupMembers?(request: EndpointGroupCommand): Promise<readonly unknown[]>;
   listRequests?(): Promise<readonly {
     platform_request_id: string;
     type: string;
@@ -154,10 +163,10 @@ export interface EndpointManagementPort {
     comment?: string | null;
     created_at: number;
   }[]>;
-  approveRequest?(requestId: string, remark?: string): Promise<void>;
-  rejectRequest?(requestId: string, reason?: string): Promise<void>;
-  kickGroupMember?(groupId: string, userId: string): Promise<void>;
-  muteGroupMember?(groupId: string, userId: string, durationSeconds: number): Promise<void>;
-  setGroupAdmin?(groupId: string, userId: string, enabled: boolean): Promise<void>;
-  deleteFriend?(userId: string): Promise<void>;
+  approveRequest?(request: EndpointApproveCommand): Promise<void>;
+  rejectRequest?(request: EndpointRejectCommand): Promise<void>;
+  kickGroupMember?(request: EndpointMemberCommand): Promise<void>;
+  muteGroupMember?(request: EndpointMuteCommand): Promise<void>;
+  setGroupAdmin?(request: EndpointAdminCommand): Promise<void>;
+  deleteFriend?(request: EndpointUserCommand): Promise<void>;
 }

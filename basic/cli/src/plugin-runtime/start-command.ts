@@ -49,7 +49,7 @@ import {
   SystemLogStore,
   resolveSystemLogConfig,
   AssistantStatus,
-  HostToolApprovals,
+  createHostToolApprovalConsoleRpc,
   HostSelfChanges,
   composeHostConsoleRpc,
   defineWorkspaceConversationTable,
@@ -185,8 +185,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const consoleEventHub = createConsoleEventHub();
   // 群聊插话 / 技能助手 Console status (#970): process-owned, survives HMR generations.
   const assistantStatus = new AssistantStatus();
-  // 危险工具硬闸审批卡片（ADR 0036）：进程持有，绑定当前 generation 的 Agent 队列。
-  const toolApprovals = new HostToolApprovals();
   // 受控自我进化审批（ADR 0040 §4）：进程持有，绑定当前 generation 的变更暂存区与审批。
   const selfChanges = new HostSelfChanges();
   const consoleConfigurationStore = new ConsoleConfigurationStore({
@@ -266,7 +264,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         await agentHost.install({
           im,
           assistantStatus,
-          toolApprovals,
           selfChanges,
           selfChangeApply,
           projectRoot: options.root,
@@ -361,7 +358,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     databaseHost,
     scheduleHost,
     eventHub: consoleEventHub,
-    hostConsoleRpc: composeHostConsoleRpc(assistantStatus.consoleRpc, toolApprovals.consoleRpc, selfChanges.consoleRpc),
+    hostConsoleRpc: lease => composeHostConsoleRpc(assistantStatus.consoleRpc,
+      createHostToolApprovalConsoleRpc({ snapshots: host.runtime.snapshots, lease }),
+      selfChanges.consoleRpc),
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration: consoleConfigurationStore,
@@ -538,7 +537,6 @@ interface ConfiguredAgentHost {
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
     readonly assistantStatus?: AssistantStatus;
-    readonly toolApprovals?: HostToolApprovals;
     readonly selfChanges?: HostSelfChanges;
     readonly selfChangeApply?: HostSelfChangeApply;
   }): RootResourceInstaller;

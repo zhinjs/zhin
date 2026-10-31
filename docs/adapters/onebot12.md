@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7437e04dbcc4542d -->
+<!-- sync-adapter-docs:sha256=582d7f9d518c56bb -->
 
 # @zhin.js/adapter-onebot12
 
@@ -46,6 +46,12 @@ pnpm add @zhin.js/adapter-onebot12
 Endpoint 直接继承 `@imhelper/onebot-v12` 的 `OneBotV12Client`；当前操作的 `$client` 就是该实际实例。业务代码直接调用
 `$client.call(action, params)` 和 Client 的公开平台能力；Webhook 使用 Client 的
 `acceptHttp()`，双工 WS 则由 Endpoint 分离 `echo` 响应后把事件交给 `ingest()`。
+
+## 操作生命周期
+
+每个实际 Client 的请求关联、定时器与取消由同一个实例级 RPC 模块持有。停止、删除或替换账号时，先取消该实例的等待，再关闭连接；已提交但未收到结果的请求保持“结果未知”，不会重试。框架发送与内容读取还绑定各自的操作信号，取消单个操作不影响其他操作或账号。原生 SDK 方法和事件重载保持不变。
+
+图片上传和发送使用同一操作信号，取消上传后不会继续提交 `send_message`；WS、反向 WS 与 HTTP 出站遵循相同规则。好友、群与成员 ID 保持协议字符串，不转为 JavaScript 数字。
 
 ## 前置条件
 

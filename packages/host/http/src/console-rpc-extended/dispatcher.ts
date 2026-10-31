@@ -77,22 +77,16 @@ export async function dispatchExtendedConsoleRpc(
     case 'endpoint.group_kick':
       return groupWriteOp(d, ctx, {
         method: 'kickGroupMember',
-        buildArgs: (gid, uid) => [gid, uid],
-        requireUser: true,
         unsupported: '踢出群成员',
       });
     case 'endpoint.group_mute':
       return groupWriteOp(d, ctx, {
         method: 'muteGroupMember',
-        buildArgs: (gid, uid, extra) => [gid, uid, extra.duration ?? 600],
-        requireUser: true,
         unsupported: '禁言群成员',
       });
     case 'endpoint.group_admin':
       return groupWriteOp(d, ctx, {
         method: 'setGroupAdmin',
-        buildArgs: (gid, uid, extra) => [gid, uid, extra.enable !== false],
-        requireUser: true,
         unsupported: '设置群管理员',
       });
     case 'endpoint.delete_friend':

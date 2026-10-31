@@ -236,8 +236,8 @@ describe('canonical IM TurnRequest ingress', () => {
       : undefined);
     const snapshot = { projections: new Map([[adapterFeatureId, { $projection: 'zhin.adapter-index/1', connection }]]) };
     const signal = new AbortController().signal;
-    const state = await resolveRuntimeTurnContextState(snapshot as never, message.conversation, signal);
-    const request = createRuntimeTurnRequest(message, 'hello', { isMaster: false, isTrusted: false }, {
+    const state = await resolveRuntimeTurnContextState({ snapshot: snapshot as never, conversation: message.conversation, signal });
+    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: false, isTrusted: false } }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
       projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' }, contextState: state,
     });
@@ -248,7 +248,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const nextGeneration = { projections: new Map([[adapterFeatureId, {
       $projection: 'zhin.adapter-index/1', connection: () => ({ identity: message.conversation.endpoint, selfUserId: 'replacement-account' }),
     }]]) };
-    expect(await resolveRuntimeTurnContextState(nextGeneration as never, message.conversation, signal)).toEqual({ bot: { id: 'replacement-account' } });
+    expect(await resolveRuntimeTurnContextState({ snapshot: nextGeneration as never, conversation: message.conversation, signal })).toEqual({ bot: { id: 'replacement-account' } });
     expect(request.input.contextState?.bot?.id).toBe('platform-account');
   });
 
@@ -260,9 +260,9 @@ describe('canonical IM TurnRequest ingress', () => {
       $projection: 'zhin.adapter-index/1', connection: () => ({ identity: message.conversation.endpoint, name: '10001' }),
     }]]) };
     const signal = new AbortController().signal;
-    expect(await resolveRuntimeTurnContextState(unknownAccount as never, message.conversation, signal)).toBeUndefined();
-    expect(await resolveRuntimeTurnContextState({ projections: new Map() }, message.conversation, signal)).toBeUndefined();
-    const request = createRuntimeTurnRequest(message, 'hello', { isMaster: true, isTrusted: false }, {
+    expect(await resolveRuntimeTurnContextState({ snapshot: unknownAccount as never, conversation: message.conversation, signal })).toBeUndefined();
+    expect(await resolveRuntimeTurnContextState({ snapshot: { projections: new Map() }, conversation: message.conversation, signal })).toBeUndefined();
+    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: true, isTrusted: false } }, {
       traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
       projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
     });
@@ -277,8 +277,8 @@ describe('canonical IM TurnRequest ingress', () => {
       $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: '8596238' }), management: () => ({ inspectGroupMember }),
     }]]) };
     const signal = new AbortController().signal;
-    const contextState = await resolveRuntimeTurnContextState(snapshot as never, conversation, signal);
-    expect(inspectGroupMember).toHaveBeenCalledExactlyOnceWith('100', '8596238', signal);
+    const contextState = await resolveRuntimeTurnContextState({ snapshot: snapshot as never, conversation, signal });
+    expect(inspectGroupMember).toHaveBeenCalledExactlyOnceWith({ groupId: '100', userId: '8596238', signal });
     expect(createRuntimeTurnAccess(message, { isMaster: false, isTrusted: false }, contextState).input)
       .toEqual({ contextState: { bot: { id: '8596238', platformRole } } });
   });
@@ -293,7 +293,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const snapshot = { projections: new Map([[adapterFeatureId, {
       $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: 'actual-account' }), management: () => ({ inspectGroupMember }),
     }]]) };
-    expect(await resolveRuntimeTurnContextState(snapshot as never, conversation, new AbortController().signal))
+    expect(await resolveRuntimeTurnContextState({ snapshot: snapshot as never, conversation, signal: new AbortController().signal }))
       .toEqual({ bot: { id: 'actual-account' } });
     expect(inspectGroupMember).not.toHaveBeenCalled();
   });
@@ -304,11 +304,11 @@ describe('canonical IM TurnRequest ingress', () => {
     const snapshot = (management?: object) => ({ projections: new Map([[adapterFeatureId, {
       $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: '8596238' }), management: () => management,
     }]]) });
-    expect(await resolveRuntimeTurnContextState(snapshot() as never, conversation, signal))
+    expect(await resolveRuntimeTurnContextState({ snapshot: snapshot() as never, conversation, signal }))
       .toEqual({ bot: { id: '8596238', platformRoleError: 'unsupported' } });
-    expect(await resolveRuntimeTurnContextState(snapshot({ inspectGroupMember: async () => ({ canModerate: false }) }) as never, conversation, signal))
+    expect(await resolveRuntimeTurnContextState({ snapshot: snapshot({ inspectGroupMember: async () => ({ canModerate: false }) }) as never, conversation, signal }))
       .toEqual({ bot: { id: '8596238', platformRoleError: 'unavailable' } });
-    expect(await resolveRuntimeTurnContextState(snapshot({ inspectGroupMember: async () => { throw new Error('member lookup failed'); } }) as never, conversation, signal))
+    expect(await resolveRuntimeTurnContextState({ snapshot: snapshot({ inspectGroupMember: async () => { throw new Error('member lookup failed'); } }) as never, conversation, signal }))
       .toEqual({ bot: { id: '8596238', platformRoleError: 'lookup_failed' } });
   });
 
@@ -392,10 +392,10 @@ describe('canonical IM TurnRequest ingress', () => {
     const signal = new AbortController().signal;
     const readConversationContext = vi.fn(async () => ({ blocks: [], cursor: 0 }));
     const commitConversationContext = vi.fn(async (_consumer: string, _cursor: number) => undefined);
-    const request = createRuntimeTurnRequest(message, 'look closer', {
+    const request = createRuntimeTurnRequest({ message, text: 'look closer', roles: {
       isMaster: false,
       isTrusted: true,
-    }, {
+    } }, {
       traceId: 'trace-1',
       turnId: 'turn-1',
       signal,
@@ -471,22 +471,22 @@ describe('canonical IM TurnRequest ingress', () => {
   it('fails closed when authenticated sender or endpoint identity is absent', () => {
     const signal = new AbortController().signal;
     const options = { traceId: 't', turnId: 'u', signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } } as const;
-    expect(() => createRuntimeTurnRequest(makeMessage({
+    expect(() => createRuntimeTurnRequest({ message: makeMessage({
       content: 'x', sender: null, metadata: { endpoint: 'bot' },
-    }), 'x', { isMaster: false, isTrusted: false }, options)).toThrow('sender identity');
-    expect(() => createRuntimeTurnRequest(makeMessage({
+    }), text: 'x', roles: { isMaster: false, isTrusted: false } }, options)).toThrow('sender identity');
+    expect(() => createRuntimeTurnRequest({ message: makeMessage({
       content: 'x', sender: 'u', metadata: {},
-    }), 'x', { isMaster: false, isTrusted: false }, options)).toThrow('endpoint identity');
+    }), text: 'x', roles: { isMaster: false, isTrusted: false } }, options)).toThrow('endpoint identity');
   });
 
   it('preserves platform roles alongside framework trust roles', () => {
     const message = makeMessage({
       content: 'x', sender: { id: 'u', roles: ['owner', 'admin'] }, metadata: { endpoint: 'bot' },
     });
-    const request = createRuntimeTurnRequest(message, 'x', {
+    const request = createRuntimeTurnRequest({ message, text: 'x', roles: {
       isMaster: false,
       isTrusted: true,
-    }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } });
+    } }, { traceId: 't', turnId: 'u', signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' } });
     expect(request.principal.roles).toEqual(['owner', 'admin', 'trusted']);
     expect(request.policy.permissions).toEqual(['owner', 'admin', 'trusted']);
   });
@@ -495,10 +495,10 @@ describe('canonical IM TurnRequest ingress', () => {
     const message = makeMessage({
       content: '继续处理', sender: { id: 'sponsor' }, metadata: { endpoint: 'member-bot' },
     });
-    const request = createRuntimeTurnRequest(message, '继续处理', {
+    const request = createRuntimeTurnRequest({ message, text: '继续处理', roles: {
       isMaster: false,
       isTrusted: true,
-    }, {
+    } }, {
       traceId: 'trace-workroom', turnId: 'turn-workroom',
       signal: new AbortController().signal, projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {},
       intent: { kind: 'new' },
@@ -525,10 +525,10 @@ describe('canonical IM TurnRequest ingress', () => {
         turnIntent: { kind: 'follow_up', targetTurnId: 'active-turn' },
       },
     });
-    const request = createRuntimeTurnRequest(message, 'more detail', {
+    const request = createRuntimeTurnRequest({ message, text: 'more detail', roles: {
       isMaster: false,
       isTrusted: false,
-    }, {
+    } }, {
       traceId: 't',
       turnId: 'u',
       signal: new AbortController().signal,
@@ -777,7 +777,7 @@ function makeMessage(input: {
   target?: string;
   sender?: string | { id: string; name?: string; roles?: readonly string[] } | null;
   metadata?: Record<string, unknown>;
-  segments?: ConstructorParameters<typeof Message>[6];
+  segments?: Message['segments'];
   replyTo?: { readonly id: string };
 }): Message {
   const conversation = conversationFromTarget(input.target ?? 'group:100');
@@ -787,35 +787,38 @@ function makeMessage(input: {
       ? input.sender
       : { id: input.sender ?? 'user-1', name: input.sender };
   return new Message(
-    conversation,
-    input.content,
-    1,
-    async () => ({ status: 'sent' as const }),
-    senderRef,
-    Object.freeze(input.metadata ?? {}),
-    input.segments,
-    { conversation, id: 'm1' },
-    typeof input.metadata?.endpoint === 'string' ? input.metadata.endpoint : undefined,
-    undefined,
-    input.replyTo,
+    {
+      conversation: conversation,
+      content: input.content,
+      sender: senderRef,
+      metadata: Object.freeze(input.metadata ?? {}),
+      segments: input.segments,
+      message: { conversation, id: 'm1' },
+      endpointId: typeof input.metadata?.endpoint === 'string' ? input.metadata.endpoint : undefined,
+      replyTo: input.replyTo,
+    },
+    { generation: 1, reply: async () => ({ status: 'sent' as const }) },
   );
 }
 
 function makeMessageWithReply(content: string, delivered: string[]): Message {
   const conversation = conversationFromTarget('group:100');
   return new Message(
-    conversation,
-    content,
-    1,
-    async (output) => {
-      delivered.push(String(output));
-      return { status: 'sent' as const };
+    {
+      conversation: conversation,
+      content: content,
+      sender: { id: 'user-1', name: 'Alice' },
+      metadata: Object.freeze({ endpoint: '10001' }),
+      message: { conversation, id: `m${delivered.length + 1}` },
+      endpointId: '10001',
     },
-    { id: 'user-1', name: 'Alice' },
-    Object.freeze({ endpoint: '10001' }),
-    undefined,
-    { conversation, id: `m${delivered.length + 1}` },
-    '10001',
+    {
+      generation: 1,
+      reply: async (output) => {
+        delivered.push(String(output));
+        return { status: 'sent' as const };
+      },
+    },
   );
 }
 
@@ -876,44 +879,44 @@ describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
 
 describe('缺口 3：masters / trusted 角色解析', () => {
   it('endpoint owner 命中 → master', () => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), 'user-1', [], undefined);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: 'user-1', endpointTrusted: [], trigger: undefined });
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
   it('trigger.masters 命中 → master（无 endpoint owner 时）', () => {
     const trigger: AITriggerConfig = { masters: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), undefined, [], trigger);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: undefined, endpointTrusted: [], trigger });
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
   it('endpoint trusted 命中 → trusted', () => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), undefined, ['user-1'], undefined);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: undefined, endpointTrusted: ['user-1'], trigger: undefined });
     expect(roles).toEqual({ isMaster: false, isTrusted: true });
   });
 
   it('trigger.trusted 命中 → trusted', () => {
     const trigger: AITriggerConfig = { trusted: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), undefined, [], trigger);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: undefined, endpointTrusted: [], trigger });
     expect(roles).toEqual({ isMaster: false, isTrusted: true });
   });
 
   it('master 优先于 trusted（对齐 legacy resolveSenderRoles）', () => {
     const trigger: AITriggerConfig = { masters: ['user-1'], trusted: ['user-1'] };
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), undefined, ['user-1'], trigger);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi', { userId: 'user-1' }), { endpointMaster: undefined, endpointTrusted: ['user-1'], trigger });
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
   it('普通用户无角色', () => {
-    const roles = resolveRuntimeSenderRoles(groupMessage('hi'), 'owner-x', ['trusted-y'], undefined);
+    const roles = resolveRuntimeSenderRoles(groupMessage('hi'), { endpointMaster: 'owner-x', endpointTrusted: ['trusted-y'], trigger: undefined });
     expect(roles).toEqual({ isMaster: false, isTrusted: false });
   });
 
   it('sender.id 不匹配 master 时不授权', () => {
     const message = groupMessage('hi', { userId: 'attacker-id' }, 'attacker-id');
-    const roles = resolveRuntimeSenderRoles(message, 'owner-x', ['owner-x'], {
+    const roles = resolveRuntimeSenderRoles(message, { endpointMaster: 'owner-x', endpointTrusted: ['owner-x'], trigger: {
       masters: ['owner-x'],
       trusted: ['owner-x'],
-    });
+    } });
     expect(roles).toEqual({ isMaster: false, isTrusted: false });
   });
 
@@ -924,9 +927,9 @@ describe('缺口 3：masters / trusted 角色解析', () => {
       sender: { id: 'owner-x', name: '昵称' },
       metadata: { endpoint: '10001' },
     });
-    const roles = resolveRuntimeSenderRoles(message, 'owner-x', [], {
+    const roles = resolveRuntimeSenderRoles(message, { endpointMaster: 'owner-x', endpointTrusted: [], trigger: {
       masters: ['owner-x'],
-    });
+    } });
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
@@ -937,9 +940,9 @@ describe('缺口 3：masters / trusted 角色解析', () => {
       sender: null,
       metadata: { endpoint: '10001', [key]: 'forged-owner' },
     });
-    const roles = resolveRuntimeSenderRoles(message, 'forged-owner', ['forged-owner'], {
+    const roles = resolveRuntimeSenderRoles(message, { endpointMaster: 'forged-owner', endpointTrusted: ['forged-owner'], trigger: {
       masters: ['forged-owner'], trusted: ['forged-owner'],
-    });
+    } });
     expect(roles).toEqual({ isMaster: false, isTrusted: false });
   });
 
@@ -1024,7 +1027,7 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
         endpoint: '知音',
       },
     });
-    const roles = resolveRuntimeSenderRoles(message, endpointMaster, [], undefined);
+    const roles = resolveRuntimeSenderRoles(message, { endpointMaster, endpointTrusted: [], trigger: undefined });
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
     expect(createRuntimeTurnAccess(message, roles).principal.roles).toContain('master');
   });

@@ -13,7 +13,7 @@ export class LineAdapter extends Adapter<LineEndpoint, LineEndpointConfig, LineC
   override get configurationIdentityProbeFields(): readonly string[] { return ['channelAccessToken', 'apiBaseUrl']; }
   protected override async identifyConfiguration(input: LineEndpointConfig, signal: AbortSignal, _changed: readonly string[]): Promise<string | undefined> {
     const config = resolveLineConfig(input);
-    const response = await new LineApiClient(config, globalThis.fetch, signal).request<{ userId?: unknown }>('/v2/bot/info');
+    const response = await new LineApiClient({ config, fetch: globalThis.fetch, signal }).request<{ userId?: unknown }>('/v2/bot/info');
     if (typeof response.userId !== 'string' || !response.userId) throw new Error('LINE identity verification returned no userId');
     return JSON.stringify(['line', new URL(config.apiBaseUrl).origin, response.userId]);
   }

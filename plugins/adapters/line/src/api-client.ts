@@ -1,3 +1,4 @@
+import { type EndpointManagementRequest } from 'zhin.js/adapter';
 import { EventEmitter } from 'node:events';
 import type { LineFetch } from './endpoint.js';
 import type { LineEvent, ResolvedLineConfig } from './protocol.js';
@@ -7,14 +8,24 @@ export interface LineGroupMember {
   readonly nickname: string;
 }
 
+interface LineGroupMemberIds { readonly memberIds?: string[]; readonly next?: string; }
+interface LineGroupMemberPageRequest extends EndpointManagementRequest {
+  readonly groupId: string;
+  readonly start?: string;
+}
+
+export interface LineApiClientOptions {
+  readonly config: ResolvedLineConfig;
+  readonly fetch: LineFetch;
+  readonly signal?: AbortSignal;
+}
+
 /** Direct LINE Messaging API client; it has no Endpoint lifecycle methods. */
 export class LineApiClient extends EventEmitter {
-  constructor(
-    readonly apiConfig: ResolvedLineConfig,
-    fetch: LineFetch,
-    signal?: AbortSignal,
-  ) {
+  readonly apiConfig: ResolvedLineConfig;
+  constructor({ config, fetch, signal }: LineApiClientOptions) {
     super();
+    this.apiConfig = config;
     this.transportSignal = signal;
     this.fetch = (url, init) => {
       this.transportSignal?.throwIfAborted();
@@ -29,6 +40,7 @@ export class LineApiClient extends EventEmitter {
     readonly body?: string;
     readonly signal?: AbortSignal;
   } = {}): Promise<T> {
+    init.signal?.throwIfAborted();
     const response = await this.fetch(`${this.apiConfig.apiBaseUrl}${path}`, {
       method: init.method ?? 'GET',
       headers: {
@@ -36,7 +48,7 @@ export class LineApiClient extends EventEmitter {
         ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(init.body === undefined ? {} : { body: init.body }),
-      signal: init.signal ?? AbortSignal.timeout(30_000),
+      signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
       const text = await response.text();
@@ -49,23 +61,22 @@ export class LineApiClient extends EventEmitter {
     return this.request(`/v2/profile/${encodeURIComponent(userId)}`);
   }
 
-  getGroupMemberIds(groupId: string, start?: string): Promise<{
-    readonly memberIds?: string[];
-    readonly next?: string;
-  }> {
-    const kind = groupId.startsWith('R') ? 'room' : 'group';
-    const query = start ? `?start=${encodeURIComponent(start)}` : '';
-    return this.request(
-      `/v2/bot/${kind}/${encodeURIComponent(groupId)}/members/ids${query}`,
-    );
+  getGroupMemberIds(groupId: string, start?: string): Promise<LineGroupMemberIds> {
+    return this.#groupMemberIds({ groupId, start });
   }
 
-  async getGroupMembers(groupId: string): Promise<LineGroupMember[]> {
+  #groupMemberIds({ groupId, start, signal }: LineGroupMemberPageRequest): Promise<LineGroupMemberIds> {
+    const kind = groupId.startsWith('R') ? 'room' : 'group';
+    const query = start ? `?start=${encodeURIComponent(start)}` : '';
+    return this.request(`/v2/bot/${kind}/${encodeURIComponent(groupId)}/members/ids${query}`, { signal });
+  }
+
+  async getGroupMembers(groupId: string, request: EndpointManagementRequest = {}): Promise<LineGroupMember[]> {
     const kind = groupId.startsWith('R') ? 'room' : 'group';
     const ids: string[] = [];
     let next: string | undefined;
     do {
-      const page = await this.getGroupMemberIds(groupId, next);
+      const page = await this.#groupMemberIds({ groupId, start: next, signal: request.signal });
       ids.push(...(page.memberIds ?? []).filter((id) => typeof id === 'string' && id.length > 0));
       next = page.next || undefined;
     } while (next);
@@ -73,10 +84,11 @@ export class LineApiClient extends EventEmitter {
     return Promise.all(ids.map(async (userId) => {
       try {
         const profile = await this.request<{ displayName?: string }>(
-          `/v2/bot/${kind}/${encodeURIComponent(groupId)}/member/${encodeURIComponent(userId)}`,
+          `/v2/bot/${kind}/${encodeURIComponent(groupId)}/member/${encodeURIComponent(userId)}`, { signal: request.signal },
         );
         return { user_id: userId, nickname: String(profile.displayName ?? userId) };
-      } catch {
+      } catch (error) {
+        if (request.signal?.aborted) throw error;
         return { user_id: userId, nickname: userId };
       }
     }));

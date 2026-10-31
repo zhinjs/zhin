@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
-import { definePlugin, applyConfigPatches, type ConfigDocumentPort, type ConfigDocumentSnapshot, type ConfigPatch, type PreparedConfigDocument, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import { definePlugin, applyConfigPatches, type ConfigDocumentPort, type ConfigDocumentSnapshot, type ConfigPatch, type PreparedConfigDocument, type RuntimeConfigDocument, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import adapterFeature, { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec, endpointEventGatewayToken, type EndpointEventSink } from '@zhin.js/adapter';
 import handlerFeature, { HandlerIndex, handlerFeatureId, defineHandler } from '@zhin.js/handler';
 import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
@@ -13,6 +13,8 @@ it('retains the untouched adapter transport across config source HMR, patches an
   const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-retained-adapter-')));
   let runtime: RootRuntime | undefined;
   let coordinator: ReturnType<RootRuntime['createHmrCoordinator']> | undefined;
+  let oldLease: SnapshotLease | undefined;
+  let beforeMixed: SnapshotLease | undefined;
   const modules = new Modules();
   const transports = { create: 0, connect: 0, stop: 0 };
   const sinks: EndpointEventSink[] = [];
@@ -75,10 +77,13 @@ it('retains the untouched adapter transport across config source HMR, patches an
       await (snapshot.projections.get(handlerFeatureId) as HandlerIndex).dispatch('diagnostic.receive', [], { snapshot });
       expect(crossFeature.at(-1)).toEqual({ generation: snapshot.generation, label, account });
     };
-    runtime = new RootRuntime({ projectRoot: root, modules, config, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources }) { resources.provide(endpointEventGatewayToken, { receive: async () => { observations.push(runtime!.snapshot.generation); } }); } });
+    runtime = new RootRuntime({ projectRoot: root, modules, config, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources }) {
+      const receive = async () => { observations.push(runtime!.snapshot.generation); };
+      resources.provide(endpointEventGatewayToken, { run: async execute => execute({ receive }), receive });
+    } });
     const first = await runtime.start();
     const firstIndex = first.projections.get(adapterFeatureId) as AdapterIndex;
-    const oldLease = runtime.snapshots.acquire();
+    oldLease = runtime.snapshots.acquire();
     await verifyHandler('max-20', 'account-v1');
     const client = firstIndex.clientById<{ readProjection(): unknown }>(firstIndex.list()[0]!.id);
     expect(() => client.readProjection()).toThrow(/project/);
@@ -131,7 +136,7 @@ it('retains the untouched adapter transport across config source HMR, patches an
     expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
 
     // A config-only disabled owner and capability edit share one HMR candidate.
-    const beforeMixed = runtime.snapshots.acquire();
+    beforeMixed = runtime.snapshots.acquire();
     const primary = (snapshot: typeof runtime.snapshot) => snapshot.resources.get('root' as never)?.get(primaryConfigToken.id) as PrimaryConfig;
     config.writeExternal({ ...config.document, draft: { label: 'unvalidated draft' } });
     modules.set(commandSource, { default: defineCommand({ execute: ({ config }) => `${(config as { label: string }).label}:mixed` }) });
@@ -153,7 +158,7 @@ it('retains the untouched adapter transport across config source HMR, patches an
     expect(transports.create).toBe(2); expect(transports.connect).toBe(2);
     await setImmediate(); expect(transports.stop).toBe(1);
     await runtime.stop(); expect(transports.stop).toBe(2);
-  } finally { await coordinator?.stop(); await runtime?.stop(); await rm(root, { recursive: true, force: true }); }
+  } finally { oldLease?.release(); beforeMixed?.release(); await coordinator?.stop(); await runtime?.stop(); await rm(root, { recursive: true, force: true }); }
 });
 
 class Modules implements ModuleRuntime {

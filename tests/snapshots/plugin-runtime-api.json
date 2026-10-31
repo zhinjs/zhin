@@ -17,8 +17,10 @@
     "export * from './peer-registry.js';",
     "export * from './provider.js';",
     "export type{Endpoint,EndpointSpecification,EndpointHooks}from './endpoint-specification.js';",
-    "export type{EndpointEventGateway,EndpointEventEmitter}from './endpoint.js';",
     "export type{EndpointIdentity,EndpointEvent,EndpointEventSink,EndpointIncomingMessage,EndpointConversation,EndpointSendRequest,EndpointSendPart,EndpointSendResult,EndpointTransportState,PlatformEvent}from './endpoint-contract.js';",
+    "export type{EndpointReceipt,EndpointEventGateway,EndpointEventEmitter}from './endpoint.js';",
+    "export type{PendingRpc,PendingRpcOptions,PendingRpcRequest,PendingRpcEnvelope,PendingRpcTransport}from './pending-rpc.js';",
+    "export{createPendingRpc}from './pending-rpc.js';",
     "export{default}from './provider.js';",
     "export{endpointEventGatewayToken}from './endpoint.js';",
     "export{endpointSpec,createEndpointSpecification,isEndpoint}from './endpoint-specification.js';",
@@ -83,6 +85,10 @@
     "export * from './root-host.js';",
     "export * from './start-command.js';"
   ],
+  "cli/runtime/data-migration": [
+    "export * from './controller.js';",
+    "export * from './plan-store.js';"
+  ],
   "cli/runtime/migrate": [
     "export * from './instance-declarations.js';",
     "export * from './legacy-command-migrator.js';",
@@ -132,7 +138,7 @@
     "export * from './message-dispatcher.js';",
     "export * from './outbound-renderer.js';",
     "export * from './outbound-segments.js';",
-    "export type{EndpointRuntimeDetail,EndpointRuntimeSummary,RuntimeEndpointEditInput,RuntimeEndpointMessageInput,RuntimeEndpointReactionInput,RuntimeEndpointRemoveReactionInput,RuntimeEndpointSendInput,RuntimeEndpointTypingInput,}from './endpoint-runtime.js';",
+    "export type{CaptureEndpointOperationInput,CapturedEndpointOperation,EndpointRuntimeDetail,EndpointRuntimeSummary,RuntimeEndpointEditInput,RuntimeEndpointMessageInput,RuntimeEndpointReactionInput,RuntimeEndpointRemoveReactionInput,RuntimeEndpointSendInput,RuntimeEndpointTypingInput,}from './endpoint-runtime.js';",
     "export type{MessageOrigin,RoomInboundRouteInput,RoomMembershipPort,RoomRouteDecision,}from './inbound-origin.js';",
     "export type{RuntimeMessageDiagnostic,RuntimeMessageDiagnosticStep,RuntimeMessageDiagnosticDelivery,RuntimeMessageDiagnosticsReader,}from './message-diagnostics.js';",
     "export type{RuntimeMessageEvent,RuntimeMessageEventSource,RuntimeMessageRendering,RuntimeSceneEventSignal,RuntimeSceneEventSource,OutboundFallbackReason,}from './message-events.js';",
@@ -170,11 +176,14 @@
     "export * from './memory-db.js';",
     "export * from './provider.js';",
     "export * from './random.js';",
+    "export * from './reply-operation.js';",
     "export * from './runtime-constants.js';",
     "export * from './send-content-text.js';",
     "export * from './session-coordinator.js';",
+    "export * from './session-delivery.js';",
+    "export * from './target-migration.js';",
     "export * from './versioned-session-service.js';",
-    "export{formatGameHelp,gameCommandHint,gameCommandFeedback}from './game-command-help.js';"
+    "export{formatGameHelp,gameCommandHint,gameCommandFeedback,type GameHelpRequest}from './game-command-help.js';"
   ],
   "handler": [
     "export * from './context.js';",
@@ -238,6 +247,7 @@
   "plugin-runtime": [
     "export * from './capability.js';",
     "export * from './component-host.js';",
+    "export * from './data-migration.js';",
     "export * from './database-host.js';",
     "export * from './delivery-target.js';",
     "export * from './dispose.js';",
@@ -255,6 +265,7 @@
     "export * from './plugin-verification.js';",
     "export * from './plugin.js';",
     "export * from './relational-state.js';",
+    "export * from './relational-target-migration.js';",
     "export * from './root-config-document.js';",
     "export * from './root-config-file.js';",
     "export * from './root-controller.js';",
@@ -264,7 +275,9 @@
     "export * from './system-log.js';",
     "export * from './task-storage.js';",
     "export * from './token.js';",
-    "export{GenerationAdmissionGate,bindGenerationAdmission,createGenerationAdmissionGate,generationAdmissionBinder,generationAdmissionSource,type GenerationAdmissionBindable,type GenerationAdmissionSource,}from './admission.js';"
+    "export{GenerationAdmissionGate,bindGenerationAdmission,createGenerationAdmissionGate,generationAdmissionBinder,generationAdmissionSource,type GenerationAdmissionBindable,type GenerationAdmissionSource,}from './admission.js';",
+    "export{OwnerOperation}from './owner-operation.js';",
+    "export{createPluginEventChannel,type PluginEventChannel}from './plugin-events.js';"
   ],
   "prompt-section": [
     "export * from './definition.js';",

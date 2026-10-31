@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { Client } from 'kook-client';
 import type { EndpointEvent } from 'zhin.js/adapter';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/kook/index.js';
 import { KookAdapter } from '../src/adapter.js';
 import { KookWebsocketEndpoint } from '../src/endpoint.js';
@@ -14,7 +14,7 @@ it('retains the actual KOOK Client and native event methods through the real Ada
   vi.spyOn(RuntimeKookClient.prototype, 'disconnect').mockResolvedValue();
   const events: EndpointEvent[] = [], listeners = process.listenerCount('uncaughtException');
   const harness = await createAdapterHarness(definition, { id: 'bot', token: 'synthetic-token' }, {
-    name: 'kook', gateway: { receive: async event => { events.push(event); } },
+    name: 'kook', gateway: createTestEndpointEventGateway({ receive: async event => { events.push(event); } }),
   });
   try {
     expect(harness.adapter).toBeInstanceOf(KookAdapter);

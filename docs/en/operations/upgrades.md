@@ -18,6 +18,51 @@ npx zhin runtime start --once --mode test  # assembly smoke test
 
 For production, follow the full flow below and take a backup first. Stop the Bot before upgrading so dependency directories are not replaced under a running process.
 
+## Adapter API 2: this patch batch's plugin boundary {#adapter-api-2}
+
+This patch batch intentionally changes plugin interfaces. `1.1.x` alone does not prove compatibility.
+The following are the first target versions, not a claim that publication has already occurred.
+Verify the formal release inventory, then upgrade the complete dependency set and lockfile together.
+
+| Package / contract | Last old-interface version | First new-interface version |
+| --- | --- | --- |
+| `zhin.js` | `1.1.18` | `1.1.19` |
+| `@zhin.js/core` | `1.1.53` | `1.1.54` |
+| `@zhin.js/adapter` | `1.1.25`, Feature API `1.0.0` | `1.1.26`, Feature API `2.0.0` |
+| `@zhin.js/feature-kit` | `1.1.9` | `1.1.10` |
+| Runtime / Isolate | `1.1.15` | `1.1.16` |
+| Plugin Runtime / Agent | `1.1.17` / `1.1.44` | `1.1.18` / `1.1.45` |
+| 19 other official platform adapters | Each package `1.1.18` | Each package `1.1.19` |
+| Bilibili / Bilibili-live adapters | Each package `0.1.1` | Each package `0.1.2` |
+| Sandbox adapter | `1.1.20` | `1.1.21` |
+
+New adapters declare `{ "package": "@zhin.js/adapter", "api": "^2.0.0" }` in `zhin.features`.
+The existing Feature API check refuses explicit `^1.0.0` consumers on API 2 and `^2.0.0` consumers
+on API 1. `zhin.engine` keeps its independent `^1.0.0` contract; it is not the npm version above.
+Missing `api` metadata keeps its existing behavior. It does not certify compatibility: authors and
+operators must check actual dependency versions, old API use and the lockfile. Old npm tarballs'
+broad peer ranges cannot be changed retroactively.
+
+Republish custom adapters using `createAdapter`, actual Client inheritance and `endpointSpec`.
+Augment `AdapterRegistry` only through a directly declared FeatureKit peer/dev dependency. Migrate
+control/management methods to named requests and Host controls to canonical message/conversation
+refs without redundant account selectors. Preserve third-party SDK signatures. Supply Satori and
+OneBot12 `platform + userId`, and the actual WeCom `agentId`. See [adapter authoring](../authoring/adapters.md).
+
+Rehearse on copied data first. Back up the old lockfile, account identities and encryption-key
+material, databases, plugin state, Owner approvals and any existing migration plans/journals.
+Historical aliases do not automatically select an account, parent channel or thread. Use the
+authenticated `/api/data-migrations` preview to select exact targets and prepare a plan, then
+explicitly apply. Application leaves maintenance paused; inspect and resume separately. No automatic
+notification replay, game deadline extension or permission recovery occurs. Reconcile after an
+unknown/disconnected outcome instead of treating an absent receipt as proof that retry is safe.
+
+Owner V2 approvals remain inactive historical grants; new writes use V3. Old code cannot read V3,
+so rollback needs matching code, lockfile and verified data, not just an npm downgrade. Restore
+requires unchanged after-images; preserve later business writes and resolve conflicts explicitly.
+Keep plans/domain journals and require fresh authorization for historical permissions. These
+instructions do not authorize real account operations, publishing, deployment or production migration.
+
 ## Upgrading from 1.1.13 or earlier: configVersion 2 {#configversion-2}
 
 ::: warning Breaking config change

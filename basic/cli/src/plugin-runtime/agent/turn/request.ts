@@ -147,35 +147,45 @@ function logFactError(op: string, kind: string | undefined, error: unknown): voi
   logger.debug(formatCompact({ op, kind, error: error instanceof Error ? error.message : String(error) }));
 }
 
+/** One cache lookup and its existing fallback services; all lifetimes stay request/generation owned. */
+interface CachedFactLookup<T> {
+  readonly cache: TurnFactCache;
+  readonly key: string;
+  readonly signal: AbortSignal;
+  readonly lookup: (signal: AbortSignal) => Promise<T>;
+  readonly level2?: FactLevel2<T>;
+  readonly refresher?: SceneFactRefresher;
+  readonly now: () => number;
+}
+
 /**
  * Read order: level 1 (fresh, 60 s) → level 2 (database) → platform. A platform result is written to both
  * levels. A level-2 row older than {@link SCENE_FACT_STALE_MS} is still served and refreshed once in the
  * background (a failed refresh keeps the last known value).
  */
 async function cachedLookup<T>(
-  cache: TurnFactCache, key: string, signal: AbortSignal, lookup: (signal: AbortSignal) => Promise<T>,
-  options: Readonly<{ level2?: FactLevel2<T>; refresher?: SceneFactRefresher; now: () => number }>,
+  { cache, key, signal, lookup, level2, refresher, now }: CachedFactLookup<T>,
 ): Promise<T | undefined> {
   const kind = key.split(KEY_SEP)[0]!;
-  const hit = cache.get<T>(key, options.now());
+  const hit = cache.get<T>(key, now());
   if (hit !== undefined) return hit;
-  const stored = await level2Read(options.level2, kind);
+  const stored = await level2Read(level2, kind);
   signal.throwIfAborted();
   if (stored) {
-    cache.set(key, stored.value, options.now());
-    if (options.now() - stored.updatedAt >= SCENE_FACT_STALE_MS) {
-      options.refresher?.schedule(key, async (refreshSignal) => {
+    cache.set(key, stored.value, now());
+    if (now() - stored.updatedAt >= SCENE_FACT_STALE_MS) {
+      refresher?.schedule(key, async (refreshSignal) => {
         const value = await raceSignal(lookup(refreshSignal), refreshSignal);
-        cache.set(key, value, options.now());
-        await level2Write(options.level2, kind, value);
+        cache.set(key, value, now());
+        await level2Write(level2, kind, value);
       });
     }
     return stored.value;
   }
   try {
     const value = await raceSignal(lookup(signal), signal);
-    cache.set(key, value, options.now());
-    await level2Write(options.level2, kind, value);
+    cache.set(key, value, now());
+    await level2Write(level2, kind, value);
     return value;
   } catch (error) {
     signal.throwIfAborted();
@@ -198,7 +208,16 @@ function groupLevel2(store: SceneFactStore, platform: string, group: string): Fa
   };
 }
 
-function memberLevel2(store: SceneFactStore, platform: string, group: string, user: string, now: () => number): FactLevel2<GroupMemberProfile> {
+/** Address of one persistent member fact, using the existing FactStore namespace unchanged. */
+interface MemberFactLevel2Request {
+  readonly store: SceneFactStore;
+  readonly platform: string;
+  readonly groupId: string;
+  readonly userId: string;
+  readonly now: () => number;
+}
+
+function memberLevel2({ store, platform, groupId: group, userId: user, now }: MemberFactLevel2Request): FactLevel2<GroupMemberProfile> {
   return {
     async read() {
       const found = await store.getMember(platform, 'group', group, user);
@@ -220,17 +239,23 @@ function memberLevel2(store: SceneFactStore, platform: string, group: string, us
   };
 }
 
+/** One source conversation and caller lifetime, resolved against its existing generation. */
+export interface RuntimeTurnContextRequest {
+  readonly snapshot: Pick<RuntimeSnapshot, 'projections'>;
+  readonly conversation: ConversationRef;
+  readonly signal: AbortSignal;
+  readonly senderId?: string;
+  /** Existing persistent facts, refresh owner and test clock; omission keeps memory-only lookup. */
+  readonly factServices?: SceneFactDeps;
+}
+
 /**
  * Resolve this turn's account and, for ICQQ groups, the ADR 0041 scene facts (group, Bot role and
  * card, sender role/card/title/mute) before tool discovery. Bot, group and sender facts all use the
  * two-level cache (memory 60 s → database → platform). Failed lookups omit their fields.
  */
 export async function resolveRuntimeTurnContextState(
-  snapshot: Pick<RuntimeSnapshot, 'projections'>,
-  conversation: ConversationRef,
-  signal: AbortSignal,
-  senderId?: string,
-  deps: SceneFactDeps = {},
+  { snapshot, conversation, signal, senderId, factServices: deps = {} }: RuntimeTurnContextRequest,
 ): Promise<TurnContextState | undefined> {
   signal.throwIfAborted();
   const now = deps.now ?? Date.now;
@@ -262,17 +287,20 @@ export async function resolveRuntimeTurnContextState(
       if (management.inspectGroupMemberProfile) {
         // Same cadence as any member (Fin 2026-10-29): L1 60 s → L2 → platform. Role-change events
         // write through, and a stale role at worst offers a tool the platform then refuses.
-        const level2 = store ? memberLevel2(store, platform, group, id, now) : undefined;
-        const member = await cachedLookup(cache, `member${KEY_SEP}${scopeKey}${KEY_SEP}${id}`, signal,
-          (lookupSignal) => management.inspectGroupMemberProfile!(group, id, lookupSignal), {
-            now,
-            ...(level2 && store ? { level2: {
-              read: level2.read,
-              // A platform result also refreshes the session profile's bot role / mute.
-              write: (value: GroupMemberProfile) => store.putBot(platform, 'group', group, id, value),
-            } } : {}),
-            ...(deps.refresher ? { refresher: deps.refresher } : {}),
-          });
+        const level2 = store ? memberLevel2({ store, platform, groupId: group, userId: id, now }) : undefined;
+        const member = await cachedLookup({
+          cache,
+          key: `member${KEY_SEP}${scopeKey}${KEY_SEP}${id}`,
+          signal,
+          lookup: (lookupSignal) => management.inspectGroupMemberProfile!({ groupId: group, userId: id, signal: lookupSignal }),
+          now,
+          ...(level2 && store ? { level2: {
+            read: level2.read,
+            // A platform result also refreshes the session profile's bot role / mute.
+            write: (value: GroupMemberProfile) => store.putBot(platform, 'group', group, id, value),
+          } } : {}),
+          ...(deps.refresher ? { refresher: deps.refresher } : {}),
+        });
         if (!member) throw new Error('bot member lookup returned nothing');
         return {
           ...bot,
@@ -281,7 +309,7 @@ export async function resolveRuntimeTurnContextState(
           ...(member.mutedUntil !== undefined ? { mutedUntil: member.mutedUntil } : {}),
         };
       }
-      const member = await raceSignal(management.inspectGroupMember!(group, id, signal), signal);
+      const member = await raceSignal(management.inspectGroupMember!({ groupId: group, userId: id, signal }), signal);
       return { ...bot, ...(member.platformRole ? { platformRole: member.platformRole } : { platformRoleError: 'unavailable' }) };
     } catch (error) {
       signal.throwIfAborted();
@@ -293,16 +321,26 @@ export async function resolveRuntimeTurnContextState(
     }
   })();
   const sceneTask = management.inspectGroupScene
-    ? cachedLookup(cache, `scene${KEY_SEP}${scopeKey}`, signal, (lookupSignal) => management.inspectGroupScene!(group, lookupSignal), {
-        now, ...(store ? { level2: groupLevel2(store, platform, group) } : {}), ...(deps.refresher ? { refresher: deps.refresher } : {}),
+    ? cachedLookup({
+        cache,
+        key: `scene${KEY_SEP}${scopeKey}`,
+        signal,
+        lookup: (lookupSignal) => management.inspectGroupScene!({ groupId: group, signal: lookupSignal }),
+        now,
+        ...(store ? { level2: groupLevel2(store, platform, group) } : {}),
+        ...(deps.refresher ? { refresher: deps.refresher } : {}),
       })
     : Promise.resolve(undefined);
   const senderTask = sender && management.inspectGroupMemberProfile
-    ? cachedLookup(cache, `member${KEY_SEP}${scopeKey}${KEY_SEP}${sender}`, signal,
-        (lookupSignal) => management.inspectGroupMemberProfile!(group, sender, lookupSignal), {
-          now, ...(store ? { level2: memberLevel2(store, platform, group, sender, now) } : {}),
-          ...(deps.refresher ? { refresher: deps.refresher } : {}),
-        })
+    ? cachedLookup({
+        cache,
+        key: `member${KEY_SEP}${scopeKey}${KEY_SEP}${sender}`,
+        signal,
+        lookup: (lookupSignal) => management.inspectGroupMemberProfile!({ groupId: group, userId: sender, signal: lookupSignal }),
+        now,
+        ...(store ? { level2: memberLevel2({ store, platform, groupId: group, userId: sender, now }) } : {}),
+        ...(deps.refresher ? { refresher: deps.refresher } : {}),
+      })
     : Promise.resolve(undefined);
   const [resolvedBot, scene, member] = await Promise.all([botTask, sceneTask, senderTask]);
   signal.throwIfAborted();
@@ -327,6 +365,12 @@ export async function resolveRuntimeTurnContextState(
   });
 }
 
+/** Trusted endpoint bindings and trigger policy, kept apart from authenticated message facts. */
+export interface RuntimeSenderRoleBindings {
+  readonly endpointMaster?: string;
+  readonly endpointTrusted: readonly string[];
+  readonly trigger?: AITriggerConfig;
+}
 
 /**
  * Sender roles derive only from the authenticated Message sender reference.
@@ -334,9 +378,7 @@ export async function resolveRuntimeTurnContextState(
  */
 export function resolveRuntimeSenderRoles(
   message: Message,
-  endpointMaster: string | undefined,
-  endpointTrusted: readonly string[],
-  trigger?: AITriggerConfig,
+  { endpointMaster, endpointTrusted, trigger }: RuntimeSenderRoleBindings,
 ): RuntimeSenderRoles {
   const senderId = message.sender?.id;
   const triggerMasters = (trigger?.masters ?? []).map(String);
@@ -349,55 +391,63 @@ export function resolveRuntimeSenderRoles(
   return { isMaster, isTrusted };
 }
 
+/** Immutable source facts; execution authority remains in the separate operation input. */
+export interface RuntimeTurnMessageFacts {
+  readonly message: Message;
+  readonly text: string;
+  readonly roles: RuntimeSenderRoles;
+}
+
+/** Existing policy, ports and lifetime for this one TurnRequest; never retained as global state. */
+export interface RuntimeTurnExecutionOptions {
+  /**
+   * Pre-narrowed access (ADR 0038 §2 merged turn); must originate from this
+   * message's conversation. Default: the message sender's own access.
+   */
+  readonly access?: TurnAccessContext;
+  readonly traceId: string;
+  readonly turnId: string;
+  readonly signal: AbortSignal;
+  /** Trusted Host project namespace, independent of the tool workspace. */
+  readonly projectRoot: string;
+  readonly workspaceRoot: string;
+  readonly workingDirectory?: string;
+  readonly filesystemAccess?: NonNullable<TurnRequest['policy']['filesystem']>['access'];
+  readonly shell?: TurnRequest['policy']['shell'];
+  readonly network?: TurnRequest['policy']['network'];
+  readonly sessionKey?: string;
+  /** Trusted personal owner address; explicit system/Workroom sessions omit it. */
+  readonly personalSession?: PersonalSessionAddress;
+  readonly intent: TurnIntent;
+  readonly ports: TurnRequestPorts;
+  readonly resolveReference?: (
+    reference: ConversationReference,
+    options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
+    signal: AbortSignal,
+  ) => Promise<ConversationResolution>;
+  readonly readConversationContext?: (consumer: string, signal: AbortSignal) => Promise<Readonly<{
+    blocks: readonly import('@zhin.js/im-contract').ConversationContextBlock[];
+    cursor: number;
+  }>>;
+  readonly commitConversationContext?: (consumer: string, cursor: number) => Promise<void>;
+  /** Configuration-owned metadata; applied after untrusted adapter metadata. */
+  readonly trustedMetadata?: Readonly<Record<string, unknown>>;
+  /** Facts read from the operation's Endpoint, independently of message metadata. */
+  readonly contextState?: TurnContextState;
+  /** #996: short scene event summaries for the ephemeral `[Scene events]` block (newest first). */
+  readonly sceneEvents?: readonly string[];
+  /** ADR 0038 §3: senders of a merged turn (two or more). */
+  readonly mergedSenders?: TurnInput['mergedSenders'];
+  /** ADR 0038 §5: the danmaku window of a live-stream turn. */
+  readonly liveDanmaku?: TurnInput['liveDanmaku'];
+}
+
 /**
  * Canonical IM → Agent TurnRequest mapper. Runtime Message remains owned by IM.
  */
 export function createRuntimeTurnRequest(
-  message: Message,
-  text: string,
-  roles: RuntimeSenderRoles,
-  input: Readonly<{
-    /**
-     * Pre-narrowed access (ADR 0038 §2 merged turn); must originate from this
-     * message's conversation. Default: the message sender's own access.
-     */
-    access?: TurnAccessContext;
-    traceId: string;
-    turnId: string;
-    signal: AbortSignal;
-    /** Trusted Host project namespace, independent of the tool workspace. */
-    projectRoot: string;
-    workspaceRoot: string;
-    workingDirectory?: string;
-    filesystemAccess?: NonNullable<TurnRequest['policy']['filesystem']>['access'];
-    shell?: TurnRequest['policy']['shell'];
-    network?: TurnRequest['policy']['network'];
-    sessionKey?: string;
-    /** Trusted personal owner address; explicit system/Workroom sessions omit it. */
-    personalSession?: PersonalSessionAddress;
-    intent: TurnIntent;
-    ports: TurnRequestPorts;
-    resolveReference?: (
-      reference: ConversationReference,
-      options: Readonly<{ depth: number; maxEntries: number; maxChars: number }>,
-      signal: AbortSignal,
-    ) => Promise<ConversationResolution>;
-    readConversationContext?: (consumer: string, signal: AbortSignal) => Promise<Readonly<{
-      blocks: readonly import('@zhin.js/im-contract').ConversationContextBlock[];
-      cursor: number;
-    }>>;
-    commitConversationContext?: (consumer: string, cursor: number) => Promise<void>;
-    /** Configuration-owned metadata; applied after untrusted adapter metadata. */
-    trustedMetadata?: Readonly<Record<string, unknown>>;
-    /** Facts read from the operation's Endpoint, independently of message metadata. */
-    contextState?: TurnContextState;
-    /** #996: short scene event summaries for the ephemeral `[Scene events]` block (newest first). */
-    sceneEvents?: readonly string[];
-    /** ADR 0038 §3: senders of a merged turn (two or more). */
-    mergedSenders?: TurnInput['mergedSenders'];
-    /** ADR 0038 §5: the danmaku window of a live-stream turn. */
-    liveDanmaku?: TurnInput['liveDanmaku'];
-  }>,
+  { message, text, roles }: RuntimeTurnMessageFacts,
+  input: RuntimeTurnExecutionOptions,
 ): TurnRequest {
   const access = input.access ?? createRuntimeTurnAccess(message, roles, input.contextState);
   const origin = access.origin;

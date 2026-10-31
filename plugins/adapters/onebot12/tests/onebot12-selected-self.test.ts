@@ -1,7 +1,7 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import { describe, expect, it, vi } from 'vitest';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/onebot12/index.js';
 import { Onebot12Client } from '../src/client.js';
 import { resolveOneBot12Config } from '../src/protocol.js';
@@ -30,7 +30,7 @@ describe('OneBot12 selected account at the actual protocol boundaries', () => {
     const config = { id: 'configured-name', platform: 'qq', userId: 'selected', connection, path: '/onebot/selected', api_url: 'https://offline.invalid/actions',
       url: address && typeof address !== 'string' ? `ws://127.0.0.1:${address.port}` : undefined };
     const h = await createAdapterHarness(definition, config, { name: 'onebot12', resources: new Map([[httpHostToken.id, http]]),
-      gateway: { async receive(event) { if (event.name === 'message.receive') messages.push(event.payload); } } });
+      gateway: createTestEndpointEventGateway({ async receive(event) { if (event.name === 'message.receive') messages.push(event.payload); } }) });
     let port = 0;
     try {
       await h.start(); h.open();

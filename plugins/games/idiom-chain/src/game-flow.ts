@@ -1,5 +1,5 @@
 import { createMessages, resolveLocale } from 'zhin.js/i18n';
-import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
+import { channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import {
   CHAIN_PREFIX,
   getGloss,
@@ -23,12 +23,14 @@ function sessionMode(session: ChainSessionRow): MatchMode {
 
 export async function sendOrEditView(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   session: ChainSessionRow,
   eventLines: string[] = [],
 ): Promise<GameReply> {
-  const content = buildChainView(session, eventLines, message.$channel.type);
-  return content;
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const content = buildChainView(session, eventLines, message.target.kind);
+    return content;
+  } });
 }
 
 async function botTurn(
@@ -67,192 +69,200 @@ async function botTurn(
 
 export async function startGame(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   matchMode: MatchMode = 'pinyin',
 ): Promise<GameReply | undefined> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const active = await services.getActiveByChannel(ch);
-  const locale = resolveLocale(active ? active.locale : message.locale);
-  if (active) {
-    if (active.player_id === message.$sender.id) {
-      return messages(locale, 'text3');
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const active = await services.getActiveByChannel(ch);
+    const locale = resolveLocale(active ? active.locale : message.locale);
+    if (active) {
+      if (active.player_id === message.sender.id) {
+        return messages(locale, 'text3');
+      }
+      return messages(locale, 'text4', { p0: active.player_name });
     }
-    return messages(locale, 'text4', { p0: active.player_name });
-  }
 
-  const used = new Set<string>();
-  const starter = pickStarterIdiom(used);
-  used.add(starter.text);
-  const session = await services.createSession(message, {
-    text: starter.text,
-    nextChar: lastChar(starter.text),
-    used: [...used],
-    matchMode,
-  });
+    const used = new Set<string>();
+    const starter = pickStarterIdiom(used);
+    used.add(starter.text);
+    const session = await services.createSession(message, {
+      text: starter.text,
+      nextChar: lastChar(starter.text),
+      used: [...used],
+      matchMode,
+    });
 
-  const gloss = starter.gloss ?? getGloss(starter.text);
-  return sendOrEditView(services, message, session, [
-    messages(locale, 'text5', { p0: modeLabel(matchMode, locale), p1: starter.text }) + (gloss ? `（${gloss}）` : ''),
-    promptLine(starter.text, matchMode, locale),
-  ]);
+    const gloss = starter.gloss ?? getGloss(starter.text);
+    return sendOrEditView(services, message, session, [
+      messages(locale, 'text5', { p0: modeLabel(matchMode, locale), p1: starter.text }) + (gloss ? `（${gloss}）` : ''),
+      promptLine(starter.text, matchMode, locale),
+    ]);
+  } });
 }
 
 export async function continueGame(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply> {
-  const session = await services.getActiveForUser(
-    `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
-    message.$sender.id,
-  );
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text6');
-  return sendOrEditView(services, message, session);
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.getActiveForUser(
+      channelKey(message),
+      message.sender.id,
+    );
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text6');
+    return sendOrEditView(services, message, session);
+  } });
 }
 
 export async function processIdiomText(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   raw: string,
 ): Promise<GameReply | null> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const session = await services.getActiveForUser(ch, message.$sender.id);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session || session.status !== 'active') return null;
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const session = await services.getActiveForUser(ch, message.sender.id);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session || session.status !== 'active') return null;
 
-  const mode = sessionMode(session);
-  const used = parseUsed(session.used_idioms);
-  const idiom = normalizeInput(raw);
-  // 格式不合规（非四字）只提示、不扣失误：避免闲聊（「好的」「谢谢」）被累计判负
-  if (!/^[\u4e00-\u9fff]{4}$/.test(idiom)) {
-    return messages(locale, 'text7');
-  }
-  const check = validatePlayerIdiom(idiom, session.last_idiom, mode, used, locale);
-  if (!check.ok) {
-    const wrong = session.wrong_count + 1;
-    if (wrong >= MAX_WRONG) {
+    const mode = sessionMode(session);
+    const used = parseUsed(session.used_idioms);
+    const idiom = normalizeInput(raw);
+    // 格式不合规（非四字）只提示、不扣失误：避免闲聊（「好的」「谢谢」）被累计判负
+    if (!/^[\u4e00-\u9fff]{4}$/.test(idiom)) {
+      return messages(locale, 'text7');
+    }
+    const check = validatePlayerIdiom(idiom, session.last_idiom, mode, used, locale);
+    if (!check.ok) {
+      const wrong = session.wrong_count + 1;
+      if (wrong >= MAX_WRONG) {
+        await services.updateSession(session.id, {
+          wrong_count: wrong,
+          status: 'lost',
+          bot_score: session.bot_score + 1,
+          streak: 0,
+        });
+        const updated = (await services.getById(session.id))!;
+        return (await sendOrEditView(services, message, updated, [
+          check.reason!,
+          messages(locale, 'text8'),
+        ])) ?? null;
+      }
+      await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
+      const updated = (await services.getById(session.id))!;
+      return (await sendOrEditView(services, message, updated, [check.reason!])) ?? null;
+    }
+
+    used.add(idiom);
+    const streak = session.streak + 1;
+    const best = Math.max(session.best_streak, streak);
+    const nextChar = lastChar(idiom);
+    const gloss = getGloss(idiom);
+
+    await services.updateSession(session.id, {
+      last_idiom: idiom,
+      next_char: nextChar,
+      used_idioms: JSON.stringify([...used]),
+      streak,
+      best_streak: best,
+      wrong_count: 0,
+    });
+
+    const current = (await services.getById(session.id))!;
+    const userLine = messages(locale, 'text9', { p0: idiom }) + (gloss ? `（${gloss}）` : '');
+
+    const botResult = await botTurn(services, current, used);
+    return (await sendOrEditView(services, message, botResult.session, [
+      userLine,
+      ...botResult.lines,
+    ])) ?? null;
+  } });
+}
+
+export async function handleChoice(
+  services: SessionService,
+  message: GamePlayer,
+  sessionId: string,
+  choiceId: string,
+): Promise<GameReply | null> {
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.getById(sessionId);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text10');
+    if (session.player_id !== message.sender.id) return messages(locale, 'text11');
+
+    const mode = sessionMode(session);
+
+    if (choiceId === 'restart') {
+      const locale = resolveLocale(message.locale);
+      const used = new Set<string>();
+      const starter = pickStarterIdiom(used);
+      used.add(starter.text);
       await services.updateSession(session.id, {
-        wrong_count: wrong,
+        locale,
+        last_idiom: starter.text,
+        next_char: lastChar(starter.text),
+        used_idioms: JSON.stringify([...used]),
+        streak: 0,
+        wrong_count: 0,
+        turn: 'player',
+        status: 'active',
+      });
+      const updated = (await services.getById(session.id))!;
+      const gloss = starter.gloss ?? getGloss(starter.text);
+      return (await sendOrEditView(services, message, updated, [
+        messages(locale, 'text12', { p0: starter.text }) + (gloss ? `（${gloss}）` : ''),
+        promptLine(starter.text, mode, locale),
+      ])) ?? null;
+    }
+
+    if (session.status !== 'active') {
+      return messages(locale, 'text13');
+    }
+
+    const used = parseUsed(session.used_idioms);
+
+    if (choiceId === 'hint') {
+      const hint = pickHintIdiom(session.last_idiom, mode, used);
+      if (!hint) {
+        // 先更新状态再单次发送终局视图，避免旧 session「你赢了」与终局视图双发
+        await services.updateSession(session.id, { status: 'won', player_score: session.player_score + 1 });
+        const updated = (await services.getById(session.id))!;
+        return (await sendOrEditView(services, message, updated, [
+          messages(locale, 'text14'),
+        ])) ?? null;
+      }
+      const gloss = getGloss(hint);
+      await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });
+      const updated = (await services.getById(session.id))!;
+      return (await sendOrEditView(services, message, updated, [
+        messages(locale, 'text15', { p0: hint }) + (gloss ? `（${gloss}）` : ''),
+        messages(locale, 'text16'),
+      ])) ?? null;
+    }
+
+    if (choiceId === 'skip') {
+      await services.updateSession(session.id, {
         status: 'lost',
         bot_score: session.bot_score + 1,
         streak: 0,
       });
       const updated = (await services.getById(session.id))!;
       return (await sendOrEditView(services, message, updated, [
-        check.reason!,
-        messages(locale, 'text8'),
+        messages(locale, 'text17'),
       ])) ?? null;
     }
-    await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
-    const updated = (await services.getById(session.id))!;
-    return (await sendOrEditView(services, message, updated, [check.reason!])) ?? null;
-  }
 
-  used.add(idiom);
-  const streak = session.streak + 1;
-  const best = Math.max(session.best_streak, streak);
-  const nextChar = lastChar(idiom);
-  const gloss = getGloss(idiom);
-
-  await services.updateSession(session.id, {
-    last_idiom: idiom,
-    next_char: nextChar,
-    used_idioms: JSON.stringify([...used]),
-    streak,
-    best_streak: best,
-    wrong_count: 0,
-  });
-
-  const current = (await services.getById(session.id))!;
-  const userLine = messages(locale, 'text9', { p0: idiom }) + (gloss ? `（${gloss}）` : '');
-
-  const botResult = await botTurn(services, current, used);
-  return (await sendOrEditView(services, message, botResult.session, [
-    userLine,
-    ...botResult.lines,
-  ])) ?? null;
-}
-
-export async function handleChoice(
-  services: SessionService,
-  message: GameMessageLike,
-  sessionId: string,
-  choiceId: string,
-): Promise<GameReply | null> {
-  const session = await services.getById(sessionId);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text10');
-  if (session.player_id !== message.$sender.id) return messages(locale, 'text11');
-
-  const mode = sessionMode(session);
-
-  if (choiceId === 'restart') {
-    const locale = resolveLocale(message.locale);
-    const used = new Set<string>();
-    const starter = pickStarterIdiom(used);
-    used.add(starter.text);
-    await services.updateSession(session.id, {
-      locale,
-      last_idiom: starter.text,
-      next_char: lastChar(starter.text),
-      used_idioms: JSON.stringify([...used]),
-      streak: 0,
-      wrong_count: 0,
-      turn: 'player',
-      status: 'active',
-    });
-    const updated = (await services.getById(session.id))!;
-    const gloss = starter.gloss ?? getGloss(starter.text);
-    return (await sendOrEditView(services, message, updated, [
-      messages(locale, 'text12', { p0: starter.text }) + (gloss ? `（${gloss}）` : ''),
-      promptLine(starter.text, mode, locale),
-    ])) ?? null;
-  }
-
-  if (session.status !== 'active') {
-    return messages(locale, 'text13');
-  }
-
-  const used = parseUsed(session.used_idioms);
-
-  if (choiceId === 'hint') {
-    const hint = pickHintIdiom(session.last_idiom, mode, used);
-    if (!hint) {
-      // 先更新状态再单次发送终局视图，避免旧 session「你赢了」与终局视图双发
-      await services.updateSession(session.id, { status: 'won', player_score: session.player_score + 1 });
+    if (choiceId === 'quit') {
+      await services.updateSession(session.id, { status: 'lost', bot_score: session.bot_score + 1 });
       const updated = (await services.getById(session.id))!;
-      return (await sendOrEditView(services, message, updated, [
-        messages(locale, 'text14'),
-      ])) ?? null;
+      return (await sendOrEditView(services, message, updated, [messages(locale, 'text18')])) ?? null;
     }
-    const gloss = getGloss(hint);
-    await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });
-    const updated = (await services.getById(session.id))!;
-    return (await sendOrEditView(services, message, updated, [
-      messages(locale, 'text15', { p0: hint }) + (gloss ? `（${gloss}）` : ''),
-      messages(locale, 'text16'),
-    ])) ?? null;
-  }
 
-  if (choiceId === 'skip') {
-    await services.updateSession(session.id, {
-      status: 'lost',
-      bot_score: session.bot_score + 1,
-      streak: 0,
-    });
-    const updated = (await services.getById(session.id))!;
-    return (await sendOrEditView(services, message, updated, [
-      messages(locale, 'text17'),
-    ])) ?? null;
-  }
-
-  if (choiceId === 'quit') {
-    await services.updateSession(session.id, { status: 'lost', bot_score: session.bot_score + 1 });
-    const updated = (await services.getById(session.id))!;
-    return (await sendOrEditView(services, message, updated, [messages(locale, 'text18')])) ?? null;
-  }
-
-  return messages(locale, 'text19');
+    return messages(locale, 'text19');
+  } });
 }
 
 export { CHAIN_PREFIX };

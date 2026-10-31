@@ -113,6 +113,16 @@ export interface EndpointChildView<E extends AnyEndpoint = AnyEndpoint> {
   readonly startAttempted: boolean;
 }
 
+/** Originating operation retained by a scoped semantic port. */
+export interface EndpointPortScope {
+  /** Retain the originating operation's resources until this admitted call settles. */
+  readonly retain?: () => () => void;
+  /** Check the caller's author/snapshot ownership before every invocation. */
+  readonly assertActive?: () => void;
+  /** Cancel in-flight calls when the originating operation ends, even if the epoch stays online. */
+  readonly signal?: AbortSignal;
+}
+
 /** Retain alongside the Root snapshot lease. Retirement cancels this exact child, never its replacement. */
 export interface EndpointChildLease<E extends AnyEndpoint = AnyEndpoint> {
   readonly instanceId: string;

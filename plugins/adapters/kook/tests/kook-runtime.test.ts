@@ -528,7 +528,7 @@ describe('kook endpoint management', () => {
     const mock = createMockClient();
     const endpoint = await createManagementEndpoint(mock);
     await endpoint.start();
-    await expect(endpoint.management.listGroupMembers?.(GUILD_ID)).resolves.toEqual([
+    await expect(endpoint.management.listGroupMembers?.({ groupId: GUILD_ID })).resolves.toEqual([
       { id: 'user-1', username: 'alice', nickname: 'Alice', online: true },
     ]);
     expect(mock.getGuildUserList).toHaveBeenCalledWith(GUILD_ID);
@@ -565,4 +565,20 @@ it.each(['websocket', 'webhook'] as const)('preserves operation locale through t
   } finally {
     await endpoint.stop();
   }
+});
+
+it('cancels image preparation before the message effect and never sends after a late upload', async () => {
+  const mock = createMockClient();
+  const endpoint = await kookFixture(() => new KookWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'kook'), config: baseConfig }), () => mock);
+  await endpoint.start(); const caller = new AbortController(); let finish!: (url: string) => void;
+  const upload = vi.spyOn(endpoint.endpoint, 'uploadMedia').mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const sending = endpoint.send({ conversation: { endpoint: { adapter: 'kook', id: endpoint.canonicalId }, kind: 'channel', id: 'chan-1' }, signal: caller.signal,
+    payload: [{ type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } }] }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(1)); caller.abort();
+    let outcome: Awaited<typeof sending> | undefined; void sending.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'not_sent' } }), { timeout: 200 });
+    finish('https://synthetic.invalid/late.png'); await Promise.resolve(); await Promise.resolve(); expect(mock.sent).toEqual([]);
+    await expect(endpoint.send({ conversation: { endpoint: { adapter: 'kook', id: endpoint.canonicalId }, kind: 'channel', id: 'chan-1' }, payload: 'fresh reply' })).resolves.toBe('sent-1');
+  } finally { finish('https://synthetic.invalid/late.png'); await endpoint.stop(); await sending; }
 });

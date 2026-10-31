@@ -1,4 +1,4 @@
-import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { capabilityId, rootPluginId } from 'zhin.js';
 import { LarkEndpoint } from '../src/endpoint.js';
 import { resolveLarkConfig } from '../src/protocol.js';
@@ -17,7 +17,7 @@ describe('Lark long connection lifecycle', () => {
         const close = vi.fn(); sessions.push({ options, close });
         return { connect, close };
       },
-    }), { gateway: { receive }, capabilities: ['inbound', 'outbound'], operations: ['recall'] });
+    }), { gateway: createTestEndpointEventGateway({ receive }), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
     return { endpoint, sessions, connect, receive };
   }
   it('observes handshake, gates admission, and deduplicates message ids', async () => {

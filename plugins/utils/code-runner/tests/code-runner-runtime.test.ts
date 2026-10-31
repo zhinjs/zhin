@@ -25,7 +25,7 @@ describe('@zhin.js/plugin-code-runner', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const index = commandIndex('run/$language', { ...runCommand, $parameter: { name: 'language', type: 'string' } });
-    await expect(index.dispatch('run brainfuck ++')).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'language' }] });
+    await expect(index.dispatch({ input: 'run brainfuck ++' })).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'language' }] });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -34,19 +34,19 @@ describe('@zhin.js/plugin-code-runner', () => {
     vi.stubGlobal('fetch', fetchMock);
     const index = commandIndex('run/$language', { ...runCommand, $parameter: { name: 'language', type: 'string' } });
     const timeout = vi.spyOn(AbortSignal, 'timeout');
-    const result = await index.dispatch('run javascript --timeout 5 console.log("hello")');
+    const result = await index.dispatch({ input: 'run javascript --timeout 5 console.log("hello")' });
     expect(timeout).toHaveBeenCalledWith(5000);
     expect(result).toMatchObject({ status: 'executed', value: '[stdout]\nhello' });
     expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toMatchObject({ files: [{ name: 'main.js', content: 'console.log("hello")' }] });
-    await expect(index.dispatch('run python --timeout 31 print(1)')).resolves.toMatchObject({ status: 'invalid' });
-    await expect(index.dispatch('run javascript')).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'code' }] });
+    await expect(index.dispatch({ input: 'run python --timeout 31 print(1)' })).resolves.toMatchObject({ status: 'invalid' });
+    await expect(index.dispatch({ input: 'run javascript' })).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'code' }] });
   });
 
   it.each(['JavaScript', 'PYTHON'])('validates normalized language %s before sending the request', async (language) => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ stdout: 'ok', stderr: '', error: '' }) });
     vi.stubGlobal('fetch', fetchMock);
     const index = commandIndex('run/$language', { ...runCommand, $parameter: { name: 'language', type: 'string' } });
-    await expect(index.dispatch(`run ${language} print(1)`)).resolves.toMatchObject({ status: 'executed' });
+    await expect(index.dispatch({ input: `run ${language} print(1)` })).resolves.toMatchObject({ status: 'executed' });
     expect(fetchMock.mock.calls[0]?.[0]).toContain(`/${language.toLowerCase()}/latest`);
   });
 });

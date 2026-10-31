@@ -1,3 +1,4 @@
+import { inheritActivityFeedbackSource } from './operation-source.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import type { AIEventName, AIEventPayload } from '../ai-event-subscriber.js';
 
@@ -11,12 +12,14 @@ export interface TurnActivityProjectorOptions {
 /** Projects canonical TurnEvents into the shared IM activity lifecycle. */
 export function createTurnActivityProjector(options: TurnActivityProjectorOptions):
 (event: TurnEvent) => void {
+  const publish = (event: AIEventName, payload: AIEventPayload) =>
+    options.publish(event, inheritActivityFeedbackSource(payload, options.payload));
   let thinkingSent = false;
   let accumulatedThinking = '';
   return (event) => {
     const payload = options.payload;
     if (event.type === 'tool_call') {
-      options.publish('ai.tool.call', {
+      publish('ai.tool.call', {
         ...payload,
         toolName: event.toolName,
         args: event.args,
@@ -24,7 +27,7 @@ export function createTurnActivityProjector(options: TurnActivityProjectorOption
       return;
     }
     if (event.type === 'tool_result') {
-      options.publish('ai.tool.result', {
+      publish('ai.tool.result', {
         ...payload,
         toolName: event.toolName,
         result: event.output,
@@ -37,7 +40,7 @@ export function createTurnActivityProjector(options: TurnActivityProjectorOption
       || event.type === 'tool_denied'
       || event.type === 'tool_cancelled'
     ) {
-      options.publish('ai.tool.result', {
+      publish('ai.tool.result', {
         ...payload,
         toolName: event.toolName,
         error: event.type === 'tool_failed' ? event.error : event.reason,
@@ -49,7 +52,7 @@ export function createTurnActivityProjector(options: TurnActivityProjectorOption
       // Base content is the user's input, not authored progress text. Keep it out of
       // this projected event while leaving explicit content on other events intact.
       const { content: _inputContent, ...context } = payload;
-      options.publish('ai.processing.start', {
+      publish('ai.processing.start', {
         ...context,
         iterations: event.iteration,
         ...(event.maxIterations !== undefined ? { iterationProgress: { current: event.iteration, total: event.maxIterations } } : {}),
@@ -62,10 +65,10 @@ export function createTurnActivityProjector(options: TurnActivityProjectorOption
       const preview = accumulatedThinking.length > options.thinkingMaxLength
         ? accumulatedThinking.slice(0, options.thinkingMaxLength) + '...'
         : accumulatedThinking;
-      options.publish('ai.thinking', { ...payload, thinking: preview });
+      publish('ai.thinking', { ...payload, thinking: preview });
     } else if (!thinkingSent) {
       thinkingSent = true;
-      options.publish('ai.thinking', { ...payload, thinking: event.text });
+      publish('ai.thinking', { ...payload, thinking: event.text });
     }
   };
 }

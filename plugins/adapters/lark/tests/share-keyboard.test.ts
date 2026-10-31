@@ -1,4 +1,4 @@
-import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { LarkEndpoint } from '../src/endpoint.js';
 import { formatOutboundBody, resolveLarkConfig } from '../src/protocol.js';
@@ -27,7 +27,7 @@ it('correlates actual card action to original full conversation, source and acto
     config: resolveLarkConfig({ id: 'bot', appId: 'fixture', appSecret: 'fixture', mode: 'websocket' }),
     longConnectionFactory: () => ({ connect: async () => {}, close: () => {} }),
     fetch: async url => ({ ok: true, status: 200, text: async () => '', json: async () => url.includes('/auth/') ? { code: 0, tenant_access_token: 'fixture', expire: 7200 } : { code: 0, data: { message_id: 'om_sent' } } }),
-  }), { gateway: { receive: event => emit(event.name, event.payload) }, capabilities: ['inbound', 'outbound'], operations: ['recall'] });
+  }), { gateway: createTestEndpointEventGateway({ receive: event => emit(event.name, event.payload) }), capabilities: ['inbound', 'outbound'], operations: ['recall'] });
   await endpoint.start(); endpoint.open();
   const conversation = { endpoint: { id: 'endpoint', adapter: 'lark' }, kind: 'private' as const, id: 'oc_chat', threadId: 'thread' };
   await endpoint.send({ conversation, payload: [{ type: 'keyboard', data: { rows: [[{ label: '确认', payload: 'confirm' }]] } }] });

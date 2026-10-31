@@ -107,7 +107,12 @@ interface MutableEntry {
 
 let sequence = 0;
 
+export class ToolApprovalQueueClosedError extends Error {
+  constructor() { super('Tool approval queue is closed'); this.name = 'ToolApprovalQueueClosedError'; }
+}
+
 export class ToolApprovalQueue {
+  #closed = false;
   readonly #now: () => number;
   readonly #ttlMs: number;
   readonly #limit: number;
@@ -120,6 +125,9 @@ export class ToolApprovalQueue {
     this.#limit = positive(options.limit) ?? DEFAULT_LIMIT;
   }
 
+  /** Closing this owning Agent's queue is terminal; its chat cancellation remains independent. */
+  get closed(): boolean { return this.#closed; }
+
   /** 同一会话、同一工具、同一参数的稳定指纹。 */
   static fingerprint(sessionKey: string, toolName: string, args: Readonly<Record<string, unknown>>): string {
     return `${sessionKey}\u0000${toolName}\u0000${stableValue(args)}`;
@@ -129,6 +137,7 @@ export class ToolApprovalQueue {
    * 建一张待审批卡片。同指纹已有 pending 卡片时复用它（无人值守重复调用不刷屏）。
    */
   enqueue(input: ToolApprovalEnqueueInput): ToolApprovalEntry {
+    if (this.#closed) throw new ToolApprovalQueueClosedError();
     this.#expireDue();
     const fingerprint = ToolApprovalQueue.fingerprint(input.sessionKey, input.toolName, input.args);
     for (const entry of this.#entries.values()) {
@@ -213,6 +222,7 @@ export class ToolApprovalQueue {
    * 无人值守回合靠它执行运营者在 Console 批准过的调用。
    */
   consumeApproved(sessionKey: string, toolName: string, args: Readonly<Record<string, unknown>>): ToolApprovalEntry | undefined {
+    if (this.#closed) return undefined;
     this.#expireDue();
     const fingerprint = ToolApprovalQueue.fingerprint(sessionKey, toolName, args);
     for (const entry of this.#entries.values()) {
@@ -250,6 +260,7 @@ export class ToolApprovalQueue {
   }
 
   dispose(): void {
+    this.#closed = true;
     for (const entry of this.#entries.values()) {
       if (entry.status === 'pending') this.#settle(entry, 'expired', null, null);
     }

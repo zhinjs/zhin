@@ -36,7 +36,7 @@ export async function createAdapterHarness<Config>(
     tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'endpoint-test', packageRoot: '/fixture', children: [] }]]),
     config: new Map([[root, config]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
     resources: new Map([[root, new Map<TokenId, unknown>([...(options.resources ?? []), [endpointEventGatewayToken.id,
-      options.gateway ?? { receive: async () => undefined }]])]]),
+      options.gateway ?? createTestEventGateway()]])]]),
   };
   const index = await AdapterIndex.create([slot], snapshot, new AbortController().signal,
     { repository: options.repository });
@@ -63,12 +63,21 @@ export async function createAdapterHarness<Config>(
   };
 }
 
+/** Minimal explicit Host receipt ownership for protocol-only tests without an IM snapshot. */
+export function createTestEndpointEventGateway(gateway: Omit<EndpointEventGateway, 'run'>): EndpointEventGateway {
+  return {
+    async run(receive) { return receive({ receive: event => gateway.receive(event) }); },
+    receive: event => gateway.receive(event),
+    ...(gateway.resolveLocale ? { resolveLocale: (endpoint, senderId) => gateway.resolveLocale!(endpoint, senderId) } : {}),
+  };
+}
+
 /** Connect protocol message/side-event assertions to the real unified Index ingress. */
 export function createTestEventGateway(
   messages?: { receive?(payload: unknown): unknown },
   sideEvents?: { receiveNotice?(payload: unknown): unknown; receiveRequest?(payload: unknown): unknown; receiveSystem?(payload: unknown): unknown },
 ): EndpointEventGateway {
-  return { async receive(event) {
+  return createTestEndpointEventGateway({ async receive(event) {
     switch (event.name) {
       case 'message.receive': return messages?.receive?.(event.payload);
       case 'notice.receive': return sideEvents?.receiveNotice?.(event.payload);
@@ -76,5 +85,5 @@ export function createTestEventGateway(
       case 'system.receive': return sideEvents?.receiveSystem?.(event.payload);
       default: return undefined;
     }
-  } };
+  } });
 }

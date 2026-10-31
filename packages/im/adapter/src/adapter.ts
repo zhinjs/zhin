@@ -6,8 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
-import { retireEndpoint } from './endpoint-specification.js';
-import { isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
+import { retireEndpoint, isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
 import {
   AdapterManagementError,
@@ -47,6 +46,13 @@ interface MutationRequest<E extends AnyEndpoint> {
   readonly instanceId: string;
   readonly action: EndpointAction;
   readonly child?: Child<E>;
+}
+/** A single account change keeps its prepared state and corresponding execution together. */
+interface PreparedAdapterChange<E extends AnyEndpoint> {
+  readonly expectedRevision: number | null;
+  /** Evaluated after admission validation, then frozen before the single CAS. */
+  readonly next: () => readonly EndpointDesiredRecord[];
+  readonly execution: MutationRequest<E> & Readonly<{ run?: () => Promise<void> }>;
 }
 interface UncertainMutation<E extends AnyEndpoint> {
   readonly commitId: string;
@@ -107,9 +113,14 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
         config: input.config as Readonly<Record<string, unknown>> }, options);
       return 'replaced';
     }
-    await this.#mutate(this.#revision, () => this.#replace(context.instanceId, record => ({
-      ...record, config: input.config as Readonly<Record<string, unknown>>, platformUserId: input.userId, revision: record.revision + 1,
-    })), undefined, { instanceId: context.instanceId, action: 'update', child }, options);
+    await this.#commit({
+      expectedRevision: this.#revision,
+      next: () => this.#replace(context.instanceId, record => ({
+        ...record, config: input.config as Readonly<Record<string, unknown>>,
+        platformUserId: input.userId, revision: record.revision + 1,
+      })),
+      execution: { instanceId: context.instanceId, action: 'update', child },
+    }, options);
     return 'retained';
   }
 
@@ -256,12 +267,16 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     const instanceId = randomUUID();
     const config = this.#newConfiguration(input.endpointId, input.config, instanceId);
     this.validateConfiguration(config as Config);
-    return this.#mutate(expectedRevision, () => {
-      const record: EndpointDesiredRecord = Object.freeze({ ...input, config, instanceId,
-        canonicalId: `${this.descriptor.id}~${instanceId}` as CapabilityId,
-        revision: 1, desiredEnabled: false });
-      return [...this.#desired(), record];
-    }, undefined, { instanceId, action: 'add' }, options);
+    return this.#commit({
+      expectedRevision,
+      next: () => {
+        const record: EndpointDesiredRecord = Object.freeze({ ...input, config, instanceId,
+          canonicalId: `${this.descriptor.id}~${instanceId}` as CapabilityId,
+          revision: 1, desiredEnabled: false });
+        return [...this.#desired(), record];
+      },
+      execution: { instanceId, action: 'add' },
+    }, options);
   }
 
   update(instanceId: string, expectedRevision: number | null, candidate: Readonly<{
@@ -275,13 +290,20 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       }
     }
     this.validateConfiguration(input.config as Config);
-    const commit = () => this.#mutate(expectedRevision, () => this.#replace(instanceId, record => ({
-      ...record, config: input.config, secretRefs: input.secretRefs, revision: record.revision + 1,
-    })), async () => {
-      const child = this.#require(instanceId);
-      await this.#stop(child);
-      if (child.desired.desiredEnabled) await this.#start(child);
-    }, { instanceId, action: 'update', child: target }, options);
+    const commit = () => this.#commit({
+      expectedRevision,
+      next: () => this.#replace(instanceId, record => ({
+        ...record, config: input.config, secretRefs: input.secretRefs, revision: record.revision + 1,
+      })),
+      execution: {
+        instanceId, action: 'update', child: target,
+        run: async () => {
+          const child = this.#require(instanceId);
+          await this.#stop(child);
+          if (child.desired.desiredEnabled) await this.#start(child);
+        },
+      },
+    }, options);
     const changedFields = this.configurationIdentityProbeFields.filter(field =>
       !isDeepStrictEqual(readConfigurationPath(target.desired.config, field), readConfigurationPath(input.config, field))
       || target.desired.secretRefs?.[field] !== input.secretRefs?.[field]);
@@ -301,20 +323,31 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
 
   start(instanceId: string, expectedRevision: number | null, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
     const target = this.#require(instanceId);
-    return this.#mutate(expectedRevision, () => this.#replace(instanceId, record => ({
-      ...record, desiredEnabled: true, revision: record.revision + 1,
-    })), () => this.#start(target), { instanceId, action: 'start', child: target }, options);
+    return this.#commit({
+      expectedRevision,
+      next: () => this.#replace(instanceId, record => ({
+        ...record, desiredEnabled: true, revision: record.revision + 1,
+      })),
+      execution: { instanceId, action: 'start', child: target, run: () => this.#start(target) },
+    }, options);
   }
   stop(instanceId: string, expectedRevision: number | null, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
     const target = this.#require(instanceId);
-    return this.#mutate(expectedRevision, () => this.#replace(instanceId, record => ({
-      ...record, desiredEnabled: false, revision: record.revision + 1,
-    })), () => this.#stop(target), { instanceId, action: 'stop', child: target }, options);
+    return this.#commit({
+      expectedRevision,
+      next: () => this.#replace(instanceId, record => ({
+        ...record, desiredEnabled: false, revision: record.revision + 1,
+      })),
+      execution: { instanceId, action: 'stop', child: target, run: () => this.#stop(target) },
+    }, options);
   }
   remove(instanceId: string, expectedRevision: number | null, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
     const child = this.#require(instanceId);
-    return this.#mutate(expectedRevision, () => this.#desired().filter(record => record.instanceId !== instanceId),
-      () => this.#stop(child), { instanceId, action: 'remove', child }, options);
+    return this.#commit({
+      expectedRevision,
+      next: () => this.#desired().filter(record => record.instanceId !== instanceId),
+      execution: { instanceId, action: 'remove', child, run: () => this.#stop(child) },
+    }, options);
   }
 
   /** One desired-state CAS replaces identity; it never inherits the old enabled intent. */
@@ -327,8 +360,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     this.validateConfiguration(config as Config);
     const record: EndpointDesiredRecord = Object.freeze({ ...input, config, instanceId: replacementId,
       canonicalId: `${this.descriptor.id}~${replacementId}` as CapabilityId, revision: 1, desiredEnabled: false });
-    return this.#mutate(expectedRevision, () => this.#desired().map(value => value.instanceId === instanceId ? record : value),
-      () => this.#stop(child), { instanceId, action: 'replace', child }, options);
+    return this.#commit({
+      expectedRevision,
+      next: () => this.#desired().map(value => value.instanceId === instanceId ? record : value),
+      execution: { instanceId, action: 'replace', child, run: () => this.#stop(child) },
+    }, options);
   }
 
   patchConfiguration(instanceId: string, expectedRevision: number | null, patch: Readonly<Record<string, unknown>>, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
@@ -523,8 +559,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       operation: Object.freeze({ ...execution }),
     });
   }
-  #mutate(expectedRevision: number | null, next: () => readonly EndpointDesiredRecord[], apply: (() => Promise<void>) | undefined,
-    request: MutationRequest<E>, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
+  #commit(change: PreparedAdapterChange<E>, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
+    const { expectedRevision, next, execution } = change;
+    const { run: apply, ...request } = execution;
     this.#assertOpen();
     if (this.#uncertain) throw unknownCommit();
     const repository = this.#options.repository;
@@ -593,8 +630,9 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       await child.current.preparation;
       return child.current;
     }
+    const desired = child.desired;
     const cancellation = new AbortController();
-    const epoch: ChildEpoch<E> = { identity: metadata(child.desired), incarnationId: randomUUID(), epoch: ++child.epoch, cancellation, operations: [], started: false,
+    const epoch: ChildEpoch<E> = { identity: metadata(desired), incarnationId: randomUUID(), epoch: ++child.epoch, cancellation, operations: [], started: false,
       open: false, retired: false, startAttempted: false, leases: 0 };
     child.current = epoch;
     const abort = () => cancellation.abort(signal?.reason);
@@ -602,18 +640,18 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     if (signal?.aborted) abort();
     const preparation = Promise.resolve().then(async () => {
       cancellation.signal.throwIfAborted();
-      const config: Record<string, unknown> = structuredClone(child.desired.config);
-      for (const [field, reference] of Object.entries(child.desired.secretRefs ?? {})) {
+      const config: Record<string, unknown> = structuredClone(desired.config);
+      for (const [field, reference] of Object.entries(desired.secretRefs ?? {})) {
         if (!this.#options.secrets) throw new AdapterManagementError('unavailable', 'Endpoint secret resolver is unavailable');
-        writeConfigurationPath(config, field, await this.#options.secrets.resolve(reference, { instanceId: child.desired.instanceId, signal: cancellation.signal }));
+        writeConfigurationPath(config, field, await this.#options.secrets.resolve(reference, { instanceId: desired.instanceId, signal: cancellation.signal }));
       }
       const endpoint = await this.createEndpoint(config as Config, {
-        signal: cancellation.signal, epoch: epoch.epoch, incarnationId: epoch.incarnationId, instanceId: child.desired.instanceId,
-        canonicalId: child.desired.canonicalId, endpointId: child.desired.endpointId,
+        signal: cancellation.signal, epoch: epoch.epoch, incarnationId: epoch.incarnationId, instanceId: desired.instanceId,
+        canonicalId: desired.canonicalId, endpointId: desired.endpointId,
       });
       if (!isEndpoint(endpoint)) throw new TypeError('Adapter factory result must implement Endpoint');
       epoch.endpoint = endpoint;
-      epoch.operations = this.#options.bind(endpoint, child.desired, cancellation.signal);
+      epoch.operations = this.#options.bind(endpoint, desired, cancellation.signal);
       if (epoch.retired || cancellation.signal.aborted || this.#closed) {
         cancellation.signal.throwIfAborted();
         throw new AdapterManagementError('closed', 'Endpoint creation retired');

@@ -1,5 +1,6 @@
 import {
   defineGamePlugin,
+  gameTargetFromKey,
   plainTextFromSendContent,
   type GameEventSession,
   type InMemoryGameDb,
@@ -59,26 +60,23 @@ export default defineGamePlugin<SessionServices>({
     const outbound = context.resources.use(outboundHostToken);
     const notify = async (raw: GameEventSession, terminal: boolean) => {
       const session = raw as TttSessionRow;
-      if (!session.adapter || !session.endpoint) return;
       const spectators = await services.session.listSpectators(session.id);
-      if (spectators.length === 0) return;
+      const firstSpectator = spectators[0];
+      if (firstSpectator === undefined) return;
       const status = session.status === 'draw'
         ? '平局。'
         : terminal && (session.winner === 1 || session.winner === 2)
           ? formatWinHeadline(session, session.winner)
           : formatTurnStatus(session, session.move_count);
-      const content = plainTextFromSendContent(renderBoard({
-        $adapter: session.adapter,
-        $endpoint: session.endpoint,
-        $channel: { type: 'private', id: '' },
-        $sender: { id: '' },
-      }, session, status, terminal));
-      await Promise.all(spectators.map((userId) => outbound.send({
-        adapter: session.adapter,
-        endpointKey: session.endpoint,
-        conversation: { kind: 'private', id: userId },
-        content,
-      })));
+      const target = gameTargetFromKey(session.channel_key);
+      if (!target) throw new Error('Historical spectator destination awaits explicit target migration');
+      const privateScene = { endpoint: target.endpoint,
+        kind: 'private' as const, id: firstSpectator };
+      const content = plainTextFromSendContent(renderBoard({ player: { target: privateScene }, session: session, statusLine: status, terminal: terminal }));
+      await Promise.all(spectators.map(async userId => {
+        if (!outbound.sendTarget) throw new Error('Canonical game delivery requires an exact-target Outbound Host');
+        await outbound.sendTarget({ endpoint: target.endpoint, kind: 'private', id: userId }, content);
+      }));
     };
     const disposeTurn = services.session.events.on('turn:change', async (event) => {
       if (event.gameId === 'ttt' && event.session.status === 'active') {

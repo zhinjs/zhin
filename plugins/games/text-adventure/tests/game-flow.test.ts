@@ -1,26 +1,22 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import {  beforeEach, describe, expect, it } from 'vitest';
 import { handleChoice, startAdventure } from '../src/game-flow.js';
-import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { channelKey, createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type GameServices } from '../src/session-service.js';
 
 let services: GameServices;
 
 function makeMessage(senderId = 'u1') {
-  return {
-    $adapter: 'test',
-    $endpoint: 'default',
-    $channel: { type: 'group', id: 'g1' },
-    $sender: { id: senderId, name: senderId },
-    content: '',
-    $reply: async () => 'mid-1',
-  } as never;
+  return { target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' }, conversation: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' },
+sender: { id: senderId, name: senderId },
+content: '',
+$reply: async () => 'mid-1' } as never;
 }
 
 async function startAndGetSession(senderId = 'u1') {
   const message = makeMessage(senderId);
   await startAdventure(services, message);
   const session = await services.sessions.getActiveForUser(
-    'test-default-group:g1',
+    channelKey({ target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' } }),
     senderId,
   );
   return { message, session: session! };

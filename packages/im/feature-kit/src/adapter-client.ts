@@ -1,6 +1,7 @@
 /**
  * Open type registry populated by platform adapter packages.
  *
+ * Use only `declare module '@zhin.js/feature-kit'`; facade exports are for reading types.
  * One adapter augments this interface once; every authoring Feature then
  * derives the same Client and native event types from its literal `adapter`.
  */

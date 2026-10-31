@@ -1,9 +1,8 @@
 import type { Database, Models, RelatedModel } from '@zhin.js/core';
 import {
   BaseSessionService,
-  channelKey,
   generateSessionId,
-  type GameMessageLike,
+  type GamePlayer,
   type GameSessionDatabase,
 } from '@zhin.js/game-kit';
 import type { AdvModelName, AdvSessionRow } from './models.js';
@@ -32,19 +31,14 @@ export class SessionService extends BaseSessionService<AdvSessionRow> {
     });
   }
 
-  async createSession(message: GameMessageLike): Promise<AdvSessionRow> {
+  async createSession(message: GamePlayer): Promise<AdvSessionRow> {
     const now = Date.now();
     const id = generateSessionId();
-    const row: AdvSessionRow = {
+    const row: Omit<AdvSessionRow, 'channel_key' | 'adapter' | 'endpoint' | 'channel_type' | 'channel_id'> = {
       id,
       locale: message.locale ?? 'zh-CN',
-      adapter: String(message.$adapter),
-      endpoint: message.$endpoint,
-      channel_type: message.$channel.type,
-      channel_id: message.$channel.id,
-      channel_key: channelKey(message),
-      player_id: message.$sender.id,
-      player_name: message.$sender.name?.trim() || message.$sender.id,
+      player_id: message.sender.id,
+      player_name: message.sender.name?.trim() || message.sender.id,
       scene_id: 'start',
       hp: 100,
       inventory: '[]',
@@ -55,7 +49,7 @@ export class SessionService extends BaseSessionService<AdvSessionRow> {
       updated_at: now,
       created_at: now,
     };
-    return this.createRow(row);
+    return this.createRow({ target: message.target, fields: row });
   }
 }
 

@@ -129,7 +129,7 @@ export const newCommand = new Command('new')
       logger.info(formatCompact( { cmd: 'new', op: 'create', type: typeLabel, name }));
 
       // 创建插件包结构
-      await createPluginPackage(pluginDir, name, packageName, options);
+      await createPluginPackage({ pluginDir, pluginName: name, packageName, options });
 
       if (options.standalone) {
         logger.success(`✓ 独立插件包 ${name} 创建成功！`);
@@ -178,14 +178,24 @@ export const newCommand = new Command('new')
     }
   });
 
-async function createPluginPackage(
-  pluginDir: string,
-  pluginName: string,
-  packageName: string,
-  options: NewPluginOptions,
-) {
+/** A single scaffold request, including the explicit CLI choices that define its output. */
+interface CreatePluginPackageRequest {
+  readonly pluginDir: string;
+  readonly pluginName: string;
+  readonly packageName: string;
+  readonly options: NewPluginOptions;
+}
+async function createPluginPackage({ pluginDir, pluginName, packageName, options }: CreatePluginPackageRequest) {
   const kind: PluginKind = options.type ?? 'normal';
   const capitalizedName = toCapitalizedName(pluginName);
+
+  // Resolve the authoring contract before creating any output. Workspace protocols stay local;
+  // an external plugin uses the release floor, even when its eventual Host still needs upgrading.
+  const workspace = workspaceStackRanges(process.cwd());
+  const stack = workspace ?? (() => {
+    const ranges = resolvePluginStackRanges(process.cwd());
+    return { peer: ranges, dev: ranges };
+  })();
 
   await fs.ensureDir(pluginDir);
   await fs.ensureDir(path.join(pluginDir, 'tests'));
@@ -197,13 +207,6 @@ async function createPluginPackage(
   if (kind === 'adapter') {
     await fs.ensureDir(path.join(pluginDir, 'adapters'));
   }
-
-  // 在本仓库根执行时用 workspace 协议；否则从已安装版本推导 ^x.y.z（不再写 latest）
-  const workspace = workspaceStackRanges(process.cwd());
-  const stack = workspace ?? (() => {
-    const ranges = resolvePluginStackRanges(process.cwd());
-    return { peer: ranges, dev: ranges };
-  })();
 
   const description =
     kind === 'adapter'
@@ -471,7 +474,7 @@ export class ${capitalizedName}Adapter extends Adapter<${capitalizedName}Endpoin
   }
 }
 
-declare module 'zhin.js/adapter' {
+declare module '@zhin.js/feature-kit' {
   interface AdapterRegistry { '${pluginName}': ${capitalizedName}Adapter }
 }
 
@@ -610,7 +613,7 @@ ${generatedJs.join('\n')}
 
   await fs.writeFile(path.join(pluginDir, '.gitignore'), gitignoreContent);
 
-  await generateTestFile(pluginDir, pluginName, packageName, kind);
+  await generateTestFile({ pluginDir, pluginName, packageName, kind });
 
   // 安装依赖
   if (!options.skipInstall) {
@@ -630,12 +633,14 @@ ${generatedJs.join('\n')}
 /**
  * 生成运行时契约测试（形态参考 plugins/utils/repeater/tests/repeater-runtime.test.ts）
  */
-async function generateTestFile(
-  pluginDir: string,
-  pluginName: string,
-  packageName: string,
-  kind: PluginKind,
-) {
+/** Generated acceptance tests must describe the same public package and convention kind. */
+interface GeneratePluginTestRequest {
+  readonly pluginDir: string;
+  readonly pluginName: string;
+  readonly packageName: string;
+  readonly kind: PluginKind;
+}
+async function generateTestFile({ pluginDir, pluginName, packageName, kind }: GeneratePluginTestRequest) {
   const testsDir = path.join(pluginDir, 'tests');
   let testContent: string;
 

@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { WebClient } from '@slack/web-api';
 import { httpHostToken } from '@zhin.js/host-http';
 import type { EndpointEvent } from 'zhin.js/adapter';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/slack/index.js';
 import { SlackAdapter } from '../src/adapter.js';
 import { SlackEndpoint } from '../src/endpoint.js';
@@ -18,7 +18,7 @@ it('keeps the real Slack WebClient and exact ingress envelope without creating a
   const events: EndpointEvent[] = [];
   const harness = await createAdapterHarness(definition, { id: 'bot', token: 'synthetic-token', socketMode: false, signingSecret: 'synthetic-signing' }, {
     name: 'slack', resources: new Map([[httpHostToken.id, { route: vi.fn(() => () => undefined) }]]),
-    gateway: { receive: async event => { events.push(event); } },
+    gateway: createTestEndpointEventGateway({ receive: async event => { events.push(event); } }),
   });
   try {
     expect(harness.adapter).toBeInstanceOf(SlackAdapter);

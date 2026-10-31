@@ -1,3 +1,4 @@
+import { invokeGameCommand } from '../../../../packages/game-kit/tests/command-operation-fixture.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { DisposeStack, outboundHostToken } from 'zhin.js';
@@ -20,7 +21,7 @@ const emptyCtx = {
   use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
-  input: undefined as never,
+  input: { conversation: { endpoint: { adapter: 'synthetic', id: 'test-account' }, kind: 'private', id: 'alice' }, sender: { id: 'alice', name: 'Alice' }, content: '' } as never,
 };
 
 describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
@@ -37,7 +38,7 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
   });
 
   it('help action returns help text', async () => {
-    const result = await gameCommand.execute({
+    const result = await invokeGameCommand(gameCommand, {
       ...emptyCtx,
       params: {},
     });
@@ -45,7 +46,7 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
   });
 
   it('bot action returns an interactive board', async () => {
-    const result = await gameCommand.execute({
+    const result = await invokeGameCommand(gameCommand, {
       ...emptyCtx,
       params: { action: 'bot' },
     });
@@ -66,7 +67,7 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
       },
       has: (token: unknown) => token === outboundHostToken,
       use: (token: unknown) => {
-        if (token === outboundHostToken) return { send };
+        if (token === outboundHostToken) return { sendTarget: send };
         throw new Error('missing resource');
       },
     };
@@ -83,12 +84,8 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
       handoff: {} as never,
       addGame: vi.fn(),
     });
-    const message = {
-      $adapter: 'sandbox',
-      $endpoint: 'default',
-      $channel: { type: 'group', id: 'room' },
-      $sender: { id: 'alice', name: 'Alice' },
-    };
+    const message = { target: { endpoint: { adapter: 'sandbox', id: 'default' }, kind: 'group', id: 'room' },
+sender: { id: 'alice', name: 'Alice' } };
     const session = await runtimeServices!.session.createSession({
       message,
       playerX: 'alice',
@@ -104,11 +101,7 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
       move_count: 1,
     });
 
-    expect(send).toHaveBeenCalledWith(expect.objectContaining({
-      adapter: 'sandbox',
-      endpointKey: 'default',
-      conversation: { kind: 'private', id: 'watcher' },
-    }));
+    expect(send).toHaveBeenCalledWith({ endpoint: message.target.endpoint, kind: 'private', id: 'watcher' }, expect.any(String));
     await lifecycle.dispose();
   });
 });

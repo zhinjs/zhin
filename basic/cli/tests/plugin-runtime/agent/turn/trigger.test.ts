@@ -29,14 +29,14 @@ function makeMessage(input: {
 }): Message {
   const conversation = conversationFromTarget(input.target ?? 'group:100');
   return new Message(
-    conversation,
-    input.content,
-    1,
-    async () => ({ status: 'sent' as const }),
-    'user-1',
-    Object.freeze(input.metadata ?? {}),
-    undefined,
-    { conversation, id: 'm1' },
+    {
+      conversation: conversation,
+      content: input.content,
+      sender: 'user-1',
+      metadata: Object.freeze(input.metadata ?? {}),
+      message: { conversation, id: 'm1' },
+    },
+    { generation: 1, reply: async () => ({ status: 'sent' as const }) },
   );
 }
 

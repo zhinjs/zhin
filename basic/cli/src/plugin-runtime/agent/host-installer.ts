@@ -5,7 +5,8 @@ import { PersonalModelManagementService } from '../personal-models/service.js';
 import { personalModelManagementToken } from '../personal-models/token.js';
 import { createPersonalModelHost } from '../personal-models/host.js';
 import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
-import { databaseRootHostToken } from '@zhin.js/plugin-runtime';
+import { createOwnerApprovalMigrationProvider } from '../data-migration/owner-approval-provider.js';
+import { pluginDataMigrationProviderToken, databaseRootHostToken, type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
@@ -23,7 +24,6 @@ import {
 } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   LocalImageAssetStore,
   localImageAssetsToken,
@@ -74,6 +74,7 @@ import {
 import { AgentRuntimeFoundation } from './runtime-foundation.js';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ImToolApprovalChannel } from './tool-approval-im-channel.js';
+import { agentToolApprovalQueueToken } from '../console/tool-approval-resource.js';
 
 const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
@@ -84,8 +85,6 @@ export interface InstallAgentHostOptions {
   readonly pruneTraces?: () => Promise<unknown>;
   /** Process-owned 群聊插话 / 技能助手 Console status (#970). */
   readonly assistantStatus?: import('../console/assistant-status.js').AssistantStatus;
-  /** Process-owned Console approval cards for the dangerous-tool hard gate (ADR 0036). */
-  readonly toolApprovals?: import('../console/tool-approvals.js').HostToolApprovals;
   /** Process-owned Console surface for self-change approval (ADR 0040 §4). */
   readonly selfChanges?: import('../console/self-changes.js').HostSelfChanges;
   /** Process-owned host side of self-change apply / recover (ADR 0040 §5 / §6). Absent: approved changes wait. */
@@ -157,7 +156,7 @@ export interface InstallAgentHostOptions {
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
-  return async ({ generation, signal, resources, lifecycle, handoff, admission, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
+  return async ({ generation, signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
@@ -205,6 +204,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       homeTools,
       assistantEnabled,
     } = agentFoundation;
+    resources.provide(pluginDataMigrationProviderToken, createOwnerApprovalMigrationProvider({
+      approvals: zhinAgent.ownerApprovals, admission,
+    }));
     resources.provide(turnModelPortToken, personalModels.turnPort(service));
     resources.provide(runtimePolicyManagementToken, new RuntimePolicyManagementService({
       rootId: personalModels.rootId, repository: personalModels.runtimePolicy, runtime: () => service.getModelRuntime(),
@@ -233,7 +235,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     resources.provide(selfChangeStoreToken, selfChanges);
     const selfChangeTrialOptions = createSelfChangeTrialOptions(options.projectRoot);
     lifecycle.add(selfChanges.startPruning());
-    if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
+    resources.provide(agentToolApprovalQueueToken, zhinAgent.toolApprovals);
+    events.on('hmr.resume', ({ details }) => {
+      if (details.outcome === 'committed' && details.receiver.state === 'replaced') zhinAgent.toolApprovals.dispose();
+    });
+    lifecycle.add(() => zhinAgent.toolApprovals.dispose());
     // ADR 0040 §5 / §6: approved changes are applied by the process-owned host (reload / exit 75 / health),
     // reported through this generation's IM and control plane; the newest generation's applier is the bound one.
     const selfChangeApplyHost = options.selfChangeApply;
