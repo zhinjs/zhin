@@ -1,0 +1,31 @@
+plugins/utils/reminder/tests/reminder-create-runtime.test.ts
+  s_9622fd28aba994::t_24bb08a4d7e8be 75,228,236-245,247-252,256-269,292,301,303-304
+scripts/check-agent-config-inventory.mjs
+  s_9622fd28aba994::t_f8851e13b4e229 17-18
+basic/cli/tests/plugin-runtime/runtime-endpoints/live-host.test.ts
+  s_9622fd28aba994::t_4b09f82dcfdd3b 60-61,67
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_9622fd28aba994::t_4b09f82dcfdd3b 7,125-128
+examples/minimal-bot/tests/stable-path.test.ts
+  s_9622fd28aba994::t_56e262ffd83ff7 1,285
+docs/ai/default-behavior.md
+  s_9622fd28aba994::t_0b57615877c34f 125
+docs/en/ai/default-behavior.md
+  s_9622fd28aba994::t_148eed46c8656d 125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fddf2b446954c62ce3ca23424e07a257ad823463",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
