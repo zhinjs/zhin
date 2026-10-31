@@ -5,6 +5,10 @@
 /** @internal Runtime 内部：CapabilitySlot（feature 与 projection 之间的载体）。 */
 export * from './capability.js';
 export * from './dispose.js';
+/** @internal Shared accepted-owner frame; no additional admission or task registry. */
+export { OwnerOperation } from './owner-operation.js';
+/** @internal Runtime-owned delivery authority; author contexts expose subscriptions only. */
+export { createPluginEventChannel, type PluginEventChannel } from './plugin-events.js';
 export * from './identity.js';
 export {
   GenerationAdmissionGate,
@@ -50,3 +54,7 @@ export * from './plugin-tasks.js';
 
 export * from './task-storage.js';
 export * from './plugin-console-rpc.js';
+
+export * from './data-migration.js';
+
+export * from './relational-target-migration.js';

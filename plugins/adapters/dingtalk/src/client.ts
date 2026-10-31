@@ -5,7 +5,7 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * DingTalkClient — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import { Endpoint, type EndpointSendRequest } from 'zhin.js/adapter';
+import { createEndpointOperation, Endpoint, type EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -163,7 +163,7 @@ export class DingTalkClient extends EventEmitter {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  protected async sendPayload({ conversation, payload, locale }: EndpointSendRequest): Promise<string> {
+  protected async sendPayload({ conversation, payload, locale, signal }: EndpointSendRequest): Promise<string> {
     try {
       const card = this.#cards.prepare(this.config, conversation, payload, locale);
       if (card) {
@@ -171,9 +171,9 @@ export class DingTalkClient extends EventEmitter {
         let httpStatus: number | undefined;
         let platformCode: string | number | undefined;
         try {
-          try { await this.#ensureAccessToken(); } catch (cause) { throw new EndpointDeliveryError('token_unavailable', 'DingTalk card token unavailable', 'not_sent', { cause }); }
+          try { await createEndpointOperation({ signal }).prepare(() => this.#ensureAccessToken()); } catch (cause) { throw new EndpointDeliveryError('token_unavailable', 'DingTalk card token unavailable', 'not_sent', { cause }); }
           stage = 'request';
-          const response = await this.#fetch('https://api.dingtalk.com/v1.0/card/instances/createAndDeliver', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': this.#accessToken.token }, body: JSON.stringify(card.body), signal: AbortSignal.timeout(30_000) });
+          const response = await this.#fetch('https://api.dingtalk.com/v1.0/card/instances/createAndDeliver', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': this.#accessToken.token }, body: JSON.stringify(card.body), signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) });
           httpStatus = response.status;
           stage = 'response';
           let data: unknown;
@@ -208,7 +208,7 @@ export class DingTalkClient extends EventEmitter {
           method: 'POST',
           headers: { 'Content-Type': 'application/json; charset=utf-8' },
           body: JSON.stringify(content),
-          signal: AbortSignal.timeout(30_000),
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
         });
         if (!response.ok) throw new EndpointDeliveryError('http_error', `DingTalk HTTP ${response.status}`, response.status >= 400 && response.status < 500 ? 'rejected' : 'unknown');
         const data = await response.json() as DingTalkApiResponse;
@@ -233,6 +233,7 @@ export class DingTalkClient extends EventEmitter {
       };
       const data = await this.#request('/robot/send', {
         method: 'POST',
+        signal,
         body: body as unknown as Record<string, unknown>,
       });
       if (typeof data.errcode === 'number' && data.errcode !== 0) {
@@ -459,11 +460,13 @@ export class DingTalkClient extends EventEmitter {
     path: string,
     options: {
       method?: 'GET' | 'POST';
+      signal?: AbortSignal;
       params?: Record<string, string | number>;
       body?: Record<string, unknown>;
     } = {},
   ): Promise<DingTalkApiResponse> {
-    await this.#ensureAccessToken();
+    await createEndpointOperation(options).prepare(() => this.#ensureAccessToken());
+    options.signal?.throwIfAborted();
     const { method = 'GET', params = {}, body } = options;
     const urlParams = new URLSearchParams({
       ...Object.fromEntries(
@@ -476,7 +479,7 @@ export class DingTalkClient extends EventEmitter {
       method,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: body && method === 'POST' ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(30_000),
+      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
       throw new EndpointDeliveryError('http_error', `DingTalk HTTP ${response.status}`, response.status >= 400 && response.status < 500 ? 'rejected' : 'unknown');

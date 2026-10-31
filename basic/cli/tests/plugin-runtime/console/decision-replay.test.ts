@@ -41,7 +41,7 @@ function host(status: AssistantStatus) {
   };
   const store = new SnapshotStore(state); stores.push(store);
   return (type: string, access: ConsoleAccess, data: Record<string, unknown> = {}) => dispatchPluginConsoleRpcRequest({ type, requestId: 1, data } as never,
-    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: status.consoleRpc });
+    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: () => status.consoleRpc });
 }
 
 describe('Console decision replay (ADR 0036 slice C)', () => {

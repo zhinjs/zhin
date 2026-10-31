@@ -400,3 +400,21 @@ describe('line plugin runtime adapter', () => {
     await endpoint.stop();
   });
 });
+
+it('passes caller cancellation into the LINE HTTP request and leaves the account available', async () => {
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(http);
+  let transportSignal: AbortSignal | undefined;
+  const fetch = vi.fn((url: string, init?: { signal?: AbortSignal }) => {
+    transportSignal = init?.signal;
+    if (fetch.mock.calls.length === 1) return new Promise<never>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(init.signal!.reason), { once: true }));
+    return Promise.resolve({ ok: true, status: 200, text: async () => '', json: async () => ({ sentMessages: [{ id: 'fresh' }] }) });
+  });
+  const endpoint = await createEndpointHarness(() => new LineEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'line'), http, config: baseConfig, fetch }), { capabilities: ['inbound', 'outbound'] });
+  await endpoint.start(); const caller = new AbortController();
+  const sending = endpoint.send({ conversation: userConversation, signal: caller.signal, payload: 'synthetic reply' }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1)); caller.abort();
+    await expect(sending).resolves.toMatchObject({ error: { disposition: 'unknown' } }); expect(transportSignal?.aborted).toBe(true);
+    await expect(endpoint.send({ conversation: userConversation, payload: 'fresh reply' })).resolves.toBe('fresh'); expect(fetch).toHaveBeenCalledTimes(2);
+  } finally { await endpoint.stop(); await sending; }
+});

@@ -1,3 +1,4 @@
+import { extractChannelInfo, subscriptionScope } from '../src/channel.js';
 /**
  * Regression tests for the "no such column: id" bug: the real sqlite tables
  * defined in plugin.ts have no id column, so delete-by-id fails outside the
@@ -10,7 +11,7 @@ import removeCommand from '../commands/rss-remove/[url]/index.ts';
 import { RSS_SEEN_TABLE, RSS_SUBS_TABLE, type RssModel } from '../src/db-store.js';
 import type { RssRow } from '../src/memory-store.js';
 import { cleanOldSeen } from '../src/poll.js';
-import { rssMessage, RSS_TEST_CHANNEL } from './message-fixture.js';
+import { rssMessage } from './message-fixture.js';
 import { resolveRssConfig } from '../src/feed.js';
 import { rssRuntimeToken, type RssRuntime } from '../src/runtime.js';
 
@@ -78,6 +79,7 @@ function createSqliteRssDb() {
     feed_title TEXT DEFAULT '',
     adapter_name TEXT NOT NULL,
     endpoint_id TEXT DEFAULT '',
+    target_json TEXT,
     channel_type TEXT DEFAULT 'private',
     channel_id TEXT NOT NULL,
     creator_id TEXT DEFAULT '',
@@ -122,10 +124,7 @@ describe.skipIf(!DatabaseSync)('rss against real sqlite (no id column)', () => {
       await Subs.insert({
         url: 'https://example.com/feed.xml',
         feed_title: 'Example',
-        adapter_name: RSS_TEST_CHANNEL.adapterName,
-        endpoint_id: RSS_TEST_CHANNEL.endpointKey,
-        channel_type: RSS_TEST_CHANNEL.channelType,
-        channel_id: RSS_TEST_CHANNEL.channelId,
+        ...subscriptionScope(extractChannelInfo(rssMessage())!),
         creator_id: '',
         creator_name: '',
         created_at: new Date().toISOString(),
@@ -140,6 +139,22 @@ describe.skipIf(!DatabaseSync)('rss against real sqlite (no id column)', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('round-trips opaque account identities through sqlite and deletes only the selected capture', async () => {
+    const { db, store } = createSqliteRssDb();
+    try {
+      const runtime = createRuntime(store), Subs = store.models.get(RSS_SUBS_TABLE)!;
+      const scenes = ['canonical\0first', 'canonical\0second'].map(id => ({ ...rssMessage(),
+        conversation: { ...rssMessage().conversation, endpoint: { adapter: 'icqq', id } },
+      }));
+      for (const input of scenes) await Subs.insert({ url: 'https://example.com/feed.xml', ...subscriptionScope(extractChannelInfo(input)!) });
+      const before = await Subs.select();
+      expect(before.map(row => row.target_json)).toEqual(scenes.map(input => subscriptionScope(extractChannelInfo(input)!).target_json));
+      expect(before.every(row => !String(row.endpoint_id).includes('\0'))).toBe(true);
+      await removeCommand.execute({ ...commandContext(runtime), input: scenes[0], params: { url: 'https://example.com/feed.xml' } });
+      expect(await Subs.select()).toEqual([before[1]]);
+    } finally { db.close(); }
   });
 
   it('cleanOldSeen deletes expired rows by feed_url + item_guid', async () => {

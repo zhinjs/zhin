@@ -1,5 +1,5 @@
 import { createMessages, resolveLocale } from 'zhin.js/i18n';
-import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
+import { channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import {
   BJ_PREFIX,
   compareHands,
@@ -19,16 +19,16 @@ import { buildBjView, naturalOutcome, playerBust } from './view.js';
  */
 function renderView(
   session: BjSessionRow,
-  message: GameMessageLike,
+  message: GamePlayer,
   terminal = false,
   revealDealer = false,
 ): GameReply {
-  return buildBjView(session, terminal, revealDealer, message.$channel.type);
+  return buildBjView(session, terminal, revealDealer, message.target.kind);
 }
 
 async function finishRound(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   session: BjSessionRow,
   status: BjSessionRow['status'],
 ): Promise<GameReply> {
@@ -52,91 +52,97 @@ async function dealerPlay(
 
 export async function startGame(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply | undefined> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const active = await services.getActiveByChannel(ch);
-  const locale = resolveLocale(active ? active.locale : message.locale);
-  if (active) {
-    if (active.player_id === message.$sender.id) {
-      return messages(locale, 'text1');
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const active = await services.getActiveByChannel(ch);
+    const locale = resolveLocale(active ? active.locale : message.locale);
+    if (active) {
+      if (active.player_id === message.sender.id) {
+        return messages(locale, 'text1');
+      }
+      return messages(locale, 'text2', { p0: active.player_name });
     }
-    return messages(locale, 'text2', { p0: active.player_name });
-  }
-  const session = await services.createSession(message);
-  const natural = naturalOutcome(session);
-  if (natural) {
-    return finishRound(services, message, session, natural);
-  }
-  return renderView(session, message);
+    const session = await services.createSession(message);
+    const natural = naturalOutcome(session);
+    if (natural) {
+      return finishRound(services, message, session, natural);
+    }
+    return renderView(session, message);
+  } });
 }
 
 export async function continueGame(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply> {
-  const session = await services.getActiveForUser(
-    `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
-    message.$sender.id,
-  );
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text3');
-  return renderView(session, message);
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.getActiveForUser(
+      channelKey(message),
+      message.sender.id,
+    );
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text3');
+    return renderView(session, message);
+  } });
 }
 
 export async function handleChoice(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   sessionId: string,
   choiceId: string,
 ): Promise<GameReply | null> {
-  const session = await services.getById(sessionId);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text4');
-  if (session.player_id !== message.$sender.id) return messages(locale, 'text5');
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.getById(sessionId);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text4');
+    if (session.player_id !== message.sender.id) return messages(locale, 'text5');
 
-  if (session.status !== 'active' && choiceId === 'restart') {
-    await services.updateSession(session.id, { status: 'aborted' });
-    return (await startGame(services, message)) ?? null;
-  }
+    if (session.status !== 'active' && choiceId === 'restart') {
+      await services.updateSession(session.id, { status: 'aborted' });
+      return (await startGame(services, message)) ?? null;
+    }
 
-  if (session.status !== 'active') return messages(locale, 'text6');
+    if (session.status !== 'active') return messages(locale, 'text6');
 
-  if (choiceId === 'quit') {
-    await services.updateSession(session.id, { status: 'aborted' });
-    return renderView((await services.getById(session.id))!, message, true, true);
-  }
+    if (choiceId === 'quit') {
+      await services.updateSession(session.id, { status: 'aborted' });
+      return renderView((await services.getById(session.id))!, message, true, true);
+    }
 
-  const deck = parseDeck(session.deck_json);
-  let player = parseCards(session.player_cards_json);
-  let dealer = parseCards(session.dealer_cards_json);
+    const deck = parseDeck(session.deck_json);
+    let player = parseCards(session.player_cards_json);
+    let dealer = parseCards(session.dealer_cards_json);
 
-  if (choiceId === 'hit') {
-    const card = deck.pop();
-    if (!card) return messages(locale, 'text7');
-    player = [...player, card];
+    if (choiceId === 'hit') {
+      const card = deck.pop();
+      if (!card) return messages(locale, 'text7');
+      player = [...player, card];
+      await services.updateSession(session.id, {
+        deck_json: JSON.stringify(deck),
+        player_cards_json: JSON.stringify(player),
+      });
+      if (playerBust({ ...session, player_cards_json: JSON.stringify(player) })) {
+        return finishRound(services, message, session, 'lost');
+      }
+      const updated = (await services.getById(session.id))!;
+      return renderView(updated, message);
+    }
+
+    if (choiceId !== 'stand') return messages(locale, 'text8');
+
+    dealer = await dealerPlay(deck, dealer);
     await services.updateSession(session.id, {
       deck_json: JSON.stringify(deck),
-      player_cards_json: JSON.stringify(player),
+      dealer_cards_json: JSON.stringify(dealer),
     });
-    if (playerBust({ ...session, player_cards_json: JSON.stringify(player) })) {
-      return finishRound(services, message, session, 'lost');
-    }
-    const updated = (await services.getById(session.id))!;
-    return renderView(updated, message);
-  }
-
-  if (choiceId !== 'stand') return messages(locale, 'text8');
-
-  dealer = await dealerPlay(deck, dealer);
-  await services.updateSession(session.id, {
-    deck_json: JSON.stringify(deck),
-    dealer_cards_json: JSON.stringify(dealer),
-  });
-  const outcome = compareHands(player, dealer);
-  const status: BjSessionRow['status'] =
-    outcome === 'won' ? 'won' : outcome === 'lost' ? 'lost' : 'draw';
-  return finishRound(services, message, session, status);
+    const outcome = compareHands(player, dealer);
+    const status: BjSessionRow['status'] =
+      outcome === 'won' ? 'won' : outcome === 'lost' ? 'lost' : 'draw';
+    return finishRound(services, message, session, status);
+  } });
 }
 
 export { BJ_PREFIX, handValue, TARGET };

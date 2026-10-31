@@ -15,6 +15,23 @@ description: "为 Zhin 还不支持的平台编写适配器：最小实现、连
 
 热重载、账号身份、版本切换和资源清理都由框架负责。
 
+## Adapter API 2 的版本边界
+
+本批仍以 npm patch 发布，但包含明确的插件接口变更。首批目标版本为
+`zhin.js 1.1.19`、`@zhin.js/core 1.1.54`、`@zhin.js/adapter 1.1.26`、
+`@zhin.js/feature-kit 1.1.10`（发布前以正式发布清单为准）。旧接口支持到这些版本之前；
+新插件需要同时满足这组 npm 依赖下限，并声明 Adapter Feature API：
+
+```json
+{ "features": [{ "package": "@zhin.js/adapter", "api": "^2.0.0" }] }
+```
+
+这里的 `api` 位于 `package.json#zhin.features`。它与 npm 包版本、`zhin.engine` 是不同的
+契约。新 Provider 的 `featureApi` 是 `2.0.0`：旧的显式 `api: ^1.0.0` 会被拒绝，新插件在
+旧 API-1 Provider 上也会被拒绝。未声明 `api` 的历史包保持原有行为，不代表已经确认兼容。
+自定义插件需要重新编译、更新 peer/dev 下限，并验证实际安装组合；完整说明见
+[版本兼容与迁移](../operations/upgrades.md#adapter-api-2)。
+
 ## 最小实现
 
 在插件里创建 `adapters/<平台名>/index.ts`，默认导出 `defineAdapter()`：
@@ -38,7 +55,7 @@ class TerminalAdapter extends Adapter<TerminalEndpoint, TerminalConfig, { readon
   }
 }
 
-declare module 'zhin.js/adapter' {
+declare module '@zhin.js/feature-kit' {
   interface AdapterRegistry { readonly terminal: TerminalAdapter; }
 }
 
@@ -47,6 +64,8 @@ export default defineAdapter<TerminalConfig>({
   createAdapter: () => new TerminalAdapter(),
 });
 ```
+
+适配器包需直接依赖 `@zhin.js/feature-kit`，类型增补只写在该模块；自定义发布包可用 peer 加开发依赖，官方适配器的精确内部 dependencies 同样有效。`zhin.js/adapter` 仍提供 Adapter API；业务 Command 加载一次适配器声明后，只需填写平台名。
 
 `TerminalEndpoint` 继承真正拥有终端 IO 的 `TerminalClient`，并 `implements Endpoint`；完整定义见 [终端示例](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts)。平台有 SDK 时继承真实 SDK Client；没有 SDK 时，Client 应真正拥有协议 IO、请求和取消，不能只是回调 Endpoint 的空壳。
 
@@ -99,7 +118,7 @@ terminal:
 
 ## 继承平台 Client 与账号所有权
 
-平台统一定义 `Adapter<E, Config, Events>` 子类，由它创建与管理所有 Endpoint。Endpoint 继承实际 SDK Client，并通过 `endpointSpec` / `createEndpointSpecification` 注册框架钩子；不覆盖 SDK 的 `on`、`off`、`emit`。通过公开 `zhin.js/adapter` 的 `AdapterRegistry` 注册一次 Adapter 类型，Command 的字符串平台声明即可推导子类与 Endpoint。
+平台统一定义 `Adapter<E, Config, Events>` 子类，由它创建与管理所有 Endpoint。Endpoint 继承实际 SDK Client，并通过 `endpointSpec` / `createEndpointSpecification` 注册框架钩子；不覆盖 SDK 的 `on`、`off`、`emit`。通过唯一增补入口 `@zhin.js/feature-kit` 的 `AdapterRegistry` 注册一次 Adapter 类型，Command 的字符串平台声明即可推导子类与 Endpoint。
 
 新增账号只保存停用配置，不创建 SDK 对象；显式启动才连接。停止、更新、删除和替换都由所属 Adapter 控制。更新运行账号只重连该账号，旧操作固定到原 incarnation。`defineAdapter` 只接受 `createAdapter`；不要另建全局账号 Controller、Client token 或可写 Endpoint 目录。
 

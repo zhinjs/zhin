@@ -1,27 +1,23 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import {  beforeEach, describe, expect, it } from 'vitest';
 import {
   BOT_ID,
   restartFromTerminal,
   startBotGame,
   startPvpGame,
 } from '../src/game-flow.js';
-import { createMemoryGameServices } from '@zhin.js/game-kit';
+import { channelKey, createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type SessionServices } from '../src/session-service.js';
 
 let services: SessionServices;
 
 function makeMessage(senderId = 'u1') {
-  return {
-    $adapter: 'test',
-    $endpoint: 'default',
-    $channel: { type: 'group', id: 'g1' },
-    $sender: { id: senderId, name: senderId },
-    content: '',
-    $reply: async () => 'mid-1',
-  } as never;
+  return { target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' }, conversation: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' },
+sender: { id: senderId, name: senderId },
+content: '',
+$reply: async () => 'mid-1' } as never;
 }
 
-const CH = 'test-default-group:g1';
+const CH = channelKey({ target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' } });
 
 describe('tic-tac-toe game-flow', () => {
   beforeEach(() => {

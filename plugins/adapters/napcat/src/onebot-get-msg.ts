@@ -39,7 +39,7 @@ export function parseOneBotGetMsgResponse(
 }
 
 export function createNapCatContentPort(
-  callApi: (action: string, params?: Record<string, unknown>) => Promise<unknown>,
+  callApi: (request: PendingRpcRequest) => Promise<unknown>,
 ): EndpointContentPort {
   return Object.freeze({
     async resolve(reference: ConversationReference, context: EndpointContentResolveContext) {
@@ -51,7 +51,7 @@ export function createNapCatContentPort(
             : Object.freeze({ status: 'resolved' as const, reference, value: reference.media });
         }
         if (reference.kind === 'message') {
-          const parsed = parseOneBotGetMsgResponse(reference.message.id, await callApi('get_msg', { message_id: reference.message.id }));
+          const parsed = parseOneBotGetMsgResponse(reference.message.id, await callApi({ action: 'get_msg', params: { message_id: reference.message.id }, signal: context.signal }));
           context.signal.throwIfAborted();
           const value: ConversationMessage = Object.freeze({
             ref: reference.message,
@@ -61,7 +61,7 @@ export function createNapCatContentPort(
           });
           return Object.freeze({ status: 'resolved' as const, reference, value });
         }
-        const raw = await callApi('get_forward_msg', { message_id: reference.forwardId, id: reference.forwardId }) as Record<string, unknown>;
+        const raw = await callApi({ action: 'get_forward_msg', params: { message_id: reference.forwardId, id: reference.forwardId }, signal: context.signal }) as Record<string, unknown>;
         context.signal.throwIfAborted();
         const nodes = Array.isArray(raw.messages) ? raw.messages.slice(0, context.maxEntries) : [];
         const value: readonly ForwardEntry[] = Object.freeze(nodes.map((node) => {
@@ -93,5 +93,5 @@ function toMillis(value: unknown): number {
   const time = Number(value);
   return Number.isFinite(time) ? (time < 10_000_000_000 ? time * 1000 : time) : Date.now();
 }
-import type { EndpointContentPort, EndpointContentResolveContext } from 'zhin.js/adapter';
+import type { PendingRpcRequest, EndpointContentPort, EndpointContentResolveContext } from 'zhin.js/adapter';
 import type { ConversationMessage, ConversationReference, ForwardEntry } from '@zhin.js/im-contract';

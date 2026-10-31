@@ -3,6 +3,7 @@ import type {
   GenerationHandoffParticipant,
   PluginId,
   PluginMetadata,
+  PluginLifecycleEventMap,
   Token,
 } from '@zhin.js/plugin-runtime';
 import type { RuntimeEnvironment } from './environment.js';
@@ -27,6 +28,8 @@ export interface IsolatedResourceBinding<T = unknown> {
 }
 
 export interface PreparedIsolatedPlugin {
+  /** Cooperative control delivery bypasses business admission without reopening it. */
+  controlEvent<TName extends keyof PluginLifecycleEventMap>(name: TName, event: PluginLifecycleEventMap[TName]): Promise<void>;
   readonly descriptor: IsolatedPluginDescriptor;
   readonly resources?: readonly IsolatedResourceBinding[];
   readonly handoff?: GenerationHandoffParticipant;

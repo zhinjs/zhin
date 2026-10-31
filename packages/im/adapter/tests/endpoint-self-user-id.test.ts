@@ -19,7 +19,7 @@ async function fixture(endpoint = new ReportingEndpoint(), owner = rootPluginId(
   const slot = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'fake', source: '/fixture/adapters/fake/index.ts',
     definition: defineAdapter({ capabilities: ['inbound'], createAdapter: () => new ReportingAdapter(endpoint) }) });
   const state: SnapshotState = { root: owner, tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
-    config: new Map([[owner, {}]]), resources: new Map([[owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]), capabilities: new Map([[slot.id, slot]]), projections: new Map() };
+    config: new Map([[owner, {}]]), resources: new Map([[owner, new Map([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async () => undefined }]])]]), capabilities: new Map([[slot.id, slot]]), projections: new Map() };
   const index = await AdapterIndex.create([slot], createSnapshotView(0, state), new AbortController().signal);
   await index.start();
   const prepared = { ...state, projections: new Map([[adapterFeatureId, index]]) };

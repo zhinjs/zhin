@@ -1,3 +1,4 @@
+import { inheritActivityFeedbackSource } from '../activity-feedback/operation-source.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { AgentStreamEventType, type AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { publishAgentStream } from '../event/publish-agent-stream.js';
@@ -90,7 +91,7 @@ export async function processTextTurn(
       // Activity observers cannot replace the original turn failure.
     }
     try {
-      await host.emitter.dispatch('ai.typing.stop', { ...payload, reason: 'processing_error' });
+      await host.emitter.dispatch('ai.typing.stop', inheritActivityFeedbackSource({ ...payload, reason: 'processing_error' }, payload));
     } catch {
       // Activity observers cannot replace the original turn failure.
     }

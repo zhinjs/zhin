@@ -31,8 +31,21 @@ export type {
   PlatformEvent,
 } from './endpoint-contract.js';
 
+/** Accepted receipt authority, valid only while its owning gateway.run callback is pending. */
+export interface EndpointReceipt {
+  receive(event: EndpointEvent): Promise<unknown>;
+}
+interface InboundReceiptScope {
+  /** Only this callback may admit children; draining existing children grants no new authority. */
+  active: boolean;
+  receipt?: EndpointReceipt;
+  readonly children: Set<Promise<unknown>>;
+}
+
 /** The one inbound event boundary shared by every platform Endpoint. */
 export interface EndpointEventGateway {
+  /** Pin the owning Root operation across native normalization and canonical continuations. */
+  run<T>(receive: (receipt: EndpointReceipt) => T | Promise<T>): Promise<T>;
   receive(event: EndpointEvent): Promise<unknown>;
   /** Read presentation language for a protocol response before normal message dispatch. */
   resolveLocale?(endpoint: EndpointIdentity, senderId?: string): Promise<Locale | undefined>;
@@ -63,6 +76,8 @@ function normalizeSelfUserId(value: unknown): string | undefined {
 interface EndpointBindingContext {
   readonly id: EndpointIdentity['id'];
   readonly name: string;
+  /** The concrete account epoch owns this signal; generation replacement does not abort it. */
+  readonly signal: AbortSignal;
   use<T>(token: Token<T>): T;
 }
 
@@ -81,10 +96,11 @@ export abstract class EndpointRuntime<TClient = unknown> {
 
   #identity?: EndpointIdentity;
   #events?: EndpointEventGateway;
+  #executionSignal!: AbortSignal;
   #admissionState: 'unbound' | 'pending' | 'active' | 'retired' = 'unbound';
   #ingressSuspended = false;
-  readonly #inboundScope = new AsyncLocalStorage<{ active: boolean }>();
-  readonly #inflightInbound = new Set<Promise<unknown>>();
+  readonly #inboundScope = new AsyncLocalStorage<InboundReceiptScope>();
+  readonly #inflightInbound = new Map<Promise<unknown>, InboundReceiptScope>();
   #pendingEvents: Array<{ event: EndpointEvent; resolve?: (value: unknown) => void; reject?: (error: Error) => void }> = [];
   #droppedEvents = 0;
   #dispatchFailures = 0;
@@ -135,6 +151,7 @@ export abstract class EndpointRuntime<TClient = unknown> {
     this.#identity = Object.freeze({ id: context.id, adapter: context.name });
     const events = context.use(endpointEventGatewayToken);
     this.#events = events;
+    this.#executionSignal = context.signal;
     if (!admission) {
       this.#activate();
       return;
@@ -144,6 +161,14 @@ export abstract class EndpointRuntime<TClient = unknown> {
       if (this.#admissionState !== 'pending') return;
       this.#activate();
       admission.onDeactivate(() => this[endpointRetire]());
+      if (!this.#isActive()) return;
+      // A candidate may already be normalizing a native callback. First publication
+      // admits that same receipt; its remaining emissions must never use a later Root.
+      for (const [operation, scope] of this.#inflightInbound) {
+        if (!scope.active || scope.receipt) continue;
+        void events.run(receipt => { scope.receipt = receipt; return operation; }).catch(() => undefined);
+        // The original operation's caller owns its failure; this holder only retains its Root.
+      }
       const pending = this.#pendingEvents.splice(0);
       for (const entry of pending) {
         if (!this.#isActive()) {
@@ -208,19 +233,47 @@ export abstract class EndpointRuntime<TClient = unknown> {
     return this.#receiveInbound(receive, this.#inboundScope.getStore());
   }
 
-  #receiveInbound<T>(receive: () => T | Promise<T>, parent?: Readonly<{ active: boolean }>): Promise<T> {
+  #receiveInbound<T>(receive: () => T | Promise<T>, parent?: InboundReceiptScope): Promise<T> {
     if (!this.#events) throw new Error('Endpoint emitted before it was bound to a runtime generation');
-    if (this.#admissionState === 'retired') return Promise.reject(new Error('Endpoint generation is retired'));
+    if (this.#admissionState === 'retired' && !parent?.active) return Promise.reject(new Error('Endpoint generation is retired'));
     if (this.#ingressSuspended && !parent?.active) return Promise.reject(new Error('Endpoint ingress is closed'));
-    const scope = { active: true };
+    const scope: InboundReceiptScope = { active: true, receipt: parent?.active ? parent.receipt : undefined, children: new Set() };
     let result: T | Promise<T>;
-    try { result = this.#inboundScope.run(scope, receive); }
+    try {
+      this.#executionSignal.throwIfAborted();
+      const execute = () => {
+        let received: T | Promise<T>;
+        try {
+          received = this.#inboundScope.run(scope, receive);
+          const asynchronous = received != null && (typeof received === 'object' || typeof received === 'function')
+            && 'then' in received && typeof received.then === 'function';
+          if (!asynchronous) scope.active = false;
+        }
+        catch (error) { scope.active = false; received = Promise.reject(error); }
+        return Promise.resolve(received).finally(async () => {
+          scope.active = false;
+          // Native SDK callbacks may deliberately detach a child normalizer or
+          // dispatch. Its accepted descendants still belong to this Root receipt.
+          // Drain without changing the callback's value/error or taking ownership
+          // of failures returned to the child's original caller.
+          while (scope.children.size) await Promise.allSettled([...scope.children]);
+        });
+      };
+      // Candidate events are buffered until publication. Accepted receipts retain their Root once.
+      result = parent?.active || this.#admissionState === 'pending' ? execute()
+        : this.#events.run(receipt => { scope.receipt = receipt; return execute(); });
+    }
     catch (error) { scope.active = false; return Promise.reject(error); }
     const operation: Promise<T> = Promise.resolve(result).finally(() => {
       scope.active = false;
       this.#inflightInbound.delete(operation);
     });
-    this.#inflightInbound.add(operation);
+    this.#inflightInbound.set(operation, scope);
+    if (parent?.active) {
+      parent.children.add(operation);
+      const release = () => { parent.children.delete(operation); };
+      void operation.then(release, release);
+    }
     return operation;
   }
 
@@ -231,7 +284,7 @@ export abstract class EndpointRuntime<TClient = unknown> {
   }
 
   protected async drainInbound(): Promise<void> {
-    while (this.#inflightInbound.size) await Promise.allSettled([...this.#inflightInbound]);
+    while (this.#inflightInbound.size) await Promise.allSettled([...this.#inflightInbound.keys()]);
   }
 
   /** The only legal platform-to-framework event ingress. */
@@ -249,7 +302,7 @@ export abstract class EndpointRuntime<TClient = unknown> {
 
   #publishInScope<TPayload>(name: string, payload: TPayload, accepted: boolean): Promise<unknown> {
     const parent = this.#inboundScope.getStore();
-    if ((this.#ingressSuspended && !parent?.active) || this.#admissionState === 'retired') {
+    if ((this.#ingressSuspended || this.#admissionState === 'retired') && !parent?.active) {
       return this.#publish(name, payload, accepted);
     }
     return this.#receiveInbound(() => this.#publish(name, payload, accepted), parent);
@@ -259,10 +312,11 @@ export abstract class EndpointRuntime<TClient = unknown> {
     if (!this.#events || !this.#identity) {
       throw new Error('Endpoint emitted before it was bound to a runtime generation');
     }
-    if (this.#admissionState === 'retired') return accepted
+    if (this.#admissionState === 'retired' && !this.#inboundScope.getStore()?.active) return accepted
       ? Promise.reject(new Error('Endpoint generation is retired')) : Promise.resolve(undefined);
     if (this.#ingressSuspended && !this.#inboundScope.getStore()?.active) return accepted
       ? Promise.reject(new Error('Endpoint ingress is closed')) : Promise.resolve(undefined);
+    this.#executionSignal.throwIfAborted();
     const event = Object.freeze({
       name,
       payload,
@@ -284,7 +338,9 @@ export abstract class EndpointRuntime<TClient = unknown> {
       this.#pendingEvents.push({ event });
       return Promise.resolve(undefined);
     }
-    return this.#events.receive(event);
+    const receipt = this.#inboundScope.getStore()?.receipt;
+    if (!receipt) throw new Error('Endpoint event requires an admitted receipt');
+    return receipt.receive(event);
   }
 
   /**

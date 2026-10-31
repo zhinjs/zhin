@@ -374,7 +374,7 @@ export function formatOutboundMessages(payload: unknown, options: FormatOutbound
  */
 export async function collectOutboundImageSizes(
   payload: unknown,
-  probe: (url: string) => Promise<QqImageSize | undefined> = (url) => probeImageSize(url),
+  { probe, signal }: { readonly probe?: (url: string) => Promise<QqImageSize | undefined>; readonly signal?: AbortSignal } = {},
 ): Promise<Map<string, QqImageSize>> {
   const sizes = new Map<string, QqImageSize>();
   const segments = toSegmentList(payload).filter((item): item is QqWireSegment => typeof item !== 'string');
@@ -385,7 +385,8 @@ export async function collectOutboundImageSizes(
     if (isMediaRef(media) && media.kind === 'url' && /^https?:\/\//i.test(media.value)) urls.add(media.value);
   }
   await Promise.all([...urls].map(async (url) => {
-    const size = await probe(url);
+    signal?.throwIfAborted();
+    const size = await (probe ? probe(url) : probeImageSize(url, { signal }));
     if (size) sizes.set(url, size);
   }));
   return sizes;

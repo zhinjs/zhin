@@ -1,9 +1,8 @@
 import type { Database, Models } from '@zhin.js/core';
 import {
   BaseSessionService,
-  channelKey,
   generateSessionId,
-  type GameMessageLike,
+  type GamePlayer,
   type GameSessionDatabase,
 } from '@zhin.js/game-kit';
 import type { DiceSessionRow } from './models.js';
@@ -33,18 +32,13 @@ export class SessionService extends BaseSessionService<DiceSessionRow> {
     });
   }
 
-  async createSession(message: GameMessageLike): Promise<DiceSessionRow> {
+  async createSession(message: GamePlayer): Promise<DiceSessionRow> {
     const now = Date.now();
-    const row: DiceSessionRow = {
+    const row: Omit<DiceSessionRow, 'channel_key' | 'adapter' | 'endpoint' | 'channel_type' | 'channel_id'> = {
       id: generateSessionId(),
       locale: message.locale ?? 'zh-CN',
-      adapter: String(message.$adapter),
-      endpoint: message.$endpoint,
-      channel_type: message.$channel.type,
-      channel_id: message.$channel.id,
-      channel_key: channelKey(message),
-      player_id: message.$sender.id,
-      player_name: message.$sender.name?.trim() || message.$sender.id,
+      player_id: message.sender.id,
+      player_name: message.sender.name?.trim() || message.sender.id,
       player_wins: 0,
       bot_wins: 0,
       round: 0,
@@ -54,7 +48,7 @@ export class SessionService extends BaseSessionService<DiceSessionRow> {
       updated_at: now,
       created_at: now,
     };
-    return this.createRow(row);
+    return this.createRow({ target: message.target, fields: row });
   }
 }
 

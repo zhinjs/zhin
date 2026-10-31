@@ -3,13 +3,19 @@ import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contrac
  * KookEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
 import {
-  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
+  createEndpointSpecification,
+  endpointSpec,
+  type Endpoint,
+  type EndpointSpecification,
   type EndpointControl,
   type EndpointChannel,
   type EndpointGroup,
   type EndpointManagement,
   type EndpointSendRequest,
   type EndpointTransportState,
+  type EndpointManagementRequest,
+  createEndpointOperation,
+  type EndpointGroupRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -86,7 +92,7 @@ export class KookWebsocketEndpoint extends RuntimeKookClient implements Endpoint
   #started = false;
   readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
-    recall: (message) => recallKookMessage(this.#requireClient(), message),
+    recall: request => recallKookMessage(this.#requireClient(), request),
   });
 
   constructor(options: KookEndpointOptions) {
@@ -180,7 +186,7 @@ export class KookWebsocketEndpoint extends RuntimeKookClient implements Endpoint
 
   async recallMessage(messageId: string, conversation?: ConversationRef): Promise<void> {
     if (!conversation) throw new EndpointDeliveryError('unsupported_operation', 'KOOK recall requires conversation routing', 'rejected');
-    await recallKookMessage(this.#requireClient(), { id: messageId, conversation });
+    await recallKookMessage(this.#requireClient(), { message: { id: messageId, conversation } });
   }
 
   #bindClient(client: KookClientTransport): void {
@@ -249,7 +255,7 @@ export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
   #started = false;
   readonly #management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
-    recall: (message) => recallKookMessage(this.#requireClient(), message),
+    recall: request => recallKookMessage(this.#requireClient(), request),
   });
 
   constructor(options: KookWebhookEndpointOptions) {
@@ -381,7 +387,7 @@ export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
 
   async recallMessage(messageId: string, conversation?: ConversationRef): Promise<void> {
     if (!conversation) throw new EndpointDeliveryError('unsupported_operation', 'KOOK recall requires conversation routing', 'rejected');
-    await recallKookMessage(this.#requireClient(), { id: messageId, conversation });
+    await recallKookMessage(this.#requireClient(), { message: { id: messageId, conversation } });
   }
 
   checkAndRememberSn(sn: number): boolean {
@@ -400,16 +406,6 @@ export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
     if (!this.#started) throw new Error('KOOK client not initialized');
     return this;
   }
-}
-
-/**
- * KOOK guild/channel/user id 是字符串形式的雪花号，超出
- * Number.MAX_SAFE_INTEGER，Number() 会丢精度。Console 社交面只把 group_id
- * 当 JSON 值透传、并以字符串回传给 listGroupMembers，因此保留原始字符串
- * （仅按契约类型声明强转）是全链路最不丢信息的方案。
- */
-function toGroupId(id: string): number {
-  return id as unknown as number;
 }
 
 /** KOOK 文字频道标记：HTTP API type=1（2=语音），kook-client 消息侧用 'GROUP'。 */
@@ -441,26 +437,28 @@ export function createKookEndpointManagement(
   requireClient: () => KookClientTransport,
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
-    async listGroups(): Promise<readonly EndpointGroup[]> {
-      const guilds = await requireClient().getGuildList();
+    async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
+      const operation = createEndpointOperation(request);
+      const guilds = await operation.run(() => requireClient().getGuildList());
       const groups: EndpointGroup[] = [];
       for (const guild of guilds) {
         if (guild?.id == null) continue;
         groups.push({
-          group_id: toGroupId(String(guild.id)),
+          group_id: String(guild.id),
           name: String(guild.name ?? guild.id),
         });
       }
       return groups;
     },
-    async listChannels(): Promise<readonly EndpointChannel[]> {
+    async listChannels(request: EndpointManagementRequest = {}): Promise<readonly EndpointChannel[]> {
+      const operation = createEndpointOperation(request);
       const client = requireClient();
       const channels: EndpointChannel[] = [];
-      for (const guild of await client.getGuildList()) {
+      for (const guild of await operation.run(() => client.getGuildList())) {
         if (guild?.id == null) continue;
         const guildId = String(guild.id);
         const guildName = String(guild.name ?? guildId);
-        for (const channel of await client.getChannelList(guildId)) {
+        for (const channel of await operation.run(() => client.getChannelList(guildId))) {
           if (channel?.id == null) continue;
           if (channel.is_category) continue;
           if (!isKookTextChannelType(channel.type)) continue;
@@ -473,9 +471,10 @@ export function createKookEndpointManagement(
       }
       return channels;
     },
-    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
+    async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
+      const operation = createEndpointOperation({ signal });
       // 平台形状（User.Info[]）原样返回
-      return requireClient().getGuildUserList(groupId);
+      return operation.run(() => requireClient().getGuildUserList(groupId));
     },
   });
 }

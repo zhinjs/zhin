@@ -1,3 +1,4 @@
+import type { CapturedEndpointOperation } from './captured-endpoint-operation.js';
 import type { JSXElement } from '@zhin.js/jsx';
 import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
 import { resolveLocale, type PluginId, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
@@ -198,16 +199,44 @@ export interface MessageBase extends Omit<IncomingMessage, 'event' | 'platformSe
 }
 
 /** Captured once from the actual inbound Endpoint operation, never from message metadata. */
-export interface RuntimeMessageSessionBinding {
-  readonly adapter: unknown;
-  readonly endpoint: unknown;
-  readonly adapterName: string;
-  readonly event: unknown;
-  readonly receivedAt: number;
-  readonly platformSentAt?: number;
-  readonly platformRoles?: readonly string[];
-  readonly authorizationRoles?: readonly string[];
-  readonly signal: AbortSignal;
+export type RuntimeMessageSessionBinding = Omit<OperationSession<string>, 'reply'>;
+
+/** Immutable facts shared by every author-bound view of one received message. */
+export interface RuntimeMessageFacts {
+  readonly conversation: ConversationRef;
+  readonly content: string;
+  readonly sender?: MessageSenderRef;
+  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly segments?: readonly Segment[];
+  readonly message?: MessageRef;
+  readonly endpointId?: string;
+  readonly mentioned?: boolean;
+  readonly replyTo?: { readonly id: string };
+}
+
+/** Presentation resolved for an author view without changing its transport identity. */
+export interface RuntimeMessagePresentation {
+  readonly locale?: Locale;
+  readonly commands?: Readonly<{ prefix: string; menu?: string }>;
+  readonly resolveCommands?: (message: RuntimeMessage) => Readonly<{ prefix: string; menu?: string }>;
+}
+
+/** Captured execution authority; its callbacks delegate to Core's existing operation lease. */
+export interface RuntimeMessageOperation {
+  readonly generation: number;
+  readonly reply: (content: SendContent, requester?: PluginId, targetConversation?: ConversationAddress) => Promise<DeliveryReceipt>;
+  readonly client?: () => unknown;
+  readonly clientAdapter?: string;
+  readonly requester?: PluginId;
+  readonly snapshot?: RuntimeSnapshot;
+  readonly assertActive?: () => void;
+  readonly origin?: MessageOrigin;
+  /** Explicit Root stop, source-account and caller lifetime, never generation replacement alone. */
+  readonly signal?: AbortSignal;
+  readonly captureInteraction?: (owner: PluginId) => CapturedEndpointOperation;
+  readonly session?: RuntimeMessageSessionBinding;
+  readonly registerOperationView?: (view: object, owner: PluginId) => void;
+  readonly presentation?: RuntimeMessagePresentation;
 }
 
 /** Canonical runtime message with optional plugin-owned extensions. */
@@ -218,64 +247,43 @@ export class RuntimeMessage implements MessageBase {
   readonly locale: Locale;
   readonly commandPrefix?: string;
   readonly commandMenu?: string;
-  readonly #resolveClient: () => unknown;
-  readonly #reply: (content: SendContent, requester?: PluginId, targetConversation?: ConversationAddress) => Promise<DeliveryReceipt>;
-  readonly #author?: PluginId;
-  readonly #snapshot?: RuntimeSnapshot;
-  readonly #assertActive?: () => void;
-  readonly #retirementSignal?: AbortSignal;
-  readonly #sessionBinding?: RuntimeMessageSessionBinding;
-  readonly #session?: OperationSession<string>;
-  readonly #registerOperationView?: (view: object, owner: PluginId) => void;
+  readonly conversation: ConversationRef;
+  readonly content: string;
+  readonly generation: number;
+  readonly sender?: MessageSenderRef;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly segments?: readonly Segment[];
+  readonly message?: MessageRef;
+  readonly endpointId?: string;
+  readonly mentioned?: boolean;
+  readonly replyTo?: { readonly id: string };
+  readonly clientAdapter?: string;
   readonly origin?: MessageOrigin;
+  readonly #facts: Readonly<RuntimeMessageFacts>;
+  readonly #operation: Readonly<RuntimeMessageOperation>;
+  readonly #session?: OperationSession<string>;
 
-  /** @internal Constructed only by the generation-owned IM Runtime. */
-  constructor(
-    readonly conversation: ConversationRef,
-    readonly content: string,
-    readonly generation: number,
-    reply: (content: SendContent, requester?: PluginId, targetConversation?: ConversationAddress) => Promise<DeliveryReceipt>,
-    readonly sender?: MessageSenderRef,
-    readonly metadata: Readonly<Record<string, unknown>> = Object.freeze({}),
-    /**
-     * 结构化段视图（与 `content` 纯文本视图同源，见 IncomingMessage.segments）。
-     * Command dispatcher 优先使用此字段，以支持 mention、image 等结构化参数。
-     */
-    readonly segments?: readonly Segment[],
-    /** 结构化入站消息身份（平台原生 message id 经 MessageRef 传递）。 */
-    readonly message?: MessageRef,
-    readonly endpointId?: string,
-    readonly mentioned?: boolean,
-    readonly replyTo?: { readonly id: string },
-    client: () => unknown = () => {
-      throw new Error('Message has no Endpoint Client context');
-    },
-    readonly clientAdapter?: string,
-    binding: Readonly<{
-      locale?: Locale;
-      commands?: Readonly<{ prefix: string; menu?: string }>;
-      resolveCommands?: (message: RuntimeMessage) => Readonly<{ prefix: string; menu?: string }>;
-      requester?: PluginId;
-      snapshot?: RuntimeSnapshot;
-      assertActive?: () => void;
-      origin?: MessageOrigin;
-      retirementSignal?: AbortSignal;
-      session?: RuntimeMessageSessionBinding;
-      registerOperationView?: (view: object, owner: PluginId) => void;
-    }> = {},
-  ) {
-    this.locale = resolveLocale(binding.locale);
-    this.origin = binding.origin;
-    this.#resolveClient = client;
-    this.#reply = reply;
-    this.#author = binding.requester;
-    this.#snapshot = binding.snapshot;
-    this.#assertActive = binding.assertActive;
-    this.#retirementSignal = binding.retirementSignal;
-    this.#sessionBinding = binding.session;
-    this.#registerOperationView = binding.registerOperationView;
-    if (binding.snapshot) binding.registerOperationView?.(this, binding.requester ?? binding.snapshot.root);
-    const requester = binding.requester;
+  /** Core owns these immutable facts; author rebinding shares them and the captured operation. */
+  constructor(facts: RuntimeMessageFacts, operation: RuntimeMessageOperation) {
+    this.#facts = Object.freeze(facts);
+    this.#operation = Object.freeze(operation);
+    const { conversation, content, sender, segments, message, endpointId, mentioned, replyTo } = facts;
+    const { reply } = operation;
+    this.conversation = conversation;
+    this.content = content;
+    this.generation = operation.generation;
+    this.sender = sender;
+    this.metadata = facts.metadata ?? Object.freeze({});
+    this.segments = segments;
+    this.message = message;
+    this.endpointId = endpointId;
+    this.mentioned = mentioned;
+    this.replyTo = replyTo;
+    this.clientAdapter = operation.clientAdapter;
+    this.locale = resolveLocale(operation.presentation?.locale);
+    this.origin = operation.origin;
+    if (operation.snapshot) operation.registerOperationView?.(this, operation.requester ?? operation.snapshot.root);
+    const requester = operation.requester;
     this.$reply = (content) => requester === undefined ? reply(content) : reply(content, requester);
     this.$replyFrom = (requester, content) => reply(content, requester);
     this.$sendTo = (target, content) => reply(content, requester, target);
@@ -307,29 +315,11 @@ export class RuntimeMessage implements MessageBase {
         ...(threadId ? { threadId } : {}),
       });
     };
-    const commands = binding.commands ?? binding.resolveCommands?.(this);
+    const commands = operation.presentation?.commands ?? operation.presentation?.resolveCommands?.(this);
     this.commandPrefix = commands?.prefix;
     this.commandMenu = commands?.menu;
-    if (binding.session) {
-      const captured = binding.session;
-      const scene = Object.freeze({ ...conversation,
-        endpoint: Object.freeze({ ...conversation.endpoint }),
-        ...(conversation.parent ? { parent: Object.freeze({ ...conversation.parent }) } : {}),
-      });
-      this.#session = Object.freeze({
-        adapterName: captured.adapterName, adapter: captured.adapter, endpoint: captured.endpoint,
-        scene, event: captured.event, signal: captured.signal,
-        ...(sender ? { sender: Object.freeze({ id: sender.id, ...(sender.name !== undefined ? { name: sender.name } : {}),
-          ...(captured.platformRoles ? { platformRoles: Object.freeze([...captured.platformRoles]) } : {}),
-          ...(captured.authorizationRoles ? { authorizationRoles: Object.freeze([...captured.authorizationRoles]) } : {}),
-        }) } : {}),
-        message: Object.freeze({ text: content, receivedAt: captured.receivedAt,
-          ...(message ? { id: message.id, ref: Object.freeze({ conversation: scene, id: message.id }) } : {}),
-          ...(segments ? { segments } : {}),
-          ...(captured.platformSentAt !== undefined ? { platformSentAt: captured.platformSentAt } : {}),
-          ...(mentioned !== undefined ? { mentioned } : {}),
-          ...(replyTo ? { replyTo: Object.freeze({ ...replyTo }) } : {}),
-        }),
+    if (operation.session) {
+      this.#session = Object.freeze({ ...operation.session,
         reply: (value: unknown) => this.$reply(value as SendContent),
       });
     }
@@ -338,42 +328,48 @@ export class RuntimeMessage implements MessageBase {
 
   /** The same captured data, with reply authority rebound by operationInputBinding. */
   [operationSession](): OperationSession<string> | undefined {
-    this.#assertActive?.();
+    this.#operation.assertActive?.();
     return this.#session;
   }
 
   /** @internal A frozen view whose sends retain the current author's exact operation. */
   [operationInputBinding](owner: PluginId, snapshot: RuntimeSnapshot): RuntimeMessage {
-    this.#assertActive?.();
-    if (snapshot.generation !== this.generation || (this.#snapshot && snapshot !== this.#snapshot)) {
+    this.#operation.assertActive?.();
+    if (snapshot.generation !== this.generation || (this.#operation.snapshot && snapshot !== this.#operation.snapshot)) {
       throw new Error('Message author binding belongs to another generation operation');
     }
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Message author: ${owner}`);
-    if (this.#author === owner && this.#snapshot === snapshot) return this;
-    return new RuntimeMessage(
-      this.conversation, this.content, this.generation, this.#reply,
-      this.sender, this.metadata, this.segments, this.message, this.endpointId,
-      this.mentioned, this.replyTo, this.#resolveClient, this.clientAdapter,
-      { requester: owner, snapshot, locale: this.locale,
-        ...(this.commandPrefix !== undefined ? { commands: { prefix: this.commandPrefix, menu: this.commandMenu } } : {}),
-        assertActive: this.#assertActive, origin: this.origin,
-        retirementSignal: this.#retirementSignal, session: this.#sessionBinding, registerOperationView: this.#registerOperationView },
-    );
+    if (this.#operation.requester === owner && this.#operation.snapshot === snapshot) return this;
+    return new RuntimeMessage(this.#facts, {
+      ...this.#operation,
+      requester: owner,
+      snapshot,
+      presentation: {
+        locale: this.locale,
+        ...(this.commandPrefix !== undefined
+          ? { commands: { prefix: this.commandPrefix, menu: this.commandMenu } }
+          : {}),
+      },
+    });
   }
 
-  /** @internal Retirement notification; ordinary leased sends may still drain. */
+  /** @internal Explicit operation cancellation; replacement alone does not end accepted work. */
   [operationInputSignal](): AbortSignal | undefined {
-    this.#assertActive?.();
-    return this.#retirementSignal;
+    this.#operation.assertActive?.();
+    return this.#operation.signal;
   }
 
   /** @internal The command/handler author's actual leased operation. */
   [interactionOperationScope](): InteractionOperationScope | undefined {
-    this.#assertActive?.();
-    return this.#snapshot ? {
-      snapshot: this.#snapshot,
-      owner: this.#author ?? this.#snapshot.root,
-      retirementSignal: this.#retirementSignal,
+    this.#operation.assertActive?.();
+    return this.#operation.snapshot ? {
+      snapshot: this.#operation.snapshot,
+      owner: this.#operation.requester ?? this.#operation.snapshot.root,
+      signal: this.#operation.signal,
+      ...(this.#operation.captureInteraction ? { retain: () => {
+        this.#operation.assertActive?.();
+        return this.#operation.captureInteraction!(this.#operation.requester ?? this.#operation.snapshot!.root);
+      } } : {}),
     } : undefined;
   }
 
@@ -383,11 +379,11 @@ export class RuntimeMessage implements MessageBase {
   }
 
   formatCommand(localPath: string, owner?: PluginId): string | undefined {
-    this.#assertActive?.();
-    if (!this.#snapshot) return undefined;
-    const commands = this.#snapshot.projections.get(commandFeatureId);
+    this.#operation.assertActive?.();
+    if (!this.#operation.snapshot) return undefined;
+    const commands = this.#operation.snapshot.projections.get(commandFeatureId);
     return isCommandIndex(commands)
-      ? commands.formatCommand(owner ?? this.#author ?? this.#snapshot.root, localPath, this.commandPrefix, this.locale)
+      ? commands.formatCommand(owner ?? this.#operation.requester ?? this.#operation.snapshot.root, localPath, this.commandPrefix, this.locale)
       : undefined;
   }
 
@@ -397,7 +393,8 @@ export class RuntimeMessage implements MessageBase {
    * generation-scoped; retaining the returned Client after dispatch is invalid.
    */
   get $client(): unknown {
-    return this.#resolveClient();
+    if (!this.#operation.client) throw new Error('Message has no Endpoint Client context');
+    return this.#operation.client();
   }
   readonly $replyFrom: (requester: PluginId, content: SendContent) => Promise<DeliveryReceipt>;
   /**

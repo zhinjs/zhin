@@ -84,7 +84,7 @@ The Sandbox adapter (`plugins/adapters/sandbox`) provides both an adapter and a 
     "entry": "./plugin.ts",
     "runtime": "trusted",
     "features": [
-      { "package": "@zhin.js/adapter", "api": "^1.0.0" },
+      { "package": "@zhin.js/adapter", "api": "^2.0.0" },
       { "package": "@zhin.js/page", "api": "^1.0.0" }
     ]
   }

@@ -1,4 +1,4 @@
-import { createMemoryGameServices, plainTextFromSendContent, type GameMessageLike } from '@zhin.js/game-kit';
+import { channelKey, createMemoryGameServices, plainTextFromSendContent, type GamePlayer } from '@zhin.js/game-kit';
 import { handleChoice, startAdventure } from '../src/game-flow.js';
 import { getAdvHelp } from '../src/adv-command.js';
 import { createServices } from '../src/session-service.js';
@@ -6,13 +6,13 @@ import { SCENES, sceneCatalog } from '../src/story-scenes.js';
 import { sceneNarrative, visibleChoices, type GameState } from '../src/story.js';
 import { ITEM_IDS } from '../src/story-items.js';
 
-function message(locale: 'zh-CN' | 'en'): GameMessageLike {
-  return {
-    locale,
-    $adapter: 'test', $endpoint: 'default', $channel: { type: 'group', id: 'g1' },
-    $sender: { id: 'alice', name: 'Alice' }, content: '', $reply: async () => 'mid',
-    formatCommand: (path) => path === 'adv' ? '!games adventure' : undefined,
-  };
+function message(locale: 'zh-CN' | 'en'): GamePlayer {
+  return { target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' }, conversation: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' },
+locale,
+sender: { id: 'alice', name: 'Alice' },
+content: '',
+$reply: async () => 'mid',
+formatCommand: (path) => path === 'adv' ? '!games adventure' : undefined };
 }
 
 it('translates every scene and choice without changing its requirements or payloads', () => {
@@ -37,7 +37,7 @@ it('translates every scene and choice without changing its requirements or paylo
 it('keeps an active adventure language and captures the new language on restart', async () => {
   const services = createMemoryGameServices(['adv_sessions', 'adv_profiles'], createServices);
   expect(plainTextFromSendContent(await startAdventure(services, message('en')) ?? '')).toContain('Entrance to the Ruins');
-  const session = (await services.sessions.getActiveForUser('test-default-group:g1', 'alice'))!;
+  const session = (await services.sessions.getActiveForUser(channelKey({ target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' } }), 'alice'))!;
   expect(session.locale).toBe('en');
   const result = await handleChoice(services, message('zh-CN'), session.id, 'leave');
   expect(plainTextFromSendContent(result ?? '')).toContain("A Coward's Return");

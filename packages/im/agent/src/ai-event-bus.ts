@@ -1,3 +1,4 @@
+import { bindActivityFeedbackSource } from './activity-feedback/operation-source.js';
 import { type Message, commMessageFromHookContext, resolveIMSessionId, resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { AIHookEvent } from './resource-hub/types.js';
 import type { AIEventPayload } from './ai-event-contract.js';
@@ -37,7 +38,7 @@ export function createAIHookBusPayload(
   agentId?: string,
 ): AIEventPayload {
   const commMessage = resolveCommMessage(event);
-  return {
+  return bindActivityFeedbackSource({
     sessionId: resolveSessionId(event),
     source,
     hookType: event.type,
@@ -64,7 +65,7 @@ export function createAIHookBusPayload(
     savedTokens: typeof event.context.savedTokens === 'number' ? event.context.savedTokens : undefined,
     totalTokensBefore: typeof event.context.totalTokensBefore === 'number' ? event.context.totalTokensBefore : undefined,
     totalTokensAfter: typeof event.context.totalTokensAfter === 'number' ? event.context.totalTokensAfter : undefined,
-  };
+  }, commMessage);
 }
 
 export function isAISessionNewPayload(payload: AIEventPayload): payload is AISessionNewPayload {

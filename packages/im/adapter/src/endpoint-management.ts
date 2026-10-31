@@ -38,47 +38,51 @@ export interface EndpointPendingRequest {
   readonly created_at: number;
 }
 
+/** Optional caller lifetime; scoped ports combine it with the exact account incarnation. */
+export interface EndpointManagementRequest { readonly signal?: AbortSignal; }
+export interface EndpointGroupRequest extends EndpointManagementRequest { readonly groupId: string; }
+export interface EndpointUserRequest extends EndpointManagementRequest { readonly userId: string; }
+export interface EndpointMemberRequest extends EndpointGroupRequest { readonly userId: string; }
+/** Inspection/moderation callers must supply their owned work lifetime. */
+export interface EndpointGroupInspectionRequest extends EndpointGroupRequest { readonly signal: AbortSignal; }
+export interface EndpointMemberInspectionRequest extends EndpointMemberRequest { readonly signal: AbortSignal; }
+export interface EndpointModerationRequest extends EndpointMemberInspectionRequest { readonly action: GroupModerationAction; }
+export interface EndpointMuteRequest extends EndpointMemberRequest { readonly durationSeconds: number; }
+export interface EndpointAdminRequest extends EndpointMemberRequest { readonly enabled: boolean; }
+export interface EndpointApproveRequest extends EndpointManagementRequest { readonly requestId: string; readonly remark?: string; }
+export interface EndpointRejectRequest extends EndpointManagementRequest { readonly requestId: string; readonly reason?: string; }
+export interface EndpointGroupNoticeRequest extends EndpointGroupRequest { readonly content: string; }
+
 /**
- * Optional, platform-neutral management surface exposed by an Endpoint.
- *
- * Platform adapters own SDK aliases, identifier coercion, and response
- * normalization. Hosts consume this interface without inspecting adapter
- * names or transport-specific fields.
+ * Platform-neutral semantic requests. Native SDK method signatures are not changed.
+ * Every request carries the lifetime of its work; platforms pass it to owned transports or
+ * use an operation scope for SDKs without cancellation. IDs remain platform addresses.
  */
 export interface EndpointManagement {
-  /** Fresh platform facts for moderation; absent means automatic moderation is unsupported. */
-  inspectGroupMember?(groupId: string, userId: string, signal: AbortSignal): Promise<GroupModerationMember>;
-  /**
-   * Scene facts for the ADR 0041 scene line (name, owner, admins, size, global mute). Single bounded
-   * lookup; every field is optional and absent means unknown. Host-internal, never a Console capability.
-   */
-  inspectGroupScene?(groupId: string, signal: AbortSignal): Promise<GroupSceneFacts>;
-  /**
-   * One member's display facts (role, card, title, mute expiry) from a single lookup. Unlike
-   * {@link inspectGroupMember} it carries no moderation verdict and costs one platform call.
-   */
-  inspectGroupMemberProfile?(groupId: string, userId: string, signal: AbortSignal): Promise<GroupMemberProfile>;
-  /** Recheck platform permissions and membership immediately before the operation. */
-  moderateGroupMember?(groupId: string, userId: string, action: GroupModerationAction, signal: AbortSignal): Promise<void>;
-  listFriends?(): Promise<readonly EndpointFriend[]>;
-  listGroups?(): Promise<readonly EndpointGroup[]>;
-  listChannels?(): Promise<readonly EndpointChannel[]>;
-  listGroupMembers?(groupId: string): Promise<readonly unknown[]>;
-  /** Live pending friend/group requests (preferred over unified_inbox_request). */
-  listRequests?(): Promise<readonly EndpointPendingRequest[]>;
-  approveRequest?(requestId: string, remark?: string): Promise<void>;
-  rejectRequest?(requestId: string, reason?: string): Promise<void>;
-  kickGroupMember?(groupId: string, userId: string): Promise<void>;
-  muteGroupMember?(groupId: string, userId: string, durationSeconds: number): Promise<void>;
-  setGroupAdmin?(groupId: string, userId: string, enabled: boolean): Promise<void>;
-  deleteFriend?(userId: string): Promise<void>;
-  /**
-   * Publish a group announcement (notice). Host-internal: used by the approved-announcement send path
-   * (ADR 0037 slice B) after the human approval, control plane and session gate. Not a Console capability,
-   * so it is intentionally absent from {@link endpointManagementCapabilityIds}.
-   */
-  sendGroupNotice?(groupId: string, content: string): Promise<void>;
+  /** Fresh platform permission, role and join facts; absent means unsupported. */
+  inspectGroupMember?(request: EndpointMemberInspectionRequest): Promise<GroupModerationMember>;
+  /** Scene name, owner, admins, size and mute facts; missing fields remain unknown. */
+  inspectGroupScene?(request: EndpointGroupInspectionRequest): Promise<GroupSceneFacts>;
+  inspectGroupMemberProfile?(request: EndpointMemberInspectionRequest): Promise<GroupMemberProfile>;
+  /** Recheck membership and platform permissions immediately before any effect. */
+  moderateGroupMember?(request: EndpointModerationRequest): Promise<void>;
+  listFriends?(request?: EndpointManagementRequest): Promise<readonly EndpointFriend[]>;
+  listGroups?(request?: EndpointManagementRequest): Promise<readonly EndpointGroup[]>;
+  listChannels?(request?: EndpointManagementRequest): Promise<readonly EndpointChannel[]>;
+  listGroupMembers?(request: EndpointGroupRequest): Promise<readonly unknown[]>;
+  listRequests?(request?: EndpointManagementRequest): Promise<readonly EndpointPendingRequest[]>;
+  approveRequest?(request: EndpointApproveRequest): Promise<void>;
+  rejectRequest?(request: EndpointRejectRequest): Promise<void>;
+  kickGroupMember?(request: EndpointMemberRequest): Promise<void>;
+  muteGroupMember?(request: EndpointMuteRequest): Promise<void>;
+  setGroupAdmin?(request: EndpointAdminRequest): Promise<void>;
+  deleteFriend?(request: EndpointUserRequest): Promise<void>;
+  /** Owner-approved publication remains in its existing policy path, outside Console capabilities. */
+  sendGroupNotice?(request: EndpointGroupNoticeRequest): Promise<void>;
 }
+
+export { createEndpointOperation } from './endpoint-operation.js';
+export type { EndpointOperation, EndpointOperationOptions } from './endpoint-operation.js';
 
 export interface GroupSceneFacts {
   readonly name?: string;

@@ -1,5 +1,5 @@
 /** Copy to commands/acceptance/index.ts only in an authorized test project. */
-import { adapterFeatureId, type AdapterIndex, endpointControlOf } from 'zhin.js/adapter';
+import { adapterFeatureId, type AdapterIndex } from 'zhin.js/adapter';
 import { outboundMessageToken } from 'zhin.js/core/runtime';
 import { defineCommand } from 'zhin.js/command';
 import { appendFile, open, readFile, unlink } from 'node:fs/promises';
@@ -35,6 +35,8 @@ export default defineCommand({
     const activeEndpoint = index.connection(target.adapter, target.endpoint);
     const resolvedId = index.resolve(target.adapter, target.endpoint);
     if (!resolvedId || index.clientAdapter(resolvedId) !== policy.platform) return;
+    // Capture before asynchronous delivery so a same-name reconnect cannot select a new Client.
+    const recallControl = action === 'reply-recall' ? index.control(resolvedId, 'recall') : undefined;
     const sample = createHash('sha256').update(`${target.alias}:${action}:${sampleText}${action === 'reply-image' && imageSample === 'rgb' ? ':image:rgb' : ''}`).digest('hex');
     const lockPath = `${policy.eventsPath}.lock`;
     let lock;
@@ -119,8 +121,7 @@ export default defineCommand({
             const receipt: any = await input.$reply(payload);
             result = receipt?.failure?.deliveryUnknown ? 'unknown' : receipt?.status === 'sent' && receipt.message?.id ? 'confirmed' : receipt?.status === 'unsupported' ? 'unsupported' : ['rejected', 'failed', 'suppressed'].includes(receipt?.status) ? 'failed' : 'unknown';
             if (action === 'reply-recall' && result === 'confirmed') {
-              const control = endpointControlOf(activeEndpoint);
-              if (!control?.recall) result = 'unsupported'; else await control.recall(receipt.message);
+              if (!recallControl?.recall) result = 'unsupported'; else await recallControl.recall({ message: receipt.message });
             }
           }
         }

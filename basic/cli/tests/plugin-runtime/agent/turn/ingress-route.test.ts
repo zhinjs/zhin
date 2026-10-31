@@ -8,7 +8,7 @@ import { requestApprovalOutcome, type TurnRequest } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { ConversationRuntime } from '../../../../../../packages/im/core/src/plugin-runtime/im/conversation-runtime.js';
-import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { rootPluginId, SnapshotStore, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { adapterFeatureId } from '@zhin.js/adapter';
 import { AgentTurnIngressRoute, auditStaleReply, mergedMemberAccess, mergedTurnSenders, selectDecisionAgentRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
@@ -27,8 +27,18 @@ describe('AgentTurnIngressRoute', () => {
     const read = vi.fn().mockResolvedValue({ agents: [], tools: [] });
     const executeLeased = vi.fn().mockResolvedValue({ status: 'completed', output: [] });
     const reply = vi.fn().mockResolvedValue({ status: 'sent' });
-    const message = new RuntimeMessage(conversation, '#hello', 1, reply, { id: 'sender' }, {}, [], undefined, 'configured-bot');
-    const retirement = new AbortController();
+    const message = new RuntimeMessage(
+      {
+        conversation: conversation,
+        content: '#hello',
+        sender: { id: 'sender' },
+        metadata: {},
+        segments: [],
+        endpointId: 'configured-bot',
+      },
+      { generation: 1, reply: reply },
+    );
+    const snapshots = new SnapshotStore(snapshot);
     const route = new AgentTurnIngressRoute({
       projectRoot: process.cwd(), runtime: { executeLeased } as never,
       im: { createInteraction: () => ({ ask: vi.fn() }) } as never,
@@ -38,8 +48,12 @@ describe('AgentTurnIngressRoute', () => {
         getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({}),
       }, agent: {} } as never,
     });
-    return { read, executeLeased, inspectGroupMember, retirement, reply,
-      run: () => route.route(message, { value: snapshot, active: true, retirementSignal: retirement.signal } as never, rootPluginId(), undefined),
+    return { read, executeLeased, inspectGroupMember, snapshots, reply,
+      run: async () => {
+        const lease = snapshots.acquire();
+        try { return await route.route(message, lease, rootPluginId(), undefined); }
+        finally { lease.release(); }
+      },
       resolve: () => completeLookup({ canModerate: false, platformRole: 'admin' }),
     };
   }
@@ -60,15 +74,27 @@ describe('AgentTurnIngressRoute', () => {
     expect(f.inspectGroupMember).toHaveBeenCalledOnce();
   });
 
-  it('does not disclose capabilities or run a model after the role lookup is cancelled', async () => {
+  it('continues the admitted turn on its leased snapshot after an unrelated HMR commit', async () => {
     const f = roleIngress(); const running = f.run();
     await vi.waitFor(() => expect(f.inspectGroupMember).toHaveBeenCalledOnce());
-    f.retirement.abort(new Error('generation retired'));
+    f.snapshots.commit(0, { snapshot: f.snapshots.current, dispose: () => undefined });
+    f.resolve();
+    await running;
+    expect(f.read).toHaveBeenCalledOnce();
+    expect(f.executeLeased).toHaveBeenCalledOnce();
+    await f.snapshots.close();
+  });
+
+  it('does not disclose capabilities or run a model after explicit Root stop cancels the role lookup', async () => {
+    const f = roleIngress(); const running = f.run();
+    await vi.waitFor(() => expect(f.inspectGroupMember).toHaveBeenCalledOnce());
+    const stopping = f.snapshots.close();
     f.resolve();
     await running;
 
     expect(f.read).not.toHaveBeenCalled();
     expect(f.executeLeased).not.toHaveBeenCalled();
+    await stopping;
   });
 
   it.each([
@@ -82,8 +108,18 @@ describe('AgentTurnIngressRoute', () => {
     const endpoint = { id: 'root\u0000zhin.adapter\u0000test', adapter: 'root' };
     const conversation = { endpoint, kind: scenario.source, id: 'source' };
     const reply = vi.fn().mockResolvedValue({ status: 'sent' });
-    const message = new RuntimeMessage(conversation, '#hello', 1, reply, { id: 'sender' }, {}, [],
-      scenario.messageId ? { conversation, id: scenario.messageId } : undefined, 'bot');
+    const message = new RuntimeMessage(
+      {
+        conversation: conversation,
+        content: '#hello',
+        sender: { id: 'sender' },
+        metadata: {},
+        segments: [],
+        message: scenario.messageId ? { conversation, id: scenario.messageId } : undefined,
+        endpointId: 'bot',
+      },
+      { generation: 1, reply: reply },
+    );
     const snapshot = {
       root: rootPluginId(), resources: new Map(), tree: new Map(),
       projections: new Map([[adapterFeatureId, {
@@ -238,9 +274,28 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
     }
     return { status: 'sent' as const };
   });
-  const message = new RuntimeMessage(conversation, options.text, 1, reply, { id: 'user' }, {}, [], undefined,
-    'bot', false, undefined, undefined, 'fixture', { locale: options.locale,
-      ...(options.prefix === undefined ? {} : { resolveCommands: value => dispatcher.commandEnvironment(value, snapshot) }) });
+  const message = new RuntimeMessage(
+    {
+      conversation: conversation,
+      content: options.text,
+      sender: { id: 'user' },
+      metadata: {},
+      segments: [],
+      endpointId: 'bot',
+      mentioned: false,
+    },
+    {
+      generation: 1,
+      reply: reply,
+      clientAdapter: 'fixture',
+      presentation: {
+        locale: options.locale,
+        ...(options.prefix === undefined
+          ? {}
+          : { resolveCommands: (value) => dispatcher.commandEnvironment(value, snapshot) }),
+      },
+    },
+  );
   const listModels = vi.fn(async () => [{ provider: 'fixture', models: ['fixture-model'] }]);
   const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) =>
     options.execute ? options.execute(request) : { status: 'completed', output: [] });

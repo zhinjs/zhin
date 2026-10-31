@@ -1,3 +1,4 @@
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import {
   MilkyV1Client,
   type MilkyV1Event,
@@ -11,6 +12,7 @@ import {
 import {
   forwardEndpointClientEvents,
   type ClientEventPayloads,
+  type PendingRpcRequest,
 } from 'zhin.js/adapter';
 import type { ResolvedMilkyConfig, callApi } from './protocol.js';
 
@@ -19,42 +21,44 @@ export { MilkyV1Client as MilkyClient } from '@imhelper/milky-v1';
 type MilkyClientEvents = ImHelperEventMap<string, MilkyV1Event, EventMap<string>>;
 export type MilkyClientEventMap = ClientEventPayloads<MilkyClientEvents>;
 
-/** Construct the exact public imhelper Client without handing it transport ownership. */
-export function milkyClientOptions(
-  config: ResolvedMilkyConfig,
-  request: typeof callApi,
-  signal?: AbortSignal,
-): ConstructorParameters<typeof MilkyV1Client>[0] {
-  return {
-    baseUrl: config.baseUrl,
-    selfId: config.id,
-    accessToken: config.access_token,
-    receiveMode: 'manual',
-    call: (action, params) => request(
-      {
-        baseUrl: config.baseUrl,
-        access_token: config.access_token,
-        ...(signal ? { signal } : {}),
-      },
-      action,
-      params,
-    ),
+/** One account-bound transport, shared by native SDK and semantic requests. */
+export interface MilkyClientBinding {
+  readonly config: ResolvedMilkyConfig;
+  readonly request: typeof callApi;
+  readonly signal?: AbortSignal;
+}
+export type MilkyActionCaller = (request: PendingRpcRequest) => Promise<MilkyV1Response>;
+export function createMilkyActionCaller({ config, request, signal }: MilkyClientBinding): MilkyActionCaller {
+  return action => {
+    const operationSignal = signal && action.signal ? AbortSignal.any([signal, action.signal]) : signal ?? action.signal;
+    if (operationSignal?.aborted) throw new EndpointDeliveryError('endpoint_inactive', 'Endpoint request ended before submission', 'not_sent', { cause: operationSignal.reason });
+    return request({ baseUrl: config.baseUrl, access_token: config.access_token, ...action, signal: operationSignal });
+  };
+}
+export function milkyClientOptions({ config, call }: {
+  readonly config: ResolvedMilkyConfig;
+  readonly call: MilkyActionCaller;
+}): ConstructorParameters<typeof MilkyV1Client>[0] {
+  return { baseUrl: config.baseUrl, selfId: config.id, accessToken: config.access_token, receiveMode: 'manual',
+    call: (action, params) => call({ action, params }),
   };
 }
 
-/** Use the Client's complete protocol response while keeping Endpoint internals data-oriented. */
-export async function callMilkyClient<T = unknown>(
-  client: MilkyV1Client,
-  action: string,
-  params?: Record<string, unknown>,
-): Promise<T | undefined> {
-  const response: MilkyV1Response<T> = await client.call<T>(action, params);
-  if (response.status !== 'ok') {
-    throw new Error(
-      `Milky API ${action}: retcode=${response.retcode}${response.message ? ` ${response.message}` : ''}`,
-    );
+/**
+ * Semantic ports must retain the SDK's status + retcode check when using its shared HTTP caller.
+ * A contradictory envelope proves neither success nor rejection.
+ * @see https://milky.ntqqrev.org/guide/communication
+ */
+export function readMilkyResponse<T = unknown>(response: unknown, action: string): T | undefined {
+  if (response && typeof response === 'object') {
+    const result = response as Partial<MilkyV1Response<unknown>>;
+    if (result.status === 'ok' && result.retcode === 0) return result.data as T | undefined;
+    if (result.status === 'failed' && Number.isSafeInteger(result.retcode) && result.retcode !== 0) {
+      throw new EndpointDeliveryError('platform_rejected',
+        `Milky API ${action}: retcode=${result.retcode}${typeof result.message === 'string' && result.message ? ` ${result.message}` : ''}`, 'rejected');
+    }
   }
-  return response.data;
+  throw new EndpointDeliveryError('delivery_unconfirmed', `Milky API ${action} did not confirm the action result`, 'unknown');
 }
 
 const milkyClientEventNames = Object.freeze([

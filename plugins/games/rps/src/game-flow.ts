@@ -1,5 +1,5 @@
 import { createMessages, resolveLocale } from 'zhin.js/i18n';
-import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
+import { channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import type { RpsSessionRow } from './models.js';
 import {
   RPS_PREFIX,
@@ -18,88 +18,94 @@ import { buildRpsView } from './view.js';
  */
 function renderView(
   session: RpsSessionRow,
-  message: GameMessageLike,
+  message: GamePlayer,
   lastRound?: { player: RpsMove; bot: RpsMove; result: 0 | 1 | 2 },
 ): GameReply {
-  return buildRpsView(session, lastRound, message.$channel.type);
+  return buildRpsView(session, lastRound, message.target.kind);
 }
 
 export async function startGame(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply | undefined> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const active = await services.getActiveByChannel(ch);
-  const locale = resolveLocale(active ? active.locale : message.locale);
-  if (active) {
-    if (active.player_id === message.$sender.id) {
-      return messages(locale, 'text1');
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const active = await services.getActiveByChannel(ch);
+    const locale = resolveLocale(active ? active.locale : message.locale);
+    if (active) {
+      if (active.player_id === message.sender.id) {
+        return messages(locale, 'text1');
+      }
+      return messages(locale, 'text2', { p0: active.player_name });
     }
-    return messages(locale, 'text2', { p0: active.player_name });
-  }
-  const session = await services.createSession(message);
-  return renderView(session, message);
+    const session = await services.createSession(message);
+    return renderView(session, message);
+  } });
 }
 
 export async function handleChoice(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   sessionId: string,
   choiceId: string,
 ): Promise<GameReply | null> {
-  const session = await services.getById(sessionId);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text3');
-  if (session.status !== 'active' && choiceId !== 'restart') {
-    return messages(locale, 'text4');
-  }
-  if (session.player_id !== message.$sender.id) return messages(locale, 'text5');
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.getById(sessionId);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text3');
+    if (session.status !== 'active' && choiceId !== 'restart') {
+      return messages(locale, 'text4');
+    }
+    if (session.player_id !== message.sender.id) return messages(locale, 'text5');
 
-  if (choiceId === 'restart') {
-    await services.updateSession(session.id, { status: 'aborted' });
-    return (await startGame(services, message)) ?? null;
-  }
-  if (choiceId === 'quit') {
-    await services.updateSession(session.id, { status: 'aborted' });
-    return renderView((await services.getById(session.id))!, message);
-  }
+    if (choiceId === 'restart') {
+      await services.updateSession(session.id, { status: 'aborted' });
+      return (await startGame(services, message)) ?? null;
+    }
+    if (choiceId === 'quit') {
+      await services.updateSession(session.id, { status: 'aborted' });
+      return renderView((await services.getById(session.id))!, message);
+    }
 
-  const player = choiceId as RpsMove;
-  if (!['rock', 'paper', 'scissors'].includes(player)) return messages(locale, 'text6');
+    const player = choiceId as RpsMove;
+    if (!['rock', 'paper', 'scissors'].includes(player)) return messages(locale, 'text6');
 
-  const bot = randomBotMove();
-  const result = resolveRound(player, bot);
-  let playerWins = session.player_wins;
-  let botWins = session.bot_wins;
-  if (result === 1) playerWins++;
-  if (result === 2) botWins++;
+    const bot = randomBotMove();
+    const result = resolveRound(player, bot);
+    let playerWins = session.player_wins;
+    let botWins = session.bot_wins;
+    if (result === 1) playerWins++;
+    if (result === 2) botWins++;
 
-  let status: RpsSessionRow['status'] = 'active';
-  if (playerWins >= WIN_TARGET) status = 'won';
-  else if (botWins >= WIN_TARGET) status = 'lost';
+    let status: RpsSessionRow['status'] = 'active';
+    if (playerWins >= WIN_TARGET) status = 'won';
+    else if (botWins >= WIN_TARGET) status = 'lost';
 
-  await services.updateSession(session.id, {
-    player_wins: playerWins,
-    bot_wins: botWins,
-    round: session.round + 1,
-    status,
-  });
+    await services.updateSession(session.id, {
+      player_wins: playerWins,
+      bot_wins: botWins,
+      round: session.round + 1,
+      status,
+    });
 
-  const updated = (await services.getById(session.id))!;
-  return renderView(updated, message, { player, bot, result });
+    const updated = (await services.getById(session.id))!;
+    return renderView(updated, message, { player, bot, result });
+  } });
 }
 
 export async function continueGame(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply> {
-  const session = await services.getActiveForUser(
-    `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
-    message.$sender.id,
-  );
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text7');
-  return renderView(session, message);
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.getActiveForUser(
+      channelKey(message),
+      message.sender.id,
+    );
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text7');
+    return renderView(session, message);
+  } });
 }
 
 export { RPS_PREFIX };

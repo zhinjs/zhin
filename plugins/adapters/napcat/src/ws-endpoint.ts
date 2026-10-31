@@ -38,10 +38,6 @@ import {
 } from './protocol.js';
 import { receiveNapCatSideEvent } from './side-event-dispatch.js';
 import {
-  handleNapCatWsMessage,
-  rejectAllPending,
-} from './ws-transport.js';
-import {
   type NapCatWsCreateOptions,
   type NapCatWsSocket,
 } from './ws-types.js';
@@ -65,13 +61,13 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
   readonly #options: NapCatWsEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly #management: EndpointManagement = createNapCatEndpointManagement(this);
-  readonly #control: EndpointControl = createRecallEndpointControl((id) => this.#recallMessage(id));
-  readonly #content = createNapCatContentPort((action, params) => this.callApi(action, params));
+  readonly #control: EndpointControl = createRecallEndpointControl((id, signal) => this.#recallMessage(id, signal));
+  readonly #content = createNapCatContentPort(request => this.requestApi(request));
   readonly #lifecycle: EndpointLifecycle;
   #open = false;
 
   constructor(options: NapCatWsEndpointOptions) {
-    super(options.config, undefined, options.signal);
+    super({ config: options.config, signal: options.signal });
     this.#logger = getAdapterLogger('napcat', options.config.id);
     this.#options = options;
     const readTransportState = () => this.#transportState;
@@ -125,7 +121,7 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
   async #stop(): Promise<void> {
     this.#open = false;
     await this.#lifecycle.stop();
-    rejectAllPending(this.pendingActions);
+    this.rpc.disconnect();
     this.#inboundDeduper.clear();
     if (this.transportSocket) {
       try {
@@ -137,10 +133,10 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
     }
   }
 
-  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
-    const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
+    const data = await this.requestApi({ action, params, signal }) as { message_id?: number | string } | undefined;
     const rawId = data?.message_id;
     if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
       throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
@@ -155,9 +151,9 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
     return messageId;
   }
 
-  async #recallMessage(messageId: string): Promise<void> {
+  async #recallMessage(messageId: string, signal?: AbortSignal): Promise<void> {
     if (!messageId) return;
-    await this.callApi('delete_msg', { message_id: Number(messageId) });
+    await this.requestApi({ action: 'delete_msg', params: { message_id: Number(messageId) }, signal });
   }
 
 
@@ -235,7 +231,7 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
       this.transportSocket = ws;
       handle.onForceClose(() => {
         if (this.transportSocket === ws) {
-          rejectAllPending(this.pendingActions);
+          this.rpc.disconnect();
         }
         try {
           ws.close();
@@ -278,17 +274,13 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
       ws.on('message', (data) => {
         if (this.transportSocket !== ws || ws.readyState !== 1 || !this.#lifecycle.started) return;
         this.#lifecycle.notifyHeartbeatAck();
-        handleNapCatWsMessage(data, {
-          endpointId: this.#options.config.id,
-          pending: this.pendingActions,
-          admit: (event) => this.ingest(event),
-        });
+        this.rpc.receive(data, event => this.ingest(event));
       });
 
       ws.on('close', (code, reason) => {
         if (this.transportSocket !== ws) return;
         this.transportSocket = undefined;
-        rejectAllPending(this.pendingActions);
+        this.rpc.disconnect();
         const reasonStr = typeof reason === 'string'
           ? reason
           : Buffer.isBuffer(reason)

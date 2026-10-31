@@ -6,7 +6,7 @@ import { createHttpHost } from '@zhin.js/host-http';
 import { NapCatWsEndpoint } from '../src/ws-endpoint.js';
 import { NapCatHttpEndpoint } from '../src/http-endpoint.js';
 import { resolveNapCatConfig } from '../src/protocol.js';
-import { createEndpointHarness } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 
 const id = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'napcat');
 const incoming = {
@@ -28,7 +28,7 @@ it('does not consume a native message ID while closed before the same Client is 
   const harness = await createEndpointHarness(() => new NapCatWsEndpoint({ id, config,
     createWebSocket: () => { queueMicrotask(() => socket.emit('open')); return socket; },
   }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'],
-    gateway: { async receive(event) { if (event.name === 'message.receive') receive(event.payload); } } });
+    gateway: createTestEndpointEventGateway({ async receive(event) { if (event.name === 'message.receive') receive(event.payload); } }) });
   try {
     await harness.start(); harness.open(); await harness.close();
     socket.emit('message', JSON.stringify(incoming));
@@ -55,7 +55,7 @@ it('does not hold close for an incomplete Host HTTP body and rejects its parsed 
   const receive = vi.fn();
   const harness = await createEndpointHarness(() => new NapCatHttpEndpoint({ id, config, http }), {
     name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'],
-    gateway: { async receive(event) { if (event.name === 'message.receive') receive(event.payload); } },
+    gateway: createTestEndpointEventGateway({ async receive(event) { if (event.name === 'message.receive') receive(event.payload); } }),
   });
   let pending: ReturnType<typeof request> | undefined;
   try {

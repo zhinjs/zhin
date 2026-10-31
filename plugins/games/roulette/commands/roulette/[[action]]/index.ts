@@ -1,6 +1,7 @@
-import { gameCommandFeedback } from '@zhin.js/game-kit';
+import { gameCommandFeedback, gamePlayerFromInput, replyGameOperation } from '@zhin.js/game-kit';
 import { defineCommand } from 'zhin.js/command';
-import { getRouletteHelp } from '../../../src/roulette-actions.js';
+import { resolveRouletteFlow } from '../../../src/runtime.js';
+import { getRouletteHelp, normalizeRouletteAction } from '../../../src/roulette-actions.js';
 import { runRouletteCommand } from '../../../src/roulette-command.js';
 
 export default defineCommand({
@@ -8,7 +9,11 @@ export default defineCommand({
   params: { action: { type: 'string', default: '' } },
   async execute(context) {
     const action = String(context.params.action ?? '');
-    const reply = await runRouletteCommand(context, context.input, action);
-    return reply ?? gameCommandFeedback(context, 'unknown', action) + '\n\n' + getRouletteHelp(context);
+    const normalized = normalizeRouletteAction(action);
+    if (normalized === 'help') return getRouletteHelp(context);
+    if (!normalized) return gameCommandFeedback(context, 'unknown', action) + '\n\n' + getRouletteHelp(context);
+    const flow = resolveRouletteFlow(context), player = gamePlayerFromInput(context.input, context);
+    await replyGameOperation({ session: flow.services.sessions, player, reply: context.session?.reply,
+      run: () => runRouletteCommand(context, context.input, action) });
   },
 });

@@ -3,8 +3,6 @@ import {
   type Models,
   type RelatedModel,
 } from '@zhin.js/core';
-import { channelKey } from './board-sender.js';
-import type { GameMessageLike } from './command-message.js';
 import type { HostGameDbSource } from './memory-db.js';
 import { generateCompactId } from './random.js';
 
@@ -77,13 +75,17 @@ export interface LeaderboardEntry {
   games: number;
 }
 
+export interface GameRecordInput {
+  /** The session's existing scope key; historical rows must not be retroactively reattributed. */
+  readonly scope: string;
+  readonly player: Readonly<{ id: string; name?: string }>;
+  readonly gameId: string;
+  readonly result: GameRecordResult;
+  readonly score?: number;
+}
+
 export interface GameRecordPort {
-  record(
-    message: GameMessageLike,
-    gameId: string,
-    result: GameRecordResult,
-    score?: number,
-  ): Promise<void>;
+  record(input: GameRecordInput): Promise<void>;
   getUserStats(userId: string, channelKeyFilter?: string): Promise<UserGameStats[]>;
   getLeaderboard(gameId: string, channelKeyFilter: string, limit?: number): Promise<LeaderboardEntry[]>;
 }
@@ -91,15 +93,15 @@ export interface GameRecordPort {
 export class GameRecordStore implements GameRecordPort {
   constructor(private readonly database: GameRecordDb) {}
 
-  async record(message: GameMessageLike, gameId: string, result: GameRecordResult, score = 0): Promise<void> {
+  async record(input: GameRecordInput): Promise<void> {
     await getRecordModel(this.database).create({
       id: recordId(),
-      user_id: message.$sender.id,
-      user_name: String(message.$sender.name ?? message.$sender.id),
-      channel_key: channelKey(message),
-      game_id: gameId,
-      result,
-      score,
+      user_id: input.player.id,
+      user_name: input.player.name ?? input.player.id,
+      channel_key: input.scope,
+      game_id: input.gameId,
+      result: input.result,
+      score: input.score ?? 0,
       created_at: Date.now(),
     });
   }

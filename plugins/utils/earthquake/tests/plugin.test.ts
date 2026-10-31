@@ -113,7 +113,7 @@ describe('@zhin.js/plugin-earthquake runtime', () => {
       quakes = [liveQuake('locale-test', 1, { magnitude: 6.1 })];
       await fake.clock.advance(2 * 60_000);
       expect(fake.sent).toHaveLength(1);
-      expect(fake.sent[0]).toMatchObject({ kind: 'send', input: { locale: 'en', content: expect.stringContaining('Earthquake') } });
+      expect(fake.sent[0]).toMatchObject({ kind: 'sendTarget', input: { locale: 'en', content: expect.stringContaining('Earthquake'), target: input.conversation } });
     } finally { await fake.dispose(); }
   });
 

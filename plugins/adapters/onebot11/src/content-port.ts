@@ -1,8 +1,8 @@
-import type { EndpointContentPort, EndpointContentResolveContext } from 'zhin.js/adapter';
+import type { EndpointContentPort, EndpointContentResolveContext, PendingRpcRequest } from 'zhin.js/adapter';
 import { toCanonicalSegments } from '@zhin.js/core';
 import type { ConversationMessage, ConversationReference, ForwardEntry } from '@zhin.js/im-contract';
 
-type CallApi = (action: string, params?: Record<string, unknown>) => Promise<unknown>;
+type CallApi = (request: PendingRpcRequest) => Promise<unknown>;
 
 export function createOneBot11ContentPort(callApi: CallApi): EndpointContentPort {
   return Object.freeze({
@@ -15,7 +15,7 @@ export function createOneBot11ContentPort(callApi: CallApi): EndpointContentPort
             : Object.freeze({ status: 'resolved' as const, reference, value: reference.media });
         }
         if (reference.kind === 'message') {
-          const row = await callApi('get_msg', { message_id: reference.message.id }) as Record<string, unknown>;
+          const row = await callApi({ action: 'get_msg', params: { message_id: reference.message.id }, signal: context.signal }) as Record<string, unknown>;
           context.signal.throwIfAborted();
           const segments = normalizeSegments(row.message ?? row.raw_message);
           const sender = row.sender as Record<string, unknown> | undefined;
@@ -30,7 +30,7 @@ export function createOneBot11ContentPort(callApi: CallApi): EndpointContentPort
           });
           return Object.freeze({ status: 'resolved' as const, reference, value });
         }
-        const raw = await callApi('get_forward_msg', { id: reference.forwardId }) as Record<string, unknown>;
+        const raw = await callApi({ action: 'get_forward_msg', params: { id: reference.forwardId }, signal: context.signal }) as Record<string, unknown>;
         context.signal.throwIfAborted();
         const nodes = Array.isArray(raw.messages) ? raw.messages.slice(0, context.maxEntries) : [];
         const value: readonly ForwardEntry[] = Object.freeze(nodes.map((node) => {

@@ -122,6 +122,7 @@ ai:
 | `usageQuota` | keep | 常用开关，保留 |
 | `schedule` | keep | 常用开关，保留 |
 | `masterShell` | keep | 常用开关，保留 |
+| `masterShellApprovalMode` | keep | 仅用于 `masterShell: isolated` 的主人私聊；默认 `ask` 询问主人，`auto` 自动审核（拒绝时转问主人），`inherit` 沿用 `execApprovalMode` |
 | `compaction` | keep | 常用开关，保留 |
 | `rateLimit` | keep | 常用开关，保留 |
 | `preExecTimeout` | preset | 高级调优，默认值即推荐值，不建议修改 |

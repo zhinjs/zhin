@@ -14,7 +14,7 @@ export class SatoriAdapter extends Adapter<SatoriWsEndpoint | SatoriWebhookEndpo
   protected override async identifyConfiguration(input: SatoriEndpointConfig, signal: AbortSignal): Promise<string> {
     const config = resolveSatoriConfig(input);
     signal.throwIfAborted();
-    const login = await callSatoriApi<SatoriLogin>({ ...config, signal }, 'login', 'get');
+    const login = await callSatoriApi<SatoriLogin>({ ...config, signal, resource: 'login', method: 'get' });
     signal.throwIfAborted();
     if (!login?.platform || !login.user?.id) throw new Error('Satori login identity is unavailable');
     if (login.platform !== config.platform || login.user.id !== config.userId) throw new Error('Satori returned another login identity');

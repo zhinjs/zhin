@@ -1,3 +1,4 @@
+import { createTestEventGateway } from '../../test-utils/endpoint.js';
 import { Adapter, AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from 'zhin.js/adapter';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
 import { ImRuntime } from '@zhin.js/core/runtime';
@@ -10,7 +11,7 @@ export async function emailDeliveryRuntime(factory: () => EmailEndpoint) {
   const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'email', source: '/fixture/email', definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new FixtureAdapter() }) });
   const base: SnapshotState = {
     root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@fixture/root', packageRoot: '/fixture', children: [] }]]),
-    config: new Map([[root, {}]]), resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]),
+    config: new Map([[root, {}]]), resources: new Map([[root, new Map([[endpointEventGatewayToken.id, createTestEventGateway()]])]]),
     capabilities: new Map([[slot.id, slot]]), projections: new Map(),
   };
   const adapters = await AdapterIndex.create([slot], createSnapshotView(0, base), new AbortController().signal);

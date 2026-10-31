@@ -18,13 +18,23 @@ import {
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
  */
 import {
-  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, createEndpointLifecycle, type EndpointLifecycle,
+  createEndpointSpecification,
+  endpointSpec,
+  type Endpoint,
+  type EndpointSpecification,
+  createEndpointLifecycle,
+  type EndpointLifecycle,
   type EndpointControl,
   type EndpointChannel,
   type EndpointManagement,
   type EndpointSendRequest,
   type EndpointTransportState,
   type AdapterOutageNotifier,
+  createEndpointOperation,
+  type EndpointGroupRequest,
+  type EndpointMemberRequest,
+  type EndpointMuteRequest,
+  type EndpointManagementRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
@@ -193,10 +203,11 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥）：公网图片嵌入 markdown，
     // 拿不到 URL/尺寸的媒体降级为独立消息先发
-    const messages = formatOutboundMessages(payload, { imageSizes: await collectOutboundImageSizes(payload) });
+    const operation = createEndpointOperation({ signal });
+    const messages = formatOutboundMessages(payload, { imageSizes: await operation.prepare(() => collectOutboundImageSizes(payload, { signal })) });
     const body = messages[messages.length - 1]!;
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
@@ -207,7 +218,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
         ledger: this.#passiveReplies,
         activeGate: this.#activeGate,
         log: fields => this.#logger.warn(formatCompact(fields)),
-      }, conversation, messages);
+      }, { conversation, messages, signal });
     } catch (error) {
       const { failure, diagnostic } = qqDeliveryFailure(error);
       this.#logger.warn(formatCompact(diagnostic));
@@ -225,7 +236,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
   async recallMessage(messageId: string): Promise<void> {
     const { kind, channelId, qqMsgId } = parseCompoundMessageId(messageId);
     const bot = this.#requireBot();
-    await recallQqMessage(bot, kind, channelId, qqMsgId);
+    await recallQqMessage(bot, { kind, channelId, messageId: qqMsgId });
     this.#logger.debug(formatCompact({
       op: 'qq_recall',
       endpoint: this.#options.config.id,
@@ -489,10 +500,11 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
     await this.#stopping;
   }
 
-  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     // 媒体与 markdown/按钮不能同条发送（msg_type 7 与 2 互斥）：公网图片嵌入 markdown，
     // 拿不到 URL/尺寸的媒体降级为独立消息先发
-    const messages = formatOutboundMessages(payload, { imageSizes: await collectOutboundImageSizes(payload) });
+    const operation = createEndpointOperation({ signal });
+    const messages = formatOutboundMessages(payload, { imageSizes: await operation.prepare(() => collectOutboundImageSizes(payload, { signal })) });
     const body = messages[messages.length - 1]!;
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
@@ -503,7 +515,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
         ledger: this.#passiveReplies,
         activeGate: this.#activeGate,
         log: fields => this.#logger.warn(formatCompact(fields)),
-      }, conversation, messages);
+      }, { conversation, messages, signal });
     } catch (error) {
       const { failure, diagnostic } = qqDeliveryFailure(error);
       this.#logger.warn(formatCompact(diagnostic));
@@ -521,7 +533,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
   async recallMessage(messageId: string): Promise<void> {
     const { kind, channelId, qqMsgId } = parseCompoundMessageId(messageId);
     const bot = this.#requireBot();
-    await recallQqMessage(bot, kind, channelId, qqMsgId);
+    await recallQqMessage(bot, { kind, channelId, messageId: qqMsgId });
     this.#logger.debug(formatCompact({
       op: 'qq_recall',
       endpoint: this.#options.config.id,
@@ -668,29 +680,31 @@ function createQqEndpointManagement(
   const api = () => requireClient();
   return Object.freeze<EndpointManagement>({
     // QQ 群（group_openid / member_openid）：官方 v2 群管理接口，部分为白名单能力（11253）。
-    inspectGroupMember: (group, user, signal) => inspectQqGroupMember(api(), group, user, signal),
-    inspectGroupScene: (group, signal) => inspectQqGroupScene(api(), group, signal),
-    inspectGroupMemberProfile: (group, user, signal) => inspectQqGroupMemberProfile(api(), group, user, signal),
-    moderateGroupMember: (group, user, action, signal) => moderateQqGroupMember(api(), group, user, action, signal, isActive),
-    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
-      return qqGroupService(api()).getMembers(groupId);
+    inspectGroupMember: request => inspectQqGroupMember(api(), request),
+    inspectGroupScene: request => inspectQqGroupScene(api(), request),
+    inspectGroupMemberProfile: request => inspectQqGroupMemberProfile(api(), request),
+    moderateGroupMember: request => moderateQqGroupMember({ api: api(), isActive }, request),
+    async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
+      const operation = createEndpointOperation({ signal });
+      return operation.run(() => qqGroupService(api()).getMembers(groupId));
     },
-    async kickGroupMember(groupId: string, userId: string): Promise<void> {
-      await kickQqGroupMember(api(), groupId, userId);
+    async kickGroupMember({ groupId, userId, signal }: EndpointMemberRequest): Promise<void> {
+      await kickQqGroupMember(api(), { groupId, userId, signal });
     },
-    async muteGroupMember(groupId: string, userId: string, durationSeconds: number): Promise<void> {
-      await muteQqGroupMember(api(), groupId, userId, durationSeconds);
+    async muteGroupMember({ groupId, userId, durationSeconds, signal }: EndpointMuteRequest): Promise<void> {
+      await muteQqGroupMember(api(), { groupId, userId, durationSeconds, signal });
     },
-    async listChannels(): Promise<readonly EndpointChannel[]> {
+    async listChannels(request: EndpointManagementRequest = {}): Promise<readonly EndpointChannel[]> {
+      const operation = createEndpointOperation(request);
       const channels: EndpointChannel[] = [];
       const client = requireClient();
-      const guilds = await client.guildService.getList();
+      const guilds = await operation.run(() => client.guildService.getList());
       for (const guildValue of Array.isArray(guilds) ? guilds : []) {
         const guild = asRecord(guildValue);
         const guildId = String(guild.id ?? guild.guild_id ?? guildValue ?? '');
         if (!guildId) continue;
         const guildName = String(guild.name ?? guild.guild_name ?? guildId);
-        const rows = await client.channelService.getList(guildId);
+        const rows = await operation.run(() => client.channelService.getList(guildId));
         for (const channelValue of Array.isArray(rows) ? rows : []) {
           const channel = asRecord(channelValue);
           const id = String(channel.id ?? channel.channel_id ?? channelValue ?? '');
@@ -723,21 +737,21 @@ function createQqEndpointControl(
   recallById: (messageId: string) => Promise<void>,
 ): EndpointControl {
   return Object.freeze<EndpointControl>({
-    recall: async (message: MessageRef) => {
-      if (isCompoundMessageId(message.id)) return recallById(message.id);
+    recall: async ({ message, signal }) => {
+      if (isCompoundMessageId(message.id)) return createEndpointOperation({ signal }).run(() => recallById(message.id));
       const kind = qqOutboundKind(message.conversation);
-      await recallQqMessage(requireBot(), kind, message.conversation.id, message.id);
+      await createEndpointOperation({ signal }).run(() => recallQqMessage(requireBot(), { kind, channelId: message.conversation.id, messageId: message.id }));
     },
-    addReaction: async (message: MessageRef, emoji: string) => {
+    addReaction: async ({ message, emoji, signal }) => {
       const target = qqGuildReactionTarget(message, emoji);
       if (!target) return null;
-      await requireBot().reactionService.addGuildMessageReaction(target.channelId, target.messageId, target.type, target.id);
+      await createEndpointOperation({ signal }).run(() => requireBot().reactionService.addGuildMessageReaction(target.channelId, target.messageId, target.type, target.id));
       return `${target.type}:${target.id}`;
     },
-    removeReaction: async (message: MessageRef, reactionId: string) => {
+    removeReaction: async ({ message, reactionId, signal }) => {
       const target = qqGuildReactionTarget(message, reactionId);
       if (!target) return;
-      await requireBot().reactionService.deleteGuildMessageReaction(target.channelId, target.messageId, target.type, target.id);
+      await createEndpointOperation({ signal }).run(() => requireBot().reactionService.deleteGuildMessageReaction(target.channelId, target.messageId, target.type, target.id));
     },
   });
 }
@@ -766,7 +780,7 @@ function qqGuildReactionTarget(message: MessageRef, emoji: string) {
   return parsed ? { channelId, messageId, ...parsed } : null;
 }
 
-async function recallQqMessage(bot: QqBotTransport, kind: ReturnType<typeof qqOutboundKind>, channelId: string, messageId: string): Promise<void> {
+async function recallQqMessage(bot: QqBotTransport, { kind, channelId, messageId }: { readonly kind: ReturnType<typeof qqOutboundKind>; readonly channelId: string; readonly messageId: string }): Promise<void> {
   const recall = { private: bot.recallPrivateMessage, group: bot.recallGroupMessage,
     channel: bot.recallGuildMessage, direct: bot.recallDirectMessage }[kind];
   if (!recall) throw new EndpointDeliveryError('recall_unsupported', 'QQ transport does not support recall for this conversation', 'not_sent');

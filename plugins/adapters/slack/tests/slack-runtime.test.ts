@@ -322,10 +322,10 @@ describe('slack plugin runtime adapter (socket)', () => {
     };
     const message = { conversation, id: '1700000001.000000' };
 
-    await endpoint.control.recall?.(message);
-    await expect(endpoint.control.edit?.(message, 'updated')).resolves.toBe(message.id);
-    await expect(endpoint.control.addReaction?.(message, ':thumbsup:')).resolves.toBe('thumbsup');
-    await endpoint.control.removeReaction?.(message, 'thumbsup');
+    await endpoint.control.recall?.({ message: message });
+    await expect(endpoint.control.edit?.({ message: message, content: 'updated' })).resolves.toBe(message.id);
+    await expect(endpoint.control.addReaction?.({ message: message, emoji: ':thumbsup:' })).resolves.toBe('thumbsup');
+    await endpoint.control.removeReaction?.({ message: message, reactionId: 'thumbsup' });
 
     expect(client.chat.delete).toHaveBeenCalledWith({ channel: 'C001', ts: message.id });
     expect(client.chat.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -502,4 +502,35 @@ it('admits Slack button values as canonical action segments', async () => {
   endpoint.endpoint.admitInteraction({ type: 'block_actions', user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'source' }, actions: [{ type: 'button', action_id: 'generated-id', block_id: 'row', value: 'canonical-callback', action_ts: 'action' }] });
   await vi.waitFor(() => expect(receive).toHaveBeenCalledWith(expect.objectContaining({ segments: [{ type: 'action', data: { id: 'action', payload: 'canonical-callback', sourceMessageId: 'source' } }] })));
   await endpoint.stop();
+});
+
+it('ends a pending native upload wait without posting text after its late completion', async () => {
+  const client = mockClient();
+  const endpoint = await slackFixture({ id: capabilityId(rootPluginId(), adapterFeature, 'slack'), config: socketConfig, createSocket: () => mockSocket() }, () => client);
+  await endpoint.start(); const caller = new AbortController();
+  let finish!: (value: never) => void;
+  const upload = vi.spyOn(endpoint.endpoint, 'filesUploadV2').mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const sending = endpoint.send({ conversation: { endpoint: { adapter: 'slack', id: endpoint.canonicalId }, kind: 'group', id: 'C001' },
+    signal: caller.signal, payload: [{ type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } }] }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(1)); caller.abort();
+    let outcome: Awaited<typeof sending> | undefined; void sending.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'unknown' } }), { timeout: 200 });
+    finish({ ok: true } as never); await Promise.resolve(); await Promise.resolve(); expect(client.chat.postMessage).not.toHaveBeenCalled();
+    await expect(endpoint.send({ conversation: { endpoint: { adapter: 'slack', id: endpoint.canonicalId }, kind: 'group', id: 'C001' }, payload: 'fresh reply' })).resolves.toBe('C001:1700000001.000000');
+  } finally { finish({ ok: true } as never); await endpoint.stop(); await sending; }
+});
+it('cancels a retained Slack control owner while leaving native account state usable', async () => {
+  const client = mockClient(); const endpoint = await slackFixture({ id: capabilityId(rootPluginId(), adapterFeature, 'slack'), config: socketConfig, createSocket: () => mockSocket() }, () => client);
+  await endpoint.start(); const source = new AbortController(); let finish!: (value: never) => void;
+  vi.mocked(client.chat.delete).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const recalling = endpoint.index.control(endpoint.canonicalId, 'recall', { signal: source.signal })!.recall!({
+    message: { conversation: { endpoint: { adapter: 'slack', id: endpoint.canonicalId }, kind: 'group', id: 'C001' }, id: '1700000001.000000' },
+  }).then(() => ({ success: true }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(client.chat.delete).toHaveBeenCalledTimes(1)); source.abort();
+    let outcome: Awaited<typeof recalling> | undefined; void recalling.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'unknown' } }), { timeout: 200 });
+    finish({ ok: true } as never); expect(endpoint.transportState).toBe('open');
+  } finally { finish({ ok: true } as never); await endpoint.stop(); await recalling; }
 });

@@ -1,3 +1,4 @@
+import { channelKey } from '../src/board-sender.js';
 import { DisposeStack, outboundHostToken, projectLocaleToken, scheduleHostToken, createToken } from '@zhin.js/plugin-runtime';
 import { defineGamePlugin } from '../src/define-game-plugin.js';
 import { GameEventBus } from '../src/game-events.js';
@@ -11,8 +12,8 @@ it('localizes a session conflict only at the presentation boundary', () => {
   expect(error).toMatchObject({ requestedGameId: 'next', activeGameId: 'active', sessionId: 'session', userId: 'user' });
 });
 
-it('uses the stored game locale for timeout notifications and keeps legacy rows in Chinese', async () => {
-  const base: BaseGameSessionRow = { id: 'game', channel_key: 'channel', status: 'active', created_at: 0, updated_at: 0,
+it('uses the stored game locale for timeout notifications and keeps rows without a saved locale in Chinese', async () => {
+  const base: BaseGameSessionRow = { id: 'game', channel_key: channelKey({ target: { endpoint: { adapter: 'root/test', id: 'bot' }, kind: 'group', id: 'room' } }), status: 'active', created_at: 0, updated_at: 0,
     adapter: 'root/test', endpoint: 'bot', channel_type: 'group', channel_id: 'room' };
   const rows: BaseGameSessionRow[] = [{ ...base, id: 'english', locale: 'en' }, { ...base, id: 'chinese', locale: 'zh-CN' }, { ...base, id: 'legacy' }];
   const services = {
@@ -26,7 +27,7 @@ it('uses the stored game locale for timeout notifications and keeps legacy rows 
   let execute: (() => Promise<void>) | undefined;
   const resources = new Map<string, unknown>([
     [projectLocaleToken.id, 'en'],
-    [outboundHostToken.id, { send: async (message: { content: unknown }) => { sent.push(message); return 'sent'; } }],
+    [outboundHostToken.id, { send: vi.fn(), sendTarget: async (_target: unknown, content: unknown, options?: { locale?: string }) => { sent.push({ content, locale: options?.locale }); return 'sent'; } }],
     [scheduleHostToken.id, { register: (job: { execute: () => Promise<void> }) => { execute = job.execute; return () => {}; } }],
   ]);
   const plugin = defineGamePlugin({ name: 'test', game: { id: 'test', title: '测试', titleI18n: { en: 'Test' }, icon: '🎮', description: 'test', commandPrefix: '/unused', commandPath: 'test' },

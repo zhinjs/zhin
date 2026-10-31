@@ -4,6 +4,8 @@ sidebar: false
 
 # Adapter 全量目标模式迁移
 
+后续审查：已确认身份、operation 生命周期、下游持久化与多态端口仍有缺口；原有通过记录不代表这些场景已完成。收敛方案和待确认的数据迁移见 [Adapter operation contracts and design review](./adapter-operation-contracts.md)。
+
 状态：完整目标实现与本地验收已完成，准备 PR 审查。不保留 Adapter 旧创作接口或运行时兼容分支。框架见 Zhin #1104，配套 Console 见 #48；远端验证以对应 PR 的当前 checks 为准。
 
 ## 范围和验收单位

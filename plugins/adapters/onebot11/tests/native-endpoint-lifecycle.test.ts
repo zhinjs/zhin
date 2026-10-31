@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { EndpointEvent } from 'zhin.js/adapter';
-import { createEndpointHarness } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { Onebot11Client } from '../src/client.js';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 import type { OneBot11WsConfig } from '../src/protocol.js';
@@ -32,7 +32,7 @@ async function fixture() {
       return socket;
     },
   }), { name: 'onebot11', id: config.id, capabilities: ['inbound', 'outbound'], operations: ['recall'],
-    gateway: { async receive(event) { received.push(event); } } });
+    gateway: createTestEndpointEventGateway({ async receive(event) { received.push(event); } }) });
   return { ...harness, socket, received };
 }
 

@@ -11,13 +11,26 @@ import {
 import { inspect } from 'node:util';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
-  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
+  createEndpointSpecification,
+  endpointSpec,
+  type Endpoint,
+  type EndpointSpecification,
   type EndpointControl,
   type EndpointManagement,
   type EndpointPendingRequest,
   type EndpointSendRequest,
   type EndpointTransportState,
   type AdapterOutageNotifier,
+  createEndpointOperation,
+  type EndpointManagementRequest,
+  type EndpointGroupRequest,
+  type EndpointApproveRequest,
+  type EndpointRejectRequest,
+  type EndpointMemberRequest,
+  type EndpointMuteRequest,
+  type EndpointAdminRequest,
+  type EndpointUserRequest,
+  type EndpointGroupNoticeRequest,
 } from 'zhin.js/adapter';
 import type { EndpointContentPort } from '@zhin.js/adapter';
 import { receiveOneBotLikeSideEvent, buildSystem, toCanonicalSegments, type LoginAssist, type LoginAssistEndpointIdentity, type PendingLoginTask } from '@zhin.js/core';
@@ -128,66 +141,70 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
   #challengeNoticeAt = 0;
 
   readonly #management: EndpointManagement = Object.freeze<EndpointManagement>({
-    inspectGroupMember: (group, user, signal) => inspectGroupMember(this, group, user, signal),
-    inspectGroupScene: (group, signal) => inspectGroupScene(this, group, signal),
-    inspectGroupMemberProfile: (group, user, signal) => inspectGroupMemberProfile(this, group, user, signal),
-    moderateGroupMember: (group, user, action, signal) => moderateGroupMember(
-      this, group, user, action, signal, () => this.#open && !this.#retiring && !this.#stopped,
-    ),
-    listFriends: async () =>
-      Array.from(this.fl.values()).map((f) => ({
+    inspectGroupMember: request => inspectGroupMember(this, request),
+    inspectGroupScene: request => inspectGroupScene(this, request),
+    inspectGroupMemberProfile: request => inspectGroupMemberProfile(this, request),
+    moderateGroupMember: request => moderateGroupMember({ client: this, isActive: () => this.#open && !this.#retiring && !this.#stopped }, request),
+    listFriends: async (request: EndpointManagementRequest = {}) =>
+      createEndpointOperation(request).run(() => Array.from(this.fl.values()).map((f) => ({
         user_id: f.user_id,
         nickname: f.nickname,
         remark: f.remark ?? '',
-      })),
-    listGroups: async () =>
-      Array.from(this.gl.values()).map((g) => ({
+      }))),
+    listGroups: async (request: EndpointManagementRequest = {}) =>
+      createEndpointOperation(request).run(() => Array.from(this.gl.values()).map((g) => ({
         group_id: g.group_id,
         name: g.group_name,
-      })),
-    listChannels: async () => {
-      await this.#guildCatalog.syncAll(this);
-      return this.#guildCatalog.getGuildChannelList();
+      }))),
+    listChannels: async (request: EndpointManagementRequest = {}) => {
+      const operation = createEndpointOperation(request);
+      await operation.run(() => this.#guildCatalog.syncAll(this));
+      return operation.run(() => this.#guildCatalog.getGuildChannelList());
     },
-    listGroupMembers: async (groupId) =>
-      Array.from((await this.getGroupMemberList(Number(groupId))).values()),
-    listRequests: () => this.#listPendingRequests(),
-    approveRequest: (requestId, remark) => this.#approveRequest(requestId, remark),
-    rejectRequest: (requestId, reason) => this.#rejectRequest(requestId, reason),
-    kickGroupMember: async (groupId, userId) => {
-      await this.setGroupKick(Number(groupId), Number(userId));
+    listGroupMembers: async ({ groupId, signal }: EndpointGroupRequest) =>
+      Array.from((await createEndpointOperation({ signal }).run(() => this.getGroupMemberList(Number(groupId)))).values()),
+    listRequests: (request: EndpointManagementRequest = {}) => createEndpointOperation(request).run(() => this.#listPendingRequests()),
+    approveRequest: request => this.#approveRequest(request),
+    rejectRequest: request => this.#rejectRequest(request),
+    kickGroupMember: async ({ groupId, userId, signal }: EndpointMemberRequest) => {
+      const operation = createEndpointOperation({ signal });
+      await operation.run(() => this.setGroupKick(Number(groupId), Number(userId)));
     },
-    muteGroupMember: async (groupId, userId, duration) => {
-      await this.setGroupBan(Number(groupId), Number(userId), duration);
+    muteGroupMember: async ({ groupId, userId, durationSeconds: duration, signal }: EndpointMuteRequest) => {
+      const operation = createEndpointOperation({ signal });
+      await operation.run(() => this.setGroupBan(Number(groupId), Number(userId), duration));
     },
-    setGroupAdmin: async (groupId, userId, enabled) => {
-      await this.setGroupAdmin(Number(groupId), Number(userId), enabled);
+    setGroupAdmin: async ({ groupId, userId, enabled, signal }: EndpointAdminRequest) => {
+      const operation = createEndpointOperation({ signal });
+      await operation.run(() => this.setGroupAdmin(Number(groupId), Number(userId), enabled));
     },
-    deleteFriend: async (userId) => {
-      await this.deleteFriend(Number(userId));
+    deleteFriend: async ({ userId, signal }: EndpointUserRequest) => {
+      const operation = createEndpointOperation({ signal });
+      await operation.run(() => this.deleteFriend(Number(userId)));
     },
-    sendGroupNotice: async (groupId, content) => {
-      if (await this.sendGroupNotice(Number(groupId), content) === false) {
+    sendGroupNotice: async ({ groupId, content, signal }: EndpointGroupNoticeRequest) => {
+      const operation = createEndpointOperation({ signal });
+      if (await operation.run(() => this.sendGroupNotice(Number(groupId), content)) === false) {
         throw new Error('QQ did not confirm the group notice');
       }
     },
   });
 
-  readonly #control: EndpointControl = Object.freeze({
-    recall: async (message: MessageRef) => {
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: async ({ message, signal }) => {
       if (!message.id || message.id.startsWith('outbound:')) return;
-      if (!await this.deleteMsg(message.id)) throw new Error('QQ did not confirm message recall');
+      if (!await createEndpointOperation({ signal }).run(() => this.deleteMsg(message.id))) throw new Error('QQ did not confirm message recall');
     },
-    addReaction: async (message: MessageRef, emoji: string) => {
+    addReaction: async ({ message, emoji, signal }) => {
       const target = resolveIcqqGroupReactionTarget(message);
       if (!target) return null;
       try {
         // Do not await protocol ACK — packet timeout must not stall the AI reply.
-        this.#ignoreReactionAck(
-          'add',
-          this.pickGroup(target.groupId).setReaction(target.seq, emoji),
-        );
+        await createEndpointOperation({ signal }).run(() => {
+          this.#ignoreReactionAck('add', this.pickGroup(target.groupId).setReaction(target.seq, emoji));
+        });
       } catch (error) {
+        if (error instanceof EndpointDeliveryError && error.code === 'endpoint_inactive') throw error;
         this.#logger.debug(formatCompact({
           op: 'reaction_add_failed',
           error: error instanceof Error ? error.message : String(error),
@@ -195,15 +212,15 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       }
       return emoji;
     },
-    removeReaction: async (message: MessageRef, reactionId: string) => {
+    removeReaction: async ({ message, reactionId, signal }) => {
       const target = resolveIcqqGroupReactionTarget(message);
       if (!target) return;
       try {
-        this.#ignoreReactionAck(
-          'remove',
-          this.pickGroup(target.groupId).delReaction(target.seq, reactionId),
-        );
+        await createEndpointOperation({ signal }).run(() => {
+          this.#ignoreReactionAck('remove', this.pickGroup(target.groupId).delReaction(target.seq, reactionId));
+        });
       } catch (error) {
+        if (error instanceof EndpointDeliveryError && error.code === 'endpoint_inactive') throw error;
         this.#logger.debug(formatCompact({
           op: 'reaction_remove_failed',
           error: error instanceof Error ? error.message : String(error),
@@ -534,12 +551,23 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     });
   }
 
-  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<EndpointSendResult> {
+  async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<EndpointSendResult> {
     if (!this.#started) throw new EndpointDeliveryError('endpoint_disconnected', 'icqq endpoint 未连接', 'not_sent');
+    const operation = createEndpointOperation({ signal });
     const mediaMode = resolveIcqqOutboundMediaMode(this.#options.config);
-    const prepared = isIcqqSegmentPayload(payload)
+    const prepared = await operation.prepare(() => isIcqqSegmentPayload(payload)
       ? prepareIcqqOutboundMedia(normalizeIcqqImageMedia(payload), mediaMode)
-      : { content: payload, dispose() {} };
+      : { content: payload, dispose() {} });
+    // Cancellation ends our wait, not the SDK's use of temporary media. The actual native
+    // promises own that resource until they settle, including a late rejection after cancellation.
+    const pendingSends = new Set<Promise<{ message_id?: unknown }>>();
+    const sendNative = (target: ReturnType<typeof icqqOutboundTarget>, message: Sendable) => {
+      const task = this.#sendNative(target, message);
+      pendingSends.add(task);
+      const settled = () => { pendingSends.delete(task); };
+      void task.then(settled, settled);
+      return task;
+    };
     try {
       // Standalone elements (share / file / …) are split into ordered messages.
       const messages = formatOutboundMessageParts(prepared.content);
@@ -549,7 +577,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
         const preview = formatIcqqSendablePreview(message);
         let result: { message_id?: unknown };
         try {
-          result = await this.#sendNative(parsed, message);
+          result = await operation.run(() => sendNative(parsed, message));
         } catch (error) {
           this.#logger.warn(formatCompact({
             op: 'icqq_send_failed',
@@ -576,12 +604,14 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       }
       return { parts };
     } finally {
-      try {
-        prepared.dispose();
-      } catch (error) {
-        // Temporary-file cleanup cannot change an already observed platform send outcome.
-        this.#logger.warn(formatCompact({ op: 'icqq_media_cleanup_failed', error: describeUnknownError(error) }));
-      }
+      const disposeMedia = () => {
+        try { prepared.dispose(); } catch (error) {
+          // Temporary-file cleanup cannot change an observed send result.
+          this.#logger.warn(formatCompact({ op: 'icqq_media_cleanup_failed', error: describeUnknownError(error) }));
+        }
+      };
+      if (pendingSends.size) void Promise.allSettled([...pendingSends]).then(disposeMedia);
+      else disposeMedia();
     }
   }
 
@@ -904,8 +934,8 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       platform: 'icqq',
       raw: payload,
       ...(isRequest ? {
-        approve: (id, remark) => this.#approveRequest(flag || id, remark),
-        reject: (id, reason) => this.#rejectRequest(flag || id, reason),
+        approve: (id, remark) => this.#approveRequest({ requestId: flag || id, remark }),
+        reject: (id, reason) => this.#rejectRequest({ requestId: flag || id, reason }),
       } : {}),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -1177,8 +1207,9 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     }
   }
 
-  async #approveRequest(id: string, remark?: string): Promise<void> {
-    const messages = await this.getSystemMsg();
+  async #approveRequest({ requestId: id, remark, signal }: EndpointApproveRequest): Promise<void> {
+    const operation = createEndpointOperation({ signal });
+    const messages = await operation.run(() => this.getSystemMsg());
     const target = messages.find((m) => {
       const msg = m as unknown as IcqqSystemMessage;
       return msg.flag === id || (msg.seq != null && String(msg.seq) === id);
@@ -1186,15 +1217,17 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     if (!target?.flag) {
       throw new Error(`icqq 未找到待处理请求: ${id}`);
     }
+    const flag = target.flag;
     if ((target as { request_type?: string }).request_type === 'friend') {
-      await this.setFriendAddRequest(target.flag, true, remark);
+      await operation.run(() => this.setFriendAddRequest(flag, true, remark));
     } else {
-      await this.setGroupAddRequest(target.flag, true);
+      await operation.run(() => this.setGroupAddRequest(flag, true));
     }
   }
 
-  async #rejectRequest(id: string, reason?: string): Promise<void> {
-    const messages = await this.getSystemMsg();
+  async #rejectRequest({ requestId: id, reason, signal }: EndpointRejectRequest): Promise<void> {
+    const operation = createEndpointOperation({ signal });
+    const messages = await operation.run(() => this.getSystemMsg());
     const target = messages.find((m) => {
       const msg = m as unknown as IcqqSystemMessage;
       return msg.flag === id || (msg.seq != null && String(msg.seq) === id);
@@ -1202,10 +1235,11 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
     if (!target?.flag) {
       throw new Error(`icqq 未找到待处理请求: ${id}`);
     }
+    const flag = target.flag;
     if ((target as { request_type?: string }).request_type === 'friend') {
-      await this.setFriendAddRequest(target.flag, false);
+      await operation.run(() => this.setFriendAddRequest(flag, false));
     } else {
-      await this.setGroupAddRequest(target.flag, false, reason);
+      await operation.run(() => this.setGroupAddRequest(flag, false, reason));
     }
   }
 }

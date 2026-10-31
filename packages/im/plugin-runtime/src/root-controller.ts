@@ -68,6 +68,7 @@ export class RootController<TState = undefined> {
         return store.acquire();
       },
       owns: (lease: SnapshotLease) => store.owns(lease),
+      retain: (lease: SnapshotLease) => store.retain(lease),
       rootResource: <T>(lease: SnapshotLease, token: Token<T>) => store.rootResource(lease, token),
     });
   }

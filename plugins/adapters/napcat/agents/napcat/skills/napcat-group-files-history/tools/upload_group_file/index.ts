@@ -15,7 +15,7 @@ export default defineAgentTool<{ group_id: number; file: string; name: string; f
   scopes: ['group'],
   async execute({ group_id, file, name, folder }: { group_id: number; file: string; name: string; folder?: string }, context) {
     const endpoint = context.$client;
-      await endpoint.uploadGroupFile(group_id, file, name, folder);
+      await endpoint.uploadGroupFile({ groupId: group_id, file, name, folder });
       return { success: true };
   },
 });

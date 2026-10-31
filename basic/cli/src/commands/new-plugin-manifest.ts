@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { scaffoldDependencyRange, type StackVersionRanges } from '@zhin.js/scaffold-wizard';
 import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
 
 export type PluginKind = 'normal' | 'service' | 'adapter';
@@ -11,13 +12,11 @@ export const PLUGIN_STACK_PACKAGES = [
   '@zhin.js/skill',
   '@zhin.js/command',
   '@zhin.js/adapter',
+  '@zhin.js/feature-kit',
   '@zhin.js/testing',
 ] as const;
 export type PluginStackPackage = (typeof PLUGIN_STACK_PACKAGES)[number];
 export type PluginStackRanges = Record<PluginStackPackage, string>;
-
-/** Used when no installed copy can be found; matches `zhin.engine` / feature `api`. */
-export const FALLBACK_STACK_RANGE = '^1.0.0';
 
 /**
  * Tooling for the generated package. Kept in step with the repository root
@@ -30,12 +29,17 @@ export const PLUGIN_TOOLING_RANGES = {
   rimraf: '^6.1.3',
 } as const;
 
-const SEMVER_PREFIX = /^(\d+)\.(\d+)\.(\d+)/;
+const require = createRequire(import.meta.url);
+const semver = require('semver') as {
+  valid(version: string): string | null;
+  gt(left: string, right: string): boolean;
+  satisfies(version: string, range: string, options: { includePrerelease: boolean }): boolean;
+};
 
-/** `1.1.8-beta.0` → `^1.1.8`; non-semver → undefined. */
+/** Preserve the concrete version, including prerelease identity; never turn a beta into a stable claim. */
 export function caretRange(version: string | undefined): string | undefined {
-  const match = version ? SEMVER_PREFIX.exec(version.trim()) : null;
-  return match ? `^${match[1]}.${match[2]}.${match[3]}` : undefined;
+  const valid = version ? semver.valid(version.trim()) : null;
+  return valid ? `^${valid}` : undefined;
 }
 
 /**
@@ -61,27 +65,23 @@ export function findInstalledVersion(packageName: string, fromDir: string): stri
   }
 }
 
-function cliPackageDir(): string {
-  return path.dirname(fileURLToPath(import.meta.url));
-}
-
 /**
- * Resolve semver ranges (`^x.y.z`) for the Zhin stack. Prefers what the host
- * project (cwd) has installed, then what this CLI was installed with, and
- * finally a wide `^1.0.0`. Never returns `latest` (pnpm rejects it for peers).
+ * The CLI's existing packed release metadata sets its authoring floor. A higher compatible installed host
+ * version may raise that floor, but an old host never lowers it. No project dependency is rewritten.
+ * Tests may supply the same metadata shape; unknown release versions are a generation error.
  */
 export function resolvePluginStackRanges(
   cwd: string,
-  searchDirs: readonly string[] = [cliPackageDir()],
+  releaseRanges?: StackVersionRanges,
 ): PluginStackRanges {
   const ranges = {} as PluginStackRanges;
   for (const name of PLUGIN_STACK_PACKAGES) {
-    let range: string | undefined;
-    for (const dir of [cwd, ...searchDirs]) {
-      range = caretRange(findInstalledVersion(name, dir));
-      if (range) break;
-    }
-    ranges[name] = range ?? FALLBACK_STACK_RANGE;
+    const released = scaffoldDependencyRange(name, releaseRanges);
+    const floor = released.startsWith('^') ? semver.valid(released.slice(1)) : null;
+    if (!floor) throw new Error(`Cannot create plugin: release version is unavailable for ${name}`);
+    const installed = caretRange(findInstalledVersion(name, cwd));
+    ranges[name] = installed && semver.satisfies(installed.slice(1), released, { includePrerelease: true })
+      && semver.gt(installed.slice(1), floor) ? installed : released;
   }
   return ranges;
 }
@@ -305,6 +305,11 @@ export function createPluginManifest(input: PluginManifestInput): Record<string,
     // Typed fakes for the generated tests (no `as never`); see docs/authoring/testing.md.
     '@zhin.js/testing': devRanges['@zhin.js/testing'],
   };
+  // Type augmentation is a direct contract dependency, not a Feature provider.
+  if (kind === 'adapter') {
+    peerDependencies['@zhin.js/feature-kit'] = peerRanges['@zhin.js/feature-kit'];
+    devDependencies['@zhin.js/feature-kit'] = devRanges['@zhin.js/feature-kit'];
+  }
   for (const name of capabilities) {
     peerDependencies[name] = peerRanges[name];
     peerDependenciesMeta[name] = { optional: true };
@@ -349,7 +354,7 @@ export function createPluginManifest(input: PluginManifestInput): Record<string,
       entry: './plugin.js',
       engine: '^1.0.0',
       runtime: 'trusted',
-      features: capabilities.map((name) => ({ package: name, api: '^1.0.0' })),
+      features: capabilities.map((name) => ({ package: name, api: name === '@zhin.js/adapter' ? '^2.0.0' : '^1.0.0' })),
       plugins: [],
     },
   };

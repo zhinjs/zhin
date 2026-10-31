@@ -41,7 +41,7 @@ export async function accountRuntimeFixture(options: { config?: Record<string, u
     [root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [owner, otherOwner] }],
     ...[owner, otherOwner].map(id => [id, { id, parent: root, instanceKey: String(id), packageName: 'fixture-child', packageRoot: '/fixture/child', children: [] }] as const),
   ]), config: new Map([[owner, source], [otherOwner, { endpoints: [] }]]), capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
-    resources: new Map([owner, otherOwner].map(id => [id, new Map<TokenId, unknown>([[endpointEventGatewayToken.id, { receive: async () => undefined }]])])) };
+    resources: new Map([owner, otherOwner].map(id => [id, new Map<TokenId, unknown>([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async () => undefined }]])])) };
   const index = await AdapterIndex.create(slots, createSnapshotView(0, state), new AbortController().signal, options.noDatabase ? {} : { repository });
   await index.activate(new AbortController().signal);
   const snapshot = { ...state, projections: new Map([[adapterFeatureId, index]]) }, store = new SnapshotStore(snapshot);

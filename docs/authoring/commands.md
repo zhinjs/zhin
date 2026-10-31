@@ -526,7 +526,7 @@ flowchart LR
 
 `commandPrefix` 按消息所属的适配器实例读取（默认 `''`）；实例配置了 `endpoints` 时，以消息来源账号的 `commandPrefix` 为准。实现见 `packages/im/core/src/plugin-runtime/im/message-dispatcher.ts`。
 
-程序化调用 `CommandIndex.dispatch()` 时返回 `status: unmatched | invalid | denied | executed`：`unmatched` 的 `matched` 为 `false`；`invalid` 带有 `issues: { field, message }[]` 和 `help`；`denied` 表示权限拒绝；只有 `executed` 有业务返回值。Host 可以传入真实的 `PermissionSubject` 进行鉴权。
+程序化调用 `CommandIndex.dispatch({ input, source, snapshot })` 时返回 `status: unmatched | invalid | denied | executed`：`unmatched` 的 `matched` 为 `false`；`invalid` 带有 `issues: { field, message }[]` 和 `help`；`denied` 表示权限拒绝；只有 `executed` 有业务返回值。Host 可以传入真实的 `PermissionSubject` 进行鉴权。
 
 ### 适配器的 endpoint 管理命令
 

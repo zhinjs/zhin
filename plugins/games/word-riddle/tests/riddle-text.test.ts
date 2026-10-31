@@ -9,17 +9,13 @@ let nextCalls = 0;
 let services: SessionService;
 
 function makeInput(content: string, senderId = 'u1') {
-  return {
-    $adapter: 'test',
-    $endpoint: 'default',
-    $channel: { type: 'group', id: 'g1' },
-    $sender: { id: senderId, name: senderId },
-    content,
-    $reply: async (reply: unknown) => {
+  return { target: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' }, conversation: { endpoint: { adapter: 'test', id: 'default' }, kind: 'group', id: 'g1' },
+sender: { id: senderId, name: senderId },
+content,
+$reply: async (reply: unknown) => {
       replies.push(String(reply));
       return 'mid-1';
-    },
-  };
+    } };
 }
 
 function makeCtx(input: unknown) {

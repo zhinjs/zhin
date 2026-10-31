@@ -56,7 +56,18 @@ function ingressHarness(options: { plane: AiControlPlane; log: DecisionEventLog;
     : { endpoint, kind: 'private' as const, id: 'user' };
   const snapshot = { root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
   const reply = vi.fn(async () => ({ status: 'sent' as const }));
-  const message = new RuntimeMessage(conversation, 'hello', 1, reply, { id: 'user' }, {}, [], undefined, 'bot', false, undefined, undefined, 'fixture', {});
+  const message = new RuntimeMessage(
+    {
+      conversation: conversation,
+      content: 'hello',
+      sender: { id: 'user' },
+      metadata: {},
+      segments: [],
+      endpointId: 'bot',
+      mentioned: false,
+    },
+    { generation: 1, reply: reply, clientAdapter: 'fixture' },
+  );
   const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) =>
     options.execute ? options.execute(request) : { status: 'completed', output: [] });
   const observeInbound = vi.fn(async () => ({ blocked: null }));

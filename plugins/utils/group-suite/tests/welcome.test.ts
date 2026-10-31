@@ -1,3 +1,4 @@
+import { createTestEventGateway } from '../../../adapters/test-utils/endpoint.js';
 // group-suite 欢迎套件（#1012 A9：欢迎验收收拢到同一个 group-suite 套件，去重旧 welcome-scope* 用例）。
 // 三层各测一次、不重复：范围解析（纯函数）→ 投递（ImRuntime + handler）→ 原生链路（PluginTestKit / HMR / 回滚，子进程）。
 // 会话级欢迎模板（ADR 0037 切片 A，Agent session-ops）的合并窗口 / 限频 / 过闸由 Agent 侧测试负责，这里不复制；
@@ -107,7 +108,7 @@ async function fixture(session?: SessionWelcomeOptions) {
     config: new Map(ids.map(id => [id, id === alpha ? { welcomeMessage: '欢迎 {name} ({id})', welcomeConversations: [] }
       : id === beta ? { welcomeMessage: 'not enabled', welcomeConversations: [] } : {}])),
     capabilities: new Map([...adapters, ...handlers, observer].map(slot => [slot.id, slot])), projections: new Map(),
-    resources: new Map(ids.map(id => [id, new Map<string, unknown>([[endpointEventGatewayToken.id, { receive: async () => undefined }], [outboundMessageToken.id, im]])])),
+    resources: new Map(ids.map(id => [id, new Map<string, unknown>([[endpointEventGatewayToken.id, createTestEventGateway()], [outboundMessageToken.id, im]])])),
   };
   const lifecycle = session ? await sessionWelcome(im, String(adapters[0]!.id), session) : undefined;
   if (lifecycle) {

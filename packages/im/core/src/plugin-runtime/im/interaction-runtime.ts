@@ -1,4 +1,5 @@
-import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
+import type { CapturedEndpointOperation } from './captured-endpoint-operation.js';
+import { resolveLocale, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
 import { interactionMessages as t } from '../../built/interaction-messages.js';
 import { projectLocale } from './locale.js';
 import { conversationRefKey, type ConversationRef, type DeliveryReceipt, type MessageRef } from '@zhin.js/im-contract';
@@ -19,7 +20,6 @@ import {
   type UserInteractionView,
 } from '../../built/user-interaction.js';
 import { randomUUID } from 'node:crypto';
-import { generationAdmissionSource, outboundHostToken, PluginOutboundHost, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { RuntimeMessage,
   type Message, type MessageSenderRef, type SendContent, type SendRequest } from './contracts.js';
 import { interactionOperationScope, type InteractionOperationScope } from './interaction-operation.js';
@@ -29,8 +29,28 @@ import { isJsxButtonPayload, JsxButtonRegistry, type JsxButtonBatch } from './js
 
 interface InteractionAnswer { readonly value: string; readonly action: boolean; }
 
+/** Prompt data shares one fixed deadline across retries after an invalid answer. */
+interface InteractionClaimRequest {
+  readonly deadline: number;
+  readonly timeoutText: string;
+  readonly prompt: UserInteractionView;
+  readonly locale: Locale;
+  readonly actions?: readonly { readonly value: string }[];
+}
+
+/** Authority belongs to the participant and captured operation, never to rendered text. */
+interface InteractionClaimAuthority {
+  readonly conversation: ConversationRef;
+  readonly subjectId: string;
+  readonly generation?: number;
+  readonly signal?: AbortSignal;
+  readonly operation?: InteractionOperationScope;
+  readonly source?: CapturedEndpointOperation;
+}
+
 interface UserInteractionClaim {
   readonly generation?: number;
+  readonly isLiveFor: (generation: number) => boolean;
   readonly actions: ReadonlyMap<string, string>;
   readonly accept: (raw: string, action?: boolean) => boolean;
   readonly reject: (error: Error) => void;
@@ -138,7 +158,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     // Another feature's callback is not a plain-text answer to this question.
     if (explicit && !explicit.startsWith(ASK_ACTION_PREFIX)) return false;
     const claim = this.#claims.get(this.#conversationKey(message));
-    if (!claim || claim.generation !== message.generation) return false;
+    if (!claim || !claim.isLiveFor(message.generation)) return false;
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
       const answer = claim.actions.get(payload);
       if (answer !== undefined) return claim.accept(answer, true);
@@ -164,8 +184,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     const claim = this.#claims.get(`${conversationRefKey(conversation)}:${senderId}`);
     const explicit = actionPayloadFromSegments(input?.segments);
     if (explicit?.startsWith(ASK_ACTION_PREFIX)
-      && (claim?.generation !== generation || !claim.actions.has(explicit))) return false;
-    if (claim?.generation === generation
+      && (!claim?.isLiveFor(generation) || !claim.actions.has(explicit))) return false;
+    if (claim?.isLiveFor(generation)
       && (!explicit || claim.actions.has(explicit))) return true;
     return input !== undefined && this.#router.resolvesLiveFallback(conversation, generation, input);
   }
@@ -196,19 +216,21 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     const defaultTimeout = 3 * 60 * 1000;
     const locale = resolveLocale(source.locale ?? (operation ? projectLocale(operation.snapshot) : undefined));
     const defaultTimeoutText = t(locale, 'timeout');
-    const ask = async <Request extends UserInteractionRequest>(
+    const withSource = async <T>(execute: (source?: CapturedEndpointOperation) => Promise<T>): Promise<T> => {
+      const retained = operation?.retain?.();
+      try { return await execute(retained); }
+      finally { retained?.release(); }
+    };
+    const askWithin = async <Request extends UserInteractionRequest>(
       request: Request,
-      progress?: UserInteractionProgress,
+      progress: UserInteractionProgress | undefined,
+      retained?: CapturedEndpointOperation,
     ): Promise<UserInteractionValue<Request>> => {
       assertUserInteractionRequest(request);
       const assertLifetime = () => {
-        for (const lifetime of [request.signal, operation?.retirementSignal]) lifetime?.throwIfAborted();
-        const host = operation?.snapshot.resources.get(operation.owner)?.get(outboundHostToken.id);
-        if (host instanceof PluginOutboundHost && host.owner === operation?.owner
-          && host[generationAdmissionSource].some(gate => !gate.active)) {
-          throw new Error('User interaction owner retired');
-        }
+        for (const lifetime of [request.signal, retained?.signal ?? operation?.signal]) lifetime?.throwIfAborted();
       };
+      const reply = retained ? (content: SendContent) => retained.send(content, { locale }) : source.$reply;
       assertLifetime();
       const timeout = request.timeout ?? defaultTimeout;
       const timeoutText = request.timeoutText ?? defaultTimeoutText;
@@ -216,11 +238,14 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       const view = projectUserInteraction(request, progress, locale);
       let prompt = view;
       while (true) {
-        const claim = this.#reserveClaim(source, deadline, timeoutText, prompt, locale, request.signal, subjectId, operation, view.actions);
+        const claim = this.#reserveClaim({ deadline, timeoutText, prompt, locale, actions: view.actions }, {
+          conversation: source.conversation, subjectId: subjectId ?? source.sender?.id ?? '',
+          generation: source.generation, signal: request.signal, operation, source: retained,
+        });
         try {
           claim.check();
           const actions = [...claim.actions.keys()];
-          const receipt = await source.$reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
+          const receipt = await reply(renderUserInteraction(prompt, (_value, index) => actions[index]!, locale));
           assertLifetime();
           if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
           claim.delivered();
@@ -244,7 +269,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
             return request.default as UserInteractionValue<Request>;
           }
           if (error instanceof UserInteractionTimeoutError) {
-            await source.$reply(renderUserInteraction({ title: t(locale, 'ended'), description: error.message }, undefined, locale));
+            await reply(renderUserInteraction({ title: t(locale, 'ended'), description: error.message }, undefined, locale));
           }
           throw error;
         } finally {
@@ -253,9 +278,13 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       }
     };
 
+    const ask = <Request extends UserInteractionRequest>(request: Request,
+      progress?: UserInteractionProgress): Promise<UserInteractionValue<Request>> =>
+      withSource(retained => askWithin(request, progress, retained));
+
     const sequence = async <Steps extends readonly UserInteractionStep[]>(
       definition: UserInteractionSequence<Steps>,
-    ): Promise<UserInteractionSequenceResult<Steps>> => {
+    ): Promise<UserInteractionSequenceResult<Steps>> => withSource(async retained => {
       if (!definition.title.trim()) {
         throw new TypeError('User interaction sequence title must not be empty');
       }
@@ -279,35 +308,27 @@ export class RuntimeInteractionCoordinator<Admission = never> {
           invalidText: step.invalidText ?? definition.invalidText,
           signal: step.signal ?? definition.signal,
         } as UserInteractionRequest;
-        result[step.id] = await ask(request, {
+        result[step.id] = await askWithin(request, {
           title: definition.title,
           description: definition.description,
           tip: definition.tip,
           index: index + 1,
           total: definition.steps.length,
-        });
+        }, retained);
       }
       return Object.freeze(result) as UserInteractionSequenceResult<Steps>;
-    };
+    });
 
     return Object.freeze({ ask, sequence });
   }
 
-  #reserveClaim(
-    source: UserInteractionSource,
-    deadline: number,
-    timeoutText: string,
-    prompt: UserInteractionView,
-    locale: Locale,
-    signal?: AbortSignal,
-    subjectId?: string,
-    operation?: InteractionOperationScope,
-    actions?: readonly { readonly value: string }[],
-  ): UserInteractionClaim {
-    const key = this.#conversationKey(source, subjectId);
+  #reserveClaim(request: InteractionClaimRequest, authority: InteractionClaimAuthority): UserInteractionClaim {
+    const { deadline, timeoutText, prompt, locale, actions } = request;
+    const { conversation, subjectId, generation: sourceGeneration, signal, operation, source } = authority;
+    const key = `${conversationRefKey(conversation)}:${subjectId}`;
     this.#claims.get(key)?.reject(new UserInteractionSupersededError());
     const id = randomUUID();
-    const generation = operation?.snapshot.generation ?? source.generation;
+    const generation = operation?.snapshot.generation ?? sourceGeneration;
     const answers = new Map(actions?.map((action, index) => [`${ASK_ACTION_PREFIX}${id}:${index}`, action.value]));
     let resolve!: (value: InteractionAnswer) => void;
     let reject!: (error: Error) => void;
@@ -331,8 +352,10 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       reject(error);
     };
     const timer = setTimeout(() => fail(new UserInteractionTimeoutError(timeoutText)), Math.max(1, deadline - Date.now()));
+    const isLiveFor = (candidate: number) => !failure && Date.now() < deadline
+      && (source ? !source.signal.aborted : generation === candidate);
     const claim: UserInteractionClaim = {
-      generation,
+      generation, isLiveFor,
       actions: answers,
       answer,
       accept: (raw, action = false) => {
@@ -350,35 +373,24 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       },
       dispose,
       project: currentGeneration => {
-        if (generation === undefined || generation !== currentGeneration || !delivered || failure
+        if (generation === undefined || !isLiveFor(currentGeneration) || !delivered || failure
           || buffered !== undefined || Date.now() >= deadline) return undefined;
         return {
-          id, generation, subjectId: subjectId ?? source.sender?.id ?? '', expiresAt: deadline,
-          conversation: { ...source.conversation, endpoint: { ...source.conversation.endpoint },
-            ...(source.conversation.parent ? { parent: { ...source.conversation.parent } } : {}) },
+          id, generation, subjectId, expiresAt: deadline,
+          conversation: { ...conversation, endpoint: { ...conversation.endpoint },
+            ...(conversation.parent ? { parent: { ...conversation.parent } } : {}) },
           segments: renderUserInteraction(prompt, (_value, index) => [...answers.keys()][index]!, locale),
         };
       },
     };
     this.#claims.set(key, claim);
     if (deadline <= Date.now()) fail(new UserInteractionTimeoutError(timeoutText));
-    for (const lifetime of [signal, operation?.retirementSignal]) {
+    for (const lifetime of [signal, source?.signal ?? operation?.signal]) {
       if (!lifetime) continue;
       const abort = () => fail(abortError(lifetime, 'User interaction operation retired'));
       if (lifetime.aborted) { abort(); break; }
       lifetime.addEventListener('abort', abort, { once: true });
       unsubscribers.push(() => lifetime.removeEventListener('abort', abort));
-    }
-    if (!failure && operation) {
-      const host = operation.snapshot.resources.get(operation.owner)?.get(outboundHostToken.id);
-      // An inherited parent's facade is not authority for the requesting owner.
-      if (host instanceof PluginOutboundHost && host.owner === operation.owner) {
-        for (const gate of host[generationAdmissionSource]) {
-          const unsubscribe = gate.onDeactivate(() => fail(new Error('User interaction owner retired')));
-          if (failure) unsubscribe();
-          else unsubscribers.push(unsubscribe);
-        }
-      }
     }
     return claim;
   }

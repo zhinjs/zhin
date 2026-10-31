@@ -38,10 +38,6 @@ import { receiveNapCatSideEvent } from './side-event-dispatch.js';
 import { createNapCatContentPort } from './onebot-get-msg.js';
 import { NapcatClient } from './client.js';
 import {
-  handleNapCatWsMessage,
-  rejectAllPending,
-} from './ws-transport.js';
-import {
   type NapCatWsSocket,
 } from './ws-types.js';
 import { verifyNapCatAccessToken } from './wss-auth.js';
@@ -60,8 +56,8 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
   readonly #options: NapCatWssEndpointOptions;
   readonly #inboundDeduper = new InboundMessageDeduper();
   readonly #management: EndpointManagement = createNapCatEndpointManagement(this);
-  readonly #control: EndpointControl = createRecallEndpointControl((id) => this.#recallMessage(id));
-  readonly #content = createNapCatContentPort((action, params) => this.callApi(action, params));
+  readonly #control: EndpointControl = createRecallEndpointControl((id, signal) => this.#recallMessage(id, signal));
+  readonly #content = createNapCatContentPort(request => this.requestApi(request));
   readonly #connectionLifecycle: EndpointLifecycle;
   #wsRelease?: () => void;
   #connectionTask = Promise.resolve();
@@ -70,7 +66,7 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
   #stopped = false;
 
   constructor(options: NapCatWssEndpointOptions) {
-    super(options.config, undefined, options.signal);
+    super({ config: options.config, signal: options.signal });
     this.#logger = getAdapterLogger('napcat', options.config.id);
     this.#options = options;
     const readTransportState = () => this.#transportState;
@@ -145,16 +141,16 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
     this.#wsRelease = undefined;
     await this.#connectionTask;
     await this.#connectionLifecycle.stop();
-    rejectAllPending(this.pendingActions);
+    this.rpc.disconnect();
     this.#inboundDeduper.clear();
     this.transportSocket = undefined;
     this.#started = false;
   }
 
-  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
-    const data = await this.callApi(action, params) as { message_id?: number | string } | undefined;
+    const data = await this.requestApi({ action, params, signal }) as { message_id?: number | string } | undefined;
     const rawId = data?.message_id;
     if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
       throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
@@ -162,9 +158,9 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
     return String(rawId);
   }
 
-  async #recallMessage(messageId: string): Promise<void> {
+  async #recallMessage(messageId: string, signal?: AbortSignal): Promise<void> {
     if (!messageId) return;
-    await this.callApi('delete_msg', { message_id: Number(messageId) });
+    await this.requestApi({ action: 'delete_msg', params: { message_id: Number(messageId) }, signal });
   }
 
 
@@ -239,12 +235,12 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
     }
     const socket = connection.socket as unknown as NapCatWsSocket;
     await this.#connectionLifecycle.stop();
-    rejectAllPending(this.pendingActions, 'Connection replaced');
+    this.rpc.disconnect('Connection replaced');
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
       this.transportSocket = socket;
       lifecycleHandle.onForceClose(() => {
         if (this.transportSocket === socket) {
-          rejectAllPending(this.pendingActions);
+          this.rpc.disconnect();
         }
         try {
           socket.close();
@@ -265,11 +261,7 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
       socket.on('message', (data) => {
         if (this.transportSocket !== socket || this.#connectionLifecycle.state === 'closed') return;
         this.#connectionLifecycle.notifyHeartbeatAck();
-        handleNapCatWsMessage(data, {
-          endpointId: this.#options.config.id,
-          pending: this.pendingActions,
-          admit: (event) => this.ingest(event),
-        });
+        this.rpc.receive(data, event => this.ingest(event));
       });
       socket.on('error', (error) => {
         if (this.transportSocket !== socket) return;
@@ -278,7 +270,7 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
       socket.on('close', () => {
         if (this.transportSocket !== socket) return;
         this.transportSocket = undefined;
-        rejectAllPending(this.pendingActions);
+        this.rpc.disconnect();
         lifecycleHandle.notifyClosed(new Error('NapCat reverse WebSocket closed'));
       });
     });

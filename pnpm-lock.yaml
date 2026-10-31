@@ -135,6 +135,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../packages/im/adapter
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../../packages/im/feature-kit
       '@zhin.js/ai':
         specifier: workspace:*
         version: link:../../packages/im/ai

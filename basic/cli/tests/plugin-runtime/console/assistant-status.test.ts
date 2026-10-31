@@ -91,7 +91,7 @@ function host(status: AssistantStatus) {
   };
   const store = new SnapshotStore(state); stores.push(store);
   return (type: string, access: ConsoleAccess) => dispatchPluginConsoleRpcRequest({ type, requestId: 1 },
-    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: status.consoleRpc });
+    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: () => status.consoleRpc });
 }
 
 it('serves plugin.root.ambient / plugin.root.skills to tokens holding the matching permission', async () => {

@@ -3,8 +3,9 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-vi.mock('zhin.js/command', () => ({ defineCommand: (definition: unknown) => definition }));
-vi.mock('zhin.js/adapter', () => ({ adapterFeatureId: 'adapter', endpointControlOf: (endpoint: unknown) => endpoint }));
+import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec,
+  endpointEventGatewayToken, type Endpoint, type EndpointControl } from 'zhin.js/adapter';
+import { createCapabilitySlot, createSnapshotView, rootPluginId, type SnapshotState } from 'zhin.js/plugin-runtime';
 
 it.each([
   ['unsupported_operation', 'not_sent', 'unsupported'],
@@ -28,7 +29,7 @@ it.each([
       await probe.execute({
         input: { content: 'probe:sample123 action:reply-recall', conversation: { endpoint: { id: 'test', adapter: 'test' }, kind: 'private', id: 'room' }, $reply: async () => ({ status: 'sent', message: { id: 'message' } }) },
         endpoint: 'test', generation: 1,
-        project: () => ({ connection: () => endpoint, resolve: () => 'test', clientAdapter: () => 'test', describe: () => [{ id: 'test', admitted: true }] }),
+        project: () => ({ connection: () => ({ transportState: 'open' }), control: () => endpoint, resolve: () => 'test', clientAdapter: () => 'test', describe: () => [{ id: 'test', admitted: true }] }),
       } as never);
       const events = (await readFile(eventsPath, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
       expect(events.map(event => event.result)).toEqual(['unknown', result]);
@@ -110,6 +111,51 @@ it('authorizes the resolved policy instance instead of comparing an owner with t
   } finally {
     if (previous === undefined) delete process.env.ZHIN_ACCEPTANCE_POLICY;
     else process.env.ZHIN_ACCEPTANCE_POLICY = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+
+it('both recall probes use the actual leased control port while connection exposes only facts', async () => {
+  const recall = vi.fn<NonNullable<EndpointControl['recall']>>(async () => undefined);
+  class NativeClient { nativeMethod() { return 'native'; } }
+  class ProbeEndpoint extends NativeClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {},
+      send: () => 'sent', control: { recall } });
+  }
+  class ProbeAdapter extends Adapter<ProbeEndpoint> { protected createEndpoint() { return new ProbeEndpoint(); } }
+  const root = rootPluginId();
+  const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'test', source: '/fixture/adapters/test/index.ts',
+    definition: defineAdapter({ capabilities: ['outbound'], operations: ['recall'], createAdapter: () => new ProbeAdapter() }) });
+  const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
+    config: new Map([[root, { id: 'bot' }]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+    resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])]]) };
+  const index = await AdapterIndex.create([slot], createSnapshotView(0, state), new AbortController().signal);
+  const directory = await mkdtemp(join(tmpdir(), 'zhin-recall-port-'));
+  const previous = process.env.ZHIN_ACCEPTANCE_POLICY;
+  try {
+    await index.activate(new AbortController().signal);
+    const connection = index.connection('test', 'bot')!;
+    expect(connection).not.toHaveProperty('control');
+    const probes = [(await import('../../scripts/platform-acceptance/probe-command.js')).default,
+      (await import('../../examples/platform-acceptance-bot/commands/acceptance/index.js')).default];
+    for (const [number, probe] of probes.entries()) {
+      const eventsPath = join(directory, `${number}.jsonl`), policyPath = join(directory, 'policy.json');
+      await writeFile(policyPath, JSON.stringify({ version: 1, platform: 'test', actions: ['reply-recall'], minIntervalMs: 1000,
+        maxSends: 1, eventsPath, targets: [{ alias: 'test-a', adapter: 'test', endpoint: 'bot', kind: 'private', id: 'room' }] }));
+      process.env.ZHIN_ACCEPTANCE_POLICY = policyPath;
+      const conversation = { endpoint: { id: String(slot.id), adapter: 'test' }, kind: 'private' as const, id: 'room' };
+      await probe.execute({ endpoint: 'bot', generation: 0, project: () => index,
+        input: { content: 'probe:actual123 action:reply-recall', conversation,
+          $reply: async () => ({ status: 'sent', message: { conversation, id: 'real-message' } }) } } as never);
+      expect(recall).toHaveBeenCalledTimes(number + 1);
+      expect(recall).toHaveBeenLastCalledWith({ message: { conversation, id: 'real-message' }, signal: expect.any(AbortSignal) });
+      const events = (await readFile(eventsPath, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      expect(events.map(event => event.result)).toEqual(['unknown', 'confirmed']);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.ZHIN_ACCEPTANCE_POLICY; else process.env.ZHIN_ACCEPTANCE_POLICY = previous;
+    await index.stop();
     await rm(directory, { recursive: true, force: true });
   }
 });

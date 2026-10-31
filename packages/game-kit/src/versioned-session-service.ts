@@ -3,6 +3,7 @@ import {
   type BaseGameSessionRow,
   type BaseSessionServiceOptions,
   type GameSessionDatabase,
+  type GameSessionWriter,
 } from './base-session-service.js';
 
 const DEFAULT_ACTION_HISTORY_LIMIT = 128;
@@ -16,6 +17,8 @@ export interface VersionedGameSessionRow extends BaseGameSessionRow {
 export interface SessionMutationOptions<TRow extends VersionedGameSessionRow> {
   readonly actionId: string;
   readonly expectedRevision?: number;
+  /** A domain may commit its state CAS and related rows in one existing database transaction. */
+  readonly writer?: GameSessionWriter<TRow>;
   readonly apply:
     | Partial<TRow>
     | ((session: Readonly<TRow>) =>
@@ -129,15 +132,12 @@ export abstract class VersionedSessionService<
         ...processedActions,
         options.actionId,
       ].slice(-this.#actionHistoryLimit);
-      const session = await this.commitSession(
+      const session = await this.commitSession({
         previous,
-        {
-          ...patch,
-          revision,
-          processed_actions: JSON.stringify(nextActions),
-        } as Partial<TRow>,
-        { id, revision: previous.revision },
-      );
+        patch: { ...patch, revision, processed_actions: JSON.stringify(nextActions) } as Partial<TRow>,
+        where: { id, revision: previous.revision },
+        writer: options.writer,
+      });
       if (!session
         || session.revision !== revision
         || !parseActionHistory(session.processed_actions).includes(options.actionId)) {

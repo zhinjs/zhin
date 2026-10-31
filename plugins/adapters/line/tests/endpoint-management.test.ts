@@ -69,7 +69,7 @@ describe('line endpoint management', () => {
     }), { gateway: createTestEventGateway(gateway(), undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start(); endpoint.open(); harnesses.push(endpoint);
 
-    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!('G123');
+    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!({ groupId: 'G123' });
 
     expect(members).toEqual([
       { user_id: 'U1', nickname: 'Alice' },
@@ -101,7 +101,7 @@ describe('line endpoint management', () => {
     }), { gateway: createTestEventGateway(gateway(), undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start(); endpoint.open(); harnesses.push(endpoint);
 
-    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!('R999');
+    const members = await endpoint.index.management(endpoint.canonicalId).listGroupMembers!({ groupId: 'R999' });
 
     expect(members).toEqual([{ user_id: 'U9', nickname: 'Roomie' }]);
     expect(calls[0]).toBe('https://api.line.me/v2/bot/room/R999/members/ids');

@@ -92,10 +92,10 @@ pnpm release / pnpm bump / pnpm pub   # changesets
 
 ## 适配器要点
 
-- 默认导出 `defineAdapter({ capabilities, create })`；`create()` 返回 `{ client, connect, activate?, send }`。
-- `connect({ events, signal, onCleanup })` 将平台事件投影到 `events.message()`，并即时登记 listener、连接与 SDK 资源的清理函数。
-- `send({ conversation, payload })` 在平台边界完成协议转换并返回平台消息 ID；不要绕过统一发送链路。
-- WebSocket、SSE、心跳和重连使用 `createEndpointLifecycle`；只有确需自定义多阶段连接时才继承 `Endpoint`。
+- 默认导出 `defineAdapter({ capabilities, createAdapter })`，创建管理账号的 `Adapter` 子类。
+- Endpoint 继承真实 SDK／实质协议 Client，以 `endpointSpec` 实现结构规范；通过 `events.run` 跟踪完整原生回调，`events.message` 投影消息。
+- `send({ conversation, payload })` 在平台边界完成协议转换，返回确认的消息 ID 或有序 `{ parts }` 投递证据；不要绕过统一发送链路。
+- WebSocket、SSE、心跳和重连使用 `createEndpointLifecycle`；账号状态归 Adapter，IO 和 pending 请求归实际 Client。
 - 完整契约与可运行示例见 `docs/authoring/adapters.md`。
 
 ## JSX

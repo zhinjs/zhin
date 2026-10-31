@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -26,6 +26,95 @@ afterEach(async () => {
 });
 
 describe('NodeIsolatedPluginRuntime', () => {
+  it.each<IsolateMode>(['worker', 'process'])('delivers real Root HMR outcomes to leased old and committed new instances over %s', async mode => {
+    const project = await createProject(); const entry = join(project, 'plugins/child/plugin.mjs');
+    const log = join(project, 'lifecycle.jsonl');
+    await writeLifecyclePlugin({ entry, log, version: 'before' });
+    const modules = new FakeModuleRuntime(); modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      config: { configVersion: 2, plugins: { child: '@test/child' } },
+      isolation: new NodeIsolatedPluginRuntime({ mode }), environment: { name: 'test', mode: 'test', platform: 'node' } });
+    try {
+      await runtime.start();
+      const old = isolatedHandle(runtime.snapshot);
+      await writeLifecyclePlugin({ entry, log, version: 'after' });
+      const hmr = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('unexpected restart'); }, onError(error) { throw error; } });
+      await hmr.enqueue(entry);
+      const records = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      expect(records.filter(row => row.event === 'pause')).toEqual([expect.objectContaining({ version: 'before', generation: 1 })]);
+      expect(records.filter(row => row.event === 'resume')).toHaveLength(2);
+      expect(records.filter(row => row.event === 'resume')).toEqual(expect.arrayContaining([
+        expect.objectContaining({ version: 'before', outcome: 'committed', state: 'replaced' }),
+        expect.objectContaining({ version: 'after', outcome: 'committed', state: 'current' }),
+      ]));
+      await vi.waitFor(() => expect(old.status).toBe('closed'));
+      const disposedRecords = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      expect(disposedRecords.findIndex(row => row.event === 'dispose')).toBeGreaterThan(disposedRecords.findIndex(row => row.version === 'before' && row.event === 'resume'));
+      await expect(isolatedHandle(runtime.snapshot).call('version')).resolves.toBe('after');
+      await expect(old.call('version')).rejects.toThrow(/not admitted|not accepting|closed/);
+      await writeBrokenPlugin(entry);
+      await expect(hmr.enqueue(entry)).rejects.toThrow('candidate setup failed');
+      const afterFailure = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      expect(afterFailure.at(-1)).toMatchObject({ event: 'resume', version: 'after', outcome: 'rejected', state: 'current' });
+      expect(modules.loadCount(entry)).toBe(0);
+    } finally { await runtime.stop(); }
+  });
+
+  it.each<IsolateMode>(['worker', 'process'])('cooperatively cancels a real isolated pause without terminating %s', async mode => {
+    const project = await createProject(); const entry = join(project, 'plugins/child/plugin.mjs');
+    const log = join(project, 'lifecycle.jsonl');
+    await writeLifecyclePlugin({ entry, log, version: 'held', hold: true });
+    const runtime = new NodeIsolatedPluginRuntime({ mode });
+    const owner = childPluginId(rootPluginId(), 'child');
+    const prepared = await runtime.prepare({ owner, parent: rootPluginId(), packageName: '@test/child', entry,
+      config: {}, environment: { name: 'test', mode: 'test', platform: 'node' } }, new AbortController().signal);
+    const handle = prepared.resources?.[0]?.value as IsolatedPluginHandle;
+    await prepared.handoff?.activateNext?.(new AbortController().signal);
+    const admissions = admitIsolatedHandle(owner, handle);
+    const lease = admissions.acquire();
+    admissions.commit(0, { snapshot: emptySnapshotState(), dispose() {} });
+    const controller = new AbortController();
+    const details = { trigger: 'manual' as const, changed: [], planned: { fullRoot: true, plugins: [owner], capabilities: [] },
+      previousGeneration: 1, activeGeneration: 1, receiver: { owner, creationGeneration: 1, state: 'current' as const } };
+    try {
+      const pending = prepared.controlEvent('hmr.pause', { signal: controller.signal, details });
+      const other = new AbortController();
+      let otherSettled = false;
+      const otherPending = prepared.controlEvent('hmr.pause', { signal: other.signal, details });
+      void otherPending.then(() => { otherSettled = true; });
+      await vi.waitFor(async () => expect((await readFile(log, 'utf8')).match(/pause/g)).toHaveLength(2));
+      // Cancelling one correlated event must not cancel another handler or terminate the isolate.
+      controller.abort(new Error('test-control-cancel'));
+      await pending; expect(handle.status).toBe('active'); expect(otherSettled).toBe(false);
+      other.abort(new Error('other-control-cancel')); await otherPending;
+      await prepared.controlEvent('hmr.resume', { signal: new AbortController().signal,
+        details: { ...details, outcome: 'cancelled', replaced: [owner] } });
+      const records = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+      expect(records).toContainEqual(expect.objectContaining({ event: 'cancelled', reason: 'test-control-cancel' }));
+      expect(records.at(-1)).toMatchObject({ event: 'resume', outcome: 'cancelled' });
+      await expect(handle.call('version')).rejects.toThrow('not admitted');
+    } finally { lease.release(); await admissions.close(); await prepared.dispose(); }
+  });
+
+  it.each<IsolateMode>(['worker', 'process'])('propagates Root stop to an in-flight isolated lifecycle callback over %s', async mode => {
+    const project = await createProject(); const entry = join(project, 'plugins/child/plugin.mjs');
+    const log = join(project, 'lifecycle.jsonl');
+    await writeLifecyclePlugin({ entry, log, version: 'stopping', hold: true });
+    const modules = new FakeModuleRuntime(); modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      config: { configVersion: 2, plugins: { child: '@test/child' } },
+      isolation: new NodeIsolatedPluginRuntime({ mode }), environment: { name: 'test', mode: 'test', platform: 'node' } });
+    await runtime.start();
+    const handle = isolatedHandle(runtime.snapshot);
+    const reloading = runtime.reload(); const rejected = expect(reloading).rejects.toThrow('stopping');
+    await vi.waitFor(async () => expect(await readFile(log, 'utf8')).toContain('pause'));
+    const stopping = runtime.stop(); await rejected; await stopping;
+    const records = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    expect(records).toContainEqual(expect.objectContaining({ event: 'cancelled', reason: 'Root lifecycle is stopping' }));
+    expect(records).toContainEqual(expect.objectContaining({ event: 'resume', outcome: 'cancelled' }));
+    expect(records.at(-1)).toMatchObject({ event: 'dispose' }); expect(handle.status).toBe('closed');
+  });
+
   it.each<IsolateMode>(['worker', 'process'])(
     'runs structured-clone RPC and events over %s transport',
     async (mode) => {
@@ -406,4 +495,24 @@ async function temporaryDirectory(): Promise<string> {
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+interface LifecyclePluginFixture { readonly entry: string; readonly log: string; readonly version: string; readonly hold?: boolean }
+async function writeLifecyclePlugin({ entry, log, version, hold = false }: LifecyclePluginFixture): Promise<void> {
+  await writeFile(entry, `
+import { appendFileSync } from 'node:fs';
+const write = value => appendFileSync(${JSON.stringify(log)}, JSON.stringify({ version: ${JSON.stringify(version)}, ...value }) + '\\n');
+export default { name: 'lifecycle', setup({ events, resources, lifecycle }) {
+  resources.use({id:'zhin.isolate.channel'}).expose('version', () => ${JSON.stringify(version)});
+  events.on('hmr.pause', async event => {
+    write({event:'pause',generation:event.details.receiver.creationGeneration});
+    if (${hold}) {
+      if (!event.signal.aborted) await new Promise(resolve => event.signal.addEventListener('abort', resolve, {once:true}));
+      write({event:'cancelled',reason:event.signal.reason.message});
+    }
+  });
+  events.on('hmr.resume', event => write({event:'resume',outcome:event.details.outcome,state:event.details.receiver.state}));
+  lifecycle.add(() => write({event:'dispose'}));
+} };
+`);
 }

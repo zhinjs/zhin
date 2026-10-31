@@ -181,11 +181,11 @@ describe('image menu with a public URL: embedded in the markdown', () => {
 
   it('collects sizes only for http(s) images in markdown/button messages', async () => {
     const probe = vi.fn(async () => ({ width: 3, height: 4 }));
-    expect(await collectOutboundImageSizes(urlMenuPayload, probe)).toEqual(new Map([['https://cdn.example/menu.png', { width: 3, height: 4 }]]));
-    expect(await collectOutboundImageSizes([urlMenuPayload[0]], probe)).toEqual(new Map());
-    expect(await collectOutboundImageSizes(imageMenuPayload, probe)).toEqual(new Map());
+    expect(await collectOutboundImageSizes(urlMenuPayload, { probe: probe })).toEqual(new Map([['https://cdn.example/menu.png', { width: 3, height: 4 }]]));
+    expect(await collectOutboundImageSizes([urlMenuPayload[0]], { probe: probe })).toEqual(new Map());
+    expect(await collectOutboundImageSizes(imageMenuPayload, { probe: probe })).toEqual(new Map());
     expect(probe).toHaveBeenCalledTimes(1);
-    expect(await collectOutboundImageSizes(urlMenuPayload, async () => undefined)).toEqual(new Map());
+    expect(await collectOutboundImageSizes(urlMenuPayload, { probe: async () => undefined })).toEqual(new Map());
   });
 
   it('endpoint probes the URL image and sends one embedded message', async () => {
@@ -221,16 +221,16 @@ describe('image size probing', () => {
   });
 
   it('returns undefined on HTTP errors, network errors and unknown formats', async () => {
-    expect(await probeImageSize('https://x/a.png', async () => ({ ok: true, body: null, arrayBuffer: async () => pngHeader(5, 6).buffer }))).toEqual({ width: 5, height: 6 });
-    expect(await probeImageSize('https://x/a.png', async () => ({ ok: false, body: null, arrayBuffer: async () => new ArrayBuffer(0) }))).toBeUndefined();
-    expect(await probeImageSize('https://x/a.png', async () => { throw new Error('offline'); })).toBeUndefined();
-    expect(await probeImageSize('https://x/a.txt', async () => ({ ok: true, body: null, arrayBuffer: async () => new TextEncoder().encode('hello').buffer }))).toBeUndefined();
+    expect(await probeImageSize('https://x/a.png', { fetch: async () => ({ ok: true, body: null, arrayBuffer: async () => pngHeader(5, 6).buffer }) })).toEqual({ width: 5, height: 6 });
+    expect(await probeImageSize('https://x/a.png', { fetch: async () => ({ ok: false, body: null, arrayBuffer: async () => new ArrayBuffer(0) }) })).toBeUndefined();
+    expect(await probeImageSize('https://x/a.png', { fetch: async () => { throw new Error('offline'); } })).toBeUndefined();
+    expect(await probeImageSize('https://x/a.txt', { fetch: async () => ({ ok: true, body: null, arrayBuffer: async () => new TextEncoder().encode('hello').buffer }) })).toBeUndefined();
   });
 
   it('reads at most the header from a streamed body', async () => {
     let pulls = 0;
     const body = new ReadableStream<Uint8Array>({ pull(controller) { pulls += 1; controller.enqueue(pulls === 1 ? pngHeader(7, 8) : new Uint8Array(40000)); } });
-    expect(await probeImageSize('https://x/a.png', async () => ({ ok: true, body, arrayBuffer: async () => new ArrayBuffer(0) }))).toEqual({ width: 7, height: 8 });
+    expect(await probeImageSize('https://x/a.png', { fetch: async () => ({ ok: true, body, arrayBuffer: async () => new ArrayBuffer(0) }) })).toEqual({ width: 7, height: 8 });
     expect(pulls).toBeLessThan(10);
   });
 });

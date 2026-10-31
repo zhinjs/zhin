@@ -30,17 +30,19 @@ export type PluginConsoleRpcResult =
 
 const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
 
+/** Trusted CLI composition resolves Host methods against this request's exact retained Root. */
+export type HostConsoleRpcFactory = (lease: SnapshotLease) => PluginConsoleRpc;
+
 export interface PluginConsoleRpcRequestOptions {
   readonly snapshots?: SnapshotReader;
   /** Caller access from its bearer token (`TokenRegistry.resolveAccess`). */
   readonly access: ConsoleAccess;
   readonly timeoutMs?: number;
   /**
-   * Host-owned methods answered as `plugin.root.<name>` (for example the Agent's 群聊插话 and
-   * 技能助手 views). They live for the whole process, so no generation admission applies, and they
-   * take precedence over the same name on the root plugin's own provider.
+   * Host-owned methods answered as `plugin.root.<name>`, resolved once from this request's lease.
+   * They take precedence over the same name on the root plugin's own provider.
    */
-  readonly hostRpc?: PluginConsoleRpc;
+  readonly hostRpc?: HostConsoleRpcFactory;
   /** @internal Test seam; defaults to the generation's Console Page catalog. */
   readonly pagesOwnedBy?: (snapshot: RuntimeSnapshot, owner: PluginId) => ReturnType<ConsoleCatalog['pagesOwnedBy']>;
 }
@@ -76,7 +78,7 @@ export async function dispatchPluginConsoleRpcRequest(
     const snapshot = lease.value;
     const pluginId = address.pluginId as PluginId;
     if (!snapshot.tree.has(pluginId)) throw new Failure('not_found', '插件未加载');
-    const hostMethod = pluginId === snapshot.root ? options.hostRpc?.methods.get(address.method) : undefined;
+    const hostMethod = pluginId === snapshot.root ? options.hostRpc?.(lease).methods.get(address.method) : undefined;
     const provider = hostMethod ? undefined : ownProvider(snapshot, pluginId);
     const method = hostMethod ?? provider?.methods.get(address.method);
     if (!method) throw new Failure('not_found', '插件未提供该操作');

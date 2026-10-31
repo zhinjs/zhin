@@ -28,7 +28,7 @@ export default defineAgentTool({
       return { success: false, message: t(context.locale, 'targetNotMember') };
     }
     context.signal.throwIfAborted();
-    const { blacklistFailed } = await kickQqGroupMember(client, group, user_id, blacklist === true);
+    const { blacklistFailed } = await kickQqGroupMember(client, { groupId: group, userId: user_id, addToBlacklist: blacklist === true });
     return {
       success: true,
       message: t(context.locale, 'memberKicked', { p0: member.username || user_id }),

@@ -4,6 +4,8 @@ import { EventEmitter } from 'node:events';
  */
 import {
   createRecallEndpointControl,
+  createEndpointOperation,
+  type EndpointOperationOptions,
   type EndpointControl,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
@@ -70,7 +72,7 @@ export class WecomClient extends EventEmitter {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: WecomEndpointOptions;
-  protected readonly endpointControl: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
+  protected readonly endpointControl: EndpointControl = createRecallEndpointControl((id, signal) => this.recallMessage(id, { signal }));
   readonly #fetch: WecomFetch;
   #routeReleases: HttpRouteRegistration[] = [];
   #accessToken: AccessToken = { access_token: '', expires_in: 0, timestamp: 0 };
@@ -146,8 +148,8 @@ export class WecomClient extends EventEmitter {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  protected async sendPayload({ conversation, payload, locale }: EndpointSendRequest): Promise<string> {
-    const materialized = await this.#materializeOutboundMedia(payload);
+  protected async sendPayload({ conversation, payload, locale, signal }: EndpointSendRequest): Promise<string> {
+    const materialized = await createEndpointOperation({ signal }).prepare(() => this.#materializeOutboundMedia(payload, { signal }));
     const content = formatOutboundBody(materialized, locale);
     const body = buildSendRequestBody(
       conversation.id,
@@ -157,6 +159,7 @@ export class WecomClient extends EventEmitter {
     const data = await this.#request('/cgi-bin/message/send', {
       method: 'POST',
       body,
+      signal,
     });
     if (data.errcode !== 0) {
       throw new Error(`Failed to send message: ${data.errmsg} (${data.errcode})`);
@@ -166,11 +169,12 @@ export class WecomClient extends EventEmitter {
     return (data.msgid as string) || `${Date.now()}`;
   }
 
-  async recallMessage(messageId: string): Promise<void> {
+  async recallMessage(messageId: string, { signal }: EndpointOperationOptions = {}): Promise<void> {
     if (!messageId) return;
     await this.#request('/cgi-bin/message/recall', {
       method: 'POST',
       body: { msgid: messageId },
+      signal,
     });
   }
 
@@ -180,7 +184,7 @@ export class WecomClient extends EventEmitter {
    * /cgi-bin/media/upload 物化；上传失败降级为文本（alt 优先），不阻断发送。
    * 无 canonical MediaRef 的媒体段 warn + 丢弃。
    */
-  async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
+  async #materializeOutboundMedia(payload: unknown, request: EndpointOperationOptions): Promise<unknown> {
     if (!Array.isArray(payload)) return payload;
     const items = await Promise.all(payload.map(async (item) => {
       if (typeof item === 'string' || !item || typeof item !== 'object') return item;
@@ -201,9 +205,10 @@ export class WecomClient extends EventEmitter {
         return { type: 'image', data: { media_id: media.value } };
       }
       try {
-        const mediaId = await this.#uploadMedia('image', media);
+        const mediaId = await this.#uploadMedia({ media, signal: request.signal });
         return { type: 'image', data: { media_id: mediaId } };
       } catch (error) {
+        if (request.signal?.aborted) throw error;
         this.#logger.warn(formatCompact({
           op: 'wecom_media_upload_failed',
           endpoint: this.#options.config.id,
@@ -217,12 +222,12 @@ export class WecomClient extends EventEmitter {
   }
 
   /** POST /cgi-bin/media/upload（临时素材，3 天有效），返回 media_id。 */
-  async #uploadMedia(type: 'image', media: Parameters<typeof resolveMediaBinary>[0]): Promise<string> {
-    await this.#ensureAccessToken();
-    const binary = await resolveMediaBinary(media);
+  async #uploadMedia({ media, signal }: WecomMediaUploadRequest): Promise<string> {
+    await createEndpointOperation({ signal }).prepare(() => this.#ensureAccessToken());
+    const binary = await createEndpointOperation({ signal }).prepare(() => resolveMediaBinary(media, { signal }));
     const form = buildMediaUploadForm(binary);
-    const url = `${this.#options.config.apiBaseUrl}/cgi-bin/media/upload?access_token=${this.#accessToken.access_token}&type=${type}`;
-    const response = await this.#fetch(url, { method: 'POST', body: form });
+    const url = `${this.#options.config.apiBaseUrl}/cgi-bin/media/upload?access_token=${this.#accessToken.access_token}&type=image`;
+    const response = await this.#fetch(url, { method: 'POST', body: form, signal });
     const data = await response.json() as WecomMediaUploadResult;
     if (data.errcode === 0 && data.media_id) return data.media_id;
     throw new Error(`WeCom media upload failed: ${data.errmsg ?? 'unknown'} (${data.errcode ?? '?'})`);
@@ -344,11 +349,13 @@ export class WecomClient extends EventEmitter {
     path: string,
     options: {
       method?: 'GET' | 'POST';
+      signal?: AbortSignal;
       params?: Record<string, string | number>;
       body?: Record<string, unknown>;
     } = {},
   ): Promise<WecomApiResponse> {
-    await this.#ensureAccessToken();
+    await createEndpointOperation(options).prepare(() => this.#ensureAccessToken());
+    options.signal?.throwIfAborted();
     const { method = 'GET', params = {}, body } = options;
     const urlParams = new URLSearchParams({
       ...Object.fromEntries(
@@ -361,6 +368,7 @@ export class WecomClient extends EventEmitter {
       method,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: body && method === 'POST' ? JSON.stringify(body) : undefined,
+      signal: options.signal,
     });
     if (!response.ok) {
       const text = await response.text().catch(() => '');
@@ -406,3 +414,7 @@ export class WecomClient extends EventEmitter {
 }
 
 export type WecomClientEventMap = Record<string, WecomMessage>;
+
+interface WecomMediaUploadRequest extends EndpointOperationOptions {
+  readonly media: Parameters<typeof resolveMediaBinary>[0];
+}

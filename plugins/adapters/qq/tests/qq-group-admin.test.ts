@@ -62,35 +62,35 @@ function fixture(kind: 'group' | 'private' | 'channel' = 'group') {
 describe('QQ group management helpers', () => {
   it('mutes with an RFC3339 expiry, unmutes with del, and rejects >30 days', async () => {
     const { groups, client } = fixture();
-    await muteQqGroupMember(client, GROUP, 'U1', 600);
+    await muteQqGroupMember(client, { groupId: GROUP, userId: 'U1', durationSeconds: 600 });
     const [[, [add]]] = groups.setMemberMute.mock.calls as unknown as [[string, [{ op: string; mute_expire_at: string }]]];
     expect(add.op).toBe('add');
     expect(Date.parse(add.mute_expire_at)).toBeGreaterThan(Date.now() + 590_000);
-    await muteQqGroupMember(client, GROUP, 'U1', 0);
+    await muteQqGroupMember(client, { groupId: GROUP, userId: 'U1', durationSeconds: 0 });
     expect(groups.setMemberMute).toHaveBeenLastCalledWith(GROUP, [{ op: 'del', member_openid: 'U1', mute_expire_at: '' }]);
-    await expect(muteQqGroupMember(client, GROUP, 'U1', QQ_GROUP_MUTE_MAX_SECONDS + 1)).rejects.toThrow(RangeError);
+    await expect(muteQqGroupMember(client, { groupId: GROUP, userId: 'U1', durationSeconds: QQ_GROUP_MUTE_MAX_SECONDS + 1 })).rejects.toThrow(RangeError);
   });
 
   it('only lets an admin bot moderate ordinary human members', async () => {
     const { groups, client } = fixture();
     const signal = new AbortController().signal;
-    await expect(inspectQqGroupMember(client, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: true, platformRole: 'member' });
+    await expect(inspectQqGroupMember(client, { groupId: GROUP, userId: 'U1', signal: signal })).resolves.toMatchObject({ canModerate: true, platformRole: 'member' });
     groups.getMemberInfo.mockResolvedValueOnce({ member_openid: 'U1', username: 'x', member_role: 'admin', bot: false, joined_at: '' });
-    await expect(inspectQqGroupMember(client, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: false, platformRole: 'admin' });
+    await expect(inspectQqGroupMember(client, { groupId: GROUP, userId: 'U1', signal: signal })).resolves.toMatchObject({ canModerate: false, platformRole: 'admin' });
     groups.getBotState.mockResolvedValueOnce({ member_openid: 'BOT', member_role: 'member', allow_proactive_msg: false, recv_msg_setting: 'all', joined_at: '' });
-    await expect(inspectQqGroupMember(client, GROUP, 'U1', signal)).resolves.toMatchObject({ canModerate: false });
+    await expect(inspectQqGroupMember(client, { groupId: GROUP, userId: 'U1', signal: signal })).resolves.toMatchObject({ canModerate: false });
   });
 
   it('moderation kick re-checks the newcomer window and requires platform success', async () => {
     const { groups, client } = fixture();
     const signal = new AbortController().signal;
-    const member = await inspectQqGroupMember(client, GROUP, 'U1', signal);
-    await moderateQqGroupMember(client, GROUP, 'U1', { type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: 600_000 }, signal, () => true);
+    const member = await inspectQqGroupMember(client, { groupId: GROUP, userId: 'U1', signal: signal });
+    await moderateQqGroupMember({ api: client, isActive: () => true }, { groupId: GROUP, userId: 'U1', action: { type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: 600_000 }, signal: signal });
     expect(groups.removeMembers).toHaveBeenCalledWith(GROUP, { member_openids: ['U1'] });
     groups.removeMembers.mockResolvedValueOnce({ remove_members_result: 'failed', add_to_member_blacklist_fail_openids: [] });
-    await expect(moderateQqGroupMember(client, GROUP, 'U1', { type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: 600_000 }, signal, () => true))
+    await expect(moderateQqGroupMember({ api: client, isActive: () => true }, { groupId: GROUP, userId: 'U1', action: { type: 'kick', joinedAt: member.joinedAt!, maxMembershipAgeMs: 600_000 }, signal: signal }))
       .rejects.toThrow('did not confirm');
-    await expect(moderateQqGroupMember(client, GROUP, 'U1', { type: 'mute', durationSeconds: 60 }, signal, () => false))
+    await expect(moderateQqGroupMember({ api: client, isActive: () => false }, { groupId: GROUP, userId: 'U1', action: { type: 'mute', durationSeconds: 60 }, signal: signal }))
       .rejects.toThrow('permission');
   });
 });
@@ -111,13 +111,13 @@ describe('QQ endpoint management and control', () => {
     const { f, endpoint: ep } = await endpoint();
     await ep.start();
     try {
-      await ep.management.listGroupMembers?.(GROUP);
+      await ep.management.listGroupMembers?.({ groupId: GROUP });
       expect(f.groups.getMembers).toHaveBeenCalledWith(GROUP);
-      await ep.management.kickGroupMember?.(GROUP, 'U1');
+      await ep.management.kickGroupMember?.({ groupId: GROUP, userId: 'U1' });
       expect(f.groups.removeMembers).toHaveBeenCalled();
-      await ep.management.muteGroupMember?.(GROUP, 'U1', 0);
+      await ep.management.muteGroupMember?.({ groupId: GROUP, userId: 'U1', durationSeconds: 0 });
       expect(f.groups.setMemberMute).toHaveBeenCalled();
-      await expect(ep.management.inspectGroupScene?.(GROUP, new AbortController().signal)).resolves.toEqual({ name: 'Group', memberCount: 42 });
+      await expect(ep.management.inspectGroupScene?.({ groupId: GROUP, signal: new AbortController().signal })).resolves.toEqual({ name: 'Group', memberCount: 42 });
     } finally { await ep.stop(); }
   });
 
@@ -126,14 +126,14 @@ describe('QQ endpoint management and control', () => {
     await ep.start();
     try {
       const group = { endpoint: { id: 'qq-bot', adapter: 'qq' }, kind: 'group' as const, id: GROUP };
-      await ep.control.recall?.({ conversation: group, id: 'NATIVE-MSG' });
+      await ep.control.recall?.({ message: { conversation: group, id: 'NATIVE-MSG' } });
       expect(f.client.recallGroupMessage).toHaveBeenCalledWith(GROUP, 'NATIVE-MSG');
-      expect(await ep.control.addReaction?.({ conversation: group, id: 'NATIVE-MSG' }, '⏳')).toBeNull();
+      expect(await ep.control.addReaction?.({ message: { conversation: group, id: 'NATIVE-MSG' }, emoji: '⏳' })).toBeNull();
       const channel = { endpoint: { id: 'qq-bot', adapter: 'qq' }, kind: 'channel' as const, id: 'CH', parent: { kind: 'channel' as const, id: 'G' } };
-      const reaction = await ep.control.addReaction?.({ conversation: channel, id: 'M1' }, '⏳');
+      const reaction = await ep.control.addReaction?.({ message: { conversation: channel, id: 'M1' }, emoji: '⏳' });
       expect(reaction).toBe('2:9203');
       expect(f.reactionService.addGuildMessageReaction).toHaveBeenCalledWith('CH', 'M1', 2, '9203');
-      await ep.control.removeReaction?.({ conversation: channel, id: 'M1' }, reaction!);
+      await ep.control.removeReaction?.({ message: { conversation: channel, id: 'M1' }, reactionId: reaction! });
       expect(f.reactionService.deleteGuildMessageReaction).toHaveBeenCalledWith('CH', 'M1', 2, '9203');
     } finally { await ep.stop(); }
   });

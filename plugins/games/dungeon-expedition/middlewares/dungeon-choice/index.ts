@@ -1,12 +1,13 @@
-import type { Message } from '@zhin.js/core/runtime';
-import { defineMiddleware } from 'zhin.js/middleware';
 import {
+  replyGameOperation,
   buildChoiceFallbackMap,
   channelKey,
-  messageFromCommandInput,
+  gamePlayerFromInput,
   parseChoicePayload,
   resolveGameTextPayload,
 } from '@zhin.js/game-kit';
+import type { Message } from '@zhin.js/core/runtime';
+import { defineMiddleware } from 'zhin.js/middleware';
 import { handleDungeonChoice } from '../../src/game-flow.js';
 import { resolveGameServices } from '../../src/runtime-store.js';
 import { stateFromSession } from '../../src/session-service.js';
@@ -19,24 +20,25 @@ import {
 export default defineMiddleware<Message>({
   target: 'inbound',
   async handle(context, next) {
+    if (!context.input.sender?.id) { await next(); return; }
     const raw = context.input.content?.trim() ?? '';
     if (!raw) {
       await next();
       return;
     }
     const service = resolveGameServices(context);
-    const message = messageFromCommandInput(context.input);
+    const message = gamePlayerFromInput(context.input);
     const payloadFromText = resolveGameTextPayload(raw);
     if (payloadFromText?.startsWith(`${DUNGEON_PREFIX}:`)) {
       const parsed = parseChoicePayload(payloadFromText, DUNGEON_PREFIX);
       if (parsed) {
-        const reply = await handleDungeonChoice(
+        await replyGameOperation({ session: service, player: message, reply: content => context.input.$reply(content),
+      run: () => handleDungeonChoice(
           service,
           message,
           parsed.sessionId,
           parsed.choiceId,
-        );
-        await context.input.$reply(reply);
+        ) });
         return;
       }
       await next();
@@ -60,12 +62,12 @@ export default defineMiddleware<Message>({
       await next();
       return;
     }
-    const reply = await handleDungeonChoice(
+    await replyGameOperation({ session: service, player: message, reply: content => context.input.$reply(content),
+      run: () => handleDungeonChoice(
       service,
       message,
       parsed.sessionId,
       parsed.choiceId,
-    );
-    await context.input.$reply(reply);
+    ) });
   },
 });

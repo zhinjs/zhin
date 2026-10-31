@@ -1,6 +1,6 @@
 import type { EndpointEventSink } from 'zhin.js/adapter';
 import { DiscordFaultProxyStrategy } from './gateway-fault-proxy.js';
-import { createReadStream, promises as fs } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
   Client,
@@ -137,7 +137,7 @@ export async function toMessageCreateOptions(body: DiscordOutboundBody): Promise
           name: file.name || 'attachment',
         }));
       } else if (file.file && await fileExists(file.file)) {
-        files.push(new AttachmentBuilder(createReadStream(file.file), {
+        files.push(new AttachmentBuilder(file.file, {
           name: file.name || path.basename(file.file),
         }));
       } else if (file.url) {

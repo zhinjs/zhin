@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getEventListeners } from 'node:events';
 import { telegramFixture, telegramDeliveryFixture } from './fixture.js';
+import { createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { capabilityId, featureId, rootPluginId, createCapabilitySlot, SnapshotStore, type RuntimeSnapshot } from 'zhin.js';
 import { Adapter, AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointEvent } from 'zhin.js/adapter';
 import type { HttpHost } from '@zhin.js/host-http';
@@ -25,9 +26,9 @@ async function makeEndpoint(receive: (name: string) => Promise<unknown> = async 
   const endpoint = await telegramFixture({ id, config,
     http: { route: () => () => undefined } as unknown as HttpHost,
     fetch: async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result: {} }), json: async () => ({}) }),
-  }, undefined, undefined, {
+  }, undefined, undefined, createTestEndpointEventGateway({
     receive: async (event) => receive(event.name),
-  });
+  }));
   await endpoint.start(); endpoint.open();
   return endpoint;
 }
@@ -61,7 +62,7 @@ async function candidate(receive: (event: EndpointEvent) => Promise<unknown>) {
   const snapshot: RuntimeSnapshot = {
     generation: 1, root,
     tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@test/root', packageRoot: '/test', children: [] }]]),
-    config: new Map([[root, { id: config.id }]]), resources: new Map([[root, new Map([[endpointEventGatewayToken.id, { receive }]])]]),
+    config: new Map([[root, { id: config.id }]]), resources: new Map([[root, new Map([[endpointEventGatewayToken.id, createTestEndpointEventGateway({ receive })]])]]),
     capabilities: new Map([[slot.id, slot]]), projections: new Map(),
   };
   const index = await AdapterIndex.create([slot], snapshot, new AbortController().signal);
@@ -174,7 +175,7 @@ describe('Telegram update admission and acknowledgement', () => {
     const endpoint = await telegramFixture({ id, config,
       http: { route: () => () => undefined } as unknown as HttpHost,
       fetch: async (url) => url.endsWith('/getChatMember') ? new Promise(() => {}) : ({ ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result: {} }), json: async () => ({}) }),
-    }, undefined, undefined, { receive });
+    }, undefined, undefined, createTestEndpointEventGateway({ receive }));
     await endpoint.start(); endpoint.open();
     const groupUpdate = { ...update, message: { ...update.message!,
       chat: { id: 1, type: 'group' as const }, from: { id: 1, first_name: 'Alice' },
@@ -223,7 +224,7 @@ describe('Telegram update admission and acknowledgement', () => {
         const result = url.endsWith('/getUpdates') ? [update] : {};
         return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true, result }), json: async () => ({}) };
       },
-    }, undefined, undefined, { receive: async () => undefined });
+    }, undefined, undefined, createTestEndpointEventGateway({ receive: async () => undefined }));
     try {
       await endpoint.start();
       endpoint.open();

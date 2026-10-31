@@ -24,10 +24,8 @@ export default defineAgentTool<{ chat_id: string; question: string; options: str
     if (!Array.isArray(optList) || optList.length < 2) {
       return { success: false, message: t(context.locale, 'pollOptionCount') };
     }
-    const result = await endpoint.sendPoll(
-      Number(chat_id), question, optList,
-      is_anonymous ?? true, allows_multiple ?? false,
-    );
+    const result = await endpoint.sendPoll({ chatId: Number(chat_id), question, options: optList,
+      isAnonymous: is_anonymous ?? true, allowsMultipleAnswers: allows_multiple ?? false });
     return { success: true, message_id: result.message_id, message: t(context.locale, 'pollSent') };
   },
 });

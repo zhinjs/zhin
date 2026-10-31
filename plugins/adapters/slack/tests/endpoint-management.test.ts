@@ -133,7 +133,7 @@ describe('slack endpoint management', () => {
     const members = vi.fn(async () => ({ members: ['U1', 'U2'] }));
     const endpoint = await startedEndpoint(mockClient({ conversationsMembers: members }));
 
-    const result = await endpoint.management.listGroupMembers!('C1');
+    const result = await endpoint.management.listGroupMembers!({ groupId: 'C1' });
 
     expect(result).toEqual(['U1', 'U2']);
     expect(members).toHaveBeenCalledWith({ channel: 'C1' });
@@ -149,4 +149,21 @@ describe('slack endpoint management', () => {
     await expect(endpoint.management.listGroups!()).rejects.toMatchObject({ code: 'endpoint_inactive', disposition: 'not_sent' });
     await endpoint.stop();
   });
+});
+
+it('cancels a native SDK page wait and never requests the next page when the late result arrives', async () => {
+  let finish!: (value: { channels: { id: string }[]; response_metadata: { next_cursor: string } }) => void;
+  const page = new Promise<{ channels: { id: string }[]; response_metadata: { next_cursor: string } }>(resolve => { finish = resolve; });
+  const list = vi.fn().mockReturnValueOnce(page).mockResolvedValue({ channels: [], response_metadata: { next_cursor: '' } });
+  const endpoint = await startedEndpoint(mockClient({ conversationsList: list }));
+  const caller = new AbortController();
+  const listing = endpoint.management.listGroups!({ signal: caller.signal }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(1)); caller.abort();
+    await expect(listing).resolves.toMatchObject({ error: { disposition: 'unknown' } });
+    finish({ channels: [{ id: 'late' }], response_metadata: { next_cursor: 'not-admitted' } });
+    await Promise.resolve(); await Promise.resolve(); expect(list).toHaveBeenCalledTimes(1);
+    await expect(endpoint.management.listGroups!()).resolves.toEqual([]);
+    expect(list).toHaveBeenCalledTimes(2); expect(list.mock.calls[1]?.[0]?.cursor).toBeUndefined();
+  } finally { await endpoint.stop(); await listing; }
 });

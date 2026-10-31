@@ -15,6 +15,24 @@ An adapter does three things:
 
 Hot reload, account identity, version switching and resource cleanup are handled by the framework.
 
+## Adapter API 2 version boundary
+
+This batch uses npm patch versions but intentionally changes plugin interfaces. Its first target
+versions are `zhin.js 1.1.19`, `@zhin.js/core 1.1.54`, `@zhin.js/adapter 1.1.26` and
+`@zhin.js/feature-kit 1.1.10` (verify the formal release inventory before installation).
+Old interfaces are supported only before these floors. New plugins need those npm peer/dev
+minimums and an explicit Adapter Feature requirement:
+
+```json
+{ "features": [{ "package": "@zhin.js/adapter", "api": "^2.0.0" }] }
+```
+
+This `api` belongs to `package.json#zhin.features`; it is separate from npm versions and
+`zhin.engine`. The new provider declares `featureApi: 2.0.0`: explicit API-1 consumers are refused,
+and API-2 consumers are refused on an API-1 provider. Omitted API metadata keeps its existing
+behavior and does not certify compatibility. Recompile custom plugins, update peer/dev floors
+and verify the installed stack; see [version compatibility and migration](../operations/upgrades.md#adapter-api-2).
+
 ## Minimal implementation
 
 Create `adapters/<platform>/index.ts` in your plugin and default-export `defineAdapter()`:
@@ -38,7 +56,7 @@ class TerminalAdapter extends Adapter<TerminalEndpoint, TerminalConfig, { readon
   }
 }
 
-declare module 'zhin.js/adapter' {
+declare module '@zhin.js/feature-kit' {
   interface AdapterRegistry { readonly terminal: TerminalAdapter; }
 }
 
@@ -47,6 +65,8 @@ export default defineAdapter<TerminalConfig>({
   createAdapter: () => new TerminalAdapter(),
 });
 ```
+
+The adapter package must declare a direct `@zhin.js/feature-kit` dependency. Custom published plugins can use peer plus development dependencies; official adapters use exact internal dependencies. Augment only that module; `zhin.js/adapter` still exports the Adapter APIs but is not a registry registration entry. Business commands need only the literal adapter name once the package declarations are loaded.
 
 `TerminalEndpoint` extends the `TerminalClient` that owns terminal IO and `implements Endpoint`; see the complete [terminal example](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts). When a platform has an SDK, extend its real Client. Without an SDK, the Client must own protocol IO, requests and cancellation, rather than call back into the Endpoint to find its implementation.
 
@@ -99,7 +119,7 @@ Convert platform-specific structures such as `share`, audio or cards at the `sen
 
 ## Native Client inheritance and account ownership
 
-Implement `Adapter<E, Config, Events>` and let it own every Endpoint. An Endpoint extends the actual SDK Client and uses `endpointSpec` / `createEndpointSpecification` for framework hooks without replacing native `on`, `off`, or `emit`. Register the Adapter type once through the public `zhin.js/adapter` `AdapterRegistry`; literal platform declarations in commands infer its Endpoint.
+Implement `Adapter<E, Config, Events>` and let it own every Endpoint. An Endpoint extends the actual SDK Client and uses `endpointSpec` / `createEndpointSpecification` for framework hooks without replacing native `on`, `off`, or `emit`. Register the Adapter type once through the canonical `@zhin.js/feature-kit` `AdapterRegistry`; literal platform declarations in commands infer its Endpoint.
 
 Adding an account saves disabled configuration without constructing an SDK object. Explicit start connects it. The owning Adapter handles update, stop, removal, and replacement. Updating a running account reconnects only that account; existing operations remain bound to their original incarnation. `defineAdapter` accepts only `createAdapter`; do not add another global account controller, Client token, or writable Endpoint directory.
 

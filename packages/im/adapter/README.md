@@ -110,8 +110,8 @@ platform `recall(messageId)` shape without leaking that shape into Core.
 
 ## Operation-scoped Client resolution
 
-每个平台通过公开 `zhin.js/adapter` 的 `AdapterRegistry` 注册实际 Adapter 类；
-这是同一底层注册表的公开导出，不新增另一处 registry。
+每个平台通过唯一增补入口 `@zhin.js/feature-kit` 的 `AdapterRegistry` 注册实际 Adapter 类；
+只在该模块增补；门面导出用于读取类型，不作为注册入口。
 Client 和 EventMap 从该类的泛型推断，不再有独立 Client token 或 descriptor lookup。
 Handler 的事件参数携带原生 `client`；Command、Middleware 和 Agent Tool 的
 `context.$client` 按当前 operation 的 Endpoint 解析：
@@ -227,3 +227,12 @@ Adapter 还提供端点的 `id`、`endpointId` 和 `name`。这些值属于 owne
 创建上下文不提供 `project()`，类型和实际对象都如此；JavaScript 强行调用会抛出
 `TypeError`，不会悄悄读取旧代投影。需要跨 Feature 的业务执行放在 command、handler、
 middleware 或 tool 中，通过它们当前 operation 的上下文解析。
+
+## API compatibility cutover
+
+The first planned API-2 batch uses npm patch versions: Adapter `1.1.26`, Core `1.1.54`,
+`zhin.js 1.1.19` and FeatureKit `1.1.10`. Adapter Provider `featureApi: 2.0.0` is independent
+of the npm version; consumers declare `zhin.features[].api: ^2.0.0`. Explicit API-1 consumers
+are refused on API 2, while omitted metadata keeps its existing meaning. Custom adapters must
+update named control/management requests and canonical Registry authoring with the matching
+peer/dev floors. See [upgrade and recovery](../../../docs/operations/upgrades.md#adapter-api-2).

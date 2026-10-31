@@ -65,7 +65,7 @@ description: "插件是什么、插件树如何组成、Plugin 与 Feature 的�
     "type": "feature",
     "entry": "./lib/provider.js",
     "engine": "^1.0.0",
-    "featureApi": "1.0.0"
+    "featureApi": "2.0.0"
   }
 }
 ```
@@ -135,7 +135,7 @@ CLI 会以当前目录为项目根，读取包契约和 `configVersion: 2` 主�
 
 ```json
 "features": [
-  { "package": "@zhin.js/adapter",     "api": "^1.0.0" },
+  { "package": "@zhin.js/adapter",     "api": "^2.0.0" },
   { "package": "@zhin.js/command",     "api": "^1.0.0" },
   { "package": "@zhin.js/component",   "api": "^1.0.0" },
   { "package": "@zhin.js/middleware",  "api": "^1.0.0" },

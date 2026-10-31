@@ -274,7 +274,7 @@ describe('flat application Runtime', () => {
     await f.childManifest({ runtime: 'isolated', metadata: { displayName: 'Isolated' } });
     let disposed = false;
     const runtime = new RootRuntime({ projectRoot: f.root, config: f.document, environment, modules: f.modules,
-      isolation: { async prepare() { return { descriptor: { name: 'isolated', metadata: { displayName: 'Isolated' } }, dispose() { disposed = true; } }; } } });
+      isolation: { async prepare() { return { descriptor: { name: 'isolated', metadata: { displayName: 'Isolated' } }, async controlEvent() {}, dispose() { disposed = true; } }; } } });
     running.push(runtime);
     await expect(runtime.start()).rejects.toThrow('metadata.displayName in both');
     expect(f.loads).not.toContain(join(f.root, 'plugins/child/plugin.ts'));

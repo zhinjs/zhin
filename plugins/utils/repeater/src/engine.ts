@@ -1,3 +1,4 @@
+import { conversationRefKey, type ConversationRef } from 'zhin.js';
 import type { Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
 import { DEFAULT_REPEATER_CONFIG } from './config.js';
@@ -6,32 +7,15 @@ export { DEFAULT_REPEATER_CONFIG } from './config.js';
 export type { RepeaterConfig } from './config.js';
 
 export interface RepeaterInboundFields {
-  readonly conversation: {
-    readonly kind: 'private' | 'group' | 'channel';
-    readonly id: string;
-  };
+  readonly conversation: ConversationRef;
   readonly content: string;
   readonly sender?: { readonly id: string; readonly name?: string } | string;
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
 
-/**
- * Best-effort group detection for Plugin Runtime `Message`.
- * Channel type comes from `conversation.kind`（metadata.type/channelType 优先，
- * 兼容早期适配器）；无类型信息时按会话 `kind:id` 作为 group key。
- */
+/** Repeater state belongs to the exact incoming conversation, including its account and thread. */
 export function resolveGroupId(message: RepeaterInboundFields): string | null {
-  const meta = message.metadata ?? {};
-  const type = meta.type ?? meta.channelType
-    ?? (meta.channel && typeof meta.channel === 'object'
-      ? (meta.channel as { type?: unknown }).type
-      : undefined)
-    ?? message.conversation.kind;
-  if (type === 'private') return null;
-  if (type === 'group' || type === 'channel') {
-    return message.conversation.id;
-  }
-  return null;
+  return message.conversation.kind === 'private' ? null : conversationRefKey(message.conversation);
 }
 
 interface RepeatState {

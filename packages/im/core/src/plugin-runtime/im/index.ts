@@ -1,6 +1,8 @@
 export * from './contracts.js';
 export { EndpointRuntime } from './endpoint-runtime.js';
 export type {
+  CaptureEndpointOperationInput,
+  CapturedEndpointOperation,
   EndpointRuntimeDetail,
   EndpointRuntimeSummary,
   RuntimeEndpointEditInput,

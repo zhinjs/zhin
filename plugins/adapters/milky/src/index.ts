@@ -13,6 +13,7 @@ export {
   resolveMilkyConfig,
   senderNickname,
   type MilkyApiClientOptions,
+  type MilkyApiRequest,
   type MilkyApiResponse,
   type MilkyConfigBase,
   type MilkyEndpointConfig,

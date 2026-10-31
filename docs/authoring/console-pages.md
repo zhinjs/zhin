@@ -84,7 +84,7 @@ Sandbox 适配器（`plugins/adapters/sandbox`）同时提供了一个适配器�
     "entry": "./plugin.ts",
     "runtime": "trusted",
     "features": [
-      { "package": "@zhin.js/adapter", "api": "^1.0.0" },
+      { "package": "@zhin.js/adapter", "api": "^2.0.0" },
       { "package": "@zhin.js/page", "api": "^1.0.0" }
     ]
   }

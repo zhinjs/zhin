@@ -141,7 +141,7 @@ describe('createEndpointCommands uses actual owned Adapter persistence', () => {
       definition: { ...commands.add, $parameter: { name: 'id', type: 'string' } as const } });
     const snapshot = { ...f.store.current, capabilities: new Map([...f.store.current.capabilities, [slot.id, slot]]) };
     const commandIndex = new CommandIndex([slot], snapshot);
-    expect(await commandIndex.dispatch('demo endpoint add bot token=a=b=c baseUrl=https://fixture.invalid', { sender: { id: 'alice' } })).toMatchObject({ status: 'executed', value: expect.stringContaining('尚未启动') });
+    expect(await commandIndex.dispatch({ input: 'demo endpoint add bot token=a=b=c baseUrl=https://fixture.invalid', source: { sender: { id: 'alice' } } })).toMatchObject({ status: 'executed', value: expect.stringContaining('尚未启动') });
     expect(f.repository.compareAndSet).toHaveBeenCalledTimes(1);
     expect(f.repository.state.get(f.adapter.descriptor.id)!.endpoints[0]).toMatchObject({ endpointId: 'bot', desiredEnabled: false, config: { id: 'bot', token: 'a=b=c', baseUrl: 'https://fixture.invalid' } });
     expect(f.adapter.created).toHaveLength(0); expect(f.source).toEqual({ endpoints: [] }); expect(f.use).not.toHaveBeenCalled(); expect(f.store.current.generation).toBe(0); expect(process.pid).toBe(pid);

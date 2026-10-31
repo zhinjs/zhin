@@ -12,7 +12,10 @@ it('localizes tool validation and preserves the provider input and single-call b
   expect(await poll.execute({ chat_id: '123', question: '原文', options: '["中文","English"]' }, context as never))
     .toMatchObject({ message: 'Poll sent', message_id: 42 });
   expect(sendPoll).toHaveBeenCalledOnce();
-  expect(sendPoll).toHaveBeenCalledWith(123, '原文', ['中文', 'English'], true, false);
+  expect(sendPoll).toHaveBeenCalledWith({
+    chatId: 123, question: '原文', options: ['中文', 'English'],
+    isAnonymous: true, allowsMultipleAnswers: false,
+  });
 });
 
 it('keeps trusted operation locale independent of platform administration results', async () => {

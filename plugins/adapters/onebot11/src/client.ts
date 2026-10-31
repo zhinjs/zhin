@@ -1,9 +1,10 @@
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import {
   OneBotV11Client,
   type OneBotV11Event as ImHelperOneBot11Event,
   type OneBotV11Response,
 } from '@imhelper/onebot-v11';
-import { EventFactory, type EventMap, type ImHelperEventMap } from 'imhelper';
+import { ProtocolError, EventFactory, type EventMap, type ImHelperEventMap } from 'imhelper';
 import {
   forwardEndpointClientEvents,
   type ClientEventPayloads,
@@ -39,18 +40,39 @@ export function onebot11ClientOptions(
   };
 }
 
-export async function callOnebot11Client<T = unknown>(
-  client: OneBotV11Client,
-  action: string,
-  params?: Record<string, unknown>,
-): Promise<T | undefined> {
-  const response: OneBotV11Response<T> = await client.call<T>(action, params);
-  if (response.status !== 'ok') {
-    throw new Error(
-      `OneBot 11 API ${action}: retcode=${response.retcode}${response.message ? ` ${response.message}` : ''}`,
-    );
+export interface Onebot11ClientRequest {
+  readonly client: OneBotV11Client;
+  readonly action: string;
+  readonly params?: Record<string, unknown>;
+}
+/** Native methods retain ProtocolError; framework ports preserve the underlying delivery evidence. */
+export async function callOnebot11Client<T = unknown>(request: Onebot11ClientRequest): Promise<T | undefined> {
+  try {
+    return readOnebot11Response<T>(await request.client.call<T>(request.action, request.params));
+  } catch (error) {
+    if (error instanceof ProtocolError) {
+      if (error.cause instanceof EndpointDeliveryError) throw error.cause;
+      if (error.response !== undefined) readOnebot11Response(error.response);
+    }
+    throw error;
   }
-  return response.data;
+}
+
+/**
+ * Framework evidence follows the OB11 response envelope, including async/1 submission.
+ * @see https://github.com/botuniverse/onebot-11/blob/master/communication/http.md
+ */
+export function readOnebot11Response<T = unknown>(response: unknown): T | undefined {
+  if (response && typeof response === 'object') {
+    const result = response as Partial<OneBotV11Response>;
+    if (result.status === 'ok' && result.retcode === 0) return result.data as T | undefined;
+    if (result.status === 'failed' && Number.isSafeInteger(result.retcode) && result.retcode !== 0 && result.retcode !== 1) {
+      throw new EndpointDeliveryError('platform_rejected',
+        `OneBot 11 API rejected: retcode=${result.retcode}${result.message ? ` ${result.message}` : ''}`, 'rejected');
+    }
+  }
+  // OB11 async/1 acknowledges submission, never the final outcome.
+  throw new EndpointDeliveryError('delivery_unconfirmed', 'OneBot 11 response did not confirm the action result', 'unknown');
 }
 
 const onebot11ClientEventNames = Object.freeze([

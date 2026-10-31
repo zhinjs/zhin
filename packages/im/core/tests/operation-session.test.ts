@@ -16,14 +16,59 @@ function fixture() {
   const event = new NativeEvent();
   const reply = vi.fn(async () => ({ status: 'sent' as const }));
   let active = true;
-  const message = new RuntimeMessage({ endpoint: { adapter: 'icqq', id: 'account-id' }, kind: 'group', id: 'room',
-    parent: { kind: 'channel', id: 'parent' }, threadId: 'thread' }, 'hello', snapshot.generation, reply,
-    { id: 'sender', name: 'Alice', roles: ['master', 'admin'] }, {}, [{ type: 'text', data: { text: 'hello' } }],
-    undefined, 'account', true, undefined, () => endpoint, 'icqq', {
-      snapshot, assertActive: () => { if (!active) throw new Error('operation ended'); },
-      session: { adapter, endpoint, adapterName: 'icqq', event, receivedAt: 200, platformSentAt: 100,
-        platformRoles: ['admin'], authorizationRoles: ['master'], signal: new AbortController().signal },
-    });
+  const message = new RuntimeMessage(
+    {
+      conversation: {
+        endpoint: { adapter: 'icqq', id: 'account-id' },
+        kind: 'group',
+        id: 'room',
+        parent: { kind: 'channel', id: 'parent' },
+        threadId: 'thread',
+      },
+      content: 'hello',
+      sender: { id: 'sender', name: 'Alice', roles: ['master', 'admin'] },
+      metadata: {},
+      segments: [{ type: 'text', data: { text: 'hello' } }],
+      endpointId: 'account',
+      mentioned: true,
+    },
+    {
+      generation: snapshot.generation,
+      reply: reply,
+      client: () => endpoint,
+      clientAdapter: 'icqq',
+      snapshot,
+      assertActive: () => {
+        if (!active) throw new Error('operation ended');
+      },
+      session: {
+        adapter,
+        endpoint,
+        adapterName: 'icqq',
+        event,
+        scene: {
+          endpoint: { adapter: 'icqq', id: 'account-id' },
+          kind: 'group',
+          id: 'room',
+          parent: { kind: 'channel', id: 'parent' },
+          threadId: 'thread',
+        },
+        message: Object.freeze({
+          text: 'hello',
+          receivedAt: 200,
+          platformSentAt: 100,
+          mentioned: true,
+        }),
+        sender: Object.freeze({
+          id: 'sender',
+          name: 'Alice',
+          platformRoles: ['admin'],
+          authorizationRoles: ['master'],
+        }),
+        signal: new AbortController().signal,
+      },
+    },
+  );
   return { message, adapter, endpoint, event, reply, snapshot, owner, end: () => { active = false; } };
 }
 
@@ -55,6 +100,12 @@ it('rebinds reply authorship to the command operation without replacing the capt
   expect(session).toBeDefined();
   expect(session.endpoint).toBe(f.endpoint);
   expect(session.event).toBe(f.event);
+  const original = readOperationSession(f.message)!;
+  expect(session.scene).toBe(original.scene);
+  expect(session.sender).toBe(original.sender);
+  expect(session.message).toBe(original.message);
+  expect(bound.conversation).toBe(f.message.conversation);
+  expect(bound.segments).toBe(f.message.segments);
   await session.reply('command reply');
   expect(f.reply).toHaveBeenCalledWith('command reply', f.owner);
   f.end();
@@ -62,8 +113,13 @@ it('rebinds reply authorship to the command operation without replacing the capt
 });
 
 it('does not fabricate a Session from a synthetic Message or metadata', () => {
-  const message = new RuntimeMessage({ endpoint: { adapter: 'synthetic', id: 'none' }, kind: 'private', id: 'sender' },
-    'synthetic', 0, async () => ({ status: 'unsupported' }), undefined,
-    { session: { adapterName: 'icqq', endpoint: {} } });
+  const message = new RuntimeMessage(
+    {
+      conversation: { endpoint: { adapter: 'synthetic', id: 'none' }, kind: 'private', id: 'sender' },
+      content: 'synthetic',
+      metadata: { session: { adapterName: 'icqq', endpoint: {} } },
+    },
+    { generation: 0, reply: async () => ({ status: 'unsupported' }) },
+  );
   expect(readOperationSession(message)).toBeUndefined();
 });

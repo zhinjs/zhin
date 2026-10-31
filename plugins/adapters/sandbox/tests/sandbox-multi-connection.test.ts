@@ -4,7 +4,7 @@ import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { EndpointEvent } from 'zhin.js/adapter';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { createEndpointHarness } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
 import { SandboxClient, type SandboxClientConnection } from '../src/client.js';
 import { resolveSandboxEndpoint } from '../src/protocol.js';
@@ -35,7 +35,7 @@ async function fixture(authenticated = false) {
   const endpoint = await createEndpointHarness(() => new SandboxWsEndpoint({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'sandbox'),
     http, defaults: resolveSandboxEndpoint({ id: 'shared-bot', owner: 'shared-owner' }),
-  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: { receive: events } });
+  }), { name: 'sandbox', capabilities: ['inbound', 'outbound'], gateway: createTestEndpointEventGateway({ receive: events }) });
   await endpoint.start();
   endpoint.open();
   const { port } = await http.listen();

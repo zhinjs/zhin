@@ -1,10 +1,12 @@
 import { PluginStateStore, rootPluginId, type StateRecord, aiCompletionToken, databaseHostToken, outboundHostToken,
   type AiCompletionInput } from 'zhin.js';
 import { SnapshotStore, createGenerationAdmissionGate, generationAdmissionSource } from 'zhin.js/plugin-runtime';
+import { childPluginId, type HmrResumeDetails } from 'zhin.js/plugin-runtime';
+import { createFakePlugin } from '../../../../packages/toolkit/testing/src/fake-plugin.js';
 import { adapterFeatureId } from 'zhin.js/adapter';
 import type { Locale } from 'zhin.js/i18n';
 import inbound from '../middlewares/inbound/index.ts';
-import { ModerationEngine } from '../src/engine.js';
+import plugin from '../plugin.ts';
 import { moderationEngineToken } from '../src/runtime.js';
 import { takeGroupBatch } from '../src/group-review-batch.js';
 
@@ -39,17 +41,21 @@ function fixture(legacyRecall = false) {
   const config = { groupModeration: [{ adapter: 'icqq', endpoint: '8596238', account: '8596238', group: '129043431' }],
     sources: [{ id: 'fixture', type: 'local', includeBuiltin: false,
       words: legacyRecall ? [{ word: advertising, severity: 'critical' }] : [] }] };
-  const engine = new ModerationEngine(); engine.configure(config);
+  const owner = createFakePlugin({ config, hosts: { database: false, schedule: false, outbound: false } });
+  const setup = owner.setup(plugin);
+  const engine = owner.resources.use(moderationEngineToken);
+  const adapterOwner = childPluginId(owner.id, 'icqq');
   const completeText = vi.fn(async (input: AiCompletionInput) => answer(input));
   const inspectGroupMember = vi.fn(async () => ({ canModerate: true, joinedAt: NOW - 3600_000 }));
   const moderateGroupMember = vi.fn(async () => {});
-  const sendTarget = vi.fn(async () => 'notice-id');
-  const recall = vi.fn(async () => {});
+  const sendTarget = vi.fn(async (_target: unknown, _content: unknown, _options?: unknown) => 'notice-id');
+  const recall = vi.fn(async (_input?: unknown) => {});
   const endpoint = { identity: { adapter: 'icqq', id: 'canonical:8596238' }, selfUserId: '8596238',
     management: { inspectGroupMember, moderateGroupMember } };
   const gate = createGenerationAdmissionGate();
   const client = {};
   const adapters = { connection: () => endpoint, [generationAdmissionSource]: [gate],
+    owner: () => adapterOwner,
     management: () => endpoint.management,
     acquire: (id: string, signal: AbortSignal, source: unknown) => {
       if (id !== endpoint.identity.id || source !== client) throw new Error('Wrong fixture Endpoint source');
@@ -62,26 +68,41 @@ function fixture(legacyRecall = false) {
   const resources = new Map<string, unknown>([
     [moderationEngineToken.id, engine], [aiCompletionToken.id, { supportsUsageShares: true, completeText }],
     [databaseHostToken.id, { state: { forConversation: () => state } }],
-    [outboundHostToken.id, { sendTarget, recall }],
+    [outboundHostToken.id, { recall, captureOperation: ({ target, client: original, signal }: {
+      target: typeof message.conversation; client: unknown; signal: AbortSignal;
+    }) => {
+      if (original !== client) throw new Error('Cannot capture a replacement Client');
+      return { target, signal, send: (content: unknown, options: unknown) => sendTarget(target, content, options),
+        recall: (ref: unknown) => recall({ message: ref }), release: () => undefined };
+    } }],
   ]);
   const snapshot = () => ({ root: rootPluginId(), tree: new Map(), config: new Map(), capabilities: new Map(),
     resources: new Map([[rootPluginId(), resources as never]]), projections: new Map([[adapterFeatureId, adapters]]) });
   const disposed = vi.fn();
   const snapshots = new SnapshotStore({ ...snapshot(), resources: new Map(), projections: new Map() });
   snapshots.commit(0, { snapshot: snapshot(), dispose: disposed });
+  const rootFact = snapshots.acquire(), stopSignal = rootFact.stopSignal; rootFact.release();
   const message = { endpointId: '8596238', id: 'original', sender: { id: '123' }, locale: 'zh-CN' as Locale,
     conversation: { endpoint: { adapter: 'icqq', id: 'canonical:8596238' }, kind: 'group', id: '129043431' },
     content: advertising, segments: [], metadata: { platformSentAt: NOW },
     $reply: vi.fn(async () => { throw new Error('Original Message reply expired'); }) };
   const abort = new AbortController(); const next = vi.fn(async () => undefined);
-  const run = (input = message, signal = abort.signal) => inbound.handle({ config, input, signal, $client: client,
+  const run = (input = message, caller = abort.signal) => inbound.handle({ config, input,
+    signal: AbortSignal.any([caller, stopSignal]), $client: client,
     use: (token: { id: string }) => { if (!resources.has(token.id)) throw new Error('Missing resource'); return resources.get(token.id); },
     project: () => adapters } as never, next as never);
   const flush = () => vi.advanceTimersByTimeAsync(300);
   const runAndFlush = async (input = message) => { const done = run(input); await flush(); await done; };
-  cleanups.push(async () => { engine.groupReviewQueue.stop(); await snapshots.close(); });
+  const completeReload = (patch: Partial<HmrResumeDetails> = {}) => owner.dispatchLifecycle('hmr.resume', {
+    signal: stopSignal, details: { trigger: 'source', changed: ['/fixture/adapter.ts'],
+      planned: { fullRoot: false, plugins: [adapterOwner], capabilities: [] },
+      previousGeneration: 1, activeGeneration: 2,
+      receiver: { owner: owner.id, creationGeneration: 1, state: 'current' }, outcome: 'committed', replaced: [adapterOwner], ...patch },
+  });
+  cleanups.push(async () => { await setup; engine.groupReviewQueue.stop(); await snapshots.close(); await owner.dispose(); });
   return { rows, config, engine, completeText, inspectGroupMember, moderateGroupMember, sendTarget, recall, endpoint,
-    resources, snapshots, snapshot, adapters, disposed, get conflicts() { return conflicts; }, message, abort, next, run, flush, runAndFlush };
+    resources, snapshots, snapshot, adapters, disposed, owner, adapterOwner, completeReload,
+    get conflicts() { return conflicts; }, message, abort, next, run, flush, runAndFlush };
 }
 
 describe('group review queue and inbound delivery', () => {
@@ -220,7 +241,7 @@ describe('group review queue and inbound delivery', () => {
     expect(f.sendTarget.mock.calls[0]![1]).toEqual(expect.arrayContaining([{ type: 'mention', data: { target: 'a' } }]));
   });
 
-  it('aborts a retired adapter request and drains new messages when the queue resource is retained', async () => {
+  it('cancels the replaced Adapter source on its committed outcome and drains new messages in the retained queue', async () => {
     const f = fixture(); let firstSignal: AbortSignal | undefined;
     f.completeText.mockImplementationOnce(input => new Promise((_resolve, reject) => {
       firstSignal = input.signal;
@@ -229,6 +250,12 @@ describe('group review queue and inbound delivery', () => {
     await f.run(); await f.flush();
     const nextAdapters = { ...f.adapters, [generationAdmissionSource]: [createGenerationAdmissionGate()] };
     f.snapshots.commit(1, { snapshot: { ...f.snapshot(), projections: new Map([[adapterFeatureId, nextAdapters]]) }, dispose: () => {} });
+    expect(firstSignal?.aborted).toBe(false);
+    await f.completeReload({ outcome: 'rejected', replaced: [] });
+    expect(firstSignal?.aborted).toBe(false);
+    await f.completeReload({ replaced: [childPluginId(f.owner.id, 'unrelated')] });
+    expect(firstSignal?.aborted).toBe(false);
+    await f.completeReload();
     expect(firstSignal?.aborted).toBe(true);
     // The fixture's projection now exposes the replacement adapter gate to the next inbound operation.
     f.adapters[generationAdmissionSource] = nextAdapters[generationAdmissionSource];
@@ -425,7 +452,7 @@ describe('group review queue and inbound delivery', () => {
     expect(f.completeText.mock.calls.every(([input]) => input.usageShares === undefined)).toBe(true);
   });
 
-  it('cancels queued and in-flight effects when the owning snapshot retires', async () => {
+  it('cancels queued and in-flight effects on explicit Root stop', async () => {
     const f = fixture(); const result = Promise.withResolvers<ReturnType<typeof answer>>();
     f.completeText.mockImplementationOnce(() => result.promise);
     await f.run(); await f.flush(); await f.run({ ...f.message, id: 'queued' });

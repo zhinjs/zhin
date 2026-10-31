@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, type EndpointEvent } from '@zhin.js/adapter';
+import { AdapterIndex, adapterFeatureId, endpointEventGatewayToken, type EndpointEvent, type EndpointEventGateway } from '@zhin.js/adapter';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId, projectLocaleToken, readOperationSession, type OperationSession, type SnapshotState } from 'zhin.js';
 import { ImRuntime, RuntimeMessage, type Message } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
@@ -20,10 +20,14 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
   const adapter = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'sandbox',
     source: '/project/adapters/sandbox/index.ts', definition: sandboxAdapter });
   let processed = 0;
-  const gateway = { async receive(event: EndpointEvent) {
-    try { return await im.endpointEvents.receive(event); }
+  const receive = async (event: EndpointEvent, dispatch: EndpointEventGateway['receive']) => {
+    try { return await dispatch(event); }
     finally { if (event.name === 'message.receive') processed++; }
-  } };
+  };
+  const gateway: EndpointEventGateway = {
+    run: execute => im.endpointEvents.run(receipt => execute({ receive: event => receive(event, receipt.receive) })),
+    receive: event => receive(event, im.endpointEvents.receive),
+  };
   const state: SnapshotState = {
     root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/project', children: [] }]]),
     config: new Map([[root, { id: 'interaction-bot', owner: 'configured-owner' }]]),
@@ -63,8 +67,10 @@ it('settles the original Core confirm once through the real Sandbox wire, never 
     expect(sessions[0]?.scene).toMatchObject({ kind: 'group', id: 'room', endpoint: { adapter: 'sandbox', id: adapter.id } });
     const conversation = { endpoint: { adapter: 'sandbox', id: String(adapter.id) }, kind: 'group' as const, id: 'room' };
     let settlements = 0;
-    answer = im.createInteraction(new RuntimeMessage(conversation, 'ask', 0,
-      content => im.send({ requester: root, conversation, content }), { id: 'configured-owner' }))!
+    answer = im.createInteraction(new RuntimeMessage(
+      { conversation: conversation, content: 'ask', sender: { id: 'configured-owner' } },
+      { generation: 0, reply: (content) => im.send({ requester: root, conversation, content }) },
+    ))!
       .ask({ type: 'confirm', title: 'Allow this operation?', signal: abort.signal });
     void answer.then(() => { settlements++; }, () => undefined);
     await vi.waitFor(() => expect(first.frames.some(frame => frame.content?.some((segment: any) => segment.type === 'keyboard'))).toBe(true));

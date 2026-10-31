@@ -251,8 +251,7 @@ describe('ImToolApprovalChannel commands', () => {
 describe('IM × Console on the same queue (G6-c)', () => {
   it('Console first: the IM answer sees the card as decided', () => {
     const { queue, channel } = setup();
-    const approvals = new HostToolApprovals();
-    approvals.bind(queue);
+    const approvals = new HostToolApprovals(queue);
     const card = queue.enqueue(DANGEROUS_CALL);
 
     expect(approvals.resolve({ id: card.id, decision: 'deny' })).toMatchObject({ status: 'denied', channel: 'console', decidedBy: 'console' });
@@ -262,8 +261,7 @@ describe('IM × Console on the same queue (G6-c)', () => {
 
   it('IM first: the Console answer is a conflict', () => {
     const { queue, channel } = setup();
-    const approvals = new HostToolApprovals();
-    approvals.bind(queue);
+    const approvals = new HostToolApprovals(queue);
     const card = queue.enqueue(DANGEROUS_CALL);
 
     channel.handleCommand(command(`approve ${card.id}`));

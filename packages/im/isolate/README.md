@@ -72,11 +72,13 @@ Host 从对应 owner 的 Resource snapshot 取得 `isolatedPluginToken`，再调
 隔离进程参与 Runtime generation readiness：
 
 1. `prepare` 创建候选 isolate、import entry 并校验 definition，但不执行 setup。
-2. `activateNext(signal)` 在候选 isolate 内执行 setup；失败会清理候选，旧代从未被触碰。
+2. `activateNext(signal)` 在候选 isolate 内执行 setup；失败会清理候选，旧代仍持有原有资源。
 3. Runtime 原子提交 snapshot 后，新请求才能从新 snapshot 取得 handle。
 4. 旧 generation 的在途请求继续持有旧 lease；最后一个 lease 释放后，Scope disposer 终止旧 isolate。
 
-RPC 超时会把整个实例标记为 failed 并终止 transport，因为远端工作可能仍在运行，不能把超时伪装成安全 drain。Worker/进程意外退出会拒绝全部 pending RPC，并通过 `onCrash` 上报；当前 generation 内不静默重启。
+`setup({ events })` 可订阅 `hmr.pause` 和 `hmr.resume`。Runtime 通过独立控制 IPC 等待真实处理器完成；信号在 isolate 内重建，取消仅通知该事件，不终止进程或恢复业务准入。旧实例在租约存活时仍可收到完成事实；插件自行决定任务如何收尾。
+
+业务 RPC 超时会把整个实例标记为 failed 并终止 transport，因为远端工作可能仍在运行，不能把超时伪装成安全 drain。Worker/进程意外退出会拒绝全部 pending RPC，并通过 `onCrash` 上报；当前 generation 内不静默重启。
 
 ## 隔离边界
 

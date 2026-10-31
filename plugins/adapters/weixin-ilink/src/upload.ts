@@ -27,9 +27,10 @@ export type UploadedFileInfo = {
  * Download a remote media URL (image, video, file) to a local temp file in destDir.
  * Returns the local file path; extension is inferred from Content-Type / URL.
  */
-export async function downloadRemoteImageToTemp(url: string, destDir: string): Promise<string> {
+export async function downloadRemoteImageToTemp(url: string, destDir: string, signal?: AbortSignal): Promise<string> {
   logger.debug(`downloadRemoteImageToTemp: fetching url=${url}`);
-  const res = await fetch(url);
+  signal?.throwIfAborted();
+  const res = await fetch(url, { signal });
   if (!res.ok) {
     const msg = `remote media download failed: ${res.status} ${res.statusText} url=${url}`;
     logger.error(`downloadRemoteImageToTemp: ${msg}`);
@@ -41,7 +42,7 @@ export async function downloadRemoteImageToTemp(url: string, destDir: string): P
   const ext = getExtensionFromContentTypeOrUrl(res.headers.get("content-type"), url);
   const name = tempFileName("weixin-remote", ext);
   const filePath = path.join(destDir, name);
-  await fs.writeFile(filePath, buf);
+  await fs.writeFile(filePath, buf, { signal });
   logger.debug(`downloadRemoteImageToTemp: saved to ${filePath} ext=${ext}`);
   return filePath;
 }
@@ -59,7 +60,8 @@ async function uploadMediaToCdn(params: {
 }): Promise<UploadedFileInfo> {
   const { filePath, toUserId, opts, cdnBaseUrl, mediaType, label } = params;
 
-  const plaintext = await fs.readFile(filePath);
+  const plaintext = await fs.readFile(filePath, { signal: opts.abortSignal });
+  opts.abortSignal?.throwIfAborted();
   const rawsize = plaintext.length;
   const rawfilemd5 = crypto.createHash("md5").update(plaintext).digest("hex");
   const filesize = aesEcbPaddedSize(rawsize);
@@ -93,6 +95,7 @@ async function uploadMediaToCdn(params: {
 
   const { downloadParam: downloadEncryptedQueryParam } = await uploadBufferToCdn({
     buf: plaintext,
+    abortSignal: opts.abortSignal,
     uploadFullUrl: uploadFullUrl || undefined,
     uploadParam: uploadParam ?? undefined,
     filekey,

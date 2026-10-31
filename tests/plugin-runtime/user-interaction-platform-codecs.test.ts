@@ -26,12 +26,28 @@ describe('UserInteraction producer → Telegram callback codec', () => {
       }
       const callback = formatCallbackSegments({ id: 'callback', from: { id: 1 }, data: emitted[0]! });
       // Exercise the actual decoder and a callback arriving before delivery completes.
-      expect(coordinator.resolveClaim(new RuntimeMessage(conversation, '', 1, async () => ({ status: 'sent' }),
-        { id: 'alice' }, {}, callback))).toBe(true);
+      expect(coordinator.resolveClaim(new RuntimeMessage(
+        {
+          conversation: conversation,
+          content: '',
+          sender: { id: 'alice' },
+          metadata: {},
+          segments: callback,
+        },
+        { generation: 1, reply: async () => ({ status: 'sent' }) },
+      ))).toBe(true);
       return { status: 'sent' };
     } }).ask({ type: 'confirm', title: '确认继续？' });
     await expect(answer).resolves.toBe(true);
-    expect(coordinator.resolveClaim(new RuntimeMessage(conversation, '', 1, async () => ({ status: 'sent' }),
-      { id: 'alice' }, {}, formatCallbackSegments({ id: 'replay', from: { id: 1 }, data: emitted[0]! })))).toBe(false);
+    expect(coordinator.resolveClaim(new RuntimeMessage(
+      {
+        conversation: conversation,
+        content: '',
+        sender: { id: 'alice' },
+        metadata: {},
+        segments: formatCallbackSegments({ id: 'replay', from: { id: 1 }, data: emitted[0]! }),
+      },
+      { generation: 1, reply: async () => ({ status: 'sent' }) },
+    ))).toBe(false);
   });
 });

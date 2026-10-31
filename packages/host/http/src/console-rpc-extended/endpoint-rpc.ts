@@ -61,7 +61,7 @@ export async function listGroupMembers(
     if (!method) {
       return { error: `当前适配器（${adapter}）不支持群成员列表` };
     }
-    const members = [...await method(groupId)];
+    const members = [...await method.call(management, { groupId })];
     return { data: { members, count: members.length } };
   });
 }
@@ -70,8 +70,6 @@ export async function listGroupMembers(
 
 interface GroupWriteSpec {
   method: 'kickGroupMember' | 'muteGroupMember' | 'setGroupAdmin';
-  buildArgs(groupId: string, userId: string, extra: { duration?: number; enable?: boolean }): unknown[];
-  requireUser: boolean;
   /** 中文操作名，用于"该平台不支持 xxx"。 */
   unsupported: string;
 }
@@ -88,7 +86,7 @@ export async function groupWriteOp(
   if (!adapter || !endpointKey || !groupId) {
     return { error: 'adapter, endpointKey, and groupId are required' };
   }
-  if (spec.requireUser && !userId) {
+  if (!userId) {
     return { error: 'userId is required' };
   }
   return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
@@ -98,13 +96,19 @@ export async function groupWriteOp(
     }
     const durationRaw = d.duration;
     const enableRaw = d.enable;
-    const args = spec.buildArgs(groupId, userId, {
-      duration: typeof durationRaw === 'number' && Number.isFinite(durationRaw)
-        ? durationRaw
-        : undefined,
-      enable: typeof enableRaw === 'boolean' ? enableRaw : undefined,
-    });
-    await (method as (...args: unknown[]) => Promise<void>).call(management, ...args);
+    // The discriminant selects one typed semantic request; no argument arrays or casts.
+    switch (spec.method) {
+      case 'kickGroupMember':
+        await management.kickGroupMember!({ groupId, userId });
+        break;
+      case 'muteGroupMember':
+        await management.muteGroupMember!({ groupId, userId,
+          durationSeconds: typeof durationRaw === 'number' && Number.isFinite(durationRaw) ? durationRaw : 600 });
+        break;
+      case 'setGroupAdmin':
+        await management.setGroupAdmin!({ groupId, userId, enabled: enableRaw !== false });
+        break;
+    }
     return { data: { success: true } };
   });
 }
@@ -124,7 +128,7 @@ export async function deleteFriend(
     if (!method) {
       return { error: '当前适配器暂不支持删除好友' };
     }
-    await method(userId);
+    await method.call(management, { userId });
     return { data: { success: true } };
   });
 }

@@ -26,8 +26,8 @@ export class Onebot12Adapter extends Adapter<OneBot12WsEndpoint | OneBot12WssEnd
     const config = resolveOneBot12Config(input);
     const id = execution.canonicalId;
     if (config.connection === 'webhook') return new OneBot12WebhookEndpoint({ id, signal: execution.signal, http: this.#context.use(httpHostToken), config });
-    if (config.connection === 'wss') return new OneBot12WssEndpoint({ id, http: this.#context.use(httpHostToken), config });
-    return new OneBot12WsEndpoint({ id, config });
+    if (config.connection === 'wss') return new OneBot12WssEndpoint({ id, signal: execution.signal, http: this.#context.use(httpHostToken), config });
+    return new OneBot12WsEndpoint({ id, signal: execution.signal, config });
   }
 }
 

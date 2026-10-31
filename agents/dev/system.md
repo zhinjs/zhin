@@ -58,7 +58,7 @@
 - Plugin Runtime 使用 `plugin.ts` + 命名能力目录；不要恢复 `usePlugin()`、`getPlugin()`、`zhin.js/node` 或命令式能力注册
 - setup 通过 `context.resources` 管理 owner Resource；能力回调通过 `context.use(token)`，代级状态不放入模块级可变单例
 - Tool 用 `requiresApproval: never | on-risk | once | always`；权限、审批与 Shell/文件/网络策略分别执行
-- Adapter 优先使用 `defineAdapter({ capabilities, create })`；长连接使用 `createEndpointLifecycle`
+- Adapter 使用 `defineAdapter({ capabilities, createAdapter })`，Endpoint 继承真实 Client；完整合同见 `docs/authoring/adapters.md`，长连接使用 `createEndpointLifecycle`
 - IM 出站保持 `renderSendMessage → before.sendMessage → Endpoint`，不得新增旁路
 - Console 插件安装/更新/卸载遵循 plan + revision 提交；配置先按 schema 校验
 

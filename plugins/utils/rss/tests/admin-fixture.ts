@@ -80,7 +80,7 @@ export async function rssFixture(options: { persistence?: boolean; outbound?: bo
   };
   const chat = async (definition: typeof list | typeof remove, params: Record<string, string> = {}) => definition.execute({
     owner: {} as never, generation: runtime.snapshot.generation, config: {}, args: [], params, locale: options.locale ?? 'zh-CN', formatCommand: (path: string) => path,
-    input: { conversation: { kind: 'group', id: 'chat' }, clientAdapter: 'sandbox', endpointId: 'chat-account', sender: { id: 'alice', name: 'Alice' } },
+    input: { conversation: { endpoint: { adapter: 'sandbox', id: 'chat-account' }, kind: 'group', id: 'chat' }, clientAdapter: 'sandbox', endpointId: 'chat-account', sender: { id: 'alice', name: 'Alice' } },
     use: (token: unknown) => { if (token === rssRuntimeToken) return rss(); throw new Error('unexpected token'); },
   } as never);
   return { project, get runtime() { return runtime; }, database, active, jobs, send, provider, state, storage, rss, tick, hmr, chat,

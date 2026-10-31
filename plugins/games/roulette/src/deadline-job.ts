@@ -1,5 +1,5 @@
 import { outboundHostToken, type OutboundHost } from 'zhin.js';
-import { resolveLocale } from 'zhin.js/i18n';
+import { sendGameSessionMessage } from '@zhin.js/game-kit';
 import { expireOverdueSessions, type ExpiredSessionNotice } from './game-flow.js';
 import { resolveRouletteFlow, type RouletteCapabilityContext } from './runtime.js';
 
@@ -30,16 +30,7 @@ function readOutbound(context: RouletteCapabilityContext): OutboundHost | undefi
 async function announce(outbound: OutboundHost, notice: ExpiredSessionNotice): Promise<void> {
   const session = notice.session;
   try {
-    await outbound.send({
-      locale: resolveLocale(session.locale),
-      adapter: session.adapter,
-      endpointKey: session.endpoint,
-      conversation: {
-        kind: session.channel_type as 'group' | 'channel',
-        id: session.channel_id,
-      },
-      content: notice.text,
-    });
+    await sendGameSessionMessage({ outbound, session, content: notice.text });
   } catch {
     // The result is already stored; a failed notice must not stop the other sessions.
   }

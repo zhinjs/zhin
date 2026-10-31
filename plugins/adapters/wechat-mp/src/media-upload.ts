@@ -31,10 +31,15 @@ const MIME_EXT: Record<string, string> = {
 };
 
 /** 从 canonical MediaRef 解析二进制：base64 解码 / 本地读盘 / URL 下载。 */
+export interface MediaResolveOptions {
+  readonly download?: (url: string, signal?: AbortSignal) => Promise<Buffer>;
+  readonly signal?: AbortSignal;
+}
 export async function resolveMediaBinary(
   media: MediaRef,
-  download: (url: string) => Promise<Buffer> = defaultDownload,
+  { download = defaultDownload, signal }: MediaResolveOptions = {},
 ): Promise<MediaBinary> {
+  signal?.throwIfAborted();
   const mimeType = media.mime_type ?? 'image/png';
   const ext = MIME_EXT[mimeType] ?? 'png';
   if (media.kind === 'base64') {
@@ -45,17 +50,17 @@ export async function resolveMediaBinary(
   }
   if (media.kind === 'path') {
     const path = media.value.startsWith('file://') ? media.value.slice('file://'.length) : media.value;
-    return { data: await readFile(path), mimeType, fileName: basename(path) };
+    return { data: await readFile(path, { signal }), mimeType, fileName: basename(path) };
   }
   if (media.kind === 'file') {
     // 平台不透明引用（media_id）：由调用方直接透传，不走上传。
     throw new Error('MediaRef kind=file is a platform opaque reference; binary resolution not applicable');
   }
-  return { data: await download(media.value), mimeType, fileName: `image.${ext}` };
+  return { data: await download(media.value, signal), mimeType, fileName: `image.${ext}` };
 }
 
-async function defaultDownload(url: string): Promise<Buffer> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+async function defaultDownload(url: string, signal?: AbortSignal): Promise<Buffer> {
+  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`download failed: HTTP ${response.status}`);
   return Buffer.from(await response.arrayBuffer());
 }

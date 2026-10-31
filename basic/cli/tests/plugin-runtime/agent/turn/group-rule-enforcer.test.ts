@@ -41,19 +41,17 @@ function harness(options: {
   const mute = vi.fn(options.mute ?? (async () => undefined));
   const kick = vi.fn(async () => undefined);
   const inspect = vi.fn(async () => ({ canModerate: options.canModerate ?? true }));
+  const release = vi.fn();
   const enforcer = new GroupRuleEnforcer({
     rules: () => store,
     controlPlane: () => options.control,
     decisionEvents: () => log,
     approvals: () => queue,
     opsCooldown: () => cooldown,
-    send,
-    inspect,
-    mute,
-    kick,
     now: () => clock,
   });
-  const hit = (overrides: Partial<GroupRuleViolation> = {}) => enforcer.enforce({
+  const hit = (overrides: Partial<GroupRuleViolation> = {}) => {
+    const violation: GroupRuleViolation = {
     platform: 'icqq',
     endpoint: '10086',
     groupId: '123',
@@ -64,16 +62,37 @@ function harness(options: {
     messageId: `m-${clock}`,
     evidence: ['加我微信领优惠'],
     ...overrides,
-  });
+  };
+    const target = { platform: violation.platform, endpoint: violation.endpoint ?? null, groupId: violation.groupId };
+    return enforcer.enforce(violation, {
+      signal: new AbortController().signal,
+      send: parts => send(target, parts),
+      inspect: signal => inspect(target, violation.memberId, signal),
+      mute: (duration, signal) => mute(target, violation.memberId, duration, signal),
+      kick: signal => kick(target, violation.memberId, signal),
+      release,
+    });
+  };
   const advance = (ms: number) => { clock += ms; };
   const codes = async () => {
     await log.idle();
     return log.recent().map((row) => `${row.kind}:${row.outcome}:${row.reasonCode}`);
   };
-  return { store, queue, send, mute, kick, inspect, enforcer, hit, advance, codes, log };
+  return { store, queue, send, mute, kick, inspect, release, enforcer, hit, advance, codes, log };
 }
 
 describe('GroupRuleEnforcer (ADR 0039 slice C)', () => {
+  it('releases captured kick effects when the owning approval queue closes, without kicking or replaying the card', async () => {
+    const f = harness();
+    await activate(f.store, { ...remindThenMute, ladder: [{ action: 'suggest_kick' }] });
+    await expect(f.hit()).resolves.toMatchObject({ kind: 'enforced', action: 'suggest_kick' });
+    expect(f.queue.list({ status: 'pending' })).toHaveLength(1); expect(f.release).not.toHaveBeenCalled();
+    f.queue.dispose();
+    await f.enforcer.drain();
+    expect(f.release).toHaveBeenCalledOnce(); expect(f.kick).not.toHaveBeenCalled();
+    expect(f.queue.list({ status: 'pending' })).toHaveLength(0);
+  });
+
   it('does nothing when the group has no active rule for the trigger', async () => {
     const { hit, send, mute, codes } = harness();
     await expect(hit()).resolves.toEqual({ kind: 'no_rule' });

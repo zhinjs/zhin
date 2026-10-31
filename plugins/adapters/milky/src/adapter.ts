@@ -2,7 +2,7 @@ import { Adapter, type AdapterContext, type EndpointCreationContext } from 'zhin
 import { httpHostToken } from '@zhin.js/host-http';
 import { callApi, resolveMilkyConfig, type MilkyEndpointConfig } from './protocol.js';
 import { MilkyWsEndpoint, MilkyWssEndpoint, MilkySseEndpoint, MilkyWebhookEndpoint } from './endpoint.js';
-import type { MilkyClientEventMap } from './client.js';
+import { readMilkyResponse, type MilkyClientEventMap } from './client.js';
 
 type MilkyEndpoint = MilkyWsEndpoint | MilkyWssEndpoint | MilkySseEndpoint | MilkyWebhookEndpoint;
 export class MilkyAdapter extends Adapter<MilkyEndpoint, MilkyEndpointConfig, MilkyClientEventMap> {
@@ -17,10 +17,9 @@ export class MilkyAdapter extends Adapter<MilkyEndpoint, MilkyEndpointConfig, Mi
   protected override async identifyConfiguration(input: MilkyEndpointConfig, signal: AbortSignal): Promise<string | undefined> {
     const config = resolveMilkyConfig(input);
     signal.throwIfAborted();
-    const response = await callApi<{ uin?: unknown }>({ ...config, signal }, 'get_login_info');
+    const response = await callApi<{ uin?: unknown }>({ ...config, signal, action: 'get_login_info' });
     signal.throwIfAborted();
-    if (response.status !== 'ok') throw new Error('Milky login identity lookup failed');
-    const userId = response.data?.uin;
+    const userId = readMilkyResponse<{ uin?: unknown }>(response, 'get_login_info')?.uin;
     if (userId === 0 || userId === '0' || (typeof userId === 'string' && !userId.trim())) return undefined;
     if ((typeof userId !== 'number' && typeof userId !== 'string') || !String(userId).trim()) throw new Error('Milky login identity is unavailable');
     return `qq:${userId}`;

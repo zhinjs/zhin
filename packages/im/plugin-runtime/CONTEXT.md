@@ -77,7 +77,8 @@ _Avoid_: duplicate signal handler、concurrent stop
 - **Process Host** 可以承载一个或多个 Root Runtime，并为每棵树触发 **Runtime Stop**。
 - **Process Host** 独占不能随 generation 安全复制、回滚或并行运行的基础设施，包括 HTTP listener、Database connection pool、文件 watcher 与 module loader；这些基础设施必须在 Root 的首次 Generation Admission 前 ready。
 - **Root Lifecycle** 只把 Process Host 基础设施之上的不可变视图或 owner-scoped lease 纳入 generation，不在 handoff 中关闭、重建或转移其所有权。
-- generation 事务只包含候选构建、验证、Required Resource readiness 与 **Atomic Publish**；旧代在 publish 前始终接纳操作，因此不存在通用 quiesce、resume 或 post-commit open 阶段。
+- generation 事务仍由 Controller 独占候选构建、readiness、提交与回滚。RootRuntime 在事务边界等待实例级 `hmr.pause`，结束后交付 `hmr.resume`；插件自主决定任务策略，框架不强制 drain/abort，也不增加 post-commit open。
+- 同一个 Root 的 SnapshotLease 共用独立 `stopSignal`；替换只取消该代 `retirementSignal`。`retain(lease)` 保留准确原代，不回退到 latest。
 - **Atomic Publish** 之后，旧代仅在其最后一个 operation lease 释放后退役并释放 Lifecycle Resource；观察者失败不得改变已经提交的 outcome。
 - generation 状态只有 Root Lifecycle 发布的 **Generation View** 一个事实源；禁止模块级 generation registry、latest-value stack 以及公开 set/get/clear 槽位。
 - **Desired Configuration** 独立持久化并触发 reconcile；失败时旧 **Active Configuration** 与 generation 保持不变，用户文件不回滚，并以 **Configuration Drift** 暴露失败 revision 与原因。

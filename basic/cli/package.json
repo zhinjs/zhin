@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",

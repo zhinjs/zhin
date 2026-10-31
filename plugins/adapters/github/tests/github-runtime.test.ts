@@ -266,7 +266,7 @@ describe('github plugin runtime adapter', () => {
       payload: 'reply text',
     });
     expect(id).toBe('99');
-    expect(gh.createIssueComment).toHaveBeenCalledWith('owner/repo', 7, 'reply text');
+    expect(gh.createIssueComment).toHaveBeenCalledWith({ repo: 'owner/repo', number: 7, body: 'reply text', signal: expect.any(AbortSignal) });
     await endpoint.stop();
   });
 

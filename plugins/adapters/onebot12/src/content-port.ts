@@ -1,7 +1,7 @@
-import type { EndpointContentPort, EndpointContentResolveContext } from 'zhin.js/adapter';
+import type { EndpointContentPort, EndpointContentResolveContext, PendingRpcRequest } from 'zhin.js/adapter';
 import type { ConversationMessage, ConversationReference } from '@zhin.js/im-contract';
 
-type CallApi = (action: string, params?: Record<string, unknown>) => Promise<unknown>;
+type CallApi = (request: PendingRpcRequest) => Promise<unknown>;
 
 export function createOneBot12ContentPort(callApi: CallApi): EndpointContentPort {
   return Object.freeze({
@@ -16,7 +16,7 @@ export function createOneBot12ContentPort(callApi: CallApi): EndpointContentPort
             ? Object.freeze({ status: 'unsupported' as const, code: 'onebot12_opaque_media' })
             : Object.freeze({ status: 'resolved' as const, reference, value: reference.media });
         }
-        const row = await callApi('get_message', { message_id: reference.message.id }) as Record<string, unknown>;
+        const row = await callApi({ action: 'get_message', params: { message_id: reference.message.id }, signal: context.signal }) as Record<string, unknown>;
         context.signal.throwIfAborted();
         const message = (row.message && typeof row.message === 'object' ? row.message : row) as Record<string, unknown>;
         const segments = normalizeSegments(message.message ?? message.content);

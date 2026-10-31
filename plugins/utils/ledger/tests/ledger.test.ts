@@ -93,7 +93,7 @@ async function createFixture(options: { config?: Partial<LedgerConfig>; outbound
     fake,
     clock,
     async run(text, message) {
-      const result = await index.dispatch(text, message);
+      const result = await index.dispatch({ input: text, source: message });
       expect(result.status).toBe('executed');
       return String(result.value);
     },

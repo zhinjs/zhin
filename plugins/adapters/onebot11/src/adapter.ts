@@ -22,8 +22,8 @@ export class Onebot11Adapter extends Adapter<OneBot11WsEndpoint | OneBot11WssEnd
   protected createEndpoint(input: OneBot11EndpointConfig, execution: EndpointCreationContext): OneBot11WsEndpoint | OneBot11WssEndpoint {
     const config = resolveOneBot11Config(input);
     return config.connection === 'wss'
-      ? new OneBot11WssEndpoint({ id: execution.canonicalId, http: this.#context.use(httpHostToken), config, probeLoginInfo: true })
-      : new OneBot11WsEndpoint({ id: execution.canonicalId, config, probeLoginInfo: true });
+      ? new OneBot11WssEndpoint({ id: execution.canonicalId, signal: execution.signal, http: this.#context.use(httpHostToken), config, probeLoginInfo: true })
+      : new OneBot11WsEndpoint({ id: execution.canonicalId, signal: execution.signal, config, probeLoginInfo: true });
   }
 }
 

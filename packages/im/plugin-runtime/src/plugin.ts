@@ -6,6 +6,7 @@ import type { Dispose, DisposeStack } from './dispose.js';
 import type { GenerationHandoffRegistry } from './handoff.js';
 import type { FeatureId, PluginId } from './identity.js';
 import type { Scope, Token } from './token.js';
+import type { PluginEventSubscriptions } from './plugin-events.js';
 
 export interface PluginMetadata {
   readonly displayName?: string;
@@ -32,6 +33,7 @@ export interface PluginInstanceView {
 }
 
 export interface PluginSetupContext<TConfig = unknown> {
+  readonly events: PluginEventSubscriptions;
   readonly signal: AbortSignal;
   readonly plugin: PluginInstanceView;
   readonly config: ConfigView<TConfig>;
@@ -49,6 +51,16 @@ export interface PluginSetupContext<TConfig = unknown> {
     definition: TDefinition,
   ): void;
 }
+
+export {
+  type PluginEventSubscriptions,
+  type PluginLifecycleEvent,
+  type PluginLifecycleEventMap,
+  type HmrEventDetails,
+  type HmrResumeDetails,
+  type HmrReloadScope,
+  type HmrOutcome,
+} from './plugin-events.js';
 
 export interface PluginDefinition<TConfig = unknown> {
   readonly name: string;
@@ -117,6 +129,8 @@ export {
   type OutboundEndpointInput,
   type OutboundEndpointOperation,
   type OutboundHost,
+  type OutboundCaptureInput,
+  type CapturedOutboundOperation,
   type OutboundMessage,
   type OutboundReactionInput,
   type OutboundRecallInput,
@@ -129,3 +143,31 @@ export {
   PluginScheduleHost,
   type ScheduleJobRegistration,
 } from './schedule-host.js';
+
+export {
+  DataMigrationError,
+  pluginDataMigrationProviderToken,
+  type DataMigrationCandidate,
+  type DataMigrationInventory,
+  type DataMigrationRequest,
+  type PrepareDataMigrationRequest,
+  type DataMigrationPlan,
+  type ApplyDataMigrationRequest,
+  type DataMigrationReceipt,
+  type ResumeDataMigrationRequest,
+  type RestoreDataMigrationRequest,
+  type InspectDataMigrationRequest,
+  type DataMigrationInspection,
+  type PluginDataMigrationProvider,
+} from './data-migration.js';
+
+export {
+  TargetMigrationScopes,
+  targetMigrationDigest,
+  orderedMigrationRows,
+  createRelationalTargetMigration,
+  type TargetMigrationRows,
+  type TargetMigrationWrite,
+  type RelationalTargetMigrationUnit,
+  type RelationalTargetMigrationOptions,
+} from './relational-target-migration.js';

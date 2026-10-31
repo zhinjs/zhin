@@ -50,20 +50,21 @@ function harness() {
   const send = async (conversation: { kind: 'private' | 'group'; id: string }, senderId: string, content: string) => {
     const reply = vi.fn(async () => ({ status: 'sent' as const }));
     const message = new RuntimeMessage(
-      { endpoint, ...conversation },
-      content,
-      1,
-      reply,
-      { id: senderId },
-      {},
-      [],
-      undefined,
-      'bot',
-      false,
-      undefined,
-      undefined,
-      'fixture',
-      { commands: { prefix: '/' } },
+      {
+        conversation: { endpoint, ...conversation },
+        content: content,
+        sender: { id: senderId },
+        metadata: {},
+        segments: [],
+        endpointId: 'bot',
+        mentioned: false,
+      },
+      {
+        generation: 1,
+        reply: reply,
+        clientAdapter: 'fixture',
+        presentation: { commands: { prefix: '/' } },
+      },
     );
     const handled = await route.route(message, { value: snapshot, active: true } as never, rootPluginId(), undefined);
     return { handled, reply };

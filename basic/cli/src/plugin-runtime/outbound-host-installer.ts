@@ -1,5 +1,6 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { EndpointRuntime } from '@zhin.js/core/runtime';
+import type { EndpointRuntime, SendContent } from '@zhin.js/core/runtime';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import {
   outboundHostToken,
   outboundRootHostToken,
@@ -7,6 +8,8 @@ import {
   rootPluginId,
   type OutboundRootHost,
   type OutboundSendInput,
+  type Locale,
+  type CapturedOutboundOperation,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 
@@ -15,6 +18,7 @@ const logger = getLogger('OutboundHost');
 export interface OutboundRuntimePort {
   readonly endpoints: Pick<
     EndpointRuntime,
+    | 'captureOperation'
     | 'capabilities'
     | 'send'
     | 'sendTarget'
@@ -44,6 +48,28 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
         }));
         throw error;
       }
+    },
+    captureOperation(input, requester) {
+      const captured = im.endpoints.captureOperation({ ...input, requester });
+      const control = captured.control;
+      return Object.freeze<CapturedOutboundOperation>({
+        target: captured.target, signal: captured.signal,
+        send: async (content: unknown, options?: Readonly<{ locale?: Locale; signal?: AbortSignal }>) => {
+          const receipt = await captured.send(content as SendContent, options);
+          if (receipt.status !== 'sent') {
+            throw new EndpointDeliveryError(
+              receipt.failure?.code ?? 'outbound_failed', receipt.failure?.message ?? 'Delivery was not confirmed.',
+              receipt.failure?.deliveryUnknown ? 'unknown' : receipt.status === 'rejected' ? 'rejected' : 'not_sent');
+          }
+          return receipt.message?.id ?? null;
+        },
+        ...(control?.recall ? { recall: message => control.recall!({ message }) } : {}),
+        ...(control?.edit ? { edit: (message, content) => control.edit!({ message, content }) } : {}),
+        ...(control?.addReaction ? { addReaction: (message, emoji, hint) => control.addReaction!({ message, emoji, hint }) } : {}),
+        ...(control?.removeReaction ? { removeReaction: (message, reactionId) => control.removeReaction!({ message, reactionId }) } : {}),
+        ...(control?.typing ? { typing: (conversation, active) => control.typing!({ conversation, active }) } : {}),
+        release: captured.release,
+      });
     },
     runWithView: (operation) => im.runWithSnapshotView(operation),
     capabilities(input) {
@@ -83,8 +109,6 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
     async addReaction(input) {
       try {
         return await im.endpoints.addReaction({
-          adapter: input.adapter,
-          endpointKey: input.endpointKey,
           message: input.message,
           emoji: input.emoji,
           sceneType: input.sceneType,
@@ -93,8 +117,6 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
       } catch (error) {
         logger.debug(formatCompact({
           op: 'outbound_add_reaction_failed',
-          adapter: input.adapter,
-          endpointKey: input.endpointKey,
           error: error instanceof Error ? error.message : String(error),
         }));
         return null;
@@ -103,40 +125,30 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
     async removeReaction(input) {
       try {
         await im.endpoints.removeReaction({
-          adapter: input.adapter,
-          endpointKey: input.endpointKey,
           message: input.message,
           reactionId: input.reactionId,
         });
       } catch (error) {
         logger.debug(formatCompact({
           op: 'outbound_remove_reaction_failed',
-          adapter: input.adapter,
-          endpointKey: input.endpointKey,
           error: error instanceof Error ? error.message : String(error),
         }));
       }
     },
     async recall(input) {
       await im.endpoints.recall({
-        adapter: input.adapter,
-        endpointKey: input.endpointKey,
         message: input.message,
       });
     },
     async edit(input) {
       try {
         return await im.endpoints.edit({
-          adapter: input.adapter,
-          endpointKey: input.endpointKey,
           message: input.message,
           content: input.content,
         });
       } catch (error) {
         logger.debug(formatCompact({
           op: 'outbound_edit_failed',
-          adapter: input.adapter,
-          endpointKey: input.endpointKey,
           error: error instanceof Error ? error.message : String(error),
         }));
         return null;
@@ -145,16 +157,12 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
     async typing(input) {
       try {
         await im.endpoints.typing({
-          adapter: input.adapter,
-          endpointKey: input.endpointKey,
           conversation: input.conversation,
           active: input.active,
         });
       } catch (error) {
         logger.debug(formatCompact({
           op: 'outbound_typing_failed',
-          adapter: input.adapter,
-          endpointKey: input.endpointKey,
           error: error instanceof Error ? error.message : String(error),
         }));
       }

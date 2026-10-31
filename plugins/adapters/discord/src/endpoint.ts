@@ -4,21 +4,29 @@ import { createDiscordRestApiAgent } from './rest-api-proxy.js';
  */
 import { Client, ChannelType } from 'discord.js';
 import {
-  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, createEndpointLifecycle,
+  createEndpointSpecification,
+  endpointSpec,
+  type Endpoint,
+  type EndpointSpecification,
+  createEndpointLifecycle,
   type EndpointChannel,
   type EndpointContentPort,
   type EndpointContentResolveContext,
   type EndpointControl,
+  type EndpointRecallRequest,
+  type EndpointReactionRequest,
   type EndpointGroup,
   type EndpointManagement,
   type EndpointSendRequest,
   type EndpointTransportState,
+  type EndpointManagementRequest,
+  createEndpointOperation,
+  type EndpointGroupRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
   type ConversationReference,
   type ConversationResolution,
-  type MessageRef,
 } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -76,18 +84,9 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
   readonly #management: EndpointManagement = createDiscordEndpointManagement(
     () => this.#requireClient(),
   );
-  readonly #control: EndpointControl = Object.freeze({
-    recall: (message: MessageRef) => this.recallMessage(message),
-    addReaction: async (
-      message: MessageRef,
-      emoji: string,
-      hint?: { readonly sceneType?: string; readonly channelId?: string },
-    ) => {
-      const channelId = hint?.channelId ?? message.conversation.id;
-      if (!channelId || !message.id) return null;
-      await this.#addReaction(channelId, message.id, emoji);
-      return emoji;
-    },
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: request => this.#recallMessage(request),
+    addReaction: request => this.#addReaction(request),
   });
   readonly #content: EndpointContentPort = Object.freeze({
     resolve: (reference: ConversationReference, context: EndpointContentResolveContext) =>
@@ -197,9 +196,9 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const snowflake = await this.#sendBody(conversation.id, body);
+    const snowflake = await this.#sendBody({ channelId: conversation.id, body, signal });
     this.#logger.debug(formatCompact({
       op: 'discord_send',
       endpoint: this.#options.config.id,
@@ -209,12 +208,13 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
     return snowflake;
   }
 
-  async recallMessage(message: MessageRef): Promise<void> {
+  async #recallMessage({ message, signal }: EndpointRecallRequest): Promise<void> {
     if (!message.id) return;
-    const channel = await this.#requireClient().channels.fetch(message.conversation.id);
+    const operation = createEndpointOperation({ signal });
+    const channel = await operation.prepare(() => this.#requireClient().channels.fetch(message.conversation.id));
     if (!channel?.isTextBased() || !channel.messages) return;
-    const msg = await channel.messages.fetch(message.id);
-    await msg.delete();
+    const msg = await operation.prepare(() => channel.messages.fetch(message.id));
+    await operation.run(() => msg.delete());
   }
 
   /** Test / internal: admit a message when open. */
@@ -279,13 +279,15 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
     });
   }
 
-  async #addReaction(channelId: string, messageId: string, emoji: string): Promise<void> {
-    const channel = await this.#requireClient().channels.fetch(channelId);
-    if (!channel?.isTextBased() || !channel.messages) {
-      throw new Error(`Channel ${channelId} 不是文本频道`);
-    }
-    const message = await channel.messages.fetch(messageId);
-    await message.react(emoji);
+  async #addReaction({ message, emoji, hint, signal }: EndpointReactionRequest): Promise<string | null> {
+    const channelId = hint?.channelId ?? message.conversation.id;
+    if (!channelId || !message.id) return null;
+    const operation = createEndpointOperation({ signal });
+    const channel = await operation.prepare(() => this.#requireClient().channels.fetch(channelId));
+    if (!channel?.isTextBased() || !channel.messages) throw new Error(`Channel ${channelId} 不是文本频道`);
+    const native = await operation.prepare(() => channel.messages.fetch(message.id));
+    await operation.run(() => native.react(emoji));
+    return emoji;
   }
 
   async #emitPlatformEvent(name: string, event: unknown): Promise<void> {
@@ -298,17 +300,18 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
     });
   }
 
-  async #sendBody(channelId: string, body: DiscordOutboundBody): Promise<string> {
+  async #sendBody({ channelId, body, signal }: DiscordCreateMessageRequest): Promise<string> {
+    const operation = createEndpointOperation({ signal });
     let stage = 'fetch_channel';
     try {
-      const channel = await this.#requireClient().channels.fetch(channelId);
+      const channel = await operation.prepare(() => this.#requireClient().channels.fetch(channelId));
       if (!channel || !channel.isSendable()) {
         throw new Error(`Channel ${channelId} is not a text channel`);
       }
       stage = 'render';
-      const options = await toMessageCreateOptions(body);
+      const options = await operation.prepare(() => toMessageCreateOptions(body));
       stage = 'send';
-      const result = await channel.send(options);
+      const result = await operation.run(async () => channel.send(options));
       return result.id;
     } catch (error) {
       const details = error as { code?: unknown; status?: unknown };
@@ -341,40 +344,52 @@ export interface DiscordInteractionsEndpointOptions {
   readonly fetch?: typeof globalThis.fetch;
 }
 
+/** One Discord REST request retains the caller lifetime through response-body consumption. */
+export interface DiscordRestRequest {
+  readonly method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
+  readonly path: string;
+  readonly body?: unknown;
+  readonly signal?: AbortSignal;
+}
+/** Protocol target and payload for a single message publication. */
+export interface DiscordCreateMessageRequest {
+  readonly channelId: string;
+  readonly body: DiscordOutboundBody;
+  readonly signal?: AbortSignal;
+}
+/** Protocol target for a single existing-message deletion. */
+export interface DiscordDeleteMessageRequest {
+  readonly channelId: string;
+  readonly messageId: string;
+  readonly signal?: AbortSignal;
+}
+
 /** Minimal Discord REST client used when Gateway is intentionally disabled. */
 export class DiscordRestClient {
-  constructor(
-    readonly token: string,
-    readonly fetch: typeof globalThis.fetch = globalThis.fetch,
-  ) {}
+  constructor(readonly token: string, readonly fetch: typeof globalThis.fetch = globalThis.fetch) {}
 
-  async request<T = unknown>(
-    method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
-    path: string,
-    body?: unknown,
-  ): Promise<T> {
-    const response = await this.fetch(`${DISCORD_API}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bot ${this.token}`,
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
-    });
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`Discord API ${method} ${path} failed (${response.status}): ${text.slice(0, 200)}`);
-    }
-    return (text ? JSON.parse(text) : undefined) as T;
+  async request<T = unknown>({ method, path, body, signal }: DiscordRestRequest): Promise<T> {
+    const deadline = AbortSignal.timeout(OUTBOUND_TIMEOUT_MS);
+    const operationSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    const operation = createEndpointOperation({ signal: operationSignal });
+    const execute = async () => {
+      const response = await this.fetch(`${DISCORD_API}${path}`, {
+        method,
+        headers: { Authorization: `Bot ${this.token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: operationSignal,
+      });
+      const text = await response.text();
+      if (!response.ok) throw new Error(`Discord API ${method} ${path} failed (${response.status}): ${text.slice(0, 200)}`);
+      return (text ? JSON.parse(text) : undefined) as T;
+    };
+    return operation.run(execute);
   }
-
-  createMessage(channelId: string, body: unknown): Promise<{ id?: string }> {
-    return this.request('POST', `/channels/${channelId}/messages`, body);
+  createMessage({ channelId, body, signal }: DiscordCreateMessageRequest): Promise<{ id?: string }> {
+    return this.request({ method: 'POST', path: `/channels/${channelId}/messages`, body, signal });
   }
-
-  deleteMessage(channelId: string, messageId: string): Promise<void> {
-    return this.request('DELETE', `/channels/${channelId}/messages/${messageId}`);
+  deleteMessage({ channelId, messageId, signal }: DiscordDeleteMessageRequest): Promise<void> {
+    return this.request({ method: 'DELETE', path: `/channels/${channelId}/messages/${messageId}`, signal });
   }
 }
 
@@ -387,8 +402,8 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;
-  readonly #control: EndpointControl = Object.freeze({
-    recall: (message: MessageRef) => this.recallMessage(message),
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: request => this.#recallMessage(request),
   });
   readonly #content: EndpointContentPort = Object.freeze({
     resolve: (reference: ConversationReference, context: EndpointContentResolveContext) =>
@@ -442,15 +457,15 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const body = formatOutboundBody(payload);
-    const data = await this.createMessage(conversation.id, body);
+    const data = await this.createMessage({ channelId: conversation.id, body, signal });
     return data.id ?? '';
   }
 
-  async recallMessage(message: MessageRef): Promise<void> {
+  async #recallMessage({ message, signal }: EndpointRecallRequest): Promise<void> {
     if (!message.id) return;
-    await this.deleteMessage(message.conversation.id, message.id);
+    await this.deleteMessage({ channelId: message.conversation.id, messageId: message.id, signal });
   }
 
   admit(msg: DiscordInboundMessage): void {
@@ -576,16 +591,6 @@ async function resolveDiscordContent(
 }
 
 /**
- * Discord snowflake 是 64 位整数的字符串形式，超出 Number.MAX_SAFE_INTEGER，
- * Number() 转换会丢精度。Console 社交面只把 group_id 当 JSON 值透传、
- * 并以字符串回传给 listGroupMembers，因此这里保留原始字符串（仅按契约
- * 类型声明强转），是全链路最不丢信息的方案。
- */
-function toGroupId(id: string): number {
-  return id as unknown as number;
-}
-
-/**
  * DiscordGatewayEndpoint 的 EndpointManagement 语义端口（参照 qq 的工厂模式）。
  * 数据源为 discord.js SDK 缓存：guilds.cache / guild.channels.cache / guild.members。
  */
@@ -593,38 +598,43 @@ export function createDiscordEndpointManagement(
   requireClient: () => DiscordClientTransport,
 ): EndpointManagement {
   return Object.freeze<EndpointManagement>({
-    async listGroups(): Promise<readonly EndpointGroup[]> {
-      const groups: EndpointGroup[] = [];
-      for (const guild of requireClient().guilds.cache.values()) {
-        if (!guild?.id) continue;
-        groups.push({
-          group_id: toGroupId(String(guild.id)),
-          name: String(guild.name ?? guild.id),
-        });
-      }
-      return groups;
-    },
-    async listChannels(): Promise<readonly EndpointChannel[]> {
-      const channels: EndpointChannel[] = [];
-      for (const guild of requireClient().guilds.cache.values()) {
-        if (!guild?.id) continue;
-        const guildId = String(guild.id);
-        const guildName = String(guild.name ?? guildId);
-        for (const channel of guild.channels?.cache?.values() ?? []) {
-          if (!channel?.id) continue;
-          if (channel.type !== ChannelType.GuildText) continue;
-          channels.push({
-            id: String(channel.id),
-            name: channel.name ? String(channel.name) : undefined,
-            parent: { type: 'guild', id: guildId, name: guildName },
+    async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
+      return createEndpointOperation(request).run(() => {
+        const groups: EndpointGroup[] = [];
+        for (const guild of requireClient().guilds.cache.values()) {
+          if (!guild?.id) continue;
+          groups.push({
+            group_id: String(guild.id),
+            name: String(guild.name ?? guild.id),
           });
         }
-      }
-      return channels;
+        return groups;
+      });
     },
-    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
-      const guild = await requireClient().guilds.fetch(groupId);
-      const members = await guild.members.fetch({ limit: 100 }) as Map<string, {
+    async listChannels(request: EndpointManagementRequest = {}): Promise<readonly EndpointChannel[]> {
+      return createEndpointOperation(request).run(() => {
+        const channels: EndpointChannel[] = [];
+        for (const guild of requireClient().guilds.cache.values()) {
+          if (!guild?.id) continue;
+          const guildId = String(guild.id);
+          const guildName = String(guild.name ?? guildId);
+          for (const channel of guild.channels?.cache?.values() ?? []) {
+            if (!channel?.id) continue;
+            if (channel.type !== ChannelType.GuildText) continue;
+            channels.push({
+              id: String(channel.id),
+              name: channel.name ? String(channel.name) : undefined,
+              parent: { type: 'guild', id: guildId, name: guildName },
+            });
+          }
+        }
+        return channels;
+      });
+    },
+    async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
+      const operation = createEndpointOperation({ signal });
+      const guild = await operation.run(() => requireClient().guilds.fetch(groupId));
+      const members = await operation.run(() => guild.members.fetch({ limit: 100 })) as Map<string, {
         id: string;
         user: { username: string };
         nickname: string | null;

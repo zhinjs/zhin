@@ -1,3 +1,4 @@
+import { decodeTaskTarget } from 'zhin.js/plugin-runtime';
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { messages } from './i18n.js';
 /**
@@ -136,10 +137,12 @@ export class BilibiliWatcher {
         || typeof channelId !== 'string' || !channelId
         || (channelType !== 'private' && channelType !== 'group' && channelType !== 'channel')) continue;
       try {
-        await push({ adapterName, endpointKey, channelType, channelId, locale: resolveLocale(row.locale), content: content(resolveLocale(row.locale)) });
+        const target = row.target_json == null ? undefined
+          : decodeTaskTarget(JSON.parse(String(row.target_json)) as Record<string, unknown>);
+        await push({ ...(target ? { target } : {}), adapterName, endpointKey, channelType, channelId, locale: resolveLocale(row.locale), content: content(resolveLocale(row.locale)) });
         pushed += 1;
-      } catch {
-        // OutboundHost already logs; keep delivering to other subscribers.
+      } catch (error) {
+        this.#options.warn?.(`[bilibili] subscription delivery failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     return pushed;

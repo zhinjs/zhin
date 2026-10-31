@@ -1,8 +1,10 @@
 export interface GameEventSession {
   readonly id: string;
+  /** Reversible complete conversation target; decode through gameTargetFromKey(). */
   readonly channel_key: string;
   readonly status: string;
   readonly updated_at: number;
+  /** Historical storage projections only; route through the complete channel_key codec. */
   readonly adapter?: string;
   readonly endpoint?: string;
   readonly channel_type?: string;

@@ -20,6 +20,7 @@ import {
   isMessageEvent,
   resolveSatoriConfig,
   type SatoriEventBody,
+  type SatoriApiRequest,
 } from '../src/protocol.js';
 import { verifySatoriToken } from '../src/webhook.js';
 
@@ -365,10 +366,7 @@ describe('satori plugin runtime adapter', () => {
     });
     expect(messageId).toBe('ch-9:out-1');
     expect(callApi).toHaveBeenCalledWith(
-      expect.objectContaining({ platform: 'test', userId: 'bot-1' }),
-      'message',
-      'create',
-      { channel_id: 'ch-9', content: 'pong' },
+      expect.objectContaining({ platform: 'test', userId: 'bot-1', resource: 'message', method: 'create', params: { channel_id: 'ch-9', content: 'pong' } }),
     );
     await endpoint.stop();
   });
@@ -392,13 +390,10 @@ describe('satori plugin runtime adapter', () => {
       id: 'ch-9',
     };
 
-    await endpoint.index.control(endpoint.canonicalId, 'recall')!.recall?.({ conversation, id: 'inbound-1' });
+    await endpoint.index.control(endpoint.canonicalId, 'recall')!.recall?.({ message: { conversation, id: 'inbound-1' } });
 
     expect(callApi).toHaveBeenCalledWith(
-      expect.objectContaining({ platform: 'test', userId: 'bot-1' }),
-      'message',
-      'delete',
-      { channel_id: 'ch-9', message_id: 'inbound-1' },
+      expect.objectContaining({ platform: 'test', userId: 'bot-1', resource: 'message', method: 'delete', params: { channel_id: 'ch-9', message_id: 'inbound-1' } }),
     );
   });
 
@@ -552,10 +547,7 @@ describe('satori ws heartbeat', () => {
 describe('satori endpoint management', () => {
   function createManagementCallApi() {
     return vi.fn(async (
-      _options: unknown,
-      resource: string,
-      method: string,
-      params: Record<string, unknown>,
+      { resource, method, params = {} }: SatoriApiRequest,
     ): Promise<unknown> => {
       if (resource === 'guild' && method === 'list') {
         if (params.next === 'p2') return { data: [{ id: 'guild-2' }] };
@@ -610,7 +602,7 @@ describe('satori endpoint management', () => {
       { group_id: 'guild-2', name: 'guild-2' },
     ]);
     expect(callApi).toHaveBeenCalledWith(
-      expect.anything(), 'guild', 'list', { next: 'p2' },
+      expect.objectContaining({ resource: 'guild', method: 'list', params: { next: 'p2' } }),
     );
   });
 
@@ -630,11 +622,11 @@ describe('satori endpoint management', () => {
     const callApi = createManagementCallApi();
     const endpoint = await createManagementEndpoint(callApi);
     await endpoint.start(); endpoint.open();
-    await expect(endpoint.index.management(endpoint.canonicalId)!.listGroupMembers?.('guild-1')).resolves.toEqual([
+    await expect(endpoint.index.management(endpoint.canonicalId)!.listGroupMembers?.({ groupId: 'guild-1' })).resolves.toEqual([
       { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: ['role-1'] },
     ]);
     expect(callApi).toHaveBeenCalledWith(
-      expect.anything(), 'guild-member', 'list', { guild_id: 'guild-1' },
+      expect.objectContaining({ resource: 'guild-member', method: 'list', params: { guild_id: 'guild-1' } }),
     );
   });
 

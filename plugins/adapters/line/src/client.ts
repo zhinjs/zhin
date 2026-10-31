@@ -3,7 +3,11 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * LineClient — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import { type EndpointManagement, type EndpointSendRequest } from 'zhin.js/adapter';
+import {
+  type EndpointManagement,
+  type EndpointSendRequest,
+  type EndpointGroupRequest,
+} from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -74,7 +78,7 @@ export class LineClient extends LineApiClient {
   protected publishPlatform(name: string, event: unknown): Promise<unknown> { this.emit(name, event); return Promise.resolve(); }
 
   constructor(options: LineEndpointOptions) {
-    super(options.config, options.fetch ?? globalThis.fetch);
+    super({ config: options.config, fetch: options.fetch ?? globalThis.fetch });
     this.#logger = getAdapterLogger('line', options.config.id);
     this.#options = options;
     const transportFetch = options.fetch ?? globalThis.fetch;
@@ -128,7 +132,7 @@ export class LineClient extends LineApiClient {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  protected async sendPayload({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  protected async sendPayload({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     try {
       const messages = formatOutboundMessages(payload);
       if (messages.length === 0) {
@@ -141,7 +145,7 @@ export class LineClient extends LineApiClient {
       if (cached) {
         this.#replyTokenCache.delete(target);
         if (Date.now() - cached.timestamp <= REPLY_TOKEN_TTL_MS) {
-          return await this.#replyMessage(cached.token, messages);
+          return await this.#replyMessage({ replyToken: cached.token, messages, signal });
         }
       }
 
@@ -150,7 +154,7 @@ export class LineClient extends LineApiClient {
           `Invalid LINE recipient ID "${target}": must start with U (user), G (group), or R (room)`, 'not_sent',
         );
       }
-      return await this.#pushMessage(target, messages);
+      return await this.#pushMessage({ to: target, messages, signal });
     } catch (error) {
       if (error instanceof EndpointDeliveryError) throw error;
       throw new EndpointDeliveryError('delivery_unconfirmed', 'Outbound request outcome is unknown', 'unknown', { cause: error });
@@ -234,8 +238,7 @@ export class LineClient extends LineApiClient {
   }
 
   async #replyMessage(
-    replyToken: string,
-    messages: ReturnType<typeof formatOutboundMessages>,
+    { replyToken, messages, signal }: LineReplyRequest,
   ): Promise<string> {
     const url = `${this.#options.config.apiBaseUrl}/v2/bot/message/reply`;
     const response = await this.#fetch(url, {
@@ -245,7 +248,7 @@ export class LineClient extends LineApiClient {
         Authorization: `Bearer ${this.#options.config.channelAccessToken}`,
       },
       body: JSON.stringify({ replyToken, messages }),
-      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(OUTBOUND_TIMEOUT_MS)]) : AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
     if (!response.ok) {
       throw await lineResponseError(response);
@@ -255,8 +258,7 @@ export class LineClient extends LineApiClient {
   }
 
   async #pushMessage(
-    to: string,
-    messages: ReturnType<typeof formatOutboundMessages>,
+    { to, messages, signal }: LinePushRequest,
   ): Promise<string> {
     const url = `${this.#options.config.apiBaseUrl}/v2/bot/message/push`;
     const response = await this.#fetch(url, {
@@ -266,7 +268,7 @@ export class LineClient extends LineApiClient {
         Authorization: `Bearer ${this.#options.config.channelAccessToken}`,
       },
       body: JSON.stringify({ to, messages }),
-      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(OUTBOUND_TIMEOUT_MS)]) : AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
     if (!response.ok) {
       throw await lineResponseError(response);
@@ -285,7 +287,7 @@ export class LineClient extends LineApiClient {
 function createLineEndpointManagement(endpoint: LineClient): EndpointManagement {
   return Object.freeze<EndpointManagement>({
     // listGroups 不接：LINE Bot API 没有"我加入了哪些群"的接口，群 id 只能来自入站事件。
-    listGroupMembers: (groupId) => endpoint.getGroupMembers(groupId),
+    listGroupMembers: ({ groupId, signal }: EndpointGroupRequest) => endpoint.getGroupMembers(groupId, { signal }),
   });
 }
 
@@ -307,3 +309,7 @@ function requireMessageId(value: unknown): string {
 export type LineClientEventMap = Record<string, LineEvent>;
 
 export type { LineGroupMember } from './api-client.js';
+
+interface LineMessageRequest { readonly messages: ReturnType<typeof formatOutboundMessages>; readonly signal?: AbortSignal; }
+interface LineReplyRequest extends LineMessageRequest { readonly replyToken: string; }
+interface LinePushRequest extends LineMessageRequest { readonly to: string; }

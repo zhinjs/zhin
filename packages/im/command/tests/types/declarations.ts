@@ -57,3 +57,11 @@ defineCommand({
 // Keep the registered-platform Session regressions in the existing project type gate.
 import './session-registry.js';
 import './session.js';
+
+// One request keeps invocation inputs and its operation generation together.
+import type { CommandDispatchRequest, CommandIndex } from '../../src/index.js';
+declare const commandIndex: CommandIndex;
+const dispatchRequest: CommandDispatchRequest = { input: 'help', commandPrefix: '/' };
+void commandIndex.dispatch(dispatchRequest);
+// @ts-expect-error positional command dispatch no longer represents an operation request
+void commandIndex.dispatch('help', undefined);

@@ -23,6 +23,10 @@ export function isolateBootstrap(): void {
   const disposers: Array<() => unknown> = [];
   const handlers = new Map<string, (input: unknown) => unknown>();
   const hostCalls = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
+  const controlSignals = new Map<number, AbortController>();
+  const lifecycleHandlers = new Map<string, Set<(event: unknown) => unknown>>([
+    ['hmr.pause', new Set()], ['hmr.resume', new Set()],
+  ]);
   let nextHostCall = 1;
 
   const errorValue = (error: unknown) => {
@@ -64,6 +68,7 @@ export function isolateBootstrap(): void {
       try { await dispose(); } catch (error) { errors.push(error); }
     }
     handlers.clear();
+    for (const listeners of lifecycleHandlers.values()) listeners.clear();
     if (errors.length > 0) throw new AggregateError(errors, 'Isolated Plugin disposal failed');
   };
 
@@ -120,6 +125,12 @@ export function isolateBootstrap(): void {
       });
       try {
         const returned = await definition.setup?.({
+          events: { on(name: string, handler: (event: unknown) => unknown) {
+            const listeners = lifecycleHandlers.get(name);
+            if (!listeners) throw new Error(`Unknown Plugin lifecycle event: ${name}`);
+            listeners.add(handler);
+            return () => listeners.delete(handler);
+          } },
           plugin,
           config: { get: () => Object.freeze(preparePayload.config) },
           resources,
@@ -144,6 +155,20 @@ export function isolateBootstrap(): void {
       if (!handler) throw new Error(`Unknown isolated method: ${payload.method}`);
       return clone(await handler(payload.input));
     },
+    async control(payload: any, id: number) {
+      if (state !== 'active') throw new Error(`Isolated Plugin is not active: ${state}`);
+      const listeners = lifecycleHandlers.get(payload.name);
+      if (!listeners) throw new Error(`Unknown Plugin lifecycle event: ${payload.name}`);
+      const controller = new AbortController();
+      controlSignals.set(id, controller);
+      if (payload.aborted) controller.abort(fromErrorValue(payload.error));
+      try {
+        const event = Object.freeze({ signal: controller.signal, details: Object.freeze(payload.details) });
+        const results = await Promise.allSettled([...listeners].map(listener => Promise.resolve().then(() => listener(event))));
+        const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason] : []);
+        if (errors.length) throw new AggregateError(errors, `Plugin ${payload.name} handlers failed`);
+      } finally { controlSignals.delete(id); }
+    },
     async dispose() {
       if (state === 'active') await disposeSetup();
       state = 'closed';
@@ -153,6 +178,10 @@ export function isolateBootstrap(): void {
   };
 
   endpoint.receive(async (message: any) => {
+    if (message?.type === 'control-cancel') {
+      controlSignals.get(message.id)?.abort(fromErrorValue(message.error));
+      return;
+    }
     if (message?.type === 'host-result') {
       const pending = hostCalls.get(message.id);
       if (!pending) return;
@@ -163,7 +192,9 @@ export function isolateBootstrap(): void {
     }
     if (message?.type !== 'request') return;
     try {
-      const value = await methods[message.method as keyof typeof methods](message.payload);
+      const value = message.method === 'control'
+        ? await methods.control(message.payload, message.id)
+        : await methods[message.method as Exclude<keyof typeof methods, 'control'>](message.payload);
       endpoint.send({ type: 'response', id: message.id, ok: true, value: clone(value) });
     } catch (error) {
       endpoint.send({ type: 'response', id: message.id, ok: false, error: errorValue(error) });

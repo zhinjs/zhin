@@ -1,3 +1,4 @@
+import type { DeliveryTarget, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import type { Locale } from 'zhin.js/i18n';
 import { createToken } from 'zhin.js';
 import type { BiliClient } from './api.js';
@@ -7,6 +8,8 @@ import type { BiliDb } from './store.js';
 import type { BilibiliWatcher } from './poll.js';
 
 export type BiliOutboundPush = (input: {
+  /** Explicit canonical target on new records; absent only at the pending historical-data boundary. */
+  readonly target?: DeliveryTarget;
   readonly adapterName: string;
   readonly endpointKey: string;
   readonly channelType: ChannelInfo['channelType'];
@@ -16,6 +19,7 @@ export type BiliOutboundPush = (input: {
 }) => Promise<void>;
 
 export interface BilibiliRuntime {
+  readonly migrationScopes?: TargetMigrationScopes;
   readonly db: BiliDb;
   readonly config: Readonly<ResolvedBilibiliConfig>;
   readonly client: BiliClient;

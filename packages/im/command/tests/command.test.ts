@@ -172,7 +172,7 @@ describe('Command Feature', () => {
     } satisfies RuntimeSnapshot;
     const index = new CommandIndex([slot], snapshot);
 
-    await index.dispatch('who', {
+    await index.dispatch({ input: 'who', source: {
       conversation: {
         endpoint: { id: 'root/icqq\0zhin.adapter/1\0icqq~1689919782', adapter: 'root/icqq' },
         kind: 'group',
@@ -187,7 +187,7 @@ describe('Command Feature', () => {
         nickname: '凉菜',
         senderRole: 'admin',
       },
-    });
+    } });
 
     expect(seen).toEqual({
       adapter: 'root/icqq',
@@ -225,16 +225,16 @@ describe('Command Feature', () => {
     });
     const index = new CommandIndex([slot], snapshotWithOwners([owner], [slot]));
 
-    await expect(index.dispatch('client-id', {
+    await expect(index.dispatch({ input: 'client-id', source: {
       clientAdapter: 'other',
       get $client() { reads += 1; return client; },
-    })).resolves.toEqual({ matched: false, status: 'unmatched' });
+    } })).resolves.toEqual({ matched: false, status: 'unmatched' });
     expect(reads).toBe(0);
 
-    await expect(index.dispatch('client-id', {
+    await expect(index.dispatch({ input: 'client-id', source: {
       clientAdapter: 'command-test',
       get $client() { reads += 1; return client; },
-    })).resolves.toMatchObject({ matched: true, value: 'client-1' });
+    } })).resolves.toMatchObject({ matched: true, value: 'client-1' });
     expect(reads).toBe(1);
   });
 
@@ -265,8 +265,8 @@ describe('Command Feature', () => {
     const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'bound-session', source: '/commands/bound-session/index.ts', definition });
     const index = new CommandIndex([slot], snapshotWithOwners([owner], [slot]));
     const source = { clientAdapter: 'command-test', endpointId: 'account', metadata: { endpoint: 'wrong-account', group_name: 'wrong room', roles: ['master'] }, $client: client, [operationSession]: () => session };
-    await expect(index.dispatch('bound-session', source)).resolves.toMatchObject({ status: 'executed', value: 'original' });
-    await expect(index.dispatch('bound-session', { ...source, clientAdapter: 'other' })).resolves.toMatchObject({ status: 'unmatched' });
+    await expect(index.dispatch({ input: 'bound-session', source: source })).resolves.toMatchObject({ status: 'executed', value: 'original' });
+    await expect(index.dispatch({ input: 'bound-session', source: { ...source, clientAdapter: 'other' } })).resolves.toMatchObject({ status: 'unmatched' });
     await expect(index.execute('bound-session')).resolves.toBe('direct');
     expect(contexts).toHaveLength(2);
   });
@@ -359,7 +359,7 @@ describe('Command Feature', () => {
     });
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
 
-    await expect(index.dispatch('gh issue list open assigned', { sender: { id: 'alice' } }))
+    await expect(index.dispatch({ input: 'gh issue list open assigned', source: { sender: { id: 'alice' } } }))
       .resolves.toEqual({
         matched: true,
       status: 'executed',
@@ -367,8 +367,8 @@ describe('Command Feature', () => {
         owner,
         value: 'alice:open,assigned',
       });
-    await expect(index.dispatch('gh issue missing')).resolves.toEqual({ matched: false, status: 'unmatched' });
-    await expect(index.dispatch('gh issue listing')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'gh issue missing' })).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'gh issue listing' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('compiles optional filename parameters and applies defaults from params', async () => {
@@ -498,18 +498,18 @@ describe('Command Feature', () => {
       name: 'endpoint list',
       alias: ['ep', 'e l'],
     });
-    await expect(index.dispatch('ep')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'ep' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       command: 'endpoint list',
       value: 'list:',
     });
-    await expect(index.dispatch('e l open')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'e l open' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       value: 'list:open',
     });
-    await expect(index.dispatch('qq.ep')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'qq.ep' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('matches multi-word alias with trailing dynamic params', async () => {
@@ -530,12 +530,12 @@ describe('Command Feature', () => {
     });
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
 
-    await expect(index.dispatch('gh issue 42')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'gh issue 42' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       value: 'bug:42',
     });
-    await expect(index.dispatch('bugs 7')).resolves.toMatchObject({ value: 'bug:7' });
+    await expect(index.dispatch({ input: 'bugs 7' })).resolves.toMatchObject({ value: 'bug:7' });
   });
 
   it('allows b and b list as distinct alias sequences', async () => {
@@ -556,8 +556,8 @@ describe('Command Feature', () => {
     });
     const index = new CommandIndex([short, longer], snapshotFor(owner, [short, longer]));
 
-    await expect(index.dispatch('b')).resolves.toMatchObject({ value: 'short' });
-    await expect(index.dispatch('b list')).resolves.toMatchObject({ value: 'long' });
+    await expect(index.dispatch({ input: 'b' })).resolves.toMatchObject({ value: 'short' });
+    await expect(index.dispatch({ input: 'b list' })).resolves.toMatchObject({ value: 'long' });
   });
 
   it('dispatches global shortcut with prefilled params and rejects trailing text', async () => {
@@ -592,13 +592,13 @@ describe('Command Feature', () => {
       snapshotWithOwners([owner, child], [slot, namespaced]),
     );
 
-    await expect(index.dispatch('开虫')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: '开虫' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       value: 'bug:9',
     });
-    await expect(index.dispatch('开虫 1')).resolves.toEqual({ matched: false, status: 'unmatched' });
-    await expect(index.dispatch('叮')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: '开虫 1' })).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: '叮' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       value: 'pong',
@@ -638,14 +638,14 @@ describe('Command Feature', () => {
       sender: { id: '12345', name: 'Alice' },
     };
 
-    const result = await index.dispatch('查看我的信息', fakeMessage);
+    const result = await index.dispatch({ input: '查看我的信息', source: fakeMessage });
     expect(result).toMatchObject({
       matched: true,
       status: 'executed',
       value: 'profile:12345',
     });
 
-    const noSender = await index.dispatch('查看我的信息');
+    const noSender = await index.dispatch({ input: '查看我的信息' });
     expect(noSender).toMatchObject({
       matched: true,
       status: 'executed',
@@ -684,7 +684,7 @@ describe('Command Feature', () => {
       },
       sender: { id: '100', name: 'Admin', roles: ['master', 'owner'] },
     };
-    const masterResult = await index.dispatch('我是谁', masterMessage);
+    const masterResult = await index.dispatch({ input: '我是谁', source: masterMessage });
     expect(masterResult).toMatchObject({ matched: true, value: 'master,owner' });
 
     const trustedMessage = {
@@ -696,7 +696,7 @@ describe('Command Feature', () => {
       },
       sender: { id: '200', roles: ['trusted'] },
     };
-    const trustedResult = await index.dispatch('我是谁', trustedMessage);
+    const trustedResult = await index.dispatch({ input: '我是谁', source: trustedMessage });
     expect(trustedResult).toMatchObject({ matched: true, value: 'trusted' });
 
     const plainMessage = {
@@ -708,7 +708,7 @@ describe('Command Feature', () => {
       },
       sender: { id: '300', roles: ['admin'] },
     };
-    const plainResult = await index.dispatch('我是谁', plainMessage);
+    const plainResult = await index.dispatch({ input: '我是谁', source: plainMessage });
     expect(plainResult).toMatchObject({ matched: true, value: 'admin' });
   });
 
@@ -728,7 +728,7 @@ describe('Command Feature', () => {
     snapshot.resources.get(owner)!.set(permissionHostToken.id, new PermissionHost());
     const index = new CommandIndex([slot], snapshot);
 
-    await expect(index.dispatch('secret', {
+    await expect(index.dispatch({ input: 'secret', source: {
       conversation: {
         endpoint: { id: 'root/discord\0x', adapter: 'root/discord' },
         kind: 'private',
@@ -737,9 +737,9 @@ describe('Command Feature', () => {
       content: 'secret',
       sender: { id: '1' },
       metadata: { isMaster: true },
-    })).resolves.toMatchObject({ matched: true, status: 'denied' });
+    } })).resolves.toMatchObject({ matched: true, status: 'denied' });
 
-    await expect(index.dispatch('secret', {
+    await expect(index.dispatch({ input: 'secret', source: {
       conversation: {
         endpoint: { id: 'root/icqq\0x', adapter: 'root/icqq' },
         kind: 'private',
@@ -748,7 +748,7 @@ describe('Command Feature', () => {
       content: 'secret',
       sender: { id: '1' },
       metadata: { isMaster: true },
-    })).resolves.toMatchObject({ matched: true, value: 'ok' });
+    } })).resolves.toMatchObject({ matched: true, value: 'ok' });
 
     await expect(index.execute('secret')).rejects.toThrow('Permission denied');
   });
@@ -772,8 +772,8 @@ describe('Command Feature', () => {
     const current = { ...old, generation: 2, resources: new Map([[owner, new Map([[permissionHostToken.id, newHost]])]]) };
     const index = new CommandIndex([slot], old);
     const source = { conversation: { endpoint: { id: 'ep', adapter: 'test' }, kind: 'private', id: 'room' }, sender: { id: 'actor' } };
-    const draining = index.dispatch(input, source, undefined, '', old);
-    await expect(index.dispatch(input, source, undefined, '', current)).resolves.toMatchObject({ matched: true, status: 'denied' });
+    const draining = index.dispatch({ input: input, source: source, commandPrefix: '', snapshot: old });
+    await expect(index.dispatch({ input: input, source: source, commandPrefix: '', snapshot: current })).resolves.toMatchObject({ matched: true, status: 'denied' });
     expect(newChecks).toBe(1);
     expect(executions).toBe(0);
     release();
@@ -795,13 +795,13 @@ describe('Command Feature', () => {
     snapshot.resources.get(owner)!.set(permissionHostToken.id, host);
     const index = new CommandIndex([slot], snapshot);
     const source = { conversation: { endpoint: { id: 'ep', adapter: 'test' }, kind: 'private', id: 'room' }, sender: { id: 'actor' } };
-    await expect(index.dispatch('guarded', source)).rejects.toBe(failure);
+    await expect(index.dispatch({ input: 'guarded', source: source })).rejects.toBe(failure);
     expect(executions).toBe(0);
     host.checkAll = async () => false;
-    await expect(index.dispatch('guarded', source)).resolves.toMatchObject({ matched: true, status: 'denied' });
+    await expect(index.dispatch({ input: 'guarded', source: source })).resolves.toMatchObject({ matched: true, status: 'denied' });
     expect(executions).toBe(0);
     host.checkAll = async () => true;
-    await expect(index.dispatch('guarded', source)).resolves.toMatchObject({ matched: true, value: 'ok' });
+    await expect(index.dispatch({ input: 'guarded', source: source })).resolves.toMatchObject({ matched: true, value: 'ok' });
     expect(executions).toBe(1);
   });
 
@@ -931,19 +931,19 @@ describe('Command Feature', () => {
     const snapshot = snapshotWithOwners([child], [rootSlot, childSlot]);
 
     const index = new CommandIndex([rootSlot, childSlot], snapshot);
-    await expect(index.dispatch('child status')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'child status' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       owner: root,
       value: 'root',
     });
-    await expect(index.dispatch('status')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'status' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       owner: child,
       value: 'child',
     });
-    await expect(index.dispatch('child.status')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'child.status' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('rejects the same user route published by different owners', () => {
@@ -983,11 +983,11 @@ describe('Command Feature', () => {
     };
     const index = new CommandIndex([rootSlot, childSlot], snapshot);
 
-    await expect(index.dispatch('status')).resolves.toMatchObject({ value: 'root' });
-    await expect(index.dispatch('child admin status')).resolves.toMatchObject({ value: 'child' });
-    await expect(index.dispatch('child admin state')).resolves.toMatchObject({ value: 'child' });
-    await expect(index.dispatch('child admin 状态')).resolves.toMatchObject({ value: 'child' });
-    await expect(index.dispatch('child status')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'status' })).resolves.toMatchObject({ value: 'root' });
+    await expect(index.dispatch({ input: 'child admin status' })).resolves.toMatchObject({ value: 'child' });
+    await expect(index.dispatch({ input: 'child admin state' })).resolves.toMatchObject({ value: 'child' });
+    await expect(index.dispatch({ input: 'child admin 状态' })).resolves.toMatchObject({ value: 'child' });
+    await expect(index.dispatch({ input: 'child status' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('leaves commands listed in the instance disabledCommands out of routing', async () => {
@@ -1014,9 +1014,9 @@ describe('Command Feature', () => {
     });
 
     expect(index.list().map((command) => command.name)).toEqual(['daily kfc', 'daily news']);
-    await expect(index.dispatch('daily kfc')).resolves.toMatchObject({ value: 'kfc' });
-    await expect(index.dispatch('daily fanyi hello')).resolves.toEqual({ matched: false, status: 'unmatched' });
-    await expect(index.dispatch('daily netease login')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'daily kfc' })).resolves.toMatchObject({ value: 'kfc' });
+    await expect(index.dispatch({ input: 'daily fanyi hello' })).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'daily netease login' })).resolves.toEqual({ matched: false, status: 'unmatched' });
     // A malformed value fails fast instead of silently enabling everything.
     expect(() => new CommandIndex(slots, { ...base, config: new Map([[owner, { disabledCommands: 'kfc' }]]) }))
       .toThrow(/Invalid disabledCommands/);
@@ -1032,13 +1032,13 @@ describe('Command Feature', () => {
       definition: defineCommand({ execute: ({ args }) => `liked:${args[0] ?? 'self'}` }),
     });
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
-    await expect(index.dispatch('赞我')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: '赞我' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       command: '赞我',
       value: 'liked:self',
     });
-    await expect(index.dispatch('赞我 10')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: '赞我 10' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       value: 'liked:10',
@@ -1060,8 +1060,8 @@ describe('Command Feature', () => {
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
 
     // 普通文本命中数字参数路由时不得抛出，应视为未命中。
-    await expect(index.dispatch('hello')).resolves.toEqual({ matched: false, status: 'unmatched' });
-    await expect(index.dispatch('30')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'hello' })).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: '30' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       value: 'wait:30',
@@ -1082,7 +1082,7 @@ describe('Command Feature', () => {
     });
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
 
-    await expect(index.dispatch('')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: '' })).resolves.toEqual({ matched: false, status: 'unmatched' });
     expect(index.has('')).toBe(false);
     await expect(index.execute('gh pr')).resolves.toBe('pr:defaultTitle');
   });
@@ -1147,7 +1147,7 @@ describe('Command Feature', () => {
       { type: 'mention', data: { target: '10001' } },
     ] as const;
 
-    await expect(index.dispatch(segments)).resolves.toMatchObject({
+    await expect(index.dispatch({ input: segments })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       command: 'upload <asset>',
@@ -1190,14 +1190,14 @@ describe('Command Feature', () => {
     expect(index.list()[0]?.name).toBe('files <...slug>');
     // 纯文本输入整体是一个 text 段；结构化多段输入逐段收集为 string[]
     await expect(index.execute('files a b c')).resolves.toEqual(['a b c']);
-    await expect(index.dispatch([
+    await expect(index.dispatch({ input: [
       { type: 'text', data: { text: 'files a' } },
       { type: 'text', data: { text: 'b' } },
       { type: 'text', data: { text: 'c' } },
-    ])).resolves.toMatchObject({ matched: true, value: ['a', 'b', 'c'] });
+    ] })).resolves.toMatchObject({ matched: true, value: ['a', 'b', 'c'] });
     // 必需捕获所有：零段输入视为不匹配该命令
     expect(index.has('files')).toBe(false);
-    await expect(index.dispatch('files')).resolves.toMatchObject({ matched: true, status: 'invalid' });
+    await expect(index.dispatch({ input: 'files' })).resolves.toMatchObject({ matched: true, status: 'invalid' });
   });
 
   it('matches optional catch-all [[...slug]] with zero segments as an empty array', async () => {
@@ -1228,10 +1228,10 @@ describe('Command Feature', () => {
     const index = new CommandIndex(slots, snapshotFor(owner, slots));
     expect(index.list()[0]?.name).toBe('files [...slug]');
     await expect(index.execute('files')).resolves.toEqual([]);
-    await expect(index.dispatch([
+    await expect(index.dispatch({ input: [
       { type: 'text', data: { text: 'files a' } },
       { type: 'text', data: { text: 'b' } },
-    ])).resolves.toMatchObject({ matched: true, value: ['a', 'b'] });
+    ] })).resolves.toMatchObject({ matched: true, value: ['a', 'b'] });
   });
 
   it('splits word-typed catch-all [...slug] per word', async () => {
@@ -1279,7 +1279,7 @@ describe('Command Feature', () => {
     await expect(index.execute('sum 1 2 3.5')).resolves.toEqual([1, 2, 3.5]);
     // 任一词无法转换为 number 即整体不匹配
     expect(index.has('sum 1 x')).toBe(false);
-    await expect(index.dispatch('sum 1 x')).resolves.toMatchObject({ matched: true, status: 'invalid' });
+    await expect(index.dispatch({ input: 'sum 1 x' })).resolves.toMatchObject({ matched: true, status: 'invalid' });
   });
 
   it('matches optional [[name]] without default as undefined when omitted', async () => {
@@ -1481,14 +1481,14 @@ describe('命令用户路由与 owner 身份分离', () => {
     const index = new CommandIndex([slot], snapshotWithOwners([qq], [slot]));
 
     expect(index.list()[0]!.name).toBe('endpoint list');
-    await expect(index.dispatch('endpoint list')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'endpoint list' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       command: 'endpoint list',
       owner: qq,
       value: 'listed',
     });
-    await expect(index.dispatch('qq.endpoint list')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'qq.endpoint list' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('多级 owner 仍只发布本地能力路径', async () => {
@@ -1497,9 +1497,9 @@ describe('命令用户路由与 owner 身份分离', () => {
 
     expect(index.list()[0]!.name).toBe('foo');
     await expect(index.execute('foo')).resolves.toBe('nested-ok');
-    await expect(index.dispatch('foo')).resolves.toMatchObject({ matched: true });
-    await expect(index.dispatch('b.a.foo')).resolves.toEqual({ matched: false, status: 'unmatched' });
-    await expect(index.dispatch('b a foo')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'foo' })).resolves.toMatchObject({ matched: true });
+    await expect(index.dispatch({ input: 'b.a.foo' })).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'b a foo' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('root 插件命令无前缀（不变）', async () => {
@@ -1507,7 +1507,7 @@ describe('命令用户路由与 owner 身份分离', () => {
     const index = new CommandIndex([slot], snapshotWithOwners([], [slot]));
 
     expect(index.list()[0]!.name).toBe('foo');
-    await expect(index.dispatch('foo')).resolves.toMatchObject({ matched: true });
+    await expect(index.dispatch({ input: 'foo' })).resolves.toMatchObject({ matched: true });
   });
 
   it('owner 点号路径不再形成隐式命令', async () => {
@@ -1515,13 +1515,13 @@ describe('命令用户路由与 owner 身份分离', () => {
     const slot = slotFor(b, 'foo');
     const index = new CommandIndex([slot], snapshotWithOwners([b], [slot]));
 
-    await expect(index.dispatch('b.foobar')).resolves.toEqual({ matched: false, status: 'unmatched' });
-    await expect(index.dispatch('foo extra args')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'b.foobar' })).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'foo extra args' })).resolves.toMatchObject({
       matched: true,
       status: 'executed',
       command: 'foo',
     });
-    await expect(index.dispatch('b.foo')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'b.foo' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('子插件可发布顶层动态首段', async () => {
@@ -1618,7 +1618,7 @@ describe('内置菜单命令', () => {
   it('默认关键词「菜单」展示 root 的指令和子插件', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
-    const result = await index.dispatch('菜单');
+    const result = await index.dispatch({ input: '菜单' });
     expect(result.matched).toBe(true);
     expect(result.command).toBe('菜单');
     const text = result.value as string;
@@ -1633,7 +1633,7 @@ describe('内置菜单命令', () => {
   it('菜单列表自动加上 commandPrefix', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
-    const result = await index.dispatch('菜单', undefined, undefined, '#');
+    const result = await index.dispatch({ input: '菜单', commandPrefix: '#' });
     expect(result.matched).toBe(true);
     const text = result.value as string;
     expect(text).toContain('#echo');
@@ -1645,7 +1645,7 @@ describe('内置菜单命令', () => {
   it('无 commandPrefix 时菜单保持原命令名', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
-    const result = await index.dispatch('菜单');
+    const result = await index.dispatch({ input: '菜单' });
     const text = result.value as string;
     expect(text).toContain('\n  echo\n');
     expect(text).toContain('「菜单 <插件名>」');
@@ -1654,7 +1654,7 @@ describe('内置菜单命令', () => {
   it('「菜单 qq」展示 qq 插件的指令和子插件', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
-    const result = await index.dispatch('菜单 qq');
+    const result = await index.dispatch({ input: '菜单 qq' });
     expect(result.matched).toBe(true);
     const text = result.value as string;
     expect(text).toContain('status');
@@ -1666,7 +1666,7 @@ describe('内置菜单命令', () => {
   it('「菜单 qq.group」展示空子插件提示', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
-    const result = await index.dispatch('菜单 qq.group');
+    const result = await index.dispatch({ input: '菜单 qq.group' });
     expect(result.matched).toBe(true);
     const text = result.value as string;
     expect(text).toContain('暂无指令和子插件');
@@ -1675,7 +1675,7 @@ describe('内置菜单命令', () => {
   it('不存在的插件 key 返回未找到', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
-    const result = await index.dispatch('菜单 nope');
+    const result = await index.dispatch({ input: '菜单 nope' });
     expect(result.matched).toBe(true);
     expect(result.value).toContain('未找到插件');
   });
@@ -1683,7 +1683,7 @@ describe('内置菜单命令', () => {
   it('自定义关键词生效', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: 'help' });
-    const result = await index.dispatch('help');
+    const result = await index.dispatch({ input: 'help' });
     expect(result.matched).toBe(true);
     expect(result.value).toContain('echo');
   });
@@ -1691,14 +1691,14 @@ describe('内置菜单命令', () => {
   it('未配置 menu 时不拦截', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot);
-    const result = await index.dispatch('菜单');
+    const result = await index.dispatch({ input: '菜单' });
     expect(result.matched).toBe(false);
   });
 
   it('菜单关键词不影响普通命令匹配', async () => {
     const { slots, snapshot } = menuSnapshot();
     const index = new CommandIndex(slots, snapshot, { keyword: '菜单' });
-    const result = await index.dispatch('echo');
+    const result = await index.dispatch({ input: 'echo' });
     expect(result.matched).toBe(true);
     expect(result.command).toBe('echo');
   });
@@ -1737,14 +1737,14 @@ describe('central command argument declarations', () => {
       options: { count: { type: 'integer', alias: 'c', default: 1, min: 1 }, quiet: { type: 'boolean', default: false } },
       execute: ({ params, options }) => ({ params, options }),
     }));
-    await expect(index.dispatch('remind -2 --count 3 --quiet hello world')).resolves.toMatchObject({ status: 'executed', value: { params: { minutes: -2, note: 'hello world' }, options: { count: 3, quiet: true } } });
-    await expect(index.dispatch('remind 2')).resolves.toMatchObject({ value: { params: { note: 'take a break' }, options: { count: 1, quiet: false } } });
+    await expect(index.dispatch({ input: 'remind -2 --count 3 --quiet hello world' })).resolves.toMatchObject({ status: 'executed', value: { params: { minutes: -2, note: 'hello world' }, options: { count: 3, quiet: true } } });
+    await expect(index.dispatch({ input: 'remind 2' })).resolves.toMatchObject({ value: { params: { note: 'take a break' }, options: { count: 1, quiet: false } } });
     await expect(index.execute('remind 2', ['--count', '4', 'wake', 'up'])).resolves.toMatchObject({ params: { minutes: 2, note: 'wake up' }, options: { count: 4 } });
   });
 
   it('supports options before directory-bound parameters through the same index', async () => {
     const index = indexFor(defineCommand({ params: { id: { type: 'integer' }, count: { type: 'integer' } }, options: { quiet: { type: 'boolean' } }, execute: ({ params, options }) => ({ params, options }) }), 'foo/$id', { name: 'id', type: 'integer' });
-    await expect(index.dispatch('foo --quiet 7 2')).resolves.toMatchObject({ status: 'executed', value: { params: { id: 7, count: 2 }, options: { quiet: true } } });
+    await expect(index.dispatch({ input: 'foo --quiet 7 2' })).resolves.toMatchObject({ status: 'executed', value: { params: { id: 7, count: 2 }, options: { quiet: true } } });
   });
 
   it('parses inline quoted option values without leaking their tokens into positional text', async () => {
@@ -1753,13 +1753,13 @@ describe('central command argument declarations', () => {
       options: { note: { type: 'string', alias: 'n' } },
       execute: ({ params, options }) => ({ params, options }),
     }));
-    await expect(index.dispatch('remind --note="hello world" actual body')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'remind --note="hello world" actual body' })).resolves.toMatchObject({
       status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'hello world' } },
     });
-    await expect(index.dispatch("remind -n='hello world' actual body")).resolves.toMatchObject({
+    await expect(index.dispatch({ input: "remind -n='hello world' actual body" })).resolves.toMatchObject({
       status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'hello world' } },
     });
-    await expect(index.dispatch('remind --note="say \\\"hi\\\"" actual body')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'remind --note="say \\\"hi\\\"" actual body' })).resolves.toMatchObject({
       status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'say "hi"' } },
     });
   });
@@ -1770,13 +1770,13 @@ describe('central command argument declarations', () => {
       options: { quiet: { type: 'boolean' } },
       execute: ({ params, options }) => ({ params, options }),
     }), 'files/$slug', { name: 'slug', type: 'text', rest: true });
-    await expect(index.dispatch('files hello world --quiet')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'files hello world --quiet' })).resolves.toMatchObject({
       status: 'executed', value: { params: { slug: ['hello world'] }, options: { quiet: true } },
     });
-    await expect(index.dispatch([
+    await expect(index.dispatch({ input: [
       { type: 'text', data: { text: 'files --quiet first item  ' } },
       { type: 'text', data: { text: '\n second "quoted"\n  line' } },
-    ])).resolves.toMatchObject({
+    ] })).resolves.toMatchObject({
       status: 'executed', value: { params: { slug: ['first item  ', '\n second "quoted"\n  line'] }, options: { quiet: true } },
     });
   });
@@ -1787,26 +1787,26 @@ describe('central command argument declarations', () => {
       options: { constructor: { type: 'string' }, toString: { type: 'string', default: 'default' }, valueOf: { type: 'string' } },
       execute: ({ params, options }) => ({ params, options, omitted: options.valueOf }),
     }));
-    await expect(index.dispatch('remind first second --constructor chosen')).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'remind first second --constructor chosen' })).resolves.toMatchObject({
       status: 'executed', value: { params: { constructor: 'first', toString: 'second' }, options: { constructor: 'chosen', toString: 'default' }, omitted: undefined },
     });
-    await expect(index.dispatch('remind first second --constructor one --constructor two')).resolves.toMatchObject({ status: 'invalid' });
+    await expect(index.dispatch({ input: 'remind first second --constructor one --constructor two' })).resolves.toMatchObject({ status: 'invalid' });
   });
 
   it('preserves structured arguments and quoted option-like values', async () => {
     const index = indexFor(defineCommand({ params: { who: { type: 'mention' }, caption: { type: 'string' } }, options: { count: { type: 'integer', default: 1 } }, execute: ({ params, options }) => ({ params, options }) }), 'upload');
-    await expect(index.dispatch([{ type: 'text', data: { text: 'upload --count 2 ' } }, { type: 'mention', data: { target: 'alice' } }, { type: 'text', data: { text: ' "--option-like text"' } }])).resolves.toMatchObject({ status: 'executed', value: { params: { who: 'alice', caption: '--option-like text' }, options: { count: 2 } } });
+    await expect(index.dispatch({ input: [{ type: 'text', data: { text: 'upload --count 2 ' } }, { type: 'mention', data: { target: 'alice' } }, { type: 'text', data: { text: ' "--option-like text"' } }] })).resolves.toMatchObject({ status: 'executed', value: { params: { who: 'alice', caption: '--option-like text' }, options: { count: 2 } } });
   });
 
   it('retains code whitespace and quotes when parsing text', async () => {
     const index = indexFor(defineCommand({ params: { code: { type: 'text' } }, options: { timeout: { type: 'integer', default: 30 } }, execute: ({ params }) => params.code }), 'run');
-    await expect(index.dispatch('run --timeout 5 if True:\n  print("hello world")')).resolves.toMatchObject({ value: 'if True:\n  print("hello world")' });
+    await expect(index.dispatch({ input: 'run --timeout 5 if True:\n  print("hello world")' })).resolves.toMatchObject({ value: 'if True:\n  print("hello world")' });
   });
 
   it.each(['remind', 'remind nope', 'remind 0', 'remind 3 --count nope', 'remind 3 --unknown', 'remind 3 --count 1 --count 2'])('reports invalid arguments without executing: %s', async (input) => {
     const execute = vi.fn();
     const index = indexFor(defineCommand({ params: { minutes: { type: 'integer', min: 1 } }, options: { count: { type: 'integer', default: 1 } }, execute }));
-    const result = await index.dispatch(input, undefined, undefined, '#');
+    const result = await index.dispatch({ input: input, commandPrefix: '#' });
     expect(result).toMatchObject({ matched: true, status: 'invalid', help: expect.stringContaining('#remind <minutes>') });
     expect(result.issues?.length).toBeGreaterThan(0);
     expect(execute).not.toHaveBeenCalled();
@@ -1814,21 +1814,21 @@ describe('central command argument declarations', () => {
 
   it('validates shortcut and session-dependent defaults with the same constraints', async () => {
     const index = indexFor(defineCommand({ params: { minutes: { type: 'integer', min: 1, default: () => 0 } }, shortcut: { later: { minutes: 0 } }, execute: () => 'should not run' }));
-    await expect(index.dispatch('later')).resolves.toMatchObject({ status: 'invalid' });
-    await expect(index.dispatch('remind')).resolves.toMatchObject({ status: 'invalid' });
+    await expect(index.dispatch({ input: 'later' })).resolves.toMatchObject({ status: 'invalid' });
+    await expect(index.dispatch({ input: 'remind' })).resolves.toMatchObject({ status: 'invalid' });
     const rest = indexFor(defineCommand({ params: { values: { type: 'integer', rest: true, default: () => 1 } }, execute: () => 'should not run' }));
-    await expect(rest.dispatch('remind')).resolves.toMatchObject({ status: 'invalid' });
+    await expect(rest.dispatch({ input: 'remind' })).resolves.toMatchObject({ status: 'invalid' });
   });
 
   it('does not replace invalid supplied parameters with defaults or treat them as omitted', async () => {
     const execute = vi.fn();
     const withDefault = indexFor(defineCommand({ params: { minutes: { type: 'integer', default: 1 } }, execute }));
     const optional = indexFor(defineCommand({ params: { minutes: { type: 'integer', optional: true } }, execute }));
-    await expect(withDefault.dispatch('remind nope')).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'minutes', code: 'expectedType', message: 'minutes：应为 integer' }] });
-    await expect(optional.dispatch('remind nope')).resolves.toMatchObject({ status: 'invalid' });
+    await expect(withDefault.dispatch({ input: 'remind nope' })).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'minutes', code: 'expectedType', message: 'minutes：应为 integer' }] });
+    await expect(optional.dispatch({ input: 'remind nope' })).resolves.toMatchObject({ status: 'invalid' });
     await expect(withDefault.execute('remind', ['nope'])).rejects.toThrow('minutes：应为 integer');
     expect(execute).not.toHaveBeenCalled();
-    await expect(withDefault.dispatch('remind')).resolves.toMatchObject({ status: 'executed' });
+    await expect(withDefault.dispatch({ input: 'remind' })).resolves.toMatchObject({ status: 'executed' });
   });
 
   it('generates prefix and namespace aware help without executing', async () => {
@@ -1838,7 +1838,7 @@ describe('central command argument declarations', () => {
     const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'remind', source: '/commands/remind/index.ts', definition });
     const snapshot = snapshotFor(owner, [slot]);
     const index = new CommandIndex([slot], { ...snapshot, config: new Map([[owner, { commandNamespace: 'daily' }]]) });
-    const result = await index.dispatch('daily remind --help', undefined, undefined, '#');
+    const result = await index.dispatch({ input: 'daily remind --help', commandPrefix: '#' });
     expect(String(result.value)).toContain('#daily remind <minutes> [--count <integer>]');
     expect(String(result.value)).toContain('默认值：1');
     expect(execute).not.toHaveBeenCalled();
@@ -1847,9 +1847,9 @@ describe('central command argument declarations', () => {
 
   it('leaves normal chat, token-prefix accidents and ambiguous dynamic input unmatched', async () => {
     const index = indexFor(defineCommand({ params: { value: { type: 'integer' } }, execute: () => 'ok' }), '$value', { name: 'value', type: 'integer' });
-    await expect(index.dispatch('hello everyone')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch({ input: 'hello everyone' })).resolves.toEqual({ matched: false, status: 'unmatched' });
     const staticIndex = indexFor(defineCommand({ params: { minutes: { type: 'integer' } }, execute: () => 'ok' }));
-    await expect(staticIndex.dispatch('reminder 3')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(staticIndex.dispatch({ input: 'reminder 3' })).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('requires an actual permission subject for restricted Host calls', async () => {
@@ -1858,10 +1858,10 @@ describe('central command argument declarations', () => {
     const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'secret', source: '/commands/secret/index.ts', definition: defineCommand({ permit: ['role(master)'], execute }) });
     const snapshot = snapshotFor(owner, [slot]);
     const index = new CommandIndex([slot], { ...snapshot, resources: new Map([[owner, new Map([[permissionHostToken.id, new PermissionHost()]])]]) });
-    await expect(index.dispatch('secret')).resolves.toMatchObject({ status: 'denied' });
+    await expect(index.dispatch({ input: 'secret' })).resolves.toMatchObject({ status: 'denied' });
     await expect(index.execute('secret')).rejects.toThrow('Permission denied');
     expect(execute).not.toHaveBeenCalled();
-    await expect(index.dispatch('secret', { sender: { id: 'operator', role: ['master'] } })).resolves.toMatchObject({ status: 'executed', value: 'ok' });
+    await expect(index.dispatch({ input: 'secret', source: { sender: { id: 'operator', role: ['master'] } } })).resolves.toMatchObject({ status: 'executed', value: 'ok' });
   });
 
   it('rejects impossible declarations before startup', () => {
@@ -1901,14 +1901,14 @@ describe('central command argument declarations', () => {
       defineCommand({ params: { name: { type: 'string' } }, shortcut: { later: { name: invalidDefault } }, execute }),
     ]) {
       const index = indexFor(definition);
-      await expect(index.dispatch(definition.shortcut ? 'later' : 'remind')).resolves.toMatchObject({ status: 'invalid' });
+      await expect(index.dispatch({ input: definition.shortcut ? 'later' : 'remind' })).resolves.toMatchObject({ status: 'invalid' });
     }
     expect(execute).not.toHaveBeenCalled();
   });
 
   it('keeps omitted optional fields absent and treats undefined defaults as omission', async () => {
     const index = indexFor(defineCommand({ params: { name: { type: 'string', optional: true, default: undefined } }, options: { count: { type: 'integer', default: undefined } }, execute: ({ params, options }) => ({ paramPresent: Object.hasOwn(params, 'name'), optionPresent: Object.hasOwn(options, 'count') }) }));
-    await expect(index.dispatch('remind')).resolves.toMatchObject({ status: 'executed', value: { paramPresent: false, optionPresent: false } });
+    await expect(index.dispatch({ input: 'remind' })).resolves.toMatchObject({ status: 'executed', value: { paramPresent: false, optionPresent: false } });
   });
 
   it('retains path-only parameter metadata in the command manifest', () => {
@@ -1920,7 +1920,7 @@ describe('central command argument declarations', () => {
     const execute = vi.fn();
     const index = indexFor(defineCommand({ params: { url: { type: 'string' } }, options, execute }), 'scan/$url', { name: 'url', type: 'string' });
     for (const input of ['scan --help', 'scan --help https://example.org', 'scan https://example.org --help']) {
-      await expect(index.dispatch(input, undefined, undefined, '#')).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('#scan <url>') });
+      await expect(index.dispatch({ input: input, commandPrefix: '#' })).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('#scan <url>') });
     }
     expect(execute).not.toHaveBeenCalled();
   });
@@ -1928,7 +1928,7 @@ describe('central command argument declarations', () => {
   it('allows quoted and terminated help tokens as literal positional values', async () => {
     const index = indexFor(defineCommand({ params: { value: { type: 'string' } }, execute: ({ params }) => params.value }));
     for (const input of ["remind '--help'", 'remind "--help"', 'remind -- --help']) {
-      await expect(index.dispatch(input)).resolves.toMatchObject({ status: 'executed', value: '--help' });
+      await expect(index.dispatch({ input: input })).resolves.toMatchObject({ status: 'executed', value: '--help' });
     }
   });
 
@@ -1936,7 +1936,7 @@ describe('central command argument declarations', () => {
     const execute = vi.fn(({ params, args }) => ({ url: params.url, args }));
     const index = indexFor(defineCommand({ params: { url: { type: 'string' } }, options, execute }), 'scan/$url', { name: 'url', type: 'string' });
     for (const input of ['scan "--help"', "scan '--help'", 'scan -- --help', 'scan -- "--help"']) {
-      await expect(index.dispatch(input)).resolves.toMatchObject({ status: 'executed', value: { url: '--help', args: [] } });
+      await expect(index.dispatch({ input: input })).resolves.toMatchObject({ status: 'executed', value: { url: '--help', args: [] } });
     }
     expect(execute).toHaveBeenCalledTimes(4);
   });
@@ -1944,24 +1944,24 @@ describe('central command argument declarations', () => {
   it('retains path-only directory argument capture without reinterpreting a consumed terminator', async () => {
     const execute = vi.fn(({ params, args }) => ({ url: params.url, args }));
     const index = indexFor(defineCommand({ execute }), 'scan/$url', { name: 'url', type: 'string' });
-    await expect(index.dispatch('scan -- --help')).resolves.toMatchObject({ status: 'executed', value: { url: '--', args: ['--help'] } });
+    await expect(index.dispatch({ input: 'scan -- --help' })).resolves.toMatchObject({ status: 'executed', value: { url: '--', args: ['--help'] } });
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it.each([undefined, {}])('preserves undeclared typed directory fields before other declared parameters with options %j', async (options) => {
     const index = indexFor(defineCommand({ params: { note: { type: 'string', default: 'fallback' } }, options, execute: ({ params }) => params }), 'foo/$id', { name: 'id', type: 'integer' });
-    await expect(index.dispatch('foo 123')).resolves.toMatchObject({ status: 'executed', value: { id: 123, note: 'fallback' } });
-    await expect(index.dispatch('foo 123 actual')).resolves.toMatchObject({ status: 'executed', value: { id: 123, note: 'actual' } });
+    await expect(index.dispatch({ input: 'foo 123' })).resolves.toMatchObject({ status: 'executed', value: { id: 123, note: 'fallback' } });
+    await expect(index.dispatch({ input: 'foo 123 actual' })).resolves.toMatchObject({ status: 'executed', value: { id: 123, note: 'actual' } });
   });
 
   it.each([7, () => 8])('preserves static and dynamic undeclared directory defaults %j', async (defaultValue) => {
     const index = indexFor(defineCommand({ params: { note: { type: 'string', default: 'fallback' } }, execute: ({ params }) => params }), 'foo/$id', { name: 'id', type: 'integer', optional: true, defaultValue });
-    await expect(index.dispatch('foo')).resolves.toMatchObject({ status: 'executed', value: { id: typeof defaultValue === 'function' ? 8 : 7, note: 'fallback' } });
+    await expect(index.dispatch({ input: 'foo' })).resolves.toMatchObject({ status: 'executed', value: { id: typeof defaultValue === 'function' ? 8 : 7, note: 'fallback' } });
   });
 
   it('preserves undeclared path values while parsing declared options and subsequent parameters', async () => {
     const index = indexFor(defineCommand({ params: { note: { type: 'string' } }, options: { quiet: { type: 'boolean' } }, execute: ({ params, options }) => ({ params, options }) }), 'foo/$id', { name: 'id', type: 'integer' });
-    await expect(index.dispatch('foo 123 --quiet actual')).resolves.toMatchObject({ status: 'executed', value: { params: { id: 123, note: 'actual' }, options: { quiet: true } } });
+    await expect(index.dispatch({ input: 'foo 123 --quiet actual' })).resolves.toMatchObject({ status: 'executed', value: { params: { id: 123, note: 'actual' }, options: { quiet: true } } });
   });
 
   it('rejects shortcuts that cannot supply a required option', () => {
@@ -1970,22 +1970,22 @@ describe('central command argument declarations', () => {
 
   it('runs a shortcut with defaulted required options', async () => {
     const index = indexFor(defineCommand({ options: { count: { type: 'integer', optional: false, default: 2 } }, shortcut: { later: {} }, execute: ({ options }) => options.count }));
-    await expect(index.dispatch('later')).resolves.toMatchObject({ status: 'executed', value: 2 });
+    await expect(index.dispatch({ input: 'later' })).resolves.toMatchObject({ status: 'executed', value: 2 });
   });
 
   it('leaves option-like tokens to commands without argument declarations', async () => {
     const index = indexFor(defineCommand({ execute: ({ args }) => args }));
-    await expect(index.dispatch('remind --bogus')).resolves.toMatchObject({ status: 'executed', value: ['--bogus'] });
+    await expect(index.dispatch({ input: 'remind --bogus' })).resolves.toMatchObject({ status: 'executed', value: ['--bogus'] });
   });
 
   it('retains text whitespace before a structured positional argument', async () => {
     const index = indexFor(defineCommand({ params: { caption: { type: 'text' }, who: { type: 'mention' } }, execute: ({ params }) => params }));
-    await expect(index.dispatch([{ type: 'text', data: { text: 'remind hello  \n' } }, { type: 'mention', data: { target: 'alice' } }])).resolves.toMatchObject({ status: 'executed', value: { caption: 'hello  \n', who: 'alice' } });
+    await expect(index.dispatch({ input: [{ type: 'text', data: { text: 'remind hello  \n' } }, { type: 'mention', data: { target: 'alice' } }] })).resolves.toMatchObject({ status: 'executed', value: { caption: 'hello  \n', who: 'alice' } });
   });
 
   it('distinguishes long option names from short aliases', async () => {
     const index = indexFor(defineCommand({ options: { c: { type: 'integer' }, count: { type: 'integer', alias: 'c' } }, execute: ({ options }) => options }));
-    await expect(index.dispatch('remind --c 2 -c 3')).resolves.toMatchObject({ status: 'executed', value: { c: 2, count: 3 } });
+    await expect(index.dispatch({ input: 'remind --c 2 -c 3' })).resolves.toMatchObject({ status: 'executed', value: { c: 2, count: 3 } });
   });
 });
 
@@ -2003,8 +2003,8 @@ it('resolves directory-bound dynamic defaults from the actual session and valida
   const defaultValue = (session: { sender?: { id: string } }) => session.sender?.id ?? 'anonymous';
   const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'profile/$name', source: '/commands/profile/[[name]]/index.ts', definition: { ...defineCommand({ params: { name: { type: 'string', default: defaultValue } }, execute: ({ params }) => params.name }), $parameter: { name: 'name', type: 'string', optional: true, defaultValue } as const } });
   const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
-  await expect(index.dispatch('profile', { content: 'profile', sender: { id: 'alice' }, conversation: { endpoint: { adapter: 'test', id: 'ep' }, kind: 'private', id: 'room' } })).resolves.toMatchObject({ status: 'executed', value: 'alice' });
-  await expect(index.dispatch('profile')).resolves.toMatchObject({ status: 'executed', value: 'anonymous' });
+  await expect(index.dispatch({ input: 'profile', source: { content: 'profile', sender: { id: 'alice' }, conversation: { endpoint: { adapter: 'test', id: 'ep' }, kind: 'private', id: 'room' } } })).resolves.toMatchObject({ status: 'executed', value: 'alice' });
+  await expect(index.dispatch({ input: 'profile' })).resolves.toMatchObject({ status: 'executed', value: 'anonymous' });
 });
 
 
@@ -2012,6 +2012,6 @@ it('accepts native numeric face ids and structured catch-all media values', asyn
   const owner = rootPluginId();
   const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'native', source: '/commands/native/index.ts', definition: defineCommand({ params: { face: { type: 'face' }, images: { type: 'image', rest: true } }, execute: ({ params }) => params }) });
   const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
-  const result = await index.dispatch([{ type: 'text', data: { text: 'native ' } }, { type: 'face', data: { id: 1 } }, { type: 'image', data: { media: { kind: 'url', url: 'https://example.test/image.png' } } }]);
+  const result = await index.dispatch({ input: [{ type: 'text', data: { text: 'native ' } }, { type: 'face', data: { id: 1 } }, { type: 'image', data: { media: { kind: 'url', url: 'https://example.test/image.png' } } }] });
   expect(result).toMatchObject({ status: 'executed', value: { face: 1, images: [{ kind: 'url', url: 'https://example.test/image.png' }] } });
 });

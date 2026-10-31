@@ -20,6 +20,7 @@ export {
 export {
   CONSOLE_TOOL_APPROVAL_OPERATOR,
   HostToolApprovals,
+  createHostToolApprovalConsoleRpc,
   TOOL_APPROVALS_READ_PERMISSION,
   TOOL_APPROVALS_RESOLVE_PERMISSION,
   composeHostConsoleRpc,

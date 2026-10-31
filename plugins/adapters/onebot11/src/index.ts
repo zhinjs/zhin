@@ -40,10 +40,10 @@ export {
 export type { OneBot11WsSocket, OneBot11WsCreateOptions } from './ws-types.js';
 
 export {
-  callOneBot11WsAction,
+  createOneBot11Rpc,
+  type OneBot11Rpc,
+  type OneBot11RpcOptions,
   decodeWsPayload,
-  handleOneBot11WsMessage,
-  rejectAllPending,
 } from './ws-transport.js';
 
 export { verifyOneBotAccessToken } from './wss-auth.js';

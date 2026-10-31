@@ -3,7 +3,6 @@ import {
   channelKey,
   createMemoryGameServices,
   plainTextFromSendContent,
-  smokeGameMessage,
 } from '@zhin.js/game-kit';
 import { processAnswerText, startGame } from '../src/game-flow.js';
 import { getRiddleById } from '../src/engine.js';
@@ -31,7 +30,7 @@ describe('word-riddle game-flow (plugin=null)', () => {
     const message = smokeGameMessage();
     await startGame(services, message as never, 'char');
     const ch = channelKey(message as never);
-    const before = (await services.getActiveForUser(ch, message.$sender.id))!;
+    const before = (await services.getActiveForUser(ch, message.sender.id))!;
 
     const reply = await processAnswerText(services, message as never, '好的');
 
@@ -45,7 +44,7 @@ describe('word-riddle game-flow (plugin=null)', () => {
     const message = smokeGameMessage();
     await startGame(services, message as never, 'char');
     const ch = channelKey(message as never);
-    const before = (await services.getActiveForUser(ch, message.$sender.id))!;
+    const before = (await services.getActiveForUser(ch, message.sender.id))!;
     const entry = getRiddleById(currentRiddleId(before)!)!;
     const wrongChar = entry.answer === '龘' ? '错' : '龘';
 
@@ -56,3 +55,5 @@ describe('word-riddle game-flow (plugin=null)', () => {
     expect(after.wrong_count).toBe(1);
   });
 });
+
+function smokeGameMessage() { return { locale: 'zh-CN' as const, target: { endpoint: { adapter: 'synthetic', id: 'canonical-test' }, kind: 'private' as const, id: 'alice' }, sender: { id: 'alice', name: 'Alice' } }; }

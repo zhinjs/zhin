@@ -7,14 +7,17 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  createEndpointOperation,
   type EndpointFriend,
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointManagementRequest,
+  type EndpointOperationOptions,
 } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
-import { getUpdates, notifyStart, notifyStop, sendTyping } from './ilink-api.js';
+import { getUpdates, notifyStart, notifyStop, sendTyping, type WeixinApiOptions } from './ilink-api.js';
 import { IlinkClientMetadata } from './ilink-meta.js';
 import {
   type WeixinIlinkCredentials,
@@ -29,7 +32,7 @@ import {
   IlinkSessionGuard,
   SESSION_EXPIRED_ERRCODE,
 } from './ilink-session-guard.js';
-import { downloadMediaFromItem } from './media-download.js';
+import { downloadMediaFromItem, type SaveMediaRequest } from './media-download.js';
 import { sendMessageWeixin } from './weixin-send.js';
 import { materializeOutboundMedia } from './outbound-media.js';
 import { MessageItemType, type WeixinMessage } from './ilink-types.js';
@@ -81,6 +84,14 @@ export interface WeixinIlinkEndpointOptions {
   readonly sessionGuard?: IlinkSessionGuard;
 }
 
+interface IlinkRecipientRequest {
+  readonly to: string;
+  readonly signal?: AbortSignal;
+}
+interface IlinkTextRequest extends IlinkRecipientRequest { readonly text: string }
+interface IlinkMediaRequest extends IlinkRecipientRequest { readonly filePath: string; readonly text?: string }
+interface IlinkTypingRequest { readonly userId: string; readonly status: number; readonly signal?: AbortSignal }
+
 export class WeixinIlinkClient extends EventEmitter {
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
@@ -110,12 +121,7 @@ export class WeixinIlinkClient extends EventEmitter {
   #disconnecting?: Promise<void>;
   protected readonly endpointManagement: EndpointManagement = createWeixinIlinkEndpointManagement(() => this);
   protected readonly endpointControl: EndpointControl = Object.freeze<EndpointControl>({
-    typing: async (conversation, active) => {
-      await this.sendTyping(
-        conversation.id,
-        active === false ? 2 : 1,
-      );
-    },
+    typing: ({ conversation, active, signal }) => this.sendTyping(conversation.id, active === false ? 2 : 1, { signal }).then(() => undefined),
   });
 
   protected configName(): string { return this.#options.config.id; }
@@ -184,49 +190,49 @@ export class WeixinIlinkClient extends EventEmitter {
     return this.#contextTokens.userIds();
   }
 
-  async sendText(to: string, text: string): Promise<{ messageId: string }> {
-    const contextToken = this.contextToken(to);
-    if (!contextToken) throw new Error(`missing context_token for peer ${to}`);
-    return this.#sendText({
-      to,
-      text,
-      opts: {
-        baseUrl: this.apiBaseUrl,
-        metadata: this.#metadata,
-        token: this.credentials.botToken,
-        contextToken,
-      },
-    });
+  sendText(to: string, text: string, options: EndpointOperationOptions = {}): Promise<{ messageId: string }> {
+    return this.#sendTextRequest({ to, text, signal: options.signal });
   }
 
-  async sendMedia(to: string, filePath: string, text = ''): Promise<{ messageId: string }> {
-    const contextToken = this.contextToken(to);
-    if (!contextToken) throw new Error(`missing context_token for peer ${to}`);
-    return sendWeixinMediaFile({
-      filePath,
-      to,
-      text,
-      opts: {
-        baseUrl: this.apiBaseUrl,
-        metadata: this.#metadata,
-        token: this.credentials.botToken,
-        contextToken,
-      },
-      cdnBaseUrl: this.cdnBaseUrl,
-    });
+  sendMedia(to: string, filePath: string, text = ''): Promise<{ messageId: string }> {
+    return this.#sendMediaRequest({ to, filePath, text });
   }
 
-  async sendTyping(userId: string, status: number): Promise<boolean> {
+  sendTyping(userId: string, status: number, options: EndpointOperationOptions = {}): Promise<boolean> {
+    return this.#sendTypingRequest({ userId, status, signal: options.signal });
+  }
+
+  #outboundOptions({ to, signal }: IlinkRecipientRequest): WeixinApiOptions & { contextToken: string } {
+    const contextToken = this.contextToken(to);
+    if (!contextToken) throw new Error(`missing context_token for peer ${to}`);
+    const signals = [this.executionSignal, signal].filter((item): item is AbortSignal => !!item);
+    const abortSignal = signals.length ? AbortSignal.any(signals) : undefined;
+    abortSignal?.throwIfAborted();
+    return { baseUrl: this.apiBaseUrl, metadata: this.#metadata, token: this.credentials.botToken,
+      contextToken, abortSignal };
+  }
+
+  #sendTextRequest(request: IlinkTextRequest): Promise<{ messageId: string }> {
+    return this.#sendText({ to: request.to, text: request.text, opts: this.#outboundOptions(request) });
+  }
+
+  #sendMediaRequest(request: IlinkMediaRequest): Promise<{ messageId: string }> {
+    return sendWeixinMediaFile({ filePath: request.filePath, to: request.to, text: request.text ?? '',
+      opts: this.#outboundOptions(request), cdnBaseUrl: this.cdnBaseUrl });
+  }
+
+  async #sendTypingRequest({ userId, status, signal }: IlinkTypingRequest): Promise<boolean> {
     const manager = this.#configManager;
     if (!this.authenticated || !manager) return false;
-    const cfg = await manager.getForUser(userId, this.contextToken(userId));
+    const signals = [this.executionSignal, signal].filter((item): item is AbortSignal => !!item);
+    const abortSignal = signals.length ? AbortSignal.any(signals) : undefined;
+    const operation = createEndpointOperation({ signal: abortSignal });
+    // Config lookup is shared by callers; cancel this waiter without cancelling the shared cache owner.
+    const cfg = await operation.prepare(() => manager.getForUser(userId, this.contextToken(userId)));
     if (!cfg.typingTicket) return false;
-    await sendTyping({
-      baseUrl: this.apiBaseUrl,
-      metadata: this.#metadata,
-      token: this.credentials.botToken,
-      body: { ilink_user_id: userId, typing_ticket: cfg.typingTicket, status },
-    });
+    await operation.run(() => sendTyping({ baseUrl: this.apiBaseUrl, metadata: this.#metadata,
+      token: this.credentials.botToken, abortSignal,
+      body: { ilink_user_id: userId, typing_ticket: cfg.typingTicket!, status } }));
     return true;
   }
 
@@ -262,6 +268,7 @@ export class WeixinIlinkClient extends EventEmitter {
           baseUrl: this.apiBaseUrl,
           metadata: this.#metadata,
           token: this.#creds.botToken,
+          abortSignal: this.executionSignal,
         },
         (msg) => this.#logger.debug(msg),
       );
@@ -329,7 +336,7 @@ export class WeixinIlinkClient extends EventEmitter {
     }));
   }
 
-  protected async sendPayload({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  protected async sendPayload({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     if (!this.#creds?.botToken) {
       throw new Error('weixin-ilink bot not authenticated');
     }
@@ -348,7 +355,8 @@ export class WeixinIlinkClient extends EventEmitter {
 
     const outboundDir = this.#state.mediaDirectory('outbound');
     const wire = formatOutboundSegments(payload);
-    const materialized = await materializeOutboundMedia(wire, outboundDir);
+    const operation = createEndpointOperation({ signal });
+    const materialized = await operation.prepare(() => materializeOutboundMedia(wire, outboundDir, signal));
     const segments = Array.isArray(materialized) ? materialized : [materialized];
     let lastId = '';
     let pendingText = '';
@@ -369,11 +377,11 @@ export class WeixinIlinkClient extends EventEmitter {
       if (filePath && fs.existsSync(filePath)) {
         // 微信限制：单条消息不能图文混排 → 先单独发文本，再发纯媒体
         if (pendingText.trim()) {
-          const textResult = await this.sendText(target, pendingText);
+          const textResult = await operation.run(() => this.sendText(target, pendingText, { signal }));
           pendingText = '';
           lastId = textResult.messageId;
         }
-        const result = await this.sendMedia(target, filePath);
+        const result = await operation.run(() => this.#sendMediaRequest({ to: target, filePath, signal }));
         lastId = result.messageId;
         continue;
       }
@@ -388,7 +396,7 @@ export class WeixinIlinkClient extends EventEmitter {
     }
 
     if (pendingText.trim()) {
-      const result = await this.sendText(target, pendingText);
+      const result = await operation.run(() => this.sendText(target, pendingText, { signal }));
       lastId = result.messageId;
     }
 
@@ -557,21 +565,15 @@ export class WeixinIlinkClient extends EventEmitter {
 
     return downloadMediaFromItem(mediaItem, {
       cdnBaseUrl: this.cdnBaseUrl, signal: this.executionSignal,
-      saveMedia: (buffer, contentType, subdir, maxBytes, originalFilename) =>
-        this.#saveInboundMedia(buffer, contentType, subdir, maxBytes, originalFilename),
+      saveMedia: request => this.#saveInboundMedia(request),
       log: (msg) => this.#logger.debug(msg),
       errLog: (msg) => this.#logger.warn(msg),
       label: `inbound:${full.from_user_id ?? 'unknown'}`,
     });
   }
 
-  async #saveInboundMedia(
-    buffer: Buffer,
-    contentType?: string,
-    subdir = 'inbound',
-    maxBytes = WEIXIN_MEDIA_MAX_BYTES,
-    originalFilename?: string,
-  ): Promise<{ path: string }> {
+  async #saveInboundMedia({ buffer, contentType, subdir = 'inbound', maxBytes = WEIXIN_MEDIA_MAX_BYTES,
+    originalFilename }: SaveMediaRequest): Promise<{ path: string }> {
     if (buffer.length > maxBytes) {
       throw new Error(`media exceeds max size ${maxBytes}`);
     }
@@ -643,12 +645,12 @@ function createWeixinIlinkEndpointManagement(
     // 个人微信无群概念（listGroups/listGroupMembers 不接），也没有通讯录/资料接口。
     // "好友"只能从会话推导：凡持有 context_token 的对端（来过消息，含重启后从磁盘恢复的）
     // 即为可达私聊对端；昵称不可得，用 user_id 占位并在 remark 注明来源。
-    async listFriends(): Promise<readonly EndpointFriend[]> {
-      return requireClient().reachableUserIds().map((userId) => ({
+    async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {
+      return createEndpointOperation(request).run(() => requireClient().reachableUserIds().map((userId) => ({
         user_id: userId,
         nickname: userId,
         remark: 'ilink: 从会话 context_token 推导，非通讯录',
-      }));
+      })));
     },
   });
 }

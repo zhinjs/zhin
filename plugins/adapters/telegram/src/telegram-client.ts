@@ -32,13 +32,15 @@ export interface TelegramClientApi {
   sendStickerMessage(chatId: number, sticker: string): Promise<{ message_id: number }>;
   setChatPermissionsAll(chatId: number, permissions: Record<string, boolean | undefined>): Promise<boolean>;
   createInviteLink(chatId: number): Promise<string>;
-  sendPoll(
-    chatId: number,
-    question: string,
-    options: string[],
-    isAnonymous?: boolean,
-    allowsMultipleAnswers?: boolean,
-  ): Promise<{ message_id: number }>;
+  sendPoll(request: TelegramPollRequest): Promise<{ message_id: number }>;
+}
+
+export interface TelegramPollRequest {
+  readonly chatId: number;
+  readonly question: string;
+  readonly options: string[];
+  readonly isAnonymous?: boolean;
+  readonly allowsMultipleAnswers?: boolean;
 }
 
 interface TelegramApiOk<T> {
@@ -51,6 +53,19 @@ interface TelegramApiErr {
   readonly description?: string;
   readonly error_code?: number;
   readonly parameters?: { readonly retry_after?: number };
+}
+
+interface TelegramHttpRequest {
+  readonly method: string;
+  readonly init: NonNullable<Parameters<TelegramFetch>[1]>;
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
+}
+interface TelegramDeadlineOperation<T> {
+  readonly method: string;
+  readonly run: (signal: AbortSignal) => Promise<T>;
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
 }
 
 /** Owns Telegram Bot API transport, cancellation, deadlines and native API operations. */
@@ -73,13 +88,11 @@ export class TelegramClient implements TelegramClientApi {
     params: Record<string, unknown> = {},
     signal?: AbortSignal,
   ): Promise<T> {
-    return this.#requestApi<T>(method, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    }, signal, method === 'getUpdates'
+    return this.#requestApi<T>({ method, init: {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params),
+    }, signal, timeoutMs: method === 'getUpdates'
       ? Math.max(this.#options.requestTimeoutMs ?? DEFAULT_API_TIMEOUT_MS, (Number(params.timeout) || 0) * 1_000 + 15_000)
-      : undefined);
+      : undefined });
   }
 
   /** multipart/form-data 变体（attach:// 媒体上传；Content-Type 边界由 FormData 自带）。 */
@@ -88,30 +101,19 @@ export class TelegramClient implements TelegramClientApi {
     form: FormData,
     signal?: AbortSignal,
   ): Promise<T> {
-    return this.#requestApi<T>(method, {
-      method: 'POST',
-      body: form,
-    }, signal);
+    return this.#requestApi<T>({ method, init: { method: 'POST', body: form }, signal });
   }
 
-  async #requestApi<T>(
-    method: string,
-    init: NonNullable<Parameters<TelegramFetch>[1]>,
-    signal?: AbortSignal,
-    timeoutMs = this.#options.requestTimeoutMs ?? DEFAULT_API_TIMEOUT_MS,
-  ): Promise<T> {
-    return this.withRequestDeadline(method, async (requestSignal) => {
+  async #requestApi<T>({ method, init, signal, timeoutMs }: TelegramHttpRequest): Promise<T> {
+    return this.withRequestDeadline({ method, run: async requestSignal => {
       const response = await this.fetchTransport(botApiUrl(this.#options.config, method), { ...init, signal: requestSignal });
       return this.#parseApiResponse<T>(method, response);
-    }, signal, timeoutMs);
+    }, signal, timeoutMs });
   }
 
-  protected async withRequestDeadline<T>(
-    method: string,
-    requestOperation: (signal: AbortSignal) => Promise<T>,
-    signal?: AbortSignal,
+  protected async withRequestDeadline<T>({ method, run, signal,
     timeoutMs = this.#options.requestTimeoutMs ?? DEFAULT_API_TIMEOUT_MS,
-  ): Promise<T> {
+  }: TelegramDeadlineOperation<T>): Promise<T> {
     const abort = new AbortController();
     let issued = false;
     const sources = [...new Set([signal, this.requestSignal, this.#apiAbort.signal].filter((item): item is AbortSignal => !!item))];
@@ -135,7 +137,7 @@ export class TelegramClient implements TelegramClientApi {
       const request = Promise.resolve().then(async () => {
         abort.signal.throwIfAborted();
         issued = true;
-        return requestOperation(abort.signal);
+        return run(abort.signal);
       });
       return await Promise.race([request, cancelled]);
     } catch (error) {
@@ -235,13 +237,8 @@ export class TelegramClient implements TelegramClientApi {
     return link.invite_link;
   }
 
-  async sendPoll(
-    chatId: number,
-    question: string,
-    options: string[],
-    isAnonymous = true,
-    allowsMultipleAnswers = false,
-  ): Promise<{ message_id: number }> {
+  async sendPoll({ chatId, question, options, isAnonymous = true,
+    allowsMultipleAnswers = false }: TelegramPollRequest): Promise<{ message_id: number }> {
     return this.callApi<{ message_id: number }>('sendPoll', {
       chat_id: chatId,
       question,

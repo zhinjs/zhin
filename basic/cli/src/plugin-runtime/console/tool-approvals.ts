@@ -6,7 +6,10 @@ import {
   type PluginConsoleRpc,
   type PluginConsoleRpcInput,
   type PluginConsoleRpcJson,
+  type SnapshotReader,
+  type SnapshotLease,
 } from '@zhin.js/plugin-runtime';
+import { agentToolApprovalQueueToken } from './tool-approval-resource.js';
 
 /**
  * Console approval cards for the dangerous-tool hard gate (ADR 0036 §3, slice E).
@@ -18,7 +21,7 @@ import {
  * - settle: `ops:approve` (ADR 0037 §3, slice E: the approver permission, shared with announcement
  *   approval) **or** the older `tool_approvals:resolve`, kept for backward compatibility so existing
  *   tokens keep working. Either one is enough (`anyOfPermissions`); the full token passes as before.
- * The Agent owns the queue for its generation; the newest installed Agent binds it here.
+ * The dispatcher constructs this facade from its already leased Agent Root.
  */
 
 export const TOOL_APPROVALS_READ_PERMISSION = 'tool_approvals:read';
@@ -32,6 +35,17 @@ export const OPS_APPROVE_PERMISSION = 'ops:approve';
 export const CONSOLE_TOOL_APPROVAL_OPERATOR = 'console';
 
 const RECENT_LIMIT = 50;
+
+/** Trusted composition input; the caller already owns this exact request lease. */
+export interface HostToolApprovalRpcInput {
+  readonly snapshots: Pick<SnapshotReader, 'rootResource'>;
+  readonly lease: SnapshotLease;
+}
+
+export function createHostToolApprovalConsoleRpc(input: HostToolApprovalRpcInput): PluginConsoleRpc {
+  if (!input.snapshots.rootResource) throw new PluginConsoleRpcError('unavailable', 'Root resource resolution is unavailable');
+  return new HostToolApprovals(input.snapshots.rootResource(input.lease, agentToolApprovalQueueToken)).consoleRpc;
+}
 
 export interface ToolApprovalCard {
   readonly id: string;
@@ -50,7 +64,7 @@ export interface ToolApprovalCard {
 }
 
 export class HostToolApprovals {
-  #queue: ToolApprovalQueue | undefined;
+  constructor(private readonly queue?: ToolApprovalQueue) {}
 
   readonly consoleRpc: PluginConsoleRpc = definePluginConsoleRpc({
     queries: {
@@ -67,18 +81,10 @@ export class HostToolApprovals {
     },
   });
 
-  /** Binds the current Agent's queue; returns an unbind that only clears this binding. */
-  bind(queue: ToolApprovalQueue): () => void {
-    this.#queue = queue;
-    return () => {
-      if (this.#queue === queue) this.#queue = undefined;
-    };
-  }
-
   snapshot(): { readonly available: boolean; readonly pending: readonly ToolApprovalCard[]; readonly recent: readonly ToolApprovalCard[] } {
-    const entries = this.#queue?.list() ?? [];
+    const entries = this.queue?.list() ?? [];
     return {
-      available: this.#queue !== undefined,
+      available: this.queue !== undefined,
       pending: entries.filter((entry) => entry.status === 'pending').map(toCard),
       recent: entries.filter((entry) => entry.status !== 'pending').slice(0, RECENT_LIMIT).map(toCard),
     };
@@ -90,7 +96,7 @@ export class HostToolApprovals {
     if (!id || (decision !== 'approve' && decision !== 'deny')) {
       throw new PluginConsoleRpcError('invalid_input', 'id and decision (approve | deny) are required');
     }
-    const queue = this.#queue;
+    const queue = this.queue;
     if (!queue) throw new PluginConsoleRpcError('unavailable', 'The Agent is not running');
     const current = queue.get(id);
     if (!current) throw new PluginConsoleRpcError('not_found', 'Approval card not found');

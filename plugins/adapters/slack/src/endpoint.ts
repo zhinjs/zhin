@@ -8,13 +8,19 @@ import { createSlackStreamAgent } from './stream-proxy.js';
 import { slackSocketConnectionError } from './socket-error.js';
 import { slackWebClientOptions, slackDeliveryError } from './web-client.js';
 import {
-  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
+  createEndpointSpecification,
+  endpointSpec,
+  type Endpoint,
+  type EndpointSpecification,
   createEndpointLifecycle,
   type EndpointFriend,
   type EndpointGroup,
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointManagementRequest,
+  createEndpointOperation,
+  type EndpointGroupRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -39,7 +45,7 @@ import {
 import { formatSlackMessageRef, parseSlackMessageRef } from './slack-message-ref.js';
 import { normalizeSlackReactionName } from './slack-reaction.js';
 import { postSlackEphemeral } from './slack-response-url.js';
-import { editSlackContent, sendSlackContent, type SlackChatClient } from './slack-outbound.js';
+import { editSlackContent, sendSlackContent, type SlackChatClient, type SlackEditRequest } from './slack-outbound.js';
 import { registerSlackWebhookRoutes, type SlackWebhookHandler } from './webhook.js';
 import { receiveSlackSideEvent } from './side-event-dispatch.js';
 
@@ -82,28 +88,28 @@ export class SlackEndpoint extends WebClient implements Endpoint, SlackWebhookHa
   #started = false;
   readonly #management: EndpointManagement = createSlackEndpointManagement(() => this);
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
-    recall: async (message) => {
+    recall: async ({ message, signal }) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
       if (!ref || !this.#started) return;
-      await this.chat.delete(ref);
+      await createEndpointOperation({ signal }).run(() => this.chat.delete(ref));
     },
-    edit: async (message, content) => {
+    edit: async ({ message, content, signal }) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
       if (!ref) return null;
-      await this.#editMessage(ref.channel, ref.ts, content);
+      await this.#editMessage({ channel: ref.channel, ts: ref.ts, content, signal });
       return message.id;
     },
-    addReaction: async (message, emoji) => {
+    addReaction: async ({ message, emoji, signal }) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
       if (!ref) return null;
       const reaction = normalizeSlackReactionName(emoji);
-      await this.#addReaction(ref.channel, ref.ts, reaction);
+      await this.#addReaction({ channel: ref.channel, timestamp: ref.ts, name: reaction, signal });
       return reaction;
     },
-    removeReaction: async (message, reactionId) => {
+    removeReaction: async ({ message, reactionId, signal }) => {
       const ref = this.resolveMessageRef(message.id, message.conversation.id);
       if (!ref) return;
-      await this.#removeReaction(ref.channel, ref.ts, reactionId);
+      await this.#removeReaction({ channel: ref.channel, timestamp: ref.ts, name: reactionId, signal });
     },
   });
 
@@ -188,19 +194,14 @@ export class SlackEndpoint extends WebClient implements Endpoint, SlackWebhookHa
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  async #sendFramework({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #sendFramework({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     if (!this.#started) throw new Error('Slack client not connected');
     const channel = conversation.id;
     const threadTs = conversation.threadId;
     try {
-    const result = await sendSlackContent(
-      this,
-      payload,
-      { channel, threadTs },
-      this.#logger,
-    );
-    this.trackMessageChannel(result.ts, channel);
-    return formatSlackMessageRef(channel, result.ts);
+      const result = await sendSlackContent(this, { content: payload, channel, threadTs, logger: this.#logger, signal });
+      this.trackMessageChannel(result.ts, channel);
+      return formatSlackMessageRef(channel, result.ts);
     } catch (error) { throw slackDeliveryError(error); }
   }
 
@@ -367,15 +368,15 @@ export class SlackEndpoint extends WebClient implements Endpoint, SlackWebhookHa
     await this.chat.delete({ channel: ref.channel, ts: ref.ts });
   }
 
-  async #editMessage(channel: string, messageTs: string, content: unknown): Promise<void> {
+  async #editMessage(request: SlackEditRequest): Promise<void> {
     if (!this.#started) throw new Error('Slack client not connected');
-    await editSlackContent(this, channel, messageTs, content);
+    await editSlackContent(this, request);
   }
 
-  async #addReaction(channel: string, timestamp: string, name: string): Promise<void> {
+  async #addReaction({ channel, timestamp, name, signal }: SlackReactionRequest): Promise<void> {
     const reaction = normalizeSlackReactionName(name);
     try {
-      await this.reactions.add({ channel, timestamp, name: reaction });
+      await createEndpointOperation({ signal }).run(() => this.reactions.add({ channel, timestamp, name: reaction }));
     } catch (error) {
       const code = (error as { data?: { error?: string } })?.data?.error;
       if (code === 'already_reacted') return;
@@ -383,10 +384,10 @@ export class SlackEndpoint extends WebClient implements Endpoint, SlackWebhookHa
     }
   }
 
-  async #removeReaction(channel: string, timestamp: string, name: string): Promise<void> {
+  async #removeReaction({ channel, timestamp, name, signal }: SlackReactionRequest): Promise<void> {
     const reaction = normalizeSlackReactionName(name);
     try {
-      await this.reactions.remove({ channel, timestamp, name: reaction });
+      await createEndpointOperation({ signal }).run(() => this.reactions.remove({ channel, timestamp, name: reaction }));
     } catch (error) {
       const code = (error as { data?: { error?: string } })?.data?.error;
       if (code === 'no_reaction') return;
@@ -482,17 +483,18 @@ function createSlackEndpointManagement(
   return Object.freeze<EndpointManagement>({
     // Slack 无"群"概念：public channel 归一为 group（channel 语义由 listChannels 之外省略，
     // Slack channel 本身就是会话载体，避免同一批数据在两个列表里重复）。
-    async listGroups(): Promise<readonly EndpointGroup[]> {
+    async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
+      const operation = createEndpointOperation(request);
       const client = requireClient();
       const groups: EndpointGroup[] = [];
       let cursor: string | undefined;
       do {
-        const page = await client.conversations.list({
+        const page = await operation.run(() => client.conversations.list({
           types: 'public_channel',
           exclude_archived: true,
           limit: SLACK_LIST_PAGE_SIZE,
           ...(cursor ? { cursor } : {}),
-        });
+        }));
         for (const value of page.channels ?? []) {
           const channel = asRecord(value);
           const id = typeof channel.id === 'string' ? channel.id : '';
@@ -504,15 +506,16 @@ function createSlackEndpointManagement(
       return groups;
     },
     // Slack 无"好友"概念：workspace 成员归一为 friend；nickname 取 real_name 回退 name。
-    async listFriends(): Promise<readonly EndpointFriend[]> {
+    async listFriends(request: EndpointManagementRequest = {}): Promise<readonly EndpointFriend[]> {
+      const operation = createEndpointOperation(request);
       const client = requireClient();
       const friends: EndpointFriend[] = [];
       let cursor: string | undefined;
       do {
-        const page = await client.users.list({
+        const page = await operation.run(() => client.users.list({
           limit: SLACK_LIST_PAGE_SIZE,
           ...(cursor ? { cursor } : {}),
-        });
+        }));
         for (const value of page.members ?? []) {
           const user = asRecord(value);
           const id = typeof user.id === 'string' ? user.id : '';
@@ -529,9 +532,10 @@ function createSlackEndpointManagement(
       return friends;
     },
     // conversations.members 只回 user id 列表（平台形状），逐 user 拉 profile 成本由调用方决定。
-    async listGroupMembers(groupId: string): Promise<readonly string[]> {
+    async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly string[]> {
+      const operation = createEndpointOperation({ signal });
       const client = requireClient();
-      const result = await client.conversations.members({ channel: groupId });
+      const result = await operation.run(() => client.conversations.members({ channel: groupId }));
       return result.members ?? [];
     },
   });
@@ -541,4 +545,10 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object'
     ? value as Record<string, unknown>
     : {};
+}
+
+interface SlackReactionRequest extends EndpointManagementRequest {
+  readonly channel: string;
+  readonly timestamp: string;
+  readonly name: string;
 }

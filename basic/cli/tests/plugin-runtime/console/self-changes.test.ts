@@ -26,7 +26,7 @@ function host(surface: HostSelfChanges, toolApprovals: HostToolApprovals) {
     config: new Map(), capabilities: new Map(), projections: new Map(), resources: new Map([[root, new Map()]]),
   };
   const store = new SnapshotStore(state); stores.push(store);
-  const hostRpc = composeHostConsoleRpc(toolApprovals.consoleRpc, surface.consoleRpc);
+  const hostRpc = () => composeHostConsoleRpc(toolApprovals.consoleRpc, surface.consoleRpc);
   return (type: string, access: ConsoleAccess, data?: unknown) => dispatchPluginConsoleRpcRequest(
     { type, requestId: 1, ...(data === undefined ? {} : { data }) },
     { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc },
@@ -48,8 +48,7 @@ it('lists pending changes and lets ops:approve approve or reject them', async ()
   const queue = new ToolApprovalQueue();
   const approvals = new SelfChangeApprovals({ store, queue });
   const surface = new HostSelfChanges();
-  const toolApprovals = new HostToolApprovals();
-  toolApprovals.bind(queue);
+  const toolApprovals = new HostToolApprovals(queue);
   const call = host(surface, toolApprovals);
   const reader: ConsoleAccess = { unrestricted: false, permissions: ['tool_approvals:read'], roles: [] };
   const approver: ConsoleAccess = { unrestricted: false, permissions: ['ops:approve'], roles: [] };

@@ -40,7 +40,7 @@ describe('physical reply aliases through Core, CLI and Agent', () => {
     class ReplyEndpoint extends ReplyClient implements Endpoint {
       readonly [endpointSpec] = createEndpointSpecification(this, {
         start() {}, open() {}, close() {}, stop() {},
-        control: { recall: message => this.recall(message) },
+        control: { recall: ({ message }) => this.recall(message) },
         send: request => this.send(request.payload),
       });
     }
@@ -59,7 +59,7 @@ describe('physical reply aliases through Core, CLI and Agent', () => {
         inputSchema: { type: 'object', properties: { message_id: { type: 'string' } }, required: ['message_id'] },
         execute: async ({ message_id }) => {
           toolInputs.push(message_id);
-          await im.endpoints.recall({ adapter: 'sandbox', endpointKey: 'sandbox', message: { conversation, id: message_id } });
+          await im.endpoints.recall({ message: { conversation, id: message_id } });
           return { recalled: message_id };
         },
       }) });

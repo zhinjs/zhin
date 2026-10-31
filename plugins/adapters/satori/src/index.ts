@@ -14,6 +14,7 @@ export {
   type ResolvedSatoriWsConfig,
   type SatoriEndpointConfig,
   type SatoriApiOptions,
+  type SatoriApiRequest,
   type SatoriChannel,
   type SatoriEventBody,
   type SatoriLogin,

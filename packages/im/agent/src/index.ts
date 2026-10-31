@@ -781,6 +781,10 @@ export type {
 } from './ai-event-contract.js';
 export { AgentEventBus } from './event/ai-event-bus.js';
 
+export { activityFeedbackSource, bindActivityFeedbackSource } from './activity-feedback/operation-source.js';
+export type { ActivityFeedbackSource } from './activity-feedback/operation-source.js';
+export { createActivityFeedbackAdapter } from './activity-feedback/adapter-integration.js';
+export type { ActivityFeedbackIO } from './activity-feedback/adapter-integration.js';
 // ── Activity Feedback（替代 endpoint typingIndicator）──
 export {
   ActivityFeedbackManager,
@@ -789,8 +793,6 @@ export {
   toActivityFeedbackEventContext,
   resolveActivitySceneType,
   resolveActivityEventTargets,
-  enableActivityFeedbackForBot,
-  isGenericActivityFeedbackManager,
   resolveSubagentActivityTag,
   formatSubagentActivityPrefix,
   withSubagentActivityPrefix,
@@ -805,11 +807,6 @@ export type {
   ActivityFeedbackScenePhases,
   ActivityFeedbackConfig,
   ResolvedActivityFeedbackPhaseConfig,
-  EndpointWithActivityFeedback,
-  ActivityFeedbackSendPort,
-  PlatformActivityFeedbackManager,
-  PlatformActivityFeedbackStartOptions,
-  BotActivityFeedbackManager,
   ActivityFeedbackEventContext,
   ActivityFeedbackGatePhase,
 } from './activity-feedback/index.js';

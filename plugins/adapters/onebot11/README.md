@@ -35,6 +35,10 @@ Endpoint 直接继承 `@imhelper/onebot-v11` 的 `OneBotV11Client`；当前操�
 
 出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
+## 操作生命周期
+
+每个实际 Client 的请求关联、定时器与取消由同一个实例级 RPC 模块持有。停止、删除或替换账号时，先取消该实例的等待，再关闭连接；已提交但未收到结果的请求保持“结果未知”，不会重试。框架发送与内容读取还绑定各自的操作信号，取消单个操作不影响其他操作或账号。原生 SDK 方法和事件重载保持不变。
+
 ## 前置条件
 
 1. 启动兼容 OneBot 11 的实现，并选定正向或反向 WebSocket。

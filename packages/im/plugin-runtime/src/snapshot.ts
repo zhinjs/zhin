@@ -81,17 +81,29 @@ export class GenerationConflictError extends Error {
 
 const snapshotLeaseAuthority = Symbol('SnapshotLeaseAuthority');
 
+/** One exact retained record and its two independent lifecycle facts. */
+interface SnapshotLeaseConstruction {
+  readonly value: RuntimeSnapshot;
+  readonly releaseRecord: () => void;
+  readonly retirementSignal: AbortSignal;
+  readonly stopSignal: AbortSignal;
+}
+
 export class SnapshotLease {
   #released = false;
+  readonly value: RuntimeSnapshot;
+  private readonly releaseRecord: () => void;
+  /** Aborted on publication of a replacement or Root close, before lease disposal. */
+  readonly retirementSignal: AbortSignal;
+  /** Root closure only; shared by leases from every generation and never aborted by HMR. */
+  readonly stopSignal: AbortSignal;
 
-  constructor(
-    readonly value: RuntimeSnapshot,
-    private readonly releaseRecord: () => void,
-    authority: typeof snapshotLeaseAuthority,
-    /** Aborted on publication of a replacement or Root close, before lease disposal. */
-    readonly retirementSignal: AbortSignal,
-  ) {
+  constructor(input: SnapshotLeaseConstruction, authority: typeof snapshotLeaseAuthority) {
     if (authority !== snapshotLeaseAuthority) throw new TypeError('SnapshotLease is owned by SnapshotStore');
+    this.value = input.value;
+    this.releaseRecord = input.releaseRecord;
+    this.retirementSignal = input.retirementSignal;
+    this.stopSignal = input.stopSignal;
   }
 
   get active(): boolean {
@@ -110,6 +122,8 @@ export type RootResourceResolver<TState> = (state: TState, root: PluginId, token
 /** Read-only operation seam exposed only to trusted Host integrations, never Plugin setup. */
 export interface SnapshotReader {
   acquire(): SnapshotLease;
+  /** Independently retain this exact owned generation, including after replacement. */
+  retain(lease: SnapshotLease): SnapshotLease;
   owns(lease: SnapshotLease): boolean;
   /** Exact leased generation, including private Root resources excluded from public snapshots. */
   rootResource?<T>(lease: SnapshotLease, token: Token<T>): T | undefined;
@@ -121,6 +135,7 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
   readonly #leases = new WeakMap<SnapshotLease, SnapshotRecord<TState> | null>();
   readonly #rootResource?: RootResourceResolver<TState>;
   #closed = false;
+  readonly #stop = new AbortController();
 
   constructor(
     initial: SnapshotState,
@@ -145,7 +160,8 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
       retired: false,
     };
     this.#current = record;
-    replaceGenerationAdmissions(new Set(), admissions, this, () => undefined, () => this.#retain(record));
+    replaceGenerationAdmissions({ previous: new Set(), next: admissions, owner: this,
+      publishNext: () => undefined, acquireNext: () => this.#retain(record), stopSignal: this.#stop.signal });
   }
 
   get current(): RuntimeSnapshot {
@@ -159,17 +175,27 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
 
   acquire(): SnapshotLease {
     if (this.#closed) throw new Error('SnapshotStore is closed');
-    const record = this.#current;
+    return this.#lease(this.#current);
+  }
+
+  retain(lease: SnapshotLease): SnapshotLease {
+    if (this.#closed) throw new Error('SnapshotStore is closed');
+    const record = this.#leases.get(lease);
+    if (!record || !lease.active) throw new Error('Snapshot retention requires an active owned lease');
+    return this.#lease(record);
+  }
+
+  #lease(record: SnapshotRecord<TState>): SnapshotLease {
     const releaseRecord = this.#retain(record);
-    const lease = new SnapshotLease(
-      record.snapshot,
-      () => {
+    const lease = new SnapshotLease({
+      value: record.snapshot,
+      releaseRecord: () => {
         this.#leases.set(lease, null);
         releaseRecord();
       },
-      snapshotLeaseAuthority,
-      record.retirement.signal,
-    );
+      retirementSignal: record.retirement.signal,
+      stopSignal: this.#stop.signal,
+    }, snapshotLeaseAuthority);
     this.#leases.set(lease, record);
     return lease;
   }
@@ -219,13 +245,8 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
       leases: 0,
       retired: false,
     };
-    replaceGenerationAdmissions(
-      previous.admissions,
-      admissions,
-      this,
-      () => { this.#current = next; },
-      () => this.#retain(next),
-    );
+    replaceGenerationAdmissions({ previous: previous.admissions, next: admissions, owner: this,
+      publishNext: () => { this.#current = next; }, acquireNext: () => this.#retain(next), stopSignal: this.#stop.signal });
     // Commit only swaps the active pointer. The previous record may still be
     // serving in-flight work, so disposal is deferred to its final lease.
     previous.retired = true;
@@ -238,7 +259,10 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
-    replaceGenerationAdmissions(this.#current.admissions, new Set(), this, () => undefined);
+    replaceGenerationAdmissions({ previous: this.#current.admissions, next: new Set(), owner: this,
+      publishNext: () => undefined, stopSignal: this.#stop.signal });
+    // Stop observers may synchronously release transports; no gate may admit fresh work then.
+    this.#stop.abort();
     this.#current.retired = true;
     this.#current.retirement.abort();
     this.#retired.add(this.#current);

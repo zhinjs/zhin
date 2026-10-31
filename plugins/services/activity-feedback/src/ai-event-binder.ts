@@ -135,20 +135,10 @@ export function bindActivityFeedbackToAIEventBus(
   runWithView: <T>(operation: () => Promise<T>) => Promise<T>,
   defaultLocale: Locale = 'zh-CN',
 ): () => Promise<void> {
-  let stopWatchingRetirement: (() => void) | undefined;
-  let cleanupNeedsGenerationView = false;
-  const watchRetirement = () => {
-    if (stopWatchingRetirement) return;
-    cleanupNeedsGenerationView = true;
-    stopWatchingRetirement = admission.onDeactivate(() => {
-      void close();
-    });
-  };
   const serialized = createGenerationSerializedTarget(
     source,
     admission,
     runWithView,
-    watchRetirement,
   );
   const unsubscribe = subscribeAIEventsOnTarget(
     serialized.target,
@@ -162,18 +152,12 @@ export function bindActivityFeedbackToAIEventBus(
       await serialized.close();
       await orchestrator.dispose();
     };
-    // Retirement is published before SnapshotStore changes its current pointer.
-    // Enter the IM view synchronously here so timers, native-typing keepalives,
-    // and final reaction/message cleanup all remain on this generation's Endpoint.
-    // A candidate rolled back before admitting any event has no generation-local
-    // feedback state, and its view is unavailable while Root is still idle.
-    shutdown = cleanupNeedsGenerationView ? runWithView(cleanup) : cleanup();
+    // Live indicators already own captured operations. Cleanup never acquires a
+    // latest generation view or a new call through a retired facade.
+    shutdown = cleanup();
     return shutdown;
   }
-  return async () => {
-    stopWatchingRetirement?.();
-    await close();
-  };
+  return close;
 }
 
 /** Generation-local ordering: one queue per IM session, no module-level runtime state. */
@@ -181,7 +165,6 @@ function createGenerationSerializedTarget(
   source: AIEventTarget,
   admission: GenerationAdmissionGate,
   runWithView: <T>(operation: () => Promise<T>) => Promise<T>,
-  onAdmitted: () => void,
 ): {
   target: AIEventTarget;
   close(): Promise<void>;
@@ -195,7 +178,6 @@ function createGenerationSerializedTarget(
       const wrapped = async (payload: AIEventPayload) => {
         const release = admission.acquire();
         if (!release) return;
-        onAdmitted();
         try {
           await runWithView(async () => {
             const key = payload.sessionId || '__global__';

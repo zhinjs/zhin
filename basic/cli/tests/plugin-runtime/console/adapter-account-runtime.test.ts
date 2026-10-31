@@ -91,7 +91,9 @@ describe('authenticated owner-scoped Adapter account RPC', () => {
     expect(legacy.endpointId).toBe('legacy-a');
     expect(legacy.instanceId).toBe(f.adapters.get(owner)!.descriptor.id);
     expect(legacy.canonicalId).toBe(f.adapters.get(owner)!.descriptor.id);
-    expect(f.index.resolve('account', 'account')).toBe(legacy.canonicalId);
+    expect(f.index.resolve('account', 'account')).toBeUndefined();
+    expect(f.index.resolve(owner, 'account')).toBe(legacy.canonicalId);
+    expect(f.index.resolve(other, 'account')).toBe(f.adapters.get(other)!.list()[0].canonicalId);
     expect(f.index.resolve('account', 'legacy-a')).toBe(legacy.canonicalId);
     const directory = f.index.forOwner(owner);
     expect(directory.adapters()).toEqual([f.adapters.get(owner)]);
@@ -175,31 +177,31 @@ describe('authenticated owner-scoped Adapter account RPC', () => {
     const snapshot = { ...f.store.current, projections, capabilities: new Map([...f.store.current.capabilities, ...slots.map(slot => [slot.id, slot] as const)]) };
     const commands = new CommandIndex(slots, snapshot); projections.set(commandFeatureId, commands);
     const source = { sender: { id: 'deployment-only' } };
-    const before = await commands.dispatch('account endpoint add fresh password=secret', source);
+    const before = await commands.dispatch({ input: 'account endpoint add fresh password=secret', source: source });
     expect(before).toMatchObject({ status: 'executed', value: expect.stringContaining('Console') });
     expect(f.repository.compareAndSet).not.toHaveBeenCalled();
     await f.call('endpoint-add', { expectedGeneration: 0, expectedRevision: null, confirmMigration: true, id: 'migrated', values: { password: 'admin' } });
     const created = adapter.created.length, generation = f.store.current.generation, pid = process.pid;
     const writesBeforeInvalid = f.repository.compareAndSet.mock.calls.length;
-    expect(await commands.dispatch('account endpoint add missing', source)).toMatchObject({ status: 'executed', value: expect.stringMatching(/必填.*password/u) });
-    expect(await commands.dispatch('account endpoint remove missing', source)).toMatchObject({ status: 'executed', value: expect.stringContaining('不存在') });
+    expect(await commands.dispatch({ input: 'account endpoint add missing', source: source })).toMatchObject({ status: 'executed', value: expect.stringMatching(/必填.*password/u) });
+    expect(await commands.dispatch({ input: 'account endpoint remove missing', source: source })).toMatchObject({ status: 'executed', value: expect.stringContaining('不存在') });
     expect(f.repository.compareAndSet).toHaveBeenCalledTimes(writesBeforeInvalid);
 
-    expect(await commands.dispatch('account endpoint add fresh password=secret', source)).toMatchObject({ status: 'executed', value: expect.stringContaining('尚未启动') });
+    expect(await commands.dispatch({ input: 'account endpoint add fresh password=secret', source: source })).toMatchObject({ status: 'executed', value: expect.stringContaining('尚未启动') });
     expect(adapter.created).toHaveLength(created); expect(bindFlow).not.toHaveBeenCalled();
     const record = adapter.list().find(entry => entry.endpointId === 'fresh')!;
     await adapter.start(record.instanceId, adapter.revision);
     const endpoint = adapter.getEndpoint(record.instanceId)!;
     const lease = adapter.acquire(record.canonicalId);
     try {
-      expect(await commands.dispatch('account endpoint remove fresh', source)).toMatchObject({ status: 'executed', value: expect.stringContaining('正在取消') });
+      expect(await commands.dispatch({ input: 'account endpoint remove fresh', source: source })).toMatchObject({ status: 'executed', value: expect.stringContaining('正在取消') });
       expect(lease.signal.aborted).toBe(true); expect(endpoint.stopped).not.toHaveBeenCalled();
     } finally { lease.release(); }
     await vi.waitFor(() => expect(endpoint.stopped).toHaveBeenCalledTimes(1));
     expect(f.files.add).not.toHaveBeenCalled(); expect(f.files.remove).not.toHaveBeenCalled();
     expect(f.store.current.generation).toBe(generation); expect(process.pid).toBe(pid);
     const faulty = new CommandIndex(slots, { ...snapshot, projections: new Map() });
-    await expect(faulty.dispatch('account endpoint add denied password=secret', source)).rejects.toThrow('projection');
+    await expect(faulty.dispatch({ input: 'account endpoint add denied password=secret', source: source })).rejects.toThrow('projection');
     expect(f.files.add).not.toHaveBeenCalled();
   });
 

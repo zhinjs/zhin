@@ -18,7 +18,7 @@ export default defineCommand({
     if (!body) return '用法: gh comment <owner/repo> <编号> <内容>';
     const api = await resolveGhClient(context);
     if (typeof api === 'string') return api;
-    const r = await api.createIssueComment(parsed.repo, number, body);
+    const r = await api.createIssueComment({ repo: parsed.repo, number, body, signal: context.signal });
     return r.ok ? `已评论 #${number}` : ghApiMessage(r.data, '评论失败');
   },
 });

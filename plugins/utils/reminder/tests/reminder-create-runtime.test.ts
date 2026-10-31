@@ -1,3 +1,4 @@
+import { createTestEventGateway } from '../../../adapters/test-utils/endpoint.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -54,8 +55,8 @@ async function fixture(options: { afterSend?: (count: number) => void; locale?: 
     [owner, { id: owner, parent: root, instanceKey: 'personal', packageName: '@test/reminder', packageRoot: directory, children: [] }],
   ]), config: new Map([[root, config], [owner, config]]), capabilities: new Map(capabilities.map(slot => [slot.id, slot])), projections: new Map(),
     resources: new Map([
-      [root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])],
-      [owner, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }], [reminderServiceToken.id, service]])],
+      [root, new Map([[endpointEventGatewayToken.id, createTestEventGateway()]])],
+      [owner, new Map([[endpointEventGatewayToken.id, createTestEventGateway()], [reminderServiceToken.id, service]])],
     ]) };
   const view = createSnapshotView(0, state);
   const adapters = await AdapterIndex.create(slots, view, new AbortController().signal);
@@ -71,7 +72,7 @@ async function fixture(options: { afterSend?: (count: number) => void; locale?: 
     const endpoint = im.endpoints.list().find(item => item.id === payload.conversation.endpoint.id)!.endpoint;
     return im.endpointEvents.receive({ name: 'message.receive', endpoint, payload, client: adapters.clientById(endpoint.id as typeof slots[number]['id']) });
   };
-  return { sent, requesters, service, added, outbound, index, store, im, conversation, receive, owner,
+  return { sent, requesters, service, added, outbound, index, store, adapters, im, conversation, receive, owner,
     failPrompt: (after = 1) => { uncertainIn = after; },
     close: async () => { service.stop(); await store.close(); await adapters.stop(); await database.stop(); await rm(directory, { recursive: true, force: true }); },
   };
@@ -224,7 +225,7 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } finally { vi.useRealTimers(); await f.close(); }
   });
 
-  it('does not create after an expired confirmation, unknown prompt delivery or generation retirement', async () => {
+  it('does not create after an expired confirmation or unknown prompt delivery', async () => {
     const f = await fixture(); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {
       const pending = f.receive('/remind create 1秒后 正文'); await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
@@ -232,10 +233,38 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
       expect(f.added).not.toHaveBeenCalled(); expect(rendered(f.sent)).toContain('不会自动顺延');
       f.failPrompt(); await f.receive('/remind create 10分钟后 unknown'); expect(f.added).not.toHaveBeenCalled();
       expect(f.sent.filter(item => JSON.stringify(item.payload).includes('正文（原样显示）') && JSON.stringify(item.payload).includes('unknown'))).toHaveLength(1);
-      const retired = f.receive('/remind create 10分钟后 retired'); await vi.waitFor(() => expect(rendered(f.sent)).toContain('retired'));
-      const before = f.sent.length; f.store.commit(0, { snapshot: f.store.current, dispose() {} }); await retired;
-      expect(f.sent).toHaveLength(before); expect(f.added).not.toHaveBeenCalled();
     } finally { await f.close(); }
+  });
+
+  it('continues an admitted confirmation across HMR and creates once after the original sender confirms', async () => {
+    const f = await fixture();
+    try {
+      const pending = f.receive('/remind create 10分钟后 retained');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      const before = f.sent.length;
+      f.store.commit(0, { snapshot: f.store.current, dispose() {} });
+      expect(f.sent).toHaveLength(before); expect(f.added).not.toHaveBeenCalled();
+      await f.receive('确认', { sender: { id: 'bob' } });
+      expect(f.added).not.toHaveBeenCalled();
+      await f.receive('确认'); await pending;
+      expect(f.added).toHaveBeenCalledTimes(1);
+      expect(await f.service.list({ senderId: 'alice', target: f.conversation })).toMatchObject([{ text: 'retained' }]);
+      await f.receive('确认'); expect(f.added).toHaveBeenCalledTimes(1);
+    } finally { await f.close(); }
+  });
+
+  it.each(['account stop', 'Root close'] as const)('cancels a pending confirmation on %s without writing or sending a late notice', async action => {
+    const f = await fixture();
+    let pending: Promise<unknown> | undefined, closing: Promise<unknown> | undefined;
+    try {
+      pending = f.receive('/remind create 10分钟后 cancelled');
+      await vi.waitFor(() => expect(rendered(f.sent)).toContain('确认创建'));
+      const before = f.sent.length;
+      closing = action === 'account stop' ? f.adapters.stop() : f.store.close();
+      await pending; await closing;
+      expect(f.sent).toHaveLength(before); expect(f.added).not.toHaveBeenCalled();
+      expect(await f.service.list({ senderId: 'alice', target: f.conversation })).toEqual([]);
+    } finally { await f.close(); await Promise.allSettled([pending, closing]); }
   });
 
   it('does not create or retry when the confirmation question has unknown delivery', async () => {
@@ -260,7 +289,7 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } finally { await f.close(); }
   });
 
-  it('does not send an old timeout when preview delivery crosses retirement and the total deadline', async () => {
+  it('sends one timeout without asking or writing when retained preview delivery crosses HMR and the total deadline', async () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     const f: Awaited<ReturnType<typeof fixture>> = await fixture({ afterSend: count => {
       if (count !== 1) return;
@@ -269,9 +298,10 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
     } });
     try {
       await f.receive('/remind create 10分钟后 old-preview');
-      expect(f.sent).toHaveLength(1);
+      expect(f.sent).toHaveLength(2);
       expect(rendered(f.sent)).toContain('old-preview');
-      expect(rendered(f.sent)).not.toContain('提醒输入超时，未创建提醒');
+      expect(f.sent.filter(item => JSON.stringify(item.payload).includes('提醒输入超时，未创建提醒'))).toHaveLength(1);
+      expect(rendered(f.sent)).not.toContain('确认创建这条提醒');
       expect(f.added).not.toHaveBeenCalled();
     } finally { await f.close(); }
   });
@@ -283,9 +313,9 @@ describe.skipIf(!sqliteAvailable)('remind create through actual CommandIndex, in
       const result = await f.index.execute('remind create 10分钟后 正文'); expect(result).toContain('真实聊天'); expect(f.added).not.toHaveBeenCalled();
       const reply = vi.fn(async () => ({ status: 'sent' }));
       const source = { conversation: f.conversation, content: 'remind create 10分钟后 正文', sender: { id: 'alice' }, $reply: reply };
-      const noInteraction = await f.index.dispatch(source.content, source);
+      const noInteraction = await f.index.dispatch({ input: source.content, source });
       expect(noInteraction.value).toContain('真实聊天'); expect(reply).not.toHaveBeenCalled();
-      const noSender = await f.index.dispatch(source.content, { ...source, sender: { id: '' } });
+      const noSender = await f.index.dispatch({ input: source.content, source: { ...source, sender: { id: '' } } });
       expect(noSender.value).toContain('真实聊天'); expect(f.added).not.toHaveBeenCalled();
     } finally { await f.close(); }
   });

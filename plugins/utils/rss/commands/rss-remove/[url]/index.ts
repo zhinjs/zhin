@@ -1,3 +1,4 @@
+import { subscriptionMigrationScope } from '../../../src/target-migration.js';
 import { rssMessages as t } from '../../../src/i18n.js';
 import { defineCommand } from 'zhin.js/command';
 import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
@@ -9,7 +10,8 @@ export default defineCommand<RssConfig>({
   description: '取消一个 RSS 订阅', descriptionI18n: { en: "Unsubscribe from an RSS feed" },
   params: { url: { type: 'string' } },
   async execute({ params, input, use, locale }) {
-    const Subs = getRssSubs(use(rssRuntimeToken).db);
+    const runtime = use(rssRuntimeToken);
+    const Subs = getRssSubs(runtime.db);
     if (!Subs) return t(locale, 'databaseUnavailable');
 
     const url = String(params.url ?? '').trim();
@@ -17,19 +19,23 @@ export default defineCommand<RssConfig>({
 
     const channel = extractChannelInfo(input);
     if (!channel) return channelSourceError(input, locale);
-    const rows = await Subs.select().where({
-      url,
-      ...subscriptionScope(channel),
-    });
+    const run = async () => {
+      const rows = await Subs.select().where({
+        url,
+        ...subscriptionScope(channel),
+      });
 
-    if (rows.length === 0) return t(locale, 'notFound');
+      if (rows.length === 0) return t(locale, 'notFound');
 
-    const row = rows[0]!;
-    // 表结构没有 id 列，删除必须按业务键匹配（与上面的 select 条件一致）。
-    await Subs.delete().where({
-      url,
-      ...subscriptionScope(channel),
-    });
-    return t(locale, 'removed', { feed: String(row.feed_title || url) });
+      const row = rows[0]!;
+      // 表结构没有 id 列，删除必须按业务键匹配（与上面的 select 条件一致）。
+      await Subs.delete().where({
+        url,
+        ...subscriptionScope(channel),
+      });
+      return t(locale, 'removed', { feed: String(row.feed_title || url) });
+    };
+    return runtime.migrationScopes ? runtime.migrationScopes.run({ scope: subscriptionMigrationScope({ target: channel.target,
+      adapterName: channel.adapterName, endpointKey: channel.endpointKey, channelType: channel.channelType, channelId: channel.channelId }), run }) : run();
   },
 });

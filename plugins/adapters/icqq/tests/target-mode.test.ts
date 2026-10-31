@@ -7,7 +7,7 @@ import { LoginAssist } from '@zhin.js/core';
 import { loginAssistToken } from '@zhin.js/core/runtime';
 import { projectLocaleToken } from 'zhin.js/i18n';
 import type { EndpointEvent } from 'zhin.js/adapter';
-import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import definition from '../adapters/icqq/index.js';
 import { IcqqAdapter } from '../src/adapter.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
@@ -25,7 +25,7 @@ it('keeps the installed ICQQ Client prototype and sends the identical rich SDK e
   const harness = await createAdapterHarness(definition, { id: '12345678', dataDir: directory, autoReconnect: false }, {
     name: 'icqq', resources: new Map([
       [loginAssistToken.id, new LoginAssist(null)], [projectLocaleToken.id, 'zh-CN'],
-    ]), gateway: { receive: async event => { events.push(event); } },
+    ]), gateway: createTestEndpointEventGateway({ receive: async event => { events.push(event); } }),
   });
   try {
     expect(harness.adapter).toBeInstanceOf(IcqqAdapter);

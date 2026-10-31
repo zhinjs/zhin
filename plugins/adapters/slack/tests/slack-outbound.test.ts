@@ -18,17 +18,17 @@ function mockLogger() {
 describe('sendSlackContent', () => {
   it('uploads MIME images with a previewable filename rather than alt text', async () => {
     const client = mockWebClient();
-    await sendSlackContent(client, [{ type: 'image', data: {
+    await sendSlackContent(client, { content: [{ type: 'image', data: {
       alt: 'test image', media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' },
-    } }], { channel: 'C001' }, mockLogger());
+    } }], ...{ channel: 'C001' }, logger: mockLogger() });
     expect(client.filesUploadV2).toHaveBeenCalledWith(expect.objectContaining({ filename: 'image.png' }));
   });
   it('sends canonical reply segments in the referenced message thread', async () => {
     const client = mockWebClient();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'reply', data: { message_id: '1700000001.000001' } },
       { type: 'text', data: { text: 'reply text' } },
-    ], { channel: 'C001' }, mockLogger());
+    ], ...{ channel: 'C001' }, logger: mockLogger() });
     expect(client.chat.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       thread_ts: '1700000001.000001', text: 'reply text',
     }));
@@ -36,7 +36,7 @@ describe('sendSlackContent', () => {
   it.each([{}, null, { ts: '' }, { ts: ' ' }, { ts: 123 }])('rejects an unconfirmed receipt %j without retry', async (response) => {
     const client = mockWebClient();
     client.chat.postMessage.mockResolvedValue(response);
-    await expect(sendSlackContent(client, 'hello', { channel: 'C001' }, mockLogger()))
+    await expect(sendSlackContent(client, { content: 'hello', ...{ channel: 'C001' }, logger: mockLogger() }))
       .rejects.toThrow('delivery is unconfirmed');
     expect(client.chat.postMessage).toHaveBeenCalledTimes(1);
   });
@@ -44,7 +44,7 @@ describe('sendSlackContent', () => {
   it('does not send remaining chunks after an unconfirmed chunk', async () => {
     const client = mockWebClient();
     client.chat.postMessage.mockResolvedValueOnce({ ts: '1700000000.000000' }).mockResolvedValueOnce({});
-    await expect(sendSlackContent(client, 'x'.repeat(350_000), { channel: 'C001' }, mockLogger()))
+    await expect(sendSlackContent(client, { content: 'x'.repeat(350_000), ...{ channel: 'C001' }, logger: mockLogger() }))
       .rejects.toThrow('delivery is unconfirmed');
     expect(client.chat.postMessage).toHaveBeenCalledTimes(2);
   });
@@ -53,18 +53,18 @@ describe('sendSlackContent', () => {
     const client = mockWebClient();
     if (failure === 'unsupported') client.filesUploadV2 = undefined;
     else client.filesUploadV2.mockRejectedValue(new Error('upload denied'));
-    await expect(sendSlackContent(client, [
+    await expect(sendSlackContent(client, { content: [
       { type: 'image', data: { media: { kind: 'base64', value: 'aGVsbG8=' } } },
-    ], { channel: 'C001' }, mockLogger())).rejects.toThrow();
+    ], ...{ channel: 'C001' }, logger: mockLogger() })).rejects.toThrow();
     expect(client.chat.postMessage).not.toHaveBeenCalled();
   });
 
   it('should send plain text as mrkdwn block', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    const result = await sendSlackContent(client, [
+    const result = await sendSlackContent(client, { content: [
       { type: 'text', data: { text: 'hello world' } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     expect(result.ts).toBe('1700000000.000000');
     expect(client.chat.postMessage).toHaveBeenCalledWith(
@@ -79,9 +79,9 @@ describe('sendSlackContent', () => {
   it('should convert markdown bold to Slack mrkdwn in blocks', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'text', data: { text: '**日常工具** - 签到' } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -93,10 +93,10 @@ describe('sendSlackContent', () => {
   it('should send with thread_ts', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, 'reply in thread', {
+    await sendSlackContent(client, { content: 'reply in thread', ...{
       channel: 'C001',
       threadTs: '1699999999.000000',
-    }, logger);
+    }, logger: logger });
 
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ thread_ts: '1699999999.000000' }),
@@ -106,10 +106,10 @@ describe('sendSlackContent', () => {
   it('should convert mention segments to mrkdwn', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'at', data: { id: 'U12345' } },
       { type: 'text', data: { text: ' hello!' } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -122,9 +122,9 @@ describe('sendSlackContent', () => {
     const client = mockWebClient();
     const logger = mockLogger();
     const longText = '行\n'.repeat(2000);
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'text', data: { text: longText } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     const call = client.chat.postMessage.mock.calls[0][0];
     const sections = call.blocks.filter((b: any) => b.type === 'section');
@@ -137,7 +137,7 @@ describe('sendSlackContent', () => {
   it('should produce one actions block per keyboard row', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       {
         type: 'keyboard',
         data: {
@@ -147,7 +147,7 @@ describe('sendSlackContent', () => {
           ],
         },
       },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     const call = client.chat.postMessage.mock.calls[0][0];
     const actions = call.blocks.filter((b: any) => b.type === 'actions');
@@ -160,9 +160,9 @@ describe('sendSlackContent', () => {
     const client = mockWebClient();
     const logger = mockLogger();
     const buttons = Array.from({ length: 7 }, (_, i) => ({ label: `B${i}`, id: `b${i}` }));
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'keyboard', data: { rows: [buttons] } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     const actions = client.chat.postMessage.mock.calls[0][0].blocks.find((b: any) => b.type === 'actions');
     expect(actions.elements).toHaveLength(5);
@@ -171,7 +171,7 @@ describe('sendSlackContent', () => {
   it('should produce Block Kit actions from keyboard segments', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'text', data: { text: 'Choose:' } },
       {
         type: 'keyboard',
@@ -182,7 +182,7 @@ describe('sendSlackContent', () => {
           ]],
         },
       },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     const call = client.chat.postMessage.mock.calls[0][0];
     expect(call.blocks).toBeDefined();
@@ -199,9 +199,9 @@ describe('sendSlackContent', () => {
   it('should handle image attachments', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/cat.jpg' }, alt: 'Cat' } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -214,9 +214,9 @@ describe('sendSlackContent', () => {
     const client = mockWebClient();
     const logger = mockLogger();
     const base64 = Buffer.from('fake-image').toString('base64');
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'image', data: { media: { kind: 'base64', value: base64, file_name: 'cat.png' } } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     expect(client.filesUploadV2).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -239,9 +239,9 @@ describe('sendSlackContent', () => {
     const filePath = join(dir, 'report.txt');
     await writeFile(filePath, 'report-body');
     try {
-      await sendSlackContent(client, [
+      await sendSlackContent(client, { content: [
         { type: 'file', data: { media: { kind: 'path', value: filePath, file_name: 'report.txt' } } },
-      ], { channel: 'C001' }, logger);
+      ], ...{ channel: 'C001' }, logger: logger });
 
       expect(client.filesUploadV2).toHaveBeenCalledWith(
         expect.objectContaining({ channel_id: 'C001', filename: 'report.txt' }),
@@ -256,10 +256,10 @@ describe('sendSlackContent', () => {
   it('should drop media segments without canonical MediaRef', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'image', data: { url: 'https://example.com/cat.jpg', title: 'Cat' } },
       { type: 'file', data: { file: '/tmp/a.txt', name: 'a.txt' } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     expect(client.filesUploadV2).not.toHaveBeenCalled();
     const call = client.chat.postMessage.mock.calls[0][0];
@@ -269,9 +269,9 @@ describe('sendSlackContent', () => {
   it('should drop kind=file media refs (no Slack equivalent)', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'image', data: { media: { kind: 'file', value: 'F0123ABC' } } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     expect(client.filesUploadV2).not.toHaveBeenCalled();
     const call = client.chat.postMessage.mock.calls[0][0];
@@ -281,9 +281,9 @@ describe('sendSlackContent', () => {
   it('should handle link segments', async () => {
     const client = mockWebClient();
     const logger = mockLogger();
-    await sendSlackContent(client, [
+    await sendSlackContent(client, { content: [
       { type: 'link', data: { url: 'https://example.com', text: 'Example' } },
-    ], { channel: 'C001' }, logger);
+    ], ...{ channel: 'C001' }, logger: logger });
 
     expect(client.chat.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -296,9 +296,9 @@ describe('sendSlackContent', () => {
 describe('editSlackContent', () => {
   it('should call chat.update with mrkdwn block', async () => {
     const client = mockWebClient();
-    await editSlackContent(client, 'C001', '1700000000.000000', [
+    await editSlackContent(client, { channel: 'C001', ts: '1700000000.000000', content: [
       { type: 'text', data: { text: 'updated text' } },
-    ]);
+    ] });
 
     expect(client.chat.update).toHaveBeenCalledWith(
       expect.objectContaining({

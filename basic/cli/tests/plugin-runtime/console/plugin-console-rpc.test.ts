@@ -225,7 +225,7 @@ it('serves host-owned queries as plugin.root.<name> ahead of a root plugin provi
     actions: { reset: { handler: async () => null } },
   });
   const call = (type: string, access: ConsoleAccess) => dispatchPluginConsoleRpcRequest({ type, requestId: 1 },
-    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc });
+    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: () => hostRpc });
   expect(await call('plugin.root.ambient', scoped(['ambient:read']))).toMatchObject({ status: 200, body: { data: { from: 'host' } } });
   expect(await call('plugin.root.ambient', scoped())).toMatchObject({ status: 403 });
   expect(await call('plugin.root.reset', scoped(['ambient:read']))).toMatchObject({ status: 403 });

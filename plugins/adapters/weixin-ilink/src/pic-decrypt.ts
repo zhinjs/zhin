@@ -55,18 +55,25 @@ function parseAesKey(aesKeyBase64: string, label: string): Buffer {
   throw new Error(msg);
 }
 
+/** A single CDN source, with request lifetime distinct from the decoding key. */
+export interface CdnDownloadRequest {
+  readonly encryptedQueryParam: string;
+  readonly cdnBaseUrl: string;
+  readonly label: string;
+  readonly fullUrl?: string;
+  readonly signal?: AbortSignal;
+}
+export interface EncryptedCdnDownloadRequest extends CdnDownloadRequest {
+  /** CDNMedia.aes_key, encoded as documented by parseAesKey. */
+  readonly aesKeyBase64: string;
+}
+
 /**
  * Download and AES-128-ECB decrypt a CDN media file. Returns plaintext Buffer.
  * aesKeyBase64: CDNMedia.aes_key JSON field (see parseAesKey for supported formats).
  */
-export async function downloadAndDecryptBuffer(
-  encryptedQueryParam: string,
-  aesKeyBase64: string,
-  cdnBaseUrl: string,
-  label: string,
-  fullUrl?: string,
-  signal?: AbortSignal,
-): Promise<Buffer> {
+export async function downloadAndDecryptBuffer({ encryptedQueryParam, aesKeyBase64, cdnBaseUrl,
+  label, fullUrl, signal }: EncryptedCdnDownloadRequest): Promise<Buffer> {
   const key = parseAesKey(aesKeyBase64, label);
   let url: string;
   if (fullUrl) {
@@ -87,13 +94,8 @@ export async function downloadAndDecryptBuffer(
 /**
  * Download plain (unencrypted) bytes from the CDN. Returns the raw Buffer.
  */
-export async function downloadPlainCdnBuffer(
-  encryptedQueryParam: string,
-  cdnBaseUrl: string,
-  label: string,
-  fullUrl?: string,
-  signal?: AbortSignal,
-): Promise<Buffer> {
+export async function downloadPlainCdnBuffer({ encryptedQueryParam, cdnBaseUrl, label,
+  fullUrl, signal }: CdnDownloadRequest): Promise<Buffer> {
   let url: string;
   if (fullUrl) {
     url = fullUrl;

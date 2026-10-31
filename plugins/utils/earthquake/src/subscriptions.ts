@@ -1,3 +1,6 @@
+import { conversationRefKey } from 'zhin.js';
+import { subscriptionDocument } from './migration-document.js';
+import { normalizeDeliveryTarget, type DeliveryTarget, type JsonValue, type TargetMigrationScopes } from 'zhin.js/plugin-runtime';
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 /**
  * Conversation subscriptions, one per conversation.
@@ -12,6 +15,8 @@ import { isRecord, toFiniteNumber, toTrimmedString } from './sources/parse-helpe
 export type ConversationKind = 'private' | 'group' | 'channel';
 
 export interface EarthquakeSubscription {
+  /** Present on canonical captures; historical alias-only rows remain unchanged until migration is approved. */
+  readonly target?: DeliveryTarget;
   readonly locale?: Locale;
   readonly adapter: string;
   readonly endpointKey: string;
@@ -27,11 +32,13 @@ export interface EarthquakeSubscription {
 export interface KeyValueState {
   get(key: string): Promise<unknown>;
   set(key: string, value: never): Promise<void>;
+  update?<T extends JsonValue>(key: string, updater: (current: T | undefined) => T | undefined): Promise<T | undefined>;
 }
 
 export const SUBSCRIPTIONS_STATE_KEY = 'subscriptions/v1';
 
-export function subscriptionKey(target: Pick<EarthquakeSubscription, 'adapter' | 'endpointKey' | 'conversationKind' | 'conversationId'>): string {
+export function subscriptionKey(target: Pick<EarthquakeSubscription, 'adapter' | 'endpointKey' | 'conversationKind' | 'conversationId' | 'target'>): string {
+  if (target.target) return `canonical:${conversationRefKey(target.target)}`;
   return [target.adapter, target.endpointKey, target.conversationKind, target.conversationId].join('\u0000');
 }
 
@@ -51,6 +58,7 @@ function parseStoredSubscription(value: unknown): EarthquakeSubscription | undef
     ? value.regions.filter((region): region is string => typeof region === 'string' && region.trim() !== '')
     : [];
   return {
+    ...(value.target === undefined ? {} : { target: normalizeDeliveryTarget(value.target) }),
     adapter,
     locale: resolveLocale(value.locale),
     endpointKey,
@@ -79,15 +87,18 @@ export class SubscriptionStore {
   readonly #state: KeyValueState;
   readonly #maxSubscriptions: number;
   #queue: Promise<unknown> = Promise.resolve();
+  #migrationScopes?: TargetMigrationScopes;
 
   constructor(state: KeyValueState, options: { readonly maxSubscriptions: number }) {
     this.#state = state;
     this.#maxSubscriptions = options.maxSubscriptions;
   }
 
+  bindMigrationScopes(scopes: TargetMigrationScopes): void { this.#migrationScopes = scopes; }
+
   async list(): Promise<EarthquakeSubscription[]> {
-    const stored = await this.#state.get(SUBSCRIPTIONS_STATE_KEY);
-    if (!Array.isArray(stored)) return [];
+    const value = await this.#state.get(SUBSCRIPTIONS_STATE_KEY);
+    const stored = Array.isArray(value) ? value : subscriptionDocument(value).subscriptions;
     const subscriptions: EarthquakeSubscription[] = [];
     for (const entry of stored) {
       const parsed = parseStoredSubscription(entry);
@@ -103,36 +114,42 @@ export class SubscriptionStore {
 
   /** Creates or replaces this conversation's subscription. */
   async upsert(subscription: EarthquakeSubscription): Promise<{ readonly created: boolean }> {
-    return this.#serialize(async () => {
-      const all = await this.list();
-      const key = subscriptionKey(subscription);
-      const index = all.findIndex((existing) => subscriptionKey(existing) === key);
-      if (index === -1 && all.length >= this.#maxSubscriptions) {
-        throw new SubscriptionLimitError(this.#maxSubscriptions);
-      }
-      if (index === -1) {
-        all.push(subscription);
-      } else {
-        all[index] = { ...subscription, locale: resolveLocale(all[index]?.locale) };
-      }
-      await this.#write(all);
-      return { created: index === -1 };
-    });
+    const key = subscriptionKey(subscription);
+    return this.#run(key, () => this.#serialize(() => this.#mutate(all => {
+      const index = all.findIndex(existing => subscriptionKey(existing) === key);
+      if (index === -1 && all.length >= this.#maxSubscriptions) throw new SubscriptionLimitError(this.#maxSubscriptions);
+      if (index === -1) all.push(subscription);
+      else all[index] = { ...subscription, locale: resolveLocale(all[index]?.locale) };
+      return { subscriptions: all, result: { created: index === -1 } };
+    })));
   }
 
   async remove(key: string): Promise<boolean> {
-    return this.#serialize(async () => {
-      const all = await this.list();
-      const remaining = all.filter((subscription) => subscriptionKey(subscription) !== key);
-      if (remaining.length === all.length) return false;
-      await this.#write(remaining);
-      return true;
-    });
+    return this.#run(key, () => this.#serialize(() => this.#mutate(all => {
+      const subscriptions = all.filter(subscription => subscriptionKey(subscription) !== key);
+      return { subscriptions, result: subscriptions.length !== all.length };
+    })));
   }
 
-  async #write(subscriptions: readonly EarthquakeSubscription[]): Promise<void> {
-    const plain = subscriptions.map((subscription) => ({ ...subscription, regions: [...subscription.regions] }));
-    await this.#state.set(SUBSCRIPTIONS_STATE_KEY, plain as never);
+  async #mutate<T>(change: (subscriptions: EarthquakeSubscription[]) => { subscriptions: EarthquakeSubscription[]; result: T }): Promise<T> {
+    if (!this.#state.update) {
+      const changed = change(await this.list());
+      await this.#state.set(SUBSCRIPTIONS_STATE_KEY, changed.subscriptions as never);
+      return changed.result;
+    }
+    let result!: T;
+    await this.#state.update(SUBSCRIPTIONS_STATE_KEY, current => {
+      const document = subscriptionDocument(current);
+      const all = document.subscriptions.flatMap(value => { const item = parseStoredSubscription(value); return item ? [item] : []; });
+      const changed = change(all); result = changed.result;
+      const subscriptions = changed.subscriptions.map(subscription => ({ ...subscription, regions: [...subscription.regions] })) as unknown as JsonValue[];
+      return Array.isArray(current) || current === undefined ? subscriptions : { ...document, subscriptions } as unknown as JsonValue;
+    });
+    return result;
+  }
+
+  #run<T>(scope: string, run: () => Promise<T>): Promise<T> {
+    return this.#migrationScopes ? this.#migrationScopes.run({ scope, run }) : run();
   }
 
   #serialize<T>(operation: () => Promise<T>): Promise<T> {

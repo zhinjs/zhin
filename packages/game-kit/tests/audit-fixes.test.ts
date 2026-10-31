@@ -1,3 +1,4 @@
+import { channelKey } from '../src/board-sender.js';
 /**
  * 第二轮审计修复的回归测试
  * - grid-keyboard：postChoices 编号从可落子格子数后续起，不覆盖格子映射
@@ -97,18 +98,14 @@ describe('audit fixes: game-records 显式数据库所有权', () => {
     return { database, insert };
   }
 
-  const message = {
-    $adapter: 'process',
-    $endpoint: 'terminal',
-    $sender: { id: 'u1', name: 'User' },
-    $channel: { type: 'private', id: 'u1' },
-  } as never;
+  const message = { target: { endpoint: { adapter: 'process', id: 'terminal' }, kind: 'private', id: 'u1' },
+sender: { id: 'u1', name: 'User' } } as never;
 
   it('不同游戏写入各自 store 的数据库', async () => {
     const dice = createDatabase();
     const blackjack = createDatabase();
-    await new GameRecordStore(dice.database).record(message, 'dice', 'won', 10);
-    await new GameRecordStore(blackjack.database).record(message, 'blackjack', 'lost');
+    await new GameRecordStore(dice.database).record({ scope: channelKey(message), player: message.sender, gameId: 'dice', result: 'won', score: 10 });
+    await new GameRecordStore(blackjack.database).record({ scope: channelKey(message), player: message.sender, gameId: 'blackjack', result: 'lost' });
 
     expect(dice.insert).toHaveBeenCalledOnce();
     expect(blackjack.insert).toHaveBeenCalledOnce();

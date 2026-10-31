@@ -1,8 +1,10 @@
+import { createDeliveryTarget, type DeliveryTarget, encodeTaskTarget, encodeStorageIdentity } from 'zhin.js/plugin-runtime';
 import type { Locale } from 'zhin.js/i18n';
 import { rssMessages as t } from './i18n.js';
 /** A subscription destination uses public Message fields, never CapabilityId internals. */
 
 export interface ChannelInfo {
+  readonly target: DeliveryTarget;
   adapterName: string;
   endpointKey: string;
   channelType: 'private' | 'group' | 'channel';
@@ -39,15 +41,16 @@ export function extractChannelInfo(input: unknown): ChannelInfo | null {
   const conversation = input.conversation;
   const kind = conversation.kind;
   if (kind !== 'private' && kind !== 'group' && kind !== 'channel') return null;
-  if (!isIdentifier(input.clientAdapter) || !isIdentifier(input.endpointId)
-    || !isIdentifier(conversation.id)) return null;
-
+  const endpoint = isRecord(conversation.endpoint) ? conversation.endpoint : {};
+  if (!isIdentifier(endpoint.adapter) || !isIdentifier(endpoint.id) || !isIdentifier(conversation.id)) return null;
+  const target = createDeliveryTarget({ conversation: conversation as DeliveryTarget });
   const sender = input.sender;
   if (sender !== undefined && (!isRecord(sender) || !isIdentifier(sender.id))) return null;
 
   return {
-    adapterName: input.clientAdapter,
-    endpointKey: input.endpointId,
+    target,
+    adapterName: target.endpoint.adapter,
+    endpointKey: target.endpoint.id,
     channelType: kind,
     channelId: conversation.id,
     senderId: isRecord(sender) && isIdentifier(sender.id) ? sender.id : '',
@@ -58,8 +61,9 @@ export function extractChannelInfo(input: unknown): ChannelInfo | null {
 /** Complete subscription scope, including the bot instance for multi-endpoint adapters. */
 export function subscriptionScope(channel: ChannelInfo): Record<string, string> {
   return {
-    adapter_name: channel.adapterName,
-    endpoint_id: channel.endpointKey,
+    target_json: JSON.stringify(encodeTaskTarget(channel.target)),
+    adapter_name: encodeStorageIdentity(channel.adapterName),
+    endpoint_id: encodeStorageIdentity(channel.endpointKey),
     channel_type: channel.channelType,
     channel_id: channel.channelId,
   };

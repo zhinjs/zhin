@@ -256,23 +256,25 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     try {
       wss.handleUpgrade(request, socket, head, (ws) => {
         let settled = false;
-        const retireSubscriptions: Array<() => void> = [];
+        const stopSubscriptions: Array<() => void> = [];
         const releaseAdmissions = () => {
           if (settled) return;
           settled = true;
-          for (const dispose of retireSubscriptions) dispose();
+          for (const unsubscribe of stopSubscriptions) unsubscribe();
           for (const item of admitted) item.release?.();
         };
         ws.once('close', releaseAdmissions);
         ws.once('error', releaseAdmissions);
-        for (const item of admitted) {
-          if (item.entry.admission) {
-            retireSubscriptions.push(item.entry.admission.onDeactivate(() => {
-              if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-              ws.close(1012, 'Generation retired');
-              }
-            }));
-          }
+        // Replacement closes new upgrades, not accepted plugin work. Explicit Root stop
+        // still closes its sockets before waiting for their admission leases to drain.
+        const stops = new Set(admitted.map(item => item.entry.admission?.stopSignal).filter(signal => signal !== undefined));
+        for (const signal of stops) {
+          const stop = () => {
+            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close(1012, 'Root stopped');
+          };
+          signal.addEventListener('abort', stop, { once: true });
+          stopSubscriptions.push(() => signal.removeEventListener('abort', stop));
+          if (signal.aborted) stop();
         }
         const connection = Object.freeze({
           socket: ws,

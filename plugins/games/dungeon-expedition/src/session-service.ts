@@ -2,9 +2,8 @@ import type { Database, Models } from '@zhin.js/core';
 import {
   DeterministicRandom,
   VersionedSessionService,
-  channelKey,
   generateCompactId,
-  type GameMessageLike,
+  type GamePlayer,
   type GameOutcome,
   type GameSessionDatabase,
   type SessionMutationResult,
@@ -41,35 +40,33 @@ export class SessionService extends VersionedSessionService<DungeonSessionRow> {
   }
 
   async createSession(
-    message: GameMessageLike,
+    message: GamePlayer,
     seed?: string | number,
   ): Promise<DungeonSessionRow> {
     const now = Date.now();
     const id = generateCompactId('dng_');
-    const ownerName = message.$sender.name?.trim() || message.$sender.id;
-    const state = createDungeonState(message.$sender.id, ownerName, message.locale);
+    const ownerName = message.sender.name?.trim() || message.sender.id;
+    const state = createDungeonState(message.sender.id, ownerName, message.locale);
     const random = DeterministicRandom.fromSeed(seed ?? id);
     return this.createRow({
-      id,
-      locale: message.locale ?? 'zh-CN',
-      adapter: String(message.$adapter),
-      endpoint: message.$endpoint,
-      channel_type: message.$channel.type,
-      channel_id: message.$channel.id,
-      channel_key: channelKey(message),
-      owner_id: message.$sender.id,
-      owner_name: ownerName,
-      state_json: JSON.stringify(state),
-      phase: state.phase,
-      turn: activePlayer(state)?.id ?? '',
-      rng_state: random.state,
-      schema_version: state.schemaVersion,
-      revision: 0,
-      processed_actions: '[]',
-      deadline_at: now + 5 * 60_000,
-      status: 'active',
-      updated_at: now,
-      created_at: now,
+      target: message.target,
+      fields: {
+        id,
+        locale: message.locale ?? 'zh-CN',
+        owner_id: message.sender.id,
+        owner_name: ownerName,
+        state_json: JSON.stringify(state),
+        phase: state.phase,
+        turn: activePlayer(state)?.id ?? '',
+        rng_state: random.state,
+        schema_version: state.schemaVersion,
+        revision: 0,
+        processed_actions: '[]',
+        deadline_at: now + 5 * 60_000,
+        status: 'active',
+        updated_at: now,
+        created_at: now,
+      },
     });
   }
 

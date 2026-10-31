@@ -1,11 +1,11 @@
-import type { Locale } from '@zhin.js/plugin-runtime';
+import type { DataMigrationInventory, Locale } from '@zhin.js/plugin-runtime';
 import { ownerApprovalMessages as t } from './owner-approval-messages.js';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { OwnerApprovalAddress } from './owner-approval-contracts.js';
 
-const STORE_VERSION = 2 as const;
+const STORE_VERSION = 3 as const;
 
 export interface BashRuleEntry {
   readonly id: string;
@@ -21,6 +21,8 @@ export interface BashApprovalEntry {
 interface OwnerApprovalDocument {
   readonly version: typeof STORE_VERSION;
   readonly endpoints: Readonly<Record<string, BashApprovalEntry>>;
+  /** V2 alias-keyed grants stay readonly until a fresh grant through the current policy flow. */
+  readonly legacyEndpoints: Readonly<Record<string, BashApprovalEntry>>;
 }
 
 export class OwnerApprovalStore {
@@ -36,6 +38,7 @@ export class OwnerApprovalStore {
     const previous = document.endpoints[key] ?? { bashRules: [] };
     this.#write({
       version: STORE_VERSION,
+      legacyEndpoints: document.legacyEndpoints,
       endpoints: {
         ...document.endpoints,
         [key]: {
@@ -64,6 +67,7 @@ export class OwnerApprovalStore {
     const id = crypto.randomUUID();
     this.#write({
       version: STORE_VERSION,
+      legacyEndpoints: document.legacyEndpoints,
       endpoints: {
         ...document.endpoints,
         [key]: {
@@ -92,12 +96,23 @@ export class OwnerApprovalStore {
     }
     this.#write({
       version: STORE_VERSION,
+      legacyEndpoints: document.legacyEndpoints,
       endpoints: {
         ...document.endpoints,
         [key]: { ...entry, bashRules: next },
       },
     });
     return { ok: true };
+  }
+
+  previewHistoricalApprovals(): DataMigrationInventory {
+    const entries = Object.entries(this.#read().legacyEndpoints);
+    return { revision: digest(entries), candidates: entries.map(([key, entry]) => ({
+      id: digest(key), domain: 'owner-approvals', title: 'Historical Owner approval', sourceVersion: '2',
+      recordCount: 1, beforeDigest: digest([key, entry]), status: 'unresolved' as const, executable: false,
+      summary: { historicalAddress: key, bashAlways: entry.bashAlways === true, ruleCount: entry.bashRules.length,
+        requiresFreshAuthorization: true },
+    })) };
   }
 
   #read(): OwnerApprovalDocument {
@@ -126,38 +141,50 @@ export class OwnerApprovalStoreFormatError extends Error {
 }
 
 function addressKey(address: OwnerApprovalAddress): string {
-  return `${address.platform}|${address.endpoint}|${address.ownerId}`;
+  return JSON.stringify([address.endpoint.adapter, address.endpoint.id, address.ownerId]);
 }
 
 function emptyDocument(): OwnerApprovalDocument {
-  return { version: STORE_VERSION, endpoints: {} };
+  return { version: STORE_VERSION, endpoints: {}, legacyEndpoints: {} };
 }
 
 function parseDocument(input: unknown): OwnerApprovalDocument {
-  if (!isRecord(input) || !hasExactKeys(input, ['version', 'endpoints'])) {
+  if (!isRecord(input) || !hasExactKeys(input, ['version', 'endpoints'], ['legacyEndpoints'])) {
     throw new TypeError('Invalid Owner approval document');
   }
-  if (input.version !== STORE_VERSION || !isRecord(input.endpoints)) {
+  if ((input.version !== STORE_VERSION && input.version !== 2) || !isRecord(input.endpoints)) {
     throw new TypeError('Unsupported Owner approval document version');
   }
-  const endpoints: Record<string, BashApprovalEntry> = {};
-  for (const [key, rawEntry] of Object.entries(input.endpoints)) {
-    if (!isRecord(rawEntry) || !hasExactKeys(rawEntry, ['bashRules'], ['bashAlways'])) {
-      throw new TypeError(`Invalid Owner approval entry: ${key}`);
+  const parseEntries = (raw: unknown): Readonly<Record<string, BashApprovalEntry>> => {
+    if (!isRecord(raw)) throw new TypeError('Invalid Owner approval entries');
+    const endpoints: Record<string, BashApprovalEntry> = {};
+    for (const [key, rawEntry] of Object.entries(raw)) {
+      if (!isRecord(rawEntry) || !hasExactKeys(rawEntry, ['bashRules'], ['bashAlways'])) {
+        throw new TypeError(`Invalid Owner approval entry: ${key}`);
+      }
+      if (rawEntry.bashAlways !== undefined && rawEntry.bashAlways !== true) {
+        throw new TypeError(`Invalid bashAlways value: ${key}`);
+      }
+      if (!Array.isArray(rawEntry.bashRules)) {
+        throw new TypeError(`Invalid bashRules value: ${key}`);
+      }
+      const bashRules = rawEntry.bashRules.map((rule) => parseRule(key, rule));
+      endpoints[key] = Object.freeze({
+        ...(rawEntry.bashAlways ? { bashAlways: true } : {}),
+        bashRules: Object.freeze(bashRules),
+      });
     }
-    if (rawEntry.bashAlways !== undefined && rawEntry.bashAlways !== true) {
-      throw new TypeError(`Invalid bashAlways value: ${key}`);
-    }
-    if (!Array.isArray(rawEntry.bashRules)) {
-      throw new TypeError(`Invalid bashRules value: ${key}`);
-    }
-    const bashRules = rawEntry.bashRules.map((rule) => parseRule(key, rule));
-    endpoints[key] = Object.freeze({
-      ...(rawEntry.bashAlways ? { bashAlways: true } : {}),
-      bashRules: Object.freeze(bashRules),
-    });
-  }
-  return Object.freeze({ version: STORE_VERSION, endpoints: Object.freeze(endpoints) });
+    return Object.freeze(endpoints);
+  };
+  if (input.version === 2 && Object.hasOwn(input, 'legacyEndpoints')) throw new TypeError('Unexpected V2 legacy entries');
+  if (input.version === 2) return Object.freeze({ version: STORE_VERSION, endpoints: Object.freeze({}),
+    legacyEndpoints: parseEntries(input.endpoints) });
+  return Object.freeze({ version: STORE_VERSION, endpoints: parseEntries(input.endpoints),
+    legacyEndpoints: parseEntries(input.legacyEndpoints) });
+}
+
+function digest(value: unknown): string {
+  return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
 function parseRule(endpoint: string, input: unknown): BashRuleEntry {

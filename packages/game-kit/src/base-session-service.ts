@@ -1,10 +1,11 @@
+import { createDeliveryTarget, DataMigrationError, encodeStorageIdentity, type DeliveryTarget, type Locale, type TargetMigrationScopes } from '@zhin.js/plugin-runtime';
+import { channelKey } from './board-sender.js';
 import {
   GameEventBus,
   type GameEventSession,
   type GameOutcome,
 } from './game-events.js';
 import type { GameSessionAvailability, GameSessionProvider } from './session-coordinator.js';
-import type { Locale } from '@zhin.js/plugin-runtime';
 
 export interface BaseGameSessionRow extends GameEventSession {
   /** Captured when the game starts; legacy rows may not carry a locale. */
@@ -45,6 +46,14 @@ export interface BaseSessionServiceOptions<TRow extends BaseGameSessionRow> {
   ) => readonly GameOutcome[];
 }
 
+export interface GameSessionCommit<TRow extends BaseGameSessionRow> {
+  readonly previous: Readonly<TRow>;
+  readonly patch: Readonly<Partial<TRow>>;
+  readonly where: Readonly<Record<string, unknown>>;
+}
+/** Resolves only after persistence commits; event publication stays in BaseSessionService. */
+export type GameSessionWriter<TRow extends BaseGameSessionRow> = (request: GameSessionCommit<TRow>) => Promise<TRow | null>;
+
 export type SessionTimeoutListener<TRow extends BaseGameSessionRow> = (
   session: TRow,
 ) => void | Promise<void>;
@@ -56,6 +65,8 @@ export type SessionTimeoutListener<TRow extends BaseGameSessionRow> = (
 export abstract class BaseSessionService<TRow extends BaseGameSessionRow>
 implements GameSessionProvider {
   readonly gameId: string;
+  readonly storageTable: string;
+  #migrationScopes?: TargetMigrationScopes;
   readonly events = new GameEventBus();
   readonly #activeStatus: string;
   readonly #abortedStatus: string;
@@ -72,10 +83,18 @@ implements GameSessionProvider {
     if (!model) throw new Error(`${options.table} not registered`);
     this.#model = model;
     this.gameId = options.gameId;
+    this.storageTable = options.table;
     this.#userFields = options.userFields;
     this.#projectOutcomes = options.projectOutcomes;
     this.#activeStatus = options.activeStatus ?? 'active';
     this.#abortedStatus = options.abortedStatus ?? 'aborted';
+  }
+
+  bindMigrationScopes(scopes: TargetMigrationScopes): void { this.#migrationScopes = scopes; }
+
+  /** Whole command/timer work, including awaited notifications, shares this scope lease. */
+  runInScope<T>(input: Readonly<{ scope: string; run: () => Promise<T> }>): Promise<T> {
+    return this.#migrationScopes ? this.#migrationScopes.run(input) : input.run();
   }
 
   async getById(id: string): Promise<TRow | null> {
@@ -112,45 +131,45 @@ implements GameSessionProvider {
   async updateSession(id: string, patch: Partial<TRow>): Promise<void> {
     const previous = await this.getById(id);
     if (!previous) return;
-    await this.commitSession(previous, patch, { id });
+    await this.commitSession({ previous, patch, where: { id } });
   }
 
   /**
    * Persist one transition and emit lifecycle events from the row that was
    * actually stored. Versioned services use `where` for optimistic locking.
    */
-  protected async commitSession(
-    previous: TRow,
-    patch: Partial<TRow>,
-    where: Record<string, unknown>,
-  ): Promise<TRow | null> {
-    const updatedAt = Date.now();
-    const changed = await this.#model.updateWhere(
-      where,
-      { ...patch, updated_at: updatedAt },
-    );
-    if (typeof changed === 'number' && changed === 0) return null;
-    const session = await this.getById(previous.id);
-    if (!session) return null;
-    if (patch.turn !== undefined && patch.turn !== previous.turn) {
-      await this.events.emit('turn:change', {
-        gameId: this.gameId,
-        session,
-        previousTurn: previous.turn,
-        turn: patch.turn,
-      });
-    }
-    if (patch.status !== undefined
-      && previous.status === this.#activeStatus
-      && patch.status !== this.#activeStatus) {
-      await this.events.emit('game:end', {
-        gameId: this.gameId,
-        session,
-        previousStatus: previous.status,
-        outcomes: this.#projectOutcomes?.(session, previous) ?? [],
-      });
-    }
-    return session;
+  protected async commitSession(input: GameSessionCommit<TRow> & Readonly<{ writer?: GameSessionWriter<TRow> }>): Promise<TRow | null> {
+    const { previous, where } = input;
+    return this.runInScope({ scope: previous.channel_key, run: async () => {
+      const patch = { ...input.patch, updated_at: Date.now() } as Partial<TRow>;
+      let session: TRow | null;
+      if (input.writer) session = await input.writer({ previous, where, patch });
+      else {
+        const changed = await this.#model.updateWhere({ ...where }, patch);
+        if (typeof changed === 'number' && changed === 0) return null;
+        session = await this.getById(previous.id);
+      }
+      if (!session) return null;
+      if (patch.turn !== undefined && patch.turn !== previous.turn) {
+        await this.events.emit('turn:change', {
+          gameId: this.gameId,
+          session,
+          previousTurn: previous.turn,
+          turn: patch.turn,
+        });
+      }
+      if (patch.status !== undefined
+        && previous.status === this.#activeStatus
+        && patch.status !== this.#activeStatus) {
+        await this.events.emit('game:end', {
+          gameId: this.gameId,
+          session,
+          previousStatus: previous.status,
+          outcomes: this.#projectOutcomes?.(session, previous) ?? [],
+        });
+      }
+      return session;
+    } });
   }
 
   async abortStale(
@@ -162,33 +181,37 @@ implements GameSessionProvider {
     let count = 0;
     for (const row of rows) {
       if (row.updated_at >= cutoff) continue;
-      // The timestamp condition prevents a cleanup scan from aborting a
-      // session that received a player action after this row was selected.
-      const session = await this.commitSession(
-        row,
-        { status: this.#abortedStatus } as Partial<TRow>,
-        {
-          id: row.id,
-          status: this.#activeStatus,
-          updated_at: row.updated_at,
-        },
-      );
-      if (!session) continue;
-      await this.events.emit('session:timeout', {
-        gameId: this.gameId,
-        session,
-        idleMs,
-      });
-      // A broken outbound adapter must not prevent later stale sessions from
-      // being finalized. Persistence and lifecycle events already succeeded.
-      if (onTimeout) {
-        try {
-          await onTimeout(session);
-        } catch {
-          // Notification is best-effort; the next cleanup pass stays healthy.
+      try {
+        const changed = await this.runInScope({ scope: row.channel_key, run: async () => {
+        // The timestamp condition prevents a cleanup scan from aborting a
+        // session that received a player action after this row was selected.
+        const session = await this.commitSession({
+          previous: row,
+          patch: { status: this.#abortedStatus } as Partial<TRow>,
+          where: { id: row.id, status: this.#activeStatus, updated_at: row.updated_at },
+        });
+        if (!session) return false;
+        await this.events.emit('session:timeout', {
+          gameId: this.gameId,
+          session,
+          idleMs,
+        });
+        // A broken outbound adapter must not prevent later stale sessions from
+        // being finalized. Persistence and lifecycle events already succeeded.
+        if (onTimeout) {
+          try {
+            await onTimeout(session);
+          } catch {
+            // Notification is best-effort; the next cleanup pass stays healthy.
+          }
         }
+        return true;
+        } });
+        if (changed) count += 1;
+      } catch (error) {
+        if (error instanceof DataMigrationError && error.code === 'unavailable') continue;
+        throw error;
       }
-      count += 1;
     }
     return count;
   }
@@ -201,16 +224,24 @@ implements GameSessionProvider {
     return this.#availability.assertAvailable(this.gameId, channelKey, userIds);
   }
 
-  protected async createRow(row: TRow): Promise<TRow> {
-    const userIds: string[] = [];
-    for (const field of this.#userFields) {
-      const value: unknown = row[field];
-      if (typeof value === 'string') userIds.push(value);
-    }
-    await this.assertPlayersAvailable(row.channel_key, userIds);
-    await this.#model.create(row);
-    await this.events.emit('game:start', { gameId: this.gameId, session: row });
-    return row;
+  protected async createRow(input: Readonly<{
+    target: DeliveryTarget;
+    fields: Omit<TRow, 'channel_key' | 'adapter' | 'endpoint' | 'channel_type' | 'channel_id'>;
+  }>): Promise<TRow> {
+    const target = createDeliveryTarget({ conversation: input.target });
+    const row = { ...input.fields, adapter: encodeStorageIdentity(target.endpoint.adapter), endpoint: encodeStorageIdentity(target.endpoint.id),
+      channel_type: target.kind, channel_id: encodeStorageIdentity(target.id), channel_key: channelKey({ target }) } as TRow;
+    return this.runInScope({ scope: row.channel_key, run: async () => {
+      const userIds: string[] = [];
+      for (const field of this.#userFields) {
+        const value: unknown = row[field];
+        if (typeof value === 'string') userIds.push(value);
+      }
+      await this.assertPlayersAvailable(row.channel_key, userIds);
+      await this.#model.create(row);
+      await this.events.emit('game:start', { gameId: this.gameId, session: row });
+      return row;
+    } });
   }
 
   protected get model(): GameSessionModel<TRow> {

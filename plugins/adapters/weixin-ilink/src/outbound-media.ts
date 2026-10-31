@@ -52,7 +52,13 @@ function withLocalPath(seg: WeixinWireSegment, media: MediaRef, filePath: string
   };
 }
 
-function writeOutboundBuffer(buffer: Buffer, outboundDir: string, seg: WeixinWireSegment, media: MediaRef): string {
+interface OutboundBufferWrite {
+  readonly buffer: Buffer;
+  readonly outboundDir: string;
+  readonly seg: WeixinWireSegment;
+  readonly media: MediaRef;
+}
+function writeOutboundBuffer({ buffer, outboundDir, seg, media }: OutboundBufferWrite): string {
   fs.mkdirSync(outboundDir, { recursive: true });
   const ext = resolveExt(seg, media);
   const filePath = path.join(
@@ -66,7 +72,9 @@ function writeOutboundBuffer(buffer: Buffer, outboundDir: string, seg: WeixinWir
 async function materializeSegment(
   seg: WeixinWireSegment,
   outboundDir: string,
+  signal?: AbortSignal,
 ): Promise<WeixinWireSegment | null> {
+  signal?.throwIfAborted();
   if (!MEDIA_TYPES.has(seg.type)) return seg;
 
   const media = (seg.data ?? {}).media;
@@ -77,9 +85,10 @@ async function materializeSegment(
   switch (media.kind) {
     case 'url': {
       try {
-        const downloaded = await downloadRemoteImageToTemp(media.value, outboundDir);
+        const downloaded = await downloadRemoteImageToTemp(media.value, outboundDir, signal);
         return withLocalPath(seg, media, downloaded);
       } catch (err) {
+        signal?.throwIfAborted();
         logger.warn(formatCompact({
           op: 'weixin_ilink_outbound_media_dropped',
           type: seg.type,
@@ -93,7 +102,12 @@ async function materializeSegment(
       return withLocalPath(
         seg,
         media,
-        writeOutboundBuffer(Buffer.from(media.value, 'base64'), outboundDir, seg, media),
+        writeOutboundBuffer({
+          buffer: Buffer.from(media.value, 'base64'),
+          outboundDir,
+          seg,
+          media,
+        }),
       );
     case 'path': {
       if (!fs.existsSync(media.value)) {
@@ -126,9 +140,10 @@ function asSegments(content: OutboundWireContent): WeixinWireSegment[] {
 export async function materializeOutboundMedia(
   content: OutboundWireContent,
   outboundDir: string,
+  signal?: AbortSignal,
 ): Promise<OutboundWireContent> {
   const segments = asSegments(content);
-  const out = (await Promise.all(segments.map((seg) => materializeSegment(seg, outboundDir))))
+  const out = (await Promise.all(segments.map((seg) => materializeSegment(seg, outboundDir, signal))))
     .filter((seg): seg is WeixinWireSegment => seg !== null);
   if (typeof content === 'string') {
     return out[0]?.type === 'text' ? String((out[0].data as { text?: string })?.text ?? content) : content;

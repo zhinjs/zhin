@@ -1,4 +1,4 @@
-import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createEndpointHarness, createTestEventGateway, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { MilkyV1Client, ProtocolError } from '@imhelper/milky-v1';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -368,7 +368,7 @@ describe('milky plugin runtime adapter', () => {
       config: baseConfig,
       callApi: vi.fn(async () => ({})),
       createWebSocket: () => { const socket = createMockWs(); queueMicrotask(() => socket.emitOpen()); return socket; },
-    }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: { receive: events } });
+    }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEndpointEventGateway({ receive: events }) });
     const rawEvent = {
       event_type: 'message_receive',
       time: 1,
@@ -414,7 +414,7 @@ describe('milky plugin runtime adapter', () => {
       config: baseConfig,
       callApi: vi.fn(async () => ({})),
       createWebSocket: () => { const socket = createMockWs(); queueMicrotask(() => socket.emitOpen()); return socket; },
-    }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: { receive: vi.fn() } });
+    }), { name: 'milky', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEndpointEventGateway({ receive: vi.fn() }) });
     const request = vi.fn();
     endpoint.endpoint.on('request.group', request);
 
@@ -544,12 +544,10 @@ describe('milky plugin runtime adapter', () => {
     })).resolves.toBe('friend:10001:99');
 
     expect(callApi).toHaveBeenCalledWith(
-      expect.objectContaining({ baseUrl: 'http://127.0.0.1:8080' }),
-      'send_private_message',
-      {
+      expect.objectContaining({ baseUrl: 'http://127.0.0.1:8080', action: 'send_private_message', params: {
         user_id: 10001,
         message: [{ type: 'text', data: { text: 'pong' } }],
-      },
+      } }),
     );
     await endpoint.stop();
   });

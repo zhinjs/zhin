@@ -6,7 +6,7 @@
 interface AdmissionLifecycle {
   assertClaimable(gate: GenerationAdmissionGate, owner: object): void;
   assertOwner(gate: GenerationAdmissionGate, owner: object): void;
-  claim(gate: GenerationAdmissionGate, owner: object): void;
+  claim(gate: GenerationAdmissionGate, owner: object, stopSignal: AbortSignal): void;
   activate(gate: GenerationAdmissionGate, acquire?: () => () => void): void;
   deactivate(gate: GenerationAdmissionGate): void;
   notifyActivation(gate: GenerationAdmissionGate): void;
@@ -21,6 +21,7 @@ let admissionLifecycle: AdmissionLifecycle;
 export class GenerationAdmissionGate {
   #state: AdmissionState = { active: false };
   #owner?: object;
+  #stopSignal?: AbortSignal;
   readonly #activationListeners = new Set<() => void>();
   readonly #deactivationListeners = new Set<() => void>();
 
@@ -28,7 +29,7 @@ export class GenerationAdmissionGate {
     admissionLifecycle = {
       assertClaimable: (gate, owner) => gate.#assertClaimable(owner),
       assertOwner: (gate, owner) => gate.#assertOwner(owner),
-      claim: (gate, owner) => { gate.#owner = owner; },
+      claim: (gate, owner, stopSignal) => { gate.#owner = owner; gate.#stopSignal = stopSignal; },
       activate: (gate, acquire) => gate.#activate(acquire),
       deactivate: (gate) => gate.#deactivate(),
       notifyActivation: (gate) => gate.#notifyActivation(),
@@ -38,6 +39,11 @@ export class GenerationAdmissionGate {
 
   get active(): boolean {
     return this.#state.active;
+  }
+
+  /** Root closure fact, bound at first publication and retained after generation retirement. */
+  get stopSignal(): AbortSignal | undefined {
+    return this.#stopSignal;
   }
 
   acquire(): (() => void) | undefined {
@@ -56,8 +62,8 @@ export class GenerationAdmissionGate {
 
   /**
    * Observe retirement of the generation that owns this gate. The callback is
-   * synchronous and must not fail; it is intended for closing process-owned
-   * ingress transports such as WebSocket connections.
+   * synchronous and must not fail. It closes new admission; it does not decide
+   * whether already-owned transports or work should end. Use stopSignal for Root shutdown.
    */
   onDeactivate(listener: () => void): () => void {
     if (!this.active) {
@@ -178,13 +184,16 @@ export function collectGenerationAdmissions(
   return result;
 }
 
-export function replaceGenerationAdmissions(
-  previous: ReadonlySet<GenerationAdmissionGate>,
-  next: ReadonlySet<GenerationAdmissionGate>,
-  owner: object,
-  publishNext: () => void,
-  acquireNext?: () => () => void,
-): void {
+/** One SnapshotStore-owned publication; all gates share that Root's explicit close fact. */
+interface GenerationAdmissionTransition {
+  readonly previous: ReadonlySet<GenerationAdmissionGate>;
+  readonly next: ReadonlySet<GenerationAdmissionGate>;
+  readonly owner: object;
+  readonly publishNext: () => void;
+  readonly acquireNext?: () => () => void;
+  readonly stopSignal: AbortSignal;
+}
+export function replaceGenerationAdmissions({ previous, next, owner, publishNext, acquireNext, stopSignal }: GenerationAdmissionTransition): void {
   // Validate the complete switch before changing ownership or visibility. A
   // rejected cross-Root gate must leave both generations exactly untouched.
   for (const gate of next) admissionLifecycle.assertClaimable(gate, owner);
@@ -194,7 +203,7 @@ export function replaceGenerationAdmissions(
   // This callback is SnapshotStore's infallible pointer assignment. Every
   // potentially rejecting ownership check has completed before publication.
   publishNext();
-  for (const gate of next) admissionLifecycle.claim(gate, owner);
+  for (const gate of next) admissionLifecycle.claim(gate, owner, stopSignal);
   for (const gate of previous) {
     if (next.has(gate)) continue;
     admissionLifecycle.deactivate(gate);

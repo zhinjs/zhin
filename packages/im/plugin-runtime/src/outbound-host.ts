@@ -35,8 +35,6 @@ export interface OutboundSendInput {
 }
 
 export interface OutboundReactionInput {
-  readonly adapter: string;
-  readonly endpointKey: string;
   readonly message: OutboundMessage;
   readonly emoji: string;
   readonly sceneType?: string;
@@ -44,15 +42,11 @@ export interface OutboundReactionInput {
 }
 
 export interface OutboundRemoveReactionInput {
-  readonly adapter: string;
-  readonly endpointKey: string;
   readonly message: OutboundMessage;
   readonly reactionId: string;
 }
 
 export interface OutboundRecallInput {
-  readonly adapter: string;
-  readonly endpointKey: string;
   readonly message: OutboundMessage;
 }
 
@@ -67,12 +61,12 @@ export interface OutboundEndpointCapabilities {
   readonly operations: readonly OutboundEndpointOperation[];
 }
 
-export interface OutboundEditInput extends OutboundEndpointInput {
+export interface OutboundEditInput {
   readonly message: OutboundMessage;
   readonly content: unknown;
 }
 
-export interface OutboundTypingInput extends OutboundEndpointInput {
+export interface OutboundTypingInput {
   readonly conversation: OutboundMessage['conversation'];
   readonly active?: boolean;
 }
@@ -86,7 +80,31 @@ export interface OutboundMessage {
   readonly id: string;
 }
 
+/** Retain a real source Client while its inbound operation is active. Never serialize this input. */
+export interface OutboundCaptureInput {
+  readonly target: DeliveryTarget;
+  readonly client: unknown;
+  readonly signal?: AbortSignal;
+}
+
+/** Messaging effects bound to one source incarnation, independent of reusable account names. */
+export interface CapturedOutboundOperation {
+  readonly target: DeliveryTarget;
+  readonly signal: AbortSignal;
+  send(content: unknown, options?: Readonly<{ locale?: Locale; signal?: AbortSignal }>): Promise<string | null>;
+  recall?(message: OutboundMessage): Promise<void>;
+  edit?(message: OutboundMessage, content: unknown): Promise<string | null>;
+  addReaction?(message: OutboundMessage, emoji: string,
+    hint?: Readonly<{ sceneType?: string; channelId?: string }>): Promise<string | null>;
+  removeReaction?(message: OutboundMessage, reactionId: string): Promise<void>;
+  typing?(conversation: OutboundMessage['conversation'], active?: boolean): Promise<void>;
+  /** Release the captured source and Root leases on every completion path. */
+  release(): void;
+}
+
 export interface OutboundHost {
+  /** Creates source-bound effects; ordinary persisted sends continue using sendTarget. */
+  captureOperation?(input: OutboundCaptureInput): CapturedOutboundOperation;
   /** Sends to persisted exact identities, rejecting stale addresses instead of aliasing another bot. */
   sendTarget?(target: DeliveryTarget, content: unknown, options?: Readonly<{ locale?: Locale }>): Promise<string | null>;
   /** Runs related operations against one IM Runtime snapshot captured at ingress. */
@@ -110,12 +128,14 @@ export interface OutboundHost {
 }
 
 /** Root-only process port: requester is supplied by the owner-bound facade. */
-export interface OutboundRootHost extends Omit<OutboundHost, 'sendTarget'> {
+export interface OutboundRootHost extends Omit<OutboundHost, 'sendTarget' | 'captureOperation'> {
+  captureOperation?(input: OutboundCaptureInput, requester: PluginId): CapturedOutboundOperation;
   sendTarget?(target: DeliveryTarget, content: unknown, requester: PluginId, options?: Readonly<{ locale?: Locale }>): Promise<string | null>;
 }
 
 /** Preserve the sending plugin as requester, independent of the destination endpoint owner. */
 export class PluginOutboundHost implements OutboundHost {
+  readonly captureOperation?: OutboundHost['captureOperation'];
   readonly sendTarget?: OutboundHost['sendTarget'];
   readonly runWithView?: OutboundHost['runWithView'];
   readonly capabilities?: OutboundHost['capabilities'];
@@ -135,6 +155,8 @@ export class PluginOutboundHost implements OutboundHost {
     this.#host = host;
     this.#admission = admission;
     this.#operation = new OwnerOperation(admission, 'Outbound');
+    const captureOperation = host.captureOperation?.bind(host);
+    this.captureOperation = captureOperation ? input => this.#run(() => captureOperation(input, this.#owner)) : undefined;
     const sendTarget = host.sendTarget?.bind(host);
     const runWithView = host.runWithView?.bind(host);
     const capabilities = host.capabilities?.bind(host);

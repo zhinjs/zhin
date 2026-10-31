@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { extractChannelInfo, subscriptionScope } from '../src/channel.js';
 import { BiliApiError } from '../src/api.js';
 import { getBiliState, getBiliSubs } from '../src/store.js';
 import { dyn, harness, live, type Harness } from './fixtures.js';
@@ -29,6 +30,21 @@ describe('BilibiliWatcher', () => {
     expect(h.pushes.find(row => row.channelId === 'old')?.content).toContain('【开播】');
     expect(h.pushes.find(row => row.channelId === 'new')?.content).toContain('[Live]');
     expect(h.client.calls.live).toBe(2);
+  });
+
+  it('restores canonical subscription destinations without reusing a display alias', async () => {
+    const h = harness(), Subs = getBiliSubs(h.db)!;
+    const targets = ['canonical\0first', 'canonical\0second'].map(id => ({ endpoint: { adapter: 'icqq', id }, kind: 'group' as const, id: 'group' }));
+    for (const conversation of targets) await Subs.insert({ uid: '1', kinds: 'live',
+      ...subscriptionScope(extractChannelInfo({ conversation, endpointId: 'same-name', clientAdapter: 'icqq' })!),
+    });
+    await Subs.insert({ uid: '1', kinds: 'live', ...subscriptionScope(extractChannelInfo({ conversation: targets[0] })!), target_json: '{invalid-json' });
+    const before = await Subs.select();
+    h.client.liveStatus.set('1', live('1', 0)); await h.watcher.tick();
+    h.client.liveStatus.set('1', live('1', 1, 2000));
+    expect((await h.watcher.tick()).pushed).toBe(2);
+    expect(h.pushes.map(row => row.target)).toEqual(targets);
+    expect(await Subs.select()).toEqual(before);
   });
 
   it('records a silent baseline, then pushes a live start once', async () => {

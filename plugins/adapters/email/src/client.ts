@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { createEndpointLifecycle, type EndpointLifecycle, type EndpointSendRequest, type EndpointTransportState } from 'zhin.js/adapter';
+import { createEndpointOperation, createEndpointLifecycle, type EndpointLifecycle, type EndpointSendRequest, type EndpointTransportState } from 'zhin.js/adapter';
 /**
  * EmailClient — lifecycle, SMTP outbound, IMAP inbound polling.
  */
@@ -176,14 +176,14 @@ export class EmailClient extends EventEmitter {
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
-  protected async sendPayload({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  protected async sendPayload({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const target = conversation.id;
     const mailOptions = formatOutboundMail(payload, {
       from: this.#options.config.smtp.auth.user,
       to: target,
     });
     try {
-      const info = await this.sendMail(mailOptions);
+      const info = await createEndpointOperation({ signal }).run(() => this.sendMail(mailOptions));
       const messageId = requireSmtpAcceptance(info, target);
       this.#logger.debug(formatCompact({ op: 'email_send', messageId }));
       return messageId;

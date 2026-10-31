@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createToken, definePlugin, projectLocaleToken, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import commandFeature, {
   CommandIndex,
@@ -18,6 +18,165 @@ afterEach(async () => {
 });
 
 describe('RootRuntime tracer bullet', () => {
+  it('awaits instance pause before evaluating a candidate and notifies both old and new instances before disposal', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    const order: string[] = [];
+    let finishPause!: () => void;
+    let pauseEntered!: () => void;
+    const entered = new Promise<void>(resolve => { pauseEntered = resolve; });
+    const held = new Promise<void>(resolve => { finishPause = resolve; });
+    const source = join(project, 'plugin.ts');
+    const notices: import('@zhin.js/plugin-runtime').HmrResumeDetails[] = [];
+    modules.set(source, { default: definePlugin({ name: 'root', setup({ events, lifecycle }) {
+      events.on('hmr.pause', async event => {
+        expect(event.signal.aborted).toBe(false); order.push('pause'); pauseEntered(); await held;
+      });
+      events.on('hmr.resume', event => { notices.push(event.details); order.push('old-complete'); });
+      lifecycle.add(() => { order.push('old-dispose'); });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2, plugins: {} },
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    await runtime.start();
+    modules.set(source, { default: definePlugin({ name: 'root', setup({ events }) {
+      order.push('candidate'); events.on('hmr.resume', event => { notices.push(event.details); order.push('new-complete'); });
+    } }) });
+    const reloading = runtime.reload();
+    await entered;
+    expect(order).toEqual(['pause']); expect(runtime.snapshot.generation).toBe(1);
+    finishPause();
+    await reloading;
+    expect(order.slice(0, 4)).toEqual(['pause', 'candidate', 'old-complete', 'new-complete']);
+    expect(notices.map(value => [value.outcome, value.receiver.creationGeneration, value.receiver.state]))
+      .toEqual([['committed', 1, 'replaced'], ['committed', 2, 'current']]);
+    expect(notices[0].replaced).toContain(runtime.snapshot.root);
+    await runtime.stop();
+    expect(order.indexOf('old-dispose')).toBeGreaterThan(order.indexOf('old-complete'));
+  });
+
+  it('keeps a reused instance once on source-slot HMR and reports completion errors without rolling module metadata back', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    let pauses = 0, resumes = 0, setups = 0;
+    const reported: unknown[] = [];
+    const rollback = vi.fn();
+    const commit = vi.fn();
+    Object.assign(modules, { beginGeneration() {}, rollbackGeneration: rollback, commitGeneration: commit });
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', setup({ events }) {
+      setups++; events.on('hmr.pause', () => { pauses++; });
+      events.on('hmr.resume', event => {
+        resumes++; expect(event.details.receiver.state).toBe('current');
+        expect(event.details.replaced).toEqual([]); throw new Error('completion diagnostic');
+      });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    const source = join(project, 'commands/gh/issue/list/index.ts');
+    modules.set(source, { default: defineCommand({ execute: () => 'before' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2, plugins: {} },
+      environment: { name: 'test', mode: 'test', platform: 'node' }, onControlError: error => { reported.push(error); } });
+    await runtime.start();
+    const hmr = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('unexpected restart'); }, onError(error) { throw error; } });
+    modules.set(source, { default: defineCommand({ execute: () => 'after' }) });
+    await hmr.enqueue(source);
+    expect([setups, pauses, resumes]).toEqual([1, 1, 1]);
+    expect(runtime.snapshot.generation).toBe(2);
+    expect(rollback).not.toHaveBeenCalled(); expect(commit).toHaveBeenCalled(); expect(reported).toHaveLength(1);
+    expect(await commandIndex(runtime.snapshot).execute('gh issue list')).toBe('after');
+    await runtime.stop();
+  });
+
+  it('rejects publication after pause failure while notifying every attempted instance', async () => {
+    const project = await createProject(); const modules = new FakeModuleRuntime();
+    const outcomes: string[] = [];
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', setup({ events }) {
+      events.on('hmr.pause', () => { throw new Error('checkpoint rejected'); });
+      events.on('hmr.resume', event => { outcomes.push(event.details.outcome); });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2, plugins: {} },
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    await runtime.start();
+    const before = modules.loadCount(join(project, 'plugin.ts'));
+    await expect(runtime.reload()).rejects.toThrow('pause handlers rejected');
+    expect(runtime.snapshot.generation).toBe(1); expect(outcomes).toEqual(['rejected']);
+    expect(modules.loadCount(join(project, 'plugin.ts'))).toBe(before);
+    await runtime.stop();
+  });
+
+  it('never sends completion to a rejected candidate that registered listeners during setup', async () => {
+    const project = await createProject(); const modules = new FakeModuleRuntime();
+    const completions: string[] = []; let rejectedDisposed = false;
+    const source = join(project, 'plugin.ts');
+    modules.set(source, { default: definePlugin({ name: 'root', setup({ events }) {
+      events.on('hmr.resume', event => { completions.push(`old:${event.details.outcome}`); });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2, plugins: {} },
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    await runtime.start();
+    modules.set(source, { default: definePlugin({ name: 'root', setup({ events, lifecycle }) {
+      events.on('hmr.resume', () => { completions.push('candidate'); });
+      lifecycle.add(() => { rejectedDisposed = true; }); throw new Error('candidate setup rejected');
+    } }) });
+    try {
+      await expect(runtime.reload()).rejects.toThrow('candidate setup rejected');
+      expect(runtime.snapshot.generation).toBe(1); expect(completions).toEqual(['old:rejected']);
+      expect(rejectedDisposed).toBe(true);
+    } finally { await runtime.stop(); }
+  });
+
+  it('cooperatively cancels a pending pause on explicit stop and keeps its old instance through completion', async () => {
+    const project = await createProject(); const modules = new FakeModuleRuntime();
+    let entered!: () => void;
+    const pause = new Promise<void>(resolve => { entered = resolve; });
+    let completed = false, disposed = false;
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', setup({ events, lifecycle }) {
+      events.on('hmr.pause', event => { entered(); return new Promise<void>(resolve => event.signal.addEventListener('abort', () => resolve(), { once: true })); });
+      events.on('hmr.resume', async event => {
+        expect(disposed).toBe(false); expect(event.details.outcome).toBe('cancelled');
+        expect(event.details.reason).toBe('root-stopping');
+        if (!event.signal.aborted) await new Promise<void>(resolve => event.signal.addEventListener('abort', () => resolve(), { once: true }));
+        completed = true;
+      });
+      lifecycle.add(() => { expect(completed).toBe(true); disposed = true; });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2, plugins: {} },
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    await runtime.start(); const reload = runtime.reload(); const rejected = expect(reload).rejects.toThrow('stopping');
+    await pause; const stop = runtime.stop(); await rejected; await stop;
+    expect(completed).toBe(true); expect(disposed).toBe(true);
+  });
+
+  it.each(['abort', 'retain'] as const)('lets the plugin choose %s for accepted command work without imposing a drain', async policy => {
+    const project = await createProject(); const modules = new FakeModuleRuntime();
+    const taskSignal = new AbortController();
+    let finish!: () => void, entered!: () => void;
+    const active = new Promise<void>(resolve => { entered = resolve; });
+    const work = new Promise<string>(resolve => { finish = () => resolve('finished');
+      taskSignal.signal.addEventListener('abort', () => resolve('plugin-cancelled'), { once: true }); });
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', setup({ events }) {
+      events.on('hmr.pause', () => { if (policy === 'abort') taskSignal.abort(); });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: async () => { entered(); return work; } }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2, plugins: {} },
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    try {
+      await runtime.start();
+      const executing = commandIndex(runtime.snapshot).execute('gh issue list'); await active;
+      await runtime.reload();
+      expect(taskSignal.signal.aborted).toBe(policy === 'abort');
+      finish();
+      await expect(executing).resolves.toBe(policy === 'abort' ? 'plugin-cancelled' : 'finished');
+    } finally { finish(); await runtime.stop(); }
+  });
+
   it('resolves omitted project language at runtime without adding it to the configuration', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();

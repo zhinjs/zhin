@@ -44,6 +44,7 @@ class InteractionAdapter extends Adapter<InteractionEndpoint> {
 }
 
 const ignoredEndpointEvents = Object.freeze({
+  async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
   receive: async (_event: EndpointEvent) => undefined,
 });
 
@@ -92,7 +93,10 @@ describe('UserInteraction via ImRuntime', () => {
     const interactions = new RuntimeInteractionCoordinator(router);
     const conversation = { endpoint: { adapter: 'test', id: 'main' }, kind: 'group' as const, id: 'room' };
     const reply = vi.fn(async () => ({ status: 'sent' as const }));
-    const message = new Message(conversation, '1', 1, reply, { id: 'alice' });
+    const message = new Message(
+      { conversation: conversation, content: '1', sender: { id: 'alice' } },
+      { generation: 1, reply: reply },
+    );
     const abort = new AbortController();
     try {
       router.rememberFallback(conversation, 1, { '1': 'old:button:action' });
@@ -107,11 +111,12 @@ describe('UserInteraction via ImRuntime', () => {
       clock.mockRestore();
     }
   });
-  async function createInteractionFixture(options: { preferences?: UserLocalePreferences; confirmation?: boolean } = {}) {
+  async function createInteractionFixture(options: { preferences?: UserLocalePreferences; confirmation?: boolean; detached?: boolean } = {}) {
     const sent: unknown[] = [];
     const events: string[] = [];
     let interactionResult: unknown;
     let interactionError: unknown;
+    let question: Promise<unknown> | undefined;
     const commandExecuted = vi.fn();
     const root = rootPluginId();
     const adapter = createCapabilitySlot({
@@ -133,12 +138,17 @@ describe('UserInteraction via ImRuntime', () => {
         async execute(context) {
           commandExecuted(context.locale, context.formatCommand('ask'), context.input?.formatCommand('ask'));
           try {
-            interactionResult = await context.interaction!.ask(options.confirmation ? { type: 'confirm', title: 'Continue?' } : {
+            question = context.interaction!.ask(options.confirmation ? { type: 'confirm', title: 'Continue?' } : {
               type: 'text',
               title: '个人信息',
               description: '请输入你的名字',
               tip: '将用于后续问候',
             });
+            if (options.detached) {
+              void question.then(value => { interactionResult = value; }, error => { interactionError = error; });
+              return;
+            }
+            interactionResult = await question;
           } catch (e) {
             interactionError = e;
             throw e;
@@ -170,6 +180,8 @@ describe('UserInteraction via ImRuntime', () => {
       events,
       commandExecuted,
       store,
+      adapters,
+      getQuestion: () => question,
       getResult: () => interactionResult,
       getError: () => interactionError,
     };
@@ -259,15 +271,49 @@ describe('UserInteraction via ImRuntime', () => {
     ]);
   });
 
-  it('immediately cancels an old question when HMR retains its owner and Endpoint', async () => {
+  it('keeps an actual captured question answerable when HMR retains its owner and Endpoint', async () => {
     const { im, sent, store } = await createInteractionFixture();
     const pending = receive(im, incomingMessage('/ask')).catch(error => error);
     await vi.waitFor(() => expect(sent).toHaveLength(1));
     store.commit(0, { snapshot: store.current, dispose() {} });
-    await expect(pending).resolves.toMatchObject({ name: 'AbortError' });
+    await expect(receive(im, incomingMessage('wrong participant', 'user-2'))).resolves.toMatchObject({ matched: false });
     expect(sent).toHaveLength(1);
-    await expect(receive(im, incomingMessage('new generation answer'))).resolves.toMatchObject({ matched: false });
+    await expect(receive(im, incomingMessage('new generation answer'))).resolves.toMatchObject({ matched: true });
+    await expect(pending).resolves.toMatchObject({ matched: true });
+    expect(JSON.stringify(sent)).toContain('你好 new generation answer');
     await store.close();
+  });
+
+  it('retains a detached question after its command frame finishes and releases the old snapshot after answering', async () => {
+    const f = await createInteractionFixture({ detached: true });
+    let disposed = false;
+    f.store.commit(0, { snapshot: f.store.current, dispose: () => { disposed = true; } });
+    await receive(f.im, incomingMessage('/ask'));
+    await vi.waitFor(() => expect(f.im.readPendingInteraction(incomingMessage('').conversation, 'user-1', 1)).toBeDefined());
+    f.store.commit(1, { snapshot: f.store.current, dispose() {} });
+    expect(disposed).toBe(false);
+    const conversation = incomingMessage('').conversation;
+    expect(f.im.readPendingInteraction(conversation, 'user-1', 2)).toMatchObject({ generation: 1, subjectId: 'user-1' });
+    expect(f.im.readPendingInteraction({ ...conversation, threadId: 'another-topic' }, 'user-1', 2)).toBeUndefined();
+    expect(f.im.readPendingInteraction({ ...conversation, endpoint: { ...conversation.endpoint, id: 'another-account' } }, 'user-1', 2)).toBeUndefined();
+    await expect(receive(f.im, incomingMessage('wrong participant', 'other'))).resolves.toMatchObject({ matched: false });
+    await expect(receive(f.im, incomingMessage('retained answer'))).resolves.toMatchObject({ matched: true });
+    await expect(f.getQuestion()).resolves.toBe('retained answer');
+    expect(f.getResult()).toBe('retained answer');
+    await vi.waitFor(() => expect(disposed).toBe(true));
+    await f.store.close();
+  });
+
+  it.each(['account', 'root'] as const)('cancels a detached question on explicit %s stop and releases its captured work', async scope => {
+    const f = await createInteractionFixture({ detached: true, confirmation: true });
+    await receive(f.im, incomingMessage('/ask'));
+    await vi.waitFor(() => expect(f.im.readPendingInteraction(incomingMessage('').conversation, 'user-1', 0)).toBeDefined());
+    const rejected = expect(f.getQuestion()).rejects.toBeInstanceOf(Error);
+    const closing = scope === 'root' ? f.store.close() : f.adapters.stop();
+    await rejected; await closing;
+    expect(f.im.readPendingInteraction(incomingMessage('').conversation, 'user-1', 0)).toBeUndefined();
+    expect(f.sent).toHaveLength(1);
+    await f.adapters.stop(); await f.store.close();
   });
 
   it('interaction 应仅匹配同一用户同一频道的消息', async () => {
@@ -582,6 +628,7 @@ describe('UserInteraction via ImRuntime', () => {
     const commandPromise = receive(im, incomingMessage('/environment'));
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
 
+    store.commit(0, { snapshot: store.current, dispose() {} });
     const firstAnswer = await receive(im, incomingMessage('正式发布'));
     expect(firstAnswer).toMatchObject({ matched: true, command: 'interaction' });
     await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(2); });
@@ -598,6 +645,7 @@ describe('UserInteraction via ImRuntime', () => {
       environment: 'production',
       confirmed: true,
     });
+    await store.close();
   });
 
   it('confirm interaction 在 signal abort 后应 fail closed 且不使用 default', async () => {
@@ -663,14 +711,14 @@ describe('UserInteraction via ImRuntime', () => {
     const { im } = await createInteractionFixture();
     const incoming = incomingMessage('start');
     const message = new Message(
-      incoming.conversation,
-      incoming.content,
-      1,
-      async () => ({
-        status: 'rejected' as const,
-        failure: { code: 'policy_denied', message: 'not delivered' },
-      }),
-      { id: 'user-1' },
+      { conversation: incoming.conversation, content: incoming.content, sender: { id: 'user-1' } },
+      {
+        generation: 1,
+        reply: async () => ({
+          status: 'rejected' as const,
+          failure: { code: 'policy_denied', message: 'not delivered' },
+        }),
+      },
     );
     const interaction = im.createInteraction(message)!;
 
@@ -683,11 +731,12 @@ describe('UserInteraction via ImRuntime', () => {
     const { im, store } = await createInteractionFixture();
     const endpoint = im.endpoints.list()[0]!.endpoint;
     const createThreadMessage = (threadId: string) => new Message(
-      { ...incomingMessage('start').conversation, endpoint, threadId },
-      'start',
-      store.current.generation,
-      async () => ({ status: 'sent' as const }),
-      { id: 'user-1' },
+      {
+        conversation: { ...incomingMessage('start').conversation, endpoint, threadId },
+        content: 'start',
+        sender: { id: 'user-1' },
+      },
+      { generation: store.current.generation, reply: async () => ({ status: 'sent' as const }) },
     );
     const threadOne = im.createInteraction(createThreadMessage('thread-1'))!;
     const threadTwo = im.createInteraction(createThreadMessage('thread-2'))!;
@@ -718,18 +767,21 @@ describe('UserInteraction via ImRuntime', () => {
     incoming.conversation.endpoint = im.endpoints.list()[0]!.endpoint;
     const delivered: string[] = [];
     const message = new Message(
-      incoming.conversation,
-      incoming.content,
-      store.current.generation,
-      async (content) => {
-        delivered.push(String(content));
-        return { status: 'sent' as const };
+      {
+        conversation: incoming.conversation,
+        content: incoming.content,
+        sender: { id: 'user-1' },
+        metadata: Object.freeze({}),
+        message: { conversation: incoming.conversation, id: 'm-ask' },
+        endpointId: 'memory',
       },
-      { id: 'user-1' },
-      Object.freeze({}),
-      undefined,
-      { conversation: incoming.conversation, id: 'm-ask' },
-      'memory',
+      {
+        generation: store.current.generation,
+        reply: async (content) => {
+          delivered.push(String(content));
+          return { status: 'sent' as const };
+        },
+      },
     );
     const interaction = im.createInteraction(message, { subjectId: 'master-1' });
     expect(interaction).toBeDefined();

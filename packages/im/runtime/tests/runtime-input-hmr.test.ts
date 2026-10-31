@@ -27,6 +27,42 @@ afterEach(async () => {
 });
 
 describe('RootRuntime watched inputs', () => {
+  it('pauses instances before source config preflight can evaluate inline plugin schema modules', async () => {
+    const fixture = await createFixture({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, child: { label: 'one' } });
+    fixture.modules.installSetups({ root: 0, child: 0, sibling: 0 });
+    let paused = false, changing = false, inspected = false;
+    const original = fixture.modules.load.bind(fixture.modules);
+    fixture.modules.load = async <T>(source: string): Promise<T> => {
+      if (changing) { inspected = true; expect(paused).toBe(true); }
+      if (changing && source === join(fixture.root, 'plugins/child/plugin.ts')) return { default: definePlugin({ name: 'child',
+        config: { toJsonSchema: () => ({ type: 'object', additionalProperties: false, properties: { label: { type: 'string' } } }) },
+      }) } as T;
+      return original<T>(source);
+    };
+    const notices: import('@zhin.js/plugin-runtime').HmrResumeDetails[] = [];
+    const runtime = new RootRuntime({ projectRoot: fixture.root, modules: fixture.modules,
+      config: fixture.config, environment: testEnvironment,
+      installResources({ events }) {
+        events.on('hmr.pause', () => { paused = true; });
+        events.on('hmr.resume', event => { notices.push(event.details); });
+      } });
+    await runtime.start();
+    // The schema reader falls back to the inline module after this sidecar disappears.
+    await rm(join(fixture.root, 'plugins/child/schema.json'));
+    changing = true;
+    const hmr = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('unexpected restart'); }, onError(error) { throw error; } });
+    fixture.config.writeExternal({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, child: { label: 'two' } });
+    try {
+      await hmr.enqueue(fixture.configSource);
+      expect(inspected).toBe(true); expect(notices).toHaveLength(1);
+      expect(notices[0]).toMatchObject({ trigger: 'source', changed: [fixture.configSource], outcome: 'committed' });
+      paused = false;
+      await hmr.enqueue(fixture.configSource);
+      expect(notices).toHaveLength(2);
+      expect(notices[1]).toMatchObject({ outcome: 'unchanged', replaced: [] });
+    } finally { await hmr.stop(); await runtime.stop(); }
+  });
+
   it('reloads only the Plugin subtree changed by an external config edit', async () => {
     const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, child: { label: 'one' } });
     const installs = { resources: 0, root: 0, child: 0, sibling: 0 };
@@ -57,10 +93,12 @@ describe('RootRuntime watched inputs', () => {
   it('requests a process restart when external config changes Host state', async () => {
     const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 8080 } });
     fixture.modules.installSetups({ resources: 0, root: 0, child: 0, sibling: 0 });
+    const outcomes: string[] = [];
     const runtime = new RootRuntime({
       projectRoot: fixture.root,
       modules: fixture.modules,
       config: fixture.config,
+      installResources({ events }) { events.on('hmr.resume', event => { outcomes.push(event.details.outcome); }); },
       environment: testEnvironment,
     });
     await runtime.start();
@@ -76,6 +114,7 @@ describe('RootRuntime watched inputs', () => {
 
     expect(restarts[0]?.reasons).toEqual(['Host configuration changed: http']);
     expect(runtime.snapshot.generation).toBe(1);
+    expect(outcomes).toEqual(['restart-required']);
     await coordinator.stop();
     await runtime.stop();
   });
