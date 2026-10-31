@@ -1,0 +1,20 @@
+docs/plans/adapter-operation-version-boundaries.md
+  s_9622fd28aba994::t_de6b9aa7422961 1-4,7-8,117,298,305
+  s_9622fd28aba994::t_9d73bd6bdac033 312-319
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "71bfc89e8c6ca4098a0abd48bcf41fb6032f9e35",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
