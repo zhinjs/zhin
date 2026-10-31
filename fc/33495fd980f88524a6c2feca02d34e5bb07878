@@ -1,0 +1,45 @@
+.changeset/master-private-ask-approval.md
+  s_9622fd28aba994::t_8fde9b5330bcd9 1-8
+packages/im/agent/tests/security/ops-cooldown.test.ts
+  s_9622fd28aba994::t_d5b743d9214a27 151-159
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_e98851fec409e8::t_85f63043389d63 1234-1235,1336-1337
+basic/cli/src/plugin-runtime/agent/turn/sandbox-policy.ts
+  s_e98851fec409e8::t_4a4373a5f907a2 11-14,42,93-118
+packages/im/agent/src/security/tool-hard-gate.ts
+  s_e98851fec409e8::t_ca5b34cadb7b92 650-651,894-898
+packages/im/agent/src/self-change/policy.ts
+  s_e98851fec409e8::t_e589e0e3484943 201
+packages/im/agent/src/session/approval-port.ts
+  s_e98851fec409e8::t_23699c6c405b62 87-89
+packages/im/agent/src/session/approval-review-agent.ts
+  s_e98851fec409e8::t_edd0bb3f3612bc 118-126,131,156
+packages/im/ai/src/types.ts
+  s_e98851fec409e8::t_52619f241e434b 585-589
+packages/im/runtime/src/host-config-schema.json
+  s_e98851fec409e8::t_60d6523b3269e7 1034-1044
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fc33495fd980f88524a6c2feca02d34e5bb07878",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e98851fec409e8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18f18-cd20-70b1-9cf0-a3512e81d639",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
