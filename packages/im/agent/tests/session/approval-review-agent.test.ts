@@ -67,6 +67,23 @@ describe('ApprovalReviewAgent', () => {
     expect(requestApproval).toHaveBeenCalledWith(input);
   });
 
+  it('escalates a reviewer rejection to a human when escalateRejections is set (master private chat)', async () => {
+    const requestApproval = vi.fn(async () => true);
+    const ask = { available: true, requestApproval };
+    const input = request('reject-escalated');
+    const port = createAutoApprovalPort(
+      reviewer('{"decision":"reject","reason":"destructive"}'), ask, undefined, { escalateRejections: true },
+    );
+    await expect(port.requestApprovalOutcome(input)).resolves.toMatchObject({ status: 'approved' });
+    expect(requestApproval).toHaveBeenCalledWith(input);
+
+    const noHuman = createAutoApprovalPort(
+      reviewer('{"decision":"reject","reason":"destructive"}'), undefined, undefined, { escalateRejections: true },
+    );
+    await expect(noHuman.requestApprovalOutcome(request('reject-no-human')))
+      .resolves.toMatchObject({ status: 'denied', by: 'reviewer' });
+  });
+
   it('fails closed on invalid model output without escalating', async () => {
     const requestApproval = vi.fn(async () => true);
     const port = createAutoApprovalPort(

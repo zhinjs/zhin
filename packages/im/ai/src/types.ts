@@ -582,6 +582,11 @@ export interface AIConfig {
      * development 白名单、白名单外命令需审批）。宿主没有可用 Docker 时执行会失败，不会降级到宿主机。
      */
     masterShell?: 'off' | 'isolated';
+    /**
+     * `masterShell: isolated` 时 master 私聊里需审批的调用怎么批。默认 ask：弹确认卡给 master；
+     * auto：交给自动审核（审核拒绝时仍会转问 master）；inherit：沿用 `execApprovalMode`。
+     */
+    masterShellApprovalMode?: 'ask' | 'auto' | 'inherit';
     /** IM / plugin-runtime 回合的子 Agent：sync 在当前回合内同步运行 spawn_task；off（默认）不提供 */
     subagentTurnMode?: 'off' | 'sync';
     /** 进度感知的工具调用预算：maxIterations 为软上限，有进展时自动延长；含硬上限与自动续跑 */

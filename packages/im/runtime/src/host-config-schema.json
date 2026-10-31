@@ -1031,6 +1031,17 @@
               "description": "Shell access for the master in IM private chats. off: no bash in IM turns. isolated: master DMs run bash inside a Docker container (workspace writable, no network, development allowlist, approval for anything else); fails closed when Docker is unavailable.",
               "x-descriptionZh": "IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。"
             },
+            "masterShellApprovalMode": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "auto",
+                "inherit"
+              ],
+              "default": "ask",
+              "description": "How approval-gated calls are approved in the master's IM private chat when masterShell is isolated. ask: show the master an approval prompt; auto: automatic reviewer (a reviewer rejection is escalated to the master); inherit: use execApprovalMode.",
+              "x-descriptionZh": "masterShell: isolated 时 master 私聊里需审批的调用怎么批。ask（默认）：弹确认卡给 master；auto：自动审核（审核拒绝时转问 master）；inherit：沿用 execApprovalMode。"
+            },
             "toolBudget": {
               "type": "object",
               "description": "Interactive runtime turns and their synchronous children have no fixed step or total wall-clock cap. They share configured token quotas. Step/time caps and continuation settings apply to bounded and legacy executions.",

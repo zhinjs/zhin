@@ -84,7 +84,9 @@ export function formatApprovalDenial(outcome: Exclude<ApprovalOutcome, { status:
     case 'denied':
       if (outcome.by === 'reviewer') {
         return 'Tool call rejected by the automatic approval reviewer (no human was asked). '
-          + 'Do not retry the same call; continue without it or tell the user it needs their explicit approval.';
+          + 'Do not retry the same call silently. If the user you are talking to owns this bot (their private chat), '
+          + 'ask them whether to approve it and wait for their answer instead of abandoning the task; '
+          + 'otherwise continue without it or tell the user it needs their explicit approval.';
       }
       return outcome.by === 'remembered'
         ? 'Tool call denied: the user already rejected this operation earlier in this conversation. Do not retry it.'

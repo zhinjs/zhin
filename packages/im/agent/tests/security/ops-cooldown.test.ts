@@ -148,6 +148,15 @@ describe('ToolHardGate × ops cooldown (ADR 0037 §3, slice E)', () => {
     expect(h.audit.records[0]!.payload).toMatchObject({ action: 'kick_member', target: 'u1', cooldownMs: 60_000 });
   });
 
+  it('does not cool down private chats (e.g. master DM config edits)', async () => {
+    const h = harness();
+    await h.gate({ sceneId: 'private:9' }).check({ name: 'kick_member' }, { user_id: 'u1' }, 'p1');
+    const again = await h.gate({ sceneId: 'private:9' }).check({ name: 'kick_member' }, { user_id: 'u2' }, 'p2');
+    expect(again).toMatchObject({ reasonCode: 'tool_dangerous_no_approval' });
+    expect(h.audit.codes()).not.toContain('ops_cooldown:allow:ops_cooldown_passed');
+    expect(h.queue.list()).toHaveLength(2);
+  });
+
   it('allows a new card once the window has passed', async () => {
     const h = harness();
     await h.gate().check({ name: 'kick_member' }, { user_id: 'u1' }, 'call-1');

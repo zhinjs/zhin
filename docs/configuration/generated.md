@@ -164,6 +164,7 @@ outline: [2, 3]
 | `ai.agent.network.enabled` | boolean | 否 | `false` | 是否允许 IM 回合 HTTPS 出网。 |
 | `ai.agent.network.allowedDomains` | array&lt;string&gt; | 否 | — | 非空时只允许访问这些域名（含子域名）。 |
 | `ai.agent.masterShell` | string: `"off"`, `"isolated"` | 否 | `"off"` | IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。 |
+| `ai.agent.masterShellApprovalMode` | string: `"ask"`, `"auto"`, `"inherit"` | 否 | `"ask"` | masterShell: isolated 时 master 私聊里需审批的调用怎么批。ask（默认）：弹确认卡给 master；auto：自动审核（审核拒绝时转问 master）；inherit：沿用 execApprovalMode。 |
 | `ai.agent.toolBudget` | object | 否 | — | 交互运行时及其同步子任务不设固定轮数和总时长上限，共享配置的 token 额度。步数、时间和续跑设置用于有界任务及旧兼容入口。 |
 | `ai.agent.toolBudget.extendBy` | integer | 否 | `10` | 有进展时每次延长的步数；0 关闭。 |
 | `ai.agent.toolBudget.progressWindow` | integer | 否 | `5` | 最近多少步内有进展才延长。 |
