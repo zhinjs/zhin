@@ -164,6 +164,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.network.enabled` | boolean | no | `false` | Allow HTTPS egress for IM turns. |
 | `ai.agent.network.allowedDomains` | array&lt;string&gt; | no | — | When non-empty, only these domains (and their subdomains) are reachable. |
 | `ai.agent.masterShell` | string: `"off"`, `"isolated"` | no | `"off"` | Shell access for the master in IM private chats. off: no bash in IM turns. isolated: master DMs run bash inside a Docker container (workspace writable, no network, development allowlist, approval for anything else); fails closed when Docker is unavailable. |
+| `ai.agent.masterShellApprovalMode` | string: `"ask"`, `"auto"`, `"inherit"` | no | `"ask"` | How approval-gated calls are approved in the master's IM private chat when masterShell is isolated. ask: show the master an approval prompt; auto: automatic reviewer (a reviewer rejection is escalated to the master); inherit: use execApprovalMode. |
 | `ai.agent.toolBudget` | object | no | — | Interactive runtime turns and their synchronous children have no fixed step or total wall-clock cap. They share configured token quotas. Step/time caps and continuation settings apply to bounded and legacy executions. |
 | `ai.agent.toolBudget.extendBy` | integer | no | `10` | Steps added per extension when progressing; 0 disables. |
 | `ai.agent.toolBudget.progressWindow` | integer | no | `5` | Progress must have happened within this many recent steps. |
