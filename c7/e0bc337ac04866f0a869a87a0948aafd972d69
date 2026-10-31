@@ -1,0 +1,1343 @@
+basic/cli/tests/new-release-contract.test.ts
+  s_9622fd28aba994::t_67240f0442df06 1-22
+basic/cli/tests/plugin-runtime/console/self-changes.test.ts
+  s_9622fd28aba994::t_22334169c93d39 29
+  s_9622fd28aba994::t_5535ebde461131 51
+plugins/services/activity-feedback/tests/hmr-policy.test.ts
+  s_9622fd28aba994::t_1b565f0e76dd60 1-20,22-49
+  s_9622fd28aba994::t_704d95d4638867 21
+packages/im/plugin-runtime/src/plugin.ts
+  s_9622fd28aba994::t_8b3b68350c077b 9,36,55-64,132-133,146-173
+plugins/utils/content-moderation/tests/group-review-runtime.test.ts
+  s_9622fd28aba994::t_727c4acfe27e98 12-13,24,30-31,49-56,88
+  s_9622fd28aba994::t_1efe71123055b2 113,119-150
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_9622fd28aba994::t_22334169c93d39 172,182,194-197
+  s_9622fd28aba994::t_87a1bd0ea2702a 164,198-199,202-203,205-211,218-219
+  s_9622fd28aba994::t_28e6bedeea97b6 11
+  s_9622fd28aba994::t_6bed28c35f92cd 9,174
+  s_9622fd28aba994::t_d94ec0174f5829 5-8,10,133,157-163,165-169,171,175-181,183-190,193,215-217,220
+  s_9622fd28aba994::t_f36fa2cb8e78bc 4,200-201,204
+  s_9622fd28aba994::t_5535ebde461131 170,173
+  s_9622fd28aba994::t_609d7383529d7c 54,57,134-156,191-192,212-214,221
+plugins/services/activity-feedback/src/ai-event-binder.ts
+  s_9622fd28aba994::t_808d2326b63680 155-157,160
+packages/im/plugin-runtime/tests/relational-target-migration.test.ts
+  s_9622fd28aba994::t_f405b0307b5f13 3,5-10,13-65,70-139,202-404,406-410,412
+  s_9622fd28aba994::t_12e68d47024173 11-12,152-168
+  s_9622fd28aba994::t_9fc2a2ed2f9022 186-187
+  s_9622fd28aba994::t_75fb54d3909b4f 1-2,4,66-69,140-151,169,405,411
+  s_9622fd28aba994::t_1147d43b8500e6 170-185,188-201
+packages/im/agent/src/security/tool-approval-queue.ts
+  s_9622fd28aba994::t_f36fa2cb8e78bc 110-113,115,128-130,140,225,263
+scripts/check-api-docs-surface.mjs
+  s_9622fd28aba994::t_3980c8b7155772 36-37,42-50
+plugins/utils/content-moderation/tests/group-review-queue.test.ts
+  s_9622fd28aba994::t_704d95d4638867 5,51-52
+  s_9622fd28aba994::t_5f9df79a47b20f 71
+  s_9622fd28aba994::t_aaa26dcbcaf74c 4,9,44-47,58,72-77,84,90-91,96-102,104-105,244,253-258,455
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_28e6bedeea97b6 77
+  s_9622fd28aba994::t_6bed28c35f92cd 9
+  s_9622fd28aba994::t_249681fe160267 8,207-209,238
+  s_9622fd28aba994::t_f36fa2cb8e78bc 159,239-242
+packages/im/isolate/src/protocol.ts
+  s_9622fd28aba994::t_b75e5a0ed098f9 4,44-50
+packages/im/isolate/src/bootstrap.ts
+  s_9622fd28aba994::t_b75e5a0ed098f9 26-29,71,128-133,158-171,181-184,195-197
+packages/im/plugin-runtime/src/plugin-events.ts
+  s_9622fd28aba994::t_05e53d8fbe4073 57
+  s_9622fd28aba994::t_8b3b68350c077b 1-56,58-76
+basic/cli/src/commands/new.ts
+  s_9622fd28aba994::t_0da270e87e2aba 132,181-188,192-199,477,616,636-643
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  s_9622fd28aba994::t_249681fe160267 33-35,42-43,45,81
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9622fd28aba994::t_ea21aa4e845a18 150-160,167,170,172,175-177,179-180,187-188,211-220,242-251,258,290-303,312,324-331,335-343,368-373,381,394-444,449-450
+packages/im/core/tests/plugin-runtime/captured-endpoint-operation.test.ts
+  s_9622fd28aba994::t_39c6da3b4d24d3 54-55
+  s_9622fd28aba994::t_f4fa65512b6ade 1-19,21-53,56-143
+  s_9622fd28aba994::t_6363dadc9d87b8 20
+plugins/adapters/kook/src/endpoint.ts
+  s_9622fd28aba994::t_e65e612ff1fa0b 6-9,16-18,95,189,258,390,440-442,447,453-454,457,461,474-475,477
+basic/cli/src/commands/new-plugin-manifest.ts
+  s_9622fd28aba994::t_8742ba0d70dabf 36,83-84
+  s_9622fd28aba994::t_5d890df0616fd0 69
+  s_9622fd28aba994::t_0da270e87e2aba 3-4,15,32-35,37,39,41-42,70-71,75,79-82,308-312,357
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  s_9622fd28aba994::t_249681fe160267 20,50,96
+packages/im/runtime/src/isolation.ts
+  s_9622fd28aba994::t_61f391184d5c12 6,31-32
+packages/im/agent/src/security/tool-hard-gate.ts
+  s_9622fd28aba994::t_609d7383529d7c 37,516-532
+  s_9622fd28aba994::t_f36fa2cb8e78bc 491-494,533-536,568,751
+basic/cli/tests/new-plugin-manifest.test.ts
+  s_9622fd28aba994::t_8742ba0d70dabf 86-91
+  s_9622fd28aba994::t_e6979b844fb2bc 9,45,48-50,66,73-76,79,81-84,92-104,113-114,130,140-154
+  s_9622fd28aba994::t_60e528b44c9f78 85,155
+packages/im/plugin-runtime/src/index.ts
+  s_9622fd28aba994::t_25a18bdd0af4b3 8-9,57-60
+  s_9622fd28aba994::t_a0c66775aa665a 10-11
+basic/cli/src/plugin-runtime/console/tool-approval-resource.ts
+  s_9622fd28aba994::t_28e6bedeea97b6 1-5
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_9622fd28aba994::t_340e9ab6455229 11,30-41,51-56,77,80-91,97,111-122,277-298
+packages/im/isolate/src/runtime.ts
+  s_9622fd28aba994::t_bb3c5a4f2c9005 158-167,170-175
+  s_9622fd28aba994::t_b75e5a0ed098f9 8,84,107,152-157,168-169,176-181
+  s_9622fd28aba994::t_79288c6ad5305a 182-183
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9622fd28aba994::t_6bed28c35f92cd 52,362
+  s_9622fd28aba994::t_249681fe160267 361,363
+packages/im/plugin-runtime/src/admission.ts
+  s_9622fd28aba994::t_d2c0159db7c985 9,24,32,44-48,65-66,187-196,206
+packages/toolkit/testing/src/fake-plugin.ts
+  s_9622fd28aba994::t_5e1113a174d3e9 2,5,69,134-140,145
+basic/cli/tests/plugin-runtime/console/decision-replay.test.ts
+  s_9622fd28aba994::t_5535ebde461131 44
+packages/im/plugin-runtime/tests/kernel.test.ts
+  s_9622fd28aba994::t_876c199379730b 45-56,58-59,63
+packages/im/agent/tests/security/tool-hard-gate.test.ts
+  s_9622fd28aba994::t_87a1bd0ea2702a 788-821
+  s_9622fd28aba994::t_609d7383529d7c 822-831
+plugins/utils/content-moderation/src/group-review-queue.ts
+  s_9622fd28aba994::t_688a9a095ab871 11-21,40
+  s_9622fd28aba994::t_8c817fc498e5ff 1,29,37-39,41-50
+  s_9622fd28aba994::t_7edb33ef6a0de9 55
+plugins/utils/content-moderation/plugin.ts
+  s_9622fd28aba994::t_8c817fc498e5ff 18-20
+  s_9622fd28aba994::t_808d2326b63680 17,21
+packages/im/plugin-runtime/src/relational-target-migration.ts
+  s_9622fd28aba994::t_a2d0bfd7b2078b 1-661
+plugins/adapters/sandbox/tests/sandbox-core-interaction.test.ts
+  s_9622fd28aba994::t_c74633a462b4d6 70-73
+  s_9622fd28aba994::t_3d08639cc3cde3 2,23-24,26-30
+plugins/services/activity-feedback/src/executor.ts
+  s_9622fd28aba994::t_1cc95d4095ab3b 1-11,13,15,18,23,26-33,38-51,53-61,63-74,76-83,86-94,98-103,105-106,108,110-111,113-121,124-127
+basic/cli/src/plugin-runtime/console/tool-approvals.ts
+  s_9622fd28aba994::t_28e6bedeea97b6 12
+  s_9622fd28aba994::t_249681fe160267 24,67,85,87,99
+  s_9622fd28aba994::t_6bed28c35f92cd 9-10,39-48
+  s_9622fd28aba994::t_08fa900b9b29d9 49
+docs/concepts/generation-lifecycle.md
+  s_9622fd28aba994::t_b8d3b5022bbfa4 89-129,153-154
+basic/cli/tests/plugin-runtime/console/assistant-status.test.ts
+  s_9622fd28aba994::t_5535ebde461131 94
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_5d6429bd0ec8fb 302-318,320-331,333-336,338,349,362,400-402,414,457,770,874,1129,1131-1137,1250
+plugins/services/activity-feedback/src/orchestrator.ts
+  s_9622fd28aba994::t_1cc95d4095ab3b 6,10,13,31,146,153-155
+plugins/services/activity-feedback/plugin.ts
+  s_9622fd28aba994::t_808d2326b63680 78-80
+basic/cli/tests/new-integration.test.ts
+  s_9622fd28aba994::t_e6979b844fb2bc 276,296
+basic/cli/tests/plugin-runtime/console/announcements-rpc.test.ts
+  s_9622fd28aba994::t_5535ebde461131 48
+basic/cli/src/plugin-runtime/data-migration/controller.ts
+  s_9622fd28aba994::t_5d6429bd0ec8fb 1-256
+plugins/adapters/bilibili-live/tests/bilibili-live-core-session.test.ts
+  s_9622fd28aba994::t_3d08639cc3cde3 3,41,44-49
+plugins/services/activity-feedback/tests/concurrent-ownership.test.ts
+  s_9622fd28aba994::t_ff45ad418f2aea 1-6,41-80
+  s_9622fd28aba994::t_8793646d6e61de 7-11,15-16,19-40
+  s_9622fd28aba994::t_1cc95d4095ab3b 12-14,17-18
+packages/im/runtime/src/root-runtime.ts
+  s_9622fd28aba994::t_8df6b201e7b502 343-345,350
+  s_9622fd28aba994::t_876c199379730b 483
+  s_9622fd28aba994::t_25a18bdd0af4b3 1,29-34,143-152,194,197,287-289,309-342,346-349,351-361,404,407-421,739-740
+  s_9622fd28aba994::t_9ff4fc34b69f15 422,484,487,492,741,820
+packages/im/runtime/tests/config-retained-adapter.test.ts
+  s_9622fd28aba994::t_421352f77416ff 5,16-17,86,139,161
+  s_9622fd28aba994::t_3d08639cc3cde3 80-83
+plugins/adapters/telegram/tests/telegram-delivery.test.ts
+  s_9622fd28aba994::t_1529180b156ce3 65
+  s_9622fd28aba994::t_917c67d690fca2 5,29,31,178,227
+basic/cli/tests/plugin-runtime/console/tool-approvals.test.ts
+  s_9622fd28aba994::t_5535ebde461131 27,36,58-59,64
+  s_9622fd28aba994::t_28e6bedeea97b6 14
+  s_9622fd28aba994::t_029925e7283994 2,112-156
+  s_9622fd28aba994::t_52724b0db70fb2 10,95-111
+packages/im/plugin-runtime/src/snapshot.ts
+  s_9622fd28aba994::t_5ea800b28e8a82 125-126,178-188
+  s_9622fd28aba994::t_6706ab9f6379f3 138
+  s_9622fd28aba994::t_5f56c877ee9fa5 264-265
+  s_9622fd28aba994::t_ab6414464ba0b5 84-91,94-99,101,103-106,190-192,196-198
+  s_9622fd28aba994::t_d2c0159db7c985 163-164,248-249,262-263
+scripts/check-plugin-scaffold.mjs
+  s_9622fd28aba994::t_7ec3f78b71b46b 230-235
+  s_9622fd28aba994::t_07771b5725179f 132-136,138,151-156,168-169,173,227-229,236
+packages/im/adapter/src/endpoint.ts
+  s_9622fd28aba994::t_01777833393298 34-44,47-48,79-80,99,102-103,154,164-171,236,238,240,242-245,253-265,271-276,287,305,315,319,341-343
+  s_9622fd28aba994::t_10954beda1e4c3 246-252
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_9622fd28aba994::t_61f391184d5c12 10,38,43,68,163-165,186,237-238,263
+basic/cli/tests/plugin-runtime/data-migration/controller.test.ts
+  s_9622fd28aba994::t_340e9ab6455229 1-209,215-275
+  s_9622fd28aba994::t_5d6429bd0ec8fb 210-214
+plugins/adapters/discord/src/endpoint.ts
+  s_9622fd28aba994::t_e65e612ff1fa0b 7-11,16-17,22-24,87-89,199,201,211,213-214,216-217,282-290,303-304,307,312,314,347-366,369-392,405-406,460,462,466,468,601-608,611-632,634-637
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_9622fd28aba994::t_28e6bedeea97b6 26
+  s_9622fd28aba994::t_249681fe160267 27
+plugins/services/activity-feedback/tests/activity-feedback-runtime.test.ts
+  s_9622fd28aba994::t_7edb33ef6a0de9 360,391,398
+packages/im/core/tests/plugin-runtime/nested-receipt-lifetime.test.ts
+  s_9622fd28aba994::t_18ef5439cddec6 8,45-46,63
+  s_9622fd28aba994::t_65288805429114 118-139
+  s_9622fd28aba994::t_b6a4d4bbcb5dba 1-7,9-44,47-62,64-117
+plugins/adapters/bilibili/tests/bilibili-runtime-localization.test.ts
+  s_9622fd28aba994::t_08844b2732ee40 109,113,118,121,123,126,128,133,136,138,140-141
+  s_9622fd28aba994::t_917c67d690fca2 9,78
+  s_9622fd28aba994::t_3891a13af539a2 64,66-67
+plugins/adapters/test-utils/endpoint.test.ts
+  s_9622fd28aba994::t_8dc337047dca31 3,13,49,71,96,113,129,132-133,137,143,145
+plugins/utils/content-moderation/middlewares/inbound/index.ts
+  s_9622fd28aba994::t_8c817fc498e5ff 155,163-165,167-169,171-173,207,215-216
+  s_9622fd28aba994::t_7edb33ef6a0de9 160,162
+  s_9622fd28aba994::t_808d2326b63680 7,178,188-189,195
+basic/cli/tests/plugin-runtime/console/plugin-console-rpc.test.ts
+  s_9622fd28aba994::t_22334169c93d39 228
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-enforcer.test.ts
+  s_9622fd28aba994::t_52724b0db70fb2 44,53-54,65-75,81,85-95
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  s_9622fd28aba994::t_5535ebde461131 254,264
+packages/im/runtime/src/plugin-events.ts
+  s_9622fd28aba994::t_61f391184d5c12 1-17
+plugins/adapters/icqq/tests/icqq-runtime.test.ts
+  s_9622fd28aba994::t_917c67d690fca2 3,221,225
+  s_9622fd28aba994::t_c74633a462b4d6 1,1115,1119,1140-1141,1148,1155-1156,1163,1240-1281
+basic/cli/src/plugin-runtime/console/api-installer.ts
+  s_9622fd28aba994::t_28e6bedeea97b6 42
+  s_9622fd28aba994::t_249681fe160267 1,43
+plugins/adapters/test-utils/endpoint.ts
+  s_9622fd28aba994::t_1a1a87a75e2ea1 39
+  s_9622fd28aba994::t_0f071e67d90eec 69
+  s_9622fd28aba994::t_cc3c4bd42a3acc 66-68,70-74,80,88
+docs/plans/adapter-operation-contracts.md
+  s_9622fd28aba994::t_1f6a99711bbf7d 296,299
+  s_9622fd28aba994::t_411c1f6e18e32c 1-6,9-295,297-298,300-338,341,343-361,363-377,382-413,418-430,440-442,444-459,462-465,467-471
+  s_9622fd28aba994::t_d93cb28fb2e8a1 378-381,414-417,431-439,443,460-461
+  s_9622fd28aba994::t_d1aa87a61d6cdf 484-540
+  s_9622fd28aba994::t_01a7ec1bde4ba4 472-483
+  s_9622fd28aba994::t_07d65964715419 7-8,339-340,342,362,466
+basic/cli/src/plugin-runtime/console/module.ts
+  s_9622fd28aba994::t_6bed28c35f92cd 23
+packages/im/adapter/src/adapter.ts
+  s_9622fd28aba994::t_0db5da6628df12 9,50-56,116-123,270-279,293-306,326-332,336-342,346-350,363-367,562-564,633,635,643-644,646,649-650,654
+packages/im/plugin-runtime/src/root-controller.ts
+  s_9622fd28aba994::t_5ea800b28e8a82 71
+packages/im/plugin-runtime/tests/admission.test.ts
+  s_9622fd28aba994::t_5f56c877ee9fa5 29-69
+.changeset/canonical-adapter-operation-contracts.md
+  s_9622fd28aba994::t_362738fac80053 1-67
+.github/agents/README.md
+  s_9622fd28aba994::t_273f7a6ae75d8e 24-25
+.github/agents/adapter-developer.agent.md
+  s_9622fd28aba994::t_05e3453235ccb3 15,32-36,38
+.github/copilot-instructions.md
+  s_9622fd28aba994::t_0b82812312e4d2 95-98
+.github/instructions/zhin-plugin.instructions.md
+  s_9622fd28aba994::t_e5fef3d93f8bdc 103-106
+.github/skills/zhin-audit/SKILL.md
+  s_9622fd28aba994::t_e6a0225e85b281 54-55
+.github/skills/zhin-audit/references/architecture-checklist.md
+  s_9622fd28aba994::t_86585fc1a43409 20-21,25-31
+agents/dev/system.md
+  s_9622fd28aba994::t_4f606087abc2d9 61
+basic/cli/package.json
+  s_9622fd28aba994::t_793c093b171878 28
+basic/cli/src/plugin-runtime/agent/turn/group-rule-enforcer.ts
+  s_9622fd28aba994::t_d1421f8888414f 81,124-137,238-250,252-256,276-277,279,284,332,339,362,378,428,446,485-487,499,501,518,559,562,586,594,596-597,639
+basic/cli/src/plugin-runtime/console/agent-feature-projection.ts
+  s_9622fd28aba994::t_c5f25dc9f52147 79-83,92-97
+basic/cli/src/plugin-runtime/console/data-migration-routes.ts
+  s_9622fd28aba994::t_692d9a6afb75ef 1-99
+basic/cli/src/plugin-runtime/console/inbox.ts
+  s_9622fd28aba994::t_a7ae232031e0c0 4,43-44,54,62,90,99,101-102,105,107
+basic/cli/src/plugin-runtime/data-migration/index.ts
+  s_9622fd28aba994::t_b3fa4d97e4125e 1-2
+basic/cli/src/plugin-runtime/data-migration/owner-approval-provider.ts
+  s_9622fd28aba994::t_27ee24d49b32fb 1-20
+basic/cli/src/plugin-runtime/data-migration/plan-store.ts
+  s_9622fd28aba994::t_8c3ab118a43451 1-84
+basic/cli/src/plugin-runtime/outbound-host-installer.ts
+  s_9622fd28aba994::t_b1c395e636ee5a 2-3,11-12,21,52-73
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9622fd28aba994::t_81e85de8a8ad48 239-240,251,263-265,280-281,296,307,309,311,395,398,474,476-477,479,486,489,498,501,528,531,780,790-800,807-820,882,888,893,899,905,910,916,919,930,932,943,945,1030
+basic/cli/tests/plugin-runtime/agent/turn/control-gate.test.ts
+  s_9622fd28aba994::t_316f4ba8596397 59-70
+basic/cli/tests/plugin-runtime/agent/turn/group-rule-operation-lifetime.test.ts
+  s_9622fd28aba994::t_4021dba47aefef 1-78
+basic/cli/tests/plugin-runtime/agent/turn/multi-message-delivery.test.ts
+  s_9622fd28aba994::t_5631228fbfafea 43,62
+basic/cli/tests/plugin-runtime/agent/turn/personal-session-request.test.ts
+  s_9622fd28aba994::t_c0c8abcc72c83d 14-24,27,61,81,95
+basic/cli/tests/plugin-runtime/agent/turn/scene-fact-cache.test.ts
+  s_9622fd28aba994::t_6a2a0aac752c7a 2,24,38,53,62,95,98,117,132,168,186,202
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts-connection.test.ts
+  s_9622fd28aba994::t_36b176eb256e4d 3,28,48,92
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts.test.ts
+  s_9622fd28aba994::t_e1727c4b35ad3b 2,24,38,44,53,55,61,65,73,79,86,96,105-106,114,122,132,134,148,150,159-160,171
+basic/cli/tests/plugin-runtime/agent/turn/tool-approval-im-ingress.test.ts
+  s_9622fd28aba994::t_eade09d1cc49eb 53-67
+basic/cli/tests/plugin-runtime/agent/turn/trigger.test.ts
+  s_9622fd28aba994::t_5cbcd0268738ac 32-39
+basic/cli/tests/plugin-runtime/console/adapter-account-runtime.test.ts
+  s_9622fd28aba994::t_1d7d8ed4702113 94-96,180,186-187,190,197,204
+basic/cli/tests/plugin-runtime/console/data-migration-routes.test.ts
+  s_9622fd28aba994::t_ab9362a8329320 1-72
+basic/cli/tests/plugin-runtime/console/inbox.test.ts
+  s_9622fd28aba994::t_2e41d0af8b7e02 90,105,110,115,121,135,165,168,179,212,226,237,311-350
+basic/cli/tests/plugin-runtime/console/interaction-routes.test.ts
+  s_9622fd28aba994::t_53d3be57ad9d20 27-36
+basic/cli/tests/plugin-runtime/locale-host.test.ts
+  s_9622fd28aba994::t_ab8141562be2a0 73-74,101,124
+basic/cli/tests/plugin-runtime/outbound-host.test.ts
+  s_9622fd28aba994::t_1902d00af69d9f 152,155
+basic/cli/tests/plugin-runtime/sender-enrichment.test.ts
+  s_9622fd28aba994::t_44b51cd54ae79e 70-79,84-93,110-113
+basic/cli/tests/plugin-runtime/workroom/human-ingress-route.test.ts
+  s_9622fd28aba994::t_73a4c8a5da5e62 32-46
+docs/adapters/onebot11.md
+  s_9622fd28aba994::t_b85d03f42e82e7 11,50-53
+docs/adapters/onebot12.md
+  s_9622fd28aba994::t_6dbc1d45504f58 11,50-55
+docs/authoring/adapters.md
+  s_9622fd28aba994::t_f0188ccdd72535 18-34,58,68-69,121
+docs/authoring/commands.md
+  s_9622fd28aba994::t_b33340a32d5478 529
+docs/authoring/console-pages.md
+  s_9622fd28aba994::t_f9c7fde5350a87 87
+docs/concepts/plugin-model.md
+  s_9622fd28aba994::t_d211a50922c5fe 68,138
+docs/contributing/development.md
+  s_9622fd28aba994::t_8840a422b8c2b9 184-188
+docs/en/authoring/adapters.md
+  s_9622fd28aba994::t_bb8f874e9d794c 18-35,59,69-70,122
+docs/en/authoring/commands.md
+  s_9622fd28aba994::t_d6b6cf5f8babb0 527
+docs/en/authoring/console-pages.md
+  s_9622fd28aba994::t_d0c46dfb7b68e6 87
+docs/en/concepts/plugin-model.md
+  s_9622fd28aba994::t_17b341fa2457af 69,136
+docs/en/operations/upgrades.md
+  s_9622fd28aba994::t_26b40b14de0d2e 21-65
+docs/operations/upgrades.md
+  s_9622fd28aba994::t_fc97afcabb7ff2 21-60
+docs/plans/adapter-operation-data-migration.md
+  s_9622fd28aba994::t_8c14aedb9b80df 1-268
+docs/plans/adapter-operation-version-boundaries.md
+  s_9622fd28aba994::t_dd90b3c227e26d 1-457
+docs/plans/adapter-session-runtime-refactor.md
+  s_9622fd28aba994::t_39d0c5b38ea2ec 7-8
+docs/plans/adapter-target-mode-migration.md
+  s_9622fd28aba994::t_b28abcfc6865a2 7-8
+examples/platform-acceptance-bot/commands/acceptance/index.ts
+  s_9622fd28aba994::t_28556e1068181d 2,38-39,124
+packages/game-kit/README.md
+  s_9622fd28aba994::t_fd4a9ce6724eeb 46,66,135-136,145-146
+packages/game-kit/src/base-session-service.ts
+  s_9622fd28aba994::t_de52e18e6ab9c2 1-2,49-56,68-69,86,93-99,134,141-172,184-206,208-213,227-244
+packages/game-kit/src/board-sender.ts
+  s_9622fd28aba994::t_aa15d925eb526d 1-2,4-14
+packages/game-kit/src/command-alias.ts
+  s_9622fd28aba994::t_093ed4a17c1ba6 17,23,30,38
+packages/game-kit/src/command-message.ts
+  s_9622fd28aba994::t_ed961dfc1b0706 2,7-10,15-28,30-31,33-41
+packages/game-kit/src/define-game-plugin.ts
+  s_9622fd28aba994::t_e6a9a0d00be580 1-3,6-7,48-50,103,106,118-123,129-130,150-153
+packages/game-kit/src/game-command-help.ts
+  s_9622fd28aba994::t_20864604756a7c 2,18,23-31,33-34,46-48
+packages/game-kit/src/game-events.ts
+  s_9622fd28aba994::t_8a76cdbf854d44 3,7
+packages/game-kit/src/game-records.ts
+  s_9622fd28aba994::t_7c99c9621d48ce 78-86,88,96,99-104
+packages/game-kit/src/index.ts
+  s_9622fd28aba994::t_ad52cf375b624b 30-35
+packages/game-kit/src/memory-db.ts
+  s_9622fd28aba994::t_75090cc5e4c704 18-19,66-78,80-109,140,184-187
+packages/game-kit/src/reply-operation.ts
+  s_9622fd28aba994::t_0bc41618fd00fa 1-27
+packages/game-kit/src/session-delivery.ts
+  s_9622fd28aba994::t_a830f23a4b5426 1-19
+packages/game-kit/src/target-migration.ts
+  s_9622fd28aba994::t_84cf6550f9fe97 1-128
+packages/game-kit/src/versioned-session-service.ts
+  s_9622fd28aba994::t_a53664babc1eb3 6,20-21,135,137-140
+packages/game-kit/tests/audit-fixes.test.ts
+  s_9622fd28aba994::t_b87a72c5c5302e 1,101-102,107-108
+packages/game-kit/tests/base-session-service.test.ts
+  s_9622fd28aba994::t_38ab27726e4e3c 46,54,194,214-215
+packages/game-kit/tests/canonical-delivery.test.ts
+  s_9622fd28aba994::t_26bc3b225e53e1 1-129
+packages/game-kit/tests/command-alias.test.ts
+  s_9622fd28aba994::t_11096e34ad9559 7,16,29,42,55,67-68
+packages/game-kit/tests/command-message.test.ts
+  s_9622fd28aba994::t_64b8b8ab0f7172 2,4-5,7-16,18,21-29,31-33,36-38
+packages/game-kit/tests/command-operation-fixture.ts
+  s_9622fd28aba994::t_df94a5b3d5f097 1-19
+packages/game-kit/tests/game-records-runtime.test.ts
+  s_9622fd28aba994::t_4c4f55f2088e46 1,14-15,21
+packages/game-kit/tests/localization.test.ts
+  s_9622fd28aba994::t_05c8eaa29059ea 1,15-16,30
+packages/game-kit/tests/memory-transactions.test.ts
+  s_9622fd28aba994::t_36543e40af3e57 1-35
+packages/game-kit/tests/target-migration.test.ts
+  s_9622fd28aba994::t_3a0535a56f0b18 1-240
+packages/game-kit/tests/versioned-session-service.test.ts
+  s_9622fd28aba994::t_9f67bb92f0a661 27,36
+packages/host/http/src/console-rpc-extended/contracts.ts
+  s_9622fd28aba994::t_28d32f90024795 137-145,154,166-171
+packages/host/http/src/console-rpc-extended/endpoint-rpc.ts
+  s_9622fd28aba994::t_034c34d263112c 64,89,99-111,131
+packages/host/http/src/console-rpc-extended/inbox-rpc.ts
+  s_9622fd28aba994::t_93fcae910073ce 367-368
+packages/host/http/src/http-host.ts
+  s_9622fd28aba994::t_d96717067f585e 259,263,268-277
+packages/host/http/tests/console-rpc-extended.test.ts
+  s_9622fd28aba994::t_707f9378d407f0 831,841,980,1030,1037,1044,1051,1058,1065,1077
+packages/host/http/tests/http-host.test.ts
+  s_9622fd28aba994::t_9691df3c63e3fb 118,133-137,156-161,163-165,173-195
+packages/im/adapter/README.md
+  s_9622fd28aba994::t_9da220e9bba950 113-114,230-238
+packages/im/adapter/package.json
+  s_9622fd28aba994::t_a0873cffb45f65 40
+packages/im/adapter/src/adapter-index.ts
+  s_9622fd28aba994::t_1268069ece0cbc 1,46,97-117,121,124,126,205-210,249,251-253,255-257,330,335,338,341,343-352,354-355,442,445
+packages/im/adapter/src/adapter-types.ts
+  s_9622fd28aba994::t_95f5d2eb201970 116-125
+packages/im/adapter/src/endpoint-control.ts
+  s_9622fd28aba994::t_b35332b79695a9 10-31,33-37,46,49
+packages/im/adapter/src/endpoint-management.ts
+  s_9622fd28aba994::t_44fcb5b3fac82e 41-55,57-59,62-81,84-86
+packages/im/adapter/src/endpoint-operation.ts
+  s_9622fd28aba994::t_20af6a0a56a9e4 1-45
+packages/im/adapter/src/index.ts
+  s_9622fd28aba994::t_d1d2675ffa603a 11,33-36
+packages/im/adapter/src/pending-rpc.ts
+  s_9622fd28aba994::t_d5392155cd2d0b 1-88
+packages/im/adapter/src/scoped-endpoint-ports.ts
+  s_9622fd28aba994::t_7718cf58772144 1-75
+packages/im/adapter/tests/account-runtime-fixture.ts
+  s_9622fd28aba994::t_6385e6a4c8ac71 44
+packages/im/adapter/tests/adapter.test.ts
+  s_9622fd28aba994::t_48bfdf3618e008 76,80,140,147,149,877,898,917,959,998
+packages/im/adapter/tests/controller/adapter-runtime.test.ts
+  s_9622fd28aba994::t_991ba869a267cb 49-50,289,319,329,371,410-411
+packages/im/adapter/tests/endpoint-client.test.ts
+  s_9622fd28aba994::t_1321a7c7336267 29
+packages/im/adapter/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_0dbb74704da818 144
+packages/im/adapter/tests/endpoint-operation.test.ts
+  s_9622fd28aba994::t_3301378dd5aacd 1-46
+packages/im/adapter/tests/endpoint-receipt-cancellation.test.ts
+  s_9622fd28aba994::t_ba6e8c5c544977 1-36
+packages/im/adapter/tests/endpoint-self-user-id.test.ts
+  s_9622fd28aba994::t_2305f9be643bc1 22
+packages/im/adapter/tests/pending-rpc.test.ts
+  s_9622fd28aba994::t_735e9f4d0c756e 1-56
+packages/im/adapter/tests/scoped-ports.test.ts
+  s_9622fd28aba994::t_1c30b5ff7a4b9f 1-91
+packages/im/agent/src/activity-feedback/adapter-integration.ts
+  s_9622fd28aba994::t_e27c9373ba8774 2,4-5,7,9,11-12,14-19,21-26,28-57
+packages/im/agent/src/activity-feedback/event-context.ts
+  s_9622fd28aba994::t_2b083f2fe6980e 1,9,79,99-101
+packages/im/agent/src/activity-feedback/index.ts
+  s_9622fd28aba994::t_9945449d304fe3 40,44,46-48
+packages/im/agent/src/activity-feedback/operation-source.ts
+  s_9622fd28aba994::t_e3b288b0297d5a 1-45
+packages/im/agent/src/activity-feedback/turn-event-projector.ts
+  s_9622fd28aba994::t_cecef8e1fbc3c7 1,15-16,22,30,43,55,68,71
+packages/im/agent/src/ai-event-bus.ts
+  s_9622fd28aba994::t_65ea98f7929cfd 1,41,68
+packages/im/agent/src/ai-event-contract.ts
+  s_9622fd28aba994::t_c521bc0df3c34d 1,38
+packages/im/agent/src/event/event-emitter.ts
+  s_9622fd28aba994::t_632bece0e1634d 1,21,34
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_69a72e50f4a747 784-787
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_a28c1af88c898d 1,608,625,646-647,650
+packages/im/agent/src/security/owner-approval-contracts.ts
+  s_9622fd28aba994::t_ccac8b3e258c07 1-3,5
+packages/im/agent/src/security/owner-approval-runtime.ts
+  s_9622fd28aba994::t_1cf1a592b6a675 18,57-59,114,118-119,147
+packages/im/agent/src/security/owner-approval-store.ts
+  s_9622fd28aba994::t_39ab570af9a115 1,8,24-25,41,70,99,108-117,144,148,152,155,158-175,177-187
+packages/im/agent/src/turn/turn-pipeline.ts
+  s_9622fd28aba994::t_d579eee28de1ab 1,94
+packages/im/agent/tests/activity-feedback/operation-source.test.ts
+  s_9622fd28aba994::t_d5d41ccad276eb 1-44
+packages/im/agent/tests/security/owner-approval-runtime.test.ts
+  s_9622fd28aba994::t_347414e53e5c4d 9,53-86
+packages/im/agent/tests/security/runtime-owner-approve.test.ts
+  s_9622fd28aba994::t_ec42f6ec829072 37,55,110
+packages/im/agent/tests/typing-indicator/index.test.ts
+  s_9622fd28aba994::t_ba81b7d8c9f0ef 11-12,686-693,695-696,698,700-706,708
+packages/im/command/README.md
+  s_9622fd28aba994::t_022054fd9030c5 120
+packages/im/command/src/command-index.ts
+  s_9622fd28aba994::t_dd7a020b885e97 61-78,344-347,353-354,359,398-403,515-516,519,530,532-533,538
+packages/im/command/src/definition.ts
+  s_9622fd28aba994::t_a0d3a6d30b613f 589-613
+packages/im/command/tests/command.test.ts
+  s_9622fd28aba994::t_fde797665d22fd 175,190,228,231,234,237,268-269,362,370-371,501,507,512,533,538,559-560,595,600-601,641,648,687,699,711,731,740,742,751,775-776,798,801,804,934,940,946,986-990,1017-1019,1035,1041,1063-1064,1085,1150,1193,1197,1200,1231,1234,1282,1484,1491,1500-1502,1510,1518-1519,1524,1621,1636,1648,1657,1669,1678,1686,1694,1701,1740-1741,1747,1756,1759,1762,1773,1776,1779,1790,1793,1798,1803,1809,1817-1818,1820,1827-1828,1831,1841,1850,1852,1861,1864,1904,1911,1923,1931,1939,1947,1953-1954,1959,1964,1973,1978,1983,1988,2006-2007,2015
+packages/im/command/tests/execution.test.ts
+  s_9622fd28aba994::t_5b53e15b8a2767 153
+packages/im/command/tests/localization.test.ts
+  s_9622fd28aba994::t_81dbf501fb0435 43-44,49-51,53,60,62,71-73,84-85,88,98,109,114,126,128,136,157-160,162-163
+packages/im/command/tests/types/declarations.ts
+  s_9622fd28aba994::t_76acf7e9b3b7c6 60-67
+packages/im/core/package.json
+  s_9622fd28aba994::t_ca1d1fe5e7fbcc 172
+packages/im/core/src/index.ts
+  s_9622fd28aba994::t_07826cbe2f7e2b 74
+packages/im/core/src/plugin-runtime/im/captured-endpoint-operation.ts
+  s_9622fd28aba994::t_5cf14c0b6628af 1-29
+packages/im/core/src/plugin-runtime/im/command-menu-navigation.ts
+  s_9622fd28aba994::t_805c2935b76f67 16-22,24,41-42
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_9622fd28aba994::t_0a387d2742a7d6 1,202-239,250-260,262-264,266-286,318,321-322,331,337-338,342-353,356,358-359,364-372,382-384,386,396-397
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_9622fd28aba994::t_097abd5f7e9618 1-3,81-87,90-91,126,134,143-145,154-232,237,288-291,295-296,300-301,305-306,310-311,327,330,332,338-340,343-358,408-414
+packages/im/core/src/plugin-runtime/im/group-rule-violation.ts
+  s_9622fd28aba994::t_d813228f2ce793 16-17
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_9622fd28aba994::t_33a54e4aa76f42 3,21,160,179,288-296,300-301,304-306,308-310,430-435
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_9622fd28aba994::t_fdf81d77b50c9d 1,16,26,57-87,100,179,233,237,298,375,407-409,411-473,562,564,566,660,678-683,719,721-723,725,729,734,745-747,755,769,772
+packages/im/core/src/plugin-runtime/im/index.ts
+  s_9622fd28aba994::t_b55eb15173f9d4 4-5
+packages/im/core/src/plugin-runtime/im/interaction-operation.ts
+  s_9622fd28aba994::t_d216799002d1f4 1,9-12
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_9622fd28aba994::t_e422e77cc366be 1-2,32-50,53,161,187-188,219-224,226-227,231,233,241-244,248,272,281-284,287,311,317,320,325-328,331,355-356,358,376,379-381,388
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_9622fd28aba994::t_7675b435cb83c0 117,134
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_9622fd28aba994::t_b5d19d60bac465 81,85-92,95-96,143-149,152,163-166
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_9622fd28aba994::t_879d35c2338279 26-31,37-56,59-60,67,70-72,76-78,81-85,89-91,100,118,149
+packages/im/core/tests/message.test.ts
+  s_9622fd28aba994::t_8c85024d3f2931 21-33,35
+packages/im/core/tests/middleware-types.fixture.ts
+  s_9622fd28aba994::t_342fd60f162072 70-85
+packages/im/core/tests/operation-session-runtime.test.ts
+  s_9622fd28aba994::t_c744101b3060c0 3,7,25-26,28,31-34,45,59,75-77,89,178,198,202-374
+packages/im/core/tests/operation-session.test.ts
+  s_9622fd28aba994::t_4aab3e496fac69 19-71,103-108,116-123
+packages/im/core/tests/plugin-runtime/command-menu-image.test.ts
+  s_9622fd28aba994::t_a90a383133717a 50,58,77,80,92,95,101,131,148,157,170,178,184,193,204,215-216,237-238,240,258-259,275-276
+packages/im/core/tests/plugin-runtime/endpoint-identity.test.ts
+  s_9622fd28aba994::t_db4b43ee035277 1-5,7-10,12-48,51-61
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_9622fd28aba994::t_3ee2b4b3e90c4a 104,609,638,1389-1403,1437-1448,1463-1473,1509-1515,1517-1518,1520,1581-1587,1589-1594,1596,1644-1650,1652-1653,1655,1704-1710,1712-1716,1718,1916-1925,1944-1951,2092,2095,2099,2103,2126-2129,2161,2168,2206,2235-2236,3224,3805,3908,3921,3987-3996,4014-4020,4034-4040,4064-4074,4131-4141,4153-4163,4177-4187
+packages/im/core/tests/plugin-runtime/interaction-pending.test.ts
+  s_9622fd28aba994::t_d661b233d9b7c2 10-19,94,100,103,107
+packages/im/core/tests/plugin-runtime/interaction-reliability.test.ts
+  s_9622fd28aba994::t_c8c40698269233 16-25,144,149,156,159-162,189-198,207,215-223,225,232
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_9622fd28aba994::t_aaf85ea748f922 47,96-99,114,119,141,147-151,183-184,274,279,281-283,287-318,631,648,714-721,734-739,770-783
+packages/im/core/tests/plugin-runtime/jsx-message-layout.test.ts
+  s_9622fd28aba994::t_58cbba7995ecfc 15,72-75,103,142,159,175
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_9622fd28aba994::t_f66c26e8737519 28,93,142-156,777-838
+packages/im/core/tests/plugin-runtime/outbound-renderer.test.ts
+  s_9622fd28aba994::t_159734069456aa 53-58,63-68,74-79,85-90,99-104,114-119,124,126,128,134-135,153-160,162,166-171,176-181,187-192,198-203,208-213,220-225,230-235,240-245,250-255,260-265,270-275,280-284
+packages/im/core/tests/plugin-runtime/receipt-hmr-lifetime.test.ts
+  s_9622fd28aba994::t_2a14f1cd587f2e 1-69
+packages/im/core/tests/plugin-runtime/reused-operation-projections.test.ts
+  s_9622fd28aba994::t_f861aa8c145586 27
+packages/im/core/tests/plugin-runtime/side-event-gateway.test.ts
+  s_9622fd28aba994::t_90507e47c45f95 1,171,202,265,293-313
+packages/im/feature-kit/src/adapter-client.ts
+  s_9622fd28aba994::t_02a260760a5938 4
+packages/im/feature-kit/tests/construction-types.fixture.ts
+  s_9622fd28aba994::t_6a180768bb18ab 23
+packages/im/handler/src/context.ts
+  s_9622fd28aba994::t_4169b1d63cda8a 15-16
+packages/im/handler/src/handler-index.ts
+  s_9622fd28aba994::t_537cdc4e8bdac3 107
+packages/im/isolate/README.md
+  s_9622fd28aba994::t_9ea08a6cd76d81 75,79-81
+packages/im/isolate/tests/isolate-runtime.test.ts
+  s_9622fd28aba994::t_02cc139ef2e52a 1,29-117,499-518
+packages/im/plugin-runtime/CONTEXT.md
+  s_9622fd28aba994::t_0c05c5ee65cf0a 80-81
+packages/im/plugin-runtime/src/data-migration.ts
+  s_9622fd28aba994::t_7fc3a863e2a669 1-112
+packages/im/plugin-runtime/src/outbound-host.ts
+  s_9622fd28aba994::t_f6424fc096f44f 64,69,83-104,106-107,131-132,138,158-159
+packages/im/plugin-runtime/tests/plugin-events.test.ts
+  s_9622fd28aba994::t_7aa93e4f3f55bb 1-37
+packages/im/runtime/tests/adapter-feature-cutover.test.ts
+  s_9622fd28aba994::t_3dc0f658e738be 1-63
+packages/im/runtime/tests/application-runtime.test.ts
+  s_9622fd28aba994::t_d71436c85ba43f 277
+packages/im/runtime/tests/im-feature-hmr.test.ts
+  s_9622fd28aba994::t_fa7417efd00712 62-63,68-69,71
+packages/im/runtime/tests/root-runtime.test.ts
+  s_9622fd28aba994::t_c06abe5e6619ae 4,21-179
+packages/im/runtime/tests/runtime-input-hmr.test.ts
+  s_9622fd28aba994::t_3bf4efcece0a79 30-65,96,101,117
+packages/toolkit/testing/src/fake-hosts.ts
+  s_9622fd28aba994::t_212d5ece88a5fe 122-123
+plugins/adapters/bilibili-live/package.json
+  s_9622fd28aba994::t_53535480ae5fab 101
+plugins/adapters/bilibili/package.json
+  s_9622fd28aba994::t_b99378ff0b17d7 113
+plugins/adapters/dingtalk/package.json
+  s_9622fd28aba994::t_4599a4800a9590 121
+plugins/adapters/dingtalk/src/client.ts
+  s_9622fd28aba994::t_27d9488216f8f8 8,166,174,176,211,236,463,468-469,482
+plugins/adapters/dingtalk/tests/dingtalk-runtime.test.ts
+  s_9622fd28aba994::t_56f23b8fd19930 480-503
+plugins/adapters/dingtalk/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_99f311bbf54f58 1,25
+plugins/adapters/discord/package.json
+  s_9622fd28aba994::t_2538bb904c5fb3 122
+plugins/adapters/discord/src/gateway.ts
+  s_9622fd28aba994::t_ca45fbd19ad093 3,140
+plugins/adapters/discord/tests/discord-runtime.test.ts
+  s_9622fd28aba994::t_06223d5387fac8 741
+plugins/adapters/discord/tests/operation-cancellation.test.ts
+  s_9622fd28aba994::t_720e9fefe9a634 1-95
+plugins/adapters/discord/tests/target-mode.test.ts
+  s_9622fd28aba994::t_e51cdb99f86da9 4,17
+plugins/adapters/discord/tests/webhook-localization.test.ts
+  s_9622fd28aba994::t_693d453aba7f6f 2,25
+plugins/adapters/email/package.json
+  s_9622fd28aba994::t_f2fba6319aa454 110
+plugins/adapters/email/src/client.ts
+  s_9622fd28aba994::t_41ddd9bf0ec045 2,179,186
+plugins/adapters/email/tests/console-runtime.test.ts
+  s_9622fd28aba994::t_b2b219a8adadd1 1,26
+plugins/adapters/email/tests/email-runtime.test.ts
+  s_9622fd28aba994::t_0576df6c3c21e5 742-758
+plugins/adapters/email/tests/runtime-delivery.ts
+  s_9622fd28aba994::t_4ba692a51314ff 1,14
+plugins/adapters/github/package.json
+  s_9622fd28aba994::t_0c95c52cac635a 141
+plugins/adapters/github/src/endpoint.ts
+  s_9622fd28aba994::t_c42cbaa57325ce 112,117-118
+plugins/adapters/github/src/gh-client.ts
+  s_9622fd28aba994::t_f2ff5e60a33dc0 13-14,49-65,91,104-105,107-108,111,142-143,160,177,180,182-183,186-188,191,200-201,206,216-220,266-267,339-342,349-350,476,517-518,528,540,549-550,556,565,570,574,578,584,624,628
+plugins/adapters/github/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_2f5ea1bf72d01f 1,25
+plugins/adapters/github/tests/github-runtime.test.ts
+  s_9622fd28aba994::t_ab487d4bd92693 269
+plugins/adapters/github/tests/operation-cancellation.test.ts
+  s_9622fd28aba994::t_b59de84c4d8a8f 1-85
+plugins/adapters/icqq/package.json
+  s_9622fd28aba994::t_1d589561efe611 130
+plugins/adapters/icqq/src/endpoint.ts
+  s_9622fd28aba994::t_6fcfd08377866e 14-17,24-33,144-149,153-155,158-162,164-171,173-175,177-179,181-183,185-187,193-194,196,198,203-205,207,215,219-221,223,554,556,558,560-570,580,607-614,937-938,1210-1212,1220,1222,1224,1228-1230,1238,1240,1242
+plugins/adapters/icqq/src/group-moderation.ts
+  s_9622fd28aba994::t_c6896a811b97b3 2,6,8,11,14,32-33,35,48-49
+plugins/adapters/icqq/src/group-scene.ts
+  s_9622fd28aba994::t_1f874abaee9462 2,22-23,25,33,58,60,63
+plugins/adapters/icqq/tests/endpoint-social.test.ts
+  s_9622fd28aba994::t_5db957065cd5bb 127,140,153,166,178,188,196,203,210,217,226,237-250
+plugins/adapters/icqq/tests/group-moderation.test.ts
+  s_9622fd28aba994::t_2b8c314de450aa 33,41,50,57,62,67,73,75,84,91,97
+plugins/adapters/icqq/tests/group-scene.test.ts
+  s_9622fd28aba994::t_5b68604d55d3ba 33,42,44,50,57,64,66-67,73,80,89,91,97
+plugins/adapters/icqq/tests/localized-tool-feedback.test.ts
+  s_9622fd28aba994::t_c9f2039a85c6a3 15-18
+plugins/adapters/icqq/tests/owner-lifecycle.test.ts
+  s_9622fd28aba994::t_4712900be9b0a9 6,21,28
+plugins/adapters/icqq/tests/target-mode.test.ts
+  s_9622fd28aba994::t_636303ab23fabc 10,28
+plugins/adapters/icqq/tests/uni-channel.test.ts
+  s_9622fd28aba994::t_1ef0cbb1b53df3 352
+plugins/adapters/kook/package.json
+  s_9622fd28aba994::t_871857ea8ac385 121
+plugins/adapters/kook/src/outbound.ts
+  s_9622fd28aba994::t_d85fce8d1bb83f 3-4,10-11,57,59,61,63,79-80,95,97,102,105
+plugins/adapters/kook/tests/kook-runtime.test.ts
+  s_9622fd28aba994::t_e6658222e988a4 531,569-584
+plugins/adapters/kook/tests/recall.test.ts
+  s_9622fd28aba994::t_c45a8f06180619 12,17,22,24
+plugins/adapters/kook/tests/target-mode.test.ts
+  s_9622fd28aba994::t_e398e44b30329a 4,17
+plugins/adapters/lark/package.json
+  s_9622fd28aba994::t_677efda0e086ec 123
+plugins/adapters/lark/src/client.ts
+  s_9622fd28aba994::t_e7bdffb05939df 13,21-22,107-108,120,122,125,257,259,265,300,302,310,319,329-332,338,633,640,671,674-676,692
+plugins/adapters/lark/src/media-upload.ts
+  s_9622fd28aba994::t_b8920dfedeae0b 25-28,31,33,44,46,49-50
+plugins/adapters/lark/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_b6eeeb61e81140 1,25
+plugins/adapters/lark/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_2367d321b473ab 115
+plugins/adapters/lark/tests/long-connection.test.ts
+  s_9622fd28aba994::t_ab4643c1f668cb 1,20
+plugins/adapters/lark/tests/share-keyboard.test.ts
+  s_9622fd28aba994::t_848c00de7080cc 1,30
+plugins/adapters/line/package.json
+  s_9622fd28aba994::t_d98676bf2c8581 118
+plugins/adapters/line/src/adapter.ts
+  s_9622fd28aba994::t_6d36faba0ed5e2 16
+plugins/adapters/line/src/api-client.ts
+  s_9622fd28aba994::t_8b40276a63411a 1,11-22,25-26,28,43,51,64-68,71,74,79,87,90-91
+plugins/adapters/line/src/client.ts
+  s_9622fd28aba994::t_6f2a928cdd8e66 6-10,81,135,148,157,241,251,261,271,290,312-315
+plugins/adapters/line/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_c15ab12c4549e1 1,25
+plugins/adapters/line/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_2f93a9d20b5b79 72,104
+plugins/adapters/line/tests/line-runtime.test.ts
+  s_9622fd28aba994::t_b0416d710b6d23 403-420
+plugins/adapters/milky/package.json
+  s_9622fd28aba994::t_770f4d37639668 125
+plugins/adapters/milky/src/adapter.ts
+  s_9622fd28aba994::t_3102592a6e817c 5,20,22
+plugins/adapters/milky/src/client.ts
+  s_9622fd28aba994::t_3f7bd9bfa730f2 1,15,24-43,47-59,61
+plugins/adapters/milky/src/endpoint-management.ts
+  s_9622fd28aba994::t_f5de4b1ddc9513 12-18,23,30-31,41-42,51-52,54
+plugins/adapters/milky/src/index.ts
+  s_9622fd28aba994::t_c9ea9660af9c04 16
+plugins/adapters/milky/src/protocol.ts
+  s_9622fd28aba994::t_dbd8536acdea3a 7,195-198,200,207-217
+plugins/adapters/milky/src/sse-endpoint.ts
+  s_9622fd28aba994::t_9a5337a4ee9cdc 17,62-63,68-70,74,121,124,136,140,143,145,148
+plugins/adapters/milky/src/webhook-endpoint.ts
+  s_9622fd28aba994::t_1ca6b0df41ae3f 18,53-54,59-61,65,102,105,116,120,123,125,128
+plugins/adapters/milky/src/ws-endpoint.ts
+  s_9622fd28aba994::t_263c9487059f9a 19,65-66,72-74,78,132,135,146,150,153,155,158
+plugins/adapters/milky/src/wss-endpoint.ts
+  s_9622fd28aba994::t_9d90f6765710ac 18,56-57,66-68,76,129,132,143,147,150,152,155
+plugins/adapters/milky/tests/configuration-identity.test.ts
+  s_9622fd28aba994::t_36e46039ab9043 1-52
+plugins/adapters/milky/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_3c48c930a112f3 46,61,71-72,78,90,98,132,134-137,145
+plugins/adapters/milky/tests/http-operation-cancellation.test.ts
+  s_9622fd28aba994::t_3db7d884c9f01c 1-55
+plugins/adapters/milky/tests/milky-runtime.test.ts
+  s_9622fd28aba994::t_4c837c96002dbc 1,371,417,547,550
+plugins/adapters/milky/tests/response-evidence.test.ts
+  s_9622fd28aba994::t_795e045f7dd9ad 1-65
+plugins/adapters/napcat/agents/napcat/skills/napcat-account/tools/set_profile/index.ts
+  s_9622fd28aba994::t_abc9a3f09c0c01 18
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-files-history/tools/upload_group_file/index.ts
+  s_9622fd28aba994::t_0d7237b7aa41af 18
+plugins/adapters/napcat/agents/napcat/skills/napcat-group-settings/tools/set_title/index.ts
+  s_9622fd28aba994::t_0355883ace8868 19
+plugins/adapters/napcat/agents/napcat/skills/napcat-media/tools/get_mini_app_ark/index.ts
+  s_9622fd28aba994::t_256635ac5c0aa4 18
+plugins/adapters/napcat/package.json
+  s_9622fd28aba994::t_b012e0bec69e4c 125
+plugins/adapters/napcat/src/client.ts
+  s_9622fd28aba994::t_144adfd35f09a9 2-6,13-47,51-63,73-80,82-90,92-94,96,110,121,145
+plugins/adapters/napcat/src/endpoint-management.ts
+  s_9622fd28aba994::t_b030ee272eb889 10-17,22,29-30,40-41,50-51,53,56-57,60
+plugins/adapters/napcat/src/http-endpoint.ts
+  s_9622fd28aba994::t_ae17646356d682 58-59,66,119,122,137,139
+plugins/adapters/napcat/src/identity.ts
+  s_9622fd28aba994::t_55710fe04e1382 2-3,9-10,12,14-15,19-20,22,27
+plugins/adapters/napcat/src/index.ts
+  s_9622fd28aba994::t_61a6d881cb1ca0 42-46,69,71-72
+plugins/adapters/napcat/src/onebot-get-msg.ts
+  s_9622fd28aba994::t_03f5b402a10071 42,54,64,96
+plugins/adapters/napcat/src/protocol.ts
+  s_9622fd28aba994::t_b2f7e14196e278 107-122,474-477,479-482
+plugins/adapters/napcat/src/ws-endpoint.ts
+  s_9622fd28aba994::t_e61aeb9da695fa 64-65,70,124,136,139,154,156,234,277,283
+plugins/adapters/napcat/src/ws-transport.ts
+  s_9622fd28aba994::t_5bca9d5047ded1 1,3-4,7-18,21-35,37-40,42,46-50
+plugins/adapters/napcat/src/wss-endpoint.ts
+  s_9622fd28aba994::t_fd601e2ba2a239 59-60,69,144,150,153,161,163,238,243,264,273
+plugins/adapters/napcat/tests/action-response.test.ts
+  s_9622fd28aba994::t_e6f4824ab56f54 1-39
+plugins/adapters/napcat/tests/content-port.test.ts
+  s_9622fd28aba994::t_d90bcafc72f73c 6
+plugins/adapters/napcat/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_6fda9f5ca4b077 33-36,40,44,49,53,57,62,70-73,77-80,83,85,88,91,95-96,99,103,135,141
+plugins/adapters/napcat/tests/http-operation-cancellation.test.ts
+  s_9622fd28aba994::t_8b1644b943d1fd 1-50
+plugins/adapters/napcat/tests/native-receipt-lifecycle.test.ts
+  s_9622fd28aba994::t_a342a455179734 9,31,58
+plugins/adapters/napcat/tests/transport-faults.test.ts
+  s_9622fd28aba994::t_90a7e7339051a7 6,38-40,182-199
+plugins/adapters/onebot11/README.md
+  s_9622fd28aba994::t_1efee835c06977 38-41
+plugins/adapters/onebot11/package.json
+  s_9622fd28aba994::t_2d744fbec0c1d9 125
+plugins/adapters/onebot11/src/adapter.ts
+  s_9622fd28aba994::t_012691c3a8ae5c 25-26
+plugins/adapters/onebot11/src/client.ts
+  s_9622fd28aba994::t_a5e3f0b18545d0 1,7,43-72,74-75
+plugins/adapters/onebot11/src/content-port.ts
+  s_9622fd28aba994::t_1dd41dd42979ce 1,5,18,33
+plugins/adapters/onebot11/src/endpoint-management.ts
+  s_9622fd28aba994::t_7939580b49d8b8 10-16,21,28-29,39-40,49-50,52
+plugins/adapters/onebot11/src/identity.ts
+  s_9622fd28aba994::t_e5f5115c91fdb2 3,10-11,13,15-16,20-21,28
+plugins/adapters/onebot11/src/index.ts
+  s_9622fd28aba994::t_06061e7fd70f80 43-45
+plugins/adapters/onebot11/src/self-id.ts
+  s_9622fd28aba994::t_e0e2b37fdcb473 22
+plugins/adapters/onebot11/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_4c940049624251 10-18
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  s_9622fd28aba994::t_88db04cc140256 16,37,43,46,64,66,70,73-77,80,92,143-149,152,155,170,172,180-185,246,280,286
+plugins/adapters/onebot11/src/ws-transport.ts
+  s_9622fd28aba994::t_67b04ef7698d57 1,3-4,7-11,13-18,21-42,46-50
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  s_9622fd28aba994::t_cec541d7c578bc 14,36,41,44,59,61,66,71-75,83,95,150-159,162,165,173,175,183-188,247,252,274,284
+plugins/adapters/onebot11/tests/client-delivery-evidence.test.ts
+  s_9622fd28aba994::t_f11d8ec97a44a1 1-42
+plugins/adapters/onebot11/tests/content-port.test.ts
+  s_9622fd28aba994::t_dfb4859f6d8fa1 12,23
+plugins/adapters/onebot11/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_3102067d2cb16a 21-37,52,65,75-76,82,94,102,130,136
+plugins/adapters/onebot11/tests/native-endpoint-lifecycle.test.ts
+  s_9622fd28aba994::t_4eca9bbe1598f4 5,35
+plugins/adapters/onebot11/tests/operation-cancellation.test.ts
+  s_9622fd28aba994::t_e086313c836e7a 1-126
+plugins/adapters/onebot11/tests/transport-faults.test.ts
+  s_9622fd28aba994::t_d67349fee000b8 6,38-40
+plugins/adapters/onebot12/README.md
+  s_9622fd28aba994::t_26e0a68aded42a 38-43
+plugins/adapters/onebot12/package.json
+  s_9622fd28aba994::t_5a30cdc7314f60 114
+plugins/adapters/onebot12/src/adapter.ts
+  s_9622fd28aba994::t_89cd348d3e2727 29-30
+plugins/adapters/onebot12/src/client.ts
+  s_9622fd28aba994::t_2e48476c9ceb7d 1-3,9,49-63,67
+plugins/adapters/onebot12/src/content-port.ts
+  s_9622fd28aba994::t_06881b1cc1b46b 1,4,19
+plugins/adapters/onebot12/src/endpoint-management.ts
+  s_9622fd28aba994::t_44674bfa646ca4 6-8,11-17,22,29-30,34,40-41,45,50-51,53,69-73
+plugins/adapters/onebot12/src/identity.ts
+  s_9622fd28aba994::t_9e0b5ed57cbd31 3,9-10,12,14-15,19-20,22,28,31-36
+plugins/adapters/onebot12/src/index.ts
+  s_9622fd28aba994::t_0b158e301726e2 24-26
+plugins/adapters/onebot12/src/protocol.ts
+  s_9622fd28aba994::t_f400a7d683e28b 1,7,410-415,431,435-437,454,469,472,478,480,491-499,501,531-538,540-542,544-557
+plugins/adapters/onebot12/src/response.ts
+  s_9622fd28aba994::t_0ccb6c48dce85a 1-20
+plugins/adapters/onebot12/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_c114496313ed68 10-18
+plugins/adapters/onebot12/src/webhook.ts
+  s_9622fd28aba994::t_57efa8eff4f70f 13,36,54,56,62,65,75,109,113-119,121,124,136,138,141-146,153-158
+plugins/adapters/onebot12/src/ws-endpoint.ts
+  s_9622fd28aba994::t_034db8feebb4ea 15,37,42,45,61,63,66,69-74,77,89,131-136,139-145,147,150,162,164,171-176,253-254,271,295
+plugins/adapters/onebot12/src/ws-transport.ts
+  s_9622fd28aba994::t_09539109c921fc 1,3-4,7,9-12,14-19,22-43,47
+plugins/adapters/onebot12/src/wss-endpoint.ts
+  s_9622fd28aba994::t_da960202aacd31 13,35,37-38,41,54,56,61,65-70,77,89,134-142,145-151,153,156,160,162,169-174,222,239-240,246,259
+plugins/adapters/onebot12/tests/client-delivery-evidence.test.ts
+  s_9622fd28aba994::t_5b867016695301 1-42
+plugins/adapters/onebot12/tests/core-operation-cancellation.test.ts
+  s_9622fd28aba994::t_2bab529cde892a 1-39
+plugins/adapters/onebot12/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_3b01192303477b 23-29,31-38,44,51-52,54,64-65,67,77-78,89,97,125,129,131,158,161-162
+plugins/adapters/onebot12/tests/http-operation-cancellation.test.ts
+  s_9622fd28aba994::t_f7bc59f8782289 1-60
+plugins/adapters/onebot12/tests/onebot12-runtime.test.ts
+  s_9622fd28aba994::t_579e6351f86fb7 293,295-296,299,309,314,329,331,824-825
+plugins/adapters/onebot12/tests/onebot12-selected-self.test.ts
+  s_9622fd28aba994::t_763180cb455ec2 4,33
+plugins/adapters/onebot12/tests/opaque-management-ids.test.ts
+  s_9622fd28aba994::t_d08ef436bb6e72 1-16
+plugins/adapters/onebot12/tests/operation-cancellation.test.ts
+  s_9622fd28aba994::t_9be339592f3db7 1-122
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/group_kick/index.ts
+  s_9622fd28aba994::t_00570f1f04acb1 31
+plugins/adapters/qq/agents/qq/skills/qq-group-admin/tools/set_mute/index.ts
+  s_9622fd28aba994::t_cd8b2a0d2ee155 32
+plugins/adapters/qq/package.json
+  s_9622fd28aba994::t_14d247af4cfa67 127
+plugins/adapters/qq/src/endpoint.ts
+  s_9622fd28aba994::t_66ac9d37980672 21-26,33-37,206,209-210,221,239,503,506-507,518,536,683-689,691-692,694-695,697-698,701,707,740-741,743,745,748,751,754,783
+plugins/adapters/qq/src/group-admin.ts
+  s_9622fd28aba994::t_5dccabcc5ea62a 14-20,59-60,63-64,69,75,77,82,85,88,95,98,111-112,114,123,129,134,137,147,150
+plugins/adapters/qq/src/image-size.ts
+  s_9622fd28aba994::t_6636cba2f3bd27 95-99,102,107
+plugins/adapters/qq/src/outbound.ts
+  s_9622fd28aba994::t_e01bc93fb740ba 377,388-389
+plugins/adapters/qq/src/qq-send.ts
+  s_9622fd28aba994::t_2d4c11a0a28135 13,38-51,87,103,105,111,148,150,152
+plugins/adapters/qq/tests/menu-pagination.test.ts
+  s_9622fd28aba994::t_80bd86ec53a61f 184-186,188,224-227,233
+plugins/adapters/qq/tests/passive-reply.test.ts
+  s_9622fd28aba994::t_9fc418128b6353 29
+plugins/adapters/qq/tests/qq-endpoint-command-defs.test.ts
+  s_9622fd28aba994::t_de89cf31fc7d0b 61,70,76,81,89
+plugins/adapters/qq/tests/qq-group-admin.test.ts
+  s_9622fd28aba994::t_fd438dd69e8f7e 65,69,71,77,79,81,87-88,91,93,114,116,118,120,129,131,133,136
+plugins/adapters/qq/tests/qq-runtime.test.ts
+  s_9622fd28aba994::t_c13ada3a27cd91 701-717
+plugins/adapters/qq/tests/target-mode.test.ts
+  s_9622fd28aba994::t_7bf525d3b7567b 4,16
+plugins/adapters/sandbox/package.json
+  s_9622fd28aba994::t_db84f3ea1fb0ca 116
+plugins/adapters/sandbox/tests/sandbox-multi-connection.test.ts
+  s_9622fd28aba994::t_2508874d7a4942 7,38
+plugins/adapters/satori/package.json
+  s_9622fd28aba994::t_6dbb8ca5298081 113
+plugins/adapters/satori/src/adapter.ts
+  s_9622fd28aba994::t_3038a7189dbdec 17
+plugins/adapters/satori/src/client.ts
+  s_9622fd28aba994::t_ce8d4c276dfa91 1,21-48
+plugins/adapters/satori/src/endpoint.ts
+  s_9622fd28aba994::t_425177282c0b7a 6-9,14,19-20,45,73,75,79-81,84,141,143,146,189-192,194,355,357,361-363,366,423,425,428,471-474,476,507,517,522,546,548,552,558,560,565,579,581
+plugins/adapters/satori/src/index.ts
+  s_9622fd28aba994::t_46730bccb63c94 17
+plugins/adapters/satori/src/protocol.ts
+  s_9622fd28aba994::t_bb6e456ec97d8e 3,187-192,194,205-212
+plugins/adapters/satori/tests/http-operation-cancellation.test.ts
+  s_9622fd28aba994::t_b79b26b86f46b4 1-55
+plugins/adapters/satori/tests/satori-selected-login.test.ts
+  s_9622fd28aba994::t_36d4aecefcd193 4,17
+plugins/adapters/slack/agents/slack/skills/slack-messages/tools/edit_message/index.ts
+  s_9622fd28aba994::t_9e709f970aac64 21,23
+plugins/adapters/slack/package.json
+  s_9622fd28aba994::t_9130da5942992a 121
+plugins/adapters/slack/src/endpoint.ts
+  s_9622fd28aba994::t_f7f7c8d22d4a57 11-14,21-23,48,91,94,96,99,102,106,109,112,197,202-204,371,373,376,379,387,390,486-487,492,497,509-510,515,518,535-536,538,549-554
+plugins/adapters/slack/src/slack-outbound.ts
+  s_9622fd28aba994::t_b755fda8f8bc10 4,26-36,39,41,49,59,68,81,110,116,121,126,132,138,156-161,163-165,167-169,171-172,174,178-181
+plugins/adapters/slack/tests/endpoint-management.test.ts
+  s_9622fd28aba994::t_687e058b6739f7 136,153-169
+plugins/adapters/slack/tests/slack-outbound.test.ts
+  s_9622fd28aba994::t_b67d7e221552fb 21,23,28,31,39,47,56,58,65,67,82,84,96,99,109,112,125,127,140,150,163,165,174,185,202,204,217,219,242,244,259,262,272,274,284,286,299,301
+plugins/adapters/slack/tests/slack-runtime.test.ts
+  s_9622fd28aba994::t_a13c3a3adf7025 325-328,506-536
+plugins/adapters/slack/tests/target-mode.test.ts
+  s_9622fd28aba994::t_5fed5e1b4675b1 5,21
+plugins/adapters/telegram/agents/telegram/skills/telegram-messages/tools/send_poll/index.ts
+  s_9622fd28aba994::t_0374876758bd16 27-28
+plugins/adapters/telegram/package.json
+  s_9622fd28aba994::t_15f54d2921e1b7 120
+plugins/adapters/telegram/src/endpoint.ts
+  s_9622fd28aba994::t_b7a661cf5c2141 55-62,97-98,250,256-258,260-261,282,287,307,329,344,356,374,384,552
+plugins/adapters/telegram/src/index.ts
+  s_9622fd28aba994::t_58446cbbe9a699 41-42
+plugins/adapters/telegram/src/telegram-client.ts
+  s_9622fd28aba994::t_977ae7925e8cd6 35-43,58-70,91-93,95,104,107-108,111,114,116,140,240-241
+plugins/adapters/telegram/tests/operation-cancellation.test.ts
+  s_9622fd28aba994::t_d9f6bc86b8b13c 1-37
+plugins/adapters/telegram/tests/target-mode.test.ts
+  s_9622fd28aba994::t_1239518119242b 4,22
+plugins/adapters/wechat-mp/package.json
+  s_9622fd28aba994::t_64bb7605fb4ab2 116
+plugins/adapters/wechat-mp/src/api-client.ts
+  s_9622fd28aba994::t_994a7491257627 1,103-104,114,117,121,123-124,127,134,138,144,152,163-164
+plugins/adapters/wechat-mp/src/client.ts
+  s_9622fd28aba994::t_c7fdb33ad07858 6-12,175,183,240,242,244,259,296,299,314,316,318,339,350-352
+plugins/adapters/wechat-mp/src/media-upload.ts
+  s_9622fd28aba994::t_395a07d8df4538 34-37,40,42,53,59,62-63
+plugins/adapters/wechat-mp/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_4eb67615afe5e4 1,25
+plugins/adapters/wechat-mp/tests/wechat-mp-runtime.test.ts
+  s_9622fd28aba994::t_4b9d06d9b2cf05 815-837
+plugins/adapters/wecom/package.json
+  s_9622fd28aba994::t_a43a9ab53e490a 121
+plugins/adapters/wecom/src/client.ts
+  s_9622fd28aba994::t_c9971a9cb13e0b 7-8,75,151-152,162,172,177,187,208,211,225-227,229-230,352,357-358,371,417-420
+plugins/adapters/wecom/src/media-upload.ts
+  s_9622fd28aba994::t_995908a0eb7746 33-36,39,41,52,55,61-62
+plugins/adapters/wecom/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_4e2728e9b9d357 1,25
+plugins/adapters/wecom/tests/wecom-runtime.test.ts
+  s_9622fd28aba994::t_fd03328f594cce 627-649
+plugins/adapters/weixin-ilink/package.json
+  s_9622fd28aba994::t_3f0eaeb57728e7 109
+plugins/adapters/weixin-ilink/src/cdn-upload.ts
+  s_9622fd28aba994::t_7eefe5e8bc675b 23,26,43,47,75
+plugins/adapters/weixin-ilink/src/client.ts
+  s_9622fd28aba994::t_08eca78b1af0a1 10,15-16,20,35,87-94,124,193-198,201-205,208-212,215-224,227-231,233-235,271,339,358-359,380,384,399,568,575-576,648-649,653
+plugins/adapters/weixin-ilink/src/ilink-api.ts
+  s_9622fd28aba994::t_e37d8dfc2df781 31-32,271,289,309,327,345,362
+plugins/adapters/weixin-ilink/src/media-download.ts
+  s_9622fd28aba994::t_897b66fa77d4bc 13-21,40,54-74,87-89,91-92,94,98-103,108-113,128-130,132-133,135,137-143,157-159,161-162,164-170
+plugins/adapters/weixin-ilink/src/outbound-media.ts
+  s_9622fd28aba994::t_27cdb1b88db26b 55-61,75,77,88,91,105-110,143,146
+plugins/adapters/weixin-ilink/src/pic-decrypt.ts
+  s_9622fd28aba994::t_c0977dbda749a0 58-70,75-76,97-98
+plugins/adapters/weixin-ilink/src/upload.ts
+  s_9622fd28aba994::t_e7c030b0f1f7eb 30,32-33,45,63-64,98
+plugins/adapters/weixin-ilink/src/weixin-send-media.ts
+  s_9622fd28aba994::t_a6702b740efa76 30,44,59,78
+plugins/adapters/weixin-ilink/src/weixin-send.ts
+  s_9622fd28aba994::t_64cf425f5a990d 78,109,128
+plugins/adapters/weixin-ilink/tests/account-state-identity.test.ts
+  s_9622fd28aba994::t_4aa75283708a7c 1,25
+plugins/adapters/weixin-ilink/tests/endpoint-commands.test.ts
+  s_9622fd28aba994::t_c90aa956e1ece5 1,25
+plugins/adapters/weixin-ilink/tests/operation-cancellation.test.ts
+  s_9622fd28aba994::t_e699a63060b725 1-77
+plugins/adapters/weixin-ilink/tests/receipt-lifecycle.test.ts
+  s_9622fd28aba994::t_78a9d94ac6b438 53-59
+plugins/adapters/weixin-ilink/tests/weixin-ilink-runtime.test.ts
+  s_9622fd28aba994::t_0fabe8950aa45c 152-153,155-156
+plugins/games/blackjack/commands/bj/[[action]]/index.ts
+  s_9622fd28aba994::t_797f2e3867f529 1,17,21-23
+plugins/games/blackjack/middlewares/bj-alias/index.ts
+  s_9622fd28aba994::t_9870a736b38a5c 1,16-18,20-21,23-25
+plugins/games/blackjack/middlewares/bj-choice/index.ts
+  s_9622fd28aba994::t_7e9ef5426229e0 2,5,9-10,21,28,38-39,48,61-62,81-82
+plugins/games/blackjack/src/bj-command.ts
+  s_9622fd28aba994::t_7a62644baa4c7b 1,5-6,13,16-30
+plugins/games/blackjack/src/game-flow.ts
+  s_9622fd28aba994::t_a11bf5a37bf8d6 2,22,26,31,55,57-65,67-73,78,80-88,93,97-106,108,110-113,115-132,134-136,139,141-145
+plugins/games/blackjack/src/session-service.ts
+  s_9622fd28aba994::t_30ec00d716f6a8 5,33,38,41-42,50
+plugins/games/blackjack/tests/bj-choice.test.ts
+  s_9622fd28aba994::t_a4babc3bd08b18 11-14,17
+plugins/games/blackjack/tests/blackjack-runtime.test.ts
+  s_9622fd28aba994::t_ccfb05b2996cfe 1,22,39,47
+plugins/games/dice-duel/commands/dice/[[action]]/index.ts
+  s_9622fd28aba994::t_01a599e4f4b5c7 1,9,13-15
+plugins/games/dice-duel/middlewares/dice-alias/index.ts
+  s_9622fd28aba994::t_4de7cafe1fa033 1,8-10,12,14-15,17-19
+plugins/games/dice-duel/middlewares/dice-choice/index.ts
+  s_9622fd28aba994::t_4cc356645fee20 2,5,9-10,21,28,38-39,47,64-65
+plugins/games/dice-duel/src/dice-command.ts
+  s_9622fd28aba994::t_92fdf101b609ac 1,6-7,14,17-29,32-33,35-39,41-42
+plugins/games/dice-duel/src/game-flow.ts
+  s_9622fd28aba994::t_efa6704cb8e4b1 2,15,18,23,25-33,35-37,42,44-52,57,61-65,67-69,71-78,80,82-84,86-89,91-93,95-102,104-106
+plugins/games/dice-duel/src/session-service.ts
+  s_9622fd28aba994::t_573eb638f024a4 5,35,37,40-41,51
+plugins/games/dice-duel/tests/dice-choice.test.ts
+  s_9622fd28aba994::t_5e7d75b33d4768 11-14,17
+plugins/games/dice-duel/tests/dice-duel-runtime.test.ts
+  s_9622fd28aba994::t_333b9d94535de4 1,22,39,47
+plugins/games/dungeon-expedition/commands/dungeon/[[action]]/index.ts
+  s_9622fd28aba994::t_3cb53ea9bd90d8 1,13,17-19
+plugins/games/dungeon-expedition/middlewares/dungeon-alias/index.ts
+  s_9622fd28aba994::t_c96d14e49c58fe 1,4,12-22
+plugins/games/dungeon-expedition/middlewares/dungeon-choice/index.ts
+  s_9622fd28aba994::t_53cd2482a21dcc 2,5,9-10,23,30,35-36,41,65-66,71
+plugins/games/dungeon-expedition/src/dungeon-command.ts
+  s_9622fd28aba994::t_658f3bd9ee205b 2,23,68,71-75,77-85
+plugins/games/dungeon-expedition/src/game-flow.ts
+  s_9622fd28aba994::t_ade47776ee0630 6,25,27-37,42,44-49,54,58-86,88-103,105,118,123
+plugins/games/dungeon-expedition/src/session-service.ts
+  s_9622fd28aba994::t_d043f89b19437e 6,43,48-49,52-69
+plugins/games/dungeon-expedition/tests/dungeon-choice.test.ts
+  s_9622fd28aba994::t_c6b8589c28790e 17-21,24
+plugins/games/dungeon-expedition/tests/dungeon-runtime.test.ts
+  s_9622fd28aba994::t_63d6b589a00fe6 1,25,42,63,75-77,81
+plugins/games/dungeon-expedition/tests/game-flow.test.ts
+  s_9622fd28aba994::t_95150a4ce8f19a 1-2,5,17-18,36
+plugins/games/dungeon-expedition/tests/session-service.test.ts
+  s_9622fd28aba994::t_12badc6cc3f569 5,13-14
+plugins/games/guess-number/commands/guess/[[action]]/index.ts
+  s_9622fd28aba994::t_c4539c93f525f4 1,9,13-15
+plugins/games/guess-number/middlewares/guess-alias/index.ts
+  s_9622fd28aba994::t_616850c8f7ae88 2,5,14-16,18,20-21,23-25
+plugins/games/guess-number/middlewares/guess-choice/index.ts
+  s_9622fd28aba994::t_c2d6190a8e5851 1,11,24-26,28,31
+plugins/games/guess-number/middlewares/guess-digit/index.ts
+  s_9622fd28aba994::t_4daca913e29504 1,10,17-19
+plugins/games/guess-number/src/game-flow.ts
+  s_9622fd28aba994::t_dcd482bff4860f 2,9,11-24,29,32-36,38-41,43,45-53,55-59,61-64,66,68-74,79,83-91,93-104
+plugins/games/guess-number/src/guess-command.ts
+  s_9622fd28aba994::t_9ae35160dbabb8 1,7-8,15,18-30,33,35-41,43-44
+plugins/games/guess-number/src/session-service.ts
+  s_9622fd28aba994::t_c74c0a91c0a692 5,39,41,44-45,55
+plugins/games/guess-number/tests/guess-number-runtime.test.ts
+  s_9622fd28aba994::t_99655818a8732c 1,23,57,65,77,82
+plugins/games/guess-number/tests/session.test.ts
+  s_9622fd28aba994::t_0c2cb0db9a14c2 1-2,5,15-16,34,41,49-52,55,57,65,72,95
+plugins/games/hub/commands/战绩/index.ts
+  s_9622fd28aba994::t_01ba109c824617 6,27-28
+plugins/games/hub/commands/排行/[[query]]/index.ts
+  s_9622fd28aba994::t_239733d5fb443e 6,49
+plugins/games/hub/tests/game-hub-runtime.test.ts
+  s_9622fd28aba994::t_b4e41cf6aede7b 54,107-108
+plugins/games/idiom-chain/commands/chain/[[action]]/index.ts
+  s_9622fd28aba994::t_f2b8cd700aba7c 1,9,13-15
+plugins/games/idiom-chain/middlewares/chain-alias/index.ts
+  s_9622fd28aba994::t_f6691835dedadc 2,5,14-16,18,20-21,23-25
+plugins/games/idiom-chain/middlewares/chain-text/index.ts
+  s_9622fd28aba994::t_6eeae9834cd5a5 2,5,9-10,21,28,38-39,47,62-63,70-71
+plugins/games/idiom-chain/src/chain-command.ts
+  s_9622fd28aba994::t_0b133477991722 1,18,21,31,34-36,38-50,53-55,57-62,64-65
+plugins/games/idiom-chain/src/game-flow.ts
+  s_9622fd28aba994::t_8ad73a474f1d57 2,26,30-33,72,75-83,86-94,96-101,106,108-116,121,124-128,130-153,155,158-162,164-171,173-174,176-181,186,190-194,196,198-219,221-223,225,227-238,241-242,246-256,258-262,264-265
+plugins/games/idiom-chain/src/session-service.ts
+  s_9622fd28aba994::t_f01053c6aaa343 5,38,42,45-46,62
+plugins/games/idiom-chain/tests/chain-alias.test.ts
+  s_9622fd28aba994::t_fafbd6901ca83b 12-15,18
+plugins/games/idiom-chain/tests/chain-text.test.ts
+  s_9622fd28aba994::t_33f519e08bec62 16-19,22
+plugins/games/idiom-chain/tests/game-flow.test.ts
+  s_9622fd28aba994::t_24784394fd57d7 33,47,59,73-74
+plugins/games/idiom-chain/tests/idiom-chain-runtime.test.ts
+  s_9622fd28aba994::t_6794a02129180d 1,22,39,47
+plugins/games/roulette/commands/roulette/[[action]]/index.ts
+  s_9622fd28aba994::t_a8182de3d5397f 1,3-4,12-17
+plugins/games/roulette/middlewares/roulette-alias/index.ts
+  s_9622fd28aba994::t_e149ad4ff3feb5 1-3,10-20
+plugins/games/roulette/middlewares/roulette-fire/index.ts
+  s_9622fd28aba994::t_9e8860baf2bf0f 2,16,22,25,29-30
+plugins/games/roulette/src/deadline-job.ts
+  s_9622fd28aba994::t_df4030528723e0 2,33
+plugins/games/roulette/src/game-flow.ts
+  s_9622fd28aba994::t_45194be3add113 2,33,44,51-58,60-69,82-89,118,141,153,236,246,252,262,273,276,289-291,296-299
+plugins/games/roulette/src/index.ts
+  s_9622fd28aba994::t_f87750479149a3 13
+plugins/games/roulette/src/mute-penalty.ts
+  s_9622fd28aba994::t_74892d0d410916 1,36,51
+plugins/games/roulette/src/roulette-actions.ts
+  s_9622fd28aba994::t_4771a142252fd4 2,69
+plugins/games/roulette/src/roulette-command.ts
+  s_9622fd28aba994::t_0a0247b6b8881a 1,4,17,20
+plugins/games/roulette/src/runtime.ts
+  s_9622fd28aba994::t_e857e9ef6a0f2a 6
+plugins/games/roulette/src/session-service.ts
+  s_9622fd28aba994::t_66059c8ea4e2ed 1,7,70,77-93,221-223
+plugins/games/roulette/src/view.ts
+  s_9622fd28aba994::t_0b8c871621db84 2,7
+plugins/games/roulette/tests/mute-penalty-connection.test.ts
+  s_9622fd28aba994::t_bfddb766d292f9 14,42
+plugins/games/roulette/tests/roulette-runtime.test.ts
+  s_9622fd28aba994::t_0b1ee027ef02e3 1-2,10,74,126-144,152,155,162,191,400
+plugins/games/rps/commands/rps/[[action]]/index.ts
+  s_9622fd28aba994::t_47b16069ca8622 1,9,13-15
+plugins/games/rps/middlewares/rps-alias/index.ts
+  s_9622fd28aba994::t_8cd08345ae5f62 1,8-10,12,14-15,17-19
+plugins/games/rps/middlewares/rps-choice/index.ts
+  s_9622fd28aba994::t_623716a89adbda 2,5,9-10,21,28,38-39,47,66-67
+plugins/games/rps/src/game-flow.ts
+  s_9622fd28aba994::t_2a6eb30ecfc125 2,21,24,29,31-39,41-43,48,52-59,61-68,70-71,73-78,80-82,84-89,91-93,98,100-108
+plugins/games/rps/src/rps-command.ts
+  s_9622fd28aba994::t_d297a99c9536e6 1,6-7,14,17-29,32-33,35-39,41-42
+plugins/games/rps/src/session-service.ts
+  s_9622fd28aba994::t_457ceea1ef6a31 5,35,37,40-41,49
+plugins/games/rps/tests/rps-choice.test.ts
+  s_9622fd28aba994::t_88218d74fcff56 11-14,17
+plugins/games/rps/tests/rps-runtime.test.ts
+  s_9622fd28aba994::t_97ba3795b6e460 1,22,39,47
+plugins/games/text-adventure/commands/adv/[[action]]/index.ts
+  s_9622fd28aba994::t_b5b2187ae6c53f 1,9,13-15
+plugins/games/text-adventure/middlewares/adv-alias/index.ts
+  s_9622fd28aba994::t_cbd1574b5d2b3c 1,8-10,12,14-15,17-19
+plugins/games/text-adventure/middlewares/adv-choice/index.ts
+  s_9622fd28aba994::t_dd26ff993ecec1 2,5,9-10,22,29,39-40,48,69-70
+plugins/games/text-adventure/src/adv-command.ts
+  s_9622fd28aba994::t_e7eb9859aeb59b 2,21,23,36,39-43,45-55,58-60,62-64,66-69,71-74,76-81,83-84
+plugins/games/text-adventure/src/game-flow.ts
+  s_9622fd28aba994::t_7723e98f90cbe3 1-2,17-36,41,43-52,54-64,69,73-82,84-90,92-127,130-136,138-140,143,146-155,157-160,165,167-174
+plugins/games/text-adventure/src/session-service.ts
+  s_9622fd28aba994::t_005fb53bad82d9 5,34,37,40-41,52
+plugins/games/text-adventure/tests/adv-choice.test.ts
+  s_9622fd28aba994::t_4a1dbc739837a7 12-15,18
+plugins/games/text-adventure/tests/game-flow.test.ts
+  s_9622fd28aba994::t_e1cf4535f9ff91 1,3,9-12,19
+plugins/games/text-adventure/tests/localization.test.ts
+  s_9622fd28aba994::t_a756926fda67ee 1,9-15,40
+plugins/games/text-adventure/tests/text-adventure-runtime.test.ts
+  s_9622fd28aba994::t_a084eff604f50d 1,22,39,47
+plugins/games/tic-tac-toe/commands/ttt/[[action]]/index.ts
+  s_9622fd28aba994::t_80eac2db39f26f 1,9,13-15
+plugins/games/tic-tac-toe/middlewares/ttt-alias/index.ts
+  s_9622fd28aba994::t_e76493de45d357 1,8-10,12,14-15,17-19
+plugins/games/tic-tac-toe/middlewares/ttt-choice/index.ts
+  s_9622fd28aba994::t_eaf6b2f4e16fdc 1,16,23,33-34,42-43,52,64-65
+plugins/games/tic-tac-toe/plugin.ts
+  s_9622fd28aba994::t_260c1d9b82537c 3,64-65,71-79
+plugins/games/tic-tac-toe/src/game-flow.ts
+  s_9622fd28aba994::t_77f57123cb8e5c 2,35-46,55,57,65,68-91,104,108-169,174,184-185,192,194-198,200-213,218,222-239
+plugins/games/tic-tac-toe/src/session-service.ts
+  s_9622fd28aba994::t_c90a4190bd5739 1,6,8-9,16,18-21,157,166,183,202,212-219
+plugins/games/tic-tac-toe/src/ttt-command.ts
+  s_9622fd28aba994::t_6ed4561654e29a 2,7-8,14,17-19,21-28,30-49,52-55,57-59,61-66,68-73,75-76
+plugins/games/tic-tac-toe/tests/game-flow-cas.test.ts
+  s_9622fd28aba994::t_45095681909548 1-63
+plugins/games/tic-tac-toe/tests/game-flow.test.ts
+  s_9622fd28aba994::t_6a81ee922d0f63 1,8,14-17,20
+plugins/games/tic-tac-toe/tests/move-atomicity.test.ts
+  s_9622fd28aba994::t_c9cf85de0c665b 1-59
+plugins/games/tic-tac-toe/tests/session.test.ts
+  s_9622fd28aba994::t_821c9e1e443ba9 1,59-60,125
+plugins/games/tic-tac-toe/tests/tic-tac-toe-runtime.test.ts
+  s_9622fd28aba994::t_e1475a4f5f5a9f 1,24,41,49,70,87-88,104
+plugins/games/tic-tac-toe/tests/ttt-choice.test.ts
+  s_9622fd28aba994::t_ab7b48e02f580f 1,4,12-15,18,53
+plugins/games/word-riddle/commands/riddle/[[action]]/index.ts
+  s_9622fd28aba994::t_f857e630596b1e 1,9,13-15
+plugins/games/word-riddle/middlewares/riddle-alias/index.ts
+  s_9622fd28aba994::t_8afecf559ecf4a 2,5,14-16,18,20-21,23-25
+plugins/games/word-riddle/middlewares/riddle-text/index.ts
+  s_9622fd28aba994::t_59ad3cec08db44 2,5,9-10,21,28,38-39,47,62-63,70-71
+plugins/games/word-riddle/src/game-flow.ts
+  s_9622fd28aba994::t_41f77743e126aa 2,26,30,49,52-60,63-65,70,72-80,85,88-102,104-119,121-129,131-134,139,143-156,158,160-162,164-172,174-180,182-185,187-188
+plugins/games/word-riddle/src/riddle-command.ts
+  s_9622fd28aba994::t_f0f6a83cdc245f 1,21,24,41,44-46,48-56,59-60,62-64,66-71,73-74
+plugins/games/word-riddle/src/session-service.ts
+  s_9622fd28aba994::t_09d8cd78d473de 5,33,36,39-40,53
+plugins/games/word-riddle/tests/game-flow.test.ts
+  s_9622fd28aba994::t_3545ad553adb71 33,47,58-59
+plugins/games/word-riddle/tests/riddle-text.test.ts
+  s_9622fd28aba994::t_e4005e00f5784b 12-15,18
+plugins/games/word-riddle/tests/word-riddle-runtime.test.ts
+  s_9622fd28aba994::t_27b4a7c8b6ba4d 1,22,39,47
+plugins/services/activity-feedback/tests/executor.test.ts
+  s_9622fd28aba994::t_1a942752901399 1-3,6-16,18-35,38-46,49-57,60-63,66-70,73-80,83-88,91-94,97-102,104,106-109,112-123,126-135,137-143
+plugins/services/activity-feedback/tests/feedback-fixture.ts
+  s_9622fd28aba994::t_1b07583c1f8485 1-41
+plugins/services/activity-feedback/tests/index.test.ts
+  s_9622fd28aba994::t_85683c3c9ccc51 5,74-75,115-116,172-173,209-210,240-241,285-286
+plugins/services/activity-feedback/tests/live-chain-probe.test.ts
+  s_9622fd28aba994::t_b9f29a2b60ce70 1,23,27,38
+plugins/services/activity-feedback/tests/localization.test.ts
+  s_9622fd28aba994::t_76ca887ade4ed3 1-2,23,26-27,31-34,44-45,56,59,78-79,82,86,95,112,130-133,135
+plugins/services/activity-feedback/tests/operation-lifetime.test.ts
+  s_9622fd28aba994::t_d5675421ab110b 1-60
+plugins/utils/answers/commands/好无聊/index.ts
+  s_9622fd28aba994::t_a4eb9bed2c4615 16
+plugins/utils/answers/commands/科目一/index.ts
+  s_9622fd28aba994::t_0eaa428f952e71 17
+plugins/utils/answers/src/quiz.ts
+  s_9622fd28aba994::t_8dd03ab5fd4e25 1,16,44-45,81-90,97-98
+plugins/utils/answers/tests/answers-logic.test.ts
+  s_9622fd28aba994::t_f3a143f484da9f 104,109,116,123
+plugins/utils/answers/tests/answers-runtime.test.ts
+  s_9622fd28aba994::t_6d61bbd0d7be8e 50
+plugins/utils/answers/tests/conversation-isolation.test.ts
+  s_9622fd28aba994::t_32a6e46527990e 1-13
+plugins/utils/bilibili/commands/bili/sub/index.ts
+  s_9622fd28aba994::t_a177bfb27c7282 1,29-31,33-42,44-50,52-61,63-69
+plugins/utils/bilibili/commands/bili/unsub/index.ts
+  s_9622fd28aba994::t_6e99b8f09f05df 1,21-22,24-27,29-38
+plugins/utils/bilibili/plugin.ts
+  s_9622fd28aba994::t_2e82c7f07f303c 1-2,38-41,45-49,57
+plugins/utils/bilibili/src/channel.ts
+  s_9622fd28aba994::t_b6edf7af2019fb 1,7,42-44,47-49,59-61
+plugins/utils/bilibili/src/poll.ts
+  s_9622fd28aba994::t_fb5c0062e6e1e9 1,140-142,144-145
+plugins/utils/bilibili/src/runtime.ts
+  s_9622fd28aba994::t_d55ae74d2bd345 1,11-12,22
+plugins/utils/bilibili/src/store.ts
+  s_9622fd28aba994::t_886bba209580ae 37,62
+plugins/utils/bilibili/src/target-migration.ts
+  s_9622fd28aba994::t_95834d803d2a1a 1-116
+plugins/utils/bilibili/tests/commands.test.ts
+  s_9622fd28aba994::t_759d36f1941d2f 200,203-205
+plugins/utils/bilibili/tests/target-migration.test.ts
+  s_9622fd28aba994::t_82aa96397b861d 1-83
+plugins/utils/bilibili/tests/watcher.test.ts
+  s_9622fd28aba994::t_28066a28f550ff 2,35-49
+plugins/utils/code-runner/tests/code-runner-runtime.test.ts
+  s_9622fd28aba994::t_ef3f74760b95f9 28,37,41-42,49
+plugins/utils/content-moderation/src/group-moderation.ts
+  s_9622fd28aba994::t_74c388a81b0d01 175
+plugins/utils/earthquake/commands/地震/订阅/index.ts
+  s_9622fd28aba994::t_8c41d9195e2b94 27
+plugins/utils/earthquake/plugin.ts
+  s_9622fd28aba994::t_27b19cb6824e05 1-2,18,37-39,41-42,51-57,62-68
+plugins/utils/earthquake/src/conversation.ts
+  s_9622fd28aba994::t_893f00924f0596 1,12,46,48-49,56
+plugins/utils/earthquake/src/migration-document.ts
+  s_9622fd28aba994::t_6c6425d5312ce9 1-36
+plugins/utils/earthquake/src/subscriptions.ts
+  s_9622fd28aba994::t_1b6b6b2700e6f9 1-3,18-19,35,40-41,61,90,97-98,100-101,117-124,128-146,148,151-152
+plugins/utils/earthquake/src/target-migration.ts
+  s_9622fd28aba994::t_8f4397271348b5 1-429
+plugins/utils/earthquake/tests/plugin.test.ts
+  s_9622fd28aba994::t_d27ae895177cb4 116
+plugins/utils/earthquake/tests/target-migration.test.ts
+  s_9622fd28aba994::t_52df0cdb572192 1-126
+plugins/utils/group-suite/tests/command-aliases.test.ts
+  s_9622fd28aba994::t_27b32751191101 93,98-100
+plugins/utils/group-suite/tests/welcome.test.ts
+  s_9622fd28aba994::t_84d614a9d346b4 1,111
+plugins/utils/ledger/tests/ledger.test.ts
+  s_9622fd28aba994::t_8a21a57eb23c85 96
+plugins/utils/qrcode/tests/qrcode-runtime.test.ts
+  s_9622fd28aba994::t_84c720ef145eb8 28,35,37,40,52
+plugins/utils/reminder/tests/reminder-create-runtime.test.ts
+  s_9622fd28aba994::t_7e5d5aec48bf3b 1,58-59,287,289
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_9622fd28aba994::t_737ced450aa74f 492
+plugins/utils/repeater/middlewares/repeater/index.ts
+  s_9622fd28aba994::t_1d1b7975e12e52 20
+plugins/utils/repeater/src/engine.ts
+  s_9622fd28aba994::t_ab514a59c7b502 1,10,16,18
+plugins/utils/repeater/tests/conversation-isolation.test.ts
+  s_9622fd28aba994::t_e78200025bff84 1-18
+plugins/utils/repeater/tests/repeater-runtime.test.ts
+  s_9622fd28aba994::t_a97cdead3a8999 1,47,50,52,61,76,87,148
+plugins/utils/rss/commands/rss-add/[url]/index.ts
+  s_9622fd28aba994::t_69ff97217b47ce 1,24-62
+plugins/utils/rss/commands/rss-remove/[url]/index.ts
+  s_9622fd28aba994::t_5010e66813218d 1,13-14,22-26,28,30-39
+plugins/utils/rss/plugin.ts
+  s_9622fd28aba994::t_48a18c6daa979d 1-2,25,35,65-68,73-77,82
+plugins/utils/rss/src/channel.ts
+  s_9622fd28aba994::t_1a006db84365f2 1,7,44-46,51-53,64-66
+plugins/utils/rss/src/poll.ts
+  s_9622fd28aba994::t_84987c1d9d9e21 1,51-57,73-74,76,85-86,125
+plugins/utils/rss/src/runtime.ts
+  s_9622fd28aba994::t_0211a0c0629688 1,9-10,20
+plugins/utils/rss/src/target-migration.ts
+  s_9622fd28aba994::t_896c55c3a71fc5 1-116
+plugins/utils/rss/tests/admin-fixture.ts
+  s_9622fd28aba994::t_da523beebf395a 83
+plugins/utils/rss/tests/admin-task-host.test.ts
+  s_9622fd28aba994::t_b4bf636f2e1849 1,42
+plugins/utils/rss/tests/admin-tasks.test.ts
+  s_9622fd28aba994::t_7e74cb1b640945 1,91
+plugins/utils/rss/tests/message-fixture.ts
+  s_9622fd28aba994::t_e4caf78d3f9cea 1,9,24
+plugins/utils/rss/tests/rss-channel.test.ts
+  s_9622fd28aba994::t_e06002ade638e8 1,11,60-61,72,113-117,163-164,172-197,200-201,209,221,229-233,235
+plugins/utils/rss/tests/rss-runtime.test.ts
+  s_9622fd28aba994::t_8d47143d4ffd78 1,15,82,151
+plugins/utils/rss/tests/rss-sqlite-delete.test.ts
+  s_9622fd28aba994::t_21aecaacf1bb55 1,14,82,127,144-159
+plugins/utils/rss/tests/target-migration.test.ts
+  s_9622fd28aba994::t_968d5b354ebf50 1-79
+pnpm-lock.yaml
+  s_9622fd28aba994::t_329fc7e2a83e44 138-140
+scripts/check-adapter-endpoint-boundaries.mjs
+  s_9622fd28aba994::t_b766c8ee099493 103-106,111
+scripts/check-adapter-endpoint-boundaries.test.ts
+  s_9622fd28aba994::t_d29c56e9c14114 15,19-20
+scripts/lib/adapter-authoring-contract.mjs
+  s_9622fd28aba994::t_909bf4a8d800b7 29-45
+scripts/platform-acceptance/probe-command.ts
+  s_9622fd28aba994::t_510acb2775d4ce 2,38-39,124
+tests/docs/first-plugin-runtime.test.ts
+  s_9622fd28aba994::t_85c24e58c06bba 112
+tests/platform-acceptance/probe-command.test.ts
+  s_9622fd28aba994::t_0242e759a8eb90 6-8,32,117-161
+tests/plugin-runtime/user-interaction-platform-codecs.test.ts
+  s_9622fd28aba994::t_5a5ca761befece 29-38,42-51
+tests/snapshots/api-surface.json
+  s_9622fd28aba994::t_48acc613c06b61 19-21,80,119,133,207
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_21c0fc5a192585 21-23,88-91,141,179,183-184,186,250,268,278-280
+plugins/adapters/satori/tests/satori-runtime.test.ts
+  s_c3f3c8741f3b73::t_1f896528b49cca 23,369,393,396,550,605,625,629
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c7e0bc337ac04866f0a869a87a0948aafd972d69",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_c3f3c8741f3b73": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18f48-03b0-70b3-a0c8-008ffa874b2b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
