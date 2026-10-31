@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/testing",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Real Plugin Runtime integration fixtures with synthetic IM endpoints",
   "type": "module",
   "main": "./lib/index.js",

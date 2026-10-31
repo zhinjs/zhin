@@ -1,5 +1,26 @@
 # @zhin.js/ai
 
+## 1.1.49
+
+### Patch Changes
+
+- 6749002: Keep interactive runtime turns and their synchronous children running without fixed iteration or total wall-clock caps. Share configured token quotas across the live turn, retain cancellation and authorization, compact child context independently, and report periodic progress without additional model calls or blocking final delivery. Scheduled, unattended, independent background and legacy API budgets remain unchanged.
+
+  Stabilize prompt prefixes by keeping conversation identity in the session-stable system tail and fresh scene state after the current message. Shorten and escape the host-context boundary, preserve permission-filtered tool disclosure, and omit fixed iteration ceilings from continuous-run traces.
+
+  Project repeated inspections of the same private image only once per model request, preserving resource access checks, transient lifetime, and the existing inspection limit.
+
+- c7944a5: DeepSeek 默认 `midConversationSystem` 改为 `none`：实测 DeepSeek 的 context 中不能放多段 system，对话中途的 system 消息（事件等）统一降级为带 `user_id:system` 头的 user 消息。显式配置 `compat.midConversationSystem` 仍优先。
+- fc33495: master 私聊审批改为先问人：`masterShell: isolated` 不再把审批强制成 `auto`，新增 `ai.agent.masterShellApprovalMode`（默认 `ask`，可选 `auto` / `inherit` 沿用 `execApprovalMode`）；master 私聊中自动审核拒绝会转问 master；群管冷却不再作用于私聊；拒绝提示与安全提示词要求在 master 私聊里请求批准而不是放弃。
+- 2c3610a: Add owner-scoped personal AI Sessions and a closed model policy hierarchy. Compile legacy providers and bindings into immutable, revision-leased connection/model/preset invocations while keeping Agent tool authority separate.
+
+  Provide authenticated personal model management, encrypted Host-private credentials, public HTTPS transport with DNS pinning and same-origin redirects, and persistent per-Session model selection. Deployment tasks and summaries retain deployment model authority. Preserve legacy history and configured perception fallback chains. Keep every chat turn on its selected model, including legacy configuration, while retaining same-model retries.
+
+  Extend trusted Host generation leases to resolve Root-private resources without publishing them in snapshots or child Plugin Scopes.
+
+- 4949b90: Preserve participant text and media boundaries when appending runtime context, anchor Anthropic caching before transient media, escape quoted host markers, and keep specialist selection out of the stable capability prefix.
+- 4c05a4e: 提高跨轮提示词缓存命中率：当前消息的运行时上下文（会话规则、记忆、技能、场景行、延迟工具索引、Turn context 等）移到正文之后，正文与日后的历史逐字节一致；系统稳定前缀不再随发送者角色变化；场景行 admins 排序稳定（ADR 0045）。
+
 ## 1.1.48
 
 ### Patch Changes

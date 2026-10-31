@@ -1,5 +1,57 @@
 # @zhin.js/agent
 
+## 1.1.45
+
+### Patch Changes
+
+- a9f4e48: PATCH COMPATIBILITY CUTOVER: this batch intentionally changes plugin APIs. The maintainer explicitly chose patch releases with declared version boundaries. Upgrade the complete tested dependency set; patch numbering does not promise compatibility with the removed interfaces.
+
+  The first planned floors are zhin.js 1.1.19, Core 1.1.54, Adapter 1.1.26, FeatureKit 1.1.10, Plugin Runtime 1.1.18, Runtime/Isolate 1.1.16 and Agent 1.1.45. Keep old-interface plugins with the earlier locked stack until they are migrated. Adapter's independent Feature API changes from 1.0.0 to 2.0.0; official consumers declare ^2.0.0. Existing Feature API admission rejects explicitly incompatible ranges; omitted API metadata keeps its existing behavior and does not certify compatibility. Runtime engine and patch-only release gates remain unchanged.
+
+  Use the native-Client Adapter target contract, canonical FeatureKit AdapterRegistry augmentation and named Endpoint control/management requests. Route message controls from canonical message/conversation refs; retain exact source authority and propagate caller/account/explicit-Root-stop cancellation. Replace removed Agent activity feedback exports with source-bound feedback. HMR pause/resume belongs to concrete plugin instances; plugins choose accepted-work policy without changing Controller commit/rollback authority. Cooperative worker/process control cancellation does not kill an isolate or reopen retired business admission.
+
+  Provide authenticated historical-data preview, exact selected binding, transactional application, authoritative inspection and explicit resumption, including active games. Preserve before-images and journals; never replay an unconfirmed effect, infer an account from an alias, or reuse historical permission grants. Owner V2 approvals remain inactive legacy data, while new writes use V3. Rollback requires matching software, lockfile and verified data; installing old code alone cannot read a new V3 approval file. Conflicting after-images are never overwritten.
+
+  See docs/plans/adapter-operation-version-boundaries.md and the Chinese/English upgrade guide for the complete version inventory, custom-plugin changes, acceptance and recovery sequence. These code and metadata changes do not authorize merging, publication, deployment, login, production migration or removal of installed workspace patches.
+
+- 6749002: Keep interactive runtime turns and their synchronous children running without fixed iteration or total wall-clock caps. Share configured token quotas across the live turn, retain cancellation and authorization, compact child context independently, and report periodic progress without additional model calls or blocking final delivery. Scheduled, unattended, independent background and legacy API budgets remain unchanged.
+
+  Stabilize prompt prefixes by keeping conversation identity in the session-stable system tail and fresh scene state after the current message. Shorten and escape the host-context boundary, preserve permission-filtered tool disclosure, and omit fixed iteration ceilings from continuous-run traces.
+
+  Project repeated inspections of the same private image only once per model request, preserving resource access checks, transient lifetime, and the existing inspection limit.
+
+- fc33495: master 私聊审批改为先问人：`masterShell: isolated` 不再把审批强制成 `auto`，新增 `ai.agent.masterShellApprovalMode`（默认 `ask`，可选 `auto` / `inherit` 沿用 `execApprovalMode`）；master 私聊中自动审核拒绝会转问 master；群管冷却不再作用于私聊；拒绝提示与安全提示词要求在 master 私聊里请求批准而不是放弃。
+- 2c3610a: Add owner-scoped personal AI Sessions and a closed model policy hierarchy. Compile legacy providers and bindings into immutable, revision-leased connection/model/preset invocations while keeping Agent tool authority separate.
+
+  Provide authenticated personal model management, encrypted Host-private credentials, public HTTPS transport with DNS pinning and same-origin redirects, and persistent per-Session model selection. Deployment tasks and summaries retain deployment model authority. Preserve legacy history and configured perception fallback chains. Keep every chat turn on its selected model, including legacy configuration, while retaining same-model retries.
+
+  Extend trusted Host generation leases to resolve Root-private resources without publishing them in snapshots or child Plugin Scopes.
+
+- 4949b90: Preserve participant text and media boundaries when appending runtime context, anchor Anthropic caching before transient media, escape quoted host markers, and keep specialist selection out of the stable capability prefix.
+- 4c05a4e: 提高跨轮提示词缓存命中率：当前消息的运行时上下文（会话规则、记忆、技能、场景行、延迟工具索引、Turn context 等）移到正文之后，正文与日后的历史逐字节一致；系统稳定前缀不再随发送者角色变化；场景行 admins 排序稳定（ADR 0045）。
+- 4042a72: 去除 discover 工具结果正文中重复的完整参数 schema，减少后续模型请求携带的重复历史。保留匹配工具的自动加载、权限、加载上限与稳定顺序，完整定义仍通过下一次请求的 tools 字段提供，无需增加 load_tool 调用。
+- f8505b0: Recover completed Sandbox output from the existing journal with separate scoped delivery facts. Preserve confirmed, partial and unknown delivery, including interrupted final projection, without resending output or changing journal retention. Read results in pages of fifty; media recovery stores authorized URL references rather than bytes.
+- f1d4d66: Record the authorized target of successful file writes and edits in their tool settlements. Project file links through the current Host's existing file-manager policy, so Console can open the actual file without inferring its identity from raw model arguments or tool output text.
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [6749002]
+- Updated dependencies [c7944a5]
+- Updated dependencies [f8505b0]
+- Updated dependencies [fc33495]
+- Updated dependencies [2c3610a]
+- Updated dependencies [4949b90]
+- Updated dependencies [4c05a4e]
+  - @zhin.js/adapter@1.1.26
+  - @zhin.js/core@1.1.54
+  - @zhin.js/plugin-runtime@1.1.18
+  - @zhin.js/ai@1.1.49
+  - @zhin.js/agent-feature@1.1.11
+  - @zhin.js/mcp-feature@1.1.11
+  - @zhin.js/prompt-section@1.1.10
+  - @zhin.js/skill@1.1.11
+  - @zhin.js/tool@1.1.13
+  - @zhin.js/permission@1.1.10
+
 ## 1.1.44
 
 ### Patch Changes
