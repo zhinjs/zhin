@@ -102,8 +102,12 @@ export function registerConsoleHttp(options: {
       return;
     }
     try {
-      const topology = await options.console.runView(requestConsoleAccess(http, request, url), (catalog) => catalog.topology());
-      const match = topology.resolve(url.pathname);
+      // Resolve inside the view: ConsoleTopology#resolve reads the catalog lease,
+      // which ends as soon as runView's callback returns.
+      const match = await options.console.runView(
+        requestConsoleAccess(http, request, url),
+        (catalog) => catalog.topology().resolve(url.pathname),
+      );
       if (match.status === 'missing') {
         response.writeHead(404);
         response.end();
