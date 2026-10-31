@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-bilibili",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Bilibili live-start and UP dynamic subscriptions for Zhin.js (Plugin Runtime)",
   "type": "module",
   "main": "./lib/index.js",

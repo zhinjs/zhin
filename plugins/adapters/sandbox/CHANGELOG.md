@@ -1,5 +1,62 @@
 # @zhin.js/adapter-process
 
+## 1.1.21
+
+### Patch Changes
+
+- 2c3610a: Move account lifecycle ownership into the generic Adapter base and let native Endpoints retain their SDK Client inheritance. Infer platform-specific operation Sessions from a single adapter registry while preserving command parameter, option, configuration and factory inference.
+
+  Bind message replies, management ports, login challenges and Agent cancellation to the captured account incarnation. Persist runtime account intent with encrypted, revision-checked Host storage; keep account management independent of Root process restarts. Require explicit operator confirmation before importing existing accounts, and give replacement accounts a new identity without inheriting previous Sessions.
+
+  Expose account save, start, stop, update and replacement through the existing adapter Console, with exact account ownership, truthful pending/unknown outcomes and no startup configuration or environment-file rewrites.
+
+  Complete the target migration across every adapter, the public authoring API, generators, examples and Console. This intentionally removes the old create factory, inheritable Endpoint/ClientEndpoint classes, Client descriptors and file-rewrite account management; plugin authors must use createAdapter, native Client inheritance and the single AdapterRegistry. Satori and OneBot12 require explicit platform/userId selection, and WeCom requires a separate agentId.
+
+  Verify opaque credential changes before the same configuration snapshot is committed. Drain admitted native callbacks across close/rollback, cancel target work on stop, and keep raw transport parsing, platform ACK timing and SDK native methods under their existing owners. Account metadata conceals credentials carried in URLs.
+
+- a9f4e48: PATCH COMPATIBILITY CUTOVER: this batch intentionally changes plugin APIs. The maintainer explicitly chose patch releases with declared version boundaries. Upgrade the complete tested dependency set; patch numbering does not promise compatibility with the removed interfaces.
+
+  The first planned floors are zhin.js 1.1.19, Core 1.1.54, Adapter 1.1.26, FeatureKit 1.1.10, Plugin Runtime 1.1.18, Runtime/Isolate 1.1.16 and Agent 1.1.45. Keep old-interface plugins with the earlier locked stack until they are migrated. Adapter's independent Feature API changes from 1.0.0 to 2.0.0; official consumers declare ^2.0.0. Existing Feature API admission rejects explicitly incompatible ranges; omitted API metadata keeps its existing behavior and does not certify compatibility. Runtime engine and patch-only release gates remain unchanged.
+
+  Use the native-Client Adapter target contract, canonical FeatureKit AdapterRegistry augmentation and named Endpoint control/management requests. Route message controls from canonical message/conversation refs; retain exact source authority and propagate caller/account/explicit-Root-stop cancellation. Replace removed Agent activity feedback exports with source-bound feedback. HMR pause/resume belongs to concrete plugin instances; plugins choose accepted-work policy without changing Controller commit/rollback authority. Cooperative worker/process control cancellation does not kill an isolate or reopen retired business admission.
+
+  Provide authenticated historical-data preview, exact selected binding, transactional application, authoritative inspection and explicit resumption, including active games. Preserve before-images and journals; never replay an unconfirmed effect, infer an account from an alias, or reuse historical permission grants. Owner V2 approvals remain inactive legacy data, while new writes use V3. Rollback requires matching software, lockfile and verified data; installing old code alone cannot read a new V3 approval file. Conflicting after-images are never overwritten.
+
+  See docs/plans/adapter-operation-version-boundaries.md and the Chinese/English upgrade guide for the complete version inventory, custom-plugin changes, acceptance and recovery sequence. These code and metadata changes do not authorize merging, publication, deployment, login, production migration or removal of installed workspace patches.
+
+- 6749002: Keep interactive runtime turns and their synchronous children running without fixed iteration or total wall-clock caps. Share configured token quotas across the live turn, retain cancellation and authorization, compact child context independently, and report periodic progress without additional model calls or blocking final delivery. Scheduled, unattended, independent background and legacy API budgets remain unchanged.
+
+  Stabilize prompt prefixes by keeping conversation identity in the session-stable system tail and fresh scene state after the current message. Shorten and escape the host-context boundary, preserve permission-filtered tool disclosure, and omit fixed iteration ceilings from continuous-run traces.
+
+  Project repeated inspections of the same private image only once per model request, preserving resource access checks, transient lifetime, and the existing inspection limit.
+
+- d38fb4b: Pass normalized message segments through the canonical Core ingress. Approval callbacks now reach the existing interaction authority instead of being interpreted as ordinary text. Keep the legacy metadata projection for older consumers.
+- 9a9bbd9: Support concurrent Console connections with per-conversation subscriptions and negotiated input echoes. Preserve Bot identities, legacy clients and server-side approvals; isolate other conversations and demo connections, and leave delivery unconfirmed when no subscriber accepts a reply.
+
+  Reuse Console conversation, usage and request readers within the active workspace when available, with a standalone-page fallback for older shells. Isolate trace reads and cancellation feedback across scene and connection changes without repeating cancellation requests.
+
+  Recover Host-scoped conversation metadata, canonical chat history, read-only offline results and current live interactions without migrating browser caches or replaying execution. Keep historical controls read-only and use the existing server authority for live answers.
+
+  Retire matching native prompt controls when an authoritative read confirms they are no longer pending, without disabling unrelated plugin messages or inferring approval success.
+
+  Keep cancellation feedback separate from trace-read errors, so cached events and subsequent trace refreshes cannot hide a failed stop request. Show read errors alongside the available trace and keep feedback scoped to the original connection and conversation.
+
+- 8f2affe: Keep Sandbox WebSocket message IDs consistent with canonical delivery receipts, preserving explicit IDs from existing wire envelopes.
+
+  Present the Sandbox as Conversations and link its conversation and trace actions to the existing Console session details, preserving the encoded session identity.
+
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [f8505b0]
+- Updated dependencies [2c3610a]
+  - @zhin.js/adapter@1.1.26
+  - @zhin.js/feature-kit@1.1.10
+  - @zhin.js/core@1.1.54
+  - @zhin.js/host-http@1.1.12
+  - @zhin.js/client@1.1.22
+  - @zhin.js/page@1.1.11
+  - @zhin.js/skill@1.1.11
+
 ## 1.1.20
 
 ### Patch Changes

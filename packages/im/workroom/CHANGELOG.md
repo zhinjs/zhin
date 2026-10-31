@@ -1,5 +1,28 @@
 # @zhin.js/workroom
 
+## 0.0.14
+
+### Patch Changes
+
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [6749002]
+- Updated dependencies [c7944a5]
+- Updated dependencies [f8505b0]
+- Updated dependencies [fc33495]
+- Updated dependencies [2c3610a]
+- Updated dependencies [4949b90]
+- Updated dependencies [4c05a4e]
+- Updated dependencies [4042a72]
+- Updated dependencies [f8505b0]
+- Updated dependencies [f1d4d66]
+  - @zhin.js/core@1.1.54
+  - @zhin.js/plugin-runtime@1.1.18
+  - @zhin.js/agent@1.1.45
+  - @zhin.js/ai@1.1.49
+  - @zhin.js/skill@1.1.11
+  - @zhin.js/tool@1.1.13
+
 ## 0.0.13
 
 ### Patch Changes
