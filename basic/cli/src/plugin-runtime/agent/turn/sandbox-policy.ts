@@ -8,6 +8,10 @@ export interface SandboxTurnPolicyInput {
   readonly scope?: 'private' | 'group' | 'channel';
   /** `ai.agent.masterShell`; anything but 'isolated' keeps bash disabled outside the sandbox. */
   readonly masterShell?: 'off' | 'isolated';
+  /** `ai.agent.masterShellApprovalMode`; defaults to `ask` so the master is asked instead of silently reviewed. */
+  readonly masterShellApprovalMode?: 'ask' | 'auto' | 'inherit';
+  /** `ai.agent.execApprovalMode`; only read when `masterShellApprovalMode: inherit`. */
+  readonly execApprovalMode?: 'ask' | 'auto' | 'bypass';
   readonly metadata: Readonly<Record<string, unknown>>;
   readonly projectRoot: string;
   readonly defaultNetwork?: TurnRequest['policy']['network'];
@@ -35,7 +39,7 @@ export function resolveSandboxTurnPolicy(input: SandboxTurnPolicyInput): Resolve
   });
   if (input.platform !== 'sandbox') {
     return allowsMasterImShell(input)
-      ? Object.freeze({ ...fallback, shell: MASTER_IM_ISOLATED_SHELL })
+      ? Object.freeze({ ...fallback, shell: masterImIsolatedShell(resolveMasterShellApprovalMode(input)) })
       : fallback;
   }
   if (!input.isMaster) return fallback;
@@ -86,12 +90,32 @@ export function resolveSandboxTurnPolicy(input: SandboxTurnPolicyInput): Resolve
  * the bash port refuses `isolation: 'none'` unless access is danger-full-access,
  * and there is deliberately no IM path to that.
  */
-const MASTER_IM_ISOLATED_SHELL: NonNullable<TurnRequest['policy']['shell']> = Object.freeze({
-  security: 'allowlist',
-  execPreset: 'development',
-  approvalMode: 'auto',
-  isolation: 'required',
-});
+function masterImIsolatedShell(approvalMode: 'ask' | 'auto' | 'bypass'): NonNullable<TurnRequest['policy']['shell']> {
+  return Object.freeze({
+    security: 'allowlist',
+    execPreset: 'development',
+    approvalMode,
+    isolation: 'required',
+  });
+}
+
+/**
+ * The master's own DM must not silently override the operator's approval choice:
+ * `ask` (default) puts a confirmation card in front of the master, `inherit`
+ * follows `execApprovalMode`, `auto` keeps the reviewer (which escalates rejections).
+ */
+export function resolveMasterShellApprovalMode(
+  input: Pick<SandboxTurnPolicyInput, 'masterShellApprovalMode' | 'execApprovalMode'>,
+): 'ask' | 'auto' | 'bypass' {
+  switch (input.masterShellApprovalMode) {
+    case 'auto':
+      return 'auto';
+    case 'inherit':
+      return input.execApprovalMode ?? 'auto';
+    default:
+      return 'ask';
+  }
+}
 
 function allowsMasterImShell(input: SandboxTurnPolicyInput): boolean {
   return input.masterShell === 'isolated' && input.isMaster && input.scope === 'private';

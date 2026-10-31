@@ -1231,6 +1231,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
               isMaster: senderRoles.isMaster,
               scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : undefined,
               masterShell: service.getAgentConfig()?.masterShell,
+              masterShellApprovalMode: service.getAgentConfig()?.masterShellApprovalMode,
+              execApprovalMode: service.getAgentConfig()?.execApprovalMode,
               metadata: message.metadata,
               projectRoot: options.projectRoot,
               defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
@@ -1331,6 +1333,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                     options.agent.approvalReviewer,
                     escalatedApprovalPort,
                     approvalJudgment,
+                    // Master's own DM: a reviewer rejection asks the master instead of refusing.
+                    { escalateRejections: senderRoles.isMaster && turnAccess.origin.kind === 'im' && turnAccess.origin.scope === 'private' },
                   ),
                   ask: askApprovalPort,
                 }),

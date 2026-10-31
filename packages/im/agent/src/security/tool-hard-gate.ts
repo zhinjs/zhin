@@ -647,6 +647,8 @@ export class ToolHardGate {
   ): ToolHardGateResult | null {
     const cooldown = this.#context.opsCooldown;
     if (!cooldown) return null;
+    // 冷却只为群管防刷卡：私聊（含 master 私聊改配置）与自我变更（category=self）不冷却。
+    if (category === 'self' || isPrivateHardGateScene(this.#context)) return null;
     const { platform, sceneId } = this.#context.location;
     const action = toolLocalName(name);
     const target = opsCooldownTarget(input);
@@ -889,6 +891,11 @@ export function formatHardGateDenial(toolName: string, why: string): string {
 }
 
 /** 冷却命中时给模型的说明：冷却中、剩余毫秒、没有生成新审批卡，明确不要重试 / 改参数 / 换工具。 */
+function isPrivateHardGateScene(context: Pick<ToolHardGateContext, 'conversationScope' | 'location'>): boolean {
+  if (context.conversationScope) return context.conversationScope === 'private';
+  return context.location.sceneId.startsWith('private:');
+}
+
 export function formatOpsCooldownDenial(toolName: string, action: string, cooldownMs: number, remainingMs: number): string {
   const seconds = Math.max(1, Math.round(cooldownMs / 1000));
   return `危险工具「${toolName}」冷却中：本会话的「${action}」${seconds} 秒内只能发起一次审批，还需等待约 ${remainingMs} 毫秒。`

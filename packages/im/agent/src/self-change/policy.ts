@@ -198,6 +198,7 @@ export const FORBIDDEN_CHANGE_CONFIG_KEYS: readonly (readonly string[])[] = Obje
   Object.freeze(['ai', 'agent', 'toolHardGate']),
   Object.freeze(['ai', 'agent', 'execApprovalMode']),
   Object.freeze(['ai', 'agent', 'masterShell']),
+  Object.freeze(['ai', 'agent', 'masterShellApprovalMode']),
 ]);
 
 /** 同 Console `CONFIG_PATCH_LIMITS`。 */
