@@ -1,4 +1,4 @@
-import { createEndpointHarness } from '../../../plugins/adapters/test-utils/endpoint.js';
+import { createEndpointHarness, createTestEndpointEventGateway } from '../../../plugins/adapters/test-utils/endpoint.js';
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -282,6 +282,6 @@ function createBoundTerminalEndpoint(
   receive: EndpointEventGateway['receive'] = async () => undefined,
 ) {
   return createEndpointHarness(() => createTerminalEndpoint(options), {
-    name: 'terminal', gateway: { receive }, capabilities: ['inbound', 'outbound'],
+    name: 'terminal', gateway: createTestEndpointEventGateway({ receive }), capabilities: ['inbound', 'outbound'],
   });
 }

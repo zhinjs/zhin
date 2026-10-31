@@ -122,6 +122,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 | `usageQuota` | keep | Common switch, kept |
 | `schedule` | keep | Common switch, kept |
 | `masterShell` | keep | Common switch, kept |
+| `masterShellApprovalMode` | keep | For owner DM with `masterShell: isolated` only; defaults to `ask` (ask the owner), `auto` uses review and escalates rejection to the owner, `inherit` follows `execApprovalMode` |
 | `compaction` | keep | Common switch, kept |
 | `rateLimit` | keep | Common switch, kept |
 | `preExecTimeout` | preset | Advanced tuning; defaults are recommended |

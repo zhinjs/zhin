@@ -57,12 +57,14 @@ it('manages and restores accounts through the built CLI without restarting its p
     const body = await response.json(); expect(body.success, JSON.stringify(body)).toBe(true); return body.data;
   };
   try {
+    const adapterManifest = JSON.parse(await readFile(join(repoRoot, 'packages/im/adapter/package.json'), 'utf8'));
+    expect(adapterManifest.zhin.featureApi).toBeTypeOf('string');
     await mkdir(join(project, 'node_modules/@zhin.js'), { recursive: true });
     await symlink(join(repoRoot, 'packages/im/zhin'), join(project, 'node_modules/zhin.js'), 'dir');
     await symlink(join(repoRoot, 'packages/im/adapter'), join(project, 'node_modules/@zhin.js/adapter'), 'dir');
     await writeFile(join(project, 'package.json'), JSON.stringify({ name: 'account-built-fixture', private: true, type: 'module',
       dependencies: { 'zhin.js': 'workspace:*', '@zhin.js/adapter': 'workspace:*' },
-      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', engine: '^1.0.0', runtime: 'trusted', features: [{ package: '@zhin.js/adapter', api: '^1.0.0' }], plugins: [] } }));
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', engine: '^1.0.0', runtime: 'trusted', features: [{ package: '@zhin.js/adapter', api: `^${adapterManifest.zhin.featureApi}` }], plugins: [] } }));
     await writeFile(join(project, 'plugin.ts'), `import {definePlugin,definePluginConsoleRpc,pluginConsoleRpcToken} from 'zhin.js';
 import {Adapter,defineAdapter,createAdapterConsoleRpc,createEndpointSpecification,endpointSpec} from 'zhin.js/adapter';
 let created=0;

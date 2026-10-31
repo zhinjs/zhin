@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PluginSchemaCatalog } from '../../../src/plugin-runtime/console/plugin-schema-catalog.js';
 import { Schema } from '../../../../../basic/schema/src/index.js';
-import { definePlugin } from '@zhin.js/plugin-runtime';
+import { definePlugin, createPluginEventChannel } from '@zhin.js/plugin-runtime';
 import { RootRuntime } from '@zhin.js/runtime';
 import { calendarConfig } from '../../../../../plugins/utils/calendar/src/config.js';
 
@@ -122,7 +122,10 @@ describe('PluginSchemaCatalog', () => {
       isolation: {
         async prepare() {
           if (rejectCandidate) throw new Error('isolated candidate failed');
-          return { descriptor: { name: 'isolated-schema-child' }, dispose() {} };
+          // This metadata-only isolate has no business lifecycle handlers. Deliver through the
+          // real instance-owned channel while keeping its source unevaluated in the Host.
+          const channel = createPluginEventChannel();
+          return { descriptor: { name: 'isolated-schema-child' }, controlEvent: channel.dispatch, dispose: () => channel.dispose() };
         },
       },
     });
