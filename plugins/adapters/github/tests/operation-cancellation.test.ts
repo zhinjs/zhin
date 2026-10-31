@@ -1,4 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
+import { once } from 'node:events';
+import { watch } from 'node:fs';
+import { onTestFinished } from 'vitest';
 import { GhClient } from '../src/gh-client.js';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -24,19 +27,29 @@ if (body.includes('next-message')) process.stdout.write(JSON.stringify({ id: 77 
   }
   const config = resolveGithubConfig({ id: 'synthetic', app_id: 1, private_key: 'synthetic-no-provider-key' });
   const f = await createEndpointHarness(() => new SyntheticGithubEndpoint({ id: capabilityId(rootPluginId(), adapterFeatureId, 'github'), config }), { name: 'github', capabilities: ['outbound'] });
-  await f.start(); f.open();
+  const caller = new AbortController(), watcher = watch(marker);
+  // Observe the real child before starting it; process startup has no 1s readiness contract.
+  const ready = once(watcher, 'change', { signal: caller.signal });
+  void ready.catch(() => undefined);
+  let outcome: unknown;
   const conversation = { endpoint: { adapter: 'github', id: f.canonicalId }, kind: 'channel' as const, id: buildChannelId('owner/repo', kind, 1) };
-  const caller = new AbortController(); let outcome: unknown;
-  const sending = f.send({ conversation, payload: 'first-message', signal: caller.signal }).then(value => { outcome = { value }; }, error => { outcome = { error }; });
-  try {
-    await vi.waitFor(async () => expect((await readFile(marker, 'utf8')).trim()).not.toBe(''));
-    caller.abort();
-    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'unknown' } }), { timeout: 250 });
-    await sending;
-    await expect(f.send({ conversation, payload: 'next-message' })).resolves.toBe('77');
-    const calls = (await readFile(marker, 'utf8')).trim().split('\n').map(row => JSON.parse(row));
-    expect(calls).toHaveLength(2); expect(calls.every(args => args.includes('/repos/owner/repo/issues/1/comments'))).toBe(true);
-  } finally { await f.stop(); await sending; vi.unstubAllEnvs(); await rm(directory, { recursive: true, force: true }); }
+  const sending = f.start().then(() => {
+    f.open();
+    return f.send({ conversation, payload: 'first-message', signal: caller.signal });
+  }).then(value => { outcome = { value }; }, error => { outcome = { error }; });
+  onTestFinished(async () => {
+    caller.abort(); watcher.close();
+    try { await f.stop(); await sending; }
+    finally { vi.unstubAllEnvs(); await rm(directory, { recursive: true, force: true }); }
+  });
+  await Promise.race([ready, sending]);
+  watcher.close();
+  expect((await readFile(marker, 'utf8')).trim()).not.toBe('');
+  caller.abort(); await sending;
+  expect(outcome).toMatchObject({ error: { disposition: 'unknown' } });
+  await expect(f.send({ conversation, payload: 'next-message' })).resolves.toBe('77');
+  const calls = (await readFile(marker, 'utf8')).trim().split('\n').map(row => JSON.parse(row));
+  expect(calls).toHaveLength(2); expect(calls.every(args => args.includes('/repos/owner/repo/issues/1/comments'))).toBe(true);
 });
 
 it('cancels App authentication preparation before any comment subprocess is admitted', async () => {
