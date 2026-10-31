@@ -1,7 +1,11 @@
+---
+sidebar: false
+---
+
 # Adapter operation patch cutover and version boundaries
 
-Status: **adopted patch boundary; Adapter provider/consumer metadata implemented; generator and
-full release acceptance are tracked separately**. Npm package versions have not been bumped. The user
+Status: **adopted patch boundary; metadata and generator implemented; local prospective-version
+tarball acceptance passed**. Npm versions in the implementation checkout have not been bumped. The user
 has approved npm patch releases despite the intentional authoring changes. This approval supersedes
 the earlier major-release proposal. It does not authorize merging, publishing, deploying, changing
 release gates, running a prerelease workflow, or migrating production data.
@@ -110,7 +114,7 @@ remain explicit deliverables; there is no repeated request to confirm the adopte
    examples inherit the Core requirement unless they already declare a concrete Adapter range;
    do not add declarations just to make every manifest look identical.
 7. Restore a patch changeset for this batch with its explicit breaking notice and complete
-   package coverage after inventory review. Preserve all 14 pre-existing changesets. Keep
+   package coverage after inventory review. Preserve all pre-existing changesets. Keep
    `defaultReleaseType: patch`, `approvedNonPatchReleases: []`, `fixed: []`, `linked: []`, the
    release coverage gate, full validation proof and npm production approval unchanged. Record
    this explicit user-approved compatibility cutover in `docs/contributing/development.md`, whose
@@ -291,19 +295,27 @@ is not proof that a commit did not happen. See the implemented protocol and reco
 
 ## 7. Evidence and dependency propagation
 
-This inventory reads the current manifests and **all 14 existing pending changesets**. An installed,
+This inventory reads the current manifests and **all 15 pre-existing pending changesets after integrating main**. An installed,
 read-only in-memory simulation used `@changesets/assemble-release-plan 6.0.10`, config `3.1.4` and
 workspace discovery through the installed release-plan tool. It did not run `changeset version`,
 pre-mode or publish, write package manifests, change a lockfile, or mutate Git.
 
 - Public workspace packages: **105**.
 - Existing pending batch alone: **88 patch releases**, plus 14 `none` bookkeeping entries.
-- Existing batch plus 55 explicit proposed patch seeds: **the same 88 patch releases**.
+- Existing batch plus 55 explicit patch seeds: **the same 88 patch releases**.
   This batch overlaps the existing dependency closure; it does not add 55 more version increments.
 - Public packages outside that patch plan: **17**, unchanged. `zhin` is the existing `4.0.1` CLI
   alias and remains `4.0.1`; it is not renamed or lowered to `1.1.x`.
 - No minor/major npm releases, fixed groups or linked groups are introduced. Adapter Feature API 2
   is an independent manifest field and therefore does not alter Changesets' npm bump calculation.
+
+A separate disposable copy ran the installed `changeset version` procedure. All 105 public package
+versions matched the final simulation. Its own offline workspace links and freshly copied build
+artifacts were used for the 29-package external-author acceptance: normal, service and Adapter
+scaffolds passed install, tests, TypeScript, packing and strict plugin checks. Peer/dev floors were
+checked before tarball overrides, and the packed Adapter consumer retained positive and negative
+native type inference. The ordinary unversioned candidate also passed that acceptance. These are
+local artifact checks; the implementation checkout's versions and publication workflow are unchanged.
 
 Concrete existing edges explain the propagation:
 
