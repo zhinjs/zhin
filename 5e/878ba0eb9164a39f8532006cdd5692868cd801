@@ -1,0 +1,26 @@
+.changeset/console-topology-projection-brand.md
+  h_b680f75345178a 1-7
+packages/console/layout/src/layout-index.ts
+  h_b680f75345178a 9-10,12-16,61-66
+packages/console/layout/tests/layout.test.ts
+  h_b680f75345178a 9,12-20
+packages/console/page/src/page-index.ts
+  h_b680f75345178a 9-10,12-16,68-73
+packages/console/page/tests/page.test.ts
+  h_b680f75345178a 9,12-20
+packages/console/pagemanager/src/plugin-runtime/console-catalog.ts
+  h_b680f75345178a 12-13,37-38,129-131,135,138
+packages/console/pagemanager/tests/plugin-runtime/console.test.ts
+  h_b680f75345178a 123-148,256-262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5e878ba0eb9164a39f8532006cdd5692868cd801",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
