@@ -1,5 +1,12 @@
 # @zhin.js/adapter-bilibili-live
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [5e878ba]
+  - @zhin.js/page@1.1.12
+
 ## 0.1.2
 
 ### Patch Changes

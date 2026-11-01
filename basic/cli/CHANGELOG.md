@@ -1,5 +1,13 @@
 # @zhin.js/cli
 
+## 1.1.26
+
+### Patch Changes
+
+- Updated dependencies [5e878ba]
+  - @zhin.js/pagemanager@1.1.19
+  - @zhin.js/runtime@1.1.16
+
 ## 1.1.25
 
 ### Patch Changes
