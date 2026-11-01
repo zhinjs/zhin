@@ -9,8 +9,8 @@ import type {
   PageManifest,
 } from '@zhin.js/console-contract';
 import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { LayoutIndex, layoutFeatureId } from '@zhin.js/layout';
-import { PageIndex, pageFeatureId } from '@zhin.js/page';
+import { isLayoutIndex, layoutFeatureId, type LayoutIndex } from '@zhin.js/layout';
+import { isPageIndex, pageFeatureId, type PageIndex } from '@zhin.js/page';
 import { allowsPage, createAccessIndex } from './access.js';
 import { buildNavigation } from './navigation.js';
 
@@ -34,8 +34,8 @@ export class ConsoleCatalog {
   ) {
     this.generation = snapshot.generation;
     this.#snapshot = snapshot;
-    this.#pages = projection(snapshot, pageFeatureId, PageIndex);
-    this.#layouts = projection(snapshot, layoutFeatureId, LayoutIndex);
+    this.#pages = projection(snapshot, pageFeatureId, isPageIndex);
+    this.#layouts = projection(snapshot, layoutFeatureId, isLayoutIndex);
     this.#access = createAccessIndex(access);
     this.#active = active;
   }
@@ -126,15 +126,14 @@ export class ConsoleCatalog {
   }
 }
 
+// Match projections by their `$projection` brand, not prototype identity: the runtime
+// imports feature packages with a per-generation query, so the PageIndex/LayoutIndex
+// instances in the snapshot may come from a different module instance than ours.
 function projection<T>(
   snapshot: RuntimeSnapshot,
   id: FeatureId,
-  constructor: { readonly prototype: T },
+  guard: (value: unknown) => value is T,
 ): T | undefined {
   const value = snapshot.projections.get(id);
-  return value
-    && typeof value === 'object'
-    && Object.prototype.isPrototypeOf.call(constructor.prototype, value)
-    ? value as T
-    : undefined;
+  return guard(value) ? value : undefined;
 }

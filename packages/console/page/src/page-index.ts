@@ -6,7 +6,14 @@ import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-
 import { OwnerCapabilityIndex } from '@zhin.js/feature-kit';
 import type { PageDefinition } from './definition.js';
 
+export const pageIndexProjection = 'zhin.page-index/1' as const;
+
 export class PageIndex {
+  /**
+   * Structural brand. Runtime generation imports can load this module more than once,
+   * so consumers must not rely on `instanceof` / prototype identity.
+   */
+  readonly $projection = pageIndexProjection;
   readonly #pages: readonly Readonly<PageManifest>[];
   readonly #byRoute: ReadonlyMap<string, Readonly<PageManifest>>;
 
@@ -57,4 +64,10 @@ export class PageIndex {
 
 function comparePage(left: PageManifest, right: PageManifest): number {
   return left.order - right.order || left.id.localeCompare(right.id);
+}
+
+/** True for a {@link PageIndex} from any module instance (HMR generation imports included). */
+export function isPageIndex(value: unknown): value is PageIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === pageIndexProjection;
 }
