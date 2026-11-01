@@ -1,5 +1,12 @@
 # @zhin.js/adapter-milky
 
+## 1.1.20
+
+### Patch Changes
+
+- Updated dependencies [5e878ba]
+  - @zhin.js/page@1.1.12
+
 ## 1.1.19
 
 ### Patch Changes
