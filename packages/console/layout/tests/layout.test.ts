@@ -6,9 +6,18 @@ import {
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { FeatureDiscovery, type DiscoveryHost } from '@zhin.js/feature-kit';
-import layoutFeature, { LayoutIndex } from '../src/index.js';
+import layoutFeature, { LayoutIndex, isLayoutIndex, layoutIndexProjection } from '../src/index.js';
 
 describe('Layout Feature', () => {
+  it('recognizes LayoutIndex by its projection brand rather than prototype identity', () => {
+    expect(layoutIndexProjection).toBe('zhin.layout-index/1');
+    expect(isLayoutIndex({ $projection: 'zhin.layout-index/1' })).toBe(true);
+    expect(isLayoutIndex({ $projection: 'zhin.other/1' })).toBe(false);
+    expect(isLayoutIndex({})).toBe(false);
+    expect(isLayoutIndex(null)).toBe(false);
+    expect(isLayoutIndex(undefined)).toBe(false);
+  });
+
   it('discovers only the two reserved TS/TSX slots without executing them', async () => {
     const host: DiscoveryHost = {
       async list(directory) {
