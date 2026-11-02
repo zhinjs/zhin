@@ -1,9 +1,6 @@
 import { markdownToTelegramHtml, projectTelegramMarkdown } from '../src/markdown-to-html.js';
 import { sliceTelegramMarkdown } from '../src/stream-markdown.js';
-
-function visible(html: string): string {
-  return html.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&');
-}
+import { telegramHtmlText as visible } from './telegram-html-text.js';
 
 function pieces(markdown: string, capacity: number) {
   let preceding = '';

@@ -3,6 +3,7 @@ import { createTelegramStreaming } from '../src/streaming.js';
 import { TelegramClient } from '../src/telegram-client.js';
 import { resolveTelegramConfig } from '../src/protocol.js';
 import { markdownToTelegramHtml } from '../src/markdown-to-html.js';
+import { telegramHtmlText as visible } from './telegram-html-text.js';
 
 const conversation: ConversationRef = { endpoint: { id: 'telegram', adapter: 'telegram' }, kind: 'private', id: '1' };
 
@@ -131,8 +132,6 @@ describe('Telegram private-chat drafts', () => {
       precedingText += result.acceptedText;
     }
     expect(precedingText).toBe(original);
-    const visible = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"')
-      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
     const sent = calls.filter(call => call.method === 'sendMessage').map(call => String(call.body.text));
     expect(sent.map(visible).join('')).toBe(visible(markdownToTelegramHtml(original)));
   });
