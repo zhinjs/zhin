@@ -1,5 +1,12 @@
 # @zhin.js/client
 
+## 1.1.23
+
+### Patch Changes
+
+- f78eb84: fix(client): resolve adapter Console pages from npm `adapter-{key}/pages/` sources as well as workspace `adapters/{key}/pages/`, so qq/icqq/github pages stop showing "找不到页面所属插件" after install from registry.
+  - @zhin.js/contract@1.1.18
+
 ## 1.1.22
 
 ### Patch Changes

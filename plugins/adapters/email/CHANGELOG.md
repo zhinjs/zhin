@@ -1,5 +1,31 @@
 # @zhin.js/adapter-email
 
+## 1.1.21
+
+### Patch Changes
+
+- af8f803: Use the current Endpoint's platform profile for Agent account identity, with per-field configured fallbacks and scoped, identity-approved profile tools. Keep SOUL first-person and independent of account names. Profile ports preserve the source Client, cancellation, truthful update outcomes and private image authority.
+
+  Adapter Feature API 2.1 and Tool Feature API 1.1 describe the additive profile requirements; new Core, official adapters and generated plugins declare the corresponding floors. Existing compatible API-2.0/API-1.0 plugins remain accepted by the newer providers. npm releases remain patch.
+
+  Private IM assets now bind to the full canonical conversation and principal. Existing IM asset records that contain only the earlier lossy hash remain on disk until their original expiry, but cannot be safely rebound; recapture them. No automatic file deletion, platform profile mutation or workspace SOUL rewrite occurs during upgrade.
+
+- Updated dependencies [b88e988]
+- Updated dependencies [f78eb84]
+- Updated dependencies [c15cef9]
+- Updated dependencies [b0c02a2]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [032dc96]
+  - @zhin.js/adapter@1.1.27
+  - @zhin.js/client@1.1.23
+  - @zhin.js/im-contract@1.1.10
+  - @zhin.js/core@1.1.55
+  - @zhin.js/page@1.1.13
+  - @zhin.js/feature-kit@1.1.11
+  - @zhin.js/skill@1.1.12
+
 ## 1.1.20
 
 ### Patch Changes

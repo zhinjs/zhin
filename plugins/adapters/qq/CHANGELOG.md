@@ -1,5 +1,55 @@
 # @zhin.js/adapter-qq
 
+## 1.1.21
+
+### Patch Changes
+
+- af8f803: Use the current Endpoint's platform profile for Agent account identity, with per-field configured fallbacks and scoped, identity-approved profile tools. Keep SOUL first-person and independent of account names. Profile ports preserve the source Client, cancellation, truthful update outcomes and private image authority.
+
+  Adapter Feature API 2.1 and Tool Feature API 1.1 describe the additive profile requirements; new Core, official adapters and generated plugins declare the corresponding floors. Existing compatible API-2.0/API-1.0 plugins remain accepted by the newer providers. npm releases remain patch.
+
+  Private IM assets now bind to the full canonical conversation and principal. Existing IM asset records that contain only the earlier lossy hash remain on disk until their original expiry, but cannot be safely rebound; recapture them. No automatic file deletion, platform profile mutation or workspace SOUL rewrite occurs during upgrade.
+
+- 26fda97: Deliver validated final answers progressively through configured QQ C2C, Telegram drafts, Slack streams, Lark cards and Sandbox updates. Keep complete-message delivery for unsupported scenes, disabled adapters and outbound middleware that does not explicitly support revisions. Discord retains complete-message delivery.
+
+  Preserve source-account leases, media order and confirmed delivery facts across cancellation, capacity rollover and follow-up answer phases. Preview drafts and uncertain outcomes do not become sent history. Bound each reply's semantic snapshot to 1 MiB, retain confirmed prefixes on failure and avoid replaying published answers.
+
+  Project the latest confirmed message revision into paginated conversation history and synchronize Sandbox message updates across connections. Existing adapter implementations and complete-send callers remain compatible.
+
+- 976886c: Preserve confirmed progressive reply content, routing and delivery evidence across cancellation, rollover and closing failures without replaying published text. Keep error dispositions and actual message references, and abort the owning provider request when its functional text consumer fails.
+
+  Enable native Sandbox Markdown through the real Core projection so Console updates retain formatting in one message. Preserve instance-level streaming opt-outs, recall tombstones and multi-page synchronization. The first safe content is immediate; later updates retain the configured pacing, including large valid intervals.
+
+  Keep Slack and Lark Markdown streaming within the current physical message. When continuation formatting cannot be verified, stop and retain confirmed content instead of replaying or silently changing it to plain text. Plain-text continuations retain their original reply route.
+
+  Use rebuildable revision metadata and indexes in the existing conversation event table for bounded SQL history reads. Original event JSON and retention remain unchanged; older writers and models keep their compatible read path. Supported adapter streaming remains enabled by default, with complete-message fallback for disabled settings or outbound middleware without incremental: true.
+
+- 3c1912f: Restore legacy Sandbox streaming history updates while preserving revision precedence, creation order, recall boundaries and browser-cache provenance. Report empty QQ send plans as not sent before any platform call.
+
+  Seek past completed conversation-history backfill batches instead of re-scanning the migrated prefix. Preserve original event data, retention and compatible older writers.
+
+  Report terminal provider quota and billing failures after publication without regeneration, and isolate synchronous diagnostic failures from provider outcomes and retry/fallback decisions.
+
+- Updated dependencies [b88e988]
+- Updated dependencies [f78eb84]
+- Updated dependencies [c15cef9]
+- Updated dependencies [b0c02a2]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [032dc96]
+  - @zhin.js/adapter@1.1.27
+  - @zhin.js/client@1.1.23
+  - @zhin.js/im-contract@1.1.10
+  - @zhin.js/core@1.1.55
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/page@1.1.13
+  - @zhin.js/host-http@1.1.13
+  - @zhin.js/agent-feature@1.1.12
+  - @zhin.js/feature-kit@1.1.11
+  - @zhin.js/permission@1.1.11
+  - @zhin.js/skill@1.1.12
+
 ## 1.1.20
 
 ### Patch Changes
