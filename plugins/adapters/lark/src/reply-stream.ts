@@ -15,11 +15,13 @@ export function supportsLarkReplyStream(request: Pick<EndpointStreamRequest, 'co
 
 /** CardKit text updates use cumulative content and one sequence across content/settings. */
 export function openLarkReplyStream(request: EndpointStreamRequest, send: Request): EndpointMessageStream | undefined {
+  // CardKit has no verified way to restore a previous card's Markdown renderer state.
+  if (request.format === 'markdown' && request.continuation) return undefined;
   const prefix = request.prefix ?? [];
   if (prefix.some(segment => segment.type !== 'reply' && segment.type !== 'mention')
     || !supportsLarkReplyStream(request)) return undefined;
   const reply = prefix.find(segment => segment.type === 'reply');
-  const replyTo = reply && 'message_id' in reply.data ? reply.data.message_id : undefined;
+  const replyTo = (reply && 'message_id' in reply.data ? reply.data.message_id : undefined) ?? request.continuation?.replyTo;
   const mentions = prefix.filter(segment => segment.type === 'mention').map(segment => {
     const target = String('target' in segment.data ? segment.data.target : '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return `<at id="${target}"></at>`;
@@ -33,18 +35,20 @@ export function openLarkReplyStream(request: EndpointStreamRequest, send: Reques
   let exhausted = false;
   let platformClosed = false;
   let failure: unknown;
-  const acknowledge = (): EndpointStreamAcknowledgement => ({ status: messageId ? 'sent' : 'buffered',
+  let lastAcknowledgement: EndpointStreamAcknowledgement | undefined;
+  const acknowledge = (): EndpointStreamAcknowledgement => lastAcknowledgement = Object.freeze({ status: messageId ? 'sent' : 'buffered',
     ...(messageId ? { messageId } : {}), acceptedText, ...(exhausted ? { exhausted: true } : {}) });
   const bodyText = (text: string) => request.format === 'markdown' ? text : text.replace(/[\\`*_{}[\]()#+.!|>~-]/g, '\\$&');
+  const assertActive = () => {
+    if (cancelled || request.signal?.aborted) throw new EndpointDeliveryError('stream_cancelled', 'Lark stream was cancelled before submission', 'not_sent');
+  };
   const call = (path: string, method: LarkStreamRequestOptions['method'], body: Record<string, unknown>) => {
-    if (cancelled) throw new EndpointDeliveryError('stream_cancelled', 'Lark stream was cancelled', 'not_sent');
-    request.signal?.throwIfAborted();
+    assertActive();
     return send(path, { method, body, signal: request.signal });
   };
   const write = async (text: string) => {
     if (failure) throw failure;
-    if (cancelled) throw new EndpointDeliveryError('stream_cancelled', 'Lark stream was cancelled', 'not_sent');
-    request.signal?.throwIfAborted();
+    assertActive();
     if (finished) return acknowledge();
     if (!text.startsWith(acceptedText)) throw new EndpointDeliveryError('stream_rewrite', 'A confirmed reply prefix cannot change', 'not_sent');
     if (exhausted) return acknowledge();
@@ -96,6 +100,7 @@ export function openLarkReplyStream(request: EndpointStreamRequest, send: Reques
     }
   };
   return {
+    get lastAcknowledgement() { return lastAcknowledgement; },
     write,
     async finish(text) {
       if (finished) return acknowledge();

@@ -78,6 +78,7 @@ sandbox:
 流式回复默认开启，首次内容立即投递，后续更新默认间隔 500 ms。
 `streaming: false` 使用完整消息发送。流式更新复用同一 `messageId` 并递增
 `revision`，同会话的多个页面同步更新同一气泡；最终更新带 `streaming: false`。
+Console 原生渲染流式 Markdown，保留标题、粗体和代码块；Core 不会先将其转换为纯文字。
 没有在线订阅者时不确认已发送，取消不会补发最终内容。
 
 ## 使用方式

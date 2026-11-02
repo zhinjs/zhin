@@ -72,12 +72,16 @@ describe('Sandbox scoped multi-connection transport', () => {
     const final = await stream.finish('## Result\n\nComplete.');
     expect(initial).toMatchObject({ status: 'sent', acceptedText: '## Result' });
     expect(final).toMatchObject({ status: 'sent', messageId: initial.messageId, acceptedText: '## Result\n\nComplete.' });
-    await vi.waitFor(() => expect(first.frames.filter(frame => frame.messageId === initial.messageId)).toHaveLength(2));
+    await vi.waitFor(() => {
+      expect(first.frames.filter(frame => frame.messageId === initial.messageId)).toHaveLength(2);
+      expect(second.frames.filter(frame => frame.messageId === initial.messageId)).toHaveLength(2);
+    });
     const frames = first.frames.filter(frame => frame.messageId === initial.messageId);
     expect(frames.map(frame => frame.revision)).toEqual([1, 2]);
     expect(frames.map(frame => frame.streaming)).toEqual([true, false]);
     expect(frames[1]).toMatchObject({ conversation: scene, content: [{ type: 'markdown', data: { content: '## Result\n\nComplete.' } }] });
     expect(second.frames.filter(frame => frame.messageId === initial.messageId)).toEqual(frames);
+    await other.subscribe({ type: 'private', id: scene.id });
     expect(other.frames.some(frame => frame.messageId === initial.messageId)).toBe(false);
     expect(receive).not.toHaveBeenCalled();
     await stream.finish('## Result\n\nComplete.');

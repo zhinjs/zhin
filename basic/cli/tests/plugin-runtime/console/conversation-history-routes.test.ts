@@ -248,3 +248,22 @@ it('retains event pagination for readers without entity projection', async () =>
   expect(body.items.map((item: any) => item.type)).toEqual(['message.created', 'member.joined']);
   expect(listBetween).toHaveBeenCalledExactlyOnceWith(conversation, 0, 2, 51);
 });
+
+it('projects updated message bodies for legacy readers without changing event pagination', async () => {
+  await events.append(message('original'));
+  await events.append({ type: 'message.updated', eventId: 'legacy-update', conversation, timestamp: 8,
+    message: { ref: { conversation, id: 'original' }, timestamp: 7, revision: 2,
+      segments: [{ type: 'text', data: { text: 'latest physical body' } }] } });
+  const listBetween = vi.fn(events.listBetween.bind(events));
+  const reader: ConversationEventReader = { listBetween, getMessage: events.getMessage.bind(events), getCursor: events.getCursor.bind(events) };
+  const request = await start(runtime(reader));
+  const response = await request();
+  expect(response.status).toBe(200);
+  const { data } = await response.json();
+  expect(data.items.map((item: any) => item.type)).toEqual(['message.created', 'message.updated']);
+  expect(data.items[1]).toMatchObject({ sequence: 2, type: 'message.updated', message: {
+    ref: { id: 'original' }, revision: 2, segments: [{ type: 'text', data: { text: 'latest physical body' } }],
+  } });
+  expect(data).toMatchObject({ hasMore: false, nextBeforeSequence: null });
+  expect(listBetween).toHaveBeenCalledExactlyOnceWith(conversation, 0, 2, 51);
+});

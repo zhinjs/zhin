@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c4b098cc8bf5d397 -->
+<!-- sync-adapter-docs:sha256=443a950fc26511cb -->
 
 # @zhin.js/adapter-slack
 
@@ -26,11 +26,13 @@ Zhin.js Slack 适配器（Plugin Runtime），优先 Socket Mode，也可经 Run
 
 `streaming` 默认 `true`，可在插件或单个 endpoint 配置中设为 `false`，恢复普通完整发送。原生流使用同一条消息的 `chat.startStream`、`chat.appendStream` 与 `chat.stopStream`；全程固定为 `chunks` 模式，正文和 Markdown 按已确认的源码前缀追加。
 
-普通频道需要可信的发言者、workspace 与既有线程（或明确的引用目标）。缺少这些信息时保留普通发送，不为获得流式能力创建新线程。引用和 @ 前缀只提交一次；未知结果不重发。媒体和按钮由统一发送链在就绪后按顺序投递，不重复上传。
+私聊和普通频道都需要既有线程或明确的引用目标；普通频道还需要可信的发言者和 workspace。缺少这些信息时保留普通发送，不为获得流式能力创建新线程。引用和 @ 前缀只提交一次；未知结果不重发。媒体和按钮由统一发送链按原始顺序投递，不重复上传。
 
 `streamingIntervalMs` 默认 `1000` 毫秒，用于后续回复更新间隔；首段立即发送，中间更新由统一回复控制器合并。
 
-原生流的累计正文上限为 12,000 字符，总时长上限为 10 分钟，追加内容不会延长时限。平台明确返回已有流已结束时，保留已确认正文，在同一话题的新消息中继续未发送的部分；发送结果未知时不重发。详见 [Slack 原生流限制](https://docs.slack.dev/reference/methods/chat.startStream/#stream-timeout)。
+原生流的累计正文上限为 12,000 字符，总时长上限为 10 分钟，追加内容不会延长时限。平台明确返回已有流已结束时，纯文字回复保留已确认正文，在同一话题的新消息中继续未发送的部分；发送结果未知时不重发。详见 [Slack 原生流限制](https://docs.slack.dev/reference/methods/chat.startStream/#stream-timeout)。
+
+纯文字可以在已确认的容量或时限边界续条。Markdown 保留单容器内的流式发送；需要续容器但无法保证独立格式时，会停止并保留已确认部分，不降级为纯文本。
 
 ## 安装
 

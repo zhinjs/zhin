@@ -68,7 +68,7 @@ const EXPECTED: Record<string, AdapterDefinition['segments']> = {
     markdown: 'native',
     supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'markdown', 'keyboard'],
   },
-  sandbox: { outboundMedia: ['url', 'base64', 'path'], interactive: 'native', html: 'direct' },
+  sandbox: { outboundMedia: ['url', 'base64', 'path'], interactive: 'native', html: 'direct', markdown: 'native' },
   satori: { outboundMedia: ['url', 'base64'], interactive: 'text' },
   slack: { outboundMedia: ['url', 'upload', 'path'], interactive: 'native', markdown: 'native' },
   telegram: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },

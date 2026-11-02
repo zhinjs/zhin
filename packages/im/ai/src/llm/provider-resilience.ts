@@ -606,9 +606,12 @@ export function createResilientCompletionPort(
           return reply;
         } catch (error) {
           if (signal?.aborted) throw error;
-          // Publication makes regenerating this completion an observable replay.
-          if (streamOptions?.retryAllowed?.() === false) throw error;
           const info = classifyProviderError(error);
+          // Publication prohibits regeneration, not the existing quota/billing explanation.
+          if (streamOptions?.retryAllowed?.() === false) {
+            if (info.kind === 'quota_exhausted' || info.kind === 'billing') throw new ProviderRequestError(info.kind, attempts, error);
+            throw error;
+          }
           lastError = error;
           lastKind = info.kind;
           const message = error instanceof Error ? error.message : String(error);

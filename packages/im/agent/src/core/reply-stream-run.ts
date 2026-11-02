@@ -75,9 +75,15 @@ export class ReplyStreamRun {
 
   #schedule(): void {
     if (this.#closed || this.#timer || this.#parsing) return;
-    const wait = Math.max(0, this.#lastParse + (this.stream.minIntervalMs ?? 0) - Date.now());
+    // JSON-only prefixes must not consume the first public content's refresh interval.
+    const wait = this.#offered ? Math.max(0, this.#lastParse + (this.stream.minIntervalMs ?? 0) - Date.now()) : 0;
+    // Native Node timers cannot represent a longer single delay; each chunk rechecks the deadline.
     this.#timer = setTimeout(() => {
       this.#timer = undefined;
+      if (this.#offered && this.#lastParse + (this.stream.minIntervalMs ?? 0) > Date.now()) {
+        this.#schedule();
+        return;
+      }
       const raw = this.#raw;
       const epoch = this.#epoch;
       this.#pending = false;
@@ -106,7 +112,7 @@ export class ReplyStreamRun {
         this.#parsing = undefined;
         if (this.#pending && !this.#error) this.#schedule();
       });
-    }, wait);
+    }, Math.min(wait, 2_147_483_647));
     this.#timer.unref?.();
   }
 

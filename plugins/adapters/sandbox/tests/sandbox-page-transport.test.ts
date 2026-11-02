@@ -121,6 +121,15 @@ function fixture(options: {
   return f;
 }
 const text = (value: string) => [{ type: 'text', data: { text: value } }];
+it('keeps an already loaded recall tombstone authoritative when a stream message arrives later', () => {
+  const incoming: playground.PlaygroundMessage = { id: 'late-stream', type: 'received', channelType: 'group', channelId: 'room',
+    channelName: 'room', senderId: 'bot', senderName: 'bot', content: text('must not resurrect'), timestamp: 2, revision: 3 };
+  const recall = { ...incoming, id: 'recall-event', recalledMessageId: incoming.id, content: [], timestamp: 1 };
+  expect(playground.mergePlaygroundMessage([recall], incoming)).toEqual([recall]);
+  for (const other of [{ ...recall, channelId: 'another-room' }, { ...recall, channelType: 'private' as const }]) {
+    expect(playground.mergePlaygroundMessage([other], incoming)).toEqual([other, incoming]);
+  }
+});
 it('updates one live reply bubble by revision and ignores stale packets and post-recall updates', () => {
   const f = fixture();
   try {

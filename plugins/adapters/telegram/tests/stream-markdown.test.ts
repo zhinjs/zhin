@@ -20,6 +20,16 @@ function pieces(markdown: string, capacity: number) {
 
 describe('Telegram Markdown source-preserving rollover', () => {
   it.each([
+    ['**abcdefghij**', 'b'],
+    ['*abcdefghij*', 'i'],
+    ['~~abcdefghij~~', 's'],
+  ])('preserves inline formatting on every physical slice: %s', (markdown, tag) => {
+    expect(pieces(markdown, 4).map(part => part.html)).toEqual([
+      `<${tag}>abcd</${tag}>`, `<${tag}>efgh</${tag}>`, `<${tag}>ij</${tag}>`,
+    ]);
+  });
+
+  it.each([
     '# Header\n\nplain **bold** *italic* ~~strike~~ & <escaped>',
     'before [report](https://example.invalid/report?a=1&b=2) after',
     '> quoted **bold**\n\n- bullet\n- another',

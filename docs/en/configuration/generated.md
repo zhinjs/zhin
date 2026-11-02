@@ -1124,8 +1124,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `lark.endpoints[].streamProxy.serverName` | string | yes | — | — |
 | `lark.endpoints[].webApiProxy` | object | no | — | Disabled by default. Loopback TLS fault proxy for Feishu outbound APIs only; preserves the official Host, SNI and certificate validation. Independent of streamProxy. |
 | `lark.endpoints[].webApiProxy.port` | integer | yes | — | — |
-| `lark.endpoints[].streaming` | boolean | no | `true` | Use native streaming cards for progressive replies. |
-| `lark.endpoints[].streamingIntervalMs` | integer | no | `1000` | Reply stream update interval in milliseconds. |
+| `lark.endpoints[].streaming` | boolean | no | — | Use native streaming cards for progressive replies. |
+| `lark.endpoints[].streamingIntervalMs` | integer | no | — | Reply stream update interval in milliseconds. |
 | `lark.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `lark.endpoints[].profile` | object | no | — | Fallback account profile |
 | `lark.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
@@ -1405,8 +1405,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `qq.endpoints[].notify.parent` | object | no | — | 可选的父频道/群容器 |
 | `qq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
 | `qq.endpoints[].notify.parent.id` | string \| number | yes | — | — |
-| `qq.endpoints[].streaming` | boolean | no | `true` | Publish supported replies while generating. Set false to send only complete replies. |
-| `qq.endpoints[].streamingIntervalMs` | number | no | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
+| `qq.endpoints[].streaming` | boolean | no | — | Publish supported replies while generating. Set false to send only complete replies. |
+| `qq.endpoints[].streamingIntervalMs` | number | no | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `qq.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `qq.endpoints[].profile` | object | no | — | Fallback account profile |
 | `qq.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
@@ -1454,8 +1454,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `sandbox.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (sandbox client id, distinct from endpoints[].owner), overriding the top-level master list. |
 | `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `sandbox.endpoints[].owner` | string | no | — | Sandbox owner user ID |
-| `sandbox.endpoints[].streaming` | boolean | no | `true` | Publish supported replies while generating. Set false to send only complete replies. |
-| `sandbox.endpoints[].streamingIntervalMs` | number | no | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
+| `sandbox.endpoints[].streaming` | boolean | no | — | Publish supported replies while generating. Set false to send only complete replies. |
+| `sandbox.endpoints[].streamingIntervalMs` | number | no | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `sandbox.endpoints[].commandPrefix` | string | no | — | — |
 | `sandbox.endpoints[].id` | string | yes | — | Sandbox bot name |
 | `sandbox.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
@@ -1547,8 +1547,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `slack.endpoints[].streamProxy.serverName` | string | yes | — | — |
 | `slack.endpoints[].webApiProxy` | object | no | — | Fault proxy for outbound JSON Web APIs only: pin slack.com:443 TCP to loopback while preserving SNI and certificate validation. Independent of the Socket proxy; does not apply to upload hosts. |
 | `slack.endpoints[].webApiProxy.port` | integer | yes | — | — |
-| `slack.endpoints[].streaming` | boolean | no | `true` | Use native streaming replies when the target supports them. |
-| `slack.endpoints[].streamingIntervalMs` | integer | no | `1000` | Reply stream update interval in milliseconds. |
+| `slack.endpoints[].streaming` | boolean | no | — | Use native streaming replies when the target supports them. |
+| `slack.endpoints[].streamingIntervalMs` | integer | no | — | Reply stream update interval in milliseconds. |
 | `slack.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `slack.endpoints[].profile` | object | no | — | Fallback account profile |
 | `slack.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
@@ -1599,8 +1599,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `telegram.endpoints[].apiBaseUrl` | string | no | — | — |
 | `telegram.endpoints[].commandPrefix` | string | no | — | — |
 | `telegram.endpoints[].id` | string | yes | — | Telegram bot name |
-| `telegram.endpoints[].streaming` | boolean | no | `true` | Publish supported replies while generating. Set false to send only complete replies. |
-| `telegram.endpoints[].streamingIntervalMs` | number | no | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
+| `telegram.endpoints[].streaming` | boolean | no | — | Publish supported replies while generating. Set false to send only complete replies. |
+| `telegram.endpoints[].streamingIntervalMs` | number | no | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `telegram.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
 | `telegram.endpoints[].profile` | object | no | — | Fallback account profile |
 | `telegram.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |

@@ -87,6 +87,35 @@ it('reports the confirmed resource stop once without regenerating the original r
   expect(JSON.stringify(result.confirmedOutput)).not.toContain('planned');
 });
 
+it.each(['not_sent', 'rejected', 'unknown'] as const)('retains completed tail slots when the remaining send throws %s', async disposition => {
+  const { EndpointDeliveryError } = await import('@zhin.js/im-contract');
+  const tailMessage = { conversation, id: 'tail-1' };
+  const empty = { receipt: { status: 'suppressed' as const }, confirmed: [], update: vi.fn(),
+    finish: vi.fn(async () => ({ status: 'suppressed' as const })), cancel: vi.fn(async () => ({ status: 'suppressed' as const })) };
+  const send = vi.fn(async () => { throw new EndpointDeliveryError('tail_stopped', 'tail', disposition,
+    { parts: [{ messageId: tailMessage.id }, {}] }); });
+  const result = await deliverProgressiveReply({ run: new ReplyStreamRun(empty) },
+    [{ type: 'image', url: 'https://example.test/generated.png' }], { send }, undefined, undefined, conversation);
+  expect(result.delivery).toMatchObject({ status: disposition === 'rejected' ? 'rejected' : 'failed',
+    code: 'tail_stopped', messages: [tailMessage, null], ...(disposition === 'rejected' ? {} : { deliveryPartial: true }) });
+  expect(result.confirmedOutput).toEqual([]);
+  expect(send).toHaveBeenCalledOnce();
+});
+
+it('keeps confirmed body slots before partially sent tail slots without inventing tail content', async () => {
+  const { EndpointDeliveryError } = await import('@zhin.js/im-contract');
+  const { run } = fixture({ status: 'sent', message, parts: [{ message }] });
+  const send = vi.fn(async () => { throw new EndpointDeliveryError('tail_unknown', 'tail', 'unknown',
+    { parts: [{ messageId: 'tail-1' }, {}] }); });
+  const result = await deliverProgressiveReply({ run, snapshot }, [...output,
+    { type: 'image', url: 'https://example.test/not-confirmed.png' }], { send }, undefined, undefined,
+    { ...conversation, id: 'different-origin' });
+  expect(result.delivery).toMatchObject({ status: 'failed', deliveryPartial: true, deliveryUnknown: true,
+    messages: [message, { conversation, id: 'tail-1' }, null] });
+  expect(result.confirmedOutput).toEqual([{ type: 'message', segments: [{ type: 'text', data: { text: 'confirmed' } }] }]);
+  expect(send).toHaveBeenCalledOnce();
+});
+
 it.each(['tail', 'limit'] as const)('marks %s sends as answer facts in the owning phase before the global terminal', async mode => {
   const { run } = fixture(mode === 'limit'
     ? { status: 'failed', parts: [{ message }], failure: { code: 'stream_buffer_limit', message: 'limit', retryable: false } }

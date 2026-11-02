@@ -236,3 +236,36 @@ describe('owner Host generation admission', () => {
     await store.close();
   });
 });
+
+it('keeps read-only aggregate builders within their owner generation and transaction lifetime', async () => {
+  const { guardTransactionModel, qualifyPluginResourceName } = await import('../src/database-host.js');
+  const execute = vi.fn(async () => [{ first: 1 }]);
+  const aggregate = { min() { return this; }, max() { return this; }, groupBy() { return this; }, where() { return this; },
+    then(resolve: any, reject: any) { return execute().then(resolve, reject); } };
+  const model: DatabaseHostModel = { select: vi.fn(), insert: vi.fn(), update: vi.fn(), delete: vi.fn(), aggregate: () => aggregate };
+  const gate = createGenerationAdmissionGate();
+  const port: DatabaseHost = { dialect: 'sqlite', started: true, define: vi.fn(), tables: () => ['messages'],
+    models: { get: vi.fn(() => model) }, getRawDatabase: () => undefined, start: async () => {}, stop: async () => {} };
+  const facade = new PluginDatabaseHost(owner, port, gate), store = new SnapshotStore(state([facade]));
+  const retained = facade.models.get('messages')!, query = retained.aggregate!().min('id', 'first').groupBy('message_key').where({});
+  expect(await query).toEqual([{ first: 1 }]);
+  expect(port.models.get).toHaveBeenCalledWith(qualifyPluginResourceName(owner, 'messages'));
+  store.commit(0, { snapshot: state([facade]), dispose() {} }); store.commit(1, { snapshot: state([]), dispose() {} });
+  expect(() => retained.aggregate!()).toThrow('inactive generation');
+  expect(() => query.max('id')).toThrow('inactive generation');
+  expect(() => query.min('id')).toThrow('inactive generation');
+  expect(() => query.groupBy('message_key')).toThrow('inactive generation');
+  expect(() => query.where({})).toThrow('inactive generation');
+  await expect(Promise.resolve(query)).rejects.toThrow('inactive generation');
+  let active = true;
+  const transaction = guardTransactionModel(model, () => { if (!active) throw new Error('transaction closed'); });
+  const pending = transaction.aggregate!().min('id'); active = false;
+  expect(() => transaction.aggregate!()).toThrow('transaction closed');
+  expect(() => pending.where({})).toThrow('transaction closed');
+  expect(() => pending.min('id')).toThrow('transaction closed');
+  expect(() => pending.max('id')).toThrow('transaction closed');
+  expect(() => pending.groupBy('message_key')).toThrow('transaction closed');
+  await expect(Promise.resolve(pending)).rejects.toThrow('transaction closed');
+  expect(execute).toHaveBeenCalledOnce();
+  await store.close();
+});

@@ -16,6 +16,7 @@ export default defineAdapter<SandboxEndpointConfig>({
   // 物化为 base64 内联（sandbox 无平台上传通道）。交互段由 Console 原生承载。
   segments: {
     html: 'direct',
+    markdown: 'native',
     outboundMedia: ['url', 'base64', 'path'],
     interactive: 'native',
   },

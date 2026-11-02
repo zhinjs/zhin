@@ -228,6 +228,8 @@ export function mergePlaygroundMessage(
   messages: readonly PlaygroundMessage[],
   incoming: PlaygroundMessage,
 ): PlaygroundMessage[] {
+  if (messages.some(message => message.recalledMessageId === incoming.id
+    && message.channelType === incoming.channelType && message.channelId === incoming.channelId)) return [...messages];
   const index = messages.findIndex(message => message.id === incoming.id
     && message.channelType === incoming.channelType && message.channelId === incoming.channelId
     && message.type === incoming.type);

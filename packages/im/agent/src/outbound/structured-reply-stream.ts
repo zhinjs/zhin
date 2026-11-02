@@ -37,9 +37,12 @@ export function createStructuredReplyStreamParser(profile?: AiOutboundSegmentPro
         const messageComplete = whole || messageIndex < messages.length - 1;
         const segments: ReplyStreamSnapshot['messages'][number]['segments'][number][] = [];
         for (const [segmentIndex, candidate] of message.segments.entries()) {
-          const value = validateSegment(candidate, profile);
-          if (!value) break;
           const complete = messageComplete || segmentIndex < message.segments.length - 1;
+          const value = validateSegment(candidate, profile);
+          if (!value) {
+            if (complete) return undefined;
+            break;
+          }
           let next = value;
           if (!complete && (value.type === 'text' || value.type === 'markdown')) {
             const field = value.type === 'text' ? 'text' : 'content';

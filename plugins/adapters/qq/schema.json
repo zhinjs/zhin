@@ -287,14 +287,22 @@
           },
           "streaming": {
             "type": "boolean",
-            "default": true,
-            "description": "Publish supported replies while generating. Set false to send only complete replies."
+            "description": "在支持的会话中渐进发送回复。设为 false 时仅发送完整回复。",
+            "x-i18n": {
+              "en": {
+                "description": "Publish supported replies while generating. Set false to send only complete replies."
+              }
+            }
           },
           "streamingIntervalMs": {
             "type": "number",
             "minimum": 0,
-            "default": 500,
-            "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
+            "description": "后续回复更新的最小间隔（毫秒）；首段立即发送。",
+            "x-i18n": {
+              "en": {
+                "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
+              }
+            }
           },
           "nickname": {
             "type": [
@@ -450,13 +458,23 @@
     "streaming": {
       "type": "boolean",
       "default": true,
-      "description": "Publish supported replies while generating. Set false to send only complete replies."
+      "description": "在支持的会话中渐进发送回复。设为 false 时仅发送完整回复。",
+      "x-i18n": {
+        "en": {
+          "description": "Publish supported replies while generating. Set false to send only complete replies."
+        }
+      }
     },
     "streamingIntervalMs": {
       "type": "number",
       "minimum": 0,
       "default": 500,
-      "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
+      "description": "后续回复更新的最小间隔（毫秒）；首段立即发送。",
+      "x-i18n": {
+        "en": {
+          "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
+        }
+      }
     },
     "nickname": {
       "type": [

@@ -25,7 +25,10 @@ it('keeps rich chunks mode when complete blocks follow Markdown chunks', async (
   await stream.append({ chunks: [{ type: 'markdown_text', text: 'first' }] });
   await stream.append({ chunks: [{ type: 'blocks', blocks: [{ type: 'divider' }] }] });
   await expect(stream.append({ markdown_text: 'mode switch' })).rejects.toMatchObject({ code: 'invalid_payload', disposition: 'not_sent' });
-  expect(chat.appendStream).toHaveBeenCalledOnce();
+  expect(chat.startStream).toHaveBeenCalledExactlyOnceWith({ ...target, chunks: [{ type: 'markdown_text', text: 'first' }] });
+  expect(chat.appendStream).toHaveBeenCalledExactlyOnceWith({ channel: 'C1', ts: '1700000000.001',
+    chunks: [{ type: 'blocks', blocks: [{ type: 'divider' }] }],
+  });
   await stream.stop();
 });
 

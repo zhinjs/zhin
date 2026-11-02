@@ -64,3 +64,9 @@ it('never cuts inside a fully recognized overlapping exact secret', () => {
   const inspector = new OutboundLeakInspector({ secretValues: ['repeat-repeat-repeat'] });
   assertStreaming(inspector, 'Public repeat-repeat-repeat. Done.');
 });
+
+it('keeps bearer offsets stable after Unicode text with expanding lowercase mappings', () => {
+  const inspector = new OutboundLeakInspector({ secretValues: [] });
+  assertStreaming(inspector, 'İBeArEr abcdefghijklmnopqrstuvwxyz0123456789 Done.');
+  expect(inspector.inspectPrefix('İBe', false).text).toBe('İ');
+});

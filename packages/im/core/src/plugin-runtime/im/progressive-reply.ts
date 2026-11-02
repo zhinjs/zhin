@@ -67,6 +67,7 @@ interface ReplyGroupState {
   consumed: number;
   containers: number;
   accepted: string;
+  replyTo?: string;
   physical?: PhysicalReply;
   unsupported?: boolean;
   done?: boolean;
@@ -108,21 +109,40 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
   const prepare = (segments: readonly Segment[]) => context.options.prepare
     ? createEndpointOperation({ signal }).prepare(() => context.options.prepare!(segments, signal)) : Promise.resolve(segments);
   const wait = async () => {
-    const remaining = (context.streaming.minIntervalMs ?? 0) - (Date.now() - lastSubmission);
-    if (remaining <= 0 || !lastSubmission) return;
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(done, remaining);
-      function done() { signal.removeEventListener('abort', abort); resolve(); }
-      function abort() { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(new EndpointDeliveryError('endpoint_inactive', 'Reply stream ended', 'not_sent')); }
-      signal.addEventListener('abort', abort, { once: true });
-      if (signal.aborted) abort();
-    });
+    if (!lastSubmission) return;
+    for (;;) {
+      const remaining = (context.streaming.minIntervalMs ?? 0) - (Date.now() - lastSubmission);
+      if (remaining <= 0) return;
+      await new Promise<void>((resolve, reject) => {
+        // Node clamps larger delays to 1 ms; keep the original deadline across timer chunks.
+        const timer = setTimeout(done, Math.min(remaining, 2_147_483_647));
+        function done() { signal.removeEventListener('abort', abort); resolve(); }
+        function abort() { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(new EndpointDeliveryError('endpoint_inactive', 'Reply stream ended', 'not_sent')); }
+        signal.addEventListener('abort', abort, { once: true });
+        if (signal.aborted) abort();
+      });
+    }
   };
   const external = async <T>(call: () => Promise<T>): Promise<T> => {
     await wait(); signal.throwIfAborted();
     context.endpoint.assertActive(); context.options.beforeSubmit?.();
     lastSubmission = Date.now(); submitted = true;
     try { return await createEndpointOperation({ signal }).run(call); } finally { submitted = false; }
+  };
+
+  const finishPhysical = async (physical: PhysicalReply, text: string, conversation: MessageRef['conversation']): Promise<{
+    ack: EndpointStreamAcknowledgement; failure?: DeliveryReceipt;
+  }> => {
+    try { return { ack: await external(() => physical.native.finish(text)) }; }
+    catch (error) {
+      let ack: EndpointStreamAcknowledgement | undefined;
+      try { ack = physical.native.lastAcknowledgement; } catch { /* A local inspection must preserve the original close error. */ }
+      if (!ack || ack.status !== 'sent' || typeof ack.messageId !== 'string' || !ack.messageId.trim() || typeof ack.acceptedText !== 'string'
+        || !text.startsWith(ack.acceptedText) || !ack.acceptedText.startsWith(physical.accepted)
+        || physical.message && (ack.messageId !== physical.message.id || ack.acceptedText === physical.accepted)) throw error;
+      // Persist a verified body update through normal delivery, while keeping the close failure terminal.
+      return { ack, failure: receiptFromEndpointError(error, true, conversation) };
+    }
   };
 
   const sendAtomic = async (group: ReplyGroup, state: ReplyGroupState) => {
@@ -144,6 +164,7 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
     while (continueContainer && !cancelled && !failure) {
       continueContainer = false;
       let ack: EndpointStreamAcknowledgement | undefined;
+      let closeFailure: DeliveryReceipt | undefined;
       let history: ReturnType<OutboundDeliveryExecution['history']> = 'skip';
       let physicalKey = `${group.key}/${state.containers}`;
       let confirmedPart = 0;
@@ -170,11 +191,19 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
           const prefix = state.consumed ? [] : projection.prefix;
           const prefixKey = JSON.stringify(prefix);
           if (!state.physical) {
+            if (!state.consumed) {
+              const reply = projection.prefix.find(segment => segment.type === 'reply');
+              const data: Readonly<Record<string, unknown>> | undefined = reply?.data;
+              state.replyTo = typeof data?.message_id === 'string' ? data.message_id : undefined;
+            }
             const native = context.streaming.open({ conversation: request.conversation, format: projection.format,
               prefix, source: context.options.source, locale: request.locale, signal,
-              ...(state.consumed ? { continuation: { precedingText: full.slice(0, state.consumed) } } : {}),
+              ...(state.consumed ? { continuation: { precedingText: full.slice(0, state.consumed),
+                ...(state.replyTo ? { replyTo: state.replyTo } : {}) } } : {}),
             });
             if (!native) {
+              if (state.consumed) throw new EndpointDeliveryError('stream_continuation_unsupported',
+                'A confirmed reply cannot fall back by replaying its source prefix', 'not_sent');
               state.unsupported = true;
               ack = { status: 'buffered', acceptedText: '' };
               if (!group.complete) return {};
@@ -191,7 +220,10 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
           const close = group.complete;
           const text = remaining;
           if (!close && text === physical.accepted) { ack = { status: 'buffered', acceptedText: physical.accepted }; return {}; }
-          ack = await external(() => close ? physical.native.finish(text) : physical.native.write(text));
+          if (close) {
+            const completed = await finishPhysical(physical, text, request.conversation);
+            ack = completed.ack; closeFailure = completed.failure;
+          } else ack = await external(() => physical.native.write(text));
           if (!text.startsWith(ack.acceptedText) || !ack.acceptedText.startsWith(physical.accepted)) {
             throw new EndpointDeliveryError('stream_ack_invalid', 'Endpoint returned an invalid confirmed prefix', 'unknown');
           }
@@ -206,15 +238,15 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
           physical.accepted = ack.acceptedText;
           state.accepted = full.slice(0, state.consumed) + ack.acceptedText;
           if (ack.status === 'sent') {
-            history = physical.message ? close ? { revision: physical.revision + 1 } : 'skip' : 'create';
+            history = physical.message ? { revision: physical.revision + 1 } : 'create';
             physical.revision += 1;
             physical.message = { conversation: request.conversation, id: ack.messageId! };
           }
-          if (close && !ack.exhausted && ack.acceptedText === text) {
+          if (!closeFailure && close && !ack.exhausted && ack.acceptedText === text) {
             physical.closed = true; state.consumed += ack.acceptedText.length; state.physical = undefined;
             state.containers += 1;
             state.done = group.complete && state.consumed === full.length;
-          } else if (ack.exhausted) {
+          } else if (!closeFailure && ack.exhausted) {
             if (!ack.acceptedText.length) throw new EndpointDeliveryError('stream_capacity_exhausted', 'No source progress is possible in this container', 'not_sent');
             if (close) {
               physical.closed = true; state.consumed += ack.acceptedText.length; state.physical = undefined; state.containers += 1;
@@ -234,6 +266,7 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
         history: () => history,
         confirmed: (part, value) => remember(confirmedPart++ ? `${physicalKey}/${confirmedPart}` : physicalKey, part, value),
       });
+      if (closeFailure) { fail(closeFailure); return; }
       if (result.status !== 'sent' && (!ack || result.failure)) { fail(result); return; }
       if (result.status === 'sent') receipt = decorate(failure ?? { status: 'sent' });
       if (ack?.exhausted && state.physical && !state.physical.closed) {
@@ -248,7 +281,8 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
               || JSON.stringify(state.consumed ? [] : projection.prefix) !== physical.prefixKey) {
               throw new EndpointDeliveryError('stream_projection_changed', 'Container completion changed previously accepted content or addressing', 'rejected');
             }
-            const end = await external(() => physical.native.finish(body));
+            const completed = await finishPhysical(physical, body, request.conversation);
+            const end = completed.ack; closeFailure = completed.failure;
             if (end.acceptedText !== body || end.status !== 'sent' || !end.messageId) throw new EndpointDeliveryError('delivery_unconfirmed', 'Container completion is unconfirmed', 'unknown');
             if (physical.message && end.messageId !== physical.message.id) throw new EndpointDeliveryError('stream_identity_changed', 'Container completion changed its message identity', 'unknown');
             return { result: end.messageId,
@@ -261,6 +295,7 @@ export function createCoreReplyStream(context: ProgressiveReplyContext): CoreRep
           history: () => physical.message ? { revision: physical.revision + 1 } : 'create',
           confirmed: (part, value) => remember(physical.key, part, value),
         });
+        if (closeFailure) { fail(closeFailure); return; }
         if (result.status !== 'sent') { fail(result); return; }
         receipt = decorate({ status: 'sent' });
         physical.closed = true; state.consumed += body.length; state.physical = undefined; state.containers += 1;
@@ -381,6 +416,13 @@ function streamText(payload: unknown): { format: 'text' | 'markdown'; text: stri
 function replyGroups(snapshot: ReplyStreamSnapshot): ReplyGroup[] {
   const groups: ReplyGroup[] = [];
   for (const message of snapshot.messages) {
+    // Rendered buttons are canonical keyboards and must remain attached to their logical body.
+    if (message.segments.some(segment => segment.value.type === 'keyboard')) {
+      const complete = message.complete && message.segments.every(segment => segment.complete);
+      groups.push({ key: `${message.key}/interactive`, segments: message.segments.map(segment => segment.value), complete });
+      if (!complete) break;
+      continue;
+    }
     let prefix: Segment[] = [], current: { key: string; segments: Segment[]; format: 'text' | 'markdown'; complete: boolean } | undefined;
     const flush = (closed: boolean) => { if (current) { groups.push({ ...current, complete: closed && current.complete }); current = undefined; } };
     for (const segment of message.segments) {

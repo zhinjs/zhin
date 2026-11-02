@@ -74,7 +74,7 @@ export function registerConversationHistoryRoutes(options: Readonly<{
         return { status: 200, data: {
           conversation: projectConversation(conversation),
           items: entries.map(({ sequence, event: item }) => ({ sequence, type: item.type, timestamp: item.timestamp,
-            ...(item.type === 'message.created' ? { message: {
+            ...(item.type === 'message.created' || item.type === 'message.updated' ? { message: {
               ref: projectMessageRef(item.message.ref),
               ...(item.message.actor ? { actor: { id: item.message.actor.id, ...(item.message.actor.displayName === undefined ? {} : { displayName: item.message.actor.displayName }) } } : {}),
               segments: item.message.segments.map(projectSegment), timestamp: item.message.timestamp,

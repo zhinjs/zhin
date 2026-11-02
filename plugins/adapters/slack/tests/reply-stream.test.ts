@@ -3,6 +3,7 @@ import { slackFixture } from './fixture.js';
 import { resolveSlackConfig } from '../src/protocol.js';
 import type { EndpointStreamRequest } from 'zhin.js/adapter';
 import { ErrorCode } from '@slack/web-api';
+import { coreReplyFixture } from '../../test-utils/reply-stream.js';
 
 async function setup(streaming?: boolean) {
   const calls = { startStream: vi.fn(async (_args: unknown) => ({ ts: '1700000000.2' })),
@@ -45,6 +46,83 @@ it('does not invent recipient information or move ordinary channel messages into
     const { threadId: _thread, ...conversation } = s.request.conversation;
     expect(s.lease.streaming!.open({ ...s.request, conversation })).toBeUndefined();
     expect(s.calls.startStream).not.toHaveBeenCalled();
+  } finally { await s.close(); }
+});
+
+it('keeps the original quoted thread when a continuation has no visible prefix', async () => {
+  const s = await setup();
+  try {
+    const { threadId: _thread, ...conversation } = s.request.conversation;
+    const stream = s.lease.streaming!.open({ ...s.request, conversation, format: 'text', prefix: [],
+      continuation: { precedingText: 'confirmed', replyTo: 'C1:1700000000.1' },
+    })!;
+    expect(stream).toBeDefined();
+    await stream.finish(' remainder');
+    expect(s.calls.startStream).toHaveBeenCalledExactlyOnceWith({ channel: 'C1', thread_ts: '1700000000.1',
+      recipient_team_id: 'T1', recipient_user_id: 'U1', chunks: [{ type: 'markdown_text', text: ' remainder' }],
+    });
+    expect(s.lease.streaming!.open({ ...s.request, conversation, format: 'text', prefix: [],
+      continuation: { precedingText: 'confirmed', replyTo: 'C2:1700000000.1' },
+    })).toBeUndefined();
+  } finally { await s.close(); }
+});
+
+it.each([
+  ['markdown', 'timeout'], ['markdown', 'capacity'], ['text', 'timeout'], ['text', 'capacity'],
+] as const)('settles %s %s rollover through Core without replaying confirmed content', async (format, limit) => {
+  const s = await setup();
+  try {
+    const { threadId: _thread, ...conversation } = s.request.conversation;
+    const request: EndpointStreamRequest = { ...s.request, format, conversation,
+      prefix: [{ type: 'reply', data: { message_id: 'C1:1700000000.1' } }, ...s.request.prefix!],
+    };
+    s.calls.startStream.mockResolvedValueOnce({ ts: '1700000000.2' }).mockResolvedValueOnce({ ts: '1700000000.3' });
+    const { stream, snapshot, ordinary } = coreReplyFixture(s.lease, request);
+    const before = format === 'markdown' ? '```typescript\nconfirmed' : 'confirmed';
+    const full = limit === 'capacity' ? before + 'x'.repeat(12_000) : before + (format === 'markdown' ? '\ntail\n```' : ' tail');
+    stream.update(snapshot(before, 1));
+    await vi.waitFor(() => expect(stream.confirmed).toHaveLength(1));
+    if (limit === 'timeout') s.calls.appendStream.mockRejectedValueOnce(Object.assign(new Error('platform finalized the stream'), {
+      code: ErrorCode.PlatformError, data: { ok: false, error: 'message_not_in_streaming_state' },
+    }));
+    const receipt = await stream.finish(snapshot(full, 2, true));
+    expect(ordinary).not.toHaveBeenCalled();
+    expect(s.calls.appendStream).toHaveBeenCalledTimes(limit === 'timeout' || format === 'text' ? 1 : 0);
+    if (format === 'markdown') {
+      expect(receipt).toMatchObject({ status: 'failed', failure: { code: 'stream_continuation_unsupported' },
+        parts: [{ message: { id: 'C1:1700000000.2' } }],
+      });
+      expect(s.calls.startStream).toHaveBeenCalledOnce();
+      expect(s.calls.stopStream).toHaveBeenCalledTimes(limit === 'timeout' ? 0 : 1);
+      expect(stream.confirmed[0]!.segments).toEqual([]);
+      expect(s.calls.startStream.mock.calls[0]![0]).toMatchObject({ chunks: [{ type: 'markdown_text', text: `<@U2>${before}` }] });
+    } else {
+      expect(receipt).toMatchObject({ status: 'sent', parts: [
+        { message: { id: 'C1:1700000000.2' } }, { message: { id: 'C1:1700000000.3' } },
+      ] });
+      expect(s.calls.startStream).toHaveBeenCalledTimes(2);
+      expect(s.calls.startStream.mock.calls[1]![0]).toMatchObject({ thread_ts: '1700000000.1',
+        chunks: [{ type: 'markdown_text', text: limit === 'timeout' ? ' tail' : full.slice(12_000 - '<@U2>'.length) }],
+      });
+      expect(stream.confirmed.flatMap(part => part.segments).filter(segment => segment.type === 'text')
+        .map(segment => segment.data.text).join('')).toBe(full);
+    }
+  } finally { await s.close(); }
+});
+
+it('retains the last confirmed body when the final native stop outcome is unknown', async () => {
+  const s = await setup();
+  try {
+    const stream = s.lease.streaming!.open(s.request)!;
+    await stream.write('confirmed');
+    expect(stream.lastAcknowledgement).toMatchObject({ status: 'sent', acceptedText: 'confirmed' });
+    s.calls.stopStream.mockRejectedValueOnce(new Error('stop connection lost'));
+    await expect(stream.finish('confirmed final')).rejects.toMatchObject({ disposition: 'unknown' });
+    expect(stream.lastAcknowledgement).toEqual({ status: 'sent', messageId: 'C1:1700000000.2', acceptedText: 'confirmed final' });
+    await expect(stream.finish('confirmed final')).rejects.toMatchObject({ disposition: 'unknown' });
+    expect(s.calls.startStream).toHaveBeenCalledOnce();
+    expect(s.calls.appendStream).toHaveBeenCalledOnce();
+    expect(s.calls.stopStream).toHaveBeenCalledOnce();
   } finally { await s.close(); }
 });
 
@@ -110,6 +188,7 @@ it('does not turn an unknown append or an unconfirmed start into an expired-cont
     await unknown.write('confirmed');
     s.calls.appendStream.mockRejectedValueOnce(new Error('socket lost'));
     await expect(unknown.write('confirmed tail')).rejects.toMatchObject({ disposition: 'unknown' });
+    expect(unknown.lastAcknowledgement).toEqual({ status: 'sent', messageId: 'C1:1700000000.2', acceptedText: 'confirmed' });
     await expect(unknown.finish('confirmed tail')).rejects.toMatchObject({ disposition: 'unknown' });
     expect(s.calls.startStream).toHaveBeenCalledTimes(2);
     expect(s.calls.appendStream).toHaveBeenCalledOnce();

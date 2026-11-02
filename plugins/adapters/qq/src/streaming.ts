@@ -3,7 +3,7 @@ import { createEndpointOperation, type EndpointMessageStream, type EndpointStrea
   type EndpointStreamAcknowledgement } from 'zhin.js/adapter';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { qqDeliveryFailure } from './delivery-error.js';
-import type { QqPassiveReplyLedger, QqReplySource } from './passive-reply.js';
+import { QQ_PASSIVE_SOURCE_CODES, type PassiveReplyGrant, type QqPassiveReplyLedger, type QqReplySource } from './passive-reply.js';
 import { qqOutboundKind, resolveOutboundMessageId } from './protocol.js';
 import { qqMarkdownClosing, qqMarkdownContinuation } from './stream-markdown.js';
 
@@ -22,17 +22,19 @@ export function createQqStreaming(getBot: () => Bot, ledger: QqPassiveReplyLedge
       // stream_messages has no verified canonical mention/keyboard projection.
       // Keep these combinations on the complete-message codec instead of guessing.
       if (request.prefix?.some(segment => segment.type !== 'reply')) return undefined;
-      const precedingText = request.continuation?.precedingText ?? '';
-      const opening = request.format === 'markdown' ? qqMarkdownContinuation(precedingText).opening : '';
       const reply = request.prefix?.find(segment => segment.type === 'reply');
       const explicitId = reply && 'message_id' in reply.data ? reply.data.message_id : undefined;
       const preferred: QqReplySource | undefined = typeof explicitId === 'string' && explicitId
         ? { id: explicitId }
         : request.source?.messageId ? { id: request.source.messageId } : undefined;
+      if (!ledger.hasUsableSource('private', request.conversation.id, preferred)) return undefined;
+      const precedingText = request.continuation?.precedingText ?? '';
+      const opening = request.format === 'markdown' ? qqMarkdownContinuation(precedingText).opening : '';
       const cancellation = new AbortController();
       const signal = request.signal ? AbortSignal.any([request.signal, cancellation.signal]) : cancellation.signal;
       const operation = createEndpointOperation({ signal });
       let native: PrivateMessageStream | undefined;
+      let grant: PassiveReplyGrant | undefined;
       let acceptedText = '';
       let messageId: string | undefined;
       let exhausted = false;
@@ -53,7 +55,7 @@ export function createQqStreaming(getBot: () => Bot, ledger: QqPassiveReplyLedge
         if (final && exhausted && text !== acceptedText) throw new EndpointDeliveryError('stream_capacity', 'QQ exhausted stream must finish its accepted prefix', 'not_sent');
         if (!native) {
           if (!text) return acknowledgement();
-          const grant = ledger.acquire('private', request.conversation.id, preferred);
+          grant = ledger.acquire('private', request.conversation.id, preferred);
           if (!grant) throw new EndpointDeliveryError('unsupported_operation', 'QQ stream has no usable passive reply source', 'not_sent');
           native = getBot().createPrivateStream(request.conversation.id, {
             source: grant.source, msgSeq: grant.msgSeq,
@@ -76,7 +78,11 @@ export function createQqStreaming(getBot: () => Bot, ledger: QqPassiveReplyLedge
           exhausted = result.remain_msg_len === 0;
           return acknowledgement();
         } catch (error) {
-          failure = qqDeliveryFailure(error).failure;
+          const result = qqDeliveryFailure(error);
+          if (grant && result.diagnostic.platformCode !== undefined && QQ_PASSIVE_SOURCE_CODES.has(result.diagnostic.platformCode)) {
+            ledger.exhaust('private', request.conversation.id, grant.source);
+          }
+          failure = result.failure;
           throw failure;
         }
       };
