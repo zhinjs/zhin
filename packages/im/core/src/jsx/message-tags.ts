@@ -1,7 +1,7 @@
 import { jsx, type JSXElement, type JSXRenderable } from '@zhin.js/jsx';
 import type { MediaRef, Segment } from '@zhin.js/im-contract';
 import type { Message, SendContent } from '../plugin-runtime/im/contracts.js';
-import type { ButtonData } from '../built/interactive-segments/types.js';
+import type { ActionSegmentData, ButtonData, KeyboardSegmentData } from '../built/interactive-segments/types.js';
 import type { MessageTagProps } from './intrinsic-elements.js';
 
 export type TextProps =
@@ -76,8 +76,11 @@ export const Forward = nativeTag('forward');
 export const Share = nativeTag('share');
 export const Dice = nativeTag('dice');
 export const Rps = nativeTag('rps');
-export const Keyboard = nativeTag('keyboard');
-export const Action = nativeTag('action');
+// Explicit annotations keep the emitted .d.ts on the leaf type module. Inferred, they
+// print as import("../index.js"), dragging the whole core entry (and @zhin.js/ai,
+// database drivers) into every packed consumer that only imports a feature subpath.
+export const Keyboard: (props: KeyboardSegmentData) => JSXElement = nativeTag('keyboard');
+export const Action: (props: ActionSegmentData) => JSXElement = nativeTag('action');
 export const Link = nativeTag('link');
 export const Qrcode = nativeTag('qrcode');
 export const Tts = nativeTag('tts');
