@@ -5,7 +5,8 @@ import { mkdtemp, rm, writeFile, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Scope, rootPluginId, childPluginId, databaseRootHostToken, GenerationHandoffStack, DisposeStack } from '@zhin.js/plugin-runtime';
-import { SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL, DatabaseScheduleJobStorage, AgentUsageCollector, agentUsageStoreToken } from '@zhin.js/agent/runtime';
+import { SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL, DatabaseScheduleJobStorage, AgentUsageCollector, agentUsageStoreToken,
+  ScheduleExecutionHistory, FileScheduleHistoryRepository } from '@zhin.js/agent/runtime';
 import { ScheduleJobStore, type TurnRequest } from '@zhin.js/agent';
 import { createScopedTraceJournal } from '@zhin.js/agent/trace';
 import { AGENT_MESSAGE_MODEL, AGENT_SESSION_MODEL, AGENT_SUMMARY_MODEL, parseAgentMessageRow } from '@zhin.js/ai';
@@ -20,6 +21,83 @@ const request = {
 } as unknown as TurnRequest;
 
 const dialects = ['sqlite', ...(process.env.ZHIN_TEST_STRUCTURED_SQL === '1' ? ['mysql', 'pg'] : [])];
+describe('history maintenance lifecycle', () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>(done => { resolve = done; });
+    return { promise, resolve };
+  }
+  async function settle() { for (let i = 0; i < 20; i++) await Promise.resolve(); }
+  function fixture(history: ScheduleExecutionHistory, pruneTrace?: () => Promise<unknown>) {
+    const lifecycle = new DisposeStack(), handoff = new GenerationHandoffStack();
+    let publish!: () => void;
+    const off = vi.fn(), start = vi.fn(async () => {});
+    installAgentPersistence({ resources: new Scope(rootPluginId()), handoff, lifecycle,
+      admission: { onActivate: (listener: () => void) => { publish = listener; return off; } } as never }, {
+      agent: { markMemoryPersistenceReady: vi.fn() }, semanticMemory: null, schedule: { start, history },
+    } as never, { sessions: { useDatabase: false } } as never, pruneTrace);
+    lifecycle.seal(); handoff.seal();
+    return { lifecycle, handoff, off, start, publish: () => publish() };
+  }
+  function repository(prune: () => Promise<number>) {
+    return { save: vi.fn(async () => {}), read: vi.fn(async () => undefined), page: vi.fn(async () => []), prune };
+  }
+  it('publishes and starts scheduling without awaiting a hung automatic history prune', async () => {
+    vi.useFakeTimers();
+    const held = deferred<number>();
+    const prune = vi.fn(() => held.promise);
+    const history = new ScheduleExecutionHistory({ repository: repository(prune), secrets: [] });
+    const runtime = fixture(history);
+    const activating = runtime.handoff.activateNext(new AbortController().signal);
+    let activated = false; void activating.then(() => { activated = true; });
+    try {
+      await settle();
+      expect(activated).toBe(true);
+      expect(prune).not.toHaveBeenCalled();
+      runtime.publish(); await settle();
+      expect(runtime.start).toHaveBeenCalledOnce();
+      expect(prune).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(3 * 3_600_000);
+      expect(prune).toHaveBeenCalledOnce();
+    } finally { held.resolve(0); await activating; await runtime.lifecycle.dispose(); history.close(); vi.useRealTimers(); }
+  });
+  it('disposes while hourly history cleanup is hung, without accepting another cleanup or changing other tasks', async () => {
+    vi.useFakeTimers();
+    const held = deferred<number>();
+    const prune = vi.fn<() => Promise<number>>().mockResolvedValueOnce(0).mockImplementation(() => held.promise);
+    const history = new ScheduleExecutionHistory({ repository: repository(prune), secrets: [] });
+    const runtime = fixture(history);
+    let disposing: Promise<void> | undefined;
+    try {
+      await runtime.handoff.activateNext(new AbortController().signal);
+      runtime.publish(); await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(3_600_000);
+      expect(prune).toHaveBeenCalledTimes(2);
+      let disposed = false;
+      disposing = runtime.lifecycle.dispose().then(() => { disposed = true; });
+      await settle();
+      expect(disposed).toBe(true);
+      expect(runtime.off).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(2 * 3_600_000);
+      expect(prune).toHaveBeenCalledTimes(2);
+    } finally { held.resolve(0); await disposing; await runtime.lifecycle.dispose(); history.close(); vi.useRealTimers(); }
+  });
+  it('retains the existing teardown wait for unrelated trace maintenance', async () => {
+    vi.useFakeTimers();
+    const held = deferred<void>();
+    const history = new ScheduleExecutionHistory({ repository: repository(vi.fn(async () => 0)), secrets: [] });
+    const runtime = fixture(history, () => held.promise);
+    let disposing: Promise<void> | undefined;
+    try {
+      await runtime.handoff.activateNext(new AbortController().signal);
+      runtime.publish(); await settle();
+      let disposed = false;
+      disposing = runtime.lifecycle.dispose().then(() => { disposed = true; });
+      await settle(); expect(disposed).toBe(false);
+      held.resolve(); await disposing; expect(disposed).toBe(true);
+    } finally { held.resolve(); await disposing; await runtime.lifecycle.dispose(); history.close(); vi.useRealTimers(); }
+  });
+});
 describe('trace archive maintenance lifecycle', () => {
   it('prunes at activation and while idle, isolates errors, and stops with the generation', async () => {
     vi.useFakeTimers();
@@ -28,7 +106,7 @@ describe('trace archive maintenance lifecycle', () => {
     const off = vi.fn();
     const admission = { onActivate: (listener: () => void) => { publish = listener; return off; } };
     const foundation = { agent: { markMemoryPersistenceReady: vi.fn() }, semanticMemory: null,
-      schedule: { start: vi.fn(async () => {}) } };
+      schedule: { start: vi.fn(async () => {}), history: { housekeeping: vi.fn() } } };
     const prune = vi.fn(async () => {});
     try {
       installAgentPersistence({ resources: new Scope(rootPluginId()), handoff, lifecycle, admission: admission as never },
@@ -78,7 +156,8 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
     resources.provide(databaseRootHostToken, host); handoff.add({ activateNext: () => host.start() });
     const foundation = { agent: { configure: vi.fn(), upgradeProfilesToDatabase: vi.fn(), markMemoryPersistenceReady: vi.fn() },
-      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data') }), start: vi.fn(async () => {}) } };
+      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data') }), start: vi.fn(async () => {}),
+        history: new ScheduleExecutionHistory({ repository: new FileScheduleHistoryRepository(join(dir, 'data', 'schedule-executions')) }) } };
     let publish!: () => void;
     const admission = { onActivate: (listener: () => void) => { publish = listener; return () => {}; } };
     installAgentPersistence({ resources, handoff, lifecycle: cleanup, admission: admission as never }, foundation as never, { usage: { retentionDays } } as never);
@@ -97,7 +176,8 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
     resources.provide(databaseRootHostToken, host); handoff.add({ activateNext: () => host.start() });
     const foundation = { agent: { configure: vi.fn(), upgradeProfilesToDatabase: vi.fn(), markMemoryPersistenceReady: vi.fn() },
-      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data-seal') }), start: vi.fn(async () => {}) } };
+      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data-seal') }), start: vi.fn(async () => {}),
+        history: new ScheduleExecutionHistory({ repository: new FileScheduleHistoryRepository(join(dir, 'data-seal', 'schedule-executions')) }) } };
     let publish!: () => void;
     const admission = { onActivate: (listener: () => void) => { publish = listener; return () => {}; } };
     installAgentPersistence({ resources, handoff, lifecycle: cleanup, admission: admission as never }, foundation as never, { usage: { retentionDays: 30 } } as never);

@@ -1,7 +1,7 @@
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { SelfProfilePort, SelfProfileSnapshot } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type SelfProfilePort, type SelfProfileSnapshot } from '@zhin.js/im-contract';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { createNativeSelfProfileToolFeatures, type NativeSelfProfileToolOptions } from '../../src/plugin-runtime/native-self-profile-tools.js';
@@ -11,6 +11,7 @@ import type { TurnEvent } from '../../src/event/turn-event.js';
 import { LocalImageAssetStore } from '../../src/media/local-image-assets.js';
 import type { NetworkTransport } from '../../src/security/turn-network-client.js';
 import { toolInvocationFromTurn } from '../../src/plugin-runtime/capability-tools.js';
+import { AttemptReplayEvidence } from '../../src/schedule-domain/replay-evidence.js';
 
 const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
 let directory: string;
@@ -24,19 +25,20 @@ function fixture(options: NativeSelfProfileToolOptions = {}, approved = true, sc
     write: vi.fn<NonNullable<SelfProfilePort['write']>>(async () => ({ status: 'updated' })) } satisfies SelfProfilePort;
   const approval = vi.fn(async () => approved);
   const events: TurnEvent[] = [];
+  const evidence = new AttemptReplayEvidence();
   const turn = createTurnIngress({
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' }, intent: { kind: 'new' },
     origin: scope?.origin ?? { kind: 'im', platform: 'icqq', endpoint: 'source-account', scope: 'private', sceneId: 'member' },
     principal: { subjectId: 'member', roles: ['master'] }, input: { text: 'profile' }, session: { key: scope?.sessionKey ?? 'session' },
     policy: { permissions: ['master'], unattended: false, filesystem: { workspaceRoot: directory }, network: { enabled: false } },
     capabilities: { tools: ['get_self_profile', 'set_self_profile'], skills: [] }, signal: new AbortController().signal,
-    ports: { selfProfile: profile, journal: { append: event => { events.push(event); } }, approval: { requestApproval: approval } },
+    ports: { operationEvidence: evidence, selfProfile: profile, journal: { append: event => { events.push(event); } }, approval: { requestApproval: approval } },
   });
   const tools = createNativeSelfProfileToolFeatures(options).map(native => ({ ...native.definition,
     name: native.name, qualifiedName: native.name, owner: rootPluginId(), source: 'builtin',
     execute: (input: unknown, context: unknown) => native.definition.execute(input as Record<string, unknown>, context as ToolExecutionContext),
   }));
-  return { profile, approval, events, turn, invocation: toolInvocationFromTurn(turn), runtime: new TurnToolRuntime(turn, tools) };
+  return { profile, approval, evidence, events, turn, invocation: toolInvocationFromTurn(turn), runtime: new TurnToolRuntime(turn, tools) };
 }
 
 it('refreshes only the bound current account without asking for read approval', async () => {
@@ -78,6 +80,23 @@ it('preserves rejection and unknown outcomes without reporting success or retryi
     await expect(f.runtime.execute('set_self_profile', { field: 'signature', value: 'Hello' }, status)).resolves.toMatchObject({ status: 'completed', output: { status } });
     expect(f.profile.write).toHaveBeenCalledTimes(1);
   }
+});
+
+it.each([['updated', 'committed'], ['rejected', 'safe'], ['unknown', 'unknown']] as const)(
+  'reports the formal profile %s result as %s evidence without parsing a tool string', async (status, disposition) => {
+    const f = fixture();
+    f.profile.write.mockResolvedValue({ status });
+    await f.runtime.execute('set_self_profile', { field: 'nickname', value: 'Requested name' }, 'profile-effect');
+    expect(f.evidence.snapshot().disposition).toBe(disposition);
+    expect(f.profile.write).toHaveBeenCalledTimes(1);
+  });
+
+it('uses only this native single-write owner to prove a not-submitted profile failure', async () => {
+  const f = fixture();
+  f.profile.write.mockRejectedValue(new EndpointDeliveryError('endpoint_inactive', 'Original account stopped', 'not_sent'));
+  expect(await f.runtime.execute('set_self_profile', { field: 'nickname', value: 'No' }, 'not-sent'))
+    .toMatchObject({ status: 'failed', error: 'Original account stopped' });
+  expect(f.evidence.snapshot()).toMatchObject({ disposition: 'safe', reason: 'not_submitted' });
 });
 
 it('loads an authorized local avatar internally, keeping bytes out of tool results and journal', async () => {

@@ -4,6 +4,7 @@ import type { SessionTreeRuntimeHandle } from '../session-tree-runtime.js';
 import type { AgentTraceRuntimeHandle } from './agent-trace-runtime.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { TurnOutcome, TurnRequest } from '../turn/turn-ingress.js';
+import type { ScheduleExecutionHistoryPort } from '../schedule-domain/execution-history-store.js';
 
 /**
  * Stable Host boundary for protocols that expose Agent capabilities externally.
@@ -41,6 +42,8 @@ export interface AgentHostConsolePort {
   /** Bindings from this exact generation, used for Catalog display and validation. */
   listBindings(): readonly ResolvedAgentBinding[];
   readonly assistant: AssistantRuntimeHandle | null;
+  /** Exact generation's durable execution history; independent of the optional assistant feature. */
+  readonly scheduleExecutions?: ScheduleExecutionHistoryPort;
   readonly trace: AgentTraceRuntimeHandle;
 }
 

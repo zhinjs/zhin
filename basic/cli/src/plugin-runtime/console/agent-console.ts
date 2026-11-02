@@ -17,6 +17,7 @@ import type { PortfolioSponsorProjection, PortfolioSponsorCommand } from '@zhin.
 import type { RuntimeSnapshot, SnapshotReader, TokenId } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isWorkroomPackageMissing } from '../../utils/optional-workroom.js';
+import type { ScheduleExecutionHistoryPort } from '@zhin.js/agent/runtime';
 
 const logger = getLogger('agent-console');
 
@@ -91,6 +92,7 @@ export type AgentConsolePort = {
   readonly workroom?: WorkroomRuntimeHandle;
   readonly workroomControl?: AgentHostWorkroomRunControlPort;
   readonly assistant: AssistantRuntime | null;
+  readonly scheduleExecutions?: ScheduleExecutionHistoryPort;
   readonly workroomCatalog?: {
     read(): Promise<Readonly<{
       definitions: Readonly<Record<string, WorkroomDefinition>>;

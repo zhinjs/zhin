@@ -1993,7 +1993,10 @@ describe('IM Runtime', () => {
       const current = fixture.store.current;
       fixture.store.commit(current.generation, { snapshot: snapshotState(current), dispose: () => undefined });
       await expect(fixture.im.endpoints.sendTarget(JSON.parse(JSON.stringify(target)), 'reminder'))
-        .resolves.toEqual({ messageId: 'sent-1' });
+        .resolves.toEqual({ messageId: 'sent-1', receipt: { status: 'sent', message: {
+          id: 'sent-1', conversation: { endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
+            kind: 'private', id: 'result-room' },
+        } } });
       expect(sent).toHaveLength(1);
       await expect(fixture.im.endpoints.sendTarget({ ...target,
         endpoint: { ...target.endpoint, adapter: String(rootPluginId()) } }, 'owner is not adapter'))
@@ -2013,7 +2016,11 @@ describe('IM Runtime', () => {
       } })));
       const current = fixture.store.current;
       fixture.store.commit(current.generation, { snapshot: snapshotState(current), dispose: () => undefined });
-      await expect(fixture.im.endpoints.sendTarget(target, 'saved target')).resolves.toEqual({ messageId: 'sent-1' });
+      await expect(fixture.im.endpoints.sendTarget(target, 'saved target')).resolves.toEqual({ messageId: 'sent-1',
+        receipt: { status: 'sent', message: { id: 'sent-1', conversation: {
+          endpoint: { id: String(fixture.adapter.id), adapter: 'memory' }, kind: 'channel', id: 'child',
+          parent: { kind: 'channel', id: 'guild' }, threadId: 'thread',
+        } } } });
       expect(sent.at(-1)).toEqual(expect.objectContaining({ conversation: target }));
       expect(events).toContain('outbound:enter');
       await expect(fixture.im.endpoints.sendTarget({ ...target, endpoint: { ...target.endpoint, adapter: 'root/other' } }, 'wrong bot'))

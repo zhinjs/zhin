@@ -103,7 +103,14 @@ export type ToolInvocationOrigin =
   | Readonly<{ kind: 'internal'; source: string }>
   | Readonly<{ kind: 'mcp'; requestId: string }>;
 
+/** @internal Exact action-owner evidence; ordinary tool text/results never imply this contract. */
+export interface ToolEffectReporter {
+  report(effect: Readonly<{ disposition: 'committed' | 'unknown' | 'not_submitted' }>): void;
+}
+
 export interface ToolInvocationContext {
+  /** @internal Optional Host evidence capability; it grants no permissions and may be absent. */
+  readonly effects?: ToolEffectReporter;
   /** Trusted turn language; never inferred from model tool arguments. */
   readonly locale?: Locale;
   readonly signal: AbortSignal;
@@ -128,6 +135,8 @@ export interface ToolExecutionContext<
   TConfig = unknown,
   TAdapter extends string | undefined = undefined,
 > extends CapabilityContext<TConfig> {
+  /** @internal Only report a real operation's confirmed result; never require this field to exist. */
+  readonly effects?: ToolEffectReporter;
   readonly locale: Locale;
   readonly signal: AbortSignal;
   readonly traceId: string;

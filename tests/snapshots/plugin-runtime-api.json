@@ -37,6 +37,10 @@
   "agent/runtime": [
     "export * from '../assistant/job-storage.js';",
     "export * from '../decision/index.js';",
+    "export * from '../schedule-domain/execution-history-file.js';",
+    "export * from '../schedule-domain/execution-history-sql.js';",
+    "export * from '../schedule-domain/execution-history-store.js';",
+    "export * from '../schedule-domain/execution-history.js';",
     "export * from '../usage/usage-store.js';",
     "export * from './agent-event-bus.js';",
     "export * from './agent-host-port.js';",
@@ -71,6 +75,7 @@
     "export{AI_SCENE_MEMBERS_TABLE}from '../scene-facts.js';",
     "export{DEFAULT_GROUP_RULE_RETENTION_DAYS}from '../group-rules.js';",
     "export{FileJournalStore}from '../journal/file-journal-store.js';",
+    "export{JsonlScheduleAuditLogger}from '../schedule-domain/audit-logger.js';",
     "export{ZhinAgent}from '../zhin-agent/index.js';",
     "export{activateAiDatabaseStorage}from '../init/activate-ai-database-storage.js';",
     "export{capabilityToTool,toolInvocationFromTurn,toolsFromCapabilities,type GenerationStampedTool,}from './capability-tools.js';",
