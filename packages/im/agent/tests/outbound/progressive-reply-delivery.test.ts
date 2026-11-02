@@ -116,6 +116,21 @@ it('keeps confirmed body slots before partially sent tail slots without inventin
   expect(send).toHaveBeenCalledOnce();
 });
 
+it.each(['parts', 'message'] as const)('retains the canonical tail %s target instead of reconstructing it from origin or prefix', async shape => {
+  const { EndpointDeliveryError } = await import('@zhin.js/im-contract');
+  const { run } = fixture({ status: 'sent', message, parts: [{ message }] });
+  const actual = { conversation: { ...conversation, id: 'redirected', threadId: 'topic' }, id: 'actual-tail' };
+  const receipt: DeliveryReceipt = { status: 'failed', ...(shape === 'parts' ? { parts: [{ message: actual }, {}] } : { message: actual }) };
+  const error = new EndpointDeliveryError('tail_error', 'tail', 'unknown', { receipt, parts: [{ messageId: 'legacy-id' }] });
+  const send = vi.fn(async () => { throw error; });
+  const result = await deliverProgressiveReply({ run, snapshot }, [...output,
+    { type: 'image', url: 'https://example.test/not-confirmed.png' }], { send }, undefined, undefined, conversation);
+  expect(result.delivery).toMatchObject({ status: 'failed', code: 'tail_error', deliveryPartial: true, deliveryUnknown: true,
+    messages: [message, actual, ...(shape === 'parts' ? [null] : [])] });
+  expect(result.confirmedOutput).toEqual([{ type: 'message', segments: [{ type: 'text', data: { text: 'confirmed' } }] }]);
+  expect(send).toHaveBeenCalledOnce();
+});
+
 it.each(['tail', 'limit'] as const)('marks %s sends as answer facts in the owning phase before the global terminal', async mode => {
   const { run } = fixture(mode === 'limit'
     ? { status: 'failed', parts: [{ message }], failure: { code: 'stream_buffer_limit', message: 'limit', retryable: false } }

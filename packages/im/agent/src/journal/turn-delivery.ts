@@ -73,9 +73,10 @@ export function recordFinalReply(
       catch (error) {
         if (final) {
           const known = error instanceof EndpointDeliveryError;
-          const conversation = identity.origin.conversation;
-          const messages = known ? error.parts?.map(part => part.messageId && conversation
-            ? { conversation, id: part.messageId } : null) ?? [] : [];
+          const canonical = known ? error.receipt : undefined;
+          const messages = canonical
+            ? canonical.parts?.map(part => part.message ?? null) ?? (canonical.message ? [canonical.message] : [])
+            : known ? error.parts?.map(() => null) ?? [] : [];
           const unknown = !known || error.disposition === 'unknown';
           await persist({ ...answerIdentity, attemptId, phase: 'settled', recordedAt: Date.now(),
             status: messages.length ? 'partial' : unknown ? 'unknown' : 'not_sent', outcome: 'threw',

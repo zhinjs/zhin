@@ -33,8 +33,11 @@ export async function deliverProgressiveReply(
     catch (error) {
       const known = error instanceof EndpointDeliveryError;
       const target = messages.find(message => message !== null)?.conversation ?? conversation;
-      const completed = known ? error.parts?.map(part => part.messageId && target
-        ? { conversation: target, id: part.messageId } : null) ?? [] : [];
+      const canonical = known ? error.receipt : undefined;
+      const completed = canonical
+        ? canonical.parts?.map(part => part.message ?? null) ?? (canonical.message ? [canonical.message] : [])
+        : known ? error.parts?.map(part => part.messageId && target
+          ? { conversation: target, id: part.messageId } : null) ?? [] : [];
       const allMessages = [...messages, ...completed];
       if (known && error.disposition === 'rejected' && !messages.length && !confirmedOutput.length) {
         return { delivery: { status: 'rejected', code: error.code, messages: allMessages }, confirmedOutput };

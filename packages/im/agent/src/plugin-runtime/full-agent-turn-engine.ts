@@ -333,7 +333,10 @@ async function* runInteractiveTurn(
       catch (error) {
         const known = error instanceof EndpointDeliveryError;
         // ReplyPort can redirect delivery; native ids alone cannot establish a target scene.
-        const messages = known ? error.parts?.map(() => null) ?? [] : [];
+        const canonical = known ? error.receipt : undefined;
+        const messages = canonical
+          ? canonical.parts?.map(part => part.message ?? null) ?? (canonical.message ? [canonical.message] : [])
+          : known ? error.parts?.map(() => null) ?? [] : [];
         delivery = known && error.disposition === 'rejected'
           ? { status: 'rejected', code: error.code, messages }
           : { status: 'failed', code: known ? error.code : 'reply_phase_unknown', retryable: false, messages,

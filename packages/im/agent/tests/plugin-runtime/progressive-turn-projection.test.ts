@@ -75,7 +75,7 @@ it.each(['sent', 'partial', 'legacy'] as const)('projects %s delivery facts thro
   }
 });
 
-it.each(['stream', 'off', 'stopped', 'fallback', 'fallback-partial', 'fallback-rejected', 'cancel', 'cancel-projection-failure', 'journal-failure', 'journal-projection-failure'] as const)('normalizes a late follow-up into one terminal with %s phase delivery', async mode => {
+it.each(['stream', 'off', 'stopped', 'fallback', 'fallback-partial', 'fallback-rejected', 'fallback-canonical-partial', 'fallback-canonical-rejected', 'cancel', 'cancel-projection-failure', 'journal-failure', 'journal-projection-failure'] as const)('normalizes a late follow-up into one terminal with %s phase delivery', async mode => {
   const controller = new PromptController('one-at-a-time', 'one-at-a-time');
   const conversation = { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private' as const, id: 'user' };
   const sessionKey = 'sandbox:bot:private:user';
@@ -84,10 +84,12 @@ it.each(['stream', 'off', 'stopped', 'fallback', 'fallback-partial', 'fallback-r
   const cancellation = new AbortController(), publish = vi.fn(async () => undefined);
   const cancelling = mode === 'cancel' || mode === 'cancel-projection-failure';
   const journaling = mode === 'journal-failure' || mode === 'journal-projection-failure';
-  const failedFallback = mode === 'fallback-partial' || mode === 'fallback-rejected';
+  const failedFallback = mode.startsWith('fallback-'), canonicalFallback = mode.startsWith('fallback-canonical');
+  const rejectedFallback = mode.endsWith('rejected');
+  const actual = { conversation: { ...conversation, id: 'redirected', threadId: 'topic' }, id: 'actual-fallback' };
   const send = vi.fn(async () => {
-    if (failedFallback) throw new EndpointDeliveryError('fallback_stopped', 'platform', mode === 'fallback-rejected' ? 'rejected' : 'unknown',
-      { parts: [{ messageId: 'fallback-1' }, {}] });
+    if (failedFallback) throw new EndpointDeliveryError('fallback_stopped', 'platform', rejectedFallback ? 'rejected' : 'unknown',
+      { parts: [{ messageId: 'fallback-1' }, {}], ...(canonicalFallback ? { receipt: { status: 'failed', parts: [{ message: actual }, {}] } } : {}) });
     return { status: 'sent' as const, messageId: 'ordinary' };
   });
   const openStream = vi.fn((answer?: { phaseId?: string }) => {
@@ -181,11 +183,11 @@ it.each(['stream', 'off', 'stopped', 'fallback', 'fallback-partial', 'fallback-r
   await consume();
   if (failedFallback) {
     expect(calls).toBe(1);
-    expect(returnedFacts[0]).toMatchObject({ delivery: { status: mode === 'fallback-rejected' ? 'rejected' : 'failed',
-      code: 'fallback_stopped', messages: [null, null],
-      ...(mode === 'fallback-partial' ? { deliveryPartial: true, deliveryUnknown: true } : {}) }, confirmedOutput: [] });
-    expect(returnedFacts[0]?.messageIds).toEqual([null, null]);
-    expect(returnedFacts[0]?.messageId).toBeUndefined();
+    expect(returnedFacts[0]).toMatchObject({ delivery: { status: rejectedFallback ? 'rejected' : 'failed',
+      code: 'fallback_stopped', messages: [canonicalFallback ? actual : null, null],
+      ...(!rejectedFallback ? { deliveryPartial: true, deliveryUnknown: true } : {}) }, confirmedOutput: [] });
+    expect(returnedFacts[0]?.messageIds).toEqual([canonicalFallback ? actual.id : null, null]);
+    expect(returnedFacts[0]?.messageId).toBe(canonicalFallback ? actual.id : undefined);
     expect(record).not.toHaveBeenCalled();
     expect(send).toHaveBeenCalledOnce();
     return;
