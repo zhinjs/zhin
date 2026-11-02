@@ -53,9 +53,14 @@ export async function resolveAdapterConsolePluginId(adapterKey: string): Promise
   const response = await apiFetch('/console/api/pages');
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const body = await response.json() as { pages?: readonly AdapterConsolePageEntry[] };
-  const pattern = new RegExp(`adapters[\\\\/]${escapeRegExp(adapterKey)}[\\\\/]pages[\\\\/]`, 'u');
+  const key = escapeRegExp(adapterKey);
+  const patterns = [
+    new RegExp(`adapters[\\/]${key}[\\/]pages[\\/]`, 'u'),
+    new RegExp(`adapter-${key}[\\/]pages[\\/]`, 'u'),
+  ];
   const candidates = (body.pages ?? []).filter(page => page.localName === 'index'
-    && typeof page.owner === 'string' && typeof page.source === 'string' && pattern.test(page.source));
+    && typeof page.owner === 'string' && typeof page.source === 'string'
+    && patterns.some(pattern => typeof page.source === "string" && pattern.test(page.source)));
   const exact = candidates.filter(page => page.route === pathname);
   return exact.length === 1 ? exact[0]?.owner : exact.length === 0 && candidates.length === 1 ? candidates[0]?.owner : undefined;
 }
