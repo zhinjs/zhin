@@ -10,7 +10,7 @@ export class TelegramAdapter extends Adapter<TelegramEndpoint, TelegramEndpointC
     private readonly transport: Pick<TelegramEndpointOptions, 'fetch' | 'requestTimeoutMs'> = {}) { super(); }
   override get configurationIdentityFields(): readonly string[] { return ['id']; }
   override get configurationIdentityProbeFields(): readonly string[] { return ['token', 'apiBaseUrl']; }
-  override get configurationUpdateFields(): readonly string[] { return ['token', 'polling', 'webhook',
+  override get configurationUpdateFields(): readonly string[] { return ['token', 'polling', 'streaming', 'streamingIntervalMs', 'webhook',
     'webhook.domain', 'webhook.path', 'webhook.secretToken', 'allowedUpdates', 'apiBaseUrl']; }
   protected override validateConfiguration(config: TelegramEndpointConfig): void { resolveTelegramConfig(config); }
   protected override async identifyConfiguration(input: TelegramEndpointConfig, signal: AbortSignal): Promise<string> {

@@ -1,5 +1,6 @@
 import { createMessages, resolveLocale, type Locale } from 'zhin.js/i18n';
-import { createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, type EndpointSendRequest } from 'zhin.js/adapter';
+import { createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, type EndpointSendRequest,
+  type EndpointStreaming, type EndpointStreamRequest, type EndpointMessageStream, type EndpointStreamAcknowledgement } from 'zhin.js/adapter';
 /**
  * SandboxWsEndpoint — WebSocket lifecycle and OutboundMessageService bridge for /sandbox.
  */
@@ -161,6 +162,9 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       start: () => this.#start(), open: () => this.#openEndpoint(),
       close: () => this.#close(), stop: () => this.#stop(),
       send: request => this.#send(request),
+      ...(options.defaults.streaming ? { streaming: Object.freeze<EndpointStreaming>({ mode: 'native',
+        minIntervalMs: options.defaults.streamingIntervalMs, supports: request => this.#supportsStream(request),
+        open: request => this.#openStream(request) }) } : {}),
       get transportState() { return readTransportState(); },
     });
   }
@@ -249,6 +253,42 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
       );
     }
     return messageId;
+  }
+
+  #supportsStream(request: Pick<EndpointStreamRequest, 'conversation' | 'source'>): boolean {
+    return !request.conversation.parent && request.conversation.threadId === undefined
+      && ['private', 'group', 'channel'].includes(request.conversation.kind);
+  }
+
+  #openStream(request: EndpointStreamRequest): EndpointMessageStream | undefined {
+    if (!this.#supportsStream(request)) return undefined;
+    const messageId = randomUUID();
+    let revision = 0, timestamp: number | undefined, acceptedText = '';
+    let state: 'active' | 'completed' | 'cancelled' = 'active';
+    let last: EndpointStreamAcknowledgement | undefined;
+    const submit = async (text: string, finish: boolean): Promise<EndpointStreamAcknowledgement> => {
+      if (state === 'completed') {
+        if (finish && text === acceptedText) return last!;
+        throw new EndpointDeliveryError('stream_closed', 'Sandbox reply stream has completed', 'not_sent');
+      }
+      if (state === 'cancelled' || request.signal?.aborted || !this.#open) {
+        throw new EndpointDeliveryError('endpoint_inactive', 'Sandbox reply stream has ended', 'not_sent');
+      }
+      if (!text.startsWith(acceptedText)) throw new EndpointDeliveryError('invalid_payload', 'Sandbox stream text must preserve the confirmed prefix', 'not_sent');
+      const sentAt = timestamp ?? Date.now();
+      this.#send({ conversation: request.conversation, signal: request.signal, payload: {
+        messageId, revision: revision + 1, streaming: !finish, timestamp: sentAt,
+        content: [...(request.prefix ?? []), request.format === 'markdown'
+          ? { type: 'markdown', data: { content: text } } : { type: 'text', data: { text } }],
+      } });
+      timestamp = sentAt; revision += 1; acceptedText = text;
+      last = { status: 'sent', messageId, acceptedText };
+      if (finish) state = 'completed';
+      return last;
+    };
+    return Object.freeze<EndpointMessageStream>({ write: text => submit(text, false), finish: text => submit(text, true),
+      cancel: () => { if (state === 'active') state = 'cancelled'; },
+    });
   }
 
   #subscribers(scene: { readonly type: string; readonly id: string }, echo = false): SandboxConnection[] {

@@ -40,6 +40,10 @@ export interface StreamOptions {
   /** Optional semantic-input observer; the SDK can repeat it for same-input retries. Failures are isolated. */
   onRequest?: (request: LlmRequestObservation) => void;
   onResponse?: (response: unknown) => void;
+  /** Incremental semantic text from the provider stream, before complete() resolves. */
+  onTextDelta?: (text: string) => void;
+  /** A completion owner may prohibit regeneration after publishing partial output. */
+  retryAllowed?: () => boolean;
   /** Override the AI SDK's built-in retry count (SDK default 2). The resilient port sets 0. */
   maxRetries?: number;
 }
@@ -264,7 +268,7 @@ export class LlmApiRuntime implements LlmCompletionPort {
     context: Context,
     options?: StreamOptions,
   ): Promise<AssistantMessage> {
-    return this.consume(this.stream(model, context, options));
+    return this.consume(this.stream(model, context, options), options);
   }
 
   async completeSimple(
@@ -272,12 +276,13 @@ export class LlmApiRuntime implements LlmCompletionPort {
     context: Context,
     options?: StreamOptions,
   ): Promise<AssistantMessage> {
-    return this.consume(this.streamSimple(model, context, options));
+    return this.consume(this.streamSimple(model, context, options), options);
   }
 
-  private async consume(eventStream: AssistantMessageEventStream): Promise<AssistantMessage> {
+  private async consume(eventStream: AssistantMessageEventStream, options?: StreamOptions): Promise<AssistantMessage> {
     let lastMessage: AssistantMessage | undefined;
     for await (const event of eventStream) {
+      if (event.type === 'text_delta' && event.text) options?.onTextDelta?.(event.text);
       if (event.type === 'done' && event.message) lastMessage = event.message;
       if (event.type === 'error') throw event.error ?? new Error('Stream failed');
     }

@@ -8,7 +8,7 @@ export class LarkAdapter extends Adapter<LarkEndpoint, LarkEndpointConfig, LarkC
   readonly #context: AdapterContext<LarkEndpointConfig>;
   constructor(context: AdapterContext<LarkEndpointConfig>) { super(); this.#context = context; }
   override get configurationIdentityFields(): readonly string[] { return ['id', 'appId', 'isFeishu']; }
-  override get configurationUpdateFields(): readonly string[] { return ['appSecret', 'encryptKey', 'verificationToken', 'mode', 'webhookPath', 'apiBaseUrl', 'webApiProxy', 'streamProxy']; }
+  override get configurationUpdateFields(): readonly string[] { return ['appSecret', 'encryptKey', 'verificationToken', 'mode', 'webhookPath', 'apiBaseUrl', 'webApiProxy', 'streamProxy', 'streaming', 'streamingIntervalMs']; }
   override get configurationIdentityProbeFields(): readonly string[] { return ['appSecret', 'apiBaseUrl']; }
   protected override async identifyConfiguration(input: LarkEndpointConfig, signal: AbortSignal, _changed: readonly string[]): Promise<string | undefined> {
     const config = resolveLarkConfig(input), client = new LarkClient({ id: this.descriptor.id, config, signal });

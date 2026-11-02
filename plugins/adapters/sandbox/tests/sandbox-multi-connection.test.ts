@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { EndpointEvent } from 'zhin.js/adapter';
+import { endpointRuntimeOf } from '../../../../packages/im/adapter/src/endpoint-specification.js';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { createEndpointHarness, createTestEndpointEventGateway } from '../../test-utils/endpoint.js';
 import { SandboxWsEndpoint } from '../src/endpoint.js';
@@ -60,6 +61,41 @@ async function fixture(authenticated = false) {
 }
 
 describe('Sandbox scoped multi-connection transport', () => {
+  it('streams one versioned Markdown message to every subscriber without another agent input', async () => {
+    const { endpoint, receive, connect } = await fixture();
+    const first = await connect(), second = await connect(), other = await connect();
+    const scene: Scene = { type: 'group', id: 'stream-room' };
+    await first.subscribe(scene); await second.subscribe(scene); await other.subscribe({ type: 'private', id: scene.id });
+    const transport = endpointRuntimeOf(endpoint.endpoint).streaming!;
+    const stream = transport.open({ conversation: conversation(scene), format: 'markdown' })!;
+    const initial = await stream.write('## Result');
+    const final = await stream.finish('## Result\n\nComplete.');
+    expect(initial).toMatchObject({ status: 'sent', acceptedText: '## Result' });
+    expect(final).toMatchObject({ status: 'sent', messageId: initial.messageId, acceptedText: '## Result\n\nComplete.' });
+    await vi.waitFor(() => expect(first.frames.filter(frame => frame.messageId === initial.messageId)).toHaveLength(2));
+    const frames = first.frames.filter(frame => frame.messageId === initial.messageId);
+    expect(frames.map(frame => frame.revision)).toEqual([1, 2]);
+    expect(frames.map(frame => frame.streaming)).toEqual([true, false]);
+    expect(frames[1]).toMatchObject({ conversation: scene, content: [{ type: 'markdown', data: { content: '## Result\n\nComplete.' } }] });
+    expect(second.frames.filter(frame => frame.messageId === initial.messageId)).toEqual(frames);
+    expect(other.frames.some(frame => frame.messageId === initial.messageId)).toBe(false);
+    expect(receive).not.toHaveBeenCalled();
+    await stream.finish('## Result\n\nComplete.');
+    expect(first.frames.filter(frame => frame.messageId === initial.messageId)).toHaveLength(2);
+  });
+
+  it('does not claim offline stream delivery or send a hidden completion after cancellation', async () => {
+    const { endpoint } = await fixture();
+    const transport = endpointRuntimeOf(endpoint.endpoint).streaming!;
+    const request = { conversation: conversation({ type: 'private', id: 'shared-owner' }), format: 'text' as const };
+    const offline = transport.open(request)!;
+    await expect(offline.write('no reader')).rejects.toMatchObject({ disposition: 'not_sent' });
+    const cancelled = transport.open(request)!;
+    cancelled.cancel();
+    await expect(cancelled.finish('must not send')).rejects.toMatchObject({ disposition: 'not_sent' });
+    expect(transport.open({ ...request, conversation: { ...request.conversation, threadId: 'unsupported-topic' } })).toBeUndefined();
+  });
+
   it('shares a scene without replacing clients or duplicating core input, and isolates other scene kinds', async () => {
     const { endpoint, receive, connect } = await fixture();
     const first = await connect(), second = await connect(), other = await connect();

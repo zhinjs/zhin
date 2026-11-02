@@ -49,6 +49,7 @@ incarnation；AdapterIndex 只投影目录、租约路由和 generation 准入�
 | `adapter-index.ts` | Adapter/Endpoint 目录、generation 投影和租约路由 |
 | `endpoint-{client,control,content,management}.ts` | 原生事件桥接与可选控制、内容、管理端口 |
 | `endpoint-lifecycle.ts` | WebSocket/SSE 的连接、重连与心跳基座 |
+| `endpoint-stream.ts` | 可选的渐进式消息容器、原文确认与预览／正式投递契约 |
 | `endpoint-configuration.ts` | 不含持久化行为的配置行 DTO |
 | `endpoint-commands.ts`、`adapter-runtime-console.ts` | 聊天与 Console 共用的账号管理语义 |
 

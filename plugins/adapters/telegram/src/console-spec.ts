@@ -10,6 +10,8 @@ export const telegramConsoleSpec = {
     { key: 'token', required: true, env: true, description: 'Telegram bot token' },
     { key: 'apiBaseUrl', description: 'Telegram Bot API URL' },
     { key: 'polling', type: 'boolean', description: 'Use long polling; false selects webhook mode' },
+    { key: 'streaming', type: 'boolean', description: 'Show private-chat drafts while generating (default true)' },
+    { key: 'streamingIntervalMs', type: 'number', description: 'Delay between draft updates in milliseconds (default 500)' },
     { key: 'webhook.domain', description: 'Public webhook origin' },
     { key: 'webhook.path', description: 'Local webhook route' },
     { key: 'webhook.secretToken', env: true, description: 'Webhook secret token' },

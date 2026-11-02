@@ -46,6 +46,22 @@ afterEach(() => {
 });
 
 describe('ConversationRuntime context hygiene', () => {
+  it('records one message identity with a later confirmed body and resolves only its unrecalled revision', async () => {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    const ref = { conversation, id: 'stream-reply' };
+    await runtime.recordOutbound({ conversation, content: 'initial' } as never, { status: 'sent', message: ref });
+    await runtime.recordOutboundUpdate({ conversation, content: 'final' } as never, { status: 'sent', message: ref }, 2);
+    const current = await store.append(message('current', 'next', Date.now(), 'user-1'));
+    const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
+    expect(context.blocks.map(block => block.text)).toEqual(['You (this bot) [message_id="stream-reply"]: final']);
+    expect(await runtime.resolveLocal({ kind: 'message', message: ref })).toMatchObject({ status: 'resolved', value: { revision: 2 } });
+    await store.append(recall('stream-reply', Date.now(), 'bot-1'));
+    await runtime.recordOutboundUpdate({ conversation, content: 'late callback' } as never, { status: 'sent', message: ref }, 3);
+    expect(await runtime.resolveLocal({ kind: 'message', message: ref })).toBeUndefined();
+    expect(await store.getMessage(ref)).toMatchObject({ revision: 2, recalled: true });
+  });
+
   it('drops the bot recalling its own outbound activity indicator', async () => {
     const store = new MemoryConversationEventStore();
     const runtime = new ConversationRuntime(store);

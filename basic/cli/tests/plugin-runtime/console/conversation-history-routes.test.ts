@@ -71,38 +71,38 @@ it('reads full canonical inbound and sent bot text without requiring an Agent se
   expect(data).toMatchObject({ hasMore: false, nextBeforeSequence: null });
 });
 
-it('paginates fifty actual events, including skipped scene events, with a stable exclusive sequence cursor', async () => {
+it('paginates fifty current message entities, excluding non-message events, with a stable exclusive sequence cursor', async () => {
   for (let index = 1; index <= 56; index++) {
     await events.append(index === 7 ? { type: 'member.joined', eventId: 'joined', conversation, timestamp: 7, member: { id: 'member' } } : message(`message-${index}`));
   }
-  const read = vi.spyOn(events, 'listBetween');
+  const read = vi.spyOn(events, 'listMessages');
   const request = await start();
   const first = (await (await request()).json()).data;
   expect(first.items).toHaveLength(50);
-  expect(first.items.map((item: any) => item.sequence)).toEqual(Array.from({ length: 50 }, (_, index) => index + 7));
-  expect(first.items[0]).toEqual({ sequence: 7, type: 'member.joined', timestamp: 7 });
-  expect(first).toMatchObject({ hasMore: true, nextBeforeSequence: 7 });
-  expect(read).toHaveBeenLastCalledWith(conversation, 0, 56, 51);
+  expect(first.items.map((item: any) => item.sequence)).toEqual([6, ...Array.from({ length: 49 }, (_, index) => index + 8)]);
+  expect(first.items[0]).toMatchObject({ sequence: 6, type: 'message.created', message: { ref: { id: 'message-6' } } });
+  expect(first).toMatchObject({ hasMore: true, nextBeforeSequence: 6 });
+  expect(read).toHaveBeenLastCalledWith(conversation, 57, 51);
   await events.append(message('arrived-later'));
   const second = (await (await request({ sessionKey, beforeSequence: String(first.nextBeforeSequence) })).json()).data;
-  expect(second.items.map((item: any) => item.sequence)).toEqual([1, 2, 3, 4, 5, 6]);
+  expect(second.items.map((item: any) => item.sequence)).toEqual([1, 2, 3, 4, 5]);
   expect(second).toMatchObject({ hasMore: false, nextBeforeSequence: null });
-  expect(read).toHaveBeenLastCalledWith(conversation, 0, 6, 51);
+  expect(read).toHaveBeenLastCalledWith(conversation, 6, 51);
 });
 
 it('clamps even a large valid cursor to the latest stored sequence rather than passing an int4-overflow sentinel to the reader', async () => {
   await events.append(message('first'));
   await events.append(message('latest'));
-  const listBetween = events.listBetween.bind(events);
-  const read = vi.spyOn(events, 'listBetween').mockImplementationOnce(async (...args) => {
+  const listMessages = events.listMessages.bind(events);
+  const read = vi.spyOn(events, 'listMessages').mockImplementationOnce(async (...args) => {
     await events.append(message('arrived-during-read'));
-    return listBetween(...args);
+    return listMessages(...args);
   });
   const request = await start();
   const response = await request({ sessionKey, beforeSequence: '9007199254740991' });
   expect(response.status).toBe(200);
   expect((await response.json()).data.items.map((item: any) => item.message.ref.id)).toEqual(['first', 'latest']);
-  expect(read).toHaveBeenCalledExactlyOnceWith(conversation, 0, 2, 51);
+  expect(read).toHaveBeenCalledExactlyOnceWith(conversation, 3, 51);
 });
 
 it.each([
@@ -160,7 +160,8 @@ it('preserves recall references and projects safe media and descriptions without
       { type: 'text', data: { text: 'Forwarded text' } }, { type: 'image', data: {} },
     ] }] } }, { type: 'unknown', data: {} },
   ]);
-  expect(body.data.items[1].messageRef).toEqual({ conversation, id: 'media' });
+  expect(body.data.items).toHaveLength(1);
+  expect(body.data.items[0].message).toMatchObject({ ref: { conversation, id: 'media' }, recalled: true });
   expect(body.data.conversation).toEqual(conversation);
   expect(JSON.stringify(body)).not.toMatch(/SECRET|PRIVATE|PASSWORD|platform-file-id/u);
 });
@@ -213,4 +214,37 @@ it('keeps the snapshot operation open through asynchronous reads and releases it
   expect(failed.status).toBe(503);
   expect(await failed.text()).not.toContain('PRIVATE');
   expect(active).toBe(0);
+});
+
+it('pages by creation while projecting the latest revision and recall, even if updates arrived after the cursor', async () => {
+  for (let index = 1; index <= 55; index++) await events.append(message(`message-${index}`));
+  const request = await start();
+  const first = (await (await request()).json()).data;
+  expect(first.items.map((item: any) => item.sequence)).toEqual(Array.from({ length: 50 }, (_, index) => index + 6));
+  expect(first.nextBeforeSequence).toBe(6);
+  const updated = { ref: { conversation, id: 'message-1' }, timestamp: 9, actor: { id: 'another-actor' },
+    revision: 3, segments: [{ type: 'text' as const, data: { text: 'latest confirmed' } }] };
+  await events.append({ type: 'message.updated', eventId: 'newest', conversation, timestamp: 9, message: updated });
+  await events.append({ type: 'message.updated', eventId: 'stale', conversation, timestamp: 10,
+    message: { ...updated, revision: 2, segments: [{ type: 'text', data: { text: 'stale body' } }] } });
+  await events.append({ type: 'message.recalled', eventId: 'recalled-old', conversation, timestamp: 11,
+    message: { conversation, id: 'message-2' } });
+  const older = (await (await request({ sessionKey, beforeSequence: String(first.nextBeforeSequence) })).json()).data;
+  expect(older.items.map((item: any) => item.sequence)).toEqual([1, 2, 3, 4, 5]);
+  expect(older.items[0].message).toMatchObject({ actor: { id: 'alice' }, timestamp: 7,
+    revision: 3, segments: [{ type: 'text', data: { text: 'latest confirmed' } }] });
+  expect(older.items[1].message).toMatchObject({ ref: { id: 'message-2' }, recalled: true });
+  expect(older).toMatchObject({ hasMore: false, nextBeforeSequence: null });
+});
+
+it('retains event pagination for readers without entity projection', async () => {
+  await events.append(message('original'));
+  await events.append({ type: 'member.joined', eventId: 'joined-legacy', conversation, timestamp: 8, member: { id: 'member' } });
+  const listBetween = vi.fn(events.listBetween.bind(events));
+  const reader: ConversationEventReader = { listBetween,
+    getMessage: events.getMessage.bind(events), getCursor: events.getCursor.bind(events) };
+  const request = await start(runtime(reader));
+  const body = (await (await request()).json()).data;
+  expect(body.items.map((item: any) => item.type)).toEqual(['message.created', 'member.joined']);
+  expect(listBetween).toHaveBeenCalledExactlyOnceWith(conversation, 0, 2, 51);
 });

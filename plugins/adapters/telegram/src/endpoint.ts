@@ -1,4 +1,5 @@
 import { TelegramClient, type TelegramFetch } from './telegram-client.js';
+import { createTelegramStreaming } from './streaming.js';
 import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, createEndpointLifecycle,
   type EndpointLifecycle, type EndpointContentPort, type EndpointContentResolveContext,
@@ -114,6 +115,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
       get name() { return options.config.id; }, get transportState() { return endpoint.#transportState; },
       control: this.#control, content: this.#content,
+      streaming: options.config.streaming !== false ? createTelegramStreaming(() => this, options.config.streamingIntervalMs) : undefined,
       profile: createTelegramSelfProfile({ client: this,
         current: () => this.#botName === undefined ? {} : { nickname: this.#botName },
         nicknameChanged: nickname => { this.#botName = nickname; },

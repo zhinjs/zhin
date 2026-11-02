@@ -2,6 +2,7 @@ import { createFeaturePrivateToken, featureId, type CapabilityId, type PluginId 
 import type { AdapterCapability, AdapterOperation, AdapterSegmentPolicy } from './definition.js';
 import type { AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
+import type { EndpointStreaming } from './endpoint-stream.js';
 
 /** Persistent account identity is independent of its reusable display/config name. */
 export interface EndpointDesiredRecord {
@@ -135,6 +136,8 @@ export interface EndpointChildLease<E extends AnyEndpoint = AnyEndpoint> {
   run<T>(operation: (endpoint: E, signal: AbortSignal) => T | Promise<T>): Promise<T>;
   /** Outbound readiness is checked even when the lease was captured for an inbound callback. */
   send(request: EndpointSendRequest): Promise<EndpointSendResult>;
+  /** Configured delivery mode, scoped to this concrete account incarnation. */
+  readonly streaming?: EndpointStreaming;
   release(): void;
 }
 

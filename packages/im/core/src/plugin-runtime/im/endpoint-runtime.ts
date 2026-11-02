@@ -1,4 +1,7 @@
 import { operationEndpoint } from './operation-endpoint.js';
+import { createCoreReplyStream } from './progressive-reply.js';
+import { supportsIncrementalOutbound } from './runtime-middleware.js';
+import type { OutboundDeliveryExecution } from './outbound-delivery-runtime.js';
 import type { CaptureEndpointOperationInput, CapturedEndpointOperation } from './captured-endpoint-operation.js';
 export type { CaptureEndpointOperationInput, CapturedEndpointOperation } from './captured-endpoint-operation.js';
 import {
@@ -90,7 +93,7 @@ interface EndpointRuntimeContext {
   /** Independently retain the current operation snapshot for detached source work. */
   retain(): SnapshotLease;
   release(lease: SnapshotLease): void;
-  send(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt>;
+  send(request: SendRequest, snapshot: RuntimeSnapshot, execution?: OutboundDeliveryExecution): Promise<DeliveryReceipt>;
 }
 
 /** Owns generation-leased Endpoint discovery, control, management, and Console delivery. */
@@ -218,6 +221,26 @@ export class EndpointRuntime {
                 ...(options?.locale ? { locale: options.locale } : {}), [operationEndpoint]: sendLease }, snapshot.value);
             } finally { sendLease.release(); }
           } finally { releaseCall(); }
+        },
+        openReplyStream: (options = {}) => {
+          assertActive();
+          if (!captured.streaming || !supportsIncrementalOutbound(snapshot.value, target.endpoint.adapter)) return undefined;
+          if (captured.streaming.supports?.({ conversation: target, source: options.source }) === false) return undefined;
+          const releaseCall = retainCall();
+          let streamLease: ReturnType<AdapterIndex['acquire']> | undefined;
+          try {
+            streamLease = index.acquire(id, captured.signal, captured.endpoint);
+            const retained = streamLease;
+            return createCoreReplyStream({ endpoint: retained, streaming: retained.streaming!, options,
+              deliver: (content, execution) => {
+                // Opening admitted this whole stream; capture.release only closes new admission.
+                retained.assertActive();
+                return this.context.send({ conversation: target, requester, content,
+                  ...(options.locale ? { locale: options.locale } : {}), [operationEndpoint]: retained }, snapshot.value, execution);
+              },
+              release: () => { try { retained.release(); } finally { releaseCall(); } },
+            });
+          } catch (error) { streamLease?.release(); releaseCall(); throw error; }
         },
         release: () => {
           if (released) return;

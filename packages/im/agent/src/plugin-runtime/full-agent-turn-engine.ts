@@ -1,7 +1,11 @@
+import type { CoreReplyStream } from '@zhin.js/core/runtime';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
+import { renderAgentOutput } from '../outbound/agent-output.js';
+import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { bindActivityFeedbackTurnSource, inheritActivityFeedbackSource } from '../activity-feedback/operation-source.js';
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
 import { MessageAliasTable, type AgentMessage, type Usage } from '@zhin.js/ai';
-import { conversationContextMessage, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
+import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
 import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
 import { SKILL_DISCLOSURE_PROMPT_HINT } from '../skill/progressive-disclosure.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
@@ -13,6 +17,9 @@ import { isTurnTerminalEvent, type TurnEndEvent, type TurnEvent, type TurnTermin
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
+import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../core/reply-phase.js';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import type { DeliveryOutcome } from '../turn/turn-ingress.js';
 import type { AgentCore } from '../core/agent-core.js';
 import { createInteractiveRun } from '../core/interactive-run.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime, type TurnToolRuntimeOptions } from '../tool/turn-tool-runtime.js';
@@ -27,7 +34,7 @@ import type {
   AgentTurnEngine,
   AgentTurnExecutionContext,
 } from './agent-runtime.js';
-import type { TurnTerminalProjection } from '../turn/execute-agent-turn.js';
+import { publishProjectionFailure, type TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
@@ -300,6 +307,52 @@ async function* runInteractiveTurn(
     segments: context.capabilities.promptSegments,
   });
 
+  let replyStream: CoreReplyStream | undefined;
+  const replyStreams = new Map<string, CoreReplyStream>();
+  const phaseFacts = new Map<string, ReplyPhaseFacts>();
+  const executions: BufferedExecution[] = [];
+  let phaseSequence = 0;
+  const replyLifetime = new AbortController();
+  const openPhase: ReplyPhaseLifecycle['open'] = () => {
+    const id = `${context.turn.identity.turnId}:answer:${++phaseSequence}`;
+    const stream = context.turn.intent.kind === 'observe' ? undefined : reply?.openStream?.({ phaseId: id });
+    if (stream) { replyStreams.set(id, stream); replyStream = stream; }
+    return { id, ...(stream ? { stream } : {}) };
+  };
+  const settlePhase: ReplyPhaseLifecycle['settle'] = async phase => {
+    const existing = phaseFacts.get(phase.id);
+    if (existing) return existing;
+    if (!reply) throw new Error('Answer phase has no reply port');
+    const answer = { intent: 'answer' as const, phaseId: phase.id };
+    let delivery: DeliveryOutcome, confirmedOutput: AgentOutputElement[];
+    if (phase.run) {
+      ({ delivery, confirmedOutput } = await deliverProgressiveReply({ run: phase.run, snapshot: phase.snapshot }, phase.output, reply, context.turn.input.locale, answer));
+    } else {
+      await replyStreams.get(phase.id)?.cancel();
+      try { delivery = await reply.send(phase.output, answer); }
+      catch (error) {
+        const known = error instanceof EndpointDeliveryError;
+        delivery = { status: 'failed', code: known ? error.code : 'reply_phase_unknown', retryable: false,
+          ...(!known || error.disposition === 'unknown' ? { deliveryUnknown: true as const } : {}) };
+      }
+      confirmedOutput = delivery.status === 'sent' ? [...phase.output] : [];
+    }
+    const messages = 'messages' in delivery ? delivery.messages ?? [] : [];
+    const messageId = messages.find(message => message !== null)?.id ?? (delivery.status === 'sent' ? delivery.messageId : undefined);
+    const stopped = delivery.status !== 'sent' && !(delivery.status === 'suppressed' && !phase.output.length);
+    const facts: ReplyPhaseFacts = {
+      delivery, confirmedOutput, ...(messageId ? { messageId } : {}),
+      ...(messages.length ? { messageIds: messages.map(message => message?.id ?? null) } : {}),
+      ...(delivery.status === 'sent' ? { contextRefs: deliveredReplyContextRefs(prep.sessionId, context.turn.identity.turnId, plannedReplyTexts(confirmedOutput), delivery, phase.id) } : {}),
+      ...(stopped ? { stopped: true } : {}),
+    };
+    phaseFacts.set(phase.id, facts);
+    const told = renderAgentOutput(confirmedOutput);
+    if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
+      deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
+    return facts;
+  };
+  const cancelReplyStreams = async () => { await Promise.all([...replyStreams.values()].map(stream => stream.cancel())); };
   const stream = host.promptController.scheduleStream({
     turnId: context.turn.identity.turnId,
     intent: context.turn.intent,
@@ -309,7 +362,22 @@ async function* runInteractiveTurn(
     sessionId: prep.sessionId,
     userMessages,
     signal: context.turn.signal,
-    execute: (initialMessages, hooks, signal) => options.core.runText({
+    execute: (initialMessages, hooks, signal) => (async function* () {
+      // A follow-up execute must retain accepted input/tool history. Only a settled phase
+      // may contribute an answer; complete-message mode has not delivered its candidate yet.
+      const previous = executions.at(-1);
+      if (previous && !previous.projected) {
+        previous.projected = true;
+        await previous.result.projectConversation?.(previous.result.replyPhaseId ? undefined : { confirmedOutput: [] });
+      }
+      const firstPhase = openPhase();
+      let firstAvailable = true;
+      const completion = yield* bufferTerminal(options.core.runText({
+      replyStream: firstPhase.stream,
+      ...(firstPhase.stream ? { replyPhases: {
+        open: () => { if (firstAvailable) { firstAvailable = false; return firstPhase; } return openPhase(); },
+        settle: settlePhase,
+      } } : {}),
       host,
       sessionId: prep.sessionId,
       userMessageExtra: prep.turnUser.userMessageExtra,
@@ -330,7 +398,7 @@ async function* runInteractiveTurn(
       modelCandidates: prompt.modelCandidates,
       initialMessages,
       promptHooks: hooks,
-      signal,
+      signal: AbortSignal.any([signal, replyLifetime.signal]),
       deferredStats: plan.deferredStats,
       deferredController: plan.controller,
       toolCatalog: plan.catalog,
@@ -339,7 +407,10 @@ async function* runInteractiveTurn(
       progressSink: createProgressSink(host, context.turn, reply),
       interactiveRun,
       generation: context.turn.identity.generation,
-    }),
+      }));
+      executions.push(completion);
+      return completion.result;
+    })(),
   });
 
   const projectActivity = payload ? createTurnActivityProjector({
@@ -348,22 +419,39 @@ async function* runInteractiveTurn(
     thinkingPreview: host.config.thinkingPreview === true,
     thinkingMaxLength: host.config.thinkingPreviewMaxLength ?? 200,
   }) : undefined;
-  const completion = yield* bufferTerminal(stream, projectActivity);
+  let projectionOwnsReply = false;
+  try {
+  const completion = yield* collectPromptExecutions(stream, executions, projectActivity);
+  if (phaseFacts.size && completion.terminal.type === 'turn_end') {
+    const output = [...phaseFacts.values()].flatMap(facts => facts.confirmedOutput);
+    completion.terminal = { ...completion.terminal, output };
+    completion.result = { ...completion.result, reply: renderAgentOutput(output), output };
+  }
   yield completion.terminal;
+  projectionOwnsReply = true;
   return {
     project: async () => {
+      let projectionError: Error | undefined;
       try {
         // The perception pre-pass is billed to the same subject as the turn itself.
         if (!interactiveRun) host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
         let deliveredMessageId: string | undefined;
         let deliveredMessageIds: readonly (string | null)[] | undefined;
         let deliveredContextRefs: readonly string[] | undefined;
+        let confirmedOutput: AgentOutputElement[] | undefined = phaseFacts.size
+          ? [...phaseFacts.values()].flatMap(facts => facts.confirmedOutput) : undefined;
         if (completion.terminal.type === 'turn_end' && reply) {
           const outbound = completion.terminal.output.length > 0
             ? completion.terminal.output
             : buildTextTurnOutbound(completion.result.reply, completion.result);
-          const plannedTexts = plannedReplyTexts(outbound);
-          const delivery = await reply.send(outbound);
+          const progressive = completion.result.progressive;
+          if (!progressive && !phaseFacts.size) await replyStream?.cancel();
+          const progressiveDelivery = phaseFacts.size ? aggregateReplyPhases([...phaseFacts.values()])
+            : progressive ? await deliverProgressiveReply(progressive, outbound, reply, context.turn.input.locale) : undefined;
+          confirmedOutput = progressiveDelivery?.confirmedOutput;
+          const actualOutput = confirmedOutput ?? outbound;
+          const plannedTexts = plannedReplyTexts(actualOutput);
+          const delivery = progressiveDelivery?.delivery ?? await reply.send(outbound);
           if (delivery.status === 'sent') {
             deliveredMessageId = delivery.messageId;
             deliveredMessageIds = delivery.messages?.map(message => message?.id ?? null);
@@ -376,10 +464,16 @@ async function* runInteractiveTurn(
             || (delivery.status === 'suppressed' && outbound.length > 0)
           ) {
             const code = 'code' in delivery ? delivery.code : delivery.status;
-            throw new Error(`Synchronous reply projection failed: ${code}`);
+            const error = new Error(`Synchronous reply projection failed: ${code}`);
+            if (!progressive && !phaseFacts.size) throw error;
+            projectionError = error;
           }
-          if (delivery.status === 'sent' && completion.result.reply.trim()) {
-            host.toldLedger?.record(prep.sessionId, completion.result.reply, 'reply', context.turn.identity.turnId);
+          const told = confirmedOutput ? renderAgentOutput(confirmedOutput) : delivery.status === 'sent' ? completion.result.reply : '';
+          if (told.trim() && !phaseFacts.size) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId);
+          if (progressive || phaseFacts.size) {
+            const messages = 'messages' in delivery ? delivery.messages ?? [] : [];
+            deliveredMessageIds = messages.map(message => message?.id ?? null);
+            deliveredMessageId = messages.find(message => message !== null)?.id;
           }
         }
         // 画像 + 好感度：回复已发出后异步写，不阻塞、不抛错。
@@ -392,7 +486,8 @@ async function* runInteractiveTurn(
           );
         } else {
           await completion.result.projectConversation?.(deliveredMessageId || deliveredMessageIds?.length || deliveredContextRefs?.length
-            ? { messageId: deliveredMessageId, messageIds: deliveredMessageIds, contextRefs: deliveredContextRefs } : undefined);
+            ? { messageId: deliveredMessageId, messageIds: deliveredMessageIds, contextRefs: deliveredContextRefs,
+                ...(confirmedOutput ? { confirmedOutput } : {}) } : confirmedOutput ? { confirmedOutput } : undefined);
         }
         await sessionSystem.touchAfterTurn(host, prep.sessionId);
         if (
@@ -414,16 +509,19 @@ async function* runInteractiveTurn(
           iterations: completion.result.iterations,
           model: completion.result.model,
           userInput: prep.turnUser.rawContent,
-          output: completion.result.reply,
+          output: confirmedOutput ? renderAgentOutput(confirmedOutput) : completion.result.reply,
           thinking: completion.result.thinking,
         });
+        if (projectionError) throw projectionError;
       } finally {
+        replyLifetime.abort();
+        await cancelReplyStreams();
         // Stop activity-feedback AFTER the reply is sent. Awaiting icqq
         // delReaction (packet timeout) before send would block the AI reply.
-        if (completion.terminal.type === 'error') {
+        if (completion.terminal.type === 'error' || projectionError) {
           emitActivityStop(host, payload, {
             event: 'ai.processing.error',
-            extra: { error: completion.terminal.error.message },
+            extra: { error: projectionError?.message ?? (completion.terminal.type === 'error' ? completion.terminal.error.message : 'Reply delivery failed') },
             reason: 'processing_error',
           });
         } else {
@@ -438,6 +536,20 @@ async function* runInteractiveTurn(
       }
     },
   };
+  } finally {
+    if (!projectionOwnsReply) {
+      replyLifetime.abort();
+      await cancelReplyStreams();
+      for (const execution of executions) {
+        if (execution.projected || !execution.result.replyPhaseId || !phaseFacts.has(execution.result.replyPhaseId)) continue;
+        // The phase has its own delivery facts even when the enclosing Turn cannot commit a terminal.
+        // Never retry a partially applied projection, and never replace the original cancellation/error.
+        execution.projected = true;
+        try { await execution.result.projectConversation?.(); }
+        catch (error) { await publishProjectionFailure(context.turn, error); }
+      }
+    }
+  }
 }
 
 async function* runScheduleTurn(
@@ -593,11 +705,98 @@ function createTurnPromptRegistry(
   return registry;
 }
 
+interface BufferedExecution {
+  terminal: TurnTerminalEvent;
+  result: AgentLoopTurnResult;
+  projected?: true;
+}
+
+/** Each Core execute retains its single terminal contract; PromptController may execute follow-ups. */
+async function* collectPromptExecutions(
+  stream: AsyncGenerator<TurnEvent, AgentLoopTurnResult>,
+  executions: BufferedExecution[],
+  onEvent?: (event: TurnEvent) => void,
+): AsyncGenerator<TurnEvent, BufferedExecution> {
+  let control: TurnTerminalEvent | undefined;
+  try {
+    while (true) {
+      const step = await stream.next();
+      if (step.done) {
+        if (!executions.length) {
+          if (!control) throw new Error('Full AgentCore completed without a terminal TurnEvent');
+          return { terminal: control, result: step.value };
+        }
+        const last = executions.at(-1)!;
+        const usage = executions.reduce((sum, execution) => ({
+          prompt_tokens: sum.prompt_tokens + execution.result.usage.prompt_tokens,
+          completion_tokens: sum.completion_tokens + execution.result.usage.completion_tokens,
+          total_tokens: sum.total_tokens + execution.result.usage.total_tokens,
+        }), zeroUsage());
+        const result: AgentLoopTurnResult = { ...last.result, usage,
+          iterations: executions.reduce((sum, execution) => sum + execution.result.iterations, 0),
+          toolCalls: executions.flatMap(execution => execution.result.toolCalls),
+          projectConversation: async delivered => {
+            for (const execution of executions) {
+              if (execution.projected) continue;
+              execution.projected = true;
+              await execution.result.projectConversation?.(execution.result.replyPhaseId ? undefined
+                : execution === last ? delivered : { confirmedOutput: [] });
+            }
+          },
+        };
+        const terminal = last.terminal.type === 'turn_end'
+          ? { ...last.terminal, usage: sumTerminalUsage(executions) } : last.terminal;
+        return { terminal, result };
+      }
+      if (isTurnTerminalEvent(step.value)) {
+        if (control || executions.length) throw new Error('PromptController emitted an unexpected terminal');
+        control = step.value;
+      } else { onEvent?.(step.value); yield step.value; }
+    }
+  } finally { await stream.return(undefined as never); }
+}
+
+function sumTerminalUsage(executions: readonly BufferedExecution[]): TurnEndEvent['usage'] {
+  if (executions.length === 1 && executions[0]!.terminal.type === 'turn_end') return executions[0]!.terminal.usage;
+  const usage: TurnEndEvent['usage'] = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  for (const { terminal } of executions) {
+    if (terminal.type !== 'turn_end') continue;
+    usage.promptTokens += terminal.usage.promptTokens;
+    usage.completionTokens += terminal.usage.completionTokens;
+    usage.totalTokens += terminal.usage.totalTokens;
+    for (const key of ['cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens'] as const) {
+      if (terminal.usage[key] !== undefined) usage[key] = (usage[key] ?? 0) + terminal.usage[key]!;
+    }
+  }
+  const reported = executions.flatMap(execution => execution.terminal.type === 'turn_end' ? [execution.terminal.usage.reported] : []);
+  if (reported.some(value => value !== undefined)) {
+    usage.reported = Object.fromEntries((['input', 'output', 'totalTokens', 'cacheRead', 'cacheWrite', 'reasoning'] as const)
+      .flatMap(key => reported.some(value => value?.[key] !== undefined)
+        ? [[key, reported.every(value => value?.[key] === true)]] : []));
+  }
+  return usage;
+}
+
+function aggregateReplyPhases(phases: readonly ReplyPhaseFacts[]): { delivery: DeliveryOutcome; confirmedOutput: AgentOutputElement[] } {
+  const confirmedOutput = phases.flatMap(phase => phase.confirmedOutput);
+  const messages = phases.flatMap(phase => 'messages' in phase.delivery ? phase.delivery.messages ?? [] : []);
+  const last = (phases.find(phase => phase.stopped) ?? phases.at(-1)!).delivery;
+  if (last.status === 'sent' || last.status === 'suppressed' && confirmedOutput.length) {
+    return { confirmedOutput, delivery: { status: 'sent', messages,
+      ...(messages.find(message => message !== null) ? { messageId: messages.find(message => message !== null)!.id } : {}),
+      messageContexts: phases.flatMap(phase => phase.delivery.status === 'sent' ? phase.delivery.messageContexts ?? [] : []),
+    } };
+  }
+  return { confirmedOutput, delivery: last.status === 'suppressed' ? last : { ...last, messages,
+    ...(last.status === 'failed' && confirmedOutput.length ? { deliveryPartial: true as const, retryable: false } : {}) } };
+}
+
 async function* bufferTerminal(
   stream: AsyncGenerator<TurnEvent, AgentLoopTurnResult>,
   onEvent?: (event: TurnEvent) => void,
 ): AsyncGenerator<TurnEvent, { terminal: TurnTerminalEvent; result: AgentLoopTurnResult }> {
   let buffered: TurnTerminalEvent | undefined;
+  try {
   while (true) {
     const step = await stream.next();
     if (step.done) {
@@ -613,6 +812,7 @@ async function* bufferTerminal(
     onEvent?.(step.value);
     yield step.value;
   }
+  } finally { await stream.return(undefined as never); }
 }
 
 function activityPayloadFromImTurn(

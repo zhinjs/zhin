@@ -53,7 +53,7 @@ export class ConversationRuntime {
   ): Promise<ConversationResolution | undefined> {
     if (reference.kind !== 'message') return undefined;
     const message = await this.#events.getMessage(reference.message);
-    return message && message.contentStatus !== 'unavailable'
+    return message && !message.recalled && message.contentStatus !== 'unavailable'
       ? Object.freeze({ status: 'resolved', reference, value: message })
       : undefined;
   }
@@ -81,12 +81,12 @@ export class ConversationRuntime {
     const excluded = new Set<string>(excludeMessageId ? [excludeMessageId] : []);
     for (const entry of events) {
       // Only message timestamps are runtime-assigned; notice clocks are adapter-defined.
-      if (entry.event.type === 'message.created' && entry.event.timestamp < notBefore) continue;
+      if ((entry.event.type === 'message.created' || entry.event.type === 'message.updated') && entry.event.timestamp < notBefore) continue;
       if (await this.#isOwnRecall(entry.event)) {
         if (entry.event.type === 'message.recalled') excluded.add(entry.event.message.id);
         continue;
       }
-      if (entry.event.type === 'message.created'
+      if ((entry.event.type === 'message.created' || entry.event.type === 'message.updated')
         && this.#interactionAnswers.has(messageRefKey(entry.event.message.ref))) continue;
       relevant.push(entry);
     }
@@ -170,6 +170,24 @@ export class ConversationRuntime {
         ...(canonicalContent !== 'unavailable' && canonicalContent?.length && canonicalContent.every(segment => segment.type === 'text') && receipt.outboundTextDigest ? {
           outboundTextDigest: receipt.outboundTextDigest,
         } : {}),
+      }),
+    }));
+  }
+
+  /** Records a confirmed replacement body without inventing another physical message. */
+  async recordOutboundUpdate(request: SendRequest, receipt: DeliveryReceipt, revision: number, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void> {
+    if (receipt.status !== 'sent' || !receipt.message?.id) return;
+    const original = await this.#events.getMessage(receipt.message);
+    if (!original) throw new Error('Cannot record an update before its original message');
+    const { contentStatus: _status, outboundTextDigest: _digest, ...identity } = original;
+    await this.#events.append(Object.freeze({
+      eventId: `message:${messageRefKey(receipt.message)}:revision:${revision}`,
+      conversation: request.conversation, timestamp: Date.now(), type: 'message.updated',
+      message: Object.freeze({ ...identity, revision,
+        segments: canonicalContent === 'unavailable' ? [] : canonicalContent ?? segmentsFromContent(request.content),
+        ...(canonicalContent === 'unavailable' ? { contentStatus: 'unavailable' as const } : {}),
+        ...(canonicalContent !== 'unavailable' && canonicalContent?.length && canonicalContent.every(segment => segment.type === 'text') && receipt.outboundTextDigest
+          ? { outboundTextDigest: receipt.outboundTextDigest } : {}),
       }),
     }));
   }
@@ -338,10 +356,23 @@ function aggregateConversationContext(
 ): readonly ConversationContextBlock[] {
   const ordinary: ConversationContextBlock[] = [];
   const noisy = new Map<string, { sequence: number; event: ConversationEvent; count: number }>();
+  const latestMessages = new Map<string, SequencedConversationEvent>();
+  const recalled = new Set<string>();
+  for (const entry of events) {
+    const event = entry.event;
+    if (event.type === 'message.recalled') recalled.add(messageRefKey(event.message));
+    if (event.type !== 'message.created' && event.type !== 'message.updated') continue;
+    const key = messageRefKey(event.message.ref), previous = latestMessages.get(key);
+    if (recalled.has(key)) continue;
+    const previousRevision = previous && (previous.event.type === 'message.created' || previous.event.type === 'message.updated')
+      ? previous.event.message.revision ?? 0 : -1;
+    if ((event.message.revision ?? 0) > previousRevision) latestMessages.set(key, entry);
+  }
   for (const { sequence, event } of events) {
     // #996: these reach the model only through the short ephemeral `[Scene events]` block.
     if (SCENE_ONLY_EVENT_TYPES.has(event.type)) continue;
-    if (event.type === 'message.created') {
+    if (event.type === 'message.created' || event.type === 'message.updated') {
+      if (latestMessages.get(messageRefKey(event.message.ref))?.sequence !== sequence) continue;
       if (excluded.has(event.message.ref.id)) continue;
       const text = describeConversationMessage(event.message);
       if (!text) continue;
@@ -404,6 +435,7 @@ function describeConversationEvent(event: ConversationEvent): string {
     case 'member.role_changed':
       return `${event.member.displayName ?? event.member.id} (${event.member.id}) role ${event.role} was ${event.enabled ? 'enabled' : 'disabled'}${actor ? ` by ${actor}` : ''}.`;
     case 'message.created':
+    case 'message.updated':
     case 'scene.join_requested':
     case 'scene.notice_updated':
     case 'member.card_changed':

@@ -1,8 +1,9 @@
 import type { AgentRunIdentity } from '@zhin.js/ai/agent-stream';
 import type { JournalStore } from '@zhin.js/ai/journal-store';
-import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
+import type { CoreReplyStream, ReplyStreamSnapshot } from '@zhin.js/core/runtime';
+import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt, type MessageRef } from '@zhin.js/im-contract';
 import type { AgentOutputElement } from '../outbound/agent-output.js';
-import type { DeliveryOutcome, ReplyPort, TurnOrigin } from '../turn/turn-ingress.js';
+import type { DeliveryOutcome, ReplyAnswerContext, ReplyPort, TurnOrigin } from '../turn/turn-ingress.js';
 import { randomUUID } from 'node:crypto';
 
 export interface TurnRecoveryIdentity {
@@ -13,6 +14,7 @@ export interface TurnRecoveryIdentity {
 
 export interface TurnDeliveryRecord extends TurnRecoveryIdentity {
   readonly attemptId?: string;
+  readonly phaseId?: string;
   readonly phase?: 'started' | 'settled';
   readonly recordedAt: number;
   readonly status: 'sent' | 'not_sent' | 'unknown' | 'partial';
@@ -55,21 +57,35 @@ export function recordFinalReply(
 ): ReplyPort {
   return Object.freeze({
     ...(reply.segments ? { segments: reply.segments } : {}),
-    async send(output: readonly AgentOutputElement[]) {
+    ...(reply.openStream ? { openStream: (context?: Pick<ReplyAnswerContext, 'phaseId'>) => {
+      const stream = context ? reply.openStream!(context) : reply.openStream!();
+      return stream ? recordStream(stream, context?.phaseId) : undefined;
+    } } : {}),
+    async send(output: readonly AgentOutputElement[], context?: ReplyAnswerContext) {
       // Progress sends enter before terminal and must never become final result receipts.
-      const final = terminalCommitted();
+      const final = context?.intent === 'answer' || terminalCommitted();
+      const answerIdentity = { ...identity, ...(context?.phaseId ? { phaseId: context.phaseId } : {}) };
       const resources = final ? resultResources(output) : [];
       const attemptId = final ? randomUUID() : undefined;
-      if (final) await persist({ ...identity, attemptId, phase: 'started', recordedAt: Date.now(), status: 'unknown', outcome: 'pending', messages: [], resources });
+      if (final) await persist({ ...answerIdentity, attemptId, phase: 'started', recordedAt: Date.now(), status: 'unknown', outcome: 'pending', messages: [], resources });
       let outcome: DeliveryOutcome;
-      try { outcome = await reply.send(output); }
+      try { outcome = await (context ? reply.send(output, context) : reply.send(output)); }
       catch (error) {
-        if (final) await persist({ ...identity, attemptId, phase: 'settled', recordedAt: Date.now(), status: 'unknown', outcome: 'threw', messages: [], resources });
+        if (final) {
+          const known = error instanceof EndpointDeliveryError;
+          const conversation = identity.origin.conversation;
+          const messages = known ? error.parts?.map(part => part.messageId && conversation
+            ? { conversation, id: part.messageId } : null) ?? [] : [];
+          const unknown = !known || error.disposition === 'unknown';
+          await persist({ ...answerIdentity, attemptId, phase: 'settled', recordedAt: Date.now(),
+            status: messages.length ? 'partial' : unknown ? 'unknown' : 'not_sent', outcome: 'threw',
+            ...(known ? { code: error.code } : {}), ...(unknown ? { deliveryUnknown: true as const } : {}), messages, resources });
+        }
         throw error;
       }
       if (final) {
         const messages = 'messages' in outcome ? outcome.messages ?? [] : [];
-        await persist({ ...identity, attemptId, phase: 'settled', recordedAt: Date.now(), outcome: outcome.status,
+        await persist({ ...answerIdentity, attemptId, phase: 'settled', recordedAt: Date.now(), outcome: outcome.status,
           status: outcome.status === 'sent' ? 'sent' : messages.length || outcome.status === 'failed' && outcome.deliveryPartial ? 'partial'
             : outcome.status === 'failed' && outcome.deliveryUnknown ? 'unknown' : 'not_sent',
           ...('code' in outcome ? { code: outcome.code } : {}),
@@ -78,6 +94,52 @@ export function recordFinalReply(
       return outcome;
     },
   });
+  function recordStream(stream: CoreReplyStream, phaseId?: string): CoreReplyStream {
+    const answerIdentity = { ...identity, ...(phaseId ? { phaseId } : {}) };
+    let attemptId: string | undefined, started: Promise<void> | undefined;
+    let finishing: Promise<DeliveryReceipt> | undefined, cancelling: Promise<DeliveryReceipt> | undefined;
+    let settled: Promise<DeliveryReceipt> | undefined;
+    const start = () => {
+      if (started) return;
+      attemptId = randomUUID();
+      // This is a real answering phase even before the model's terminal event. Diagnostics do not
+      // gate admission or platform I/O; a crash leaves an explicitly unknown pending attempt.
+      started = persist({ ...answerIdentity, attemptId, phase: 'started', recordedAt: Date.now(), status: 'unknown',
+        outcome: 'pending', messages: [], resources: [] });
+    };
+    const settle = (receipt: DeliveryReceipt) => {
+      if (settled) return settled;
+      settled = (async () => {
+        await started;
+        const messages = receipt.parts?.map(part => part.message ?? null) ?? (receipt.message ? [receipt.message] : []);
+        const output: AgentOutputElement[] = stream.confirmed.map(part => ({ type: 'message', segments: [...part.segments] }));
+        await persist({ ...answerIdentity, attemptId, phase: 'settled', recordedAt: Date.now(), outcome: receipt.status,
+          status: receipt.status === 'sent' ? 'sent' : messages.length ? 'partial'
+            : receipt.failure?.deliveryUnknown ? 'unknown' : 'not_sent',
+          ...(receipt.failure ? { code: receipt.failure.code } : {}),
+          ...(receipt.failure?.deliveryUnknown ? { deliveryUnknown: true as const } : {}),
+          messages, resources: resultResources(output) });
+        return receipt;
+      })();
+      return settled;
+    };
+    return Object.freeze({
+      get minIntervalMs() { return stream.minIntervalMs; },
+      get receipt() { return stream.receipt; },
+      get confirmed() { return stream.confirmed; },
+      update(snapshot: ReplyStreamSnapshot) { start(); stream.update(snapshot); },
+      finish: (snapshot: ReplyStreamSnapshot) => finishing ??= (async () => {
+        start();
+        return settle(await stream.finish(snapshot));
+      })(),
+      // Cancellation must reach the transport while finish is still pending. Only receipt
+      // persistence is shared; serializing these operations would make cancellation ineffective.
+      cancel: () => cancelling ??= (async () => {
+        const receipt = await stream.cancel();
+        return started ? settle(receipt) : receipt;
+      })(),
+    });
+  }
   async function persist(record: TurnDeliveryRecord) {
     try { await store.recordDelivery(record); }
     catch { try { warn(); } catch { /* Diagnostics cannot replace a delivery settlement. */ } }

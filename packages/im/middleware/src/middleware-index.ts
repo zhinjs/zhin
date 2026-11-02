@@ -36,6 +36,7 @@ export interface MiddlewareDescriptor {
   readonly target: MiddlewareTarget;
   readonly order: number;
   readonly adapter?: string;
+  readonly incremental?: true;
 }
 
 interface MiddlewareRecord extends MiddlewareDescriptor {
@@ -60,6 +61,7 @@ export class MiddlewareIndex {
       target: slot.definition.target,
       order: slot.definition.order,
       ...(slot.definition.adapter ? { adapter: slot.definition.adapter } : {}),
+      ...(slot.definition.target === 'outbound' && slot.definition.incremental === true ? { incremental: true as const } : {}),
       slot,
     })).sort((left, right) => compareMiddleware(left, right, topology)));
   }

@@ -172,6 +172,39 @@ segments: {
 
 `text` 始终保留为通用回退；若为它声明场景，只限制扩展字段和提示。
 
+
+## 渐进式回答
+
+可在真实 Client 的 `createEndpointSpecification(this, hooks)` 中提供可选的
+`hooks.streaming`。配置关闭或会话不适用时不提供该能力，普通 `send` 继续工作。
+当前接入为 QQ 官方 C2C、Telegram 私聊草稿、Slack 线程、飞书应用卡片和 Sandbox；
+Discord 保留完整发送。各平台的适用范围和配置以适配器 README 为准。
+
+`EndpointStreaming.supports({ conversation, source })` 是同步、本地的预检，不能执行网络
+查询；它用可信入站来源排除已知不支持的场景。`open(request)` 再校验正文格式、引用与
+可见前缀，返回一个物理消息容器。`undefined` 表示确定不支持，查询失败不能冒充不支持。
+这些端口随同原账号实例的租约保留，不得通过账号名重新查找一个替代 Client。
+
+同一容器的 `write(text)` 和 `finish(text)` 由 Core 串行调用，接收累计原文，适配器再
+转换成平台增量或完整更新。一个容器只承载一种文字格式；媒体、格式切换与平台容量
+边界由 Core 保序。`cancel()` 仅停止本地更新，不暗中正式发送草稿、撤回消息或重试。
+
+| 回执字段 | 含义 |
+| --- | --- |
+| `status: buffered` | 本次没有新的外部变化，不能确认新增原文 |
+| `status: preview` | 仅临时可见，不能写成已发送历史 |
+| `status: sent` 与 `messageId` | 已确认的正式消息身份 |
+| `acceptedText` | 精确原文前缀，不是编码后的 HTML、Markdown 包装或 wire 长度 |
+| `exhausted` | 已证实达到物理容器限制，Core 先结束当前容器再续条 |
+| `confirmedContent` | 能独立验证的该条物理消息正文；包括可见前缀 |
+| `contentUnavailable` | 身份及原文游标已知，但独立富文本正文无法准确重建 |
+
+Core 继续复用渲染、权限、资源授权和出站中间件，不把模型原始 JSON、工具阶段文字或
+推理内容直接交给适配器。已发送前缀不能改写；其后失败不得重发整条。语义快照上限是
+每条回复 1 MiB（不含媒体原始字节），触限停止新增、保留已确认部分并说明原因。
+
+完整类型见 [endpoint-stream.ts](../../packages/im/adapter/src/endpoint-stream.ts)，生命周期
+回归见 [捕获发送测试](../../packages/im/core/tests/plugin-runtime/captured-endpoint-operation.test.ts)。
 ## 账号自身资料
 
 此能力要求 Adapter Feature API `^2.1.0`；在 Tool 中使用当前账号资料上下文还需要

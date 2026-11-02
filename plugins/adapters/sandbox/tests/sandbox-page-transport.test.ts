@@ -121,6 +121,23 @@ function fixture(options: {
   return f;
 }
 const text = (value: string) => [{ type: 'text', data: { text: value } }];
+it('updates one live reply bubble by revision and ignores stale packets and post-recall updates', () => {
+  const f = fixture();
+  try {
+    f.ready();
+    const frame = { type: 'private', id: 'sandbox-user', conversation: { type: 'private', id: 'sandbox-user' },
+      messageId: 'streamed-reply', bot: 'stable-bot', timestamp: 10, revision: 1, streaming: true, content: text('first') };
+    f.socket().receive(frame); f.render();
+    f.socket().receive({ ...frame, revision: 3, streaming: false, content: text('final'), timestamp: 30 }); f.render();
+    f.socket().receive({ ...frame, revision: 2, content: text('stale'), timestamp: 20 }); f.render();
+    const rows = f.view.messages.filter((row: playground.PlaygroundMessage) => row.id === frame.messageId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ revision: 3, streaming: false, timestamp: 10, content: text('final') });
+    const recalled = { ...rows[0], recalled: true };
+    const merged = playground.mergePlaygroundMessage([recalled], { ...rows[0], revision: 4, content: text('resurrect') });
+    expect(merged[0]).toMatchObject({ recalled: true, content: text('final') });
+  } finally { f.close(); }
+});
 const echo = (messageId: string, id = 'sandbox-user', type = 'private') => ({
   type, id, conversation: { type, id }, direction: 'inbound', messageId, senderId: 'owner', content: text('hello'), timestamp: 5,
 });

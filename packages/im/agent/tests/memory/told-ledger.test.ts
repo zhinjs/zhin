@@ -74,4 +74,22 @@ describe('SessionToldLedger', () => {
     // A reply in a different canonical session cannot hide this session's entry.
     expect(JSON.stringify(projectPromptContext([{ ...reply, contextRefs: [deliveredReplyContextRef('other', 'turn-a')] }, user])[1]?.content)).toContain('Covered conclusion.');
   });
+
+  it('keeps independent phase coverage when only one answer from the same real Turn survives the history window', () => {
+    const ledger = new SessionToldLedger();
+    const firstRef = deliveredReplyContextRef('session', 'real-turn', 'answer-1');
+    const secondRef = deliveredReplyContextRef('session', 'real-turn', 'answer-2');
+    ledger.record('session', 'First answer conclusion.', 'reply', 'real-turn', firstRef);
+    ledger.record('session', 'Second answer conclusion.', 'reply', 'real-turn', secondRef);
+    const raw: AssistantMessage = { role: 'assistant', timestamp: 1, content: [{ type: 'text', text: 'Second answer conclusion.' }],
+      api: 'test', model: 'test', provider: 'test', usage: EMPTY_TOKEN_USAGE, stopReason: 'stop' };
+    const visibleSecond = stampDeliveredMessageId([raw], 'native-2', [secondRef])[0] as AssistantMessage;
+    const user = { ...createUserMessage('current'), content: [...ledger.renderBlocks('session'), { type: 'text' as const, text: 'current' }] };
+    const projected = projectPromptContext([visibleSecond, user]);
+    expect(JSON.stringify(projected.at(-1)?.content)).toContain('First answer conclusion.');
+    expect(JSON.stringify(projected.at(-1)?.content)).not.toContain('Second answer conclusion.');
+    expect(ledger.entries('session').map(entry => entry.turnId)).toEqual(['real-turn', 'real-turn']);
+    expect(JSON.stringify(projectPromptContext([user]))).toContain('Second answer conclusion.');
+    expect(firstRef).not.toBe(secondRef);
+  });
 });

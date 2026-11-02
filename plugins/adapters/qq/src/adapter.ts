@@ -9,7 +9,7 @@ export class QqAdapter extends Adapter<QqHttpEndpoint | QqWebsocketEndpoint, QqE
   constructor(private readonly context: AdapterContext<QqEndpointConfig>) { super(); }
   override get configurationIdentityFields(): readonly string[] { return ['id', 'appid']; }
   override get configurationIdentityProbeFields(): readonly string[] { return ['accessTokenUrl', 'gatewayUrl']; }
-  override get configurationUpdateFields(): readonly string[] { return ['secret', 'mode', 'sandbox', 'intents', 'botKind',
+  override get configurationUpdateFields(): readonly string[] { return ['secret', 'mode', 'sandbox', 'streaming', 'streamingIntervalMs', 'intents', 'botKind',
     'accessTokenUrl', 'gatewayUrl', 'streamProxy', 'streamProxy.port', 'streamProxy.serverName', 'webhookPath']; }
   protected override validateConfiguration(input: QqEndpointConfig): void { resolveQqConfig(input); }
   protected createEndpoint(input: QqEndpointConfig, execution: EndpointCreationContext): QqHttpEndpoint | QqWebsocketEndpoint {

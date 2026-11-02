@@ -9,6 +9,10 @@ export const turnReplyMessages = createMessages({
     'zh-CN': '正在等待当前操作返回，之后会核对结果并继续剩余工作。',
     en: 'Waiting for the current operation to return, then checking its result and continuing the remaining work.',
   },
+  replyLimit: {
+    'zh-CN': '回复达到资源上限，已停止生成。已发送的内容会保留。',
+    en: 'The reply reached its resource limit and generation stopped. Content already sent is preserved.',
+  },
   stalled: {
     'zh-CN': '连续调用没有取得新结果，任务未完成，已暂停。请检查已有结果或补充信息。',
     en: 'Repeated calls made no progress. The task is unfinished and has stopped; please check the results or provide more information.',
