@@ -2,6 +2,7 @@ import { createEndpointOperation, type EndpointProfile } from 'zhin.js/adapter';
 import type { Client, ClientUser, User } from 'discord.js';
 import type { SelfProfile } from '@zhin.js/im-contract';
 import type { DiscordRestRequest } from './endpoint.js';
+import { DiscordRestRequestError } from './rest-request-error.js';
 
 function profileOf(user: Pick<User, 'username' | 'avatarURL'>): SelfProfile {
   return { nickname: user.username, avatar: user.avatarURL() };
@@ -68,7 +69,13 @@ export function createDiscordRestSelfProfile(client: DiscordProfileRestClient, r
         }
         body = { avatar: `data:${change.value.mime_type};base64,${change.value.value}` };
       } else return { status: 'rejected', message: `Discord does not expose ${change.field} through this port` };
-      const updated = await client.request<DiscordOwnUser>({ method: 'PATCH', path: '/users/@me', body, signal });
+      let updated: DiscordOwnUser;
+      try { updated = await client.request<DiscordOwnUser>({ method: 'PATCH', path: '/users/@me', body, signal }); }
+      catch (error) {
+        if (!(error instanceof DiscordRestRequestError)) throw error;
+        if (error.acknowledged) return { status: 'updated' };
+        return { status: error.disposition === 'rejected' ? 'rejected' : 'unknown', message: error.message };
+      }
       const profile = observed(updated);
       return { status: 'updated', ...(profile ? { profile } : {}) };
     },

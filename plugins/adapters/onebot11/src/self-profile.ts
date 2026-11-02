@@ -16,6 +16,7 @@ export function createOnebot11SelfProfile({ call, reportAccount }: Onebot11SelfP
   let accountId: string | undefined;
   let accountRevision = 0;
   let readSequence = 0;
+  let publishedSequence = 0;
   return Object.freeze<Onebot11SelfProfile>({
     writableFields: Object.freeze([]),
     get current() { return nickname === undefined ? {} : { nickname }; },
@@ -25,6 +26,7 @@ export function createOnebot11SelfProfile({ call, reportAccount }: Onebot11SelfP
         nickname = undefined;
         accountRevision++;
         readSequence++;
+        publishedSequence = readSequence;
       }
       reportAccount(id);
     },
@@ -38,7 +40,8 @@ export function createOnebot11SelfProfile({ call, reportAccount }: Onebot11SelfP
       const self = await call({ action: 'get_login_info', signal }) as { user_id?: number | string; nickname?: string } | undefined;
       assertAccount();
       if (!self?.user_id || typeof self.nickname !== 'string') throw new Error('OneBot11 returned an incomplete self profile');
-      if (sequence === readSequence) {
+      if (sequence > publishedSequence) {
+        publishedSequence = sequence;
         accountId = String(self.user_id);
         nickname = self.nickname;
         reportAccount(accountId);
@@ -50,7 +53,10 @@ export function createOnebot11SelfProfile({ call, reportAccount }: Onebot11SelfP
       assertAccount();
       if (!details || String(details.user_id) !== String(self.user_id)) throw new Error('OneBot11 returned another account profile');
       const observedNickname = typeof details.nickname === 'string' ? details.nickname : self.nickname;
-      if (sequence === readSequence) nickname = observedNickname;
+      if (sequence >= publishedSequence) {
+        publishedSequence = sequence;
+        nickname = observedNickname;
+      }
       const profile: SelfProfile = { nickname: observedNickname,
         ...(details.sex === 'male' || details.sex === 'female' || details.sex === 'unknown' ? { gender: details.sex } : {}),
         ...(typeof details.age === 'number' && Number.isFinite(details.age) ? { age: details.age } : {}),
