@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1a716377f0ef61c1 -->
+<!-- sync-adapter-docs:sha256=3099bca2766dc469 -->
 
 # @zhin.js/adapter-lark
 
@@ -33,7 +33,7 @@ Zhin.js 飞书 / Lark 适配器（Plugin Runtime），通过 Runtime Host HTTP W
 
 平台明确拒绝已有卡片的更新并报告流式超时或容量超限时，纯文字回复保留已确认正文，再用新卡片继续未发送部分。首条内容自身超限时明确报错，不重复创建或截断原文。卡片流式模式在开启 10 分钟后自动关闭，详见[流式更新卡片](https://open.feishu.cn/document/cardkit-v1/streaming-updates-openapi-overview)。
 
-纯文字可以在已确认的容量或时限边界续条。Markdown 保留单容器内的流式发送；需要续容器但无法保证独立格式时，会停止并保留已确认部分，不降级为纯文本。关闭流式模式失败时，正文的确认记录会保留，关闭结果仍明确记录为失败或未知。
+纯文字可以在已确认的容量或时限边界续条。Markdown 保留单容器内的流式发送；已确认的 Markdown 卡片需要续容器时，无法恢复其渲染状态，会停止并保留已确认部分，不降级为纯文本。关闭流式模式失败时，正文的确认记录会保留，关闭结果仍明确记录为失败或未知。
 
 ## 安装
 
