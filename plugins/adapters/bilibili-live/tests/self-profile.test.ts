@@ -2,6 +2,45 @@ import { BilibiliLiveClient } from '../src/client.js';
 import { resolveBilibiliLiveConfig } from '../src/protocol.js';
 
 describe('Bilibili Live public self profile', () => {
+  it('retains a newer confirmed anonymous state over an older pending login response', async () => {
+    let complete!: (body: unknown) => void;
+    let first = true;
+    const fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => {
+      if (first) { first = false; return new Promise(resolve => { complete = resolve; }); }
+      return { code: -101, data: { isLogin: false } };
+    } }));
+    const client = new BilibiliLiveClient(resolveBilibiliLiveConfig({ id: 'live', roomId: '100' }), fetch);
+    const signal = new AbortController().signal;
+    const earlier = client.readSelfProfile(signal);
+    await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+    await expect(client.readSelfProfile(signal)).rejects.toThrow('not logged in');
+    complete({ code: 0, data: { isLogin: true, mid: 1, uname: 'Earlier login' } });
+    await earlier;
+    expect(client.currentSelfProfile).toEqual({});
+    expect(client.selfUid).toBeUndefined();
+  });
+  it.each(['rejected', 'cancelled', 'network'] as const)('publishes the last valid pending nav when a newer request is %s', async failure => {
+    let complete!: (body: unknown) => void;
+    let calls = 0;
+    const abort = new AbortController();
+    const fetch = vi.fn(async () => {
+      if (++calls === 2 && failure === 'network') throw new Error('Network unavailable');
+      const first = calls === 1;
+      return { ok: true, status: 200, json: async () => {
+        if (first) return new Promise(resolve => { complete = resolve; });
+        if (failure === 'cancelled') abort.abort();
+        return { code: failure === 'rejected' ? -412 : 0, data: { isLogin: true, mid: 2, uname: 'Must not publish' } };
+      } };
+    });
+    const client = new BilibiliLiveClient(resolveBilibiliLiveConfig({ id: 'live', roomId: '100' }), fetch);
+    const earlier = client.readSelfProfile(new AbortController().signal);
+    await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+    await expect(client.readSelfProfile(abort.signal)).rejects.toThrow();
+    complete({ code: 0, data: { isLogin: true, mid: 1, uname: 'Last valid name' } });
+    await earlier;
+    expect(client.currentSelfProfile).toEqual({ nickname: 'Last valid name' });
+    expect(client.selfUid).toBe('1');
+  });
   it('keeps startup unsigned fallback when nav returns a business error without WBI keys', async () => {
     const fetch = vi.fn(async (url: string) => ({ ok: true, status: 200, json: async () => url.includes('/nav')
       ? { code: -412, message: 'nav unavailable' }

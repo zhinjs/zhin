@@ -83,6 +83,7 @@ export class BilibiliLiveClient {
   #selfUid?: string;
   #selfProfile: Readonly<SelfProfile> = Object.freeze({});
   #navSequence = 0;
+  #publishedNavSequence = 0;
 
   /** Public account facts from the native nav response, never Cookie or WBI keys. */
   get currentSelfProfile(): Readonly<import('@zhin.js/im-contract').SelfProfile> { return this.#selfProfile; }
@@ -180,7 +181,8 @@ export class BilibiliLiveClient {
     } : {});
     // Startup can still use WBI keys or its existing unsigned fallback. Only valid
     // login/anonymous responses may publish account facts, in request order.
-    if (sequence === this.#navSequence && (envelope.code === 0 || envelope.code === -101)) {
+    if (sequence > this.#publishedNavSequence && (envelope.code === 0 || envelope.code === -101)) {
+      this.#publishedNavSequence = sequence;
       this.#selfUid = uid;
       this.#selfProfile = profile;
     }

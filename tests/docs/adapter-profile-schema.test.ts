@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import Ajv from 'ajv';
 
-const directory = new URL('../../../../plugins/adapters/', import.meta.url);
+const directory = new URL('../../plugins/adapters/', import.meta.url);
 const schemas = readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
   if (!entry.isDirectory()) return [];
   let schema: { $defs?: Record<string, object> };

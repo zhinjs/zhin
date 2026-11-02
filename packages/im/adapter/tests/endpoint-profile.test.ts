@@ -36,6 +36,28 @@ class NativeProfile implements EndpointProfile {
 }
 
 describe('account-owned profile facts and configuration fallback', () => {
+  it.each(['caller cancellation', 'account change'])('preserves a write ACK observed before %s', async reason => {
+    const pending = deferred<SelfProfileWriteResult>();
+    const write = vi.fn(() => pending.promise);
+    const source: EndpointProfile = { writableFields: ['nickname'], read: async () => ({}), write };
+    const state = new EndpointProfileState({ source, defaults: { nickname: 'Configured' } });
+    const caller = new AbortController();
+    const updating = state.write({ signal: caller.signal, change: { field: 'nickname', value: 'Confirmed' } });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    let next: EndpointProfileState | undefined;
+    pending.resolve({ status: 'updated', profile: { nickname: 'Confirmed' } });
+    // The operation consumes its ACK before this microtask; the caller's await
+    // continuation runs afterward and must not replace that ACK with not_sent.
+    queueMicrotask(() => {
+      if (reason === 'account change') next = state.nextAccount();
+      else caller.abort(new Error('caller ended'));
+    });
+    await expect(updating).resolves.toMatchObject({ status: 'updated', profile: { nickname: 'Confirmed' } });
+    if (next) expect(next.peek().values.nickname).toBe('Configured');
+    else expect(state.peek().values.nickname).toBe('Confirmed');
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
   it('ends old captured profile ports when the source account changes, retaining only configured fallbacks', async () => {
     const source = new NativeProfile();
     const state = new EndpointProfileState({ source, defaults: { nickname: 'Configured' } });
