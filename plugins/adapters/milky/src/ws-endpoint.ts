@@ -1,3 +1,4 @@
+import { createMilkySelfProfile } from './self-profile.js';
 /**
  * Milky WS client endpoint — outbound connect to Milky protocol server.
  */
@@ -84,6 +85,8 @@ export class MilkyWsEndpoint extends MilkyClient implements Endpoint {
       close: () => { this.#close(); }, stop: () => this.#stop(),
       send: request => this.#send(request),
       management: this.#management, control: this.#control,
+      profile: createMilkySelfProfile({ call: request => call(request).then(response => readMilkyResponse(response, request.action)),
+        reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
       get transportState() { return readTransportState(); },
     });
     forwardMilkyClientEvents(this, (name, payload) => {

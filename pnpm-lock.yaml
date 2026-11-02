@@ -1825,6 +1825,9 @@ importers:
       '@zhin.js/feature-kit':
         specifier: workspace:*
         version: link:../feature-kit
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../im-contract
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime

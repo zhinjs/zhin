@@ -4,7 +4,7 @@ import { currentGroup } from '../../../../conversation.js';
 import { messages as t } from '../../../../messages.js';
 
 export default defineAgentTool({
-  description: '让机器人退出当前 QQ 群；仅主人可发起且每次人工审批，机器人是群主时拒绝执行以免解散群',
+  description: '退出你当前所在的 QQ 群；仅主人可发起且每次人工审批，你是群主时拒绝执行以免解散群',
   adapter: 'icqq',
   scopes: ['group'],
   currentConversationBotRoles: ['admin', 'member'],

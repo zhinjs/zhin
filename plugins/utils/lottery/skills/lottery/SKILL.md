@@ -25,7 +25,7 @@ Manual trigger: `lottery [game]`
 
 ## Agent role
 
-Interactive chat may use the tools owned by this lottery plugin instance. Tool names are qualified from the runtime owner, so instructions must select them by description instead of assuming an instance key. Recommended numbers must come from the lottery recommendation tool.
+In interactive chat, you may use the tools owned by this lottery plugin instance. Tool names are qualified from the runtime owner; select them by description instead of assuming an instance key. Recommended numbers must come from the lottery recommendation tool.
 
 ## Game ids
 

@@ -1,3 +1,4 @@
+import { createOnebot11SelfProfile } from './self-profile.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * OneBot11 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
@@ -64,6 +65,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
   readonly #connectionLifecycle: EndpointLifecycle;
   #connectionTask = Promise.resolve();
   readonly #rpc: OneBot11Rpc;
+  readonly #profile: ReturnType<typeof createOnebot11SelfProfile>;
   #started = false;
   #stopped = false;
 
@@ -83,6 +85,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
     const callApi = (request: PendingRpcRequest) => this.#rpc.call(request).then(readOnebot11Response);
     this.#management = createOneBot11EndpointManagement({ callApi });
     this.#content = createOneBot11ContentPort(callApi);
+    this.#profile = createOnebot11SelfProfile({ call: callApi, reportAccount: id => this[endpointSpec].reportSelfUserId(id) });
     const readTransportState = () => this.#transportState;
     this[endpointSpec] = createEndpointSpecification(this, {
       name: options.config.id,
@@ -91,6 +94,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
       send: request => this.#send(request),
       get transportState() { return readTransportState(); },
       management: this.#management, control: this.#control, content: this.#content,
+      profile: this.#profile,
     });
     this.#releaseClientEvents = forwardOnebot11ClientEvents(this, (name, payload) => {
       void this[endpointSpec].events.run(() => {
@@ -155,7 +159,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
       this.#releaseClientEvents();
       this.#ws = undefined;
       this.#started = false;
-      this[endpointSpec].reportSelfUserId(undefined);
+      this.#profile.reportAccount(undefined);
     }
   }
 
@@ -178,7 +182,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
 
   #admitRaw(ev: OneBot11Event): void {
     const selfId = resolveOnebot11SelfId(ev.self_id);
-    if (!this.#stopped && selfId) this[endpointSpec].reportSelfUserId(selfId);
+    if (!this.#stopped && selfId) this.#profile.reportAccount(selfId);
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(ev, {
         emit: (name, payload) => this[endpointSpec].events.emit(name, payload),
@@ -223,7 +227,7 @@ export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
       }));
     });
     if (this.#stopped || this.#transportState !== 'open') return;
-    if (selfId) this[endpointSpec].reportSelfUserId(selfId);
+    if (selfId) this.#profile.reportAccount(selfId);
   }
 
   #warnPlatformEvent(error: unknown): void {

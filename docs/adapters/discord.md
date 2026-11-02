@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=12c75cf667170886 -->
+<!-- sync-adapter-docs:sha256=8bad3cd93621488a -->
 
 # @zhin.js/adapter-discord
 
@@ -21,7 +21,7 @@ Zhin.js Discord 适配器（Plugin Runtime），默认通过 **Gateway WebSocket
 - 支持私聊、群组与服务器频道
 - 出站 `send({ conversation, payload })` → Discord channel message（Markdown content / media / embed / keyboard）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
-- Interactions HTTP webhook 延期（需 `httpHostToken`）；配置 `connection: interactions` 会明确报错
+- Interactions HTTP webhook（需 `httpHostToken`），支持验签、PING 与 slash command
 
 ## 安装
 
@@ -53,7 +53,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 | **Bot Token** | [Discord Developer Portal](https://discord.com/developers/applications) 创建应用并获取 Token |
 | **MESSAGE CONTENT INTENT** | 需开启才能读取消息正文 |
 | **Gateway（默认）** | 本地/生产均可；discord.js 连接 Gateway，无需公网 HTTPS |
-| **host-http** | Gateway **不需要**；Interactions webhook 延期至下一棒 |
+| **host-http** | Gateway **不需要**；Interactions webhook 需要 |
 
 必填字段（`endpoints[i]`）：`id`、`token`。
 
@@ -123,7 +123,7 @@ Discord 的 token / publicKey 更新通过只读 GET `/applications/@me` 核验�
 | Gateway 反复断线 | 检查 Token、网络代理、Gateway Intents 与应用后台配置 |
 | 能上线但收不到正文 | 启用 Message Content Intent，并给 Bot 频道读取权限 |
 | 能收不能发 | 检查 Send Messages、Embed Links 与附件权限 |
-| `connection: interactions` 启动失败 | 当前生产路径使用 Gateway；改回 `gateway` |
+| `connection: interactions` 启动失败 | 检查 HTTP Host、`applicationId`、`publicKey` 与交互回调地址 |
 
 ## 许可证
 
@@ -155,3 +155,11 @@ DISCORD_REST_API_PROXY_PORT=18570 pnpm --filter platform-acceptance-bot dev:disc
 forwarding 下以新sample确认真实消息基线；control `POST /cut` 后另发新sample，出站结果须失败/unknown且无自动POST重发；`POST /recover` 后先确认旧sample未补发，再新sample确认恢复。检查平台可见消息与报告回执，不重发未知sample。此模式仅Gateway REST、JSON消息能力；Interactions Endpoint 与其他CDN目的地不适用，配置Interactions会明确拒绝。本地真实SDK TLS fixture覆盖服务收到POST后切断、可信CA但SAN不匹配拒绝、默认直连与手动恢复，不能当成实机结果。停止/连接失败会销毁专用Dispatcher，并取消尚未完成TLS握手。
 
 公开扩展点参考：[Discord RESTOptions.agent](https://discord.js.org/docs/packages/rest/main/RESTOptions:Interface)、[Undici 6.28 Agent](https://github.com/nodejs/undici/blob/v6.28.0/docs/docs/api/Agent.md)。
+
+## 当前账号资料
+
+Gateway 和 Interactions 模式均通过资料端口暴露当前认证账号的用户名（`nickname`）及头像。Gateway 使用原生 `ClientUser`；Interactions 使用 `GET/PATCH /users/@me`。修改沿用 Agent 身份类审批及当前账号生命周期，与服务器内的成员昵称分开处理。
+
+支持修改昵称和头像；其他资料字段没有对应适配器操作时不声明可写。平台响应提供有效头像资料时返回其 CDN URL；若仅确认修改成功，则不返回未确认的资料。图片字节只在请求内部使用，不返回模型；Agent 解析图片沿用现有本地图片和网络权限。
+
+`nickname` / `profile` 配置仅补足平台缺失字段，Endpoint 配置优先于适配器默认值。接口依据 [discord.js ClientUser](https://discord.js.org/docs/packages/discord.js/main/ClientUser:Class)。

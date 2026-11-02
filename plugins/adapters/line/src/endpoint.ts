@@ -1,5 +1,6 @@
 import { createEndpointSpecification, endpointSpec, type Endpoint } from 'zhin.js/adapter';
 import { LineClient, type LineEndpointOptions } from './client.js';
+import { createLineSelfProfile } from './self-profile.js';
 export type { LineEndpointOptions } from './client.js';
 export type { LineFetch } from './client.js';
 
@@ -14,6 +15,7 @@ export class LineEndpoint extends LineClient implements Endpoint {
       send: (request: import('zhin.js/adapter').EndpointSendRequest) => this.sendPayload(request),
       name: this.configName(),
       management: this.endpointManagement,
+      profile: createLineSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     };
     Object.defineProperty(hooks, 'transportState', { get: () => this.transportState });
     return createEndpointSpecification(this, hooks);

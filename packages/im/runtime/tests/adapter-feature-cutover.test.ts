@@ -2,20 +2,23 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import adapterFeature from '@zhin.js/adapter';
+import toolFeature from '@zhin.js/tool';
 import { definePlugin } from '@zhin.js/plugin-runtime';
 import { RootRuntime, type ModuleRuntime } from '../src/index.js';
 
 const temporary: string[] = [];
 afterEach(async () => { await Promise.all(temporary.splice(0).map(path => rm(path, { recursive: true }))); });
 
-interface CutoverFixtureRequest { readonly api?: string; readonly providerApi?: string }
+interface CutoverFixtureRequest { readonly api?: string; readonly providerApi?: string; readonly feature?: 'adapter' | 'tool' }
 async function cutoverFixture(input: CutoverFixtureRequest) {
-  const manifest = JSON.parse(await readFile(new URL('../../adapter/package.json', import.meta.url), 'utf8'));
+  const feature = input.feature ?? 'adapter';
+  const packageName = `@zhin.js/${feature}`;
+  const manifest = JSON.parse(await readFile(new URL(`../../${feature}/package.json`, import.meta.url), 'utf8'));
   const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-api-cutover-'))); temporary.push(root);
-  const provider = join(root, 'packages/adapter'); await mkdir(provider, { recursive: true });
-  await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@test/cutover', dependencies: { '@zhin.js/adapter': 'workspace:*' },
+  const provider = join(root, `packages/${feature}`); await mkdir(provider, { recursive: true });
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: '@test/cutover', dependencies: { [packageName]: 'workspace:*' },
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts',
-      features: [{ package: '@zhin.js/adapter', ...(input.api ? { api: input.api } : {}) }] } }));
+      features: [{ package: packageName, ...(input.api ? { api: input.api } : {}) }] } }));
   await writeFile(join(provider, 'package.json'), JSON.stringify({ name: manifest.name, version: manifest.version,
     zhin: { protocol: 1, type: 'feature', entry: './index.ts', engine: manifest.zhin.engine,
       featureApi: input.providerApi ?? manifest.zhin.featureApi } }));
@@ -23,7 +26,7 @@ async function cutoverFixture(input: CutoverFixtureRequest) {
   const loads: string[] = []; let setups = 0;
   const modules: ModuleRuntime = { async load<T>(source: string): Promise<T> {
     loads.push(source);
-    if (source === join(provider, 'index.ts')) return { default: adapterFeature } as T;
+    if (source === join(provider, 'index.ts')) return { default: feature === 'tool' ? toolFeature : adapterFeature } as T;
     if (source === join(root, 'plugin.ts')) return { default: definePlugin({ name: 'cutover', setup() { setups++; } }) } as T;
     throw new Error(`Unexpected module: ${source}`);
   }, async close() {} };
@@ -35,7 +38,7 @@ async function cutoverFixture(input: CutoverFixtureRequest) {
 it('rejects an old explicit Adapter API consumer before any plugin/provider module is evaluated', async () => {
   const fixture = await cutoverFixture({ api: '^1.0.0' });
   try {
-    await expect(fixture.runtime.start()).rejects.toThrow('requires ^1.0.0, provider declares 2.0.0');
+    await expect(fixture.runtime.start()).rejects.toThrow('requires ^1.0.0, provider declares 2.1.0');
     expect(fixture.loads).toEqual([]); expect(fixture.setups()).toBe(0);
   } finally { await fixture.runtime.stop(); }
 });
@@ -60,4 +63,27 @@ it('still rejects malformed provider metadata even when the consumer omits its A
     await expect(fixture.runtime.start()).rejects.toThrow('declares invalid featureApi version not-semver');
     expect(fixture.loads).toEqual([]); expect(fixture.setups()).toBe(0);
   } finally { await fixture.runtime.stop(); }
+});
+
+// Profile operations are an additive capability: reject an older provider before any login.
+it('rejects a profile consumer on an API-2.0 provider before evaluating modules', async () => {
+  const fixture = await cutoverFixture({ api: '^2.1.0', providerApi: '2.0.0' });
+  try {
+    await expect(fixture.runtime.start()).rejects.toThrow('requires ^2.1.0, provider declares 2.0.0');
+    expect(fixture.loads).toEqual([]); expect(fixture.setups()).toBe(0);
+  } finally { await fixture.runtime.stop(); }
+});
+
+it('rejects a profile Tool consumer on a provider that cannot forward profile context', async () => {
+  const fixture = await cutoverFixture({ feature: 'tool', api: '^1.1.0', providerApi: '1.0.0' });
+  try {
+    await expect(fixture.runtime.start()).rejects.toThrow('requires ^1.1.0, provider declares 1.0.0');
+    expect(fixture.loads).toEqual([]); expect(fixture.setups()).toBe(0);
+  } finally { await fixture.runtime.stop(); }
+});
+
+it.each(['^1.0.0', '^1.1.0'])('keeps compatible Tool consumers working on the current provider: %s', async api => {
+  const fixture = await cutoverFixture({ feature: 'tool', api });
+  try { await fixture.runtime.start(); expect(fixture.setups()).toBe(1); }
+  finally { await fixture.runtime.stop(); }
 });

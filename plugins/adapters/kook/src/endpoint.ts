@@ -42,6 +42,7 @@ import {
 import { recallKookMessage, sendKookOutbound } from './outbound.js';
 import { KookSenderRoleResolver, type KookSenderRoleProjection } from './sender-roles.js';
 import { receiveKookSideEvent } from './side-event-dispatch.js';
+import { createKookSelfProfile } from './self-profile.js';
 
 export interface KookEndpointOptions {
   readonly id: CapabilityId;
@@ -105,6 +106,7 @@ export class KookWebsocketEndpoint extends RuntimeKookClient implements Endpoint
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
       name: options.config.id, get transportState() { return endpoint.#transportState; },
       management: this.#management, control: this.#control,
+      profile: createKookSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
   }
 
@@ -266,6 +268,7 @@ export class KookWebhookEndpoint extends RuntimeKookClient implements Endpoint {
       start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
       management: this.#management, control: this.#control,
+      profile: createKookSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
   }
 

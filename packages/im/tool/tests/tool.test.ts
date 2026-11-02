@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { SelfProfilePort } from '@zhin.js/im-contract';
 import {
   childPluginId,
   createCapabilitySlot,
@@ -33,6 +34,16 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
+  it('passes only the originating account profile port through Tool execution', async () => {
+    const root = rootPluginId();
+    const selfProfile: SelfProfilePort = { peek: () => ({ values: { nickname: 'Original' }, sources: { nickname: 'platform' }, writableFields: [], platformStatus: 'available' }),
+      read: async () => ({ values: { nickname: 'Original' }, sources: { nickname: 'platform' }, writableFields: [], platformStatus: 'available' }) };
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'profile', source: '/tools/profile/index.ts',
+      definition: defineAgentTool({ description: 'Read current account', execute: (_input, context) => context.selfProfile }) });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+    expect(await index.execute(root, 'profile', {}, { ...invocation(), selfProfile })).toBe(selfProfile);
+    expect(await index.execute(root, 'profile', { selfProfile }, invocation())).toBeUndefined();
+  });
   it('reads synchronous availability from the same owner definition without invoking the tool', () => {
     const root = rootPluginId();
     let executions = 0;

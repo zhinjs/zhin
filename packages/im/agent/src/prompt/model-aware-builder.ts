@@ -14,9 +14,9 @@ export class ModelAwarePromptBuilder {
         return [
           '# Style',
           ' - Direct and concise — match reply length to question complexity',
-          ' - Simple question = short answer; complex task = structured reply',
+          ' - Keep simple answers brief; add explanation or structure when useful',
           ' - No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...")',
-          ' - Focus on actions and results, not explanations',
+          ' - Lead with the answer or result; explain when the request needs it',
           ` - ${REPLY_LANGUAGE_RULE}`,
         ].join('\n');
       case 'detailed':
@@ -24,8 +24,8 @@ export class ModelAwarePromptBuilder {
           '# Style',
           ' - Lead with the answer or result',
           ' - Be concise, direct, and useful',
-          ' - Use Markdown formatting (headings, lists, tables) for multi-part answers',
-          ' - Match reply length to complexity: 1 line for greetings, structured format for multi-step results',
+          ' - Use Markdown formatting when it improves clarity',
+          ' - Match reply length to complexity; include the detail needed to understand multi-step results',
           ' - No preamble ("Here\'s...", "I\'ll..."), no postamble ("Let me know...")',
           ` - ${REPLY_LANGUAGE_RULE}`,
         ].join('\n');

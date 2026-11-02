@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Bilibili 直播弹幕协议（Experimental，非官方 Web 接口）。
  *
@@ -35,7 +36,7 @@ export const BILIBILI_LIVE_MIN_SEND_INTERVAL_SEC = 2;
 export const BILIBILI_LIVE_HEARTBEAT_MS = 30_000;
 
 /** One endpoint config after AdapterIndex expands `<instanceKey>.endpoints`. */
-export interface BilibiliLiveEndpointConfig {
+export interface BilibiliLiveEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   /** 直播间号（短号或长号都可以）。只填你自己的直播间。 */
   readonly roomId?: string | number;

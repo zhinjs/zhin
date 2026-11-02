@@ -205,6 +205,7 @@ export class EndpointRuntime {
       return Object.freeze({
         target, signal: captured.signal, control: controls,
         management: index.management(id, scope),
+        profile: index.profile(id, scope),
         send: async (content, options) => {
           assertActive();
           // Retain the source authority, while each send owns its caller cancellation.

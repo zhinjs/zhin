@@ -14,6 +14,8 @@ import { resolveWorkerSlowToolTimeout, isPromptTraceEnabled, isPromptTraceVerbos
 import { applyExecPolicyToTools } from './security/exec-policy.js';
 import { logPromptComposition } from './internal/prompt-trace.js';
 import { resolveWorkspacePrompt } from './prompt/workspace-prompt.js';
+import { CRITICAL_RULES } from './prompt/rules/critical-rules.js';
+import { REQUEST_SECURITY_BOUNDARY } from './prompt/rules/security.js';
 const logger = getLogger('DeferredWorker');
 const ORCHESTRATOR_TOOL_SET = new Set<string>(DEFAULT_ALWAYS_LOADED_TOOLS);
 
@@ -144,10 +146,7 @@ export class DeferredWorkerRunner {
 
     const workerBody = resolveWorkspacePrompt('deferred-worker', llmModel.sdk);
 
-    const systemPrompt = `${workerBody.trim()}
-
-## Task
-${goal}`;
+    const systemPrompt = [CRITICAL_RULES, REQUEST_SECURITY_BOUNDARY, workerBody.trim()].join('\n\n');
 
     const maxIterations = options.maxIterations ?? execPolicyConfig?.maxSubagentIterations ?? 15;
 

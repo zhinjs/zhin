@@ -75,6 +75,8 @@ describe('zhin-home', () => {
     expect(fs.existsSync(path.join(root, 'zhin.config.yml'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'package.json'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'data'))).toBe(true);
+    expect(fs.readFileSync(path.join(root, 'SOUL.md'), 'utf8')).toContain('我是一个能力出众');
+    expect(fs.readFileSync(path.join(root, 'TOOLS.md'), 'utf8')).toContain('：直接调用');
 
     await fs.writeFile(path.join(root, 'zhin.config.yml'), 'custom: true\n');
     scaffoldGlobalHome({ homeDir: fakeHome });

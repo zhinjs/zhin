@@ -17,6 +17,7 @@ import { getProcessPeerRegistry } from './peer-registry.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointContentPort } from './endpoint-content.js';
+import { configuredSelfProfile, EndpointProfileState, type EndpointProfile } from './endpoint-profile.js';
 
 export type {
   EndpointConversation,
@@ -78,6 +79,7 @@ interface EndpointBindingContext {
   readonly name: string;
   /** The concrete account epoch owns this signal; generation replacement does not abort it. */
   readonly signal: AbortSignal;
+  readonly config?: unknown;
   use<T>(token: Token<T>): T;
 }
 
@@ -93,6 +95,11 @@ export abstract class EndpointRuntime<TClient = unknown> {
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;
+  readonly profile?: EndpointProfile;
+  #selfProfile?: EndpointProfileState;
+
+  /** Source-account facts live with this concrete Client, separately from its immutable identity. */
+  get selfProfile(): EndpointProfileState | undefined { return this.#selfProfile; }
 
   #identity?: EndpointIdentity;
   #events?: EndpointEventGateway;
@@ -115,7 +122,11 @@ export abstract class EndpointRuntime<TClient = unknown> {
 
   /** Adapter 在登录成功后上报平台账号；undefined / 空 / 非法值表示撤销。 */
   protected reportSelfUserId(userId: string | undefined): void {
-    this.#selfUserId = normalizeSelfUserId(userId);
+    const next = normalizeSelfUserId(userId);
+    if (this.#selfUserId !== undefined && this.#selfUserId !== next) {
+      this.#selfProfile = this.#selfProfile?.nextAccount();
+    }
+    this.#selfUserId = next;
     this.#syncPeerRegistry();
   }
 
@@ -152,6 +163,10 @@ export abstract class EndpointRuntime<TClient = unknown> {
     const events = context.use(endpointEventGatewayToken);
     this.#events = events;
     this.#executionSignal = context.signal;
+    this.#selfProfile = new EndpointProfileState({
+      source: this.profile,
+      defaults: configuredSelfProfile((context.config ?? {}) as Readonly<Record<string, unknown>>),
+    });
     if (!admission) {
       this.#activate();
       return;

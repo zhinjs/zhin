@@ -17,6 +17,10 @@ export interface NetworkTextResponse {
   readonly headers: Readonly<Record<string, string>>;
   readonly body: string;
 }
+/** Binary media uses the same authorized hops and pinned connection as text requests. */
+export interface NetworkBinaryResponse extends Omit<NetworkTextResponse, 'body'> {
+  readonly body: Uint8Array;
+}
 
 export interface NetworkRequestOptions {
   readonly headers?: Readonly<Record<string, string>>;
@@ -32,6 +36,20 @@ export interface NetworkTransport {
     signal: AbortSignal,
     maxBytes: number,
   ): Promise<Omit<NetworkTextResponse, 'url'>>;
+  requestBytes?(
+    url: URL,
+    headers: Readonly<Record<string, string>>,
+    signal: AbortSignal,
+    maxBytes: number,
+  ): Promise<Omit<NetworkBinaryResponse, 'url'>>;
+}
+
+/** One policy-authorized hop; credentials may narrow when its redirect changes origin. */
+interface AuthorizedNetworkHop {
+  readonly url: URL;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly signal: AbortSignal;
+  readonly maxBytes: number;
 }
 
 /** Turn-scoped network module: policy, DNS pinning, redirects, timeout, and body limits. */
@@ -43,16 +61,31 @@ export class TurnNetworkClient {
   ) {}
 
   async getText(url: string, options: NetworkRequestOptions = {}): Promise<NetworkTextResponse> {
+    return this.#get(url, options, hop => this.transport.request(hop.url, hop.headers, hop.signal, hop.maxBytes));
+  }
+
+  async getBytes(url: string, options: NetworkRequestOptions = {}): Promise<NetworkBinaryResponse> {
+    const request = this.transport.requestBytes;
+    if (!request) throw new Error('This network transport does not support binary media');
+    return this.#get(url, options, hop => request.call(this.transport, hop.url, hop.headers, hop.signal, hop.maxBytes));
+  }
+
+  async #get<T extends Omit<NetworkTextResponse, 'body' | 'url'> & { readonly body: string | Uint8Array }>(
+    url: string,
+    options: NetworkRequestOptions,
+    request: (hop: AuthorizedNetworkHop) => Promise<T>,
+  ): Promise<T & { readonly url: string }> {
     const maxRedirects = options.maxRedirects ?? 5;
     const maxBytes = options.maxBytes ?? 2 * 1024 * 1024;
     const timeoutMs = options.timeoutMs ?? 15_000;
     const signal = AbortSignal.any([this.signal, AbortSignal.timeout(timeoutMs)]);
     let current = url;
+    let headers = options.headers ?? {};
 
     for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
       signal.throwIfAborted();
       const parsed = authorizeNetworkUrl(current, this.policy);
-      const response = await this.transport.request(parsed, options.headers ?? {}, signal, maxBytes);
+      const response = await request({ url: parsed, headers, signal, maxBytes });
       if (response.status < 300 || response.status >= 400) {
         return Object.freeze({ url: parsed.href, ...response });
       }
@@ -61,7 +94,12 @@ export class TurnNetworkClient {
       if (redirect === maxRedirects) {
         throw new NetworkAccessDeniedError(`Network redirect limit exceeded (${maxRedirects})`);
       }
-      current = new URL(location, parsed).href;
+      const next = new URL(location, parsed);
+      if (next.origin !== parsed.origin) {
+        headers = Object.fromEntries(Object.entries(headers).filter(([name]) =>
+          !/^(?:authorization|cookie|proxy-authorization)$/iu.test(name)));
+      }
+      current = next.href;
     }
     throw new NetworkAccessDeniedError('Network redirect state is invalid');
   }
@@ -74,6 +112,16 @@ export class NodeNetworkTransport implements NetworkTransport {
     signal: AbortSignal,
     maxBytes: number,
   ): Promise<Omit<NetworkTextResponse, 'url'>> {
+    const response = await this.requestBytes(url, headers, signal, maxBytes);
+    return Object.freeze({ ...response, body: Buffer.from(response.body).toString('utf8') });
+  }
+
+  async requestBytes(
+    url: URL,
+    headers: Readonly<Record<string, string>>,
+    signal: AbortSignal,
+    maxBytes: number,
+  ): Promise<Omit<NetworkBinaryResponse, 'url'>> {
     const addresses = isIP(url.hostname)
       ? [{ address: url.hostname, family: isIP(url.hostname) }]
       : await lookup(url.hostname, { all: true, verbatim: true });
@@ -106,7 +154,7 @@ function requestPinnedAddress(
   headers: Readonly<Record<string, string>>,
   signal: AbortSignal,
   maxBytes: number,
-): Promise<Omit<NetworkTextResponse, 'url'>> {
+): Promise<Omit<NetworkBinaryResponse, 'url'>> {
   const requester = url.protocol === 'https:' ? https : http;
   return new Promise((resolve, reject) => {
     const request = requester.request({
@@ -135,7 +183,7 @@ function requestPinnedAddress(
         status: response.statusCode ?? 0,
         statusText: response.statusMessage ?? '',
         headers: Object.freeze(normalizeHeaders(response.headers)),
-        body: Buffer.concat(chunks).toString('utf8'),
+        body: Buffer.concat(chunks),
       })));
     });
     request.once('error', reject);

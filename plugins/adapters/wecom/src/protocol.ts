@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import { createMessages, type Locale } from 'zhin.js/i18n';
 /**
  * WeCom (企业微信) protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
@@ -9,7 +10,7 @@ import type { IncomingMessage } from 'node:http';
 import type { ConversationRef } from '@zhin.js/im-contract';
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface WecomEndpointConfig {
+export interface WecomEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly corpId: string;
   readonly agentId: string;

@@ -4,7 +4,7 @@ import { currentGroup, recallMessage, resolveMessage } from '../../../../convers
 import { messages as t } from '../../../../messages.js';
 
 export default defineAgentTool({
-  description: '撤回当前 QQ 群内他人的真实消息；需调用方具备群管发起权限及机器人具备实时平台权限，无需逐次审批',
+  description: '撤回当前 QQ 群内他人的真实消息；需调用方具备群管发起权限及你具备实时平台权限，无需逐次审批',
   adapter: 'icqq',
   scopes: ['group'],
   currentConversationBotRoles: ['owner', 'admin'],

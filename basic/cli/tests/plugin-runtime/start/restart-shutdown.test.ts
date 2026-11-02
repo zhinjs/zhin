@@ -9,6 +9,7 @@ const repo = resolve('.');
 const fixtureSource = join(repo, 'examples/minimal-bot');
 const tsx = pathToFileURL(join(repo, 'node_modules/tsx/dist/esm/index.mjs')).href;
 const entry = pathToFileURL(join(repo, 'basic/cli/src/plugin-runtime/start-command.ts')).href;
+const lifecycleEntry = pathToFileURL(join(repo, 'basic/cli/src/plugin-runtime/process-lifecycle.ts')).href;
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
 
@@ -119,11 +120,12 @@ export default definePlugin({
 });
 `;
 
-async function project(options: { hang?: boolean } = {}): Promise<{ root: string; port: number }> {
+async function project(options: { hang?: boolean; slow?: boolean } = {}): Promise<{ root: string; port: number }> {
   const root = await mkdtemp(join(tmpdir(), 'zhin-signal-'));
   roots.push(root);
   await cp(join(fixtureSource, 'package.json'), join(root, 'package.json'));
   if (options.hang) await writeFile(join(root, 'plugin.ts'), hangingPlugin);
+  else if (options.slow) await writeFile(join(root, 'plugin.ts'), slowStartPlugin);
   else await cp(join(fixtureSource, 'plugin.ts'), join(root, 'plugin.ts'));
   await symlink(join(fixtureSource, 'node_modules'), join(root, 'node_modules'), 'junction');
   const port = await freePort();
@@ -131,11 +133,17 @@ async function project(options: { hang?: boolean } = {}): Promise<{ root: string
   return { root, port };
 }
 
-/** Starts the real process, waits for HTTP readiness, then delivers the given signals. */
-function startAndSignal(root: string, port: number, signals: readonly NodeJS.Signals[], gapMs = 0) {
+/** Starts the real process, waits for its real signal-listener registration, then delivers the given signals. */
+function startAndSignal(root: string, signals: readonly NodeJS.Signals[], gapMs = 0) {
   const script = `
     import { runStartCommand } from ${JSON.stringify(entry)};
-    await runStartCommand({ root: ${JSON.stringify(root)}, args: ['--no-watch'], writeOutput: () => {}, writeError: value => process.stderr.write(value) });
+    import { nodeProcessLifecycleAdapter } from ${JSON.stringify(lifecycleEntry)};
+    const registerSignal = nodeProcessLifecycleAdapter.on;
+    nodeProcessLifecycleAdapter.on = (signal, listener) => {
+      registerSignal(signal, listener);
+      if (signal === 'SIGINT') process.stdout.write('test:signals-ready\\n');
+    };
+    await runStartCommand({ root: ${JSON.stringify(root)}, args: ['--no-watch'], writeOutput: value => process.stdout.write(value), writeError: value => process.stderr.write(value) });
   `;
   return new Promise<{ code: number | null; output: string; elapsedMs: number; killed: boolean }>((done, reject) => {
     const child = spawn(process.execPath, ['--import', tsx, '--input-type=module', '-e', script], {
@@ -144,15 +152,18 @@ function startAndSignal(root: string, port: number, signals: readonly NodeJS.Sig
     let output = '';
     let killed = false;
     let signalledAt = 0;
-    child.stdout.on('data', chunk => { output += String(chunk); });
+    const started = new Promise<void>(resolve => {
+      child.stdout.on('data', chunk => {
+        output += String(chunk);
+        if (output.includes('test:signals-ready\n')) resolve();
+      });
+    });
     child.stderr.on('data', chunk => { output += String(chunk); });
     const timer = setTimeout(() => { killed = true; child.kill('SIGKILL'); }, 45_000);
     void (async () => {
-      for (;;) {
-        try { await fetch(`http://127.0.0.1:${port}/`); break; } catch { await new Promise(r => setTimeout(r, 200)); }
-      }
-      // Give the runtime time to finish start-up after HTTP listens.
-      await new Promise(r => setTimeout(r, 1_000));
+      // Both HTTP and startup output precede listener installation. Observe the
+      // real process adapter registration instead of guessing a startup delay.
+      await started;
       signalledAt = Date.now();
       for (const [index, signal] of signals.entries()) {
         if (index > 0) await new Promise(r => setTimeout(r, gapMs));
@@ -165,9 +176,18 @@ function startAndSignal(root: string, port: number, signals: readonly NodeJS.Sig
 }
 
 describe.skipIf(process.platform === 'win32')('process signal shutdown', () => {
+  it('waits for actual startup when HTTP listens before a slow generation is ready', async () => {
+    const { root, port } = await project({ slow: true });
+    const result = await startAndSignal(root, ['SIGINT']);
+    expect(result.killed, result.output).toBe(false);
+    expect(result.code, result.output).toBe(0);
+    expect(result.elapsedMs).toBeLessThan(5_000);
+    expect(await portIsFree(port)).toBe(true);
+  }, 60_000);
+
   it('stops gracefully on SIGINT and frees the port', async () => {
     const { root, port } = await project();
-    const result = await startAndSignal(root, port, ['SIGINT']);
+    const result = await startAndSignal(root, ['SIGINT']);
     expect(result.killed, result.output).toBe(false);
     expect(result.code, result.output).toBe(0);
     expect(result.elapsedMs).toBeLessThan(5_000);
@@ -177,7 +197,7 @@ describe.skipIf(process.platform === 'win32')('process signal shutdown', () => {
 
   it('force-exits a hanging stop after the 5s budget and names what was still stopping', async () => {
     const { root, port } = await project({ hang: true });
-    const result = await startAndSignal(root, port, ['SIGINT']);
+    const result = await startAndSignal(root, ['SIGINT']);
     expect(result.killed, result.output).toBe(false);
     expect(result.code, result.output).toBe(130);
     expect(result.elapsedMs).toBeGreaterThanOrEqual(4_500);
@@ -188,7 +208,7 @@ describe.skipIf(process.platform === 'win32')('process signal shutdown', () => {
 
   it('exits immediately on a second SIGINT during a hanging stop', async () => {
     const { root, port } = await project({ hang: true });
-    const result = await startAndSignal(root, port, ['SIGINT', 'SIGINT'], 300);
+    const result = await startAndSignal(root, ['SIGINT', 'SIGINT'], 300);
     expect(result.killed, result.output).toBe(false);
     expect(result.code, result.output).toBe(130);
     expect(result.elapsedMs).toBeLessThan(3_000);

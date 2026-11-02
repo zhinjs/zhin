@@ -1,3 +1,4 @@
+import { createOnebot12SelfProfile } from './self-profile.js';
 /**
  * OneBot12 WS client endpoint — outbound connect to OneBot implementation.
  */
@@ -85,6 +86,7 @@ export class OneBot12WsEndpoint extends Onebot12Client implements Endpoint {
       send: request => this.#send(request),
       get transportState() { return readTransportState(); },
       management: this.#management, control: this.#control, content: this.#content,
+      profile: createOnebot12SelfProfile({ call: callApi, accountId: options.config.userId, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
     this.#releaseClientEvents = forwardOnebot12ClientEvents(this, (name, payload) => {
       void this[endpointSpec].events.run(() => {

@@ -13,6 +13,7 @@ import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
 import { BASH_TOOL_NAME, turnPolicyAllowsShell } from './native-bash-tool.js';
 import { deriveSubagentPolicy } from '../security/policy-narrowing.js';
 import type { ImageInspectionBudget } from '../media/local-image-inspection.js';
+import type { ContextFile } from '../bootstrap.js';
 import {
   isToolAboveTrust,
   narrowPolicyForTrust,
@@ -38,6 +39,9 @@ export interface SubagentTurnCapabilityOptions {
   /** The parent's exact, already-authorized generation projection. */
   readonly capabilities: AgentCapabilities;
   readonly loopHooks?: PluginAILoopHookRegistry;
+  /** Workspace text captured with the parent engine's generation; never resolve a latest Host value. */
+  readonly bootstrapContext?: string;
+  readonly contextFiles?: readonly ContextFile[];
   /** Resolved lazily: the parent's prompt (and model choice) is built after its capability plan. */
   readonly resolveModel: () => SubagentModelSelection | undefined;
 }
@@ -129,9 +133,17 @@ async function runSubagentTurn(
     trustLevel,
   );
   const shellAllowed = turnPolicyAllowsShell(policy);
+  const sourceProfile = parentTurn.ports.selfProfile;
+  const selfProfile = sourceProfile && (run.readOnly ? Object.freeze({
+    peek: () => ({ ...sourceProfile.peek(), writableFields: [] }),
+    read: async (request: import('@zhin.js/im-contract').SelfProfileReadRequest) => ({ ...await sourceProfile.read(request), writableFields: [] }),
+  }) : sourceProfile);
+  const accountProfile = selfProfile?.peek();
   const childTools = Object.freeze(options.capabilities.tools.filter(tool =>
     tool.name !== SUBAGENT_TOOL_NAME
     && (shellAllowed || tool.name !== BASH_TOOL_NAME)
+    && (sourceProfile || (tool.name !== 'get_self_profile' && tool.name !== 'set_self_profile'))
+    && (!run.readOnly || tool.name !== 'set_self_profile')
     && !isToolAboveTrust(tool, trustLevel)));
   const turnId = `${parentTurn.identity.turnId}:subagent:${run.index}`;
   const sessionKey = `${parentTurn.session.key}#subagent:${run.index}`;
@@ -141,7 +153,9 @@ async function runSubagentTurn(
     execution: parentTurn.execution,
     principal: parentTurn.principal,
     intent: Object.freeze({ kind: 'new' as const }),
-    input: Object.freeze({ text: run.task, locale: parentTurn.input.locale, commandPrefix: parentTurn.input.commandPrefix, commandMenu: parentTurn.input.commandMenu }),
+    input: Object.freeze({ text: run.task, locale: parentTurn.input.locale, commandPrefix: parentTurn.input.commandPrefix, commandMenu: parentTurn.input.commandMenu,
+      ...(accountProfile ? { contextState: { ...parentTurn.input.contextState, bot: { ...parentTurn.input.contextState?.bot, profile: accountProfile } } } : {}),
+    }),
     session: Object.freeze({ key: sessionKey }),
     policy,
     capabilities: Object.freeze({
@@ -155,6 +169,7 @@ async function runSubagentTurn(
       journal: createScopedTraceJournal(parentTurn.ports.journal, { turnId, sessionKey }),
       ...(parentTurn.ports.approval ? { approval: parentTurn.ports.approval } : {}),
       ...(parentTurn.ports.question ? { question: parentTurn.ports.question } : {}),
+      ...(selfProfile ? { selfProfile } : {}),
     }),
   });
   const plan = createDeferredCapabilityPlan({
@@ -169,7 +184,7 @@ async function runSubagentTurn(
     host,
     sessionId: sessionKey,
     rawContent: run.task,
-    promptProfile: { kind: 'interactive' },
+    promptProfile: { kind: 'delegated', persona: SUBAGENT_PERSONA },
     turnContext: turn,
     imageInspectionBudget: options.imageInspectionBudget,
     allTools: [...plan.allTools],
@@ -178,6 +193,8 @@ async function runSubagentTurn(
     toolEventSource: 'authority',
     loopHooks: options.loopHooks,
     promptRuntime: {
+      bootstrapContext: options.bootstrapContext?.trim() ?? '',
+      contextFiles: options.contextFiles,
       agentNickname: host.activeBinding?.nickname,
       modelId: run.model.modelId,
       providerAlias: host.activeBinding?.providerAlias,

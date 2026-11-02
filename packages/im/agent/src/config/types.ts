@@ -42,7 +42,7 @@ export interface AgentBindingConfig {
    * effective config.
    */
   match?: RouteMatchConfig | RouteMatchConfig[];
-  /** Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024 #11）。 */
+  /** 任务/协作角色昵称（ADR 0024 #11）；IM 自我资料优先取当前 Endpoint，此值仅作最终显示名兜底。 */
   nickname?: string;
   /** spawn_task 可见子 agent 类型（glob → allow/deny，ADR 0030）。 */
   permission?: {
@@ -56,7 +56,7 @@ export interface ResolvedAgentBinding {
   providerAlias: string;
   model: string;
   mcpServers: string[];
-  /** 展示昵称（缺省回退 role label / agent 名）。 */
+  /** 任务/协作角色显示名；IM 当前账号昵称由 Endpoint 资料提供，此值仅作最终兜底。 */
   nickname?: string;
   /** spawn_task 子 agent 类型过滤（ADR 0030）。 */
   permission?: AgentBindingConfig['permission'];

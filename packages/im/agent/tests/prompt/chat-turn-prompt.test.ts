@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import { buildRichSystemPrompt, describePromptSectionsForDebug, fillPromptSlots } from '../../src/prompt/system-prompt.js';
 import type { TurnContextView } from '../../src/context/turn-envelope.js';
 
-const SOUL = '## SOUL.md\n\n你是群里的老朋友，说话随意。';
+const SOUL = '## SOUL.md\n\n我是群里的老朋友，说话随意。';
 const base = {
   config: DEFAULT_CONFIG,
   skillRegistry: null,
@@ -33,21 +33,27 @@ describe('chat turn prompt', () => {
     expect(prompt).toContain('# Workspace tasks in chat');
     expect(prompt).not.toContain('Keep response under 4 lines');
     expect(prompt).not.toContain('override everything');
-    expect(prompt.indexOf('你是群里的老朋友')).toBeLessThan(prompt.indexOf('# Chat style'));
+    expect(prompt.indexOf('我是群里的老朋友')).toBeLessThan(prompt.indexOf('# Chat style'));
   });
 
   it('keeps the task-agent prompt for non-IM turns', () => {
     const task = ids(httpTurn);
     expect(task).toContain('§5b_editing');
     expect(task.indexOf('§11_bootstrap')).toBeGreaterThan(task.indexOf('§5b_editing'));
-    expect(buildRichSystemPrompt({ ...base, turn: httpTurn })).toContain('<workflow>');
+    const prompt = buildRichSystemPrompt({ ...base, turn: httpTurn });
+    expect(prompt).toContain('<workflow>');
+    expect(prompt).not.toContain('Keep response under 4 lines');
+    expect(prompt).toContain('match reply length to question complexity');
   });
 
-  it('fills the {{nickname}} slot of workspace prompt files from the agent binding', () => {
-    const soul = '## SOUL.md\n\n我是 {{nickname}}，大家叫我{{ nickname }}就行。';
+  it('loads first-person SOUL prose without deriving account identity from it', () => {
+    const soul = '## SOUL.md\n\n我是一个喜欢聊天和音乐的人。';
     expect(buildRichSystemPrompt({ ...base, bootstrapContext: soul, turn: imTurn, agentNickname: '小凉' }))
-      .toContain('我是 小凉，大家叫我小凉就行。');
-    expect(fillPromptSlots(soul, undefined)).toContain('我是 Zhin，大家叫我Zhin就行。');
+      .toContain('我是一个喜欢聊天和音乐的人。');
+  });
+
+  it('keeps explicit capability nickname templates separate from SOUL prose', () => {
+    expect(fillPromptSlots('Hello {{nickname}}', undefined)).toBe('Hello Zhin');
     expect(fillPromptSlots('{{nick}}', '小凉')).toBe('{{nick}}');
   });
 });

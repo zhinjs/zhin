@@ -19,10 +19,10 @@ describe('capability catalog', () => {
     expect(clipped.endsWith('…')).toBe(true);
   });
 
-  it('renders skills as name + trigger with the load_skill hint', () => {
+  it('renders only the Skill directory without shared loading guidance', () => {
     const text = renderSkillCatalog([{ name: 'weekly-report', description: 'Write the report.\nInternal notes.' }])!;
     expect(text).toContain('## Available skills');
-    expect(text).toContain('load_skill(name)');
+    expect(text).not.toContain('load_skill(name)');
     expect(text).toContain('- weekly-report: Write the report');
     expect(text).not.toContain('Internal notes');
   });

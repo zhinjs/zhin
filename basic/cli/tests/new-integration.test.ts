@@ -293,7 +293,7 @@ describe('CLI new command integration', () => {
     const packageJson = await fs.readJson(path.join(pluginDir, 'package.json'))
     expect(packageJson.zhin.features).toEqual([
       { package: '@zhin.js/skill', api: '^1.0.0' },
-      { package: '@zhin.js/adapter', api: '^2.0.0' },
+      { package: '@zhin.js/adapter', api: '^2.1.0' },
     ])
     expect(packageJson.dependencies).toBeUndefined()
     expect(packageJson.peerDependencies['@zhin.js/adapter']).toBeDefined()

@@ -425,16 +425,16 @@ plugins:
 icqq:
   master: "${ICQQ_MASTER}" # Top-level shared: applies to all endpoints
   endpoints:
-    # Per-entry: name is required, other fields merge with top-level (per-entry takes priority)
-    - name: "${ICQQ_ACCOUNT_1}"
-    - name: "${ICQQ_ACCOUNT_2}"
+    # Per-entry: id is required, other fields merge with top-level (per-entry takes priority)
+    - id: "${ICQQ_ACCOUNT_1}"
+    - id: "${ICQQ_ACCOUNT_2}"
 ```
 
 Expansion rules (`@zhin.js/adapter`'s `expandEndpointConfigs`):
 
-- Each endpoint's final configuration = instance configuration (without the `endpoints` key) shallow-merged with the entry's fields, **per-entry fields override top-level**.
-- `name` is required and must be a non-empty string; must not contain `~`; duplicates keep only the first with a warning.
-- When `endpoints` is empty or all entries are invalid, it falls back to a single Endpoint (named after the instanceKey).
+- Connection fields are shallow-merged, with per-entry fields taking precedence. Profile fallbacks merge separately per field.
+- Every entry requires a non-empty `id`. Reserved delimiters (`~` and NUL), duplicate IDs and invalid entries are rejected.
+- Missing or empty `endpoints` creates one Endpoint using the top-level `id`, or the instance key when it is absent.
 
 Real-world example (QQ official bot, main account through proxy gateway + sandbox account coexisting):
 
@@ -445,14 +445,14 @@ plugins:
   slack: "@zhin.js/adapter-slack"
 qq:
   endpoints:
-    - name: zhin
+    - id: zhin
       appid: "${QQ_APPID}"
       secret: "${QQ_SECRET}"
       mode: websocket
       sandbox: false
       gatewayUrl: "https://bots.example.com/gateway/102005927"
       intents: [ GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES ]
-    - name: "102069707"
+    - id: "102069707"
       appid: "${QQ_SANDBOX_APPID}"
       secret: "${QQ_SANDBOX_SECRET}"
       mode: websocket
@@ -460,7 +460,7 @@ qq:
       intents: [ GUILDS, GROUP_AND_C2C_EVENT ]
 slack:
   endpoints:
-    - name: zhin
+    - id: zhin
       token: "${SLACK_TOKEN}"
       appToken: "${SLACK_APP_TOKEN}"
       signingSecret: "${SLACK_SIGNING_SECRET}"
@@ -483,3 +483,32 @@ plugins: {}
 ```
 
 After starting, use the `zhin setup` wizard to progressively add database / adapters / AI (see [CLI Reference](../cli/index.md)); for how to run, see [zhin runtime start in Detail](../cli/runtime.md).
+
+## Account self profile
+
+The Agent uses the current Endpoint's platform facts first. Adapter-level `nickname` and `profile`
+are missing-field fallbacks; each `endpoints[]` entry can override them. `profile` is merged per field.
+Saving these defaults never changes the platform account. A known empty signature or interests list
+stays empty, and group cards remain separate. The existing AI nickname is the final fallback;
+internal task agents keep their role identities.
+
+```yaml
+icqq:
+  master: "your QQ ID"
+  nickname: Zhin
+  profile:
+    gender: unknown
+    interests: [music, photography]
+    bio: A conversational assistant
+  endpoints:
+    - id: "bot QQ ID"
+      nickname: Zhin Bot
+      profile:
+        interests: [music, reading]
+```
+
+`profile` accepts `gender`, `age`, `birthday` (`YYYY-MM-DD`), `signature`, `avatar` (image URL),
+`interests` (string array), and `bio`. Missing information stays unknown. Ordinary turns reuse facts
+read for that account incarnation; `get_self_profile` refreshes them explicitly. `set_self_profile`
+changes one actually supported platform field under the existing identity approval policy. Editing
+fallback configuration and changing platform profile are separate operations.

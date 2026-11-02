@@ -21,7 +21,7 @@ const expectedSurface = new Map([
   ['@zhin.js/skill', ['SkillDefinition', 'SkillScope', 'parseSkillMarkdown']],
   ['@zhin.js/tool', [
     'AgentToolDefiner', 'AgentToolDefinition', 'ToolExecutionContext', 'ToolInvocationContext',
-    'ToolInvocationPolicy', 'ToolProtectedPathData', 'ToolQuestionPort', 'ToolQuestionRequest', 'ToolApproval',
+    'ToolInvocationPolicy', 'ToolAvailabilityContext', 'ToolProtectedPathData', 'ToolQuestionPort', 'ToolQuestionRequest', 'ToolApproval',
     'ToolInvocationOrigin', 'ToolQuestionAnswer', 'ToolQuestionType', 'ToolRisk', 'ToolRiskCategory', 'ToolScope',
     'defineAgentTool',
   ]],
@@ -56,6 +56,9 @@ const expectedSurface = new Map([
     'PlatformEvent', 'AdapterCapability', 'AdapterInteractiveMode',
     'AdapterMarkdownMode', 'AdapterOperation', 'AdapterOperationDeclaration',
     'AdapterOutboundMedia', 'AdapterReactionDeclaration', 'HtmlOutboundMode', 'defineAdapter',
+    'EndpointProfile', 'EndpointProfileConfiguration',
+    'SelfProfile', 'SelfProfileField', 'SelfProfileChange', 'SelfProfileReadRequest',
+    'SelfProfileWriteRequest', 'SelfProfileWriteResult', 'SelfProfileSnapshot', 'SelfProfilePort',
   ]],
   ['zhin.js/agent', [
     'AgentResourceHub', 'AgentPreset', 'AgentTool', 'AgentToolExecutionContext',

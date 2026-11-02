@@ -79,6 +79,7 @@ import type { SystemMessage as IcqqSystemMessage } from './types.js';
 import { ManagedIcqqClient, type IcqqBackgroundOperation } from './managed-client.js';
 import { inspectGroupMember, moderateGroupMember } from './group-moderation.js';
 import { inspectGroupMemberProfile, inspectGroupScene } from './group-scene.js';
+import { createIcqqSelfProfile } from './self-profile.js';
 
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
@@ -239,7 +240,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
       start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(), stop: () => this.#stopFramework(),
       send: request => this.#sendFramework(request), get name() { return name(); },
       get transportState() { return state(); },
-      management: this.#management, control: this.#control,
+      management: this.#management, control: this.#control, profile: createIcqqSelfProfile(this),
       get content() { return content(); },
     });
     this.#contentResolver = new IcqqContentResolver(this);

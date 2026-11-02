@@ -52,6 +52,24 @@ async function createEndpoint(ws: ReturnType<typeof createMockWs>, probeLoginInf
 
 const registry = getProcessPeerRegistry();
 
+async function verifyProfileAccountSwitch(endpoint: Awaited<ReturnType<typeof createEndpointHarness<OneBot11WsEndpoint | OneBot11WssEndpoint>>>, ws: ReturnType<typeof createMockWs>) {
+  ws.send.mockImplementation((data: string) => {
+    const request = JSON.parse(data) as { echo: string };
+    queueMicrotask(() => ws.emitMessage(JSON.stringify({ status: 'ok', retcode: 0,
+      data: { user_id: 1, nickname: 'Previous account', age: 25 }, echo: request.echo })));
+  });
+  const port = endpoint.index.profile(endpoint.canonicalId)!;
+  expect((await port.read({ signal: new AbortController().signal })).values.nickname).toBe('Previous account');
+  ws.emitMessage(JSON.stringify({ post_type: 'meta_event', meta_event_type: 'heartbeat', self_id: 2, status: {} }));
+  await vi.waitFor(() => expect(endpoint.index.connection('onebot11', endpoint.canonicalId)?.selfUserId).toBe('2'));
+  // An old account's captured port cannot be rebound to the new logged-in account.
+  expect(() => port.peek()).toThrow('Profile account changed');
+  await expect(port.read({ signal: new AbortController().signal })).rejects.toMatchObject({ disposition: 'not_sent' });
+  const current = endpoint.index.profile(endpoint.canonicalId)!;
+  expect(current.peek().values.nickname).toBeUndefined();
+  expect(current.peek().values.age).toBeUndefined();
+}
+
 /** 让 get_login_info 探测停在手动 deferred 上，其余 action 透传。 */
 function deferredLoginInfo(endpoint: Awaited<ReturnType<typeof createEndpointHarness<OneBot11WsEndpoint | OneBot11WssEndpoint>>>) {
   let resolve!: (value: unknown) => void;
@@ -73,6 +91,12 @@ describe('resolveOnebot11SelfId', () => {
 });
 
 describe('OneBot11WsEndpoint selfUserId', () => {
+  it('invalidates the previous account profile when the live WS reports a different account', async () => {
+    const ws = createMockWs(), endpoint = await createEndpoint(ws, false);
+    await endpoint.start(); endpoint.open();
+    try { await verifyProfileAccountSwitch(endpoint, ws); }
+    finally { await endpoint.stop(); }
+  });
   it('reports self_id from inbound events and never uses config.id', async () => {
     const ws = createMockWs();
     const endpoint = await createEndpoint(ws, false);
@@ -183,6 +207,15 @@ describe('OneBot11WssEndpoint selfUserId', () => {
     });
     return { endpoint, connect };
   }
+
+  it('invalidates the previous account profile when the reverse WS reports a different account', async () => {
+    const { endpoint, connect } = await createWss(false), ws = createMockWs();
+    await endpoint.start(); connect(ws);
+    await vi.waitFor(() => expect(endpoint.index.describe()[0]?.transportState).toBe('open'));
+    endpoint.open();
+    try { await verifyProfileAccountSwitch(endpoint, ws); }
+    finally { await endpoint.stop(); }
+  });
 
   it('reports self_id from inbound events and clears on stop', async () => {
     const { endpoint, connect } = await createWss(false);

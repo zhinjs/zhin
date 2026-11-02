@@ -75,11 +75,15 @@ export class BilibiliLiveEndpoint extends BilibiliLiveClient implements Endpoint
     super(options.config, options.fetch ?? (globalThis.fetch as unknown as BilibiliLiveFetch), options.now, options.signal);
     this.#options = options;
     const readTransportState = () => this.#transportState;
+    const client = this;
     this[endpointSpec] = createEndpointSpecification(this, {
       name: options.config.id,
       start: () => this.#start(), open: () => this.#openEndpoint(),
       close: () => this.#close(), stop: () => this.#stop(),
       send: request => this.#send(request),
+      profile: { writableFields: [], get current() { return client.currentSelfProfile; },
+        read: ({ signal }) => this.readSelfProfile(signal),
+      },
       get transportState() { return readTransportState(); },
     });
     this.#logger = getAdapterLogger('bilibili-live', options.config.id);

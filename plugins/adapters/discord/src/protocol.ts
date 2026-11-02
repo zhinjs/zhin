@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import { validateDiscordGatewayFaultProxy } from './gateway-fault-proxy.js';
 /** Discord Gateway protocol helpers. Canonicalization is owned by Core. */
 
@@ -15,7 +16,7 @@ export interface DiscordActivity {
 }
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface DiscordEndpointConfig {
+export interface DiscordEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly token: string;
   /** Default `gateway`. `interactions` uses httpHostToken POST + Ed25519 verify. */

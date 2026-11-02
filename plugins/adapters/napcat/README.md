@@ -116,3 +116,14 @@ MIT License
 ### 高阶消息支持边界
 
 NapCat 官方消息兼容表标明 share 仅接收，不支持发送；Markdown 仅可在双层合并转发内发送，不支持直接消息。Canonical `markdown`、`share`、`keyboard` 直接出站明确返回 `unsupported_operation / not_sent`，不会将占位段或原始协议猜测报告成功。当前未实现合并转发 Markdown，亦无原生按钮回调闭环。参考：[官方兼容表](https://napneko.github.io/develop/msg)。
+
+## 当前账号资料
+
+三个传输模式（WS、反向 WS、HTTP）共用当前账号资料端口。读取通过 `get_login_info` 定位真实账号，再取该账号的 `get_stranger_info`；写入只作用于当前登录账号，沿用 Agent 身份类审批。
+
+- 可读：昵称、性别、年龄、个性签名。
+- 可写：昵称、性别、签名、头像。年龄、生日、兴趣和独立个人简介没有接到已验证的写接口。
+- `set_qq_profile.personal_note` 是签名，不冒充个人简介；性别变更按上游要求携带当前昵称，其他资料由 NapCat 自身保留。平台接口不提供跨外部客户端的 CAS，因此同时在 QQ 客户端改名可能与此类读后写操作竞争。
+- `set_qq_profile` 内层 `result` 非零同样视为拒绝。头像修改只报告平台已确认成功，不查询或返回修改后的头像 URL，也不把上传源链接或 base64 当成平台头像。
+
+`nickname` / `profile` 配置仅补足缺失字段，Endpoint 项可覆盖适配器默认值，配置不写回 QQ。接口语义依据 [NapCat 的资料设置实现](https://github.com/NapNeko/NapCatQQ/blob/main/packages/napcat-onebot/action/go-cqhttp/SetQQProfile.ts) 与 [账号信息实现](https://github.com/NapNeko/NapCatQQ/blob/main/packages/napcat-onebot/action/go-cqhttp/GetStrangerInfo.ts)。

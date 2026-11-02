@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Weixin iLink protocol helpers (no legacy Adapter/Endpoint / segment-mapper).
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -9,7 +10,7 @@ import { DEFAULT_API_BASE_URL, DEFAULT_CDN_BASE_URL } from './ilink-meta.js';
 import type { WeixinMessage } from './ilink-types.js';
 
 /** One expanded Weixin iLink endpoint configuration produced by AdapterIndex. */
-export interface WeixinIlinkEndpointConfig {
+export interface WeixinIlinkEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly botAgent?: string;
   readonly baseUrl?: string;

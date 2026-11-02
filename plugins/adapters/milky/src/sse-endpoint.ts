@@ -1,3 +1,4 @@
+import { createMilkySelfProfile } from './self-profile.js';
 /**
  * Milky SSE client endpoint — GET text/event-stream on /event.
  */
@@ -80,6 +81,8 @@ export class MilkySseEndpoint extends MilkyClient implements Endpoint {
       close: () => { this.#open = false; }, stop: () => this.#stop(),
       send: request => this.#send(request),
       management: this.#management, control: this.#control,
+      profile: createMilkySelfProfile({ call: request => call(request).then(response => readMilkyResponse(response, request.action)),
+        reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
       get transportState() { return readTransportState(); },
     });
     forwardMilkyClientEvents(this, (name, payload) => {

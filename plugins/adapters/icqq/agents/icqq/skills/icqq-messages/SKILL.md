@@ -23,6 +23,6 @@ Only use real message IDs from the current conversation. Do not invent IDs, sour
 
 `quote_reply` sends a text reply quoting one original; `forward_messages` sends a merged forward of the supplied originals. Use `inspect_conversation_reference` to read an incoming quote/forward when available; it does not send messages.
 
-`recall_own_message` needs no management role or per-call approval, including when the bot is an ordinary group member. It verifies the bot authored the message. The platform decides the recall time window; never promise success before receiving confirmation or retry an unconfirmed result automatically. To recall another member's message, load `icqq-group-admin` instead.
+`recall_own_message` needs no management role or per-call approval, including when you are an ordinary group member. It verifies that you authored the message. The platform decides the recall time window; never promise success before receiving confirmation or retry an unconfirmed result automatically. To recall another member's message, load `icqq-group-admin` instead.
 
 These tools currently support QQ private/group conversations, not guild channels. A failed or suppressed outbound receipt is not a delivered message.

@@ -50,6 +50,7 @@ export interface BilibiliCookie {
 export interface BilibiliNav {
   readonly mid: string;
   readonly uname?: string;
+  readonly face?: string;
 }
 
 export class BilibiliClient {
@@ -125,15 +126,16 @@ export class BilibiliClient {
   /** 登录态自检：uid + 昵称（未登录返回 undefined）。未登录时 B 站返回 -101。 */
   async getNav(): Promise<BilibiliNav | undefined> {
     if (!this.hasCookie) return undefined;
-    let data: { isLogin?: boolean; mid?: number; uname?: string } | undefined;
+    let data: { isLogin?: boolean; mid?: number; uname?: string; face?: string } | undefined;
     try {
-      data = await this.request<{ isLogin?: boolean; mid?: number; uname?: string }>('/x/web-interface/nav');
+      data = await this.request<{ isLogin?: boolean; mid?: number; uname?: string; face?: string }>('/x/web-interface/nav');
     } catch (error) {
       if (error instanceof BilibiliApiError && error.code === -101) return undefined;
       throw error;
     }
     return data?.isLogin && data.mid
-      ? Object.freeze({ mid: String(data.mid), ...(data.uname ? { uname: data.uname } : {}) })
+      ? Object.freeze({ mid: String(data.mid), ...(typeof data.uname === 'string' ? { uname: data.uname } : {}),
+          ...(typeof data.face === 'string' ? { face: data.face } : {}) })
       : undefined;
   }
 

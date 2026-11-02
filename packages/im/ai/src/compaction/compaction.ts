@@ -219,7 +219,7 @@ async function generateSummary(
 - Important user preferences and constraints
 - Core topics discussed
 
-The summary should be brief but informative so that later turns can quickly recover context.`;
+Keep your summary brief but informative so later turns can quickly recover context.`;
 
   if (customInstructions) {
     systemPrompt += `\n\nAdditional instructions: ${customInstructions}`;

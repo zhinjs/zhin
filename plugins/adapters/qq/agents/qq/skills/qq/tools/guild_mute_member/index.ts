@@ -5,7 +5,7 @@ import { currentGuildChannel } from '../../../../conversation.js';
 import { messages as t } from '../../../../messages.js';
 
 export default defineAgentTool({
-  description: '禁言 / 解除禁言当前 QQ 频道中的成员；需机器人具备频道管理权限',
+  description: '禁言 / 解除禁言当前 QQ 频道中的成员；需你具备频道管理权限',
   adapter: 'qq',
   scopes: ['channel'],
   tags: ['qq'],

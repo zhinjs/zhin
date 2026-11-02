@@ -89,6 +89,9 @@ export interface TurnContextState {
     /** Platform account id, not the configured Endpoint name. */
     id?: string;
     name?: string;
+    /** Account facts retain their platform/configured provenance; distinct from a group card. */
+    profile?: import('@zhin.js/im-contract').SelfProfileSnapshot;
+    profileError?: 'lookup_failed';
     platformRole?: string;
     /** Stable lookup outcome code; role remains unknown when the platform read fails. */
     platformRoleError?: string;
@@ -271,6 +274,7 @@ export interface TurnPorts {
   readonly activity?: ActivityPort;
   readonly delivery?: DeliveryPort;
   readonly question?: ToolQuestionPort;
+  readonly selfProfile?: NonNullable<ToolInvocationContext['selfProfile']>;
   readonly references?: ReferencePort;
   readonly conversationContext?: ConversationContextPort;
   /** Runtime-only native Client capability; absent for detached/scheduled turns. */

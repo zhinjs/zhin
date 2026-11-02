@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import type { MessageElem, Sendable, ShareElem } from '@icqqjs/icqq';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { resolveAdapterNotifyTarget, type AdapterNotifyTarget, type ResolvedAdapterNotifyTarget } from 'zhin.js/adapter';
@@ -232,7 +233,7 @@ export const Actions = {
 } as const;
 
 /** One expanded ICQQ endpoint configuration produced by AdapterIndex. */
-export interface IcqqEndpointConfig {
+export interface IcqqEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly autoReconnect?: boolean;
   readonly outboundMedia?: 'file' | 'base64';

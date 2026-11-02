@@ -1,6 +1,7 @@
 import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
@@ -540,6 +541,8 @@ describe('sandbox plugin runtime adapter', () => {
     const first = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
     const second = new WebSocket(`ws://127.0.0.1:${port}/sandbox`);
     try {
+      // 服务端接入先于客户端处理升级响应；等待两端真实 open 后再验证连接保留。
+      await Promise.all([once(first, 'open'), once(second, 'open')]);
       await vi.waitFor(() => expect(endpoint.endpoint.connections()).toHaveLength(2));
       expect(first.readyState).toBe(WebSocket.OPEN);
       expect(second.readyState).toBe(WebSocket.OPEN);

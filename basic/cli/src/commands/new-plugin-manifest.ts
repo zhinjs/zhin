@@ -296,6 +296,9 @@ if (!process.argv.includes('--clean')) {
 export function createPluginManifest(input: PluginManifestInput): Record<string, unknown> {
   const { kind, peerRanges, devRanges } = input;
   const capabilities = capabilityPackages(kind);
+  const featureApis: Readonly<Record<string, string>> = {
+    '@zhin.js/adapter': '^2.1.0',
+  };
 
   const peerDependencies: Record<string, string> = { 'zhin.js': peerRanges['zhin.js'] };
   const peerDependenciesMeta: Record<string, { optional: true }> = {};
@@ -354,7 +357,10 @@ export function createPluginManifest(input: PluginManifestInput): Record<string,
       entry: './plugin.js',
       engine: '^1.0.0',
       runtime: 'trusted',
-      features: capabilities.map((name) => ({ package: name, api: name === '@zhin.js/adapter' ? '^2.0.0' : '^1.0.0' })),
+      features: capabilities.map((name) => ({
+        package: name,
+        api: featureApis[name] ?? '^1.0.0',
+      })),
       plugins: [],
     },
   };

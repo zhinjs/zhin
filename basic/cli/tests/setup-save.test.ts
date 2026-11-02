@@ -57,6 +57,15 @@ describe('setup 配置落盘', () => {
     expect(fs.existsSync(path.join(tmp, 'zhin.config.yml'))).toBe(false);
     // 引导文件仍正常创建
     expect(fs.existsSync(path.join(tmp, 'SOUL.md'))).toBe(true);
+    expect(fs.readFileSync(path.join(tmp, 'SOUL.md'), 'utf8')).toContain('我是一个能力出众');
+    const tools = fs.readFileSync(path.join(tmp, 'TOOLS.md'), 'utf8');
+    expect(tools).toContain('：直接调用');
+    expect(tools).toContain('**高风险操作**：简要说明理由');
+    expect(tools).toContain('`discover` / `load_skill`');
+    expect(tools).toContain('执行 `bash` shell 命令时需谨慎');
+    expect(tools).toContain('向用户说明并提供替代方案');
+    expect(tools).not.toMatch(/常用工具场景|`read_file`|`web_search`|`memory_upsert`/u);
+    expect(fs.readFileSync(path.join(tmp, 'AGENTS.md'), 'utf8')).toContain('你可通过 memory_store');
   });
 
   it('updates an existing editable configuration and retains unrelated values and comments', async () => {
@@ -113,6 +122,15 @@ describe('setup 配置落盘', () => {
     expect(yaml.parse(fs.readFileSync(file, 'utf8'))).toMatchObject({ locale: 'en' });
     expect(yaml.parse(fs.readFileSync(file, 'utf8'))).not.toHaveProperty('timezone');
     expect(fs.readFileSync(path.join(tmp, 'SOUL.md'), 'utf8')).not.toMatch(/[\u3400-\u9fff]/u);
+    expect(fs.readFileSync(path.join(tmp, 'SOUL.md'), 'utf8')).toContain('I am a capable');
+    const tools = fs.readFileSync(path.join(tmp, 'TOOLS.md'), 'utf8');
+    expect(tools).toContain('call directly');
+    expect(tools).toContain('**High-risk operations:** explain the reason briefly');
+    expect(tools).toContain('`discover` / `load_skill`');
+    expect(tools).toContain('Run `bash` shell commands carefully.');
+    expect(tools).toContain('Explain permission or dependency failures and offer an alternative.');
+    expect(tools).not.toMatch(/Common tasks|`read_file`|`web_search`|`memory_upsert`/u);
+    expect(fs.readFileSync(path.join(tmp, 'AGENTS.md'), 'utf8')).toContain('You can append');
     expect(log.mock.calls.flat().join(' ')).toContain('Zhin configuration wizard');
   });
 

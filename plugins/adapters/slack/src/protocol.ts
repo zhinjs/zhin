@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Slack protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -19,7 +20,7 @@ const SLACK_SIG_VERSION = 'v0';
 const MAX_TIMESTAMP_DRIFT_SECONDS = 300;
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface SlackEndpointConfig {
+export interface SlackEndpointConfig extends EndpointProfileConfiguration {
   readonly webApiProxy?: import('./web-api-proxy.js').SlackWebApiProxy;
   readonly streamProxy?: import('./stream-proxy.js').SlackStreamProxy;
   readonly id: string;

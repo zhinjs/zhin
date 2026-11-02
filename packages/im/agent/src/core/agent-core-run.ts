@@ -194,6 +194,7 @@ export interface AgentLoopTurnInput {
   loopHooks?: PluginAILoopHookRegistry;
   promptRuntime?: Readonly<{
     bootstrapContext?: string;
+    contextFiles?: readonly import('../bootstrap.js').ContextFile[];
     activeSkillsContext?: string;
     agentNickname?: string;
     modelId?: string;
@@ -512,7 +513,7 @@ export async function* runAgentLoopTextTurnRun(
         ...(turnShellPolicy.approvalMode ? { execApprovalMode: turnShellPolicy.approvalMode } : {}),
       }
     : host.config;
-  let promptParts = hasTools
+  let promptParts = hasTools || input.promptProfile.kind === 'schedule'
     ? await buildAgentPathSystemPromptParts(host, {
         profile: input.promptProfile,
         turn: input.turnContext,
@@ -648,6 +649,7 @@ export async function* runAgentLoopTextTurnRun(
         bootstrapSkipped: scopeBootstrapText(
           input.promptRuntime?.bootstrapContext ?? '',
           bootstrapSceneFromTurn(input.turnContext),
+          { contextFiles: input.promptRuntime?.contextFiles },
         ).skipped,
         activeSkillsContext: input.promptRuntime?.activeSkillsContext,
         loadedTools: agentTools,
