@@ -127,7 +127,7 @@ export class AssistantEventIngress {
         if (!job) {
           return { ok: false, status: 'error', error: `job not found: ${req.jobId}` };
         }
-        void this.engine.runJobNow(req.jobId);
+        void this.engine.runJobNow(req.jobId, { source: 'event' });
         logger.info(formatCompact({ op: 'event_trigger', jobId: req.jobId, source: req.source }));
         return { ok: true, jobId: req.jobId, status: 'queued' };
       }
@@ -144,7 +144,7 @@ export class AssistantEventIngress {
         payload: req.payload,
       });
 
-      void this.engine.runJobNow(jobId);
+      void this.engine.runJobNow(jobId, { source: 'event' });
       logger.info(formatCompact({ op: 'event_enqueue', jobId, source: req.source, type: req.type }));
       return { ok: true, jobId, status: 'queued' };
     } catch (e: unknown) {

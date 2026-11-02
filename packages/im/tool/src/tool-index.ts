@@ -141,6 +141,7 @@ export class ToolIndex {
       }),
       ...(invocation.question ? { question: invocation.question } : {}),
       ...(invocation.selfProfile ? { selfProfile: invocation.selfProfile } : {}),
+      ...(invocation.effects ? { effects: invocation.effects } : {}),
     } as ToolExecutionContext;
     Object.defineProperty(context, '$client', {
       enumerable: true,

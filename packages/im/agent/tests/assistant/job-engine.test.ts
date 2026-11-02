@@ -23,6 +23,29 @@ describe('ScheduleJobEngine', () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
+  it.each(['every', 'at'] as const)('keeps %s business completion separate from an unknown final delivery', async kind => {
+    const execute = vi.fn(async () => ({ success: true, output: 'Completed result', responseText: 'Completed result',
+      durationMs: 10, delivery: { status: 'unknown', channel: 'im' } }));
+    const worker = new JobWorker({ executor: { execute } as unknown as TaskExecutor });
+    const store = new ScheduleJobStore({ dataDir });
+    const sendIm = vi.fn(async () => {});
+    const engine = new ScheduleJobEngine({ store, worker, notifyOnFailure: true,
+      router: createNotificationRouter({ resolveAdapter: () => undefined, sendIm }) });
+    try {
+      await engine.addJob({ id: 'completed-notice-unknown', enabled: true,
+        schedule: kind === 'at' ? { kind: 'at', atMs: Date.now() + 60_000, deleteAfterRun: true } : { kind: 'every', everyMs: 60_000 },
+        action: { kind: 'agent', prompt: 'Complete once' }, notify: { channel: 'im', target: { channel: 'im', scene: {
+          platform: 'fixture', endpointKey: 'canonical-account', sceneId: 'room', kind: 'private',
+        } } } });
+      await engine.runJobNow('completed-notice-unknown');
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(sendIm).not.toHaveBeenCalled();
+      const stored = await store.getJob('completed-notice-unknown');
+      if (kind === 'at') expect(stored).toBeUndefined();
+      else expect(stored?.state).toMatchObject({ lastStatus: 'ok' });
+    } finally { engine.unload(); await worker.stop(); }
+  });
+
   it('addJob 持久化并在 every 调度触发时调用 worker', async () => {
     const execute = vi.fn(async () => ({
       success: true,

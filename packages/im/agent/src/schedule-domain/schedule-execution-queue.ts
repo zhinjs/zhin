@@ -4,11 +4,19 @@ export interface ScheduleExecutionQueueOptions {
   readonly defaultMaxRetries: number;
 }
 
+export type ScheduleQueueRetryDecision = Readonly<{ retry: true }> | Readonly<{
+  retry: false;
+  reason: 'cancelled' | 'timeout' | 'attempt_budget_exhausted' | 'not_retryable';
+}>;
+
 export interface ScheduleExecutionRequest<T> {
   readonly name: string;
   readonly timeoutMs?: number;
   readonly maxRetries?: number;
   readonly execute: (signal: AbortSignal) => Promise<T>;
+  /** The execution owner must prove the whole operation safe to replay. */
+  readonly canRetry?: (error: unknown) => boolean;
+  readonly onRetryDecision?: (decision: ScheduleQueueRetryDecision) => void;
 }
 
 interface PendingExecution<T> extends ScheduleExecutionRequest<T> {
@@ -16,8 +24,15 @@ interface PendingExecution<T> extends ScheduleExecutionRequest<T> {
   readonly reject: (error: Error) => void;
 }
 
+export class ScheduleQueueCancellation extends Error {
+  constructor(readonly reason: 'cancelled' | 'timeout', message: string) {
+    super(message);
+    this.name = 'ScheduleQueueCancellation';
+  }
+}
+
 function cancellationError(name: string): Error {
-  return new Error(`Schedule execution ${name} cancelled`);
+  return new ScheduleQueueCancellation('cancelled', `Schedule execution ${name} cancelled`);
 }
 
 /**
@@ -112,13 +127,15 @@ export class ScheduleExecutionQueue {
       const controller = new AbortController();
       this.#controllers.add(controller);
       const timeout = setTimeout(() => {
-        controller.abort(new Error(`Schedule execution ${pending.name} timed out after ${timeoutMs}ms`));
+        controller.abort(new ScheduleQueueCancellation('timeout', `Schedule execution ${pending.name} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
       timeout.unref?.();
 
       try {
         const value = await pending.execute(controller.signal);
         if (controller.signal.aborted) {
+          observeRetryDecision(pending, { retry: false, reason: controller.signal.reason instanceof ScheduleQueueCancellation
+            && controller.signal.reason.reason === 'timeout' ? 'timeout' : 'cancelled' });
           pending.reject(abortReason(controller.signal, pending.name));
         } else {
           pending.resolve(value);
@@ -126,10 +143,16 @@ export class ScheduleExecutionQueue {
         return;
       } catch (error) {
         if (controller.signal.aborted || this.#disposed) {
+          observeRetryDecision(pending, { retry: false, reason: controller.signal.reason instanceof ScheduleQueueCancellation
+            && controller.signal.reason.reason === 'timeout' ? 'timeout' : 'cancelled' });
           pending.reject(abortReason(controller.signal, pending.name));
           return;
         }
-        if (attempt >= maxRetries) {
+        const safe = pending.canRetry?.(error) === true;
+        const retry = safe && attempt < maxRetries;
+        observeRetryDecision(pending, retry ? { retry: true }
+          : { retry: false, reason: !safe ? 'not_retryable' : 'attempt_budget_exhausted' });
+        if (!retry) {
           pending.reject(error instanceof Error ? error : new Error(String(error)));
           return;
         }
@@ -145,4 +168,15 @@ export class ScheduleExecutionQueue {
 function abortReason(signal: AbortSignal, name: string): Error {
   if (signal.reason instanceof Error) return signal.reason;
   return cancellationError(name);
+}
+import { getLogger } from '@zhin.js/logger';
+
+const logger = getLogger('schedule-execution-queue');
+
+
+function observeRetryDecision(request: Pick<ScheduleExecutionRequest<unknown>, 'onRetryDecision'>,
+  decision: Parameters<NonNullable<ScheduleExecutionRequest<unknown>['onRetryDecision']>>[0]): void {
+  try {
+    void Promise.resolve(request.onRetryDecision?.(decision)).catch(() => logger.warn('Schedule retry observation failed'));
+  } catch { logger.warn('Schedule retry observation failed'); }
 }

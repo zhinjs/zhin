@@ -254,7 +254,7 @@ export class EndpointRuntime {
     }
   }
 
-  async send(input: RuntimeEndpointSendInput): Promise<{ messageId: string }> {
+  async send(input: RuntimeEndpointSendInput): Promise<{ messageId: string; receipt: DeliveryReceipt }> {
     const lease = this.context.acquire();
     try {
       const index = requireAdapters(lease.value);
@@ -278,7 +278,7 @@ export class EndpointRuntime {
   }
 
   /** Resolves a persisted identity exactly in the current operation generation. */
-  async sendTarget(target: DeliveryTarget, content: unknown, requester?: PluginId, options?: Readonly<{ locale?: Locale }>): Promise<{ messageId: string }> {
+  async sendTarget(target: DeliveryTarget, content: unknown, requester?: PluginId, options?: Readonly<{ locale?: Locale }>): Promise<{ messageId: string; receipt: DeliveryReceipt }> {
     const conversation = normalizeDeliveryTarget(target);
     const lease = this.context.acquire();
     try {
@@ -418,16 +418,19 @@ function normalizeConsoleContent(content: unknown): SendContent {
   return String(content);
 }
 
-function requireSentReceipt(result: DeliveryReceipt): { messageId: string } {
+function requireSentReceipt(result: DeliveryReceipt): { messageId: string; receipt: DeliveryReceipt } {
   if (result.status !== 'sent') {
     throw new EndpointDeliveryError(
       result.failure?.code ?? `outbound_${result.status}`,
       result.failure?.message ?? 'Outbound delivery was suppressed.',
       result.failure?.deliveryUnknown ? 'unknown'
         : result.status === 'rejected' ? 'rejected' : 'not_sent',
+      { receipt: result, ...(result.parts ? { parts: result.parts.map(part => ({
+        ...(part.message ? { messageId: part.message.id } : {}), ...(part.sourceIndices ? { sourceIndices: part.sourceIndices } : {}),
+      })) } : {}) },
     );
   }
-  return { messageId: result.message?.id ?? '' };
+  return { messageId: result.message?.id ?? '', receipt: result };
 }
 
 /** A canonical message/address cannot be redirected by a second endpoint selector. */

@@ -16,6 +16,12 @@ import {
 import { validateScheduleOutput } from './output-validator.js';
 import { createScheduleSecurityContext, type ScheduleSecurityDenial } from './security-harness.js';
 import type { TurnOutcome } from '../turn/turn-ingress.js';
+import { AttemptReplayEvidence, type ReplayEvidence } from './replay-evidence.js';
+import type { ScheduleAttemptContext } from './attempt-context.js';
+import type { ToolOperationEvidencePort } from '../tool/tool-operation-evidence.js';
+import type { ScheduleObservationOwner } from './execution-history.js';
+import { ScheduleExecutionHistory } from './execution-history-store.js';
+import { ScheduleHistoryReporter } from './history-observer.js';
 
 export interface ScheduleExecutionResult {
   success: boolean;
@@ -25,15 +31,19 @@ export interface ScheduleExecutionResult {
   tokenUsage: { input: number; output: number };
   error?: string;
   audit: ScheduleAuditRecord;
+  replay?: ReplayEvidence;
+  status?: 'succeeded' | 'failed' | 'cancelled' | 'budget_partial';
 }
 
 export interface ScheduleExecutionOptions {
   preview?: boolean;
   signal?: AbortSignal;
+  attempt?: ScheduleAttemptContext;
 }
 
 export interface ScheduleExecutionDomain {
   execute(job: ScheduleJob, options?: ScheduleExecutionOptions): Promise<ScheduleExecutionResult>;
+  dispose?(): void;
 }
 
 export interface ScheduleTurnExecutionRequest {
@@ -48,6 +58,7 @@ export interface ScheduleTurnExecutionRequest {
   readonly security: ReturnType<typeof createScheduleSecurityContext>;
   readonly signal: AbortSignal;
   readonly onTurnEvent: (event: TurnEvent) => void;
+  readonly operationEvidence: ToolOperationEvidencePort;
 }
 
 export interface ScheduleTurnPort {
@@ -59,6 +70,7 @@ export interface ScheduleExecutionDomainDeps {
   config: Required<ZhinAgentConfig>;
   auditLogger?: ScheduleAuditLogger;
   now?: () => number;
+  observations?: ScheduleObservationOwner;
 }
 
 function textFromElements(elements: AgentOutputElement[]): string {
@@ -86,11 +98,13 @@ function terminationLabel(reason: NonNullable<ScheduleAuditRecord['budgetTermina
 }
 
 export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
-  private readonly auditLogger: ScheduleAuditLogger;
   private readonly now: () => number;
+  readonly #ownedObservations?: ScheduleExecutionHistory;
+  readonly #history: ScheduleHistoryReporter;
 
   constructor(private readonly deps: ScheduleExecutionDomainDeps) {
-    this.auditLogger = deps.auditLogger ?? new JsonlScheduleAuditLogger();
+    this.#ownedObservations = deps.observations ? undefined : new ScheduleExecutionHistory({ auditLogger: deps.auditLogger ?? new JsonlScheduleAuditLogger() });
+    this.#history = new ScheduleHistoryReporter(undefined, deps.observations ?? this.#ownedObservations);
     this.now = deps.now ?? Date.now;
   }
 
@@ -100,7 +114,8 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
   ): Promise<ScheduleExecutionResult> {
     options.signal?.throwIfAborted();
     const startedAt = this.now();
-    const executionId = randomUUID();
+    const executionId = options.attempt?.identity.attemptId ?? randomUUID();
+    const evidence = options.attempt?.evidence ?? new AttemptReplayEvidence();
     const prompt = job.executionPlan?.prompt?.trim() || job.action.prompt.trim();
     const security = createScheduleSecurityContext(
       this.deps.config.schedule?.security?.execPreset ?? 'readonly',
@@ -126,7 +141,22 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
         executionPlan: job.executionPlan,
         security,
         signal: budget.signal,
+        operationEvidence: evidence,
         onTurnEvent: (event: TurnEvent) => {
+          const attempt = options.attempt;
+          if (attempt) {
+            const common = { type: 'attempt_progress' as const, runId: attempt.identity.runId,
+              jobId: job.id, attemptId: executionId, at: this.now() };
+            if (event.type === 'iteration_start' || event.type === 'turn_start' || event.type === 'turn_end'
+              || event.type === 'error' || event.type === 'turn_cancelled' || event.type === 'budget_exceeded') {
+              void attempt.history.observe({ ...common, phase: 'model', status: event.type });
+            } else if (event.type === 'tool_call' || event.type === 'tool_result' || event.type === 'tool_failed'
+              || event.type === 'tool_cancelled' || event.type === 'tool_denied') {
+              void attempt.history.observe({ ...common, phase: event.type === 'tool_denied' ? 'approval' : 'tool',
+                status: event.type, toolName: event.toolName, toolUseId: event.toolUseId,
+                ...(event.type === 'tool_denied' ? { code: event.policy } : {}) });
+            }
+          }
           if (event.type === 'chunk') streamed = event.accumulated;
           if (event.type === 'capability_resolution') {
             resolution = {
@@ -153,7 +183,6 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
           }
         },
     }), options.signal);
-    options.signal?.throwIfAborted();
     const outcome = guarded.value;
     const completedOutput = outcome?.status === 'completed' ? outcome.output : [];
     const raw = completedOutput.length > 0 ? textFromElements([...completedOutput]) : streamed;
@@ -161,7 +190,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
     const suffix = guarded.terminatedBy ? `\n\n[任务因${terminationLabel(guarded.terminatedBy)}被终止]` : '';
     const output = validation.valid ? `${validation.cleaned}${suffix}` : '';
     const durationMs = this.now() - startedAt;
-    const acceptedPartial = Boolean(guarded.terminatedBy && validation.valid);
+    const acceptedPartial = !options.signal?.aborted && Boolean(guarded.terminatedBy && validation.valid);
     const outcomeError = outcome && outcome.status !== 'completed'
       ? outcome.status === 'failed' ? outcome.error.message
         : outcome.status === 'cancelled' ? outcome.reason
@@ -192,7 +221,9 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       outputStripped: validation.stripped,
       error,
     });
-    await this.auditLogger.write(audit);
+    (options.attempt?.history ?? this.#history).audit({ attempt: options.attempt?.identity ?? {
+      runId: executionId, jobId: job.id, attemptId: executionId, number: 1, startedAt,
+    }, record: audit });
     return {
       success: audit.success,
       output,
@@ -201,8 +232,13 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       tokenUsage: guarded.tokenUsage,
       error: audit.error,
       audit,
+      replay: evidence.snapshot(),
+      status: options.signal?.aborted ? 'cancelled' : acceptedPartial ? 'budget_partial' : audit.success ? 'succeeded' : 'failed',
     };
   }
+
+  dispose(): void { this.#ownedObservations?.close(); }
+
 }
 
 interface ScheduleToolResolution {

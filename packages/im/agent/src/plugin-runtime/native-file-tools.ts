@@ -136,6 +136,7 @@ async function writeFile(input: Record<string, unknown>, context: ToolExecutionC
   context.signal.throwIfAborted();
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, content, { encoding: 'utf8', signal: context.signal });
+  context.effects?.report({ disposition: 'committed' });
   return `Wrote ${Buffer.byteLength(content)} bytes to ${target}`;
 }
 
@@ -156,6 +157,7 @@ async function editFile(input: Record<string, unknown>, context: ToolExecutionCo
   const current = await fs.stat(target);
   if (isFileStale(stat.mtimeMs, current.mtimeMs)) throw new Error('File changed during edit; read it again');
   await fs.writeFile(target, content.replace(match.actual, replacement), { encoding: 'utf8', signal: context.signal });
+  context.effects?.report({ disposition: 'committed' });
   return `Edited ${target}`;
 }
 

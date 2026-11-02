@@ -1,4 +1,5 @@
 import { resolveLocale, rootPluginId, type Locale } from '@zhin.js/plugin-runtime';
+import type { DeliveryReceipt } from '@zhin.js/im-contract';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -36,6 +37,9 @@ import {
   ZhinAgent,
   type AgentTraceRecorder,
   type AssistantRuntimeHandle,
+  ScheduleExecutionHistory,
+  FileScheduleHistoryRepository,
+  JsonlScheduleAuditLogger,
 } from '@zhin.js/agent/runtime';
 import { createRuntimeProactiveOutbound, observeAgentTurnTrace } from './runtime-factory.js';
 
@@ -64,11 +68,17 @@ export function createAssistantScheduleRuntime(
   defaultNotify: ReturnType<typeof parseJobNotify> | undefined;
   bindCallHaService: (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => void;
   assistantRuntime: AssistantRuntimeHandle | null;
+  history: ScheduleExecutionHistory;
 } {
   const dataDir = join(projectRoot, 'data');
   mkdirSync(dataDir, { recursive: true });
 
   const assistantCfg = resolveAssistantConfig(assistantRaw);
+  const history = new ScheduleExecutionHistory({
+    repository: new FileScheduleHistoryRepository(join(dataDir, 'schedule-executions')),
+    auditLogger: new JsonlScheduleAuditLogger(dataDir),
+    activity: createScheduleActivityPort(agent),
+  });
   const defaults = resolveAssistantDefaultsConfig(assistantCfg.defaults);
   let defaultNotify = defaults.notify;
   if (defaultNotify) {
@@ -88,11 +98,14 @@ export function createAssistantScheduleRuntime(
   const notificationRouter = createNotificationRouter({
     resolveAdapter: () => undefined,
     sendIm: async (notify, content, source, options) => {
+      let receipt: DeliveryReceipt | undefined;
       await proactiveOutbound.send({
         scene: notify.target.scene,
         source: (source ?? 'scheduled') as ProactiveSendSource,
         locale: options?.locale,
+        onReceipt: value => { receipt = value; },
       }, content);
+      return receipt;
     },
     callHaService: async (service, target, data) => {
       if (callHaServiceImpl) {
@@ -109,10 +122,10 @@ export function createAssistantScheduleRuntime(
   const executor = createTaskExecutor({
     turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot, trace),
     config: agent.config,
-    activity: createScheduleActivityPort(agent),
     dataDir,
     router: notificationRouter,
     defaultNotify,
+    observations: history,
   });
 
   const store = createScheduleJobStoreFromConfig(dataDir, {
@@ -122,6 +135,7 @@ export function createAssistantScheduleRuntime(
   const jobWorker = new JobWorker({
     executor,
     queue: assistantCfg.queue,
+    history,
   });
   const jobEngine = new ScheduleJobEngine({
     store,
@@ -191,7 +205,7 @@ export function createAssistantScheduleRuntime(
   const tools = createScheduleTools(scheduleManager);
 
   return {
-    tools, store, start,
+    tools, store, start, history,
     assistantEnabled: assistantCfg.enabled,
     notificationRouter,
     defaultNotify,
@@ -203,6 +217,7 @@ export function createAssistantScheduleRuntime(
       jobEngine.unload();
       await jobWorker.stop();
       await executor.dispose();
+      history.close();
     },
   };
 }
@@ -252,7 +267,7 @@ function createRuntimeScheduleTurnPort(
           },
         },
         signal: input.signal,
-        ports: {},
+        ports: { operationEvidence: input.operationEvidence },
       };
       return runtime.execute(rootPluginId(), request, {
         binding,
