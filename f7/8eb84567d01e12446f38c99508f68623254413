@@ -1,0 +1,18 @@
+.changeset/adapter-console-npm-page-owner.md
+  h_b680f75345178a 1-5
+packages/console/client/client/adapter-console/AdapterConsolePage.test.ts
+  h_b680f75345178a 190-205
+packages/console/client/client/adapter-console/AdapterConsolePage.tsx
+  h_b680f75345178a 56-60,62-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f78eb84567d01e12446f38c99508f68623254413",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
