@@ -1,0 +1,27 @@
+.changeset/progressive-platform-replies.md
+  s_c757df74f34330::t_0dbb60c121a4c1 16
+.changeset/progressive-reply-recovery.md
+  s_c757df74f34330::t_d7286ee8a65bf5 1-23
+packages/im/agent/tests/journal/turn-delivery.test.ts
+  s_c757df74f34330::t_a44f15d561ac73 191-205
+packages/im/agent/tests/outbound/progressive-reply-delivery.test.ts
+  s_c757df74f34330::t_79544f8eaf4c62 119-133
+packages/im/agent/tests/plugin-runtime/progressive-turn-projection.test.ts
+  s_c757df74f34330::t_5cca66340cc5ad 78,87-89,91-92,186-190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "976886c642c5a9e2709b868770c55d7f681e8ae8",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
