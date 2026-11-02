@@ -306,17 +306,33 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
   async #indexedMessageStates(refs: readonly MessageRef[], through: number): Promise<Map<string, MessageProjection>> {
     const keys = refs.map(messageRefKey), selected = new Set(keys), aliases = new Map<string, string>();
     for (const key of keys) { aliases.set(key, key); aliases.set(databaseTextKey(key), key); }
-    const batches = async (read: (stored: readonly string[]) => PromiseLike<Record<string, unknown>[]>) => [
-      ...await read(keys.map(databaseTextKey)), ...await toleratePostgresNul(() => Promise.resolve(read(keys)), []),
-    ];
+    type Keyed = { key: string; row: Record<string, unknown> };
+    const keyed = (rows: readonly Record<string, unknown>[]): Keyed[] | undefined => {
+      const result: Keyed[] = [];
+      for (const row of rows) {
+        const key = aliases.get(String(row.message_key));
+        if (!key) return undefined;
+        result.push({ key, row });
+      }
+      return result;
+    };
+    // Some drivers (Node 22 node:sqlite) truncate returned TEXT at the first NUL, so a grouped legacy
+    // key cannot always be mapped back from the row; re-read those per key and attribute by the query.
+    const batches = async (read: (stored: readonly string[]) => PromiseLike<Record<string, unknown>[]> | undefined): Promise<Keyed[]> => {
+      const run = (stored: readonly string[]) => toleratePostgresNul(() => Promise.resolve(read(stored) ?? []), []);
+      const encoded = (await Promise.resolve(read(keys.map(databaseTextKey)) ?? [])).flatMap(row => keyed([row]) ?? []);
+      const legacy = await run(keys);
+      const resolved = keyed(legacy);
+      if (resolved) return [...encoded, ...resolved];
+      const perKey: Keyed[] = [];
+      for (const key of keys) for (const row of await run([key])) perKey.push({ key, row });
+      return [...encoded, ...perKey];
+    };
     const first = await batches(stored => this.events.aggregate!().min('id', 'sequence').groupBy('message_key', 'event_type')
       .where({ $and: [{ id: { $lte: through } }, { message_key: { $in: stored } }, { event_type: { $in: ['message.created', 'message.recalled'] } }] }));
     const creations = new Map<string, number>(), recalls = new Map<string, number>();
     const retainFirst = (map: Map<string, number>, key: string, sequence: number) => map.set(key, Math.min(map.get(key) ?? sequence, sequence));
-    for (const row of first) {
-      const key = aliases.get(String(row.message_key));
-      if (key) retainFirst(row.event_type === 'message.created' ? creations : recalls, key, Number(row.sequence));
-    }
+    for (const { key, row } of first) retainFirst(row.event_type === 'message.created' ? creations : recalls, key, Number(row.sequence));
     const scope = (stored: readonly string[], revisions?: ReadonlyMap<string, number>) => stored.flatMap(key => {
       const canonical = aliases.get(key)!, recall = recalls.get(canonical), revision = revisions?.get(canonical);
       return revisions && revision === undefined ? [] : [{ message_key: key,
@@ -325,17 +341,19 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     const highest = await batches(stored => this.events.aggregate!().max('message_revision', 'revision').groupBy('message_key')
       .where({ $and: [{ id: { $lte: through } }, { event_type: 'message.updated' }, { $or: scope(stored) }] }));
     const revisions = new Map<string, number>();
-    for (const row of highest) {
-      const key = aliases.get(String(row.message_key));
-      if (key) revisions.set(key, Math.max(revisions.get(key) ?? 0, Number(row.revision)));
+    for (const { key, row } of highest) {
+      if (row.revision === null || row.revision === undefined) continue;
+      revisions.set(key, Math.max(revisions.get(key) ?? 0, Number(row.revision)));
     }
     const updates = new Map<string, number>();
     if (revisions.size) {
-      const selected = await batches(stored => this.events.aggregate!().min('id', 'sequence').groupBy('message_key')
-        .where({ $and: [{ id: { $lte: through } }, { event_type: 'message.updated' }, { $or: scope(stored, revisions) }] }));
-      for (const row of selected) {
-        const key = aliases.get(String(row.message_key));
-        if (key) retainFirst(updates, key, Number(row.sequence));
+      const selected = await batches(stored => {
+        const scoped = scope(stored, revisions);
+        return scoped.length ? this.events.aggregate!().min('id', 'sequence').groupBy('message_key')
+          .where({ $and: [{ id: { $lte: through } }, { event_type: 'message.updated' }, { $or: scoped }] }) : undefined;
+      });
+      for (const { key, row } of selected) {
+        if (row.sequence !== null && row.sequence !== undefined) retainFirst(updates, key, Number(row.sequence));
       }
     }
     const ids = [...new Set([...creations.values(), ...recalls.values(), ...updates.values()])];
