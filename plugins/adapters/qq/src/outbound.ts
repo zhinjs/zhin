@@ -303,6 +303,7 @@ export interface FormatOutboundMessagesOptions {
 }
 
 function requireKeyboardMarkdown(messages: QqOutboundMessage[]): QqOutboundMessage[] {
+  if (!messages.length) throw new EndpointDeliveryError('unsupported_operation', 'QQ payload has no sendable content', 'not_sent');
   for (const message of messages) {
     const parts: readonly (string | QqOutboundElem)[] = Array.isArray(message) ? message : [message as string | QqOutboundElem];
     if (parts.some(part => typeof part !== 'string' && (part.type === 'keyboard' || part.type === 'button'))

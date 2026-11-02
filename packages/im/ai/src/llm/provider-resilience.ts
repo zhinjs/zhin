@@ -549,6 +549,10 @@ export function createResilientCompletionPort(
   const config = resolveProviderResilienceConfig(options.config);
   const wait = options.sleep ?? sleep;
   const timers = options.timers ?? REAL_TIMERS;
+  const reportEvent = (event: ProviderResilienceEvent): void => {
+    // Diagnostics must not replace provider outcomes or control retry/fallback admission.
+    try { options.onEvent?.(event); } catch { /* The caller owns its diagnostic sink. */ }
+  };
 
   async function attempt(
     call: 'complete' | 'completeSimple',
@@ -601,7 +605,7 @@ export function createResilientCompletionPort(
           const reply = await attempt(call, model, context, streamOptions);
           if (reply.stopReason === 'error' && finishFailureKind(reply.errorMessage) === 'safety_block') {
             // Final by design: no retry, no fallback (see the module comment).
-            options.onEvent?.({ type: 'refused', model: model.id, kind: 'safety_block', error: reply.errorMessage ?? '' });
+            reportEvent({ type: 'refused', model: model.id, kind: 'safety_block', error: reply.errorMessage ?? '' });
           }
           return reply;
         } catch (error) {
@@ -609,7 +613,11 @@ export function createResilientCompletionPort(
           const info = classifyProviderError(error);
           // Publication prohibits regeneration, not the existing quota/billing explanation.
           if (streamOptions?.retryAllowed?.() === false) {
-            if (info.kind === 'quota_exhausted' || info.kind === 'billing') throw new ProviderRequestError(info.kind, attempts, error);
+            if (info.kind === 'quota_exhausted' || info.kind === 'billing') {
+              reportEvent({ type: 'give_up', model: model.id, kind: info.kind,
+                error: error instanceof Error ? error.message : String(error) });
+              throw new ProviderRequestError(info.kind, attempts, error);
+            }
             throw error;
           }
           lastError = error;
@@ -624,7 +632,7 @@ export function createResilientCompletionPort(
             const delayMs = isEmpty ? 0 : computeBackoffDelay(retries, config, info.retryAfterMs, options.random);
             if (isEmpty) emptyRetries += 1;
             else retries += 1;
-            options.onEvent?.({ type: 'retry', model: model.id, attempt: attempts, kind: info.kind, delayMs, error: message });
+            reportEvent({ type: 'retry', model: model.id, attempt: attempts, kind: info.kind, delayMs, error: message });
             await wait(delayMs, signal);
             continue;
           }
@@ -632,14 +640,14 @@ export function createResilientCompletionPort(
           const nextIndex = info.fallbackEligible ? nextCandidateIndex(models, m, info.kind) : -1;
           const next = nextIndex >= 0 ? models[nextIndex] : undefined;
           if (next) {
-            options.onEvent?.({ type: 'fallback', from: model.id, to: next.id, kind: info.kind, error: message });
+            reportEvent({ type: 'fallback', from: model.id, to: next.id, kind: info.kind, error: message });
             // Skip candidates that cannot succeed (see nextCandidateIndex); the loop adds one.
             m = nextIndex - 1;
             break;
           }
           // Out of empty-reply retries: hand the reply back so existing recovery paths run.
           if (isEmpty) return error.reply;
-          options.onEvent?.({ type: 'give_up', model: model.id, kind: info.kind, error: message });
+          reportEvent({ type: 'give_up', model: model.id, kind: info.kind, error: message });
           // Non-retryable errors keep their original identity for upstream handlers,
           // except an exhausted quota or balance, which has nothing to handle and a polite message.
           if (!info.retryable && info.kind !== 'quota_exhausted' && info.kind !== 'billing') throw error;

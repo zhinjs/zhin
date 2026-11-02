@@ -77,7 +77,7 @@ export class ReplyStreamRun {
     if (this.#closed || this.#timer || this.#parsing) return;
     // JSON-only prefixes must not consume the first public content's refresh interval.
     const wait = this.#offered ? Math.max(0, this.#lastParse + (this.stream.minIntervalMs ?? 0) - Date.now()) : 0;
-    // Native Node timers cannot represent a longer single delay; each chunk rechecks the deadline.
+    // Native Node timers cannot represent a longer single delay; each timer firing rechecks the deadline.
     this.#timer = setTimeout(() => {
       this.#timer = undefined;
       if (this.#offered && this.#lastParse + (this.stream.minIntervalMs ?? 0) > Date.now()) {

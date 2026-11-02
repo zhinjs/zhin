@@ -131,6 +131,22 @@ it.each(['parts', 'message'] as const)('retains the canonical tail %s target ins
   expect(send).toHaveBeenCalledOnce();
 });
 
+it('retains tail-only canonical references without an origin, prefix reference or optional target parameter', async () => {
+  const { EndpointDeliveryError } = await import('@zhin.js/im-contract');
+  const actual = { conversation: { ...conversation, id: 'redirected', threadId: 'topic' }, id: 'actual-tail' };
+  const native: CoreReplyStream = { receipt: { status: 'suppressed' }, confirmed: [], update: vi.fn(),
+    finish: async () => ({ status: 'suppressed' }), cancel: async () => ({ status: 'suppressed' }) };
+  const send = vi.fn(async () => { throw new EndpointDeliveryError('tail_error', 'tail', 'unknown', {
+    receipt: { status: 'failed', parts: [{ message: actual }, {}] }, parts: [{ messageId: 'legacy-id' }],
+  }); });
+  const result = await deliverProgressiveReply({ run: new ReplyStreamRun(native) },
+    [{ type: 'image', url: 'https://example.test/not-confirmed.png' }], { send });
+  expect(result.delivery).toMatchObject({ status: 'failed', code: 'tail_error', deliveryPartial: true, deliveryUnknown: true,
+    messages: [actual, null] });
+  expect(result.confirmedOutput).toEqual([]);
+  expect(send).toHaveBeenCalledOnce();
+});
+
 it.each(['tail', 'limit'] as const)('marks %s sends as answer facts in the owning phase before the global terminal', async mode => {
   const { run } = fixture(mode === 'limit'
     ? { status: 'failed', parts: [{ message }], failure: { code: 'stream_buffer_limit', message: 'limit', retryable: false } }

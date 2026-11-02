@@ -4,9 +4,13 @@ import { createCoreReplyStream, type ReplyStreamSnapshot } from '../../../packag
 
 /** Real Core/Endpoint stream boundary; only the Host delivery observer is mocked. */
 export function coreReplyFixture(lease: EndpointChildLease, request: EndpointStreamRequest) {
+  const streaming = lease.streaming;
+  if (!streaming || streaming.supports?.({ conversation: request.conversation, source: request.source }) === false) {
+    throw new Error('This Endpoint does not support progressive replies for the fixture input');
+  }
   const ordinary = vi.fn(lease.send);
   const stream = createCoreReplyStream({
-    endpoint: { ...lease, send: ordinary }, streaming: { ...lease.streaming!, minIntervalMs: 0 },
+    endpoint: { ...lease, send: ordinary }, streaming: { ...streaming, minIntervalMs: 0 },
     options: { source: request.source }, release() {},
     async deliver(content, execution) {
       const result = await execution.send({ conversation: request.conversation, payload: content });

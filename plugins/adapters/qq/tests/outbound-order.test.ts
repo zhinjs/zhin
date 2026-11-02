@@ -4,6 +4,11 @@ const image = { type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } 
 const markdown = (content: string) => ({ type: 'markdown', data: { content } });
 
 describe('QQ ordered rich replies', () => {
+  it('reports an entirely dropped payload as not sent rather than returning an empty send plan', () => {
+    expect(() => formatOutboundMessages([markdown(''), { type: 'image', data: {} }]))
+      .toThrow(expect.objectContaining({ code: 'unsupported_operation', disposition: 'not_sent' }));
+  });
+
   it('keeps Markdown before and after an unembeddable image in separate messages', () => {
     const result = formatOutboundMessages([markdown('before'), image, markdown('after')]);
     expect(result).toEqual([

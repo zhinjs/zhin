@@ -42,6 +42,7 @@ it('does not invent recipient information or move ordinary channel messages into
   try {
     expect(s.lease.streaming!.supports!({ conversation: s.request.conversation, source: s.request.source })).toBe(true);
     expect(s.lease.streaming!.supports!({ conversation: s.request.conversation, source: { senderId: 'U1' } })).toBe(false);
+    expect(() => coreReplyFixture(s.lease, { ...s.request, source: { senderId: 'U1' } })).toThrow('does not support progressive replies');
     expect(s.lease.streaming!.open({ ...s.request, source: { senderId: 'U1' } })).toBeUndefined();
     const { threadId: _thread, ...conversation } = s.request.conversation;
     expect(s.lease.streaming!.open({ ...s.request, conversation })).toBeUndefined();
@@ -128,7 +129,10 @@ it('retains the last confirmed body when the final native stop outcome is unknow
 
 it('keeps off disabled and rejects further operations after its originating lease retires', async () => {
   const off = await setup(false);
-  try { expect(off.lease.streaming).toBeUndefined(); } finally { await off.close(); }
+  try {
+    expect(off.lease.streaming).toBeUndefined();
+    expect(() => coreReplyFixture(off.lease, off.request)).toThrow('does not support progressive replies');
+  } finally { await off.close(); }
   const s = await setup();
   try {
     const stream = s.lease.streaming!.open(s.request)!;

@@ -180,3 +180,39 @@ it('defers an old-version write arriving after the probe to the next bounded rea
   expect(inject).toBe(false);
   expect(await f.store.getMessage({ conversation: scene, id: 'a' })).toMatchObject({ revision: 5 });
 });
+
+it('seeks past each completed backfill batch and starts fresh on repeated migrations', async () => {
+  const f = await fixture(true);
+  for (let index = 0; index < 405; index++) {
+    const event = created(`old-${index}`);
+    await f.events.insert({ id: index * 3 + 1, event_id: event.eventId, conversation_key: conversationRefKey(scene),
+      message_key: '', event_json: JSON.stringify(event), time: event.timestamp });
+  }
+  const before = await f.events.select('id', 'event_json').orderBy('id');
+  const query = f.raw.query.bind(f.raw), batches: number[][] = [], plans: string[][] = [];
+  const statements = vi.spyOn(f.raw, 'query').mockImplementation(async (sql, params) => {
+    const rows = await query(sql, params);
+    if (String(sql).startsWith('SELECT') && String(sql).includes('"event_json"') && String(sql).includes('"message_revision" IS NULL')) {
+      batches.push((rows as Record<string, unknown>[]).map(row => Number(row.id)));
+      const plan = await query(`EXPLAIN QUERY PLAN ${sql}`, params) as Record<string, unknown>[];
+      plans.push(plan.map(row => String(row.detail)));
+    }
+    return rows;
+  });
+  await migrateConversationColumns(f.raw);
+  expect(batches.map(batch => batch.length)).toEqual([200, 200, 5, 0]);
+  expect(batches.flat()).toEqual(before.map(row => row.id));
+  expect(plans.slice(1).every(plan => plan.some(detail => /SEARCH conversation_events USING INTEGER PRIMARY KEY \(rowid>\?\)/.test(detail)))).toBe(true);
+  expect(await f.events.select('id', 'event_json').orderBy('id')).toEqual(before);
+  expect((await f.events.select('message_revision', 'query_version')).every(row => row.message_revision === 0 && row.query_version === 1)).toBe(true);
+  batches.length = 0; plans.length = 0; statements.mockClear();
+  await migrateConversationColumns(f.raw);
+  expect(batches).toEqual([[]]);
+  expect(statements.mock.calls.some(([sql]) => String(sql).startsWith('UPDATE'))).toBe(false);
+  // A later migration must revisit an earlier identity whose derived metadata needs rebuilding.
+  await f.events.update({ message_revision: null }).where({ id: before[0]!.id });
+  batches.length = 0;
+  await migrateConversationColumns(f.raw);
+  expect(batches).toEqual([[before[0]!.id], []]);
+  expect(await f.events.select('id', 'event_json').orderBy('id')).toEqual(before);
+});
