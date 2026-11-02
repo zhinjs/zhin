@@ -1,0 +1,247 @@
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_7fb5e4069b4bc1 6,60-61,757-758,1255,1340-1372,1465-1466,1476-1477
+basic/cli/src/plugin-runtime/console/conversation-history-routes.ts
+  s_9622fd28aba994::t_0961415ca44a63 66-70,81-83,109
+basic/cli/tests/plugin-runtime/console/conversation-history-routes.test.ts
+  s_9622fd28aba994::t_d328938b7c6764 74,78,82-85,88,90,96-97,99,105,163-164,218-250
+docs/adapters/lark.md
+  s_9622fd28aba994::t_7d462b5572c3e6 11,26-35
+docs/adapters/qq.md
+  s_9622fd28aba994::t_0bb20e3024a5f5 11,59-71
+docs/adapters/sandbox.md
+  s_9622fd28aba994::t_db6d2beb939796 11,86-87,90-94,213
+docs/adapters/slack.md
+  s_9622fd28aba994::t_82a5c8f662a40d 11,25-34
+docs/adapters/telegram.md
+  s_9622fd28aba994::t_6a18f635d90378 11,72-84
+docs/authoring/adapters.md
+  s_9622fd28aba994::t_5c516d2f3b9629 174-207
+docs/authoring/middleware-components.md
+  s_9622fd28aba994::t_e52ebf89790263 82-91
+docs/configuration/generated.md
+  s_9622fd28aba994::t_4b375f9d2e1eaf 983-984,989-990,1156-1157,1170-1171,1179-1180,1187-1188,1244-1245,1247-1248,1278-1279,1281-1282
+docs/en/configuration/generated.md
+  s_9622fd28aba994::t_112bb9dbcaab4d 983-984,989-990,1156-1157,1170-1171,1179-1180,1187-1188,1244-1245,1247-1248,1278-1279,1281-1282
+packages/im/adapter/README.md
+  s_9622fd28aba994::t_45a49a86fa7ef1 52
+packages/im/adapter/src/adapter.ts
+  s_9622fd28aba994::t_1a00ed3736dda1 11,482-515,519
+packages/im/adapter/src/endpoint-stream.ts
+  s_9622fd28aba994::t_be3f1788820785 1-54
+packages/im/adapter/tests/streaming-lease.test.ts
+  s_9622fd28aba994::t_09295a1db5c6cc 1-120
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_300e8ecaadd666 6-9,14,193-195,268-270,272,511-532,563-564,674,712-713,731-733,750,768-781,786,788-797,818-819,838-935,949,968,981-984,986-994,1109-1113,1115,1123,1127,1130,1180-1192,1194,1196-1201,1217,1230,1240-1246,1252,1254,1278-1282,1288-1297,1304,1310,1352-1353,1361-1363,1370,1374-1375,1379,1387-1388,1421,1425-1426,1432,1438,1455-1456,1460-1474,1502-1504,1514,1518-1537,1560-1561,1563-1587,1589-1595
+packages/im/agent/src/core/reply-phase.ts
+  s_9622fd28aba994::t_18f5aab0f2ffa3 1-28
+packages/im/agent/src/core/reply-stream-run.ts
+  s_9622fd28aba994::t_8ae8389857f22a 1-126
+packages/im/agent/src/core/turn-reply-messages.ts
+  s_9622fd28aba994::t_9e5d69e0d4d917 12-15
+packages/im/agent/src/outbound/progressive-reply-delivery.ts
+  s_9622fd28aba994::t_f31ec6447d4057 1-77
+packages/im/agent/src/outbound/structured-reply-stream.ts
+  s_9622fd28aba994::t_7f7d2f610d5fba 1-124
+packages/im/agent/src/security/outbound-leak-guard.ts
+  s_9622fd28aba994::t_51ee98b1698337 20-21,127-164,224-244,246-259,262,290-324
+packages/im/agent/src/session/context-provenance.ts
+  s_9622fd28aba994::t_81322ea3f5c262 16-17,40,47,60
+packages/im/agent/src/turn/execute-agent-turn.ts
+  s_9622fd28aba994::t_628653825e6efd 120-121
+packages/im/agent/src/turn/prompt-controller.ts
+  s_9622fd28aba994::t_18e95447312266 2,11-12,304,314-318
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9622fd28aba994::t_b2e89cd30998ef 14,243-248,250-252
+packages/im/agent/tests/core/reply-stream-scheduling.test.ts
+  s_9622fd28aba994::t_9bc1bc8250ee8d 1-34
+packages/im/agent/tests/core/structured-reply-stream.test.ts
+  s_9622fd28aba994::t_cfd3236b39fbe1 1-90
+packages/im/agent/tests/outbound/progressive-reply-delivery.test.ts
+  s_9622fd28aba994::t_ef124c6ac47cdb 1-100
+packages/im/agent/tests/session/conversation-context-projection.test.ts
+  s_9622fd28aba994::t_c0f4b6a4e42040 60-83
+packages/im/ai/src/memory/prompt-context.ts
+  s_9622fd28aba994::t_f80b086c4ae6ad 107
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_9622fd28aba994::t_19c59ea870313a 2-4,96,224-243
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_9622fd28aba994::t_3588d1423844f7 42,53-63,75,77,86,197-198,206-220,230,233-241,245,249,255,328,373-379
+packages/im/core/tests/plugin-runtime/captured-endpoint-operation.test.ts
+  s_9622fd28aba994::t_5648574efacc4a 3,6-7,9,11-15,24,34-37,40,44-46,54-565
+packages/im/im-contract/src/conversation-store.ts
+  s_9622fd28aba994::t_9972bf0412f302 6-7,25-68,72,77,83-87,93-104,147,152,191,199,214-221,223-229,232,235-272,362-365
+packages/im/middleware/src/definition.ts
+  s_9622fd28aba994::t_331949accfb264 50-53,77
+plugins/adapters/lark/README.md
+  s_9622fd28aba994::t_f6ad3336dd7540 14-23
+plugins/adapters/lark/src/client.ts
+  s_9622fd28aba994::t_d4ded3896dea4f 46,127-133,676
+plugins/adapters/lark/src/reply-stream.ts
+  s_9622fd28aba994::t_3ed76adf658e8a 1-125
+plugins/adapters/lark/tests/reply-stream.test.ts
+  s_9622fd28aba994::t_38f932fe3b9b88 1-119
+plugins/adapters/qq/src/endpoint.ts
+  s_9622fd28aba994::t_6fd98d52c15c76 7,115,421
+plugins/adapters/qq/src/outbound.ts
+  s_9622fd28aba994::t_c183d8647ea791 306-309,312-315,317-336,338,341-342
+plugins/adapters/qq/src/protocol.ts
+  s_9622fd28aba994::t_7b8ef17261f7a8 18-20,40-41,57-58,100-101,115-116,130-131
+plugins/adapters/qq/src/stream-markdown.ts
+  s_9622fd28aba994::t_49c3706f070554 1-41
+plugins/adapters/qq/src/streaming.ts
+  s_9622fd28aba994::t_f89a4f7d49a902 1-92
+plugins/adapters/qq/tests/streaming.test.ts
+  s_9622fd28aba994::t_1e126c10626869 1-126
+plugins/adapters/sandbox/README.md
+  s_9622fd28aba994::t_5dcd921bb129e5 74-75,78-82,201
+plugins/adapters/sandbox/src/endpoint.ts
+  s_9622fd28aba994::t_c1fcf115377dd1 2-3,165-167,258-293
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  s_9622fd28aba994::t_2068a428cb5681 9,292-306
+plugins/adapters/slack/README.md
+  s_9622fd28aba994::t_741e2cc877b55e 13-22
+plugins/adapters/slack/src/endpoint.ts
+  s_9622fd28aba994::t_4839cb80f110f8 51,128-133
+plugins/adapters/slack/src/native-stream.ts
+  s_9622fd28aba994::t_64751ca3638426 1-79
+plugins/adapters/slack/src/reply-stream.ts
+  s_9622fd28aba994::t_39e40e3a0e5000 1-83
+plugins/adapters/slack/tests/reply-stream.test.ts
+  s_9622fd28aba994::t_23a3b96915e215 1-129
+plugins/adapters/telegram/src/endpoint.ts
+  s_9622fd28aba994::t_47d32d78ac1d43 2,116
+plugins/adapters/telegram/src/protocol.ts
+  s_9622fd28aba994::t_695886f0ebd256 20-22,39-40,250-251,271-272,534-546,644,662,680,698,716,736,745,762-763
+plugins/adapters/telegram/src/streaming.ts
+  s_9622fd28aba994::t_b1f61457fe407e 1-110
+plugins/adapters/telegram/tests/streaming.test.ts
+  s_9622fd28aba994::t_801eb142a9277e 1-139
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_744e42efb8d645 17,143
+.changeset/progressive-platform-replies.md
+  s_9622fd28aba994::t_a78925b35702e6 1-20
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_dbea2e1d41b3a6::t_c2f5665b91c7bd 7-9,264-411,733-754
+packages/im/adapter/src/adapter-types.ts
+  s_9622fd28aba994::t_5eda1fe1df64bb 5,139-140
+packages/im/adapter/src/endpoint-specification.ts
+  s_9622fd28aba994::t_cd8b856180fdc4 7,34,48
+packages/im/adapter/src/endpoint.ts
+  s_9622fd28aba994::t_d239641a4391b9 20,97
+packages/im/adapter/src/index.ts
+  s_9622fd28aba994::t_8555ed3150156b 23
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_89280b7aa79e47::t_1f62314d62944c 1-4,8,19-21,36,297-342,352-367,388,397-400,409-416,418,421,428-429,434-441,454-456,458-463,476-477,499,502,504-505,508,511,526-539,690-775,781,797
+packages/im/agent/tests/core/answer-stage-stream.test.ts
+  s_9622fd28aba994::t_a9fe300c41cf0c 1-471
+packages/im/agent/tests/memory/told-ledger.test.ts
+  s_9622fd28aba994::t_3c83f78f9fe1f3 77-94
+packages/im/agent/tests/plugin-runtime/progressive-turn-projection.test.ts
+  s_9622fd28aba994::t_ddfce23299b92a 1-216
+packages/im/agent/tests/security/outbound-leak-prefix.test.ts
+  s_9622fd28aba994::t_2fa8d03a45fbb5 1-66
+packages/im/core/src/plugin-runtime/im/progressive-reply.ts
+  s_9622fd28aba994::t_673fcf0b08db60 1-404
+packages/im/core/src/plugin-runtime/im/runtime-middleware.ts
+  s_c9b5f38bba0f14::t_0b62cacb75f534 20-25
+packages/im/im-contract/tests/contracts.test.ts
+  s_c9b5f38bba0f14::t_c29e2d1a360e5e 11-12,40-42,44,47-49,52-54,86-160
+packages/im/middleware/src/middleware-index.ts
+  s_c9b5f38bba0f14::t_eb3870ada6bab6 39,64
+plugins/adapters/lark/schema.json
+  s_caae6e7d1ebec8::t_21517caa2ca9a8 166-176,228-238
+plugins/adapters/lark/src/adapter.ts
+  s_c9b5f38bba0f14::t_16b9ec22c9196e 11
+plugins/adapters/lark/src/console-spec.ts
+  s_caae6e7d1ebec8::t_6bee964b800370 14-15
+plugins/adapters/lark/src/protocol.ts
+  s_caae6e7d1ebec8::t_f7b6b6eaa6d5a3 19-21,36-37,124-125,149-150
+plugins/adapters/qq/schema.json
+  s_dbea2e1d41b3a6::t_45d3b48e2675c3 287-297,428-438
+plugins/adapters/qq/src/adapter.ts
+  s_dbea2e1d41b3a6::t_b125220e2ea6fd 12
+plugins/adapters/qq/src/qq-console-spec.ts
+  s_9622fd28aba994::t_877aa93fb1c9e1 17-18
+plugins/adapters/qq/tests/outbound-order.test.ts
+  s_dbea2e1d41b3a6::t_b9f2de46c2ba96 1-41
+plugins/adapters/qq/tests/streaming-config.test.ts
+  s_9622fd28aba994::t_3d61ed2ed15c3d 1-9
+plugins/adapters/sandbox/tests/sandbox-multi-connection.test.ts
+  s_9622fd28aba994::t_9c787ca0cefd18 6,64-98
+plugins/adapters/slack/schema.json
+  s_caae6e7d1ebec8::t_8f71d40b84afb4 157-167,190-200
+plugins/adapters/slack/src/adapter.ts
+  s_c9b5f38bba0f14::t_0ce8a77d144565 15
+plugins/adapters/slack/src/console-spec.ts
+  s_caae6e7d1ebec8::t_593a829c768f35 14-15
+plugins/adapters/slack/src/protocol.ts
+  s_caae6e7d1ebec8::t_c31e2700df2952 23-25,39-40,133-134,155-156
+plugins/adapters/slack/tests/native-stream.test.ts
+  s_9622fd28aba994::t_e8d8066ca9612a 1-55
+plugins/adapters/telegram/schema.json
+  s_dbea2e1d41b3a6::t_6da7153bfc9931 144-154,177-187
+plugins/adapters/telegram/src/adapter.ts
+  s_dbea2e1d41b3a6::t_9a5af9238247fa 13
+plugins/adapters/telegram/src/console-spec.ts
+  s_9622fd28aba994::t_e560469db5e7a2 13-14
+plugins/adapters/telegram/src/markdown-to-html.ts
+  s_c9b5f38bba0f14::t_1cc6fe073a6e37 1-7,9-24,27-53,55-57,59-63,65-79,81-91,94-97,99-102,104-106,108-114,117,125
+plugins/adapters/telegram/src/stream-markdown.ts
+  s_9622fd28aba994::t_143c39bc672359 1-67
+plugins/adapters/telegram/tests/markdown-to-html.test.ts
+  s_9622fd28aba994::t_26342eeded520a 19-23
+plugins/adapters/telegram/tests/outbound-order.test.ts
+  s_dbea2e1d41b3a6::t_1557b11604ab3a 1-36
+plugins/adapters/telegram/tests/stream-markdown.test.ts
+  s_9622fd28aba994::t_e8d88239180434 1-56
+plugins/adapters/telegram/tests/streaming-config.test.ts
+  s_9622fd28aba994::t_9ee8651be86b1c 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "26fda97336bd1424896a4942d9602514d10fc16c",
+  "prompts": {},
+  "sessions": {
+    "s_89280b7aa79e47": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a19ae1-4e2f-7533-8cd3-16a012c2ba97",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_c9b5f38bba0f14": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a199ca-09aa-7af1-83fa-6c6bc4d42ef0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_caae6e7d1ebec8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a199c9-d9aa-7ce2-be53-891b0283dd1b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_dbea2e1d41b3a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a199ca-415e-7a81-b902-78953cefae27",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
