@@ -1,0 +1,220 @@
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_c971c9c7ecd77d 56,66,73-75,77,165,215,291,481,491
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_9622fd28aba994::t_c25814137d4254 76-79
+plugins/adapters/discord/src/self-profile.ts
+  s_9622fd28aba994::t_75e4b1dd1c1871 47,49,57-61,72-73
+plugins/adapters/bilibili/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 525,538
+plugins/adapters/napcat/src/self-profile.ts
+  s_9622fd28aba994::t_75e4b1dd1c1871 46-51
+  s_9622fd28aba994::t_1d4680ade822e8 2
+packages/im/agent/src/bootstrap-scope.ts
+  s_9622fd28aba994::t_6eaa1985d10f8a 15-16,105-106,109-132,156
+  s_9622fd28aba994::t_6405a150cf282b 49-52
+  s_9622fd28aba994::t_ed38123a2b0112 35-38,41-43,45-48,53-69,150,157,172-173,176,189
+  s_9622fd28aba994::t_373dc9ed82adb0 39-40,44
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_9622fd28aba994::t_4176c7083b7efb 174,181,183,238
+packages/im/agent/src/plugin-runtime/native-self-profile-tools.ts
+  s_9622fd28aba994::t_8e32e7b72835fa 3,86
+plugins/adapters/milky/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 221,234
+plugins/adapters/telegram/tests/self-profile.test.ts
+  s_9622fd28aba994::t_f41d14c0b22beb 3-4,21-43
+plugins/adapters/github/tests/self-profile.test.ts
+  s_9622fd28aba994::t_b76ad3d69b1fa5 1-22
+plugins/adapters/kook/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 314,327
+plugins/adapters/icqq/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 622,635
+plugins/adapters/discord/README.md
+  s_9622fd28aba994::t_cfb0e4af8e2ace 12,44,114,147,149,151,153
+plugins/adapters/onebot11/tests/self-profile.test.ts
+  s_9622fd28aba994::t_9cda697c1e1fbe 53-62
+  s_9622fd28aba994::t_f05f267e08f6fa 1-9,12,14-15,17-18,20-52,63
+  s_9622fd28aba994::t_24e8e1e8ea10ab 10-11,13,16,19
+packages/im/agent/src/bootstrap.ts
+  s_9622fd28aba994::t_6eaa1985d10f8a 20,155
+packages/im/agent/src/prompt/assembly.ts
+  s_9622fd28aba994::t_3b02d1e4b3175d 64,161-162
+  s_9622fd28aba994::t_95b6a18eea3c08 24-25,63,65-68,76,163,211
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  s_9622fd28aba994::t_1d4680ade822e8 88
+  s_9622fd28aba994::t_11cbafa1c74c62 68,97,162,185,230
+plugins/adapters/satori/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 223,236
+basic/cli/tests/plugin-runtime/start/restart-shutdown.test.ts
+  s_9622fd28aba994::t_bdee9439b0469c 146,155-157,159-160,166
+  s_9622fd28aba994::t_9e23d732fe8cec 12,136,140-145,158,164-165
+  s_9622fd28aba994::t_de2e50c272802b 123,128,179-180,182-187
+  s_9622fd28aba994::t_714de7b779a02b 137,181,190,200,211
+plugins/adapters/onebot12/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 234,247
+plugins/adapters/wecom/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 219,232
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_9622fd28aba994::t_1964d3e650c7e3 15,46,82,98-110
+  s_9622fd28aba994::t_402f70f2e0fcba 111-112
+packages/im/adapter/src/endpoint.ts
+  s_9622fd28aba994::t_6642c5d1715075 125-129
+basic/cli/tests/cli-write-side.test.ts
+  s_9622fd28aba994::t_270f14d3ff09b6 25,221-222
+packages/im/agent/tests/plugin-runtime/subagent-provider-prompt.test.ts
+  s_9622fd28aba994::t_1964d3e650c7e3 12,15,17,19-20,45,64-66
+  s_9622fd28aba994::t_fba0bd82a7a0f6 25,44,60-62
+packages/im/agent/tests/security/turn-network-binary.test.ts
+  s_9622fd28aba994::t_fba0bd82a7a0f6 69-89
+plugins/adapters/bilibili-live/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 361,374
+docs/authoring/adapters.md
+  s_9622fd28aba994::t_0c11394ccb596a 180,193-196
+plugins/adapters/discord/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 337,350
+plugins/adapters/telegram/src/self-profile.ts
+  s_9622fd28aba994::t_c15714cc01940c 4,29,52-54
+  s_9622fd28aba994::t_fc3ec6a9a9fd1b 30-38,40-51
+plugins/adapters/napcat/tests/self-profile.test.ts
+  s_9622fd28aba994::t_b76ab81f2adcdc 16-25
+plugins/adapters/weixin-ilink/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 223,236
+packages/im/adapter/src/endpoint-profile.ts
+  s_9622fd28aba994::t_6642c5d1715075 131,148-156,158,172,201
+  s_9622fd28aba994::t_8e32e7b72835fa 3,91-92
+packages/im/adapter/tests/endpoint-profile.test.ts
+  s_9622fd28aba994::t_b476cc9e42b0b6 85-92
+  s_9622fd28aba994::t_e0454b710e54d9 39-84
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  s_9622fd28aba994::t_01e33a4c1746ff 196
+  s_9622fd28aba994::t_1c863155677239 16,44,197
+packages/im/agent/src/context/context-system.ts
+  s_9622fd28aba994::t_0f7b3bfeff7bdf 135-136
+  s_9622fd28aba994::t_3b02d1e4b3175d 109
+  s_9622fd28aba994::t_1c863155677239 19,112-113,115,200
+packages/im/adapter/src/adapter.ts
+  s_9622fd28aba994::t_0c11394ccb596a 8,374
+plugins/adapters/napcat/README.md
+  s_9622fd28aba994::t_cfb0e4af8e2ace 127
+docs/en/configuration/index.md
+  s_9622fd28aba994::t_0c11394ccb596a 428-430,435-437,448,455,463
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_36859fb317a6c5 320,348,437-438,440,451,458
+  s_9622fd28aba994::t_797fa4fc4af235 31,439,442
+plugins/adapters/onebot11/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 216,229
+basic/cli/src/commands/migrate.ts
+  s_9622fd28aba994::t_270f14d3ff09b6 167,171,188
+plugins/adapters/line/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 198,211
+packages/im/adapter/tests/profile-schema.test.ts
+  s_9622fd28aba994::t_683122ac7b6a72 1-36
+packages/im/im-contract/src/self-profile.ts
+  s_9622fd28aba994::t_8e32e7b72835fa 23-29
+packages/im/agent/src/security/turn-network-client.ts
+  s_9622fd28aba994::t_01e33a4c1746ff 83,97-102
+  s_9622fd28aba994::t_5a9ae40883ed28 47-54,64,70,76,88
+packages/im/agent/tests/bootstrap-scope.test.ts
+  s_9622fd28aba994::t_fc887e30948cde 118-127,130-154,202
+  s_9622fd28aba994::t_f6bc91cbb69606 41-50
+  s_9622fd28aba994::t_58c9a72cf0befe 173-186,197-201
+  s_9622fd28aba994::t_de2e50c272802b 128-129
+  s_9622fd28aba994::t_acd52dffde328a 203
+packages/im/agent/tests/prompt/bootstrap-source-provider.test.ts
+  s_9622fd28aba994::t_1327862da243ca 1-7,9,12-15,17-20,32-36,40-58,84
+  s_9622fd28aba994::t_1d6c292bc48a74 8,10-11,16,21-31,59-83
+  s_9622fd28aba994::t_41e7b8e99507dd 37-39
+plugins/adapters/napcat/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 233,246
+plugins/adapters/email/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 301,314
+plugins/adapters/github/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 244,257
+plugins/adapters/sandbox/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 177,190
+plugins/adapters/wechat-mp/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 246,259
+basic/cli/src/plugin-runtime/agent/publication-coordinator.ts
+  s_9622fd28aba994::t_36859fb317a6c5 3,24,76
+plugins/adapters/onebot11/tests/onebot11-self-user-id.test.ts
+  s_9622fd28aba994::t_e0454b710e54d9 65-70
+  s_9622fd28aba994::t_9cda697c1e1fbe 55-64,71-72,94-99,211-218
+  s_9622fd28aba994::t_2167c5ef0bedc5 219
+plugins/adapters/github/src/self-profile.ts
+  s_9622fd28aba994::t_bf20162cb6e1b1 5,16-17,20-21
+plugins/adapters/sandbox/tests/sandbox-core-interaction.test.ts
+  s_9622fd28aba994::t_d1904b63e408d4 9-19
+packages/im/agent/src/prompt/rules/security.ts
+  s_9622fd28aba994::t_01e33a4c1746ff 2
+packages/im/agent/src/prompt/prompts/deferred-worker.md
+  s_9622fd28aba994::t_5a9ae40883ed28 11
+plugins/adapters/telegram/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 243,256
+packages/im/agent/src/context/agents-instruction.ts
+  s_9622fd28aba994::t_6eaa1985d10f8a 8,101
+  s_9622fd28aba994::t_0f7b3bfeff7bdf 72
+packages/toolkit/create-zhin/src/templates/bootstrap.ts
+  s_9622fd28aba994::t_270f14d3ff09b6 12,29
+plugins/adapters/slack/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 256,269
+plugins/adapters/telegram/README.md
+  s_9622fd28aba994::t_cfb0e4af8e2ace 176,178,180,182
+plugins/adapters/lark/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 294,307
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  s_9622fd28aba994::t_11cbafa1c74c62 72,85,94,152,182,228
+docs/adapters/napcat.md
+  s_9622fd28aba994::t_9fb69267ce299d 11,139
+plugins/adapters/qq/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 494,507
+docs/adapters/telegram.md
+  s_9622fd28aba994::t_9fb69267ce299d 11,188,190,192,194
+plugins/adapters/bilibili-live/tests/self-profile.test.ts
+  s_9622fd28aba994::t_b76ab81f2adcdc 5-39
+packages/im/agent/tests/prompt/account-persona-entry-paths.test.ts
+  s_9622fd28aba994::t_e1d3bbb8b550d2 19-47
+packages/im/agent/tests/prompt/prompt-policy-requests.test.ts
+  s_9622fd28aba994::t_5a9ae40883ed28 164
+  s_9622fd28aba994::t_e1d3bbb8b550d2 123-125,165-167
+docs/en/authoring/adapters.md
+  s_9622fd28aba994::t_0c11394ccb596a 182
+plugins/adapters/bilibili-live/src/client.ts
+  s_9622fd28aba994::t_75e4b1dd1c1871 7,84-85,92,94-99,163-166,176-177,180-188
+docs/configuration/index.md
+  s_9622fd28aba994::t_0c11394ccb596a 424-426,431-433,444,451,459
+plugins/adapters/onebot11/src/self-profile.ts
+  s_9622fd28aba994::t_04b16fca74127a 6-10,14,16-19,22,24-30,32-37,39,41-46,50,52-54
+  s_9622fd28aba994::t_9cda697c1e1fbe 23
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9622fd28aba994::t_aaa06f0942db9c 38,83-84,220-221,240-245,247,271,275,279-280,547,550
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_95b6a18eea3c08 652
+  s_9622fd28aba994::t_5c7ce25fc244ec 197
+packages/im/agent/tests/context/agents-instruction-root.test.ts
+  s_9622fd28aba994::t_58c9a72cf0befe 38-55
+plugins/adapters/dingtalk/schema.json
+  s_9622fd28aba994::t_0c11394ccb596a 265,278
+docs/plans/prompt-policy-consolidation.md
+  s_9622fd28aba994::t_9c3fb4440e48e5 157-158,166-206
+plugins/adapters/discord/tests/self-profile.test.ts
+  s_9622fd28aba994::t_b76ab81f2adcdc 6-15
+docs/adapters/discord.md
+  s_9622fd28aba994::t_9fb69267ce299d 11,24,56,126,159,161,163,165
+packages/im/tool/src/definition.ts
+  s_9622fd28aba994::t_270f14d3ff09b6 147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "236b969582de4a21224a3a9631cdbad2e8e61a11",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
