@@ -1,0 +1,18 @@
+.changeset/schedule-mysql-index-prefix.md
+  h_b680f75345178a 1-5
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  h_b680f75345178a 15-21,95
+basic/cli/tests/plugin-runtime/agent/schedule-history-index.test.ts
+  h_b680f75345178a 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1d5b86955614331d597a090ef7e746f479605921",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
