@@ -15,12 +15,15 @@ export function supportsSlackReplyStream(request: Pick<EndpointStreamRequest, 'c
 export function openSlackReplyStream(client: WebClient, request: EndpointStreamRequest,
   onMessage: (ts: string) => void): EndpointMessageStream | undefined {
   if (!supportsSlackReplyStream(request)) return undefined;
+  // A new physical message cannot inherit the previous native Markdown renderer state.
+  if (request.format === 'markdown' && request.continuation) return undefined;
   const prefix = request.prefix ?? [];
   if (prefix.some(segment => segment.type !== 'reply' && segment.type !== 'mention')) return undefined;
   const wire = formatOutboundWire(prefix.length ? prefix : '');
-  const quoted = wire.replyTo ? parseSlackMessageRef(wire.replyTo) : null;
+  const replyTo = wire.replyTo ?? request.continuation?.replyTo;
+  const quoted = replyTo ? parseSlackMessageRef(replyTo) : null;
   if (quoted && quoted.channel !== request.conversation.id) return undefined;
-  const threadTs = request.conversation.threadId ?? quoted?.ts ?? wire.replyTo;
+  const threadTs = request.conversation.threadId ?? quoted?.ts ?? replyTo;
   // Ordinary channel replies must not move into a new thread just to gain streaming.
   if (!threadTs) return undefined;
   const event = request.source?.event as { team_id?: unknown } | undefined;
@@ -34,7 +37,8 @@ export function openSlackReplyStream(client: WebClient, request: EndpointStreamR
   let cancelled = false;
   let finished = false;
   let exhausted = false;
-  const acknowledge = (): EndpointStreamAcknowledgement => ({
+  let lastAcknowledgement: EndpointStreamAcknowledgement | undefined;
+  const acknowledge = (): EndpointStreamAcknowledgement => lastAcknowledgement = Object.freeze({
     status: native.messageTs ? 'sent' : 'buffered',
     ...(native.messageTs ? { messageId: formatSlackMessageRef(request.conversation.id, native.messageTs) } : {}),
     acceptedText,
@@ -69,6 +73,7 @@ export function openSlackReplyStream(client: WebClient, request: EndpointStreamR
     return acknowledge();
   };
   return {
+    get lastAcknowledgement() { return lastAcknowledgement; },
     write,
     async finish(text) {
       if (finished) return acknowledge();

@@ -14,7 +14,7 @@ export interface EndpointStreamRequest {
   readonly format: 'text' | 'markdown';
   readonly prefix?: readonly Segment[];
   /** Source already consumed by earlier physical containers of this same logical segment. */
-  readonly continuation?: Readonly<{ precedingText: string }>;
+  readonly continuation?: Readonly<{ precedingText: string; replyTo?: string }>;
   readonly source?: EndpointStreamSource;
   readonly locale?: Locale;
   readonly signal?: AbortSignal;
@@ -36,6 +36,8 @@ export interface EndpointStreamAcknowledgement {
 
 /** Platform calls are serial, cumulative-source updates; adapters translate to native deltas. */
 export interface EndpointMessageStream {
+  /** Latest locally cached acknowledgement; reading it never performs a platform operation. */
+  readonly lastAcknowledgement?: EndpointStreamAcknowledgement;
   write(text: string): Promise<EndpointStreamAcknowledgement>;
   finish(text: string): Promise<EndpointStreamAcknowledgement>;
   /** Local cancellation only: no hidden final send, recall or retry. */

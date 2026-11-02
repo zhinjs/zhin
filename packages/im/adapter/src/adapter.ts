@@ -497,14 +497,14 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       minIntervalMs: streaming.minIntervalMs,
       ...(streaming.supports ? { supports: (request: Pick<EndpointStreamRequest, 'conversation' | 'source'>) => {
         assertOutbound();
-        if (request.conversation.endpoint.id !== canonicalId) {
+        if (request.conversation.endpoint.id !== canonicalId || request.conversation.endpoint.adapter !== this.descriptor.name) {
           throw new EndpointDeliveryError('endpoint_identity_mismatch', 'Stream belongs to another account', 'not_sent');
         }
         return streaming.supports!(request);
       } } : {}),
       open: (request: EndpointStreamRequest): EndpointMessageStream | undefined => {
         assertOutbound();
-        if (request.conversation.endpoint.id !== canonicalId) {
+        if (request.conversation.endpoint.id !== canonicalId || request.conversation.endpoint.adapter !== this.descriptor.name) {
           throw new EndpointDeliveryError('endpoint_identity_mismatch', 'Stream belongs to another account', 'not_sent');
         }
         const streamSignal = request.signal
@@ -512,6 +512,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
         const stream = streaming.open({ ...request, signal: streamSignal });
         if (!stream) return undefined;
         return Object.freeze({
+          get lastAcknowledgement() { return stream.lastAcknowledgement; },
           write: async (text: string) => { assertOutbound(); streamSignal.throwIfAborted(); return stream.write(text); },
           finish: async (text: string) => { assertOutbound(); streamSignal.throwIfAborted(); return stream.finish(text); },
           cancel: () => stream.cancel(),

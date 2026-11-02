@@ -470,6 +470,25 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
     await endpoint.stop();
   });
 
+  it('rejects an unrepresentable keyboard/media order before sending any earlier message', async () => {
+    const mock = createMockBot();
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig,
+    }), () => mock);
+    try {
+      await endpoint.start();
+      await expect(endpoint.send({
+        conversation: { endpoint: { id: endpoint.canonicalId, adapter: 'qq' }, kind: 'private', id: 'user-1' },
+        payload: [
+          { type: 'markdown', data: { content: 'before' } },
+          { type: 'image', data: { media: { kind: 'base64', value: 'QUJD' } } },
+          { type: 'keyboard', data: { id: 'controls' } },
+        ],
+      })).rejects.toMatchObject({ code: 'unsupported_operation', disposition: 'not_sent' });
+      expect(mock.sent).toEqual([]);
+    } finally { await endpoint.stop(); }
+  });
+
   it('sends markdown segments as msg_type=2 payloads', async () => {
     const mock = createMockBot();
     const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),

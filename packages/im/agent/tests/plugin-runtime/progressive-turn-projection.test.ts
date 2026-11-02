@@ -13,6 +13,7 @@ import { PromptController } from '../../src/turn/prompt-controller.js';
 import { UsageQuota } from '../../src/security/usage-quota.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { ReplyStreamRun } from '../../src/core/reply-stream-run.js';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 
 it.each(['sent', 'partial', 'legacy'] as const)('projects %s delivery facts through the complete turn engine', async mode => {
   const conversation = { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private' as const, id: 'user' };
@@ -74,7 +75,7 @@ it.each(['sent', 'partial', 'legacy'] as const)('projects %s delivery facts thro
   }
 });
 
-it.each(['stream', 'off', 'stopped', 'fallback', 'cancel', 'cancel-projection-failure', 'journal-failure', 'journal-projection-failure'] as const)('normalizes a late follow-up into one terminal with %s phase delivery', async mode => {
+it.each(['stream', 'off', 'stopped', 'fallback', 'fallback-partial', 'fallback-rejected', 'fallback-canonical-partial', 'fallback-canonical-rejected', 'cancel', 'cancel-projection-failure', 'journal-failure', 'journal-projection-failure'] as const)('normalizes a late follow-up into one terminal with %s phase delivery', async mode => {
   const controller = new PromptController('one-at-a-time', 'one-at-a-time');
   const conversation = { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private' as const, id: 'user' };
   const sessionKey = 'sandbox:bot:private:user';
@@ -83,14 +84,21 @@ it.each(['stream', 'off', 'stopped', 'fallback', 'cancel', 'cancel-projection-fa
   const cancellation = new AbortController(), publish = vi.fn(async () => undefined);
   const cancelling = mode === 'cancel' || mode === 'cancel-projection-failure';
   const journaling = mode === 'journal-failure' || mode === 'journal-projection-failure';
-  const send = vi.fn(async () => ({ status: 'sent' as const, messageId: 'ordinary' }));
+  const failedFallback = mode.startsWith('fallback-'), canonicalFallback = mode.startsWith('fallback-canonical');
+  const rejectedFallback = mode.endsWith('rejected');
+  const actual = { conversation: { ...conversation, id: 'redirected', threadId: 'topic' }, id: 'actual-fallback' };
+  const send = vi.fn(async () => {
+    if (failedFallback) throw new EndpointDeliveryError('fallback_stopped', 'platform', rejectedFallback ? 'rejected' : 'unknown',
+      { parts: [{ messageId: 'fallback-1' }, {}], ...(canonicalFallback ? { receipt: { status: 'failed', parts: [{ message: actual }, {}] } } : {}) });
+    return { status: 'sent' as const, messageId: 'ordinary' };
+  });
   const openStream = vi.fn((answer?: { phaseId?: string }) => {
     if (mode === 'off') return undefined;
     const index = streams.length + 1, message = { conversation, id: `physical-${index}` };
-    const receipt = mode === 'stopped'
+    const receipt = failedFallback ? { status: 'suppressed' as const } : mode === 'stopped'
       ? { status: 'failed' as const, parts: [{ message }], failure: { code: 'phase_unknown', message: 'unconfirmed tail', retryable: false, deliveryUnknown: true as const } }
       : { status: 'sent' as const, message, parts: [{ message }] };
-    const native: CoreReplyStream = { receipt, confirmed: [{ key: 'physical', message, segments: [{ type: 'text', data: { text: `confirmed-${index}` } }] }],
+    const native: CoreReplyStream = { receipt, confirmed: failedFallback ? [] : [{ key: 'physical', message, segments: [{ type: 'text', data: { text: `confirmed-${index}` } }] }],
       update: vi.fn(), finish: vi.fn(async () => { order.push(`finish:${index}`); return receipt; }), cancel: vi.fn(async () => receipt) };
     expect(answer?.phaseId).toBe(`turn:answer:${index}`);
     streams.push(native); return native;
@@ -123,7 +131,7 @@ it.each(['stream', 'off', 'stopped', 'fallback', 'cancel', 'cancel-projection-fa
       if (input.replyPhases) {
         const phase = input.replyPhases.open(); phaseId = phase.id;
         const facts = await input.replyPhases.settle({ id: phase.id, reply: `planned-${index}`, output,
-          ...(mode === 'fallback' ? {} : { run: new ReplyStreamRun(phase.stream!),
+          ...(mode === 'fallback' || failedFallback ? {} : { run: new ReplyStreamRun(phase.stream!),
             snapshot: { revision: 1, messages: [{ key: 'message', complete: true, segments: [{ key: 'body', complete: true, value: output[0]!.segments[0]! }] }] } }) });
         returnedFacts.push(facts);
         stopped = facts.stopped === true;
@@ -159,7 +167,7 @@ it.each(['stream', 'off', 'stopped', 'fallback', 'cancel', 'cancel-projection-fa
   const consume = async () => { while (true) {
     const step = await stream.next();
     if (!step.done) { events.push(step.value); continue; }
-    if (mode === 'stopped') await expect(step.value.project()).rejects.toThrow('phase_unknown');
+    if (mode === 'stopped' || failedFallback) await expect(step.value.project()).rejects.toThrow(failedFallback ? 'fallback_stopped' : 'phase_unknown');
     else await step.value.project();
     break;
   } };
@@ -173,6 +181,17 @@ it.each(['stream', 'off', 'stopped', 'fallback', 'cancel', 'cancel-projection-fa
     return;
   }
   await consume();
+  if (failedFallback) {
+    expect(calls).toBe(1);
+    expect(returnedFacts[0]).toMatchObject({ delivery: { status: rejectedFallback ? 'rejected' : 'failed',
+      code: 'fallback_stopped', messages: [canonicalFallback ? actual : null, null],
+      ...(!rejectedFallback ? { deliveryPartial: true, deliveryUnknown: true } : {}) }, confirmedOutput: [] });
+    expect(returnedFacts[0]?.messageIds).toEqual([canonicalFallback ? actual.id : null, null]);
+    expect(returnedFacts[0]?.messageId).toBe(canonicalFallback ? actual.id : undefined);
+    expect(record).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledOnce();
+    return;
+  }
   const terminals = events.filter(event => event.type === 'turn_end');
   expect(terminals).toHaveLength(1);
   expect(calls).toBe(mode === 'stopped' ? 1 : 2);

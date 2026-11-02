@@ -139,7 +139,8 @@ export const CONVERSATION_EVENT_QUERY_MODEL = Object.freeze({
   conversation_kind: { type: 'text' as const, nullable: true }, conversation_id: { type: 'text' as const, nullable: true },
   parent_kind: { type: 'text' as const, nullable: true }, parent_id: { type: 'text' as const, nullable: true },
   thread_id: { type: 'text' as const, nullable: true }, actor_id: { type: 'text' as const, nullable: true },
-  platform_message_id: { type: 'text' as const, nullable: true }, query_version: { type: 'integer' as const, nullable: true },
+  platform_message_id: { type: 'text' as const, nullable: true },
+  message_revision: { type: 'integer' as const, nullable: true }, query_version: { type: 'integer' as const, nullable: true },
 });
 
 export function conversationEventQueryFields(event: ConversationEvent): Record<string, string | number | null> {
@@ -149,7 +150,9 @@ export function conversationEventQueryFields(event: ConversationEvent): Record<s
     conversation_kind: conversation.kind, conversation_id: databaseTextKey(conversation.id), parent_kind: conversation.parent?.kind ?? null,
     parent_id: conversation.parent ? databaseTextKey(conversation.parent.id) : null, thread_id: conversation.threadId === undefined ? null : databaseTextKey(conversation.threadId),
     actor_id: actor ? databaseTextKey(actor.id) : null,
-    platform_message_id: eventMessageRef(event) ? databaseTextKey(eventMessageRef(event)!.id) : null, query_version: 1 };
+    platform_message_id: eventMessageRef(event) ? databaseTextKey(eventMessageRef(event)!.id) : null,
+    message_key: eventMessageRef(event) ? databaseTextKey(messageRefKey(eventMessageRef(event)!)) : '',
+    message_revision: event.type === 'message.created' || event.type === 'message.updated' ? event.message.revision ?? 0 : 0, query_version: 1 };
 }
 
 export const CONVERSATION_EVENT_MODEL = Object.freeze({
@@ -174,7 +177,15 @@ type ConversationDbSelection = PromiseLike<Record<string, unknown>[]> & {
   limit?(count: number): ConversationDbSelection;
 };
 
+interface ConversationDbAggregation extends PromiseLike<Record<string, unknown>[]> {
+  min(field: string, alias?: string): ConversationDbAggregation;
+  max(field: string, alias?: string): ConversationDbAggregation;
+  groupBy(...fields: string[]): ConversationDbAggregation;
+  where(query: Record<string, unknown>): ConversationDbAggregation;
+}
+
 export interface ConversationDbModel {
+  aggregate?(): ConversationDbAggregation;
   select(...fields: string[]): ConversationDbSelection;
   insert(row: Record<string, unknown>): unknown;
   update(patch: Record<string, unknown>): { where(query: Record<string, unknown>): unknown };
@@ -196,7 +207,6 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
         ...conversationEventQueryFields(event),
         event_id: databaseTextKey(event.eventId),
         conversation_key: databaseTextKey(conversationRefKey(event.conversation)),
-        message_key: eventMessageRef(event) ? databaseTextKey(messageRefKey(eventMessageRef(event)!)) : '',
         event_json: JSON.stringify(event),
         time: event.timestamp,
       }));
@@ -250,6 +260,26 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     const states = new Map<string, MessageProjection>();
     if (!refs.length) return states;
     const keys = refs.map(messageRefKey);
+    if (this.events.aggregate) {
+      // This is an event-sequence boundary, not a cross-query SQL/MVCC snapshot.
+      const [latest] = await this.events.aggregate().max('id', 'through');
+      const through = Number(latest?.through ?? 0), conversationKey = conversationRefKey(conversation);
+      const unindexed = async (storedKeys: readonly string[], storedConversation: string) => {
+        const selection = this.events.select('id').where({ $and: [
+          { id: { $lte: through } }, { message_revision: null }, { $or: [
+            { message_key: { $in: storedKeys } },
+            { $and: [{ conversation_key: storedConversation }, { message_key: '' },
+              { $or: [{ event_type: 'message.recalled' }, { event_type: null }] }] },
+          ] },
+        ] });
+        // A third-party model without bounded selections keeps its existing JSON reader.
+        return selection.limit ? (await selection.limit(1)).length > 0 : true;
+      };
+      const encoded = await unindexed(keys.map(databaseTextKey), databaseTextKey(conversationKey));
+      const legacy = encoded ? false : await toleratePostgresNul(() => unindexed(keys, conversationKey), false);
+      if (!encoded && !legacy) return this.#indexedMessageStates(refs, through);
+      // Older binaries may still write nullable metadata; preserve the established JSON reader until rebuilt.
+    }
     const select = (storedKeys: readonly string[]) => Promise.resolve(this.events.select('id', 'event_json')
       .where({ message_key: { $in: storedKeys } }));
     const encoded = await select(keys.map(databaseTextKey));
@@ -268,6 +298,55 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
       const key = messageRefKey(ref), state = states.get(key) ?? { recalled: false };
       projectMessage(state, { sequence: Number(row.id), event });
       states.set(key, state);
+    }
+    return states;
+  }
+
+  /** Resolve only the selected bodies; aggregate scans never materialize cumulative JSON revisions. */
+  async #indexedMessageStates(refs: readonly MessageRef[], through: number): Promise<Map<string, MessageProjection>> {
+    const keys = refs.map(messageRefKey), selected = new Set(keys), aliases = new Map<string, string>();
+    for (const key of keys) { aliases.set(key, key); aliases.set(databaseTextKey(key), key); }
+    const batches = async (read: (stored: readonly string[]) => PromiseLike<Record<string, unknown>[]>) => [
+      ...await read(keys.map(databaseTextKey)), ...await toleratePostgresNul(() => Promise.resolve(read(keys)), []),
+    ];
+    const first = await batches(stored => this.events.aggregate!().min('id', 'sequence').groupBy('message_key', 'event_type')
+      .where({ $and: [{ id: { $lte: through } }, { message_key: { $in: stored } }, { event_type: { $in: ['message.created', 'message.recalled'] } }] }));
+    const creations = new Map<string, number>(), recalls = new Map<string, number>();
+    const retainFirst = (map: Map<string, number>, key: string, sequence: number) => map.set(key, Math.min(map.get(key) ?? sequence, sequence));
+    for (const row of first) {
+      const key = aliases.get(String(row.message_key));
+      if (key) retainFirst(row.event_type === 'message.created' ? creations : recalls, key, Number(row.sequence));
+    }
+    const scope = (stored: readonly string[], revisions?: ReadonlyMap<string, number>) => stored.flatMap(key => {
+      const canonical = aliases.get(key)!, recall = recalls.get(canonical), revision = revisions?.get(canonical);
+      return revisions && revision === undefined ? [] : [{ message_key: key,
+        ...(recall === undefined ? {} : { id: { $lt: recall } }), ...(revision === undefined ? {} : { message_revision: revision }) }];
+    });
+    const highest = await batches(stored => this.events.aggregate!().max('message_revision', 'revision').groupBy('message_key')
+      .where({ $and: [{ id: { $lte: through } }, { event_type: 'message.updated' }, { $or: scope(stored) }] }));
+    const revisions = new Map<string, number>();
+    for (const row of highest) {
+      const key = aliases.get(String(row.message_key));
+      if (key) revisions.set(key, Math.max(revisions.get(key) ?? 0, Number(row.revision)));
+    }
+    const updates = new Map<string, number>();
+    if (revisions.size) {
+      const selected = await batches(stored => this.events.aggregate!().min('id', 'sequence').groupBy('message_key')
+        .where({ $and: [{ id: { $lte: through } }, { event_type: 'message.updated' }, { $or: scope(stored, revisions) }] }));
+      for (const row of selected) {
+        const key = aliases.get(String(row.message_key));
+        if (key) retainFirst(updates, key, Number(row.sequence));
+      }
+    }
+    const ids = [...new Set([...creations.values(), ...recalls.values(), ...updates.values()])];
+    const states = new Map<string, MessageProjection>();
+    if (!ids.length) return states;
+    const rows = await this.events.select('id', 'event_json').where({ id: { $in: ids } });
+    for (const row of rows.sort((left, right) => Number(left.id) - Number(right.id))) {
+      const event = freezeConversationData(parseConversationEvent(row.event_json)), ref = eventMessageRef(event);
+      if (!ref || !selected.has(messageRefKey(ref))) continue;
+      const key = messageRefKey(ref), state = states.get(key) ?? { recalled: false };
+      projectMessage(state, { sequence: Number(row.id), event }); states.set(key, state);
     }
     return states;
   }

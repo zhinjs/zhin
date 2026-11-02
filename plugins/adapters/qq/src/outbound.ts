@@ -302,6 +302,17 @@ export interface FormatOutboundMessagesOptions {
   readonly imageSizes?: ReadonlyMap<string, QqImageSize>;
 }
 
+function requireKeyboardMarkdown(messages: QqOutboundMessage[]): QqOutboundMessage[] {
+  for (const message of messages) {
+    const parts: readonly (string | QqOutboundElem)[] = Array.isArray(message) ? message : [message as string | QqOutboundElem];
+    if (parts.some(part => typeof part !== 'string' && (part.type === 'keyboard' || part.type === 'button'))
+      && !parts.some(part => typeof part !== 'string' && part.type === 'markdown')) {
+      throw new EndpointDeliveryError('unsupported_operation', 'QQ keyboard requires Markdown in the same physical message', 'not_sent');
+    }
+  }
+  return messages;
+}
+
 /**
  * Preserve the original segment order before formatOutbound merges Markdown.
  * Public images with known dimensions become inline Markdown at their original
@@ -312,15 +323,20 @@ export function formatOutboundMessages(payload: unknown, options: FormatOutbound
   const items = toSegmentList(payload);
   const rich = items.some(item => typeof item !== 'string' && MARKDOWN_MESSAGE_TYPES.has(item.type));
   const media = items.some(item => typeof item !== 'string' && SPLIT_MEDIA_TYPES.has(item.type));
-  if (!rich || !media) return [formatOutbound(payload)];
+  if (!rich || !media) return requireKeyboardMarkdown([formatOutbound(payload)]);
 
   const replies = items.filter(item => typeof item !== 'string' && item.type === 'reply');
   const templates = items.some(item => typeof item !== 'string' && item.type === 'markdown' && markdownTemplateId(item.data ?? {}));
   const messages: QqOutboundMessage[] = [];
   let pending: Array<string | QqWireSegment> = [];
+  const append = (items: Array<string | QqWireSegment>): void => {
+    const message = formatOutbound(items);
+    const parts = Array.isArray(message) ? message : [message];
+    if (parts.some(part => typeof part === 'string' ? part.length > 0 : part.type !== 'reply')) messages.push(message);
+  };
   const flush = (): void => {
     if (!pending.length) return;
-    messages.push(formatOutbound([...replies, ...pending]));
+    append([...replies, ...pending]);
     pending = [];
   };
   for (const item of items) {
@@ -332,14 +348,14 @@ export function formatOutboundMessages(payload: unknown, options: FormatOutbound
         pending.push({ type: 'markdown', data: { content: `![图片 #${size.width}px #${size.height}px](${source.value})` } });
       } else {
         flush();
-        messages.push(formatOutbound([...replies, item]));
+        append([...replies, item]);
       }
     } else {
       pending.push(item);
     }
   }
   flush();
-  return messages;
+  return requireKeyboardMarkdown(messages);
 }
 
 /**

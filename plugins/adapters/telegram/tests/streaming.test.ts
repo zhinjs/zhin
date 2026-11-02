@@ -43,6 +43,7 @@ describe('Telegram private-chat drafts', () => {
     const stream = streaming.open({ conversation, format: 'text' })!;
     await stream.write('first');
     await stream.write('first second');
+    expect(calls.map(call => call.body.text)).toEqual(['first', 'first second']);
     expect(calls.map(call => call.body.draft_id)).toEqual([calls[0].body.draft_id, calls[0].body.draft_id]);
   });
 

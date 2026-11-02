@@ -74,7 +74,12 @@ type AuthoringForAdapter<TInput, TConfig, TAdapter extends string | undefined> =
     readonly order?: number;
   } & (
     | { readonly target?: 'inbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: MiddlewareNext): unknown }
-    | { readonly target: 'outbound'; readonly incremental?: true; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void> }
+    | {
+        readonly target: 'outbound';
+        /** Opt in to cumulative revisions; do not repeat approvals, external sends or other side effects. */
+        readonly incremental?: true;
+        handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void>;
+      }
   );
 
 /** @internal Shape shared with the typed IM facade; not a separate authoring API. */

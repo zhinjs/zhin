@@ -64,12 +64,34 @@ describe('QQ native C2C reply stream', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses an exhausted passive source without upgrading to an active message', async () => {
+  it('keeps exhausted passive sources on the complete-message path without claiming another grant', () => {
     const { streaming, ledger, calls } = fixture();
     for (let n = 0; n < 4; n++) ledger.acquire('private', 'user');
-    const stream = streaming.open({ conversation, format: 'text' })!;
-    await expect(stream.write('reply')).rejects.toMatchObject({ disposition: 'not_sent' });
+    expect(streaming.open({ conversation, format: 'text' })).toBeUndefined();
     expect(calls).toEqual([]);
+  });
+
+  it('does not offer a stream when no passive source is recorded', () => {
+    const { bot, calls } = fixture();
+    const streaming = createQqStreaming(() => bot, new QqPassiveReplyLedger());
+    expect(streaming.open({ conversation, format: 'text' })).toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
+  it('preflights passive source availability without consuming the source quota', () => {
+    const { streaming, ledger } = fixture();
+    for (let n = 0; n < 5; n++) expect(streaming.open({ conversation, format: 'text' })).toBeDefined();
+    expect(ledger.acquire('private', 'user')?.msgSeq).toBe(1);
+  });
+
+  it('exhausts an explicitly rejected passive source without retrying the native operation', async () => {
+    const { streaming, send, ledger } = fixture();
+    send.mockRejectedValueOnce(new Error('Request "/v2/users/user/stream_messages" failed with code(304027): rejected'));
+    const stream = streaming.open({ conversation, format: 'text' })!;
+    await expect(stream.write('reply')).rejects.toMatchObject({ disposition: 'rejected' });
+    await expect(stream.finish('reply')).rejects.toMatchObject({ disposition: 'rejected' });
+    expect(send).toHaveBeenCalledOnce();
+    expect(ledger.acquire('private', 'user')).toBeUndefined();
   });
 
   it('stops accepting additional text when QQ reports an exhausted native container', async () => {

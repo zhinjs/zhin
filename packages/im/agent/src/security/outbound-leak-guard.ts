@@ -131,7 +131,7 @@ export class OutboundLeakInspector {
     let end = text.length;
     for (const literal of literals) end = Math.min(end, pendingLiteralStart(text, literal));
     for (const marker of SECRET_MARKERS) {
-      const candidate = marker.insensitive ? text.toLowerCase() : text;
+      const candidate = marker.insensitive ? text.replace(/[A-Z]/g, character => character.toLowerCase()) : text;
       const start = pendingLiteralStart(candidate, marker.text);
       if (start < text.length && (!marker.word || start === 0 || !/\w/.test(text[start - 1]!))) end = Math.min(end, start);
     }

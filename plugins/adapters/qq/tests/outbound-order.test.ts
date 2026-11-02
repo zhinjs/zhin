@@ -13,6 +13,37 @@ describe('QQ ordered rich replies', () => {
     ]);
   });
 
+  it('does not turn dropped media into a blank physical message', () => {
+    expect(formatOutboundMessages([markdown('before'), { type: 'image', data: {} }, markdown('after')]))
+      .toEqual([markdown('before'), markdown('after')]);
+  });
+
+  it('does not send routing-only messages when the referenced media is dropped', () => {
+    const reply = { type: 'reply', data: { message_id: 'source' } };
+    expect(formatOutboundMessages([reply, markdown('before'), { type: 'image', data: {} }, markdown('after')]))
+      .toEqual([
+        [{ type: 'reply', data: { id: 'source' } }, markdown('before')],
+        [{ type: 'reply', data: { id: 'source' } }, markdown('after')],
+      ]);
+  });
+
+  it('rejects a keyboard separated from its Markdown before submitting any physical message', () => {
+    expect(() => formatOutboundMessages([markdown('before'), image, { type: 'keyboard', data: { id: 'controls' } }]))
+      .toThrow(expect.objectContaining({ code: 'unsupported_operation', disposition: 'not_sent' }));
+  });
+
+  it('keeps a keyboard with its original adjacent Markdown after a media barrier', () => {
+    const keyboard = { type: 'keyboard', data: { id: 'controls' } };
+    expect(formatOutboundMessages([markdown('before'), image, markdown('after'), keyboard])).toEqual([
+      markdown('before'), { type: 'image', data: { file: 'base64://QUJD' } }, [markdown('after'), keyboard],
+    ]);
+  });
+
+  it('does not submit a standalone keyboard without inventing a Markdown body', () => {
+    expect(() => formatOutboundMessages([{ type: 'keyboard', data: { id: 'controls' } }]))
+      .toThrow(expect.objectContaining({ code: 'unsupported_operation', disposition: 'not_sent' }));
+  });
+
   it('keeps each embedded public image between its surrounding Markdown', () => {
     const url = 'https://example.invalid/image.png';
     const result = formatOutboundMessages([

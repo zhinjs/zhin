@@ -64,8 +64,15 @@ pnpm add @zhin.js/adapter-telegram
 首段立即展示，后续更新默认至少间隔 500 毫秒。可在实例配置或单个 endpoint 中设置：
 
 ```yaml
-streaming: true
-streamingIntervalMs: 500
+telegram:
+  streaming: true
+  streamingIntervalMs: 500
+  endpoints:
+    - id: my-telegram-bot
+      token: ${TELEGRAM_TOKEN}
+    - id: complete-replies
+      token: ${OTHER_TELEGRAM_TOKEN}
+      streaming: false
 ```
 
 `streaming: false` 关闭生成中的公开更新。草稿与正式回复保持同一话题，最终消息保留引用与交互内容。超过平台单条容量时按内容顺序接续消息，Markdown 代码块和链接保留格式与原文；图片、语音和文件仍使用现有上传发送链路。结果未知时不会自动重复正式发送。

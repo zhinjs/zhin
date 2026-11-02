@@ -3,6 +3,13 @@ import { createStructuredReplyStreamParser } from '../../src/outbound/structured
 const textStart = '{"messages":[{"segments":[{"type":"text","data":{"text":"';
 const markdownStart = '{"messages":[{"segments":[{"type":"markdown","data":{"content":"';
 
+it.each([
+  '{"messages":[{"segments":[{"type":"bogus","data":{}},{"type":"text","data":{"text":"later',
+  '{"messages":[{"segments":[{"type":"text","data":{"text":"first"}},{"type":"bogus","data":{}}]},{"segments":[{"type":"text","data":{"text":"later',
+])('rejects a closed invalid segment instead of publishing around it', async raw => {
+  expect(await createStructuredReplyStreamParser().parse(raw, 1)).toBeUndefined();
+});
+
 it('projects text while its JSON string is still open, with host-owned stable keys', async () => {
   const parser = createStructuredReplyStreamParser();
   const first = await parser.parse(textStart + 'first', 1);

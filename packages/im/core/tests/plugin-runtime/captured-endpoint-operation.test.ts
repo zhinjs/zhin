@@ -10,7 +10,7 @@ import { ImRuntime, type OutboundEnvelope, type ReplyStreamSnapshot } from '../.
 
 async function fixture(send: (request: EndpointSendRequest) => Promise<string> = async () => 'sent', options: {
   streaming?: EndpointStreaming; middleware?: MiddlewareDefinition[]; events?: MemoryConversationEventStore;
-  nativeMarkdown?: boolean;
+  nativeMarkdown?: boolean; nativeKeyboard?: boolean;
 } = {}) {
   const root = rootPluginId(), im = new ImRuntime({ conversationEvents: options.events }), repository = new MemoryDesiredRepository();
   repository.snapshot = undefined;
@@ -39,7 +39,10 @@ async function fixture(send: (request: EndpointSendRequest) => Promise<string> =
   const adapter = new NativeAdapter();
   const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'test', source: '/fixture/adapters/test/index.ts',
     definition: defineAdapter({ capabilities: ['inbound', 'outbound'], operations: ['recall'],
-      ...(options.nativeMarkdown ? { segments: { markdown: 'native' as const } } : {}), createAdapter: () => adapter }) });
+      ...(options.nativeMarkdown || options.nativeKeyboard ? { segments: {
+        ...(options.nativeMarkdown ? { markdown: 'native' as const } : {}),
+        ...(options.nativeKeyboard ? { interactive: 'native' as const } : {}),
+      } } : {}), createAdapter: () => adapter }) });
   const middlewares = (options.middleware ?? []).map((definition, index) => createCapabilitySlot({ owner: root, feature: middlewareFeatureId,
     localName: `middleware-${index}`, source: `/fixture/middlewares/${index}/index.ts`, definition }));
   const state: SnapshotState = { root,
@@ -76,6 +79,35 @@ function nativeStreaming() {
   } };
   return { frames, cancelled, streaming };
 }
+
+it.each(['finish', 'cancel'] as const)('keeps a long native stream interval across timer chunks until %s', async ending => {
+  const native = nativeStreaming(), timerLimit = 2_147_483_647;
+  const f = await fixture(async () => 'ordinary', { streaming: { ...native.streaming, minIntervalMs: timerLimit + 1000 } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  vi.useFakeTimers(); vi.setSystemTime(1);
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('first', 1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(native.frames.map(frame => frame.text)).toEqual(['first']);
+    const finishing = stream.finish(streamSnapshot('first second', 2, true));
+    await vi.advanceTimersByTimeAsync(1);
+    expect(native.frames).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(timerLimit - 1);
+    expect(native.frames).toHaveLength(1);
+    if (ending === 'cancel') {
+      expect(await stream.cancel()).toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
+      expect(await finishing).toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
+    } else {
+      await vi.advanceTimersByTimeAsync(999);
+      expect(native.frames).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await finishing).toMatchObject({ status: 'sent' });
+      expect(native.frames.map(frame => frame.text)).toEqual(['first', 'first second']);
+    }
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { operation.release(); vi.useRealTimers(); await f.close(); }
+});
 
 it('coalesces intermediate candidates through incremental middleware and persists the confirmed final body once', async () => {
   const native = nativeStreaming(), events = new MemoryConversationEventStore();
@@ -368,6 +400,173 @@ it('closes capacity-limited containers before continuing and does not repeat men
     expect(opened.map(item => item.preceding)).toEqual([undefined, 'abc', 'abcdef']);
     expect(opened.map(item => item.prefix.length)).toEqual([1, 0, 0]);
     expect(stream.confirmed.flatMap(item => item.segments).filter(segment => segment.type === 'mention')).toEqual([mention]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it.each([true, false])('stops rather than replaying a confirmed prefix when continuation is unsupported (complete=%s)', async complete => {
+  const ordinary = vi.fn(async () => 'ordinary');
+  let opens = 0;
+  const streaming: EndpointStreaming = { mode: 'native', open() {
+    if (opens++) return undefined;
+    return {
+      async write(text) { return { status: 'sent', messageId: 'partial', acceptedText: text.slice(0, 3), exhausted: true }; },
+      async finish(text) { return { status: 'sent', messageId: 'partial', acceptedText: text.slice(0, 3),
+        ...(text.length > 3 ? { exhausted: true as const } : {}) }; },
+      cancel() {},
+    };
+  } };
+  const f = await fixture(ordinary, { streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    if (!complete) {
+      stream.update(streamSnapshot('abcdef', 1));
+      await vi.waitFor(() => expect(opens).toBe(2));
+    }
+    expect(await stream.finish(streamSnapshot('abcdef', 2, true))).toMatchObject({
+      status: 'failed', failure: { code: 'stream_continuation_unsupported' }, parts: [{ message: { id: 'partial' } }],
+    });
+    expect(ordinary).not.toHaveBeenCalled();
+    expect(stream.confirmed.map(part => part.segments)).toEqual([[{ type: 'text', data: { text: 'abc' } }]]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('persists the latest physically sent revision when a stream is cancelled before completion', async () => {
+  const native = nativeStreaming(), events = new MemoryConversationEventStore();
+  const f = await fixture(async () => 'ordinary', { streaming: native.streaming, events });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('first', 1));
+    await vi.waitFor(() => expect(native.frames).toHaveLength(1));
+    stream.update(streamSnapshot('first second', 2));
+    await vi.waitFor(() => expect(stream.confirmed[0]!.segments).toEqual([{ type: 'text', data: { text: 'first second' } }]));
+    await stream.cancel();
+    const stored = await events.getMessage({ conversation: f.target, id: 'stream-1' });
+    expect(stored).toMatchObject({ revision: 2, segments: [{ type: 'text', data: { text: 'first second' } }] });
+    expect(await events.listMessages(f.target, undefined, 50)).toHaveLength(1);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('carries the first rendered reply target into continuation metadata without repeating its prefix', async () => {
+  const requests: Array<Parameters<EndpointStreaming['open']>[0]> = [];
+  const streaming: EndpointStreaming = { mode: 'native', open(request) {
+    requests.push(request);
+    return { async write(text) { return { status: 'sent', messageId: `part-${requests.length}`, acceptedText: text }; },
+      async finish(text) { return { status: 'sent', messageId: `part-${requests.length}`, acceptedText: text.slice(0, 3),
+        ...(text.length > 3 ? { exhausted: true as const } : {}) }; }, cancel() {} };
+  } };
+  const f = await fixture(async () => 'ordinary', { streaming, middleware: [defineMiddleware<OutboundEnvelope>({
+    target: 'outbound', incremental: true, async handle({ input }, next) {
+      input.replace([{ type: 'reply', data: { message_id: 'rendered-target' } },
+        { type: 'mention', data: { target: 'user' } }, ...input.payload as Segment[]]);
+      await next();
+    },
+  })] });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    expect(await stream.finish(streamSnapshot('abcdefg', 1, true))).toMatchObject({ status: 'sent' });
+    expect(requests.map(request => request.continuation)).toEqual([undefined,
+      { precedingText: 'abc', replyTo: 'rendered-target' }, { precedingText: 'abcdef', replyTo: 'rendered-target' }]);
+    expect(requests.map(request => request.prefix)).toEqual([
+      [{ type: 'reply', data: { message_id: 'rendered-target' } }, { type: 'mention', data: { target: 'user' } }], [], [],
+    ]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it.each(['new', 'first', 'stale', 'preview', 'wrong-id', 'invalid-prefix'] as const)(
+  'retains verified final content through a close error only for a new saved acknowledgement (%s)', async mode => {
+    type Acknowledgement = Awaited<ReturnType<NonNullable<ReturnType<EndpointStreaming['open']>>['write']>>;
+    let cached: Acknowledgement | undefined;
+    const write = vi.fn(async (text: string): Promise<Acknowledgement> => {
+      cached = { status: 'sent', messageId: 'physical', acceptedText: text }; return cached;
+    });
+    const finish = vi.fn(async (text: string): Promise<Acknowledgement> => {
+      if (mode !== 'stale') cached = { status: mode === 'preview' ? 'preview' : 'sent',
+        messageId: mode === 'wrong-id' ? 'different' : 'physical', acceptedText: mode === 'invalid-prefix' ? 'rewritten' : text };
+      throw new EndpointDeliveryError('close_failed', 'Synthetic close failed after its body update', 'unknown');
+    });
+    const streaming: EndpointStreaming = { mode: 'native', open() { return {
+      write, finish, get lastAcknowledgement() { return cached; }, cancel() {},
+    }; } };
+    const events = new MemoryConversationEventStore(), ordinary = vi.fn(async () => 'ordinary');
+    const f = await fixture(ordinary, { streaming, events });
+    const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+    try {
+      const stream = operation.openReplyStream!()!;
+      if (mode !== 'first') {
+        stream.update(streamSnapshot('old', 1));
+        await vi.waitFor(() => expect(stream.confirmed).toHaveLength(1));
+      }
+      expect(await stream.finish(streamSnapshot('old final', 2, true))).toMatchObject({
+        status: 'failed', failure: { code: 'close_failed', deliveryUnknown: true }, parts: [{ message: { id: 'physical' } }],
+      });
+      const expected = mode === 'new' || mode === 'first' ? 'old final' : 'old';
+      expect((await events.getMessage({ conversation: f.target, id: 'physical' }))!.segments).toEqual([{ type: 'text', data: { text: expected } }]);
+      expect(stream.confirmed[0]!.segments).toEqual([{ type: 'text', data: { text: expected } }]);
+      expect(write).toHaveBeenCalledTimes(mode === 'first' ? 0 : 1);
+      expect(finish).toHaveBeenCalledTimes(1);
+      expect(ordinary).not.toHaveBeenCalled();
+    } finally { operation.release(); await f.close(); }
+  },
+);
+
+it('records a saved capacity-limited preview after close fails without opening another container', async () => {
+  type Acknowledgement = Awaited<ReturnType<NonNullable<ReturnType<EndpointStreaming['open']>>['write']>>;
+  let cached: Acknowledgement | undefined;
+  const write = vi.fn(async (text: string): Promise<Acknowledgement> => ({ status: 'preview', acceptedText: text.slice(0, 3), exhausted: true }));
+  const finish = vi.fn(async (text: string): Promise<Acknowledgement> => {
+    cached = { status: 'sent', messageId: 'saved-preview', acceptedText: text };
+    throw new EndpointDeliveryError('close_failed', 'Synthetic close failed', 'unknown');
+  });
+  const open = vi.fn(() => ({ write, finish, get lastAcknowledgement() { return cached; }, cancel() {} }));
+  const events = new MemoryConversationEventStore(), f = await fixture(async () => 'ordinary', { streaming: { mode: 'draft', open }, events });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('abcdef', 1));
+    await vi.waitFor(() => expect(stream.receipt.failure?.code).toBe('close_failed'));
+    expect(await stream.finish(streamSnapshot('abcdef', 2, true))).toMatchObject({
+      status: 'failed', failure: { code: 'close_failed', deliveryUnknown: true }, parts: [{ message: { id: 'saved-preview' } }],
+    });
+    expect((await events.getMessage({ conversation: f.target, id: 'saved-preview' }))!.segments).toEqual([{ type: 'text', data: { text: 'abc' } }]);
+    expect(open).toHaveBeenCalledOnce(); expect(write).toHaveBeenCalledOnce(); expect(finish).toHaveBeenCalledExactlyOnceWith('abc');
+  } finally { operation.release(); await f.close(); }
+});
+
+it('keeps a known text and keyboard message atomic through the real renderer and native endpoint', async () => {
+  const native = nativeStreaming(), ordinary = vi.fn(async () => 'interactive-message');
+  const f = await fixture(ordinary, { streaming: native.streaming, nativeKeyboard: true });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  const keyboard: Segment = { type: 'keyboard', data: { rows: [[{ id: 'confirm', label: 'Confirm', payload: 'confirmed' }]] } };
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('Choose', 1, false, [keyboard]));
+    await new Promise(resolve => setImmediate(resolve));
+    expect(native.frames).toEqual([]); expect(ordinary).not.toHaveBeenCalled();
+    expect(await stream.finish(streamSnapshot('Choose', 2, true, [keyboard]))).toMatchObject({ status: 'sent' });
+    expect(native.frames).toEqual([]);
+    expect(ordinary).toHaveBeenCalledOnce();
+    expect(ordinary.mock.calls[0]![0].payload).toEqual([{ type: 'text', data: { text: 'Choose' } }, keyboard]);
+    expect(stream.confirmed[0]!.message).toMatchObject({ id: 'interactive-message' });
+  } finally { operation.release(); await f.close(); }
+});
+
+it('stops without sending a keyboard that arrives after its text was published', async () => {
+  const native = nativeStreaming(), ordinary = vi.fn(async () => 'interactive-message');
+  const f = await fixture(ordinary, { streaming: native.streaming, nativeKeyboard: true });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  const keyboard: Segment = { type: 'keyboard', data: { rows: [[{ id: 'confirm', label: 'Confirm', payload: 'confirmed' }]] } };
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('Choose', 1));
+    await vi.waitFor(() => expect(native.frames).toHaveLength(1));
+    expect(await stream.finish(streamSnapshot('Choose', 2, true, [keyboard]))).toMatchObject({
+      status: 'rejected', failure: { code: 'stream_prefix_changed' }, parts: [{ message: { id: 'stream-1' } }],
+    });
+    expect(native.frames).toHaveLength(1); expect(ordinary).not.toHaveBeenCalled();
+    expect(stream.confirmed[0]!.segments).toEqual([{ type: 'text', data: { text: 'Choose' } }]);
   } finally { operation.release(); await f.close(); }
 });
 

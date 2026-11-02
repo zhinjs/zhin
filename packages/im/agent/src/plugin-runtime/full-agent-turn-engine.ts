@@ -332,8 +332,16 @@ async function* runInteractiveTurn(
       try { delivery = await reply.send(phase.output, answer); }
       catch (error) {
         const known = error instanceof EndpointDeliveryError;
-        delivery = { status: 'failed', code: known ? error.code : 'reply_phase_unknown', retryable: false,
-          ...(!known || error.disposition === 'unknown' ? { deliveryUnknown: true as const } : {}) };
+        // ReplyPort can redirect delivery; native ids alone cannot establish a target scene.
+        const canonical = known ? error.receipt : undefined;
+        const messages = canonical
+          ? canonical.parts?.map(part => part.message ?? null) ?? (canonical.message ? [canonical.message] : [])
+          : known ? error.parts?.map(() => null) ?? [] : [];
+        delivery = known && error.disposition === 'rejected'
+          ? { status: 'rejected', code: error.code, messages }
+          : { status: 'failed', code: known ? error.code : 'reply_phase_unknown', retryable: false, messages,
+              ...(!known || error.disposition === 'unknown' ? { deliveryUnknown: true as const } : {}),
+              ...(messages.length ? { deliveryPartial: true as const } : {}) };
       }
       confirmedOutput = delivery.status === 'sent' ? [...phase.output] : [];
     }

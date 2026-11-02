@@ -90,6 +90,19 @@ it('rejects stream admission for another account before invoking its native port
   } finally { lease.release(); await h.stop(); }
 });
 
+it.each(['supports', 'open'] as const)('rejects a mismatched adapter at the %s stream boundary', async boundary => {
+  const h = await fixture(), lease = h.account.acquire(h.canonicalId);
+  const conversation = { ...h.conversation, endpoint: { ...h.conversation.endpoint, adapter: 'another-adapter' } };
+  const native = h.endpoints[0].port;
+  const supports = vi.spyOn(native, 'supports');
+  try {
+    expect(() => boundary === 'supports' ? lease.streaming!.supports!({ conversation })
+      : lease.streaming!.open({ conversation, format: 'text' })).toThrow('another account');
+    expect(supports).not.toHaveBeenCalled();
+    expect(native.requests).toEqual([]);
+  } finally { lease.release(); await h.stop(); }
+});
+
 it('never rebinds a retired stream to a restarted account while preserving local cancellation', async () => {
   const h = await fixture(); const lease = h.account.acquire(h.canonicalId);
   let released = false;
@@ -117,4 +130,19 @@ it('never rebinds a retired stream to a restarted account while preserving local
       expect(h.endpoints[1].port.streams).toHaveLength(1);
     } finally { next.release(); }
   } finally { if (!released) lease.release(); await h.stop(); }
+});
+
+it('exposes the native last acknowledgement through the lease as a live local getter', async () => {
+  const h = await fixture(), lease = h.account.acquire(h.canonicalId);
+  let cached: Awaited<ReturnType<EndpointMessageStream['write']>> | undefined;
+  const native: EndpointMessageStream = { write: vi.fn(), finish: vi.fn(), cancel: vi.fn(), get lastAcknowledgement() { return cached; } };
+  vi.spyOn(h.endpoints[0].port, 'open').mockReturnValue(native as NativeMessageStream);
+  try {
+    const stream = lease.streaming!.open({ conversation: h.conversation, format: 'text' })!;
+    expect(stream.lastAcknowledgement).toBeUndefined();
+    cached = { status: 'sent', messageId: 'saved', acceptedText: 'confirmed' };
+    expect(stream.lastAcknowledgement).toBe(cached);
+    expect(native.write).not.toHaveBeenCalled();
+    expect(native.finish).not.toHaveBeenCalled();
+  } finally { lease.release(); await h.stop(); }
 });

@@ -166,14 +166,12 @@
           },
           "streaming": {
             "type": "boolean",
-            "default": true,
             "description": "Use native streaming cards for progressive replies."
           },
           "streamingIntervalMs": {
             "type": "integer",
             "minimum": 0,
-            "description": "Reply stream update interval in milliseconds.",
-            "default": 1000
+            "description": "Reply stream update interval in milliseconds."
           },
           "nickname": {
             "type": [

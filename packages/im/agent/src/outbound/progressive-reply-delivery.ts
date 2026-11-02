@@ -1,4 +1,4 @@
-import { EndpointDeliveryError, type DeliveryReceipt } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { turnReplyMessages } from '../core/turn-reply-messages.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
@@ -12,6 +12,7 @@ export async function deliverProgressiveReply(
   reply: ReplyPort,
   locale?: Locale,
   answer?: ReplyAnswerContext,
+  conversation?: ConversationRef,
 ): Promise<{ delivery: DeliveryOutcome; confirmedOutput: AgentOutputElement[] }> {
   const { run, snapshot } = progressive;
   const send = (elements: readonly AgentOutputElement[]) => answer ? reply.send(elements, answer) : reply.send(elements);
@@ -31,9 +32,19 @@ export async function deliverProgressiveReply(
     try { extra = await send(remaining); }
     catch (error) {
       const known = error instanceof EndpointDeliveryError;
+      const target = messages.find(message => message !== null)?.conversation ?? conversation;
+      const canonical = known ? error.receipt : undefined;
+      const completed = canonical
+        ? canonical.parts?.map(part => part.message ?? null) ?? (canonical.message ? [canonical.message] : [])
+        : known ? error.parts?.map(part => part.messageId && target
+          ? { conversation: target, id: part.messageId } : null) ?? [] : [];
+      const allMessages = [...messages, ...completed];
+      if (known && error.disposition === 'rejected' && !messages.length && !confirmedOutput.length) {
+        return { delivery: { status: 'rejected', code: error.code, messages: allMessages }, confirmedOutput };
+      }
       return { delivery: { status: 'failed', code: known ? error.code : 'reply_tail_unknown', retryable: false,
         ...(!known || error.disposition === 'unknown' ? { deliveryUnknown: true as const } : {}),
-        messages, ...(confirmedOutput.length ? { deliveryPartial: true as const } : {}) }, confirmedOutput };
+        messages: allMessages, ...(confirmedOutput.length || allMessages.length ? { deliveryPartial: true as const } : {}) }, confirmedOutput };
     }
     const extraMessages = 'messages' in extra ? extra.messages ?? [] : [];
     messages.push(...extraMessages);

@@ -188,6 +188,21 @@ it.each(['not_sent', 'rejected', 'unknown'] as const)('records %s thrown answer 
   expect(records.at(-1)?.deliveryUnknown === true).toBe(disposition === 'unknown');
 });
 
+it.each(['parts', 'message', 'legacy'] as const)('keeps scoped %s exception evidence without treating the ingress scene as the reply target', async shape => {
+  const { EndpointDeliveryError } = await import('@zhin.js/im-contract');
+  const actual = { conversation: { ...conversation, id: 'redirected', threadId: 'topic' }, id: 'native-target' };
+  const receipt = shape === 'legacy' ? undefined : { status: 'failed' as const,
+    ...(shape === 'parts' ? { parts: [{ message: actual }, {}] } : { message: actual }) };
+  const error = new EndpointDeliveryError('target_error', 'platform', 'unknown', { receipt, parts: [{ messageId: 'legacy-id' }, {}] });
+  const records: TurnDeliveryRecord[] = [];
+  const port = recordFinalReply({ send: async () => { throw error; } }, identity, () => true,
+    { recordDelivery: async record => { records.push(record); } }, vi.fn());
+  await expect(port.send([{ type: 'image', url: 'https://example.test/offline-resource.png' }])).rejects.toBe(error);
+  expect(records.at(-1)).toMatchObject({ outcome: 'threw', code: 'target_error', status: 'partial', deliveryUnknown: true,
+    messages: shape === 'legacy' ? [null, null] : [actual, ...(shape === 'parts' ? [null] : [])],
+    resources: [{ type: 'image', url: 'https://example.test/offline-resource.png' }] });
+});
+
 it('can cancel an in-flight finish and retains that settlement when the native final result arrives late', async () => {
   const records: TurnDeliveryRecord[] = [];
   const message = { conversation, id: 'already-sent' };
