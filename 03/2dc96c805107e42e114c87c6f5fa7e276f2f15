@@ -1,0 +1,75 @@
+docs/plans/schedule-outcome-retry-safety.md
+  s_9622fd28aba994::t_fabf4ac57372a6 119,125,134,181,261,263,265,267-268,273,276-293
+.changeset/schedule-execution-safety.md
+  s_9622fd28aba994::t_9a127a671a54c5 1-15
+basic/cli/src/plugin-runtime/agent/assistant-runtime.ts
+  s_9622fd28aba994::t_a06b3ac844c9e7 42,77-81,128,220
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  s_9622fd28aba994::t_7301918c05da54 119-120,125-127
+basic/cli/tests/plugin-runtime/agent/schedule-history.test.ts
+  s_9622fd28aba994::t_0cd452a75e964d 5,22,25-27,29-30,32,87-88,105,115-137,141-142,144,153-154,156-157,178,187,204-207,219-237
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  s_9622fd28aba994::t_a6e53875d04ce7 24-100,109
+basic/cli/tests/plugin-runtime/console/schedule-execution-routes.test.ts
+  s_9622fd28aba994::t_e98c5a4e6d0a4a 30,63,88-92,113-117,146,202-203,236-237
+packages/im/agent/README.md
+  s_9622fd28aba994::t_6a69c1406560a9 114-123
+packages/im/agent/src/assistant/job-worker.ts
+  s_9622fd28aba994::t_a093eb530745c8 14,21,29,34,52
+packages/im/agent/src/plugin-runtime/index.ts
+  s_9622fd28aba994::t_07774734470c8f 30
+packages/im/agent/src/schedule-domain/activity.ts
+  s_9622fd28aba994::t_adb0a8a311deca 1-13
+packages/im/agent/src/schedule-domain/execution-domain.ts
+  s_9622fd28aba994::t_242823efb8f4a3 22-24,46,73,102-103,106-107,151,224-226,240-241
+packages/im/agent/src/schedule-domain/execution-history-file.ts
+  s_9622fd28aba994::t_e49e8a2759bfac 54,58-59
+packages/im/agent/src/schedule-domain/execution-history-sql.ts
+  s_9622fd28aba994::t_d498f8e4106f5a 11-12,33,57,62-63,74,77,79-80
+packages/im/agent/src/schedule-domain/execution-history.ts
+  s_9622fd28aba994::t_074be059dce14f 3-4,75-81
+packages/im/agent/src/schedule-domain/history-observer.ts
+  s_9622fd28aba994::t_30315dccb68b9c 2,8,11-17,23-32
+packages/im/agent/src/schedule-domain/replay-evidence.ts
+  s_9622fd28aba994::t_84271a5f8947d0 34
+packages/im/agent/src/task-executor.ts
+  s_9622fd28aba994::t_666a0afee0d8ce 22-23,28-29,57,72-75,79,92,97,99,108-109,125,141,144,170,228,232,249-252
+packages/im/agent/tests/helpers/schedule-execution-fixture.ts
+  s_9622fd28aba994::t_a45bd757d95a98 4,13-14,33-34,44,46-50,82,84-85
+packages/im/agent/tests/schedule-domain/history-generation-lifecycle.test.ts
+  s_9622fd28aba994::t_08fd79ea4b9746 1-63
+packages/im/agent/tests/schedule-domain/observation-runtime.test.ts
+  s_9622fd28aba994::t_10b16dde701022 1-81
+packages/im/agent/tests/schedule-domain/replay-evidence.test.ts
+  s_9622fd28aba994::t_c1f373ffb3d164 1-35
+packages/im/agent/tests/schedule-domain/replay-safety.test.ts
+  s_9622fd28aba994::t_03548c8f83e1f5 5-6,9-32,40,53,65,86,94,103
+packages/im/agent/tests/schedule-observation-owner.test.ts
+  s_9622fd28aba994::t_1d1786cddb5664 1-352
+packages/im/agent/src/schedule-domain/execution-history-store.ts
+  s_dbea2e1d41b3a6::t_505278374ec47e 3,5-8,59,146-195,200-203,207-209,213-215,219-355,357-362,364-382,384,387,389-390,394-397,405,407,411-413,415-432,434-442
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "032dc96c805107e42e114c87c6f5fa7e276f2f15",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_dbea2e1d41b3a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a199ca-415e-7a81-b902-78953cefae27",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
