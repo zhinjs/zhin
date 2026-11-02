@@ -17,6 +17,7 @@ import { getProcessPeerRegistry } from './peer-registry.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointContentPort } from './endpoint-content.js';
+import type { EndpointStreaming } from './endpoint-stream.js';
 import { configuredSelfProfile, EndpointProfileState, type EndpointProfile } from './endpoint-profile.js';
 
 export type {
@@ -95,6 +96,7 @@ export abstract class EndpointRuntime<TClient = unknown> {
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;
+  readonly streaming?: EndpointStreaming;
   readonly profile?: EndpointProfile;
   #selfProfile?: EndpointProfileState;
 

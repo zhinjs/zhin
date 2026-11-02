@@ -104,7 +104,7 @@ function projectRepresentedContext(messages: AgentMessage[]): AgentMessage[] {
     const blocks = user.contextBlocks;
     if (blocks && user.content.length === 1 && user.content[0]?.type === 'text'
       && user.content[0].text === renderContextMessage({ role: 'user-context', blocks })) {
-      const retained = blocks.filter(block => block.eventType !== 'message.created'
+      const retained = blocks.filter(block => block.eventType !== 'message.created' && block.eventType !== 'message.updated'
         || !block.reference || !represented.has(block.reference));
       if (retained.length !== blocks.length) {
         changed = true;

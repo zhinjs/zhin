@@ -39,6 +39,7 @@ interface OutboundDeliveryContext {
   readonly diagnostics?: RuntimeMessageDiagnostics;
   prepareButtons?(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch;
   record(request: SendRequest, receipt: DeliveryReceipt, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void>;
+  recordUpdate?(request: SendRequest, receipt: DeliveryReceipt, revision: number, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void>;
   /** Side-channel correlation ledger for inbound origin; failures never affect the receipt. */
   ledger?(conversation: ConversationRef, receipt: DeliveryReceipt, payload: unknown): void;
   rememberFallback(
@@ -47,6 +48,17 @@ interface OutboundDeliveryContext {
     map: Record<string, string>,
   ): Record<string, string> | void;
   publish(event: RuntimeMessageEvent): void;
+}
+
+/** Internal transport continuation. Rendering, policy and middleware still own every submitted revision. */
+export interface OutboundDeliveryExecution {
+  send(request: import('@zhin.js/adapter').EndpointSendRequest): Promise<{
+    readonly result?: EndpointSendResult;
+    readonly confirmedContent?: readonly Segment[];
+    readonly contentUnavailable?: true;
+  }>;
+  history(): 'create' | 'skip' | Readonly<{ revision: number }>;
+  confirmed(part: DeliveryPart, content: readonly Segment[] | undefined): void;
 }
 
 /** Owns rendering, policy projection, middleware, Endpoint delivery, and delivery facts. */
@@ -60,9 +72,9 @@ export class OutboundDeliveryRuntime {
     this.#renderer = renderer;
   }
 
-  async deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
+  async deliver(request: SendRequest, snapshot: RuntimeSnapshot, execution?: OutboundDeliveryExecution): Promise<DeliveryReceipt> {
     let rendering: RuntimeMessageRendering | undefined;
-    const receipt = await this.#deliver(request, snapshot, value => { rendering = value; });
+    const receipt = await this.#deliver(request, snapshot, value => { rendering = value; }, execution);
     this.context.diagnostics?.delivery(snapshot.generation, request.conversation, receipt, rendering);
     return receipt;
   }
@@ -71,6 +83,7 @@ export class OutboundDeliveryRuntime {
     request: SendRequest,
     snapshot: RuntimeSnapshot,
     observeRendering: (rendering: RuntimeMessageRendering) => void,
+    execution?: OutboundDeliveryExecution,
   ): Promise<DeliveryReceipt> {
     const adapter = request.conversation.endpoint.id as CapabilityId;
     const boundEndpoint = request[operationEndpoint];
@@ -181,7 +194,8 @@ export class OutboundDeliveryRuntime {
             : Array.isArray(payload) && payload.every(isCanonicalSegment) ? payload : undefined;
           // Capture known canonical content before the endpoint can mutate it.
           // Inline rendering bytes and opaque extensions never become new history.
-          const contentSources = canonicalContent?.map(snapshotHistorySource);
+          let contentSources = canonicalContent?.map(snapshotHistorySource);
+          let contentUnavailable = false;
           const payloadLength = Array.isArray(payload) ? payload.length : 1;
           try {
             const sendRequest = {
@@ -189,10 +203,21 @@ export class OutboundDeliveryRuntime {
               locale: resolveLocale(request.locale ?? projectLocale(snapshot)),
               payload,
             };
-            const result = boundEndpoint
-              ? await boundEndpoint.send(sendRequest)
-              : await requireAdapters(snapshot).send(adapter, sendRequest);
-            receipt = receiptFromEndpointResult(result, request.conversation, payloadLength);
+            if (execution) {
+              const transported = await execution.send(sendRequest);
+              if (transported.confirmedContent) {
+                contentSources = transported.confirmedContent.map(snapshotHistorySource);
+                // Explicit physical evidence must never fall back to the planned logical body.
+                contentUnavailable = !contentSources.length || contentSources.some(source => source === undefined);
+              }
+              if (transported.contentUnavailable) { contentSources = undefined; contentUnavailable = true; }
+              receipt = transported.result === undefined ? suppressedDeliveryReceipt()
+                : receiptFromEndpointResult(transported.result, request.conversation, contentSources?.length ?? payloadLength);
+            } else {
+              const result = boundEndpoint ? await boundEndpoint.send(sendRequest)
+                : await requireAdapters(snapshot).send(adapter, sendRequest);
+              receipt = receiptFromEndpointResult(result, request.conversation, payloadLength);
+            }
           } catch (error) {
             receipt = receiptFromEndpointError(error, true, request.conversation, payloadLength);
           }
@@ -202,24 +227,32 @@ export class OutboundDeliveryRuntime {
           if (receipt.status !== 'sent' && !receipt.failure?.deliveryUnknown && !receipt.parts?.length) revokeButtons?.();
 
           for (const part of evidence.parts) {
+            execution?.confirmed(part.part, part.content);
             const partReceipt: DeliveryReceipt = { status: 'sent', ...(part.part.message ? { message: part.part.message } : {}),
               ...(part.part.outboundTextDigest ? { outboundTextDigest: part.part.outboundTextDigest } : {}) };
-            if (part.part.message) {
-              await this.context.record(request, partReceipt, part.content ?? (receipt.parts ? 'unavailable' : undefined));
+            const history = execution?.history() ?? 'create';
+            if (part.part.message && history !== 'skip') {
+              try {
+                const content = part.content ?? (contentUnavailable || receipt.parts ? 'unavailable' : undefined);
+                if (history === 'create') await this.context.record(request, partReceipt, content);
+                else await this.context.recordUpdate?.(request, partReceipt, history.revision, content);
+              } catch (error) {
+                logger.warn(formatCompact({ op: 'outbound_history_failed', error: error instanceof Error ? error.message : String(error) }));
+              }
             }
             try {
               this.context.ledger?.(request.conversation, partReceipt,
-                part.content ?? (receipt.parts ? undefined : payload));
+                part.content ?? (contentUnavailable || receipt.parts ? undefined : payload));
             } catch (error) {
               logger.warn(`outbound ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
             }
-            if (part.part.message) this.context.publish({
+            if (part.part.message && history !== 'skip') this.context.publish({
               direction: 'outbound',
               rendering: projection.rendering,
               conversation: request.conversation,
               requester: request.requester,
               contentPreview: part.content ? previewMessageContent(part.content)
-                : receipt.parts ? '[Message content unavailable; inspect its reference.]' : previewMessageContent(payload),
+                : contentUnavailable || receipt.parts ? '[Message content unavailable; inspect its reference.]' : previewMessageContent(payload),
               messageId: part.part.message.id,
               timestamp: Date.now(),
             });
@@ -292,7 +325,7 @@ function receiptFromEndpointResult(
   });
 }
 
-function receiptFromEndpointError(error: unknown, attempted = true, conversation?: ConversationRef, payloadLength?: number): DeliveryReceipt {
+export function receiptFromEndpointError(error: unknown, attempted = true, conversation?: ConversationRef, payloadLength?: number): DeliveryReceipt {
   if (error instanceof EndpointDeliveryError) {
     const parts = attempted && conversation ? normalizeEndpointParts(error.parts, conversation, payloadLength) : [];
     // Disposition is transport evidence; an error code alone cannot override it.
@@ -337,6 +370,13 @@ function normalizeEndpointParts(parts: readonly EndpointSendPart[] | undefined, 
 }
 
 function snapshotHistorySource(segment: Segment): Segment | undefined {
+  if (segment.type === 'markdown') {
+    const data: Readonly<Record<string, unknown>> = segment.data;
+    // The AI authoring contract has one closed Markdown shape. Core extensions remain opaque.
+    if (Object.keys(segment).length !== 2 || !Object.hasOwn(segment, 'type') || !Object.hasOwn(segment, 'data')
+      || Object.keys(data).length !== 1 || !Object.hasOwn(data, 'content') || typeof data.content !== 'string') return undefined;
+    return { type: 'markdown', data: { content: data.content } };
+  }
   // Forward entries and opaque card/extensions have no bounded, simple content contract here.
   if (!isStrictCanonicalSegment(segment) || segment.type === 'forward') return undefined;
   if (collectSegmentMedia([segment]).some(({ media }) => media.kind === 'base64' || media.value.startsWith('data:'))) return undefined;

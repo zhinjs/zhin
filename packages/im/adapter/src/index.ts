@@ -20,6 +20,7 @@ export * from './endpoint-lifecycle.js';
 export * from './endpoint-management.js';
 export * from './endpoint-control.js';
 export * from './endpoint-content.js';
+export * from './endpoint-stream.js';
 export * from './endpoint-profile.js';
 export * from './endpoint-client.js';
 export * from './provider.js';

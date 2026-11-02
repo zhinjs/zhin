@@ -61,6 +61,7 @@ import {
   OutboundDeliveryRuntime,
   failedDeliveryReceipt,
 } from './outbound-delivery-runtime.js';
+import type { OutboundDeliveryExecution } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
 import { messageLocale } from './locale.js';
 import { InboundDeduper } from './inbound-dedup.js';
@@ -147,6 +148,7 @@ export class ImRuntime implements OutboundMessageService {
       diagnostics: this.#messageDiagnostics,
       ledger: (conversation, receipt, payload) => ledger.record(conversation, receipt, payload),
       record: (request, receipt, canonicalContent) => this.#conversations.recordOutbound(request, receipt, canonicalContent),
+      recordUpdate: (request, receipt, revision, canonicalContent) => this.#conversations.recordOutboundUpdate(request, receipt, revision, canonicalContent),
       rememberFallback: (conversation, generation, map) =>
         this.#interactions.rememberFallback(conversation, generation, map),
       publish: (event) => this.#messageEventStream.publish(event),
@@ -178,7 +180,7 @@ export class ImRuntime implements OutboundMessageService {
       acquire: () => this.#acquire(),
       retain: () => this.#retainSnapshot(),
       release: (lease) => this.#release(lease),
-      send: (request, snapshot) => this.#deliver(request, snapshot),
+      send: (request, snapshot, execution) => this.#deliver(request, snapshot, execution),
     });
   }
 
@@ -404,8 +406,8 @@ export class ImRuntime implements OutboundMessageService {
   }
 
   /** All unified outbound entry points observe the actual delivery, never their own caller/drain promise. */
-  #deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
-    const delivery = this.#outbound.deliver(request, snapshot);
+  #deliver(request: SendRequest, snapshot: RuntimeSnapshot, execution?: OutboundDeliveryExecution): Promise<DeliveryReceipt> {
+    const delivery = this.#outbound.deliver(request, snapshot, execution);
     this.#commandOperation.getStore()?.trackSend(delivery);
     return delivery;
   }

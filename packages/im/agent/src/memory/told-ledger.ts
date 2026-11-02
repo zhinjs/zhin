@@ -21,6 +21,8 @@ export interface ToldEntry {
   readonly kind: ToldEntryKind;
   readonly text: string;
   readonly turnId?: string;
+  /** Host-authored coverage identity; several answers can belong to the same real Turn. */
+  readonly contextRef?: string;
   readonly at: number;
 }
 
@@ -101,7 +103,7 @@ export class SessionToldLedger {
   }
 
   /** Records what was sent. A repeated statement moves to the newest position instead of duplicating. */
-  record(sessionId: string, text: string, source: 'reply' | 'progress', turnId?: string): void {
+  record(sessionId: string, text: string, source: 'reply' | 'progress', turnId?: string, contextRef?: string): void {
     const extracted = extractToldEntries(text, source);
     if (extracted.length === 0) return;
     const current = [...(this.#sessions.get(sessionId) ?? [])];
@@ -109,7 +111,7 @@ export class SessionToldLedger {
       const key = normalizeToldText(entry.text);
       const existing = current.findIndex((item) => normalizeToldText(item.text) === key);
       if (existing >= 0) current.splice(existing, 1);
-      current.push(Object.freeze({ ...entry, ...(turnId ? { turnId } : {}), at: this.#now() }));
+      current.push(Object.freeze({ ...entry, ...(turnId ? { turnId } : {}), ...(contextRef ? { contextRef } : {}), at: this.#now() }));
     }
     this.#sessions.delete(sessionId);
     this.#sessions.set(sessionId, current.slice(-this.#maxEntries));
@@ -137,7 +139,7 @@ export class SessionToldLedger {
         contextRef: {
           ...block.contextRef!,
           ...(entry.turnId && entry.kind !== 'progress'
-            ? { representedBy: deliveredReplyContextRef(sessionId, entry.turnId) } : {}),
+            ? { representedBy: entry.contextRef ?? deliveredReplyContextRef(sessionId, entry.turnId) } : {}),
         },
       };
     });

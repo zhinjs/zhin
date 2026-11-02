@@ -606,6 +606,8 @@ export function createResilientCompletionPort(
           return reply;
         } catch (error) {
           if (signal?.aborted) throw error;
+          // Publication makes regenerating this completion an observable replay.
+          if (streamOptions?.retryAllowed?.() === false) throw error;
           const info = classifyProviderError(error);
           lastError = error;
           lastKind = info.kind;

@@ -4,6 +4,7 @@ import { EndpointRuntime, bindEndpoint, isEndpointRuntime, type EndpointEventSin
 import type { EndpointContentPort } from './endpoint-content.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointManagement } from './endpoint-management.js';
+import type { EndpointStreaming } from './endpoint-stream.js';
 import type { EndpointProfile } from './endpoint-profile.js';
 
 /** Framework namespace; native SDK emit/on/off and other methods remain untouched. */
@@ -31,6 +32,7 @@ export interface EndpointHooks {
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;
+  readonly streaming?: EndpointStreaming;
   readonly profile?: EndpointProfile;
 }
 
@@ -46,6 +48,7 @@ class NativeEndpointRuntime extends EndpointRuntime<object> {
     this.control = hooks.control;
     this.profile = hooks.profile;
     Object.defineProperty(this, 'content', { get: () => hooks.content });
+    Object.defineProperty(this, 'streaming', { get: () => hooks.streaming });
     if (!hooks.send) Object.defineProperty(this, 'send', { value: undefined });
   }
   get name(): string | undefined { return this.#hooks.name; }

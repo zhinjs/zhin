@@ -57,3 +57,27 @@ it('covers only exact planned plain text, leaving rewritten, reordered and rich 
   output[0]!.segments[0]!.data.text = 'mutated by middleware';
   expect(planned[0]).toBe('first');
 });
+
+it.each(['same', 'older', 'missing'] as const)('covers an updated message only with %s body evidence', async evidence => {
+  const conversation: ConversationRef = { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private', id: 'user' };
+  const runtime = new ConversationRuntime(), message = { conversation, id: 'streamed' };
+  const initial = 'initial reply body', final = 'final confirmed reply body';
+  await runtime.recordOutbound({ conversation, content: initial } as never,
+    { status: 'sent', message, outboundTextDigest: deliveredTextDigest(initial) }, [{ type: 'text', data: { text: initial } }]);
+  await runtime.recordOutboundUpdate({ conversation, content: final } as never,
+    { status: 'sent', message, ...(evidence === 'missing' ? {} : { outboundTextDigest: deliveredTextDigest(final) }) },
+    2, [{ type: 'text', data: { text: final } }]);
+  const pending = await runtime.readContext(conversation, 'consumer', 2);
+  expect(pending.blocks).toHaveLength(1);
+  expect(pending.blocks[0]!.eventType).toBe('message.updated');
+  const text = evidence === 'older' ? initial : final;
+  const assistant: AssistantMessage = { role: 'assistant', timestamp: 1, content: [{ type: 'text', text }],
+    api: 'test', provider: 'test', model: 'test', usage: EMPTY_TOKEN_USAGE, stopReason: 'stop' };
+  const visible = stampDeliveredMessageId([assistant], message.id, [deliveredMessageContextRef(message, deliveredTextDigest(text))])[0]!;
+  const raw = conversationContextMessage(pending.blocks)!;
+  const projected = projectPromptContext([visible, raw, createUserMessage('current')]);
+  const background = projected.filter(item => item.role === 'user' && 'contextBlocks' in item);
+  if (evidence === 'same') expect(background).toHaveLength(0);
+  else expect(JSON.stringify(background)).toContain(final);
+  expect(JSON.stringify(raw)).toContain(final);
+});

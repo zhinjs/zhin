@@ -127,12 +127,17 @@ export function readSandboxHistoryPage(body: unknown, binding: SandboxHistoryBin
         || !Array.isArray(message.segments) || !message.segments.every(segment => text(record(segment)?.type) && record(record(segment)?.data))
         || message.actor !== undefined && (!actor || !text(actor.id) || actor.displayName !== undefined && typeof actor.displayName !== 'string')
         || message.contentStatus !== undefined && message.contentStatus !== 'unavailable') fail();
+      if (message.revision !== undefined && (!Number.isSafeInteger(message.revision) || Number(message.revision) < 0)
+        || message.recalled !== undefined && message.recalled !== true) fail();
       const content: MessageSegment[] = message.contentStatus === 'unavailable'
         ? [{ type: 'text', data: { text: sandboxText(locale, '消息正文未保存') } }] : message.segments as MessageSegment[];
       messages.push({ id: ref.id, type: actor ? 'sent' : 'received', channelType: binding.scene.type, channelId: binding.scene.id,
         channelName: binding.scene.name, senderId: actor ? String(actor.id) : 'endpoint',
         senderName: actor ? String(actor.displayName || actor.id) : binding.scope.id, content, timestamp: message.timestamp,
-        historySequence: previous, ...(hasPlaygroundKeyboard(content) ? { interactionReadOnly: true } : {}) });
+        historySequence: previous, ...(hasPlaygroundKeyboard(content) ? { interactionReadOnly: true } : {}),
+        ...(message.revision === undefined ? {} : { revision: Number(message.revision), streaming: false }),
+        ...(message.recalled === true ? { recalled: true } : {}),
+      });
     } else if (item.type === 'message.recalled') {
       const ref = record(item.messageRef);
       if (item.messageRef !== undefined && (!ref || !text(ref.id) || !matches(ref.conversation))) fail();
@@ -153,12 +158,16 @@ export function mergeSandboxHistory(current: readonly PlaygroundMessage[], histo
   const rows = new Map(current.map(row => [key(row), row]));
   for (const row of history) {
     const existing = rows.get(key(row));
-    rows.set(key(row), existing ? { ...row, ...existing, historySequence: row.historySequence,
-      ...(existing.interactionReadOnly === false ? { interactionReadOnly: false } : row.interactionReadOnly ? { interactionReadOnly: true } : {}) } : row);
+    if (existing?.recalled) continue;
+    const newer = (row.revision ?? 0) > (existing?.revision ?? 0);
+    rows.set(key(row), existing ? { ...(newer ? { ...existing, ...row } : { ...row, ...existing }), historySequence: row.historySequence,
+      ...(!newer && existing.interactionReadOnly === false ? { interactionReadOnly: false } : row.interactionReadOnly ? { interactionReadOnly: true } : {}),
+      ...(existing.recalled || row.recalled ? { recalled: true } : {}),
+    } : row);
   }
   const recalled = new Set([...rows.values()].filter(row => row.recalledMessageId).map(row => JSON.stringify([row.channelType, row.channelId, row.recalledMessageId])));
-  return [...rows.values()].map(row => recalled.has(JSON.stringify([row.channelType, row.channelId, row.id]))
-    ? { ...row, recalled: true, ...(hasPlaygroundKeyboard(row.content) ? { interactionReadOnly: true } : {}) } : row)
+  return [...rows.values()].map(row => row.recalled || recalled.has(JSON.stringify([row.channelType, row.channelId, row.id]))
+    ? { ...row, recalled: true, streaming: false, ...(hasPlaygroundKeyboard(row.content) ? { interactionReadOnly: true } : {}) } : row)
     .sort((a, b) => a.timestamp - b.timestamp || (a.channelType === b.channelType && a.channelId === b.channelId
       ? (a.historySequence ?? Number.MAX_SAFE_INTEGER) - (b.historySequence ?? Number.MAX_SAFE_INTEGER) : 0));
 }

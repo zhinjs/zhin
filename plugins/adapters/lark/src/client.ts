@@ -43,6 +43,7 @@ import {
 import { normalizeLarkSenderForPermit } from './platform-permit.js';
 import { registerLarkWebhookRoutes } from './webhook.js';
 import { createLarkLongConnection, type LarkLongConnectionFactory } from './long-connection.js';
+import { openLarkReplyStream, supportsLarkReplyStream } from './reply-stream.js';
 
 /** 出站 HTTP 调用统一 30s 超时。 */
 const OUTBOUND_TIMEOUT_MS = 30_000;
@@ -123,6 +124,13 @@ export class LarkClient extends SdkClient {
     ),
   });
   protected readonly endpointControl: EndpointControl = createRecallEndpointControl((id, signal) => this.recallMessage(id, { signal }));
+  protected get endpointStreaming(): import('zhin.js/adapter').EndpointStreaming | undefined {
+    return this.config.streaming !== false ? { mode: 'card',
+      minIntervalMs: this.config.streamingIntervalMs ?? 1000,
+      supports: supportsLarkReplyStream,
+      open: request => openLarkReplyStream(request, (path, options) => this.#request(path, options)),
+    } : undefined;
+  }
   #routeReleases: HttpRouteRegistration[] = [];
 
   #open = false;
@@ -665,7 +673,7 @@ export class LarkClient extends SdkClient {
   async #request(
     path: string,
     options: {
-      method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+      method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
       params?: Record<string, string | number>;
       body?: Record<string, unknown>;
       signal?: AbortSignal;

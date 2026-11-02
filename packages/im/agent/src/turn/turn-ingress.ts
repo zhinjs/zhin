@@ -11,6 +11,7 @@ import type {
 import type { ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
 import type { ConversationContextBlock, MessageRef } from '@zhin.js/im-contract';
 import type { AiOutboundSegmentProfile } from '@zhin.js/core';
+import type { CoreReplyStream } from '@zhin.js/core/runtime';
 
 export type TurnScope = 'private' | 'group' | 'channel';
 
@@ -242,8 +243,16 @@ export type DeliveryOutcome =
       messages?: readonly (MessageRef | null)[];
     }>;
 
+export interface ReplyAnswerContext {
+  /** A Host-owned completed answering phase, independent of the Turn's eventual terminal. */
+  readonly intent?: 'answer';
+  readonly phaseId?: string;
+}
+
 export interface ReplyPort {
-  send(output: readonly AgentOutputElement[]): Promise<DeliveryOutcome>;
+  send(output: readonly AgentOutputElement[], context?: ReplyAnswerContext): Promise<DeliveryOutcome>;
+  /** Adapter-configured publication; absent/undefined retains complete-message delivery. */
+  openStream?(context?: Pick<ReplyAnswerContext, 'phaseId'>): CoreReplyStream | undefined;
   /** What the reply endpoint lets the model author; absent means the core default set. */
   readonly segments?: AiOutboundSegmentProfile;
 }

@@ -16,3 +16,8 @@ describe('markdownToTelegramHtml', () => {
     expect(markdownToTelegramHtml('[run](javascript:alert)')).toBe('run');
   });
 });
+it('preserves literal JavaScript replacement tokens inside code', () => {
+  expect(markdownToTelegramHtml('`$&`')).toBe('<code>$&amp;</code>');
+  expect(markdownToTelegramHtml('```js\nconst replacement = "$&";\n```'))
+    .toBe('<pre><code class="language-js">const replacement = &quot;$&amp;&quot;;</code></pre>');
+});

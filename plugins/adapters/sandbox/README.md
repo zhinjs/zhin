@@ -71,7 +71,14 @@ sandbox:
   endpoints:
     - id: sandbox-bot
       owner: sandbox-user
+      streaming: true
+      streamingIntervalMs: 500
 ```
+
+流式回复默认开启，首次内容立即投递，后续更新默认间隔 500 ms。
+`streaming: false` 使用完整消息发送。流式更新复用同一 `messageId` 并递增
+`revision`，同会话的多个页面同步更新同一气泡；最终更新带 `streaming: false`。
+没有在线订阅者时不确认已发送，取消不会补发最终内容。
 
 ## 使用方式
 
@@ -191,6 +198,7 @@ Console 沙盒页和自己写的测试客户端都用这套协议。每个 WebSo
 
 - `conversation: { type, id }` 是框架发送请求确定的真实会话；新客户端优先用它归并消息，即使 legacy envelope 的 `type` / `id` 指向别处。`bot` 和 `endpoint` 是配置的 endpoint id。旧客户端仍可读取原 `type` / `id` 字段。
 - `messageId` 与框架记录的发送回执使用同一个消息 ID，可用于关联实时回复和已保存的聊天记录；已有 wire envelope 的非空显式字符串 ID 保持不变。
+- `revision` 为同一消息的递增版本；`streaming: true` 表示后续仍可更新，`false` 为该物理消息的完成更新。旧客户端可继续读取 `content`，支持版本的客户端忽略迟到的旧版本。聊天历史每页仍为 50 条消息，更新事件不额外占用页数；撤回优先于后续更新。
 - `content` 是消息段数组。文本、`html`（JSX 卡片，见上文 `html: direct`）、按钮等段原样透传。
 - `image` / `audio` / `video` / `file` 段只读 `data.media`（MediaRef）：`url` 原样透传；`base64` 补上 `base64://` 前缀后内联；`path` 由服务端读取文件后转成 `base64` 内联；其他类型和缺少 `data.media` 的媒体段会被丢弃，并在日志中记录 `sandbox_outbound_media_dropped`。
 - 插件直接发送完整消息对象时，其他字段会原样保留。

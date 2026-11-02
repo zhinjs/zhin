@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { getLogger } from '@zhin.js/logger';
 import type { AgentEvent, AgentMessage, QueueMode } from '@zhin.js/ai';
 import type { OnChunkCallback } from '../config/index.js';
 import type { AgentLoopTurnResult } from '../core/agent-loop-turn.js';
@@ -6,6 +7,8 @@ import type { TurnEvent } from '../event/turn-event.js';
 import { SessionMessageQueue } from './session-message-queue.js';
 import { TriggerCancelledError } from './trigger-cancelled-error.js';
 import type { TurnIntent, TurnPrincipal } from './turn-ingress.js';
+
+const logger = getLogger('PromptController');
 
 export interface PromptTurnHooks {
   getSteeringMessages: () => Promise<AgentMessage[]>;
@@ -298,7 +301,7 @@ export class PromptController {
         throw error;
       }
 
-      while (queue.hasFollowUp() && !signal.aborted) {
+      while (queue.hasFollowUp() && !signal.aborted && !lastResult?.replyPhaseStopped) {
         const batch = queue.drainFollowUp();
         try {
           lastResult = yield* request.execute(batch, hooks, signal, turnId);
@@ -306,6 +309,11 @@ export class PromptController {
           throwIfAborted(signal, request.sessionKey);
           throw error;
         }
+      }
+
+      if (lastResult?.replyPhaseStopped && (queue.followUpDepth() || queue.steeringDepth())) {
+        logger.warn(JSON.stringify({ op: 'pending_input_unprocessed', turnId, sessionKey: request.sessionKey,
+          reason: 'reply_phase_stopped', followUp: queue.followUpDepth(), steering: queue.steeringDepth() }));
       }
 
       throwIfAborted(signal, request.sessionKey);

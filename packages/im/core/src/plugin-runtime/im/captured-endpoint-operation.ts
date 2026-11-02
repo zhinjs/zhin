@@ -2,6 +2,7 @@ import type { EndpointControl, EndpointManagement } from '@zhin.js/adapter';
 import type { ConversationRef, DeliveryReceipt, SelfProfilePort } from '@zhin.js/im-contract';
 import type { Locale, PluginId } from '@zhin.js/plugin-runtime';
 import type { SendContent } from './contracts.js';
+import type { CoreReplyStream, OpenReplyStreamOptions } from './progressive-reply.js';
 
 /** Capture while the source Message/event is active, before handing work to an asynchronous owner. */
 export interface CaptureEndpointOperationInput {
@@ -26,6 +27,7 @@ export interface CapturedEndpointOperation {
   readonly profile?: SelfProfilePort;
   /** Uses the ordinary renderer/middleware/delivery pipeline with the captured author. */
   send(content: SendContent, options?: Readonly<{ locale?: Locale; signal?: AbortSignal }>): Promise<DeliveryReceipt>;
+  openReplyStream?(options?: OpenReplyStreamOptions): CoreReplyStream | undefined;
   /** Stops new calls and releases source/Root leases after accepted calls drain; never stops the account. */
   release(): void;
 }

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { getProcessPeerRegistry } from 'zhin.js/adapter';
+import { endpointRuntimeOf } from '../../../../packages/im/adapter/src/endpoint-specification.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
@@ -287,6 +288,21 @@ describe('sandbox plugin runtime adapter', () => {
     const resolved = resolveSandboxEndpoint({});
     expect(resolved.id).toBe('sandbox-bot');
     expect(resolved.randomNamePerConnection).toBe(false);
+  });
+
+  it('resolves stream defaults, explicit opt-out and a configured flush interval', () => {
+    expect(resolveSandboxEndpoint({})).toMatchObject({ streaming: true, streamingIntervalMs: 500 });
+    expect(resolveSandboxEndpoint({ streaming: false, streamingIntervalMs: 750 })).toMatchObject({ streaming: false, streamingIntervalMs: 750 });
+    expect(() => resolveSandboxEndpoint({ streamingIntervalMs: -1 })).toThrow();
+    expect(() => resolveSandboxEndpoint({ streamingIntervalMs: Number.NaN })).toThrow();
+  });
+
+  it('does not expose the incremental port when streaming is explicitly disabled', () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const endpoint = new SandboxWsEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'sandbox'), http,
+      defaults: resolveSandboxEndpoint({ streaming: false }) });
+    expect(endpointRuntimeOf(endpoint).streaming).toBeUndefined();
   });
 
   it('does not let a demo-scope websocket run Agent tasks', async () => {

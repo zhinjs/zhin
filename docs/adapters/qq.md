@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=8559c59b2655524f -->
+<!-- sync-adapter-docs:sha256=842a6e6a8af9c9f2 -->
 
 # @zhin.js/adapter-qq
 
@@ -55,6 +55,19 @@ pnpm add @zhin.js/adapter-qq
 | **host-http** | WebSocket **不需要**；Webhook / middleware 模式需要（经 `httpHostToken`） |
 
 必填字段（`endpoints[i]`）：`id`、`appid`、`secret`。
+
+## 渐进式回复
+
+C2C 私聊默认在生成过程中更新文本或 Markdown，群聊和频道继续使用完整消息发送。Markdown 是否可用仍取决于机器人已开通的平台权限；不支持的内容组合沿用完整发送链路。图片、语音、文件和按钮通过同一回复链路按内容顺序处理。
+
+首段立即发送，后续更新默认至少间隔 500 毫秒。可在实例配置或单个 endpoint 中设置：
+
+```yaml
+streaming: true
+streamingIntervalMs: 500
+```
+
+`streaming: false` 关闭生成中的公开更新，恢复完整消息发送。流式回复与普通回复共用被动消息来源和配额；同一流的分片不重复申领被动回复序号。取消停止后续更新，不自动撤回已确认内容；发送结果未知时不会整条重发。
 
 ## 最小配置
 

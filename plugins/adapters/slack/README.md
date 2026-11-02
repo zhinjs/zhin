@@ -10,6 +10,16 @@ Zhin.js Slack 适配器（Plugin Runtime），优先 Socket Mode，也可经 Run
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Block Kit 按钮、斜杠命令、消息编辑、表情反应等（见 `tools/`）
 
+## 渐进式回复
+
+`streaming` 默认 `true`，可在插件或单个 endpoint 配置中设为 `false`，恢复普通完整发送。原生流使用同一条消息的 `chat.startStream`、`chat.appendStream` 与 `chat.stopStream`；全程固定为 `chunks` 模式，正文和 Markdown 按已确认的源码前缀追加。
+
+普通频道需要可信的发言者、workspace 与既有线程（或明确的引用目标）。缺少这些信息时保留普通发送，不为获得流式能力创建新线程。引用和 @ 前缀只提交一次；未知结果不重发。媒体和按钮由统一发送链在就绪后按顺序投递，不重复上传。
+
+`streamingIntervalMs` 默认 `1000` 毫秒，用于后续回复更新间隔；首段立即发送，中间更新由统一回复控制器合并。
+
+原生流的累计正文上限为 12,000 字符，总时长上限为 10 分钟，追加内容不会延长时限。平台明确返回已有流已结束时，保留已确认正文，在同一话题的新消息中继续未发送的部分；发送结果未知时不重发。详见 [Slack 原生流限制](https://docs.slack.dev/reference/methods/chat.startStream/#stream-timeout)。
+
 ## 安装
 
 ```bash

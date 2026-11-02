@@ -63,7 +63,11 @@ export function registerConversationHistoryRoutes(options: Readonly<{
         // The extra event establishes hasMore independently of the visible message types.
         const latestSequence = Number(row.id);
         const throughSequence = beforeSequence === undefined ? latestSequence : Math.min(beforeSequence - 1, latestSequence);
-        const page = await reader.listBetween(conversation, 0, throughSequence, PAGE_SIZE + 1);
+        const page = reader.listMessages
+          ? (await reader.listMessages(conversation, throughSequence + 1, PAGE_SIZE + 1)).map(({ sequence, message }) => ({ sequence,
+              event: { type: 'message.created' as const, eventId: message.ref.id, conversation: message.ref.conversation,
+                timestamp: message.timestamp, message } }))
+          : await reader.listBetween(conversation, 0, throughSequence, PAGE_SIZE + 1);
         if (page.some(item => conversationRefKey(item.event.conversation) !== conversationRefKey(conversation))) throw new Error('Conversation history reader returned another scene');
         const hasMore = page.length > PAGE_SIZE;
         const entries = page.slice(-PAGE_SIZE);
@@ -74,6 +78,9 @@ export function registerConversationHistoryRoutes(options: Readonly<{
               ref: projectMessageRef(item.message.ref),
               ...(item.message.actor ? { actor: { id: item.message.actor.id, ...(item.message.actor.displayName === undefined ? {} : { displayName: item.message.actor.displayName }) } } : {}),
               segments: item.message.segments.map(projectSegment), timestamp: item.message.timestamp,
+              ...(item.message.revision === undefined ? {} : { revision: item.message.revision }),
+              ...(item.message.recalled ? { recalled: true } : {}),
+              ...(item.message.contentStatus ? { contentStatus: item.message.contentStatus } : {}),
               ...(item.message.replyTo ? { replyTo: projectMessageRef(item.message.replyTo) } : {}),
             } } : {}),
             ...(item.type === 'message.recalled' ? { messageRef: projectMessageRef(item.message) } : {}),
@@ -99,7 +106,7 @@ export function registerConversationHistoryRoutes(options: Readonly<{
         ? { success: false, code: error.code, error: error.message }
         : { success: false, code: 'history_unavailable', error: '暂时无法读取聊天记录，请稍后重试' });
     }
-  }, { summary: 'Read recorded conversation history', tags: ['conversations'], description: 'Full-scope, read-only canonical history. Fifty events per page; ambiguous parent/thread addresses are unavailable.' });
+  }, { summary: 'Read recorded conversation history', tags: ['conversations'], description: 'Full-scope, read-only canonical history. Fifty latest message entities per page (legacy readers use events); ambiguous parent/thread addresses are unavailable.' });
 }
 
 function projectConversation(conversation: ConversationRef): ConversationRef {

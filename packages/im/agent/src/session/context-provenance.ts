@@ -13,8 +13,8 @@ export function deliveredTextDigest(text: string): string {
   return createHash('sha256').update(text).digest('hex');
 }
 
-export function deliveredReplyContextRef(sessionId: string, turnId: string): string {
-  return `delivered-reply:${createHash('sha256').update(JSON.stringify([sessionId, turnId])).digest('hex')}`;
+export function deliveredReplyContextRef(sessionId: string, turnId: string, phaseId?: string): string {
+  return `delivered-reply:${createHash('sha256').update(JSON.stringify(phaseId === undefined ? [sessionId, turnId] : [sessionId, turnId, phaseId])).digest('hex')}`;
 }
 
 /** Capture primitive evidence before a send hook can mutate any shared segment objects. */
@@ -37,13 +37,14 @@ export function deliveredReplyContextRefs(
   turnId: string,
   plannedTexts: readonly (string | undefined)[],
   delivery: Extract<DeliveryOutcome, { status: 'sent' }>,
+  phaseId?: string,
 ): readonly string[] {
   const contexts = delivery.messageContexts ?? [];
   const references = contexts.filter(item => plannedTexts.includes(item.plannedText))
     .map(item => deliveredMessageContextRef(item.message, deliveredTextDigest(item.plannedText)));
   if (plannedTexts.length > 0 && plannedTexts.length === contexts.length
     && plannedTexts.every((text, index) => text !== undefined && text === contexts[index]?.plannedText)) {
-    references.push(deliveredReplyContextRef(sessionId, turnId));
+    references.push(deliveredReplyContextRef(sessionId, turnId, phaseId));
   }
   return references;
 }
@@ -56,7 +57,7 @@ export function conversationContextMessage(blocks: readonly ConversationContextB
     eventType: block.eventType,
     text: block.text,
     source: 'external_content',
-    ...(block.eventType === 'message.created' && block.message && block.messageTextDigest
+    ...((block.eventType === 'message.created' || block.eventType === 'message.updated') && block.message && block.messageTextDigest
       ? { reference: deliveredMessageContextRef(block.message, block.messageTextDigest) } : {}),
   }));
   return {
