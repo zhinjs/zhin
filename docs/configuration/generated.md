@@ -980,10 +980,14 @@ outline: [2, 3]
 | `lark.endpoints[].streamProxy.serverName` | string | 是 | — | — |
 | `lark.endpoints[].webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
 | `lark.endpoints[].webApiProxy.port` | integer | 是 | — | — |
+| `lark.endpoints[].streaming` | boolean | 否 | `true` | Use native streaming cards for progressive replies. |
+| `lark.endpoints[].streamingIntervalMs` | integer | 否 | `1000` | Reply stream update interval in milliseconds. |
 | `lark.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `lark.mode` | string: `"webhook"`, `"websocket"` | 否 | `"webhook"` | — |
 | `lark.webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
 | `lark.webApiProxy.port` | integer | 是 | — | — |
+| `lark.streaming` | boolean | 否 | `true` | Use native streaming cards for progressive replies. |
+| `lark.streamingIntervalMs` | integer | 否 | `1000` | Reply stream update interval in milliseconds. |
 
 ### line
 
@@ -1149,6 +1153,8 @@ outline: [2, 3]
 | `qq.endpoints[].notify.parent` | object | 否 | — | 可选的父频道/群容器 |
 | `qq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
 | `qq.endpoints[].notify.parent.id` | string \| number | 是 | — | — |
+| `qq.endpoints[].streaming` | boolean | 否 | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `qq.endpoints[].streamingIntervalMs` | number | 否 | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `qq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `qq.streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.streamProxy.port` | integer | 是 | — | — |
@@ -1161,6 +1167,8 @@ outline: [2, 3]
 | `qq.notify.parent` | object | 否 | — | 可选的父频道/群容器 |
 | `qq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
 | `qq.notify.parent.id` | string \| number | 是 | — | — |
+| `qq.streaming` | boolean | 否 | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `qq.streamingIntervalMs` | number | 否 | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 
 ### sandbox
 
@@ -1168,12 +1176,16 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
+| `sandbox.streaming` | boolean | 否 | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `sandbox.streamingIntervalMs` | number | 否 | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `sandbox.master` | string \| number | 否 | — | 框架 master（sandbox client id (distinct from endpoints[].owner)；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
 | `sandbox.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `sandbox.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `sandbox.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（sandbox client id (distinct from endpoints[].owner)）；覆盖顶层 master |
 | `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `sandbox.endpoints[].owner` | string | 否 | — | Sandbox owner user ID |
+| `sandbox.endpoints[].streaming` | boolean | 否 | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `sandbox.endpoints[].streamingIntervalMs` | number | 否 | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `sandbox.endpoints[].commandPrefix` | string | 否 | — | — |
 | `sandbox.endpoints[].id` | string | 是 | — | Sandbox bot name |
 | `sandbox.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
@@ -1229,7 +1241,11 @@ outline: [2, 3]
 | `slack.endpoints[].streamProxy.serverName` | string | 是 | — | — |
 | `slack.endpoints[].webApiProxy` | object | 否 | — | 出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用 |
 | `slack.endpoints[].webApiProxy.port` | integer | 是 | — | — |
+| `slack.endpoints[].streaming` | boolean | 否 | `true` | Use native streaming replies when the target supports them. |
+| `slack.endpoints[].streamingIntervalMs` | integer | 否 | `1000` | Reply stream update interval in milliseconds. |
 | `slack.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `slack.streaming` | boolean | 否 | `true` | Use native streaming replies when the target supports them. |
+| `slack.streamingIntervalMs` | integer | 否 | `1000` | Reply stream update interval in milliseconds. |
 
 ### telegram
 
@@ -1259,7 +1275,11 @@ outline: [2, 3]
 | `telegram.endpoints[].apiBaseUrl` | string | 否 | — | — |
 | `telegram.endpoints[].commandPrefix` | string | 否 | — | — |
 | `telegram.endpoints[].id` | string | 是 | — | Telegram bot name |
+| `telegram.endpoints[].streaming` | boolean | 否 | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `telegram.endpoints[].streamingIntervalMs` | number | 否 | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `telegram.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `telegram.streaming` | boolean | 否 | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `telegram.streamingIntervalMs` | number | 否 | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 
 ### wechat-mp
 

@@ -4,8 +4,9 @@ import { RuntimeInteractionCoordinator } from '../../../../../../packages/im/cor
 import { describe, expect, it, vi } from 'vitest';
 import type { DecisionProvider } from '@zhin.js/ai';
 import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/runtime';
-import { requestApprovalOutcome, type TurnRequest } from '@zhin.js/agent';
-import type { Message } from '@zhin.js/core/runtime';
+import { AiControlPlane, requestApprovalOutcome, type TurnRequest } from '@zhin.js/agent';
+import { TurnAdmissionGate } from '@zhin.js/agent/turn';
+import type { CoreReplyStream, Message, OpenReplyStreamOptions } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { ConversationRuntime } from '../../../../../../packages/im/core/src/plugin-runtime/im/conversation-runtime.js';
 import { rootPluginId, SnapshotStore, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
@@ -259,6 +260,154 @@ function agent(name: string): AgentCapabilities['agents'][number] {
     source: `agents/${name}/agent.json`,
   };
 }
+
+function progressiveIngress(options: {
+  supported?: boolean;
+  portAbsent?: boolean;
+  expectExecutionError?: boolean;
+  execute(request: TurnRequest, flow: ReturnType<typeof progressiveFacts>): Promise<unknown>;
+}) {
+  const flow = progressiveFacts();
+  let executionError: unknown;
+  const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) => {
+    try { return await options.execute(request, flow); }
+    catch (error) { executionError = error; throw error; }
+  });
+  const route = new AgentTurnIngressRoute({
+    projectRoot: '/synthetic/allowed-workspace', runtime: { executeLeased } as never,
+    im: { createInteraction: () => ({ ask: vi.fn() }), endpoints: { captureOperation: flow.captureOperation } } as never,
+    ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
+    agent: { service: {
+      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+      getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({ inboundQueue: { merge: { enabled: false } } }),
+      imageAssets: { ownsUrl: flow.ownsUrl },
+    }, agent: { getControlPlane: () => flow.control } } as never,
+  });
+  if (options.supported === false) flow.openReplyStream.mockReturnValue(undefined);
+  if (options.portAbsent) flow.captureOperation.mockReturnValue({ release: flow.release });
+  return { ...flow, executeLeased,
+    async run() {
+      try {
+        const result = await route.route(flow.message, { value: flow.snapshot, active: true } as never, rootPluginId(), undefined);
+        // The production ingress handles engine errors; assertions inside the fake engine must still fail this test.
+        if (executionError && !options.expectExecutionError) throw executionError;
+        return result;
+      }
+      finally { route.dispose(); }
+    },
+  };
+}
+
+function progressiveFacts() {
+  const conversation = { endpoint: { adapter: 'sandbox', id: 'root\u0000zhin.adapter\u0000sandbox' }, kind: 'private' as const, id: 'user' };
+  class NativeEvent { readonly team_id = 'trusted-team'; nativeMethod() { return 'sdk'; } }
+  const event = new NativeEvent(), client = { native: 'exact-client-instance' };
+  const control = new AiControlPlane();
+  const controller = new AbortController();
+  const snapshot = { root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(), capabilities: new Map() } as unknown as RuntimeSnapshot;
+  const messageRef = { conversation, id: 'native-message' };
+  const reply = vi.fn(async () => ({ status: 'sent' as const, message: { conversation, id: 'ordinary-reply' } }));
+  const message = new RuntimeMessage({ conversation, content: '#hello', sender: { id: 'sender' }, message: messageRef,
+    metadata: { event: { team_id: 'forged-team' }, client: { native: 'forged-client' } }, segments: [], endpointId: 'bot',
+  }, { generation: 1, reply, client: () => client, clientAdapter: 'sandbox',
+    session: { adapterName: 'sandbox', adapter: {} as never, endpoint: client as never, scene: conversation,
+      sender: { id: 'sender' }, message: { ref: messageRef, id: messageRef.id, text: '#hello', receivedAt: 1 },
+      event, signal: controller.signal },
+  });
+  const receipt = { status: 'sent' as const, message: { conversation, id: 'progressive-reply' } };
+  const native: CoreReplyStream = { receipt, confirmed: [{ key: 'one', message: receipt.message, segments: [{ type: 'text', data: { text: 'answer' } }] }],
+    update: vi.fn(), finish: vi.fn(async () => receipt), cancel: vi.fn(async () => receipt) };
+  const openReplyStream = vi.fn((_options: OpenReplyStreamOptions): CoreReplyStream | undefined => native);
+  const release = vi.fn();
+  const captureOperation = vi.fn((_input: unknown): { openReplyStream?: typeof openReplyStream; release: typeof release } => ({ openReplyStream, release }));
+  const ownsUrl = vi.fn((url: string) => url === 'https://assets.fixture.test/owned.png');
+  return { conversation, event, client, controller, control, snapshot, message, reply, native, openReplyStream, release, captureOperation, ownsUrl };
+}
+
+describe('CLI progressive reply ingress', () => {
+  it('captures trusted native facts, preserves media authorization, and releases after completion', async () => {
+    const f = progressiveIngress({ execute: async (request, flow) => {
+      expect(flow.release).not.toHaveBeenCalled();
+      const stream = request.ports.reply!.openStream!()!;
+      const captured = flow.captureOperation.mock.calls[0]![0] as unknown as Record<string, unknown>;
+      expect(captured).toMatchObject({ target: flow.conversation, requester: rootPluginId() });
+      expect(captured.client).toBe(flow.client);
+      const options = flow.openReplyStream.mock.calls[0]![0];
+      expect(options.source).toEqual({ messageId: 'native-message', senderId: 'sender', event: flow.event });
+      expect(options.source!.event).toBe(flow.event);
+      expect((options.source!.event as typeof flow.event).nativeMethod()).toBe('sdk');
+      expect(options.beforeSubmit).not.toThrow();
+      const owned = { type: 'image' as const, data: { media: { kind: 'url' as const, value: 'https://assets.fixture.test/owned.png' } } };
+      expect(await options.prepare!([owned], request.signal)).toEqual([owned]);
+      const denied = await options.prepare!([{ type: 'image', data: { media: { kind: 'url', value: 'https://private.fixture.test/secret.png' } } },
+        { type: 'image', data: { media: { kind: 'path', value: '/outside/private.png' } } }], request.signal);
+      expect(denied.every(segment => segment.type === 'text')).toBe(true);
+      await stream.finish({ revision: 1, messages: [] });
+      expect(flow.release).not.toHaveBeenCalled();
+      return { status: 'completed', output: [] };
+    } });
+    await f.run();
+    expect(f.native.finish).toHaveBeenCalledOnce();
+    expect(f.release).toHaveBeenCalledOnce();
+    expect(f.reply).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the control plane immediately before each progressive submission', async () => {
+    const f = progressiveIngress({ execute: async (request, flow) => {
+      request.ports.reply!.openStream!();
+      const beforeSubmit = flow.openReplyStream.mock.calls[0]![0].beforeSubmit!;
+      expect(beforeSubmit).not.toThrow();
+      await flow.control.set({ expectedRevision: 0, instance: { emergency_stop: true }, actorId: 'operator' });
+      expect(beforeSubmit).toThrow(expect.objectContaining({ code: 'reply_suppressed', disposition: 'not_sent' }));
+      return { status: 'completed', output: [] };
+    } });
+    await f.run();
+    expect(f.release).toHaveBeenCalledOnce();
+    expect(f.native.update).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the current admission stale verdict rather than caching initial permission', async () => {
+    const admit = TurnAdmissionGate.prototype.admit;
+    let stale = false;
+    const spy = vi.spyOn(TurnAdmissionGate.prototype, 'admit').mockImplementation(async function (this: TurnAdmissionGate, ...args) {
+      const admitted = await admit.apply(this, args);
+      return admitted.kind === 'run' ? { ...admitted, staleCheck: () => stale
+        ? { kind: 'discard' as const, senders: ['sender'] } : admitted.staleCheck() } : admitted;
+    });
+    const f = progressiveIngress({ execute: async (request, flow) => {
+      request.ports.reply!.openStream!();
+      const beforeSubmit = flow.openReplyStream.mock.calls[0]![0].beforeSubmit!;
+      expect(beforeSubmit).not.toThrow(); stale = true;
+      expect(beforeSubmit).toThrow(expect.objectContaining({ code: 'reply_suppressed', disposition: 'not_sent' }));
+      return { status: 'completed', output: [] };
+    } });
+    try { await f.run(); expect(f.release).toHaveBeenCalledOnce(); }
+    finally { spy.mockRestore(); }
+  });
+
+  it('releases captured authority when executeLeased throws', async () => {
+    const f = progressiveIngress({ expectExecutionError: true, execute: async (request) => {
+      request.ports.reply!.openStream!();
+      throw new Error('synthetic engine failure');
+    } });
+    await f.run();
+    expect(f.executeLeased).toHaveBeenCalledOnce();
+    expect(f.release).toHaveBeenCalledOnce();
+  });
+
+  it.each(['unsupported', 'off'] as const)('keeps ordinary delivery when progressive replies are %s', async mode => {
+    const f = progressiveIngress({ supported: mode !== 'unsupported', portAbsent: mode === 'off', execute: async (request) => {
+      expect(request.ports.reply!.openStream!()).toBeUndefined();
+      expect(await request.ports.reply!.send([{ type: 'message', segments: [{ type: 'text', data: { text: 'ordinary answer' } }] }]))
+        .toMatchObject({ status: 'sent' });
+      return { status: 'completed', output: [] };
+    } });
+    await f.run();
+    expect(f.reply).toHaveBeenCalledExactlyOnceWith([{ type: 'text', data: { text: 'ordinary answer' } }]);
+    expect(f.native.finish).not.toHaveBeenCalled();
+    expect(f.release).toHaveBeenCalledOnce();
+  });
+});
 
 
 function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; text: string; enabled?: boolean; errorTemplate?: string;
@@ -580,4 +729,26 @@ describe('personal Session IM ingress', () => {
       f.route.dispose();
     }
   });
+});
+
+it('CLI progressive cancellation interrupts a pending finish instead of waiting behind it', async () => {
+  const f = progressiveIngress({ execute: async (request, flow) => {
+    let release!: (value: CoreReplyStream['receipt']) => void;
+    const cancelled: CoreReplyStream['receipt'] = { status: 'failed', parts: [{ message: flow.native.receipt.message }],
+      failure: { code: 'cancelled', message: 'cancelled', retryable: false, deliveryUnknown: true } };
+    const finish = vi.spyOn(flow.native, 'finish').mockImplementation(() => new Promise(resolve => { release = resolve; }));
+    const cancel = vi.spyOn(flow.native, 'cancel').mockResolvedValue(cancelled);
+    const stream = request.ports.reply!.openStream!()!;
+    const finishing = stream.finish({ revision: 1, messages: [] });
+    const cancelling = stream.cancel();
+    try {
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce());
+      expect(await cancelling).toBe(cancelled);
+    } finally { release(flow.native.receipt); }
+    expect(await finishing).toBe(cancelled);
+    expect(finish).toHaveBeenCalledOnce();
+    return { status: 'completed', output: [] };
+  } });
+  await f.run();
+  expect(f.release).toHaveBeenCalledOnce();
 });

@@ -48,6 +48,7 @@ import { postSlackEphemeral } from './slack-response-url.js';
 import { editSlackContent, sendSlackContent, type SlackChatClient, type SlackEditRequest } from './slack-outbound.js';
 import { registerSlackWebhookRoutes, type SlackWebhookHandler } from './webhook.js';
 import { receiveSlackSideEvent } from './side-event-dispatch.js';
+import { openSlackReplyStream, supportsSlackReplyStream } from './reply-stream.js';
 
 export interface SlackSocketLike {
   on(
@@ -124,6 +125,12 @@ export class SlackEndpoint extends WebClient implements Endpoint, SlackWebhookHa
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
       name: options.config.id, get transportState() { return endpoint.#transportState; },
       management: this.#management, control: this.#control,
+      ...(options.config.streaming !== false ? { streaming: { mode: 'native' as const,
+        minIntervalMs: options.config.streamingIntervalMs ?? 1000,
+        supports: supportsSlackReplyStream,
+        open: (request: import('zhin.js/adapter').EndpointStreamRequest) => openSlackReplyStream(this, request,
+          ts => this.trackMessageChannel(ts, request.conversation.id)),
+      } } : {}),
     });
   }
 

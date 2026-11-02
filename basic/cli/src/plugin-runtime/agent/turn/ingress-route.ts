@@ -3,7 +3,7 @@ import { withDeploymentModelScope } from '../../personal-models/deployment-scope
 import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { ConversationRef, TextSegment } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type TextSegment } from '@zhin.js/im-contract';
 import {
   createAutoApprovalPort,
   createBypassApprovalPort,
@@ -57,6 +57,8 @@ import {
   type GroupRuleViolationReport,
   type GroupRuleViolationTrigger,
   type ImRuntime,
+  type CapturedEndpointOperation,
+  type CoreReplyStream,
   type IngressRoute,
   type Message,
   type RuntimeSceneEventSignal,
@@ -752,7 +754,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
     conversationSequence: number | undefined,
   ): Promise<boolean> {
     // Capture the actual inbound incarnation once, before async preprocessing can retire it.
-    const operationSignal = readOperationSession(message)?.signal;
+    const operationSession = readOperationSession(message);
+    const operationSignal = operationSession?.signal;
     const options = this.options;
     const service = options.agent.service;
     const zhinAgent = options.agent.agent;
@@ -1249,6 +1252,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               snapshot,
               replyConversation.kind,
             );
+            let replyOperation: CapturedEndpointOperation | undefined;
             const request = createRuntimeTurnRequest({ message, text: routed.userText, roles: senderRoles }, {
               ...(members || liveAccess ? { access: turnAccessForTurn } : {}),
               traceId,
@@ -1333,6 +1337,39 @@ export class AgentTurnIngressRoute implements IngressRoute {
                   segments: workroomReplyConversation || !message.message
                     ? { ...replySegments, reaction: undefined }
                     : replySegments,
+                  openStream: () => {
+                    // Redirected workroom and live-room replies keep their existing delivery authority.
+                    if (workroomAgentTurn || workroomReplyConversation || liveDanmaku) return undefined;
+                    replyOperation ??= options.im.endpoints.captureOperation({ target: replyConversation,
+                      client: message.$client, signal, requester });
+                    const stream = replyOperation.openReplyStream?.({ locale: message.locale,
+                      source: { messageId: message.message?.id, senderId: message.sender?.id, event: operationSession?.event },
+                      beforeSubmit: () => {
+                        if (staleReplyBlocked() || outboundBlocked('reply')) {
+                          throw new EndpointDeliveryError('reply_suppressed', 'Reply admission is no longer active', 'not_sent');
+                        }
+                      },
+                      prepare: segments => publishOutboundElements([{ type: 'message', segments: [...segments] }],
+                        effectiveAdapter || undefined, undefined, { filesystem: turnPolicy.filesystem,
+                          imageAssets: options.agent.service.imageAssets,
+                          ...(turnPolicy.network ? { network: turnPolicy.network } : {}) }),
+                    });
+                    if (!stream) return undefined;
+                    let settlement: Promise<CoreReplyStream['receipt']> | undefined;
+                    const settle = (receipt: CoreReplyStream['receipt']) => settlement ??= Promise.resolve().then(() => {
+                      const outcome = deliveryOutcomeFromReceipt(receipt);
+                      auditOutbound(audit, outcome, { progressive: true });
+                      if (stream.confirmed.length) { spoke = true; admission?.markDelivered(); }
+                      return receipt;
+                    });
+                    return Object.freeze({
+                      get minIntervalMs() { return stream.minIntervalMs; },
+                      get receipt() { return stream.receipt; }, get confirmed() { return stream.confirmed; },
+                      update: snapshot => stream.update(snapshot),
+                      finish: snapshot => stream.finish(snapshot).then(settle),
+                      cancel: () => stream.cancel().then(settle),
+                    } satisfies CoreReplyStream);
+                  },
                   send: async (output) => {
                     logger.debug(formatCompact({
                       op: 'replychain_port_send',
@@ -1425,7 +1462,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 },
               },
             });
-            return options.runtime.executeLeased(
+            try {
+              return await options.runtime.executeLeased(
               lease,
               requester,
               request,
@@ -1435,7 +1473,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
               observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission),
-            );
+              );
+            } finally { replyOperation?.release(); }
           }, {
             disabled: workroomAgentTurn != null,
             observe: observation => {

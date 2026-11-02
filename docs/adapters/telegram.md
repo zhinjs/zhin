@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e5b6df7b8602392f -->
+<!-- sync-adapter-docs:sha256=012d865747a3371e -->
 
 # @zhin.js/adapter-telegram
 
@@ -68,6 +68,19 @@ pnpm add @zhin.js/adapter-telegram
 | **host-http** | Polling **不需要**；Webhook **需要** CLI HTTP Host |
 
 必填字段（`endpoints[i]`）：`id`、`token`。
+
+## 渐进式回复
+
+私聊默认通过 Telegram 草稿展示生成中的文本或 Markdown，完成后正式发送。草稿是临时预览，不代表消息已保存；取消只停止更新，不会自动把部分草稿正式发送。群聊和不支持的目标继续使用完整消息发送。
+
+首段立即展示，后续更新默认至少间隔 500 毫秒。可在实例配置或单个 endpoint 中设置：
+
+```yaml
+streaming: true
+streamingIntervalMs: 500
+```
+
+`streaming: false` 关闭生成中的公开更新。草稿与正式回复保持同一话题，最终消息保留引用与交互内容。超过平台单条容量时按内容顺序接续消息，Markdown 代码块和链接保留格式与原文；图片、语音和文件仍使用现有上传发送链路。结果未知时不会自动重复正式发送。
 
 ## 最小配置
 

@@ -3,6 +3,17 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "streaming": {
+      "type": "boolean",
+      "default": true,
+      "description": "Publish supported replies while generating. Set false to send only complete replies."
+    },
+    "streamingIntervalMs": {
+      "type": "number",
+      "minimum": 0,
+      "default": 500,
+      "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
+    },
     "master": {
       "type": [
         "string",
@@ -69,6 +80,17 @@
           "owner": {
             "type": "string",
             "description": "Sandbox owner user ID"
+          },
+          "streaming": {
+            "type": "boolean",
+            "default": true,
+            "description": "Publish supported replies while generating. Set false to send only complete replies."
+          },
+          "streamingIntervalMs": {
+            "type": "number",
+            "minimum": 0,
+            "default": 500,
+            "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
           },
           "commandPrefix": {
             "type": "string"

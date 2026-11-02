@@ -8,6 +8,7 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
 import { retireEndpoint, isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
+import type { EndpointMessageStream, EndpointStreamRequest, EndpointStreaming } from './endpoint-stream.js';
 import {
   AdapterManagementError,
   type AdapterDescriptorInfo, type EndpointChildLease, type EndpointChildView,
@@ -478,9 +479,44 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
         throw new EndpointDeliveryError('endpoint_inactive', 'Endpoint execution lease is retired', 'not_sent');
       }
     };
+    const assertOutbound = () => {
+      assertActive();
+      if (!epoch.started) throw new EndpointDeliveryError('endpoint_inactive', 'Adapter Endpoint is not ready to send', 'not_sent');
+      if (!this.descriptor.capabilities.includes('outbound')) {
+        throw new EndpointDeliveryError('outbound_unsupported', 'Endpoint does not support outbound', 'not_sent');
+      }
+    };
+    const streaming = runtime.streaming;
+    const scopedStreaming: EndpointStreaming | undefined = streaming && {
+      mode: streaming.mode,
+      minIntervalMs: streaming.minIntervalMs,
+      ...(streaming.supports ? { supports: (request: Pick<EndpointStreamRequest, 'conversation' | 'source'>) => {
+        assertOutbound();
+        if (request.conversation.endpoint.id !== canonicalId) {
+          throw new EndpointDeliveryError('endpoint_identity_mismatch', 'Stream belongs to another account', 'not_sent');
+        }
+        return streaming.supports!(request);
+      } } : {}),
+      open: (request: EndpointStreamRequest): EndpointMessageStream | undefined => {
+        assertOutbound();
+        if (request.conversation.endpoint.id !== canonicalId) {
+          throw new EndpointDeliveryError('endpoint_identity_mismatch', 'Stream belongs to another account', 'not_sent');
+        }
+        const streamSignal = request.signal
+          ? AbortSignal.any([cancellation.signal, request.signal]) : cancellation.signal;
+        const stream = streaming.open({ ...request, signal: streamSignal });
+        if (!stream) return undefined;
+        return Object.freeze({
+          write: async (text: string) => { assertOutbound(); streamSignal.throwIfAborted(); return stream.write(text); },
+          finish: async (text: string) => { assertOutbound(); streamSignal.throwIfAborted(); return stream.finish(text); },
+          cancel: () => stream.cancel(),
+        });
+      },
+    };
     return Object.freeze({
       instanceId: child.desired.instanceId, canonicalId, epoch: epoch.epoch, incarnationId: epoch.incarnationId,
       signal: cancellation.signal, endpoint, assertActive,
+      ...(scopedStreaming ? { streaming: Object.freeze(scopedStreaming) } : {}),
       run: async <T>(operation: (endpoint: E, signal: AbortSignal) => T | Promise<T>): Promise<T> => {
         assertActive(); return operation(endpoint, cancellation.signal);
       },

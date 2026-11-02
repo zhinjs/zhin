@@ -12,6 +12,7 @@ export class SlackAdapter extends Adapter<SlackEndpoint, SlackEndpointConfig, Sl
   override get configurationIdentityFields(): readonly string[] { return ['id']; }
   override get configurationIdentityProbeFields(): readonly string[] { return ['token', 'appToken', 'signingSecret']; }
   override get configurationUpdateFields(): readonly string[] { return ['token', 'appToken', 'signingSecret', 'socketMode',
+    'streaming', 'streamingIntervalMs',
     'webhookPath', 'clientPingTimeout', 'webApiProxy', 'webApiProxy.port', 'streamProxy', 'streamProxy.port', 'streamProxy.serverName']; }
   protected override validateConfiguration(config: SlackEndpointConfig): void { resolveSlackConfig(config); }
   protected override async identifyConfiguration(input: SlackEndpointConfig, signal: AbortSignal, changedFields: readonly string[]): Promise<string | undefined> {

@@ -238,6 +238,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         type: string; id: string; locale?: unknown; content?: unknown; endpoint?: string; workingDirectory?: string; canExecute?: boolean;
         shellIsolation?: { available?: boolean; provider?: string; message?: string }; timestamp: number;
         messageId?: string; bot?: string; protocol?: string; connectionId?: string; direction?: string; senderId?: string;
+        revision?: number; streaming?: boolean;
         conversation?: { type: Channel['type']; id: string };
     }) => {
         const locale = data.type === 'ready' && data.locale === 'en' ? 'en' : data.type === 'ready' ? 'zh-CN' : localeRef.current
@@ -326,6 +327,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             interactionReadOnly: false,
             channelId: sceneId, channelName, senderId: isInput ? data.senderId || connectionRef.current.ownerId || 'owner' : 'endpoint',
             senderName: isInput ? sandboxText(locale, "当前用户") : data.bot || endpointIdRef.current, content, timestamp: data.timestamp,
+            ...(Number.isSafeInteger(data.revision) && data.revision! > 0 ? { revision: data.revision } : {}),
+            ...(typeof data.streaming === 'boolean' ? { streaming: data.streaming } : {}),
         }))
     }
 

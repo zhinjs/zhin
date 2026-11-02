@@ -154,6 +154,17 @@
                 "description": "Fault proxy for outbound JSON Web APIs only: pin slack.com:443 TCP to loopback while preserving SNI and certificate validation. Independent of the Socket proxy; does not apply to upload hosts."
               }
             }
+          },
+          "streaming": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use native streaming replies when the target supports them."
+          },
+          "streamingIntervalMs": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Reply stream update interval in milliseconds.",
+            "default": 1000
           }
         },
         "required": [
@@ -176,6 +187,17 @@
           "description": "Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it."
         }
       }
+    },
+    "streaming": {
+      "type": "boolean",
+      "default": true,
+      "description": "Use native streaming replies when the target supports them."
+    },
+    "streamingIntervalMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Reply stream update interval in milliseconds.",
+      "default": 1000
     }
   },
   "required": [

@@ -1,14 +1,18 @@
 import { EventEmitter } from 'node:events';
 import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter,
-  endpointEventGatewayToken, endpointSpec, type Endpoint, type EndpointSendRequest } from '@zhin.js/adapter';
+  endpointEventGatewayToken, endpointSpec, type Endpoint, type EndpointSendRequest, type EndpointStreaming } from '@zhin.js/adapter';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId,
   type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
-import type { MessageRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, MemoryConversationEventStore, type MessageRef, type Segment } from '@zhin.js/im-contract';
+import { MiddlewareIndex, defineMiddleware, middlewareFeatureId, type MiddlewareDefinition } from '@zhin.js/middleware';
 import { MemoryDesiredRepository } from '../../../../../plugins/adapters/test-utils/desired-repository.js';
-import { ImRuntime } from '../../src/plugin-runtime/im/index.js';
+import { ImRuntime, type OutboundEnvelope, type ReplyStreamSnapshot } from '../../src/plugin-runtime/im/index.js';
 
-async function fixture(send: (request: EndpointSendRequest) => Promise<string> = async () => 'sent') {
-  const root = rootPluginId(), im = new ImRuntime(), repository = new MemoryDesiredRepository();
+async function fixture(send: (request: EndpointSendRequest) => Promise<string> = async () => 'sent', options: {
+  streaming?: EndpointStreaming; middleware?: MiddlewareDefinition[]; events?: MemoryConversationEventStore;
+  nativeMarkdown?: boolean;
+} = {}) {
+  const root = rootPluginId(), im = new ImRuntime({ conversationEvents: options.events }), repository = new MemoryDesiredRepository();
   repository.snapshot = undefined;
   const calls: Array<{ account: string; message: string }> = [];
   class NativeEndpoint extends EventEmitter implements Endpoint {
@@ -17,6 +21,7 @@ async function fixture(send: (request: EndpointSendRequest) => Promise<string> =
       super();
       this[endpointSpec] = createEndpointSpecification(this, {
         start() {}, open() {}, close() {}, stop() {}, send,
+        streaming: options.streaming,
         control: { recall: async ({ message }) => { calls.push({ account: this.account, message: message.id }); } },
       });
     }
@@ -26,20 +31,537 @@ async function fixture(send: (request: EndpointSendRequest) => Promise<string> =
   }
   const adapter = new NativeAdapter();
   const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'test', source: '/fixture/adapters/test/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], operations: ['recall'], createAdapter: () => adapter }) });
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], operations: ['recall'],
+      ...(options.nativeMarkdown ? { segments: { markdown: 'native' as const } } : {}), createAdapter: () => adapter }) });
+  const middlewares = (options.middleware ?? []).map((definition, index) => createCapabilitySlot({ owner: root, feature: middlewareFeatureId,
+    localName: `middleware-${index}`, source: `/fixture/middlewares/${index}/index.ts`, definition }));
   const state: SnapshotState = { root,
     tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'fixture', packageRoot: '/fixture', children: [] }]]),
-    config: new Map([[root, { endpoints: [{ id: 'one' }, { id: 'two' }] }]]), capabilities: new Map([[slot.id, slot]]),
+    config: new Map([[root, { endpoints: [{ id: 'one' }, { id: 'two' }] }]]), capabilities: new Map([[slot.id, slot], ...middlewares.map(value => [value.id, value] as const)]),
     projections: new Map(), resources: new Map([[root, new Map<TokenId, unknown>([[endpointEventGatewayToken.id, im.endpointEvents]])]]),
   };
   const index = await AdapterIndex.create([slot], createSnapshotView(0, state), new AbortController().signal, { repository });
-  const store = new SnapshotStore({ ...state, projections: new Map([[adapterFeatureId, index]]) });
+  const projections: SnapshotState['projections'] = new Map([[adapterFeatureId, index]]);
+  if (middlewares.length) (projections as Map<unknown, unknown>).set(middlewareFeatureId, new MiddlewareIndex(middlewares, createSnapshotView(0, state)));
+  const store = new SnapshotStore({ ...state, projections });
   im.attach(store); await index.activate(new AbortController().signal);
   const one = adapter.list().find(row => row.endpointId === 'one')!, two = adapter.list().find(row => row.endpointId === 'two')!;
   const target = { endpoint: { id: one.canonicalId, adapter: 'test' }, kind: 'group' as const, id: 'room',
     parent: { kind: 'channel' as const, id: 'container' }, threadId: 'topic' };
   return { im, adapter, index, store, state, one, two, calls, target, async close() { await index.stop(); await store.close(); } };
 }
+
+function streamSnapshot(text: string, revision: number, complete = false, tail: readonly Segment[] = []): ReplyStreamSnapshot {
+  return { revision, messages: [{ key: 'answer', complete,
+    segments: [{ key: 'body', complete: complete || tail.length > 0, value: { type: 'text', data: { text } } },
+      ...tail.map((value, index) => ({ key: `tail-${index}`, complete, value }))],
+  }] };
+}
+
+function nativeStreaming() {
+  const frames: Array<{ kind: 'write' | 'finish'; text: string; id: string }> = [];
+  const cancelled = vi.fn();
+  let count = 0;
+  const streaming: EndpointStreaming = { mode: 'native', open() {
+    const id = `stream-${++count}`;
+    return { write: async text => { frames.push({ kind: 'write', text, id }); return { status: 'sent', messageId: id, acceptedText: text }; },
+      finish: async text => { frames.push({ kind: 'finish', text, id }); return { status: 'sent', messageId: id, acceptedText: text }; }, cancel: cancelled };
+  } };
+  return { frames, cancelled, streaming };
+}
+
+it('coalesces intermediate candidates through incremental middleware and persists the confirmed final body once', async () => {
+  const native = nativeStreaming(), events = new MemoryConversationEventStore();
+  const ordinary = vi.fn(async () => 'ordinary');
+  const f = await fixture(ordinary, { streaming: native.streaming, events, middleware: [defineMiddleware<OutboundEnvelope>({
+    target: 'outbound', incremental: true,
+    async handle({ input }, next) {
+      const segments = input.payload as Segment[];
+      input.replace(segments.map(segment => segment.type === 'text'
+        ? { type: 'text', data: { text: `safe:${String(segment.data.text)}` } } : segment));
+      await next();
+    },
+  })] });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('first', 1));
+    stream.update(streamSnapshot('first second', 2));
+    stream.update(streamSnapshot('first second third', 3));
+    stream.update(streamSnapshot('stale revision', 2));
+    const receipt = await stream.finish(streamSnapshot('first second third final', 4, true));
+    expect(receipt.status).toBe('sent');
+    expect(native.frames.at(-1)).toMatchObject({ kind: 'finish', text: 'safe:first second third final' });
+    expect(native.frames.some(frame => frame.text === 'safe:first second')).toBe(false);
+    expect(ordinary).not.toHaveBeenCalled();
+    expect(stream.confirmed).toHaveLength(1);
+    expect(stream.confirmed[0]!.segments).toEqual([{ type: 'text', data: { text: 'safe:first second third final' } }]);
+    expect((await events.listMessages!(f.target, undefined, 50))).toHaveLength(1);
+    expect((await events.getMessage({ conversation: f.target, id: 'stream-1' }))!.segments).toEqual(stream.confirmed[0]!.segments);
+    await stream.finish(streamSnapshot('first second third final', 4, true));
+    stream.update(streamSnapshot('after finalization', 5));
+    expect(native.frames.filter(frame => frame.kind === 'finish')).toHaveLength(1);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('preserves confirmed addressing when an incremental middleware changes the prefix of an existing container', async () => {
+  const native = nativeStreaming();
+  let target = 'first-target';
+  const f = await fixture(async () => 'ordinary', { streaming: native.streaming, middleware: [defineMiddleware<OutboundEnvelope>({
+    target: 'outbound', incremental: true,
+    async handle({ input }, next) { input.replace([{ type: 'mention', data: { target } }, ...input.payload as Segment[]]); await next(); },
+  })] });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('shown', 1));
+    await vi.waitFor(() => expect(native.frames).toHaveLength(1));
+    target = 'different-target';
+    expect(await stream.finish(streamSnapshot('shown final', 2, true))).toMatchObject({ status: 'rejected', failure: { code: 'stream_projection_changed' } });
+    expect(native.frames).toHaveLength(1);
+    expect(stream.confirmed[0]!.segments).toEqual([{ type: 'mention', data: { target: 'first-target' } }, { type: 'text', data: { text: 'shown' } }]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('keeps legacy outbound middleware on complete delivery and never assumes it is incremental', async () => {
+  const native = nativeStreaming(), middleware = vi.fn(async (_context: unknown, next: () => Promise<void>) => next());
+  const f = await fixture(async () => 'complete', { streaming: native.streaming,
+    middleware: [defineMiddleware({ target: 'outbound', handle: middleware })] });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    expect(operation.openReplyStream!()).toBeUndefined();
+    expect(middleware).not.toHaveBeenCalled();
+    expect(await operation.send('complete reply')).toMatchObject({ status: 'sent' });
+    expect(middleware).toHaveBeenCalledTimes(1);
+    expect(native.frames).toEqual([]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('does not offer a stream or open a native container when the retained source is locally unsupported', async () => {
+  const open = vi.fn(), supports = vi.fn(() => false);
+  const ordinary = vi.fn(async () => 'complete');
+  const f = await fixture(ordinary, { streaming: { mode: 'native', supports, open } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const source = { messageId: 'trusted-ingress', senderId: 'sender' };
+    expect(operation.openReplyStream!({ source })).toBeUndefined();
+    expect(supports).toHaveBeenCalledWith({ conversation: f.target, source });
+    expect(open).not.toHaveBeenCalled();
+    expect(await operation.send('complete reply')).toMatchObject({ status: 'sent' });
+    expect(ordinary).toHaveBeenCalledOnce();
+  } finally { operation.release(); await f.close(); }
+});
+
+it('falls back from an unsupported projected format in the same completed outbound pass', async () => {
+  const ordinary = vi.fn(async () => 'complete'), inspect = vi.fn();
+  const f = await fixture(ordinary, { streaming: { mode: 'native', open: () => undefined }, middleware: [defineMiddleware({
+    target: 'outbound', incremental: true, async handle(_context, next) { inspect(); await next(); },
+  })] });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    expect(await stream.finish(streamSnapshot('complete reply', 1, true))).toMatchObject({ status: 'sent' });
+    expect(ordinary).toHaveBeenCalledOnce();
+    expect(inspect).toHaveBeenCalledOnce();
+  } finally { operation.release(); await f.close(); }
+});
+
+it('retains real partial facts when admission changes before a queued final update', async () => {
+  const native = nativeStreaming(), f = await fixture(async () => 'ordinary', { streaming: native.streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  let blocked = false;
+  try {
+    const stream = operation.openReplyStream!({ beforeSubmit() {
+      if (blocked) throw new EndpointDeliveryError('reply_blocked', 'Reply admission changed', 'not_sent');
+    } })!;
+    stream.update(streamSnapshot('already seen', 1));
+    await vi.waitFor(() => expect(native.frames).toHaveLength(1));
+    blocked = true;
+    const result = await stream.finish(streamSnapshot('already seen plus forbidden tail', 2, true));
+    expect(result).toMatchObject({ status: 'failed', failure: { code: 'reply_blocked' }, parts: [{ message: { id: 'stream-1' } }] });
+    expect(result.failure?.deliveryUnknown).toBeUndefined();
+    expect(native.frames).toHaveLength(1);
+    expect(stream.confirmed[0]!.segments).toEqual([{ type: 'text', data: { text: 'already seen' } }]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('cancels an unabortable in-flight stream without waiting or claiming a known failure', async () => {
+  let resolve!: (value: { status: 'sent'; messageId: string; acceptedText: string }) => void;
+  const write = vi.fn(() => new Promise<{ status: 'sent'; messageId: string; acceptedText: string }>(done => { resolve = done; }));
+  const finish = vi.fn(), cancel = vi.fn();
+  const f = await fixture(async () => 'ordinary', { streaming: { mode: 'native', open: () => ({ write, finish, cancel }) } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('pending', 1));
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    expect(await stream.cancel()).toMatchObject({ status: 'failed', failure: { code: 'cancelled', deliveryUnknown: true } });
+    resolve({ status: 'sent', messageId: 'late', acceptedText: 'pending' });
+    expect(await stream.finish(streamSnapshot('pending final', 2, true))).toMatchObject({ status: 'failed', failure: { deliveryUnknown: true } });
+    expect(finish).not.toHaveBeenCalled();
+    expect(write).toHaveBeenCalledTimes(1);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('can cancel while final submission is in flight without waiting for an unabortable platform', async () => {
+  const finish = vi.fn(() => new Promise<never>(() => {})), cancel = vi.fn();
+  const f = await fixture(async () => 'ordinary', { streaming: { mode: 'native', open: () => ({ write: finish, finish, cancel }) } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    const pending = stream.finish(streamSnapshot('final pending', 1, true));
+    await vi.waitFor(() => expect(finish).toHaveBeenCalledTimes(1));
+    expect(await stream.cancel()).toMatchObject({ status: 'failed', failure: { code: 'cancelled', deliveryUnknown: true } });
+    expect(await pending).toMatchObject({ status: 'failed', failure: { code: 'cancelled', deliveryUnknown: true } });
+    expect(stream.confirmed).toEqual([]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('keeps text/media/text order and authorizes each atomic resource only once', async () => {
+  const native = nativeStreaming(), order: string[] = [];
+  const streaming: EndpointStreaming = { ...native.streaming, open(request) {
+    const handle = native.streaming.open(request)!;
+    return { write: text => { order.push(`text:${text}`); return handle.write(text); },
+      finish: text => { order.push(`text:${text}`); return handle.finish(text); }, cancel: () => handle.cancel() };
+  } };
+  const ordinary = vi.fn(async (_request: EndpointSendRequest) => { order.push('image'); return 'image-message'; });
+  const f = await fixture(ordinary, { streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  const image: Segment = { type: 'image', data: { media: { kind: 'path', value: '/authorized/output.png' } } };
+  const snapshot = (revision: number, complete: boolean): ReplyStreamSnapshot => ({ revision, messages: [{ key: 'answer', complete,
+    segments: [
+      { key: 'first', complete: true, value: { type: 'text', data: { text: 'before' } } },
+      { key: 'image', complete: true, value: image },
+      { key: 'last', complete, value: { type: 'text', data: { text: complete ? 'after final' : 'after' } } },
+    ],
+  }] });
+  const prepare = vi.fn(async (segments: readonly Segment[]) => segments.map(segment => segment.type === 'image'
+    ? { type: 'image', data: { media: { kind: 'url', value: 'https://example.invalid/prepared.png' } } } : segment));
+  try {
+    const stream = operation.openReplyStream!({ prepare })!;
+    stream.update(snapshot(1, false));
+    await vi.waitFor(() => expect(ordinary).toHaveBeenCalledTimes(1));
+    expect(await stream.finish(snapshot(2, true))).toMatchObject({ status: 'sent', parts: [{}, {}, {}] });
+    expect(order[0]).toBe('text:before'); expect(order[1]).toBe('image'); expect(order.at(-1)).toBe('text:after final');
+    expect(ordinary).toHaveBeenCalledTimes(1);
+    expect(prepare.mock.calls.filter(([segments]) => segments.some(segment => segment.type === 'image'))).toHaveLength(1);
+    expect(ordinary.mock.calls[0]![0].payload).toEqual([{ type: 'image', data: { media: { kind: 'url', value: 'https://example.invalid/prepared.png' } } }]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it.each(['replace', 'remove', 'prepend', 'reorder', 'format', 'address'] as const)(
+  'rejects %s of a completed group before sending any later content', async mutation => {
+    const native = nativeStreaming(), events = new MemoryConversationEventStore();
+    const f = await fixture(async () => 'ordinary', { streaming: native.streaming, events });
+    const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+    const message = (key: string, text: string): ReplyStreamSnapshot['messages'][number] => ({ key, complete: true,
+      segments: [{ key: 'body', complete: true, value: { type: 'text', data: { text } } }],
+    });
+    const original = [message('first', 'already shown'), message('second', 'also shown')];
+    const changed: ReplyStreamSnapshot['messages'] = mutation === 'replace' ? [message('first', 'replacement'), original[1]!]
+      : mutation === 'remove' ? [original[0]!]
+      : mutation === 'prepend' ? [message('new', 'must not send'), ...original]
+      : mutation === 'reorder' ? [...original].reverse()
+      : [{ ...original[0]!, segments: mutation === 'format'
+        ? [{ key: 'body', complete: true, value: { type: 'markdown', data: { content: 'already shown' } } }]
+        : [{ key: 'mention', complete: true, value: { type: 'mention', data: { target: 'different' } } }, ...original[0]!.segments] }, original[1]!];
+    try {
+      const stream = operation.openReplyStream!()!;
+      stream.update({ revision: 1, messages: original });
+      await vi.waitFor(() => expect(native.frames).toHaveLength(2));
+      const receipt = await stream.finish({ revision: 2, messages: changed });
+      expect(receipt).toMatchObject({ status: 'rejected', failure: { code: 'stream_prefix_changed' }, parts: [{}, {}] });
+      expect(native.frames.map(frame => frame.text)).toEqual(['already shown', 'also shown']);
+      expect(stream.confirmed.flatMap(part => part.segments)).toEqual(original.flatMap(item => item.segments.map(segment => segment.value)));
+      const stored = await events.listMessages!(f.target, undefined, 50);
+      expect(stored.map(item => item.message.segments)).toEqual([
+        [{ type: 'text', data: { text: 'already shown' } }], [{ type: 'text', data: { text: 'also shown' } }],
+      ]);
+    } finally { operation.release(); await f.close(); }
+  },
+);
+
+it.each(['remove', 'prepend', 'format'] as const)('rejects %s of an open published group', async mutation => {
+  const native = nativeStreaming();
+  const f = await fixture(async () => 'ordinary', { streaming: native.streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('published prefix', 1));
+    await vi.waitFor(() => expect(native.frames).toHaveLength(1));
+    const final = streamSnapshot('published prefix final', 2, true);
+    const messages: ReplyStreamSnapshot['messages'] = mutation === 'remove' ? []
+      : mutation === 'prepend' ? [{ ...final.messages[0]!, key: 'inserted' }, ...final.messages]
+      : [{ ...final.messages[0]!, segments: [{ key: 'body', complete: true,
+        value: { type: 'image', data: { media: { kind: 'url', value: 'https://example.invalid/replaced.png' } } } }] }];
+    expect(await stream.finish({ revision: 2, messages })).toMatchObject({
+      status: 'rejected', failure: { code: 'stream_prefix_changed' }, parts: [{}],
+    });
+    expect(native.frames).toHaveLength(1);
+    expect(stream.confirmed[0]!.segments).toEqual([{ type: 'text', data: { text: 'published prefix' } }]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('rejects replacement of a completed atomic resource without sending it twice', async () => {
+  const native = nativeStreaming(), ordinary = vi.fn(async () => 'image-message');
+  const f = await fixture(ordinary, { streaming: native.streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  const snapshot = (value: string, revision: number): ReplyStreamSnapshot => ({ revision, messages: [{ key: 'answer', complete: true,
+    segments: [{ key: 'image', complete: true, value: { type: 'image', data: { media: { kind: 'url', value } } } }],
+  }] });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(snapshot('https://example.invalid/original.png', 1));
+    await vi.waitFor(() => expect(ordinary).toHaveBeenCalledTimes(1));
+    expect(await stream.finish(snapshot('https://example.invalid/replaced.png', 2))).toMatchObject({
+      status: 'rejected', failure: { code: 'stream_prefix_changed' }, parts: [{}],
+    });
+    expect(ordinary).toHaveBeenCalledTimes(1);
+    expect(stream.confirmed[0]!.segments).toEqual(snapshot('https://example.invalid/original.png', 1).messages[0]!.segments.map(segment => segment.value));
+  } finally { operation.release(); await f.close(); }
+});
+
+it('accepts semantically identical completed groups with different object key order', async () => {
+  const native = nativeStreaming();
+  const f = await fixture(async () => 'ordinary', { streaming: native.streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('already shown', 1, true, [{ type: 'image', data: { media: { kind: 'url', value: 'https://example.invalid/original.png' } } }]));
+    await vi.waitFor(() => expect(stream.confirmed).toHaveLength(2));
+    const reordered = streamSnapshot('already shown', 2, true, [{ data: { media: { value: 'https://example.invalid/original.png', kind: 'url' } }, type: 'image' }]);
+    expect(await stream.finish(reordered)).toMatchObject({ status: 'sent', parts: [{}, {}] });
+    expect(native.frames).toHaveLength(1);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('closes capacity-limited containers before continuing and does not repeat mentions', async () => {
+  const opened: Array<{ preceding?: string; prefix: readonly Segment[] }> = [], calls: Array<{ kind: string; text: string; id: string }> = [];
+  let count = 0;
+  const streaming: EndpointStreaming = { mode: 'native', open(request) {
+    const id = `container-${++count}`;
+    opened.push({ preceding: request.continuation?.precedingText, prefix: request.prefix ?? [] });
+    return {
+      async write(text) { calls.push({ kind: 'write', text, id }); return { status: 'sent', messageId: id, acceptedText: text.slice(0, 3), ...(text.length >= 3 ? { exhausted: true } : {}) }; },
+      async finish(text) { calls.push({ kind: 'finish', text, id }); return { status: 'sent', messageId: id, acceptedText: text.slice(0, 3), ...(text.length > 3 ? { exhausted: true } : {}) }; },
+      cancel() {},
+    };
+  } };
+  const f = await fixture(async () => 'ordinary', { streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  const mention: Segment = { type: 'mention', data: { target: 'user-1' } };
+  const snapshot: ReplyStreamSnapshot = { revision: 1, messages: [{ key: 'answer', complete: true, segments: [
+    { key: 'mention', complete: true, value: mention }, { key: 'body', complete: true, value: { type: 'text', data: { text: 'abcdefg' } } },
+  ] }] };
+  try {
+    const stream = operation.openReplyStream!()!;
+    expect(await stream.finish(snapshot)).toMatchObject({ status: 'sent', parts: [{}, {}, {}] });
+    expect(calls.map(call => call.text)).toEqual(['abcdefg', 'defg', 'g']);
+    expect(calls.every(call => call.kind === 'finish')).toBe(true);
+    expect(opened.map(item => item.preceding)).toEqual([undefined, 'abc', 'abcdef']);
+    expect(opened.map(item => item.prefix.length)).toEqual([1, 0, 0]);
+    expect(stream.confirmed.flatMap(item => item.segments).filter(segment => segment.type === 'mention')).toEqual([mention]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('does not let a terminal history failure turn a confirmed stream into a delivery failure', async () => {
+  class FailingUpdates extends MemoryConversationEventStore {
+    override append(event: Parameters<MemoryConversationEventStore['append']>[0]) {
+      if (event.type === 'message.updated') return Promise.reject(new Error('synthetic storage unavailable'));
+      return super.append(event);
+    }
+  }
+  const native = nativeStreaming(), f = await fixture(async () => 'ordinary', { streaming: native.streaming, events: new FailingUpdates() });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('first', 1));
+    await vi.waitFor(() => expect(native.frames).toHaveLength(1));
+    expect(await stream.finish(streamSnapshot('first final', 2, true))).toMatchObject({ status: 'sent' });
+    expect(native.frames).toHaveLength(2);
+    expect(stream.confirmed[0]!.segments).toEqual([{ type: 'text', data: { text: 'first final' } }]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('does not fabricate standalone rich-text history when the platform cannot confirm it', async () => {
+  const events = new MemoryConversationEventStore();
+  const f = await fixture(async () => 'ordinary', { events, streaming: { mode: 'native', open: () => ({
+    async write(text) { return { status: 'sent', messageId: 'rich', acceptedText: text, contentUnavailable: true }; },
+    async finish(text) { return { status: 'sent', messageId: 'rich', acceptedText: text, contentUnavailable: true }; }, cancel() {},
+  }) } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    const snapshot: ReplyStreamSnapshot = { revision: 1, messages: [{ key: 'answer', complete: true, segments: [
+      { key: 'body', complete: true, value: { type: 'markdown', data: { content: 'partial code without its surrounding fence' } } },
+    ] }] };
+    expect(await stream.finish(snapshot)).toMatchObject({ status: 'sent', message: { id: 'rich' } });
+    expect(stream.confirmed).toMatchObject([{ message: { id: 'rich' }, segments: [] }]);
+    expect(await events.getMessage({ conversation: f.target, id: 'rich' })).toMatchObject({ contentStatus: 'unavailable' });
+    expect((await events.getMessage({ conversation: f.target, id: 'rich' }))?.content).toBeUndefined();
+  } finally { operation.release(); await f.close(); }
+});
+
+it.each([
+  { incremental: false, canonical: false }, { incremental: true, canonical: false },
+  { incremental: false, canonical: true }, { incremental: true, canonical: true },
+  { incremental: false, canonical: 'markdown' as const }, { incremental: true, canonical: 'markdown' as const },
+  { incremental: false, canonical: 'markdown-platform' as const }, { incremental: true, canonical: 'markdown-extra-data' as const },
+])('records cross-container Markdown only from independently confirmed physical content: %j', async ({ incremental, canonical }) => {
+  const events = new MemoryConversationEventStore(), bodies = new Map<string, readonly Segment[]>();
+  let opened = 0;
+  const f = await fixture(async () => 'ordinary', { events, nativeMarkdown: true, streaming: { mode: 'native', open: request => {
+    expect(request.format).toBe('markdown');
+    const messageId = `rich-container-${++opened}`;
+    const submit = async (text: string, finish: boolean) => {
+      const acceptedText = text.slice(0, 8);
+      const body: readonly Segment[] = typeof canonical === 'string'
+        ? [{ type: 'markdown', data: { content: `**visible:${acceptedText}**`, ...(canonical === 'markdown-extra-data' ? { hidden: 'not confirmed authoring content' } : {}) },
+          ...(canonical === 'markdown-platform' ? { platform: { hidden: 'native field' } } : {}) }]
+        : [{ type: 'text', data: { text: `visible:${acceptedText}` } }];
+      bodies.set(messageId, body);
+      return { status: 'sent' as const, messageId, acceptedText,
+        ...(text.length > 8 || !finish && text.length === 8 ? { exhausted: true as const } : {}),
+        ...(canonical ? { confirmedContent: body } : {}),
+      };
+    };
+    return { write: text => submit(text, false), finish: text => submit(text, true), cancel() {} };
+  } } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  const snapshot = (revision: number, complete: boolean): ReplyStreamSnapshot => ({ revision, messages: [{ key: 'answer', complete, segments: [
+    { key: 'body', complete, value: { type: 'markdown', data: { content: '```ts\nconst n=1;\n```' } } },
+  ] }] });
+  try {
+    const stream = operation.openReplyStream!()!;
+    if (incremental) {
+      stream.update(snapshot(1, false));
+      await vi.waitFor(() => expect(opened).toBe(3));
+    }
+    expect(await stream.finish(snapshot(2, true))).toMatchObject({ status: 'sent' });
+    expect(stream.confirmed).toHaveLength(3);
+    for (const physical of stream.confirmed) {
+      const stored = await events.getMessage(physical.message!);
+      if (canonical === true || canonical === 'markdown') {
+        expect(physical.segments).toEqual(bodies.get(physical.message!.id));
+        expect(stored?.segments).toEqual(bodies.get(physical.message!.id));
+        expect(stored?.contentStatus).toBeUndefined();
+      } else {
+        expect(physical.segments).toEqual([]);
+        expect(stored).toMatchObject({ contentStatus: 'unavailable', segments: [] });
+      }
+    }
+  } finally { operation.release(); await f.close(); }
+});
+
+it('does not open an empty container when the final source ends exactly at a previous capacity boundary', async () => {
+  const opened = vi.fn(() => ({
+    async write(text: string) { return { status: 'sent' as const, messageId: 'full', acceptedText: text, exhausted: true as const }; },
+    async finish(text: string) { return { status: 'sent' as const, messageId: 'full', acceptedText: text }; }, cancel() {},
+  }));
+  const f = await fixture(async () => 'ordinary', { streaming: { mode: 'native', open: opened } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('abc', 1));
+    await vi.waitFor(() => expect(stream.confirmed[0]?.segments).toEqual([{ type: 'text', data: { text: 'abc' } }]));
+    expect(await stream.finish(streamSnapshot('abc', 2, true))).toMatchObject({ status: 'sent', parts: [{}] });
+    expect(opened).toHaveBeenCalledTimes(1);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('creates formal history when a capacity-limited preview is first saved by completion', async () => {
+  const events = new MemoryConversationEventStore();
+  const f = await fixture(async () => 'ordinary', { events, streaming: { mode: 'draft', open: () => ({
+    async write(text) { return { status: 'preview', acceptedText: text, exhausted: true }; },
+    async finish(text) { return { status: 'sent', messageId: 'saved-preview', acceptedText: text }; }, cancel() {},
+  }) } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('preview body', 1));
+    await vi.waitFor(async () => expect(await events.getMessage({ conversation: f.target, id: 'saved-preview' }))
+      .toMatchObject({ segments: [{ type: 'text', data: { text: 'preview body' } }] }));
+    expect(await stream.finish(streamSnapshot('preview body', 2, true))).toMatchObject({ status: 'sent' });
+  } finally { operation.release(); await f.close(); }
+});
+
+it('continues all transformed source after a nonterminal capacity acknowledgement', async () => {
+  const frames: string[] = [];
+  let count = 0;
+  const f = await fixture(async () => 'ordinary', { streaming: { mode: 'native', open: () => {
+    const messageId = `part-${++count}`;
+    return { async write(text) { frames.push(text); return { status: 'sent', messageId, acceptedText: text.slice(0, 3), ...(text.length >= 3 ? { exhausted: true } : {}) }; },
+      async finish(text) { return { status: 'sent', messageId, acceptedText: text.slice(0, 3), ...(text.length > 3 ? { exhausted: true } : {}) }; }, cancel() {} };
+  } }, middleware: [defineMiddleware<OutboundEnvelope>({ target: 'outbound', incremental: true,
+    async handle({ input }, next) { input.replace(`prefix:${String((input.payload as Segment[])[0]!.data.text)}`); await next(); },
+  })] });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('x', 1));
+    await vi.waitFor(() => expect(frames).toEqual(['prefix:x', 'fix:x', ':x']));
+    expect(await stream.finish(streamSnapshot('x', 2, true))).toMatchObject({ status: 'sent', parts: [{}, {}, {}] });
+    expect(stream.confirmed.flatMap(part => part.segments).map(segment => segment.data.text).join('')).toBe('prefix:x');
+  } finally { operation.release(); await f.close(); }
+});
+
+it('preserves cancellation evidence even if an adapter local teardown throws', async () => {
+  const native = nativeStreaming();
+  const f = await fixture(async () => 'ordinary', { streaming: { ...native.streaming, open(request) {
+    const handle = native.streaming.open(request)!;
+    return { ...handle, cancel() { throw new Error('synthetic local teardown failure'); } };
+  } } });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('visible', 1));
+    await vi.waitFor(() => expect(native.frames).toHaveLength(1));
+    expect(await stream.cancel()).toMatchObject({ status: 'failed', failure: { code: 'cancelled' }, parts: [{ message: { id: 'stream-1' } }] });
+  } finally { operation.release(); await f.close(); }
+});
+
+it('drains an admitted stream after the capture stops accepting new operations', async () => {
+  const native = nativeStreaming(), f = await fixture(async () => 'ordinary', { streaming: native.streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    operation.release();
+    expect(() => operation.openReplyStream!()).toThrow();
+    expect(await stream.finish(streamSnapshot('already admitted', 1, true))).toMatchObject({ status: 'sent' });
+    expect(native.frames.map(frame => frame.text)).toEqual(['already admitted']);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('rejects an oversized semantic snapshot at admission and preserves only confirmed content', async () => {
+  const native = nativeStreaming(), f = await fixture(async () => 'ordinary', { streaming: native.streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  try {
+    const stream = operation.openReplyStream!()!;
+    stream.update(streamSnapshot('visible prefix', 1));
+    await vi.waitFor(() => expect(native.frames).toHaveLength(1));
+    stream.update(streamSnapshot('visible prefix' + 'x'.repeat(1024 * 1024), 2));
+    expect(stream.receipt).toMatchObject({ status: 'failed', failure: { code: 'stream_buffer_limit', retryable: false } });
+    expect(await stream.finish(streamSnapshot('new attempt', 3, true))).toMatchObject({ status: 'failed', failure: { code: 'stream_buffer_limit' } });
+    expect(native.frames.map(frame => frame.text)).toEqual(['visible prefix']);
+    expect(stream.confirmed[0]!.segments).toEqual([{ type: 'text', data: { text: 'visible prefix' } }]);
+  } finally { operation.release(); await f.close(); }
+});
+
+it('excludes inline media bytes from the semantic bound and still authorizes the atomic media', async () => {
+  const native = nativeStreaming(), ordinary = vi.fn(async () => 'image');
+  const f = await fixture(ordinary, { streaming: native.streaming });
+  const operation = f.im.endpoints.captureOperation({ target: f.target, client: f.index.clientById(f.one.canonicalId) });
+  const image: Segment = { type: 'image', data: { media: { kind: 'base64', value: 'a'.repeat(2 * 1024 * 1024) } } };
+  const prepared: Segment = { type: 'image', data: { media: { kind: 'url', value: 'https://example.invalid/authorized.png' } } };
+  const prepare = vi.fn(async () => [prepared]);
+  try {
+    const stream = operation.openReplyStream!({ prepare })!;
+    expect(await stream.finish({ revision: 1, messages: [{ key: 'answer', complete: true, segments: [{ key: 'image', complete: true, value: image }] }] }))
+      .toMatchObject({ status: 'sent' });
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(ordinary.mock.calls[0]![0].payload).toEqual([prepared]);
+  } finally { operation.release(); await f.close(); }
+});
 
 it('routes existing-message control solely by its canonical reference, not contradictory selectors', async () => {
   const f = await fixture();

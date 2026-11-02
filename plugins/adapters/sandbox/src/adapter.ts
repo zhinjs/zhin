@@ -10,7 +10,7 @@ export class SandboxAdapter extends Adapter<SandboxWsEndpoint, SandboxEndpointCo
   constructor(context: AdapterContext<SandboxEndpointConfig>) { super(); this.#context = context; }
   override get configurationIdentityFields(): readonly string[] { return ['id']; }
   // owner binds the synthetic sender's existing permissions and is not a runtime connection setting.
-  override get configurationUpdateFields(): readonly string[] { return []; }
+  override get configurationUpdateFields(): readonly string[] { return ['streaming', 'streamingIntervalMs']; }
   protected override validateConfiguration(config: SandboxEndpointConfig): void { resolveSandboxEndpoint(config); }
   protected createEndpoint(input: SandboxEndpointConfig, execution: EndpointCreationContext): SandboxWsEndpoint {
     return new SandboxWsEndpoint({ id: execution.canonicalId, defaults: resolveSandboxEndpoint(input),

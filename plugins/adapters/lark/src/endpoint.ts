@@ -15,6 +15,7 @@ export class LarkEndpoint extends LarkClient implements Endpoint {
       name: this.configName(),
       control: this.endpointControl,
       management: this.endpointManagement,
+      streaming: this.endpointStreaming,
     };
     Object.defineProperty(hooks, 'transportState', { get: () => this.transportState });
     return createEndpointSpecification(this, hooks);

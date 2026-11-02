@@ -129,3 +129,86 @@ it('pages fifty scoped completed runs with a stable tie-breaker and replays only
   expect(second.hasMore).toBe(false); expect(second.nextCursor).toBeNull();
   expect(replay).toHaveBeenCalledTimes(55);
 });
+
+it('preserves the stream port and records answering-phase facts before the terminal, without replay or byte storage', async () => {
+  const records: TurnDeliveryRecord[] = [], warn = vi.fn();
+  const message = { conversation, id: 'streamed' };
+  const receipt = { status: 'failed' as const, parts: [{ message }],
+    failure: { code: 'cancelled', message: 'cancelled', retryable: false, deliveryUnknown: true as const } };
+  const native = { receipt, minIntervalMs: 500,
+    confirmed: [{ key: 'message-0/text/0', message, segments: [{ type: 'image', data: { media: { kind: 'url', value: 'https://assets.example/confirmed.png' } } }] }],
+    update: vi.fn(), finish: vi.fn(async () => receipt), cancel: vi.fn(async () => receipt) };
+  const port = recordFinalReply({ send: vi.fn(), openStream: () => native }, identity, () => false,
+    { recordDelivery: async record => { records.push(record); } }, warn);
+  const stream = port.openStream!()!;
+  const snapshot = { revision: 1, messages: [] };
+  stream.update(snapshot);
+  expect(native.update).toHaveBeenCalledExactlyOnceWith(snapshot);
+  expect(records).toMatchObject([{ phase: 'started', status: 'unknown', outcome: 'pending' }]);
+  expect(await stream.cancel()).toBe(receipt);
+  expect(await stream.cancel()).toBe(receipt);
+  expect(native.cancel).toHaveBeenCalledOnce();
+  expect(records).toHaveLength(2);
+  expect(records[1]).toMatchObject({ phase: 'settled', status: 'partial', deliveryUnknown: true,
+    messages: [message], resources: [{ type: 'image', url: 'https://assets.example/confirmed.png' }] });
+  expect(warn).not.toHaveBeenCalled();
+});
+
+it('does not create a phantom attempt when an unopened candidate falls back to ordinary delivery', async () => {
+  const records: TurnDeliveryRecord[] = [];
+  const native = { receipt: { status: 'suppressed' as const }, confirmed: [], update: vi.fn(),
+    finish: vi.fn(), cancel: vi.fn(async () => ({ status: 'suppressed' as const })) };
+  const port = recordFinalReply({ send: vi.fn(), openStream: () => native }, identity, () => false,
+    { recordDelivery: async record => { records.push(record); } }, vi.fn());
+  await port.openStream!()!.cancel();
+  expect(records).toEqual([]);
+});
+
+it('records a Host-authored answer phase before the global terminal while leaving progress unclassified', async () => {
+  const records: TurnDeliveryRecord[] = [], send = vi.fn(async () => ({ status: 'sent' as const }));
+  const port = recordFinalReply({ send }, identity, () => false,
+    { recordDelivery: async record => { records.push(record); } }, vi.fn());
+  await port.send([{ type: 'text', content: 'progress' }]);
+  expect(records).toEqual([]);
+  const output = [{ type: 'text' as const, content: 'phase answer' }];
+  const context = { intent: 'answer' as const, phaseId: 'answer-1' };
+  await port.send(output, context);
+  expect(send).toHaveBeenLastCalledWith(output, context);
+  expect(records).toMatchObject([{ phase: 'started', phaseId: 'answer-1' }, { phase: 'settled', phaseId: 'answer-1', status: 'sent' }]);
+});
+
+it.each(['not_sent', 'rejected', 'unknown'] as const)('records %s thrown answer evidence without rewriting the exception', async disposition => {
+  const { EndpointDeliveryError } = await import('@zhin.js/im-contract');
+  const error = new EndpointDeliveryError('specific_code', 'message', disposition);
+  const records: TurnDeliveryRecord[] = [];
+  const port = recordFinalReply({ send: async () => { throw error; } }, identity, () => false,
+    { recordDelivery: async record => { records.push(record); } }, vi.fn());
+  await expect(port.send([], { intent: 'answer', phaseId: 'answer-1' })).rejects.toBe(error);
+  expect(records.at(-1)).toMatchObject({ outcome: 'threw', status: disposition === 'unknown' ? 'unknown' : 'not_sent', code: 'specific_code', phaseId: 'answer-1' });
+  expect(records.at(-1)?.deliveryUnknown === true).toBe(disposition === 'unknown');
+});
+
+it('can cancel an in-flight finish and retains that settlement when the native final result arrives late', async () => {
+  const records: TurnDeliveryRecord[] = [];
+  const message = { conversation, id: 'already-sent' };
+  const cancelled = { status: 'failed' as const, parts: [{ message }],
+    failure: { code: 'cancelled', message: 'cancelled', retryable: false, deliveryUnknown: true as const } };
+  let release!: (receipt: typeof cancelled | { status: 'sent'; parts: { message: typeof message }[] }) => void;
+  const native = { receipt: cancelled, confirmed: [{ key: 'part', message, segments: [{ type: 'text', data: { text: 'known prefix' } }] }],
+    update: vi.fn(), finish: vi.fn(() => new Promise<typeof cancelled | { status: 'sent'; parts: { message: typeof message }[] }>(resolve => { release = resolve; })),
+    cancel: vi.fn(async () => cancelled) };
+  const port = recordFinalReply({ send: vi.fn(), openStream: () => native }, identity, () => false,
+    { recordDelivery: async record => { records.push(record); } }, vi.fn());
+  const stream = port.openStream!()!;
+  const finishing = stream.finish({ revision: 1, messages: [] });
+  const cancelling = stream.cancel();
+  try {
+    await vi.waitFor(() => expect(native.cancel).toHaveBeenCalledOnce());
+    expect(await cancelling).toBe(cancelled);
+  } finally { release({ status: 'sent', parts: [{ message }] }); }
+  expect(await finishing).toBe(cancelled);
+  expect(records.filter(record => record.phase === 'settled')).toMatchObject([
+    { status: 'partial', deliveryUnknown: true, code: 'cancelled', messages: [message] },
+  ]);
+  expect(records.filter(record => record.phase === 'settled')).toHaveLength(1);
+});

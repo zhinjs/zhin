@@ -41,12 +41,16 @@ export type ResolvedSandboxBot = {
   readonly id: string;
   readonly owner: string;
   readonly randomNamePerConnection: boolean;
+  readonly streaming: boolean;
+  readonly streamingIntervalMs: number;
 };
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
 export interface SandboxEndpointConfig {
   readonly id?: string;
   readonly owner?: string;
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
 }
 
 export function resolveSandboxEndpoint(
@@ -54,6 +58,8 @@ export function resolveSandboxEndpoint(
 ): ResolvedSandboxBot {
   const id = optionalEndpointField(config.id) ?? 'sandbox-bot';
   const owner = optionalEndpointField(config.owner) ?? 'sandbox-user';
+  const streamingIntervalMs = config.streamingIntervalMs ?? 500;
+  if (!Number.isFinite(streamingIntervalMs) || streamingIntervalMs < 0) throw new TypeError('streamingIntervalMs must be a non-negative finite number');
   return {
     context: 'sandbox',
     id,
@@ -62,6 +68,8 @@ export function resolveSandboxEndpoint(
     // across browser reconnects and Host restarts so a persisted playground
     // session resumes the same Agent context.
     randomNamePerConnection: false,
+    streaming: config.streaming !== false,
+    streamingIntervalMs,
   };
 }
 

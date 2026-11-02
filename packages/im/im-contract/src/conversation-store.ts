@@ -3,6 +3,8 @@ import type { ConversationRef, MessageRef } from './identity.js';
 
 export interface ConversationEventReader {
   getMessage(ref: MessageRef): Promise<ConversationMessage | undefined>;
+  /** Message entities in creation order, before an exclusive creation sequence; updates do not consume page slots. */
+  listMessages?(conversation: ConversationRef, beforeSequence: number | undefined, limit: number): Promise<readonly SequencedConversationMessage[]>;
   /** Latest events in (afterExclusive, throughInclusive], returned in ascending sequence order. */
   listBetween(
     conversation: ConversationRef,
@@ -20,27 +22,86 @@ export interface ConversationEventWriter {
 
 export interface ConversationEventStore extends ConversationEventReader, ConversationEventWriter {}
 
+export interface SequencedConversationMessage {
+  readonly sequence: number;
+  readonly message: ConversationMessage;
+}
+
+interface MessageProjection {
+  created?: SequencedConversationMessage;
+  latest?: ConversationMessage;
+  recalled: boolean;
+}
+
+function eventMessageRef(event: ConversationEvent): MessageRef | undefined {
+  return event.type === 'message.created' || event.type === 'message.updated' ? event.message.ref
+    : event.type === 'message.recalled' ? event.message : undefined;
+}
+
+function projectMessage(state: MessageProjection, entry: SequencedConversationEvent): void {
+  const { event, sequence } = entry;
+  if (event.type === 'message.created') {
+    state.created ??= { sequence, message: event.message };
+    if (state.latest && (state.latest.revision ?? 0) <= (state.created.message.revision ?? 0)) state.latest = undefined;
+  } else if (event.type === 'message.updated' && !state.recalled) {
+    if (event.message.revision > (state.latest?.revision ?? state.created?.message.revision ?? 0)) state.latest = event.message;
+  } else if (event.type === 'message.recalled') state.recalled = true;
+}
+
+function projectedMessage(state: MessageProjection): SequencedConversationMessage | undefined {
+  if (!state.created) return undefined;
+  const { segments: _segments, contentStatus: _status, outboundTextDigest: _digest, revision: _revision, ...identity } = state.created.message;
+  const content = state.latest ?? state.created.message;
+  return { sequence: state.created.sequence, message: freezeConversationData({ ...identity, segments: content.segments,
+    ...(content.contentStatus ? { contentStatus: content.contentStatus } : {}),
+    ...(content.outboundTextDigest ? { outboundTextDigest: content.outboundTextDigest } : {}),
+    ...(content.revision === undefined ? {} : { revision: content.revision }),
+    ...(state.recalled ? { recalled: true as const } : {}),
+  }) };
+}
+
+function assertMessageUpdate(event: ConversationEvent): void {
+  if (event.type === 'message.updated' && (!Number.isSafeInteger(event.message.revision) || event.message.revision <= 0)) {
+    throw new TypeError('Message update revision must be a positive integer');
+  }
+}
+
 /** Process-local implementation; database hosts provide the same contract. */
 export class MemoryConversationEventStore implements ConversationEventStore {
   readonly #events = new Map<string, SequencedConversationEvent>();
-  readonly #messages = new Map<string, ConversationMessage>();
+  readonly #messages = new Map<string, MessageProjection>();
   readonly #cursors = new Map<string, number>();
   #sequence = 0;
 
   async append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>> {
+    assertMessageUpdate(event);
     const existing = this.#events.get(event.eventId);
     if (existing) return Object.freeze({ appended: false, sequence: existing.sequence });
     const sequence = ++this.#sequence;
     const stored = Object.freeze({ sequence, event: freezeConversationData(event) });
     this.#events.set(event.eventId, stored);
-    if (event.type === 'message.created') {
-      this.#messages.set(messageRefKey(event.message.ref), event.message);
+    const ref = eventMessageRef(event);
+    if (ref) {
+      const key = messageRefKey(ref), state = this.#messages.get(key) ?? { recalled: false };
+      projectMessage(state, stored);
+      this.#messages.set(key, state);
     }
     return Object.freeze({ appended: true, sequence });
   }
 
   async getMessage(ref: MessageRef): Promise<ConversationMessage | undefined> {
-    return this.#messages.get(messageRefKey(ref));
+    const state = this.#messages.get(messageRefKey(ref));
+    return state ? projectedMessage(state)?.message : undefined;
+  }
+
+  async listMessages(conversation: ConversationRef, beforeSequence: number | undefined, limit: number): Promise<readonly SequencedConversationMessage[]> {
+    const cap = Math.max(0, Math.floor(limit));
+    if (!cap) return [];
+    return [...this.#messages.values()].flatMap(state => {
+      const entry = projectedMessage(state);
+      return entry && sameConversation(entry.message.ref.conversation, conversation)
+        && (beforeSequence === undefined || entry.sequence < beforeSequence) ? [entry] : [];
+    }).sort((left, right) => right.sequence - left.sequence).slice(0, cap).reverse();
   }
 
   async listBetween(
@@ -83,12 +144,12 @@ export const CONVERSATION_EVENT_QUERY_MODEL = Object.freeze({
 
 export function conversationEventQueryFields(event: ConversationEvent): Record<string, string | number | null> {
   const conversation = event.conversation;
-  const actor = event.type === 'message.created' ? event.message.actor : 'actor' in event ? event.actor : undefined;
+  const actor = event.type === 'message.created' || event.type === 'message.updated' ? event.message.actor : 'actor' in event ? event.actor : undefined;
   return { event_type: event.type, endpoint_adapter: databaseTextKey(conversation.endpoint.adapter), endpoint_id: databaseTextKey(conversation.endpoint.id),
     conversation_kind: conversation.kind, conversation_id: databaseTextKey(conversation.id), parent_kind: conversation.parent?.kind ?? null,
     parent_id: conversation.parent ? databaseTextKey(conversation.parent.id) : null, thread_id: conversation.threadId === undefined ? null : databaseTextKey(conversation.threadId),
     actor_id: actor ? databaseTextKey(actor.id) : null,
-    platform_message_id: event.type === 'message.created' ? databaseTextKey(event.message.ref.id) : null, query_version: 1 };
+    platform_message_id: eventMessageRef(event) ? databaseTextKey(eventMessageRef(event)!.id) : null, query_version: 1 };
 }
 
 export const CONVERSATION_EVENT_MODEL = Object.freeze({
@@ -127,6 +188,7 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
   ) {}
 
   async append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>> {
+    assertMessageUpdate(event);
     const existing = await this.#eventById(event.eventId);
     if (existing) return Object.freeze({ appended: false, sequence: Number(existing.id) });
     try {
@@ -134,7 +196,7 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
         ...conversationEventQueryFields(event),
         event_id: databaseTextKey(event.eventId),
         conversation_key: databaseTextKey(conversationRefKey(event.conversation)),
-        message_key: event.type === 'message.created' ? databaseTextKey(messageRefKey(event.message.ref)) : '',
+        message_key: eventMessageRef(event) ? databaseTextKey(messageRefKey(eventMessageRef(event)!)) : '',
         event_json: JSON.stringify(event),
         time: event.timestamp,
       }));
@@ -149,21 +211,65 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
   }
 
   async getMessage(ref: MessageRef): Promise<ConversationMessage | undefined> {
-    const key = messageRefKey(ref);
+    const states = await this.#messageStates(ref.conversation, [ref]);
+    const state = states.get(messageRefKey(ref));
+    return state ? projectedMessage(state)?.message : undefined;
+  }
+
+  async listMessages(conversation: ConversationRef, beforeSequence: number | undefined, limit: number): Promise<readonly SequencedConversationMessage[]> {
+    const cap = Math.max(0, Math.floor(limit));
+    if (!cap) return [];
     const select = async (storedKey: string): Promise<Record<string, unknown>[]> => {
-      const rows = this.events.select('id', 'event_json')
-        .where({ message_key: storedKey })
-        .orderBy?.('id', 'DESC')
-        .limit?.(1) ?? [];
+      let rows = this.events.select('id', 'event_json').where({ $and: [
+        { conversation_key: storedKey }, { message_key: { $ne: '' } },
+        { $or: [{ event_type: 'message.created' }, { event_type: null }] },
+        ...(beforeSequence === undefined ? [] : [{ id: { $lt: beforeSequence } }]),
+      ] });
+      rows = rows.orderBy?.('id', 'DESC') ?? rows;
+      rows = rows.limit?.(cap) ?? rows;
       return Promise.resolve(rows);
     };
+    const key = conversationRefKey(conversation);
     const encoded = await select(databaseTextKey(key));
     const legacy = await toleratePostgresNul(() => select(key), []);
-    const row = [...encoded, ...legacy]
-      .sort((left, right) => Number(right.id) - Number(left.id))[0];
-    if (!row) return undefined;
-    const event = parseConversationEvent(row.event_json);
-    return event.type === 'message.created' ? event.message : undefined;
+    const creations = uniqueEventRows([...encoded, ...legacy])
+      .map(row => ({ sequence: Number(row.id), event: parseConversationEvent(row.event_json) }))
+      .filter((entry): entry is SequencedConversationEvent & { event: Extract<ConversationEvent, { type: 'message.created' }> } =>
+        entry.event.type === 'message.created' && sameConversation(entry.event.conversation, conversation))
+      .sort((left, right) => right.sequence - left.sequence).slice(0, cap).reverse();
+    const states = await this.#messageStates(conversation, creations.map(entry => entry.event.message.ref));
+    return creations.flatMap(entry => {
+      const state = states.get(messageRefKey(entry.event.message.ref));
+      const message = state && projectedMessage(state);
+      return message ? [message] : [];
+    });
+  }
+
+  /** One bounded set of message identities is resolved in batches, including legacy recall rows. */
+  async #messageStates(conversation: ConversationRef, refs: readonly MessageRef[]): Promise<Map<string, MessageProjection>> {
+    const states = new Map<string, MessageProjection>();
+    if (!refs.length) return states;
+    const keys = refs.map(messageRefKey);
+    const select = (storedKeys: readonly string[]) => Promise.resolve(this.events.select('id', 'event_json')
+      .where({ message_key: { $in: storedKeys } }));
+    const encoded = await select(keys.map(databaseTextKey));
+    const legacy = await toleratePostgresNul(() => select(keys), []);
+    const legacyRecalls = (storedKey: string) => Promise.resolve(this.events.select('id', 'event_json').where({ $and: [
+      { conversation_key: storedKey }, { message_key: '' }, { $or: [{ event_type: 'message.recalled' }, { event_type: null }] },
+    ] }));
+    const conversationKey = conversationRefKey(conversation);
+    const recalls = await legacyRecalls(databaseTextKey(conversationKey));
+    const oldRecalls = await toleratePostgresNul(() => legacyRecalls(conversationKey), []);
+    const selected = new Set(keys);
+    for (const row of uniqueEventRows([...encoded, ...legacy, ...recalls, ...oldRecalls]).sort((left, right) => Number(left.id) - Number(right.id))) {
+      const event = freezeConversationData(parseConversationEvent(row.event_json));
+      const ref = eventMessageRef(event);
+      if (!ref || !selected.has(messageRefKey(ref))) continue;
+      const key = messageRefKey(ref), state = states.get(key) ?? { recalled: false };
+      projectMessage(state, { sequence: Number(row.id), event });
+      states.set(key, state);
+    }
+    return states;
   }
 
   async listBetween(
@@ -251,6 +357,10 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     const legacy = await toleratePostgresNul(() => select(eventId), undefined);
     return legacy && parseConversationEvent(legacy.event_json).eventId === eventId ? legacy : undefined;
   }
+}
+
+function uniqueEventRows(rows: readonly Record<string, unknown>[]): Record<string, unknown>[] {
+  return [...new Map(rows.map(row => [Number(row.id), row])).values()];
 }
 
 async function toleratePostgresNul<T>(operation: () => Promise<T>, fallback: T): Promise<T> {

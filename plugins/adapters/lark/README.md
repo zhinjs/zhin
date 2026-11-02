@@ -11,6 +11,16 @@ Zhin.js 飞书 / Lark 适配器（Plugin Runtime），通过 Runtime Host HTTP W
 - canonical `markdown` 段编码为 `interactive` JSON 2.0 卡片中的 `markdown`
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 
+## 渐进式回复
+
+`streaming` 默认 `true`，可在插件或单个 endpoint 配置中设为 `false`，恢复普通完整发送。正文和 Markdown 使用 CardKit JSON 2.0 流式卡片：先创建实体并发送卡片引用，随后以累计正文更新同一组件，结束时关闭 `streaming_mode`。内容更新与收尾共用严格递增的 `sequence`。
+
+需要应用具有 CardKit 创建与更新卡片及当前会话发送权限。引用目标和 @ 前缀保持不变；资源创建成功不等于聊天消息已经送达，消息发送或更新结果未知时不重新创建或发布。媒体和按钮继续经统一发送链按就绪顺序处理。
+
+`streamingIntervalMs` 默认 `1000` 毫秒，用于后续回复更新间隔；首段立即发送，中间更新由统一回复控制器合并。
+
+平台明确拒绝已有卡片的更新并报告流式超时或容量超限时，仅保留已确认正文，再用新卡片继续未发送部分。首条内容自身超限时明确报错，不重复创建或截断原文。卡片流式模式在开启 10 分钟后自动关闭，详见[流式更新卡片](https://open.feishu.cn/document/cardkit-v1/streaming-updates-openapi-overview)。
+
 ## 安装
 
 ```bash

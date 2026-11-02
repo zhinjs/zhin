@@ -17,6 +17,9 @@ export interface TelegramEndpointConfig {
   readonly token: string;
   /** Default true. `false` selects webhook mode (requires httpHostToken). */
   readonly polling?: boolean;
+  /** Show private-chat drafts while generating; false keeps complete delivery. */
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
   readonly webhook?: {
     readonly domain?: string;
     readonly path?: string;
@@ -33,6 +36,8 @@ export interface ResolvedTelegramConfig {
   readonly mode: 'polling' | 'webhook';
   readonly allowedUpdates: readonly string[];
   readonly apiBaseUrl: string;
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
   readonly webhook?: {
     readonly domain: string;
     readonly path: string;
@@ -242,6 +247,8 @@ export type TelegramOutboundAction =
 export function resolveTelegramConfig(config: TelegramEndpointConfig): ResolvedTelegramConfig {
   const id = requiredEndpointField(config.id, 'id');
   const token = requiredEndpointField(config.token, 'token');
+  const streamingIntervalMs = config.streamingIntervalMs ?? 500;
+  if (!Number.isFinite(streamingIntervalMs) || streamingIntervalMs < 0) throw new TypeError('streamingIntervalMs must be a non-negative finite number');
   const polling = config.polling;
   const webhookSource = config.webhook;
   const mode: 'polling' | 'webhook' = polling === false ? 'webhook' : 'polling';
@@ -261,6 +268,8 @@ export function resolveTelegramConfig(config: TelegramEndpointConfig): ResolvedT
     mode,
     allowedUpdates: [...allowedUpdates],
     apiBaseUrl,
+    streaming: config.streaming !== false,
+    streamingIntervalMs,
     webhook,
   };
 }
@@ -522,6 +531,19 @@ function buildOutboundActions(
     replyTo != null ? { reply_parameters: { message_id: replyTo } } : {}
   );
 
+  const flushText = (): void => {
+    if (!textContent.trim() && !keyboard) return;
+    actions.push({ method: 'sendMessage', params: {
+      chat_id: chatId,
+      text: textContent.trim() || ' ',
+      ...htmlMode,
+      ...replyParams(),
+      ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+    } });
+    textContent = '';
+    keyboard = undefined;
+  };
+
   /**
    * 媒体来源归一：唯一来源是 canonical `data.media` MediaRef。
    * kind=url/file → 字符串直发（file 即 Telegram file_id 不透明引用）；
@@ -619,6 +641,7 @@ function buildOutboundActions(
         break;
       }
       case 'image': {
+        if (keyboard) flushText();
         const photo = mediaSource('image', data, 'image.png');
         if (photo) {
           actions.push({
@@ -636,6 +659,7 @@ function buildOutboundActions(
         break;
       }
       case 'video': {
+        if (keyboard) flushText();
         const video = mediaSource('video', data, 'video.mp4');
         if (video) {
           actions.push({
@@ -653,6 +677,7 @@ function buildOutboundActions(
         break;
       }
       case 'audio': {
+        if (keyboard) flushText();
         const audio = mediaSource('audio', data, 'audio.mp3');
         if (audio) {
           actions.push({
@@ -670,6 +695,7 @@ function buildOutboundActions(
         break;
       }
       case 'voice': {
+        if (keyboard) flushText();
         const voice = mediaSource('voice', data, 'voice.ogg');
         if (voice) {
           actions.push({
@@ -687,6 +713,7 @@ function buildOutboundActions(
         break;
       }
       case 'file': {
+        if (keyboard) flushText();
         const document = mediaSource('file', data, 'file');
         if (document) {
           actions.push({
@@ -706,6 +733,7 @@ function buildOutboundActions(
       case 'sticker': {
         const sticker = mediaSource('sticker', data, 'sticker.webp');
         if (sticker) {
+          flushText();
           actions.push({
             method: 'sendSticker',
             params: { chat_id: chatId, sticker, ...replyParams() },
@@ -714,6 +742,7 @@ function buildOutboundActions(
         break;
       }
       case 'location': {
+        flushText();
         actions.push({
           method: 'sendLocation',
           params: {
@@ -730,33 +759,8 @@ function buildOutboundActions(
     }
   }
 
-  if (actions.length === 0) {
-    const text = textContent.trim() || (keyboard ? ' ' : '');
-    if (!text && !keyboard) throw new Error('No Telegram content to send');
-    return [{
-      method: 'sendMessage',
-      params: {
-        chat_id: chatId,
-        text: text || ' ',
-        ...htmlMode,
-        ...replyParams(),
-        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-      },
-    }];
-  }
-
-  if (textContent.trim() || keyboard) {
-    actions.unshift({
-      method: 'sendMessage',
-      params: {
-        chat_id: chatId,
-        text: textContent.trim() || ' ',
-        ...htmlMode,
-        ...replyParams(),
-        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
-      },
-    });
-  }
+  flushText();
+  if (actions.length === 0) throw new Error('No Telegram content to send');
 
   return actions;
 }

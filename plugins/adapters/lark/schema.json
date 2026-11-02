@@ -163,6 +163,17 @@
                 "description": "Disabled by default. Loopback TLS fault proxy for Feishu outbound APIs only; preserves the official Host, SNI and certificate validation. Independent of streamProxy."
               }
             }
+          },
+          "streaming": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use native streaming cards for progressive replies."
+          },
+          "streamingIntervalMs": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Reply stream update interval in milliseconds.",
+            "default": 1000
           }
         },
         "required": [
@@ -214,6 +225,17 @@
           "description": "Disabled by default. Loopback TLS fault proxy for Feishu outbound APIs only; preserves the official Host, SNI and certificate validation. Independent of streamProxy."
         }
       }
+    },
+    "streaming": {
+      "type": "boolean",
+      "default": true,
+      "description": "Use native streaming cards for progressive replies."
+    },
+    "streamingIntervalMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Reply stream update interval in milliseconds.",
+      "default": 1000
     }
   },
   "required": [

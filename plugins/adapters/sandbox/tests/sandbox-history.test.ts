@@ -19,6 +19,19 @@ const live = (id: string, value = id): state.PlaygroundMessage => ({ id, type: '
   channelName: 'Project', senderId: 'endpoint', senderName: 'Bot', content: text(value), timestamp: 100 });
 afterEach(() => vi.unstubAllGlobals());
 
+it('refreshes a live message with a higher confirmed history revision without resurrecting recalls', () => {
+  const updated = { ...created(1, 'native', text('confirmed final')), message: { ...created(1, 'native').message, revision: 4, segments: text('confirmed final') } };
+  const rows = readSandboxHistoryPage(page([updated]), binding).messages;
+  const merged = mergeSandboxHistory([{ ...live('native', 'older live prefix'), revision: 2 }], rows);
+  expect(merged).toHaveLength(1);
+  expect(merged[0]).toMatchObject({ revision: 4, content: text('confirmed final') });
+  const recalled = { ...updated, message: { ...updated.message, recalled: true } };
+  const tombstone = readSandboxHistoryPage(page([recalled]), binding).messages;
+  expect(mergeSandboxHistory(merged, tombstone)[0]).toMatchObject({ recalled: true });
+  expect(mergeSandboxHistory(mergeSandboxHistory(merged, tombstone), [{ ...live('native', 'late'), revision: 5 }])[0])
+    .toMatchObject({ recalled: true, content: text('confirmed final') });
+});
+
 const code = ts.transpileModule(readFileSync(new URL('../pages/index/useSandboxHistory.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;

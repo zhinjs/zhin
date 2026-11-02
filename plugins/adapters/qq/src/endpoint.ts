@@ -4,6 +4,7 @@ import { projectQqGuildSenderRoles } from './platform-permit.js';
 import { qqDeliveryFailure } from './delivery-error.js';
 import { normalizeQqInteraction } from './interaction.js';
 import { awaitQqStartup } from './start-deadline.js';
+import { createQqStreaming } from './streaming.js';
 import { EndpointDeliveryError, type MessageRef } from '@zhin.js/im-contract';
 import {
   inspectQqGroupMember,
@@ -111,6 +112,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
       start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
       get transportState() { return endpoint.#transportState; }, management: this.#management, control: this.#control,
+      streaming: options.config.streaming !== false ? createQqStreaming(() => this.#requireBot(), this.#passiveReplies, options.config.streamingIntervalMs) : undefined,
     });
     this.#bindBot(this);
   }
@@ -416,6 +418,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
       get transportState() { return endpoint.#transportState; },
       management: this.#management, control: this.#control,
+      streaming: options.config.streaming !== false ? createQqStreaming(() => this.#requireBot(), this.#passiveReplies, options.config.streamingIntervalMs) : undefined,
     });
     this.#bindBot(this);
   }

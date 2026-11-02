@@ -14,6 +14,8 @@ export const qqConsoleSpec = {
     { key: 'secret', required: true, env: true, description: 'QQ app secret' },
     { key: 'mode', description: 'websocket, webhook or middleware' },
     { key: 'sandbox', type: 'boolean', description: 'QQ sandbox environment' },
+    { key: 'streaming', type: 'boolean', description: 'Publish supported C2C replies while generating (default true)' },
+    { key: 'streamingIntervalMs', type: 'number', description: 'Delay between reply updates in milliseconds (default 500)' },
     { key: 'botKind', description: 'public or private; existing explicit intents remain authoritative' },
     { key: 'accessTokenUrl', description: 'Configured access-token API URL' },
     { key: 'gatewayUrl', description: 'Configured Gateway discovery URL' },

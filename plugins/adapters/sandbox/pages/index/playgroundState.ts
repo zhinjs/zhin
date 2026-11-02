@@ -35,6 +35,8 @@ export interface PlaygroundMessage {
   readonly historySequence?: number;
   readonly recalled?: boolean;
   readonly recalledMessageId?: string;
+  readonly revision?: number;
+  readonly streaming?: boolean;
 }
 
 export interface PlaygroundState {
@@ -170,6 +172,8 @@ function parseMessage(value: unknown): PlaygroundMessage | undefined {
     ...(Number.isSafeInteger(item.historySequence) && Number(item.historySequence) > 0 ? { historySequence: Number(item.historySequence) } : {}),
     ...(item.recalled === true ? { recalled: true } : {}),
     ...(typeof item.recalledMessageId === 'string' ? { recalledMessageId: item.recalledMessageId } : {}),
+    ...(Number.isSafeInteger(item.revision) && Number(item.revision) > 0 ? { revision: Number(item.revision) } : {}),
+    ...(typeof item.streaming === 'boolean' ? { streaming: item.streaming } : {}),
   };
 }
 
@@ -227,6 +231,10 @@ export function mergePlaygroundMessage(
   const index = messages.findIndex(message => message.id === incoming.id
     && message.channelType === incoming.channelType && message.channelId === incoming.channelId
     && message.type === incoming.type);
-  return index < 0 ? [...messages, incoming]
-    : messages.map((message, offset) => offset === index ? { ...message, ...incoming } : message);
+  if (index < 0) return [...messages, incoming];
+  const existing = messages[index]!;
+  if (existing.recalled || existing.revision !== undefined && (incoming.revision ?? 0) <= existing.revision) return [...messages];
+  return messages.map((message, offset) => offset === index ? { ...message, ...incoming,
+    ...(incoming.revision === undefined ? {} : { timestamp: message.timestamp }),
+  } : message);
 }
