@@ -39,6 +39,7 @@ import {
   type AssistantRuntimeHandle,
   ScheduleExecutionHistory,
   FileScheduleHistoryRepository,
+  JsonlScheduleAuditLogger,
 } from '@zhin.js/agent/runtime';
 import { createRuntimeProactiveOutbound, observeAgentTurnTrace } from './runtime-factory.js';
 
@@ -73,7 +74,11 @@ export function createAssistantScheduleRuntime(
   mkdirSync(dataDir, { recursive: true });
 
   const assistantCfg = resolveAssistantConfig(assistantRaw);
-  const history = new ScheduleExecutionHistory({ repository: new FileScheduleHistoryRepository(join(dataDir, 'schedule-executions')) });
+  const history = new ScheduleExecutionHistory({
+    repository: new FileScheduleHistoryRepository(join(dataDir, 'schedule-executions')),
+    auditLogger: new JsonlScheduleAuditLogger(dataDir),
+    activity: createScheduleActivityPort(agent),
+  });
   const defaults = resolveAssistantDefaultsConfig(assistantCfg.defaults);
   let defaultNotify = defaults.notify;
   if (defaultNotify) {
@@ -117,11 +122,10 @@ export function createAssistantScheduleRuntime(
   const executor = createTaskExecutor({
     turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot, trace),
     config: agent.config,
-    activity: createScheduleActivityPort(agent),
     dataDir,
     router: notificationRouter,
     defaultNotify,
-    history,
+    observations: history,
   });
 
   const store = createScheduleJobStoreFromConfig(dataDir, {
@@ -213,7 +217,7 @@ export function createAssistantScheduleRuntime(
       jobEngine.unload();
       await jobWorker.stop();
       await executor.dispose();
-      await history.drain();
+      history.close();
     },
   };
 }

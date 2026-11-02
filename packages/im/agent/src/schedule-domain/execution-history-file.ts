@@ -51,11 +51,12 @@ export class FileScheduleHistoryRepository implements ScheduleHistoryRepository 
     if (record.version !== 1 || record.runId !== query.runId || !Array.isArray(record.attempts)) throw new Error('Invalid schedule history identity');
     return query.jobId && record.jobId !== query.jobId ? undefined : record;
   }
-  async prune({ cutoff, ownerStartedAt }: Readonly<{ cutoff: number; ownerStartedAt: number }>): Promise<number> {
+  async prune({ cutoff, ownerStartedAt, protectedRunIds }: Readonly<{ cutoff: number; ownerStartedAt: number; protectedRunIds: readonly string[] }>): Promise<number> {
     await this.#refreshIndex();
     let deleted = 0;
     for (const [name, { summary }] of this.#index) {
-      if (summary.queuedAt >= cutoff || (summary.finishedAt === undefined && summary.ownerStartedAt === ownerStartedAt)) continue;
+      if (summary.queuedAt >= cutoff || protectedRunIds.includes(summary.runId)
+        || (summary.finishedAt === undefined && summary.ownerStartedAt === ownerStartedAt)) continue;
       try { await rm(join(this.directory, name)); }
       catch (error) { if (!missing(error)) throw error; }
       this.#index.delete(name);

@@ -8,7 +8,8 @@ const json = { type: 'json', nullable: false } as const;
 export const SCHEDULE_RUN_MODEL = {
   id: { type: 'text', length: 64, primary: true }, run_id: text, job_id: text, label: text,
   source: text, queued_at: time, started_at: time, finished_at: time, status: text,
-  owner_started_at: time, attempt_count: { type: 'integer', nullable: false }, delivery_status: text, detail_json: json,
+  owner_started_at: time, attempt_count: { type: 'integer', nullable: false }, delivery_status: text,
+  recording_issue: { type: 'boolean', nullable: false }, detail_json: json,
 };
 export const SCHEDULE_ATTEMPT_MODEL = {
   id: { type: 'text', length: 64, primary: true }, run_id: { type: 'text', length: 64, nullable: false },
@@ -29,7 +30,7 @@ export class DatabaseScheduleHistoryRepository implements ScheduleHistoryReposit
     const row = { id, run_id: encodeStorageIdentity(record.runId), job_id: encodeStorageIdentity(record.jobId), label: record.label ?? null,
       source: record.source, queued_at: record.queuedAt, started_at: record.startedAt ?? null, finished_at: record.finishedAt ?? null,
       status: record.status, owner_started_at: record.ownerStartedAt, attempt_count: record.attemptCount,
-      delivery_status: record.deliveryStatus ?? null, detail_json: detail };
+      delivery_status: record.deliveryStatus ?? null, recording_issue: record.recordingIssue === true, detail_json: detail };
     await retryRelationalOperation(() => this.database.transaction!(async transaction => {
       const runs = transaction.model('agent_schedule_runs');
       const existing = (await runs.select('run_id', 'job_id', 'queued_at').where({ id }).limit(1))[0];
@@ -53,12 +54,13 @@ export class DatabaseScheduleHistoryRepository implements ScheduleHistoryReposit
       ...(query.before ? { $or: [{ queued_at: { $lt: query.before.queuedAt } }, { queued_at: query.before.queuedAt, id: { $lt: query.before.key } }] } : {}),
     };
     const rows = await this.database.models.get('agent_schedule_runs')!.select('run_id', 'job_id', 'label', 'source', 'queued_at', 'started_at',
-      'finished_at', 'status', 'owner_started_at', 'attempt_count', 'delivery_status')
+      'finished_at', 'status', 'owner_started_at', 'attempt_count', 'delivery_status', 'recording_issue')
       .where(where).orderBy('queued_at', 'DESC').orderBy('id', 'DESC').limit(query.limit);
     return rows.map(row => ({ runId: decodeStorageIdentity(row.run_id), jobId: decodeStorageIdentity(row.job_id), label: string(row.label),
       source: row.source as StoredScheduleHistorySummary['source'], queuedAt: Number(row.queued_at), startedAt: value(row.started_at), finishedAt: value(row.finished_at),
       status: row.status as StoredScheduleHistorySummary['status'], ownerStartedAt: Number(row.owner_started_at), attemptCount: Number(row.attempt_count),
-      deliveryStatus: string(row.delivery_status) as StoredScheduleHistorySummary['deliveryStatus'] }));
+      deliveryStatus: string(row.delivery_status) as StoredScheduleHistorySummary['deliveryStatus'],
+      ...(row.recording_issue === true || row.recording_issue === 1 ? { recordingIssue: true } : {}) }));
   }
   async read(query: ScheduleHistoryRead): Promise<ScheduleHistoryRecord | undefined> {
     const id = historyKey(query.runId);
@@ -69,11 +71,13 @@ export class DatabaseScheduleHistoryRepository implements ScheduleHistoryReposit
     const attempts = await this.database.models.get('agent_schedule_attempts')!.select('detail_json').where({ run_id: id }).orderBy('number');
     return { ...detail, attempts: attempts.map(attempt => typeof attempt.detail_json === 'string' ? JSON.parse(attempt.detail_json) : attempt.detail_json) };
   }
-  async prune({ cutoff, ownerStartedAt }: Readonly<{ cutoff: number; ownerStartedAt: number }>): Promise<number> {
+  async prune({ cutoff, ownerStartedAt, protectedRunIds }: Readonly<{ cutoff: number; ownerStartedAt: number; protectedRunIds: readonly string[] }>): Promise<number> {
     return retryRelationalOperation(() => this.database.transaction!(async transaction => {
       const runs = transaction.model('agent_schedule_runs');
+      const protectedKeys = new Set(protectedRunIds.map(historyKey));
       const old = await runs.select('id', 'owner_started_at', 'finished_at').where({ queued_at: { $lt: cutoff } });
-      const ids = old.filter(row => row.finished_at !== null && row.finished_at !== undefined || Number(row.owner_started_at) !== ownerStartedAt).map(row => row.id);
+      const ids = old.filter(row => (row.finished_at !== null && row.finished_at !== undefined || Number(row.owner_started_at) !== ownerStartedAt)
+        && !protectedKeys.has(String(row.id))).map(row => row.id);
       // Bounded SQL parameter batches; this is not a history capacity or retention limit.
       for (let offset = 0; offset < ids.length; offset += 200) {
         const batch = ids.slice(offset, offset + 200);

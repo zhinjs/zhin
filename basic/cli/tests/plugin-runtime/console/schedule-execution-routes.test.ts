@@ -27,7 +27,7 @@ beforeEach(async () => {
   const http = { route: (method: string, path: string, handler: HttpHandler) => { routes.set(`${method} ${path}`, handler); return () => {}; } };
   registerScheduleExecutionRoutes({ http, base: '/api' });
 });
-afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
+afterEach(async () => { await history.drain(); history.close(); await rm(directory, { recursive: true, force: true }); });
 
 async function request(method: string, path: string, auth: 'full' | 'demo' = 'full') {
   const url = new URL(path, 'http://synthetic-host');
@@ -60,6 +60,7 @@ async function seed() {
   await history.observe({ type: 'attempt_finished', attempt, finishedAt: NOW + 5, result });
   await history.observe({ type: 'attempt_replay', runId: run.runId, jobId: run.jobId, attemptId: attempt.attemptId, decision: 'stop', reason: 'unknown' });
   await history.observe({ type: 'run_finished', runId: run.runId, jobId: run.jobId, finishedAt: NOW + 5, result });
+  await history.drain();
 }
 
 it('requires full scope before querying or cleaning, independently of assistant.enabled', async () => {
@@ -84,9 +85,11 @@ it('reads retained snapshots globally after task deletion, with exact job/run as
   if (process.env.ZHIN_SCHEDULE_WIRE_CAPTURE) {
     const failed = context('wire-recording-gap');
     const write = vi.spyOn(repository, 'save').mockRejectedValue(new Error('synthetic recording gap'));
-    await expect(history.observe({ type: 'run_queued', run: failed })).rejects.toThrow();
-    await expect(history.observe({ type: 'run_finished', runId: failed.runId, jobId: failed.jobId, finishedAt: NOW + 1,
-      result: { success: true, output: 'Unpersisted synthetic result', durationMs: 1, tokenUsage: { input: 0, output: 0 } } })).rejects.toThrow();
+    history.observe({ type: 'run_queued', run: failed });
+    await history.drain();
+    history.observe({ type: 'run_finished', runId: failed.runId, jobId: failed.jobId, finishedAt: NOW + 1,
+      result: { success: true, output: 'Unpersisted synthetic result', durationMs: 1, tokenUsage: { input: 0, output: 0 } } });
+    await history.drain();
     write.mockRestore();
     const withGap = await request('GET', '/api/assistant/executions?limit=1');
     await writeFile(process.env.ZHIN_SCHEDULE_WIRE_CAPTURE, JSON.stringify({ pageResponse: withGap.body, detailResponse: detail.body }, null, 2));
@@ -107,9 +110,11 @@ it('rejects malformed cursors and keeps storage failure distinct from missing or
 it('exposes terminal recording health without retaining failed output or presenting missing data as no execution', async () => {
   vi.spyOn(repository, 'save').mockRejectedValue(new Error('synthetic disk outage'));
   const run = context('missing-run');
-  await expect(history.observe({ type: 'run_queued', run })).rejects.toThrow();
-  await expect(history.observe({ type: 'run_finished', runId: run.runId, jobId: run.jobId, finishedAt: NOW + 1,
-    result: { success: true, output: 'FAILED_BODY', durationMs: 1, tokenUsage: { input: 0, output: 0 } } })).rejects.toThrow();
+  history.observe({ type: 'run_queued', run });
+  await history.drain();
+  history.observe({ type: 'run_finished', runId: run.runId, jobId: run.jobId, finishedAt: NOW + 1,
+    result: { success: true, output: 'FAILED_BODY', durationMs: 1, tokenUsage: { input: 0, output: 0 } } });
+  await history.drain();
   const page = await request('GET', '/api/assistant/executions');
   expect(page.body.data.recordingHealth).toMatchObject({ activeWriteFailures: 0, incompleteCompletedRuns: 1, lastRun: { runId: 'missing-run' } });
   expect(page.body.data.runs).toEqual([]);
@@ -138,6 +143,7 @@ it('exports repository-derived multi-attempt, committed-stop, pagination and cle
     if (!result.success) await history.observe({ type: 'attempt_replay', runId: run.runId, jobId: run.jobId, attemptId: attempt.attemptId,
       decision: 'stop', reason: 'committed' });
     await history.observe({ type: 'run_finished', runId: run.runId, jobId: run.jobId, finishedAt: run.queuedAt + 10, result });
+    await history.drain();
   };
   await seed();
   const retryRun = { ...context('two-attempts'), queuedAt: NOW - 1 };
@@ -193,8 +199,8 @@ it('exports repository-derived multi-attempt, committed-stop, pagination and cle
 });
 
 it('captures actual Worker, Executor, Domain and TurnToolRuntime producers through the repository and registered Host handler', async () => {
-  const readonly = createScheduleExecutionFixture({ readOnly: true, failAfterTool: true, history });
-  const committed = createScheduleExecutionFixture({ tool: createFixtureFileWriter(), workspace: directory, failAfterTool: true, history });
+  const readonly = createScheduleExecutionFixture({ readOnly: true, failAfterTool: true, observations: history });
+  const committed = createScheduleExecutionFixture({ tool: createFixtureFileWriter(), workspace: directory, failAfterTool: true, observations: history });
   try {
     const readResult = await readonly.worker.run({ ...scheduleFixtureJob, id: 'actual-read-only', label: 'Actual read-only retry' });
     const writeResult = await committed.worker.run({ ...scheduleFixtureJob, id: 'actual-committed', label: 'Actual committed write' });
@@ -227,7 +233,7 @@ it('captures actual Worker, Executor, Domain and TurnToolRuntime producers throu
       } }, null, 2));
     }
   } finally {
-    await readonly.worker.stop(); await readonly.executor.dispose();
-    await committed.worker.stop(); await committed.executor.dispose();
+    await readonly.dispose();
+    await committed.dispose();
   }
 });

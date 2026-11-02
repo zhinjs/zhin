@@ -1,7 +1,6 @@
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { randomUUID } from 'node:crypto';
 import { resolveLocale, type Locale } from '@zhin.js/plugin-runtime';
-import { getLogger } from '@zhin.js/logger';
 
 import type { TurnEvent } from '../event/turn-event.js';
 import type { ScheduleJob, ScheduleJobCreator, ScheduleJobExecutionPlan } from '../assistant/types.js';
@@ -20,8 +19,9 @@ import type { TurnOutcome } from '../turn/turn-ingress.js';
 import { AttemptReplayEvidence, type ReplayEvidence } from './replay-evidence.js';
 import type { ScheduleAttemptContext } from './attempt-context.js';
 import type { ToolOperationEvidencePort } from '../tool/tool-operation-evidence.js';
-
-const logger = getLogger('schedule-execution');
+import type { ScheduleObservationOwner } from './execution-history.js';
+import { ScheduleExecutionHistory } from './execution-history-store.js';
+import { ScheduleHistoryReporter } from './history-observer.js';
 
 export interface ScheduleExecutionResult {
   success: boolean;
@@ -43,6 +43,7 @@ export interface ScheduleExecutionOptions {
 
 export interface ScheduleExecutionDomain {
   execute(job: ScheduleJob, options?: ScheduleExecutionOptions): Promise<ScheduleExecutionResult>;
+  dispose?(): void;
 }
 
 export interface ScheduleTurnExecutionRequest {
@@ -69,6 +70,7 @@ export interface ScheduleExecutionDomainDeps {
   config: Required<ZhinAgentConfig>;
   auditLogger?: ScheduleAuditLogger;
   now?: () => number;
+  observations?: ScheduleObservationOwner;
 }
 
 function textFromElements(elements: AgentOutputElement[]): string {
@@ -96,11 +98,13 @@ function terminationLabel(reason: NonNullable<ScheduleAuditRecord['budgetTermina
 }
 
 export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
-  private readonly auditLogger: ScheduleAuditLogger;
   private readonly now: () => number;
+  readonly #ownedObservations?: ScheduleExecutionHistory;
+  readonly #history: ScheduleHistoryReporter;
 
   constructor(private readonly deps: ScheduleExecutionDomainDeps) {
-    this.auditLogger = deps.auditLogger ?? new JsonlScheduleAuditLogger();
+    this.#ownedObservations = deps.observations ? undefined : new ScheduleExecutionHistory({ auditLogger: deps.auditLogger ?? new JsonlScheduleAuditLogger() });
+    this.#history = new ScheduleHistoryReporter(undefined, deps.observations ?? this.#ownedObservations);
     this.now = deps.now ?? Date.now;
   }
 
@@ -144,7 +148,7 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
             const common = { type: 'attempt_progress' as const, runId: attempt.identity.runId,
               jobId: job.id, attemptId: executionId, at: this.now() };
             if (event.type === 'iteration_start' || event.type === 'turn_start' || event.type === 'turn_end'
-              || event.type === 'turn_error' || event.type === 'turn_cancelled' || event.type === 'turn_budget_exceeded') {
+              || event.type === 'error' || event.type === 'turn_cancelled' || event.type === 'budget_exceeded') {
               void attempt.history.observe({ ...common, phase: 'model', status: event.type });
             } else if (event.type === 'tool_call' || event.type === 'tool_result' || event.type === 'tool_failed'
               || event.type === 'tool_cancelled' || event.type === 'tool_denied') {
@@ -217,8 +221,9 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       outputStripped: validation.stripped,
       error,
     });
-    try { await this.auditLogger.write(audit); }
-    catch { logger.warn('Schedule audit recording failed'); }
+    (options.attempt?.history ?? this.#history).audit({ attempt: options.attempt?.identity ?? {
+      runId: executionId, jobId: job.id, attemptId: executionId, number: 1, startedAt,
+    }, record: audit });
     return {
       success: audit.success,
       output,
@@ -231,6 +236,8 @@ export class ScheduleExecutionDomainImpl implements ScheduleExecutionDomain {
       status: options.signal?.aborted ? 'cancelled' : acceptedPartial ? 'budget_partial' : audit.success ? 'succeeded' : 'failed',
     };
   }
+
+  dispose(): void { this.#ownedObservations?.close(); }
 
 }
 

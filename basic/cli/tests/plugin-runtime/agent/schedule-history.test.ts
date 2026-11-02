@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DatabaseScheduleHistoryRepository, FileScheduleHistoryRepository, ScheduleExecutionHistory, SCHEDULE_RUN_MODEL, SCHEDULE_ATTEMPT_MODEL,
-  historyKey, scheduleHistoryCutoff, type ScheduleRunContext, type ScheduleAttemptIdentity, type ScheduleHistoryResult, type ScheduleHistoryRepository } from '@zhin.js/agent/runtime';
+  historyKey, scheduleHistoryCutoff, type ScheduleRunContext, type ScheduleAttemptIdentity, type ScheduleHistoryResult, type ScheduleHistoryRepository, type ScheduleHistoryEvent } from '@zhin.js/agent/runtime';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { JobWorker, createTaskExecutor, createNotificationRouter } from '@zhin.js/agent';
 import { createScheduleAuditRecord } from '../../../../../packages/im/agent/src/schedule-domain/audit-logger.js';
@@ -19,16 +19,17 @@ const run = (runId: string, queuedAt = NOW, jobId = 'job'): ScheduleRunContext =
 } });
 const attempt = (context: ScheduleRunContext, number = 1): ScheduleAttemptIdentity => ({ runId: context.runId, jobId: context.jobId,
   attemptId: `${context.runId}-attempt-${number}`, number, startedAt: context.queuedAt + number });
+async function observe(store: ScheduleExecutionHistory, event: ScheduleHistoryEvent) { store.observe(event); await store.drain(); }
 async function complete(store: ScheduleExecutionHistory, context: ScheduleRunContext) {
   const current = attempt(context);
-  await store.observe({ type: 'run_queued', run: context });
-  await store.observe({ type: 'attempt_started', attempt: current });
-  await store.observe({ type: 'attempt_progress', runId: context.runId, jobId: context.jobId, attemptId: current.attemptId,
+  await observe(store, { type: 'run_queued', run: context });
+  await observe(store, { type: 'attempt_started', attempt: current });
+  await observe(store, { type: 'attempt_progress', runId: context.runId, jobId: context.jobId, attemptId: current.attemptId,
     at: context.queuedAt + 2, phase: 'tool', status: 'completed', toolName: 'read_record', toolUseId: 'call-1' });
-  await store.observe({ type: 'attempt_finished', attempt: current, finishedAt: context.queuedAt + 20, result });
-  await store.observe({ type: 'attempt_replay', runId: context.runId, jobId: context.jobId, attemptId: current.attemptId,
+  await observe(store, { type: 'attempt_finished', attempt: current, finishedAt: context.queuedAt + 20, result });
+  await observe(store, { type: 'attempt_replay', runId: context.runId, jobId: context.jobId, attemptId: current.attemptId,
     decision: 'stop', reason: 'attempt_budget_exhausted' });
-  await store.observe({ type: 'run_finished', runId: context.runId, jobId: context.jobId, finishedAt: context.queuedAt + 20, result });
+  await observe(store, { type: 'run_finished', runId: context.runId, jobId: context.jobId, finishedAt: context.queuedAt + 20, result });
 }
 
 describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
@@ -83,8 +84,8 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
 
   it('restores unfinished records as interrupted only across processes, without inventing a finish or replay', async () => {
     const context = run('pending');
-    await store.observe({ type: 'run_queued', run: context });
-    await store.observe({ type: 'attempt_started', attempt: attempt(context) });
+    await observe(store, { type: 'run_queued', run: context });
+    await observe(store, { type: 'attempt_started', attempt: attempt(context) });
     const sameProcess = new ScheduleExecutionHistory({ repository, ownerStartedAt: OWNER });
     expect((await store.read({ runId: 'pending' }))?.status).toBe('running');
     expect((await sameProcess.read({ runId: 'pending' }))?.status).toBe('unsettled');
@@ -101,7 +102,7 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
     expect(new Date(cutoff).toISOString()).toBe('2026-02-28T10:15:20.123Z');
     await complete(store, run('old', cutoff - 1));
     await complete(store, run('edge', cutoff));
-    await store.observe({ type: 'run_queued', run: run('active', cutoff - 100) });
+    await observe(store, { type: 'run_queued', run: run('active', cutoff - 100) });
     expect(await store.cleanup()).toEqual({ deleted: 1, cutoff });
     expect(await store.read({ runId: 'old' })).toBeUndefined();
     expect(await store.read({ runId: 'edge' })).toBeDefined();
@@ -111,12 +112,36 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
     expect((await restarted.cleanup()).deleted).toBe(1);
   });
 
+  it('protects pending/inflight runs and same-process unsettled records whose inactivity is unknown', async () => {
+    const context = run('cleanup-race', scheduleHistoryCutoff(NOW) - 100);
+    await observe(store, { type: 'run_queued', run: context });
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const save = repository.save.bind(repository);
+    vi.spyOn(repository, 'save').mockImplementationOnce(async record => { await held; await save(record); });
+    store.observe({ type: 'run_finished', runId: context.runId, jobId: context.jobId, finishedAt: NOW, result });
+    expect(await store.cleanup()).toMatchObject({ deleted: 0 });
+    expect(await repository.read({ runId: context.runId })).toBeDefined();
+    release(); await store.drain();
+    expect((await store.cleanup()).deleted).toBe(1);
+    await observe(store, { type: 'run_queued', run: run('old-unsettled', context.queuedAt) });
+    store.close();
+    const nextGeneration = new ScheduleExecutionHistory({ repository, ownerStartedAt: OWNER, now: () => NOW });
+    expect((await nextGeneration.read({ runId: 'old-unsettled' }))?.status).toBe('unsettled');
+    expect((await nextGeneration.cleanup()).deleted).toBe(0); // Unsettled is not proof that an old generation stopped.
+    nextGeneration.close();
+    const restarted = new ScheduleExecutionHistory({ repository, ownerStartedAt: OWNER + 1, now: () => NOW });
+    expect((await restarted.cleanup()).deleted).toBe(1);
+    restarted.close();
+  });
+
   it('preserves a write failure as a recording gap then flushes the complete observation without a business retry', async () => {
     const fail = vi.spyOn(repository, 'save').mockRejectedValueOnce(new Error('synthetic disk failure'));
     const context = run('gap');
-    await expect(store.observe({ type: 'run_queued', run: context })).rejects.toThrow('synthetic disk failure');
+    await observe(store, { type: 'run_queued', run: context });
+    expect(store.health().activeWriteFailures).toBe(1);
     expect((await store.page({ limit: 10 })).runs[0]).toMatchObject({ runId: 'gap', recordingIssue: true });
-    await store.observe({ type: 'attempt_started', attempt: attempt(context) });
+    await observe(store, { type: 'attempt_started', attempt: attempt(context) });
     expect((await store.read({ runId: 'gap' }))?.recordingIssue).toBeUndefined();
     expect(fail).toHaveBeenCalledTimes(2);
     expect((await repository.read({ runId: 'gap' }))?.attempts).toHaveLength(1);
@@ -125,11 +150,11 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
   it('releases terminal output after storage failure and exposes constant recording health instead of a false live state', async () => {
     const context = run('terminal-gap');
     const current = attempt(context);
-    await store.observe({ type: 'run_queued', run: context });
-    await store.observe({ type: 'attempt_started', attempt: current });
+    await observe(store, { type: 'run_queued', run: context });
+    await observe(store, { type: 'attempt_started', attempt: current });
     vi.spyOn(repository, 'save').mockRejectedValue(new Error('synthetic terminal failure'));
-    await expect(store.observe({ type: 'run_finished', runId: context.runId, jobId: context.jobId,
-      finishedAt: NOW + 1, result: { ...result, output: 'UNPERSISTED_BODY_MUST_NOT_BE_CACHED' } })).rejects.toThrow('synthetic terminal failure');
+    await observe(store, { type: 'run_finished', runId: context.runId, jobId: context.jobId,
+      finishedAt: NOW + 1, result: { ...result, output: 'UNPERSISTED_BODY_MUST_NOT_BE_CACHED' } });
     const detail = await store.read({ runId: context.runId });
     expect(detail).toMatchObject({ status: 'unsettled', recordingIssue: true });
     expect(detail?.result).toBeUndefined();
@@ -150,7 +175,7 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
       await original(record);
     });
     let effects = 0;
-    const executor = createTaskExecutor({ history: store, router: createNotificationRouter({ resolveAdapter: () => undefined }), domain: {
+    const executor = createTaskExecutor({ observations: store, router: createNotificationRouter({ resolveAdapter: () => undefined }), domain: {
       execute: async (job, options) => {
         effects++;
         const audit = createScheduleAuditRecord({ jobId: job.id, executionId: options?.attempt?.identity.attemptId ?? 'synthetic-attempt',
@@ -159,7 +184,7 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
         return { success: true, output: 'Verified', durationMs: 1, toolsUsed: [], tokenUsage: { input: 1, output: 1 }, audit };
       },
     } });
-    const worker = new JobWorker({ executor, history: store, queue: { maxRetries: 2 } });
+    const worker = new JobWorker({ executor, observations: store, queue: { maxRetries: 2 } });
     try {
       const task = await worker.run({ ...run('business').job, notify: { channel: 'silent' } });
       await store.drain();
@@ -176,10 +201,10 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
     const current = attempt(context);
     const response = { ...result, output: `password=synthetic-password\n${'完整结果'.repeat(20_000)}\ndata:image/png;base64,AAAA`,
       audit: { privateToolArguments: 'must-not-persist' } };
-    await store.observe({ type: 'run_queued', run: context });
-    await store.observe({ type: 'attempt_started', attempt: current });
-    await store.observe({ type: 'attempt_finished', attempt: current, finishedAt: NOW + 1, result: response });
-    await store.observe({ type: 'run_finished', runId: context.runId, jobId: context.jobId, finishedAt: NOW + 1, result: response });
+    await observe(store, { type: 'run_queued', run: context });
+    await observe(store, { type: 'attempt_started', attempt: current });
+    await observe(store, { type: 'attempt_finished', attempt: current, finishedAt: NOW + 1, result: response });
+    await observe(store, { type: 'run_finished', runId: context.runId, jobId: context.jobId, finishedAt: NOW + 1, result: response });
     const detail = JSON.stringify(await store.read({ runId: 'privacy' }));
     expect(detail).not.toContain('synthetic-password');
     expect(detail).not.toContain('data:image');
@@ -190,6 +215,25 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
       expect((await readdir(directory)).every(name => name.endsWith('.history'))).toBe(true);
       expect(await readFile(join(directory, `${historyKey('privacy')}.history`), 'utf8')).not.toContain('synthetic-password');
     }
+  });
+
+  it('restores a persisted recording gap in both summary and detail after generation-local health is gone', async () => {
+    const context = run('persisted-aux-gap');
+    const current = attempt(context);
+    const observed = new ScheduleExecutionHistory({ repository, ownerStartedAt: OWNER,
+      auditLogger: { write: async () => { throw new Error('synthetic lost audit append'); } } });
+    await observe(observed, { type: 'run_queued', run: context });
+    await observe(observed, { type: 'attempt_started', attempt: current });
+    observed.audit({ attempt: current, record: createScheduleAuditRecord({ jobId: context.jobId, executionId: current.attemptId,
+      timestamp: NOW, prompt: context.job.action.prompt, toolsResolved: [], toolsResolvedBy: 'affinity', skillsResolved: [], missingTools: [], missingSkills: [] }) });
+    await observed.drain();
+    await observe(observed, { type: 'run_finished', runId: context.runId, jobId: context.jobId, finishedAt: NOW + 1, result });
+    observed.close();
+    const restored = new ScheduleExecutionHistory({ repository, ownerStartedAt: OWNER + 1 });
+    expect(restored.health().incompleteCompletedRuns).toBe(0);
+    expect((await restored.read({ runId: context.runId }))?.recordingIssue).toBe(true);
+    expect((await restored.page({ limit: 10 })).runs[0]?.recordingIssue).toBe(true);
+    restored.close();
   });
 });
 

@@ -11,13 +11,14 @@ import { createScheduleAttempt, type ScheduleAttemptContext } from '../schedule-
 import { ScheduleAttemptFailure } from '../schedule-domain/execution-failure.js';
 import { failedScheduleResult } from '../schedule-domain/execution-result.js';
 import { ScheduleHistoryReporter } from '../schedule-domain/history-observer.js';
-import type { ScheduleHistoryObserver, ScheduleRunContext } from '../schedule-domain/execution-history.js';
+import type { ScheduleHistoryObserver, ScheduleRunContext, ScheduleObservationOwner } from '../schedule-domain/execution-history.js';
 const logger = getLogger('assistant-job-worker');
 
 export interface JobWorkerOptions {
   executor: TaskExecutor;
   queue?: AssistantQueueConfig;
   history?: ScheduleHistoryObserver;
+  observations?: ScheduleObservationOwner;
 }
 
 export class JobWorker {
@@ -25,10 +26,12 @@ export class JobWorker {
   private queueCfg: ReturnType<typeof resolveAssistantQueueConfig>;
   private readonly queue: ScheduleExecutionQueue;
   readonly #history?: ScheduleHistoryObserver;
+  readonly #observations?: ScheduleObservationOwner;
 
   constructor(options: JobWorkerOptions) {
     this.executor = options.executor;
     this.#history = options.history;
+    this.#observations = options.observations ?? options.executor.observations;
     this.queueCfg = resolveAssistantQueueConfig(options.queue);
     this.queue = new ScheduleExecutionQueue({
       maxConcurrency: this.queueCfg.maxConcurrency,
@@ -46,7 +49,7 @@ export class JobWorker {
     const run: ScheduleRunContext = { runId: randomUUID(), jobId: job.id, queuedAt: Date.now(),
       source: options.source ?? 'scheduled', job,
       ...(options.scheduledAt === undefined ? {} : { scheduledAt: options.scheduledAt }) };
-    const history = new ScheduleHistoryReporter(this.#history);
+    const history = new ScheduleHistoryReporter(this.#history, this.#observations);
     void history.observe({ type: 'run_queued', run });
     const finish = (result: TaskExecutionResult) => {
       history.observe({ type: 'run_finished', runId: run.runId, jobId: job.id, finishedAt: Date.now(), result });

@@ -1,5 +1,7 @@
 import type { MessageRef } from '@zhin.js/im-contract';
 import type { ScheduleJob } from '../assistant/types.js';
+import type { ScheduleAuditRecord } from './audit-logger.js';
+import type { ScheduleActivityEvent } from './activity.js';
 
 /** One actual trigger; automatic attempts retain this identity and captured job. */
 export interface ScheduleRunContext {
@@ -69,4 +71,11 @@ export type ScheduleHistoryEvent =
 /** Observation has its own error channel; callers must not feed failures into business retry. */
 export interface ScheduleHistoryObserver {
   observe(event: ScheduleHistoryEvent): void | Promise<void>;
+}
+
+/** One generation owns history, audit and activity IO; none of these observations controls execution. */
+export interface ScheduleObservationOwner extends ScheduleHistoryObserver {
+  audit(input: Readonly<{ attempt: ScheduleAttemptIdentity; record: ScheduleAuditRecord }>): void;
+  activity(input: Readonly<{ attempt: ScheduleAttemptIdentity; event: ScheduleActivityEvent }>): void;
+  close(): void;
 }

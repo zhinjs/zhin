@@ -111,6 +111,16 @@ turn 会跨代执行。
 - 🌳 **会话树**：`parent_id` + `active_leaf`；IM `/tree`、`/reset`；branch summarization；Console `GET/POST /api/agent/sessions/...`
 - 🪝 **Hook 系统**：generation-owned `AgentResourceHub.hooks` 与 canonical stream events
 
+## 定时任务执行记录
+
+更新 Host 与 Console 后，在「定时提醒 → 执行记录」查看每次运行的时间、各次尝试、基本过程、最终结果和独立的通知投递结果。读取及清理需要当前 Host 的 `full` 权限；模型诊断轨迹按需读取，继续沿用原有 Trace 保留规则。
+
+执行记录沿用部署的文件或 SQL 存储，保留一个 UTC 自然月。删除任务定义仍可查看未到期历史；「清理过期记录」只清理到期且非活动的执行记录。重启前没有结算的记录显示为中断或待核对，不自动续跑。
+
+失败后，只有实际调用能够证明整次尝试可安全重放时，才在既有次数内重试。已提交或无法确定副作用的调用不会从头重跑；通知或观察记录失败也不触发任务重放。插件的 `readOnly` 声明必须真实，不按工具名或返回文字猜测。
+
+记录写入与任务执行分离。慢存储时合并同次运行的快照，待保存终态最多 128 份／16 MiB（含正在写入的一份）；超大、满载或写入失败时显示记录缺口，不能据此判断任务没有执行。详细设计与验收见[定时任务方案](../../../docs/plans/schedule-outcome-retry-safety.md)。
+
 ## 依赖关系
 
 - 依赖 **@zhin.js/core**（IM 类型与消息链）与 **@zhin.js/ai**（`agentLoop`、Provider 抽象）

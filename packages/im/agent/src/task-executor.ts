@@ -19,11 +19,14 @@ import {
 import { JsonlScheduleAuditLogger } from './schedule-domain/audit-logger.js';
 import type { ZhinAgentConfig } from './config/zhin-agent-config.js';
 import { DEFAULT_CONFIG } from './config/zhin-agent-defaults.js';
-import type { ScheduleHistoryObserver, ScheduleRunContext } from './schedule-domain/execution-history.js';
+import type { ScheduleHistoryObserver, ScheduleRunContext, ScheduleObservationOwner } from './schedule-domain/execution-history.js';
+import { ScheduleExecutionHistory } from './schedule-domain/execution-history-store.js';
 import { ScheduleHistoryReporter } from './schedule-domain/history-observer.js';
 import { createScheduleAttempt, type ScheduleAttemptContext } from './schedule-domain/attempt-context.js';
 import { ScheduleAttemptFailure } from './schedule-domain/execution-failure.js';
 import { failedScheduleResult } from './schedule-domain/execution-result.js';
+import type { ScheduleActivityEvent, ScheduleActivityPort } from './schedule-domain/activity.js';
+export type { ScheduleActivityEvent, ScheduleActivityPort } from './schedule-domain/activity.js';
 
 const logger = getLogger('task-executor');
 
@@ -51,6 +54,7 @@ export interface TaskExecutorDeps {
   domain?: ScheduleExecutionDomain;
   dataDir?: string;
   history?: ScheduleHistoryObserver;
+  observations?: ScheduleObservationOwner;
 }
 
 export interface TaskExecutionOptions {
@@ -59,27 +63,20 @@ export interface TaskExecutionOptions {
   attempt?: ScheduleAttemptContext;
 }
 
-export interface ScheduleActivityEvent {
-  readonly phase: 'start' | 'finish' | 'error';
-  readonly job: ScheduleJob;
-  readonly previewSource?: ScheduleInvocationContext;
-  readonly notify: import('./assistant/types.js').JobNotify;
-}
-
-export interface ScheduleActivityPort {
-  publish(event: ScheduleActivityEvent): void | Promise<void>;
-}
-
 export function createTaskExecutor(deps: TaskExecutorDeps) {
   const sceneLocks = new KeyedMutex();
   const executionContext = new AsyncLocalStorage<boolean>();
   let disposed = false;
   let disposal: Promise<void> | undefined;
   const { router } = deps;
+  const ownedObservations = deps.observations ? undefined : new ScheduleExecutionHistory({
+    auditLogger: new JsonlScheduleAuditLogger(deps.dataDir), activity: deps.activity,
+  });
+  const observations = deps.observations ?? ownedObservations!;
   const domain = deps.domain ?? new ScheduleExecutionDomainImpl({
     turn: deps.turn ?? missingScheduleTurnPort(),
     config: deps.config ?? DEFAULT_CONFIG,
-    auditLogger: new JsonlScheduleAuditLogger(deps.dataDir),
+    observations,
   });
 
   async function execute(job: ScheduleJob, options: TaskExecutionOptions = {}): Promise<TaskExecutionResult> {
@@ -92,15 +89,14 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       source: previewSource ? 'preview' : 'scheduled',
       job: structuredClone(job),
     };
-    const attempt = options.attempt ?? createScheduleAttempt({ run: run!, number: 1, history: new ScheduleHistoryReporter(deps.history) });
+    const attempt = options.attempt ?? createScheduleAttempt({ run: run!, number: 1, history: new ScheduleHistoryReporter(deps.history, observations) });
     if (run) {
       void attempt.history.observe({ type: 'run_queued', run });
       void attempt.history.observe({ type: 'attempt_started', attempt: attempt.identity });
     }
-    const event = async (phase: ScheduleActivityEvent['phase']) => {
+    const event = (phase: ScheduleActivityEvent['phase']) => {
       if (!job.activityFeedback) return;
-      try { await deps.activity?.publish({ phase, job, previewSource, notify: effectiveNotify }); }
-      catch { logger.warn('Schedule activity recording failed'); }
+      attempt.history.activity({ attempt: attempt.identity, event: { phase, job, previewSource, notify: effectiveNotify } });
     };
     const lockKey = previewSource
       ? `preview:${previewSource.sessionKey}`
@@ -109,8 +105,8 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     const execution = sceneLocks.run(lockKey, () => executionContext.run(true, async () => {
       // Activity belongs to admitted execution, not to time spent waiting for
       // the per-scene mutex. Keeping its terminal inside the same critical
-      // section prevents a prior run from clearing a later run's indicator.
-      await event('start');
+      // section preserves publication order in the shared observation owner.
+      event('start');
       let result: ScheduleExecutionResult;
       try {
         result = await domain.execute(job, {
@@ -126,7 +122,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
               replay: result.replay ?? { disposition: 'unknown', operations: [] } } });
         }
       } catch (error) {
-        await event('error');
+        event('error');
         throw error;
       }
       const executionPlan = previewSource
@@ -142,10 +138,10 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
       let delivery: TaskDeliveryOutcome = { status: 'not_requested', channel: effectiveNotify.channel };
 
       if (!result.success) {
-        await event('error');
+        event('error');
         logger.error(`[TaskExecutor] 执行失败: ${result.error ?? 'unknown error'}`);
       } else if (previewSource) {
-        await event('finish');
+        event('finish');
       } else {
         if (result.output) {
           void attempt.history.observe({ type: 'attempt_progress', ...attempt.identity, at: Date.now(), phase: 'delivery', status: 'started' });
@@ -171,7 +167,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
           }
           void attempt.history.observe({ type: 'attempt_progress', ...attempt.identity, at: Date.now(), phase: 'delivery', status: delivery.status });
         }
-        await event('finish');
+        event('finish');
       }
 
       const observedReplay = attempt.evidence.snapshot();
@@ -229,11 +225,11 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     }
     if (disposal) return disposal;
     disposed = true;
-    disposal = sceneLocks.drain();
+    disposal = sceneLocks.drain().finally(() => ownedObservations?.close());
     return disposal;
   }
 
-  return { execute, preview, dispose };
+  return { execute, preview, dispose, observations };
 }
 
 function missingScheduleTurnPort(): ScheduleTurnPort {
@@ -250,7 +246,10 @@ function scheduleLockKey(job: ScheduleJob, notify: import('./assistant/types.js'
   return `im:${scene.platform}:${scene.endpointKey}:${scene.kind}:${scene.sceneId}`;
 }
 
-export type TaskExecutor = ReturnType<typeof createTaskExecutor>;
+export type TaskExecutor = Pick<ReturnType<typeof createTaskExecutor>, 'execute' | 'preview' | 'dispose'> & Readonly<{
+  /** Internal shared owner; custom executors need not implement an observation backend. */
+  observations?: ScheduleObservationOwner;
+}>;
 
 function deliveryFromReceipt(receipt: DeliveryReceipt, channel: TaskDeliveryOutcome['channel']): TaskDeliveryOutcome {
   const messages = receipt.parts?.map(part => part.message ?? null) ?? (receipt.message ? [receipt.message] : []);

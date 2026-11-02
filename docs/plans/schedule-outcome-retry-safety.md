@@ -116,13 +116,13 @@ interface ScheduleAttemptFailure {
 // 同一次触发只创建一次 run；每次自动重试是独立 attempt。
 const run = createRunContext(capturedTrigger);
 // history.observe 独立处理记录错误，只报告缺口，不抛回业务链。
-await history.observe({ phase: 'queued', run });
+history.observe({ phase: 'queued', run });
 
 return queue.enqueueAndWait({
   ...existingQueueOptions,
   execute: async signal => {
     const attempt = beginAttempt({ run, signal });
-    await history.observe({ phase: 'started', attempt });
+    history.observe({ phase: 'started', attempt });
     let outcome: AttemptOutcome;
     try {
       outcome = fromTaskResult(await executor.execute(job, { signal, attempt }));
@@ -131,7 +131,7 @@ return queue.enqueueAndWait({
     }
     // 先固定真实业务结果；历史失败不能变成一次执行失败。
     const settled = settleAttempt({ outcome, replay: attempt.evidence() });
-    await history.observe({ phase: 'finished', attempt, settled });
+    history.observe({ phase: 'finished', attempt, settled });
     return completeOrRaiseTypedFailure(settled);
   },
 });
@@ -178,7 +178,7 @@ else stopWithOriginalResult();
 
 记录模块保留已经写成的摘要；重启后没有终态的旧记录展示为中断／待核对，不自动补造结束时间或外部成功状态。旧 audit 和 last* 只能作为旧来源，不能反推过去的完整尝试。
 
-执行摘要、基本过程与最终结果保留一个自然月：以实际触发／入队时间为基准，UTC 日历回退一个月，月底钳制到上月最后一天，并保留时分秒。不以 30 天替代自然月。当前活动运行不清理；任务删除不级联删除历史，旧历史仍保留至同一期限。模型 Trace 继续使用其现有保留规则。
+执行摘要、基本过程与最终结果保留一个自然月：以实际触发／入队时间为基准，UTC 日历回退一个月，月底钳制到上月最后一天，并保留时分秒。不以 30 天替代自然月。当前活动／待写运行不清理；同进程旧 generation 的未结算行只有“状态待核对”，不能据此证明已停止，因此也不自动删除。任务删除不级联删除历史，旧历史仍保留至同一期限。模型 Trace 继续使用其现有保留规则。
 
 过期清理复用现有 generation housekeeping 的启动及发布后清理通道，不新增定时器、频率或通知。Console 的 full 管理清理只删除已过期且非活动的执行历史，不删除任务定义、Trace 或未到期记录；接口可重复调用，不触发任务重跑。需要删除未到期／全部历史时，另行确认具体范围。
 
@@ -258,18 +258,36 @@ POST /api/assistant/executions/cleanup
 - `tool_call` 在授权前发出，只是请求过程，不作为已进入工具或已提交的证据。真正调用入口采集正式 `readOnly` 声明；未分类调用保持 `unknown`，原生动作 owner 在真实写入／正式回执之后才报告 `committed`，不会解析普通工具字符串猜成功。
 - Queue 的重试决定来自实际剩余次数、取消状态及执行方的重放依据，并单独记录 `attempt_replay` 原因；历史模块不参与重放准入。
 
-以上为当前实现与已确认规则的对齐说明；存储始终挂起时的资源／关闭边界仍按下节候选方案单独确认，不能将尚未完成的观察通道称为通过验收。
+以上为当前实现与已确认规则的对齐说明；存储始终挂起时的资源／关闭边界按下节已确认方案实现并单独验收。
 
-## 待确认：存储缓慢时的有界写入
+## 已确认：存储缓慢时的有界写入
 
-持久化可能缓慢或始终不返回；不能让记录 I/O 阻塞任务并触发业务超时，也不能把每个事件／终态正文无限排进内存。候选规则如下，确认后才实现：
+持久化可能缓慢或始终不返回；不能让记录 I/O 阻塞任务并触发业务超时，也不能把每个事件／终态正文无限排进内存。用户已确认以下资源与满载规则：
 
-- 历史模块独占一个物理写入；同一运行的变化合并为当前快照，不排无界的事件或 Promise 队列。
-- 已结束、尚未落盘的运行最多保留 128 份，且其投影脱敏后序列化 JSON 的 UTF-8 总大小最多 16 MiB；任一达到上限便不再保留新终态正文，只增加常量大小的 recordingHealth 缺口摘要。任务继续、不因记录不足重放；空位恢复后正常收录后续运行。
+- 历史、审计、活动观察独占一个物理写入；同一运行的变化合并为当前快照，辅助事实保留接受顺序，不排无界的 Promise 队列。物理在途正文从提交时就预留同一预算，即使运行仍活动；不能提交的活动快照留在既有运行 owner 中合并，不新增任务准入或计时器。管理清理沿既有独立 prune 入口，单 owner 合并重复触发，并保护精确待写身份及同进程未结算行。
+- 已结束、尚未落盘的运行（包含已提交但尚未返回的物理写入）最多保留 128 份，且历史／审计／活动投影脱敏后序列化 JSON 的 UTF-8 总大小最多 16 MiB；同 run 的新旧快照只计一份运行，但所有仍保留的正文均计入字节预算；任一达到上限便不再保留新终态正文，只增加常量大小的 recordingHealth 缺口摘要。任务继续、不因记录不足重放；空位恢复后正常收录后续运行。
 - 正在执行的运行仍由既有 owner／并发规则管理，不新增业务排队或记录轮询。未确认新重试次数、定时器或通知。
 - 当前最终输出和任务 prompt 没有这一级字节上限；单份快照也可能超过 16 MiB。不能为了塞进队列擅自截断最终结果、缩小模型预算或改变任务行为；不能完整保留时明确呈现缺口。
 - 关闭时停止接收记录、释放尚未提交的正文，不无限等待无法取消的底层 I/O。已经提交的 SQL／文件写入是否可取消，须按现有驱动和 Host 停止预算区分，不能承诺物理写一定已经终止。
 
-这项容量／满载取舍仍待用户确认；当前存储与只读 API 的实现不等于该异步通道已经完成或验收。
+这项容量／满载取舍已获确认；历史、审计与活动记录共用同一 generation owner。实现须分别验证慢／永不返回的 I/O、精确容量边界、单份过大、恢复接纳和关闭，不以普通快存储通过替代这些验收。
 
 记录属于可观测历史，失败不得控制业务执行或触发重跑；不引入逐副作用强制落盘、重启自动续跑或新通知策略。若需要“存储不可用就禁止任务执行”的强审计准入，须作为另一项行为变更明确设计和确认。
+
+## 本地验收记录
+
+以下证据来自源码、真实本地执行链与合成响应，不含真实模型或平台账号调用。最终冻结候选的集成回归为 17 个文件、142 个用例通过；完整构建与项目门禁在提交 PR 前另行记录。
+
+| 场景与预期 | 实际证据 | 结论 | 未覆盖范围 |
+| --- | --- | --- | --- |
+| 已提交／未知动作不整任务重放，只读仍可重试 | 初始提交 `2a174ee5c` 的 Worker／Queue（仅改测试导入）在同一合成执行边界调用两次；[真实工具准入回归](../../packages/im/agent/tests/schedule-domain/replay-safety.test.ts)中新链一次，只读两次且 attempt 不同 | 通过 | 对比不等于完整旧部署；第三方错误的 readOnly 声明不由本轮证明 |
+| 强 Journal 失败不能抹掉动作依据 | 同一真实 ToolRuntime 中，工具后 Journal 提交失败仍为 unknown、动作一次；已确认文件写后模型失败仍为 committed | 通过 | 无远端幂等或崩溃恢复承诺 |
+| 投递与业务独立，取消按阶段处理 | [Core 出站回归](../../packages/im/core/tests/plugin-runtime/outbound-locale.test.ts)保留 partial／unknown 与完整 MessageRef；通知阶段取消后晚到 ACK 保留业务完成；模型未完成时取消保留取消状态和已知动作 | 通过 | 平台回执为本地合成；未做真实 IM 送达 |
+| 观察故障不阻塞／重跑业务 | [观察链回归](../../packages/im/agent/tests/schedule-domain/observation-runtime.test.ts)覆盖 history／audit／activity 永久挂起、单次工具执行、借用与自建 owner 关闭 | 通过 | 不能承诺底层驱动的已提交 I/O 已物理取消 |
+| 容量包含旧在途正文及状态重建 | [owner 回归](../../packages/im/agent/tests/schedule-observation-owner.test.ts)覆盖精确 128 份／16 MiB UTF-8、active-inflight、同 run 多版本与实例、超大、释放和恢复接纳 | 通过 | 该预算针对观察正文；不代表任务结果、活动运行或整个进程的堆上限 |
+| 保存结果未知后可被新事实修复 | 真实文件仓库保存成功后再抛错，下一新事实可保存；lookup 错误不视为 absence，外部已存在 run 仍拒绝 | 通过 | 不新增业务重试或定时存储重试 |
+| 不误删活跃旧代记录，不阻塞发布与关闭 | [真实 RootController／旧 lease 回归](../../packages/im/agent/tests/schedule-domain/history-generation-lifecycle.test.ts)保留过期但仍活跃的旧代记录；[Host 生命周期回归](../../basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts)覆盖挂起清理，原 Trace 等待仍保留 | 通过 | 跨代红对比只移除被验证的保护条件，未声称完整旧版本验收 |
+| 文件／SQL 与受权 API 一致 | [存储回归](../../basic/cli/tests/plugin-runtime/agent/schedule-history.test.ts)覆盖真实文件与 SQLite、缺口标记重读、大正文、自然月清理、稳定游标；[注册路由回归](../../basic/cli/tests/plugin-runtime/console/schedule-execution-routes.test.ts)覆盖 full／503／删除任务后历史 | 通过 | 未连接真实 MySQL／PostgreSQL；只核对对应驱动及字段合同 |
+| Console 显示实际产物，挂起请求不困住用户 | 严格 parser 接受真实 Worker→工具→文件→Host 产物；实际 Farm 页面核验两次只读尝试、已提交停止重放、50＋6 分页、权限／存储错误与缺口；挂起清理可 Esc 关闭、刷新仍可用、重复入口禁用 | 通过 | 使用本地合成 Host，未部署远端 Console |
+
+真实供应商调用、真实账号操作、生产送达、发布与部署均未执行。本轮没有添加自动续跑、补发、合并或发布操作。

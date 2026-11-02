@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
+import { getLogger } from '@zhin.js/logger';
 import { redactStrings } from '../trace/turn-trace-archive.js';
-import type { ScheduleAttemptIdentity, ScheduleHistoryEvent, ScheduleHistoryObserver, ScheduleHistoryProgress, ScheduleHistoryResult, ScheduleRunContext, ScheduleReplayDecision } from './execution-history.js';
+import { collectEnvironmentSecrets } from '../security/outbound-leak-guard.js';
+import type { ScheduleAuditLogger, ScheduleAuditRecord } from './audit-logger.js';
+import type { ScheduleActivityEvent, ScheduleActivityPort } from './activity.js';
+import type { ScheduleAttemptIdentity, ScheduleHistoryEvent, ScheduleHistoryProgress, ScheduleHistoryResult, ScheduleRunContext, ScheduleReplayDecision, ScheduleObservationOwner } from './execution-history.js';
 
 export type ScheduleHistoryStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'budget_partial' | 'interrupted' | 'unsettled';
 export interface ScheduleHistorySummary {
@@ -52,7 +56,7 @@ export interface ScheduleHistoryRepository {
   save(record: ScheduleHistoryRecord): Promise<void>;
   page(query: ScheduleHistoryQuery): Promise<readonly StoredScheduleHistorySummary[]>;
   read(query: ScheduleHistoryRead): Promise<ScheduleHistoryRecord | undefined>;
-  prune(input: Readonly<{ cutoff: number; ownerStartedAt: number }>): Promise<number>;
+  prune(input: Readonly<{ cutoff: number; ownerStartedAt: number; protectedRunIds: readonly string[] }>): Promise<number>;
 }
 /** Host-facing query/management projection; contains no execution or retry authority. */
 export interface ScheduleExecutionHistoryPort {
@@ -139,78 +143,258 @@ function applyHistory(record: ScheduleHistoryRecord, event: Exclude<ScheduleHist
   return { ...record, attempts: record.attempts.map(attempt => attempt === existing ? updated : attempt) };
 }
 
-/** Serialized observational state. Write errors stay observable, but never erase business evidence. */
-export class ScheduleExecutionHistory implements ScheduleHistoryObserver, ScheduleExecutionHistoryPort {
-  #repository: ScheduleHistoryRepository;
-  readonly #pending = new Map<string, ScheduleHistoryRecord>();
+/** Unpersisted terminal observations share one approved generation-local budget. */
+export const SCHEDULE_OBSERVATION_MAX_RUNS = 128;
+export const SCHEDULE_OBSERVATION_MAX_BYTES = 16 * 1024 * 1024;
+
+type AuxiliaryObservation = Readonly<{ kind: 'audit'; record: ScheduleAuditRecord }>
+  | Readonly<{ kind: 'activity'; event: ScheduleActivityEvent }>;
+
+export interface ScheduleExecutionHistoryOptions {
+  /** Omit for audit/activity-only use; this does not enable durable execution history. */
+  readonly repository?: ScheduleHistoryRepository;
+  readonly now?: () => number;
+  readonly ownerStartedAt?: number;
+  /** Defaults to the existing environment-secret collector used by trace storage. */
+  readonly secrets?: readonly string[];
+  /** Both sinks run through this owner's single bounded physical writer. */
+  readonly auditLogger?: ScheduleAuditLogger;
+  readonly activity?: ScheduleActivityPort;
+}
+
+interface ObservationState {
+  readonly runId: string;
+  readonly jobId: string;
+  record?: ScheduleHistoryRecord;
+  auxiliary: readonly AuxiliaryObservation[];
+  revision: number;
+  dirty: boolean;
+  firstWrite: boolean;
+  incomplete: boolean;
+  auxiliaryIncomplete: boolean;
+  bytes?: number;
+}
+interface ObservationWrite {
+  readonly state: ObservationState;
+  readonly record?: ScheduleHistoryRecord;
+  readonly auxiliary: readonly AuxiliaryObservation[];
+  readonly revision: number;
+  readonly bytes: number;
+}
+const terminalObservation = (state: ObservationState): boolean => !state.record || state.record.finishedAt !== undefined;
+const observationBytes = (state: Pick<ObservationState, 'record' | 'auxiliary'>): number =>
+  Buffer.byteLength(JSON.stringify({ record: state.record, auxiliary: state.auxiliary }), 'utf8');
+
+/**
+ * One observational owner, with synchronous acceptance and a single physical writer.
+ * Active executions own their latest snapshot. Completed, unpersisted bodies are bounded;
+ * failed/full records become constant health, never a business retry or an unbounded IO queue.
+ */
+export class ScheduleExecutionHistory implements ScheduleObservationOwner, ScheduleExecutionHistoryPort {
+  #repository?: ScheduleHistoryRepository;
+  readonly #pending = new Map<string, ObservationState>();
   readonly #writeFailures = new Set<string>();
   #incompleteCompletedRuns = 0;
   #lastFailureAt?: number;
   #lastFailedRun?: Readonly<{ runId: string; jobId: string }>;
-  #tail: Promise<void> = Promise.resolve();
+  #writing?: ObservationWrite;
+  #closed = false;
+  #cleanup?: Promise<ScheduleHistoryCleanup>;
+  #drained?: { promise: Promise<void>; resolve: () => void };
   readonly #now: () => number;
   readonly #ownerStartedAt: number;
   readonly #secrets: readonly string[];
-  constructor(input: Readonly<{ repository: ScheduleHistoryRepository; now?: () => number; ownerStartedAt?: number; secrets?: readonly string[] }>) {
+  readonly #auditLogger?: ScheduleAuditLogger;
+  readonly #activity?: ScheduleActivityPort;
+  constructor(input: ScheduleExecutionHistoryOptions = {}) {
     this.#repository = input.repository;
     this.#now = input.now ?? Date.now;
     this.#ownerStartedAt = input.ownerStartedAt ?? Math.trunc(performance.timeOrigin);
-    this.#secrets = input.secrets ?? [];
+    this.#secrets = input.secrets ?? collectEnvironmentSecrets();
+    this.#auditLogger = input.auditLogger;
+    this.#activity = input.activity;
   }
   /** Called before scheduler publication; preserves the configured SQL/file mode. */
   activateRepository(repository: ScheduleHistoryRepository): void { this.#repository = repository; }
-  observe(event: ScheduleHistoryEvent): Promise<void> {
-    // TypeScript structural compatibility does not remove runtime audit/responseText/plan fields.
-    // Project before cloning so the observation channel never retains those additional payloads.
-    const snapshot = redactStrings(structuredClone(historyObservation(event, this.#ownerStartedAt)), this.#secrets);
-    const operation = this.#tail.then(async () => {
-      const runId = snapshot.type === 'run_queued' ? snapshot.record.runId : 'attempt' in snapshot ? snapshot.attempt.runId : snapshot.runId;
-      const existing = this.#pending.get(runId);
-      let record: ScheduleHistoryRecord;
-      if (snapshot.type === 'run_queued') {
-        if (existing) throw new Error('Schedule run identity already exists');
-        record = snapshot.record;
-      } else {
-        const previous = existing ?? await this.#repository.read({ runId });
-        if (!previous) throw new Error('Schedule run was not recorded');
-        record = applyHistory(previous, snapshot);
-      }
-      this.#pending.set(runId, record);
-      try {
-        if (snapshot.type === 'run_queued' && await this.#repository.read({ runId })) throw new Error('Schedule run identity already exists');
-        await this.#repository.save(record);
-        this.#writeFailures.delete(runId);
-        if (this.#lastFailedRun?.runId === runId) this.#lastFailedRun = undefined;
-        if (record.finishedAt !== undefined) this.#pending.delete(runId);
-      } catch (error) {
-        this.#lastFailureAt = this.#now();
-        this.#lastFailedRun = { runId: record.runId, jobId: record.jobId };
-        if (record.finishedAt !== undefined) {
-          // History is observational, not a memory-backed retry queue. Retain only health after
-          // terminal write failure; the execution context has already fixed its business outcome.
-          this.#incompleteCompletedRuns += 1;
-          this.#pending.delete(runId);
-          this.#writeFailures.delete(runId);
-        } else this.#writeFailures.add(runId);
-        throw error;
-      }
-    });
-    this.#tail = operation.catch(() => undefined);
-    return operation;
+
+  observe(event: ScheduleHistoryEvent): void {
+    // Project before copying: structural types do not strip audit/responseText/plan fields.
+    const snapshot = this.#redact(historyObservation(event, this.#ownerStartedAt));
+    const runId = snapshot.type === 'run_queued' ? snapshot.record.runId : 'attempt' in snapshot ? snapshot.attempt.runId : snapshot.runId;
+    const jobId = snapshot.type === 'run_queued' ? snapshot.record.jobId : 'attempt' in snapshot ? snapshot.attempt.jobId : snapshot.jobId;
+    if (this.#closed) { this.#missing({ runId, jobId }); return; }
+    const existing = this.#pending.get(runId);
+    if (snapshot.type === 'run_queued') {
+      if (existing) throw new Error('Schedule run identity already exists');
+      this.#pending.set(runId, { runId, jobId, record: snapshot.record, auxiliary: [], revision: 1,
+        dirty: true, firstWrite: true, incomplete: false, auxiliaryIncomplete: false });
+    } else {
+      if (!existing?.record) throw new Error('Schedule run was not recorded');
+      existing.record = applyHistory(existing.record, snapshot);
+      existing.revision++;
+      existing.dirty = true;
+      existing.bytes = undefined;
+    }
+    this.#admitAndWrite(runId);
   }
+
+  audit({ attempt, record }: Parameters<ScheduleObservationOwner['audit']>[0]): void {
+    // Keep the established JSONL fields only, never arbitrary runtime extensions.
+    const { jobId, executionId, timestamp, createdBy, prompt, toolsResolved, toolsResolvedBy, skillsResolved,
+      missingTools, missingSkills, toolsUsed, toolCallCount, tokenUsage, durationMs, budgetTerminated,
+      securityDenials, success, outputLength, outputStripped, error } = record;
+    const snapshot = this.#redact({ jobId, executionId, timestamp, createdBy, prompt, toolsResolved, toolsResolvedBy,
+      skillsResolved, missingTools, missingSkills, toolsUsed, toolCallCount, tokenUsage, durationMs, budgetTerminated,
+      securityDenials, success, outputLength, outputStripped, error });
+    const state = this.#auxiliaryState(attempt);
+    if (!state) return;
+    state.auxiliary = [...state.auxiliary, { kind: 'audit', record: snapshot }];
+    state.revision++; state.dirty = true; state.bytes = undefined;
+    this.#admitAndWrite(attempt.runId);
+  }
+
+  activity({ attempt, event }: Parameters<ScheduleObservationOwner['activity']>[0]): void {
+    const state = this.#auxiliaryState(attempt);
+    if (!state) return;
+    // Preserve the established callback payload and acceptance order; it shares the same byte budget.
+    state.auxiliary = [...state.auxiliary, { kind: 'activity', event: this.#redact(event) }];
+    state.revision++; state.dirty = true; state.bytes = undefined;
+    this.#admitAndWrite(attempt.runId);
+  }
+
+  #redact<T>(value: T): T {
+    // Reuse the trace credential scrubber, and omit image bytes in every observation string.
+    return JSON.parse(JSON.stringify(redactStrings(value, this.#secrets), (_key, entry: unknown) =>
+      typeof entry === 'string' ? withoutInlineImages(entry) : entry)) as T;
+  }
+  #auxiliaryState(attempt: ScheduleAttemptIdentity): ObservationState | undefined {
+    if (this.#closed) { this.#missing(attempt); return; }
+    let state = this.#pending.get(attempt.runId);
+    if (!state) {
+      state = { runId: attempt.runId, jobId: attempt.jobId, auxiliary: [], revision: 0,
+        dirty: false, firstWrite: true, incomplete: false, auxiliaryIncomplete: false };
+      this.#pending.set(attempt.runId, state);
+    }
+    if (state.jobId !== attempt.jobId) throw new Error('Schedule observation job identity mismatch');
+    return state;
+  }
+  #missing(run: Readonly<{ runId: string; jobId: string }>): void {
+    this.#incompleteCompletedRuns++;
+    this.#lastFailureAt = this.#now();
+    this.#lastFailedRun = { runId: run.runId, jobId: run.jobId };
+  }
+  #drop(state: ObservationState): void {
+    this.#markIncomplete(state);
+    if (this.#pending.get(state.runId) === state) {
+      this.#pending.delete(state.runId);
+      this.#writeFailures.delete(state.runId);
+    }
+    // An in-flight write retains only its already-issued immutable snapshot, not this newer body.
+    state.record = undefined; state.auxiliary = []; state.dirty = false; state.bytes = undefined;
+  }
+  #markIncomplete(state: ObservationState): void {
+    if (!state.incomplete) { state.incomplete = true; this.#missing(state); }
+    if (state.record && !state.record.recordingIssue) {
+      state.record = { ...state.record, recordingIssue: true }; state.bytes = undefined;
+    }
+  }
+  #admitAndWrite(runId: string): void {
+    const state = this.#pending.get(runId)!;
+    if (terminalObservation(state)) {
+      if (state.auxiliaryIncomplete) this.#markIncomplete(state);
+      const { runs, bytes } = this.#reservation();
+      if (runs.size > SCHEDULE_OBSERVATION_MAX_RUNS || bytes > SCHEDULE_OBSERVATION_MAX_BYTES) this.#drop(state);
+    }
+    this.#pump();
+  }
+  #reservation(): { runs: Set<string>; bytes: number } {
+    const runs = new Set<string>();
+    let bytes = 0;
+    for (const state of this.#pending.values()) {
+      if (terminalObservation(state)) { runs.add(state.runId); bytes += state.bytes ??= observationBytes(state); }
+    }
+    if (this.#writing) {
+      const current = this.#pending.get(this.#writing.state.runId);
+      runs.add(this.#writing.state.runId);
+      // Reserve every physical in-flight body now, even while its execution is active:
+      // that driver reference cannot be revoked when the run later becomes terminal.
+      if (current !== this.#writing.state || !terminalObservation(current) || current.revision !== this.#writing.revision) bytes += this.#writing.bytes;
+    }
+    return { runs, bytes };
+  }
+  #pump(): void {
+    if (this.#writing || this.#closed) return;
+    const reserved = this.#reservation();
+    const state = [...this.#pending.values()].find(candidate => {
+      if (!candidate.dirty) return false;
+      if (terminalObservation(candidate)) return true;
+      // Keep a blocked active snapshot on its existing owner, not in a second IO queue.
+      // A later observation or completed write can make room; no timer or busy retry.
+      return reserved.runs.size < SCHEDULE_OBSERVATION_MAX_RUNS
+        && reserved.bytes + (candidate.bytes ??= observationBytes(candidate)) <= SCHEDULE_OBSERVATION_MAX_BYTES;
+    });
+    if (!state) { this.#drained?.resolve(); this.#drained = undefined; return; }
+    state.dirty = false;
+    const write: ObservationWrite = { state, record: state.record, auxiliary: state.auxiliary,
+      revision: state.revision, bytes: state.bytes ??= observationBytes(state) };
+    this.#writing = write;
+    void this.#persist(write);
+  }
+  async #persist(write: ObservationWrite): Promise<void> {
+    const state = write.state;
+    const attempted: AuxiliaryObservation[] = [];
+    try {
+      const repository = this.#repository;
+      if (repository && write.record) {
+        if (state.firstWrite) {
+          if (await repository.read({ runId: state.runId })) throw new Error('Schedule run identity already exists');
+          // Save may persist and then fail. The confirmed absence check still belongs to
+          // this state, so its next new fact must not mistake that write for an external run.
+          state.firstWrite = false;
+        }
+        await repository.save(write.record);
+      }
+      if (this.#closed) return;
+      for (const fact of write.auxiliary) {
+        attempted.push(fact);
+        if (fact.kind === 'audit') await this.#auditLogger?.write(fact.record);
+        else await this.#activity?.publish(fact.event);
+        if (this.#closed) return;
+      }
+      if (!state.auxiliaryIncomplete) this.#writeFailures.delete(state.runId);
+      if (this.#lastFailedRun?.runId === state.runId && !state.incomplete && !state.auxiliaryIncomplete) this.#lastFailedRun = undefined;
+    } catch {
+      if (attempted.length) state.auxiliaryIncomplete = true;
+      this.#lastFailureAt = this.#now();
+      this.#lastFailedRun = { runId: state.runId, jobId: state.jobId };
+      if (terminalObservation(state)) {
+        this.#drop(state);
+      } else this.#writeFailures.add(state.runId);
+    } finally {
+      // Each captured auxiliary fact is attempted once. Newer facts remain on the same run,
+      // not in a second Promise queue, and a later snapshot can repair an active history gap.
+      state.auxiliary = state.auxiliary.filter(fact => !attempted.includes(fact));
+      state.bytes = undefined;
+      if (this.#pending.get(state.runId) === state && state.revision === write.revision && terminalObservation(state)) this.#pending.delete(state.runId);
+      this.#writing = undefined;
+      if (this.#closed) { this.#drained?.resolve(); this.#drained = undefined; }
+      else this.#pump();
+    }
+  }
+
   async page(query: ScheduleHistoryQuery): Promise<ScheduleHistoryPage> {
-    await this.#tail;
     if (!Number.isSafeInteger(query.limit) || query.limit < 1) throw new TypeError('History limit must be a positive integer');
-    const persisted = await this.#repository.page({ ...query, limit: query.limit + this.#writeFailures.size + 1 });
+    const persisted = await this.#repository?.page({ ...query, limit: query.limit + this.#pending.size + 1 }) ?? [];
     const rows = new Map(persisted.map(({ ownerStartedAt, ...row }): [string, ScheduleHistorySummary] => {
-      const active = this.#pending.get(row.runId);
-      const status = active?.status ?? (row.finishedAt === undefined ? ownerStartedAt !== this.#ownerStartedAt ? 'interrupted' : 'unsettled' : row.status);
+      const pending = this.#pending.get(row.runId)?.record;
+      const status = pending?.status ?? (row.finishedAt === undefined ? ownerStartedAt !== this.#ownerStartedAt ? 'interrupted' : 'unsettled' : row.status);
       return [row.runId, { ...row, status,
         ...(this.#incompleteCompletedRuns > 0 && this.#lastFailedRun?.runId === row.runId ? { recordingIssue: true } : {}) }];
     }));
-    for (const runId of this.#writeFailures) {
-      const pending = this.#pending.get(runId);
-      if (pending && matchesHistory(pending, query)) rows.set(runId, { ...historySummary(pending), recordingIssue: true });
+    for (const state of this.#pending.values()) {
+      const record = state.record;
+      if (record && matchesHistory(record, query)) rows.set(state.runId, { ...historySummary(record),
+        ...(this.#writeFailures.has(state.runId) ? { recordingIssue: true } : {}) });
     }
     const sorted = [...rows.values()].sort(compareHistory);
     const runs = sorted.slice(0, query.limit);
@@ -218,23 +402,45 @@ export class ScheduleExecutionHistory implements ScheduleHistoryObserver, Schedu
     return { runs, recordingHealth: this.health(), ...(sorted.length > query.limit && last ? { nextCursor: { queuedAt: last.queuedAt, key: historyKey(last.runId) } } : {}) };
   }
   async read(query: ScheduleHistoryRead): Promise<ScheduleHistoryRecord | undefined> {
-    await this.#tail;
-    const pending = this.#pending.get(query.runId);
+    const pending = this.#pending.get(query.runId)?.record;
     if (pending && (!query.jobId || pending.jobId === query.jobId)) return { ...pending, ...(this.#writeFailures.has(query.runId) ? { recordingIssue: true } : {}) };
-    const record = await this.#repository.read(query);
+    const record = await this.#repository?.read(query);
     return record ? { ...recoveredHistory(record, this.#ownerStartedAt),
       ...(this.#incompleteCompletedRuns > 0 && this.#lastFailedRun?.runId === record.runId ? { recordingIssue: true } : {}) } : undefined;
   }
-  async cleanup(): Promise<ScheduleHistoryCleanup> {
-    await this.#tail;
+  cleanup(): Promise<ScheduleHistoryCleanup> {
+    if (this.#closed) return Promise.reject(new Error('Schedule history owner is closed'));
+    if (this.#cleanup) return this.#cleanup;
     const cutoff = scheduleHistoryCutoff(this.#now());
-    const deleted = await this.#repository.prune({ cutoff, ownerStartedAt: this.#ownerStartedAt });
-    for (const [runId, record] of this.#pending) {
-      if (record.finishedAt !== undefined && record.queuedAt < cutoff) { this.#pending.delete(runId); this.#writeFailures.delete(runId); }
-    }
-    return { deleted, cutoff };
+    const protectedRunIds = [...new Set([...this.#pending.keys(), ...(this.#writing ? [this.#writing.state.runId] : [])])];
+    this.#cleanup = (async () => ({ deleted: await this.#repository?.prune({ cutoff, ownerStartedAt: this.#ownerStartedAt, protectedRunIds }) ?? 0, cutoff }))()
+      .finally(() => { this.#cleanup = undefined; });
+    return this.#cleanup;
   }
-  async drain(): Promise<void> { await this.#tail; }
+  /** Existing startup/hourly maintenance is observational, never a publication or shutdown dependency. */
+  housekeeping(): void {
+    if (this.#closed || this.#cleanup) return;
+    void this.cleanup().catch(() => getLogger('schedule-history').warn('Schedule execution history cleanup failed'));
+  }
+  /** Explicit flush for tests/callers that choose to wait. Lifecycle shutdown uses close(), never drain(). */
+  drain(): Promise<void> {
+    if (!this.#writing) this.#pump();
+    if (!this.#writing) return Promise.resolve();
+    if (!this.#drained) {
+      let resolve!: () => void;
+      const promise = new Promise<void>(done => { resolve = done; });
+      this.#drained = { promise, resolve };
+    }
+    return this.#drained.promise;
+  }
+  /** Stops admission immediately. Already-issued driver IO cannot be cancelled by this owner. */
+  close(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    for (const state of this.#pending.values()) this.#drop(state);
+    if (this.#writing && !this.#writing.state.incomplete) this.#drop(this.#writing.state);
+    this.#drained?.resolve(); this.#drained = undefined;
+  }
   health(): ScheduleHistoryHealth {
     return { activeWriteFailures: this.#writeFailures.size, incompleteCompletedRuns: this.#incompleteCompletedRuns,
       lastFailureAt: this.#lastFailureAt, lastRun: this.#lastFailedRun };

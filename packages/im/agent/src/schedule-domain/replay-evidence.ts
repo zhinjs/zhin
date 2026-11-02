@@ -31,7 +31,7 @@ export class AttemptReplayEvidence implements ToolOperationEvidencePort {
     const report: ReturnType<ToolOperationEvidencePort['started']>['report'] = ({ disposition }) => {
       const previous = this.#operations[index]!;
       // A later rejected action cannot erase an earlier confirmed effect in this invocation.
-      const status = previous.status === 'committed' && disposition === 'not_submitted' ? 'committed'
+      const status = previous.status === 'committed' ? 'committed'
         : disposition === 'not_submitted' ? 'safe' : disposition;
       this.#operations[index] = Object.freeze({ ...record, status });
     };

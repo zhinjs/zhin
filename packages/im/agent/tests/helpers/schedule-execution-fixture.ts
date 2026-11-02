@@ -1,7 +1,7 @@
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
 import { JobWorker } from '../../src/assistant/job-worker.js';
-import { createNotificationRouter } from '../../src/assistant/notification-router.js';
+import { createNotificationRouter, type NotificationRouter } from '../../src/assistant/notification-router.js';
 import { createTaskExecutor } from '../../src/task-executor.js';
 import { ScheduleExecutionDomainImpl } from '../../src/schedule-domain/execution-domain.js';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
@@ -10,7 +10,8 @@ import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import { createNativeFileToolFeatures } from '../../src/plugin-runtime/native-file-tools.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import type { ScheduleJob } from '../../src/assistant/types.js';
-import type { ScheduleHistoryEvent, ScheduleHistoryObserver } from '../../src/schedule-domain/execution-history.js';
+import type { ScheduleHistoryEvent, ScheduleHistoryObserver, ScheduleObservationOwner } from '../../src/schedule-domain/execution-history.js';
+import { ScheduleExecutionHistory } from '../../src/schedule-domain/execution-history-store.js';
 
 export const scheduleFixtureJob: ScheduleJob = {
   id: 'replay-test', enabled: true, schedule: { kind: 'every', everyMs: 60_000 },
@@ -29,6 +30,8 @@ export function createScheduleExecutionFixture(options: {
   readonly historyFailure?: boolean;
   readonly history?: ScheduleHistoryObserver;
   readonly afterTool?: (signal: AbortSignal) => Promise<void>;
+  readonly router?: NotificationRouter;
+  readonly observations?: ScheduleObservationOwner;
 } = {}) {
   let effects = 0;
   const events: ScheduleHistoryEvent[] = [];
@@ -38,8 +41,13 @@ export function createScheduleExecutionFixture(options: {
     execute: vi.fn(async () => { effects++; return 'Action complete'; }),
   } as ToolCapability;
   let turns = 0;
-  const domain = new ScheduleExecutionDomainImpl({ config: DEFAULT_CONFIG,
+  const ownedObservations = options.observations ? undefined : new ScheduleExecutionHistory({
     auditLogger: { write: async () => { if (options.auditFailure) throw new Error('audit unavailable'); } },
+    activity: { publish: async () => { if (options.activityFailure) throw new Error('activity unavailable'); } },
+  });
+  const observations = options.observations ?? ownedObservations!;
+  const domain = new ScheduleExecutionDomainImpl({ config: DEFAULT_CONFIG,
+    observations,
     turn: { execute: async request => {
       turns++;
       const turn = createTurnIngress({
@@ -71,10 +79,10 @@ export function createScheduleExecutionFixture(options: {
     events.push(event); if (options.historyFailure) throw new Error('history unavailable');
     await options.history?.observe(event);
   } };
-  const executor = createTaskExecutor({ domain, router: createNotificationRouter({ resolveAdapter: () => undefined }), history,
-    activity: { publish: async () => { if (options.activityFailure) throw new Error('activity unavailable'); } } });
+  const executor = createTaskExecutor({ domain, router: options.router ?? createNotificationRouter({ resolveAdapter: () => undefined }), history, observations });
   const worker = new JobWorker({ executor, history, queue: { maxRetries: 1, maxConcurrency: 1, defaultTimeoutMs: 5_000 } });
-  return { worker, executor, events, effects: () => effects, turns: () => turns };
+  const dispose = async () => { await worker.stop(); await executor.dispose(); ownedObservations?.close(); };
+  return { worker, executor, observations, dispose, events, effects: () => effects, turns: () => turns };
 }
 
 /** A real file-action owner with an explicit authorized workspace; no provider or platform IO. */

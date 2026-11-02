@@ -84,9 +84,6 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     }
     if (sql) await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
     if (sql) foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
-    await foundation.schedule.history.cleanup().catch(() => {
-      getLogger('agent').warn('op=schedule_history_prune status=failed; 执行历史清理失败');
-    });
     if (sql && raw) {
       await ensureDatabaseIndex(raw, 'agent_schedule_runs', 'agent_schedule_runs_job_time', [{ name: 'job_id', text: true }, { name: 'queued_at' }, { name: 'id', text: true }]);
       await ensureDatabaseIndex(raw, 'agent_schedule_runs', 'agent_schedule_runs_time', [{ name: 'queued_at' }, { name: 'id', text: true }]);
@@ -119,11 +116,15 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       pendingStart = foundation.schedule.start().catch(() => {
         getLogger('agent').warn('op=schedule_start status=failed; 定时任务启动失败');
       });
+      // The history owner coalesces cleanup and owns its errors; driver IO cannot gate publication or shutdown.
+      foundation.schedule.history.housekeeping();
       // Diagnostic storage must not delay generation publication or Agent admission.
       pendingPrune = pruneTraceArchive().finally(() => { pendingPrune = undefined; });
       if (usage || decisions() || pruneTraces || foundation.agent.getGroupRules?.()?.persistent || foundation.schedule.history) {
         timer = setInterval(() => {
-          if (stopped || pendingPrune) return;
+          if (stopped) return;
+          foundation.schedule.history.housekeeping();
+          if (pendingPrune) return;
           pendingPrune = Promise.all([
             usage?.prune().catch(() => {
               getLogger('agent').warn('op=usage_prune status=failed; 用量保留期清理失败');
@@ -132,9 +133,6 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
             decisions()?.prune(auditRetentionDays),
             pruneTraceArchive(),
             pruneGroupRules(),
-            foundation.schedule.history.cleanup().catch(() => {
-              getLogger('agent').warn('op=schedule_history_prune status=failed; 执行历史清理失败');
-            }),
           ]).then(() => undefined).finally(() => { pendingPrune = undefined; });
         }, 3_600_000);
         timer.unref();

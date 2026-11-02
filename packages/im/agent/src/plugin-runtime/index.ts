@@ -27,6 +27,7 @@ export * from '../schedule-domain/execution-history.js';
 export * from '../schedule-domain/execution-history-store.js';
 export * from '../schedule-domain/execution-history-file.js';
 export * from '../schedule-domain/execution-history-sql.js';
+export { JsonlScheduleAuditLogger } from '../schedule-domain/audit-logger.js';
 export {
   createSessionTreeRuntimeFromAgent,
   type SessionTreeRuntimeHandle,
