@@ -187,6 +187,22 @@ describe('shared runtime Adapter page production handlers', () => {
     localStorage.setItem('zhin_api_base', 'https://host-a.test'); expect(await f.h.exports.resolveAdapterConsolePluginId!('icqq')).toBe('plugin-a'); f.h.unmount();
   });
 
+  it('resolves adapter console owner from npm adapter-*/pages sources as well as workspace adapters/*/pages', async () => {
+    const f = fixture(); await f.h.settle();
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).endsWith('/console/api/pages')) {
+        return Response.json({ pages: [
+          { owner: 'root/icqq', localName: 'index', source: 'node_modules/@zhin.js/adapter-icqq/pages/index/index.ts', route: '/icqq' },
+          { owner: 'root/qq', localName: 'index', source: 'node_modules/@zhin.js/adapter-qq/pages/index.tsx', route: '/qq' },
+        ] });
+      }
+      return Response.json({ success: true, data: {} });
+    }));
+    expect(await f.h.exports.resolveAdapterConsolePluginId!('icqq')).toBe('root/icqq');
+    expect(await f.h.exports.resolveAdapterConsolePluginId!('qq')).toBe('root/qq');
+    f.h.unmount();
+  });
+
   it('keeps retiring accounts read-only and disables migration actions for nonoperators', async () => {
     const s = status(); s.runtime = { ...s.runtime!, needsMigration: true, canMigrate: false, endpoints: s.runtime!.endpoints.map(value => ({ ...value, retiring: true })) };
     const f = fixture(s); await f.h.settle(); expect(f.h.text()).toContain('正在关闭'); expect(f.h.text()).toContain('首次迁移需要管理员确认');
