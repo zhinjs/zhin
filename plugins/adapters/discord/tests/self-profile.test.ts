@@ -1,17 +1,53 @@
 import { createDiscordSelfProfile, createDiscordRestSelfProfile } from '../src/self-profile.js';
 import { Client, ClientUser } from 'discord.js';
 import { EndpointProfileState } from '@zhin.js/adapter';
+import { DiscordRestClient } from '../src/endpoint.js';
 
 describe('Discord own account profile', () => {
+  it('preserves confirmed fields when the actual REST client receives a native 400 rejection', async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'GET'
+      ? { id: '123', username: 'Confirmed name', avatar: null }
+      : { code: 50035, message: 'Invalid Form Body' }), { status: init?.method === 'GET' ? 200 : 400 }));
+    const state = new EndpointProfileState({ source: createDiscordRestSelfProfile(new DiscordRestClient('synthetic', fetch as typeof globalThis.fetch), vi.fn()), defaults: {} });
+    const signal = new AbortController().signal;
+    await state.read({ signal });
+    expect(await state.write({ signal, change: { field: 'nickname', value: 'Rejected name' } })).toMatchObject({ status: 'rejected' });
+    expect(state.peek().values.nickname).toBe('Confirmed name');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([408, 500, 502])('keeps actual HTTP %s uncertain rather than treating it as a platform rejection', async status => {
+    const client = new DiscordRestClient('synthetic', (async () => new Response(JSON.stringify({ code: 50035, message: 'Gateway failure' }), { status })) as typeof globalThis.fetch);
+    const port = createDiscordRestSelfProfile(client, vi.fn());
+    expect(await port.write!({ signal: new AbortController().signal, change: { field: 'nickname', value: 'Unknown' } }))
+      .toMatchObject({ status: 'unknown' });
+  });
+
+  it('does not call a proxy HTML 400 a native rejection or expose transport details in its message', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('<html>proxy failed</html>', { status: 400 }))
+      .mockRejectedValueOnce(new Error('Transport failed at https://synthetic.invalid/?secret=private'));
+    const port = createDiscordRestSelfProfile(new DiscordRestClient('synthetic', fetch), vi.fn());
+    const signal = new AbortController().signal;
+    expect(await port.write!({ signal, change: { field: 'nickname', value: 'One' } })).toMatchObject({ status: 'unknown' });
+    const result = await port.write!({ signal, change: { field: 'nickname', value: 'Two' } });
+    expect(result.status).toBe('unknown');
+    expect(result.message).not.toContain('private');
+  });
+
+  it('retains a real HTTP success ACK even when the account response JSON cannot be parsed', async () => {
+    const port = createDiscordRestSelfProfile(new DiscordRestClient('synthetic', (async () => new Response('invalid JSON', { status: 200 })) as typeof globalThis.fetch), vi.fn());
+    expect(await port.write!({ signal: new AbortController().signal, change: { field: 'nickname', value: 'Accepted' } }))
+      .toEqual({ status: 'updated' });
+  });
   it('keeps a confirmed REST write ACK when its returned profile cannot be projected', async () => {
     const request = vi.fn(async () => ({ id: '123', username: 'Accepted' }));
     const report = vi.fn(), port = createDiscordRestSelfProfile({ request } as never, report);
     expect(await port.write!({ signal: new AbortController().signal, change: { field: 'nickname', value: 'Accepted' } }))
       .toEqual({ status: 'updated' });
     expect(report).not.toHaveBeenCalled();
-    request.mockRejectedValueOnce(new Error('PATCH rejected'));
+    request.mockRejectedValueOnce(new TypeError('Unexpected request implementation error'));
     await expect(port.write!({ signal: new AbortController().signal, change: { field: 'nickname', value: 'No' } }))
-      .rejects.toThrow('PATCH rejected');
+      .rejects.toThrow('Unexpected request implementation error');
   });
   it('projects the native current user and preserves a native avatar clear', async () => {
     const user = { id: '123', username: 'Real bot', avatarURL: () => null,
