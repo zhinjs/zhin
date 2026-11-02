@@ -1,0 +1,200 @@
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_dc09b004ea6ec5 19-20
+packages/im/agent/src/assistant/job-worker.ts
+  s_9622fd28aba994::t_28c582980145bf 83-85
+  s_9622fd28aba994::t_f704be2950d8aa 77,81,89
+  s_9622fd28aba994::t_d60c7ec3bd661c 50-51,53-54,75,88,94,101
+  s_9622fd28aba994::t_b965fd047d0d86 5,10-14,20,27,31,42,44,46-49,55-57,59,63,74,76,78-80,82,87,90,98-99
+  s_9622fd28aba994::t_57ed7ebc22a3cb 64-72
+  s_9622fd28aba994::t_cb1a36c74e6b60 52
+  s_9622fd28aba994::t_4fd7b3806785b9 6,100
+basic/cli/src/plugin-runtime/console/schedule-execution-routes.ts
+  s_9622fd28aba994::t_3e8bde8c3693bd 1-6,8-10,12-13,15-26,35-52,54-64
+  s_9622fd28aba994::t_fe7d43e1fdc309 7
+  s_9622fd28aba994::t_e83f99e441663e 27-28,31-34,53
+  s_9622fd28aba994::t_5d3143fe0dacdd 29-30
+  s_9622fd28aba994::t_f1760eabe62f33 11,14
+packages/im/agent/tests/schedule-domain/replay-safety.test.ts
+  s_9622fd28aba994::t_9e077199b1377b 11
+  s_9622fd28aba994::t_9e2e768b28834b 40-43,45-60
+  s_9622fd28aba994::t_4a5921672ebf56 1-3,5-10,12-31,33-39,61-79
+  s_9622fd28aba994::t_366b16e64c636b 4,32,44
+basic/cli/tests/plugin-runtime/agent/schedule-history.test.ts
+  s_9622fd28aba994::t_e1a5d47f833e10 125-142,172-173
+  s_9622fd28aba994::t_5d3143fe0dacdd 89-90
+  s_9622fd28aba994::t_2e637644a2e844 7-8,143-171
+  s_9622fd28aba994::t_a03e48281fe44a 1-6,9-65,69-88,91-124,174-176,178-186,189-199
+  s_9622fd28aba994::t_f782bef1c283d2 66-68,177,187-188
+packages/im/agent/src/schedule-domain/budget-guard.ts
+  s_9622fd28aba994::t_6ccf63bf94dd8d 58-61
+packages/im/im-contract/src/endpoint.ts
+  s_9622fd28aba994::t_fc22e85348586b 45-46,51,56
+packages/im/agent/src/schedule-domain/execution-result.ts
+  s_9622fd28aba994::t_b965fd047d0d86 1-26
+packages/im/agent/src/plugin-runtime/native-file-tools.ts
+  s_9622fd28aba994::t_6e61a0c19ff578 139,160
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_9622fd28aba994::t_37cd1f5e80f02b 20,95
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_9622fd28aba994::t_fc22e85348586b 234,258,398,405-407,410
+basic/cli/src/plugin-runtime/console/agent-routes.ts
+  s_9622fd28aba994::t_3e8bde8c3693bd 9,23
+packages/im/agent/tests/schedule-domain/schedule-execution-queue.test.ts
+  s_9622fd28aba994::t_9439247df4143d 25-43
+  s_9622fd28aba994::t_e1fe0117b530fe 13-24
+  s_9622fd28aba994::t_8673ee526d108f 76
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  s_9622fd28aba994::t_8a2e22d66a7084 8-9,32,82-83,102-103
+packages/im/agent/tests/schedule-domain/execution-domain.test.ts
+  s_9622fd28aba994::t_cf4f6aac7a26d0 19-30
+packages/im/agent/tests/plugin-runtime/native-self-profile-tools.test.ts
+  s_9622fd28aba994::t_228c73babf8e83 4,14,28,35,41,85-99
+  s_9622fd28aba994::t_bf7a6321ba976e 100-101
+packages/im/agent/src/schedule-domain/execution-history.ts
+  s_9622fd28aba994::t_5d3143fe0dacdd 40
+  s_9622fd28aba994::t_5f9b45902e1f02 1-25,27-35,41-55,60-64,66-72
+  s_9622fd28aba994::t_e42cc13f4130be 26
+  s_9622fd28aba994::t_2f7bd3eab7f721 36-39
+  s_9622fd28aba994::t_a4e16a8f9ea512 56-59,65
+basic/cli/tests/plugin-runtime/console/schedule-execution-routes.test.ts
+  s_9622fd28aba994::t_4067b3e55d1d31 2-3,5-6,8-27,29-84,93-128
+  s_9622fd28aba994::t_27c40f7b516474 1,185-187
+  s_9622fd28aba994::t_48050566505f30 129-160,175-183,190-191,232-233
+  s_9622fd28aba994::t_fa6fc2624cfaa4 85-92
+  s_9622fd28aba994::t_fe7d43e1fdc309 4,7,28,192-218,220-231
+  s_9622fd28aba994::t_8f8de6a859c5b0 161-174,184,188-189
+  s_9622fd28aba994::t_266f596bf9f892 219
+packages/im/agent/src/assistant/job-engine.ts
+  s_9622fd28aba994::t_577a93c119ec40 72-73,85
+  s_9622fd28aba994::t_4fd7b3806785b9 76,86
+packages/im/agent/tests/assistant/event-ingress.test.ts
+  s_9622fd28aba994::t_cf4f6aac7a26d0 74,115
+packages/im/agent/src/outbound/send-proactive.ts
+  s_9622fd28aba994::t_fc22e85348586b 5,19-20
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9622fd28aba994::t_dc09b004ea6ec5 271-272
+packages/im/tool/tests/tool.test.ts
+  s_9622fd28aba994::t_1ce1b99c0c37a8 37-50
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  s_9622fd28aba994::t_dc09b004ea6ec5 166
+packages/im/agent/src/assistant/notification-router.ts
+  s_9622fd28aba994::t_fc22e85348586b 8,16,33,146,150
+  s_9622fd28aba994::t_4f206b9144f2f2 144
+packages/im/agent/src/plugin-runtime/index.ts
+  s_9622fd28aba994::t_9446f33a2905ef 26-29
+packages/im/core/tests/plugin-runtime/outbound-locale.test.ts
+  s_9622fd28aba994::t_ba3ee06eb27cfa 9,14,20-24,106-149,151
+  s_9622fd28aba994::t_7ce4d1be280ac8 10-12,150
+packages/im/agent/src/plugin-runtime/agent-host-port.ts
+  s_9622fd28aba994::t_9446f33a2905ef 7,45-46
+packages/im/tool/src/tool-index.ts
+  s_9622fd28aba994::t_6e61a0c19ff578 144
+packages/im/agent/src/schedule-domain/execution-failure.ts
+  s_9622fd28aba994::t_67897c71b13726 1-18
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_9622fd28aba994::t_63b98c45fd750f 267-270
+  s_9622fd28aba994::t_fc22e85348586b 266,271-272
+docs/authoring/agent-tools.md
+  s_9622fd28aba994::t_1ce1b99c0c37a8 150-151
+packages/im/agent/src/schedule-domain/execution-history-file.ts
+  s_9622fd28aba994::t_a2e1cd8beb1474 1-6,8-22,27-32,34-74,77,79-85,87-103
+  s_9622fd28aba994::t_f782bef1c283d2 23-26
+  s_9622fd28aba994::t_90b5b2fe034e44 7,33,75-76,78,86
+docs/plans/schedule-outcome-retry-safety.md
+  s_9622fd28aba994::t_9fcf64fb372cb6 263-274
+  s_9622fd28aba994::t_d53a83b9f4ebdf 13,181,183-184,245,247-248
+  s_9622fd28aba994::t_90b5b2fe034e44 210-212,215-217
+  s_9622fd28aba994::t_ef2268f6b515a0 2,6,8,10-11,15,17,19,21-30,33,35-82,85-94,97,99-100,103-105,107,109,111-112,114-117,120-124,127,129,131,136-141,144,146-155,157,159-180,182,185-209,213-214,218-244,246,249,275
+  s_9622fd28aba994::t_525b8241efa624 113,118-119,125-126,128,130,132-135
+  s_9622fd28aba994::t_482b827bde5f1a 250-262
+packages/im/tool/src/definition.ts
+  s_9622fd28aba994::t_6e61a0c19ff578 107-110,113,139
+  s_9622fd28aba994::t_1ce1b99c0c37a8 106,112,138
+packages/im/agent/tests/assistant/job-engine.test.ts
+  s_9622fd28aba994::t_cf4f6aac7a26d0 26-48
+packages/im/agent/src/schedule-domain/attempt-context.ts
+  s_9622fd28aba994::t_42868ea483b408 1-20
+packages/im/agent/src/assistant/event-ingress.ts
+  s_9622fd28aba994::t_577a93c119ec40 130,147
+packages/im/agent/src/schedule-domain/execution-domain.ts
+  s_9622fd28aba994::t_e24717ab7169b4 146-147
+  s_9622fd28aba994::t_6ccf63bf94dd8d 4,20-24,34,41,60,113-114,140,142-145,148-155,230
+  s_9622fd28aba994::t_367c3f13aad8e6 234
+  s_9622fd28aba994::t_ce8fe339b85ea6 35,189,231
+  s_9622fd28aba994::t_cb1a36c74e6b60 220-221
+packages/im/agent/src/task-executor.ts
+  s_9622fd28aba994::t_67897c71b13726 5,22-25,33-41,53,59,90-91,93-96,99,109,119,121-123,127,142,153,166-167,181-183,186-188,198
+  s_9622fd28aba994::t_28c582980145bf 177-179,190-192,197
+  s_9622fd28aba994::t_cb1a36c74e6b60 102-103,185,195
+  s_9622fd28aba994::t_d60c7ec3bd661c 97-98,151,172,184,194
+  s_9622fd28aba994::t_577a93c119ec40 92
+  s_9622fd28aba994::t_b965fd047d0d86 26,189,193,196
+  s_9622fd28aba994::t_f704be2950d8aa 124-126
+  s_9622fd28aba994::t_4f206b9144f2f2 6,42,160-162,164-165,168-170,254-264
+packages/im/agent/src/schedule-domain/execution-history-sql.ts
+  s_9622fd28aba994::t_90b5b2fe034e44 61
+  s_9622fd28aba994::t_f66b36bf4f8cb6 2-6,8-10,12-14,16-31,33-43,45-60,62-67,69,71-86
+  s_9622fd28aba994::t_7f43f01d80c1de 1,7,11,15,32,44,68,70
+basic/cli/src/plugin-runtime/agent/assistant-runtime.ts
+  s_9622fd28aba994::t_5d3143fe0dacdd 2,96,101,103
+  s_9622fd28aba994::t_9446f33a2905ef 40-41,70,76,124,134,204,216,266
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9622fd28aba994::t_dc09b004ea6ec5 259-260
+  s_9622fd28aba994::t_6e61a0c19ff578 258,261
+packages/im/agent/src/tool/tool-operation-evidence.ts
+  s_9622fd28aba994::t_6e61a0c19ff578 12,14-15
+  s_9622fd28aba994::t_dc09b004ea6ec5 1-11,13
+packages/im/agent/src/plugin-runtime/native-self-profile-tools.ts
+  s_9622fd28aba994::t_228c73babf8e83 3,62-71
+  s_9622fd28aba994::t_6e61a0c19ff578 72-74
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  s_9622fd28aba994::t_37cd1f5e80f02b 8,48-49,86-94,124,135-137
+packages/im/agent/src/schedule-domain/execution-history-store.ts
+  s_9622fd28aba994::t_e1a5d47f833e10 205
+  s_9622fd28aba994::t_5d3143fe0dacdd 88,108,183,206-210
+  s_9622fd28aba994::t_716213e882ee8d 157
+  s_9622fd28aba994::t_2ea32b9d2e63f1 110-115,163-165,167,172
+  s_9622fd28aba994::t_668382687e7f6b 1-3,5,7-23,25-34,36-41,49-52,54-61,63-65,67,69-87,89-96,98,100,116-118,121-125,128-133,136,139-146,150-156,158-162,166,178-179,181-182,184,197-204,211-217,219-224,227-237,242
+  s_9622fd28aba994::t_a4e16a8f9ea512 4,24,134-135
+  s_9622fd28aba994::t_e714d4bee6d4f6 35,53,66,68,101,103-107,109,120,137,168-171,173-177,180
+  s_9622fd28aba994::t_e42cc13f4130be 6
+  s_9622fd28aba994::t_f1760eabe62f33 97,99,102,119,138
+  s_9622fd28aba994::t_e83f99e441663e 42-48,62,147-149,185-196,218,225-226,238-241
+  s_9622fd28aba994::t_353a1fa89bc4c9 126-127
+packages/im/agent/src/schedule-domain/replay-evidence.ts
+  s_9622fd28aba994::t_6e61a0c19ff578 22-24,29-30,32-36
+  s_9622fd28aba994::t_9aaf73ff8046d2 9,28,43,46
+  s_9622fd28aba994::t_6f98bc098471c8 31,37-38
+  s_9622fd28aba994::t_dc09b004ea6ec5 1-7,10-21,25-26,39-42,44-45,47-48,51-52
+  s_9622fd28aba994::t_1711fef5f3b215 8,27,49-50
+basic/cli/src/plugin-runtime/agent/publication-coordinator.ts
+  s_9622fd28aba994::t_9446f33a2905ef 60
+packages/im/agent/src/schedule-domain/history-observer.ts
+  s_9622fd28aba994::t_42868ea483b408 1-5,7-9,15-16
+  s_9622fd28aba994::t_cb1a36c74e6b60 6,10-14
+packages/im/agent/src/schedule-domain/schedule-execution-queue.ts
+  s_9622fd28aba994::t_4fd7b3806785b9 27-33,35,130,182
+  s_9622fd28aba994::t_9439247df4143d 7-11,19,153-154
+  s_9622fd28aba994::t_42868ea483b408 17-18
+  s_9622fd28aba994::t_0465465b1840d3 146,172-181
+  s_9622fd28aba994::t_57ed7ebc22a3cb 147,151-152,155
+  s_9622fd28aba994::t_e1fe0117b530fe 137-138
+packages/im/agent/tests/helpers/schedule-execution-fixture.ts
+  s_9622fd28aba994::t_12ee0e52ea5755 1-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "51fd65aeacfb937e3626f0d24d73bad9d21b1916",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
