@@ -3,6 +3,16 @@ import { Client, ClientUser } from 'discord.js';
 import { EndpointProfileState } from '@zhin.js/adapter';
 
 describe('Discord own account profile', () => {
+  it('keeps a confirmed REST write ACK when its returned profile cannot be projected', async () => {
+    const request = vi.fn(async () => ({ id: '123', username: 'Accepted' }));
+    const report = vi.fn(), port = createDiscordRestSelfProfile({ request } as never, report);
+    expect(await port.write!({ signal: new AbortController().signal, change: { field: 'nickname', value: 'Accepted' } }))
+      .toEqual({ status: 'updated' });
+    expect(report).not.toHaveBeenCalled();
+    request.mockRejectedValueOnce(new Error('PATCH rejected'));
+    await expect(port.write!({ signal: new AbortController().signal, change: { field: 'nickname', value: 'No' } }))
+      .rejects.toThrow('PATCH rejected');
+  });
   it('projects the native current user and preserves a native avatar clear', async () => {
     const user = { id: '123', username: 'Real bot', avatarURL: () => null,
       fetch: vi.fn(async () => user), setUsername: vi.fn(async () => ({ ...user, username: 'New bot' })),

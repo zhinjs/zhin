@@ -4,6 +4,7 @@
  * 永远不要记录 Cookie。
  */
 import { createHash } from 'node:crypto';
+import type { SelfProfile } from '@zhin.js/im-contract';
 import { BILIBILI_LIVE_RISK_CODES, type LiveDanmaku, type ResolvedBilibiliLiveConfig } from './protocol.js';
 
 export type BilibiliLiveFetch = (
@@ -80,17 +81,22 @@ export class BilibiliLiveClient {
   readonly now: () => number;
   #buvid3?: string;
   #selfUid?: string;
-  #selfProfile: import('@zhin.js/im-contract').SelfProfile = {};
+  #selfProfile: Readonly<SelfProfile> = Object.freeze({});
+  #navSequence = 0;
 
   /** Public account facts from the native nav response, never Cookie or WBI keys. */
   get currentSelfProfile(): Readonly<import('@zhin.js/im-contract').SelfProfile> { return this.#selfProfile; }
 
   async readSelfProfile(signal: AbortSignal): Promise<Readonly<import('@zhin.js/im-contract').SelfProfile>> {
     signal.throwIfAborted();
-    await this.#nav(signal);
+    const snapshot = await this.#nav(signal);
     signal.throwIfAborted();
-    if (!this.#selfUid) throw new Error('Bilibili Live account is not logged in');
-    return this.#selfProfile;
+    if (typeof snapshot.code !== 'number') throw new BilibiliLiveApiError(-1, 'Malformed Bilibili nav response');
+    if (snapshot.code !== 0 && snapshot.code !== -101) {
+      throw new BilibiliLiveApiError(snapshot.code, snapshot.message ?? `Bilibili nav API ${snapshot.code}`);
+    }
+    if (!snapshot.uid) throw new Error('Bilibili Live account is not logged in');
+    return snapshot.profile;
   }
 
   constructor(config: ResolvedBilibiliLiveConfig, fetch: BilibiliLiveFetch, now: () => number = Date.now, signal?: AbortSignal) {
@@ -154,7 +160,10 @@ export class BilibiliLiveClient {
   }
 
   /** 读取登录态与 WBI 密钥。未登录时 nav 返回 -101，但仍带 WBI 密钥。 */
-  async #nav(signal?: AbortSignal): Promise<{ imgKey: string; subKey: string }> {
+  async #nav(signal?: AbortSignal): Promise<{
+    imgKey: string; subKey: string; code?: number; message?: string; uid?: string; profile: Readonly<SelfProfile>;
+  }> {
+    const sequence = ++this.#navSequence;
     const cookie = this.#cookie();
     const response = await this.fetch(`${this.config.apiBaseUrl}/x/web-interface/nav`, {
       headers: { 'user-agent': USER_AGENT, ...(cookie ? { cookie } : {}) },
@@ -162,19 +171,21 @@ export class BilibiliLiveClient {
     });
     if (!response.ok) throw new BilibiliLiveApiError(-1, `HTTP ${response.status}`, response.status);
     const envelope = await response.json() as { code?: number; message?: string; data?: { isLogin?: boolean; mid?: unknown; uname?: string; face?: string; wbi_img?: { img_url?: unknown; sub_url?: unknown } } };
-    if (typeof envelope.code !== 'number') throw new BilibiliLiveApiError(-1, 'Malformed Bilibili nav response');
-    // Anonymous nav still provides WBI keys under -101; other native errors are not profile facts.
-    if (envelope.code !== 0 && envelope.code !== -101) {
-      throw new BilibiliLiveApiError(envelope.code, envelope.message ?? `Bilibili nav API ${envelope.code}`);
-    }
     const data = envelope.data;
     signal?.throwIfAborted();
-    this.#selfUid = envelope.code === 0 && data?.isLogin && data.mid != null ? String(data.mid) : undefined;
-    this.#selfProfile = this.#selfUid ? Object.freeze({
+    const uid = envelope.code === 0 && data?.isLogin && data.mid != null ? String(data.mid) : undefined;
+    const profile: Readonly<SelfProfile> = Object.freeze(uid ? {
       ...(typeof data?.uname === 'string' ? { nickname: data.uname } : {}),
       ...(typeof data?.face === 'string' ? { avatar: data.face } : {}),
-    }) : {};
-    return { imgKey: keyFromUrl(data?.wbi_img?.img_url), subKey: keyFromUrl(data?.wbi_img?.sub_url) };
+    } : {});
+    // Startup can still use WBI keys or its existing unsigned fallback. Only valid
+    // login/anonymous responses may publish account facts, in request order.
+    if (sequence === this.#navSequence && (envelope.code === 0 || envelope.code === -101)) {
+      this.#selfUid = uid;
+      this.#selfProfile = profile;
+    }
+    return { imgKey: keyFromUrl(data?.wbi_img?.img_url), subKey: keyFromUrl(data?.wbi_img?.sub_url),
+      code: envelope.code, message: envelope.message, uid, profile };
   }
 
   async #ensureBuvid(): Promise<void> {

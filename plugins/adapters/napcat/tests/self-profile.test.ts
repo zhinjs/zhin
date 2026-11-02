@@ -13,6 +13,16 @@ function fixture() {
 }
 
 describe('NapCat own account profile', () => {
+  it('classifies failed gender prerequisites as not submitted without losing read error meaning', async () => {
+    const { requestApi, port, signal } = fixture();
+    const failure = new Error('login lookup failed');
+    requestApi.mockRejectedValueOnce(failure);
+    await expect(port.write!({ signal, change: { field: 'gender', value: 'female' } }))
+      .rejects.toMatchObject({ disposition: 'not_sent', cause: failure });
+    expect(requestApi).toHaveBeenCalledTimes(1);
+    requestApi.mockRejectedValueOnce(failure);
+    await expect(port.read({ signal })).rejects.toBe(failure);
+  });
   it('uses the current login identity and projects only known profile fields', async () => {
     const { requestApi, port, signal } = fixture();
     expect(await port.read({ signal })).toEqual({ nickname: 'Self now', gender: 'male', age: 27, signature: '' });

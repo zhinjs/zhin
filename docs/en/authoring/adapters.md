@@ -179,7 +179,7 @@ This capability requires Adapter Feature API `^2.1.0`. Tools using the bound acc
 context require Tool Feature API `^1.1.0`. These are additive capability floors; existing
 compatible plugins remain supported by the newer providers.
 
-Expose account nickname, gender, age, signature, avatar, interests and biography through the optional
+Expose account nickname, gender, age, birthday, signature, avatar, interests and biography through the optional
 `profile` hook of `createEndpointSpecification`. The Endpoint instance `name` remains its instance
 identifier; a group card remains scene-specific. Native Client methods and type inference are unchanged.
 

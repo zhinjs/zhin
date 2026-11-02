@@ -66,3 +66,24 @@ it('propagates caller cancellation to the active pinned binary request without r
   await expect(pending).rejects.toThrow('turn stopped');
   expect(mocked.request).toHaveBeenCalledTimes(1);
 });
+
+it.each(['getText', 'getBytes'] as const)('keeps credentials on same-origin %s redirects but strips them before a foreign authorized hop', async method => {
+  const hops: Array<{ url: string; headers: Readonly<Record<string, string>> }> = [];
+  const respond = async (url: URL, headers: Readonly<Record<string, string>>) => {
+    hops.push({ url: url.href, headers });
+    return { status: hops.length < 3 ? 302 : 200, statusText: 'OK',
+      headers: hops.length < 3 ? { location: hops.length === 1 ? '/same-origin' : 'https://cdn.example.test/image' } : {} };
+  };
+  const transport: NetworkTransport = {
+    request: async (url, headers) => ({ ...await respond(url, headers), body: 'image' }),
+    requestBytes: async (url, headers) => ({ ...await respond(url, headers), body: new Uint8Array([1]) }),
+  };
+  const headers = { aUtHoRiZaTiOn: 'synthetic credential', Cookie: 'synthetic=session', 'Proxy-Authorization': 'synthetic proxy', Accept: 'image/png' };
+  await new TurnNetworkClient({ ...policy, network: { ...policy.network, allowedDomains: ['images.example.test', 'cdn.example.test'] } },
+    new AbortController().signal, transport)[method]('https://images.example.test/start', { headers });
+  expect(hops).toHaveLength(3);
+  expect(hops[0]?.headers).toEqual(headers);
+  expect(hops[1]?.headers).toEqual(headers);
+  expect(hops[2]?.headers).toEqual({ Accept: 'image/png' });
+  expect(headers.Cookie).toBe('synthetic=session');
+});

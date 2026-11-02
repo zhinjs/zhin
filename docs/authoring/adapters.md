@@ -177,7 +177,7 @@ segments: {
 此能力要求 Adapter Feature API `^2.1.0`；在 Tool 中使用当前账号资料上下文还需要
 Tool Feature API `^1.1.0`。这些是可选能力的新增版本下限，不要求旧插件改成新的主版本。
 
-账号昵称与性别、年龄、签名、头像、兴趣和简介通过 `createEndpointSpecification` 的可选
+账号昵称与性别、年龄、生日、签名、头像、兴趣和简介通过 `createEndpointSpecification` 的可选
 `profile` 钩子提供。不要把 Endpoint 的实例名 `name` 当成平台昵称，也不要把群名片当成
 账号昵称。原生 Client 的 API、属性和类型推断保持原样。
 
@@ -190,10 +190,10 @@ profile: {
   },
   async write({ change, signal }) {
     if (change.field !== 'nickname') return { status: 'rejected' };
-    const accepted = await changeOwnNickname(client, change.value, signal);
-    return accepted
-      ? { status: 'updated', profile: { nickname: change.value } }
-      : { status: 'rejected' };
+    // 原生调用层区分 updated / rejected / unknown，不把超时当作拒绝。
+    const result = await changeOwnNickname(client, change.value, signal);
+    if (result.status === 'updated') return { ...result, profile: { nickname: change.value } };
+    return result; // 保留明确拒绝或结果未知。
   },
 }
 ```

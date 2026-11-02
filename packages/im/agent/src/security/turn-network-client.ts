@@ -44,6 +44,14 @@ export interface NetworkTransport {
   ): Promise<Omit<NetworkBinaryResponse, 'url'>>;
 }
 
+/** One policy-authorized hop; credentials may narrow when its redirect changes origin. */
+interface AuthorizedNetworkHop {
+  readonly url: URL;
+  readonly headers: Readonly<Record<string, string>>;
+  readonly signal: AbortSignal;
+  readonly maxBytes: number;
+}
+
 /** Turn-scoped network module: policy, DNS pinning, redirects, timeout, and body limits. */
 export class TurnNetworkClient {
   constructor(
@@ -53,30 +61,31 @@ export class TurnNetworkClient {
   ) {}
 
   async getText(url: string, options: NetworkRequestOptions = {}): Promise<NetworkTextResponse> {
-    return this.#get(url, options, (target, signal, maxBytes) => this.transport.request(target, options.headers ?? {}, signal, maxBytes));
+    return this.#get(url, options, hop => this.transport.request(hop.url, hop.headers, hop.signal, hop.maxBytes));
   }
 
   async getBytes(url: string, options: NetworkRequestOptions = {}): Promise<NetworkBinaryResponse> {
     const request = this.transport.requestBytes;
     if (!request) throw new Error('This network transport does not support binary media');
-    return this.#get(url, options, (target, signal, maxBytes) => request.call(this.transport, target, options.headers ?? {}, signal, maxBytes));
+    return this.#get(url, options, hop => request.call(this.transport, hop.url, hop.headers, hop.signal, hop.maxBytes));
   }
 
   async #get<T extends Omit<NetworkTextResponse, 'body' | 'url'> & { readonly body: string | Uint8Array }>(
     url: string,
     options: NetworkRequestOptions,
-    request: (target: URL, signal: AbortSignal, maxBytes: number) => Promise<T>,
+    request: (hop: AuthorizedNetworkHop) => Promise<T>,
   ): Promise<T & { readonly url: string }> {
     const maxRedirects = options.maxRedirects ?? 5;
     const maxBytes = options.maxBytes ?? 2 * 1024 * 1024;
     const timeoutMs = options.timeoutMs ?? 15_000;
     const signal = AbortSignal.any([this.signal, AbortSignal.timeout(timeoutMs)]);
     let current = url;
+    let headers = options.headers ?? {};
 
     for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
       signal.throwIfAborted();
       const parsed = authorizeNetworkUrl(current, this.policy);
-      const response = await request(parsed, signal, maxBytes);
+      const response = await request({ url: parsed, headers, signal, maxBytes });
       if (response.status < 300 || response.status >= 400) {
         return Object.freeze({ url: parsed.href, ...response });
       }
@@ -85,7 +94,12 @@ export class TurnNetworkClient {
       if (redirect === maxRedirects) {
         throw new NetworkAccessDeniedError(`Network redirect limit exceeded (${maxRedirects})`);
       }
-      current = new URL(location, parsed).href;
+      const next = new URL(location, parsed);
+      if (next.origin !== parsed.origin) {
+        headers = Object.fromEntries(Object.entries(headers).filter(([name]) =>
+          !/^(?:authorization|cookie|proxy-authorization)$/iu.test(name)));
+      }
+      current = next.href;
     }
     throw new NetworkAccessDeniedError('Network redirect state is invalid');
   }

@@ -16,6 +16,35 @@ const BOOTSTRAP = buildBootstrapContextSection([
   { path: 'TOOLS.md', content: 'Use the established workflow.\n\n### Owner notes\n<!-- scope: master-private -->\nOwner-only operational notes.' },
 ]);
 
+it.each(['http', 'internal'] as const)('preserves the configured binding nickname on a tool-less non-IM %s turn without SOUL', async entry => {
+  const llm = wireMockLlmApi({ models: ['m'], responder: () => assistantTextReply('Synthetic reply.') });
+  const host = {
+    config: { ...DEFAULT_CONFIG, gitStatus: false, outputSchema: false, maxIterations: 1,
+      toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 } },
+    activeBinding: { nickname: 'Configured non-IM identity' }, bootstrapContext: '', globalContext: '',
+    userProfiles: { buildProfileSummary: async () => '' },
+    getTurnProvider: () => llm.provider, modelRegistry: null, llmRuntime: llm.runtime,
+    getTurnActiveSkills: () => '',
+    contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async () => {} },
+    compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },
+    getActiveTurnTracker: () => undefined, promptTraceConfig: {}, phaseConfig: {},
+  } as unknown as ZhinAgentPrivate;
+  const turn: TurnContextView = {
+    origin: entry === 'http' ? { kind: 'http', sessionId: entry } : { kind: 'internal', source: entry },
+    principal: { subjectId: 'caller', roles: ['user'] }, session: { key: entry },
+  };
+  const current = createUserMessage('Who are you?');
+  const prepared = await new ContextSystem().buildTextTurnContext({ host, turn,
+    content: 'Who are you?', turnUser: { rawContent: 'Who are you?', promptMessages: [current] } });
+  await collectAgentLoopTurnRun(runAgentLoopTextTurnRun({
+    host, sessionId: entry, rawContent: 'Who are you?', promptProfile: { kind: 'interactive' }, turnContext: turn,
+    allTools: [], resolvedTools: [], toolLoading: 'direct', toolExecution: { execute: async () => { throw new Error('No tools'); } },
+    personaEnhanced: prepared.personaEnhanced, modelId: 'm', modelCandidates: ['m'], initialMessages: prepared.userMessages,
+  }));
+  expect(llm.calls[0]?.context.systemPrompt).toContain('You are Configured non-IM identity');
+  expect(llm.calls[0]?.context.systemPrompt).not.toContain('You are Zhin');
+});
+
 it.each(['chat', 'vision', 'http'] as const)('sends a neutral persona with scoped first-person SOUL on the actual tool-less %s path', async entry => {
   const mode = entry === 'vision' ? 'vision' : 'chat';
   const llm = wireMockLlmApi({ models: ['m'], responder: () => assistantTextReply('好。') });

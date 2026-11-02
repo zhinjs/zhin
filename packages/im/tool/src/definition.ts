@@ -144,6 +144,7 @@ export interface ToolExecutionContext<
 
 /** Read-only admission facts; no platform IO or profile mutation authority. */
 export type ToolAvailabilityContext = Pick<ToolInvocationContext, 'sessionKey' | 'origin'> & Readonly<{
+  /** Turn-start snapshot of this account's editable fields; absent without a bound IM account. */
   accountProfile?: Pick<SelfProfileSnapshot, 'writableFields'>;
 }>;
 

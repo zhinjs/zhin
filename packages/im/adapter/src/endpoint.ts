@@ -122,7 +122,11 @@ export abstract class EndpointRuntime<TClient = unknown> {
 
   /** Adapter 在登录成功后上报平台账号；undefined / 空 / 非法值表示撤销。 */
   protected reportSelfUserId(userId: string | undefined): void {
-    this.#selfUserId = normalizeSelfUserId(userId);
+    const next = normalizeSelfUserId(userId);
+    if (this.#selfUserId !== undefined && this.#selfUserId !== next) {
+      this.#selfProfile = this.#selfProfile?.nextAccount();
+    }
+    this.#selfUserId = next;
     this.#syncPeerRegistry();
   }
 

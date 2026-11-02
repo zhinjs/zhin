@@ -20,6 +20,13 @@ export const SELF_PROFILE_FIELDS = [
 
 export type SelfProfileField = (typeof SELF_PROFILE_FIELDS)[number];
 
+/** Validate an explicit YYYY-MM-DD calendar date without deriving it from an age. */
+export function isSelfProfileBirthday(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const timestamp = Date.parse(`${value}T00:00:00Z`);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === value;
+}
+
 /** A single platform effect; unsupported fields are rejected before submission. */
 export type SelfProfileChange = {
   [K in SelfProfileField]: Readonly<{

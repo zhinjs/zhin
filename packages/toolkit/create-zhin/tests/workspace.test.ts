@@ -73,8 +73,10 @@ describe('createWorkspace', () => {
     expect(instructions).toContain('You are a helpful AI assistant.')
     expect(instructions).toContain('*(You can append here via write_file / write_memory.)*')
     expect(instructions).not.toContain("Briefly state what you're doing before acting")
-    expect(tools).toContain('Base answers on actual tool results')
-    expect(tools).toContain('Use `spawn_task`')
+    expect(tools).toContain('Workspace-specific notes')
+    expect(tools).not.toContain('call its declared tools immediately')
+    expect(tools).not.toContain('Base answers on actual tool results')
+    expect(tools).not.toContain('try alternatives')
     expect(routines.routines.morningBrief.prompt).toMatch(locale === 'zh-CN' ? /^汇总/ : /^Summarize/)
   })
 

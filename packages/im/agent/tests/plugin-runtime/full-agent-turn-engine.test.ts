@@ -171,13 +171,16 @@ describe('FullAgentTurnEngine', () => {
       tools: new TurnToolRuntime(turn, []),
       selection: { ...selection(), ...(mode === 'specialist' ? { agent: 'researcher' } : {}) },
     };
+    const contextFiles = [{ path: 'SOUL.md', content: 'Stable workspace persona.' }];
     const engine = createFullAgentTurnEngine({
       host: host as never,
       core: core as never,
       sessionSystem: sessionSystem as never,
       contextSystem: contextSystem as never,
       bootstrapContext: '## SOUL.md\nStable workspace persona.',
+      contextFiles,
     });
+    contextFiles[0]!.content = 'Changed after generation capture.';
     const events: string[] = [];
     const started: Array<Record<string, unknown>> = [];
     const finished: Array<Record<string, unknown>> = [];
@@ -232,6 +235,7 @@ describe('FullAgentTurnEngine', () => {
     const runtime = coreInput?.promptRuntime as PromptRuntimeOverrides;
     expect(runtime).toMatchObject({ modelId: 'model', providerAlias: 'provider', modelSdk: 'google' });
     expect(runtime.bootstrapContext).toBe('## SOUL.md\nStable workspace persona.');
+    expect(runtime.contextFiles).toEqual([{ path: 'SOUL.md', content: 'Stable workspace persona.' }]);
     const buildPrompt = (runtime: PromptRuntimeOverrides) => buildAgentPathSystemPrompt({
       ...host, config: DEFAULT_CONFIG, skillRegistry: null, skillsSummaryXML: '', globalContext: '',
       getTurnActiveSkills: () => '',

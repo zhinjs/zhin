@@ -421,16 +421,16 @@ plugins:
 icqq:
   master: "${ICQQ_MASTER}" # 顶层共享：所有 endpoint 生效
   endpoints:
-    # 逐项：name 必填，其余字段与顶层合并（逐项优先）
-    - name: "${ICQQ_ACCOUNT_1}"
-    - name: "${ICQQ_ACCOUNT_2}"
+    # 逐项：id 必填，其余字段与顶层合并（逐项优先）
+    - id: "${ICQQ_ACCOUNT_1}"
+    - id: "${ICQQ_ACCOUNT_2}"
 ```
 
 展开规则（`@zhin.js/adapter` 的 `expandEndpointConfigs`）：
 
-- 每个 endpoint 的最终配置 = 实例配置（去掉 `endpoints` 键）与该项的浅合并，**逐项字段覆盖顶层**。
-- `name` 必填且为非空字符串；不含 `~`；重名只保留首个并告警。
-- `endpoints` 为空或全部非法时，退回单 Endpoint（名为 instanceKey）。
+- 连接字段浅合并，逐项覆盖顶层；资料兜底单独按字段合并。
+- 每项必须提供非空 `id`；包含保留分隔符（`~` 和 NUL）、重复 ID 或非法条目时明确报错。
+- 未提供 `endpoints` 或数组为空时，创建一个 Endpoint，使用顶层 `id`，未提供时使用 instanceKey。
 
 真实示例（QQ 官方 bot，主账号走代理网关 + 沙箱账号并存）：
 
@@ -441,14 +441,14 @@ plugins:
   slack: "@zhin.js/adapter-slack"
 qq:
   endpoints:
-    - name: zhin
+    - id: zhin
       appid: "${QQ_APPID}"
       secret: "${QQ_SECRET}"
       mode: websocket
       sandbox: false
       gatewayUrl: "https://bots.example.com/gateway/102005927"
       intents: [ GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES ]
-    - name: "102069707"
+    - id: "102069707"
       appid: "${QQ_SANDBOX_APPID}"
       secret: "${QQ_SANDBOX_SECRET}"
       mode: websocket
@@ -456,7 +456,7 @@ qq:
       intents: [ GUILDS, GROUP_AND_C2C_EVENT ]
 slack:
   endpoints:
-    - name: zhin
+    - id: zhin
       token: "${SLACK_TOKEN}"
       appToken: "${SLACK_APP_TOKEN}"
       signingSecret: "${SLACK_SIGNING_SECRET}"

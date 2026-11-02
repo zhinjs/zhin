@@ -1,6 +1,6 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
-import { SELF_PROFILE_FIELDS, type MediaRef, type SelfProfileChange, type SelfProfilePort } from '@zhin.js/im-contract';
+import { SELF_PROFILE_FIELDS, isSelfProfileBirthday, type MediaRef, type SelfProfileChange, type SelfProfilePort } from '@zhin.js/im-contract';
 import { defineAgentTool, type ToolExecutionContext } from '@zhin.js/tool';
 import { z } from 'zod';
 import type { ImageAssetPublisher } from '../media/image-assets.js';
@@ -83,9 +83,7 @@ function textProfileChange({ field, value }: Record<string, unknown>): Exclude<S
       if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return { field, value };
       break;
     case 'birthday':
-      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(value)
-        && Number.isFinite(Date.parse(`${value}T00:00:00Z`))
-        && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value) return { field, value };
+      if (typeof value === 'string' && isSelfProfileBirthday(value)) return { field, value };
       break;
     case 'interests':
       if (Array.isArray(value) && value.every((item): item is string => typeof item === 'string')) return { field, value };
