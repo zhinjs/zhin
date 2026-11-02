@@ -158,6 +158,8 @@ malicious-input, authority, privacy, output-shape and execution-count checks rem
 source hashes match the sealed final captures. Nothing was committed, pushed or deployed.
 
 
-Local evidence bundle: `/Users/liuchunlang/.codex/visualizations/2026/10/23/01a166a4-5b4c-7e22-80f0-d3374c43b4fb/prompt-policy-2026-11-02-wy9hjiac`.
-It contains the preserved source baseline, synthetic before/after requests, component comparisons,
-cache identities and captured bodies, the task-only diff, and local validation logs.
+The local evidence bundle contains the preserved source baseline, synthetic before/after requests,
+component comparisons, cache identities and bodies, the task-only diff, and validation logs. It is
+retained for review without publishing local account paths or session identifiers. Reproduce current
+synthetic request captures with `ZHIN_PROMPT_POLICY_CAPTURE_DIR=<output-directory> pnpm exec vitest run
+packages/im/agent/tests/prompt/prompt-policy-requests.test.ts` from the repository root.
