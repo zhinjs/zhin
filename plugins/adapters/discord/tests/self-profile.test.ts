@@ -4,6 +4,30 @@ import { EndpointProfileState } from '@zhin.js/adapter';
 import { DiscordRestClient } from '../src/endpoint.js';
 
 describe('Discord own account profile', () => {
+  it.each([false, true])('retains confirmed profile fields after a native rate limit without code (global=%s)', async global => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'GET'
+      ? { id: '123', username: 'Confirmed name', avatar: null }
+      : { message: 'You are being rate limited.', retry_after: 0.25, global }), { status: init?.method === 'GET' ? 200 : 429 }));
+    const state = new EndpointProfileState({ source: createDiscordRestSelfProfile(new DiscordRestClient('synthetic', fetch as typeof globalThis.fetch), vi.fn()), defaults: {} });
+    const signal = new AbortController().signal;
+    await state.read({ signal });
+    expect(await state.write({ signal, change: { field: 'nickname', value: 'Limited name' } })).toMatchObject({ status: 'rejected' });
+    expect(state.peek().values.nickname).toBe('Confirmed name');
+    expect(fetch).toHaveBeenCalledTimes(2); // One read and one write, with no automatic retry.
+  });
+
+  it.each([
+    '<html>proxy limit</html>',
+    JSON.stringify({ message: 'proxy limit', retry_after: '1', global: false }),
+    JSON.stringify({ message: 'proxy limit', retry_after: 1 }),
+  ])('keeps unrecognized 429 responses uncertain', async body => {
+    const fetch = vi.fn(async () => new Response(body, { status: 429 }));
+    const port = createDiscordRestSelfProfile(new DiscordRestClient('synthetic', fetch), vi.fn());
+    expect(await port.write!({ signal: new AbortController().signal, change: { field: 'nickname', value: 'Unknown' } }))
+      .toMatchObject({ status: 'unknown' });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('preserves confirmed fields when the actual REST client receives a native 400 rejection', async () => {
     const fetch = vi.fn(async (_url: string, init?: RequestInit) => new Response(JSON.stringify(init?.method === 'GET'
       ? { id: '123', username: 'Confirmed name', avatar: null }
