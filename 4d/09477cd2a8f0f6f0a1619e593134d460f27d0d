@@ -1,0 +1,21 @@
+plugins/adapters/discord/src/rest-request-error.ts
+  s_9622fd28aba994::t_df83ac3cf62f0e 9-10,13,26,28,31-36
+plugins/adapters/discord/tests/self-profile.test.ts
+  s_9622fd28aba994::t_7f0c60300314d8 7-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d09477cd2a8f0f6f0a1619e593134d460f27d0d",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
