@@ -131,10 +131,10 @@ export class ContextSystem {
     const modelCandidates = [modelId];
     const providerAlias = host.getTurnProvider().name;
     const llmModel = host.llmRuntime.model(providerAlias, modelId);
-    // The host bootstrap section (system prompt) already includes the root AGENTS.md: keep only nearer ones here.
-    const rootInSystemPrompt = input.contextFiles !== undefined
+    // Captured files decide root presence or absence (including []); never borrow a newer root from disk.
+    const rootHandledBySystem = input.contextFiles !== undefined
       || /(?:^|\n)## AGENTS\.md\n/u.test((!isScheduleTurn ? systemBootstrap : input.systemBootstrap) ?? '');
-    const agentsContext = await buildAgentsEnvelopeContext(undefined, bootstrapSceneFromTurn(turn), { excludeRoot: rootInSystemPrompt });
+    const agentsContext = await buildAgentsEnvelopeContext(undefined, bootstrapSceneFromTurn(turn), { excludeRoot: rootHandledBySystem });
 
     // Schedule ingress provides one current task; never infer its author from a history tail.
     const scheduleInput = isScheduleTurn && turnUser.promptMessages.length === 1 ? turnUser.promptMessages[0] : undefined;

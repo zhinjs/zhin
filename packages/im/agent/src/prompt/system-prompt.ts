@@ -26,7 +26,7 @@ import {
 } from './rules/index.js';
 import { triggerSentence } from '../skill/capability-catalog.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
-import { scopeBootstrapText, bootstrapSceneFromTurn } from '../bootstrap-scope.js';
+import { scopeBootstrapText, scopeBootstrapDocument, bootstrapSceneFromTurn, type BootstrapScene } from '../bootstrap-scope.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
 import { PromptSegmentRegistry } from './segments/registry.js';
 import type { PromptSegment, SegmentInput, TextSegmentKind } from './segments/types.js';
@@ -217,8 +217,10 @@ export function fillPromptSlots(text: string, nickname: string | undefined): str
   return text.replace(/\{\{\s*nickname\s*\}\}/g, () => scalar);
 }
 
-function bootstrapHasSoul(bootstrapContext: string | undefined, contextFiles?: readonly ContextFile[]): boolean {
-  if (contextFiles !== undefined) return contextFiles.some(file => file.path === 'SOUL.md' && file.content.trim());
+function bootstrapHasSoul(bootstrapContext: string | undefined, scene: BootstrapScene, contextFiles?: readonly ContextFile[]): boolean {
+  if (contextFiles !== undefined) {
+    return contextFiles.some(file => file.path === 'SOUL.md' && scopeBootstrapDocument(file.content, scene).text.trim());
+  }
   if (!bootstrapContext?.trim()) return false;
   return /##\s*SOUL\.md/i.test(bootstrapContext) || /\n#\s*Soul\b/i.test(bootstrapContext);
 }
@@ -237,14 +239,15 @@ function applyAgentNicknameToPersona(persona: string, nickname: string): string 
   return `You are ${nickname}. ${p}`;
 }
 
-function resolvePersonaLead({ config, bootstrapContext, contextFiles, agentNickname }: {
+function resolvePersonaLead({ config, bootstrapContext, contextFiles, scene, agentNickname }: {
   config: Required<ZhinAgentConfig>;
   bootstrapContext?: string;
   contextFiles?: readonly ContextFile[];
+  scene: BootstrapScene;
   agentNickname?: string;
 }): string {
   const nickname = agentNickname?.trim();
-  if (bootstrapHasSoul(bootstrapContext, contextFiles)) {
+  if (bootstrapHasSoul(bootstrapContext, scene, contextFiles)) {
     return 'Follow the personality and tone in SOUL.md.';
   }
 
@@ -272,11 +275,11 @@ export function buildPersonaSection(ctx: Pick<RichSystemPromptContext, 'profile'
   if (ctx.profile?.kind === 'delegated') return ctx.profile.persona;
   if (isChatTurn(ctx)) {
     // The account's mutable display name is a scene fact, while shared tone/instructions stay cached.
-    return resolvePersonaLead({ config: ctx.config, bootstrapContext: ctx.bootstrapContext, contextFiles: ctx.contextFiles })
+    return resolvePersonaLead({ config: ctx.config, bootstrapContext: ctx.bootstrapContext, contextFiles: ctx.contextFiles, scene: bootstrapSceneFromTurn(ctx.turn) })
       .replace(/^You are Zhin(?:, a member of this chat)?\b/i, 'You are a member of this chat');
   }
   const nickname = turnAgentNickname(ctx.turn, ctx.agentNickname);
-  return resolvePersonaLead({ config: ctx.config, bootstrapContext: ctx.bootstrapContext, contextFiles: ctx.contextFiles,
+  return resolvePersonaLead({ config: ctx.config, bootstrapContext: ctx.bootstrapContext, contextFiles: ctx.contextFiles, scene: bootstrapSceneFromTurn(ctx.turn),
     agentNickname: nickname ? promptNickname(nickname) : undefined });
 }
 

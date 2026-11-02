@@ -1,5 +1,6 @@
 import { createDiscordRestApiAgent } from './rest-api-proxy.js';
 import { createDiscordSelfProfile, createDiscordRestSelfProfile } from './self-profile.js';
+import { DiscordRestRequestError } from './rest-request-error.js';
 /**
  * DiscordEndpoint — lifecycle, outbound, admit, gateway / interactions modes, agent tool surface.
  */
@@ -375,15 +376,23 @@ export class DiscordRestClient {
     const operationSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
     const operation = createEndpointOperation({ signal: operationSignal });
     const execute = async () => {
-      const response = await this.fetch(`${DISCORD_API}${path}`, {
-        method,
-        headers: { Authorization: `Bot ${this.token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: operationSignal,
-      });
-      const text = await response.text();
-      if (!response.ok) throw new Error(`Discord API ${method} ${path} failed (${response.status}): ${text.slice(0, 200)}`);
-      return (text ? JSON.parse(text) : undefined) as T;
+      const encodedBody = body === undefined ? undefined : JSON.stringify(body);
+      let response: Response | undefined;
+      let text: string | undefined;
+      try {
+        response = await this.fetch(`${DISCORD_API}${path}`, {
+          method,
+          headers: { Authorization: `Bot ${this.token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+          ...(encodedBody === undefined ? {} : { body: encodedBody }),
+          signal: operationSignal,
+        });
+        text = await response.text();
+        if (!response.ok) throw new DiscordRestRequestError({ status: response.status, body: text });
+        return (text ? JSON.parse(text) : undefined) as T;
+      } catch (cause) {
+        if (cause instanceof DiscordRestRequestError) throw cause;
+        throw new DiscordRestRequestError({ status: response?.status, body: text, cause });
+      }
     };
     return operation.run(execute);
   }

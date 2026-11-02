@@ -227,8 +227,9 @@ export class EndpointProfileState implements SelfProfilePort {
     const nativeBeforeWrite = this.#observeNative();
     let result: SelfProfileWriteResult;
     try {
+      // EndpointOperation already classifies cancellation before a settlement.
+      // Once it observed an ACK, a later abort must not relabel the write not_sent.
       result = await createEndpointOperation(request).run(() => write.call(source, request));
-      request.signal.throwIfAborted();
     } catch (error) {
       // Unless transport evidence proves no submission, the old value is no longer fresh evidence.
       if (!(error instanceof EndpointDeliveryError) || error.disposition !== 'not_sent') {

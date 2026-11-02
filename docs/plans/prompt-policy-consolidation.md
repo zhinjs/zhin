@@ -204,3 +204,33 @@ provider cache hits or billing savings. Real-provider/platform validation remain
 
 GitHub CI and CodeQL must be checked on the follow-up commit separately from these local results.
 The scheduled execution changes remain a separate branch and are not included in this PR.
+
+## Post-merge follow-up checkpoint
+
+PR #1118 merged before this second review finished. Its branch is no longer edited; the remaining
+corrections belong to a separate follow-up candidate. Scoped SOUL presence now uses visible file
+content, and an explicitly empty captured file list cannot borrow a newer root AGENTS.md. Sourced
+search links remain usable under the existing runtime network policy; tool output cannot grant
+network permission. Actual rich, lite and vision requests cover private-persona filtering and
+fallback selection, while search-to-fetch tests cover both allowed and denied network access.
+
+Profile follow-up preserves an ACK already consumed before cancellation without converting unknown
+or rejected writes to success. Separate account state prevents the old result entering its
+replacement. OneBot11 and Bilibili retain the last valid native observation when a newer read fails;
+Discord distinguishes a native rejection from an uncertain transport/proxy response and preserves
+an HTTP success ACK when its response body cannot be decoded. Schema regressions now live in the
+repository's documentation-test layer without adding an Adapter dependency on Ajv.
+
+A new `reviewed-followup` evidence checkpoint preserves 24 synthetic scenarios / 31 actual L1
+requests and a 143-path source fingerprint manifest, including one removed test path. The previous
+baseline, after and reviewed checkpoints remain unchanged. The original ten matched scenarios retain
+their first-request system character counts and token estimates, but their bytes changed; equal
+size is not evidence of equal rules or cache identity. These are request-assembly and runtime-gate
+checks with scripted model responses, not real-model behavior or provider-cache/billing evidence.
+
+Local validation passed: 113 CI-selected build tasks including examples, all 59 harness checks and
+196 scripted Agent evals. The first sandboxed harness run failed on loopback listening and npm/pnpm
+cache/store permissions. The complete rerun passed with the required local execution permissions;
+the original failure remains preserved, and no assertion, timeout or gate was relaxed. The captured
+production sources remained unchanged throughout validation. No provider or real-account calls,
+publication or deployment occurred. Follow-up GitHub CI still needs verification on its own commit.
