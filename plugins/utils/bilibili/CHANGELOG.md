@@ -1,5 +1,14 @@
 # @zhin.js/plugin-bilibili
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [af8f803]
+- Updated dependencies [032dc96]
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/skill@1.1.12
+
 ## 0.1.6
 
 ### Patch Changes

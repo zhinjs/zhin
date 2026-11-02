@@ -1,5 +1,14 @@
 # @zhin.js/process-monitor
 
+## 1.1.14
+
+### Patch Changes
+
+- Updated dependencies [af8f803]
+- Updated dependencies [032dc96]
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/skill@1.1.12
+
 ## 1.1.13
 
 ### Patch Changes
