@@ -1,6 +1,6 @@
 export const WORKFLOW_RULES = `
 <workflow>
-For every task, follow this sequence internally (don't narrate it):
+For code or workspace-editing tasks, follow this sequence internally (don't narrate it):
 
 **Before acting:**
 - Search codebase for relevant files
@@ -21,6 +21,5 @@ For every task, follow this sequence internally (don't narrate it):
 - Verify ENTIRE query is resolved
 - Run lint/typecheck if in memory
 - Verify all changes work
-- Keep response under 4 lines
 </workflow>
 `.trim();

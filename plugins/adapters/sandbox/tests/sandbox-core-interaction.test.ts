@@ -6,6 +6,17 @@ import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import sandboxAdapter from '../adapters/sandbox/index.js';
 import { SandboxClient } from '../src/client.js';
 
+// Docker availability is not part of the Core confirmation wire contract. Its
+// probe can outlast the frame wait on a busy runner; readiness timing itself is
+// covered by sandbox-runtime.test.ts with a controlled delayed probe.
+vi.mock('node:child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('node:child_process')>(),
+  execFile: (_file: string, _args: readonly string[], _options: object,
+    callback: (error: Error | null, stdout: string) => void) => {
+    queueMicrotask(() => callback(null, 'test-version'));
+  },
+}));
+
 it('settles the original Core confirm once through the real Sandbox wire, never admitting its callback as ordinary chat', async () => {
   const root = rootPluginId(), abort = new AbortController();
   const ordinary = vi.fn();

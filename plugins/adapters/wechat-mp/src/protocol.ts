@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import { createMessages, type Locale } from 'zhin.js/i18n';
 /**
  * WeChat Official Account (MP) protocol helpers — no legacy Adapter/Endpoint.
@@ -10,7 +11,7 @@ import * as xml2js from 'xml2js';
 import type { ConversationRef } from '@zhin.js/im-contract';
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface WeChatMpEndpointConfig {
+export interface WeChatMpEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly appId: string;
   readonly appSecret: string;

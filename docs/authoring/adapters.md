@@ -27,7 +27,7 @@ description: "为 Zhin 还不支持的平台编写适配器：最小实现、连
 ```
 
 这里的 `api` 位于 `package.json#zhin.features`。它与 npm 包版本、`zhin.engine` 是不同的
-契约。新 Provider 的 `featureApi` 是 `2.0.0`：旧的显式 `api: ^1.0.0` 会被拒绝，新插件在
+契约。首次接口切换的 `featureApi` 为 `2.0.0`（自身资料能力在 `2.1.0` 新增）：旧的显式 `api: ^1.0.0` 会被拒绝，新插件在
 旧 API-1 Provider 上也会被拒绝。未声明 `api` 的历史包保持原有行为，不代表已经确认兼容。
 自定义插件需要重新编译、更新 peer/dev 下限，并验证实际安装组合；完整说明见
 [版本兼容与迁移](../operations/upgrades.md#adapter-api-2)。
@@ -205,3 +205,37 @@ Core 继续复用渲染、权限、资源授权和出站中间件，不把模型
 
 完整类型见 [endpoint-stream.ts](../../packages/im/adapter/src/endpoint-stream.ts)，生命周期
 回归见 [捕获发送测试](../../packages/im/core/tests/plugin-runtime/captured-endpoint-operation.test.ts)。
+## 账号自身资料
+
+此能力要求 Adapter Feature API `^2.1.0`；在 Tool 中使用当前账号资料上下文还需要
+Tool Feature API `^1.1.0`。这些是可选能力的新增版本下限，不要求旧插件改成新的主版本。
+
+账号昵称与性别、年龄、生日、签名、头像、兴趣和简介通过 `createEndpointSpecification` 的可选
+`profile` 钩子提供。不要把 Endpoint 的实例名 `name` 当成平台昵称，也不要把群名片当成
+账号昵称。原生 Client 的 API、属性和类型推断保持原样。
+
+```ts
+profile: {
+  writableFields: ['nickname'],
+  get current() { return { nickname: client.nickname }; }, // 已观察资料，不发请求
+  async read({ signal }) {
+    return readOwnPlatformProfile(client, signal);
+  },
+  async write({ change, signal }) {
+    if (change.field !== 'nickname') return { status: 'rejected' };
+    // 原生调用层区分 updated / rejected / unknown，不把超时当作拒绝。
+    const result = await changeOwnNickname(client, change.value, signal);
+    if (result.status === 'updated') return { ...result, profile: { nickname: change.value } };
+    return result; // 保留明确拒绝或结果未知。
+  },
+}
+```
+
+上面的读写函数代表适配器自己的原生调用，不是框架新增的函数。只声明实际安全实现的
+`writableFields`；无法确认执行结果时返回 `unknown`，不得自动重试或冒充成功。一次请求
+只改一个字段。头像资料只返回 URL；已解析的图片字节仅在执行时传入 SDK。
+
+框架将端口绑定到原始 Client 和调用生命周期，停止或替换账号后不能通过旧端口修改新账号。
+普通回合复用当前实例成功读取的资料，`get_self_profile` 主动刷新；不是实时轮询。
+`set_self_profile` 只操作当前账号，沿用身份类审批；年龄不会被换算为一个虚构生日。
+配置兜底见[配置参考](../configuration/index.md#账号自身资料)。

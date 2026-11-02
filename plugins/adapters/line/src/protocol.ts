@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * LINE Messaging API protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -11,7 +12,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 const logger = getLogger('line');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface LineEndpointConfig {
+export interface LineEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly channelSecret: string;
   readonly channelAccessToken: string;

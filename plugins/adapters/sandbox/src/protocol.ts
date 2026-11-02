@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /** Sandbox WebSocket wire protocol helpers (no legacy Adapter/Endpoint). */
 
 import { readFileSync } from 'node:fs';
@@ -46,7 +47,7 @@ export type ResolvedSandboxBot = {
 };
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface SandboxEndpointConfig {
+export interface SandboxEndpointConfig extends EndpointProfileConfiguration {
   readonly id?: string;
   readonly owner?: string;
   readonly streaming?: boolean;

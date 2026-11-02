@@ -306,7 +306,9 @@ async function bindTools(
     // Static capability queries have no session. Actual TurnRequest ingress always supplies one.
     // Apply eligibility after access checks so all resident/deferred/load paths share this ceiling.
     .filter(({ descriptor }) => !turn?.session
-      || index.isAvailable(descriptor.owner, descriptor.name, { sessionKey: turn.session.key, origin: turn.origin }))
+      || index.isAvailable(descriptor.owner, descriptor.name, { sessionKey: turn.session.key, origin: turn.origin,
+        ...(turn.input?.contextState?.bot?.profile ? { accountProfile: { writableFields: turn.input.contextState.bot.profile.writableFields } } : {}),
+      }))
     .map((r) => Object.freeze({
       ...r.descriptor,
       hidden: isSelectedAgentTool(r.descriptor.placement, selectedAgent)

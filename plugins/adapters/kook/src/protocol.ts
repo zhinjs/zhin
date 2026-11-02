@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /** KOOK protocol helpers. Canonicalization is owned by Core. */
 
 import { createDecipheriv, timingSafeEqual } from 'node:crypto';
@@ -28,7 +29,7 @@ export enum KookPermission {
 }
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface KookEndpointConfig {
+export interface KookEndpointConfig extends EndpointProfileConfiguration {
   readonly apiProxy?: import('./api-proxy.js').KookApiProxy;
   readonly streamProxy?: import('./stream-proxy.js').KookStreamProxy;
   readonly id: string;

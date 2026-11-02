@@ -463,16 +463,20 @@ assistant:
     notifyOnFailure: false
 ```
 
-Workspace bootstrap files (`SOUL.md`, `AGENTS.md`, `TOOLS.md`) may write a
-`{{nickname}}` slot; prompt assembly replaces it with the current agent's
-`ai.agents.<name>.nickname`, or `Zhin` when none is configured, so one SOUL can
-serve several bots with different nicknames:
+Write `SOUL.md` in the first person to describe personality, values and tone. It no longer uses
+a nickname placeholder. The current Endpoint supplies account facts separately; configuration only
+fills unavailable fields. Several accounts can share one persona, and renaming an account does not
+require changing SOUL or rebuilding the shared prompt cache.
 
 ```md
 # Who I am
 
-I'm {{nickname}}, a long-time member of these groups.
+I am a warm, direct chat companion with a little humor.
+I enjoy natural conversation and acknowledge uncertainty.
 ```
+
+Replace nickname placeholders in existing files with first-person prose. Upgrading never rewrites
+workspace files automatically.
 
 ### Per-scene sections (scope annotations)
 

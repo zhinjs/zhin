@@ -696,6 +696,13 @@ export class AgentTurnIngressRoute implements IngressRoute {
     if (!text || trigger?.enabled === false || hasIgnoredTriggerPrefix(text, trigger)) return null;
     const engagement = this.#ambientEngagement();
     if (!engagement?.enabledFor(platform, message.conversation.id)) return null;
+    const source = readOperationSession(message);
+    if (source) {
+      const operation = this.options.im.endpoints.captureOperation({ target: message.conversation,
+        client: source.endpoint, signal: source.signal });
+      try { botName = operation.profile?.peek().values.nickname?.trim() || botName; }
+      finally { operation.release(); }
+    }
     const key = `${platform}:${message.conversation.id}`;
     const judge = this.#ambientDecisionRoute(snapshot, key);
     const decision = await engagement.consider({
@@ -1053,6 +1060,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         ...(modelStartedAt !== undefined ? { durationMs: Date.now() - modelStartedAt } : {}),
       });
       let admission: Extract<TurnAdmission, { kind: 'run' }> | undefined;
+      let profileOperation: ReturnType<ImRuntime['endpoints']['captureOperation']> | undefined;
       /** ADR 0038 §4: the stale verdict is audited once per turn. */
       let staleAudited = false;
       const staleReplyBlocked = (): boolean => {
@@ -1131,11 +1139,16 @@ export class AgentTurnIngressRoute implements IngressRoute {
             ...(admission ? [admission.signal] : []),
             ...(lease.stopSignal ? [lease.stopSignal] : []),
           ]);
+          const source = readOperationSession(message);
+          if (source) profileOperation = options.im.endpoints.captureOperation({
+            target: message.conversation, client: source.endpoint, signal, requester,
+          });
           const contextState = await resolveRuntimeTurnContextState({
             snapshot,
             conversation: message.conversation,
             signal,
             senderId: message.sender?.id,
+            selfProfile: profileOperation?.profile,
             factServices: { store: options.agent.agent.getUserProfiles?.()?.scenes, refresher: this.#sceneFactRefresher },
           });
           signal.throwIfAborted();
@@ -1317,6 +1330,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 },
               }),
               ports: {
+                ...(profileOperation?.profile ? { selfProfile: profileOperation.profile } : {}),
                 // ADR 0038 §5: a danmaku turn never puts an approval card in front of anyone.
                 approval: liveDanmaku ? NO_APPROVAL_PORT : options.approvalPort ?? resolveApprovalPort({
                   mode: turnPolicy.shell?.approvalMode
@@ -1541,6 +1555,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       } finally {
         capabilityActive = false;
+        profileOperation?.release();
         admission?.release();
       }
   }

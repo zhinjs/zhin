@@ -12,6 +12,7 @@ import { agentToolApprovalQueueToken } from '../../../src/plugin-runtime/console
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const seedPresets = vi.fn(async () => 3);
+const publishHost = vi.hoisted(() => vi.fn());
 // Real ZhinAgent so the test exercises its actual SessionSystem persistence latch.
 const agentRef: { current?: InstanceType<typeof import('@zhin.js/agent/runtime').ZhinAgent> } = {};
 
@@ -42,6 +43,7 @@ vi.mock('../../../src/plugin-runtime/agent/tool-feature-publisher.js', () => ({
 vi.mock('../../../src/plugin-runtime/agent/publication-coordinator.js', () => ({
   AgentHostPublicationCoordinator: class {
     constructor(options: { resources: Scope }) {
+      publishHost(options);
       options.resources.provide(agentHostToken, {} as never);
     }
   },
@@ -77,6 +79,7 @@ function install(workroom?: unknown) {
 describe('installAgentHost optional Workroom', () => {
   beforeEach(() => {
     seedPresets.mockClear();
+    publishHost.mockClear();
     // Offline provider: never called, the installer only composes the Agent.
     agentRef.current = new ZhinAgent(new SdkProviderAdapter('mock', 'openai', { sdk: 'openai', apiKey: 'test-key' }, ['m']), {});
   });
@@ -90,6 +93,21 @@ describe('installAgentHost optional Workroom', () => {
     expect(resources.has(ingressRouteToken)).toBe(true);
     expect(resources.has(workroomHostToken)).toBe(false);
     expect(seedPresets).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures each real bootstrap source before formatting its headings', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-bootstrap-files-'));
+    try {
+      const agents = '# Rules\n## SOUL.md\nKeep these release instructions.';
+      await writeFile(join(root, 'SOUL.md'), 'Main persona.');
+      await writeFile(join(root, 'AGENTS.md'), agents);
+      await installAgentHost({ runtime: {} as never, im: {} as never,
+        workroomStorageMode: 'file', projectRoot: root })(context(new Scope(rootPluginId())));
+      expect(publishHost).toHaveBeenCalledWith(expect.objectContaining({
+        bootstrapText: `## SOUL.md\nMain persona.\n\n## AGENTS.md\n${agents}`,
+        contextFiles: [{ path: 'SOUL.md', content: 'Main persona.' }, { path: 'AGENTS.md', content: agents }],
+      }));
+    } finally { await rm(root, { recursive: true, force: true }); }
   });
 
   it('marks Agent persistence ready without Workroom so the first turn does not wait for the timeout (#857)', async () => {

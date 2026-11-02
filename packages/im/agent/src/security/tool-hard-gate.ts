@@ -89,7 +89,7 @@ export const CORE_DANGEROUS_TOOLS: ReadonlyMap<string, DangerousToolCategory> = 
   ...(['send_red_packet', 'red_packet', 'send_hongbao', 'transfer', 'transfer_money', 'pay', 'payment',
     'send_payment'] as const).map((name) => [name, 'funds'] as const),
   // 身份：改 Bot 资料、头像、签名、昵称、解绑账号
-  ...(['set_profile', 'set_avatar', 'set_signature', 'set_self_nickname', 'set_bot_nickname', 'set_online_status',
+  ...(['set_profile', 'set_self_profile', 'set_avatar', 'set_signature', 'set_self_nickname', 'set_bot_nickname', 'set_online_status',
     'set_group_portrait', 'unbind'] as const).map((name) => [name, 'identity'] as const),
 ]);
 

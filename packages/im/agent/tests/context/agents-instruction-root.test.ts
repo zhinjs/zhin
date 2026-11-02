@@ -35,4 +35,22 @@ describe('AGENTS.md envelope chain', () => {
     vi.spyOn(process, 'cwd').mockReturnValue(root);
     expect(await buildAgentsEnvelopeContext(root, undefined, { excludeRoot: true })).toBeNull();
   });
+
+  it('does not reload a data fallback after the root bootstrap has been captured', async () => {
+    root = await mkdtemp(path.join(tmpdir(), 'zhin-agents-'));
+    await mkdir(path.join(root, 'data'));
+    await writeFile(path.join(root, 'data', 'AGENTS.md'), 'LATEST DATA RULES');
+    vi.spyOn(process, 'cwd').mockReturnValue(root);
+    expect(await buildAgentsEnvelopeContext(root, undefined, { excludeRoot: true })).toBeNull();
+    expect(await buildAgentsEnvelopeContext(root)).toContain('LATEST DATA RULES');
+  });
+
+  it('keeps a known AGENTS file private across ordinary file-name Markdown headings', async () => {
+    root = await mkdtemp(path.join(tmpdir(), 'zhin-agents-'));
+    await writeFile(path.join(root, 'AGENTS.md'), '# Owner\n<!-- scope: master-private -->\nsecret\n## TOOLS.md\nNested secret.\n# Public\nkept');
+    vi.spyOn(process, 'cwd').mockReturnValue(root);
+    const text = await buildAgentsEnvelopeContext(root, { kind: 'group', master: false });
+    expect(text).toContain('# Public\nkept');
+    expect(text).not.toMatch(/Nested secret|\nsecret/);
+  });
 });

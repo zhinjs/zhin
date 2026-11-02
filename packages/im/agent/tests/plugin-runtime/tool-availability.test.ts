@@ -4,6 +4,7 @@ import { defineAgentTool, ToolIndex, toolFeatureId } from '@zhin.js/tool';
 import { CapabilityIngress } from '../../src/plugin-runtime/capability-ingress.js';
 import { createDeferredCapabilityPlan } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import type { TurnAccessContext } from '../../src/turn/turn-ingress.js';
+import { createNativeSelfProfileToolFeatures } from '../../src/plugin-runtime/native-self-profile-tools.js';
 
 function fixture(restricted = false) {
   const owner = rootPluginId();
@@ -43,6 +44,23 @@ function turn(sessionKey: string): TurnAccessContext {
 }
 
 describe('Tool availability projection', () => {
+  it('keeps fallback profile reads while hiding unavailable account writes before discovery or approval', async () => {
+    const { owner, snapshot: existing } = fixture();
+    const slots = createNativeSelfProfileToolFeatures().map(({ name, definition }) => createCapabilitySlot({
+      owner, feature: toolFeatureId, localName: name, source: `/native/${name}`, definition,
+    }));
+    const base = { ...existing, capabilities: new Map(slots.map(slot => [slot.id, slot])) };
+    const snapshot = { ...base, projections: new Map([[toolFeatureId, new ToolIndex(slots, base)]]) };
+    const access = turn('current');
+    const profile = (writableFields: readonly ('nickname' | 'bio')[]) => ({ ...access,
+      input: { contextState: { bot: { profile: { values: { nickname: 'Fallback' }, sources: { nickname: 'configured' as const },
+        writableFields, platformStatus: 'unsupported' as const } } } },
+    });
+    const ingress = new CapabilityIngress();
+    expect((await ingress.read(snapshot, owner, () => true, profile([]))).tools.map(tool => tool.name)).toEqual(['get_self_profile']);
+    expect((await ingress.read(snapshot, owner, () => true, profile(['nickname']))).tools.map(tool => tool.name)).toEqual(['get_self_profile', 'set_self_profile']);
+    expect((await ingress.read(snapshot, owner, () => true, { ...access, origin: { kind: 'http', sessionId: 'http' } })).tools).toEqual([]);
+  });
   it('filters cooldown tools before resident, persisted loads, discovery and load_tool are built', async () => {
     const { owner, snapshot, ready } = fixture();
     const ingress = new CapabilityIngress();

@@ -23,6 +23,13 @@ async function fixture(send: (request: EndpointSendRequest) => Promise<string> =
         start() {}, open() {}, close() {}, stop() {}, send,
         streaming: options.streaming,
         control: { recall: async ({ message }) => { calls.push({ account: this.account, message: message.id }); } },
+        profile: {
+          writableFields: ['nickname'],
+          read: async () => ({ nickname: this.account }),
+          write: async ({ change }) => change.field === 'nickname'
+            ? { status: 'updated', profile: { nickname: change.value } }
+            : { status: 'rejected' },
+        },
       });
     }
   }
@@ -575,6 +582,27 @@ it('routes existing-message control solely by its canonical reference, not contr
   } finally { await f.close(); }
 });
 
+it('captures the same account for profile reads and writes without sharing another account cache', async () => {
+  const f = await fixture();
+  const caller = new AbortController();
+  const source = f.im.endpoints.captureOperation({
+    target: f.target, client: f.index.clientById(f.one.canonicalId), signal: caller.signal,
+  });
+  const other = f.im.endpoints.captureOperation({
+    target: { ...f.target, endpoint: { ...f.target.endpoint, id: f.two.canonicalId } },
+    client: f.index.clientById(f.two.canonicalId),
+  });
+  try {
+    expect(await source.profile!.read({ signal: caller.signal })).toMatchObject({ values: { nickname: 'one' } });
+    await source.profile!.write!({ signal: caller.signal, change: { field: 'nickname', value: 'Changed' } });
+    expect(source.profile!.peek()).toMatchObject({ values: { nickname: 'Changed' }, sources: { nickname: 'platform' } });
+    expect(await other.profile!.read({ signal: new AbortController().signal })).toMatchObject({ values: { nickname: 'two' } });
+    source.release();
+    await expect(source.profile!.write!({ signal: caller.signal, change: { field: 'nickname', value: 'Escaped' } }))
+      .rejects.toMatchObject({ code: 'operation_scope_ended' });
+  } finally { source.release(); other.release(); await f.close(); }
+});
+
 it('retains full scene and actual source Client, and releases on account cancellation without rebinding', async () => {
   const f = await fixture();
   const source = f.index.clientById(f.one.canonicalId);
@@ -589,6 +617,8 @@ it('retains full scene and actual source Client, and releases on account cancell
     await f.adapter.start(f.one.instanceId, f.adapter.revision);
     await expect(operation.control!.recall!({ message: { conversation: f.target, id: 'late' } })).rejects.toMatchObject({ disposition: 'not_sent' });
     await expect(operation.send('late')).rejects.toMatchObject({ disposition: 'not_sent' });
+    await expect(operation.profile!.read({ signal: new AbortController().signal, refresh: true }))
+      .rejects.toMatchObject({ disposition: 'not_sent' });
     expect(f.calls).toEqual([{ account: 'one', message: 'early' }]);
   } finally { operation.release(); await f.close(); }
 });

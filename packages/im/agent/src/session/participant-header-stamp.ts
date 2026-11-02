@@ -20,9 +20,11 @@ export function stampUserHeader(user: UserMessage, quote?: ConversationQuote): U
 /** The bot's own facts as a structured actor, from the turn's `contextState.bot`. */
 export function assistantActorOf(bot: NonNullable<TurnContextState['bot']> | undefined): ConversationActor | undefined {
   if (!bot?.id) return undefined;
+  const name = bot.profile?.values.nickname !== undefined
+    ? bot.profile.values.nickname?.trim() : bot.name?.trim();
   return {
     subjectId: bot.id,
-    ...(bot.name?.trim() ? { displayName: bot.name.trim() } : {}),
+    ...(name ? { displayName: name } : {}),
     ...(bot.platformRole ? { roles: [bot.platformRole] } : {}),
     ...(bot.nickname ? { groupNickname: bot.nickname } : {}),
   };

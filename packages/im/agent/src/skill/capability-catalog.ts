@@ -6,8 +6,6 @@
  * `load_skill` (or intent priming), and specialist instructions only when the
  * agent is selected, so the resident prompt stays small as plugins add skills.
  */
-import { SKILL_DISCLOSURE_PROMPT_HINT } from './progressive-disclosure.js';
-
 /** Headings the context budget report uses to attribute catalog tokens. */
 export const SKILL_CATALOG_HEADING = '## Available skills';
 export const AGENT_CATALOG_HEADING = '## Available specialist agents';
@@ -87,15 +85,14 @@ export function toolIndexGroup(item: { readonly owner?: string; readonly mcpServ
 const byName = (a: CatalogEntry, b: CatalogEntry): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 
 /**
- * Skill catalog block: name and one trigger sentence (<= 40 chars) per skill, plus the load_skill
- * hint. Sorted by name so the block is byte-stable across turns; the full description arrives with
+ * Skill catalog block: name and one trigger sentence (<= 40 chars) per skill.
+ * Sorted by name so the block is byte-stable across turns; the full description arrives with
  * load_skill / discover.
  */
 export function renderSkillCatalog(skills: readonly CatalogEntry[]): string | undefined {
   if (skills.length === 0) return undefined;
   return [
     SKILL_CATALOG_HEADING,
-    SKILL_DISCLOSURE_PROMPT_HINT,
     ...renderEntries([...skills].sort(byName), 'use discover(kind=skill) to search them.', (text) => triggerSentence(text)),
   ].join('\n');
 }

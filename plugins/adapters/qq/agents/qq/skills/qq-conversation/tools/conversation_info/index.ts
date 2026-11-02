@@ -12,7 +12,7 @@ function guildRole(roles: readonly unknown[] | undefined): string {
 }
 
 export default defineAgentTool({
-  description: '读取当前 QQ 官方机器人会话及机器人自己的群／频道身份；区分调用者权限、机器人平台权限和官方不支持的操作',
+  description: '读取当前 QQ 官方机器人会话及你自己的群／频道身份；区分调用者权限、你的平台权限和官方不支持的操作',
   adapter: 'qq',
   requiresApproval: 'never',
   readOnly: true,

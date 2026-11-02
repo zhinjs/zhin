@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Telegram Bot API protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -12,7 +13,7 @@ import { escapeTelegramHtml, markdownToTelegramHtml } from './markdown-to-html.j
 const logger = getLogger('telegram');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface TelegramEndpointConfig {
+export interface TelegramEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly token: string;
   /** Default true. `false` selects webhook mode (requires httpHostToken). */

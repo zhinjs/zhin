@@ -124,7 +124,7 @@
     "features": [
       {
         "package": "@zhin.js/adapter",
-        "api": "^2.0.0"
+        "api": "^2.1.0"
       },
       {
         "package": "@zhin.js/command",
@@ -136,7 +136,7 @@
       },
       {
         "package": "@zhin.js/tool",
-        "api": "^1.0.0"
+        "api": "^1.1.0"
       },
       {
         "package": "@zhin.js/skill",

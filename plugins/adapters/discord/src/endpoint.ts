@@ -1,4 +1,5 @@
 import { createDiscordRestApiAgent } from './rest-api-proxy.js';
+import { createDiscordSelfProfile, createDiscordRestSelfProfile } from './self-profile.js';
 /**
  * DiscordEndpoint — lifecycle, outbound, admit, gateway / interactions modes, agent tool surface.
  */
@@ -104,7 +105,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
       start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
       get name() { return options.config.id; }, get transportState() { return endpoint.#transportState; },
-      management: this.#management, control: this.#control, content: this.#content,
+      management: this.#management, control: this.#control, content: this.#content, profile: createDiscordSelfProfile(this),
     });
   }
 
@@ -160,6 +161,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
         },
       }, AbortSignal.any([abort.signal, executionSignal]));
       if (abort.signal.aborted || this.#connection !== abort) return;
+      if (this.user?.id) this[endpointSpec].reportSelfUserId(this.user.id);
       this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.id,
@@ -419,6 +421,7 @@ export class DiscordInteractionsEndpoint extends DiscordRestClient implements En
       start: () => this.#startFramework(), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
       control: this.#control, content: this.#content,
+      profile: createDiscordRestSelfProfile(this, id => this[endpointSpec].reportSelfUserId(id)),
     });
   }
 

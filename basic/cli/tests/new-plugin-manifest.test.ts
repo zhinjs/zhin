@@ -146,7 +146,7 @@ describe('createPluginManifest', () => {
 
   it('selects Adapter API 2 independently of engine and unchanged Feature APIs', () => {
     expect(manifest('adapter').zhin).toMatchObject({ engine: '^1.0.0', features: [
-      { package: '@zhin.js/skill', api: '^1.0.0' }, { package: '@zhin.js/adapter', api: '^2.0.0' },
+      { package: '@zhin.js/skill', api: '^1.0.0' }, { package: '@zhin.js/adapter', api: '^2.1.0' },
     ] });
     for (const kind of ['normal', 'service'] as const) {
       expect(manifest(kind).zhin.features.every((feature: { api: string }) => feature.api === '^1.0.0')).toBe(true);

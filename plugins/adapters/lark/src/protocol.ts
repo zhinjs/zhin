@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import type { Locale } from 'zhin.js/i18n';
 import { validateLarkWebApiProxy } from './web-api-proxy.js';
 /**
@@ -15,7 +16,7 @@ import { formatLarkCard } from './cards.js';
 const logger = getLogger('lark');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface LarkEndpointConfig {
+export interface LarkEndpointConfig extends EndpointProfileConfiguration {
   /** Native streaming cards are enabled unless explicitly disabled. */
   readonly streaming?: boolean;
   readonly streamingIntervalMs?: number;

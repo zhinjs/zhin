@@ -1,3 +1,4 @@
+import { createSatoriSelfProfile } from './self-profile.js';
 import { acceptHttpIngress } from 'imhelper';
 /**
  * SatoriEndpoint — WebSocket and webhook lifecycle, outbound, admit.
@@ -88,6 +89,8 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
       close: () => { this.#open = false; }, stop: () => this.#stop(),
       send: request => this.#send(request),
       management: this.#management, control: this.#control,
+      profile: createSatoriSelfProfile({ call, platform: options.config.platform, accountId: options.config.userId,
+        reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
     forwardSatoriClientEvents(this, (name, payload) => {
       void this[endpointSpec].events.run(() => {
@@ -370,6 +373,8 @@ export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
       close: () => { this.#open = false; }, stop: () => this.#stop(),
       send: request => this.#send(request),
       management: this.#management, control: this.#control,
+      profile: createSatoriSelfProfile({ call, platform: options.config.platform, accountId: options.config.userId,
+        reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
     forwardSatoriClientEvents(this, (name, payload) => {
       void this[endpointSpec].events.run(() => {

@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * OneBot 11 protocol helpers (no legacy Adapter/Endpoint / segment-mapper).
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -9,7 +10,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 const logger = getLogger('onebot11');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface OneBot11EndpointConfig {
+export interface OneBot11EndpointConfig extends EndpointProfileConfiguration {
   readonly connection?: 'ws' | 'wss';
   readonly id: string;
   readonly access_token?: string;

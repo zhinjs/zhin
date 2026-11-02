@@ -41,6 +41,7 @@ import {
   type TelegramUpdate,
 } from './protocol.js';
 import { registerTelegramWebhookRoutes } from './webhook.js';
+import { createTelegramSelfProfile } from './self-profile.js';
 
 const CHAT_MEMBER_CACHE_TTL_MS = 60_000;
 const CHAT_MEMBER_CACHE_MAX = 2_000;
@@ -94,6 +95,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
   readonly #inflightUpdates = new Map<number, Promise<void>>();
   #botUserId?: number;
   #botUsername?: string;
+  #botName?: string;
   readonly #chatMemberCache = new Map<string, ChatMemberPermit>();
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: ({ message, signal }) => this.recallMessage(message, signal),
@@ -114,6 +116,10 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       get name() { return options.config.id; }, get transportState() { return endpoint.#transportState; },
       control: this.#control, content: this.#content,
       streaming: options.config.streaming !== false ? createTelegramStreaming(() => this, options.config.streamingIntervalMs) : undefined,
+      profile: createTelegramSelfProfile({ client: this,
+        current: () => this.#botName === undefined ? {} : { nickname: this.#botName },
+        nicknameChanged: nickname => { this.#botName = nickname; },
+      }),
     });
   }
 
@@ -170,6 +176,8 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         if (abort.signal.aborted) return;
         this.#botUserId = me.id;
         this.#botUsername = me.username;
+        this.#botName = me.first_name;
+        if (me.id) this[endpointSpec].reportSelfUserId(String(me.id));
 
         if (this.#options.config.mode === 'webhook') {
           if (!this.#options.http) {

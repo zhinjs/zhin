@@ -45,6 +45,7 @@ import {
 import type { AdapterInstance } from './adapter.js';
 import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView, type EndpointPortScope } from './adapter-types.js';
 import { bindPlatformEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
+import { endpointCreationConfiguration, mergeEndpointProfileConfiguration, type SelfProfilePort, type SelfProfileSnapshot } from './endpoint-profile.js';
 
 /** Trusted composition input, excluded from public snapshot resources and authoring contexts. */
 export interface AdapterPersistencePorts {
@@ -77,6 +78,7 @@ export interface EndpointConnectionInfo {
   readonly identity: EndpointIdentity;
   readonly name?: string;
   readonly selfUserId?: string;
+  readonly profile?: SelfProfileSnapshot;
   readonly transportState?: EndpointTransportState;
   readonly eventDiagnostics: AdapterEndpointSummary['eventDiagnostics'];
 }
@@ -175,10 +177,11 @@ export class AdapterIndex {
         const initial: EndpointDesiredRecord[] = expandEndpointConfigs(slot, snapshot).map(expansion => ({
           instanceId: expansion.id, canonicalId: expansion.id, endpointId: expansion.endpointId,
           revision: 1, desiredEnabled: true,
-          config: expansion.config ?? (construction.config ?? {}) as Readonly<Record<string, unknown>>,
+          config: expansion.config ?? endpointCreationConfiguration((construction.config ?? {}) as Readonly<Record<string, unknown>>, {}),
         }));
         const makeContext = (record: EndpointDesiredRecord, childSignal: AbortSignal) => Object.freeze({
-          ...createConstructionContext(snapshot, slot.owner, admission, childSignal), config: record.config,
+          ...createConstructionContext(snapshot, slot.owner, admission, childSignal),
+          config: mergeEndpointProfileConfiguration(creationDefaults, record.config),
           id: record.canonicalId, endpointId: record.endpointId, name: slot.localName,
         });
         const baseContext = Object.freeze({ ...construction, id: slot.id, endpointId: slot.localName, name: slot.localName });
@@ -267,6 +270,7 @@ export class AdapterIndex {
       identity: runtime.identity,
       name: endpointLiveName(endpoint),
       selfUserId: runtime.selfUserId,
+      ...(runtime.selfProfile ? { profile: runtime.selfProfile.peek() } : {}),
       transportState: runtime.transportState,
       eventDiagnostics: runtime.eventDiagnostics,
     });
@@ -339,6 +343,26 @@ export class AdapterIndex {
     const record = this.#record(id);
     const port = record?.endpoint ? endpointRuntimeOf(record.endpoint).management : undefined;
     return port && record?.endpoint ? scopeEndpointManagement({ port, invoke: this.#portInvoker({ id, endpoint: record.endpoint, scope }) }) : undefined;
+  }
+  /** Capture the original Client and originating lifetime, exactly like management/control ports. */
+  profile(id: CapabilityId, scope?: EndpointPortScope): SelfProfilePort | undefined {
+    const record = this.#record(id);
+    const endpoint = record?.endpoint;
+    const state = endpoint && endpointRuntimeOf(endpoint).selfProfile;
+    if (!endpoint || !state) return undefined;
+    const invoke = this.#portInvoker({ id, endpoint, scope });
+    const write = state.write;
+    return Object.freeze({
+      peek: () => {
+        scope?.assertActive?.();
+        const lease = this.acquire(id, scope?.signal, endpoint);
+        try { return state.peek(); } finally { lease.release(); }
+      },
+      read: request => invoke({ signal: request.signal,
+        run: signal => state.read({ ...request, signal }) }),
+      ...(write ? { write: request => invoke({ signal: request.signal,
+        run: signal => write.call(state, { ...request, signal }) }) } : {}),
+    } satisfies SelfProfilePort);
   }
   /** Each facade captures its original Client; calls cannot resolve a replacement incarnation. */
   #portInvoker({ id, endpoint, scope }: EndpointPortBinding): EndpointPortInvoker {
@@ -533,7 +557,7 @@ function expandEndpointConfigs(
   return Object.freeze(normalized.map((entry) => Object.freeze({
     id: `${slot.id}~${entry.id}` as CapabilityId,
     endpointId: entry.id,
-    config: Object.freeze({ ...base, ...entry, id: entry.id }),
+    config: Object.freeze({ ...endpointCreationConfiguration(base, entry), id: entry.id }),
   })));
 }
 

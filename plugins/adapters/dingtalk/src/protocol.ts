@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import { messages as t } from './i18n.js';
 import type { Locale } from 'zhin.js/i18n';
 /**
@@ -11,7 +12,7 @@ import type { IncomingMessage } from 'node:http';
 import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface DingTalkEndpointConfig {
+export interface DingTalkEndpointConfig extends EndpointProfileConfiguration {
   readonly streamProxy?: import('./stream-proxy.js').DingTalkStreamProxy;
   readonly id: string;
   readonly appKey: string;

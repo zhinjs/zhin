@@ -51,7 +51,7 @@ function setup(srv: ReturnType<typeof server>, extra: Partial<ProviderInstanceCo
   return { runtime, model: createLlmTransportModel('gemini', config, 'gemini-3.8-flash') };
 }
 
-const generates = (calls: Call[]) => calls.filter((c) => /GenerateContent/.test(c.url) && !c.url.includes('cachedContents'));
+const generates = (calls: Call[]) => calls.filter((c) => /:(?:generateContent|streamGenerateContent)/.test(c.url));
 const creates = (calls: Call[]) => calls.filter((c) => c.url.endsWith('/cachedContents'));
 
 describe('Gemini explicit context caching', () => {
@@ -107,6 +107,27 @@ describe('Gemini explicit context caching', () => {
       const second = await provider.completeTextResult(SYSTEM, 'b');
       expect(second.usage?.cacheRead).toBe(4000);
       expect(creates(srv.calls)).toHaveLength(1);
+    } finally {
+      await provider.dispose();
+    }
+  });
+
+  it('keeps the standalone runtime but replaces its cache when the supplied system changes', async () => {
+    const srv = server();
+    const provider = createSdkProviderAdapter('gemini', {
+      sdk: 'google', apiKey: 'test-key', models: ['gemini-3.8-flash'], contextCache: { mode: 'explicit' },
+    }, new AiHttpTransport({ fetch: srv.fetch }))!;
+    try {
+      for (const system of [SYSTEM, SYSTEM, `${SYSTEM} New policy.`, `${SYSTEM} New policy.`]) {
+        await provider.completeTextResult(system, 'synthetic task');
+      }
+      expect(creates(srv.calls)).toHaveLength(2);
+      expect(generates(srv.calls).map(call => call.body.cachedContent))
+        .toEqual(['cachedContents/c1', 'cachedContents/c1', 'cachedContents/c2', 'cachedContents/c2']);
+      expect(creates(srv.calls)[1]!.body.systemInstruction.parts[0].text).toContain('New policy.');
+      expect(srv.calls.filter(call => call.method === 'DELETE').map(call => call.url))
+        .toEqual([expect.stringMatching(/\/cachedContents\/c1$/)]);
+      expect(JSON.stringify(srv.calls)).not.toContain('test-key');
     } finally {
       await provider.dispose();
     }
@@ -179,14 +200,47 @@ describe('Gemini explicit context caching', () => {
     expect(generates(srv.calls).at(-1)!.body.cachedContent).toBe('cachedContents/c2');
   });
 
+  it('reuses unchanged schemas but sends the new cache ID after a tool schema changes', async () => {
+    const srv = server();
+    const { runtime, model } = setup(srv);
+    const context = { systemPrompt: SYSTEM, messages: [createUserMessage('synthetic task')], tools: [weather] };
+    await runtime.complete(model, context);
+    await runtime.complete(model, context);
+    await runtime.complete(model, { ...context, tools: [{ ...weather,
+      parameters: z.object({ city: z.string(), units: z.enum(['metric', 'imperial']) }),
+    }] });
+    expect(creates(srv.calls)).toHaveLength(2);
+    expect(generates(srv.calls).map(call => call.body.cachedContent))
+      .toEqual(['cachedContents/c1', 'cachedContents/c1', 'cachedContents/c2']);
+    const schemas = creates(srv.calls).map(call => call.body.tools[0].functionDeclarations[0].parameters);
+    expect(schemas[0].properties).not.toHaveProperty('units');
+    expect(schemas[1].properties.units.enum).toEqual(['metric', 'imperial']);
+    expect(srv.calls.filter(call => call.method === 'DELETE')).toHaveLength(1);
+    expect(generates(srv.calls).at(-1)!.body.tools).toBeUndefined();
+  });
+
+  it('keeps provider explicit-cache configuration independent of the stream hint opt-out', async () => {
+    const srv = server();
+    const { runtime, model } = setup(srv);
+    const context = { systemPrompt: SYSTEM, messages: [createUserMessage('synthetic task')] };
+    await runtime.complete(model, context, { promptCache: false });
+    await runtime.complete(model, context, { promptCache: false });
+    expect(creates(srv.calls)).toHaveLength(1);
+    expect(generates(srv.calls).map(call => call.body.cachedContent))
+      .toEqual(['cachedContents/c1', 'cachedContents/c1']);
+  });
+
   it('falls back to the full request when the server no longer has the cache', async () => {
-    const srv = server({ generateStatus: (call) => (call.body.cachedContent ? 404 : 200) });
+    const srv = server({ generateStatus: (call) => (call.body.cachedContent === 'cachedContents/c1' ? 404 : 200) });
     const { runtime, model } = setup(srv);
     const message = await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('a')], tools: [weather] });
     expect(message.stopReason).toBe('stop');
     const last = generates(srv.calls).at(-1)!.body;
     expect(last.cachedContent).toBeUndefined();
     expect(last.systemInstruction).toBeDefined();
+    await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('b')], tools: [weather] });
+    expect(creates(srv.calls)).toHaveLength(2);
+    expect(generates(srv.calls).at(-1)!.body.cachedContent).toBe('cachedContents/c2');
   });
 
   it('leaves requests unchanged (implicit caching) when the cache cannot be created, and does not retry each turn', async () => {

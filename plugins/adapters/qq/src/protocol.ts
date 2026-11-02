@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /** QQ Official Bot protocol helpers. Canonicalization is owned by Core. */
 
 import { EndpointDeliveryError, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
@@ -8,7 +9,7 @@ import { resolveAdapterNotifyTarget, type AdapterNotifyTarget, type ResolvedAdap
 const logger = getLogger('qq');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface QqEndpointConfig {
+export interface QqEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly appid: string;
   readonly secret: string;

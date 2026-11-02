@@ -4,7 +4,7 @@ import { currentConversation, recallTarget, requireGroupManager, resolveMessageT
 import { messages as t } from '../../../../messages.js';
 
 export default defineAgentTool({
-  description: '撤回当前 QQ 群或频道子频道内他人的真实消息；需调用方具备群管发起权限，机器人须为管理员，官方只允许 2 分钟内',
+  description: '撤回当前 QQ 群或频道子频道内他人的真实消息；需调用方具备群管发起权限，你须为管理员，官方只允许 2 分钟内',
   adapter: 'qq',
   scopes: ['group', 'channel'],
   permissions: ['role(master,admin,trusted,owner)'],

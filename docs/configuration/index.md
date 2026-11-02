@@ -421,16 +421,16 @@ plugins:
 icqq:
   master: "${ICQQ_MASTER}" # 顶层共享：所有 endpoint 生效
   endpoints:
-    # 逐项：name 必填，其余字段与顶层合并（逐项优先）
-    - name: "${ICQQ_ACCOUNT_1}"
-    - name: "${ICQQ_ACCOUNT_2}"
+    # 逐项：id 必填，其余字段与顶层合并（逐项优先）
+    - id: "${ICQQ_ACCOUNT_1}"
+    - id: "${ICQQ_ACCOUNT_2}"
 ```
 
 展开规则（`@zhin.js/adapter` 的 `expandEndpointConfigs`）：
 
-- 每个 endpoint 的最终配置 = 实例配置（去掉 `endpoints` 键）与该项的浅合并，**逐项字段覆盖顶层**。
-- `name` 必填且为非空字符串；不含 `~`；重名只保留首个并告警。
-- `endpoints` 为空或全部非法时，退回单 Endpoint（名为 instanceKey）。
+- 连接字段浅合并，逐项覆盖顶层；资料兜底单独按字段合并。
+- 每项必须提供非空 `id`；包含保留分隔符（`~` 和 NUL）、重复 ID 或非法条目时明确报错。
+- 未提供 `endpoints` 或数组为空时，创建一个 Endpoint，使用顶层 `id`，未提供时使用 instanceKey。
 
 真实示例（QQ 官方 bot，主账号走代理网关 + 沙箱账号并存）：
 
@@ -441,14 +441,14 @@ plugins:
   slack: "@zhin.js/adapter-slack"
 qq:
   endpoints:
-    - name: zhin
+    - id: zhin
       appid: "${QQ_APPID}"
       secret: "${QQ_SECRET}"
       mode: websocket
       sandbox: false
       gatewayUrl: "https://bots.example.com/gateway/102005927"
       intents: [ GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES ]
-    - name: "102069707"
+    - id: "102069707"
       appid: "${QQ_SANDBOX_APPID}"
       secret: "${QQ_SANDBOX_SECRET}"
       mode: websocket
@@ -456,7 +456,7 @@ qq:
       intents: [ GUILDS, GROUP_AND_C2C_EVENT ]
 slack:
   endpoints:
-    - name: zhin
+    - id: zhin
       token: "${SLACK_TOKEN}"
       appToken: "${SLACK_APP_TOKEN}"
       signingSecret: "${SLACK_SIGNING_SECRET}"
@@ -479,3 +479,33 @@ plugins: {}
 ```
 
 启动后按 `zhin setup` 向导逐步补齐 database / 适配器 / AI（见 [CLI 参考](../cli/index.md)）；运行方式见 [zhin runtime start 详解](../cli/runtime.md)。
+
+## 账号自身资料
+
+Agent 优先使用当前 Endpoint 的平台资料。适配器顶层的 `nickname` 和 `profile` 是缺失字段
+的默认值；`endpoints[]` 可逐项覆盖，`profile` 按字段合并。这些值不会自动修改平台资料。
+
+```yaml
+icqq:
+  master: "你的 QQ 号"
+  nickname: 小知
+  profile:
+    gender: unknown
+    interests: [音乐, 摄影]
+    bio: 喜欢交流的生活助手
+  endpoints:
+    - id: "机器人 QQ 号"
+      nickname: 小知同学
+      profile:
+        interests: [音乐, 读书]
+```
+
+例如平台能读到昵称，就使用平台昵称；读不到兴趣，才使用此账号覆盖后的兴趣。平台明确
+返回空签名或空兴趣时，不会恢复配置中的旧值。群名片单独保留。已有 AI 配置的昵称仍是
+最终兜底，内部子 Agent 的角色名称保持独立。
+
+`profile` 支持 `gender`、`age`、`birthday`（`YYYY-MM-DD`）、`signature`、`avatar`（图片 URL）、
+`interests`（字符串数组）和 `bio`。没有配置或平台证据的信息保持未知。普通回合复用本次
+账号实例已读取的资料；需要重新查询时使用 `get_self_profile`。修改实际账号资料使用
+`set_self_profile`，它只开放适配器确实支持的字段，并沿用身份类操作审批。配置表单编辑
+的是兜底值，和平台资料修改是不同操作。

@@ -1,3 +1,4 @@
+import { createOnebot12SelfProfile } from './self-profile.js';
 import { acceptHttpIngress } from 'imhelper';
 /**
  * OneBot12 HTTP webhook endpoint — POST inbound + api_url outbound.
@@ -71,6 +72,7 @@ export class OneBot12WebhookEndpoint extends Onebot12Client implements Endpoint 
       close: () => { this.#open = false; }, stop: () => this.#stop(),
       send: request => this.#send(request),
       management: this.#management, control: this.#control, content: this.#content,
+      profile: createOnebot12SelfProfile({ call: callApi, accountId: options.config.userId, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
     this.#releaseClientEvents = forwardOnebot12ClientEvents(this, (name, payload) => {
       void this[endpointSpec].events.run(() => {

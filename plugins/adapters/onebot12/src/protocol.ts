@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import { readOnebot12Response } from './response.js';
 /**
  * OneBot 12 protocol helpers (no legacy Adapter/Endpoint / segment-mapper).
@@ -10,7 +11,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 const logger = getLogger('onebot12');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface OneBot12EndpointConfig {
+export interface OneBot12EndpointConfig extends EndpointProfileConfiguration {
   readonly platform: string;
   readonly userId: string;
   readonly connection?: 'ws' | 'webhook' | 'wss';

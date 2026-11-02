@@ -2,9 +2,10 @@ import { redactConfigurationUrl } from './configuration-metadata.js';
 import { AsyncResource } from 'node:async_hooks';
 import { sameConfigurationIdentity } from './configuration-identity.js';
 import { readConfigurationPath, writeConfigurationPath } from './configuration-fields.js';
+import { configuredSelfProfile, endpointCreationConfiguration } from './endpoint-profile.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, SELF_PROFILE_FIELDS } from '@zhin.js/im-contract';
 import { DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
 import { retireEndpoint, isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
@@ -290,6 +291,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
         throw new AdapterManagementError('invalid_configuration', 'Account identity changes require explicit replacement');
       }
     }
+    configuredSelfProfile(input.config);
     this.validateConfiguration(input.config as Config);
     const commit = () => this.#commit({
       expectedRevision,
@@ -370,8 +372,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
 
   patchConfiguration(instanceId: string, expectedRevision: number | null, patch: Readonly<Record<string, unknown>>, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
     const allowed = this.configurationUpdateFields;
-    if (!allowed) throw new AdapterManagementError('unsupported', 'This Adapter does not declare safe configuration updates');
-    for (const key of Object.keys(patch)) if (!allowed.includes(key)) {
+    const common = ['nickname', 'profile', ...SELF_PROFILE_FIELDS.filter(field => field !== 'nickname').map(field => `profile.${field}`)];
+    if (!allowed && (!Object.keys(patch).length || Object.keys(patch).some(key => !common.includes(key)))) {
+      throw new AdapterManagementError('unsupported', 'This Adapter does not declare safe configuration updates');
+    }
+    for (const key of Object.keys(patch)) if (!common.includes(key) && !allowed?.includes(key)) {
       throw new AdapterManagementError('invalid_configuration', 'The field is not updateable; identity changes require explicit replacement');
     }
     const previous = this.#require(instanceId).desired;
@@ -554,10 +559,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
   #creationConfiguration(endpointId: string, explicit: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
     const defaults = this.#options.creationDefaults;
     if (defaults === undefined) return explicit;
-    return { ...structuredClone(defaults), ...explicit, id: endpointId };
+    return { ...endpointCreationConfiguration(structuredClone(defaults), explicit), id: endpointId };
   }
   #newConfiguration(endpointId: string, explicit: Readonly<Record<string, unknown>>, instanceId: string): Readonly<Record<string, unknown>> {
     const config = this.#creationConfiguration(endpointId, explicit);
+    configuredSelfProfile(config);
     return this.prepareConfiguration(structuredClone(config) as Config, {
       instanceId, endpointId, canonicalId: `${this.descriptor.id}~${instanceId}` as CapabilityId,
     }) as Readonly<Record<string, unknown>>;

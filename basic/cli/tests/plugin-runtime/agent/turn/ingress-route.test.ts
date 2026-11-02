@@ -291,6 +291,7 @@ function progressiveIngress(options: {
         const result = await route.route(flow.message, { value: flow.snapshot, active: true } as never, rootPluginId(), undefined);
         // The production ingress handles engine errors; assertions inside the fake engine must still fail this test.
         if (executionError && !options.expectExecutionError) throw executionError;
+        expect(flow.profileRelease).toHaveBeenCalledOnce();
         return result;
       }
       finally { route.dispose(); }
@@ -318,18 +319,21 @@ function progressiveFacts() {
   const native: CoreReplyStream = { receipt, confirmed: [{ key: 'one', message: receipt.message, segments: [{ type: 'text', data: { text: 'answer' } }] }],
     update: vi.fn(), finish: vi.fn(async () => receipt), cancel: vi.fn(async () => receipt) };
   const openReplyStream = vi.fn((_options: OpenReplyStreamOptions): CoreReplyStream | undefined => native);
-  const release = vi.fn();
-  const captureOperation = vi.fn((_input: unknown): { openReplyStream?: typeof openReplyStream; release: typeof release } => ({ openReplyStream, release }));
+  const release = vi.fn(), profileRelease = vi.fn();
+  const captureOperation = vi.fn((_input: unknown): { openReplyStream?: typeof openReplyStream; release: typeof release } => ({ openReplyStream, release }))
+    .mockReturnValueOnce({ release: profileRelease });
   const ownsUrl = vi.fn((url: string) => url === 'https://assets.fixture.test/owned.png');
-  return { conversation, event, client, controller, control, snapshot, message, reply, native, openReplyStream, release, captureOperation, ownsUrl };
+  return { conversation, event, client, controller, control, snapshot, message, reply, native, openReplyStream, release, profileRelease, captureOperation, ownsUrl };
 }
 
 describe('CLI progressive reply ingress', () => {
   it('captures trusted native facts, preserves media authorization, and releases after completion', async () => {
     const f = progressiveIngress({ execute: async (request, flow) => {
       expect(flow.release).not.toHaveBeenCalled();
+      expect(flow.profileRelease).not.toHaveBeenCalled();
       const stream = request.ports.reply!.openStream!()!;
-      const captured = flow.captureOperation.mock.calls[0]![0] as unknown as Record<string, unknown>;
+      expect(flow.captureOperation).toHaveBeenCalledTimes(2);
+      const captured = flow.captureOperation.mock.calls.at(-1)![0] as unknown as Record<string, unknown>;
       expect(captured).toMatchObject({ target: flow.conversation, requester: rootPluginId() });
       expect(captured.client).toBe(flow.client);
       const options = flow.openReplyStream.mock.calls[0]![0];

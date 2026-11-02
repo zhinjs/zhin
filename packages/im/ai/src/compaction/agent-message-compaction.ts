@@ -43,7 +43,7 @@ const SUMMARY_SYSTEM = `You are a conversation summarization assistant. Compress
 - The source of authority-sensitive decisions
 - Core topics discussed
 
-The summary should be brief but informative so that later turns can quickly recover context.`;
+Keep your summary brief but informative so later turns can quickly recover context.`;
 
 export interface AgentCompactionConfig {
   enabled?: boolean;

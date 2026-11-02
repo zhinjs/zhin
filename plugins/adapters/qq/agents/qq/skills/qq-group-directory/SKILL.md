@@ -17,8 +17,8 @@ scopes:
 ---
 # qq-group-directory
 
-All lookups target the current group only. Members are identified by `member_openid`, which is scoped to this bot and group; never derive it from a nickname or reuse it in another group.
+All lookups target the current group only. Members are identified by `member_openid`, which is scoped to your current account and group; never derive it from a nickname or reuse it in another group.
 
-Member list and member detail are invite-only official capabilities. Error 11253 means the bot has no access; report that instead of guessing. `group_members` is paged (≤30 per page, 60 QPM): request further pages only when needed.
+Member list and member detail are invite-only official capabilities. Error 11253 means you have no access; report that instead of guessing. `group_members` is paged (≤30 per page, 60 QPM): request further pages only when needed.
 
-There is no official API for the bot's group list, friend list or arbitrary user profiles, so `group_list`, `friend_list` and `user_info` do not exist on QQ official bots.
+There is no official API for your group list, friend list or arbitrary user profiles, so `group_list`, `friend_list` and `user_info` do not exist on QQ official bots.

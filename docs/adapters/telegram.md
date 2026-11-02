@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=012d865747a3371e -->
+<!-- sync-adapter-docs:sha256=b1f1abb59e9dd6ba -->
 
 # @zhin.js/adapter-telegram
 
@@ -197,3 +197,11 @@ MIT
 ### 禁用按钮
 
 canonical keyboard 的 `disabled: true` 按钮映射为 Telegram Bot API 10.3 的 `disabled: {}`，不携带 `callback_data`；启用按钮仍使用原回调数据，并保留 1–64 UTF-8 字节校验。自建 Bot API Server 需支持该版本，见 [DisabledButton](https://core.telegram.org/bots/api#disabledbutton)。
+
+## 当前账号资料
+
+资料端口使用 Bot API 的账号方法，与聊天管理方法分开：`getMyName` / `setMyName` 读取及修改昵称，`getMyShortDescription` / `setMyShortDescription` 处理简短签名（`signature`），`getMyDescription` / `setMyDescription` 处理个人简介（`bio`）。这些操作针对默认语言版本；修改沿用 Agent 现有的身份类审批。
+
+`setMyProfilePhoto` 通过 multipart 附件上传已解析的 JPEG 字节，不把 URL 冒充上传文件，也不向模型暴露含 Bot Token 的 Telegram 下载地址。资料端口不返回需凭据访问的文件接口 URL，亦不声明 Bot 的年龄、性别、生日及兴趣可写。
+
+`nickname` / `profile` 配置只补足缺失字段；Endpoint 字段优先于适配器默认值，不会修改 Telegram 账号。接口依据 [Bot API 官方文档](https://core.telegram.org/bots/api#getmyname)及[头像设置方法](https://core.telegram.org/bots/api#setmyprofilephoto)。

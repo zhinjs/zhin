@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * GitHub webhook / comment helpers — no legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -36,7 +37,7 @@ export type {
 export { buildChannelId, parseChannelId } from './types.js';
 
 /** One expanded GitHub endpoint configuration produced by AdapterIndex. */
-export interface GithubEndpointConfig {
+export interface GithubEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly host?: string;
   readonly app_id: string | number;
