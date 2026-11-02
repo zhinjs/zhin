@@ -82,8 +82,8 @@ it('preserves rejection and unknown outcomes without reporting success or retryi
   }
 });
 
-it.each([['updated', 'committed'], ['rejected', 'safe'], ['unknown', 'unknown']] as const)
-  ('reports the formal profile %s result as %s evidence without parsing a tool string', async (status, disposition) => {
+it.each([['updated', 'committed'], ['rejected', 'safe'], ['unknown', 'unknown']] as const)(
+  'reports the formal profile %s result as %s evidence without parsing a tool string', async (status, disposition) => {
     const f = fixture();
     f.profile.write.mockResolvedValue({ status });
     await f.runtime.execute('set_self_profile', { field: 'nickname', value: 'Requested name' }, 'profile-effect');
