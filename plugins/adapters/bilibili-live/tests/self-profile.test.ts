@@ -2,6 +2,41 @@ import { BilibiliLiveClient } from '../src/client.js';
 import { resolveBilibiliLiveConfig } from '../src/protocol.js';
 
 describe('Bilibili Live public self profile', () => {
+  it('keeps startup unsigned fallback when nav returns a business error without WBI keys', async () => {
+    const fetch = vi.fn(async (url: string) => ({ ok: true, status: 200, json: async () => url.includes('/nav')
+      ? { code: -412, message: 'nav unavailable' }
+      : { code: 0, data: { token: 'synthetic', host_list: [] } } }));
+    const client = new BilibiliLiveClient(resolveBilibiliLiveConfig({ id: 'live', roomId: '100', buvid3: 'visitor' }), fetch);
+    expect(await client.getDanmuServer('100')).toMatchObject({ token: 'synthetic' });
+    expect(new URL(fetch.mock.calls[1][0]).searchParams.has('w_rid')).toBe(false);
+    expect(client.currentSelfProfile).toEqual({});
+  });
+
+  it('keeps each read snapshot separate and never publishes an older nav response over the newer account', async () => {
+    let complete!: (body: unknown) => void;
+    let first = true;
+    const fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => {
+      if (first) { first = false; return new Promise(resolve => { complete = resolve; }); }
+      return { code: 0, data: { isLogin: true, mid: 2, uname: 'New account' } };
+    } }));
+    const client = new BilibiliLiveClient(resolveBilibiliLiveConfig({ id: 'live', roomId: '100' }), fetch);
+    const signal = new AbortController().signal;
+    const earlier = client.readSelfProfile(signal);
+    await vi.waitFor(() => expect(complete).toBeTypeOf('function'));
+    expect(await client.readSelfProfile(signal)).toEqual({ nickname: 'New account' });
+    complete({ code: 0, data: { isLogin: true, mid: 1, uname: 'Old account' } });
+    expect(await earlier).toEqual({ nickname: 'Old account' });
+    expect(client.currentSelfProfile).toEqual({ nickname: 'New account' });
+    expect(client.selfUid).toBe('2');
+  });
+
+  it('never exposes a mutable empty native snapshot', async () => {
+    const fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ code: -101, data: { isLogin: false } }) }));
+    const client = new BilibiliLiveClient(resolveBilibiliLiveConfig({ id: 'live', roomId: '100' }), fetch);
+    expect(Object.isFrozen(client.currentSelfProfile)).toBe(true);
+    await expect(client.readSelfProfile(new AbortController().signal)).rejects.toThrow('not logged in');
+    expect(Object.isFrozen(client.currentSelfProfile)).toBe(true);
+  });
   it('retains only logged-in native nav name/avatar and omits Cookie/WBI details', async () => {
     const fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ code: 0, data: {
       isLogin: true, mid: 123, uname: 'Live self', face: 'https://example.com/live.png',

@@ -17,7 +17,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { getLogger } from '@zhin.js/logger';
-import { scopeBootstrapText, type BootstrapScene } from './bootstrap-scope.js';
+import { scopeBootstrapDocument, type BootstrapScene } from './bootstrap-scope.js';
 
 const logger = getLogger('Bootstrap');
 
@@ -152,7 +152,7 @@ export function buildContextFiles(
     if (file.missing || !file.content) continue;
 
     let content = options?.scene
-      ? scopeBootstrapText(file.content, options.scene).text.trim()
+      ? scopeBootstrapDocument(file.content, options.scene).text.trim()
       : file.content.trim();
     if (!content) continue;
 

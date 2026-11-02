@@ -22,6 +22,7 @@ import {
   isPinnedSpecifier,
 } from '../src/commands/migrate.js';
 import { scheduleCommand } from '../src/commands/schedule.js';
+import { SOUL_MD_TEMPLATE, TOOLS_MD_TEMPLATE } from '../../../packages/toolkit/create-zhin/src/templates/bootstrap.js';
 
 let tmp: string;
 let prevCwd: string;
@@ -217,7 +218,8 @@ describe('migrate', () => {
     const upgraded = upgradeBootstrapFiles(tmp, false);
     expect(upgraded).toBeGreaterThan(0);
     const next = fs.readFileSync(path.join(tmp, 'SOUL.md'), 'utf-8');
-    expect(next).toContain('I am an action-oriented AI assistant');
+    expect(next).toBe(SOUL_MD_TEMPLATE);
+    expect(fs.readFileSync(path.join(tmp, 'TOOLS.md'), 'utf-8')).toBe(TOOLS_MD_TEMPLATE);
     // 旧内容被备份
     expect(fs.readFileSync(path.join(tmp, 'SOUL.md.bak'), 'utf-8')).toBe(oldSoul);
   });

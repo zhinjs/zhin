@@ -1,5 +1,7 @@
 import { createTelegramSelfProfile } from '../src/self-profile.js';
 import { EndpointProfileState } from '@zhin.js/adapter';
+import { TelegramClient } from '../src/telegram-client.js';
+import { resolveTelegramConfig } from '../src/protocol.js';
 
 function fixture() {
   let nickname = 'Login name';
@@ -16,6 +18,29 @@ function fixture() {
 }
 
 describe('Telegram bot account profile', () => {
+  it.each(['nickname', 'avatar'] as const)('maps real Bot API rejections for %s without invalidating confirmed facts', async field => {
+    const client = new TelegramClient({ config: resolveTelegramConfig({ id: 'test', token: 'synthetic' }),
+      fetch: async () => ({ ok: false, status: 400, text: async () => JSON.stringify({ ok: false, error_code: 400, description: 'Change rejected' }), json: async () => ({}) }) });
+    const changed = vi.fn();
+    const source = createTelegramSelfProfile({ client, current: () => ({ nickname: 'Known name' }), nicknameChanged: changed });
+    const signal = new AbortController().signal;
+    const change = field === 'nickname' ? { field, value: 'No' } as const
+      : { field, value: { kind: 'base64', value: 'aW1hZ2U=', mime_type: 'image/jpeg' } } as const;
+    expect(await source.write!({ signal, change })).toMatchObject({ status: 'rejected', message: expect.stringContaining('Change rejected') });
+    expect(source.current).toEqual({ nickname: 'Known name' });
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('reports an uncertain real transport result as unknown and preserves not-sent cancellation', async () => {
+    const client = new TelegramClient({ config: resolveTelegramConfig({ id: 'test', token: 'synthetic' }),
+      fetch: async () => { throw new Error('Connection closed'); } });
+    const source = createTelegramSelfProfile({ client, current: () => ({}), nicknameChanged: vi.fn() });
+    expect(await source.write!({ signal: new AbortController().signal, change: { field: 'nickname', value: 'Maybe' } }))
+      .toMatchObject({ status: 'unknown', message: expect.stringContaining('Connection closed') });
+    const abort = new AbortController(); abort.abort();
+    await expect(source.write!({ signal: abort.signal, change: { field: 'nickname', value: 'No' } }))
+      .rejects.toMatchObject({ disposition: 'not_sent' });
+  });
   it('distinguishes bot profile methods from chat description methods', async () => {
     const { port, callApi, signal } = fixture();
     expect(await port.read({ signal })).toEqual({ nickname: 'Real name', signature: '', bio: 'About this bot' });

@@ -298,7 +298,6 @@ export function createPluginManifest(input: PluginManifestInput): Record<string,
   const capabilities = capabilityPackages(kind);
   const featureApis: Readonly<Record<string, string>> = {
     '@zhin.js/adapter': '^2.1.0',
-    '@zhin.js/tool': '^1.1.0',
   };
 
   const peerDependencies: Record<string, string> = { 'zhin.js': peerRanges['zhin.js'] };

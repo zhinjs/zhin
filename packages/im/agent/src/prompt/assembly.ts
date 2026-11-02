@@ -21,7 +21,8 @@ import { DEFAULT_CONFIG } from '../config/index.js';
 import { CRITICAL_RULES } from './rules/critical-rules.js';
 import { REQUEST_SECURITY_BOUNDARY } from './rules/security.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
-import { bootstrapSceneFromTurn, scopeBootstrapText } from '../bootstrap-scope.js';
+import { bootstrapSceneFromTurn, scopeBootstrapDocument, scopeBootstrapText } from '../bootstrap-scope.js';
+import type { ContextFile } from '../bootstrap.js';
 
 /**
  * System prompt split at the provider cache breakpoint (ADR 0042 §1): `stable` is byte-identical
@@ -59,6 +60,12 @@ function scheduleSystemPrompt(
   options: { runtime?: PromptRuntimeOverrides; turn?: TurnContextView } = {},
 ): SystemPromptSplit {
   const { runtime, turn } = options;
+  const scene = bootstrapSceneFromTurn(turn);
+  const bootstrap = runtime?.bootstrapContext ?? (runtime?.contextFiles === undefined ? agent.bootstrapContext : '');
+  const scopedBootstrap = runtime?.contextFiles === undefined
+    ? scopeBootstrapText([agent.globalContext, bootstrap].filter(Boolean).join('\n\n'), scene).text
+    : [scopeBootstrapDocument(agent.globalContext, scene).text,
+        scopeBootstrapText(bootstrap, scene, { contextFiles: runtime.contextFiles }).text].filter(Boolean).join('\n\n');
   const base = assembleSchedulePrompt({
     jobId: profile.jobId,
     prompt: profile.prompt,
@@ -66,10 +73,7 @@ function scheduleSystemPrompt(
     security: profile.security,
     runtimeContext: buildStableRuntimeLines(runtime ?? {}).join('\n'),
     skillContext: agent.getTurnActiveSkills(),
-    bootstrapContext: scopeBootstrapText(
-      [agent.globalContext, runtime?.bootstrapContext ?? agent.bootstrapContext].filter(Boolean).join('\n\n'),
-      bootstrapSceneFromTurn(turn),
-    ).text,
+    bootstrapContext: scopedBootstrap,
   }).systemPrompt;
   return mergeRequiredBasePrompt(
     base,
@@ -154,7 +158,9 @@ function agentPathPromptContext(
     segments: options.runtime?.segments,
     sceneText: options.runtime?.sceneText,
     activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
-    bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
+    bootstrapContext: options.runtime?.bootstrapContext
+      ?? (options.runtime?.contextFiles === undefined ? agent.bootstrapContext : ''),
+    contextFiles: options.runtime?.contextFiles,
     globalContext: agent.globalContext,
     turn: options.turn,
     toolSearchDeferredStats: options.deferredStats,
@@ -202,6 +208,7 @@ export async function buildAgentPathSystemPromptParts(
 
 export interface PromptRuntimeOverrides {
   readonly bootstrapContext?: string;
+  readonly contextFiles?: readonly ContextFile[];
   readonly activeSkillsContext?: string;
   readonly agentNickname?: string;
   readonly modelId?: string;

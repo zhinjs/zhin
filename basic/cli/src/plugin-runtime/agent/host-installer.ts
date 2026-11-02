@@ -28,6 +28,7 @@ import {
   LocalImageAssetStore,
   localImageAssetsToken,
   type AssistantConfig,
+  type ContextFile,
   type ApprovalPort,
   hostProtectedPathsToken,
   SelfChangeApplier,
@@ -316,7 +317,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       planningDisclosure: options.workroomPlanningDisclosurePort,
       dynamicPlanningPolicy: options.workroomDynamicPlanningPolicyPort,
     });
-    const bootstrapText = await loadBootstrap(options.projectRoot);
+    const { bootstrapText, contextFiles } = await loadBootstrap(options.projectRoot);
 
     // Register before any await so a cancelled generation cannot leak Agent
     // Resources. DisposeStack continues through later cleanup when one
@@ -344,6 +345,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       processRuntime: options.runtime,
       agent: agentFoundation,
       bootstrapText,
+      contextFiles,
     });
 
     const workroom = assembly
@@ -432,8 +434,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 }
 
 
-async function loadBootstrap(projectRoot: string): Promise<string> {
+async function loadBootstrap(projectRoot: string): Promise<{
+  bootstrapText: string;
+  contextFiles: readonly ContextFile[];
+}> {
   const parts: string[] = [];
+  const contextFiles: ContextFile[] = [];
   let total = 0;
   for (const name of BOOTSTRAP_FILES) {
     try {
@@ -442,13 +448,14 @@ async function loadBootstrap(projectRoot: string): Promise<string> {
       if (!body) continue;
       const chunk = truncate(body, Math.max(500, MAX_BOOTSTRAP_CHARS - total));
       parts.push(`## ${name}\n${chunk}`);
+      contextFiles.push({ path: name, content: chunk });
       total += chunk.length;
       if (total >= MAX_BOOTSTRAP_CHARS) break;
     } catch {
       /* missing bootstrap files are optional */
     }
   }
-  return parts.join('\n\n');
+  return { bootstrapText: parts.join('\n\n'), contextFiles };
 }
 
 function truncate(value: string, max: number): string {

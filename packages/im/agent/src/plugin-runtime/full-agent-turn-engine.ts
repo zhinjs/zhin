@@ -53,6 +53,7 @@ import {
 } from './subagent-turn-capability.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
+import type { ContextFile } from '../bootstrap.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 
 export interface FullAgentTurnEngineOptions {
@@ -62,14 +63,18 @@ export interface FullAgentTurnEngineOptions {
   readonly contextSystem: ContextSystem;
   readonly loopHooks?: PluginAILoopHookRegistry;
   readonly bootstrapContext?: string;
+  readonly contextFiles?: readonly ContextFile[];
 }
 
 const logger = getLogger('FullAgentTurnEngine');
 
 /** Generation-owned adapter from canonical TurnIngress to the one full AgentCore. */
 export function createFullAgentTurnEngine(options: FullAgentTurnEngineOptions): AgentTurnEngine {
+  const captured = { ...options, ...(options.contextFiles !== undefined ? {
+    contextFiles: Object.freeze(options.contextFiles.map(file => Object.freeze({ ...file }))),
+  } : {}) };
   return Object.freeze({
-    run: (context: AgentTurnExecutionContext) => runFullAgentTurn(options, context),
+    run: (context: AgentTurnExecutionContext) => runFullAgentTurn(captured, context),
   });
 }
 
@@ -157,6 +162,7 @@ async function* runInteractiveTurn(
       parentTurn: context.turn,
       capabilities: { ...context.capabilities, tools: context.toolCapabilities },
       bootstrapContext: options.bootstrapContext,
+      contextFiles: options.contextFiles,
       loopHooks: options.loopHooks,
       resolveModel: () => subagentModel.current,
       imageInspectionBudget,
@@ -206,6 +212,7 @@ async function* runInteractiveTurn(
     toldLedgerBlocks: host.toldLedger?.renderBlocks(prep.sessionId),
     relevantMemory,
     systemBootstrap: options.bootstrapContext,
+    contextFiles: options.contextFiles,
   });
   const providerInput = context.turn.input.media?.length
     ? prompt.modelInput
@@ -281,6 +288,7 @@ async function* runInteractiveTurn(
   }
   const promptRuntime = Object.freeze({
     bootstrapContext: options.bootstrapContext?.trim() ?? '',
+    contextFiles: options.contextFiles,
     activeSkillsContext,
     capabilityTail: capabilityContext.tail
       ? fillPromptSlots(capabilityContext.tail, agentNickname) : undefined,
@@ -470,6 +478,7 @@ async function* runScheduleTurn(
     },
     activeSkillsContext,
     systemBootstrap: options.bootstrapContext,
+    contextFiles: options.contextFiles,
   });
   const messageAliases = new MessageAliasTable();
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
@@ -479,6 +488,7 @@ async function* runScheduleTurn(
   });
   const promptRuntime = Object.freeze({
     bootstrapContext: options.bootstrapContext,
+    contextFiles: options.contextFiles,
     activeSkillsContext,
     agentNickname: host.activeBinding?.nickname,
     modelId: prompt.modelId,

@@ -1,5 +1,6 @@
 import {
   SELF_PROFILE_FIELDS,
+  isSelfProfileBirthday,
   EndpointDeliveryError,
   type SelfProfile,
   type SelfProfileField,
@@ -87,6 +88,8 @@ export function configuredSelfProfile(config: Readonly<Record<string, unknown>>)
         throw new AdapterManagementError('invalid_configuration', `profile.${field} must be a string`);
       } else if (field === 'gender' && !['male', 'female', 'other', 'unknown'].includes(value)) {
         throw new AdapterManagementError('invalid_configuration', 'profile.gender must be male, female, other or unknown');
+      } else if (field === 'birthday' && !isSelfProfileBirthday(value)) {
+        throw new AdapterManagementError('invalid_configuration', 'profile.birthday must be a valid YYYY-MM-DD calendar date');
       } else if (field === 'avatar' && !isProfileAvatar(value)) {
         throw new AdapterManagementError('invalid_configuration', 'profile.avatar must be an HTTP(S) URL');
       }
@@ -125,6 +128,7 @@ interface EndpointProfileStateOptions {
 /** @internal One concrete Client's observed facts. No global cache, polling, timer or persistence. */
 export class EndpointProfileState implements SelfProfilePort {
   readonly #source?: EndpointProfile;
+  readonly #account = new AbortController();
   readonly #defaults: Readonly<SelfProfile>;
   #observed: Readonly<SelfProfile> = Object.freeze({});
   #loaded = false;
@@ -141,7 +145,17 @@ export class EndpointProfileState implements SelfProfilePort {
     if (!source?.write) Object.defineProperty(this, 'write', { value: undefined });
   }
 
+  /** End this account's captured ports and start with the same configured fallbacks. */
+  nextAccount(): EndpointProfileState {
+    const next = new EndpointProfileState({ source: this.#source, defaults: this.#defaults });
+    // The native Client may still expose the prior account cache until its next query/event.
+    next.#nativeBaseline = copyProfile(this.#source?.current ?? {});
+    this.#account.abort(new EndpointDeliveryError('endpoint_inactive', 'Profile account changed', 'not_sent'));
+    return next;
+  }
+
   peek(): SelfProfileSnapshot {
+    this.#account.signal.throwIfAborted();
     this.#observeNative();
     const values = copyProfile({ ...this.#defaults, ...this.#observed });
     const sources = Object.freeze(Object.fromEntries(SELF_PROFILE_FIELDS
@@ -155,6 +169,7 @@ export class EndpointProfileState implements SelfProfilePort {
   }
 
   async read(request: SelfProfileReadRequest): Promise<SelfProfileSnapshot> {
+    request = { ...request, signal: AbortSignal.any([request.signal, this.#account.signal]) };
     request.signal.throwIfAborted();
     const source = this.#source;
     if (!source || (this.#loaded && !request.refresh)) return this.peek();
@@ -183,6 +198,7 @@ export class EndpointProfileState implements SelfProfilePort {
   }
 
   async write(request: SelfProfileWriteRequest): Promise<SelfProfileWriteResult> {
+    request = { ...request, signal: AbortSignal.any([request.signal, this.#account.signal]) };
     request.signal.throwIfAborted();
     const source = this.#source;
     const write = source?.write;

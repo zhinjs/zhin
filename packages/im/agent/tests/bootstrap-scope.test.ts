@@ -38,6 +38,16 @@ const DOC = [
 ].join('\n');
 
 describe('scopeBootstrapText', () => {
+  it('honors owner-private sections in CRLF workspace files', () => {
+    const content = '# Owner notes\r\n<!-- scope: master-private -->\r\nowner-only\r\n## TOOLS.md\r\nstill-private\r\n';
+    const result = scopeBootstrapText('', GROUP, { contextFiles: [{ path: 'AGENTS.md', content }] });
+    expect(result.text).not.toContain('owner-only');
+    expect(result.text).not.toContain('still-private');
+    expect(result.skipped).toContain('Owner notes');
+    expect(scopeBootstrapText('', MASTER_PRIVATE, { contextFiles: [{ path: 'AGENTS.md', content }] }).text)
+      .toContain('owner-only');
+  });
+
   it('returns unannotated text untouched', () => {
     const text = '# A\nbody\n\n## B\nmore\n';
     expect(scopeBootstrapText(text, GROUP)).toEqual({ text, skipped: [] });
@@ -105,6 +115,43 @@ describe('scopeBootstrapText', () => {
   it('is byte-stable per scene', () => {
     expect(scopeBootstrapText(DOC, GROUP).text).toBe(scopeBootstrapText(DOC, { ...GROUP }).text);
   });
+
+  it.each([
+    ['## Heading \t###\t ', 'Heading'],
+    ['## ###\t', '#'],
+    ['##  ', ''],
+  ])('preserves title and closing-hash parsing for %j', (heading, title) => {
+    const text = `${heading}\n<!-- scope: master -->\nprivate\n## Public\nkept`;
+    expect(scopeBootstrapText(text, GROUP)).toEqual({ text: '## Public\nkept', skipped: [title] });
+  });
+
+  it('does not scope an empty one-space heading or an embedded line terminator', () => {
+    for (const heading of ['## ', '## Heading\u2028suffix', '####### Heading']) {
+      const text = `${heading}\n<!-- scope: master -->\nkept`;
+      expect(scopeBootstrapText(text, GROUP)).toEqual({ text, skipped: [] });
+    }
+  });
+
+  it('preserves case-insensitive annotations, Unicode whitespace and empty scope comments', () => {
+    const text = '## A\n\u00a0<!-- \tSCOPE \t: group \t-->\u00a0\na\n## B\n<!-- scope: -->\nb';
+    expect(scopeBootstrapText(text, GROUP)).toEqual({ text: '## A\na\n## B\nb', skipped: [] });
+    const invalid = '## A\n<!-- scope: group > -->\nkept';
+    expect(scopeBootstrapText(invalid, GROUP)).toEqual({ text: invalid, skipped: [] });
+  });
+
+  it('handles long whitespace followed by nonmatching heading, comment and trim suffixes', () => {
+    // No wall-clock assertion: these exercise the former backtracking inputs at the public boundary.
+    const tabs = '\t'.repeat(65_536);
+    const badHeading = `## ${tabs}\r!`;
+    expect(scopeBootstrapText(`## A\n<!-- scope: group -->\na\n${badHeading}`, GROUP))
+      .toEqual({ text: `## A\na\n${badHeading}`, skipped: [] });
+    const badAnnotation = `## A\n<!-- scope:${tabs}group --!`;
+    expect(scopeBootstrapText(badAnnotation, GROUP)).toEqual({ text: badAnnotation, skipped: [] });
+    expect(scopeBootstrapText(`## A\n<!-- scope: group -->\na${tabs}!`, GROUP))
+      .toEqual({ text: `## A\na${tabs}!`, skipped: [] });
+    expect(scopeBootstrapText(`## A\n<!-- scope: group -->\na${tabs}\u00a0\n`, GROUP))
+      .toEqual({ text: '## A\na\n', skipped: [] });
+  });
 });
 
 describe('scope parsing', () => {
@@ -123,6 +170,20 @@ describe('scope parsing', () => {
   });
 });
 
+it('uses captured file identities instead of document headings when scoping or omitting SOUL', () => {
+  const contextFiles = [
+    { path: 'SOUL.md', content: 'Omit the parent persona.' },
+    { path: 'AGENTS.md', content: '# Public rules\n## SOUL.md\nKeep public instructions.\n# Private\n<!-- scope: master-private -->\nsecret\n## TOOLS.md\nNested secret.' },
+    { path: 'TOOLS.md', content: 'Keep real tool guidance.' },
+  ];
+  const result = scopeBootstrapText('Unused flattened fallback.', GROUP, { contextFiles, excludeFiles: ['SOUL.md'] });
+  expect(result.text).toContain('## SOUL.md\nKeep public instructions.');
+  expect(result.text).toContain('Keep real tool guidance.');
+  expect(result.text).not.toMatch(/Omit the parent|Nested secret|\nsecret/);
+  expect(result.skipped).toEqual(['SOUL.md', 'Private']);
+  expect(scopeBootstrapText('Latest unrelated fallback.', GROUP, { contextFiles: [] })).toEqual({ text: '', skipped: [] });
+});
+
 describe('injection', () => {
   const file = (name: BootstrapFile['name'], content: string): BootstrapFile => ({ name, path: name, content, missing: false });
 
@@ -131,6 +192,13 @@ describe('injection', () => {
     expect(buildStableBootstrapSection(files, { scene: GROUP })).not.toContain('ssh prod');
     expect(buildStableBootstrapSection(files, { scene: MASTER_PRIVATE })).toContain('ssh prod');
     expect(buildStableBootstrapSection(files)).toContain('ssh prod');
+  });
+
+  it('treats nested file-name headings in a known source as document headings', () => {
+    const content = '# Private\n<!-- scope: master-private -->\nsecret\n## TOOLS.md\nNested secret.\n# Public\nkept';
+    const section = buildStableBootstrapSection([file('SOUL.md', content)], { scene: GROUP });
+    expect(section).toContain('# Public\nkept');
+    expect(section).not.toMatch(/Nested secret|\nsecret/);
   });
 
   const turn = (scope: 'group' | 'private', roles: string[], key = 'k', subjectId = '1'): TurnContextView => ({

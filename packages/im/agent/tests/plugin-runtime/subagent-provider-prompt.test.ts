@@ -9,18 +9,20 @@ import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import { buildBootstrapContextSection } from '../../src/bootstrap.js';
 import { assistantTextReply, wireMockLlmApi } from '../helpers/mock-llm-api.js';
 
-it('keeps the delegated role at the actual provider boundary without losing workspace, platform or safety rules', async () => {
+it.each(['captured', 'absent', 'empty'] as const)('keeps the delegated role and %s bootstrap at the actual provider boundary without borrowing latest workspace', async bootstrap => {
   const llm = wireMockLlmApi({ models: ['m'], responder: () => assistantTextReply('Read-only inspection complete.') });
   const soul = '我是主群里爱发短句的朋友。';
-  const capturedBootstrap = buildBootstrapContextSection([
+  const contextFiles = [
     { path: 'SOUL.md', content: `${soul}\n\n# Nested personality\nSpeak with this main persona.` },
+    { path: 'AGENTS.md', content: '# Project rules\n## SOUL.md\nKeep real release instructions.\n# Private\n<!-- scope: master-private -->\nPrivate first line.\n## TOOLS.md\nPrivate nested instruction.' },
     { path: 'TOOLS.md', content: 'Verify file context before editing.\n\n### Private notes\n<!-- scope: master-private -->\nOwner-private configuration.' },
-  ]);
+  ];
+  const capturedBootstrap = buildBootstrapContextSection(contextFiles);
   const host = {
     config: { ...DEFAULT_CONFIG, gitStatus: false, maxSubagentIterations: 1,
       toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 } },
     activeBinding: { nickname: 'Main chat persona', providerAlias: 'mock', model: 'm' },
-    bootstrapContext: '', // CLI supplies workspace text through the captured engine, not mutable Host state.
+    bootstrapContext: '## TOOLS.md\nLatest unrelated Host workspace.',
     globalContext: '# Platform rules\nUse the current ICQQ endpoint; never guess a recipient.',
     getTurnProvider: () => llm.provider, llmRuntime: llm.runtime,
     skillRegistry: null, skillsSummaryXML: '', getTurnActiveSkills: () => '',
@@ -39,7 +41,8 @@ it('keeps the delegated role at the actual provider boundary without losing work
   const read: ToolCapability = { owner: rootPluginId(), name: 'read_file', qualifiedName: 'read_file', description: 'Read a synthetic record.',
     source: 'builtin:read_file', readOnly: true, requiresApproval: 'never' as const,
     inputSchema: { type: 'object', properties: {} }, execute: async () => { throw new Error('No model tool call is expected'); } };
-  const child = createSubagentTurnCapability({ host, core: defaultAgentCore, parentTurn, bootstrapContext: capturedBootstrap,
+  const child = createSubagentTurnCapability({ host, core: defaultAgentCore, parentTurn,
+    ...(bootstrap !== 'absent' ? { bootstrapContext: capturedBootstrap, contextFiles: bootstrap === 'empty' ? [] : contextFiles } : {}),
     capabilities: { generation: 1, owner: rootPluginId(), tools: [read], skills: [], agents: [], mcp: [], promptSections: [] },
     resolveModel: () => ({ modelId: 'm', modelCandidates: ['m'] }),
   });
@@ -54,8 +57,13 @@ it('keeps the delegated role at the actual provider boundary without losing work
   expect(sent.systemPrompt).not.toContain('Use SOUL.md for persona and tone.');
   expect(sent.systemPrompt).not.toContain('# Chat style');
   expect(sent.systemPrompt).not.toContain('Use spawn_task');
-  expect(sent.systemPrompt).toContain('Verify file context before editing.');
+  if (bootstrap === 'captured') expect(sent.systemPrompt).toContain('Verify file context before editing.');
+  else expect(sent.systemPrompt).not.toContain('Verify file context before editing.');
+  expect(sent.systemPrompt).not.toContain('Latest unrelated Host workspace.');
   expect(sent.systemPrompt).not.toContain('Owner-private configuration.');
+  expect(sent.systemPrompt).not.toContain('Private nested instruction.');
+  if (bootstrap === 'captured') expect(sent.systemPrompt).toContain('Keep real release instructions.');
+  else expect(sent.systemPrompt).not.toContain('Keep real release instructions.');
   expect(sent.systemPrompt).toContain('Use the current ICQQ endpoint; never guess a recipient.');
   expect(sent.systemPrompt).toContain('# Security');
   expect(sent.systemPrompt).toContain('server-verified sender');

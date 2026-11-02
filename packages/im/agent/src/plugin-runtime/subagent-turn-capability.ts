@@ -13,6 +13,7 @@ import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
 import { BASH_TOOL_NAME, turnPolicyAllowsShell } from './native-bash-tool.js';
 import { deriveSubagentPolicy } from '../security/policy-narrowing.js';
 import type { ImageInspectionBudget } from '../media/local-image-inspection.js';
+import type { ContextFile } from '../bootstrap.js';
 import {
   isToolAboveTrust,
   narrowPolicyForTrust,
@@ -40,6 +41,7 @@ export interface SubagentTurnCapabilityOptions {
   readonly loopHooks?: PluginAILoopHookRegistry;
   /** Workspace text captured with the parent engine's generation; never resolve a latest Host value. */
   readonly bootstrapContext?: string;
+  readonly contextFiles?: readonly ContextFile[];
   /** Resolved lazily: the parent's prompt (and model choice) is built after its capability plan. */
   readonly resolveModel: () => SubagentModelSelection | undefined;
 }
@@ -192,7 +194,8 @@ async function runSubagentTurn(
     toolEventSource: 'authority',
     loopHooks: options.loopHooks,
     promptRuntime: {
-      ...(options.bootstrapContext !== undefined ? { bootstrapContext: options.bootstrapContext } : {}),
+      bootstrapContext: options.bootstrapContext?.trim() ?? '',
+      contextFiles: options.contextFiles,
       agentNickname: host.activeBinding?.nickname,
       modelId: run.model.modelId,
       providerAlias: host.activeBinding?.providerAlias,

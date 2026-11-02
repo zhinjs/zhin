@@ -1,5 +1,5 @@
 import type { EndpointProfile, PendingRpcRequest } from 'zhin.js/adapter';
-import type { SelfProfile } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type SelfProfile } from '@zhin.js/im-contract';
 
 interface NapcatSelfProfileClient {
   readonly currentSelfProfile?: Readonly<SelfProfile>;
@@ -43,7 +43,12 @@ export function createNapcatSelfProfile(client: NapcatSelfProfileClient, reportA
         case 'gender': {
           if (change.value === 'other') return { status: 'rejected', message: 'NapCat supports male, female or unknown gender' };
           // The native API requires nickname even when only changing sex.
-          const self = await account(signal);
+          let self: NapcatAccount;
+          try { self = await account(signal); }
+          catch (cause) {
+            throw new EndpointDeliveryError('endpoint_unavailable',
+              'NapCat profile change was not sent: self account lookup failed', 'not_sent', { cause });
+          }
           action = 'set_qq_profile';
           params = { nickname: self.nickname, sex: change.value === 'male' ? 1 : change.value === 'female' ? 2 : 0 };
           break;

@@ -36,6 +36,60 @@ class NativeProfile implements EndpointProfile {
 }
 
 describe('account-owned profile facts and configuration fallback', () => {
+  it('ends old captured profile ports when the source account changes, retaining only configured fallbacks', async () => {
+    const source = new NativeProfile();
+    const state = new EndpointProfileState({ source, defaults: { nickname: 'Configured' } });
+    await state.read({ signal: signal() });
+    const next = state.nextAccount();
+    expect(() => state.peek()).toThrow('Profile account changed');
+    await expect(state.read({ signal: signal() })).rejects.toMatchObject({ disposition: 'not_sent' });
+    await expect(state.write({ signal: signal(), change: { field: 'nickname', value: 'Wrong account' } }))
+      .rejects.toMatchObject({ disposition: 'not_sent' });
+    expect(source.writes).toHaveLength(0);
+    expect(next.peek().values).toEqual({ nickname: 'Configured' });
+    expect((await next.read({ signal: signal() })).values.nickname).toBe('Native');
+  });
+
+  it('does not let an old account read settle into its replacement profile', async () => {
+    const pending = deferred<SelfProfile>();
+    const source = new NativeProfile(); source.pending = pending.promise;
+    const state = new EndpointProfileState({ source, defaults: {} });
+    const reading = state.read({ signal: signal() });
+    const rejected = expect(reading).rejects.toMatchObject({ disposition: 'not_sent' });
+    const next = state.nextAccount();
+    await rejected;
+    pending.resolve({ nickname: 'Late old account' });
+    await Promise.resolve();
+    expect(next.peek().values).toEqual({});
+  });
+
+  it('keeps a submitted old-account write unknown and a queued write unsubmitted after an account change', async () => {
+    const pending = deferred<SelfProfileWriteResult>();
+    const write = vi.fn(() => pending.promise);
+    const state = new EndpointProfileState({ defaults: {}, source: {
+      writableFields: ['nickname'], read: async () => ({}), write,
+    } });
+    const first = state.write({ signal: signal(), change: { field: 'nickname', value: 'First' } });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    const second = state.write({ signal: signal(), change: { field: 'nickname', value: 'Queued' } });
+    const firstRejected = expect(first).rejects.toMatchObject({ disposition: 'unknown' });
+    const secondRejected = expect(second).rejects.toMatchObject({ disposition: 'not_sent' });
+    const next = state.nextAccount();
+    await Promise.all([firstRejected, secondRejected]);
+    pending.resolve({ status: 'updated', profile: { nickname: 'Late old name' } });
+    await Promise.resolve();
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(next.peek().values).toEqual({});
+  });
+
+  it.each(['2024-02-30', '2023-02-29', '2024-13-01', 'not-a-date'])('rejects impossible configured birthdays: %s', birthday => {
+    expect(() => configuredSelfProfile({ profile: { birthday } })).toThrow('calendar date');
+  });
+
+  it.each(['2000-02-29', '2024-02-29', '2024-12-31'])('retains an explicit valid configured birthday: %s', birthday => {
+    expect(configuredSelfProfile({ profile: { birthday } })).toEqual({ birthday });
+  });
+
   it('merges Endpoint profile defaults per field without changing unrelated nested configuration', () => {
     const config = mergeEndpointProfileConfiguration(
       { nickname: 'Adapter', profile: { gender: 'female', interests: ['music'] }, transport: { one: 1 } },

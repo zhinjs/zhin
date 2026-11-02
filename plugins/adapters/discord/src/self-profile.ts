@@ -44,9 +44,9 @@ interface DiscordProfileRestClient { request<T>(request: DiscordRestRequest): Pr
 
 /** Interactions-only accounts use the same public identity fields through authenticated REST. */
 export function createDiscordRestSelfProfile(client: DiscordProfileRestClient, reportAccount: (id: string) => void): EndpointProfile {
-  const observed = (user: DiscordOwnUser): SelfProfile => {
+  const observed = (user: DiscordOwnUser): SelfProfile | undefined => {
     if (!user?.id || typeof user.username !== 'string' || (user.avatar !== null && typeof user.avatar !== 'string')) {
-      throw new Error('Discord returned an incomplete self profile');
+      return undefined;
     }
     reportAccount(user.id);
     return { nickname: user.username, avatar: user.avatar === null ? null
@@ -54,7 +54,11 @@ export function createDiscordRestSelfProfile(client: DiscordProfileRestClient, r
   };
   return Object.freeze<EndpointProfile>({
     writableFields: Object.freeze(['nickname', 'avatar']),
-    async read({ signal }) { return observed(await client.request<DiscordOwnUser>({ method: 'GET', path: '/users/@me', signal })); },
+    async read({ signal }) {
+      const profile = observed(await client.request<DiscordOwnUser>({ method: 'GET', path: '/users/@me', signal }));
+      if (!profile) throw new Error('Discord returned an incomplete self profile');
+      return profile;
+    },
     async write({ change, signal }) {
       let body: { username: string } | { avatar: string };
       if (change.field === 'nickname') body = { username: change.value };
@@ -65,7 +69,8 @@ export function createDiscordRestSelfProfile(client: DiscordProfileRestClient, r
         body = { avatar: `data:${change.value.mime_type};base64,${change.value.value}` };
       } else return { status: 'rejected', message: `Discord does not expose ${change.field} through this port` };
       const updated = await client.request<DiscordOwnUser>({ method: 'PATCH', path: '/users/@me', body, signal });
-      return { status: 'updated', profile: observed(updated) };
+      const profile = observed(updated);
+      return { status: 'updated', ...(profile ? { profile } : {}) };
     },
   });
 }

@@ -154,8 +154,8 @@ only. No pass rate or model-quality improvement is inferred from them.
 Final local validation passed: 113 build tasks, all 59 harness checks (including full unit tests,
 type-check, lint, L4 and smoke), and 196 scripted Agent evals. Two sets of stale textual assertions
 were updated to the approved ownership/wording contract after preserving their failing evidence;
-malicious-input, authority, privacy, output-shape and execution-count checks remain. Production
-source hashes match the sealed final captures. Nothing was committed, pushed or deployed.
+malicious-input, authority, privacy, output-shape and execution-count checks remain. At that checkpoint, production
+source hashes matched the corresponding sealed captures; publishing had not started.
 
 
 The local evidence bundle contains the preserved source baseline, synthetic before/after requests,
@@ -163,3 +163,44 @@ component comparisons, cache identities and bodies, the task-only diff, and vali
 retained for review without publishing local account paths or session identifiers. Reproduce current
 synthetic request captures with `ZHIN_PROMPT_POLICY_CAPTURE_DIR=<output-directory> pnpm exec vitest run
 packages/im/agent/tests/prompt/prompt-policy-requests.test.ts` from the repository root.
+
+
+## PR review follow-up
+
+The initial candidate and its evidence remain preserved. Review then corrected three polynomial
+regular expressions in scope parsing, and a CRLF heading bug that could leave a private section
+visible. The CLI now carries immutable `ContextFile` sources through parent, child and schedule
+assembly, so a normal Markdown heading cannot impersonate a Host file boundary. Empty captured
+sources do not fall back to the latest Host files.
+
+Custom callers that provide only a flattened bootstrap string retain the prior wrapper semantics:
+that string cannot establish which same-named heading was an actual file. The verified source-aware
+coverage is the CLI and existing raw-file loaders, with actual parent/child/schedule provider-entry
+regressions. Custom assemblers must supply captured file metadata for that guarantee.
+
+The same review preserves configuration nicknames on non-IM tool-less paths, keeps private prompts,
+configuration, tool internals and internal errors in the shared Security rule, and retains existing
+retry budgets. New-project and migration-generated SOUL/TOOLS templates no longer recreate forced
+tool-use or alternative-after-any-failure instructions; existing workspace files are not rewritten.
+
+Account-profile follow-up fixes source-account changes, stale concurrent platform reads, definitive
+Telegram rejection, Discord write ACK preservation, GitHub lookup errors, and NapCat pre-submission
+failure meaning. Profile configuration checks real calendar dates and HTTP(S) URL shape. The shared
+network redirect seam strips authentication headers on cross-origin hops; current avatar calls did
+not supply these headers. No actual credential leakage or platform mutation was observed.
+
+Final local validation after those fixes: 113 build tasks including examples, all 59 harness checks,
+and 196 scripted Agent evals passed. The Sandbox Core wire test isolates optional Docker discovery;
+its delayed-readiness contract remains independently tested. Process shutdown tests wait for actual
+signal-listener registration, replacing a fixed startup delay; original exit-code and shutdown-budget
+assertions remain, with an added slow-start regression.
+
+The reviewed synthetic L1 capture contains 10 scenarios / 13 requests and a 134-source fingerprint
+manifest. First-request system estimates are rich 1,239 → 1,268, lite/vision 485 → 757, delegated
+1,574 → 1,602, and schedule 309 → 501. Historical samples are not overwritten; the reviewed captures
+and component comparison are a separate evidence checkpoint. The existing 900-token fixed-prompt
+ceiling remains unchanged and passes. These estimates do not demonstrate real model behavior,
+provider cache hits or billing savings. Real-provider/platform validation remains unexecuted.
+
+GitHub CI and CodeQL must be checked on the follow-up commit separately from these local results.
+The scheduled execution changes remain a separate branch and are not included in this PR.

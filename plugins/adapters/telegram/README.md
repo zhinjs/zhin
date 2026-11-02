@@ -173,10 +173,10 @@ MIT
 
 canonical keyboard 的 `disabled: true` 按钮映射为 Telegram Bot API 10.3 的 `disabled: {}`，不携带 `callback_data`；启用按钮仍使用原回调数据，并保留 1–64 UTF-8 字节校验。自建 Bot API Server 需支持该版本，见 [DisabledButton](https://core.telegram.org/bots/api#disabledbutton)。
 
-## Current account profile
+## 当前账号资料
 
-The self-profile port uses the Bot API's account methods, not chat administration methods: `getMyName` / `setMyName` for nickname, `getMyShortDescription` / `setMyShortDescription` for the short profile tagline (`signature`), and `getMyDescription` / `setMyDescription` for the longer description (`bio`). These operate on the default language variant. Account mutations use the Agent's existing identity approval.
+资料端口使用 Bot API 的账号方法，与聊天管理方法分开：`getMyName` / `setMyName` 读取及修改昵称，`getMyShortDescription` / `setMyShortDescription` 处理简短签名（`signature`），`getMyDescription` / `setMyDescription` 处理个人简介（`bio`）。这些操作针对默认语言版本；修改沿用 Agent 现有的身份类审批。
 
-`setMyProfilePhoto` uploads resolved JPEG bytes as a new multipart attachment. It does not pass a URL as an uploaded profile photo or expose Telegram download URLs containing the bot token. The port does not return avatar URLs from credential-bearing file endpoints. Bot age, gender, birthday and interests are not advertised as writable fields.
+`setMyProfilePhoto` 通过 multipart 附件上传已解析的 JPEG 字节，不把 URL 冒充上传文件，也不向模型暴露含 Bot Token 的 Telegram 下载地址。资料端口不返回需凭据访问的文件接口 URL，亦不声明 Bot 的年龄、性别、生日及兴趣可写。
 
-`nickname` / `profile` configuration is only a missing-field fallback; per-Endpoint fields override adapter defaults without changing the Telegram account. See the [official Bot API](https://core.telegram.org/bots/api#getmyname) and [profile-photo method](https://core.telegram.org/bots/api#setmyprofilephoto).
+`nickname` / `profile` 配置只补足缺失字段；Endpoint 字段优先于适配器默认值，不会修改 Telegram 账号。接口依据 [Bot API 官方文档](https://core.telegram.org/bots/api#getmyname)及[头像设置方法](https://core.telegram.org/bots/api#setmyprofilephoto)。

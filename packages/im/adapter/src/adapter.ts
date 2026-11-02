@@ -5,7 +5,7 @@ import { readConfigurationPath, writeConfigurationPath } from './configuration-f
 import { configuredSelfProfile, endpointCreationConfiguration } from './endpoint-profile.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, SELF_PROFILE_FIELDS } from '@zhin.js/im-contract';
 import { DisposeStack, GenerationCompensationError, type CapabilityId } from '@zhin.js/plugin-runtime';
 import { retireEndpoint, isEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
@@ -371,8 +371,7 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
 
   patchConfiguration(instanceId: string, expectedRevision: number | null, patch: Readonly<Record<string, unknown>>, options?: AdapterMutationOptions): Promise<AdapterMutationResult> {
     const allowed = this.configurationUpdateFields;
-    const common = ['nickname', 'profile', 'profile.gender', 'profile.age', 'profile.birthday',
-      'profile.signature', 'profile.avatar', 'profile.interests', 'profile.bio'];
+    const common = ['nickname', 'profile', ...SELF_PROFILE_FIELDS.filter(field => field !== 'nickname').map(field => `profile.${field}`)];
     if (!allowed && (!Object.keys(patch).length || Object.keys(patch).some(key => !common.includes(key)))) {
       throw new AdapterManagementError('unsupported', 'This Adapter does not declare safe configuration updates');
     }
