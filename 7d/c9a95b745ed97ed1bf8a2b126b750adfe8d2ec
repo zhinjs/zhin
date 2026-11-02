@@ -1,0 +1,191 @@
+plugins/adapters/lark/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 294,307
+plugins/adapters/email/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 301,314
+plugins/adapters/github/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 244,257
+plugins/adapters/onebot12/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 234,247
+plugins/adapters/telegram/src/self-profile.ts
+  s_9622fd28aba994::t_a84b859219cf3c 4,29-38,40-54
+plugins/adapters/napcat/tests/self-profile.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 16-25
+plugins/adapters/telegram/tests/self-profile.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 3-4,21-43
+packages/im/agent/tests/security/turn-network-binary.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 69-89
+plugins/adapters/bilibili-live/src/client.ts
+  s_9622fd28aba994::t_a84b859219cf3c 7,84-85,92,94-99,163-166,176-177,180-188
+docs/authoring/adapters.md
+  s_9622fd28aba994::t_a84b859219cf3c 180,193-196
+plugins/adapters/sandbox/tests/sandbox-core-interaction.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 9-19
+plugins/adapters/qq/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 494,507
+plugins/adapters/napcat/README.md
+  s_9622fd28aba994::t_a84b859219cf3c 127
+plugins/adapters/satori/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 223,236
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_a84b859219cf3c 56,66,73-75,77,165,215,291,481,491
+docs/adapters/telegram.md
+  s_9622fd28aba994::t_a84b859219cf3c 11,188,190,192,194
+packages/toolkit/create-zhin/src/templates/bootstrap.ts
+  s_9622fd28aba994::t_a84b859219cf3c 12,29
+plugins/adapters/dingtalk/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 265,278
+packages/im/agent/src/bootstrap.ts
+  s_9622fd28aba994::t_a84b859219cf3c 20,155
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 174,181,183,238
+packages/im/im-contract/src/self-profile.ts
+  s_9622fd28aba994::t_a84b859219cf3c 23-29
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  s_9622fd28aba994::t_a84b859219cf3c 68,88,97,162,185,230
+docs/adapters/discord.md
+  s_9622fd28aba994::t_a84b859219cf3c 11,24,56,126,159,161,163,165
+plugins/adapters/discord/README.md
+  s_9622fd28aba994::t_a84b859219cf3c 12,44,114,147,149,151,153
+plugins/adapters/wechat-mp/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 246,259
+packages/im/agent/src/context/context-system.ts
+  s_9622fd28aba994::t_a84b859219cf3c 19,109,112-113,115,135-136,200
+plugins/adapters/onebot11/src/self-profile.ts
+  s_9622fd28aba994::t_a84b859219cf3c 6-10,14,16-19,22-30,32-37,39,41-46,50,52-54
+plugins/adapters/discord/src/self-profile.ts
+  s_9622fd28aba994::t_a84b859219cf3c 47,49,57-61,72-73
+packages/im/adapter/src/adapter.ts
+  s_9622fd28aba994::t_a84b859219cf3c 8,374
+packages/im/agent/tests/plugin-runtime/subagent-provider-prompt.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 12,15,17,19-20,25,44-45,60-62,64-66
+plugins/adapters/wecom/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 219,232
+plugins/adapters/discord/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 337,350
+packages/im/agent/src/context/agents-instruction.ts
+  s_9622fd28aba994::t_a84b859219cf3c 8,72,101
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_a84b859219cf3c 31,320,348,437-440,442,451,458
+packages/im/adapter/tests/profile-schema.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 1-36
+packages/im/adapter/src/endpoint.ts
+  s_9622fd28aba994::t_a84b859219cf3c 125-129
+packages/im/adapter/tests/endpoint-profile.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 39-92
+packages/im/tool/src/definition.ts
+  s_9622fd28aba994::t_a84b859219cf3c 156
+plugins/adapters/kook/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 314,327
+plugins/adapters/line/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 198,211
+plugins/adapters/milky/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 221,234
+plugins/adapters/weixin-ilink/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 223,236
+plugins/adapters/bilibili-live/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 361,374
+plugins/adapters/icqq/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 622,635
+plugins/adapters/bilibili/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 525,538
+basic/cli/src/commands/migrate.ts
+  s_9622fd28aba994::t_a84b859219cf3c 167,171,188
+plugins/adapters/telegram/README.md
+  s_9622fd28aba994::t_a84b859219cf3c 176,178,180,182
+packages/im/agent/tests/prompt/bootstrap-source-provider.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 1-84
+packages/im/agent/src/bootstrap-scope.ts
+  s_9622fd28aba994::t_a84b859219cf3c 15-16,35-69,105-106,109-132,150,156-157,172-173,176,189
+packages/im/adapter/src/endpoint-profile.ts
+  s_9622fd28aba994::t_a84b859219cf3c 3,91-92,131,148-156,158,172,201
+plugins/adapters/bilibili-live/tests/self-profile.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 5-39
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 76-79
+plugins/adapters/sandbox/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 177,190
+plugins/adapters/onebot11/tests/self-profile.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 1-63
+plugins/adapters/github/src/self-profile.ts
+  s_9622fd28aba994::t_a84b859219cf3c 5,16-17,20-21
+docs/en/configuration/index.md
+  s_9622fd28aba994::t_a84b859219cf3c 428-430,435-437,448,455,463
+docs/en/authoring/adapters.md
+  s_9622fd28aba994::t_a84b859219cf3c 182
+plugins/adapters/napcat/src/self-profile.ts
+  s_9622fd28aba994::t_a84b859219cf3c 2,46-51
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 15,46,82,98-110
+  s_9622fd28aba994::t_be885edf63a67b 111-112
+docs/adapters/napcat.md
+  s_9622fd28aba994::t_a84b859219cf3c 11,139
+packages/im/agent/src/prompt/rules/security.ts
+  s_9622fd28aba994::t_a84b859219cf3c 2
+packages/im/agent/tests/context/agents-instruction-root.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 38-55
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_a84b859219cf3c 197,652
+plugins/adapters/github/tests/self-profile.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 1-22
+docs/plans/prompt-policy-consolidation.md
+  s_9622fd28aba994::t_a84b859219cf3c 157-158,166-206
+plugins/adapters/napcat/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 233,246
+basic/cli/tests/plugin-runtime/start/restart-shutdown.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 12,123,128,136-137,140-146,155-160,164-166,179-187,190,200,211
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  s_9622fd28aba994::t_a84b859219cf3c 72,85,94,152,182,228
+packages/im/agent/src/plugin-runtime/native-self-profile-tools.ts
+  s_9622fd28aba994::t_a84b859219cf3c 98
+  s_9622fd28aba994::t_f316aacea2047f 3
+plugins/adapters/discord/tests/self-profile.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 6-15
+basic/cli/tests/cli-write-side.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 25,221-222
+packages/im/agent/tests/prompt/prompt-policy-requests.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 123-125,164-167
+plugins/adapters/onebot11/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 216,229
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  s_9622fd28aba994::t_a84b859219cf3c 16,44,197-198
+packages/im/agent/src/security/turn-network-client.ts
+  s_9622fd28aba994::t_a84b859219cf3c 47-54,64,70,76,83,88,97-102
+plugins/adapters/telegram/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 243,256
+plugins/adapters/slack/schema.json
+  s_9622fd28aba994::t_a84b859219cf3c 256,269
+packages/im/agent/src/prompt/assembly.ts
+  s_9622fd28aba994::t_a84b859219cf3c 24-25,63-68,76,161-163,211
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9622fd28aba994::t_a84b859219cf3c 38,83-84,220-221,240-245,247,271,275,279-280,547,550
+packages/im/agent/tests/prompt/account-persona-entry-paths.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 19-47
+packages/im/agent/tests/bootstrap-scope.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 41-50,118-154,173-186,197-202
+  s_9622fd28aba994::t_b3712f5f4e4861 203
+packages/im/agent/src/prompt/prompts/deferred-worker.md
+  s_9622fd28aba994::t_a84b859219cf3c 11
+basic/cli/src/plugin-runtime/agent/publication-coordinator.ts
+  s_9622fd28aba994::t_a84b859219cf3c 3,24,77
+docs/configuration/index.md
+  s_9622fd28aba994::t_a84b859219cf3c 424-426,431-433,444,451,459
+plugins/adapters/onebot11/tests/onebot11-self-user-id.test.ts
+  s_9622fd28aba994::t_a84b859219cf3c 55-72,94-99,211-218
+  s_9622fd28aba994::t_c97963c3ab1268 219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7dc9a95b745ed97ed1bf8a2b126b750adfe8d2ec",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
