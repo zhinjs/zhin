@@ -60,7 +60,7 @@ export async function resolveAdapterConsolePluginId(adapterKey: string): Promise
   ];
   const candidates = (body.pages ?? []).filter(page => page.localName === 'index'
     && typeof page.owner === 'string' && typeof page.source === 'string'
-    && patterns.some(pattern => pattern.test(page.source)));
+    && patterns.some(pattern => typeof page.source === "string" && pattern.test(page.source)));
   const exact = candidates.filter(page => page.route === pathname);
   return exact.length === 1 ? exact[0]?.owner : exact.length === 0 && candidates.length === 1 ? candidates[0]?.owner : undefined;
 }
