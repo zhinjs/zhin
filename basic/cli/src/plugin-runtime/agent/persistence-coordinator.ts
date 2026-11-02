@@ -12,6 +12,13 @@ import type { AgentHostAIConfig } from './config.js';
 
 type Context = Parameters<RootResourceInstaller>[0];
 
+/** MySQL TEXT needs (128); VARCHAR(64) id/run_id must stay unprefixed (ER_WRONG_SUB_KEY). */
+export async function ensureScheduleHistoryIndexes(database: StructuredDatabase): Promise<void> {
+  await ensureDatabaseIndex(database, 'agent_schedule_runs', 'agent_schedule_runs_job_time', [{ name: 'job_id', text: true }, { name: 'queued_at' }, { name: 'id' }]);
+  await ensureDatabaseIndex(database, 'agent_schedule_runs', 'agent_schedule_runs_time', [{ name: 'queued_at' }, { name: 'id' }]);
+  await ensureDatabaseIndex(database, 'agent_schedule_attempts', 'agent_schedule_attempts_run', [{ name: 'run_id' }, { name: 'number' }]);
+}
+
 /** Agent owns its storage with or without the optional Workroom package. */
 export function installAgentPersistence(context: Pick<Context, 'resources' | 'handoff' | 'lifecycle' | 'admission'>,
   foundation: AgentRuntimeFoundation, config: AgentHostAIConfig, pruneTraces?: () => Promise<unknown>): void {
@@ -85,9 +92,7 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
     if (sql) await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
     if (sql) foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
     if (sql && raw) {
-      await ensureDatabaseIndex(raw, 'agent_schedule_runs', 'agent_schedule_runs_job_time', [{ name: 'job_id', text: true }, { name: 'queued_at' }, { name: 'id', text: true }]);
-      await ensureDatabaseIndex(raw, 'agent_schedule_runs', 'agent_schedule_runs_time', [{ name: 'queued_at' }, { name: 'id', text: true }]);
-      await ensureDatabaseIndex(raw, 'agent_schedule_attempts', 'agent_schedule_attempts_run', [{ name: 'run_id', text: true }, { name: 'number' }]);
+      await ensureScheduleHistoryIndexes(raw);
     }
     if (sql && raw && decisions()) {
       await ensureDatabaseIndex(raw, AI_DECISION_EVENTS_TABLE, 'ai_decision_events_ts', [{ name: 'ts' }]);
