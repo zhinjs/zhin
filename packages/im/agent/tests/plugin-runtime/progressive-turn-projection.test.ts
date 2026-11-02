@@ -14,6 +14,7 @@ import { UsageQuota } from '../../src/security/usage-quota.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { ReplyStreamRun } from '../../src/core/reply-stream-run.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { deliveredTextDigest } from '../../src/session/context-provenance.js';
 
 it.each(['sent', 'partial', 'legacy'] as const)('projects %s delivery facts through the complete turn engine', async mode => {
   const conversation = { endpoint: { adapter: 'sandbox', id: 'bot' }, kind: 'private' as const, id: 'user' };
@@ -89,7 +90,8 @@ it.each(['stream', 'off', 'stopped', 'fallback', 'fallback-partial', 'fallback-r
   const actual = { conversation: { ...conversation, id: 'redirected', threadId: 'topic' }, id: 'actual-fallback' };
   const send = vi.fn(async () => {
     if (failedFallback) throw new EndpointDeliveryError('fallback_stopped', 'platform', rejectedFallback ? 'rejected' : 'unknown',
-      { parts: [{ messageId: 'fallback-1' }, {}], ...(canonicalFallback ? { receipt: { status: 'failed', parts: [{ message: actual }, {}] } } : {}) });
+      { parts: [{ messageId: 'fallback-1', sourceIndices: [0] }, {}], ...(canonicalFallback ? { receipt: { status: 'failed',
+        parts: [{ message: actual, sourceIndices: [0], outboundTextDigest: deliveredTextDigest('rewritten by outbound middleware') }, {}] } } : {}) });
     return { status: 'sent' as const, messageId: 'ordinary' };
   });
   const openStream = vi.fn((answer?: { phaseId?: string }) => {

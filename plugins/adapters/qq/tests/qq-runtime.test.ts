@@ -489,6 +489,21 @@ config: baseConfig}), () => mock, { receive: vi.fn(), send: vi.fn(async () => 's
     } finally { await endpoint.stop(); }
   });
 
+  it('reports no delivery when the complete payload is dropped before the first native send', async () => {
+    const mock = createMockBot();
+    const endpoint = await qqFixture(() => new QqWebsocketEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig,
+    }), () => mock);
+    try {
+      await endpoint.start();
+      await expect(endpoint.send({
+        conversation: { endpoint: { id: endpoint.canonicalId, adapter: 'qq' }, kind: 'private', id: 'user-1' },
+        payload: [{ type: 'markdown', data: { content: '' } }, { type: 'image', data: {} }],
+      })).rejects.toMatchObject({ code: 'unsupported_operation', disposition: 'not_sent' });
+      expect(mock.sent).toEqual([]);
+    } finally { await endpoint.stop(); }
+  });
+
   it('sends markdown segments as msg_type=2 payloads', async () => {
     const mock = createMockBot();
     const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), adapterFeature, 'qq'),

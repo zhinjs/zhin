@@ -36,6 +36,8 @@ it('publishes one CardKit entity, updates full Markdown and closes streaming wit
   try {
     expect(s.lease.streaming!.supports!({ conversation: s.request.conversation })).toBe(true);
     expect(s.lease.streaming!.supports!({ conversation: { ...s.request.conversation, threadId: 'topic' } })).toBe(false);
+    expect(() => coreReplyFixture(s.lease, { ...s.request, conversation: { ...s.request.conversation, threadId: 'topic' } }))
+      .toThrow('does not support progressive replies');
     expect(s.lease.streaming!.supports!({ conversation: { ...s.request.conversation, parent: { kind: 'channel', id: 'parent' } } })).toBe(false);
     const stream = s.lease.streaming!.open(s.request)!;
     expect(s.calls).toHaveLength(0);

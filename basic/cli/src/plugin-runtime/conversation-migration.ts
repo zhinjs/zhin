@@ -8,14 +8,20 @@ export async function migrateConversationColumns(database: StructuredDatabase): 
   await ensureDatabaseColumns(database, 'conversation_events', CONVERSATION_EVENT_QUERY_MODEL);
   const model = database.models.get('conversation_events');
   if (!model) throw new Error('Missing conversation_events model');
+  let afterId: unknown;
   while (true) {
-    const rows = await model.select('id', 'event_json').where({ $or: [{ query_version: null }, { message_revision: null }] }).orderBy('id').limit(200);
+    const rows = await model.select('id', 'event_json').where({ $and: [
+      ...(afterId === undefined ? [] : [{ id: { $gt: afterId } }]),
+      { $or: [{ query_version: null }, { message_revision: null }] },
+    ] }).orderBy('id').limit(200);
     if (!rows.length) break;
     for (const row of rows) {
       const event = JSON.parse(String(row.event_json)) as ConversationEvent;
       const fields = conversationEventQueryFields(event);
       await model.update(fields).where({ id: row.id });
     }
+    // Seek past the completed batch instead of re-scanning already backfilled rows.
+    afterId = rows[rows.length - 1]!.id;
   }
   // Derived indexes can be rebuilt from event_json; rollback ignores the additive columns/indexes.
   await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_message_sequence', [

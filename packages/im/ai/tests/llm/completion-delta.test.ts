@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAssistantMessageEventStream, LlmApiRuntime, type AssistantStreamEvent } from '../../src/llm/llm-api-runtime.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 import type { Model } from '../../src/llm/types/model.js';
-import { createResilientCompletionPort, ProviderRequestError } from '../../src/llm/provider-resilience.js';
+import { createResilientCompletionPort, ProviderRequestError, type ProviderResilienceEvent } from '../../src/llm/provider-resilience.js';
 
 const model: Model = { id: 'test', provider: 'test', api: 'ai-sdk', sdk: 'openai', reasoning: false,
   input: ['text'], contextWindow: 8192, maxTokens: 1000 };
@@ -39,14 +39,30 @@ describe('completion deltas', () => {
     'keeps $kind classification after publication without retrying or falling back', async ({ code, kind }) => {
       const error = Object.assign(new Error(code === 402 ? 'Insufficient Balance' : 'Rate limit reached on requests per day (RPD)'), { statusCode: code });
       const complete = vi.fn(async () => { throw error; });
+      const events: ProviderResilienceEvent[] = [];
       const port = createResilientCompletionPort({ complete, completeSimple: complete }, {
         config: { maxRetries: 2, requestTimeoutMs: 0 }, fallbackModels: [{ ...model, id: 'fallback', provider: 'other' }],
+        onEvent: event => { events.push(event); },
       });
       const rejected = await port.complete(model, { systemPrompt: '', messages: [] }, { retryAllowed: () => false }).catch(error => error);
       expect(rejected).toBeInstanceOf(ProviderRequestError);
       expect(rejected).toMatchObject({ kind, cause: error });
       expect(complete).toHaveBeenCalledOnce();
+      expect(events).toEqual([{ type: 'give_up', model: model.id, kind, error: error.message }]);
     });
+
+  it('keeps the published quota failure when its give-up observer throws', async () => {
+    const error = Object.assign(new Error('Insufficient Balance'), { statusCode: 402 });
+    const complete = vi.fn(async () => { throw error; });
+    const port = createResilientCompletionPort({ complete, completeSimple: complete }, {
+      config: { maxRetries: 2, requestTimeoutMs: 0 },
+      onEvent: () => { throw new Error('logger unavailable'); },
+    });
+    const rejected = await port.complete(model, { systemPrompt: '', messages: [] }, { retryAllowed: () => false }).catch(error => error);
+    expect(rejected).toBeInstanceOf(ProviderRequestError);
+    expect(rejected).toMatchObject({ kind: 'billing', cause: error });
+    expect(complete).toHaveBeenCalledOnce();
+  });
   it('observes genuine provider deltas before the completion has resolved', async () => {
     const runtime = new LlmApiRuntime();
     let release!: () => void;

@@ -122,6 +122,18 @@ describe('backoff helpers', () => {
 });
 
 describe('createResilientCompletionPort (fault injection)', () => {
+  it.each(['retry', 'fallback'] as const)('keeps %s decisions independent of a throwing event observer', async mode => {
+    const result = reply('ok');
+    const { port, calls } = scripted([apiError(mode === 'retry' ? 429 : 400), result]);
+    const resilient = createResilientCompletionPort(port, {
+      config: { maxRetries: mode === 'retry' ? 1 : 0, requestTimeoutMs: 0 },
+      fallbackModels: [model('b')], sleep: noSleep,
+      onEvent: () => { throw new Error('diagnostic unavailable'); },
+    });
+    await expect(resilient.complete(model('a'), ctx)).resolves.toBe(result);
+    expect(calls.map(call => call.model)).toEqual(['a', mode === 'retry' ? 'a' : 'b']);
+  });
+
   it('retries a 429 with backoff, then succeeds, and disables SDK-level retries', async () => {
     const { resilient, calls, events } = harness([apiError(429), reply('ok')]);
     await expect(resilient.complete(model('a'), ctx)).resolves.toMatchObject({ content: [{ text: 'ok' }] });

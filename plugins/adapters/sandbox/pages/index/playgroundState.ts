@@ -33,6 +33,9 @@ export interface PlaygroundMessage {
   /** Stored controls are display data; only the live pending authority may accept their answers. */
   readonly interactionReadOnly?: boolean;
   readonly historySequence?: number;
+  readonly historyCreatedSequence?: number;
+  /** Origin of the selected historical body; a live wire revision clears this provenance. */
+  readonly historyEvent?: Readonly<{ type: 'message.created' | 'message.updated'; sequence: number }>;
   readonly recalled?: boolean;
   readonly recalledMessageId?: string;
   readonly revision?: number;
@@ -157,6 +160,8 @@ function parseMessage(value: unknown): PlaygroundMessage | undefined {
   if (typeof item.id !== 'string' || typeof item.channelId !== 'string' || !Array.isArray(item.content)) return undefined;
   if (item.type !== 'sent' && item.type !== 'received') return undefined;
   if (item.channelType !== 'private' && item.channelType !== 'group' && item.channelType !== 'channel') return undefined;
+  const historyEvent = item.historyEvent && typeof item.historyEvent === 'object' && !Array.isArray(item.historyEvent)
+    ? item.historyEvent as Record<string, unknown> : undefined;
   return {
     id: item.id.slice(0, 256),
     type: item.type,
@@ -170,6 +175,11 @@ function parseMessage(value: unknown): PlaygroundMessage | undefined {
     ...(item.interactionResolved === true ? { interactionResolved: true } : {}),
     ...(hasPlaygroundKeyboard(item.content as MessageSegment[]) ? { interactionReadOnly: true } : {}),
     ...(Number.isSafeInteger(item.historySequence) && Number(item.historySequence) > 0 ? { historySequence: Number(item.historySequence) } : {}),
+    ...(Number.isSafeInteger(item.historyCreatedSequence) && Number(item.historyCreatedSequence) > 0
+      ? { historyCreatedSequence: Number(item.historyCreatedSequence) } : {}),
+    ...((historyEvent?.type === 'message.created' || historyEvent?.type === 'message.updated')
+      && Number.isSafeInteger(historyEvent.sequence) && Number(historyEvent.sequence) > 0
+      ? { historyEvent: { type: historyEvent.type, sequence: Number(historyEvent.sequence) } } : {}),
     ...(item.recalled === true ? { recalled: true } : {}),
     ...(typeof item.recalledMessageId === 'string' ? { recalledMessageId: item.recalledMessageId } : {}),
     ...(Number.isSafeInteger(item.revision) && Number(item.revision) > 0 ? { revision: Number(item.revision) } : {}),
@@ -237,6 +247,7 @@ export function mergePlaygroundMessage(
   const existing = messages[index]!;
   if (existing.recalled || existing.revision !== undefined && (incoming.revision ?? 0) <= existing.revision) return [...messages];
   return messages.map((message, offset) => offset === index ? { ...message, ...incoming,
+    historyEvent: incoming.historyEvent,
     ...(incoming.revision === undefined ? {} : { timestamp: message.timestamp }),
   } : message);
 }

@@ -76,7 +76,8 @@ type AuthoringForAdapter<TInput, TConfig, TAdapter extends string | undefined> =
     | { readonly target?: 'inbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: MiddlewareNext): unknown }
     | {
         readonly target: 'outbound';
-        /** Opt in to cumulative revisions; do not repeat approvals, external sends or other side effects. */
+        /** Opt in to cumulative prefixes. Previously published text, format and addressing must stay stable;
+         * do not repeat approvals, external sends or other side effects. */
         readonly incremental?: true;
         handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void>;
       }

@@ -17,7 +17,69 @@ const page = (items: unknown[], hasMore = false) => ({ success: true, data: { co
   nextBeforeSequence: hasMore ? (items[0] as { sequence: number })?.sequence : null } });
 const live = (id: string, value = id): state.PlaygroundMessage => ({ id, type: 'received', channelType: 'group', channelId: 'room',
   channelName: 'Project', senderId: 'endpoint', senderName: 'Bot', content: text(value), timestamp: 100 });
+const updated = (sequence: number, id: string, revision: number, value: string) => ({
+  ...created(sequence, id), type: 'message.updated', message: { ...created(sequence, id).message,
+    revision, timestamp: 1, segments: text(value) },
+});
+const recall = (sequence: number, id: string) => ({ sequence, type: 'message.recalled', timestamp: sequence,
+  messageRef: { conversation, id } });
 afterEach(() => vi.unstubAllGlobals());
+
+it('decodes legacy updates by revision without moving their original message between equal-time neighbors', () => {
+  const neighbor = created(2, 'neighbor'); neighbor.message.timestamp = 1;
+  const read = readSandboxHistoryPage(page([created(1, 'native'), neighbor, updated(3, 'native', 2, 'final')]), binding);
+  const merged = mergeSandboxHistory([], read.messages);
+  expect(merged.map(row => row.id)).toEqual(['native', 'neighbor']);
+  expect(merged[0]).toMatchObject({ content: text('final'), revision: 2, historySequence: 1 });
+});
+
+it('never substitutes an equal or lower legacy revision for an already visible native revision', () => {
+  const current = { ...live('native', 'live final'), revision: 4, streaming: true };
+  const read = readSandboxHistoryPage(page([updated(5, 'native', 4, 'duplicate'), updated(6, 'native', 3, 'older')]), binding);
+  expect(mergeSandboxHistory([current], read.messages)[0]).toMatchObject({ content: text('live final'), revision: 4, streaming: true });
+});
+
+it('ignores legacy updates after recall while retaining the latest confirmed pre-recall body', () => {
+  const read = readSandboxHistoryPage(page([created(1, 'native'), updated(2, 'native', 1, 'confirmed'),
+    recall(3, 'native'), updated(4, 'native', 2, 'after recall')]), binding);
+  const merged = mergeSandboxHistory([], read.messages);
+  expect(merged.find(row => row.id === 'native')).toMatchObject({ recalled: true, content: text('confirmed'), revision: 1 });
+});
+
+it('recovers the valid pre-recall revision when an earlier page reveals the recall boundary', () => {
+  const newest = readSandboxHistoryPage(page([updated(9, 'native', 3, 'after recall')], true), binding);
+  const current = mergeSandboxHistory([], newest.messages);
+  const earlier = readSandboxHistoryPage(page([created(1, 'native'), updated(5, 'native', 2, 'confirmed'), recall(7, 'native')]), binding, 9);
+  const merged = mergeSandboxHistory(current, earlier.messages);
+  expect(merged.find(row => row.id === 'native')).toMatchObject({ recalled: true, content: text('confirmed'), revision: 2, historySequence: 1 });
+  expect(state.mergePlaygroundMessage(merged, { ...live('native', 'late wire'), revision: 10 }))
+    .toEqual(merged);
+});
+
+it('retains historical provenance through browser storage before loading an earlier recall page', () => {
+  const initial = state.createDefaultPlaygroundState();
+  const session = { ...initial.sessions[1]!, id: 'room' };
+  let saved = '';
+  const storage = { getItem: () => saved, setItem: (_key: string, value: string) => { saved = value; } };
+  const newest = mergeSandboxHistory([], readSandboxHistoryPage(page([updated(9, 'native', 3, 'after recall')], true), binding).messages);
+  expect(state.savePlaygroundState({ activeSessionId: session.id, activeSessionType: session.type, sessions: [session], messages: newest }, storage)).toBe(true);
+  const restored = state.loadPlaygroundState(storage).messages;
+  expect(restored[0]!.historyEvent).toEqual({ type: 'message.updated', sequence: 9 });
+  const earlier = readSandboxHistoryPage(page([created(1, 'native'), updated(5, 'native', 2, 'confirmed'), recall(7, 'native')]), binding, 9);
+  expect(mergeSandboxHistory(restored, earlier.messages).find(row => row.id === 'native'))
+    .toMatchObject({ content: text('confirmed'), revision: 2, recalled: true, historySequence: 1 });
+});
+
+it('keeps the first valid historical revision on a tie while leaving live revision ties unchanged', () => {
+  const newest = mergeSandboxHistory([], readSandboxHistoryPage(page([updated(9, 'native', 3, 'duplicate')], true), binding).messages);
+  const earlier = readSandboxHistoryPage(page([created(1, 'native'), updated(5, 'native', 3, 'first confirmed')]), binding, 9);
+  expect(mergeSandboxHistory(newest, earlier.messages)[0]).toMatchObject({ content: text('first confirmed'), revision: 3, historySequence: 1 });
+});
+
+it.each([undefined, 0, -1, 1.5])('rejects an invalid legacy update revision: %s', revision => {
+  const event = updated(2, 'native', 1, 'invalid');
+  expect(() => readSandboxHistoryPage(page([{ ...event, message: { ...event.message, revision } }]), binding)).toThrow();
+});
 
 it('refreshes a live message with a higher confirmed history revision without resurrecting recalls', () => {
   const updated = { ...created(1, 'native', text('confirmed final')), message: { ...created(1, 'native').message, revision: 4, segments: text('confirmed final') } };
@@ -74,6 +136,20 @@ function fixture() {
   };
   f.render(); return f;
 }
+
+it('loads a legacy update-only page and retains it when an older creation page is requested', async () => {
+  const f = fixture();
+  try {
+    f.answer(0, page([updated(11, 'native', 3, 'latest')], true)); await f.settle();
+    expect(f.rows).toHaveLength(1);
+    expect(f.rows[0]).toMatchObject({ content: text('latest'), revision: 3 });
+    const loading = f.output.loadEarlier();
+    f.answer(1, page([created(1, 'native'), updated(4, 'native', 2, 'older')]));
+    await loading; await f.settle();
+    expect(f.rows).toHaveLength(1);
+    expect(f.rows[0]).toMatchObject({ content: text('latest'), revision: 3, historySequence: 1 });
+  } finally { f.close(); }
+});
 
 it('loads one real page and only loads older non-message events when requested, without sending inputs', async () => {
   const f = fixture();

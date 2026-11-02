@@ -32,6 +32,7 @@ export async function deliverProgressiveReply(
     try { extra = await send(remaining); }
     catch (error) {
       const known = error instanceof EndpointDeliveryError;
+      // The inbound origin is not a delivery target; redirected replies retain canonical refs below.
       const target = messages.find(message => message !== null)?.conversation ?? conversation;
       const canonical = known ? error.receipt : undefined;
       const completed = canonical

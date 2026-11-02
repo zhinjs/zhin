@@ -343,6 +343,8 @@ async function* runInteractiveTurn(
               ...(!known || error.disposition === 'unknown' ? { deliveryUnknown: true as const } : {}),
               ...(messages.length ? { deliveryPartial: true as const } : {}) };
       }
+      // Partial receipts prove send slots, not their bodies: sourceIndices address the rendered,
+      // middleware-transformed payload, so they cannot promote phase.output into history/ledger.
       confirmedOutput = delivery.status === 'sent' ? [...phase.output] : [];
     }
     const messages = 'messages' in delivery ? delivery.messages ?? [] : [];

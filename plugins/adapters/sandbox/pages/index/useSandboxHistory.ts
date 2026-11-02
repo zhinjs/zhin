@@ -121,20 +121,23 @@ export function readSandboxHistoryPage(body: unknown, binding: SandboxHistoryBin
     if (!item || !Number.isSafeInteger(item.sequence) || Number(item.sequence) <= previous || !text(item.type)
       || !validTime(item.timestamp) || before !== undefined && Number(item.sequence) >= before) fail();
     previous = Number(item.sequence);
-    if (item.type === 'message.created') {
+    if (item.type === 'message.created' || item.type === 'message.updated') {
       const message = record(item.message), ref = record(message?.ref), actor = record(message?.actor);
       if (!message || !ref || !text(ref.id) || !matches(ref.conversation) || !validTime(message.timestamp)
         || !Array.isArray(message.segments) || !message.segments.every(segment => text(record(segment)?.type) && record(record(segment)?.data))
         || message.actor !== undefined && (!actor || !text(actor.id) || actor.displayName !== undefined && typeof actor.displayName !== 'string')
         || message.contentStatus !== undefined && message.contentStatus !== 'unavailable') fail();
       if (message.revision !== undefined && (!Number.isSafeInteger(message.revision) || Number(message.revision) < 0)
+        || item.type === 'message.updated' && (!Number.isSafeInteger(message.revision) || Number(message.revision) <= 0)
         || message.recalled !== undefined && message.recalled !== true) fail();
       const content: MessageSegment[] = message.contentStatus === 'unavailable'
         ? [{ type: 'text', data: { text: sandboxText(locale, '消息正文未保存') } }] : message.segments as MessageSegment[];
       messages.push({ id: ref.id, type: actor ? 'sent' : 'received', channelType: binding.scene.type, channelId: binding.scene.id,
         channelName: binding.scene.name, senderId: actor ? String(actor.id) : 'endpoint',
         senderName: actor ? String(actor.displayName || actor.id) : binding.scope.id, content, timestamp: message.timestamp,
-        historySequence: previous, ...(hasPlaygroundKeyboard(content) ? { interactionReadOnly: true } : {}),
+        historySequence: previous, historyEvent: { type: item.type, sequence: previous },
+        ...(item.type === 'message.created' ? { historyCreatedSequence: previous } : {}),
+        ...(hasPlaygroundKeyboard(content) ? { interactionReadOnly: true } : {}),
         ...(message.revision === undefined ? {} : { revision: Number(message.revision), streaming: false }),
         ...(message.recalled === true ? { recalled: true } : {}),
       });
@@ -155,18 +158,35 @@ export function readSandboxHistoryPage(body: unknown, binding: SandboxHistoryBin
 /** Stable message identity joins canonical events, optimistic inputs and native wire receipts. */
 export function mergeSandboxHistory(current: readonly PlaygroundMessage[], history: readonly PlaygroundMessage[]): PlaygroundMessage[] {
   const key = (row: PlaygroundMessage) => JSON.stringify([row.channelType, row.channelId, row.type, row.id]);
-  const rows = new Map(current.map(row => [key(row), row]));
+  const targetKey = (row: PlaygroundMessage, id = row.id) => JSON.stringify([row.channelType, row.channelId, id]);
+  const lowest = (left?: number, right?: number) => left === undefined ? right : right === undefined ? left : Math.min(left, right);
+  const recalled = new Set<string>(), recallSequences = new Map<string, number>();
+  for (const row of [...current, ...history]) {
+    if (!row.recalledMessageId) continue;
+    const target = targetKey(row, row.recalledMessageId);
+    recalled.add(target);
+    if (row.historySequence !== undefined) recallSequences.set(target, lowest(recallSequences.get(target), row.historySequence)!);
+  }
+  // An earlier page can reveal that a previously loaded raw update followed a recall.
+  const afterRecall = (row: PlaygroundMessage) => row.historyEvent?.type === 'message.updated'
+    && recallSequences.has(targetKey(row)) && row.historyEvent.sequence >= recallSequences.get(targetKey(row))!;
+  const rows = new Map(current.filter(row => !afterRecall(row)).map(row => [key(row), row]));
   for (const row of history) {
+    if (afterRecall(row)) continue;
     const existing = rows.get(key(row));
-    if (existing?.recalled) continue;
-    const newer = (row.revision ?? 0) > (existing?.revision ?? 0);
-    rows.set(key(row), existing ? { ...(newer ? { ...existing, ...row } : { ...row, ...existing }), historySequence: row.historySequence,
+    const beforeRecall = Boolean(row.historyEvent && row.historyEvent.sequence < (recallSequences.get(targetKey(row)) ?? -1));
+    const newer = (!existing?.recalled || row.recalled || beforeRecall) && ((row.revision ?? 0) > (existing?.revision ?? 0)
+      || (row.revision ?? 0) === (existing?.revision ?? 0) && row.historyEvent && existing?.historyEvent
+        && row.historyEvent.sequence < existing.historyEvent.sequence);
+    const createdSequence = lowest(existing?.historyCreatedSequence, row.historyCreatedSequence);
+    rows.set(key(row), existing ? { ...(newer ? { ...existing, ...row } : { ...row, ...existing }),
+      historySequence: createdSequence ?? lowest(existing.historySequence, row.historySequence), historyCreatedSequence: createdSequence,
+      historyEvent: newer ? row.historyEvent : existing.historyEvent,
       ...(!newer && existing.interactionReadOnly === false ? { interactionReadOnly: false } : row.interactionReadOnly ? { interactionReadOnly: true } : {}),
       ...(existing.recalled || row.recalled ? { recalled: true } : {}),
     } : row);
   }
-  const recalled = new Set([...rows.values()].filter(row => row.recalledMessageId).map(row => JSON.stringify([row.channelType, row.channelId, row.recalledMessageId])));
-  return [...rows.values()].map(row => row.recalled || recalled.has(JSON.stringify([row.channelType, row.channelId, row.id]))
+  return [...rows.values()].map(row => row.recalled || recalled.has(targetKey(row))
     ? { ...row, recalled: true, streaming: false, ...(hasPlaygroundKeyboard(row.content) ? { interactionReadOnly: true } : {}) } : row)
     .sort((a, b) => a.timestamp - b.timestamp || (a.channelType === b.channelType && a.channelId === b.channelId
       ? (a.historySequence ?? Number.MAX_SAFE_INTEGER) - (b.historySequence ?? Number.MAX_SAFE_INTEGER) : 0));
