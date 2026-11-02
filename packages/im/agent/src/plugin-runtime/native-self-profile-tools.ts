@@ -1,6 +1,6 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
-import { SELF_PROFILE_FIELDS, type MediaRef, type SelfProfileChange, type SelfProfilePort } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, SELF_PROFILE_FIELDS, type MediaRef, type SelfProfileChange, type SelfProfilePort } from '@zhin.js/im-contract';
 import { defineAgentTool, type ToolExecutionContext } from '@zhin.js/tool';
 import { z } from 'zod';
 import type { ImageAssetPublisher } from '../media/image-assets.js';
@@ -59,7 +59,19 @@ export function createNativeSelfProfileToolFeatures(options: NativeSelfProfileTo
           const change = field === 'avatar'
             ? { field: 'avatar' as const, value: await avatarReference(input, context, options) }
             : textProfileChange(input);
-          return profile.write({ change, signal: context.signal });
+          let result: Awaited<ReturnType<NonNullable<SelfProfilePort['write']>>>;
+          try { result = await profile.write({ change, signal: context.signal }); }
+          catch (error) {
+            // This owner performs one profile write, preceded only by image reads.
+            // A generic plugin exception does not carry this whole-invocation guarantee.
+            if (error instanceof EndpointDeliveryError && error.disposition !== 'unknown' && !error.parts?.length) {
+              context.effects?.report({ disposition: 'not_submitted' });
+            }
+            throw error;
+          }
+          context.effects?.report({ disposition: result.status === 'updated' ? 'committed'
+            : result.status === 'rejected' ? 'not_submitted' : 'unknown' });
+          return result;
         },
       }),
     },

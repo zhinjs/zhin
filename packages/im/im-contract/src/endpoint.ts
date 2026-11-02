@@ -42,15 +42,18 @@ export interface DeliveryPart {
 /** Stable transport evidence; a generic thrown error must never imply safe retry. */
 export class EndpointDeliveryError extends Error {
   readonly parts?: readonly EndpointSendPart[];
+  /** Canonical receipt retained by the unified delivery owner, when one exists. */
+  readonly receipt?: DeliveryReceipt;
   constructor(
     readonly code: string,
     message: string,
     readonly disposition: 'not_sent' | 'rejected' | 'unknown',
-    options?: ErrorOptions & { readonly parts?: readonly EndpointSendPart[] },
+    options?: ErrorOptions & { readonly parts?: readonly EndpointSendPart[]; readonly receipt?: DeliveryReceipt },
   ) {
     super(message, options);
     this.name = 'EndpointDeliveryError';
     this.parts = options?.parts;
+    this.receipt = options?.receipt;
   }
 }
 

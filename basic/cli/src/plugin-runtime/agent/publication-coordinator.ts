@@ -57,6 +57,7 @@ export class AgentHostPublicationCoordinator {
         sessionTree: sessionTreeRuntime,
         listBindings: () => agent.listBindings(),
         assistant: schedule.assistantRuntime,
+        scheduleExecutions: schedule.history,
         trace: traceRuntime,
         cancelSession: (sessionKey: string) => agent.agent.cancelSession(sessionKey),
       }),

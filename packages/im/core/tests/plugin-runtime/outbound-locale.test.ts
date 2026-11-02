@@ -6,14 +6,22 @@ import { MiddlewareIndex, middlewareFeatureId, defineMiddleware } from '@zhin.js
 import { ImRuntime, type Message, type SendContent, type OutboundEnvelope } from '../../src/plugin-runtime/im/index.js';
 import { createOutboundHost } from '../../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
 import { createRuntimeProactiveOutbound } from '../../../../../basic/cli/src/plugin-runtime/agent/runtime-factory.js';
+import { EndpointDeliveryError, type DeliveryReceipt } from '@zhin.js/im-contract';
+import { createNotificationRouter, createTaskExecutor, JobWorker } from '../../../agent/src/index.js';
+import { createScheduleAuditRecord } from '../../../agent/src/schedule-domain/audit-logger.js';
+import type { ScheduleJob } from '../../../agent/src/assistant/types.js';
 
-async function fixture(projectLocale: Locale, replace = false) {
+async function fixture(projectLocale: Locale, replace = false, partial = false) {
   const root = rootPluginId();
   const im = new ImRuntime();
   const sent: EndpointSendRequest[] = [];
   let userLocale: Locale = 'en';
   class MemoryClient {
-    async send(request: EndpointSendRequest) { sent.push(request); return `m${sent.length}`; }
+    async send(request: EndpointSendRequest) {
+      sent.push(request);
+      if (partial) throw new EndpointDeliveryError('connection_lost', 'Later bubble is unconfirmed', 'unknown', { parts: [{ messageId: 'confirmed-first' }] });
+      return `m${sent.length}`;
+    }
   }
   class MemoryEndpoint extends MemoryClient implements Endpoint {
     readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request) });
@@ -93,5 +101,51 @@ it('carries captured language through owner-bound Host sends, exact targets and 
     expect(JSON.stringify(f.sent.map(request => request.payload))).toContain('后台原文');
     expect(JSON.stringify(f.sent.map(request => request.payload))).toContain('队列原文');
     expect(JSON.stringify(f.sent.map(request => request.payload))).toContain('计划原文');
+  } finally { await f.stop(); }
+});
+
+it('keeps a real partial unified-send receipt separate from completed scheduled work without replay', async () => {
+  const f = await fixture('zh-CN', false, true);
+  const proactive = createRuntimeProactiveOutbound(f.im);
+  const execute = vi.fn(async () => {
+    const output = 'Already completed task';
+    return { success: true, output, durationMs: 7, toolsUsed: [], tokenUsage: { input: 3, output: 2 },
+      audit: createScheduleAuditRecord({ jobId: 'partial-job', executionId: 'fixture-execution', timestamp: 1,
+        prompt: 'Fixture', toolsResolved: [], toolsResolvedBy: 'affinity', skillsResolved: [], missingTools: [], missingSkills: [],
+        toolsUsed: [], tokenUsage: { input: 3, output: 2 }, durationMs: 7, securityDenials: [], success: true,
+        outputLength: output.length, outputStripped: [] }) };
+  });
+  const router = createNotificationRouter({ resolveAdapter: () => undefined,
+    sendIm: async (notify, content) => {
+      let receipt: DeliveryReceipt | undefined;
+      await proactive.send({ scene: notify.target.scene, source: 'scheduled', onReceipt: value => { receipt = value; } }, content);
+      return receipt;
+    } });
+  const executor = createTaskExecutor({ domain: { execute }, router });
+  const worker = new JobWorker({ executor, queue: { maxRetries: 1 } });
+  const job: ScheduleJob = { id: 'partial-job', enabled: true, schedule: { kind: 'every', everyMs: 60_000 },
+    action: { kind: 'agent', prompt: 'Fixture' }, notify: { channel: 'im', target: { channel: 'im', scene: {
+      platform: f.row.endpoint.adapter, endpointKey: f.row.endpoint.id, kind: 'private', sceneId: 'recipient',
+    } } }, createdAt: 1, updatedAt: 1, state: {} };
+  try {
+    const result = await worker.run(job);
+    expect(result).toMatchObject({ success: true, output: 'Already completed task', durationMs: 7,
+      delivery: { status: 'partial', deliveryUnknown: true, messages: [{ id: 'confirmed-first', conversation: {
+        endpoint: f.row.endpoint, kind: 'private', id: 'recipient',
+      } }] } });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(f.sent).toHaveLength(1);
+  } finally { await worker.stop(); await executor.dispose(); await f.stop(); }
+});
+
+it('observes the same successful proactive receipt without letting observer failure repeat or reject its send', async () => {
+  const f = await fixture('zh-CN');
+  const onReceipt = vi.fn(async () => { throw new Error('observer unavailable'); });
+  try {
+    expect(await createRuntimeProactiveOutbound(f.im).send({ scene: { platform: f.row.endpoint.adapter,
+      endpointKey: f.row.endpoint.id, kind: 'private', sceneId: 'recipient' }, source: 'scheduled', onReceipt }, 'Once'))
+      .toBe('m1');
+    expect(onReceipt).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ status: 'sent', message: expect.objectContaining({ id: 'm1' }) }));
+    expect(f.sent).toHaveLength(1);
   } finally { await f.stop(); }
 });

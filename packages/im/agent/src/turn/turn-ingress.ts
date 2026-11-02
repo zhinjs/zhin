@@ -268,6 +268,8 @@ export interface DeliveryPort {
 }
 
 export interface TurnPorts {
+  /** Enclosing attempt's actual-call evidence; never supplied as model input. */
+  readonly operationEvidence?: import('../tool/tool-operation-evidence.js').ToolOperationEvidencePort;
   readonly journal: TurnJournalPort;
   readonly reply?: ReplyPort;
   readonly approval?: ApprovalPort;

@@ -23,6 +23,10 @@ export {
   getMcpToolsForBinding,
 } from '../resource-hub/mcp-lifecycle.js';
 export type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
+export * from '../schedule-domain/execution-history.js';
+export * from '../schedule-domain/execution-history-store.js';
+export * from '../schedule-domain/execution-history-file.js';
+export * from '../schedule-domain/execution-history-sql.js';
 export {
   createSessionTreeRuntimeFromAgent,
   type SessionTreeRuntimeHandle,

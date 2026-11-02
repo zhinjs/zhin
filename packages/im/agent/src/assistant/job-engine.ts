@@ -69,11 +69,11 @@ export class ScheduleJobEngine {
     }
   }
 
-  async runJobNow(jobId: string): Promise<void> {
-    await this.runJob(jobId);
+  async runJobNow(jobId: string, options: Readonly<{ source?: 'manual' | 'event' }> = {}): Promise<void> {
+    await this.runJob(jobId, options.source ?? 'manual');
   }
 
-  private async runJob(jobId: string): Promise<void> {
+  private async runJob(jobId: string, source: 'scheduled' | 'manual' | 'event' = 'scheduled'): Promise<void> {
     const job = await this.store.getJob(jobId);
     if (!job || !job.enabled) return;
     if (job.action.kind !== 'agent' && job.action.kind !== 'heartbeat') return;
@@ -82,7 +82,8 @@ export class ScheduleJobEngine {
       return;
     }
 
-    const result = await this.worker.run(job);
+    const result = await this.worker.run(job, { source,
+      ...(job.schedule.kind === 'at' ? { scheduledAt: job.schedule.atMs } : {}) });
 
     await this.store.updateJobState(jobId, {
       lastExecutedAt: Date.now(),

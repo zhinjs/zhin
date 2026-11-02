@@ -5,7 +5,8 @@ import { mkdtemp, rm, writeFile, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Scope, rootPluginId, childPluginId, databaseRootHostToken, GenerationHandoffStack, DisposeStack } from '@zhin.js/plugin-runtime';
-import { SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL, DatabaseScheduleJobStorage, AgentUsageCollector, agentUsageStoreToken } from '@zhin.js/agent/runtime';
+import { SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL, DatabaseScheduleJobStorage, AgentUsageCollector, agentUsageStoreToken,
+  ScheduleExecutionHistory, FileScheduleHistoryRepository } from '@zhin.js/agent/runtime';
 import { ScheduleJobStore, type TurnRequest } from '@zhin.js/agent';
 import { createScopedTraceJournal } from '@zhin.js/agent/trace';
 import { AGENT_MESSAGE_MODEL, AGENT_SESSION_MODEL, AGENT_SUMMARY_MODEL, parseAgentMessageRow } from '@zhin.js/ai';
@@ -28,7 +29,7 @@ describe('trace archive maintenance lifecycle', () => {
     const off = vi.fn();
     const admission = { onActivate: (listener: () => void) => { publish = listener; return off; } };
     const foundation = { agent: { markMemoryPersistenceReady: vi.fn() }, semanticMemory: null,
-      schedule: { start: vi.fn(async () => {}) } };
+      schedule: { start: vi.fn(async () => {}), history: { cleanup: vi.fn(async () => ({ deleted: 0, cutoff: 0 })) } } };
     const prune = vi.fn(async () => {});
     try {
       installAgentPersistence({ resources: new Scope(rootPluginId()), handoff, lifecycle, admission: admission as never },
@@ -78,7 +79,8 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
     resources.provide(databaseRootHostToken, host); handoff.add({ activateNext: () => host.start() });
     const foundation = { agent: { configure: vi.fn(), upgradeProfilesToDatabase: vi.fn(), markMemoryPersistenceReady: vi.fn() },
-      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data') }), start: vi.fn(async () => {}) } };
+      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data') }), start: vi.fn(async () => {}),
+        history: new ScheduleExecutionHistory({ repository: new FileScheduleHistoryRepository(join(dir, 'data', 'schedule-executions')) }) } };
     let publish!: () => void;
     const admission = { onActivate: (listener: () => void) => { publish = listener; return () => {}; } };
     installAgentPersistence({ resources, handoff, lifecycle: cleanup, admission: admission as never }, foundation as never, { usage: { retentionDays } } as never);
@@ -97,7 +99,8 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     const resources = new Scope(rootPluginId()), handoff = new GenerationHandoffStack();
     resources.provide(databaseRootHostToken, host); handoff.add({ activateNext: () => host.start() });
     const foundation = { agent: { configure: vi.fn(), upgradeProfilesToDatabase: vi.fn(), markMemoryPersistenceReady: vi.fn() },
-      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data-seal') }), start: vi.fn(async () => {}) } };
+      service: {}, semanticMemory: null, schedule: { store: new ScheduleJobStore({ dataDir: join(dir, 'data-seal') }), start: vi.fn(async () => {}),
+        history: new ScheduleExecutionHistory({ repository: new FileScheduleHistoryRepository(join(dir, 'data-seal', 'schedule-executions')) }) } };
     let publish!: () => void;
     const admission = { onActivate: (listener: () => void) => { publish = listener; return () => {}; } };
     installAgentPersistence({ resources, handoff, lifecycle: cleanup, admission: admission as never }, foundation as never, { usage: { retentionDays: 30 } } as never);

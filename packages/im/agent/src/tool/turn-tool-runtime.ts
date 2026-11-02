@@ -255,7 +255,10 @@ export class TurnToolRuntime {
       : undefined;
     const startedAt = Date.now();
     try {
-      const output = await tool.execute(effectiveInput, toolInvocationFromTurn(this.turn));
+      const effects = this.turn.ports.operationEvidence?.started({
+        turnId: this.turn.identity.turnId, toolUseId, toolName: tool.name, readOnly: tool.readOnly === true,
+      });
+      const output = await tool.execute(effectiveInput, { ...toolInvocationFromTurn(this.turn), ...(effects ? { effects } : {}) });
       this.#observeOutput(tool, effectiveInput, output);
       const durationMs = Date.now() - startedAt;
       // A tool that ignores cancellation may already have committed side effects.

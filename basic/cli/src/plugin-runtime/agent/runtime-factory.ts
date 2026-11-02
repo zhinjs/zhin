@@ -263,6 +263,13 @@ export function createRuntimeProactiveOutbound(
         content,
         locale: ctx.locale,
       });
+      if (ctx.onReceipt && result.receipt) {
+        try {
+          const observation = ctx.onReceipt(result.receipt);
+          if (observation) void observation.catch(() => logger.warn('Proactive delivery receipt observation failed'));
+        }
+        catch { logger.warn('Proactive delivery receipt observation failed'); }
+      }
       return result.messageId || 'ok';
     },
     async sendElements(ctx, elements) {

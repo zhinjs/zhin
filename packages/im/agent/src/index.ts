@@ -16,6 +16,8 @@ export type { ServiceAgent, ServiceAgentResult, CreateServiceAgentOptions } from
 export { createAgentSession } from './create-agent-session.js';
 export type { AgentSessionHandle, CreateAgentSessionOptions } from './create-agent-session.js';
 export { PluginAILoopHookRegistry } from './plugin-loop-hooks.js';
+export type { ToolOperationEvidencePort, ToolOperationStart } from './tool/tool-operation-evidence.js';
+
 export type {
   PluginBeforeToolCallHandler,
   PluginAfterToolCallHandler,

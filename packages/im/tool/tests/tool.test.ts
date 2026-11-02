@@ -34,6 +34,20 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
+  it('forwards optional action-owner evidence without accepting it from model arguments or requiring it on older Hosts', async () => {
+    const root = rootPluginId();
+    const report = vi.fn();
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'effect', source: '/tools/effect/index.ts',
+      definition: defineAgentTool({ description: 'Fixture action owner', execute: (_input, context) => {
+        context.effects?.report({ disposition: 'committed' });
+        return 'done';
+      } }) });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+    expect(await index.execute(root, 'effect', {}, { ...invocation(), effects: { report } })).toBe('done');
+    expect(report).toHaveBeenCalledExactlyOnceWith({ disposition: 'committed' });
+    expect(await index.execute(root, 'effect', { effects: { report } }, invocation())).toBe('done');
+    expect(report).toHaveBeenCalledTimes(1);
+  });
   it('passes only the originating account profile port through Tool execution', async () => {
     const root = rootPluginId();
     const selfProfile: SelfProfilePort = { peek: () => ({ values: { nickname: 'Original' }, sources: { nickname: 'platform' }, writableFields: [], platformStatus: 'available' }),
