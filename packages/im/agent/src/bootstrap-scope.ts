@@ -30,7 +30,7 @@ const KNOWN_PARTS: ReadonlySet<string> = new Set(['group', 'private', 'channel',
 const ANNOTATION = /^\s*<!--\s*scope\s*:\s*([^>]*?)\s*-->\s*$/i;
 const HEADING = /^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/;
 /** The `## SOUL.md` wrappers that the host puts between concatenated files. */
-const FILE_WRAPPER = /^##[ \t]+(?:SOUL|AGENTS|TOOLS)\.md[ \t]*$/;
+const FILE_WRAPPER = /^##[ \t]+((?:SOUL|AGENTS|TOOLS)\.md)[ \t]*$/;
 
 /** Derive the scene facts from the turn view (anything with origin + principal). */
 export function bootstrapSceneFromTurn(
@@ -64,8 +64,12 @@ export function sceneMatches(scope: readonly (readonly string[])[], scene: Boots
 }
 
 /** Keep only the sections whose scope annotation matches `scene`. Unannotated text is untouched. */
-export function scopeBootstrapText(text: string, scene: BootstrapScene): ScopedBootstrapText {
-  if (!text || !/<!--\s*scope\s*:/i.test(text)) return { text, skipped: [] };
+export function scopeBootstrapText(text: string, scene: BootstrapScene, options?: {
+  /** Omit an already-loaded file at its existing wrapper boundary, including nested headings. */
+  excludeFiles?: readonly string[];
+}): ScopedBootstrapText {
+  const excluded = new Set(options?.excludeFiles ?? []);
+  if (!text || (!/<!--\s*scope\s*:/i.test(text) && excluded.size === 0)) return { text, skipped: [] };
 
   const lines = text.split('\n');
   const out: string[] = [];
@@ -88,10 +92,18 @@ export function scopeBootstrapText(text: string, scene: BootstrapScene): ScopedB
       continue;
     }
 
-    const level = FILE_WRAPPER.test(line) ? 0 : heading[1]!.length;
+    const file = FILE_WRAPPER.exec(line);
+    const level = file ? 0 : heading[1]!.length;
     if (skipLevel !== null) {
       if (level > skipLevel) continue; // still inside the skipped section
       skipLevel = null;
+    }
+
+    if (file && excluded.has(file[1]!)) {
+      skipLevel = 0;
+      skipped.push(file[1]!);
+      changed = true;
+      continue;
     }
 
     let j = i + 1;

@@ -13,6 +13,7 @@ import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { generateQrCode } from 'zhin.js/qrcode';
 import { BilibiliApiError, BilibiliClient, type BilibiliFetch } from './client.js';
+import { createBilibiliSelfProfile } from './self-profile.js';
 import { BilibiliDraftQueue, type BilibiliReplyDraft } from './drafts.js';
 import {
   QR_LIFETIME_MS,
@@ -163,6 +164,7 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
       start: () => this.#start(), open: () => this.#openEndpoint(),
       close: () => this.#close(), stop: () => this.#stop(),
       send: request => this.#send(request),
+      profile: createBilibiliSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
       get transportState() { return readTransportState(); },
     });
     this.#logger = getAdapterLogger('bilibili', options.config.id);

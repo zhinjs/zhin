@@ -318,8 +318,6 @@ export async function loadAgentsMemory(workspaceDir?: string): Promise<string | 
  * ```
  * # Workspace
  *
- * The following project context files have been loaded:
- * If SOUL.md is present, embody its persona and tone.
  *
  * ## SOUL.md
  *
@@ -333,20 +331,7 @@ export async function loadAgentsMemory(workspaceDir?: string): Promise<string | 
 export function buildBootstrapContextSection(contextFiles: ContextFile[]): string {
   if (contextFiles.length === 0) return '';
 
-  const hasSoul = contextFiles.some(f =>
-    f.path.toLowerCase().endsWith('soul.md'),
-  );
-
-  const lines: string[] = [
-    '# Workspace',
-    '',
-    'Loaded workspace files (persona / agent notes / tool habits):',
-  ];
-
-  if (hasSoul) {
-    lines.push('Use SOUL.md for persona and tone.');
-  }
-  lines.push('');
+  const lines: string[] = ['# Workspace', ''];
 
   for (const file of contextFiles) {
     lines.push(`## ${file.path}`, '', file.content, '');

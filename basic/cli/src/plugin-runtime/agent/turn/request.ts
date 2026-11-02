@@ -43,7 +43,7 @@ import {
 import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { approvalMessages as approvalText } from './approval-messages.js';
 import type { SceneFactRefresher } from './scene-fact-refresher.js';
-import type { ConversationRef, ConversationReference, ConversationResolution } from '@zhin.js/im-contract';
+import type { ConversationRef, ConversationReference, ConversationResolution, SelfProfilePort } from '@zhin.js/im-contract';
 
 type EndpointOwnerResolver = (adapterLocalName: string, endpointKey: string) => string | undefined;
 type EndpointTrustedResolver = (adapterLocalName: string, endpointKey: string) => readonly string[];
@@ -245,6 +245,8 @@ export interface RuntimeTurnContextRequest {
   readonly conversation: ConversationRef;
   readonly signal: AbortSignal;
   readonly senderId?: string;
+  /** Already captured source Client authority; never resolved from a reusable account alias. */
+  readonly selfProfile?: SelfProfilePort;
   /** Existing persistent facts, refresh owner and test clock; omission keeps memory-only lookup. */
   readonly factServices?: SceneFactDeps;
 }
@@ -255,7 +257,7 @@ export interface RuntimeTurnContextRequest {
  * two-level cache (memory 60 s → database → platform). Failed lookups omit their fields.
  */
 export async function resolveRuntimeTurnContextState(
-  { snapshot, conversation, signal, senderId, factServices: deps = {} }: RuntimeTurnContextRequest,
+  { snapshot, conversation, signal, senderId, selfProfile, factServices: deps = {} }: RuntimeTurnContextRequest,
 ): Promise<TurnContextState | undefined> {
   signal.throwIfAborted();
   const now = deps.now ?? Date.now;
@@ -263,10 +265,29 @@ export async function resolveRuntimeTurnContextState(
   if (!isAdapterIndex(adapters)) return undefined;
   const endpointId = conversation.endpoint.id;
   const endpoint = adapters.connection(endpointId, endpointId);
-  const id = endpoint?.selfUserId;
-  if (!id) return undefined;
-  const bot: NonNullable<TurnContextState['bot']> = { id };
-  if (conversation.endpoint.adapter !== 'icqq' || conversation.kind !== 'group') {
+  let id = endpoint?.selfUserId;
+  if (!id && !selfProfile) return undefined;
+  let profile: import('@zhin.js/im-contract').SelfProfileSnapshot | undefined;
+  let profileError: 'lookup_failed' | undefined;
+  if (selfProfile) {
+    try { profile = await selfProfile.read({ signal }); }
+    catch {
+      signal.throwIfAborted();
+      profile = selfProfile.peek();
+      profileError = 'lookup_failed';
+      logger.warn(formatCompact({ op: 'agent_self_profile_lookup_failed', endpoint: endpointId }));
+    }
+    // A first read may finish an already-started platform identity lookup. The captured port
+    // checks its original incarnation before this synchronous DTO read; never use config ids.
+    selfProfile.peek();
+    id = adapters.connection(endpointId, endpointId)?.selfUserId;
+  }
+  const bot: NonNullable<TurnContextState['bot']> = {
+    ...(id ? { id } : {}),
+    ...(profile ? { profile, ...(profile.values.nickname ? { name: profile.values.nickname } : {}) } : {}),
+    ...(profileError ? { profileError } : {}),
+  };
+  if (!endpoint || !id || conversation.endpoint.adapter !== 'icqq' || conversation.kind !== 'group') {
     return Object.freeze({ bot: Object.freeze(bot) });
   }
   // Each inspection supplies its own signal: foreground turn or generation-owned background refresh.

@@ -1,5 +1,6 @@
 import { createEndpointSpecification, endpointSpec, type Endpoint } from 'zhin.js/adapter';
 import { WecomClient, type WecomEndpointOptions } from './client.js';
+import { createWecomSelfProfile } from './self-profile.js';
 export type { WecomEndpointOptions } from './client.js';
 export type { WecomFetch } from './client.js';
 
@@ -14,6 +15,7 @@ export class WecomEndpoint extends WecomClient implements Endpoint {
       send: (request: import('zhin.js/adapter').EndpointSendRequest) => this.sendPayload(request),
       name: this.configName(),
       control: this.endpointControl,
+      profile: createWecomSelfProfile(this),
     };
     Object.defineProperty(hooks, 'transportState', { get: () => this.transportState });
     return createEndpointSpecification(this, hooks);

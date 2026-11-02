@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {
@@ -35,7 +36,7 @@
     "type": "feature",
     "entry": "./lib/provider.js",
     "engine": "^1.0.0",
-    "featureApi": "1.0.0"
+    "featureApi": "1.1.0"
   },
   "engines": {
     "node": ">=22.19.0"

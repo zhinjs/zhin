@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Bilibili 评论协议辅助（Experimental，非官方 Web 接口）。
  *
@@ -32,7 +33,7 @@ export type BilibiliNotificationKind = 'reply' | 'at';
 export type BilibiliNotificationScope = 'whitelist' | 'all';
 
 /** One endpoint config after AdapterIndex expands `<instanceKey>.endpoints`. */
-export interface BilibiliEndpointConfig {
+export interface BilibiliEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   /** @internal Assigned only for fresh Adapter identities; imported records retain their original data path. */
   readonly stateDirectoryId?: string;

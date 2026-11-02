@@ -6,6 +6,7 @@ import { SocketModeClient } from '@slack/socket-mode';
 import { createSlackWebApiAgent } from './web-api-proxy.js';
 import { createSlackStreamAgent } from './stream-proxy.js';
 import { slackSocketConnectionError } from './socket-error.js';
+import { createSlackSelfProfile } from './self-profile.js';
 import { slackWebClientOptions, slackDeliveryError } from './web-client.js';
 import {
   createEndpointSpecification,
@@ -124,6 +125,7 @@ export class SlackEndpoint extends WebClient implements Endpoint, SlackWebhookHa
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
       name: options.config.id, get transportState() { return endpoint.#transportState; },
       management: this.#management, control: this.#control,
+      profile: createSlackSelfProfile({ client: this, accountId: () => this.#botUserId }),
     });
   }
 
@@ -166,6 +168,7 @@ export class SlackEndpoint extends WebClient implements Endpoint, SlackWebhookHa
 
       const authTest = await this.auth.test();
       if (authTest.user_id) this.#botUserId = String(authTest.user_id);
+      if (this.#botUserId) this[endpointSpec].reportSelfUserId(this.#botUserId);
 
       this.#logger.info(
         `connected (${config.mode})`

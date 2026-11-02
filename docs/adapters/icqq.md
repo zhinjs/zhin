@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2839b3840e6668c5 -->
+<!-- sync-adapter-docs:sha256=7a2053f53c5e3a36 -->
 
 # @zhin.js/adapter-icqq
 
@@ -261,3 +261,13 @@ ICQQ 要求分享、文件、语音、视频、JSON 卡片和合并转发单独�
 Endpoint 管理和工具反馈跟随当前操作语言；登录没有当前聊天发送者，LoginAssist 提示采用项目语言。提示文案变化不改变扫码、短信、滑块验证过程，群管理权限、审批与平台结果检查保持原规则。
 
 Endpoint 添加用法中的调用头由当前环境的实际命令前缀与插件命名空间提供；未知时只提示所需参数，不生成猜测命令。
+
+## 当前账号资料
+
+`endpointSpec.profile` 接到原生 ICQQ Client 的资料卡与设置方法；Agent 通过统一的 `get_self_profile` / `set_self_profile` 工具访问当前账号，修改沿用身份类审批。平台资料优先于配置兜底，群名片仍是独立的场景资料。
+
+- 可读：昵称、性别、年龄、个性签名、头像 URL。只投影这些公开资料，不把 SDK 返回的邮箱、QID 等一起交给模型。
+- 可写：昵称、性别、签名、个人说明、头像。SDK 返回 `false` 时明确拒绝，不报告成功。头像输入经工具链解析为已授权图片，结果不回传图片 base64。
+- 年龄不反推生日；当前安装的 ICQQ 1.12.3 `setBirthday` 月日编码有缺陷，因此不开放生日写入。兴趣无对应已验证接口，只能使用配置兜底。
+
+配置的 `nickname`、`profile` 可放在适配器默认值或某个 `endpoints[]` 项中；Endpoint 逐字段覆盖默认值，只有平台未提供的字段才使用它们。配置兜底不会写回 QQ。

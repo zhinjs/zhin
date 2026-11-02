@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { callNapCatHttpAction, readNapCatActionResponse, type NapCatEvent, type ResolvedNapCatConfig } from './protocol.js';
 import { createNapCatRpc, type NapCatRpc } from './ws-transport.js';
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type SelfProfile } from '@zhin.js/im-contract';
 import type { PendingRpcRequest } from 'zhin.js/adapter';
 import type { NapCatWsSocket } from './ws-types.js';
 
@@ -52,6 +52,12 @@ export class NapcatClient extends EventEmitter<Record<string, [NapCatEvent]>> {
   protected readonly protocolConfig: ResolvedNapCatConfig;
   readonly #httpAction: typeof callNapCatHttpAction;
   readonly #executionSignal?: AbortSignal;
+  #selfAccountId?: string;
+  #selfProfile: Readonly<SelfProfile> = Object.freeze({});
+  #profileRevision = 0;
+
+  /** Confirmed native self facts shared by platform tools and the semantic profile port. */
+  get currentSelfProfile(): Readonly<SelfProfile> { return this.#selfProfile; }
 
   constructor(options: NapcatClientOptions) {
     super();
@@ -75,6 +81,7 @@ export class NapcatClient extends EventEmitter<Record<string, [NapCatEvent]>> {
 
   /** A semantic operation supplies its caller lifetime to the same native protocol owner. */
   async requestApi(request: PendingRpcRequest): Promise<unknown> {
+    const profileRevision = this.#profileRevision;
     const signals = [this.#executionSignal, request.signal].filter((signal): signal is AbortSignal => !!signal);
     const signal = signals.length ? AbortSignal.any(signals) : undefined;
     if (signal?.aborted) throw new EndpointDeliveryError('endpoint_inactive', 'Endpoint operation ended', 'not_sent');
@@ -83,14 +90,71 @@ export class NapcatClient extends EventEmitter<Record<string, [NapCatEvent]>> {
         const response = await this.#httpAction({ http_url: this.protocolConfig.http_url,
           access_token: this.protocolConfig.access_token, signal }, request.action, request.params ?? {});
         if (signal?.aborted) throw new EndpointDeliveryError('endpoint_inactive', 'Endpoint operation cancelled', 'unknown');
-        return readNapCatActionResponse(response).data;
+        const data = readNapCatActionResponse(response).data;
+        this.#observeSelfProfile(request, data, profileRevision, signal);
+        return data;
       } catch (cause) {
         if (cause instanceof EndpointDeliveryError) throw cause;
         throw new EndpointDeliveryError('delivery_unconfirmed', cause instanceof Error ? cause.message : String(cause), 'unknown', { cause });
       }
     }
     const response = await this.rpc.call({ ...request, signal });
-    return readNapCatActionResponse(response).data;
+    const data = readNapCatActionResponse(response).data;
+    this.#observeSelfProfile(request, data, profileRevision, signal);
+    return data;
+  }
+
+  /** Observe the one native action after its acknowledgement; never submit a second platform effect. */
+  #observeSelfProfile(request: PendingRpcRequest, data: unknown, revision: number, signal?: AbortSignal): void {
+    if (signal?.aborted) return;
+    const result = data && typeof data === 'object' ? data as Record<string, unknown> : undefined;
+    if (typeof result?.result === 'number' && result.result !== 0) return;
+    const params = request.params ?? {};
+    let facts: SelfProfile = {};
+    switch (request.action) {
+      case 'get_login_info': {
+        if (revision !== this.#profileRevision) return;
+        const id = result?.user_id;
+        if ((typeof id !== 'number' && typeof id !== 'string') || !String(id).trim() || id === 0 || id === '0') return;
+        if (this.#selfAccountId !== undefined && this.#selfAccountId !== String(id)) this.#selfProfile = Object.freeze({});
+        this.#selfAccountId = String(id);
+        if (typeof result?.nickname === 'string') facts = { nickname: result.nickname };
+        break;
+      }
+      case 'get_stranger_info': {
+        if (revision !== this.#profileRevision) return;
+        if (!this.#selfAccountId || String(params.user_id) !== this.#selfAccountId || String(result?.user_id) !== this.#selfAccountId) return;
+        facts = {
+          ...(typeof result?.nickname === 'string' ? { nickname: result.nickname } : {}),
+          ...(result?.sex === 'male' || result?.sex === 'female' || result?.sex === 'unknown' ? { gender: result.sex } : {}),
+          ...(typeof result?.age === 'number' && Number.isFinite(result.age) ? { age: result.age } : {}),
+          ...(typeof result?.long_nick === 'string' ? { signature: result.long_nick } : {}),
+        };
+        break;
+      }
+      case 'set_qq_profile': {
+        const gender = params.sex === 1 || params.sex === '1' ? 'male'
+          : params.sex === 2 || params.sex === '2' ? 'female'
+            : params.sex === 0 || params.sex === '0' ? 'unknown' : undefined;
+        facts = { ...(typeof params.nickname === 'string' ? { nickname: params.nickname } : {}),
+          ...(typeof params.personal_note === 'string' ? { signature: params.personal_note } : {}),
+          ...(gender ? { gender } : {}),
+        };
+        break;
+      }
+      case 'set_self_longnick':
+        if (typeof params.longNick === 'string') facts = { signature: params.longNick };
+        break;
+      case 'set_qq_avatar': {
+        const { avatar: _previousAvatar, ...rest } = this.#selfProfile;
+        this.#selfProfile = Object.freeze(rest);
+        this.#profileRevision += 1;
+        return;
+      }
+      default: return;
+    }
+    this.#selfProfile = Object.freeze({ ...this.#selfProfile, ...facts });
+    this.#profileRevision += 1;
   }
 
   async setTitle({ groupId, userId, title, duration = -1 }: NapcatMemberTitleRequest): Promise<boolean> {

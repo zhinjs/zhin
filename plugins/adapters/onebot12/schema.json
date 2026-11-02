@@ -131,6 +131,27 @@
             "type": "string",
             "minLength": 1,
             "description": "Selected OneBot12 bot user ID"
+          },
+          "nickname": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "账号昵称兜底",
+            "x-i18n": {
+              "en": {
+                "description": "Fallback account nickname"
+              }
+            }
+          },
+          "profile": {
+            "$ref": "#/$defs/selfProfileFallback",
+            "description": "账号资料兜底",
+            "x-i18n": {
+              "en": {
+                "description": "Fallback account profile"
+              }
+            }
           }
         },
         "required": [
@@ -154,9 +175,93 @@
           "description": "Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it."
         }
       }
+    },
+    "nickname": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "账号昵称兜底",
+      "x-i18n": {
+        "en": {
+          "description": "Fallback account nickname"
+        }
+      }
+    },
+    "profile": {
+      "$ref": "#/$defs/selfProfileFallback",
+      "description": "账号资料兜底",
+      "x-i18n": {
+        "en": {
+          "description": "Fallback account profile"
+        }
+      }
     }
   },
   "required": [
     "endpoints"
-  ]
+  ],
+  "$defs": {
+    "selfProfileFallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gender": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "male",
+            "female",
+            "other",
+            "unknown",
+            null
+          ]
+        },
+        "age": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "birthday": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "signature": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "avatar": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(https?://|$)"
+        },
+        "interests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "bio": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
 }

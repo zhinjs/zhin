@@ -512,7 +512,7 @@ export async function* runAgentLoopTextTurnRun(
         ...(turnShellPolicy.approvalMode ? { execApprovalMode: turnShellPolicy.approvalMode } : {}),
       }
     : host.config;
-  let promptParts = hasTools
+  let promptParts = hasTools || input.promptProfile.kind === 'schedule'
     ? await buildAgentPathSystemPromptParts(host, {
         profile: input.promptProfile,
         turn: input.turnContext,

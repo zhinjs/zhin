@@ -4,7 +4,7 @@ import { recallTarget, resolveMessageTarget } from '../../../../conversation.js'
 import { messages as t } from '../../../../messages.js';
 
 export default defineAgentTool({
-  description: '撤回机器人在当前 QQ 会话中自己发送的消息；无需群管角色或逐次审批，官方只允许撤回 2 分钟内的消息',
+  description: '撤回你在当前 QQ 会话中自己发送的消息；无需群管角色或逐次审批，官方只允许撤回 2 分钟内的消息',
   adapter: 'qq',
   scopes: ['private', 'group', 'channel'],
   requiresApproval: 'never',

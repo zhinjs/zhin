@@ -217,7 +217,7 @@ describe('migrate', () => {
     const upgraded = upgradeBootstrapFiles(tmp, false);
     expect(upgraded).toBeGreaterThan(0);
     const next = fs.readFileSync(path.join(tmp, 'SOUL.md'), 'utf-8');
-    expect(next).toContain('Action-oriented');
+    expect(next).toContain('I am an action-oriented AI assistant');
     // 旧内容被备份
     expect(fs.readFileSync(path.join(tmp, 'SOUL.md.bak'), 'utf-8')).toBe(oldSoul);
   });

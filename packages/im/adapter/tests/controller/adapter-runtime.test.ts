@@ -300,7 +300,9 @@ describe('Adapter-owned native Endpoint runtime', () => {
     expect(metadata.identity.id).toBe(one.canonicalId);
     expect(Object.isFrozen(metadata)).toBe(true);
     expect(Object.isFrozen(metadata.identity)).toBe(true);
-    expect(Object.keys(metadata).sort()).toEqual(['eventDiagnostics', 'identity', 'name', 'selfUserId', 'transportState']);
+    expect(Object.keys(metadata).sort()).toEqual(['eventDiagnostics', 'identity', 'name', 'profile', 'selfUserId', 'transportState']);
+    expect(Object.isFrozen(metadata.profile)).toBe(true);
+    expect(Object.isFrozen(metadata.profile?.values)).toBe(true);
     expect(Reflect.get(metadata, 'client')).toBeUndefined();
     expect(Reflect.get(metadata, 'management')).toBeUndefined();
     expect(Reflect.get(metadata, 'start')).toBeUndefined();

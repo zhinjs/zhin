@@ -1,3 +1,4 @@
+import { createOnebot11SelfProfile } from './self-profile.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * OneBot11 WS client endpoint — outbound connect to OneBot implementation.
@@ -88,6 +89,7 @@ export class OneBot11WsEndpoint extends Onebot11Client implements Endpoint {
       send: request => this.#send(request),
       get transportState() { return readTransportState(); },
       management: this.#management, control: this.#control, content: this.#content,
+      profile: createOnebot11SelfProfile({ call: callApi, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
     this.#releaseClientEvents = forwardOnebot11ClientEvents(this, (name, payload) => {
       void this[endpointSpec].events.run(() => {

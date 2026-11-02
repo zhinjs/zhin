@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * NapCat protocol helpers (OneBot 11 + NapCat extensions).
  * No legacy Adapter/Endpoint / segment-mapper.
@@ -9,7 +10,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 const logger = getLogger('napcat');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface NapCatEndpointConfig {
+export interface NapCatEndpointConfig extends EndpointProfileConfiguration {
   readonly connection?: 'ws' | 'wss' | 'http';
   readonly id: string;
   readonly access_token?: string;

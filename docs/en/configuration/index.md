@@ -483,3 +483,32 @@ plugins: {}
 ```
 
 After starting, use the `zhin setup` wizard to progressively add database / adapters / AI (see [CLI Reference](../cli/index.md)); for how to run, see [zhin runtime start in Detail](../cli/runtime.md).
+
+## Account self profile
+
+The Agent uses the current Endpoint's platform facts first. Adapter-level `nickname` and `profile`
+are missing-field fallbacks; each `endpoints[]` entry can override them. `profile` is merged per field.
+Saving these defaults never changes the platform account. A known empty signature or interests list
+stays empty, and group cards remain separate. The existing AI nickname is the final fallback;
+internal task agents keep their role identities.
+
+```yaml
+icqq:
+  master: "your QQ ID"
+  nickname: Zhin
+  profile:
+    gender: unknown
+    interests: [music, photography]
+    bio: A conversational assistant
+  endpoints:
+    - id: "bot QQ ID"
+      nickname: Zhin Bot
+      profile:
+        interests: [music, reading]
+```
+
+`profile` accepts `gender`, `age`, `birthday` (`YYYY-MM-DD`), `signature`, `avatar` (image URL),
+`interests` (string array), and `bio`. Missing information stays unknown. Ordinary turns reuse facts
+read for that account incarnation; `get_self_profile` refreshes them explicitly. `set_self_profile`
+changes one actually supported platform field under the existing identity approval policy. Editing
+fallback configuration and changing platform profile are separate operations.

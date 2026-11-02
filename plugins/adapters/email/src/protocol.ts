@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Email SMTP/IMAP helpers (no legacy Adapter/Endpoint / segment-mapper).
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -46,7 +47,7 @@ export interface EmailAttachmentsConfig {
 }
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface EmailEndpointConfig {
+export interface EmailEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly smtp: SmtpConfig;
   readonly imap: ImapConfig;

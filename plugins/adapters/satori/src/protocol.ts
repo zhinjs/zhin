@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /** Satori protocol helpers. Spec: https://satori.chat/zh-CN/protocol/overview.html */
 
 import { EndpointDeliveryError, isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
@@ -78,7 +79,7 @@ export interface SatoriWireSegment {
 }
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface SatoriEndpointConfig {
+export interface SatoriEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   /** Exact remote login selected by this configured Endpoint. */
   readonly platform: string;

@@ -155,7 +155,7 @@ export function collectWizardFeatures(
   options: Pick<InitOptions, 'ai'>,
 ): Array<{ package: string; api: string }> {
   return options.ai?.enabled ? [
-    { package: '@zhin.js/tool', api: '^1.0.0' },
+    { package: '@zhin.js/tool', api: '^1.1.0' },
     { package: '@zhin.js/prompt-section', api: '^1.0.0' },
   ] : [];
 }

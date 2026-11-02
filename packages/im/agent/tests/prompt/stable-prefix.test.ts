@@ -9,6 +9,7 @@ import { buildCapabilityContext } from '../../src/plugin-runtime/full-agent-turn
 import { PromptAssemblyRegistry } from '../../src/prompt/prompt-assembly-registry.js';
 import { BOOTSTRAP_PROMPT_ORDER } from '../../src/prompt/system-prompt.js';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
+import { SKILL_DISCLOSURE_PROMPT_HINT } from '../../src/skill/progressive-disclosure.js';
 
 type Turn = NonNullable<RichSystemPromptContext['turn']>;
 
@@ -83,6 +84,35 @@ describe('stable system prompt prefix (ADR 0042 §1)', () => {
       const { text } = promptFor(turn);
       expect(text).not.toMatch(/Session rules[ (:]|Memory paths:|Chat command prefix:|Sender: id=|Reply language fallback:/);
     }
+  });
+
+  it.each([
+    { neutral: true, gated: true },
+    { neutral: false, gated: true },
+    { neutral: true, gated: false },
+    { neutral: false, gated: false },
+  ])('shares one Skill loading hint across neutral=$neutral and gated=$gated catalogs', ({ neutral, gated }) => {
+    const owner = rootPluginId();
+    const skill = (name: string, permissions?: string[]) => ({
+      $feature: 'zhin.skill/1', owner, name, qualifiedName: `plugin:${name}`, description: `${name} things`,
+      instructions: name, source: 'test', ...(permissions ? { permissions } : {}),
+    }) as never;
+    const skills = [
+      ...(neutral ? [skill('weather')] : []),
+      ...(gated ? [skill('deploy', ['master'])] : []),
+    ];
+    const context = buildCapabilityContext([], skills);
+    const request = `${context.stable}\n${context.tail}`;
+    expect(request.split(SKILL_DISCLOSURE_PROMPT_HINT)).toHaveLength(neutral || gated ? 2 : 1);
+    expect(context.stable.includes(SKILL_DISCLOSURE_PROMPT_HINT)).toBe(neutral);
+    expect(context.tail.includes(SKILL_DISCLOSURE_PROMPT_HINT)).toBe(!neutral && gated);
+    expect(context.stable.includes('- plugin:weather: weather things')).toBe(neutral);
+    expect(context.tail.includes('- plugin:deploy: deploy things')).toBe(gated);
+    expect(context.stable).not.toContain('deploy');
+    expect(context.tail).not.toContain('weather');
+    const hintedCatalog = neutral ? context.stable : context.tail;
+    if (neutral || gated) expect(hintedCatalog.indexOf(SKILL_DISCLOSURE_PROMPT_HINT))
+      .toBeLessThan(hintedCatalog.indexOf('## Available skills'));
   });
 
   it('moves per-turn tail additions after the breakpoint', () => {

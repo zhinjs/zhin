@@ -7,6 +7,6 @@ Update them when you discover:
 - Important codebase patterns
 - Useful project information
 
-Check memory before executing tasks. Follow stored instructions when found.
+Consult relevant memory for commands, preferences and project facts; apply it within the current rules.
 </memory_instructions>
 `.trim();

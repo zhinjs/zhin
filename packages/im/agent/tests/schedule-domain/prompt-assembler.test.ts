@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildBootstrapContextSection } from '../../src/bootstrap.js';
 import { assembleSchedulePrompt } from '../../src/schedule-domain/prompt-assembler.js';
 
 describe('assembleSchedulePrompt', () => {
@@ -20,6 +21,14 @@ describe('assembleSchedulePrompt', () => {
     expect(result.systemPrompt).toContain('Known preference');
     expect(result.systemPrompt).not.toContain('You are Zhin');
     expect(result.userPrompt).toBe('发布天气预报');
+  });
+
+  it('keeps already-formatted workspace files under one heading', () => {
+    const bootstrapContext = buildBootstrapContextSection([{ path: 'TOOLS.md', content: 'Use verified tool results.' }]);
+    const { systemPrompt } = assembleSchedulePrompt({ jobId: 'scheduled', prompt: 'Generate report', bootstrapContext });
+    expect(systemPrompt.match(/^# Workspace.*$/gmu)).toHaveLength(1);
+    expect(systemPrompt).toContain('## TOOLS.md\n\nUse verified tool results.');
+    expect(systemPrompt).toContain('无人值守审批一律拒绝');
   });
 
   it('describes the effective execution preset', () => {

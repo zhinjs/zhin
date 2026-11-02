@@ -683,6 +683,24 @@ outline: [2, 3]
 | `bilibili.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（B 站 uid） |
 | `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `bilibili.endpoints[].commandPrefix` | string | 否 | — | — |
+| `bilibili.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `bilibili.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `bilibili.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `bilibili.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `bilibili.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `bilibili.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `bilibili.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `bilibili.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `bilibili.endpoints[].profile.bio` | string \| null | 否 | — | — |
+| `bilibili.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `bilibili.profile` | object | 否 | — | 账号资料兜底 |
+| `bilibili.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `bilibili.profile.age` | integer \| null | 否 | — | — |
+| `bilibili.profile.birthday` | string \| null | 否 | — | — |
+| `bilibili.profile.signature` | string \| null | 否 | — | — |
+| `bilibili.profile.avatar` | string \| null | 否 | — | — |
+| `bilibili.profile.interests` | array \| null | 否 | — | — |
+| `bilibili.profile.bio` | string \| null | 否 | — | — |
 
 ### bilibili-live
 
@@ -715,6 +733,24 @@ outline: [2, 3]
 | `bilibili-live.endpoints[].master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
 | `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
 | `bilibili-live.endpoints[].commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `bilibili-live.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `bilibili-live.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `bilibili-live.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `bilibili-live.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `bilibili-live.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `bilibili-live.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `bilibili-live.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `bilibili-live.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `bilibili-live.endpoints[].profile.bio` | string \| null | 否 | — | — |
+| `bilibili-live.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `bilibili-live.profile` | object | 否 | — | 账号资料兜底 |
+| `bilibili-live.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `bilibili-live.profile.age` | integer \| null | 否 | — | — |
+| `bilibili-live.profile.birthday` | string \| null | 否 | — | — |
+| `bilibili-live.profile.signature` | string \| null | 否 | — | — |
+| `bilibili-live.profile.avatar` | string \| null | 否 | — | — |
+| `bilibili-live.profile.interests` | array \| null | 否 | — | — |
+| `bilibili-live.profile.bio` | string \| null | 否 | — | — |
 
 ### dingtalk
 
@@ -741,10 +777,28 @@ outline: [2, 3]
 | `dingtalk.endpoints[].streamProxy` | object | 否 | — | 故障验收专用：TCP固定127.0.0.1，保留真实WSS TLS身份 |
 | `dingtalk.endpoints[].streamProxy.port` | integer | 是 | — | — |
 | `dingtalk.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `dingtalk.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `dingtalk.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `dingtalk.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `dingtalk.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `dingtalk.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `dingtalk.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `dingtalk.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `dingtalk.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `dingtalk.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `dingtalk.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `dingtalk.mode` | string: `"webhook"`, `"stream"` | 否 | `"webhook"` | — |
 | `dingtalk.cardTemplateId` | string | 否 | — | Stream interactive card template ID |
 | `dingtalk.cardButtonCount` | integer | 否 | `2` | Fixed button count in the card template |
+| `dingtalk.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `dingtalk.profile` | object | 否 | — | 账号资料兜底 |
+| `dingtalk.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `dingtalk.profile.age` | integer \| null | 否 | — | — |
+| `dingtalk.profile.birthday` | string \| null | 否 | — | — |
+| `dingtalk.profile.signature` | string \| null | 否 | — | — |
+| `dingtalk.profile.avatar` | string \| null | 否 | — | — |
+| `dingtalk.profile.interests` | array \| null | 否 | — | — |
+| `dingtalk.profile.bio` | string \| null | 否 | — | — |
 
 ### discord
 
@@ -787,8 +841,26 @@ outline: [2, 3]
 | `discord.endpoints[].gatewayFaultProxyUrl` | string | 否 | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
 | `discord.endpoints[].restApiProxy` | object | 否 | — | Gateway测试实例REST专用故障代理：discord.com:443固定loopback TCP，保留SNI/证书校验，独立于Gateway代理 |
 | `discord.endpoints[].restApiProxy.port` | integer | 是 | — | — |
+| `discord.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `discord.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `discord.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `discord.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `discord.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `discord.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `discord.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `discord.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `discord.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `discord.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `discord.gatewayFaultProxyUrl` | string | 否 | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
+| `discord.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `discord.profile` | object | 否 | — | 账号资料兜底 |
+| `discord.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `discord.profile.age` | integer \| null | 否 | — | — |
+| `discord.profile.birthday` | string \| null | 否 | — | — |
+| `discord.profile.signature` | string \| null | 否 | — | — |
+| `discord.profile.avatar` | string \| null | 否 | — | — |
+| `discord.profile.interests` | array \| null | 否 | — | — |
+| `discord.profile.bio` | string \| null | 否 | — | — |
 
 ### email
 
@@ -827,7 +899,25 @@ outline: [2, 3]
 | `email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | 否 | — | — |
 | `email.endpoints[].commandPrefix` | string | 否 | — | — |
 | `email.endpoints[].id` | string | 是 | — | Email bot name |
+| `email.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `email.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `email.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `email.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `email.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `email.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `email.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `email.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `email.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `email.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `email.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `email.profile` | object | 否 | — | 账号资料兜底 |
+| `email.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `email.profile.age` | integer \| null | 否 | — | — |
+| `email.profile.birthday` | string \| null | 否 | — | — |
+| `email.profile.signature` | string \| null | 否 | — | — |
+| `email.profile.avatar` | string \| null | 否 | — | — |
+| `email.profile.interests` | array \| null | 否 | — | — |
+| `email.profile.bio` | string \| null | 否 | — | — |
 
 ### github
 
@@ -855,7 +945,25 @@ outline: [2, 3]
 | `github.endpoints[].bot_login` | string | 否 | — | Override App bot login |
 | `github.endpoints[].workspace_root` | string | 否 | — | Managed git workspace root |
 | `github.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
+| `github.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `github.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `github.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `github.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `github.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `github.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `github.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `github.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `github.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `github.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `github.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `github.profile` | object | 否 | — | 账号资料兜底 |
+| `github.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `github.profile.age` | integer \| null | 否 | — | — |
+| `github.profile.birthday` | string \| null | 否 | — | — |
+| `github.profile.signature` | string \| null | 否 | — | — |
+| `github.profile.avatar` | string \| null | 否 | — | — |
+| `github.profile.interests` | array \| null | 否 | — | — |
+| `github.profile.bio` | string \| null | 否 | — | — |
 
 ### icqq
 
@@ -904,6 +1012,15 @@ outline: [2, 3]
 | `icqq.endpoints[].notify.parent` | object | 否 | — | 可选的父频道/群容器 |
 | `icqq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
 | `icqq.endpoints[].notify.parent.id` | string \| number | 是 | — | — |
+| `icqq.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `icqq.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `icqq.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `icqq.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `icqq.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `icqq.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `icqq.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `icqq.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `icqq.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `icqq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖 |
 | `icqq.notify` | object | 否 | — | 掉线/登录失败时通过另一个适配器实例给 master 发通知（adapter/endpoint/kind/id 指向实际会话） |
 | `icqq.notify.adapter` | string | 是 | — | 通知使用的适配器类型，如 qq / icqq |
@@ -913,6 +1030,15 @@ outline: [2, 3]
 | `icqq.notify.parent` | object | 否 | — | 可选的父频道/群容器 |
 | `icqq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
 | `icqq.notify.parent.id` | string \| number | 是 | — | — |
+| `icqq.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `icqq.profile` | object | 否 | — | 账号资料兜底 |
+| `icqq.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `icqq.profile.age` | integer \| null | 否 | — | — |
+| `icqq.profile.birthday` | string \| null | 否 | — | — |
+| `icqq.profile.signature` | string \| null | 否 | — | — |
+| `icqq.profile.avatar` | string \| null | 否 | — | — |
+| `icqq.profile.interests` | array \| null | 否 | — | — |
+| `icqq.profile.bio` | string \| null | 否 | — | — |
 
 ### kook
 
@@ -949,7 +1075,25 @@ outline: [2, 3]
 | `kook.endpoints[].streamProxy.serverName` | string | 是 | — | — |
 | `kook.endpoints[].apiProxy` | object | 否 | — | Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled. |
 | `kook.endpoints[].apiProxy.port` | integer | 是 | — | — |
+| `kook.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `kook.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `kook.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `kook.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `kook.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `kook.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `kook.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `kook.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `kook.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `kook.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `kook.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `kook.profile` | object | 否 | — | 账号资料兜底 |
+| `kook.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `kook.profile.age` | integer \| null | 否 | — | — |
+| `kook.profile.birthday` | string \| null | 否 | — | — |
+| `kook.profile.signature` | string \| null | 否 | — | — |
+| `kook.profile.avatar` | string \| null | 否 | — | — |
+| `kook.profile.interests` | array \| null | 否 | — | — |
+| `kook.profile.bio` | string \| null | 否 | — | — |
 
 ### lark
 
@@ -980,10 +1124,28 @@ outline: [2, 3]
 | `lark.endpoints[].streamProxy.serverName` | string | 是 | — | — |
 | `lark.endpoints[].webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
 | `lark.endpoints[].webApiProxy.port` | integer | 是 | — | — |
+| `lark.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `lark.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `lark.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `lark.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `lark.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `lark.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `lark.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `lark.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `lark.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `lark.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `lark.mode` | string: `"webhook"`, `"websocket"` | 否 | `"webhook"` | — |
 | `lark.webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
 | `lark.webApiProxy.port` | integer | 是 | — | — |
+| `lark.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `lark.profile` | object | 否 | — | 账号资料兜底 |
+| `lark.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `lark.profile.age` | integer \| null | 否 | — | — |
+| `lark.profile.birthday` | string \| null | 否 | — | — |
+| `lark.profile.signature` | string \| null | 否 | — | — |
+| `lark.profile.avatar` | string \| null | 否 | — | — |
+| `lark.profile.interests` | array \| null | 否 | — | — |
+| `lark.profile.bio` | string \| null | 否 | — | — |
 
 ### line
 
@@ -1004,7 +1166,25 @@ outline: [2, 3]
 | `line.endpoints[].apiBaseUrl` | string | 否 | — | — |
 | `line.endpoints[].commandPrefix` | string | 否 | — | — |
 | `line.endpoints[].id` | string | 是 | — | LINE bot name |
+| `line.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `line.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `line.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `line.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `line.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `line.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `line.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `line.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `line.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `line.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `line.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `line.profile` | object | 否 | — | 账号资料兜底 |
+| `line.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `line.profile.age` | integer \| null | 否 | — | — |
+| `line.profile.birthday` | string \| null | 否 | — | — |
+| `line.profile.signature` | string \| null | 否 | — | — |
+| `line.profile.avatar` | string \| null | 否 | — | — |
+| `line.profile.interests` | array \| null | 否 | — | — |
+| `line.profile.bio` | string \| null | 否 | — | — |
 
 ### milky
 
@@ -1028,7 +1208,25 @@ outline: [2, 3]
 | `milky.endpoints[].heartbeat_interval` | number | 否 | — | — |
 | `milky.endpoints[].commandPrefix` | string | 否 | — | — |
 | `milky.endpoints[].id` | string | 是 | — | Milky bot name |
+| `milky.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `milky.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `milky.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `milky.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `milky.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `milky.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `milky.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `milky.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `milky.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `milky.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `milky.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `milky.profile` | object | 否 | — | 账号资料兜底 |
+| `milky.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `milky.profile.age` | integer \| null | 否 | — | — |
+| `milky.profile.birthday` | string \| null | 否 | — | — |
+| `milky.profile.signature` | string \| null | 否 | — | — |
+| `milky.profile.avatar` | string \| null | 否 | — | — |
+| `milky.profile.interests` | array \| null | 否 | — | — |
+| `milky.profile.bio` | string \| null | 否 | — | — |
 
 ### napcat
 
@@ -1056,7 +1254,25 @@ outline: [2, 3]
 | `napcat.endpoints[].poll_interval` | number | 否 | — | — |
 | `napcat.endpoints[].commandPrefix` | string | 否 | — | — |
 | `napcat.endpoints[].id` | string | 是 | — | NapCat bot name |
+| `napcat.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `napcat.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `napcat.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `napcat.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `napcat.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `napcat.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `napcat.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `napcat.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `napcat.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `napcat.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `napcat.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `napcat.profile` | object | 否 | — | 账号资料兜底 |
+| `napcat.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `napcat.profile.age` | integer \| null | 否 | — | — |
+| `napcat.profile.birthday` | string \| null | 否 | — | — |
+| `napcat.profile.signature` | string \| null | 否 | — | — |
+| `napcat.profile.avatar` | string \| null | 否 | — | — |
+| `napcat.profile.interests` | array \| null | 否 | — | — |
+| `napcat.profile.bio` | string \| null | 否 | — | — |
 
 ### onebot11
 
@@ -1080,7 +1296,25 @@ outline: [2, 3]
 | `onebot11.endpoints[].heartbeat_interval` | number | 否 | — | — |
 | `onebot11.endpoints[].commandPrefix` | string | 否 | — | — |
 | `onebot11.endpoints[].id` | string | 是 | — | OneBot11 bot name |
+| `onebot11.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `onebot11.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `onebot11.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `onebot11.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `onebot11.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `onebot11.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `onebot11.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `onebot11.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `onebot11.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `onebot11.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `onebot11.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `onebot11.profile` | object | 否 | — | 账号资料兜底 |
+| `onebot11.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `onebot11.profile.age` | integer \| null | 否 | — | — |
+| `onebot11.profile.birthday` | string \| null | 否 | — | — |
+| `onebot11.profile.signature` | string \| null | 否 | — | — |
+| `onebot11.profile.avatar` | string \| null | 否 | — | — |
+| `onebot11.profile.interests` | array \| null | 否 | — | — |
+| `onebot11.profile.bio` | string \| null | 否 | — | — |
 
 ### onebot12
 
@@ -1107,7 +1341,25 @@ outline: [2, 3]
 | `onebot12.endpoints[].id` | string | 是 | — | OneBot12 bot name |
 | `onebot12.endpoints[].platform` | string | 是 | — | Selected OneBot12 bot platform |
 | `onebot12.endpoints[].userId` | string | 是 | — | Selected OneBot12 bot user ID |
+| `onebot12.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `onebot12.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `onebot12.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `onebot12.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `onebot12.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `onebot12.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `onebot12.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `onebot12.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `onebot12.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `onebot12.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `onebot12.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `onebot12.profile` | object | 否 | — | 账号资料兜底 |
+| `onebot12.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `onebot12.profile.age` | integer \| null | 否 | — | — |
+| `onebot12.profile.birthday` | string \| null | 否 | — | — |
+| `onebot12.profile.signature` | string \| null | 否 | — | — |
+| `onebot12.profile.avatar` | string \| null | 否 | — | — |
+| `onebot12.profile.interests` | array \| null | 否 | — | — |
+| `onebot12.profile.bio` | string \| null | 否 | — | — |
 
 ### qq
 
@@ -1149,6 +1401,15 @@ outline: [2, 3]
 | `qq.endpoints[].notify.parent` | object | 否 | — | 可选的父频道/群容器 |
 | `qq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
 | `qq.endpoints[].notify.parent.id` | string \| number | 是 | — | — |
+| `qq.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `qq.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `qq.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `qq.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `qq.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `qq.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `qq.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `qq.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `qq.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `qq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 | `qq.streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.streamProxy.port` | integer | 是 | — | — |
@@ -1161,6 +1422,15 @@ outline: [2, 3]
 | `qq.notify.parent` | object | 否 | — | 可选的父频道/群容器 |
 | `qq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
 | `qq.notify.parent.id` | string \| number | 是 | — | — |
+| `qq.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `qq.profile` | object | 否 | — | 账号资料兜底 |
+| `qq.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `qq.profile.age` | integer \| null | 否 | — | — |
+| `qq.profile.birthday` | string \| null | 否 | — | — |
+| `qq.profile.signature` | string \| null | 否 | — | — |
+| `qq.profile.avatar` | string \| null | 否 | — | — |
+| `qq.profile.interests` | array \| null | 否 | — | — |
+| `qq.profile.bio` | string \| null | 否 | — | — |
 
 ### sandbox
 
@@ -1176,7 +1446,25 @@ outline: [2, 3]
 | `sandbox.endpoints[].owner` | string | 否 | — | Sandbox owner user ID |
 | `sandbox.endpoints[].commandPrefix` | string | 否 | — | — |
 | `sandbox.endpoints[].id` | string | 是 | — | Sandbox bot name |
+| `sandbox.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `sandbox.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `sandbox.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `sandbox.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `sandbox.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `sandbox.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `sandbox.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `sandbox.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `sandbox.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `sandbox.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `sandbox.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `sandbox.profile` | object | 否 | — | 账号资料兜底 |
+| `sandbox.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `sandbox.profile.age` | integer \| null | 否 | — | — |
+| `sandbox.profile.birthday` | string \| null | 否 | — | — |
+| `sandbox.profile.signature` | string \| null | 否 | — | — |
+| `sandbox.profile.avatar` | string \| null | 否 | — | — |
+| `sandbox.profile.interests` | array \| null | 否 | — | — |
+| `sandbox.profile.bio` | string \| null | 否 | — | — |
 
 ### satori
 
@@ -1200,7 +1488,25 @@ outline: [2, 3]
 | `satori.endpoints[].id` | string | 是 | — | Satori bot name |
 | `satori.endpoints[].platform` | string | 是 | — | Selected Satori login platform |
 | `satori.endpoints[].userId` | string | 是 | — | Selected Satori login user ID |
+| `satori.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `satori.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `satori.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `satori.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `satori.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `satori.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `satori.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `satori.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `satori.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `satori.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `satori.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `satori.profile` | object | 否 | — | 账号资料兜底 |
+| `satori.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `satori.profile.age` | integer \| null | 否 | — | — |
+| `satori.profile.birthday` | string \| null | 否 | — | — |
+| `satori.profile.signature` | string \| null | 否 | — | — |
+| `satori.profile.avatar` | string \| null | 否 | — | — |
+| `satori.profile.interests` | array \| null | 否 | — | — |
+| `satori.profile.bio` | string \| null | 否 | — | — |
 
 ### slack
 
@@ -1229,7 +1535,25 @@ outline: [2, 3]
 | `slack.endpoints[].streamProxy.serverName` | string | 是 | — | — |
 | `slack.endpoints[].webApiProxy` | object | 否 | — | 出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用 |
 | `slack.endpoints[].webApiProxy.port` | integer | 是 | — | — |
+| `slack.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `slack.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `slack.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `slack.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `slack.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `slack.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `slack.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `slack.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `slack.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `slack.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `slack.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `slack.profile` | object | 否 | — | 账号资料兜底 |
+| `slack.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `slack.profile.age` | integer \| null | 否 | — | — |
+| `slack.profile.birthday` | string \| null | 否 | — | — |
+| `slack.profile.signature` | string \| null | 否 | — | — |
+| `slack.profile.avatar` | string \| null | 否 | — | — |
+| `slack.profile.interests` | array \| null | 否 | — | — |
+| `slack.profile.bio` | string \| null | 否 | — | — |
 
 ### telegram
 
@@ -1259,7 +1583,25 @@ outline: [2, 3]
 | `telegram.endpoints[].apiBaseUrl` | string | 否 | — | — |
 | `telegram.endpoints[].commandPrefix` | string | 否 | — | — |
 | `telegram.endpoints[].id` | string | 是 | — | Telegram bot name |
+| `telegram.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `telegram.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `telegram.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `telegram.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `telegram.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `telegram.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `telegram.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `telegram.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `telegram.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `telegram.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `telegram.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `telegram.profile` | object | 否 | — | 账号资料兜底 |
+| `telegram.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `telegram.profile.age` | integer \| null | 否 | — | — |
+| `telegram.profile.birthday` | string \| null | 否 | — | — |
+| `telegram.profile.signature` | string \| null | 否 | — | — |
+| `telegram.profile.avatar` | string \| null | 否 | — | — |
+| `telegram.profile.interests` | array \| null | 否 | — | — |
+| `telegram.profile.bio` | string \| null | 否 | — | — |
 
 ### wechat-mp
 
@@ -1288,7 +1630,25 @@ outline: [2, 3]
 | `wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | 否 | — | — |
 | `wechat-mp.endpoints[].commandPrefix` | string | 否 | — | — |
 | `wechat-mp.endpoints[].id` | string | 是 | — | WeChat MP bot name |
+| `wechat-mp.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `wechat-mp.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `wechat-mp.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `wechat-mp.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `wechat-mp.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `wechat-mp.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `wechat-mp.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `wechat-mp.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `wechat-mp.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `wechat-mp.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `wechat-mp.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `wechat-mp.profile` | object | 否 | — | 账号资料兜底 |
+| `wechat-mp.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `wechat-mp.profile.age` | integer \| null | 否 | — | — |
+| `wechat-mp.profile.birthday` | string \| null | 否 | — | — |
+| `wechat-mp.profile.signature` | string \| null | 否 | — | — |
+| `wechat-mp.profile.avatar` | string \| null | 否 | — | — |
+| `wechat-mp.profile.interests` | array \| null | 否 | — | — |
+| `wechat-mp.profile.bio` | string \| null | 否 | — | — |
 
 ### wecom
 
@@ -1312,7 +1672,25 @@ outline: [2, 3]
 | `wecom.endpoints[].commandPrefix` | string | 否 | — | — |
 | `wecom.endpoints[].id` | string | 是 | — | WeCom bot name |
 | `wecom.endpoints[].agentId` | string | 是 | — | 企业微信应用 AgentId（非应用 Secret） |
+| `wecom.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `wecom.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `wecom.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `wecom.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `wecom.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `wecom.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `wecom.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `wecom.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `wecom.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `wecom.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `wecom.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `wecom.profile` | object | 否 | — | 账号资料兜底 |
+| `wecom.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `wecom.profile.age` | integer \| null | 否 | — | — |
+| `wecom.profile.birthday` | string \| null | 否 | — | — |
+| `wecom.profile.signature` | string \| null | 否 | — | — |
+| `wecom.profile.avatar` | string \| null | 否 | — | — |
+| `wecom.profile.interests` | array \| null | 否 | — | — |
+| `wecom.profile.bio` | string \| null | 否 | — | — |
 
 ### weixin-ilink
 
@@ -1338,7 +1716,25 @@ outline: [2, 3]
 | `weixin-ilink.endpoints[].longPollTimeoutMs` | number | 否 | — | — |
 | `weixin-ilink.endpoints[].dataDir` | string | 否 | — | Endpoint state root |
 | `weixin-ilink.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
+| `weixin-ilink.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `weixin-ilink.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `weixin-ilink.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `weixin-ilink.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `weixin-ilink.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `weixin-ilink.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `weixin-ilink.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `weixin-ilink.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `weixin-ilink.endpoints[].profile.bio` | string \| null | 否 | — | — |
 | `weixin-ilink.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `weixin-ilink.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `weixin-ilink.profile` | object | 否 | — | 账号资料兜底 |
+| `weixin-ilink.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `weixin-ilink.profile.age` | integer \| null | 否 | — | — |
+| `weixin-ilink.profile.birthday` | string \| null | 否 | — | — |
+| `weixin-ilink.profile.signature` | string \| null | 否 | — | — |
+| `weixin-ilink.profile.avatar` | string \| null | 否 | — | — |
+| `weixin-ilink.profile.interests` | array \| null | 否 | — | — |
+| `weixin-ilink.profile.bio` | string \| null | 否 | — | — |
 
 ### process-monitor
 

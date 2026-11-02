@@ -282,8 +282,8 @@ export class WecomClient extends EventEmitter {
     });
   }
 
-  async getApplicationInfo(): Promise<WecomApiResponse> {
-    const response = await this.#request('/cgi-bin/agent/get', { params: { agentid: this.config.agentId } });
+  async getApplicationInfo(request: EndpointOperationOptions = {}): Promise<WecomApiResponse> {
+    const response = await this.#request('/cgi-bin/agent/get', { params: { agentid: this.config.agentId }, signal: request.signal });
     if (response.errcode !== 0) throw new Error('WeCom application identity verification failed');
     return response;
   }

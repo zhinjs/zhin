@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e5b6df7b8602392f -->
+<!-- sync-adapter-docs:sha256=86fb043e157dee74 -->
 
 # @zhin.js/adapter-telegram
 
@@ -184,3 +184,11 @@ MIT
 ### 禁用按钮
 
 canonical keyboard 的 `disabled: true` 按钮映射为 Telegram Bot API 10.3 的 `disabled: {}`，不携带 `callback_data`；启用按钮仍使用原回调数据，并保留 1–64 UTF-8 字节校验。自建 Bot API Server 需支持该版本，见 [DisabledButton](https://core.telegram.org/bots/api#disabledbutton)。
+
+## Current account profile
+
+The self-profile port uses the Bot API's account methods, not chat administration methods: `getMyName` / `setMyName` for nickname, `getMyShortDescription` / `setMyShortDescription` for the short profile tagline (`signature`), and `getMyDescription` / `setMyDescription` for the longer description (`bio`). These operate on the default language variant. Account mutations use the Agent's existing identity approval.
+
+`setMyProfilePhoto` uploads resolved JPEG bytes as a new multipart attachment. It does not pass a URL as an uploaded profile photo or expose Telegram download URLs containing the bot token. The port does not return avatar URLs from credential-bearing file endpoints. Bot age, gender, birthday and interests are not advertised as writable fields.
+
+`nickname` / `profile` configuration is only a missing-field fallback; per-Endpoint fields override adapter defaults without changing the Telegram account. See the [official Bot API](https://core.telegram.org/bots/api#getmyname) and [profile-photo method](https://core.telegram.org/bots/api#setmyprofilephoto).

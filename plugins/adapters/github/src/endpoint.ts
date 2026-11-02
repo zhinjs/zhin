@@ -6,6 +6,7 @@ import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId, PluginDatabaseHost } from 'zhin.js';
 import { GhClient } from './gh-client.js';
+import { createGithubSelfProfile } from './self-profile.js';
 import {
   enrichInboundContent,
   formatInboundContent,
@@ -34,6 +35,7 @@ export class GithubEndpoint extends GhClient implements Endpoint {
   readonly [endpointSpec] = createEndpointSpecification(this, {
     start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
     stop: () => this.#stopFramework(), send: request => this.#sendFramework(request),
+    profile: createGithubSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
   });
   #workspaceManager?: WorkspaceManager;
   get database() { return this.#options.database; }

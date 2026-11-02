@@ -479,3 +479,33 @@ plugins: {}
 ```
 
 启动后按 `zhin setup` 向导逐步补齐 database / 适配器 / AI（见 [CLI 参考](../cli/index.md)）；运行方式见 [zhin runtime start 详解](../cli/runtime.md)。
+
+## 账号自身资料
+
+Agent 优先使用当前 Endpoint 的平台资料。适配器顶层的 `nickname` 和 `profile` 是缺失字段
+的默认值；`endpoints[]` 可逐项覆盖，`profile` 按字段合并。这些值不会自动修改平台资料。
+
+```yaml
+icqq:
+  master: "你的 QQ 号"
+  nickname: 小知
+  profile:
+    gender: unknown
+    interests: [音乐, 摄影]
+    bio: 喜欢交流的生活助手
+  endpoints:
+    - id: "机器人 QQ 号"
+      nickname: 小知同学
+      profile:
+        interests: [音乐, 读书]
+```
+
+例如平台能读到昵称，就使用平台昵称；读不到兴趣，才使用此账号覆盖后的兴趣。平台明确
+返回空签名或空兴趣时，不会恢复配置中的旧值。群名片单独保留。已有 AI 配置的昵称仍是
+最终兜底，内部子 Agent 的角色名称保持独立。
+
+`profile` 支持 `gender`、`age`、`birthday`（`YYYY-MM-DD`）、`signature`、`avatar`（图片 URL）、
+`interests`（字符串数组）和 `bio`。没有配置或平台证据的信息保持未知。普通回合复用本次
+账号实例已读取的资料；需要重新查询时使用 `get_self_profile`。修改实际账号资料使用
+`set_self_profile`，它只开放适配器确实支持的字段，并沿用身份类操作审批。配置表单编辑
+的是兜底值，和平台资料修改是不同操作。

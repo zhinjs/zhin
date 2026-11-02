@@ -15,10 +15,10 @@ tools:
 ---
 # qq-conversation
 
-Use `conversation_info` before claiming the bot's role or available platform permissions. Group roles come live from the official `bot_state` API for the current endpoint, not from the sender's role. A failed lookup is not evidence that the bot is an ordinary member.
+Use `conversation_info` before claiming your role or available platform permissions. Group roles come live from the official `bot_state` API for the current endpoint, not from the sender's role. A failed lookup is not evidence that you are an ordinary member.
 
-Caller roles authorize a request; bot platform roles determine whether QQ can execute it. They are independent, and a successful inspection does not replace the live check each management tool performs.
+Caller roles authorize a request; your platform roles determine whether QQ can execute it. They are independent, and a successful inspection does not replace the live check each management tool performs.
 
-In guilds the bot role is read from its guild member record (4 owner, 2 admin, 5 child-channel admin). A `channel_admin` record does not say which child channels it governs, so it cannot authorize an operation in the current channel.
+In guilds your role is read from your guild member record (4 owner, 2 admin, 5 child-channel admin). A `channel_admin` record does not say which child channels it governs, so it cannot authorize an operation in the current channel.
 
 The official QQ Bot API has no merged forward, poke, profile like, leave group, group announcement, essence, special title, anonymous, group files or group sign-in. Do not promise or simulate them.

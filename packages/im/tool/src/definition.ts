@@ -9,6 +9,7 @@ import type {
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
 import type { DeliveryTarget, Locale } from '@zhin.js/plugin-runtime';
+import type { SelfProfilePort, SelfProfileSnapshot } from '@zhin.js/im-contract';
 import { isToolInputSchema, type ToolInputSchema } from './input-schema.js';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
@@ -117,6 +118,8 @@ export interface ToolInvocationContext {
   }>;
   readonly policy: ToolInvocationPolicy;
   readonly question?: ToolQuestionPort;
+  /** Current account's profile authority, pinned by the originating IM operation. */
+  readonly selfProfile?: SelfProfilePort;
   /** Runtime-only native Client capability for an IM-origin turn. */
   readonly client?: OperationClientPort;
 }
@@ -134,9 +137,15 @@ export interface ToolExecutionContext<
   readonly principal: ToolInvocationContext['principal'];
   readonly policy: ToolInvocationPolicy;
   readonly question?: ToolQuestionPort;
+  readonly selfProfile?: SelfProfilePort;
   /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
   readonly $client: AdapterClient<TAdapter>;
 }
+
+/** Read-only admission facts; no platform IO or profile mutation authority. */
+export type ToolAvailabilityContext = Pick<ToolInvocationContext, 'sessionKey' | 'origin'> & Readonly<{
+  accountProfile?: Pick<SelfProfileSnapshot, 'writableFields'>;
+}>;
 
 export interface AgentToolDefinition<
   TInput = unknown,
@@ -189,7 +198,7 @@ export interface AgentToolDefinition<
    * are projected. Read existing state only: do not reserve capacity, start I/O or draw randomness.
    * This narrows disclosure, never grants permission; execute must recheck mutable conditions.
    */
-  readonly isAvailable?: (context: Pick<ToolInvocationContext, 'sessionKey' | 'origin'>) => boolean;
+  readonly isAvailable?: (context: ToolAvailabilityContext) => boolean;
   /** @internal Filesystem-derived private capability binding. */
   readonly placement?: ToolPlacement;
   execute(

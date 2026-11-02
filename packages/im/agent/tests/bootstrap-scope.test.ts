@@ -145,10 +145,10 @@ describe('injection', () => {
   it('§11_bootstrap follows the turn scene and is byte-stable across senders of the same kind', () => {
     const group = buildRichSystemPrompt({ ...base, turn: turn('group', []) });
     expect(group).not.toContain('ssh prod');
-    expect(group).toContain('be brief');
+    expect(group).toContain('## Group etiquette\nbe brief');
     const masterPrivate = buildRichSystemPrompt({ ...base, turn: turn('private', ['master']) });
     expect(masterPrivate).toContain('ssh prod');
-    expect(masterPrivate).not.toContain('be brief');
+    expect(masterPrivate).not.toContain('## Group etiquette\nbe brief');
     expect(buildRichSystemPrompt({ ...base, turn: turn('group', [], 'other', '99') })).toBe(group);
   });
 
@@ -164,4 +164,21 @@ describe('injection', () => {
       systemPrompt: 'x', loadedTools: [], deferredToolCount: 0, historyMessages: [], userMessages: [],
     }).bootstrap_skipped).toBeUndefined();
   });
+});
+
+it('excludes a persona file at existing wrapper boundaries while preserving fenced examples and scene constraints', () => {
+  const text = [
+    '# Workspace', '## SOUL.md', 'Parent persona.', '# Nested persona heading', 'Parent-only style.',
+    '## TOOLS.md', 'Follow the tool workflow.', '```md', '## SOUL.md', 'Example, not a file boundary.', '```',
+    '### Private operations', '<!-- scope: master-private -->', 'Private secret note.',
+    '## AGENTS.md', 'Keep the original task boundaries.',
+  ].join('\n');
+  const filtered = scopeBootstrapText(text, GROUP, { excludeFiles: ['SOUL.md'] });
+  expect(filtered.text).not.toContain('Parent persona.');
+  expect(filtered.text).not.toContain('Parent-only style.');
+  expect(filtered.text).not.toContain('Private secret note.');
+  expect(filtered.text).toContain('```md\n## SOUL.md\nExample, not a file boundary.\n```');
+  expect(filtered.text).toContain('Follow the tool workflow.');
+  expect(filtered.text).toContain('Keep the original task boundaries.');
+  expect(filtered.skipped).toEqual(['SOUL.md', 'Private operations']);
 });

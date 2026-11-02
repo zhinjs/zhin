@@ -6,6 +6,7 @@ import { isLocale } from '@zhin.js/plugin-runtime';
 import { SCENE_WAKE_METADATA_KEY } from '../scene-events.js';
 import { formatMergedTurnBlock } from '../turn/merged-turn-context.js';
 import { formatLiveDanmakuBlock } from '../turn/live-turn-context.js';
+import { SELF_PROFILE_FIELDS, type SelfProfileSnapshot } from '@zhin.js/im-contract';
 
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
@@ -26,6 +27,8 @@ export interface TurnContextEnvelopeInput {
   turn?: TurnContextView;
   observedAt?: number;
   profileSummary?: string;
+  /** Last-resort configured display name; never overwrites an observed account field. */
+  fallbackNickname?: string;
   sessionSummary?: string;
   /** 状态感知 `[Scene events]` 段（#996），与会话画像同块、ephemeral。 */
   sceneEvents?: string;
@@ -115,6 +118,20 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   return buildTurnContextBlocks(input).map(block => block.text).join('\n');
 }
 
+/** Keep field provenance concise without treating an omitted source as a platform observation. */
+function accountProfileData(profile: SelfProfileSnapshot, readError?: 'lookup_failed'): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const source of ['platform', 'configured', undefined] as const) {
+    const fields = Object.fromEntries(SELF_PROFILE_FIELDS
+      .filter(field => profile.values[field] !== undefined && profile.sources[field] === source)
+      .map(field => [field, profile.values[field]]));
+    if (Object.keys(fields).length) data[source ?? 'unattributed'] = fields;
+  }
+  if (profile.writableFields.length) data.can_edit = profile.writableFields;
+  data.read = readError ?? profile.platformStatus;
+  return data;
+}
+
 export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextContentBlock[] {
   const blocks: TextContentBlock[] = [];
   const stable: string[] = [];
@@ -139,6 +156,16 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
       blocks.push(createPromptContextBlock('session-identity', formatSessionContextLine(input.turn)));
     }
     if (isLocale(display?.locale)) current.push(`Reply language fallback: ${display.locale}.`);
+    const self = display?.contextState?.bot;
+    if (origin.kind === 'im' && (self?.profile || self?.name?.trim() || input.fallbackNickname?.trim() || self?.profileError)) {
+      const profile: SelfProfileSnapshot = self?.profile ?? { values: {}, sources: {}, writableFields: [], platformStatus: 'unsupported' };
+      const nickname = self?.name?.trim() || input.fallbackNickname?.trim();
+      const account: SelfProfileSnapshot = profile.values.nickname !== undefined || !nickname ? profile : {
+        ...profile, values: { ...profile.values, nickname },
+        sources: { ...profile.sources, nickname: self?.name?.trim() ? 'platform' : 'configured' },
+      };
+      current.push(`Your account data: ${JSON.stringify(accountProfileData(account, self?.profileError))}`);
+    }
     if (typeof display?.commandPrefix === 'string') {
       stable.push(`Chat command prefix: ${JSON.stringify(display.commandPrefix)}. Include it exactly once when showing a known command; do not infer it from history or invent command names.`);
       if (display.commandMenu) stable.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}.`);

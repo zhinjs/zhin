@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=12c75cf667170886 -->
+<!-- sync-adapter-docs:sha256=2110eec0a8d62839 -->
 
 # @zhin.js/adapter-discord
 
@@ -155,3 +155,11 @@ DISCORD_REST_API_PROXY_PORT=18570 pnpm --filter platform-acceptance-bot dev:disc
 forwarding 下以新sample确认真实消息基线；control `POST /cut` 后另发新sample，出站结果须失败/unknown且无自动POST重发；`POST /recover` 后先确认旧sample未补发，再新sample确认恢复。检查平台可见消息与报告回执，不重发未知sample。此模式仅Gateway REST、JSON消息能力；Interactions Endpoint 与其他CDN目的地不适用，配置Interactions会明确拒绝。本地真实SDK TLS fixture覆盖服务收到POST后切断、可信CA但SAN不匹配拒绝、默认直连与手动恢复，不能当成实机结果。停止/连接失败会销毁专用Dispatcher，并取消尚未完成TLS握手。
 
 公开扩展点参考：[Discord RESTOptions.agent](https://discord.js.org/docs/packages/rest/main/RESTOptions:Interface)、[Undici 6.28 Agent](https://github.com/nodejs/undici/blob/v6.28.0/docs/docs/api/Agent.md)。
+
+## Current account profile
+
+Gateway and Interactions modes expose the authenticated account's username (`nickname`) and avatar through the shared self-profile port. Gateway mode uses the original `ClientUser`; Interactions mode uses `GET/PATCH /users/@me`. Profile mutations use the existing Agent identity approval and preserve the original account's lifetime. Server-specific member nicknames remain separate.
+
+Nickname and avatar are writable. Other personal fields are not advertised as writable without a matching supported adapter operation. Successful avatar changes return the platform's confirmed CDN URL; image bytes stay inside the request and are not returned to the model. Inputs resolved by the Agent use the existing local-image and network permissions.
+
+`nickname` / `profile` configuration only fills missing platform fields, with per-Endpoint fields overriding adapter defaults. See [discord.js ClientUser](https://discord.js.org/docs/packages/discord.js/main/ClientUser:Class).

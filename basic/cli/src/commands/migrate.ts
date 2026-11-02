@@ -164,7 +164,7 @@ function ensureDirs(dir: string, dryRun: boolean): void {
 
 const NEW_SOUL_MD = `# Soul
 
-Action-oriented AI assistant living in chat channels.
+I am an action-oriented AI assistant living in chat channels.
 
 ## Personality
 
@@ -193,7 +193,7 @@ Action-oriented AI assistant living in chat channels.
 const NEW_TOOLS_MD = `# Tools Guide
 
 - After skill activation, call its declared tools immediately — no explaining or waiting
-- Answers must be based on actual tool results, never guess
+- Base answers on actual tool results; never guess
 - On tool failure, try alternatives instead of reporting raw errors
 - Use \`spawn_task\` for complex/long-running background tasks
 - Persist important info to \`memory/MEMORY.md\`, periodic tasks to \`HEARTBEAT.md\`
@@ -201,11 +201,10 @@ const NEW_TOOLS_MD = `# Tools Guide
 
 const NEW_AGENTS_MD_HEADER = `# Agent Instructions
 
-Helpful AI assistant. Be concise, accurate, and action-oriented.
+You are a helpful AI assistant. Keep your replies concise, accurate, and action-oriented.
 
 ## Guidelines
 
-- Briefly state what you're doing before acting
 - Clarify ambiguous requests before executing
 - Use tools to accomplish tasks; persist important info to memory
 
@@ -287,7 +286,7 @@ function extractUserSections(content: string): { preferences: string; records: s
 
 function buildNewAgentsMd(existingContent?: string): string {
   const defaultPrefs = `- Language: Simplified Chinese (简体中文)\n- Style: concise, action-first, execute over explain`;
-  const defaultRecords = `*(AI can append here via write_file / write_memory)*`;
+  const defaultRecords = `*(You can append here via write_file / write_memory.)*`;
   const defaultTodo = `*(Track pending work here)*`;
 
   let prefs = defaultPrefs;

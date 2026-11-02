@@ -13,6 +13,9 @@ import { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import type { ApprovalOutcomePort } from '../../src/session/approval-port.js';
 import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-runtime.js';
+import type { SelfProfilePort, SelfProfileSnapshot } from '@zhin.js/im-contract';
+import type { ToolExecutionContext } from '@zhin.js/tool';
+import { createNativeSelfProfileToolFeatures } from '../../src/plugin-runtime/native-self-profile-tools.js';
 
 const ISOLATED: TurnPolicyContext = Object.freeze({
   permissions: ['master'],
@@ -45,6 +48,8 @@ async function runQqTurn(options: {
   spawnArgs?: Record<string, unknown>;
   child?: ChildScript;
   groupMember?: boolean;
+  selfProfile?: SelfProfilePort;
+  engineBootstrap?: string;
 }) {
   const turn = createTurnIngress({
     intent: { kind: 'new' },
@@ -55,7 +60,9 @@ async function runQqTurn(options: {
     principal: options.groupMember
       ? { subjectId: 'member', roles: ['user'] }
       : { subjectId: 'master', roles: ['master'] },
-    input: { text: 'please delegate', locale: 'en', commandPrefix: '!!', commandMenu: '!!menu' },
+    input: { text: 'please delegate', locale: 'en', commandPrefix: '!!', commandMenu: '!!menu',
+      ...(options.selfProfile ? { contextState: { bot: { profile: options.selfProfile.peek() } } } : {}),
+    },
     session: { key: 'im:icqq:bot:private:master' },
     policy: options.policy,
     capabilities: { tools: options.tools.map(tool => tool.name), skills: [] },
@@ -64,6 +71,7 @@ async function runQqTurn(options: {
       journal: { append: async () => undefined },
       ...(!options.policy.unattended ? { reply: { send: async () => ({ status: 'sent' as const }) } } : {}),
       ...(options.approval ? { approval: options.approval } : {}),
+      ...(options.selfProfile ? { selfProfile: options.selfProfile } : {}),
     },
   });
   const inputs: CoreInput[] = [];
@@ -115,6 +123,7 @@ async function runQqTurn(options: {
     selection: { binding: { name: 'zhin', providerAlias: 'provider', model: 'model', mcpServers: [] }, mcpServers: [] },
   } as never;
   const engine = createFullAgentTurnEngine({
+    bootstrapContext: options.engineBootstrap,
     host: host as never,
     core: core as never,
     sessionSystem: {
@@ -169,6 +178,49 @@ describe('deriveSubagentPolicy', () => {
 
 describe('spawn_task on the plugin-runtime (QQ) turn path', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it('forwards the engine-captured workspace into the child instead of looking up mutable Host state', async () => {
+    const bootstrap = '## TOOLS.md\nCaptured-generation operational guidance.';
+    const { child } = await runQqTurn({ policy: NO_SHELL, tools: [capability('read_file')], engineBootstrap: bootstrap });
+    expect(child?.promptRuntime.bootstrapContext).toBe(bootstrap);
+  });
+
+  it.each([true, false])('retains the parent account profile with read_only=%s without renaming the child role', async readOnly => {
+    const snapshot: SelfProfileSnapshot = { values: { nickname: 'Physical account' }, sources: { nickname: 'platform' }, writableFields: ['nickname'], platformStatus: 'available' };
+    const selfProfile = { peek: () => snapshot, read: vi.fn(async () => snapshot),
+      write: vi.fn<NonNullable<SelfProfilePort['write']>>(async () => ({ status: 'updated' })) } satisfies SelfProfilePort;
+    const tools = createNativeSelfProfileToolFeatures().map(native => ({ ...native.definition, owner: rootPluginId(), name: native.name,
+      qualifiedName: native.name, source: 'builtin', execute: (async (input, context) => native.definition.execute(input as Record<string, unknown>, context as ToolExecutionContext)) as ToolCapability['execute'],
+    }));
+    const approval = vi.fn(async (_request?: unknown) => true);
+    let readResult: unknown, writeResult: unknown;
+    const { child, parent } = await runQqTurn({ policy: ISOLATED, tools, selfProfile,
+      approval: { available: true, requestApproval: approval, requestApprovalOutcome: async request => ({ status: await approval(request) ? 'approved' : 'denied' }) },
+      spawnArgs: { task: 'Read the current account profile', read_only: readOnly },
+      child: async input => {
+        readResult = await input.toolExecution.execute({ name: 'get_self_profile' }, {}, 'read-account');
+        writeResult = await input.toolExecution.execute({ name: 'set_self_profile' }, { field: 'nickname', value: 'New account name' }, 'write-account');
+        return 'Account task finished';
+      },
+    });
+    expect(parent?.promptRuntime.agentNickname).toBe('Physical account');
+    expect(child?.promptRuntime.agentNickname).toBe('bot');
+    expect(child?.personaEnhanced).toContain('You are a sub-agent');
+    expect(readResult).toMatchObject({ status: 'completed', output: { values: { nickname: 'Physical account' } } });
+    expect(selfProfile.read).toHaveBeenCalledTimes(1);
+    if (readOnly) {
+      expect(names(child?.allTools)).not.toContain('set_self_profile');
+      expect(child?.turnContext.ports.selfProfile.write).toBeUndefined();
+      expect(writeResult).toMatchObject({ status: 'denied', policy: 'capability' });
+      expect(approval).not.toHaveBeenCalled();
+      expect(selfProfile.write).not.toHaveBeenCalled();
+    } else {
+      expect(child?.turnContext.ports.selfProfile).toBe(selfProfile);
+      expect(writeResult).toMatchObject({ status: 'completed', output: { status: 'updated' } });
+      expect(approval).toHaveBeenCalledTimes(1);
+      expect(selfProfile.write).toHaveBeenCalledTimes(1);
+    }
+  });
 
   it('is hidden unless ai.agent.subagentTurnMode is sync', async () => {
     const { parent, child } = await runQqTurn({ policy: NO_SHELL, tools: [capability('read_file')], subagentTurnMode: 'off' });

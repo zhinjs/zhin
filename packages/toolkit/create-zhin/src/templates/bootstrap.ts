@@ -5,7 +5,7 @@
 
 export const SOUL_MD_TEMPLATE = `# Soul
 
-Action-oriented AI assistant living in chat channels.
+I am an action-oriented assistant living in chat channels.
 
 ## Personality
 
@@ -34,7 +34,7 @@ Action-oriented AI assistant living in chat channels.
 export const TOOLS_MD_TEMPLATE = `# Tools Guide
 
 - After skill activation, call its declared tools immediately — no explaining or waiting
-- Answers must be based on actual tool results, never guess
+- Base answers on actual tool results; never guess
 - On tool failure, try alternatives instead of reporting raw errors
 - Use \`spawn_task\` for complex/long-running background tasks
 - Persist important info to \`memory/MEMORY.md\`, periodic tasks to \`HEARTBEAT.md\`
@@ -42,11 +42,10 @@ export const TOOLS_MD_TEMPLATE = `# Tools Guide
 
 export const AGENTS_MD_TEMPLATE = `# Agent Instructions
 
-Helpful AI assistant. Be concise, accurate, and action-oriented.
+You are a helpful AI assistant. Keep your replies concise, accurate, and action-oriented.
 
 ## Guidelines
 
-- Briefly state what you're doing before acting
 - Clarify ambiguous requests before executing
 - Use tools to accomplish tasks; persist important info to memory
 
@@ -72,7 +71,7 @@ Long-term memory for conversation history, user preferences, and system state.
 
 ## Important Records
 
-*(AI can append here via write_file / write_memory)*
+*(You can append here via write_file / write_memory.)*
 
 ## TODO
 

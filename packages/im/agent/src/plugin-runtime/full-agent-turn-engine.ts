@@ -3,6 +3,7 @@ import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
 import { MessageAliasTable, type AgentMessage, type Usage } from '@zhin.js/ai';
 import { conversationContextMessage, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
 import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
+import { SKILL_DISCLOSURE_PROMPT_HINT } from '../skill/progressive-disclosure.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { resolveSkillTools, type SkillToolCandidate } from './skill-tool-resolution.js';
@@ -35,6 +36,8 @@ import { resolveToolTier } from './tool-tier.js';
 import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 import { labelThirdPartyGuidance } from '../prompt/third-party-guidance.js';
 import { BOOTSTRAP_PROMPT_ORDER, fillPromptSlots } from '../prompt/system-prompt.js';
+import { hasNicknameSlot, turnAgentNickname } from '../context/self-profile.js';
+import type { TurnContextView } from '../context/turn-envelope.js';
 import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress.js';
 import { TurnProvenance } from '../security/provenance.js';
@@ -153,6 +156,7 @@ async function* runInteractiveTurn(
       core: options.core,
       parentTurn: context.turn,
       capabilities: { ...context.capabilities, tools: context.toolCapabilities },
+      bootstrapContext: options.bootstrapContext,
       loopHooks: options.loopHooks,
       resolveModel: () => subagentModel.current,
       imageInspectionBudget,
@@ -253,7 +257,8 @@ async function* runInteractiveTurn(
     provenance,
     leakInspector,
   });
-  const promptRegistry = createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner);
+  const agentNickname = turnAgentNickname(context.turn, host.activeBinding?.nickname);
+  const promptRegistry = createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner, context.turn, agentNickname);
   const capabilityContext = buildCapabilityContext(
     context.capabilities.agents,
     context.capabilities.skills,
@@ -266,9 +271,9 @@ async function* runInteractiveTurn(
     // entries go to the current message's runtime-context tail; load/execute still enforce access.
     promptRegistry.register('§11_capabilities', {
       layer: 'system',
-      kind: 'platform',
+      kind: context.turn.origin.kind === 'im' && hasNicknameSlot(capabilityContext.stable) ? 'scene' : 'platform',
       title: 'Turn capabilities',
-      content: fillPromptSlots(capabilityContext.stable, host.activeBinding?.nickname),
+      content: fillPromptSlots(capabilityContext.stable, agentNickname),
       order: BOOTSTRAP_PROMPT_ORDER.task - 1,
       budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat : BOOTSTRAP_PROMPT_ORDER.task,
       retention: 'preferred',
@@ -278,8 +283,8 @@ async function* runInteractiveTurn(
     bootstrapContext: options.bootstrapContext?.trim() ?? '',
     activeSkillsContext,
     capabilityTail: capabilityContext.tail
-      ? fillPromptSlots(capabilityContext.tail, host.activeBinding?.nickname) : undefined,
-    agentNickname: host.activeBinding?.nickname,
+      ? fillPromptSlots(capabilityContext.tail, agentNickname) : undefined,
+    agentNickname,
     modelId: prompt.modelId,
     providerAlias: prompt.providerAlias,
     modelSdk: prompt.modelSdk,
@@ -479,7 +484,7 @@ async function* runScheduleTurn(
     modelId: prompt.modelId,
     providerAlias: prompt.providerAlias,
     modelSdk: prompt.modelSdk,
-    registry: createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner),
+    registry: createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner, context.turn, host.activeBinding?.nickname),
     segments: context.capabilities.promptSegments,
   });
   const stream = host.promptController.scheduleStream({
@@ -552,6 +557,8 @@ async function* runScheduleTurn(
 function createTurnPromptRegistry(
   sections: readonly PromptSectionDescriptor[],
   agentOwner: PromptSectionDescriptor['owner'],
+  turn: TurnContextView,
+  nickname?: string,
 ): PromptAssemblyRegistry {
   const registry = new PromptAssemblyRegistry();
   for (const section of sections) {
@@ -559,7 +566,8 @@ function createTurnPromptRegistry(
     registry.register(section.qualifiedName, {
       layer: section.layer,
       title: section.title,
-      content: thirdParty ? labelThirdPartyGuidance(`plugin:${String(section.owner)}`, section.content) : section.content,
+      content: fillPromptSlots(thirdParty ? labelThirdPartyGuidance(`plugin:${String(section.owner)}`, section.content) : section.content, nickname),
+      kind: turn.origin.kind === 'im' && hasNicknameSlot(section.content) ? 'scene' : undefined,
       order: section.order,
       placement: section.platforms?.length ? 'tail' : undefined,
       retention: section.retention,
@@ -702,12 +710,15 @@ export function buildCapabilityContext(
   // Progressive disclosure (#729): names and one-line triggers only; the full
   // instructions arrive through load_skill or intent priming.
   const neutralSkills = renderSkillCatalog(skills.filter(skill => isSenderNeutralSkill(skill, tools)).map(entry));
-  if (neutralSkills) stable.push(neutralSkills);
+  if (neutralSkills) stable.push(SKILL_DISCLOSURE_PROMPT_HINT, neutralSkills);
   const gatedSkills = renderSkillCatalog(skills.filter(skill => !isSenderNeutralSkill(skill, tools)).map(entry));
-  if (gatedSkills) tail.push(gatedSkills);
+  if (gatedSkills) {
+    if (!neutralSkills) tail.push(SKILL_DISCLOSURE_PROMPT_HINT);
+    tail.push(gatedSkills);
+  }
   return {
     stable: stable.join('\n\n'),
-    tail: tail.length ? ['Also available in this turn (depends on the sender, bot role or selected specialist):', ...tail].join('\n\n') : '',
+    tail: tail.length ? ['Also available to you this turn (depends on the sender, your account role or selected specialist):', ...tail].join('\n\n') : '',
   };
 }
 

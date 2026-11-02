@@ -136,9 +136,17 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
       reason: TRUST_RESTRICTION_REASON,
     });
   }
+  if (input.tool.name === 'set_self_profile') {
+    const profile = input.turn.ports.selfProfile;
+    if (!profile?.write || !profile.peek().writableFields.some(field => field === input.input.field)) {
+      return Object.freeze({ status: 'denied', policy: 'capability',
+        reason: `Current account does not expose a writable ${String(input.input.field)} field` });
+    }
+  }
   const networkDecision = checkTurnNetworkPolicy(input);
   if (networkDecision) return networkDecision;
-  const fileOperation = resolveTurnFileOperation(input.tool.name);
+  const fileOperation = input.tool.name === 'set_self_profile' && input.input.field === 'avatar' && input.input.file_path !== undefined
+    ? 'read' : resolveTurnFileOperation(input.tool.name);
   let authorizedInput = input.input;
   if (fileOperation) {
     const fileAuthority = await authorizeTurnFileInput(
@@ -349,7 +357,7 @@ function protectedPathDenial(
   return Object.freeze({
     status: 'denied',
     policy: 'host-protected-path',
-    reason: `${impact.target} is maintained by the package manager / host and cannot be written by the agent`,
+    reason: `${impact.target} is maintained by the package manager / host; you cannot write it`,
   });
 }
 

@@ -1,5 +1,5 @@
 import { defineAgentTool, toolFeatureId } from '@zhin.js/tool';
-import type { LocalImageAssetStore } from '../media/local-image-assets.js';
+import { LegacyLocalImageScopeError, type LocalImageAssetStore } from '../media/local-image-assets.js';
 
 export function createNativeLocalAssetsToolFeature(store: LocalImageAssetStore) {
   return Object.freeze({
@@ -11,9 +11,10 @@ export function createNativeLocalAssetsToolFeature(store: LocalImageAssetStore) 
       requiresApproval: 'never',
       async execute(input, context) {
         try { return await store.inspect(String(input.asset_id), context, context.signal); }
-        catch {
+        catch (error) {
           context.signal.throwIfAborted();
-          throw new Error('Local image is unavailable, expired or outside this conversation');
+          if (error instanceof LegacyLocalImageScopeError) throw error;
+          throw new Error('Local image is unavailable, expired or outside this conversation', { cause: error });
         }
       },
     }),

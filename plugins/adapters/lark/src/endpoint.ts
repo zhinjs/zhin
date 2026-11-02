@@ -1,5 +1,6 @@
 import { createEndpointSpecification, endpointSpec, type Endpoint } from 'zhin.js/adapter';
 import { LarkClient, type LarkEndpointOptions } from './client.js';
+import { createLarkSelfProfile } from './self-profile.js';
 export type { LarkEndpointOptions } from './client.js';
 export type { LarkFetch } from './client.js';
 
@@ -15,6 +16,7 @@ export class LarkEndpoint extends LarkClient implements Endpoint {
       name: this.configName(),
       control: this.endpointControl,
       management: this.endpointManagement,
+      profile: createLarkSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     };
     Object.defineProperty(hooks, 'transportState', { get: () => this.transportState });
     return createEndpointSpecification(this, hooks);

@@ -1,3 +1,4 @@
+import { createMilkySelfProfile } from './self-profile.js';
 /**
  * Milky webhook endpoint — httpHostToken POST inbound + baseUrl HTTP API outbound.
  */
@@ -70,6 +71,8 @@ export class MilkyWebhookEndpoint extends MilkyClient implements Endpoint {
       close: () => { this.#open = false; }, stop: () => this.#stop(),
       send: request => this.#send(request),
       management: this.#management, control: this.#control,
+      profile: createMilkySelfProfile({ call: request => call(request).then(response => readMilkyResponse(response, request.action)),
+        reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
     forwardMilkyClientEvents(this, (name, payload) => {
       void this[endpointSpec].events.run(() => {

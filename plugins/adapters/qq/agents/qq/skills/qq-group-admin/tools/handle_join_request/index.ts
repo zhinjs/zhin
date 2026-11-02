@@ -4,7 +4,7 @@ import { currentGroup, requireGroupManager } from '../../../../conversation.js';
 import { messages as t } from '../../../../messages.js';
 
 export default defineAgentTool({
-  description: '通过或拒绝当前 QQ 群的一条入群申请；每次人工审批，需机器人为群管理员，官方白名单能力',
+  description: '通过或拒绝当前 QQ 群的一条入群申请；每次人工审批，需你为群管理员，官方白名单能力',
   adapter: 'qq',
   scopes: ['group'],
   permissions: ['role(master,admin,trusted,owner)'],

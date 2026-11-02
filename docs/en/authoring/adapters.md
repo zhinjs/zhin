@@ -28,7 +28,7 @@ minimums and an explicit Adapter Feature requirement:
 ```
 
 This `api` belongs to `package.json#zhin.features`; it is separate from npm versions and
-`zhin.engine`. The new provider declares `featureApi: 2.0.0`: explicit API-1 consumers are refused,
+`zhin.engine`. The initial cutover declared `featureApi: 2.0.0` (self-profile support adds `2.1.0`): explicit API-1 consumers are refused,
 and API-2 consumers are refused on an API-1 provider. Omitted API metadata keeps its existing
 behavior and does not certify compatibility. Recompile custom plugins, update peer/dev floors
 and verify the installed stack; see [version compatibility and migration](../operations/upgrades.md#adapter-api-2).
@@ -172,3 +172,24 @@ segments: {
 ```
 
 `text` always remains a common fallback; scene declarations on it restrict only its extra fields and hints.
+
+## Account self profile
+
+This capability requires Adapter Feature API `^2.1.0`. Tools using the bound account-profile
+context require Tool Feature API `^1.1.0`. These are additive capability floors; existing
+compatible plugins remain supported by the newer providers.
+
+Expose account nickname, gender, age, signature, avatar, interests and biography through the optional
+`profile` hook of `createEndpointSpecification`. The Endpoint instance `name` remains its instance
+identifier; a group card remains scene-specific. Native Client methods and type inference are unchanged.
+
+The hook exposes already-observed `current` facts without IO, `read({ signal })`, actual
+`writableFields`, and optional `write({ change, signal })`. Write one field at a time and return
+`updated`, `rejected` or `unknown` according to the native result. Do not retry an unknown effect.
+Never advertise an unsupported setter or return image bytes as avatar facts.
+
+The framework binds this port to the original Client and operation lifetime. Old ports cannot write
+a replacement account. Ordinary turns reuse the incarnation's successful observation;
+`get_self_profile` explicitly refreshes it. `set_self_profile` targets the current account and retains
+the existing identity approval. An age must never be converted into an invented birthday. See
+[Configuration](../configuration/index.md#account-self-profile) for fallback values.

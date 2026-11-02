@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Milky protocol helpers (no legacy Adapter/Endpoint / segment-mapper).
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -11,7 +12,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 const logger = getLogger('milky');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface MilkyEndpointConfig {
+export interface MilkyEndpointConfig extends EndpointProfileConfiguration {
   readonly connection?: 'ws' | 'sse' | 'webhook' | 'wss';
   readonly id: string;
   readonly baseUrl: string;

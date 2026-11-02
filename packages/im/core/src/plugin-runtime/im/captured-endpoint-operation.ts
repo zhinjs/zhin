@@ -1,5 +1,5 @@
 import type { EndpointControl, EndpointManagement } from '@zhin.js/adapter';
-import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
+import type { ConversationRef, DeliveryReceipt, SelfProfilePort } from '@zhin.js/im-contract';
 import type { Locale, PluginId } from '@zhin.js/plugin-runtime';
 import type { SendContent } from './contracts.js';
 
@@ -22,6 +22,8 @@ export interface CapturedEndpointOperation {
   /** The same guarded semantic ports as ordinary calls, pinned to the retained Client. */
   readonly control?: EndpointControl;
   readonly management?: EndpointManagement;
+  /** Current account facts and approved mutations, under the same retained operation. */
+  readonly profile?: SelfProfilePort;
   /** Uses the ordinary renderer/middleware/delivery pipeline with the captured author. */
   send(content: SendContent, options?: Readonly<{ locale?: Locale; signal?: AbortSignal }>): Promise<DeliveryReceipt>;
   /** Stops new calls and releases source/Root leases after accepted calls drain; never stops the account. */

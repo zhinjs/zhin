@@ -10,6 +10,7 @@ import { createNativeLocalAssetsToolFeature } from './native-local-assets-tool.j
 import { createNativeKnowledgeToolFeature, type KnowledgeIndex } from './native-knowledge-tool.js';
 import { createNativeWebToolFeatures } from './native-web-tools.js';
 import type { NativeSearchDecisionResolver } from '../decision/retrieval.js';
+import { createNativeSelfProfileToolFeatures } from './native-self-profile-tools.js';
 
 export interface NativeAgentToolFeature {
   readonly name: string;
@@ -33,6 +34,7 @@ export function createNativeAgentToolSuite(
     new NativeBashToolFeature(),
     ...createNativeFileToolFeatures(),
     ...createNativeWebToolFeatures(),
+    ...createNativeSelfProfileToolFeatures({ imageAssets: options.imageAssets, localAssets: options.localAssets }),
     createNativeImageToolFeature(options.resolveProvider, options.resolveImageDefaults, options.imageAssets),
     ...(options.imageAssets ? [createNativeImageUploadToolFeature(options.imageAssets)] : []),
     ...(options.localAssets ? [createNativeLocalAssetsToolFeature(options.localAssets)] : []),

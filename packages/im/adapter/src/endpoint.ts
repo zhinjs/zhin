@@ -17,6 +17,7 @@ import { getProcessPeerRegistry } from './peer-registry.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointContentPort } from './endpoint-content.js';
+import { configuredSelfProfile, EndpointProfileState, type EndpointProfile } from './endpoint-profile.js';
 
 export type {
   EndpointConversation,
@@ -78,6 +79,7 @@ interface EndpointBindingContext {
   readonly name: string;
   /** The concrete account epoch owns this signal; generation replacement does not abort it. */
   readonly signal: AbortSignal;
+  readonly config?: unknown;
   use<T>(token: Token<T>): T;
 }
 
@@ -93,6 +95,11 @@ export abstract class EndpointRuntime<TClient = unknown> {
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;
+  readonly profile?: EndpointProfile;
+  #selfProfile?: EndpointProfileState;
+
+  /** Source-account facts live with this concrete Client, separately from its immutable identity. */
+  get selfProfile(): EndpointProfileState | undefined { return this.#selfProfile; }
 
   #identity?: EndpointIdentity;
   #events?: EndpointEventGateway;
@@ -152,6 +159,10 @@ export abstract class EndpointRuntime<TClient = unknown> {
     const events = context.use(endpointEventGatewayToken);
     this.#events = events;
     this.#executionSignal = context.signal;
+    this.#selfProfile = new EndpointProfileState({
+      source: this.profile,
+      defaults: configuredSelfProfile((context.config ?? {}) as Readonly<Record<string, unknown>>),
+    });
     if (!admission) {
       this.#activate();
       return;

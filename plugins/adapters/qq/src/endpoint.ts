@@ -1,3 +1,4 @@
+import { createQqSelfProfile } from './self-profile.js';
 import { Bot, ReceiverMode } from 'qq-official-bot';
 import { installQqUploadDiagnostics } from './upload-diagnostics.js';
 import { projectQqGuildSenderRoles } from './platform-permit.js';
@@ -111,6 +112,7 @@ export class QqWebsocketEndpoint extends Bot<ReceiverMode.WEBSOCKET> implements 
       start: signal => this.#startFramework(signal), open: () => this.#openFramework(), close: () => this.#closeFramework(),
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
       get transportState() { return endpoint.#transportState; }, management: this.#management, control: this.#control,
+      profile: createQqSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
     this.#bindBot(this);
   }
@@ -416,6 +418,7 @@ export class QqHttpEndpoint extends Bot<ReceiverMode.MIDDLEWARE, 'koa'> implemen
       stop: () => this.#stopFramework(), send: request => this.#sendFramework(request), name: options.config.id,
       get transportState() { return endpoint.#transportState; },
       management: this.#management, control: this.#control,
+      profile: createQqSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
     });
     this.#bindBot(this);
   }

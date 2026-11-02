@@ -13,6 +13,11 @@ export type { AdapterRegistry } from '@zhin.js/feature-kit';
 
 export type { Endpoint } from './endpoint-specification.js';
 export type {
+  EndpointProfile, EndpointProfileConfiguration,
+  SelfProfile, SelfProfileField, SelfProfileChange, SelfProfileReadRequest,
+  SelfProfileWriteRequest, SelfProfileWriteResult, SelfProfileSnapshot, SelfProfilePort,
+} from './endpoint-profile.js';
+export type {
   EndpointConversation,
   EndpointEvent,
   EndpointEventSink,

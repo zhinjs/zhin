@@ -16,6 +16,7 @@ import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createNapCatEndpointManagement } from './endpoint-management.js';
+import { createNapcatSelfProfile } from './self-profile.js';
 import {
   InboundMessageDeduper,
   isNapCatBotMentioned,
@@ -76,6 +77,7 @@ export class NapCatWssEndpoint extends NapcatClient implements Endpoint {
       close: () => this.#close(), stop: () => this.#stop(),
       send: request => this.#send(request),
       management: this.#management, control: this.#control, content: this.#content,
+      profile: createNapcatSelfProfile(this, id => this[endpointSpec].reportSelfUserId(id)),
       get transportState() { return readTransportState(); },
     });
     this.on('event', event => {

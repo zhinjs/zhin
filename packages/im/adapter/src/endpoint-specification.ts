@@ -4,6 +4,7 @@ import { EndpointRuntime, bindEndpoint, isEndpointRuntime, type EndpointEventSin
 import type { EndpointContentPort } from './endpoint-content.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointManagement } from './endpoint-management.js';
+import type { EndpointProfile } from './endpoint-profile.js';
 
 /** Framework namespace; native SDK emit/on/off and other methods remain untouched. */
 export const endpointSpec: unique symbol = Symbol.for('zhin.endpoint.specification/1');
@@ -30,6 +31,7 @@ export interface EndpointHooks {
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;
+  readonly profile?: EndpointProfile;
 }
 
 /** Admission attachment only: the actual Endpoint remains the native SDK instance. */
@@ -42,6 +44,7 @@ class NativeEndpointRuntime extends EndpointRuntime<object> {
     this.#hooks = hooks;
     this.management = hooks.management;
     this.control = hooks.control;
+    this.profile = hooks.profile;
     Object.defineProperty(this, 'content', { get: () => hooks.content });
     if (!hooks.send) Object.defineProperty(this, 'send', { value: undefined });
   }
@@ -49,6 +52,7 @@ class NativeEndpointRuntime extends EndpointRuntime<object> {
   override get transportState(): EndpointTransportState | undefined { return this.#hooks.transportState; }
   override readonly management?: EndpointManagement;
   override readonly control?: EndpointControl;
+  override readonly profile?: EndpointProfile;
   start(signal: AbortSignal): void | Promise<void> { return this.#hooks.start(signal); }
   open(): void { this.resumeIngress(); this.#hooks.open(); }
   async close(): Promise<void> {

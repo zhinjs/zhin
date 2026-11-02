@@ -7,7 +7,8 @@ import {
   appendTurnContextBlocks,
 } from './turn-user-message.js';
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
-import { bootstrapSceneFromTurn } from '../bootstrap-scope.js';
+import { bootstrapSceneFromTurn, scopeBootstrapText } from '../bootstrap-scope.js';
+import { buildPersonaSection } from '../prompt/system-prompt.js';
 import {
   buildTurnContextBlocks,
   type TurnContextView,
@@ -101,7 +102,19 @@ export class ContextSystem {
     };
 
     const extraMessages = isScheduleTurn ? [] : await this.runPipeline(buildCtx, host);
-    const personaEnhanced = host.buildDisciplinedPrompt(host.config.persona);
+    // Rich turns assemble these same workspace files themselves. Tool-less turns use this
+    // prepared persona, so its SOUL reference must include the already-loaded, scene-scoped text.
+    // Delegated role prompts bypass ContextSystem and remain the caller's explicit persona.
+    const systemBootstrap = input.systemBootstrap ?? host.bootstrapContext;
+    const persona = !isScheduleTurn
+      ? [
+          buildPersonaSection({ config: host.config, bootstrapContext: systemBootstrap, turn }),
+          host.globalContext,
+          scopeBootstrapText(systemBootstrap ?? '', bootstrapSceneFromTurn(turn)).text,
+        ].filter(text => text?.trim()).join('\n\n')
+      : host.config.persona;
+    // Final request assemblers own style/safety injection; context preparation only supplies content.
+    const personaEnhanced = persona;
 
     const selected = getAgentTurnConfiguration()?.models?.chat;
     const resolvedCandidates = selected ? [selected.invocation.model.model] : resolveModelCandidates(
@@ -117,7 +130,7 @@ export class ContextSystem {
     const providerAlias = host.getTurnProvider().name;
     const llmModel = host.llmRuntime.model(providerAlias, modelId);
     // The host bootstrap section (system prompt) already includes the root AGENTS.md: keep only nearer ones here.
-    const rootInSystemPrompt = /(?:^|\n)## AGENTS\.md\n/u.test(input.systemBootstrap ?? '');
+    const rootInSystemPrompt = /(?:^|\n)## AGENTS\.md\n/u.test((!isScheduleTurn ? systemBootstrap : input.systemBootstrap) ?? '');
     const agentsContext = await buildAgentsEnvelopeContext(undefined, bootstrapSceneFromTurn(turn), { excludeRoot: rootInSystemPrompt });
 
     // Schedule ingress provides one current task; never infer its author from a history tail.
@@ -128,6 +141,7 @@ export class ContextSystem {
     const first = preparedMessages[0]?.role === 'user' ? preparedMessages[0] as import('@zhin.js/ai').UserMessage : undefined;
     const turnBlocks = buildTurnContextBlocks({
       turn,
+      fallbackNickname: host.activeBinding?.nickname,
       observedAt: first?.timestamp,
       profileSummary: envelopeParts.profileSummary,
       sessionSummary: envelopeParts.sessionSummary,
