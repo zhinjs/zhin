@@ -1,0 +1,51 @@
+.changeset/progressive-reply-recovery.md
+  s_c757df74f34330::t_a2f224cdd29d1a 19,23
+basic/cli/src/plugin-runtime/conversation-migration.ts
+  s_c757df74f34330::t_174b799fe29e14 11,13-16,23-24
+basic/cli/tests/plugin-runtime/conversation-store-projection.test.ts
+  s_c757df74f34330::t_1c76cd9e2f84d1 183-218
+packages/im/agent/src/core/reply-stream-run.ts
+  s_c757df74f34330::t_2197424b65d5f7 80
+packages/im/agent/src/outbound/progressive-reply-delivery.ts
+  s_c757df74f34330::t_61faef65def486 35
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_c757df74f34330::t_45b81adec12686 346-347
+packages/im/agent/tests/outbound/progressive-reply-delivery.test.ts
+  s_c757df74f34330::t_6f9cfade5a47c2 134-149
+packages/im/agent/tests/plugin-runtime/progressive-turn-projection.test.ts
+  s_c757df74f34330::t_bd564c4274d38e 17,93-94
+packages/im/ai/tests/llm/completion-delta.test.ts
+  s_c757df74f34330::t_178485902ed6fe 5,42,45,51,53-65
+packages/im/middleware/src/definition.ts
+  s_c757df74f34330::t_f943f6f51d3702 79-80
+plugins/adapters/lark/README.md
+  s_c757df74f34330::t_168a129b495562 24
+plugins/adapters/qq/src/outbound.ts
+  s_c757df74f34330::t_74bf0cbf706a98 306
+plugins/adapters/sandbox/README.md
+  s_c757df74f34330::t_653388cf41ea6b 81,203
+plugins/adapters/sandbox/pages/index/playgroundState.ts
+  s_c757df74f34330::t_70ef551d9d4c80 36-38,163-164,178-182,250
+plugins/adapters/sandbox/pages/index/useSandboxHistory.ts
+  s_c757df74f34330::t_4e79d7567cd72e 124,131,138-140,161-173,175,177-184,189
+plugins/adapters/sandbox/tests/sandbox-history.test.ts
+  s_c757df74f34330::t_23ec181c16fdae 20-25,28-83,140-153
+plugins/adapters/test-utils/reply-stream.ts
+  s_c757df74f34330::t_c4a49b8bfe28cb 7-10,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "38a66b497ec56cbce61405c04e4e4a4adc9bd3e9",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
