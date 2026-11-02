@@ -1,0 +1,16 @@
+.changeset/conversation-store-nul-key-aliases.md
+  h_b680f75345178a 1-5
+packages/im/im-contract/src/conversation-store.ts
+  h_b680f75345178a 309-330,335,344-346,350-356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c15cef93e9becbe8f9ad20415fccdfbba02eb80e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
