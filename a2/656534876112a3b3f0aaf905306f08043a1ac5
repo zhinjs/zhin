@@ -1,0 +1,55 @@
+basic/cli/src/plugin-runtime/console/configuration-chat-policy.ts
+  s_9622fd28aba994::t_d3a850716f3be3 5-22,26,31-69,218-225,228-250,252-271
+basic/cli/tests/plugin-runtime/configuration-host-installer.test.ts
+  s_9622fd28aba994::t_717ba5e6ca1fa9 39,47-48,105,107,109-116,118-120,136,148-154,160,162,165,167-170,182,188-199,207-210,219,222-231,233-234,255,263
+basic/cli/src/plugin-runtime/configuration-host-installer.ts
+  s_079f1dc5e6308d::t_153a7fe3648cc7 3,12-15,18-21,25-26,28,43,45,59-86,95-96,98-99,121,124-159
+basic/cli/src/plugin-runtime/sender-enrichment.ts
+  s_9622fd28aba994::t_1d1d2dd2e4b515 19-21
+basic/cli/tests/plugin-runtime/console/configuration-chat-field-policy.test.ts
+  s_ce30e957c2b2e6::t_b95bee55564059 1-122
+basic/cli/tests/plugin-runtime/console/configuration-chat-shape.test.ts
+  s_e0efb469ee3bbd::t_0f975b0f796426 26-29,31-33,36,39-41
+basic/cli/tests/plugin-runtime/console/configuration-chat.test.ts
+  s_079f1dc5e6308d::t_04d51660b8941a 114-124,141,143-144,146-153,162,298-299
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a2656534876112a3b3f0aaf905306f08043a1ac5",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
