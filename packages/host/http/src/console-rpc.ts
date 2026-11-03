@@ -1,10 +1,12 @@
 import type { AuthScope } from './token-registry.js';
 import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
+  CONFIG_PATCH_LIMITS,
   CONFIG_RPC,
   ENDPOINT_RPC,
   type ConsoleConfigPatchRequest,
   type ConsoleConfigPatchResult,
+  type ConsoleConfigProjectPatchResult,
   type ConsoleConfigSource,
   type ConsoleConfigExplanation,
   type ConsoleEndpointSummary,
@@ -203,6 +205,8 @@ export type RuntimeConsoleRpcContext = {
    * Scope and schema checks belong to the implementation; scope violations throw.
    */
   patchConfig?(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult>;
+  /** Full-scope, revision-checked project administration, distinct from page allowlists. */
+  patchProjectConfig?(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>): Promise<ConsoleConfigProjectPatchResult>;
   applyConfig?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
   setPluginEnabled?(
@@ -277,6 +281,31 @@ export function pickRpcReply(
     ?? payloads[payloads.length - 1]
     ?? null
   );
+}
+
+const FORBIDDEN_PATCH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Structural check for `config:patch-project` operations at the RPC boundary, so no project
+ * port implementation receives a malformed request. The store repeats the full validation.
+ */
+function invalidProjectPatchOperations(patches: readonly unknown[]): string | undefined {
+  if (patches.length === 0) return 'patches 必须是非空数组';
+  if (patches.length > CONFIG_PATCH_LIMITS.maxOperations) return `一次最多 ${CONFIG_PATCH_LIMITS.maxOperations} 个 patch`;
+  for (const [index, item] of patches.entries()) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return `patches[${index}] 必须是对象`;
+    const operation = item as Record<string, unknown>;
+    const path = operation.path;
+    if (!Array.isArray(path) || path.length === 0 || path.length > CONFIG_PATCH_LIMITS.maxPathDepth
+      || path.some(segment => typeof segment !== 'string' || !segment
+        || segment.length > CONFIG_PATCH_LIMITS.maxSegmentLength || FORBIDDEN_PATCH_SEGMENTS.has(segment))) {
+      return `patches[${index}].path 必须是 1–${CONFIG_PATCH_LIMITS.maxPathDepth} 段的有效字符串数组`;
+    }
+    if (operation.op === 'set') {
+      if (!Object.hasOwn(operation, 'value') || operation.value === undefined) return `patches[${index}] 的 set 需要 value`;
+    } else if (operation.op !== 'remove') return `patches[${index}].op 只能是 set 或 remove`;
+  }
+  return undefined;
 }
 
 export async function dispatchRuntimeConsoleRpc(
@@ -478,9 +507,15 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
+    case CONFIG_RPC.PATCH_PROJECT:
     case CONFIG_RPC.PATCH: {
       if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full scope required' }); return payloads; }
+      const projectPatch = message.type === CONFIG_RPC.PATCH_PROJECT;
       const { instanceKey, expectedRevision, patches } = message;
+      if (projectPatch && instanceKey !== undefined) {
+        emit({ requestId, error: 'Project patches must not specify instanceKey' });
+        return payloads;
+      }
       if (instanceKey !== undefined && (typeof instanceKey !== 'string' || !instanceKey || instanceKey.length > 128)) {
         emit({ requestId, error: 'instanceKey 必须是插件实例名，或省略以使用 Host 白名单' });
         return payloads;
@@ -493,12 +528,17 @@ export async function dispatchRuntimeConsoleRpc(
         emit({ requestId, error: 'patches 必须是数组' });
         return payloads;
       }
-      if (!ctx.patchConfig) {
+      if (projectPatch) {
+        const invalid = invalidProjectPatchOperations(patches);
+        if (invalid) { emit({ requestId, error: invalid }); return payloads; }
+      }
+      const patch = projectPatch ? ctx.patchProjectConfig : ctx.patchConfig;
+      if (!patch) {
         emit({ requestId, error: 'Config patch is not configured' });
         return payloads;
       }
       try {
-        const result = await ctx.patchConfig({
+        const result = await patch.call(ctx, {
           ...(instanceKey === undefined ? {} : { instanceKey }),
           expectedRevision,
           patches,
