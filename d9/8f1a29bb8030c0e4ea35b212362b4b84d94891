@@ -1,0 +1,113 @@
+packages/im/ai/tests/llm/gemini-context-cache.test.ts
+  s_9622fd28aba994::t_73fcf3f6d190bc 2
+basic/cli/tests/plugin-runtime/inference/host.test.ts
+  s_9622fd28aba994::t_fce96d9faccedd 20-59
+  s_9622fd28aba994::t_00eff350b912f5 18
+basic/cli/tests/plugin-runtime/inference/apply-contract.test.ts
+  s_9622fd28aba994::t_e60c6dd6a1581a 6,33,168,175,182-183,187,200-202
+  s_9622fd28aba994::t_a3994e907e450b 10-15
+  s_9622fd28aba994::t_56f9175d8b9c78 112-118,184
+  s_9622fd28aba994::t_a733e0ed2616f1 21-26,50-56,61-64,156-158,169-174,176-181,185-186,188-199,203-214,237-240,252-255,258-261
+basic/cli/tests/plugin-runtime/inference/migration-session-bindings.test.ts
+  s_9622fd28aba994::t_fce96d9faccedd 768-769,772-793,795-800
+  s_9622fd28aba994::t_e392464cdb5042 763-767,770-771,794,801
+basic/cli/src/plugin-runtime/inference/host.ts
+  s_9622fd28aba994::t_a733e0ed2616f1 362-365
+  s_9622fd28aba994::t_0b29f804777c8a 366
+packages/im/core/src/plugin-runtime/im/command-menu-navigation.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 2
+docs/plans/ai-provider-runtime-implementation.md
+  s_9622fd28aba994::t_21acb75f046a90 3,24,35
+  s_9622fd28aba994::t_cc1e08daefe8ae 47-55
+basic/cli/src/plugin-runtime/inference/account-runtime.ts
+  s_9622fd28aba994::t_0b29f804777c8a 1092-1094
+basic/cli/tests/plugin-runtime/inference/migration-cli.test.ts
+  s_9622fd28aba994::t_fcb68decadd9e7 2
+  s_9622fd28aba994::t_00eff350b912f5 7
+  s_9622fd28aba994::t_fce96d9faccedd 46-92,96-97,100-107,114-116
+  s_9622fd28aba994::t_ddf732fc63a03f 94-95,98-99,111,117
+  s_9622fd28aba994::t_7fce5c26875bce 93,108-110,112-113
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_9622fd28aba994::t_6f49157ad72efd 32,102-110
+  s_9622fd28aba994::t_92c030de7537e5 98
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 2,21
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 3
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_9622fd28aba994::t_73fcf3f6d190bc 13
+basic/cli/tests/plugin-runtime/agent/runtime-factory-perception.test.ts
+  s_9622fd28aba994::t_a733e0ed2616f1 7-8,21-23
+  s_9622fd28aba994::t_f2fe9be8574500 1-6,9-20,24-39
+docs/plans/inference-migration-cli-contract.md
+  s_9622fd28aba994::t_cc1e08daefe8ae 7-8
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 65
+packages/im/agent/src/subagent/subagent-runtime.ts
+  s_9622fd28aba994::t_9b3099e55e8df2 606-608,617-622,624-637
+  s_9622fd28aba994::t_0eb0b270c2b7c0 2-4,120-121,193,215,270-271,279,313,316,340,366,369,424,565,623,638-640,670,711
+  s_9622fd28aba994::t_609c7bf55bf991 1,615-616
+packages/im/ai/tests/provider/contracts.type-test.ts
+  s_9622fd28aba994::t_609c7bf55bf991 52
+basic/cli/tests/plugin-runtime/inference/session-directory.test.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 3
+basic/cli/tests/plugin-runtime/inference/account-runtime.test.ts
+  s_9622fd28aba994::t_e60c6dd6a1581a 262-263,270,280-285,289,296-297
+  s_9622fd28aba994::t_fce96d9faccedd 264-269,271-279,286-288,290-295,298-327
+packages/im/agent/src/subagent/subagent-system-init.ts
+  s_9622fd28aba994::t_0eb0b270c2b7c0 44-47
+packages/im/workroom/tests/workroom-runtime/workroom-host-local-agent-execution.e2e.test.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 10
+packages/im/ai/tests/llm/google-gemini-provider.test.ts
+  s_9622fd28aba994::t_73fcf3f6d190bc 2
+packages/im/ai/tests/llm/google-base-url-proxy.test.ts
+  s_9622fd28aba994::t_73fcf3f6d190bc 2
+packages/im/agent/evals/framework/live-model.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 18
+packages/im/agent/src/plugin-runtime/decision-runtime.ts
+  s_9622fd28aba994::t_609c7bf55bf991 42,58-62,74
+  s_9622fd28aba994::t_99e0831c18efbd 82
+packages/im/agent/tests/context/context-prefix.test.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 6
+docs/plans/ai-provider-behavior-migration.md
+  s_9622fd28aba994::t_ef631d37ec75e1 80-87
+  s_9622fd28aba994::t_c2d3659ddde16d 71-78
+  s_9622fd28aba994::t_4a6ec330417e2c 79
+basic/cli/src/commands/migrate.ts
+  s_9622fd28aba994::t_21fa8068f14c4e 570-572
+  s_9622fd28aba994::t_7fce5c26875bce 569
+basic/cli/src/commands/setup.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 14
+packages/im/ai/tests/llm/system-prompt-cache-breakpoint.test.ts
+  s_9622fd28aba994::t_73fcf3f6d190bc 2
+basic/cli/src/plugin-runtime/inference/management.ts
+  s_9622fd28aba994::t_0b29f804777c8a 64,121,266,332,362,394,560
+  s_9622fd28aba994::t_a733e0ed2616f1 261-265,558-559,726-727,783,785-786,795-799
+  s_9622fd28aba994::t_bb49db93003126 724-725,728-731,762,765-767,770-773,775-776
+packages/im/agent/tests/model-runtime/delegated-side-inference.test.ts
+  s_9622fd28aba994::t_0dbf87ac3f6048 1-3,5-8,12-19,25-46,48-56,61-66,70-88,93,95-101,103-104,110-111,113,116-125,128-130,140-144,146-151
+  s_9622fd28aba994::t_7b6fd5b7277b8a 137
+  s_9622fd28aba994::t_d67834df431f4f 47,57-60
+  s_9622fd28aba994::t_9b3099e55e8df2 11,92
+  s_9622fd28aba994::t_a9da45d64e8234 20-24,138
+  s_9622fd28aba994::t_0302cedcf08221 4,9-10,67-69,89-91,94,102,109,112,115,132-136,139
+  s_9622fd28aba994::t_b14f99b754f009 105-108,114,126-127,131,145
+packages/im/agent/evals/framework/driver.ts
+  s_9622fd28aba994::t_eafce6aeddb59c 44,46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d98f1a29bb8030c0e4ea35b212362b4b84d94891",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
