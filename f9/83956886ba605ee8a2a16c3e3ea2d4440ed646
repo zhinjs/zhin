@@ -1,0 +1,33 @@
+docs/ai/default-behavior.md
+  s_4a3da79bf26c58::t_223e7fb909ae55 48
+docs/en/ai/default-behavior.md
+  s_4a3da79bf26c58::t_67b30004553ba0 48
+packages/im/agent/src/index.ts
+  s_4a3da79bf26c58::t_f19f2623841f79 443,449,451
+packages/im/agent/src/self-change/apply.ts
+  s_4a3da79bf26c58::t_d1e448d45f5a84 5-6,23,25,171-173,435-446
+packages/im/agent/src/self-change/policy.ts
+  s_4a3da79bf26c58::t_f584f642626554 196-233,236-240,266-294,313
+packages/im/agent/tests/self-change/apply.test.ts
+  s_4a3da79bf26c58::t_9e9de397087251 15,223-246
+packages/im/agent/tests/self-change/policy.test.ts
+  s_4a3da79bf26c58::t_6372514a4604c9 1,5-6,11,13,118-164,200-238
+packages/im/runtime/src/host-config-schema.json
+  s_4a3da79bf26c58::t_31e3035f3ab81e 84-85,162-164,762-765,788-791,877-879,1002-1005,1016-1019,1051-1054,1065-1068,1210-1212,1299-1301,1363-1366,1388-1391,1401-1404,1414-1417,1427-1430,1515-1517,1551-1554,3006-3009,3076-3079,3648-3650,3806-3808,3944-3947,4684-4686
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f983956886ba605ee8a2a16c3e3ea2d4440ed646",
+  "prompts": {},
+  "sessions": {
+    "s_4a3da79bf26c58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66214013-1784-4c6a-9edd-9039237b51db",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
