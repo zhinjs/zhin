@@ -1,0 +1,49 @@
+.changeset/self-change-f3-review-followup.md
+  s_efe26f87c3b074::t_3df6ec016945de 6
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  s_9622fd28aba994::t_66fcc8bbc6d5c1 285-288
+basic/cli/src/plugin-runtime/console/self-changes.ts
+  s_9622fd28aba994::t_1e7796c749ad38 180-181,197,269-271,277,282,287-294
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  s_efe26f87c3b074::t_5c68db67fffe92 413-421,438-441,444
+basic/cli/tests/plugin-runtime/console/self-changes.test.ts
+  s_efe26f87c3b074::t_dc2136e6eb782c 110-111,153-154,161,166-170
+packages/im/agent/src/decision-events.ts
+  s_9622fd28aba994::t_0b3aa6a25eb2b9 330-344
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_27ed2d4b869db1 260-261
+packages/im/agent/src/self-change/approval.ts
+  s_9622fd28aba994::t_173001b5dc8f32 48,50-51,319-321,333-334
+packages/im/agent/src/self-change/detail-diff.ts
+  s_9622fd28aba994::t_197ae3a69b6699 14,32-35,106,116,118-120,189-194,271,339,341-352,367
+packages/im/agent/tests/self-change/approval.test.ts
+  s_efe26f87c3b074::t_526f3744cc0416 97-109
+packages/im/agent/tests/self-change/detail-diff.test.ts
+  s_efe26f87c3b074::t_9e9213e1a37275 82-87,193-209
+tests/snapshots/api-surface.json
+  s_efe26f87c3b074::t_5ecea3409c5f59 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d21f2c7a51f8e4a75f6eabfe289548b8fdc3339d",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
