@@ -5,6 +5,7 @@ import {
   ENDPOINT_RPC,
   type ConsoleConfigPatchRequest,
   type ConsoleConfigPatchResult,
+  type ConsoleConfigProjectPatchResult,
   type ConsoleConfigSource,
   type ConsoleConfigExplanation,
   type ConsoleEndpointSummary,
@@ -203,6 +204,8 @@ export type RuntimeConsoleRpcContext = {
    * Scope and schema checks belong to the implementation; scope violations throw.
    */
   patchConfig?(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult>;
+  /** Full-scope, revision-checked project administration, distinct from page allowlists. */
+  patchProjectConfig?(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>): Promise<ConsoleConfigProjectPatchResult>;
   applyConfig?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
   setPluginEnabled?(
@@ -478,9 +481,15 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
+    case CONFIG_RPC.PATCH_PROJECT:
     case CONFIG_RPC.PATCH: {
       if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full scope required' }); return payloads; }
+      const projectPatch = message.type === CONFIG_RPC.PATCH_PROJECT;
       const { instanceKey, expectedRevision, patches } = message;
+      if (projectPatch && instanceKey !== undefined) {
+        emit({ requestId, error: 'Project patches must not specify instanceKey' });
+        return payloads;
+      }
       if (instanceKey !== undefined && (typeof instanceKey !== 'string' || !instanceKey || instanceKey.length > 128)) {
         emit({ requestId, error: 'instanceKey 必须是插件实例名，或省略以使用 Host 白名单' });
         return payloads;
@@ -493,12 +502,13 @@ export async function dispatchRuntimeConsoleRpc(
         emit({ requestId, error: 'patches 必须是数组' });
         return payloads;
       }
-      if (!ctx.patchConfig) {
+      const patch = projectPatch ? ctx.patchProjectConfig : ctx.patchConfig;
+      if (!patch) {
         emit({ requestId, error: 'Config patch is not configured' });
         return payloads;
       }
       try {
-        const result = await ctx.patchConfig({
+        const result = await patch.call(ctx, {
           ...(instanceKey === undefined ? {} : { instanceKey }),
           expectedRevision,
           patches,
