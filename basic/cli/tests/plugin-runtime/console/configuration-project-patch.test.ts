@@ -117,6 +117,40 @@ describe('trusted project patch (config:patch-project)', () => {
     expect(JSON.stringify(result)).not.toMatch(/private-|PRIVATE_/u);
   });
 
+  it.each([
+    { name: 'if/then hiding a writeOnly branch', path: ['demo', 'key'], expected: REDACTED_CONFIG_VALUE,
+      schema: { type: 'object', properties: { mode: { type: 'string' }, key: { type: 'string' } },
+        if: { properties: { mode: { const: 'locked' } } }, then: { properties: { key: { type: 'string', writeOnly: true } } } } },
+    { name: 'nested $id resource whose local $ref resolves elsewhere', path: ['demo'], expected: { color: 'visible', nested: REDACTED_CONFIG_VALUE },
+      schema: { type: 'object', $defs: { field: { type: 'string' } }, properties: { color: { type: 'string' },
+        nested: { $id: 'urn:fixture:resource', type: 'object', $defs: { field: { type: 'string', writeOnly: true } }, properties: { key: { $ref: '#/$defs/field' } } } } } },
+    { name: 'non-local $ref', path: ['demo', 'key'], expected: REDACTED_CONFIG_VALUE,
+      schema: { type: 'object', properties: { key: { $ref: 'https://example.invalid/secret.json' } } } },
+    { name: 'contains subschema', path: ['demo', 'samples'], expected: REDACTED_CONFIG_VALUE,
+      schema: { type: 'object', properties: { samples: { type: 'array', items: { type: 'string' }, contains: { writeOnly: true } } } } },
+    { name: 'dependencies subschema', path: ['demo', 'key'], expected: REDACTED_CONFIG_VALUE,
+      schema: { type: 'object', properties: { key: { type: 'string' } },
+        dependencies: { key: { properties: { key: { type: 'string', writeOnly: true } } } } } },
+  ])('never echoes a conflict value under an unprovable schema boundary: $name', async ({ schema: boundary, path, expected }) => {
+    const f = await fixture();
+    await writeFile(join(f.root, 'demo', 'schema.json'), JSON.stringify(boundary));
+    const document = JSON.parse(await readFile(f.file, 'utf8'));
+    const stored = path[1] === 'samples' ? { samples: ['private-boundary'] } : path.length === 1
+      ? { color: 'visible', nested: { key: 'private-boundary' } } : { key: 'private-boundary' };
+    await writeFile(f.file, JSON.stringify({ ...document, demo: stored }));
+    const result = await f.store.patchProject({ expectedRevision: 'f'.repeat(64), patches: [set(path, 'x')] });
+    expect(result.status).toBe('conflict');
+    expect((result as { current: unknown }).current).toEqual([{ path, value: expected }]);
+    expect(JSON.stringify(result)).not.toContain('private-boundary');
+  });
+
+  it('keeps unknown-boundary redaction to conflict evidence: maskConfigValue defaults are unchanged', () => {
+    const boundary = { type: 'object', properties: { key: { $ref: 'https://example.invalid/secret.json' } } };
+    expect(maskConfigValue(boundary, ['demo', 'key'], 'public')).toBe('public');
+    expect(maskConfigValue(boundary, ['demo', 'key'], 'public', { unknownSchema: 'redact' })).toBe(REDACTED_CONFIG_VALUE);
+    expect(maskConfigValue(schema, ['demo', 'label'], 'before', { unknownSchema: 'redact' })).toBe('before');
+  });
+
   it('fails closed with whole-value redaction when the section schema cannot be read', async () => {
     const f = await fixture();
     await writeFile(join(f.root, 'demo', 'schema.json'), '{ not json');
