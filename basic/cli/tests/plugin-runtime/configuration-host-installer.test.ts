@@ -79,7 +79,7 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
     return endpoint[endpointSpec].events.message({ conversation: { endpoint: { id: selected.id, adapter: 'platform' }, kind: input.kind ?? 'private', id: 'conversation' },
       content: text, sender: { id: input.sender ?? 'alice' }, metadata: input.metadata });
   };
-  return { project, runtime, realStore, store, client, otherClient, index, row, receive, setups,
+  return { project, runtime, realStore, store, document: config, client, otherClient, index, row, receive, setups,
     close: async () => { await runtime.stop(); await rm(project, { recursive: true, force: true }); } };
 }
 function lastReply(client: Client): string { return String(client.sendNative.mock.calls.at(-1)?.[0].payload); }
@@ -241,6 +241,55 @@ it('does not disclose raw service exceptions or conflict values', async () => {
     expect(lastReply(f.client)).toContain('not saved');
     expect(lastReply(f.client)).not.toContain('DO_NOT_DISCLOSE');
   } finally { await f.close(); }
+});
+
+it.each([
+  { locale: 'en' as const, action: 'set' }, { locale: 'zh-CN' as const, action: 'set' },
+  { locale: 'en' as const, action: 'delete' }, { locale: 'zh-CN' as const, action: 'delete' },
+])('reports a definite prepare rejection as not saved through the real SDK/store boundary ($locale/$action)', async ({ locale, action }) => {
+  const f = await fixture({ locale });
+  const prepare = vi.spyOn(f.document, 'prepare').mockRejectedValueOnce(new Error('DO_NOT_DISCLOSE_prepare_detail'));
+  const apply = vi.spyOn(f.runtime, 'applyConfiguration');
+  try {
+    const before = await f.document.readSource();
+    const generation = f.runtime.snapshot.generation;
+    await f.receive(action === 'set' ? '!!config set bot.nickname -- "Not saved"' : '!!config delete bot.nickname');
+    expect(lastReply(f.client)).toContain(locale === 'en' ? 'not saved' : '未保存');
+    expect(lastReply(f.client)).not.toMatch(/unconfirmed|未确认|DO_NOT_DISCLOSE/);
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(apply).not.toHaveBeenCalled();
+    expect(await f.document.readSource()).toEqual(before);
+    expect(f.runtime.snapshot.generation).toBe(generation);
+    expect(f.client.sendNative).toHaveBeenCalledOnce();
+  } finally { prepare.mockRestore(); apply.mockRestore(); await f.close(); }
+});
+
+it.each(['en', 'zh-CN'] as const)('keeps a genuinely lost commit acknowledgement unconfirmed without retry, rollback or apply (%s)', async locale => {
+  const f = await fixture({ locale });
+  const realPrepare = f.document.prepare.bind(f.document);
+  const commit = vi.fn();
+  const rollback = vi.fn();
+  const prepare = vi.spyOn(f.document, 'prepare').mockImplementationOnce(async (...args) => {
+    const prepared = await realPrepare(...args);
+    commit.mockImplementation(async () => { await prepared.commit(); throw new Error('DO_NOT_DISCLOSE_lost_ack'); });
+    rollback.mockImplementation(() => prepared.rollback());
+    return { ...prepared, commit, rollback };
+  });
+  const apply = vi.spyOn(f.runtime, 'applyConfiguration');
+  try {
+    const before = await f.document.readSource();
+    await f.receive('!!config set bot.nickname -- "Persisted without acknowledgement"');
+    expect(lastReply(f.client)).toContain(locale === 'en' ? 'unconfirmed' : '未确认');
+    expect(lastReply(f.client)).not.toMatch(/not saved|未保存|DO_NOT_DISCLOSE/);
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(commit).toHaveBeenCalledOnce();
+    expect(rollback).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+    const saved = await f.document.readSource();
+    expect(saved.revision).not.toBe(before.revision);
+    expect(saved.document.bot).toMatchObject({ nickname: 'Persisted without acknowledgement' });
+    expect(f.client.sendNative).toHaveBeenCalledOnce();
+  } finally { prepare.mockRestore(); apply.mockRestore(); await f.close(); }
 });
 
 it('does not convert reply delivery failure into a configuration failure or replay the write', async () => {

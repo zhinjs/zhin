@@ -2,8 +2,8 @@ import { CONFIG_PATCH_LIMITS, HOST_CONFIG_PATCH_PATHS, type ConsoleConfigPatchOp
 import type { ConfigPatch, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
 import { assertUnambiguousConfigKey } from './configuration-projection.js';
+import { isForbiddenConfigurationPathSegment } from './configuration-path-segment.js';
 
-const FORBIDDEN_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 /** Host keys a plugin may never claim: declarations, the root plugin section and transport. */
 const UNCLAIMABLE_HOST_KEYS = new Set(['plugin', 'http']);
 const HOST_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
@@ -44,7 +44,7 @@ function normalizePath(value: unknown, label: string): readonly string[] {
   }
   for (const segment of value) {
     if (typeof segment !== 'string' || !segment || segment.length > CONFIG_PATCH_LIMITS.maxSegmentLength
-      || FORBIDDEN_SEGMENTS.has(segment)) {
+      || isForbiddenConfigurationPathSegment(segment)) {
       throw new ConfigPatchScopeError(`${label} 含有无效路径段`);
     }
   }
@@ -63,7 +63,7 @@ export function readDeclaredPatchPaths(schema: Readonly<Record<string, unknown>>
   if (!Array.isArray(declared)) throw new ConfigPatchScopeError(`${instanceKey} 的 x-zhin-config.patchPaths 必须是字符串数组`);
   return Object.freeze(declared.map((entry) => {
     const path = typeof entry === 'string' ? entry.split('.') : [];
-    if (path.length < 2 || path.some(segment => !SEGMENT.test(segment) || FORBIDDEN_SEGMENTS.has(segment))
+    if (path.length < 2 || path.some(segment => !SEGMENT.test(segment) || isForbiddenConfigurationPathSegment(segment))
       || !HOST_KEY_SET.has(path[0]!) || UNCLAIMABLE_HOST_KEYS.has(path[0]!)) {
       throw new ConfigPatchScopeError(`${instanceKey} 的 x-zhin-config.patchPaths 项 ${String(entry)} 无效：只能声明 Host 配置下至少两级的路径（如 ai.decisions）`);
     }

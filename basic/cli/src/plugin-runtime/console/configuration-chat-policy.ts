@@ -39,8 +39,8 @@ function intersect(left: Variants, right: Variants): Variants {
 function variants(value: unknown, root: Schema, seen = new Set<unknown>()): Variants {
   if (!record(value) || seen.has(value)) unknown();
   const nextSeen = new Set([...seen, value]);
-  if (value.hidden === true || record(value['x-zhin-config']) && value['x-zhin-config'].hidden === true
-    || ['if', 'then', 'else', 'not', 'dependentSchemas', '$dynamicRef', '$recursiveRef', '$dynamicAnchor', 'unevaluatedProperties', 'unevaluatedItems'].some(key => own(value, key))) unknown();
+  if (value !== root && own(value, '$id') || value.hidden === true || record(value['x-zhin-config']) && value['x-zhin-config'].hidden === true
+    || ['if', 'then', 'else', 'not', 'contains', 'dependencies', 'dependentSchemas', '$dynamicRef', '$recursiveRef', '$dynamicAnchor', 'unevaluatedProperties', 'unevaluatedItems'].some(key => own(value, key))) unknown();
   let result: Variants = [[value]];
   if (value.$ref !== undefined) {
     if (typeof value.$ref !== 'string' || !value.$ref.startsWith('#/')) unknown();

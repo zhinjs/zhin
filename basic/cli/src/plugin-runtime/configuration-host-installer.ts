@@ -3,7 +3,7 @@ import { commandFeatureId, defineCommand, type CommandContext, type CommandParam
 import { readOperationSession } from '@zhin.js/feature-kit';
 import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { ConfigChatAccessError, parseConfigurationPath, type ConsoleConfigurationStore } from './console/module.js';
+import { ConfigChatAccessError, ConfigChatRequestRejectedError, parseConfigurationPath, type ConsoleConfigurationStore } from './console/module.js';
 import type { ConfigurationChatAuthorizer } from './sender-enrichment.js';
 
 const messages = createMessages({
@@ -16,6 +16,7 @@ const messages = createMessages({
   json: { 'zh-CN': '配置值必须是有效 JSON；字符串需要双引号。', en: 'The value must be valid JSON. Strings need double quotes.' },
   unavailable: { 'zh-CN': '当前环境无法确定配置指令的调用方式。', en: 'The configuration command invocation is unavailable in this environment.' },
   unconfirmed: { 'zh-CN': '配置操作结果未确认，请只读检查状态；不会自动重试。', en: 'The configuration outcome is unconfirmed. Check status read-only; no automatic retry is made.' },
+  rejected: { 'zh-CN': '配置操作在保存前失败，本次未保存。', en: 'The configuration request failed before saving. This change was not saved.' },
   conflict: { 'zh-CN': '配置已被其他操作修改，本次未保存，请重新读取。', en: 'Another operation changed the configuration. This change was not saved; read it again.' },
   invalid: { 'zh-CN': '配置校验失败，本次未保存。', en: 'Configuration validation failed. This change was not saved.' },
   saved: { 'zh-CN': '配置已保存。', en: 'Configuration saved.' },
@@ -67,6 +68,7 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
           } catch (error) {
             if (command.signal.aborted) throw error;
             if (error instanceof ConfigChatAccessError) return messages(command.locale, error.kind);
+            if (error instanceof ConfigChatRequestRejectedError) return messages(command.locale, 'rejected');
             return messages(command.locale, 'unconfirmed');
           }
         },

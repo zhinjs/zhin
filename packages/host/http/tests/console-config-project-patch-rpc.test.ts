@@ -28,7 +28,7 @@ describe('trusted project configuration patch RPC', () => {
   it('rejects demo, missing revision, non-array patches and scoped-field ambiguity before a write', async () => {
     const patchProjectConfig = vi.fn(async () => saved);
     for (const [extra, authScope] of [
-      [{}, 'demo'], [{ expectedRevision: 'stale' }, 'full'], [{ patches: null }, 'full'],
+      [{}, 'demo'], [{ expectedRevision: undefined }, 'full'], [{ expectedRevision: 'stale' }, 'full'], [{ patches: null }, 'full'],
       [{ instanceKey: 'bot' }, 'full'],
     ] as const) {
       const request = message(extra);

@@ -103,7 +103,7 @@ npx zhin config get ai.enabled
 npx zhin config set ai.agents.zhin.model '"my-model"'
 npx zhin config status
 npx zhin config apply
-npx zhin config --live http://127.0.0.1:8086 --token-env ZHIN_CONSOLE_TOKEN status
+npx zhin config --live http://127.0.0.1:8068 --token-env ZHIN_CONSOLE_TOKEN status
 npx zhin config --offline set menuKeyword '"Menu"'
 ```
 

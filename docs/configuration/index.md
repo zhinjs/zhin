@@ -104,7 +104,7 @@ npx zhin config set ai.agents.zhin.model '"my-model"'
 npx zhin config status
 npx zhin config apply
 # 待重启的 HTTP 配置、随机端口或远程 Host：指定实际服务地址
-npx zhin config --live http://127.0.0.1:8086 --token-env ZHIN_CONSOLE_TOKEN status
+npx zhin config --live http://127.0.0.1:8068 --token-env ZHIN_CONSOLE_TOKEN status
 # Host 停止时，仅保存本地文件，不请求生效
 npx zhin config --offline set menuKeyword '"菜单"'
 ```

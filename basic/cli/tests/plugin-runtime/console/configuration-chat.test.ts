@@ -1,11 +1,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { ConfigDocumentConflictError, createConfigDocument } from '@zhin.js/config-file';
 import type { ConsoleConfigApplication } from '@zhin.js/console-protocol';
-import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
+import { ConsoleConfigurationStore, ConfigChatRequestRejectedError } from '../../../src/plugin-runtime/console/configuration.js';
 import { ConfigChatAccessError, assertChatConfigurationAccess } from '../../../src/plugin-runtime/console/configuration-chat-policy.js';
 import { parseConfigurationPath } from '../../../src/plugin-runtime/console/configuration-path.js';
+import { normalizeConfigPatchOperations } from '../../../src/plugin-runtime/console/configuration-patch.js';
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
@@ -40,6 +41,12 @@ describe('configuration paths', () => {
   });
   it.each(['.', 'demo..label', '/demo/~2', '/demo/', '/__proto__/x', 'demo.constructor', '/demo/\u0000'])('rejects unsafe/ambiguous %j', path => {
     expect(() => parseConfigurationPath(path)).toThrow('Invalid configuration path');
+  });
+  it.each(['__proto__', 'constructor', 'prototype'])('uses the same forbidden-segment policy for parser, patches and reads: %s', async key => {
+    expect(() => parseConfigurationPath(`/demo/${key}`)).toThrow();
+    expect(() => normalizeConfigPatchOperations([{ op: 'remove', path: ['demo', key] }])).toThrow();
+    const f = await fixture();
+    await expect(f.store.readChat(['demo', key], 'get')).rejects.toMatchObject({ kind: 'unknown' });
   });
 });
 
@@ -225,6 +232,73 @@ describe('Console project/chat configuration entrypoints', () => {
     expect(String(caught)).not.toContain('private-parser-excerpt');
     expect(JSON.parse(await readFile(f.file, 'utf8')).demo.label).toBe('after');
     expect(commits).toBe(1); expect(rollbacks).toBe(0);
+  });
+  it.each(['prepare', 'candidate', 'validation'] as const)('classifies a chat %s failure before commit as rejected, not unconfirmed', async stage => {
+    const f = await fixture(undefined, stage === 'validation' ? { validateConfiguration: async () => { throw new Error('private-validation-excerpt'); } } : {});
+    const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
+    const prepare = vi.spyOn(f.document, 'prepare');
+    if (stage === 'prepare') prepare.mockRejectedValueOnce(new Error('private-preparation-excerpt'));
+    let caught: unknown;
+    try { await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set',
+      path: stage === 'candidate' ? ['configVersion'] : ['demo', 'label'], value: stage === 'candidate' ? 3 : 'after' }] }); } catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(ConfigChatRequestRejectedError);
+    expect(String(caught)).toContain('未保存'); expect(String(caught)).not.toContain('private-');
+    expect(await readFile(f.file, 'utf8')).toBe(before);
+  });
+  it.each(['contains', 'dependencies'] as const)('denies an unsupported %s subschema before reads and parent writes', async keyword => {
+    const f = await fixture(keyword === 'contains' ? { samples: ['synthetic-private-value'] } : { label: 'synthetic-private-value' });
+    const protectedSchema = keyword === 'contains'
+      ? { type: 'object', additionalProperties: false, properties: { samples: { type: 'array', items: { type: 'string' }, contains: { writeOnly: true } } } }
+      : { type: 'object', additionalProperties: false, properties: { label: { type: 'string' } },
+        dependencies: { label: { type: 'object', properties: { label: { type: 'string', writeOnly: true } } } } };
+    await writeFile(join(f.root, 'demo/schema.json'), JSON.stringify(protectedSchema));
+    const value = keyword === 'contains' ? { samples: ['synthetic-private-value'] } : { label: 'synthetic-private-value' };
+    expect((await f.store.validatePluginConfig('demo', value)).valid).toBe(true);
+    const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
+    await expect(f.store.readChat(['demo', keyword === 'contains' ? 'samples' : 'label'], 'get')).rejects.toMatchObject({ kind: 'unknown' });
+    await expect(f.store.readChat(['demo'], 'get')).rejects.toMatchObject({ kind: 'unknown' });
+    await expect(f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['demo'], value }] })).rejects.toMatchObject({ kind: 'unknown' });
+    expect(await readFile(f.file, 'utf8')).toBe(before);
+  });
+  it('rejects nested schema resource scopes rather than resolving their references against the wrong root', async () => {
+    const f = await fixture({ nested: { label: 'synthetic-private-value' } });
+    await writeFile(join(f.root, 'demo/schema.json'), JSON.stringify({ type: 'object', $defs: { field: { type: 'string', const: 'public' } }, properties: {
+      nested: { $id: 'urn:fixture:private-resource', type: 'object',
+        $defs: { field: { type: 'string', const: 'synthetic-private-value', writeOnly: true } }, properties: { label: { $ref: '#/$defs/field' } } },
+    } }));
+    expect((await f.store.validatePluginConfig('demo', { nested: { label: 'synthetic-private-value' } })).valid).toBe(true);
+    await expect(f.store.readChat(['demo', 'nested', 'label'], 'get')).rejects.toMatchObject({ kind: 'unknown' });
+  });
+  it('keeps a root schema identity and root-local references usable', async () => {
+    const f = await fixture({ label: 'public' });
+    await writeFile(join(f.root, 'demo/schema.json'), JSON.stringify({ $id: 'urn:fixture:public-resource', type: 'object',
+      $defs: { field: { type: 'string' } }, properties: { label: { $ref: '#/$defs/field' } } }));
+    expect(await f.store.readChat(['demo', 'label'], 'get')).toMatchObject({ value: 'public' });
+  });
+  it('keeps a confirmed commit conflict rejected when reading its latest source also fails', async () => {
+    const f = await fixture(); const { revision } = await f.store.readSource(); const before = await readFile(f.file, 'utf8');
+    const prepare = f.document.prepare.bind(f.document);
+    vi.spyOn(f.document, 'prepare').mockImplementation(async (...args) => {
+      const prepared = await prepare(...args);
+      return { ...prepared, commit: async () => {
+        vi.spyOn(f.document, 'read').mockRejectedValueOnce(new Error('private-read-failure'));
+        throw new ConfigDocumentConflictError(f.file, revision, 'new-revision');
+      } };
+    });
+    await expect(f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['demo', 'label'], value: 'after' }] }))
+      .rejects.toBeInstanceOf(ConfigChatRequestRejectedError);
+    expect(await readFile(f.file, 'utf8')).toBe(before);
+  });
+  it('cannot turn an error after a confirmed commit into a pre-save rejection', async () => {
+    const f = await fixture(undefined, { applyConfiguration: async () => { throw new Error('apply failed'); },
+      readApplication: () => { throw new ConfigChatRequestRejectedError(); } });
+    const revision = (await f.document.read()).revision;
+    let caught: unknown;
+    try { await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['demo', 'label'], value: 'after' }] }); }
+    catch (error) { caught = error; }
+    expect(caught).toBeInstanceOf(Error); expect(caught).not.toBeInstanceOf(ConfigChatRequestRejectedError);
+    expect(String(caught)).toContain('未确认');
+    expect(JSON.parse(await readFile(f.file, 'utf8')).demo.label).toBe('after');
   });
   it('preserves project commit uncertainty and the attempted revision after the file was written', async () => {
     const applyConfiguration = vi.fn(async (): Promise<ConsoleConfigApplication> => { throw new Error('must not apply without commit acknowledgement'); });

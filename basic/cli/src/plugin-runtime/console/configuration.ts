@@ -15,6 +15,7 @@ import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flatt
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 import { assertChatConfigurationAccess, chatConfigurationSchema, ConfigChatAccessError } from './configuration-chat-policy.js';
+import { isForbiddenConfigurationPathSegment } from './configuration-path-segment.js';
 import {
   assertPatchesInScope,
   normalizeConfigPatchOperations,
@@ -32,6 +33,11 @@ export interface ChatConfigurationRead extends ConsoleConfigApplicationStatus {
 /** Only a thrown commit crosses this uncertainty boundary; never prepared cleanup. */
 class ConfigCommitUnconfirmedError extends Error {
   constructor(cause: unknown) { super('Configuration commit outcome is unconfirmed', { cause }); }
+}
+/** A Host-classified rejection before this operation attempted any commit. */
+export class ConfigChatRequestRejectedError extends Error {
+  readonly code = 'configuration_request_rejected';
+  constructor() { super('配置操作在保存前失败，未保存。'); this.name = 'ConfigChatRequestRejectedError'; }
 }
 const declarationSchemas: Readonly<Record<string, Readonly<Record<string, unknown>>>> = Object.freeze({
   configVersion: { type: 'integer', const: 2 },
@@ -197,7 +203,7 @@ export class ConsoleConfigurationStore {
         if (result.status === 'invalid') return Object.freeze({ ...result, errors: Object.freeze([{ path: '$', message: '配置校验失败，未保存' }]), missingEnv: Object.freeze([]) });
         return Object.freeze({ ...result, missingEnv: Object.freeze([]), application: chatApplication(result.application) });
       } catch (error) {
-        if (error instanceof ConfigChatAccessError) throw error;
+        if (error instanceof ConfigChatAccessError || error instanceof ConfigChatRequestRejectedError) throw error;
         // The save boundary may have been crossed. Never misclassify an unknown
         // operation as an access denial or recommend repeating the write.
         throw new Error('配置保存或生效结果未确认，请先在 CLI 或 Console 核验当前状态。');
@@ -206,15 +212,17 @@ export class ConsoleConfigurationStore {
   }
 
   async #patchCore(request: ConsoleConfigPatchRequest, mode: 'scoped' | 'project' | 'chat'): Promise<ConsoleConfigPatchResult> {
-    const instanceKey = request.instanceKey;
+    let phase: 'prepare' | 'commit' | 'committed' = 'prepare';
+    try {
+      const instanceKey = request.instanceKey;
       const patches = normalizeConfigPatchOperations(request.patches);
       const current = await this.#document.read();
       if (mode === 'scoped') {
-      const declared = instanceKey === undefined
-        ? []
-        : readDeclaredPatchPaths(await this.#ownSchema(current.document, instanceKey), instanceKey);
-      const allowed = resolvePatchScope(current.document, instanceKey, declared);
-      assertPatchesInScope(patches, allowed, instanceKey === undefined ? 'Host 白名单' : `插件 ${instanceKey}`);
+        const declared = instanceKey === undefined
+          ? []
+          : readDeclaredPatchPaths(await this.#ownSchema(current.document, instanceKey), instanceKey);
+        const allowed = resolvePatchScope(current.document, instanceKey, declared);
+        assertPatchesInScope(patches, allowed, instanceKey === undefined ? 'Host 白名单' : `插件 ${instanceKey}`);
       }
       const paths = Object.freeze(patches.map(patch => patch.path));
       const conflict = (snapshot: typeof current): ConsoleConfigPatchResult => Object.freeze({
@@ -281,9 +289,10 @@ export class ConsoleConfigurationStore {
             errors: Object.freeze([Object.freeze({ path: '$', message: '完整配置未通过运行校验' })]),
             missingEnv: Object.freeze([...missingEnv].sort()), message: '配置校验失败，未保存' });
         }
-        try { committed = await prepared.commit(); }
+        phase = 'commit';
+        try { committed = await prepared.commit(); phase = 'committed'; }
         catch (error) {
-          if (error instanceof ConfigDocumentConflictError) throw error;
+          if (error instanceof ConfigDocumentConflictError) { phase = 'prepare'; throw error; }
           throw new ConfigCommitUnconfirmedError(error);
         }
       } catch (error) {
@@ -303,6 +312,20 @@ export class ConsoleConfigurationStore {
           ? (applied.application ? '配置已保存，部分配置待重启生效' : '配置已保存，需重启进程才能生效') : applied.application
             ? '配置已保存，请查看各项生效结果' : '配置已保存',
       });
+    } catch (error) {
+      if (mode === 'chat') {
+        if (phase === 'prepare') {
+          if (error instanceof ConfigChatAccessError) throw error;
+          // The authoritative boundary knows no commit was attempted. Do not ask
+          // the message layer to infer this fact from exception text or type.
+          throw new ConfigChatRequestRejectedError();
+        }
+        // A callback's exception type cannot turn a crossed write boundary into
+        // a pre-save rejection, even if it reuses one of our public error classes.
+        throw new Error('Configuration operation outcome is unconfirmed', { cause: error });
+      }
+      throw error;
+    }
   }
 
   async #assertChatPath(document: RuntimeConfigDocument, path: readonly string[], values: readonly unknown[], deep = true): Promise<unknown> {
@@ -330,7 +353,7 @@ export class ConsoleConfigurationStore {
   readChat(path: readonly string[], mode: 'get' | 'list' | 'schema' | 'status'): Promise<ChatConfigurationRead> {
     return this.#afterMutations(async () => {
       try {
-        if (!Array.isArray(path) || path.some(key => typeof key !== 'string' || !key || ['__proto__', 'constructor', 'prototype'].includes(key))) throw new ConfigChatAccessError('unknown');
+        if (!Array.isArray(path) || path.some(key => typeof key !== 'string' || !key || isForbiddenConfigurationPathSegment(key))) throw new ConfigChatAccessError('unknown');
         const { document, revision } = await this.#document.read();
         const application = this.#readApplication?.();
         if (application && application.operationId !== this.#applicationErrorAtOperationId) this.#applicationError = undefined;

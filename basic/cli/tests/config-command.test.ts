@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createConfigCommand } from '../src/commands/config.js';
-import { ConfigFileDocument } from '@zhin.js/config-file';
+import { ConfigFileDocument, createConfigDocument } from '@zhin.js/config-file';
 
 const roots: string[] = [];
 const previousExitCode = process.exitCode;
@@ -238,11 +238,79 @@ it('check --fix preserves an offline committed migration when its acknowledgemen
     return { document: prepared.document, pluginOrder: prepared.pluginOrder, commit, rollback };
   });
   await run('check', '--fix', '--offline');
-  expect(JSON.parse(String(output.mock.calls.at(-1)?.[0]))).toMatchObject({ status: 'unconfirmed', expectedRevision, application: 'not-requested' });
+  const result = JSON.parse(String(output.mock.calls.at(-1)?.[0]));
+  expect(result).toMatchObject({ status: 'unconfirmed', expectedRevision, application: 'not-requested' });
+  expect(result).not.toHaveProperty('save');
+  expect(result).not.toHaveProperty('summary');
+  expect(output).toHaveBeenCalledTimes(1);
   expect(JSON.parse(await readFile(file, 'utf8')).log_level).toBe('info');
   expect(commit).toHaveBeenCalledTimes(1);
   expect(rollback).not.toHaveBeenCalled();
   expect(process.exitCode).toBe(1);
+});
+
+it.each([true, false])('check --fix reports a successful offline commit without implying Host application (json=%s)', async json => {
+  const { root, file, output } = await fixture({ configVersion: 2, plugins: {}, log_level: 'INFO' });
+  const manifestFile = join(root, 'package.json');
+  const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
+  manifest.dependencies = { 'zhin.js': '^1.1.0' };
+  await writeFile(manifestFile, JSON.stringify(manifest));
+  const prepare = ConfigFileDocument.prototype.prepare;
+  const commit = vi.fn();
+  const rollback = vi.fn();
+  vi.spyOn(ConfigFileDocument.prototype, 'prepare').mockImplementation(async function (current, patches) {
+    const prepared = await prepare.call(this, current, patches);
+    commit.mockImplementation(() => prepared.commit());
+    return { document: prepared.document, pluginOrder: prepared.pluginOrder, commit, rollback };
+  });
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  await createConfigCommand().parseAsync(['node', 'zhin', 'check', '--fix', '--offline', ...(json ? ['--json'] : [])]);
+  const saved = await createConfigDocument(file).read();
+  expect(saved.document.log_level).toBe('info');
+  if (json) {
+    expect(JSON.parse(String(output.mock.calls.at(-1)?.[0]))).toMatchObject({
+      success: true, configFile: 'zhin.config.json', fixesApplied: ['normalized log_level → info'],
+      summary: { errors: 0 }, issues: expect.any(Array),
+      save: { status: 'saved', application: 'not-requested', revision: saved.revision },
+    });
+  } else {
+    expect(output.mock.calls.flat().join('\n')).toContain('配置已离线保存，未请求运行中 Host 生效');
+  }
+  expect(commit).toHaveBeenCalledTimes(1);
+  expect(rollback).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('check --fix reports unchanged separately from saved and never commits or applies twice', async () => {
+  const { root, file, source, output } = await fixture();
+  const manifestFile = join(root, 'package.json');
+  const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
+  manifest.dependencies = { 'zhin.js': '^1.1.0' };
+  await writeFile(manifestFile, JSON.stringify(manifest));
+  const current = await createConfigDocument(file).read();
+  const prepare = vi.spyOn(ConfigFileDocument.prototype, 'prepare');
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+  await run('check', '--fix', '--offline');
+  expect(JSON.parse(String(output.mock.calls.at(-1)?.[0]))).toMatchObject({ success: true,
+    fixesApplied: [], summary: { errors: 0 }, issues: expect.any(Array),
+    save: { status: 'unchanged', application: 'not-requested', revision: current.revision } });
+  expect(output).toHaveBeenCalledTimes(1);
+  expect(await readFile(file, 'utf8')).toBe(source);
+  expect(prepare).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('read-only config check does not claim a save receipt', async () => {
+  const { root, file, source, output } = await fixture();
+  const manifestFile = join(root, 'package.json');
+  const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
+  manifest.dependencies = { 'zhin.js': '^1.1.0' };
+  await writeFile(manifestFile, JSON.stringify(manifest));
+  await run('check');
+  const result = JSON.parse(String(output.mock.calls.at(-1)?.[0]));
+  expect(result).toMatchObject({ success: true, fixesApplied: [] });
+  expect(result).not.toHaveProperty('save');
+  expect(await readFile(file, 'utf8')).toBe(source);
 });
 
 it('never sends malformed or empty paths to the Host', async () => {

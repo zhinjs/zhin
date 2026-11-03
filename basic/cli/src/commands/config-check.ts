@@ -8,7 +8,6 @@ import {
   type ConfigIssue,
 } from '../utils/config-check.js';
 import { getLoadedConfigRevision, prepareConfigSave } from '../utils/config-file.js';
-import { logger } from '../utils/logger.js';
 import { loadRuntimeEnvironmentLayers } from '../plugin-runtime/start/module.js';
 import { validateOfflineConfiguration, commitOfflineConfiguration } from '../utils/config-offline.js';
 
@@ -49,6 +48,9 @@ export function createConfigCheckCommand(): Command { return new Command('check'
     };
 
     let result = await runConfigCheck(cwd, env);
+    // This receipt describes file persistence only, independently of diagnostics
+    // and without implying that a running Host applied the saved configuration.
+    let save: Readonly<{ status: 'saved' | 'unchanged'; application: 'not-requested'; revision: string; message: string }> | undefined;
 
     if (options.fix && result.configFile && Object.keys(result.config).length > 0) {
       const { config: fixed, fixes } = applyConfigFixes(result.config, cwd);
@@ -67,15 +69,20 @@ export function createConfigCheckCommand(): Command { return new Command('check'
             process.exitCode = 1;
             return;
           }
+          save = saved;
         } else {
           // Declaration imports can touch the source even on a no-op candidate.
           await prepareConfigSave(file, fixed, result.config);
+          save = { status: 'unchanged', revision: expectedRevision, application: 'not-requested',
+            message: '配置未变更，未保存，未请求运行中 Host 生效' };
         }
         result.fixesApplied = fixes;
         result = await runConfigCheck(cwd, env);
         result.fixesApplied = fixes;
       } else {
-        logger.info('未发现可自动修复的配置项');
+        const revision = getLoadedConfigRevision(result.config);
+        if (revision) save = { status: 'unchanged', revision, application: 'not-requested',
+          message: '未发现可自动修复的配置项，未保存，未请求运行中 Host 生效' };
       }
     }
 
@@ -88,6 +95,7 @@ export function createConfigCheckCommand(): Command { return new Command('check'
         fixesApplied: result.fixesApplied,
         summary,
         issues: result.issues,
+        ...(save ? { save } : {}),
       }, null, 2));
       if (summary.exitCode !== 0) process.exit(summary.exitCode);
       return;
@@ -97,6 +105,7 @@ export function createConfigCheckCommand(): Command { return new Command('check'
     if (result.configFile) {
       console.log(`${chalk.gray('文件:')} ${result.configFile}`);
     }
+    if (save) console.log(save.message);
     if (result.fixesApplied.length > 0) {
       console.log(chalk.green(`\n已应用 ${result.fixesApplied.length} 项修复:`));
       for (const fix of result.fixesApplied) {

@@ -1,4 +1,5 @@
 import { CONFIG_PATCH_LIMITS } from '@zhin.js/console-protocol';
+import { isForbiddenConfigurationPathSegment } from './configuration-path-segment.js';
 
 /** JSON Pointer preserves literal dots and slashes; dotted paths cover simple fields. */
 export function parseConfigurationPath(input: string): readonly string[] {
@@ -10,7 +11,7 @@ export function parseConfigurationPath(input: string): readonly string[] {
     return segment.replaceAll('~1', '/').replaceAll('~0', '~');
   }) : input.split('.');
   if (segments.length > CONFIG_PATCH_LIMITS.maxPathDepth || segments.some(segment => !segment
-    || segment.length > CONFIG_PATCH_LIMITS.maxSegmentLength || ['__proto__', 'constructor', 'prototype'].includes(segment)
+    || segment.length > CONFIG_PATCH_LIMITS.maxSegmentLength || isForbiddenConfigurationPathSegment(segment)
     || /[\u0000-\u001f\u007f]/u.test(segment) || (!pointer && !/^[A-Za-z0-9_-]+$/u.test(segment)))) {
     throw new TypeError('Invalid configuration path');
   }
