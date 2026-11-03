@@ -1,0 +1,29 @@
+basic/cli/src/plugin-runtime/sender-enrichment.ts
+  s_9622fd28aba994::t_1e28e818687037 42-43,45
+basic/cli/src/plugin-runtime/configuration-host-installer.ts
+  s_e0efb469ee3bbd::t_6ef656d06111be 143-145,147,149-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ca95225352fde484b568257525b7095f77959342",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
