@@ -1,6 +1,4 @@
-import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey } from './configuration-schema-safety.js';
-export { sensitiveConfigKey } from './configuration-schema-safety.js';
-
+import { sensitiveConfigKey } from './configuration-schema-safety.js';
 /**
  * Masks stored configuration values before they leave the store in a response that the
  * caller did not ask to read (e.g. a trusted project patch conflict). Conservative: a
@@ -11,11 +9,13 @@ type Schema = Readonly<Record<string, unknown>>;
 
 export const REDACTED_CONFIG_VALUE = '[redacted]';
 const MAX_DEPTH = 32;
-const unknownSchema: Schema = Object.freeze({ writeOnly: true });
 
 function record(value: unknown): value is Schema {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
+
+/** Credential-like names; shared with the chat field policy (single source). */
+export { sensitiveConfigKey } from './configuration-schema-safety.js';
 
 function sensitiveSchema(schema: Schema): boolean {
   const metadata = schema['x-zhin-config'];
@@ -27,8 +27,7 @@ function sensitiveSchema(schema: Schema): boolean {
 
 /** Expands local `$ref` and every combinator branch; any branch's annotation applies. */
 function expand(node: unknown, root: Schema, seen: ReadonlySet<unknown> = new Set()): Schema[] {
-  if (!record(node) || seen.has(node) || seen.size > MAX_DEPTH) return [unknownSchema];
-  if (isUnknownConfigurationSchemaBoundary(node, root)) return [unknownSchema];
+  if (!record(node) || seen.has(node) || seen.size > MAX_DEPTH) return [];
   const nextSeen = new Set([...seen, node]);
   const nodes: Schema[] = [node];
   if (typeof node.$ref === 'string' && node.$ref.startsWith('#/')) {
@@ -71,7 +70,7 @@ function children(nodes: readonly Schema[], key: string, root: Schema): Schema[]
 }
 
 function maskTree(value: unknown, nodes: readonly Schema[], root: Schema, depth: number): unknown {
-  if (nodes.some(node => sensitiveSchema(node) || isUnknownConfigurationSchemaBoundary(node, root))) return REDACTED_CONFIG_VALUE;
+  if (nodes.some(sensitiveSchema)) return REDACTED_CONFIG_VALUE;
   if (typeof value === 'string') return /\$\{|^env:\/\//u.test(value) ? REDACTED_CONFIG_VALUE : value;
   if (value === null || typeof value !== 'object') return value;
   if (depth >= MAX_DEPTH) return REDACTED_CONFIG_VALUE;
