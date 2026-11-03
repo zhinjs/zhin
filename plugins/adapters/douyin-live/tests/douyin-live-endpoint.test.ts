@@ -173,4 +173,17 @@ describe('DouyinLiveEndpoint outbound (sendMode α)', () => {
     await expect(harness.send({ conversation: conversation(WEB_RID), payload: 'hi' })).rejects.toMatchObject({ code: 'send_disabled', disposition: 'not_sent' });
     await harness.stop();
   });
+
+  it('direct mode validates the room and payload, then reports not_implemented without calling the platform', async () => {
+    const { harness, calls } = await connected({ sendMode: 'direct' });
+    const before = calls.length;
+    await expect(harness.send({ conversation: conversation('1'), payload: 'hi' })).rejects.toMatchObject({ code: 'invalid_recipient', disposition: 'not_sent' });
+    await expect(harness.send({ conversation: conversation(WEB_RID), payload: [{ type: 'image', data: { url: 'x' } }] })).rejects.toMatchObject({ code: 'invalid_payload' });
+    await expect(harness.send({
+      conversation: conversation(WEB_RID),
+      payload: [{ type: 'mention', data: { id: '42', name: 'viewer' } }, { type: 'text', data: { text: '欢迎' } }],
+    })).rejects.toMatchObject({ code: 'not_implemented', disposition: 'not_sent' });
+    expect(calls.length).toBe(before);
+    await harness.stop();
+  });
 });

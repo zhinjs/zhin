@@ -5,7 +5,7 @@
  *   `needAck` 时回 ack；每条 `WebcastChatMessage` 进一条 canonical 消息，其余类型（礼物 / 进场 / 点赞 / 关注）忽略。
  *   Adapter 声明 `liveDanmaku`，Agent 按 ADR 0038 §5 把弹幕收进窗口、一窗只回一次、只用只读工具。
  * - 断线走 `createEndpointLifecycle` 退避重连，每次重连重新解析 room_id、重建签名地址。
- * - 出站（sendMode α）：默认 `off` 只听不说。
+ * - 出站（sendMode α）：默认 `off` 只听不说；`direct` 尚无稳定可测的发送接口，明确返回 `not_implemented`。
  * - 不落盘：所有状态都在内存里，且有上限。
  */
 import WebSocket from 'ws';
@@ -25,7 +25,9 @@ import {
   decodeWebcastFrame,
   encodeAck,
   encodeHeartbeat,
+  formatOutboundDanmaku,
   parseChatMessage,
+  splitDanmaku,
   type DouyinLiveChat,
   type ResolvedDouyinLiveConfig,
 } from './protocol.js';
@@ -112,6 +114,12 @@ export class DouyinLiveEndpoint extends DouyinLiveClient implements Endpoint {
 
   async #start(): Promise<void> {
     await this.#lifecycle.start((handle) => this.#connect(handle));
+    if (this.config.sendMode === 'direct') {
+      this.#logger.warn(formatCompact({
+        op: 'douyin_live_send_not_implemented',
+        hint: 'sendMode: direct 尚未实现，回复不会发出（返回 not_implemented）；请改用 sendMode: off',
+      }));
+    }
   }
 
   #openEndpoint(): void {
@@ -231,9 +239,23 @@ export class DouyinLiveEndpoint extends DouyinLiveClient implements Endpoint {
     });
   }
 
-  /** 出站（sendMode α）：当前只支持 `off`。 */
-  async #send(_request: EndpointSendRequest): Promise<string> {
-    throw new EndpointDeliveryError('send_disabled', 'Douyin live sendMode is off', 'not_sent');
+  /**
+   * 出站（sendMode α）：默认 `off` 只听不说；`direct` 在有稳定可测的 HTTP 发送接口之前明确返回
+   * `not_implemented`（不尝试任何平台写接口）。校验顺序与将来的真实发送一致：模式 → 房间 → 内容。
+   */
+  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+    const config = this.config;
+    if (config.sendMode === 'off') {
+      throw new EndpointDeliveryError('send_disabled', 'Douyin live sendMode is off', 'not_sent');
+    }
+    if (conversation.id !== this.webRid) {
+      throw new EndpointDeliveryError('invalid_recipient',
+        `Douyin live can only post to its own room ${this.webRid}, got "${conversation.id}"`, 'not_sent');
+    }
+    const chunks = splitDanmaku(formatOutboundDanmaku(payload), config.maxLength, config.maxChunks);
+    if (chunks.length === 0) throw new EndpointDeliveryError('invalid_payload', 'Danmaku is empty', 'not_sent');
+    throw new EndpointDeliveryError('not_implemented',
+      'Douyin live direct sending is not implemented yet (no stable, testable send API); use sendMode: off', 'not_sent');
   }
 }
 
