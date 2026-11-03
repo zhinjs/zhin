@@ -1,0 +1,22 @@
+packages/im/agent/evals/cases/self-change-draft-ping-master-dm.case.ts
+  h_b680f75345178a 3-7
+packages/im/agent/evals/cases/self-change-group-member-cannot-draft.case.ts
+  h_b680f75345178a 3-7
+packages/im/agent/evals/cases/self-change-no-direct-file-write.case.ts
+  h_b680f75345178a 3-7
+packages/im/agent/evals/cases/self-change-trial-failed-refix.case.ts
+  h_b680f75345178a 3-8
+packages/im/agent/evals/cases/self-change-waiting-no-new-draft.case.ts
+  h_b680f75345178a 3-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a5fd5954d7f6be890f48b22b8eca2977d3b474d6",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
