@@ -1,0 +1,21 @@
+basic/cli/src/utils/host-http.ts
+  s_9622fd28aba994::t_f357e12d42fc4a 46-56,65
+basic/cli/tests/utils/host-http.test.ts
+  s_9622fd28aba994::t_a3a8192ccbf6f1 2,54-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5018aad0cda9f2da97dfe672c9b1e32d834ea942",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
