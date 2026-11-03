@@ -1,0 +1,35 @@
+docs/ai/default-behavior.md
+  s_efe26f87c3b074::t_b7cc0493e0aef5 68-71
+docs/en/ai/default-behavior.md
+  s_efe26f87c3b074::t_6e3457bd964a24 68-71
+.changeset/adr-0040-accepted-self-change-docs.md
+  s_4a3da79bf26c58::t_ee0d1b1e0351da 1-4
+docs/.vitepress/config.ts
+  s_4a3da79bf26c58::t_49252c99c344a2 94,259
+docs/adr/0040-controlled-self-change.md
+  s_4a3da79bf26c58::t_95e0a05cae783c 7-9,53-54,79-81,125,142-152,164-181,183,192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "117568926dd5919973e214ba84d44d650c7c6874",
+  "prompts": {},
+  "sessions": {
+    "s_4a3da79bf26c58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66214013-1784-4c6a-9edd-9039237b51db",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
