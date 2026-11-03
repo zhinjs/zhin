@@ -59,6 +59,39 @@ describe('ordinary config:patch scope stays byte-stable', () => {
 });
 
 describe('trusted project patch (config:patch-project)', () => {
+  it.each(['contains', 'dependencies', 'nested-resource'] as const)('redacts conflict values when an unsupported %s boundary can conceal secret metadata', async boundary => {
+    const f = await fixture();
+    const value = boundary === 'contains' ? { samples: ['synthetic-private-value'] }
+      : boundary === 'dependencies' ? { label: 'synthetic-private-value' } : { nested: { label: 'synthetic-private-value' } };
+    const protectedSchema = boundary === 'contains'
+      ? { type: 'object', properties: { samples: { type: 'array', items: { type: 'string' }, contains: { writeOnly: true } } } }
+      : boundary === 'dependencies' ? { type: 'object', properties: { label: { type: 'string' } },
+        dependencies: { label: { type: 'object', properties: { label: { type: 'string', writeOnly: true } } } } }
+        : { type: 'object', $defs: { field: { type: 'string', const: 'public' } }, properties: {
+          nested: { $id: 'urn:fixture:private-conflict-resource', type: 'object',
+            $defs: { field: { type: 'string', const: 'synthetic-private-value', writeOnly: true } }, properties: { label: { $ref: '#/$defs/field' } } },
+        } };
+    await writeFile(join(f.root, 'demo/schema.json'), JSON.stringify(protectedSchema));
+    const document = JSON.parse(await readFile(f.file, 'utf8')); document.demo = value;
+    await writeFile(f.file, JSON.stringify(document));
+    expect((await f.store.validatePluginConfig('demo', value)).valid).toBe(true);
+    const path = boundary === 'contains' ? ['demo', 'samples'] : boundary === 'dependencies' ? ['demo', 'label'] : ['demo', 'nested', 'label'];
+    const before = await readFile(f.file, 'utf8');
+    const result = await f.store.patchProject({ expectedRevision: 'f'.repeat(64), patches: [set(path, 'next')] });
+    expect(result).toMatchObject({ status: 'conflict', current: [{ path, value: REDACTED_CONFIG_VALUE }] });
+    expect(JSON.stringify(result)).not.toContain('synthetic-private-value'); expect(await readFile(f.file, 'utf8')).toBe(before);
+  });
+  it('redacts only an uncertain child while retaining proven ordinary sibling conflict values', async () => {
+    const f = await fixture();
+    await writeFile(join(f.root, 'demo/schema.json'), JSON.stringify({ type: 'object', properties: {
+      label: { type: 'string' }, guarded: { type: 'array', items: { type: 'string' }, contains: { writeOnly: true } },
+    } }));
+    const document = JSON.parse(await readFile(f.file, 'utf8')); document.demo = { label: 'public', guarded: ['synthetic-private-value'] };
+    await writeFile(f.file, JSON.stringify(document));
+    const result = await f.store.patchProject({ expectedRevision: 'f'.repeat(64), patches: [set(['demo'], {})] });
+    expect(result).toMatchObject({ status: 'conflict', current: [{ value: { label: 'public', guarded: REDACTED_CONFIG_VALUE } }] });
+    expect(JSON.stringify(result)).not.toContain('synthetic-private-value');
+  });
   it('validates and applies one complete candidate across sections under a single CAS', async () => {
     const validateConfiguration = vi.fn(async (_candidate: Readonly<Record<string, unknown>>) => undefined);
     const applyConfiguration = vi.fn(async (revision?: string): Promise<ConsoleConfigApplication> => ({ operationId: 'config:1234:1', sourceRevision: revision!, saved: true,

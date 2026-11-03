@@ -1,8 +1,9 @@
-import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
+import type { OperationSession } from '@zhin.js/feature-kit';
 import { isDeepStrictEqual } from 'node:util';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type RuntimeConfigDocument, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { childPluginId, rootPluginId, readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type RuntimeConfigDocument, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { expandEnvironmentValue, type RootPluginConfigurationSelection } from '@zhin.js/runtime';
 
 export interface EndpointRoleResolver {
@@ -11,6 +12,32 @@ export interface EndpointRoleResolver {
 }
 interface Roles { readonly master?: string; readonly trusted: readonly string[] }
 interface PluginRoles { readonly base: Roles; readonly endpoints: Map<string, Roles | undefined> }
+
+export type ConfigurationChatAuthorizer = (session: OperationSession<string>, adapters: AdapterIndex) => boolean;
+
+/** Startup role authority, matched against the actual operation's Adapter and account.
+ * Direct declared owners are mapped with the canonical PluginId constructor. Nested
+ * owners never borrow their parent's role configuration or a legacy display alias.
+ */
+export function createConfigurationChatAuthorizer(
+  startup: RuntimeConfigDocument, endpointRoles: EndpointRoleResolver,
+): ConfigurationChatAuthorizer {
+  const owners = new Map(Object.keys(readPluginConfigurationMap(startup)).map(key => [childPluginId(rootPluginId(), key), key]));
+  const ai = isRecord(startup.ai) ? startup.ai : undefined;
+  const trigger = ai && isRecord(ai.trigger) ? ai.trigger : undefined;
+  const globalMasters = new Set(normalizeTrustedIdList(trigger?.masters));
+  return (session, adapters) => {
+    if (session.scene.kind !== 'private' || !session.sender?.id || !isAdapterIndex(adapters)) return false;
+    const id = session.scene.endpoint.id as CapabilityId;
+    const adapter = adapters.adapterForEndpoint(id);
+    const child = adapter?.find(id);
+    if (!adapter || !child || session.adapter !== adapter || session.endpoint !== adapter.getEndpoint(child.desired.instanceId)) return false;
+    if (!child.started || session.signal.aborted) return false;
+    if (globalMasters.has(session.sender.id)) return true;
+    const key = owners.get(adapter.descriptor.owner);
+    return key !== undefined && endpointRoles.resolveOwner(key, child.desired.endpointId) === session.sender.id;
+  };
+}
 
 /** Resolve account roles inside their declaring Plugin. Legacy aliases are accepted only when unique. */
 export async function createEndpointRoleResolver(config: RuntimeConfigDocument | ConfigDocumentPort): Promise<EndpointRoleResolver> {
