@@ -5,6 +5,7 @@ export type { EvalClock } from './fake-clock.js';
 export { defineEvalCase, validateEvalCase, loadEvalCases } from './fixture.js';
 export type {
   EvalCase, EvalExpectations, EvalInboundMessage, EvalImage, EvalTool, EvalTag, EvalTermination, EvalApprovalBehaviour, EvalNativeTool, EvalLiveMode, EvalMemoryEntry,
+  EvalSelfChangeFixture, EvalSelfChangeFile, EvalSelfChangeStatus,
 } from './fixture.js';
 export { runEvalCase } from './driver.js';
 export type { EvalRunRecord, EvalToolInvocation, RunEvalCaseOptions } from './driver.js';

@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { defineAgentPromptSection, type PromptSectionDescriptor } from '@zhin.js/prompt-section';
-import { ToolIndex } from '@zhin.js/tool';
+import { ToolIndex, type ToolAvailabilityContext } from '@zhin.js/tool';
 import { AgentCore } from '../../src/core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
 import { isTurnTerminalEvent, type TurnEvent, type TurnTerminalEvent } from '../../src/event/turn-event.js';
@@ -23,6 +23,11 @@ import { createNativeFileToolFeatures } from '../../src/plugin-runtime/native-fi
 import { createNativeWebToolFeatures } from '../../src/plugin-runtime/native-web-tools.js';
 import { createNativeSemanticMemoryToolFeatures, SemanticMemoryRuntime } from '../../src/plugin-runtime/native-semantic-memory-tools.js';
 import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
+import { createNativeSelfChangeToolFeatures } from '../../src/plugin-runtime/native-self-change-tools.js';
+import { createHostProtectedPaths } from '../../src/security/host-config-paths.js';
+import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
+import { SelfChangeApprovals } from '../../src/self-change/approval.js';
+import { SelfChangeStore, type SelfChangeOrigin } from '../../src/self-change/store.js';
 import type { ApprovalOutcome, ApprovalOutcomePort } from '../../src/session/approval-port.js';
 import { applyTurnTrust, resolveTurnTrustLevel } from '../../src/security/trust-level.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
@@ -33,7 +38,7 @@ import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-tr
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalMemoryEntry, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import type { EvalApprovalBehaviour, EvalCase, EvalSelfChangeStatus, EvalMemoryEntry, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { createLlmMediaPerceptionPort, resolvePerceptionConfig } from '../../src/media/perception.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
@@ -72,6 +77,10 @@ export interface EvalRunRecord {
   readonly unexpectedlyOfferedToolCalls: readonly string[];
   /** One TurnTrace per inbound turn, built exactly as production builds them. */
   readonly traces: readonly TurnTrace[];
+  /** Self-changes in the store after the run, oldest first (`change_draft` cases). */
+  readonly selfChanges: readonly Readonly<{ id: string; status: EvalSelfChangeStatus }>[];
+  /** Production workspace files named by `expect.workspaceFiles`, read after the run (`null` = absent). */
+  readonly workspaceFiles: Readonly<Record<string, string | null>>;
 }
 
 const ENDPOINT = 'eval-bot';
@@ -121,7 +130,7 @@ async function runInWorkspace(
   const toolNames = [
     ...(definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name),
     // Memory and web tools stay resident so their cases exercise policy, not discovery.
-    ...(definition.nativeTools ?? []).filter((name) => name.startsWith('memory_') || name.startsWith('web_')),
+    ...(definition.nativeTools ?? []).filter((name) => name.startsWith('memory_') || name.startsWith('web_') || name === 'change_draft'),
   ];
   // Mocked tools are always loaded so scripts can call them without a
   // discover/load_tool round trip; the scene-tier defaults still apply on top (ADR 0042 §2).
@@ -189,11 +198,15 @@ async function runInWorkspace(
   const events: TurnEvent[] = [];
   const terminals: TurnTerminalEvent[] = [];
   const traces: TurnTrace[] = [];
+  const selfChange = workspace && definition.nativeTools?.includes('change_draft')
+    ? await createEvalSelfChange(definition, workspace)
+    : undefined;
+  const native = await nativeCapabilities(
+    definition.nativeTools ?? [], definition.bashOutput ?? '', semanticMemory, executedTools, rawToolOutputs, selfChange,
+  );
   const tools = [
     ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
-    ...await nativeCapabilities(
-      definition.nativeTools ?? [], definition.bashOutput ?? '', semanticMemory, executedTools, rawToolOutputs,
-    ),
+    ...native.tools,
   ];
   const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
 
@@ -201,7 +214,7 @@ async function runInWorkspace(
   for (const [index, message] of (inbound as readonly EvalInboundMessage[]).entries()) {
     const trace = createTurnTrace(definition, message, index);
     const releaseTrace = registerTurnTrace(trace);
-    const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, approval, outbound, workspace, trace);
+    const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, native.available, approval, outbound, workspace, trace);
     const context: AgentTurnExecutionContext = {
       turn,
       capabilities: {
@@ -234,7 +247,18 @@ async function runInWorkspace(
     }
   }
 
+  const selfChanges = selfChange
+    ? [...await selfChange.store.list()].sort((left, right) => left.createdAt - right.createdAt).map((record) => Object.freeze({ id: record.id, status: record.status as EvalSelfChangeStatus }))
+    : [];
+  selfChange?.approvals.dispose();
+  const workspaceFiles: Record<string, string | null> = {};
+  for (const relative of Object.keys(definition.expect.workspaceFiles ?? {})) {
+    workspaceFiles[relative] = workspace ? await readFile(join(workspace, relative), 'utf8').catch(() => null) : null;
+  }
+
   return {
+    selfChanges,
+    workspaceFiles,
     events,
     executedTools,
     attemptedTools: model.requests.flatMap((request) => request.toolCalls),
@@ -258,6 +282,7 @@ function buildTurn(
   message: EvalInboundMessage,
   index: number,
   tools: readonly ToolCapability[],
+  available: NativeAvailability,
   approval: ApprovalOutcomePort | undefined,
   outbound: string[],
   workspace: string | undefined,
@@ -270,8 +295,14 @@ function buildTurn(
   const sessionKey = sessionKeyFor(message);
   const requestedPolicy: TurnPolicyContext = message.policy ?? defaultPolicy(roles, workspace, message.shell === true);
   const origin = { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId } as const;
+  // Per-turn availability (`isAvailable`), as capability ingress binds tools in production (#1051 F4).
+  const visible = tools.filter((tool) => available(tool.name, {
+    sessionKey,
+    origin: { ...origin, messageId: `${definition.id}:turn-${index + 1}:message` },
+    principal: { subjectId: sender.id, roles },
+  }));
   // Same #726 trust rule AgentRuntime applies before a Turn starts.
-  const trust = applyTurnTrust({ origin, principal: { roles }, policy: requestedPolicy }, tools);
+  const trust = applyTurnTrust({ origin, principal: { roles }, policy: requestedPolicy }, visible);
   const policy = trust.policy;
   const turnTools = trust.tools;
   const turnId = `${definition.id}:turn-${index + 1}`;
@@ -483,6 +514,49 @@ async function createEvalSemanticMemory(definition: EvalCase): Promise<SemanticM
   return runtime;
 }
 
+/** Whether a tool is offered on a turn (native tools' `isAvailable`; mocked tools always are). */
+type NativeAvailability = (name: string, context: ToolAvailabilityContext) => boolean;
+
+interface EvalSelfChange {
+  readonly store: SelfChangeStore;
+  readonly approvals: SelfChangeApprovals;
+}
+
+/**
+ * A real self-change store and approval queue over the workspace (ADR 0040): drafts stage under
+ * `.zhin/changes`, trials run their static checks, and a passing draft goes to a `self` approval card nobody
+ * settles during the case. Seeded changes belong to the first inbound's conversation.
+ */
+async function createEvalSelfChange(definition: EvalCase, workspace: string): Promise<EvalSelfChange> {
+  const store = new SelfChangeStore({
+    root: join(workspace, '.zhin', 'changes'),
+    projectRoot: workspace,
+    protectedPaths: await createHostProtectedPaths({ projectRoot: workspace }),
+  });
+  const approvals = new SelfChangeApprovals({ store, queue: new ToolApprovalQueue() });
+  const seed = definition.selfChange?.pending;
+  if (seed) {
+    const first = (Array.isArray(definition.inbound) ? definition.inbound[0] : definition.inbound) as EvalInboundMessage;
+    const senderId = first.sender?.id ?? 'eval-user';
+    const scope = first.scope ?? 'private';
+    const origin: SelfChangeOrigin = {
+      platform: PLATFORM,
+      sceneId: `${scope}:${scope === 'group' ? 'eval-group' : senderId}`,
+      userId: senderId,
+      endpoint: ENDPOINT,
+    };
+    const draft = await store.draft({ origin, files: seed.files.map((file) => ({ path: file.path, content: file.content })) });
+    await store.attachPlan(draft.id, draft.contentHash, {
+      version: 1, contentHash: draft.contentHash, summary: seed.summary, files: [],
+      impact: { kind: 'generation', subtrees: ['root'], slots: [], reasons: [], estimated: true, config: null },
+    });
+    await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+    await store.transition(draft.id, 'ready', { actor: 'policy', trial: { passed: true, checks: [] } });
+    await approvals.submit(draft.id);
+  }
+  return { store, approvals };
+}
+
 /**
  * Real native tool definitions, executed through a ToolIndex; bash gets a
  * canned, shell-free port and memory tools an in-memory store.
@@ -493,15 +567,19 @@ async function nativeCapabilities(
   semanticMemory: SemanticMemoryRuntime | null,
   executed: EvalToolInvocation[],
   rawOutputs: string[],
-): Promise<ToolCapability[]> {
-  if (names.length === 0) return [];
+  selfChange?: EvalSelfChange,
+): Promise<{ tools: ToolCapability[]; available: NativeAvailability }> {
+  if (names.length === 0) return { tools: [], available: () => true };
   const owner = rootPluginId();
   const bash = new NativeBashToolFeature({ execute: async () => ({ stdout: bashOutput, stderr: '' }) });
   const memoryFeatures = semanticMemory ? createNativeSemanticMemoryToolFeatures(semanticMemory) : [];
   const web = createNativeWebToolFeatures({
     request: async (url) => { throw new Error(`eval web transport never reaches the network (${url.href})`); },
   });
-  const features = [bash, ...createNativeFileToolFeatures(), ...memoryFeatures, ...web]
+  const selfChangeFeatures = selfChange
+    ? createNativeSelfChangeToolFeatures({ store: () => selfChange.store, approvals: () => selfChange.approvals })
+    : [];
+  const features = [bash, ...createNativeFileToolFeatures(), ...memoryFeatures, ...web, ...selfChangeFeatures]
     .filter((feature) => names.includes(feature.name as EvalNativeTool));
   const slots = features.map((feature) => createCapabilitySlot({
     owner,
@@ -511,7 +589,9 @@ async function nativeCapabilities(
     definition: feature.definition,
   }));
   const index = new ToolIndex(slots, nativeSnapshot(slots));
-  return index.list().map((descriptor) => ({
+  const nativeNames = new Set(index.list().map((descriptor) => descriptor.name));
+  const available: NativeAvailability = (name, context) => !nativeNames.has(name) || index.isAvailable(owner, name, context);
+  const tools = index.list().map((descriptor) => ({
     ...descriptor,
     execute: (async (input: unknown, invocation: Parameters<ToolCapability['execute']>[1]) => {
       executed.push({ name: descriptor.name, args: (input ?? {}) as Record<string, unknown> });
@@ -520,6 +600,7 @@ async function nativeCapabilities(
       return result;
     }) as ToolCapability['execute'],
   }));
+  return { tools, available };
 }
 
 function nativeSnapshot(slots: readonly ReturnType<typeof createCapabilitySlot>[]): RuntimeSnapshot {

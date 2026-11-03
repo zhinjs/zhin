@@ -521,6 +521,41 @@ describe('SelfChangeApplier — no supervisor to restart (#1051 F1)', () => {
   });
 });
 
+describe('SelfChangeApplier — leftover approved at start (#1051 Q2=B)', () => {
+  it('applies a change approved within the last hour', async () => {
+    const store = await makeStore();
+    const host = fakeHost();
+    const change = await approvedChange(store);
+    const resumed = new SelfChangeApplier({ store, projectRoot: project, ports: host.ports, now: () => change.updatedAt + 59 * 60_000 });
+    expect(await resumed.resumeApproved(change.id)).toBe('applied');
+    expect(readFileSync(join(project, 'commands', 'ping.ts'), 'utf8')).toBe('export default "pong";\n');
+    expect(host.reports.map(report => report.kind)).toEqual(['applied']);
+  });
+
+  it('expires an older approval without touching files and tells only the owner to draft again', async () => {
+    const store = await makeStore();
+    const host = fakeHost();
+    const change = await approvedChange(store);
+    const resumed = new SelfChangeApplier({ store, projectRoot: project, ports: host.ports, now: () => change.updatedAt + 61 * 60_000 });
+    expect(await resumed.resumeApproved(change.id)).toBe('expired');
+    expect(existsSync(join(project, 'commands', 'ping.ts'))).toBe(false);
+    expect(host.reloads).toBe(0);
+    const record = await store.get(change.id);
+    expect(record).toMatchObject({ status: 'expired', error: expect.stringContaining('not applied within 60 min') });
+    expect(host.reports).toEqual([expect.objectContaining({ kind: 'expired', ownerOnly: true, text: expect.stringContaining('请重新起草') })]);
+    expect(audit.map(event => event.reasonCode)).toEqual(expect.arrayContaining(['change_expired', 'change_report_sent']));
+  });
+
+  it('honours a custom window and refuses a change that is not approved', async () => {
+    const store = await makeStore();
+    const host = fakeHost();
+    const change = await approvedChange(store);
+    const strict = new SelfChangeApplier({ store, projectRoot: project, ports: host.ports, approvedApplyWindowMs: 1_000, now: () => change.updatedAt + 2_000 });
+    expect(await strict.resumeApproved(change.id)).toBe('expired');
+    await expect(strict.resumeApproved(change.id)).rejects.toThrow();
+  });
+});
+
 describe('SelfChangeApprovals → applier', () => {
   it('hands an approved change to onApproved after a human approves it', async () => {
     const store = await makeStore();

@@ -56,6 +56,8 @@ export type SelfChangeGenerationPorts = Pick<SelfChangeApplyPorts, 'emergencySto
 export interface SelfChangeApplierHandle {
   apply(id: string): Promise<unknown>;
   recover(): Promise<number>;
+  /** Leftover `approved` at start: applied within the approval window, else expired (#1051 Q2=B). Defaults to `apply`. */
+  resumeApproved?(id: string): Promise<unknown>;
 }
 
 export class HostSelfChangeApply {
@@ -118,8 +120,8 @@ export class HostSelfChangeApply {
 
   /**
    * The newest Agent generation binds its applier; the returned function unbinds it on dispose.
-   * `listApproved` lists changes approved but never applied (the process ended in between); they are applied
-   * once after `recover()`.
+   * `listApproved` lists changes approved but never applied (the process ended in between); after `recover()`
+   * each goes through `resumeApproved` once (applied when approved within the last hour, else expired, Q2=B).
    */
   bind(applier: SelfChangeApplierHandle, listApproved?: () => Promise<readonly string[]>): () => void {
     this.#applier = applier;
@@ -162,7 +164,7 @@ export class HostSelfChangeApply {
       for (const id of await listApproved?.() ?? []) {
         this.#errorBaseline.set(id, this.#errors);
         try {
-          await applier.apply(id);
+          await (applier.resumeApproved ? applier.resumeApproved(id) : applier.apply(id));
         } finally {
           this.#errorBaseline.delete(id);
         }
