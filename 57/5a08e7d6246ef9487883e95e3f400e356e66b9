@@ -1,0 +1,31 @@
+.changeset/self-change-1146-followup.md
+  s_9622fd28aba994::t_06f4785d7864c5 2,6
+packages/im/agent/src/self-change/apply.ts
+  s_9622fd28aba994::t_b11a8d72b9a5ff 542-544
+basic/cli/tests/plugin-runtime/agent/self-change-configuration-application.test.ts
+  s_58400078c2bd23::t_d721bd9f3be8f7 214,236-237,252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "575a08e7d6246ef9487883e95e3f400e356e66b9",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
