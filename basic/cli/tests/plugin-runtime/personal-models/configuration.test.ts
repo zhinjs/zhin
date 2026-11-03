@@ -129,4 +129,29 @@ describe('trusted model configuration admission', () => {
     expect(c.retained).toHaveLength(1);
     await runtime.dispose(); await c.close();
   });
+
+  it('releases an already captured configuration lease when cancelled during secret resolution', async () => {
+    const entered = deferred<void>(), secret = deferred<string>();
+    const factory = vi.fn(() => new AiHttpTransport({ fetch: async () => { throw new Error('unexpected network'); } }));
+    const runtime = new ModelRuntimeService({ hostOwnerId, config: { modelCatalog: {
+      connections: { main: { revision: 1, sdk: 'openai-compatible', baseUrl: 'https://synthetic.invalid/v1', secretRef: 'synthetic-ref' } },
+      models: { old: { connectionId: 'main', model: 'old', capabilities: {} } }, presets: { old: { modelId: 'old' } },
+    }, modelPolicy: { defaults: { chat: 'old' } } },
+    secretResolver: async () => { entered.resolve(); return secret.promise; }, hostTransportFactory: factory });
+    const c = controller(runtime), abort = new AbortController();
+    const access = createModelConfigurationAccess({ control: c.control, runtime: () => runtime });
+    const pending = access.acquire(async () => input, abort.signal);
+    try {
+      await entered.promise;
+      expect(c.retained).toHaveLength(1); expect(c.retained[0].active).toBe(true);
+      expect(factory).not.toHaveBeenCalled();
+      abort.abort();
+      await expect(pending).rejects.toMatchObject({ code: 'cancelled' });
+      expect(c.retained[0].active).toBe(false);
+      await expect(c.control(async () => 'queue-free')).resolves.toBe('queue-free');
+    } finally {
+      secret.resolve('synthetic-key');
+      await pending.catch(() => undefined); await runtime.dispose(); await c.close();
+    }
+  });
 });

@@ -130,6 +130,8 @@ Adding an account saves disabled configuration without constructing an SDK objec
 If `setup` does not use these fields to construct business state, the plugin can explicitly declare them as Feature-owned:
 
 ```ts
+import { definePlugin } from 'zhin.js';
+
 export default definePlugin({
   name: 'example-adapter',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },

@@ -72,7 +72,8 @@ describe('Plugin Runtime kernel', () => {
     paths[0][0] = 'credentials';
     expect(definition.configUpdate?.featurePaths).toEqual([['profile']]);
     expect(Object.isFrozen(definition.configUpdate?.featurePaths[0])).toBe(true);
-    for (const invalid of [null, false, { featurePaths: [['__proto__']] }, { featurePaths: [[]] }, { featurePaths: [['profile']], apply() {} }]) {
+    for (const invalid of [null, false, { featurePaths: [['__proto__']] }, { featurePaths: [[]] },
+      { featurePaths: [new Array(1)] }, { featurePaths: new Array(1) }, { featurePaths: [['profile']], apply() {} }]) {
       expect(() => definePlugin({ name: 'profile', configUpdate: invalid as never })).toThrow(TypeError);
     }
     const state = emptyState();

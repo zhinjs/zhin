@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIProvider, ImageGenerateRequest } from '@zhin.js/ai';
 import type { ToolExecutionContext } from '@zhin.js/tool';
+import { ModelLeaseError } from '@zhin.js/ai/model-catalog';
+import { getLogger } from '@zhin.js/logger';
 import { createNativeImageToolFeature } from '../../src/plugin-runtime/native-image-tool.js';
 
 const context = Object.freeze({
@@ -14,6 +16,19 @@ const context = Object.freeze({
 }) as unknown as ToolExecutionContext;
 
 describe('native image ToolFeature', () => {
+  it.each([true, false])('logs a safe cleanup cause without exposing arbitrary exception text (typed=%s)', async typed => {
+    const warning = vi.spyOn(getLogger('agent'), 'warn').mockImplementation(() => undefined);
+    const release = async () => { throw typed ? new ModelLeaseError('resource-dispose-failed') : new Error('synthetic-private-release-detail'); };
+    const feature = createNativeImageToolFeature(() => { throw new Error('unexpected legacy lookup'); }, undefined, undefined,
+      async () => ({ provider: { generateImage: async () => ({ base64: 'aW1hZ2U=', mimeType: 'image/png', model: 'image' }) } as unknown as AIProvider,
+        defaults: {}, release }));
+    try {
+      await expect(feature.definition.execute({ provider_alias: 'images', prompt: 'a tree' }, context)).resolves.toContain('aW1hZ2U=');
+      const log = warning.mock.calls.flat().join(' ');
+      expect(log).toContain(`cause: ${typed ? 'resource-dispose-failed' : 'unclassified'}`);
+      expect(log).not.toContain('synthetic-private-release-detail');
+    } finally { warning.mockRestore(); }
+  });
   it('resolves the configured provider at execution time and applies host defaults', async () => {
     const generateImage = vi.fn(async (_request: ImageGenerateRequest) => ({
       base64: 'aW1hZ2U=',

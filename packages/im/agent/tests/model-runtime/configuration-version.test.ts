@@ -17,6 +17,14 @@ function fixture() {
 }
 
 describe('immutable deployment model versions', () => {
+  it('distinguishes the deployment binding default from the existing standalone provider-first default', async () => {
+    const runtime = new ModelRuntimeService({ hostOwnerId, config: config({ model: 'next' }) });
+    try {
+      expect(runtime.resolveHostModel().model.model).toBe('next');
+      expect(runtime.resolveHostModel({}).model.model).toBe('old');
+      expect(runtime.resolveHostModel({ providerAlias: undefined, model: undefined }).model.model).toBe('old');
+    } finally { await runtime.dispose(); }
+  });
   it('keeps admitted scopes fixed and creates the next version using its actual private factory data', async () => {
     const f = fixture();
     const oldPlan = await f.runtime.resolveForTurn(turn);
@@ -88,6 +96,30 @@ describe('immutable deployment model versions', () => {
     expect(f.runtime.prepareConfiguration({ ...config(), agents: { zhin: { provider: 'main', model: 'old', permission: { task: { '*': 'allow' } } } } })).toMatchObject({ kind: 'restart-required' });
     expect(() => f.runtime.prepareConfiguration({ ...config(), agents: { zhin: { provider: 'missing', model: 'old' } } })).toThrow();
     return f.runtime.dispose();
+  });
+
+  it('keeps undeclared global image defaults pending while provider-owned defaults are versioned with their provider', async () => {
+    const f = fixture();
+    try {
+      expect(f.runtime.prepareConfiguration({ ...config(), imageGeneration: { defaultSize: '1024x1024' } }))
+        .toMatchObject({ kind: 'restart-required', reasons: expect.arrayContaining(['non-model-configuration']) });
+      const update = f.runtime.prepareConfiguration({ ...config(), providers: { main: {
+        ...config().providers!.main, imageGeneration: { defaultSize: '1024x1024' },
+      } } });
+      if (update.kind !== 'ready') throw new Error('expected provider-owned defaults to be compatible');
+      expect(update.runtime.resolveHostProvider('main').defaults.defaultSize).toBe('1024x1024');
+      expect(f.runtime.resolveHostProvider('main').defaults.defaultSize).toBeUndefined();
+      expect(f.network).not.toHaveBeenCalled();
+    } finally { await f.runtime.dispose(); }
+  });
+
+  it('leaves undeclared perception routing on its existing restart lifecycle', async () => {
+    const f = fixture();
+    try {
+      expect(f.runtime.prepareConfiguration({ ...config(), multimodal: { perception: { provider: 'main', model: 'next' } } }))
+        .toMatchObject({ kind: 'restart-required', reasons: expect.arrayContaining(['non-model-configuration']) });
+      expect(f.network).not.toHaveBeenCalled();
+    } finally { await f.runtime.dispose(); }
   });
 
   it('does not reborrow a startup provider after its transferred resource was retired', async () => {

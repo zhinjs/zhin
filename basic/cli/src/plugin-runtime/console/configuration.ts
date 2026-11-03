@@ -182,7 +182,16 @@ export class ConsoleConfigurationStore {
       try {
         const prepared = await this.#document.prepare(current, patches);
         readApplicationPluginDeclaration(prepared.document);
-        await this.#validatePrepared(prepared);
+        try { await this.#validatePrepared(prepared); }
+        catch (error) {
+          if (!(error instanceof ConfigValidationError)) throw error;
+          // Runtime validation may report cross-field constraints without a
+          // structured path. Preserve the invalid contract at the document
+          // boundary; arbitrary issue strings can contain private values.
+          return Object.freeze({ status: 'invalid', revision: current.revision,
+            errors: Object.freeze([Object.freeze({ path: '$', message: '完整配置未通过运行校验' })]),
+            missingEnv: Object.freeze([...missingEnv].sort()), message: '配置校验失败，未保存' });
+        }
         committed = await prepared.commit();
       } catch (error) {
         if (error instanceof ConfigDocumentConflictError) return conflict(await this.#document.read());

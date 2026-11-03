@@ -25,7 +25,10 @@ export interface ModelExecutionBundle {
 export interface ModelExecutionLease extends ModelExecutionBundle {
   release(): Promise<void>;
 }
-/** Deployment-only selection; never resolves a personal catalog or session override. */
+/** Deployment-only selection; never resolves a personal catalog or session override.
+ * `undefined` uses the zhin binding. An empty provider selection intentionally keeps
+ * the standalone subagent's existing default-provider/first-model behavior.
+ */
 export type HostModelSelection = { readonly bindingName: string } | { readonly presetId: string }
   | { readonly providerAlias?: string; readonly model?: string };
 export interface ResolvedHostProvider {

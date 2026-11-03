@@ -10,7 +10,7 @@ import type {
 import type { ConsoleConfigApplicationStatus, ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
 import { ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS } from '@zhin.js/runtime';
 import { ConfigDocumentConflictError } from '@zhin.js/config-file';
-import { ConfigPatchScopeError } from './console/configuration-patch.js';
+import { ConfigPatchScopeError } from './console/module.js';
 
 /**
  * Process-owned host side of ADR 0040 §5 / §6 (slice E2): the ports a {@link import('@zhin.js/agent').SelfChangeApplier}

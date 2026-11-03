@@ -64,6 +64,23 @@ describe('saved configuration and effective application', () => {
     expect(applications).toBe(0);
   });
 
+  it('returns structured invalid for full runtime validation without saving or disclosing issue values', async () => {
+    const applyConfiguration = vi.fn(async () => application('unreachable'));
+    const { file, store } = await fixture({
+      validateConfiguration: async () => { throw new ConfigValidationError(['synthetic-private-credential']); },
+      applyConfiguration,
+    });
+    const before = await readFile(file, 'utf8');
+    const revision = (await store.readSource()).revision;
+    const result = await store.patch({ expectedRevision: revision,
+      patches: [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'active' }] });
+    expect(result).toMatchObject({ status: 'invalid', revision,
+      errors: [{ path: '$', message: expect.any(String) }] });
+    expect(await readFile(file, 'utf8')).toBe(before);
+    expect(applyConfiguration).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain('synthetic-private-credential');
+  });
+
   it('keeps a confirmed save when application throws and returns no sensitive error text', async () => {
     const { file, store } = await fixture({ applyConfiguration: async () => { throw new Error('synthetic-private-credential'); } });
     const result = await store.replaceSource(JSON.stringify({ configVersion: 2, plugins: {}, locale: 'en' }),

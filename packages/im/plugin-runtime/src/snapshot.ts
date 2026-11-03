@@ -13,7 +13,8 @@ import type {
   PluginId,
   TokenId,
 } from './identity.js';
-import { freezePluginConfigUpdate, type PluginMetadata, type PluginConfigUpdateDeclaration } from './plugin.js';
+import type { PluginMetadata } from './plugin.js';
+import { freezePluginConfigUpdate, type PluginConfigUpdateDeclaration } from './config-update-declaration.js';
 
 export interface PluginNodeSnapshot {
   readonly id: PluginId;

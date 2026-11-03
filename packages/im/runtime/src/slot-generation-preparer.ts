@@ -64,7 +64,8 @@ export class SlotGenerationPreparer {
       {
         root: current.root,
         tree: current.tree,
-        config: this.configUpdates?.config.size ? new Map([...current.config, ...this.configUpdates.config]) : current.config,
+        config: this.configUpdates?.config.size ? new Map([...current.config,
+          ...[...this.configUpdates.config].map(([owner, view]) => [owner, Object.freeze(view ?? {})] as const)]) : current.config,
         resources: this.primaryConfig
           ? projectPrimaryConfigResources(current.resources, this.primaryConfig)
           : current.resources,

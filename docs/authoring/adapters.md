@@ -129,6 +129,8 @@ terminal:
 如果插件的 `setup` 不依赖这些字段建立业务状态，可以显式把它们声明为 Feature 所有：
 
 ```ts
+import { definePlugin } from 'zhin.js';
+
 export default definePlugin({
   name: 'example-adapter',
   configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },

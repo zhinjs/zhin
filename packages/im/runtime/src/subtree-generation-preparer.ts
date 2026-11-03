@@ -83,7 +83,7 @@ export class SubtreeGenerationPreparer {
       this.isolation,
     );
     plugins.installSetupFeatureAliases(featureSetupAliases(this.model.providers.values()), this.model.rootsByFeature);
-    for (const [owner, view] of this.configUpdates?.config ?? []) plugins.config.set(owner, view);
+    for (const [owner, view] of this.configUpdates?.config ?? []) plugins.config.set(owner, Object.freeze(view ?? {}));
     plugins.removeSubtrees(roots);
 
     const projectionDisposers = new Map<FeatureId, Dispose>();

@@ -29,6 +29,49 @@ afterEach(async () => {
 });
 
 describe('RootRuntime config patches', () => {
+  it.each(['sync', 'async'])('reports safe preparation diagnostics when the %s sink fails', async sink => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'fixture' }) });
+    const diagnostics: unknown[] = [];
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      config: { configVersion: 2, plugins: {}, log_level: 'info' },
+      environment: { name: 'test', mode: 'test', platform: 'node' }, installResources() {},
+      onControlError(error) {
+        diagnostics.push(error);
+        if (sink === 'async') return Promise.reject(new Error('diagnostic sink failed'));
+        throw new Error('diagnostic sink failed');
+      },
+      configUpdates: [{ id: 'level', paths: [['log_level']], async prepare() {
+        throw Object.assign(new TypeError('private-key-in-error'), { cause: 'private-key-in-cause', secret: 'private-key-in-property' });
+      } }],
+    });
+    try {
+      const initial = await runtime.start();
+      await runtime.patchConfig([{ op: 'set', path: ['log_level'], value: 'debug' }]);
+      expect(runtime.snapshot).toBe(initial);
+      expect(runtime.configurationApplication.groups).toContainEqual(expect.objectContaining({ id: 'level', status: 'failed' }));
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]).toMatchObject({ code: 'configuration_preparation_failed', handler: 'level', errorKind: 'type' });
+      expect(String(diagnostics[0]) + JSON.stringify(diagnostics)).not.toContain('private-key');
+      await new Promise(resolve => setImmediate(resolve));
+    } finally { await runtime.stop(); }
+  });
+  it.each([false, true])('keeps an absent/empty HTTP block pending (initially present=%s)', async present => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'fixture' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      config: { configVersion: 2, plugins: {}, ...(present ? { http: {} } : {}) },
+      environment: { name: 'test', mode: 'test', platform: 'node' }, installResources() {},
+    });
+    try {
+      const initial = await runtime.start();
+      await runtime.patchConfig([present ? { op: 'remove', path: ['http'] } : { op: 'set', path: ['http'], value: {} }]);
+      expect(runtime.snapshot).toBe(initial);
+      expect(runtime.configurationApplication.groups).toContainEqual(expect.objectContaining({ paths: [['http']], status: 'restart-pending' }));
+    } finally { await runtime.stop(); }
+  });
   it('retains a Host-selected plugin owner and its declaration while applying independent edits', async () => {
     const project = await createProject();
     await writeJson(join(project, 'plugins/child/schema.json'), { type: 'object', additionalProperties: false,
@@ -72,11 +115,13 @@ describe('RootRuntime config patches', () => {
       port.writeExternal({ configVersion: 2, plugins: { sibling: '@test/sibling' }, sibling: { label: 'next' } });
       await runtime.applyConfiguration();
       expect(runtime.snapshot.tree.has(childPluginId(rootPluginId(), 'child'))).toBe(false);
-      port.writeExternal({ configVersion: 2, plugins: { sibling: '@test/sibling', child: '@test/sibling' }, disable_plugins: ['child'], child: { label: 'rebound' } });
+      port.writeExternal({ configVersion: 2, plugins: { sibling: '@test/sibling', child: '@test/sibling' }, child: { label: 'rebound' } });
       await runtime.applyConfiguration();
       expect(runtime.snapshot.tree.has(childPluginId(rootPluginId(), 'child'))).toBe(false);
       await runtime.reload();
       expect(runtime.snapshot.tree.has(childPluginId(rootPluginId(), 'child'))).toBe(false);
+      expect(runtime.configurationApplication.groups).toContainEqual(expect.objectContaining({ id: 'plugin-host:child', status: 'restart-pending' }));
+      expect((runtime.snapshot.resources.get(rootPluginId())?.get(primaryConfigToken.id) as PrimaryConfig).document.disable_plugins ?? []).not.toContain('child');
       expect(old.value.config.get(childPluginId(rootPluginId(), 'child'))).toEqual(child);
     } finally { old.release(); await runtime.stop(); }
   });

@@ -350,7 +350,7 @@ Console 的 `config:apply` 要求 full scope 与当前文件 `expectedRevision`�
 | 切片 | 主要落点 | 必须先证明的行为 |
 | --- | --- | --- |
 | A. 应用结果与有效基线 | runtime 输入/patch planner、RootRuntime、协议 | 保存与有效值分离；混合 Host/插件变更不夹带 pending；两入口行为一致 |
-| B. 统一控制与监听边界 | HMR coordinator、RootHost、CLI options | pending 不锁死配置更新；源码事件不会应用待重启项；参数语义确认后再落 parser |
+| B. 统一控制与监听边界 | HMR coordinator、RootHost、CLI options | pending 不锁死配置更新；源码事件不会应用待重启项；仅显式 `--watch` 监听的语义已确认并实现 |
 | C. Endpoint 资料原地更新 | adapter、profile、retained generation 投影 | 文件账号和受管账号分别测试，昵称变化保留真实 transport 与准入 |
 | D. AI 部署版本更新 | model-runtime、CLI Host installer、策略仓库适配 | 下一回合更新；同回合固定；租约释放、覆写优先级、选择写入协调正确；破坏性目录变化不冒充支持热更 |
 | E. Console 完整闭环 | CLI configuration store、console protocol、独立 Console 仓库 | 表单/源码保存与实际应用状态一致；冲突、失败、来源显示可解释 |

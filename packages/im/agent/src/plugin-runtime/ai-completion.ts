@@ -120,6 +120,7 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       const started = now();
       let result: TextCompleteResult;
       let scope: { release(): Promise<void> } | undefined;
+      let executingProvider: string | undefined;
       try {
         if (!input.agent && !input.model?.trim() && options.acquireDefaultModel) {
           const models = await options.acquireDefaultModel(input.signal);
@@ -131,6 +132,7 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
           provider = selected.provider; model = selected.model; opts.model = model;
         }
         record(reserved);
+        executingProvider = provider.name;
         result = provider.completeTextResult
           ? await provider.completeTextResult(input.system ?? '', user, opts)
           : { text: await provider.completeText(input.system ?? '', user, opts), model };
@@ -138,7 +140,8 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         logger.warn(formatCompact({
           op: 'ai_completion',
           purpose,
-          provider: scope ? provider.name : binding.providerAlias,
+          bindingProvider: binding.providerAlias,
+          provider: executingProvider,
           model,
           outcome: 'error',
           durationMs: now() - started,
@@ -160,7 +163,8 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       logger.info(formatCompact({
         op: 'ai_completion',
         purpose,
-        provider: scope ? provider.name : binding.providerAlias,
+        bindingProvider: binding.providerAlias,
+        provider: executingProvider,
         model: result.model,
         outcome: 'ok',
         durationMs,

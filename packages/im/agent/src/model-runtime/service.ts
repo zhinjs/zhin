@@ -101,7 +101,11 @@ export class ModelRuntimeService {
     this.#leases = construction?.leases ?? new ModelLeaseRuntime(this.#execution);
   }
 
-  /** Prepare an immutable view; no active binding, secret resolver or provider is touched. */
+  /** Prepare an immutable view; no active binding, secret resolver or provider is touched.
+   * The replacement borrows this Root Scope's pool, rather than owning an independent
+   * pool. Retain the original owner until that Scope retires; retiring a configuration
+   * snapshot must not dispose the Scope owner. Dispose a borrowed view only to close it.
+   */
   prepareConfiguration(config: ModelRuntimeServiceOptions['config']): ModelRuntimeConfigurationUpdate {
     this.#assertOpen();
     // A registered provider is a startup owner, not authority over a later authored definition.

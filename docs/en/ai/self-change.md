@@ -41,7 +41,8 @@ Trial passed, one human approval, written to the production directories — that
 
 - Health check fails after apply: the bot **rolls back once** from its snapshot and reports "failed, rolled back" with the reason.
 - Still unhealthy after the rollback: an instance-level **emergency stop** opens, only the owner's DM is told, and there are **no more automatic restarts** until you deal with it (the evidence is kept until you mark it handled in the Console).
-- An unconfirmed configuration save/application or a superseded revision stops automatic continuation and retains evidence for manual verification. It does not retry or overwrite another edit. Here, `failed` means the flow stopped; it does not prove the configuration was not applied or itself enable emergency stop. Recovery also checks the durably acknowledged revision, and retains older records when ownership cannot be proved.
+- A configuration save/application is unconfirmed, or a newer revision has replaced it: the flow stops and keeps evidence for manual verification. It does not retry the operation or overwrite another edit. Here, `failed` means the flow stopped, not that the configuration is known to be unapplied. This outcome does not enable emergency stop by itself.
+- During recovery, the bot checks the last durably acknowledged revision. If it cannot prove ownership, it keeps the older records for manual verification.
 - Process killed mid-apply: the next start checks durable progress and configuration ownership. Confirmed operations retain snapshot rollback and health checks; unconfirmed writes or applications retain evidence for manual verification.
 - Process exited right after approval: on the next start, approvals younger than one hour are applied; older ones expire and the owner gets "approval expired, please draft again".
 

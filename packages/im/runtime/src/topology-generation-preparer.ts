@@ -93,8 +93,7 @@ export class TopologyGenerationPreparer {
     signal.throwIfAborted();
     const planned = new TopologyTransactionPlanner().plan(this.model.graph, this.graph);
     const nextNodes = graphNodes(this.graph);
-    const configReplacements = changedConfigRoots(current, nextNodes, this.configResolver)
-      .filter(owner => !this.configUpdates?.config.has(owner));
+    const configReplacements = changedConfigRoots(current, nextNodes, this.configResolver, this.configUpdates?.config);
     const replacedPluginRoots = collapseRoots([
       ...planned.replacedPluginRoots,
       ...configReplacements,
@@ -128,7 +127,7 @@ export class TopologyGenerationPreparer {
       this.isolation,
     );
     plugins.installSetupFeatureAliases(featureSetupAliases(featureTopology.providers.values()), featureTopology.rootsByFeature);
-    for (const [owner, view] of this.configUpdates?.config ?? []) plugins.config.set(owner, view);
+    for (const [owner, view] of this.configUpdates?.config ?? []) plugins.config.set(owner, Object.freeze(view ?? {}));
     const setupRoots = collapseRoots([
       ...plan.addedPluginRoots,
       ...plan.replacedPluginRoots,
@@ -376,10 +375,11 @@ function changedConfigRoots(
   current: RuntimeSnapshot,
   nextNodes: ReadonlyMap<PluginId, PluginGraphNode>,
   configResolver: PluginConfigResolver,
+  retained?: ReadonlyMap<PluginId, unknown>,
 ): readonly PluginId[] {
   const changed: PluginId[] = [];
   for (const [id, node] of nextNodes) {
-    if (!current.tree.has(id)) continue;
+    if (!current.tree.has(id) || retained?.has(id)) continue;
     if (!isDeepStrictEqual(current.config.get(id), configResolver(node) ?? {})) changed.push(id);
   }
   return collapseRoots(changed);

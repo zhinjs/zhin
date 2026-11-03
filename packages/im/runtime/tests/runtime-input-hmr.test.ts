@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   childPluginId,
   definePlugin,
+  createToken,
   rootPluginId,
   type ConfigDocumentPort,
   type ConfigDocumentSnapshot,
@@ -57,14 +58,17 @@ describe('RootRuntime watched inputs', () => {
     const declaration = { configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, ai: { apiKey: 'env://AI_KEY' } };
     const fixture = await createFixture(declaration);
     const environment = new FakeEnvironmentSource(join(fixture.root, '.env'), { base: { AI_KEY: 'key-before' } });
-    // Mirrors process-owned factories which resolve env:// refs through the
-    // startup EnvStore rather than ${...} expansion of the YAML document.
-    const processHost = { key: createEnvStore(rootPluginId(), testEnvironment, await environment.read()).get('AI_KEY') };
+    const hostToken = createToken<{ key: string | undefined }>('test.captured-environment');
     const installs = { resources: 0, root: 0, child: 0, sibling: 0 };
     fixture.modules.installSetups(installs);
     const runtime = new RootRuntime({ projectRoot: fixture.root, modules: fixture.modules, config: fixture.config,
-      environment: testEnvironment, environmentSource: environment, installResources() { installs.resources++; } });
+      environment: testEnvironment, environmentSource: environment, installResources({ resources }) {
+        installs.resources++;
+        // A real installed consumer captures the Root-provided startup EnvStore.
+        resources.provide(hostToken, { key: resources.use(envStoreToken).get('AI_KEY') });
+      } });
     const initial = await runtime.start();
+    const processHost = initial.resources.get(rootPluginId())?.get(hostToken.id) as { key: string | undefined };
     const hmr = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('unexpected process restart'); }, onError(error) { throw error; } });
     const effectiveKey = () => (runtime.snapshot.resources.get(rootPluginId())?.get(envStoreToken.id) as ReturnType<typeof createEnvStore>).get('AI_KEY');
     try {
@@ -73,6 +77,7 @@ describe('RootRuntime watched inputs', () => {
       expect(runtime.snapshot).toBe(initial);
       expect(effectiveKey()).toBe(processHost.key);
       expect(installs.resources).toBe(1);
+      expect(runtime.snapshot.resources.get(rootPluginId())?.get(hostToken.id)).toBe(processHost);
       expect(runtime.configurationApplication.groups).toEqual([expect.objectContaining({ id: 'environment', status: 'restart-pending' })]);
       expect(JSON.stringify(runtime.configurationApplication)).not.toContain('key-after');
       fixture.config.writeExternal({ ...declaration, child: { label: 'updated' } });

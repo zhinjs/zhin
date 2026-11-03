@@ -41,12 +41,14 @@ npx zhin --help        # 查看全部命令
 ### runtime：运行与管理项目
 
 ```bash
-zhin runtime start [--mode production] [--watch source config] [--daemon]
+zhin runtime start [--mode production] [--watch source config | --no-watch] [--daemon]
 zhin runtime inspect
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
 zhin runtime migrate [extract|cutover|status] [--check|--write]
 ```
+
+`--watch` 与兼容参数 `--no-watch` 互斥；都不传时不监听文件变化。
 
 | 子命令 | 作用 |
 | --- | --- |

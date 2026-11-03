@@ -18,12 +18,17 @@ describe('HmrCoordinator', () => {
     const config = '/project/zhin.config.yml';
     const modules = new WatchingFakeModules();
     const plans: GenerationInvalidationPlan[] = [];
+    const ownership = ownershipFor(source, '/project');
+    ownership.addPackageRoot('/project', root);
+    let accepted!: () => void;
+    const acceptedReload = new Promise<void>(resolve => { accepted = resolve; });
     const coordinator = new HmrCoordinator({
-      modules, ownership: () => ownershipFor(source, '/project'),
+      modules, ownership: () => ownership,
       acceptWatchedSource: path => path === config,
       runtime: { reload: async plan => { plans.push(plan); } },
       onRestartRequired: () => { throw new Error('Unexpected restart'); },
       onError: error => { throw error; },
+      onReload: plan => { if (plan.changed.includes(config)) accepted(); },
     });
     const stop = coordinator.start();
     try {
@@ -33,9 +38,13 @@ describe('HmrCoordinator', () => {
       await coordinator.enqueue(source);
       expect(plans.map(plan => plan.changed)).toEqual([[source]]);
       expect(modules.invalidated).toEqual([source]);
+      modules.emit(config);
+      await acceptedReload;
+      expect(plans.map(plan => plan.changed)).toEqual([[source], [config]]);
+      expect(modules.invalidated).toEqual([source, config]);
       modules.emit(source);
       await coordinator.stop();
-      expect(plans).toHaveLength(1);
+      expect(plans).toHaveLength(2);
     } finally { await stop(); }
   });
 

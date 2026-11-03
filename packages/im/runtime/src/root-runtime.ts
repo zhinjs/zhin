@@ -43,7 +43,7 @@ import {
   type FeatureProvider,
 } from '@zhin.js/feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
-import { ConfigComposer, HOST_RESOURCE_CONFIG_KEYS, type ComposedConfig, type JsonSchema } from './config-composer.js';
+import { ConfigComposer, ConfigValidationError, HOST_RESOURCE_CONFIG_KEYS, type ComposedConfig, type JsonSchema } from './config-composer.js';
 import { createPrimaryConfig, primaryConfigToken, type PrimaryConfig } from './primary-config.js';
 import { immutableConfigSchema } from './plugin-config-schema.js';
 import { defineRuntimeEnvironment, type RuntimeEnvironment } from './environment.js';
@@ -744,7 +744,15 @@ export class RootRuntime {
         rawDocument = copyConfigurationPaths(rawDocument, rawDesired, handler.paths);
         accepted.push(...handler.paths);
         groups.push(configGroup(handler.id, handler.paths, prepared.effect, 'applied'));
-      } catch {
+      } catch (error) {
+        // Preparation may throw SDK errors containing credentials or config.
+        // Report only a bounded classification through the existing diagnostic
+        // sink, whose own failure must not change the application outcome.
+        try { void Promise.resolve(this.#onControlError(Object.assign(new Error('Host configuration preparation failed'), {
+          code: 'configuration_preparation_failed', handler: handler.id,
+          errorKind: error instanceof ConfigValidationError ? 'validation' : error instanceof TypeError ? 'type'
+            : error instanceof RangeError ? 'range' : 'unknown',
+        }))).catch(() => undefined); } catch { /* Diagnostics cannot reverse a configuration outcome. */ }
         accepted.push(...handler.paths);
         groups.push(configGroup(handler.id, handler.paths, 'replace-resource', 'failed', 'preparation-failed'));
       } finally { lease.release(); }

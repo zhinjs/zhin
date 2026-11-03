@@ -41,12 +41,14 @@ All commands, grouped by purpose, follow.
 ### runtime: Run and Manage Projects
 
 ```bash
-zhin runtime start [--mode production] [--watch source config] [--daemon]
+zhin runtime start [--mode production] [--watch source config | --no-watch] [--daemon]
 zhin runtime inspect
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
 zhin runtime migrate [extract|cutover|status] [--check|--write]
 ```
+
+`--watch` and the compatibility flag `--no-watch` are mutually exclusive. Without either, no files are watched.
 
 | Subcommand | Purpose |
 | --- | --- |

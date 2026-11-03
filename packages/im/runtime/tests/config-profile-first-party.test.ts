@@ -66,7 +66,10 @@ it.each([
     } });
     modules.set(adapterSource, { default: adapterDefinition('profile-message') });
     modules.set(commandSource, { default: defineCommand({ execute: ({ config }) => (config as { nickname: string }).nickname }) });
-    const config = new ConfigPort(join(project, 'zhin.config.json'), { configVersion: 2, plugins: { icqq: '@test/icqq' }, icqq: { nickname: 'Before' } });
+    const beforeProfile = { signature: 'Before signature', birthday: '2000-01-02' };
+    const afterProfile = { signature: 'After signature', birthday: '2001-03-04' };
+    const config = new ConfigPort(join(project, 'zhin.config.json'), { configVersion: 2, plugins: { icqq: '@test/icqq' },
+      icqq: { nickname: 'Before', profile: beforeProfile } });
     runtime = new RootRuntime({ projectRoot: project, modules, config,
       environment: { name: 'test', mode: 'test', platform: 'node' },
       installResources({ resources }) {
@@ -79,15 +82,17 @@ it.each([
     const id = oldIndex.list()[0].id;
     const oldClient = oldIndex.clientById(id);
     const oldPort = oldIndex.profile(id)!;
+    expect(oldPort.peek().values).toEqual({ nickname: 'Before', ...beforeProfile });
     previous = runtime.snapshots.acquire();
     if (change === 'slot' || change === 'adapter-slot') {
       if (change === 'slot') modules.set(commandSource, { default: defineCommand({ execute: ({ config }) => `${(config as { nickname: string }).nickname}:updated` }) });
       else modules.set(adapterSource, { default: adapterDefinition('profile-message-v2') });
-      config.writeExternal({ ...config.document, icqq: { nickname: 'After' } });
+      config.writeExternal({ ...config.document, icqq: { nickname: 'After', profile: afterProfile } });
       coordinator = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('unexpected restart'); }, onError(error) { throw error; } });
       await Promise.all([coordinator.enqueue(config.sources[0]), coordinator.enqueue(change === 'slot' ? commandSource : adapterSource)]);
     } else {
       await runtime.patchConfig([{ op: 'set', path: ['icqq', 'nickname'], value: 'After' },
+        { op: 'set', path: ['icqq', 'profile'], value: afterProfile },
         ...(change === 'topology' ? [{ op: 'set' as const, path: ['plugins', 'extra'], value: '@test/extra' }] : []),
       ]);
     }
@@ -96,10 +101,10 @@ it.each([
     expect(await commands.execute('profile-view')).toBe(change === 'slot' ? 'After:updated' : 'After');
     expect(await oldCommands.execute('profile-view')).toBe('Before');
     expect(commands).not.toBe(oldCommands);
-    expect(runtime.snapshot.config.get('root/icqq' as never)).toEqual({ nickname: 'After' });
-    expect(previous.value.config.get('root/icqq' as never)).toEqual({ nickname: 'Before' });
-    expect(index.profile(id)!.peek().values.nickname).toBe('After');
-    expect(oldPort.peek().values.nickname).toBe('Before');
+    expect(runtime.snapshot.config.get('root/icqq' as never)).toEqual({ nickname: 'After', profile: afterProfile });
+    expect(previous.value.config.get('root/icqq' as never)).toEqual({ nickname: 'Before', profile: beforeProfile });
+    expect(index.profile(id)!.peek().values).toEqual({ nickname: 'After', ...afterProfile });
+    expect(oldPort.peek().values).toEqual({ nickname: 'Before', ...beforeProfile });
     const retainsTransport = declared && change !== 'adapter-slot';
     expect(index.clientById(id) === oldClient).toBe(retainsTransport);
     expect(transports.create).toBe(retainsTransport ? 1 : 2);

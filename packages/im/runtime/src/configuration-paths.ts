@@ -22,7 +22,9 @@ export function changedConfigurationPaths(before: unknown, after: unknown, path:
   const beforeObject = before === undefined ? {} : before;
   const afterObject = after === undefined ? {} : after;
   if (beforeObject && afterObject && typeof beforeObject === 'object' && typeof afterObject === 'object' && !Array.isArray(beforeObject) && !Array.isArray(afterObject)) {
-    return [...new Set([...Object.keys(beforeObject), ...Object.keys(afterObject)])].flatMap(key => changedConfigurationPaths(
+    const keys = [...new Set([...Object.keys(beforeObject), ...Object.keys(afterObject)])];
+    if (keys.length === 0) return [path];
+    return keys.flatMap(key => changedConfigurationPaths(
       (beforeObject as Record<string, unknown>)[key], (afterObject as Record<string, unknown>)[key], [...path, key]));
   }
   return [path];

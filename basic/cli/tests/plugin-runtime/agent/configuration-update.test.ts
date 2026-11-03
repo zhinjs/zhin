@@ -96,6 +96,7 @@ it('prepares an unexposed immutable private model binding and preserves unrelate
     const turn = { rootId: projectRoot, ownerId: hostModelOwnerId(projectRoot) };
     expect((await next.resolveForTurn(turn)).chat.model.model).toBe('next');
     expect((await f.runtime.resolveForTurn(turn)).chat.model.model).toBe('old');
+    expect(next.getCompatibilityRouting().agents.zhin.permission).toEqual(f.initial.agents!.zhin.permission);
     expect(f.handler.paths).not.toContainEqual(['ai', 'agents', 'zhin', 'permission']);
     expect(JSON.stringify(next.getCatalogConfig())).not.toContain('synthetic-key');
   } finally { await f.runtime.dispose(); }

@@ -14,7 +14,8 @@ import {
 import type { ImageAssetPublisher } from '../media/image-assets.js';
 import { decodeBase64 } from '../media/media-normalize.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
-import { getLogger } from '@zhin.js/logger';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import { ModelLeaseError } from '@zhin.js/ai/model-catalog';
 
 export type ImageProviderResolver = (alias: string) => AIProvider;
 export type ImageGenerationDefaultsResolver = (alias: string) => ImageGenerationDefaults;
@@ -77,7 +78,11 @@ async function generateImage(
       lease?.defaults ?? resolveDefaults(alias), imageAssets);
   } finally {
     try { await lease?.release(); }
-    catch { try { getLogger('agent').warn('Image provider lease cleanup failed'); } catch { /* Diagnostic only. */ } }
+    catch (error) {
+      try { getLogger('agent').warn(formatCompact({ op: 'image_provider_release', outcome: 'failed',
+        cause: error instanceof ModelLeaseError ? error.code : 'unclassified' })); }
+      catch { /* Diagnostic only; never expose arbitrary disposer error text. */ }
+    }
   }
 }
 

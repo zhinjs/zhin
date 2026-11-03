@@ -7,6 +7,9 @@ import type { GenerationHandoffRegistry } from './handoff.js';
 import type { FeatureId, PluginId } from './identity.js';
 import type { Scope, Token } from './token.js';
 import type { PluginEventSubscriptions } from './plugin-events.js';
+import { freezePluginConfigUpdate, type PluginConfigUpdateDeclaration } from './config-update-declaration.js';
+export { freezePluginConfigUpdate } from './config-update-declaration.js';
+export type { PluginConfigUpdateDeclaration } from './config-update-declaration.js';
 
 export interface PluginMetadata {
   readonly displayName?: string;
@@ -70,23 +73,6 @@ export interface PluginDefinition<TConfig = unknown> {
   /** Fields owned by Features; setup must not capture these as mutable business configuration. */
   readonly configUpdate?: PluginConfigUpdateDeclaration;
   setup?(context: PluginSetupContext<TConfig>): void | Dispose | Promise<void | Dispose>;
-}
-
-export interface PluginConfigUpdateDeclaration {
-  readonly featurePaths: readonly (readonly string[])[];
-}
-
-/** @internal Normalize the inert ownership declaration at both authoring and loading seams. */
-export function freezePluginConfigUpdate(value: PluginConfigUpdateDeclaration): PluginConfigUpdateDeclaration {
-  if (!value || typeof value !== 'object' || Object.keys(value).some(key => key !== 'featurePaths') || !Array.isArray(value.featurePaths)) {
-    throw new TypeError('Plugin configUpdate must declare featurePaths');
-  }
-  return Object.freeze({ featurePaths: Object.freeze(value.featurePaths.map((path: readonly string[]) => {
-    if (!Array.isArray(path) || !path.length || path.some(part => typeof part !== 'string' || !part || ['__proto__', 'prototype', 'constructor'].includes(part))) {
-      throw new TypeError('Plugin configUpdate paths must be safe nonempty paths');
-    }
-    return Object.freeze([...path]);
-  })) });
 }
 
 const pluginNamePattern = /^[a-z][a-z0-9-]*$/;

@@ -49,6 +49,27 @@ describe('configuration-owned account profile projections', () => {
     } finally { lease.release(); }
   });
 
+  it('saves an unchanged managed configuration with CAS while preserving the live connection', async () => {
+    const fixture = await accountRuntimeFixture({ migration: true, config: { nickname: 'Current', endpoints: [{ id: 'one' }] } });
+    const record = fixture.adapter.list()[0];
+    const endpoint = fixture.adapter.getEndpoint(record.instanceId)!;
+    const lease = fixture.index.acquire(record.canonicalId);
+    try {
+      const updated = await fixture.adapter.update(record.instanceId, fixture.adapter.revision, {
+        config: { id: 'one' },
+      }, { waitForExecution: false });
+      expect(updated.execution.status).toBe('applied');
+      expect(fixture.repository.compareAndSet).toHaveBeenCalledTimes(1);
+      expect(fixture.adapter.getEndpoint(record.instanceId)).toBe(endpoint);
+      expect(endpoint.connect).toHaveBeenCalledTimes(1);
+      expect(endpoint.disconnect).not.toHaveBeenCalled();
+      expect(lease.signal.aborted).toBe(false);
+      await expect(fixture.index.send(record.canonicalId, { conversation: {
+        endpoint: { id: record.canonicalId, adapter: 'demo' }, kind: 'private', id: 'recipient',
+      }, payload: 'still connected after unchanged save' })).resolves.toBe('native-message');
+    } finally { lease.release(); }
+  });
+
   it('prepares a file profile view without publishing it to the old index or rebuilding transport', async () => {
     const fixture = await accountRuntimeFixture({ noDatabase: true,
       config: { nickname: 'Old default', endpoints: [{ id: 'one', profile: { signature: 'Before' } }] } });

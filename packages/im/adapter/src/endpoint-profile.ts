@@ -65,7 +65,9 @@ export function endpointCreationConfiguration(
   return { ...connectionDefaults, ...explicit };
 }
 
-/** @internal Profile-only changes cannot alter connection, credentials or account identity. */
+/** @internal No connection-relevant difference, including identical configurations.
+ * An unchanged update must not reconnect; persistence still follows the normal CAS contract.
+ */
 export function isEndpointProfileConfigurationChange(
   previous: Readonly<Record<string, unknown>>,
   next: Readonly<Record<string, unknown>>,
