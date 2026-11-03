@@ -1,0 +1,76 @@
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  s_9622fd28aba994::t_0ba575441cbf14 9,14,30-31,33-35,40-41
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_9622fd28aba994::t_37a8b2e00c20c3 9,64,273,295-301,306,311-314
+basic/cli/tests/plugin-runtime/console/configuration-patch.test.ts
+  s_9622fd28aba994::t_c6835ab56204bd 31,85,89,97-98,141
+packages/im/runtime/tests/config-composer.test.ts
+  s_9622fd28aba994::t_701e80373b83da 7,9,300,305-310,312-317
+  s_9622fd28aba994::t_26662917318403 8
+packages/im/runtime/tests/model-policy-schema.test.ts
+  s_9622fd28aba994::t_c868de4ef78a66 1-2,4-5,8-12,16-21,24,26-34,37-43,46-48,51-58,60-65
+  s_9622fd28aba994::t_3b207eb10ef73d 49-50
+basic/cli/tests/plugin-runtime/agent/runtime-foundation.test.ts
+  s_9622fd28aba994::t_3b207eb10ef73d 4,6,9-19,21-24,28-29,31-34
+basic/cli/src/utils/ai-config-loader.ts
+  s_9622fd28aba994::t_26ee83eab6899b 14
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_9622fd28aba994::t_73a0dbb345203a 17,216-226
+basic/cli/tests/plugin-runtime/console/console-schema-coverage.test.ts
+  s_9622fd28aba994::t_26662917318403 28,45
+  s_9622fd28aba994::t_73a0dbb345203a 29-30,44,46-48
+basic/cli/tests/plugin-runtime/console/ai-config-validation.test.ts
+  s_9622fd28aba994::t_26662917318403 64
+  s_9622fd28aba994::t_bec59824fe04eb 1-63,65-77
+tests/helpers/review-ai-plan.ts
+  s_9622fd28aba994::t_0ba575441cbf14 4-25,28-36
+  s_9622fd28aba994::t_37a8b2e00c20c3 26-27
+  s_9622fd28aba994::t_26662917318403 1-3
+examples/life-assistant-bot/tests/config-contract.test.ts
+  s_9622fd28aba994::t_0ba575441cbf14 9-10,14,40-46,49-54
+basic/cli/src/utils/config-check.ts
+  s_9622fd28aba994::t_26ee83eab6899b 226-239,333,343-348
+basic/cli/tests/plugin-runtime/console/console-schema.test.ts
+  s_9622fd28aba994::t_73a0dbb345203a 120,124-142,144,146,150
+  s_9622fd28aba994::t_26662917318403 143
+packages/im/ai/provider-plan.schema.json
+  s_9622fd28aba994::t_a3e78bccd9e6a9 423-424,428-429,433-434,475-476,480-481,485-486,527-528,532-533,537-538,579-580,584-585,589-590,631-632,636-637,641-642,683-684,688-689,693-694
+basic/cli/src/plugin-runtime/console/configuration-patch.ts
+  s_9622fd28aba994::t_c6835ab56204bd 56,68
+docs/plans/ai-provider-behavior-migration.md
+  s_9622fd28aba994::t_5ddf31a29116fa 98-105
+basic/cli/tests/plugin-runtime/agent/turn/inference-fixture.ts
+  s_9622fd28aba994::t_44d317b5458eba 1-30
+basic/cli/tests/config-check.test.ts
+  s_9622fd28aba994::t_872fd3ffb029de 25,28,31,34-45,50,56,102,123-125,149,177,194-195,265-288,351
+basic/cli/tests/plugin-runtime/agent/turn/control-gate.test.ts
+  s_9622fd28aba994::t_6319f3a6c18071 1,76,82
+basic/cli/tests/plugin-runtime/agent/turn/endpoint-cancellation.test.ts
+  s_9622fd28aba994::t_a12c37bedf307c 1,32-33,36
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_9622fd28aba994::t_22aad18b5d2a30 1-2,45,47,52,56,75,80-81,104,146,148,219,236,251,285,290,461,465,469-470,475,485-486,489,495,568,576,585,590,596,608,615-617,619,650,668,690,709,727,744,763,778,782-788,800-801,828,839,860
+basic/cli/tests/plugin-runtime/agent/turn/multi-message-delivery.test.ts
+  s_9622fd28aba994::t_068d69eb8d0adb 1-2,82-84,110-113
+basic/cli/tests/plugin-runtime/agent/turn/self-profile-ambient.test.ts
+  s_9622fd28aba994::t_9bea4cf5e7b11a 1-2,20,22,25,27,46-49
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_9622fd28aba994::t_7e8bce73cd08bb 25,61,1401-1402,1410-1413,1453,1513,1526,1529-1531,1533,1535,1539,1541,1549,1551,1553,1588,1605,1608-1610,1612,1615,1666,1729
+packages/im/runtime/tests/agent-feature-hmr.test.ts
+  s_9622fd28aba994::t_6ffb96ae0a4e3e 66,200
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8ce43b2781a12fe9bddc029b2015f7b9f342d02",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
