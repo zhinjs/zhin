@@ -1,0 +1,21 @@
+packages/host/http/src/console-rpc.ts
+  s_9622fd28aba994::t_6077bda9609545 4,286-310,531-534
+packages/host/http/tests/console-config-project-patch-rpc.test.ts
+  s_9622fd28aba994::t_4aaa67d866d386 28,32-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c8094dde99d6e7066815c2715cd259b44b2a2270",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
