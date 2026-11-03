@@ -71,6 +71,18 @@ describe('Tool Feature', () => {
     expect(index.isAvailable(root, 'sticker', { sessionKey: 'bot-a:scene', origin: invocation().origin })).toBe(false);
     expect(index.isAvailable(root, 'sticker', { sessionKey: 'bot-b:scene', origin: invocation().origin })).toBe(true);
     expect(executions).toBe(0);
+    let seen: unknown;
+    const byPrincipal = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'owner-only',
+      source: '/tools/owner-only/index.ts', definition: defineAgentTool({ description: 'Owner only',
+        isAvailable: ({ principal }) => { seen = principal; return principal?.roles.includes('master') === true; },
+        execute: () => undefined }) });
+    const principalIndex = new ToolIndex([byPrincipal], createSnapshot([byPrincipal], createToken('unused').id));
+    const origin = invocation().origin;
+    expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin, principal: { subjectId: 'u', roles: ['master'] } })).toBe(true);
+    expect(seen).toEqual({ subjectId: 'u', roles: ['master'] });
+    expect(Object.isFrozen(seen)).toBe(true);
+    expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin, principal: { subjectId: 'u', roles: ['user'] } })).toBe(false);
+    expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin })).toBe(false);
     expect(() => index.isAvailable(root, 'unknown', { sessionKey: 'bot-a:scene', origin: invocation().origin })).toThrow('Unknown Agent Tool');
   });
 

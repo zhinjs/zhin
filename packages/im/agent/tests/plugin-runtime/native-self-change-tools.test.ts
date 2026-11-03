@@ -10,7 +10,9 @@ import { SelfChangeConfigKeyError, SelfChangePathError } from '../../src/self-ch
 import type { SelfChangePreview, SelfChangeImpactPort } from '../../src/self-change/preview.js';
 import { SelfChangeStateError, SelfChangeStore } from '../../src/self-change/store.js';
 import { SelfChangeApprovals } from '../../src/self-change/approval.js';
+import { SelfChangeDraftForbiddenError } from '../../src/self-change/drafters.js';
 import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
+import { resolveToolHardGateImApproval, type ToolHardGateImApprovalConfig } from '../../src/security/tool-hard-gate.js';
 
 let project: string;
 let events: DecisionEventInput[];
@@ -21,7 +23,12 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(project, { recursive: true, force: true }));
 
-async function harness(impact?: SelfChangeImpactPort, withApprovals = false, restartSupported?: boolean) {
+async function harness(
+  impact?: SelfChangeImpactPort,
+  withApprovals = false,
+  restartSupported?: boolean,
+  imApproval?: ToolHardGateImApprovalConfig,
+) {
   const store = new SelfChangeStore({
     root: join(project, '.zhin', 'changes'),
     projectRoot: project,
@@ -35,11 +42,16 @@ async function harness(impact?: SelfChangeImpactPort, withApprovals = false, res
     impact: () => impact,
     approvals: () => approvals,
     ...(restartSupported === undefined ? {} : { restartSupported: () => restartSupported }),
+    ...(imApproval ? { imApproval: () => resolveToolHardGateImApproval(imApproval) } : {}),
   });
   return { store, tool: feature!, queue };
 }
 
-function context(subjectId = '42', origin: Partial<Extract<ToolExecutionContext['origin'], { kind: 'im' }>> = {}): ToolExecutionContext {
+function context(
+  subjectId = '42',
+  origin: Partial<Extract<ToolExecutionContext['origin'], { kind: 'im' }>> = {},
+  roles: readonly string[] = ['master'],
+): ToolExecutionContext {
   return {
     locale: 'zh-CN',
     signal: new AbortController().signal,
@@ -47,7 +59,7 @@ function context(subjectId = '42', origin: Partial<Extract<ToolExecutionContext[
     turnId: 'turn-1',
     sessionKey: 'session',
     origin: { kind: 'im', platform: 'icqq', endpoint: 'bot-1', scope: 'private', sceneId: '42', ...origin },
-    principal: { subjectId, roles: ['user'] },
+    principal: { subjectId, roles },
     policy: {},
   } as unknown as ToolExecutionContext;
 }
@@ -165,6 +177,74 @@ describe('change_draft tool', () => {
     expect(second).toContain(`Change ${record!.id} from this conversation is still waiting`);
     expect(await store.list()).toHaveLength(1);
   });
+  describe('who may draft (#1051 F4)', () => {
+    const approvers: ToolHardGateImApprovalConfig = { enabled: true, approverIds: { icqq: ['7'] } };
+    const group = { scope: 'group' as const, sceneId: '500' };
+
+    function visible(tool: Awaited<ReturnType<typeof harness>>['tool'], ctx: ToolExecutionContext): boolean {
+      return tool.definition.isAvailable?.({ sessionKey: ctx.sessionKey, origin: ctx.origin, principal: ctx.principal }) ?? true;
+    }
+
+    it('shows the tool only to the master and IM approvers', async () => {
+      const { tool } = await harness(undefined, false, undefined, approvers);
+      expect(visible(tool, context('42'))).toBe(true);
+      expect(visible(tool, context('42', group))).toBe(true);
+      expect(visible(tool, context('7', group, ['user']))).toBe(true);
+      expect(visible(tool, context('99', group, ['user', 'admin']))).toBe(false);
+      expect(visible(tool, context('99', {}, ['trusted']))).toBe(false);
+      expect(visible(tool, context('7', { platform: 'qq' }, ['user']))).toBe(false);
+      // 静态查询没有发起人：不可见。
+      expect(tool.definition.isAvailable?.({ sessionKey: 's', origin: context().origin })).toBe(false);
+    });
+
+    it('ignores approverIds while the IM approval channel is off', async () => {
+      const { tool } = await harness(undefined, false, undefined, { ...approvers, enabled: false });
+      expect(visible(tool, context('7', group, ['user']))).toBe(false);
+      expect(visible(tool, context('42'))).toBe(true);
+    });
+
+    it('refuses a group member or stranger who calls it anyway and audits change_draft_forbidden', async () => {
+      const { store, tool } = await harness(undefined, true, undefined, approvers);
+      await expect(tool.definition.execute({ files: [ping], summary: 'x' }, context('99', group, ['user', 'member'])))
+        .rejects.toBeInstanceOf(SelfChangeDraftForbiddenError);
+      await expect(tool.definition.execute({ files: [ping], summary: 'x' }, context('99', {}, ['user'])))
+        .rejects.toBeInstanceOf(SelfChangeDraftForbiddenError);
+      expect(await store.list()).toEqual([]);
+      expect(events).toEqual([
+        expect.objectContaining({ kind: 'self_change', outcome: 'deny', reasonCode: 'change_draft_forbidden', userId: '99', actorId: '99', sceneId: 'group:500', turnId: 'turn-1' }),
+        expect.objectContaining({ kind: 'self_change', outcome: 'deny', reasonCode: 'change_draft_forbidden', userId: '99', sceneId: 'private:42' }),
+      ]);
+    });
+
+    it('lets an IM approver draft and submit', async () => {
+      const { store, tool } = await harness(undefined, true, undefined, approvers);
+      const result = await tool.definition.execute({ files: [ping], summary: '加 /ping 指令' }, context('7', group, ['user']));
+      expect(result).toContain('Submitted for approval');
+      expect((await store.list())[0]).toMatchObject({ status: 'pending', origin: { userId: '7' } });
+    });
+
+    it('without IM approval settings only the master may draft', async () => {
+      const { tool } = await harness(undefined, true);
+      await expect(tool.definition.execute({ files: [ping], summary: 'x' }, context('7', group, ['user'])))
+        .rejects.toBeInstanceOf(SelfChangeDraftForbiddenError);
+      await expect(tool.definition.execute({ files: [ping], summary: 'x' }, context('42', group))).resolves.toContain('Submitted for approval');
+    });
+
+    it('stops drafting once 3 changes wait for approval across the instance', async () => {
+      const { store, tool, queue } = await harness(undefined, true);
+      for (const sceneId of ['501', '502', '503']) {
+        const result = await tool.definition.execute({ files: [ping], summary: sceneId }, context('42', { scope: 'group', sceneId }));
+        expect(result).toContain('Submitted for approval');
+      }
+      const fourth = await tool.definition.execute({ files: [ping], summary: '504' }, context('42', { scope: 'group', sceneId: '504' }));
+      expect(fourth).toContain('3 changes to this bot are already waiting');
+      expect(fourth).toContain('at most 3 at a time');
+      expect((await store.list()).map(record => record.status)).toEqual(['pending', 'pending', 'pending']);
+      expect(queue.list()).toHaveLength(3);
+      expect(events.at(-1)).toMatchObject({ outcome: 'deny', reasonCode: 'change_pending_cap_reached', sceneId: 'group:504', payload: { pending: 3, limit: 3 } });
+    });
+  });
+
   describe('without a supervisor to restart (#1051 F1)', () => {
     const hostConfigImpact: SelfChangeImpactPort = { hostConfigKeys: ['http'], planFiles: () => ({ kind: 'none', reasons: [] }) };
     const portPatch = { expected_revision: 'rev-1', patches: [{ op: 'set', path: ['http', 'port'], value_json: '8087' }] };

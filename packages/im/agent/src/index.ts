@@ -436,6 +436,7 @@ export {
   DEFAULT_CHANGE_IDLE_TTL_MS,
   DEFAULT_CHANGE_PRUNE_INTERVAL_MS,
   DEFAULT_CHANGE_RETENTION_MS,
+  DEFAULT_MAX_PENDING_CHANGES,
   FORBIDDEN_CHANGE_CONFIG_KEYS,
   MAX_CHANGE_BYTES,
   MAX_CHANGE_FILES,
@@ -508,6 +509,7 @@ export {
 export {
   SELF_CHANGE_APPROVAL_TOOL,
   SelfChangeApprovals,
+  SelfChangePendingCapError,
   SelfChangePendingLimitError,
   approvalOrigin as selfChangeApprovalOrigin,
   selfChangeApprovalArgs,
@@ -532,6 +534,12 @@ export {
   type SelfChangeTrialOptions,
   type SelfChangeTrialResult,
 } from './self-change/trial.js';
+export {
+  SELF_CHANGE_MASTER_ROLE,
+  SelfChangeDraftForbiddenError,
+  canDraftSelfChange,
+  type SelfChangeDrafter,
+} from './self-change/drafters.js';
 export {
   AI_SESSION_EVENTS_TABLE,
   AI_SESSION_EVENT_MODEL,

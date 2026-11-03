@@ -79,6 +79,7 @@ export class ToolIndex {
     if (!predicate) return true;
     const available = predicate(Object.freeze({ sessionKey: context.sessionKey, origin: context.origin,
       ...(context.accountProfile ? { accountProfile: Object.freeze({ writableFields: Object.freeze([...context.accountProfile.writableFields]) }) } : {}),
+      ...(context.principal ? { principal: Object.freeze({ subjectId: context.principal.subjectId, roles: Object.freeze([...context.principal.roles]) }) } : {}),
     }));
     if (typeof available !== 'boolean') {
       throw new TypeError(`Agent Tool ${entry.qualifiedName} isAvailable must return a boolean`);

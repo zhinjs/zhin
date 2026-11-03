@@ -308,6 +308,7 @@ async function bindTools(
     .filter(({ descriptor }) => !turn?.session
       || index.isAvailable(descriptor.owner, descriptor.name, { sessionKey: turn.session.key, origin: turn.origin,
         ...(turn.input?.contextState?.bot?.profile ? { accountProfile: { writableFields: turn.input.contextState.bot.profile.writableFields } } : {}),
+        principal: { subjectId: turn.principal.subjectId, roles: turn.principal.roles },
       }))
     .map((r) => Object.freeze({
       ...r.descriptor,

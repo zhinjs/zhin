@@ -7,7 +7,8 @@
  * - **永远是新鲜人批**：只认带人工渠道（`console` / `im_dm` / `im_approver_group`）的批准；回合内审批端口、
  *   bypass、自动审核都不会结算这张卡（它不是任何工具调用，硬闸的同参数消费也对不上）。没有渠道的「批准」按驳回处理。
  * - 批准绑定 `content_hash`：结算时变更内容与卡片上的摘要不一致 → `rejected`（`change_hash_mismatch`）。
- * - 同一发起会话同时最多 1 个 `pending`；默认 24 小时超时 → `expired`。
+ * - 同一发起会话同时最多 1 个 `pending`，全实例同时最多 {@link DEFAULT_MAX_PENDING_CHANGES} 个（#1051 F4）；
+ *   默认 24 小时超时 → `expired`。
  * - 队列只在内存里：每次启动 {@link SelfChangeApprovals.restore} 为磁盘上仍 `pending` 的变更按剩余时限重建卡片。
  *
  * 批准后停在 `approved`，经 `onApproved` 交给生效（快照、写入、热重载 / 重启、回报，见 `apply.ts`）。
@@ -20,7 +21,7 @@ import {
   type ToolApprovalOrigin,
   type ToolApprovalQueue,
 } from '../security/tool-approval-queue.js';
-import { DEFAULT_CHANGE_IDLE_TTL_MS } from './policy.js';
+import { DEFAULT_CHANGE_IDLE_TTL_MS, DEFAULT_MAX_PENDING_CHANGES } from './policy.js';
 import type { SelfChangePreview } from './preview.js';
 import { SelfChangeNotFoundError, SelfChangeStateError, type SelfChangeOrigin, type SelfChangeRecord, type SelfChangeStore } from './store.js';
 
@@ -49,11 +50,25 @@ export class SelfChangePendingLimitError extends Error {
   }
 }
 
+/** 全实例待审变更已到上限（#1051 F4）。 */
+export class SelfChangePendingCapError extends Error {
+  readonly pending: number;
+  readonly limit: number;
+  constructor(pending: number, limit: number) {
+    super(`${pending} changes are already waiting for approval (limit ${limit})`);
+    this.pending = pending;
+    this.limit = limit;
+    this.name = 'SelfChangePendingCapError';
+  }
+}
+
 export interface SelfChangeApprovalsOptions {
   readonly store: SelfChangeStore;
   readonly queue: ToolApprovalQueue;
   /** 审批时限；默认 24 小时（与 `pending` 闲置清理同一时限）。 */
   readonly ttlMs?: number;
+  /** 全实例同时待审上限；默认 {@link DEFAULT_MAX_PENDING_CHANGES}。 */
+  readonly maxPending?: number;
   readonly now?: () => number;
   readonly onError?: (error: unknown) => void;
   /** 结算为 `approved` 后调用（切片 E：交给 {@link import('./apply.js').SelfChangeApplier} 生效）。出错只上报。 */
@@ -73,6 +88,8 @@ export class SelfChangeApprovals {
   readonly #store: SelfChangeStore;
   readonly #queue: ToolApprovalQueue;
   readonly #ttlMs: number;
+  /** 全实例同时待审上限。 */
+  readonly maxPending: number;
   readonly #now: () => number;
   readonly #onError: (error: unknown) => void;
   readonly #onApproved?: (record: SelfChangeRecord) => void | Promise<void>;
@@ -87,6 +104,10 @@ export class SelfChangeApprovals {
     this.#store = options.store;
     this.#queue = options.queue;
     this.#ttlMs = options.ttlMs ?? DEFAULT_CHANGE_IDLE_TTL_MS;
+    const maxPending = options.maxPending;
+    this.maxPending = typeof maxPending === 'number' && Number.isInteger(maxPending) && maxPending > 0
+      ? maxPending
+      : DEFAULT_MAX_PENDING_CHANGES;
     this.#now = options.now ?? Date.now;
     this.#onError = options.onError ?? (() => undefined);
     this.#onApproved = options.onApproved;
@@ -100,8 +121,14 @@ export class SelfChangeApprovals {
     return null;
   }
 
+  /** 全实例当前等待审批的变更数。 */
+  async pendingCount(): Promise<number> {
+    return (await this.#store.list()).filter(record => record.status === 'pending').length;
+  }
+
   /**
-   * 把 `ready` 的变更提交审批。同会话已有 `pending` 时抛 {@link SelfChangePendingLimitError}，变更保持 `ready`
+   * 把 `ready` 的变更提交审批。同会话已有 `pending` 时抛 {@link SelfChangePendingLimitError}；全实例待审已到
+   * {@link maxPending} 时抛 {@link SelfChangePendingCapError}。两种情况变更都保持 `ready`
    * （24 小时未提交按 §6a 过期清理）。
    */
   submit(id: string, options: SelfChangeSubmitOptions = {}): Promise<SelfChangeDecisionResult> {
@@ -111,6 +138,8 @@ export class SelfChangeApprovals {
       if (current.status !== 'ready') throw new SelfChangeStateError(current.status, 'be submitted');
       const pending = await this.pendingFor(current.origin);
       if (pending) throw new SelfChangePendingLimitError(pending.id);
+      const waiting = await this.pendingCount();
+      if (waiting >= this.maxPending) throw new SelfChangePendingCapError(waiting, this.maxPending);
       const record = await this.#store.transition(id, 'pending', {
         actor: 'policy',
         actorId: current.origin.userId,

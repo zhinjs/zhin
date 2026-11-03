@@ -63,6 +63,8 @@
 
 **本地插件根与无守护进程（#1051 F1）。** 宿主从当前已提交 generation 的源码归属里取项目内的本地插件根（workspace / 本地路径插件；真实路径须在项目根内、不含 `node_modules`，所以指向 `node_modules` 或项目外的符号链接不算），起草、试跑（按插件根分组）与生效三处共用同一份：`plugins/<x>/commands/...` 等约定目录可以起草，`node_modules` 里的插件仍拒绝；每次使用时重读，HMR 新一代自动更新。只有 `zhin start` 守护进程拉起（`ZHIN_SUPERVISOR_PID` 须为十进制 pid 且等于父进程 pid，镜像里继承的固定值如 `ZHIN_SUPERVISOR_PID=1` 不算）且不是 `--once` 时才算能自动重启；无守护进程或 `--once` 都视为无法自动重启：否则影响面为 `process` 的变更试跑通过后停在 `ready`、**不提交审批**，`change_draft` 告诉模型本实例没法自动生效（审计 `change_restart_unavailable`）；已批准的变更生效时若计划要重启则不动文件直接 `failed`，生效中途才升级为重启（热重载要求重启、配置补丁需要重启）则按快照回滚、不重启，结论 `rolled_back`，原因码同为 `change_restart_unavailable`。回滚本身需要重启时（恢复配置要重启、恢复后的热重载要求重启、`recover()` 接续的回滚要重启）不请求重启、也不报「已回滚」，直接急停并私聊主人。
 
+**谁能起草与全实例待审上限（#1051 F4）。** 只有 Bot 的**主人**（端点 owner / `trigger.masters`，回合角色 `master`）与 **IM 审批人**（`toolHardGate.imApproval` 开启时 `approverIds` 里该平台的人）能起草：其他人的回合里 `change_draft` 不出现在工具面（模型看不到就不会尝试）；万一被调用，直接拒绝、不写暂存，审计 `change_draft_forbidden`（`deny`）。群成员、群管理员、`trusted`、私聊陌生人都不能起草；审批人范围不变。另外全实例同时最多 3 个待审变更：已满时 `change_draft` 不起草、告诉模型等主人处理掉几张再来（审计 `change_pending_cap_reached`），挡住多会话刷卡。
+
 ```yaml
 ai:
   agent:

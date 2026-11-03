@@ -5,6 +5,8 @@ import { CapabilityIngress } from '../../src/plugin-runtime/capability-ingress.j
 import { createDeferredCapabilityPlan } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import type { TurnAccessContext } from '../../src/turn/turn-ingress.js';
 import { createNativeSelfProfileToolFeatures } from '../../src/plugin-runtime/native-self-profile-tools.js';
+import { createNativeSelfChangeToolFeatures } from '../../src/plugin-runtime/native-self-change-tools.js';
+import { resolveToolHardGateImApproval } from '../../src/security/tool-hard-gate.js';
 
 function fixture(restricted = false) {
   const owner = rootPluginId();
@@ -35,10 +37,10 @@ function fixture(restricted = false) {
   return { owner, ready, snapshot: { ...base, projections: new Map([[toolFeatureId, new ToolIndex(all, base)]]) } };
 }
 
-function turn(sessionKey: string): TurnAccessContext {
+function turn(sessionKey: string, principal = { subjectId: 'member', roles: ['user'] as readonly string[] }): TurnAccessContext {
   return {
     origin: { kind: 'im', platform: 'icqq', endpoint: sessionKey.includes('bot-a') ? 'bot-a' : 'bot-b', scope: 'group', sceneId: 'scene' },
-    principal: { subjectId: 'member', roles: ['user'] },
+    principal,
     policy: { permissions: [], unattended: false }, session: { key: sessionKey },
   };
 }
@@ -61,6 +63,23 @@ describe('Tool availability projection', () => {
     expect((await ingress.read(snapshot, owner, () => true, profile(['nickname']))).tools.map(tool => tool.name)).toEqual(['get_self_profile', 'set_self_profile']);
     expect((await ingress.read(snapshot, owner, () => true, { ...access, origin: { kind: 'http', sessionId: 'http' } })).tools).toEqual([]);
   });
+  it('shows change_draft only to the master and IM approvers (#1051 F4)', async () => {
+    const { owner, snapshot: existing } = fixture();
+    const slots = createNativeSelfChangeToolFeatures({
+      store: () => undefined,
+      imApproval: () => resolveToolHardGateImApproval({ enabled: true, approverIds: ['approver'] }),
+    }).map(({ name, definition }) => createCapabilitySlot({ owner, feature: toolFeatureId, localName: name, source: `/native/${name}`, definition }));
+    const base = { ...existing, capabilities: new Map(slots.map(slot => [slot.id, slot])) };
+    const snapshot = { ...base, projections: new Map([[toolFeatureId, new ToolIndex(slots, base)]]) };
+    const ingress = new CapabilityIngress();
+    const names = async (principal: { subjectId: string; roles: readonly string[] }) =>
+      (await ingress.read(snapshot, owner, () => true, turn('current', principal))).tools.map(tool => tool.name);
+    expect(await names({ subjectId: 'member', roles: ['user', 'admin'] })).toEqual([]);
+    expect(await names({ subjectId: 'friend', roles: ['trusted'] })).toEqual([]);
+    expect(await names({ subjectId: 'owner', roles: ['master'] })).toEqual(['change_draft']);
+    expect(await names({ subjectId: 'approver', roles: ['user'] })).toEqual(['change_draft']);
+  });
+
   it('filters cooldown tools before resident, persisted loads, discovery and load_tool are built', async () => {
     const { owner, snapshot, ready } = fixture();
     const ingress = new CapabilityIngress();
@@ -68,7 +87,7 @@ describe('Tool availability projection', () => {
     expect(capabilities.tools.map(tool => tool.name)).toEqual(['ordinary']);
     expect(ready).toHaveBeenCalledTimes(3);
     expect(ready).toHaveBeenCalledWith({ sessionKey: 'icqq:bot-a:group:scene',
-      origin: turn('icqq:bot-a:group:scene').origin });
+      origin: turn('icqq:bot-a:group:scene').origin, principal: { subjectId: 'member', roles: ['user'] } });
     const plan = createDeferredCapabilityPlan({ capabilities,
       sessionSnapshot: { loadedSkills: [], loadedTools: { loaded: 1 } },
       config: { deferredTools: { alwaysLoadedTools: ['resident'] } }, persistSnapshot: async () => undefined,
