@@ -127,6 +127,15 @@ Committing only switches the pointer -- the old generation is not destroyed imme
 
 A failed HMR transaction cancels the remaining changes in the batch and invokes `onError`; it will not silently replay. HMR stop closes admission and awaits the in-flight reload. Once a process restart is required, the coordinator rejects further generation work. Post-commit Console or logging observer failures are diagnostic only and cannot rewrite a committed reload as failed.
 
+### Pause and resume handlers must not wait on model-fetching work
+
+Plugins can subscribe to `hmr.pause` (awaited before any candidate module is evaluated) and `hmr.resume` (delivered after commit or rollback). Both run **inside the Root control queue**, the same serial queue behind `RootRuntime.control`. Host model fetching (`acquire*` / `withRuntime` from `createModelConfigurationAccess`) captures the current generation's model configuration through that queue too. As a result:
+
+- Calling `control()` or fetching a model directly from a handler is rejected immediately with `Recursive Runtime control` (same async context). In `hmr.pause` that fails the pause and aborts the reload, keeping the old generation; in `hmr.resume` it is only reported as a control error and does not roll back the committed generation.
+- Awaiting an in-flight task that will still fetch a model (for example an Agent turn that has not resolved its model yet) deadlocks: that fetch is queued behind the reload, and the reload is waiting for the handler.
+
+Keep handlers to local, bounded checkpoints: record the task, set a flag, cooperate with `signal`, and return. Let the plugin's own task finish any model-dependent work after the handler returns; never `await` it inside the handler. The Runtime does not detect such waits; guard tests in `packages/im/runtime/tests/root-runtime.test.ts` and `basic/cli/tests/plugin-runtime/personal-models/configuration.test.ts` lock the current ordering.
+
 ## Why Resources Must Be Attached to Lifecycle
 
 Hot reload = old generation destroyed, new generation rebuilt. If a plugin stores resources in **module-level variables** (`let _db = ...`), when the module is reloaded the old variable dies with the old generation, but some callbacks still hold references to it -- this is the classic cause of "ghost singleton" incidents (timers firing repeatedly, using an already-closed database connection).
