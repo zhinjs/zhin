@@ -202,6 +202,8 @@ export interface AgentTurnIngressRouteOptions {
 export class AgentTurnIngressRoute implements IngressRoute {
 
   #admissionGate: TurnAdmissionGate | undefined;
+  /** Whether this generation's gate has the ADR 0038 group merge window. */
+  #mergeWindowEnabled = false;
   #ambient: AmbientEngagement | null | undefined;
   /** Chat-model judge(s) from `ai.trigger.ambient.judge`; the fallback of the decision route. */
   #ambientLlmJudge: EngagementJudge | undefined;
@@ -587,6 +589,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   #gate(): TurnAdmissionGate {
     if (!this.#admissionGate) {
       const queue = normalizeInboundQueueConfig(this.options.agent.service.getAgentConfig()?.inboundQueue);
+      this.#mergeWindowEnabled = queue.merge.enabled;
       this.#admissionGate = new TurnAdmissionGate({
         maxQueuedTurns: queue.maxQueuedTurns,
         queueTtlMs: queue.ttlMs,
@@ -989,6 +992,29 @@ export class AgentTurnIngressRoute implements IngressRoute {
       } else if (ambientKey) {
         this.#ambientEngagement()?.noteSpoke(ambientKey);
       }
+      // #725: ordinary IM turns go through the admission gate. Workroom turns
+      // and products that resolve their own turn intent keep their semantics.
+      const intentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
+      const gate = workroomAgentTurn || intentResolver || message.metadata?.turnIntent !== undefined
+        ? undefined
+        : this.#gate();
+      const plainText = isPlainTextRuntimeMessage(message);
+      const mergeable = gate !== undefined && !liveRoom && isMergeableGroupTurn({
+        message,
+        trigger,
+        plainText,
+        isMaster: senderRoles.isMaster,
+        content: matched.content,
+      });
+      // ADR 0038 R0-fix (#1049, relative to #1104): the merge window is keyed by
+      // Session, so a mergeable group wake waits in the shared scene Session (as
+      // danmaku does) and different senders can land in one window. Masters,
+      // commands, stop words, media / quote / forward, DMs and `merge.enabled: false`
+      // stay in the sender's personal Session; so does `clear`, which only ever
+      // archives the caller's own Session.
+      const personalSessionKey = sessionKey;
+      const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !isClearCommand(matched.content);
+      if (sceneMerge) sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
       audit({
         kind: 'inbound_wake',
         outcome: 'allow',
@@ -1017,7 +1043,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const productIntent = taskIntentResolver || message.metadata?.turnIntent !== undefined
           ? (await resolveProductTurnIntent(message, senderRoles, undefined, taskIntentResolver).catch(() => undefined))?.kind
           : undefined;
-        const routedTask = await routeTaskInterjection(detachedTasks, { ...taskActor, sessionId: sessionKey }, matched.content, productIntent, { locale: message.locale });
+        let routedTask = await routeTaskInterjection(detachedTasks, { ...taskActor, sessionId: sceneMerge ? personalSessionKey : sessionKey }, matched.content, productIntent, { locale: message.locale });
+        if (!routedTask.handled && sceneMerge) {
+          routedTask = await routeTaskInterjection(detachedTasks, { ...taskActor, sessionId: sessionKey }, matched.content, productIntent, { locale: message.locale });
+        }
         if (routedTask.handled) {
           if (routedTask.reply) await reply(routedTask.reply);
           logger.info(formatCompact({ op: 'agent_host_task_interjection', kind: routedTask.kind, task: routedTask.taskId }));
@@ -1031,18 +1060,23 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       }
 
-      // #725: ordinary IM turns go through the admission gate. Workroom turns
-      // and products that resolve their own turn intent keep their semantics.
-      const intentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
-      const gate = workroomAgentTurn || intentResolver || message.metadata?.turnIntent !== undefined
-        ? undefined
-        : this.#gate();
       const senderId = turnAccess.principal.subjectId;
       if (gate && isCancelIntent(matched.content)) {
-        const stopped = gate.stop(sessionKey, senderId, senderRoles.isMaster);
+        let stoppedKey = sessionKey;
+        let stopped = gate.stop(sessionKey, senderId, senderRoles.isMaster);
+        // A stop word is never mergeable, so it routes to the personal Session; a
+        // merged group turn of the same scene runs in the scene Session (R0-fix).
+        if (stopped !== 'stopped' && this.#mergeWindowEnabled && !liveRoom && !ambient
+          && turnAccess.origin.kind === 'im' && turnAccess.origin.scope !== 'private') {
+          const sceneKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
+          if (sceneKey !== sessionKey && gate.stop(sceneKey, senderId, senderRoles.isMaster) === 'stopped') {
+            stopped = 'stopped';
+            stoppedKey = sceneKey;
+          }
+        }
         if (stopped === 'stopped') {
           await reply(t(message.locale, 'stopped'));
-          logger.info(formatCompact({ op: 'agent_host_turn_stopped', sessionKey }));
+          logger.info(formatCompact({ op: 'agent_host_turn_stopped', sessionKey: stoppedKey }));
           return true;
         }
         // Nothing of the sender's to stop: handle it as an ordinary message.
@@ -1080,7 +1114,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
         );
         let inbound = preprocessed;
         if (gate) {
-          const plainText = isPlainTextRuntimeMessage(message);
           const admitted = await gate.admit({
             sessionKey,
             senderId,
@@ -1088,13 +1121,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             plainText,
             // Masters keep their own turn (ADR 0038 §0.3), in a live room too.
             live: liveRoom && !senderRoles.isMaster,
-            mergeable: !liveRoom && isMergeableGroupTurn({
-              message,
-              trigger,
-              plainText,
-              isMaster: senderRoles.isMaster,
-              content: matched.content,
-            }),
+            mergeable,
             ...(message.sender?.name ? { senderName: message.sender.name } : {}),
             ...(message.message?.id ? { messageId: message.message.id } : {}),
             access: turnAccess,
@@ -1278,7 +1305,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               shell: liveDanmaku ? undefined : turnPolicy.shell,
               network: turnPolicy.network,
               sessionKey,
-              ...(!workroomAgentTurn && !liveRoom && !ambient
+              ...(!workroomAgentTurn && !liveRoom && !ambient && !sceneMerge
                 ? { personalSession: runtimePersonalSessionAddress(turnAccess, options.projectRoot) } : {}),
               contextState,
               ...(sceneEvents.length ? { sceneEvents } : {}),
