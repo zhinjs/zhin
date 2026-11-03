@@ -1,0 +1,19 @@
+basic/cli/tests/plugin-runtime/configuration-cross-entry.test.ts
+  s_e3b3fa774a1665::t_8e1b9b0b919f5a 1-336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5648827615ac565cc6798d6dcb6a487e6b123bc8",
+  "prompts": {},
+  "sessions": {
+    "s_e3b3fa774a1665": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a248-e3f7-75f2-8c9a-057d909d731e",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
