@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { hostGet } from '../../src/utils/host-http.js';
+import { connectableHost, hostGet } from '../../src/utils/host-http.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -49,5 +49,14 @@ describe('hostGet', () => {
       status: 0,
       error: '无法连接 http://127.0.0.1:8086/api（请先 zhin runtime start）',
     });
+  });
+});
+
+describe('connectableHost', () => {
+  it.each([
+    ['0.0.0.0', '127.0.0.1'], ['::', '[::1]'], ['[::]', '[::1]'], ['::1', '[::1]'], ['[::1]', '[::1]'],
+    ['127.0.0.1', '127.0.0.1'], ['localhost', 'localhost'], ['bot.example.com', 'bot.example.com'],
+  ])('maps the bind address %s to the connectable host %s', (bind, host) => {
+    expect(connectableHost(bind)).toBe(host);
   });
 });

@@ -474,6 +474,8 @@ export const CONFIG_RPC = Object.freeze({
   PATCH: 'config:patch',
   /** Trusted project administration; ordinary page patches retain their allowlist. */
   PATCH_PROJECT: 'config:patch-project',
+  /** Trusted project read (full scope): one path or the whole document, masked unless `reveal`. */
+  GET_PROJECT: 'config:get-project',
   APPLY: 'config:apply',
 } as const);
 
@@ -540,6 +542,23 @@ export type ConsoleConfigApplyResult =
   | Readonly<{ status: 'unconfirmed'; message: string }>;
 
 /** A trusted project write may reach storage without obtaining its acknowledgement. */
+/** `config:get-project` request: omit `path` (or pass `[]`) to read the whole document. */
+export interface ConsoleConfigProjectReadRequest {
+  readonly path?: readonly string[];
+  /** Return stored values verbatim; otherwise schema/secret/env-reference values are masked. */
+  readonly reveal?: boolean;
+}
+
+/** `config:get-project` result. `value` is absent when `exists` is false. */
+export type ConsoleConfigProjectRead = Readonly<{
+  revision: string;
+  path: readonly string[];
+  exists: boolean;
+  value?: unknown;
+  /** True when values were masked (default); false only for an explicit `reveal`. */
+  redacted: boolean;
+}>;
+
 export type ConsoleConfigProjectPatchResult = ConsoleConfigPatchResult | Readonly<{
   status: 'unconfirmed';
   expectedRevision: string;
