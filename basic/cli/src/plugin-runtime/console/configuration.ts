@@ -1,6 +1,6 @@
 import { ConfigDocumentConflictError, type ConfigFileDocument } from '@zhin.js/config-file';
 import { isDeepStrictEqual } from 'node:util';
-import type { ConsoleConfigApplication, ConsoleConfigApplicationStatus, ConsoleConfigApplyResult, ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigProjectPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
+import type { ConsoleConfigApplication, ConsoleConfigApplicationStatus, ConsoleConfigApplyResult, ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigProjectPatchResult, ConsoleConfigProjectRead, ConsoleConfigProjectReadRequest, ConsoleConfigSource } from '@zhin.js/console-protocol';
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
   applyConfigPatches,
@@ -336,6 +336,36 @@ export class ConsoleConfigurationStore {
       }
       throw error;
     }
+  }
+
+  /**
+   * Trusted project read (`config:get-project`, full scope only). Values are masked by
+   * section schema, secret-like keys and unexpanded environment references unless the
+   * caller explicitly asks to `reveal`; a section whose schema cannot be read is masked whole.
+   */
+  readProject(request: ConsoleConfigProjectReadRequest = {}): Promise<ConsoleConfigProjectRead> {
+    return this.#afterMutations(async () => {
+      const { document, revision } = await this.#document.read();
+      const path = Object.freeze([...(request.path ?? [])]);
+      const reveal = request.reveal === true;
+      const value = path.length ? readPath(document, path) : document;
+      if (value === undefined) return Object.freeze({ revision, path, exists: false, redacted: !reveal });
+      // Only a verbatim whole-document reply needs its own copy; masking builds new values.
+      if (reveal) return Object.freeze({ revision, path, exists: true, value: path.length ? value : structuredClone(document), redacted: false });
+      let masked: unknown;
+      if (path.length) masked = await this.#maskedValue(document, path);
+      else {
+        const keys = Object.keys(document);
+        const schemas = await this.#schemas.readJsonMany(keys, document);
+        masked = Object.freeze(Object.fromEntries(keys.map(key => {
+          const schema = schemas.get(key);
+          // Fail closed: without the schema we cannot rule out a schema-marked secret under an ordinary key.
+          return [key, schema instanceof Error || schema === undefined ? REDACTED_CONFIG_VALUE
+            : maskConfigValue(schema, [key], document[key])] as const;
+        })));
+      }
+      return Object.freeze({ revision, path, exists: true, value: masked, redacted: true });
+    });
   }
 
   /** Conflict evidence for trusted writes: never echo secrets or unexpanded references. */

@@ -104,16 +104,36 @@ zhin setup --global        # 在 ~/.zhin 初始化全局实例
 
 选择网络数据库时，CLI 会检查端口范围，把连接字段写成环境变量引用，实际值写入 `.env`。完成后运行 `npx zhin config check`，可以在启动前发现缺失的数据库变量；如果连接值只在 `.env.production` 里，使用 `npx zhin config check --environment production`。
 
-### config：读写配置文件
+### config：读写配置
 
 ```bash
-zhin config list
-zhin config get <key>            # 支持嵌套路径，如 ai.enabled
-zhin config set <key> <value>    # value 支持 JSON
-zhin config delete <key>
-zhin config path                 # 显示配置文件路径
+zhin config list                       # 完整配置（敏感值打码）
+zhin config get <key>                  # 点路径 ai.enabled 或 JSON Pointer /plugin/key.with.dot
+zhin config set <key> <value>          # value 按 JSON 解析，失败时作为字符串
+zhin config unset <key>                # 别名 delete / del
+zhin config path                       # 显示本地配置文件路径
 zhin config check [--fix] [--json] [--strict]
 ```
+
+`get` / `set` / `unset` / `list` **默认连接运行中的 Host**（`POST {base}/console/request`）：写入先读取配置版本，再用 `config:patch-project` 一次性提交，由 Host 完成 CAS、Schema 校验、保存和按需生效。CLI 不自己读改写文件，也不重试。
+
+- 连接：`--host <url>` 优先，token 只取 `ZHIN_CONSOLE_TOKEN`（或 `--token-env <name>` 指定的变量）。未给 `--host` 时按配置 `http.host` / `http.port` / `http.base` 推导地址（监听地址 `0.0.0.0` / `::` 会改连 `127.0.0.1` / `[::1]`），此时环境变量未设置才回退到配置 `http.token`。非 loopback 地址携带 token 必须用 HTTPS。
+- **Host 未运行时直接失败，不会回退到离线写文件。** 需要离线操作时显式加 `--offline`：用与 Host 相同的 `patchProject` 规则（版本检查、插件声明不可改、逐段 Schema 校验）在本地校验后保存；不启动 Runtime、不执行插件 `setup`、CLI 不向 Host 发送任何请求，但加载插件声明时会执行模块顶层代码（模块自身可能访问网络）。离线保存不会让运行中的 Host 生效，需要 `--watch config` 或在 Console 中「应用配置」。
+- 读取默认按 Schema 打码：`secret` / `writeOnly` / `hidden` / 密码字段、密钥类键名以及未展开的 `${...}` / `env://` 引用都显示为 `[redacted]`；加 `--reveal` 才输出原值。
+- `get` / `list` / `set` / `unset` 加 `--json` 时只输出一行紧凑 JSON，便于脚本处理；不加时只输出可读文本（`config path`、`config check` 的输出格式见各自说明）。
+- 退出码 `6` 时会同时输出 `requestId` 与 `expectedRevision`（`--json` 在结果对象中，否则打印到 stderr），用于核对这次写入。
+
+退出码是公开契约：
+
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | 成功：已保存并生效（或无需生效）；读取成功；`--offline` 已保存（尚未在运行中的 Host 生效） |
+| `3` | 已保存，部分配置需重启进程后生效 |
+| `4` | 版本冲突：配置已被其他地方修改，未保存；输出最新值（已打码） |
+| `5` | 校验失败（含插件声明写入被拒）：未保存时输出字段路径；配置已保存但生效前校验失败时也返回 `5`，请用 `zhin config get` 核对 |
+| `6` | 结果未知：写请求已发出但未收到确定回执（含网关 502/504 等非权威错误），或已保存但生效结果未确认。附带 `requestId` / `expectedRevision`；请先 `zhin config get` 核对，**不要直接重试** |
+| `7` | 未连接到运行中的 Host：请求未发出，文件未修改 |
+| `1` | 其他错误：参数错误、配置项不存在、鉴权失败（401/403）、Host 明确拒绝请求（未保存）；或**已保存但未生效**（被更新修订替代、部分配置生效失败/受阻，文件已写入） |
 
 `config check` 校验配置文件，`--fix` 自动修复可以安全迁移的字段。数据库连接变量缺失本身就是错误；其他警告可以用 `--strict` 提升为错误，适合在 CI 中使用。
 

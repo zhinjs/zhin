@@ -1,34 +1,16 @@
 import { modelRuntimeBaselineToken, validateModelRuntimeConfig, type ModelRuntimeConfig } from '@zhin.js/agent/model-runtime';
-import { ConfigValidationError, expandEnvironmentValue, type RootConfigUpdateHandler } from '@zhin.js/runtime';
+import { ConfigValidationError, type RootConfigUpdateHandler } from '@zhin.js/runtime';
 import type { Token } from '@zhin.js/plugin-runtime';
 import { hostModelOwnerId } from '../personal-models/host-identity.js';
 import { isDeepStrictEqual } from 'node:util';
+import { modelConfigurationEnvironmentReferences, modelConfigurationPaths } from '../../utils/model-configuration-environment.js';
 
 /** One model dependency group; unrelated AI authority remains on its existing lifecycle. */
 export function createModelConfigurationUpdateHandler(initialConfig: ModelRuntimeConfig, projectRoot: string): RootConfigUpdateHandler {
-  const paths: readonly (readonly string[])[] = Object.freeze([
-    ['ai', 'providers'], ['ai', 'modelCatalog'], ['ai', 'modelPolicy'],
-    ...Object.keys(initialConfig.agents ?? {}).flatMap(name => ['provider', 'model', 'preset'].map(field => ['ai', 'agents', name, field])),
-  ].map(path => Object.freeze(path)));
+  const paths = modelConfigurationPaths(initialConfig.agents);
+  // Shared with the `--offline` validator so the Host and offline checks cannot drift apart.
   const environmentReferences = (document: Readonly<Record<string, unknown>>, expanded: ModelRuntimeConfig,
-    hasValue: (name: string) => boolean) => {
-    const references = new Set<string>();
-    const missing = new Set<string>();
-    // Use the canonical interpolation parser, including explicit fallback syntax.
-    // Marker values reveal only presence; credentials are never collected here.
-    const owned = paths.map(path => path.reduce<unknown>((value, key) => value && typeof value === 'object'
-      && Object.hasOwn(value, key) ? (value as Record<string, unknown>)[key] : undefined, document));
-    expandEnvironmentValue(owned, name => { references.add(name); return hasValue(name) ? 'present' : undefined; },
-      name => { missing.add(name); return ''; });
-    for (const connection of Object.values(expanded.modelCatalog?.connections ?? {})) {
-      if (typeof connection.secretRef !== 'string') continue;
-      const key = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(connection.secretRef)?.[1];
-      if (!key) continue;
-      references.add(key);
-      if (!hasValue(key)) missing.add(key);
-    }
-    return { references, missing };
-  };
+    hasValue: (name: string) => boolean) => modelConfigurationEnvironmentReferences(paths, document, expanded, hasValue);
   return Object.freeze({
     id: 'agent-models', paths,
     validate: ({ next, expand, hasEnvironmentValue, signal }: Parameters<NonNullable<RootConfigUpdateHandler['validate']>>[0]) => {
