@@ -67,7 +67,7 @@ pnpm add @ai-sdk/openai   # 示例：按 provider 替换
 <!-- #endregion deps-install -->
 
 <!-- #region doctor -->
-`zhin doctor --fix` 或 `zhin config check --fix` 可根据 `ai.enabled` 自动补全 `package.json`；并检查 `@zhin.js/speech` / `@zhin.js/html-renderer` optional peer。升级到 L4：`zhin doctor --upgrade-l4`。
+`zhin doctor --fix` 可根据 `ai.enabled` 自动补全 `package.json`，并检查 `@zhin.js/speech` / `@zhin.js/html-renderer` optional peer。`zhin config check --fix --offline` 用于校验后修复配置字段，不代替安装依赖。升级到 L4：`zhin doctor --upgrade-l4`。
 <!-- #endregion doctor -->
 
 <!-- #region scaffold-note -->

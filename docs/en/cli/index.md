@@ -104,18 +104,33 @@ The wizard edits the matching parts of [`zhin.config.yml`](../configuration/inde
 
 For network databases, the CLI checks the port range, writes connection fields as environment references and puts the real values in `.env`. Afterwards run `npx zhin config check` to catch missing database variables before startup; if the values only live in `.env.production`, use `npx zhin config check --environment production`.
 
-### config: Read and Write Configuration Files
+### config: Inspect, Save and Apply Configuration
 
 ```bash
 zhin config list
 zhin config get <key>            # nested paths such as ai.enabled
 zhin config set <key> <value>    # value accepts JSON
 zhin config delete <key>
+zhin config schema [section]     # Console form-schema projection
+zhin config status               # saved revision and latest application receipt
+zhin config apply [--expected-revision <revision>]
 zhin config path                 # print the config file path
-zhin config check [--fix] [--json] [--strict]
+zhin config check [--json] [--strict] [--environment production]
+zhin config check --fix --offline
+zhin config set log_level debug --offline
 ```
 
-`config check` validates the config file, and `--fix` repairs fields that can be migrated safely. Missing database connection variables are always errors; other warnings become errors with `--strict`, which suits CI.
+`list/get/set/delete/schema/status/apply` connect to the running Host by default, using its configuration service for validation, revision checks and selective application. They never start a second Runtime. Use `--live https://host.example/api` and `--token-env ZHIN_CONSOLE_TOKEN` for an explicit address and full-token environment variable. Otherwise the CLI discovers the connection from the project configuration. Pending HTTP or token changes may differ from the running listener; specify the actual connection in that case. Connection failures never fall back to local writes.
+
+`get/list` show the saved desired document, which may differ from effective settings. A save can apply some groups while leaving others pending restart. `status` shows the latest receipt; `apply` requests application of an already saved revision without rewriting it. An unconfirmed result requires checking the matching revision and operationId. A newer unrelated receipt does not prove that the original operation failed; do not blindly retry. `--json` emits one compact JSON value without additional human-readable message lines.
+
+Simple dotted paths such as `ai.enabled` remain supported. Use JSON Pointer for literal dots, for example `zhin config get /plugin/key.with.dot`; `~1` encodes `/` and `~0` encodes `~`. Arrays require existing numeric indices. Removing an item closes the index gap; `-` append and out-of-range creation are unsupported. Set the complete array to append items; source-revision checks still protect against concurrent changes.
+
+Only explicit `--offline` saves directly to the local file, without requesting application by a running Host. Offline saves load declarations, compose the complete schema and validate the candidate before committing against the original source revision. They do not execute Plugin `setup`, but declaration imports execute module top-level code. Unavailable declarations or schemas prevent saving. `schema` shows a form projection; the Host or offline composer remains responsible for full validation.
+
+Offline `schema` uses the complete composer, so the current configuration must validate first. For invalid files, start with read-only `check`, or query the schema from a Host that is still running.
+
+`config check` retains its read-only local diagnostics and does not prove that the running Host validated or applied the configuration. Missing database variables are errors; `--strict` also treats warnings as errors. `--fix` requires explicit `--offline`, performs full preflight before saving safe migrations, and does not request application. `path` always prints the local configuration path.
 
 ### doctor: Environment Diagnostics
 

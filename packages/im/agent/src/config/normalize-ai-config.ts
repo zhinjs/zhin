@@ -61,7 +61,7 @@ export function rejectRemovedAiConfigFields(ai: AIConfig | undefined): void {
   const raw = ai as Record<string, unknown> | undefined;
   if (!raw) return;
   if (raw.routes && typeof raw.routes === 'object' && Object.keys(raw.routes as object).length > 0) {
-    throw new Error('ai.routes removed; inbound routing never took effect (IM messages always go to ai.agents.zhin) — delete it or run zhin config check --fix');
+    throw new Error('ai.routes removed; inbound routing never took effect (IM messages always go to ai.agents.zhin) — delete it or run zhin config check --fix --offline');
   }
   if (raw.pipeline && typeof raw.pipeline === 'object' && Object.keys(raw.pipeline as object).length > 0) {
     throw new Error('ai.pipeline removed; use ai.agents.<role>');

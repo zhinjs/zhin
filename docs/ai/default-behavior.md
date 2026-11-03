@@ -184,7 +184,7 @@ ai:
 1. 已弃用键仍被接受，不会导致启动失败；
 2. 启动时每个已弃用键打印一次警告；
 3. `zhin config check` 报告 `ai.agent_<key>_deprecated`；
-4. `zhin config check --fix` 自动删除这些键；
+4. `zhin config check --fix --offline` 自动删除这些键；
 5. 至少保留一个 minor 版本后再从类型中删除。
 
 ## 新增开关的门禁

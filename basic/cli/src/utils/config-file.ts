@@ -21,6 +21,11 @@ function rememberSource(config: Record<string, unknown>, file: string, snapshot:
   });
 }
 
+/** Original source identity for callers reporting an unacknowledged prepared commit. */
+export function getLoadedConfigRevision(config: Record<string, unknown>): string | undefined {
+  return (config as EditableConfig)[loadedConfigSource]?.snapshot.revision;
+}
+
 export function findConfigFile(cwd: string): string | null {
   const existing = ROOT_CONFIG_FILE_NAMES
     .filter((name) => fs.existsSync(path.join(cwd, name)));

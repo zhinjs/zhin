@@ -472,6 +472,8 @@ export const CONFIG_RPC = Object.freeze({
   REPLACE_SOURCE: 'config:replace-source',
   SET: 'config:set',
   PATCH: 'config:patch',
+  /** Trusted project administration; ordinary page patches retain their allowlist. */
+  PATCH_PROJECT: 'config:patch-project',
   APPLY: 'config:apply',
 } as const);
 
@@ -536,6 +538,13 @@ export type ConsoleConfigApplyResult =
   | Readonly<{ status: 'conflict'; revision: string; message: string }>
   | Readonly<{ status: 'invalid'; message: string }>
   | Readonly<{ status: 'unconfirmed'; message: string }>;
+
+/** A trusted project write may reach storage without obtaining its acknowledgement. */
+export type ConsoleConfigProjectPatchResult = ConsoleConfigPatchResult | Readonly<{
+  status: 'unconfirmed';
+  expectedRevision: string;
+  message: string;
+}>;
 
 export type ConsoleConfigPatchResult =
   | Readonly<{
@@ -671,6 +680,7 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
 export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
   CONFIG_RPC.SET,
   CONFIG_RPC.PATCH,
+  CONFIG_RPC.PATCH_PROJECT,
   CONFIG_RPC.REPLACE_SOURCE,
   CONFIG_RPC.APPLY,
   PLUGIN_RPC.APPLY,

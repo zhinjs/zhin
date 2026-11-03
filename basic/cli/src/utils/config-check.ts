@@ -130,7 +130,7 @@ function checkDatabase(
       path: 'database.dialect',
       message: 'database.dialect 应使用 pg 而非 postgres',
       fixable: true,
-      fixHint: 'zhin config check --fix',
+      fixHint: 'zhin config check --fix --offline',
     });
     return;
   }
@@ -241,7 +241,7 @@ function checkAi(
       path: 'ai.defaultProvider',
       message: 'ai.defaultProvider 已废弃，应使用 ai.agents.zhin.provider',
       fixable: true,
-      fixHint: 'zhin config check --fix',
+      fixHint: 'zhin config check --fix --offline',
     });
   }
   if (legacy.agent?.chatModel != null || legacy.agent?.visionModel != null) {
@@ -251,7 +251,7 @@ function checkAi(
       path: 'ai.agent',
       message: 'ai.agent.chatModel / visionModel 已废弃，应使用 ai.agents.zhin.model',
       fixable: true,
-      fixHint: 'zhin config check --fix',
+      fixHint: 'zhin config check --fix --offline',
     });
   }
   if (legacy.routes != null) {
@@ -261,7 +261,7 @@ function checkAi(
       path: 'ai.routes',
       message: 'ai.routes 已废弃：入站路由从未生效，IM 消息总是交给 ai.agents.zhin',
       fixable: true,
-      fixHint: 'zhin config check --fix',
+      fixHint: 'zhin config check --fix --offline',
     });
   }
   const agents = legacy.agents;
@@ -276,7 +276,7 @@ function checkAi(
           path: `ai.agents.${name}.${key}`,
           message: `ai.agents.${name}.${key} 已弃用：入站路由从未生效，IM 消息总是交给 ai.agents.zhin`,
           fixable: true,
-          fixHint: 'zhin config check --fix',
+          fixHint: 'zhin config check --fix --offline',
         });
       }
     }
@@ -288,7 +288,7 @@ function checkAi(
       path: `ai.agent.${key}`,
       message: `ai.agent.${key} 已弃用：${reason}`,
       fixable: true,
-      fixHint: 'zhin config check --fix',
+      fixHint: 'zhin config check --fix --offline',
     });
   }
   for (const key of ['allowedTools', 'disabledTools', 'toolSearch', 'memoryMcp'] as const) {
@@ -299,7 +299,7 @@ function checkAi(
         path: `ai.${key}`,
         message: `ai.${key} 已废弃或不再生效`,
         fixable: true,
-        fixHint: 'zhin config check --fix',
+        fixHint: 'zhin config check --fix --offline',
       });
     }
   }
@@ -318,7 +318,7 @@ function checkAi(
           path: `ai.providers.${alias}.${legacyField}`,
           message: `ai.providers.${alias}.${legacyField} 应迁移为 sdk`,
           fixable: true,
-          fixHint: 'zhin config check --fix',
+          fixHint: 'zhin config check --fix --offline',
         });
       }
     }

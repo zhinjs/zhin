@@ -361,9 +361,9 @@ export interface AgentBindingConfig {
   provider: string;
   model: string;
   mcpServers?: string[];
-  /** @deprecated 入站路由从未生效；启动时告警，`zhin config check --fix` 会删除。 */
+  /** @deprecated 入站路由从未生效；启动时告警，`zhin config check --fix --offline` 会删除。 */
   priority?: number;
-  /** @deprecated 入站路由从未生效（含 hasMedia）；启动时告警，`zhin config check --fix` 会删除。 */
+  /** @deprecated 入站路由从未生效（含 hasMedia）；启动时告警，`zhin config check --fix --offline` 会删除。 */
   match?: RouteMatchConfig;
   /** Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 */
   nickname?: string;
@@ -611,7 +611,7 @@ export interface AIConfig {
     execApprovalMode?: 'ask' | 'auto' | 'bypass';
     subagentExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     workerExecApprovalMode?: 'ask' | 'auto' | 'bypass';
-    /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
+    /** @deprecated No effect (#735); `zhin config check --fix --offline` removes it. */
     taskExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     /** 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） */
     phaseTrace?: boolean;

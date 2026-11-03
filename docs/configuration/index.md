@@ -94,6 +94,29 @@ npx zhin runtime start --mode production      # 均不监听
 
 模型目录项删除、重命名、Agent 绑定拓扑或能力契约的破坏性修改不支持热更新，保留为待进程重启。第三方代码若长期保存自己取得的 SDK/provider 引用，也不会自动换成新对象，应在新操作时通过框架入口重新取得。
 
+### CLI 和聊天入口
+
+除了编辑文件和 Console，也可以通过 CLI 管理配置。默认连接运行中的 Host，保存前完整校验，使用文件修订防止覆盖并发编辑，然后按上述边界申请生效；不需要开启 watch：
+
+```bash
+npx zhin config get ai.enabled
+npx zhin config set ai.agents.zhin.model '"my-model"'
+npx zhin config status
+npx zhin config apply
+# 待重启的 HTTP 配置、随机端口或远程 Host：指定实际服务地址
+npx zhin config --live http://127.0.0.1:8086 --token-env ZHIN_CONSOLE_TOKEN status
+# Host 停止时，仅保存本地文件，不请求生效
+npx zhin config --offline set menuKeyword '"菜单"'
+```
+
+凭据通过环境变量传给 CLI，不放进命令参数。自动发现地址仅参考本地 HTTP 配置，不证明监听器已经采用该配置。连接失败不会改写本地文件或自动转离线。`schema` 展示表单 Schema 投影，`status` 显示文件版本与生效回执；响应丢失时先只读核对，不能把较新的回执当成先前请求未保存的证明。
+
+路径支持 `ai.enabled` 或 JSON Pointer，例如 `/my.bot/endpoints/0/nickname`；实例名本身有点时使用 Pointer，`~1` 表示 `/`，`~0` 表示 `~`。数组删除会收拢后续索引，不接受越界索引或隐式追加。离线保存会加载声明并校验，但不启动 Runtime、不调用插件 setup；导入内联配置声明仍可能执行模块顶层代码。`config check` 是本地诊断，`check --fix` 必须显式加 `--offline` 才能校验后保存。
+
+安装根 Command Feature 后，真实 Bot 主人可以在**私聊**使用 `config` 查看当前调用方式，提供 `list / get / schema / status / set / delete`。实际提示由框架带上当前账号的前缀和 namespace；这里省略前缀。任一账号的合法主人可以管理项目全局配置，不依赖 AI Agent。
+
+聊天 `set` 的值必须是 JSON，例如 `config set mybot.nickname -- "小智"`。聊天不读取或写入密钥、token、密码等敏感字段；缺少 Schema、无法确定安全范围、覆盖或删除父对象会触及敏感后代时也会拒绝，并引导使用 CLI／Console。安全列表和 Schema 只展示允许披露的结构，不回显敏感默认值、冲突原值或原始校验异常。保存与生效仍遵守整份期望配置的应用流程，不会只应用本条命令涉及的字段。
+
 ### 文件与数据库记录各管什么
 
 `zhin.config.yml` 继续保存部署声明，Console 配置表单仍写回该文件，不会把整份配置迁入数据库。受管账号 desired 记录、个人模型与会话选择、模型运行策略覆写继续由各自现有数据库/API 管理；文件热更新不覆盖显式领域记录，也不清空个人选择。YAML 中的账号种子不会改写已经存在的受管账号记录；适配器资料默认值仍能作用于继承它的账号。
@@ -337,7 +360,7 @@ ai:
 | `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
 | `permission.task` | `spawn_task` 可见子 Agent 类型（glob → `allow` / `deny`） |
 
-IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除，详见 [ai.agents](../ai/index.md#ai-agents)。
+IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix --offline` 会删除，详见 [ai.agents](../ai/index.md#ai-agents)。
 
 ### mcpServers：外部 MCP Server
 
