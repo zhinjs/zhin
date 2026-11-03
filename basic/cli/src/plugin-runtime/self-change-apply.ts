@@ -174,7 +174,7 @@ export class HostSelfChangeApply {
         }
       }
       if (failures.length === 1) throw failures[0];
-      if (failures.length > 1) throw new AggregateError(failures, `${failures.length} approved self-changes failed to resume`);
+      if (failures.length > 1) throw new AggregateError(failures, `${failures.length} approved self-changes failed to resume: ${failures.map(error => error instanceof Error ? error.message : String(error)).join('; ')}`);
     });
   }
 
