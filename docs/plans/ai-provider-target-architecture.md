@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # AI Provider 目标架构：服务、账号、模型配置与用途
 
 > 已批准设计基准的仓库内副本。原始设计快照保持不变；实施状态、回归证据及未完成范围见 `ai-provider-runtime-implementation.md`。本文件不代表已通过发布或实号验收。

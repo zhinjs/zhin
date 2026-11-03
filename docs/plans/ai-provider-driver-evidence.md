@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Provider 实现与验收边界
 
 本文记录本次目标架构的 Driver、插件作者接缝与决策接线；主方案仍以 [目标架构](./ai-provider-target-architecture.md) 为准。
