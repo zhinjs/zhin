@@ -4,6 +4,7 @@ import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as remote from '../console-utils/remoteApi.js';
 import * as messages from './messages.js';
+import * as styles from './styles.js';
 import type { AdapterConsoleStatus, AdapterConsoleLoginTask } from './types.js';
 
 const require = createRequire(import.meta.url);
@@ -39,7 +40,7 @@ function harness() {
   };
   const module = { exports: {} as Record<string, (...args: unknown[]) => unknown> };
   const compiled = ts.transpileModule(source + '\nexport { AdapterConsoleSession };', { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  new Function('require', 'module', 'exports', compiled)((name: string) => name === 'react' ? { ...require('react'), ...hooks } : name === '../console-utils/remoteApi.js' ? remote : name === './messages.js' ? messages : require(name), module, module.exports);
+  new Function('require', 'module', 'exports', compiled)((name: string) => name === 'react' ? { ...require('react'), ...hooks } : name === '../console-utils/remoteApi.js' ? remote : name === './messages.js' ? messages : name === './styles.js' ? styles : require(name), module, module.exports);
   const flush = () => { for (let i = 0; i < 50; i++) { dirty = false; cursor = 0; value = render(); const pending = effects; effects = []; pending.forEach(fn => fn()); if (!dirty) break; } return value; };
   return {
     exports: module.exports,
@@ -48,6 +49,7 @@ function harness() {
     nodes: () => all(value),
     button(label: string) { const node = all(value).find(node => typeof node.type === 'function' && node.type.name === 'Button' && text(node) === label); if (!node) throw new Error(`missing button ${label}: ${text(value)}`); return node.props as { onClick: () => Promise<void> | void; disabled?: boolean }; },
     input(at: number) { return all(value).filter(node => node.type === 'input')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
+    select(at: number) { return all(value).filter(node => node.type === 'select')[at]!.props as { value: string; onChange: (e: { target: { value: string } }) => void }; },
     unmount() { for (const slot of slots) (slot as { cleanup?: () => void })?.cleanup?.(); },
     text: () => text(value),
   };
@@ -284,11 +286,39 @@ describe('shared runtime Adapter page production handlers', () => {
     ], configured: [{ ...base.configured[0]!, values: { ...base.configured[0]!.values, url: '••••••', 'proxy.port': '1080', enabled: 'false' } }],
     runtime: { ...base.runtime!, mutableFields: [...base.runtime!.mutableFields, 'url', 'proxy.port', 'enabled'] } });
     await f.h.settle(); await f.h.button('编辑').onClick(); await f.h.settle();
-    expect(f.h.input(3).value).toBe('••••••'); expect(f.h.input(4).value).toBe('1080'); expect(f.h.input(5).value).toBe('false');
+    expect(f.h.input(3).value).toBe('••••••'); expect(f.h.input(4).value).toBe('1080'); expect(f.h.select(0).value).toBe('false');
+    expect(f.h.nodes().find(node => node.type === 'option' && node.props?.value === '')?.props?.disabled).toBe(true);
     expect(f.h.nodes().filter(node => node.type === 'input')[4]!.props!.type).toBe('number');
-    f.h.input(4).onChange({ target: { value: '1081' } }); await f.h.settle(); f.h.input(5).onChange({ target: { value: 'true' } }); await f.h.settle();
+    f.h.input(4).onChange({ target: { value: '1081' } }); await f.h.settle(); f.h.select(0).onChange({ target: { value: 'true' } }); await f.h.settle();
     await f.h.button('保存').onClick(); await f.h.settle();
     expect(f.writes()[0]!.body.data).toEqual({ instanceId: 'instance-old', expectedGeneration: 4, expectedRevision: 2, values: { 'proxy.port': '1081', enabled: 'true' } });
     expect(JSON.stringify(f.writes())).not.toContain('••••••'); f.h.unmount();
+  });
+
+  it('keeps credentials behind a native disclosure and exposes an accessible account editor', async () => {
+    const f = fixture(); await f.h.settle();
+    const disclosure = f.h.nodes().find(node => node.type === 'details');
+    expect(disclosure).toBeDefined(); expect(disclosure!.props?.open).toBeUndefined();
+    expect(f.h.nodes().find(node => node.type === 'nav')?.props?.['aria-label']).toBe('页面导航');
+    await f.h.button('编辑').onClick(); await f.h.settle();
+    expect(f.h.nodes().find(node => node.type === 'input')?.props).toMatchObject({ autoFocus: true, 'aria-label': 'id' });
+    f.h.unmount();
+  });
+
+  it('clears cancelled add-account credentials before reopening the form', async () => {
+    const f = fixture(); await f.h.settle(); await f.h.button('添加').onClick(); await f.h.settle();
+    f.h.input(1).onChange({ target: { value: 'synthetic-cancelled-draft' } }); await f.h.settle();
+    expect(f.h.nodes().find(node => node.props?.controls === 'adapter-add-account')?.props?.expanded).toBe(true);
+    await f.h.button('取消').onClick(); await f.h.settle();
+    await f.h.button('添加').onClick(); await f.h.settle();
+    expect(f.h.input(1).value).toBe(''); expect(f.writes()).toHaveLength(0); f.h.unmount();
+  });
+
+  it('keeps an expired verification visible with guidance but disables submission', async () => {
+    const s = status(); s.runtime = { ...s.runtime!, endpoints: s.runtime!.endpoints.map(endpoint => ({ ...endpoint, desiredEnabled: true })) };
+    const f = fixture(s, [{ id: 'expired', adapter: 'icqq', endpointKey: '10001', type: 'qrcode', payload: {}, createdAt: 1, expiresAt: Date.now() - 1,
+      endpointIdentity: { canonicalId: 'canonical-old', instanceId: 'instance-old', epoch: 5, incarnationId: 'incarnation-current' } }]);
+    await f.h.settle(); expect(f.h.text()).toContain('验证已过期'); expect(f.h.button('已扫码，继续').disabled).toBe(true);
+    expect(f.calls.some(call => call.body.type === 'login.submit')).toBe(false); f.h.unmount();
   });
 });
