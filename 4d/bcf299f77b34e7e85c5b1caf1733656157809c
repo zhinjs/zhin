@@ -1,0 +1,21 @@
+packages/im/agent/src/self-change/detail-diff.ts
+  s_079f1dc5e6308d::t_abefccd3a07b2c 34-40,208-211,264-284,305-338
+packages/im/agent/tests/self-change/detail-diff.test.ts
+  s_079f1dc5e6308d::t_06cf763683a0d7 261-268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4dbcf299f77b34e7e85c5b1caf1733656157809c",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
