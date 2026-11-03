@@ -6,9 +6,9 @@ import { createStructuredReplyStreamParser } from '../outbound/structured-reply-
 /** One public answering phase; provider consumption never waits for platform requests. */
 export class ReplyStreamRun {
   readonly stream: CoreReplyStream;
-  readonly #parser: ReturnType<typeof createStructuredReplyStreamParser>;
+  #parser: ReturnType<typeof createStructuredReplyStreamParser>;
+  readonly #profile?: AiOutboundSegmentProfile;
   readonly #aliases?: MessageAliasTable;
-  #raw = '';
   #epoch = 0;
   #revision = 0;
   #timer?: ReturnType<typeof setTimeout>;
@@ -23,6 +23,7 @@ export class ReplyStreamRun {
 
   constructor(stream: CoreReplyStream, profile?: AiOutboundSegmentProfile, aliases?: MessageAliasTable) {
     this.stream = stream;
+    this.#profile = profile;
     this.#parser = createStructuredReplyStreamParser(profile);
     this.#aliases = aliases;
   }
@@ -37,7 +38,7 @@ export class ReplyStreamRun {
     if (this.#offered) throw new Error('A published reply cannot be regenerated');
     this.#clearTimer();
     this.#epoch += 1;
-    this.#raw = '';
+    this.#parser = createStructuredReplyStreamParser(this.#profile);
     this.#snapshot = undefined;
     this.#error = undefined;
     this.#lastParse = -Infinity;
@@ -52,7 +53,7 @@ export class ReplyStreamRun {
     if (this.stream.receipt.status === 'failed' || this.stream.receipt.status === 'rejected') {
       throw new Error(this.stream.receipt.failure?.code ?? 'Reply delivery stopped');
     }
-    this.#raw += text;
+    this.#parser.append(text);
     this.#pending = true;
     this.#schedule();
   }
@@ -62,7 +63,7 @@ export class ReplyStreamRun {
     this.#clearTimer();
     await this.#parsing;
     if (this.#error) throw this.#error;
-    const snapshot = await this.#parser.parse(raw, ++this.#revision, true);
+    const snapshot = await this.#parser.finish(raw, ++this.#revision);
     if (snapshot) this.#snapshot = this.#resolve(snapshot);
     return snapshot ? this.#snapshot : undefined;
   }
@@ -84,11 +85,11 @@ export class ReplyStreamRun {
         this.#schedule();
         return;
       }
-      const raw = this.#raw;
+      const candidate = this.#parser;
       const epoch = this.#epoch;
       this.#pending = false;
       this.#lastParse = Date.now();
-      this.#parsing = this.#parser.parse(raw, ++this.#revision).then(snapshot => {
+      this.#parsing = candidate.snapshot(++this.#revision).then(snapshot => {
         if (this.#closed || epoch !== this.#epoch || !snapshot) return;
         const resolved = this.#resolve(snapshot);
         this.#snapshot = resolved;

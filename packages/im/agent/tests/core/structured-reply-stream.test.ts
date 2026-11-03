@@ -1,4 +1,13 @@
-import { createStructuredReplyStreamParser } from '../../src/outbound/structured-reply-stream.js';
+import { createStructuredReplyStreamParser as createCandidate } from '../../src/outbound/structured-reply-stream.js';
+
+// The production candidate is append-only; these isolated cases intentionally parse unrelated raws.
+function createStructuredReplyStreamParser(profile?: Parameters<typeof createCandidate>[0]) {
+  return { parse(raw: string, revision: number, final = false) {
+    const candidate = createCandidate(profile);
+    candidate.append(raw);
+    return final ? candidate.finish(raw, revision) : candidate.snapshot(revision);
+  } };
+}
 
 const textStart = '{"messages":[{"segments":[{"type":"text","data":{"text":"';
 const markdownStart = '{"messages":[{"segments":[{"type":"markdown","data":{"content":"';

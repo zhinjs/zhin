@@ -3,63 +3,90 @@ import type { AiOutboundSegmentProfile } from '@zhin.js/core';
 import type { ReplyStreamSnapshot } from '@zhin.js/core/runtime';
 import type { Segment } from '@zhin.js/im-contract';
 import { decodeStructuredReply, TOOL_CALL_MARKUP } from './structured-reply.js';
+import { ReplyJsonCandidate } from './reply-json-candidate.js';
 
 export interface StructuredReplyStreamParser {
-  parse(raw: string, revision: number, final?: boolean): Promise<ReplyStreamSnapshot | undefined>;
+  append(delta: string): void;
+  snapshot(revision: number): Promise<ReplyStreamSnapshot | undefined>;
+  finish(raw: string, revision: number): Promise<ReplyStreamSnapshot | undefined>;
 }
 
 /** Partial JSON is only a candidate; the existing message schema still owns every segment. */
 export function createStructuredReplyStreamParser(profile?: AiOutboundSegmentProfile): StructuredReplyStreamParser {
+  const cursor = new ReplyJsonCandidate();
+  const segmentCache = new WeakMap<object, Segment | null>();
+  const wholeCache = new WeakMap<object, boolean>();
   return {
-    async parse(raw, revision, final = false) {
-      const parsed = await parsePartialJson(raw);
-      if (final) decodeStructuredReply(raw, profile);
-      if (parsed.state === 'failed-parse' || parsed.state === 'undefined-input') return undefined;
-      const root = object(parsed.value);
-      if (!root) return undefined;
-      const legacy = !('messages' in root) && Array.isArray(root.segments);
-      if (Object.keys(root).some(key => ![legacy ? 'segments' : 'messages', 'reaction'].includes(key))) return undefined;
-      // The ordinary decoder places reactions before words. Until the root decision is known,
-      // hold words rather than moving a reaction behind an already-public message.
-      if (profile?.reaction && (root.reaction !== undefined && root.reaction !== ''
-        || parsed.state !== 'successful-parse' && closedRootString(raw, 'reaction') !== '')) return undefined;
-      const messages = legacy ? [{ segments: root.segments }] : root.messages;
-      if (!Array.isArray(messages)) return undefined;
-      const whole = parsed.state === 'successful-parse';
-      if (whole && !final) {
-        try { decodeStructuredReply(raw, profile); } catch { return undefined; }
-      }
-      const projected: ReplyStreamSnapshot['messages'][number][] = [];
-      for (const [messageIndex, item] of messages.entries()) {
-        const message = object(item);
-        if (!message || Object.keys(message).some(key => key !== 'segments')) return undefined;
-        if (!Array.isArray(message.segments)) break;
-        const messageComplete = whole || messageIndex < messages.length - 1;
-        const segments: ReplyStreamSnapshot['messages'][number]['segments'][number][] = [];
-        for (const [segmentIndex, candidate] of message.segments.entries()) {
-          const complete = messageComplete || segmentIndex < message.segments.length - 1;
-          const value = validateSegment(candidate, profile);
-          if (!value) {
-            if (complete) return undefined;
-            break;
-          }
-          let next = value;
-          if (!complete && (value.type === 'text' || value.type === 'markdown')) {
-            const field = value.type === 'text' ? 'text' : 'content';
-            const data = value.data as Readonly<Record<string, unknown>>;
-            const text = data[field];
-            if (typeof text !== 'string') break;
-            const prefix = publicTextPrefix(text);
-            if (prefix === undefined) return undefined;
-            next = { ...value, data: { ...data, [field]: prefix } } as Segment;
-          }
-          segments.push({ key: `segment-${segmentIndex}`, complete, value: next });
-        }
-        projected.push({ key: `message-${messageIndex}`, complete: messageComplete, segments });
-      }
-      return { revision, messages: projected };
+    append: delta => cursor.append(delta),
+    async snapshot(revision) {
+      const raw = cursor.raw;
+      if (cursor.nonObject) return undefined;
+      // A withheld reaction must not cause its growing message body to be materialized.
+      if (!cursor.fallback && profile?.reaction && !cursor.whole
+        && (cursor.reaction() !== undefined && cursor.reaction() !== '' || cursor.closedReaction !== '')) return undefined;
+      const parsed = cursor.fallback ? await parsePartialJson(raw)
+        : { value: cursor.value(), state: cursor.whole ? 'successful-parse' : 'repaired-parse' };
+      return project(parsed, revision, false, raw, cursor.closedReaction, cursor.fallback);
+    },
+    async finish(raw, revision) {
+      decodeStructuredReply(raw, profile);
+      return project(await parsePartialJson(raw), revision, true, raw);
     },
   };
+
+  function project(parsed: { state: string; value: unknown }, revision: number, final: boolean, raw: string,
+    reaction?: string, fallback = false): ReplyStreamSnapshot | undefined {
+    if (parsed.state === 'failed-parse' || parsed.state === 'undefined-input') return undefined;
+    const root = object(parsed.value);
+    if (!root) return undefined;
+    const legacy = !('messages' in root) && Array.isArray(root.segments);
+    if (Object.keys(root).some(key => ![legacy ? 'segments' : 'messages', 'reaction'].includes(key))) return undefined;
+    // The ordinary decoder places reactions before words. Until the root decision is known,
+    // hold words rather than moving a reaction behind an already-public message.
+    if (profile?.reaction && (root.reaction !== undefined && root.reaction !== ''
+      || parsed.state !== 'successful-parse' && (fallback ? closedRootString(raw, 'reaction') : reaction) !== '')) return undefined;
+    const messages = legacy ? [{ segments: root.segments }] : root.messages;
+    if (!Array.isArray(messages)) return undefined;
+    const whole = parsed.state === 'successful-parse';
+    if (whole && !final) {
+      if (!wholeCache.has(root)) {
+        try { decodeStructuredReply(raw, profile); wholeCache.set(root, true); }
+        catch { wholeCache.set(root, false); }
+      }
+      if (!wholeCache.get(root)) return undefined;
+    }
+    const projected: ReplyStreamSnapshot['messages'][number][] = [];
+    for (const [messageIndex, item] of messages.entries()) {
+      const message = object(item);
+      if (!message || Object.keys(message).some(key => key !== 'segments')) return undefined;
+      if (!Array.isArray(message.segments)) break;
+      const messageComplete = whole || messageIndex < messages.length - 1;
+      const segments: ReplyStreamSnapshot['messages'][number]['segments'][number][] = [];
+      for (const [segmentIndex, candidate] of message.segments.entries()) {
+        const complete = messageComplete || segmentIndex < message.segments.length - 1;
+        const item = object(candidate);
+        if (item && !segmentCache.has(item)) segmentCache.set(item, validateSegment(item, profile) ?? null);
+        const value = item ? segmentCache.get(item) : undefined;
+        if (!value) {
+          if (complete) return undefined;
+          break;
+        }
+        let next = value;
+        if (!complete && (value.type === 'text' || value.type === 'markdown')) {
+          const field = value.type === 'text' ? 'text' : 'content';
+          const data = value.data as Readonly<Record<string, unknown>>;
+          const text = data[field];
+          if (typeof text !== 'string') break;
+          const prefix = publicTextPrefix(text);
+          if (prefix === undefined) return undefined;
+          next = { ...value, data: { ...data, [field]: prefix } } as Segment;
+        }
+        segments.push({ key: `segment-${segmentIndex}`, complete, value: next });
+      }
+      projected.push({ key: `message-${messageIndex}`, complete: messageComplete, segments });
+    }
+    return { revision, messages: projected };
+  }
 }
 
 function object(value: unknown): Record<string, unknown> | undefined {
