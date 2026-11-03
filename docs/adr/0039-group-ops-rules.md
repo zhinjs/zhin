@@ -4,7 +4,9 @@ sidebar: false
 
 # ADR 0039：动态群管规则——批准一次的违规阶梯
 
-状态：Proposed
+状态：Accepted
+
+实现：切片 A–E 已合入 main（[#1057](https://github.com/zhinjs/zhin/pull/1057) / [#1060](https://github.com/zhinjs/zhin/pull/1060) / [#1063](https://github.com/zhinjs/zhin/pull/1063) / [#1066](https://github.com/zhinjs/zhin/pull/1066) / [#1068](https://github.com/zhinjs/zhin/pull/1068)；tracking [#1050](https://github.com/zhinjs/zhin/issues/1050)）。
 
 关联：[#1029](https://github.com/zhinjs/zhin/issues/1029) B 部分（A 部分「连续输入合流」见 [ADR 0038](./0038-continuous-input-merge.md)）。**修订 [ADR 0037](./0037-controlled-landing-phase1-group-ops.md) 的一条非目标**：「全自动踢人 / 禁言」改为「全自动踢人」（见 §7）。依赖 0037 切片 E 的 `ops_cooldown` / `ops:approve`（[#1031](https://github.com/zhinjs/zhin/pull/1031)）与切片 C 的计数器形状（[#1034](https://github.com/zhinjs/zhin/pull/1034)），以及 ADR 0036 硬闸与 G6 IM 审批通道（[#1021](https://github.com/zhinjs/zhin/pull/1021)）。
 
