@@ -100,7 +100,8 @@ export interface SelfChangeApplyPorts {
   /**
    * 受控重启能否把进程拉起来（有守护进程、不是 `--once`）。缺省视为可以。
    * 返回 false 时：计划要重启的变更不动文件直接 `failed`；生效中途才发现要重启的按快照回滚（`rolled_back`），
-   * 两者原因码都是 `change_restart_unavailable`。
+   * 两者原因码都是 `change_restart_unavailable`。回滚本身需要重启（恢复配置要重启 / 恢复后热重载要求重启 /
+   * recover() 接续的回滚要重启）时不请求重启，直接急停。
    */
   restartSupported?(): boolean;
   health(input: SelfChangeHealthInput): Promise<SelfChangeHealth>;
@@ -289,6 +290,11 @@ export class SelfChangeApplier {
       }
     }
     if (mode === 'process') {
+      // 回滚也要守同一道闸：没有守护进程（`--once` / 裸 node，含 recover() 接续）时不请求重启，
+      // 恢复后的状态没法在本进程生效，只能急停等人处理。
+      if (!this.#restartSupported()) {
+        return this.#emergency(current, `${failure}; rollback needs a process restart, but this instance has no supervisor to restart it`);
+      }
       const restarts = (current.apply?.restarts ?? 0) + 1;
       if (restarts > MAX_CHANGE_RESTARTS) return this.#emergency(current, `${failure}; restart limit reached`);
       return this.#restart(current, current.status === 'verifying' ? null : 'verifying', { phase: 'rollback', mode, restarts, failure });
@@ -304,7 +310,8 @@ export class SelfChangeApplier {
   /**
    * 生效中途才发现要重启（热重载说需要重启 / 配置补丁需要重启），而本实例没有守护进程：按快照回滚，不重启。
    * 正向改动没有在本进程里生效过（热重载拒绝了、需要重启的配置也还没生效），恢复磁盘即可；
-   * 恢复配置只需热重载时照常热重载，热重载再说要重启也不重启。之后校验：健康 → `rolled_back`，否则急停。
+   * 恢复配置只需热重载时照常热重载。恢复本身需要重启（快照配置要重启才生效）或恢复后的热重载要求重启时，
+   * 无法证明恢复后的状态已在本进程生效，不报 `rolled_back`，直接急停。之后校验：健康 → `rolled_back`，否则急停。
    */
   async #rollbackWithoutRestart(record: SelfChangeRecord, failure: string): Promise<SelfChangeApplyOutcome> {
     const snapshot = await this.#store.readSnapshot(record.id).catch(() => null);
@@ -316,11 +323,18 @@ export class SelfChangeApplier {
     } catch (error) {
       return this.#emergency(current, `${failure}; rollback failed: ${errorText(error)}`);
     }
+    if (restoreMode === 'process') {
+      return this.#emergency(current, `${failure}; restoring the snapshot needs a process restart, but this instance has no supervisor to restart it`);
+    }
     if (restoreMode === 'generation') {
+      let reloaded: 'reloaded' | 'restart';
       try {
-        await this.#ports.reload({ record: current, changed: current.files.map(file => file.path) });
+        reloaded = await this.#ports.reload({ record: current, changed: current.files.map(file => file.path) });
       } catch (error) {
         return this.#emergency(current, `${failure}; reload after rollback failed: ${errorText(error)}`);
+      }
+      if (reloaded === 'restart') {
+        return this.#emergency(current, `${failure}; reload after rollback needs a process restart, but this instance has no supervisor to restart it`);
       }
     }
     const health = await this.#health(current, false);

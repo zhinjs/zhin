@@ -47,18 +47,26 @@ export function planRespawn(
   return Object.freeze({ respawn: true, attempts: Object.freeze([...recent, now]) });
 }
 
+const SUPERVISOR_PID_PATTERN = /^[1-9]\d*$/;
+
 /**
  * Whether a controlled restart (exit 75) brings this process back: a `zhin` supervisor started it
- * (`ZHIN_SUPERVISOR_PID`) and it was not started with `--once` (which never respawns). A bare `node`
- * start or a container entrypoint without the supervisor just exits.
+ * and it was not started with `--once` (which never respawns). A bare `node` start or a container
+ * entrypoint without the supervisor just exits.
+ *
+ * `ZHIN_SUPERVISOR_PID` alone is not proof: it is inherited, and an image may export a fixed value
+ * (e.g. `ZHIN_SUPERVISOR_PID=1`). {@link NativeTypeScriptSupervisor} spawns the runtime directly and
+ * stamps its own pid, so the variable must be a strict decimal pid that equals our parent pid.
  */
 export function processRestartSupported(
   once: boolean,
   environment: Readonly<Record<string, string | undefined>> = process.env,
+  parentPid: number = process.ppid,
 ): boolean {
   if (once) return false;
-  const supervisorPid = Number(environment.ZHIN_SUPERVISOR_PID ?? '');
-  return Number.isInteger(supervisorPid) && supervisorPid > 0;
+  const raw = environment.ZHIN_SUPERVISOR_PID;
+  if (raw === undefined || !SUPERVISOR_PID_PATTERN.test(raw)) return false;
+  return Number(raw) === parentPid;
 }
 
 /** Preserve process loader configuration when the supervisor creates a child. */

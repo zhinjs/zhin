@@ -409,9 +409,9 @@ describe('SelfChangeApplier — no supervisor to restart (#1051 F1)', () => {
     expect(host.reports[0]!.text).toContain('没有守护进程');
   });
 
-  it('rolls the config back without restarting when the config patch needs a restart', async () => {
+  it('rolls the config back without restarting when the config patch needs a restart but the restore does not', async () => {
     const store = await makeStore();
-    const config = fakeConfig('http:\n  port: 8086\n', 'r1', true);
+    const config = fakeConfig('http:\n  port: 8086\n', 'r1', true, false);
     const host = fakeHost(config);
     host.restartSupported = false;
     const change = await approvedChange(store, {
@@ -424,7 +424,87 @@ describe('SelfChangeApplier — no supervisor to restart (#1051 F1)', () => {
     expect(config.source).toBe('http:\n  port: 8086\n');
     expect(existsSync(join(project, 'commands', 'b.ts'))).toBe(false);
     expect(host.restarts).toBe(0);
+    expect(host.reloads).toBe(1);
     expect((await store.get(change.id))?.status).toBe('rolled_back');
+  });
+
+  it('does not claim rolled_back when restoring the config snapshot itself needs a restart → emergency stop', async () => {
+    const store = await makeStore();
+    const config = fakeConfig('http:\n  port: 8086\n', 'r1', true, true);
+    const host = fakeHost(config);
+    host.restartSupported = false;
+    const change = await approvedChange(store, {
+      files: [{ path: 'commands/b.ts', content: 'export default 1;\n' }],
+      configPatch: { expectedRevision: 'r1', patches: [{ op: 'set', path: ['http', 'port'], value: 1 }] },
+    });
+    expect(await applier(store, host).apply(change.id)).toBe('failed');
+    expect(config.restored).toBe(1);
+    expect(config.source).toBe('http:\n  port: 8086\n');
+    expect(existsSync(join(project, 'commands', 'b.ts'))).toBe(false);
+    expect(host.restarts).toBe(0);
+    expect(host.stops).toHaveLength(1);
+    const record = await store.get(change.id);
+    expect(record?.status).toBe('failed');
+    expect(record?.error).toContain('restoring the snapshot needs a process restart');
+    expect(host.reports.map(report => report.kind)).toEqual(['failed']);
+    expect(host.reports[0]).toMatchObject({ ownerOnly: true });
+    expect(host.reports[0]!.text).not.toContain('已回滚');
+  });
+
+  it('treats a post-rollback reload that asks for a restart as a failure → emergency stop', async () => {
+    const store = await makeStore();
+    const config = fakeConfig('weather:\n  unit: f\n', 'r1', true, false);
+    const host = fakeHost(config);
+    host.restartSupported = false;
+    host.reloadResult = 'restart';
+    const change = await approvedChange(store, {
+      configPatch: { expectedRevision: 'r1', patches: [{ op: 'set', path: ['weather', 'unit'], value: 'c' }] },
+    });
+    expect(await applier(store, host).apply(change.id)).toBe('failed');
+    expect(host.reloads).toBe(1);
+    expect(host.restarts).toBe(0);
+    expect(host.stops).toHaveLength(1);
+    const record = await store.get(change.id);
+    expect(record?.status).toBe('failed');
+    expect(record?.error).toContain('reload after rollback needs a process restart');
+    expect(host.reports[0]!.text).not.toContain('已回滚');
+  });
+
+  it('recover() under --once does not request a restart for a rollback that needs one → emergency stop', async () => {
+    const store = await makeStore();
+    const change = await approvedChange(store, { impact: 'process' });
+    // 有守护进程时正向已重启；下次却以 `--once` 启动，健康检查失败需要回滚重启。
+    expect(await applier(store, fakeHost()).apply(change.id)).toBe('restarting');
+    const once = fakeHost();
+    once.restartSupported = false;
+    once.health = [{ ok: false, error: 'startup error' }];
+    expect(await applier(await makeStore(), once).recover()).toBe(1);
+    expect(once.restarts).toBe(0);
+    expect(once.stops).toHaveLength(1);
+    expect(existsSync(join(project, 'commands', 'ping.ts'))).toBe(false);
+    const record = await store.get(change.id);
+    expect(record?.status).toBe('failed');
+    expect(record?.error).toContain('rollback needs a process restart');
+    expect(once.reports[0]).toMatchObject({ kind: 'failed', ownerOnly: true });
+  });
+
+  it('recover() without a supervisor does not restart for a process change interrupted mid-apply', async () => {
+    const store = await makeStore();
+    const change = await approvedChange(store, { impact: 'process' });
+    await store.writeSnapshot(change.id, { files: [{ path: 'commands/ping.ts', content: null }], config: null });
+    await store.transition(change.id, 'applying', {
+      actor: 'policy', reasonCode: 'change_restart_requested',
+      reportTarget: origin, apply: { phase: 'forward', mode: 'process', restarts: 0, failure: null },
+    });
+    mkdirSync(join(project, 'commands'), { recursive: true });
+    writeFileSync(join(project, 'commands', 'ping.ts'), 'half');
+    const host = fakeHost();
+    host.restartSupported = false;
+    expect(await applier(await makeStore(), host).recover()).toBe(1);
+    expect(host.restarts).toBe(0);
+    expect(host.stops).toHaveLength(1);
+    expect(existsSync(join(project, 'commands', 'ping.ts'))).toBe(false);
+    expect((await store.get(change.id))?.status).toBe('failed');
   });
 
   it('enters emergency stop when still unhealthy after that rollback', async () => {
@@ -458,7 +538,7 @@ describe('SelfChangeApprovals → applier', () => {
   });
 });
 
-function fakeConfig(source: string, revision: string, restartRequired = false) {
+function fakeConfig(source: string, revision: string, restartRequired = false, restoreRestartRequired = restartRequired) {
   let counter = 0;
   const state = {
     source,
@@ -478,7 +558,7 @@ function fakeConfig(source: string, revision: string, restartRequired = false) {
       state.restored += 1;
       state.source = next;
       state.revision = `${revision}-r${++counter}`;
-      return { revision: state.revision, restartRequired };
+      return { revision: state.revision, restartRequired: restoreRestartRequired };
     },
   };
   return state;
