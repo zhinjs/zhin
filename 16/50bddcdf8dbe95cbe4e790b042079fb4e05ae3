@@ -1,0 +1,79 @@
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_9622fd28aba994::t_54c2f4bc9699e5 26,39-50,189-194,197,200,224,239-246,249-250,253,256-260,273,301-307,310,313,327,334,341-351,355,533-538,546-560
+basic/cli/tests/config-command.test.ts
+  s_9622fd28aba994::t_5c60ab6f59a0ca 57-58,61,65,81,139-154
+docs/cli/index.md
+  s_9622fd28aba994::t_1b7b225e00b057 125-126
+docs/en/cli/index.md
+  s_9622fd28aba994::t_18533d26f45fd2 125-126
+.changeset/config-project-patch-p0.md
+  s_079f1dc5e6308d::t_4cff859ecf3b73 1-7
+basic/cli/src/plugin-runtime/console/configuration-chat-policy.ts
+  s_079f1dc5e6308d::t_22270c0432ffcb 2,36-37
+basic/cli/src/plugin-runtime/console/configuration-redaction.ts
+  s_079f1dc5e6308d::t_ba687b69389895 1-100
+basic/cli/src/plugin-runtime/console/configuration-schema-safety.ts
+  s_079f1dc5e6308d::t_a6d781268b2593 1-19
+basic/cli/tests/plugin-runtime/console/configuration-chat.test.ts
+  s_e0efb469ee3bbd::t_1dea2e893f38a3 91,94,97-117,121,125,128,131,159,163-164,166-168,177-181,185,190,192-193,196,200,204,207,209-210,271
+basic/cli/tests/plugin-runtime/console/configuration-project-patch.test.ts
+  s_58400078c2bd23::t_2d47c45942623d 1-233
+docs/configuration/index.md
+  s_079f1dc5e6308d::t_7f42435b25d5b2 114-115
+docs/en/configuration/index.md
+  s_079f1dc5e6308d::t_9e621c972d26f8 112-113
+docs/plans/configuration-live-update.md
+  s_079f1dc5e6308d::t_b9b9376130fa98 442,456
+packages/host/http/src/console-rpc.ts
+  s_ce30e957c2b2e6::t_2a29513aa5cff9 4,286-310,531-534
+packages/host/http/tests/console-config-project-patch-rpc.test.ts
+  s_ce30e957c2b2e6::t_ae7fc73263fb0b 28,32-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1650bddcdf8dbe95cbe4e790b042079fb4e05ae3",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
