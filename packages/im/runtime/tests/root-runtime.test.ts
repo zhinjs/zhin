@@ -500,6 +500,88 @@ describe('RootRuntime tracer bullet', () => {
   });
 });
 
+/**
+ * #1139 P6 guard: `hmr.pause` / `hmr.resume` run inside the Root control queue
+ * (`RootRuntime.control`). Model fetching (`createModelConfigurationAccess`)
+ * captures its configuration through the same queue, so a lifecycle handler
+ * that awaits model-fetching work either fails fast (same async context) or
+ * waits on work queued behind the reload it is part of (a deadlock).
+ * These tests lock that ordering; they do not change Runtime behavior.
+ */
+describe('HMR lifecycle handlers and the Root control queue', () => {
+  it('rejects Root control requested from inside an hmr.pause handler and keeps the old generation', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    const pauseErrors: unknown[] = [];
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', setup({ events }) {
+      events.on('hmr.pause', async () => {
+        try {
+          await runtime.control(async () => 'model-capture');
+        } catch (error) {
+          pauseErrors.push(error);
+          throw error;
+        }
+      });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
+    // The pause handler reads `runtime` only when a reload dispatches it, after construction.
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2, plugins: {} },
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    await runtime.start();
+
+    await expect(runtime.reload()).rejects.toThrow('Plugin pause handlers rejected reload');
+
+    expect(pauseErrors).toHaveLength(1);
+    expect(String(pauseErrors[0])).toContain('Recursive Runtime control');
+    expect(runtime.snapshot.generation).toBe(1);
+    await expect(runtime.control(async () => 'queue-free')).resolves.toBe('queue-free');
+    await runtime.stop();
+  });
+
+  it('runs control work admitted during a pause only after pause, candidate setup and resume finish', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    const order: string[] = [];
+    let releasePause!: () => void;
+    let markPauseEntered!: () => void;
+    const pauseHeld = new Promise<void>(resolve => { releasePause = resolve; });
+    const pauseEntered = new Promise<void>(resolve => { markPauseEntered = resolve; });
+    const source = join(project, 'plugin.ts');
+    modules.set(source, { default: definePlugin({ name: 'root', setup({ events }) {
+      events.on('hmr.pause', async () => {
+        order.push('pause');
+        markPauseEntered();
+        await pauseHeld;
+      });
+      events.on('hmr.resume', () => { order.push('old-resume'); });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: { configVersion: 2, plugins: {} },
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    await runtime.start();
+    modules.set(source, { default: definePlugin({ name: 'root', setup() { order.push('candidate'); } }) });
+
+    const reloading = runtime.reload();
+    await pauseEntered;
+    // Stands in for an in-flight turn that fetches a model after the pause began.
+    const modelCapture = runtime.control(async () => {
+      order.push('model-capture');
+      return 'captured';
+    });
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(order).toEqual(['pause']);
+
+    releasePause();
+    await reloading;
+    await expect(modelCapture).resolves.toBe('captured');
+    expect(order).toEqual(['pause', 'candidate', 'old-resume', 'model-capture']);
+    expect(runtime.snapshot.generation).toBe(2);
+    await runtime.stop();
+  });
+});
+
 function commandIndex(snapshot: RuntimeSnapshot): CommandIndex {
   const index = snapshot.projections.get(commandFeatureId);
   if (!(index instanceof CommandIndex)) throw new Error('Missing Command projection');
