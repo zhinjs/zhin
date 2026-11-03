@@ -1,0 +1,49 @@
+docs/configuration/generated.md
+  s_079f1dc5e6308d::t_5240f0a9f0d52f 882
+docs/en/configuration/generated.md
+  s_079f1dc5e6308d::t_919c5638901991 882
+plugins/adapters/douyin-live/schema.json
+  s_58400078c2bd23::t_28fe19088f3ace 115-116,140,142-143
+plugins/adapters/douyin-live/src/adapter.ts
+  s_58400078c2bd23::t_fbe13aaf7f3532 9,11
+plugins/adapters/douyin-live/src/endpoint.ts
+  s_58400078c2bd23::t_6e4d2cd7e5d615 217,220-227
+plugins/adapters/douyin-live/src/protocol.ts
+  s_58400078c2bd23::t_417e894c18248d 77,350
+plugins/adapters/douyin-live/tests/douyin-live-endpoint.test.ts
+  s_ce30e957c2b2e6::t_9d1a0a5bffc19c 149-159
+plugins/adapters/douyin-live/tests/douyin-live-protocol.test.ts
+  s_ce30e957c2b2e6::t_c10152f7b90adb 24-25,119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c081121527b32d2fdf015c44491aee58b9e49487",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
