@@ -420,15 +420,18 @@
                     },
                     "topK": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxCandidates": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxSelections": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     }
                   }
                 },
@@ -469,15 +472,18 @@
                     },
                     "topK": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxCandidates": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxSelections": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     }
                   }
                 },
@@ -518,15 +524,18 @@
                     },
                     "topK": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxCandidates": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxSelections": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     }
                   }
                 },
@@ -567,15 +576,18 @@
                     },
                     "topK": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxCandidates": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxSelections": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     }
                   }
                 },
@@ -616,15 +628,18 @@
                     },
                     "topK": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxCandidates": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxSelections": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     }
                   }
                 },
@@ -665,15 +680,18 @@
                     },
                     "topK": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxCandidates": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     },
                     "maxSelections": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 9007199254740991
                     }
                   }
                 },

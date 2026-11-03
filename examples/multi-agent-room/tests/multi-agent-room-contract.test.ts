@@ -6,10 +6,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { parse } from 'yaml';
+import { reviewAIPlan } from '../../../tests/helpers/review-ai-plan.js';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8');
 const config = parse(configText);
+const plan = parse(fs.readFileSync(path.join(botRoot, 'ai.plan.yml'), 'utf8'));
 
 describe('multi-agent-room 编排契约', () => {
   it('使用数据库持久化会话', () => {
@@ -25,13 +27,18 @@ describe('multi-agent-room 编排契约', () => {
     ]);
   });
 
-  it('ai.agents 与 agents 目录对应三个角色', () => {
+  it('独立提案中的三种角色用途与 agents 目录对应', async () => {
+    const reviewed = await reviewAIPlan(plan);
     for (const agent of ['coordinator', 'researcher', 'writer']) {
-      expect(config.ai.agents[agent]).toMatchObject({ provider: 'ollama', model: 'qwen3:8b' });
+      const selected = reviewed.graph.profiles[reviewed.graph.purposes.agents![agent]];
+      expect(selected.model).toBe('qwen3:8b');
+      expect(selected.accountId).toBe(reviewed.bindings.accounts.ollama);
       for (const file of ['agent.json', 'system.md', 'boundaries.md', 'conventions.md']) {
         expect(fs.existsSync(path.join(botRoot, 'agents', agent, file))).toBe(true);
       }
     }
+    expect(config.ai).not.toHaveProperty('providers');
+    expect(config.ai).not.toHaveProperty('plan');
     expect(fs.existsSync(path.join(botRoot, 'agents', 'planner'))).toBe(false);
     const boundaries = fs.readFileSync(path.join(botRoot, 'agents', 'writer', 'boundaries.md'), 'utf8');
     expect(boundaries).toContain('Room Bus');

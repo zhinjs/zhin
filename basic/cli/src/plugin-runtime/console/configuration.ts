@@ -14,6 +14,7 @@ import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
+import { hostModelOwnerId } from '../inference/host-identity.js';
 import {
   assertPatchesInScope,
   normalizeConfigPatchOperations,
@@ -212,6 +213,17 @@ export class ConsoleConfigurationStore {
     const errors: Array<{ path: string; message: string }> = [];
     const missingEnv = new Set<string>();
     const candidate = schema ? parsePluginConfigSchema(schema, data) : { value: data, errors: [] };
+    if (pluginName === 'ai' && candidate.errors.length === 0) {
+      // Startup composition deliberately retains legacy data for explicit
+      // migration. A normal structured save must still pass its real consumer.
+      const { loadAiConfigUtils } = await import('../../utils/ai-config-loader.js');
+      const validate = loadAiConfigUtils(this.#projectRoot)?.validateModelRuntimeConfig;
+      const messages = validate
+        ? validate(candidate.value, hostModelOwnerId(this.#projectRoot))
+        : ['AI configuration validation requires the installed Agent package'];
+      if (messages.length) return Object.freeze({ schemaAvailable: schema !== null, valid: false,
+        errors: Object.freeze(messages.map(message => ({ path: '$', message }))), missingEnv: Object.freeze([]) });
+    }
     const environmentName = this.#environmentName();
     const environment = this.#environmentForPlugin?.(pluginName) ?? createEnvStore(rootPluginId(),
       { name: environmentName, mode: environmentName === 'production' ? 'production' : 'development', platform: 'node' },

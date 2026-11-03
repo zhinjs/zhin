@@ -223,6 +223,20 @@ function checkAi(
 ): void {
   const ai = config.ai;
   if (!ai || typeof ai !== 'object' || Array.isArray(ai)) return;
+  const raw = ai as Record<string, unknown>;
+  const deprecated = (code: string, keyPath: string, reason: string): void => {
+    pushIssue(issues, { severity: 'warn', code, path: keyPath,
+      message: `${keyPath} 已弃用：${reason}`, fixable: true, fixHint: 'zhin config check --fix' });
+  };
+  for (const { key, reason } of aiUtils?.findDeprecatedAgentConfigKeys?.(raw.agent) ?? []) {
+    deprecated(`ai.agent_${key}_deprecated`, `ai.agent.${key}`, reason);
+  }
+  for (const { agent, key, reason } of aiUtils?.findDeprecatedAgentBindingKeys?.(raw.agents) ?? []) {
+    deprecated('ai.agent_routing_deprecated', `ai.agents.${agent}.${key}`, reason);
+  }
+  for (const key of ['allowedTools', 'disabledTools', 'toolSearch', 'memoryMcp']) {
+    if (Object.hasOwn(raw, key)) deprecated(`ai.${key}_deprecated`, `ai.${key}`, '已废弃或不再生效');
+  }
   const legacy = ['providers', 'modelCatalog', 'modelPolicy', 'defaultProvider', 'decisions']
     .filter(key => Object.hasOwn(ai, key));
   if (legacy.length) {
@@ -316,6 +330,7 @@ export function applyConfigFixes(
 } {
   const fixes: string[] = [];
   const next: Record<string, unknown> = { ...config };
+  const aiUtils = loadAiConfigUtils(cwd);
   if (next.database && typeof next.database === 'object' && !Array.isArray(next.database)) {
     const database = { ...(next.database as Record<string, unknown>) };
     if (database.dialect === 'postgres') {
@@ -325,7 +340,12 @@ export function applyConfigFixes(
     }
   }
 
-  // AI model/account migration is explicit and transactional; --fix must not recreate startup authority.
+  // Only retired nonfunctional switches are fixed here. Model/account migration stays explicit.
+  if (next.ai && aiUtils) {
+    const { ai, fixes: aiFixes } = aiUtils.applyAiConfigFixes(next.ai);
+    if (ai) next.ai = ai;
+    fixes.push(...aiFixes);
+  }
   if ('log_level' in next && isValidLogLevelInput(next.log_level)) {
     const normalized = toLogLevelName(next.log_level as LogLevelInput);
     if (next.log_level !== normalized) {

@@ -28,7 +28,7 @@ decider:
 other: {}
 `;
 
-async function project(patchPaths: unknown = ['ai.decisions']) {
+async function project(patchPaths: unknown = ['ai.knowledge']) {
   const root = await mkdtemp(join(tmpdir(), 'zhin-config-patch-')); tempRoots.push(root);
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'patch-fixture',
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } }));
@@ -82,11 +82,11 @@ describe('scoped config:patch', () => {
     expect(own).toMatchObject({ status: 'saved', restartRequired: false, message: '配置已保存' });
     revision = (await store.readSource()).revision;
     const declared = await store.patch({ instanceKey: 'decider', expectedRevision: revision, patches: [
-      { op: 'set', path: ['ai', 'decisions'], value: { provider: 'root/decider', skills: { mode: 'shadow' } } },
+      { op: 'set', path: ['ai', 'knowledge'], value: { baseDir: 'explicit-notes' } },
     ] });
     expect(declared).toMatchObject({ status: 'saved', restartRequired: true });
     const saved = parseYaml((await store.readSource()).source);
-    expect(saved.ai).toMatchObject({ enabled: true, decisions: { provider: 'root/decider' }, trigger: { ambient: { mode: 'active' } } });
+    expect(saved.ai).toMatchObject({ enabled: true, knowledge: { baseDir: 'explicit-notes' }, trigger: { ambient: { mode: 'active' } } });
     expect(saved.decider).toEqual({ level: 3 });
   });
 
@@ -94,8 +94,8 @@ describe('scoped config:patch', () => {
     const { store } = await project();
     const { revision } = await store.readSource();
     const attempts: Array<[string, string[]]> = [
-      ['other', ['ai', 'decisions']], ['other', ['decider', 'level']], ['decider', ['ai', 'trigger', 'ambient']],
-      ['missing', ['missing', 'x']], ['ai', ['ai', 'decisions']], ['decider', ['decider', '__proto__']],
+      ['other', ['ai', 'knowledge']], ['other', ['decider', 'level']], ['decider', ['ai', 'trigger', 'ambient']],
+      ['missing', ['missing', 'x']], ['ai', ['ai', 'knowledge']], ['decider', ['decider', '__proto__']],
     ];
     for (const [instanceKey, path] of attempts) {
       await expect(store.patch({ instanceKey, expectedRevision: revision, patches: [{ op: 'set', path, value: {} }] }))
@@ -138,7 +138,7 @@ describe('scoped config:patch', () => {
     for (const patches of [[], [{ op: 'merge', path: ['ai'] }], [{ op: 'set', path: [] , value: 1 }], [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'] }]] as never[]) {
       await expect(store.patch({ expectedRevision: revision, patches })).rejects.toBeInstanceOf(ConfigPatchScopeError);
     }
-    for (const declared of [['ai'], ['plugins.x'], ['plugin.x'], 'ai.decisions']) {
+    for (const declared of [['ai'], ['plugins.x'], ['plugin.x'], 'ai.knowledge']) {
       const fixture = await project(declared);
       await expect(fixture.store.patch({ instanceKey: 'decider', expectedRevision: (await fixture.store.readSource()).revision,
         patches: [{ op: 'set', path: ['decider', 'level'], value: 1 }] })).rejects.toThrow(/patchPaths/);

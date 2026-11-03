@@ -53,7 +53,7 @@ function normalizePath(value: unknown, label: string): readonly string[] {
 
 /**
  * Reads `x-zhin-config.patchPaths` from a plugin's own JSON Schema root: dotted Host sub-paths
- * (at least two segments, e.g. `ai.decisions`) the plugin owns besides its instance block.
+ * (at least two segments, e.g. `ai.knowledge`) the plugin owns besides its instance block.
  */
 export function readDeclaredPatchPaths(schema: Readonly<Record<string, unknown>> | null, instanceKey: string): readonly (readonly string[])[] {
   const metadata = schema?.['x-zhin-config'];
@@ -65,7 +65,7 @@ export function readDeclaredPatchPaths(schema: Readonly<Record<string, unknown>>
     const path = typeof entry === 'string' ? entry.split('.') : [];
     if (path.length < 2 || path.some(segment => !SEGMENT.test(segment) || FORBIDDEN_SEGMENTS.has(segment))
       || !HOST_KEY_SET.has(path[0]!) || UNCLAIMABLE_HOST_KEYS.has(path[0]!)) {
-      throw new ConfigPatchScopeError(`${instanceKey} 的 x-zhin-config.patchPaths 项 ${String(entry)} 无效：只能声明 Host 配置下至少两级的路径（如 ai.decisions）`);
+      throw new ConfigPatchScopeError(`${instanceKey} 的 x-zhin-config.patchPaths 项 ${String(entry)} 无效：只能声明 Host 配置下至少两级的路径（如 ai.knowledge）`);
     }
     return Object.freeze(path);
   }));

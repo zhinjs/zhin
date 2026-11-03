@@ -22,6 +22,7 @@ import {
   type CapabilitySlot,
   type CapabilityId,
   type SnapshotState,
+  type RuntimeSnapshot,
   type PluginId,
   type PluginNodeSnapshot,
   type FeatureId,
@@ -57,7 +58,7 @@ import {
   middlewareFeatureId,
   type MiddlewareNext,
 } from '@zhin.js/middleware';
-import { bindOperationInput, operationInputBinding, readOperationSession } from '@zhin.js/feature-kit';
+import { bindOperationInput, operationInputBinding, readOperationSession, readOperationInputResources } from '@zhin.js/feature-kit';
 import {
   HandlerIndex,
   defineHandler,
@@ -1397,13 +1398,18 @@ describe('IM Runtime', () => {
         content: '/status',
       },
       {
-        generation: 1,
+        generation: snapshot.generation,
+        snapshot,
         reply: async (_content, owner) => {
           requester = owner;
           return { status: 'sent' };
         },
       },
     );
+
+    // Generation numbers alone cannot authorize a different snapshot object.
+    expect(() => readOperationInputResources(message, createSnapshotView(snapshot.generation, state)))
+      .toThrow('another generation operation');
 
     await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({
       matched: true,
@@ -1444,7 +1450,7 @@ describe('IM Runtime', () => {
             content: `${prefix}acceptance probe:local0001`,
             endpointId: endpoint,
           },
-          { generation: 1, reply: async () => ({ status: 'sent' }) },
+          { generation: snapshot.generation, snapshot, reply: async () => ({ status: 'sent' }) },
         );
         expect(defaultCommandPrefixResolver(message, snapshot)).toBe(prefix);
         await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({ matched: true, command: 'acceptance', value: 'accepted' });
@@ -1504,7 +1510,7 @@ describe('IM Runtime', () => {
         projections: new Map([[commandFeatureId, new CommandIndex([command], base)]]),
       });
     };
-    const send = (content: string, opts?: { endpoint?: string }) => new Message(
+    const send = (snapshot: RuntimeSnapshot, content: string, opts?: { endpoint?: string }) => new Message(
       {
         conversation: {
           endpoint: {
@@ -1517,19 +1523,22 @@ describe('IM Runtime', () => {
         content: content,
         endpointId: opts?.endpoint,
       },
-      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
+      { generation: snapshot.generation, snapshot, reply: async () => ({ status: 'sent' as const }) },
     );
 
+    const defaultSnapshot = makeSnapshot({});
+    const prefixedSnapshot = makeSnapshot({ commandPrefix: '/' });
+
     // 默认 ''：无前缀直接匹配；带 / 反而不匹配
-    await expect(new MessageDispatcher().dispatch(send('zt'), makeSnapshot({})))
+    await expect(new MessageDispatcher().dispatch(send(defaultSnapshot, 'zt'), defaultSnapshot))
       .resolves.toMatchObject({ matched: true });
-    await expect(new MessageDispatcher().dispatch(send('/zt'), makeSnapshot({})))
+    await expect(new MessageDispatcher().dispatch(send(defaultSnapshot, '/zt'), defaultSnapshot))
       .resolves.toMatchObject({ matched: false });
 
     // 实例 config '/'：要求斜杠
-    await expect(new MessageDispatcher().dispatch(send('/zt'), makeSnapshot({ commandPrefix: '/' })))
+    await expect(new MessageDispatcher().dispatch(send(prefixedSnapshot, '/zt'), prefixedSnapshot))
       .resolves.toMatchObject({ matched: true });
-    await expect(new MessageDispatcher().dispatch(send('zt'), makeSnapshot({ commandPrefix: '/' })))
+    await expect(new MessageDispatcher().dispatch(send(prefixedSnapshot, 'zt'), prefixedSnapshot))
       .resolves.toMatchObject({ matched: false });
 
     // endpoints[i].commandPrefix 逐项覆盖顶层
@@ -1537,11 +1546,11 @@ describe('IM Runtime', () => {
       commandPrefix: '/',
       endpoints: [{ id: 'bot-1', commandPrefix: '!' }, { id: 'bot-2' }],
     });
-    await expect(new MessageDispatcher().dispatch(send('!zt', { endpoint: 'bot-1' }), snapshot))
+    await expect(new MessageDispatcher().dispatch(send(snapshot, '!zt', { endpoint: 'bot-1' }), snapshot))
       .resolves.toMatchObject({ matched: true });
-    await expect(new MessageDispatcher().dispatch(send('/zt', { endpoint: 'bot-2' }), snapshot))
+    await expect(new MessageDispatcher().dispatch(send(snapshot, '/zt', { endpoint: 'bot-2' }), snapshot))
       .resolves.toMatchObject({ matched: true });
-    await expect(new MessageDispatcher().dispatch(send('!zt', { endpoint: 'bot-2' }), snapshot))
+    await expect(new MessageDispatcher().dispatch(send(snapshot, '!zt', { endpoint: 'bot-2' }), snapshot))
       .resolves.toMatchObject({ matched: false });
   });
 
@@ -1576,7 +1585,7 @@ describe('IM Runtime', () => {
       });
     };
     // A platform quote comes first, the typed text second; replyTo carries the quoted id.
-    const quoted = (text: string) => new Message(
+    const quoted = (snapshot: RuntimeSnapshot, text: string) => new Message(
       {
         conversation: {
           endpoint: {
@@ -1593,15 +1602,17 @@ describe('IM Runtime', () => {
         ],
         replyTo: { id: 'notice-1' },
       },
-      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
+      { generation: snapshot.generation, snapshot, reply: async () => ({ status: 'sent' as const }) },
     );
 
-    await expect(new MessageDispatcher().dispatch(quoted('同意'), makeSnapshot({})))
+    const defaultSnapshot = makeSnapshot({});
+    const prefixedSnapshot = makeSnapshot({ commandPrefix: '/' });
+    await expect(new MessageDispatcher().dispatch(quoted(defaultSnapshot, '同意'), defaultSnapshot))
       .resolves.toMatchObject({ matched: true, command: '同意' });
-    await expect(new MessageDispatcher().dispatch(quoted('/同意'), makeSnapshot({ commandPrefix: '/' })))
+    await expect(new MessageDispatcher().dispatch(quoted(prefixedSnapshot, '/同意'), prefixedSnapshot))
       .resolves.toMatchObject({ matched: true, command: '同意' });
     // The prefix is still required after the quote.
-    await expect(new MessageDispatcher().dispatch(quoted('同意'), makeSnapshot({ commandPrefix: '/' })))
+    await expect(new MessageDispatcher().dispatch(quoted(prefixedSnapshot, '同意'), prefixedSnapshot))
       .resolves.toMatchObject({ matched: false });
   });
 
@@ -1652,7 +1663,7 @@ describe('IM Runtime', () => {
         content: content,
         endpointId: endpoint,
       },
-      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
+      { generation: snapshot.generation, snapshot, reply: async () => ({ status: 'sent' as const }) },
     );
 
     const hashed = await new MessageDispatcher().dispatch(send('#菜单', 'bot-1'), snapshot);
@@ -1715,7 +1726,7 @@ describe('IM Runtime', () => {
           { type: 'image', data: { media } },
         ]),
       },
-      { generation: 1, reply: async () => ({ status: 'sent' as const }) },
+      { generation: snapshot.generation, snapshot, reply: async () => ({ status: 'sent' as const }) },
     );
 
     await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({

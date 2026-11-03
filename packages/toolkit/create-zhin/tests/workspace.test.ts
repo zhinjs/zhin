@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
 import type { InitOptions } from '../src/types'
 import { scaffoldDependencyRange } from '@zhin.js/scaffold-wizard'
+import { reviewAIPlan } from '../../../../tests/helpers/review-ai-plan.js'
 
 const tmpRoots: string[] = []
 
@@ -60,7 +61,7 @@ describe('createWorkspace', () => {
       ai: {
         enabled: true,
         agentProvider: 'ollama',
-        providers: { ollama: { host: 'http://127.0.0.1:11434' } },
+        providers: { ollama: { host: 'http://127.0.0.1:11434', models: ['explicit-local-model'], capabilities: { input: ['text'], toolCalling: true } } },
       },
     })
     const soul = await fs.readFile(path.join(projectPath, 'SOUL.md'), 'utf8')
@@ -269,7 +270,7 @@ describe('createWorkspace', () => {
       ai: {
         enabled: true,
         agentProvider: 'ollama',
-        providers: { ollama: { host: 'http://127.0.0.1:11434' } },
+        providers: { ollama: { host: 'http://127.0.0.1:11434', models: ['explicit-local-model'], capabilities: { input: ['text'], toolCalling: true } } },
       },
     })
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
@@ -291,16 +292,26 @@ describe('createWorkspace', () => {
     expect(await fs.pathExists(path.join(projectPath, 'SOUL.md'))).toBe(true)
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')
     expect(config).toContain('ai:')
-    expect(config).toContain('provider: ollama')
+    expect(parse(config).ai).not.toHaveProperty('providers')
+    expect(parse(config).ai).not.toHaveProperty('plan')
+    const plan = parse(await fs.readFile(path.join(projectPath, 'ai.plan.yml'), 'utf8'))
+    const reviewed = await reviewAIPlan(plan)
+    const selected = reviewed.graph.profiles[reviewed.graph.purposes.defaults.chat!]
+    expect(selected.model).toBe('explicit-local-model')
+    expect(reviewed.graph.services[reviewed.bindings.services.ollama].models[selected.model].toolCalling).toBe(true)
   })
 })
 
 it('generates English project guidance and examples while retaining config values and dynamic command prefixes', async () => {
-  const projectPath = await makeProject({ locale: 'en', ai: {enabled:true,providers:{openai:{apiKey:'synthetic-only',models:['gpt-4o']}},agentProvider:'openai'} });
+  const projectPath = await makeProject({ locale: 'en', ai: {enabled:true,providers:{openai:{apiKey:'${OPENAI_API_KEY}',models:['explicit-model']}},agentProvider:'openai'} });
   const config=parse(await fs.readFile(path.join(projectPath,'zhin.config.yml'),'utf8'));
   expect(config.locale).toBe('en');
   expect(config.database).toEqual({dialect:'sqlite',filename:'./data/bot.db',mode:'wal'});
   expect(config).not.toHaveProperty('timezone');
+  expect(config.ai).not.toHaveProperty('providers');
+  const plan = parse(await fs.readFile(path.join(projectPath, 'ai.plan.yml'), 'utf8'));
+  expect(plan.accounts.openai.auth).toEqual({ method: 'api-key', source: 'env://OPENAI_API_KEY' });
+  expect((await reviewAIPlan(plan)).graph.purposes.defaults.chat).toBeTruthy();
   const readme=await fs.readFile(path.join(projectPath,'README.md'),'utf8');
   expect(readme).toContain('## 🚀 Quick start'); expect(readme).not.toMatch(/[\u3400-\u9fff]/u);
   const instructions=await fs.readFile(path.join(projectPath,'AGENTS.md'),'utf8');

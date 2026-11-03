@@ -95,3 +95,11 @@ sidebar: false
 - 真实 26 包 tarball 闭包的 strict 作者检查发现：`bridgeAuthoringHook()` 的推断返回类型把 handler 参数发射成不存在的根 `AIHookEvent`，而根实际公开名为 `OrchestratorHookEvent`。函数返回结构与已有 resource-hub `AIHook` 完全一致，因此只显式标注该真实返回类型；没有添加根 alias，也没有改变 handler、返回对象或运行行为。原作者发现测试与桥接合同测试共 7 项通过；单包构建后的 `.d.ts` 直接引用 `../resource-hub/types.js` 的 `AIHook`。
 - 该 Agent 宽入口归档检查同时发现 Database 的 `mongodb`、`mysql2/promise`、`pg`、`redis` 可选方言声明需要对应外部类型。四处静态类型依赖在基线 `d8532ddbf` 已存在；未补装四库、添加 shim 或使用 skipLibCheck 来称全入口闭包通过。纯推理入口已经验证的 strict 闭包与这个更宽 Agent 作者入口是不同证据层。
 - **独立候选方案（未实施）**：盘点 Database 公共类型的方言依赖边界，将中性合同与可选方言作者入口分离，设计后单独确认；不能仅删除合法类型、改变数据库运行 API，或要求所有 SQLite 用户默认安装四个驱动来掩盖声明问题。
+
+### 全量回归后的配置与脚手架收敛
+
+- 本组原 8 文件独立复现 19 个失败：示例／workspace 仍在启动文件寻找模型定义，Ollama fixture 没有明确模型，Key fixture 使用明文；旧 schema 测试仍指向已退役的 modelCatalog／decisions／TypeSafe 静态配置；Foundation 测试把已批准的空配置可启动误当无效。原人格、依赖、三角色、scope、身份、秘密隔离和辅助构造前拒绝断言均迁移到正式入口，未删除这些行为验收。
+- 示例与生成 workspace 的独立 `ai.plan.yml` 经过 canonical `reviewProviderPlan` 和真实官方纯 Driver 的 schema／目录验证；测试仅展开示例中明确给出的非秘密默认值，不装配凭据、读取 `.env` 或调用 Provider。启动文件继续只保留静态政策。TypeSafe 测试分别检查空插件配置与真实 Service／Profile schema，并保留通用条件约束的 Host 权威验证。
+- 新提案 schema 对三项决策计数漏掉安全整数上限：从提交 `fecfffb1c` 直接读取旧 schema 的红证据为 `MAX_SAFE_INTEGER + 1` 被静态解析接受，canonical graph 早已拒绝 invalid-graph；补齐原约束后静态 schema 与 canonical review 一致拒绝，没有增加新阈值或改变宽 startup schema 的扩展行为。
+- 发现并修复 Console 正常结构化保存的独立缺口：宽 startup schema 为 legacy 只读迁移保留数据，但正常表单／patch 之前可能把必然被 Agent 拒绝的旧选择器写回。现在仅 `validatePluginConfig('ai')` 复用已有纯 startup validator，在环境查询前明确拒绝；缺 Agent 验证器也返回结构化 invalid。真实 RPC 保存、patch、无写入、无环境查询、合法扩展及 legacy 源读取回归均覆盖；file-manager `replaceSource` 合同不改，通用 patch 权限范围断言保留。
+- 本组连同新增 Console 回归为 10 文件／115 测试通过；正式源码 type-check 与本组 ESLint 通过。Root 的初次完整 `check:all` 尚有其他分组失败，此处局部结果不能代替最终完整门禁；所有运行均为合成本地数据，没有实号或迁移用户资料。

@@ -6,9 +6,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
+import { parse } from 'yaml'
+import { reviewAIPlan } from '../../../tests/helpers/review-ai-plan.js'
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const configText = fs.readFileSync(path.join(botRoot, 'zhin.config.yml'), 'utf8')
+const plan = parse(fs.readFileSync(path.join(botRoot, 'ai.plan.yml'), 'utf8'))
 
 describe('life-assistant-bot 配置契约', () => {
   it('启用 AI', () => {
@@ -34,15 +37,21 @@ describe('life-assistant-bot 配置契约', () => {
       .toContain('@zhin.js/skill')
   })
 
-  it('配置了 AI provider', () => {
-    expect(configText).toMatch(/services:\s*\n/)
-    expect(configText).toMatch(/ollama:/)
+  it('通过独立提案配置本地服务，不在启动文件定义模型权威', async () => {
+    expect(plan.services.ollama).toMatchObject({ driver: 'ollama', options: { baseUrl: 'http://localhost:11434' } })
+    expect(plan.accounts.ollama).toEqual({ service: 'ollama', auth: { method: 'none' } })
+    expect(parse(configText).ai).not.toHaveProperty('providers')
+    expect(parse(configText).ai).not.toHaveProperty('plan')
+    const reviewed = await reviewAIPlan(plan)
+    expect(reviewed.graph.services[reviewed.bindings.services.ollama].models['qwen3:8b']).toMatchObject({ input: ['text'], toolCalling: true })
   })
 
-  it('配置了 agent 绑定', () => {
-    expect(configText).toMatch(/profiles:\s*\n/)
-    expect(configText).toMatch(/purposes:/)
-    expect(configText).toMatch(/model:/)
+  it('显式导入后聊天用途绑定到提案中的真实模型', async () => {
+    const reviewed = await reviewAIPlan(plan)
+    const selected = reviewed.graph.profiles[reviewed.graph.purposes.defaults.chat!]
+    expect(selected.model).toBe('qwen3:8b')
+    expect(selected.accountId).toBe(reviewed.bindings.accounts.ollama)
+    expect(parse(configText).ai).not.toHaveProperty('profiles')
   })
 
   it('配置了知识库', () => {
