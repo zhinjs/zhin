@@ -207,6 +207,8 @@ export type RuntimeConsoleRpcContext = {
   patchConfig?(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult>;
   /** Full-scope, revision-checked project administration, distinct from page allowlists. */
   patchProjectConfig?(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>): Promise<ConsoleConfigProjectPatchResult>;
+  /** Full-scope project read (`config:get-project`); masked unless `reveal`. */
+  readProjectConfig?(request: import('@zhin.js/console-protocol').ConsoleConfigProjectReadRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigProjectRead>;
   applyConfig?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
   setPluginEnabled?(
@@ -504,6 +506,23 @@ export async function dispatchRuntimeConsoleRpc(
           requestId,
           error: `Failed to save config: ${error instanceof Error ? error.message : String(error)}`,
         });
+      }
+      return payloads;
+    }
+    case CONFIG_RPC.GET_PROJECT: {
+      if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full scope required' }); return payloads; }
+      const { path, reveal } = message;
+      if (path !== undefined && (!Array.isArray(path) || path.length > CONFIG_PATCH_LIMITS.maxPathDepth
+        || path.some(segment => typeof segment !== 'string' || !segment || segment.length > CONFIG_PATCH_LIMITS.maxSegmentLength))) {
+        emit({ requestId, error: 'path 必须是非空字符串数组' });
+        return payloads;
+      }
+      if (reveal !== undefined && typeof reveal !== 'boolean') { emit({ requestId, error: 'reveal 必须是布尔值' }); return payloads; }
+      if (!ctx.readProjectConfig) { emit({ requestId, error: 'Config project read is not configured' }); return payloads; }
+      try {
+        emit({ requestId, data: await ctx.readProjectConfig({ path: (path ?? []) as string[], reveal: reveal === true }) });
+      } catch (error) {
+        emit({ requestId, error: `Failed to read config: ${error instanceof Error ? error.message : String(error)}` });
       }
       return payloads;
     }

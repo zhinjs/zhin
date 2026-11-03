@@ -1,6 +1,6 @@
 import { ConfigDocumentConflictError, type ConfigFileDocument } from '@zhin.js/config-file';
 import { isDeepStrictEqual } from 'node:util';
-import type { ConsoleConfigApplication, ConsoleConfigApplicationStatus, ConsoleConfigApplyResult, ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigProjectPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
+import type { ConsoleConfigApplication, ConsoleConfigApplicationStatus, ConsoleConfigApplyResult, ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigProjectPatchResult, ConsoleConfigProjectRead, ConsoleConfigProjectReadRequest, ConsoleConfigSource } from '@zhin.js/console-protocol';
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
   applyConfigPatches,
@@ -262,6 +262,26 @@ export class ConsoleConfigurationStore {
         : applied.applicationError ? '配置已保存，生效结果未确认' : applied.restartRequired
         ? (applied.application ? '配置已保存，部分配置待重启生效' : '配置已保存，需重启进程才能生效') : applied.application
           ? '配置已保存，请查看各项生效结果' : '配置已保存',
+    });
+  }
+
+  /**
+   * Trusted project read (`config:get-project`, full scope only). Values are masked by
+   * section schema, secret-like keys and unexpanded environment references unless the
+   * caller explicitly asks to `reveal`; a section whose schema cannot be read is masked whole.
+   */
+  readProject(request: ConsoleConfigProjectReadRequest = {}): Promise<ConsoleConfigProjectRead> {
+    return this.#afterMutations(async () => {
+      const { document, revision } = await this.#document.read();
+      const path = Object.freeze([...(request.path ?? [])]);
+      const reveal = request.reveal === true;
+      const value = path.length ? readPath(document, path) : structuredClone(document);
+      if (value === undefined) return Object.freeze({ revision, path, exists: false, redacted: !reveal });
+      if (reveal) return Object.freeze({ revision, path, exists: true, value, redacted: false });
+      const masked = path.length ? await this.#maskedValue(document, path)
+        : Object.freeze(Object.fromEntries(await Promise.all(Object.keys(document)
+          .map(async key => [key, await this.#maskedValue(document, [key])] as const))));
+      return Object.freeze({ revision, path, exists: true, value: masked, redacted: true });
     });
   }
 

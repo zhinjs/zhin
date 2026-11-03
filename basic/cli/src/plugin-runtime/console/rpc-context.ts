@@ -68,6 +68,7 @@ function createRpcContext(
       configuration.replaceSource(source, expectedRevision),
     setConfigKey: (pluginName: string, data: unknown) => configuration.setKey(pluginName, data),
     patchConfig: (request) => configuration.patch(request),
+    readProjectConfig: configuration.readProject ? request => configuration.readProject!(request) : undefined,
     patchProjectConfig: configuration.patchProject ? request => configuration.patchProject!(request) : undefined,
     applyConfig: configuration.apply ? expectedRevision => configuration.apply!(expectedRevision) : undefined,
     pluginManagement,
