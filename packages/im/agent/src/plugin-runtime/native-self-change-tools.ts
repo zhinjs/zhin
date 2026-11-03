@@ -7,6 +7,7 @@
  *   作为后续试跑（切片 C）与审批卡（切片 D）的展示内容。
  * - 随后宿主自动试跑（§3）：通过 → `ready`；失败 → `trial_failed`（终态），错误交回模型重新起草。
  * - 试跑通过即提交审批（§4，切片 D）：`pending` + G6 `self` 审批卡；同一会话已有待审变更时不起草新变更。
+ * - 影响面是 `process`（需要重启）而本实例没有守护进程时不提交审批，停在 `ready`（#1051 F1，Q6=A）。
  * - 只在 IM 会话里可用：审计与回报需要发起会话与发起人。
  */
 import {
@@ -42,6 +43,11 @@ export interface NativeSelfChangeToolSources {
   readonly trial?: () => SelfChangeTrialOptions | undefined;
   /** 审批提交（切片 D）；缺省时试跑通过的变更停在 `ready`。 */
   readonly approvals?: () => SelfChangeApprovals | undefined;
+  /**
+   * 受控重启能否把进程拉起来（有守护进程、不是 `--once`）；缺省视为可以。
+   * false 时影响面为 `process` 的变更不提交审批（批准了也只会停机）。
+   */
+  readonly restartSupported?: () => boolean;
 }
 
 export function createNativeSelfChangeToolFeatures(sources: NativeSelfChangeToolSources): readonly NativeSelfChangeToolFeature[] {
@@ -154,6 +160,11 @@ async function draftSelfChange(
   await store.attachPlan(record.id, record.contentHash, preview);
   const trialed = await runSelfChangeTrial(store, record.id, { ...(sources.trial?.() ?? {}), turnId: context.turnId });
   if (trialed.status !== 'ready' || !approvals) return describeDraft(trialed, preview);
+  const restartSupported = sources.restartSupported?.() ?? true;
+  if (preview.impact.kind === 'process' && !restartSupported) {
+    store.audit(trialed, 'change_restart_unavailable', 'policy', { impact: preview.impact.kind });
+    return describeDraft(trialed, preview, { restartUnavailable: true });
+  }
   try {
     const submitted = await approvals.submit(trialed.id, { turnId: context.turnId });
     return describeDraft(submitted.record, preview, { approvalId: submitted.approvalId });
@@ -207,7 +218,7 @@ function toConfigOperation(raw: unknown): unknown {
 function describeDraft(
   record: SelfChangeRecord,
   preview: SelfChangePreview,
-  submission: { approvalId?: string; blockedBy?: string } = {},
+  submission: { approvalId?: string; blockedBy?: string; restartUnavailable?: boolean } = {},
 ): string {
   const lines = preview.files.map((file) => {
     const counts = file.kind === 'delete' ? `-${file.removed}` : `+${file.added} -${file.removed}`;
@@ -241,7 +252,12 @@ function describeDraft(
       ? [`Submitted for approval (card ${submission.approvalId}): the owner gets it in a private chat or in the Console, never in a group; it expires in 24 hours.`]
       : submission.blockedBy
         ? [`Not submitted: change ${submission.blockedBy} from this conversation is still waiting for approval.`]
-        : []),
+        : submission.restartUnavailable
+          ? ['Not submitted for approval: this change needs a process restart, but this instance runs without a supervisor '
+            + '(started with --once or outside `zhin start`), so it cannot restart itself and approving would only stop the bot. '
+            + 'Tell the user it cannot go live automatically here: the owner has to run the bot under `zhin start` '
+            + '(which restarts it) and ask again.']
+          : []),
     'Tell the user briefly what was drafted and that it is waiting; do not claim it is active and do not write these files with other tools. '
       + 'To change it further, call change_draft again WITHOUT change_id (start a new change) with the full file list.',
   ].join('\n');

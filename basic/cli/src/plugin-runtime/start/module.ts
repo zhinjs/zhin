@@ -8,6 +8,7 @@ export {
   SUPERVISOR_CHILD_EXIT_GRACE_MS,
   planRespawn,
   processRestartExitCode,
+  processRestartSupported,
   startSupervisorWatchdog,
   supervisedNodeArguments,
   type RespawnPlan,

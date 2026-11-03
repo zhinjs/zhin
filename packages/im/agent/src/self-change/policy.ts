@@ -92,6 +92,7 @@ export function selfChangeOutcome(code: DecisionReasonCode): DecisionOutcome {
     case 'change_config_key_forbidden':
     case 'change_rejected':
     case 'change_hash_mismatch':
+    case 'change_restart_unavailable':
       return 'deny';
     case 'change_expired':
     case 'change_pruned':
@@ -131,6 +132,22 @@ export interface ChangePathPolicyInput {
   readonly protectedPaths?: HostProtectedPaths;
   /** 额外的本地插件根，相对项目根（例如 `plugins/weather`）；项目根本身总是插件根。 */
   readonly pluginRoots?: readonly string[];
+}
+
+/**
+ * Local plugin roots (relative to the project root) as a fixed list or a provider the host re-reads on every
+ * use: the host derives them from the committed generation's source ownership, which is still empty while the
+ * first generation is being assembled and changes with every HMR generation.
+ */
+export type SelfChangePluginRootsSource = readonly string[] | (() => readonly string[]);
+
+/** Turns a {@link SelfChangePluginRootsSource} into a provider of a frozen list. */
+export function selfChangePluginRootsProvider(source: SelfChangePluginRootsSource | undefined): () => readonly string[] {
+  if (typeof source === 'function') {
+    return () => Object.freeze([...source()]);
+  }
+  const fixedRoots = Object.freeze([...(source ?? [])]);
+  return () => fixedRoots;
 }
 
 function posixRelative(value: string): string {

@@ -37,9 +37,11 @@ import {
   normalizeChangeTarget,
   selfChangeContentHash,
   selfChangeOutcome,
+  selfChangePluginRootsProvider,
   sha256Hex,
   type SelfChangeConfigPatch,
   type SelfChangeFileEntry,
+  type SelfChangePluginRootsSource,
   type SelfChangeStatus,
 } from './policy.js';
 
@@ -160,8 +162,8 @@ export interface SelfChangeStoreOptions {
   readonly root: string;
   readonly projectRoot: string;
   readonly protectedPaths?: HostProtectedPaths;
-  /** 额外的本地插件根（相对项目根）。 */
-  readonly pluginRoots?: readonly string[];
+  /** 额外的本地插件根（相对项目根）；宿主传 provider，每次起草时重读当前 generation 的插件根。 */
+  readonly pluginRoots?: SelfChangePluginRootsSource;
   readonly audit?: () => SelfChangeAuditSink | undefined;
   readonly now?: () => number;
   readonly retentionMs?: number;
@@ -215,7 +217,7 @@ export class SelfChangeStore {
   readonly root: string;
   readonly #projectRoot: string;
   readonly #protectedPaths?: HostProtectedPaths;
-  readonly #pluginRoots: readonly string[];
+  readonly #pluginRoots: () => readonly string[];
   readonly #audit: () => SelfChangeAuditSink | undefined;
   readonly #now: () => number;
   readonly #retentionMs: number;
@@ -230,7 +232,7 @@ export class SelfChangeStore {
     this.root = path.resolve(options.root);
     this.#projectRoot = path.resolve(options.projectRoot);
     this.#protectedPaths = options.protectedPaths;
-    this.#pluginRoots = Object.freeze([...(options.pluginRoots ?? [])]);
+    this.#pluginRoots = selfChangePluginRootsProvider(options.pluginRoots);
     this.#audit = options.audit ?? (() => undefined);
     this.#now = options.now ?? Date.now;
     this.#retentionMs = options.retentionMs ?? DEFAULT_CHANGE_RETENTION_MS;
@@ -265,10 +267,11 @@ export class SelfChangeStore {
       }
       const staged: { entry: SelfChangeFileEntry; content: string | null }[] = [];
       const seen = new Set<string>();
+      const pluginRoots = this.#pluginRoots();
       for (const file of rawFiles) {
         let target: string;
         try {
-          target = normalizeChangeTarget(file?.path, { projectRoot: this.#projectRoot, protectedPaths: this.#protectedPaths, pluginRoots: this.#pluginRoots });
+          target = normalizeChangeTarget(file?.path, { projectRoot: this.#projectRoot, protectedPaths: this.#protectedPaths, pluginRoots });
         } catch (error) {
           if (error instanceof SelfChangePathError) reject('change_path_forbidden', error, { path: String(file?.path ?? '').slice(0, 200) });
           throw error;

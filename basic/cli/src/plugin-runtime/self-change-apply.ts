@@ -41,6 +41,12 @@ export interface SelfChangeApplyHostOptions {
   readonly configuration?: SelfChangeConfigurationSource;
   /** Absolute root config file; reloaded with a change that carries a config patch. */
   readonly configFile?: string;
+  /**
+   * #1051 F1 / Q6=A: whether a controlled exit 75 brings the process back (a `zhin` supervisor is present and
+   * the process was not started with `--once`). Default true. When false, `change_draft` does not submit changes
+   * that need a restart, and the applier rolls back instead of restarting.
+   */
+  readonly restartSupported?: boolean;
 }
 
 /** What the Agent generation contributes: the control plane and the IM. */
@@ -66,6 +72,11 @@ export class HostSelfChangeApply {
 
   constructor(options: SelfChangeApplyHostOptions) {
     this.#options = options;
+  }
+
+  /** A controlled restart (exit 75) brings this process back; see {@link SelfChangeApplyHostOptions.restartSupported}. */
+  get restartSupported(): boolean {
+    return this.#options.restartSupported ?? true;
   }
 
   /** An approved change is being applied (or recovered): HMR restart requests are left to the applier. */
@@ -97,6 +108,7 @@ export class HostSelfChangeApply {
       ...(config ? { config } : {}),
       reload: ({ record, changed }) => this.#options.reload(this.#sources(record, changed)),
       requestRestart: () => this.#options.restart(),
+      restartSupported: () => this.restartSupported,
       health: input => this.#health(input),
       emergencyStop: generation.emergencyStop,
       report: generation.report,

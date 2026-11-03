@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(project, { recursive: true, force: true }));
 
-async function harness(impact?: SelfChangeImpactPort, withApprovals = false) {
+async function harness(impact?: SelfChangeImpactPort, withApprovals = false, restartSupported?: boolean) {
   const store = new SelfChangeStore({
     root: join(project, '.zhin', 'changes'),
     projectRoot: project,
@@ -30,7 +30,12 @@ async function harness(impact?: SelfChangeImpactPort, withApprovals = false) {
   });
   const queue = new ToolApprovalQueue();
   const approvals = withApprovals ? new SelfChangeApprovals({ store, queue }) : undefined;
-  const [feature] = createNativeSelfChangeToolFeatures({ store: () => store, impact: () => impact, approvals: () => approvals });
+  const [feature] = createNativeSelfChangeToolFeatures({
+    store: () => store,
+    impact: () => impact,
+    approvals: () => approvals,
+    ...(restartSupported === undefined ? {} : { restartSupported: () => restartSupported }),
+  });
   return { store, tool: feature!, queue };
 }
 
@@ -159,5 +164,36 @@ describe('change_draft tool', () => {
     const second = await tool.definition.execute({ files: [{ ...ping, path: 'commands/pong.ts' }], summary: 'again' }, context('42', { scope: 'group', sceneId: '500' }));
     expect(second).toContain(`Change ${record!.id} from this conversation is still waiting`);
     expect(await store.list()).toHaveLength(1);
+  });
+  describe('without a supervisor to restart (#1051 F1)', () => {
+    const hostConfigImpact: SelfChangeImpactPort = { hostConfigKeys: ['http'], planFiles: () => ({ kind: 'none', reasons: [] }) };
+    const portPatch = { expected_revision: 'rev-1', patches: [{ op: 'set', path: ['http', 'port'], value_json: '8087' }] };
+
+    it('keeps a change that needs a restart at ready and does not submit it', async () => {
+      const { store, tool, queue } = await harness(hostConfigImpact, true, false);
+      const result = await tool.definition.execute({ config_patch: portPatch, summary: '改端口' }, context());
+      expect(result).toContain('Not submitted for approval');
+      expect(result).toContain('without a supervisor');
+      expect(result).toContain('restart');
+      const [record] = await store.list();
+      expect(record).toMatchObject({ status: 'ready' });
+      expect(queue.list()).toEqual([]);
+      expect(events.map(event => event.reasonCode)).toContain('change_restart_unavailable');
+    });
+
+    it('still submits a hot-reload change', async () => {
+      const { store, tool, queue } = await harness(undefined, true, false);
+      const result = await tool.definition.execute({ files: [ping], summary: '加 /ping 指令' }, context());
+      expect(result).toContain('Submitted for approval');
+      expect((await store.list())[0]).toMatchObject({ status: 'pending' });
+      expect(queue.list()).toHaveLength(1);
+    });
+
+    it('submits a change that needs a restart when a supervisor can restart it', async () => {
+      const { store, tool } = await harness(hostConfigImpact, true, true);
+      const result = await tool.definition.execute({ config_patch: portPatch, summary: '改端口' }, context());
+      expect(result).toContain('Submitted for approval');
+      expect((await store.list())[0]).toMatchObject({ status: 'pending' });
+    });
   });
 });

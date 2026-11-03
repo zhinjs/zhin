@@ -69,6 +69,15 @@ describe('HostSelfChangeApply ports', () => {
     expect(options.restarts).toBe(1);
   });
 
+  it('exposes whether a controlled restart brings the process back (#1051 F1)', () => {
+    const supervised = new HostSelfChangeApply(hostOptions());
+    expect(supervised.restartSupported).toBe(true);
+    expect(supervised.ports(noGeneration).restartSupported?.()).toBe(true);
+    const unsupervised = new HostSelfChangeApply(hostOptions({ restartSupported: false }));
+    expect(unsupervised.restartSupported).toBe(false);
+    expect(unsupervised.ports(noGeneration).restartSupported?.()).toBe(false);
+  });
+
   it('is unhealthy when a runtime error was reported after the change started applying', async () => {
     const host = new HostSelfChangeApply(hostOptions());
     host.noteError(); // before the change: does not count

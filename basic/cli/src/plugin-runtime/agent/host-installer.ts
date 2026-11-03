@@ -142,6 +142,11 @@ export interface InstallAgentHostOptions {
   readonly workroomLocalDataGovernance?: LocalWorkroomDataGovernanceAuthority;
   /** ADR 0040 §2: `InvalidationPlanner` over the committed source ownership, for `change_draft` previews. */
   readonly selfChangeImpact?: SelfChangeImpactPort;
+  /**
+   * #1051 F1: local plugin roots (relative to the project root) whose convention dirs a self-change may write,
+   * re-read from the committed generation on every use. Absent: only the project root's convention dirs.
+   */
+  readonly selfChangePluginRoots?: () => readonly string[];
 }
 
 /**
@@ -222,11 +227,15 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       hostCatalog: () => service.getModelRuntime().getCatalogConfig(),
     }));
     zhinAgent.hostProtectedPaths = hostProtectedPaths;
+    // #1051 F1: the store (drafts), the trial (grouping by plugin root) and the applier (writes) share one view
+    // of the local plugin roots, so a draft accepted under `plugins/<x>/commands/` is also trial-run and written.
+    const selfChangePluginRoots = options.selfChangePluginRoots ?? (() => []);
     // ADR 0040 §6a: the self-change staging area is bounded — prune on start, then every 6 hours.
     const selfChanges = new SelfChangeStore({
       root: join(options.projectRoot, '.zhin', 'changes'),
       projectRoot: options.projectRoot,
       protectedPaths: hostProtectedPaths,
+      pluginRoots: selfChangePluginRoots,
       audit: () => zhinAgent.decisionEvents,
       onError: error => logger.warn(formatCompact({
         op: 'self_change_prune_failed',
@@ -253,6 +262,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         store: selfChanges,
         projectRoot: options.projectRoot,
         protectedPaths: hostProtectedPaths,
+        pluginRoots: selfChangePluginRoots,
         ports: selfChangeApplyHost.ports(createSelfChangeGenerationPorts({
           send: (target, text) => options.im.endpoints.send({
             adapter: target.adapter,
@@ -335,7 +345,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       announcements: () => zhinAgent.getAnnouncements?.(),
       sessionEvents: () => zhinAgent.getSessionEvents?.(),
       groupRules: () => zhinAgent.getGroupRules?.(),
-      selfChanges: { store: () => selfChanges, impact: () => options.selfChangeImpact, trial: () => selfChangeTrialOptions, approvals: () => selfChangeApprovals },
+      selfChanges: {
+        store: () => selfChanges,
+        impact: () => options.selfChangeImpact,
+        trial: () => ({ ...selfChangeTrialOptions, pluginRoots: selfChangePluginRoots() }),
+        approvals: () => selfChangeApprovals,
+        ...(selfChangeApplyHost ? { restartSupported: () => selfChangeApplyHost.restartSupported } : {}),
+      },
     });
 
     const publicationCoordinator = new AgentHostPublicationCoordinator({

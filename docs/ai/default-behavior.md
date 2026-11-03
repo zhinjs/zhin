@@ -61,6 +61,8 @@
 
 **宿主接线（切片 E2）。** `zhin runtime start` 进程持有生效宿主，最新一代 Agent 绑定生效器，生效跨代串行：热重载走 `RootHost.reloadSources()`——与开发态文件监听同一条 HMR 路径（模块失效 + `InvalidationPlanner`），生产 `--no-watch` 也可用；带配置补丁的变更连同根配置文件一起重载，计划判定需重启时按重启处理。重启即受控 exit 75（与 Console「重启」同一出口）；生效进行中，文件监听触发的重启请求推迟：由生效流程在落盘 `verifying` 之后发起，流程结束时仍未重启则补发。健康检查：已有提交的 generation、变更文件所属插件都已装配、且从开始生效（重启后为本进程启动）起运行时没有报过错误。配置补丁按顶层段逐段走 Console `config:patch`（宿主段用宿主白名单、其余段限定在该插件实例内，revision 依次衔接，任一段未保存即停并按快照源文整份换回）。回报：发起会话过控制面，被拦记 `blocked`；发不出去（会话不存在、Bot 已不在群里、被禁言）改投该端点主人私聊（`change_report_redirected`）；急停回报只投主人私聊且不受控制面拦截（它要告诉主人刚刚打开的急停）。急停即以 `self_change:<id>` 打开实例级 `emergency_stop`。每次启动完成后（`--once` 除外）先 `recover()`，再把「已批准但还没来得及生效」（批准后进程就退出了）的变更依次生效。
 
+**本地插件根与无守护进程（#1051 F1）。** 宿主从当前已提交 generation 的源码归属里取项目内的本地插件根（workspace / 本地路径插件；真实路径须在项目根内、不含 `node_modules`，所以指向 `node_modules` 或项目外的符号链接不算），起草、试跑（按插件根分组）与生效三处共用同一份：`plugins/<x>/commands/...` 等约定目录可以起草，`node_modules` 里的插件仍拒绝；每次使用时重读，HMR 新一代自动更新。只有 `zhin start` 守护进程拉起（`ZHIN_SUPERVISOR_PID` 须为十进制 pid 且等于父进程 pid，镜像里继承的固定值如 `ZHIN_SUPERVISOR_PID=1` 不算）且不是 `--once` 时才算能自动重启；无守护进程或 `--once` 都视为无法自动重启：否则影响面为 `process` 的变更试跑通过后停在 `ready`、**不提交审批**，`change_draft` 告诉模型本实例没法自动生效（审计 `change_restart_unavailable`）；已批准的变更生效时若计划要重启则不动文件直接 `failed`，生效中途才升级为重启（热重载要求重启、配置补丁需要重启）则按快照回滚、不重启，结论 `rolled_back`，原因码同为 `change_restart_unavailable`。回滚本身需要重启时（恢复配置要重启、恢复后的热重载要求重启、`recover()` 接续的回滚要重启）不请求重启、也不报「已回滚」，直接急停并私聊主人。
+
 ```yaml
 ai:
   agent:
