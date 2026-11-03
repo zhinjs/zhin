@@ -91,5 +91,7 @@ it('two concurrent offline writers on one revision: one saves, the other is a co
   // A later (online or offline) read observes the desired value that won.
   const winner = results.find(result => result.status === 'saved');
   const read = await second.readProject({ path: ['log_level'] });
-  expect(read).toMatchObject({ exists: true, revision: (winner as { revision: string }).revision });
+  // ...and that value belongs to the writer whose patch returned `saved`.
+  expect(read).toMatchObject({ exists: true, revision: (winner as { revision: string }).revision,
+    value: results[0]!.status === 'saved' ? 'debug' : 'warn' });
 });

@@ -12,6 +12,7 @@ import { registerConsoleRpcRoute } from '../../../src/plugin-runtime/console/rpc
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 import { createPluginLifecycleStore, resolvePluginLifecycleFile } from '../../../src/plugin-runtime/plugin-lifecycle-store.js';
 import { CONFIG_EXIT_CODES, createConfigCommand } from '../../../src/commands/config.js';
+import { ConsoleRpcError, ConsoleRequestUnconfirmedError, requestPluginConsole } from '../../../src/plugin-management/console-client.js';
 
 const token = 'synthetic-full-token';
 const previousExitCode = process.exitCode;
@@ -22,6 +23,17 @@ let http: ReturnType<typeof createHttpHost> | undefined;
 let proxy: Server | undefined;
 let output: ReturnType<typeof vi.spyOn>;
 let generation = 1;
+let appliedDocument: Record<string, unknown> = {};
+
+const plain = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && !Array.isArray(value));
+/** Leaf paths whose value differs between two documents: the receipt reports exactly what changed. */
+function changedPaths(before: unknown, after: unknown, prefix: readonly string[] = []): string[][] {
+  if (plain(before) && plain(after)) {
+    return [...new Set([...Object.keys(before), ...Object.keys(after)])]
+      .flatMap(key => changedPaths(before[key], after[key], [...prefix, key]));
+  }
+  return JSON.stringify(before) === JSON.stringify(after) ? [] : [[...prefix]];
+}
 
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-config-cli-live-')));
@@ -29,14 +41,18 @@ beforeEach(async () => {
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'config-cli-live', version: '1.0.0', type: 'module',
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false } }));
   await writeFile(join(root, 'plugin.js'), 'export default {};');
-  await writeFile(file, JSON.stringify({ configVersion: 2, plugins: {}, log_level: 'info', menuKeyword: 'Before',
-    ai: { enabled: false, providers: { main: { apiKey: '${MAIN_KEY}' } } }, http: { host: '127.0.0.1', port: 18086, token: 'stored-http-token' } }));
+  appliedDocument = { configVersion: 2, plugins: {}, log_level: 'info', menuKeyword: 'Before',
+    ai: { enabled: false, providers: { main: { apiKey: '${MAIN_KEY}' } } }, http: { host: '127.0.0.1', port: 18086, token: 'stored-http-token' } };
+  await writeFile(file, JSON.stringify(appliedDocument));
   // Host-side apply is faked: Host-section `http` edits need a restart, everything else applies in place.
   const applyConfiguration = vi.fn(async (expectedRevision?: string): Promise<ConsoleConfigApplication> => {
     const current = await createConfigDocument(file).read();
-    const restart = JSON.parse(await readFile(file, 'utf8')).http.port !== 18086;
+    const next = JSON.parse(await readFile(file, 'utf8')) as Record<string, unknown>;
+    const restart = (next.http as { port?: unknown }).port !== 18086;
+    const paths = changedPaths(appliedDocument, next);
+    appliedDocument = next;
     return { operationId: `op-${generation}`, sourceRevision: expectedRevision ?? current.revision, saved: true, generation: ++generation,
-      applicationRevision: generation, groups: [{ id: 'main', paths: [['log_level']], dependsOn: [],
+      applicationRevision: generation, groups: [{ id: 'main', paths, dependsOn: [],
         effect: restart ? 'restart-process' : 'in-place', status: restart ? 'restart-pending' : 'applied' }] };
   });
   http = createHttpHost({ host: '127.0.0.1', port: 0, token });
@@ -84,13 +100,16 @@ describe('zhin config against a real Host HTTP control plane', () => {
 
   it('set/unset save through the Host and map the application receipt to exit codes', async () => {
     const applied = await run('set', 'menuKeyword', 'After');
-    expect(applied).toMatchObject({ code: CONFIG_EXIT_CODES.ok, data: { status: 'saved', application: { groups: [{ status: 'applied' }] } } });
+    expect(applied).toMatchObject({ code: CONFIG_EXIT_CODES.ok, data: { status: 'saved', paths: [['menuKeyword']],
+      application: { groups: [{ status: 'applied', paths: [['menuKeyword']] }] } } });
     expect(JSON.parse(await readFile(file, 'utf8')).menuKeyword).toBe('After');
     expect((await run('get', 'menuKeyword')).data).toBe('After');
-    expect(await run('unset', 'menuKeyword')).toMatchObject({ code: CONFIG_EXIT_CODES.ok, data: { status: 'saved' } });
+    expect(await run('unset', 'menuKeyword')).toMatchObject({ code: CONFIG_EXIT_CODES.ok, data: { status: 'saved', paths: [['menuKeyword']],
+      application: { groups: [{ paths: [['menuKeyword']] }] } } });
     expect(JSON.parse(await readFile(file, 'utf8'))).not.toHaveProperty('menuKeyword');
     const pending = await run('set', 'http.port', '18087');
-    expect(pending).toMatchObject({ code: CONFIG_EXIT_CODES.restartPending, data: { status: 'saved', restartRequired: true } });
+    expect(pending).toMatchObject({ code: CONFIG_EXIT_CODES.restartPending, data: { status: 'saved', restartRequired: true, paths: [['http', 'port']],
+      application: { groups: [{ status: 'restart-pending', paths: [['http', 'port']] }] } } });
   });
 
   it('invalid values and declaration writes are invalid (exit 5) with field paths and leave the file unchanged', async () => {
@@ -146,6 +165,23 @@ describe('zhin config against a real Host HTTP control plane', () => {
     host = direct;
     // The Host did save; the CLI neither retried nor wrote locally.
     expect((await run('get', 'menuKeyword')).data).toBe('Saved despite lost reply');
+  });
+
+  it('the real route echoes requestId on its HTTP 400 rejection, so only that is authoritative', async () => {
+    const malformed = { type: 'config:patch-project', expectedRevision: 'not-a-revision', patches: [] };
+    await expect(requestPluginConsole(host, malformed, 'ZHIN_CONSOLE_TOKEN', { requestId: 'req-authoritative' }))
+      .rejects.toBeInstanceOf(ConsoleRpcError);
+    // The same rejection behind a gateway that rewrites it to 502 proves nothing about execution.
+    const direct = host;
+    proxy = createServer(async (request, response) => {
+      for await (const _chunk of request) { /* drain */ }
+      response.writeHead(502, { 'content-type': 'application/json' }).end('{"error":"Bad Gateway"}');
+    });
+    await new Promise<void>(done => proxy!.listen(0, '127.0.0.1', done));
+    host = `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`;
+    await expect(requestPluginConsole(host, malformed, 'ZHIN_CONSOLE_TOKEN', { requestId: 'req-gateway' }))
+      .rejects.toMatchObject({ name: ConsoleRequestUnconfirmedError.name, requestId: 'req-gateway', httpStatus: 502 });
+    host = direct;
   });
 
   it('a rejected token is an authentication failure and never falls back offline', async () => {
