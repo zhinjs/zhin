@@ -268,8 +268,9 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       started: true,
       generation: 1,
       plugins: 1,
-      // Seven authored capabilities plus the Host-installed language command.
-      capabilities: 8,
+      // Seven authored capabilities, language, and seven Host config routes:
+      // config / list / get / schema / status / set / delete.
+      capabilities: 15,
       // adapter + command + component + middleware + handler + schedule + tool（platformFeatures 继承）
       projections: 7,
     });
