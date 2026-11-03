@@ -49,7 +49,10 @@ export class DouyinLiveApiError extends Error {
   }
 }
 
-/** `X-MS-STUB` = md5(`k1=v1,k2=v2,...`)，按 `STUB_KEYS` 顺序取 WebSocket 查询参数。 */
+/**
+ * `X-MS-STUB` = md5(`k1=v1,k2=v2,...`)，按 `STUB_KEYS` 顺序取 WebSocket 查询参数。
+ * md5 是平台协议规定的参数摘要（不是安全用途）；输入只有公开参数与随机游客设备 id，不含 Cookie 或账号凭据。
+ */
 export function buildSignatureStub(params: ReadonlyMap<string, string> | Record<string, string>): string {
   const get = (key: string) => (params instanceof Map ? params.get(key) : (params as Record<string, string>)[key]) ?? '';
   const plain = STUB_KEYS.map((key) => `${key}=${get(key)}`).join(',');
@@ -175,7 +178,8 @@ export class DouyinLiveClient {
   /** 弹幕 WebSocket 查询参数（不含 signature）。 */
   pushParams(roomId: string): Map<string, string> {
     const nowMs = Math.floor(this.now());
-    const uid = this.userUniqueId;
+    // 随机游客设备 id（非账号身份、非秘密）；平台把它同时用作 did 与 user_unique_id。
+    const deviceId = this.userUniqueId;
     return new Map([
       ['app_name', 'douyin_web'], ['version_code', '180800'], ['webcast_sdk_version', '1.0.14-beta.0'],
       ['update_version_code', '1.0.14-beta.0'], ['compress', 'gzip'], ['device_platform', 'web'],
@@ -183,9 +187,9 @@ export class DouyinLiveClient {
       ['browser_language', 'zh-CN'], ['browser_platform', 'Win32'], ['browser_name', 'Mozilla'],
       ['browser_version', DOUYIN_LIVE_USER_AGENT.slice('Mozilla/'.length)], ['browser_online', 'true'],
       ['tz_name', 'Asia/Shanghai'], ['cursor', `d-1_u-1_fh-0_t-${nowMs}_r-1`],
-      ['internal_ext', `internal_src:dim|wss_push_room_id:${roomId}|wss_push_did:${uid}|first_req_ms:${nowMs}|fetch_time:${nowMs}|seq:1|wss_info:0-${nowMs}-0-0`],
+      ['internal_ext', `internal_src:dim|wss_push_room_id:${roomId}|wss_push_did:${deviceId}|first_req_ms:${nowMs}|fetch_time:${nowMs}|seq:1|wss_info:0-${nowMs}-0-0`],
       ['host', LIVE_BASE_URL], ['aid', '6383'], ['live_id', '1'], ['did_rule', '3'], ['endpoint', 'live_pc'],
-      ['support_wrds', '1'], ['user_unique_id', uid], ['im_path', '/webcast/im/fetch/'], ['identity', 'audience'],
+      ['support_wrds', '1'], ['user_unique_id', deviceId], ['im_path', '/webcast/im/fetch/'], ['identity', 'audience'],
       ['need_persist_msg_count', '15'], ['insert_task_id', ''], ['live_reason', ''], ['room_id', roomId],
       ['heartbeatDuration', '0'],
     ]);
