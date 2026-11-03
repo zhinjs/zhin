@@ -4,7 +4,7 @@ import { RuntimeInteractionCoordinator } from '../../../../../../packages/im/cor
 import { describe, expect, it, vi } from 'vitest';
 import type { DecisionProvider } from '@zhin.js/ai';
 import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/runtime';
-import { AiControlPlane, requestApprovalOutcome, type TurnRequest } from '@zhin.js/agent';
+import { AiControlPlane, DecisionEventLog, requestApprovalOutcome, type TurnRequest } from '@zhin.js/agent';
 import { TurnAdmissionGate } from '@zhin.js/agent/turn';
 import type { CoreReplyStream, Message, OpenReplyStreamOptions } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
@@ -553,7 +553,7 @@ describe('personal Session IM ingress', () => {
   const endpoint = { id: 'root\0zhin.adapter\0icqq', adapter: 'icqq' };
   const conversation: ConversationRef = { endpoint, kind: 'group', id: 'shared-room' };
 
-  function fixture(options: { merge?: boolean; hold?: boolean; live?: boolean; ambient?: boolean; events?: MemoryConversationEventStore } = {}) {
+  function fixture(options: { merge?: boolean; quietMs?: number; masters?: string[]; log?: DecisionEventLog; hold?: boolean; live?: boolean; ambient?: boolean; events?: MemoryConversationEventStore } = {}) {
     const requests: TurnRequest[] = [];
     const complete: Array<() => void> = [];
     let released = false;
@@ -575,11 +575,12 @@ describe('personal Session IM ingress', () => {
     const route = new AgentTurnIngressRoute({
       projectRoot: '/host-a', runtime: { executeLeased } as never,
       im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext, commitConversationContext, conversationEventReader: options.events } as never,
-      ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
+      ingress: { read: async () => ({ agents: [], tools: [], skills: [] }) } as never,
       agent: {
         service: {
           getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
           getTriggerConfig: () => ({ enabled: true,
+            ...(options.masters ? { masters: options.masters } : {}),
             ...(options.events ? { sceneEvents: { conversations: ['*'] } } : {}),
             ...(options.ambient ? { ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } } : {}),
           }),
@@ -587,14 +588,15 @@ describe('personal Session IM ingress', () => {
             model: () => ({}),
             completeSimple: async () => ({ role: 'assistant', content: [{ type: 'text', text: '{"engage":true,"confidence":0.9,"reason":"unanswered"}' }] }),
           }),
-          getAgentConfig: () => ({ inboundQueue: { merge: { enabled: options.merge ?? false, quietMs: 0, maxWaitMs: 0 },
+          getAgentConfig: () => ({ inboundQueue: { merge: { enabled: options.merge ?? false, quietMs: options.quietMs ?? 0, maxWaitMs: (options.quietMs ?? 0) * 4 },
             ...(options.live ? { live: { windowMs: 50, minIntervalMs: 0 } } : {}) } }),
         },
-        agent: { archiveSession, appendSessionEvents },
+        agent: { archiveSession, appendSessionEvents, ...(options.log ? { getDecisionEvents: () => options.log } : {}) },
       } as never,
     });
-    const run = (subjectId: string, text = '#hello', target = conversation, account = 'account-a') => {
+    const run = (subjectId: string, text = '#hello', target = conversation, account = 'account-a', extra: Partial<Message> = {}) => {
       const message = {
+        ...extra,
         conversation: target, content: text, endpointId: account, sender: { id: subjectId },
         message: { conversation: target, id: `message-${subjectId}` },
         $reply: vi.fn(async () => ({ status: 'sent' })),
@@ -604,7 +606,115 @@ describe('personal Session IM ingress', () => {
     return { route, run, requests, release: () => { released = true; complete.splice(0).forEach(resolve => resolve()); }, executeLeased, archiveSession, appendSessionEvents, readConversationContext, commitConversationContext };
   }
 
-  it('runs two people in one group independently even with group merging enabled', async () => {
+  /** An `@bot` plain-text group message: mergeable under ADR 0038 §1. */
+  const mention = (f: ReturnType<typeof fixture>, subjectId: string, text: string) =>
+    f.run(subjectId, text, conversation, 'account-a', { mentioned: true });
+  const mergeRows = (log: DecisionEventLog) => log.recent()
+    .filter(row => row.reasonCode.startsWith('merge_window_'))
+    .map(row => ({ reasonCode: row.reasonCode, userId: row.userId, payload: row.payload }));
+
+  it('merges two people @-ing the Bot in one group into one scene Session turn (ADR 0038 §验收1, R0-fix)', async () => {
+    vi.useFakeTimers();
+    const log = new DecisionEventLog();
+    const f = fixture({ merge: true, quietMs: 100, log });
+    try {
+      const alice = mention(f, 'alice', '今晚几点开会');
+      const bob = mention(f, 'bob', '在哪个会议室');
+      await vi.advanceTimersByTimeAsync(100);
+      await Promise.all([alice, bob]);
+      expect(f.executeLeased).toHaveBeenCalledTimes(1);
+      const request = f.requests[0]!;
+      expect(request.session.key).toMatch(/^scene-task:v1:[a-f0-9]{64}$/);
+      expect(request.session.personal).toBeUndefined();
+      expect(request.input.mergedSenders?.map(sender => sender.subjectId)).toEqual(['alice', 'bob']);
+      expect(request.input.mergedSenders?.map(sender => sender.texts)).toEqual([['今晚几点开会'], ['在哪个会议室']]);
+      await vi.waitFor(() => expect(mergeRows(log).map(row => row.reasonCode)).toContain('merge_window_flushed'));
+      const rows = mergeRows(log);
+      expect(rows.filter(row => row.reasonCode === 'merge_window_joined').map(row => row.userId)).toEqual(['alice', 'bob']);
+      expect(rows.filter(row => row.reasonCode === 'merge_window_flushed')).toEqual([
+        { reasonCode: 'merge_window_flushed', userId: 'alice', payload: expect.objectContaining({ source: 'message', senders: ['alice', 'bob'], waitedMs: 100 }) },
+      ]);
+    } finally { f.route.dispose(); vi.useRealTimers(); }
+  });
+
+  it('keeps each sender in their personal Session when group merging is disabled', async () => {
+    const log = new DecisionEventLog();
+    const f = fixture({ merge: false, hold: true, log });
+    const alice = mention(f, 'alice', 'alice question');
+    const bob = mention(f, 'bob', 'bob question');
+    try {
+      await vi.waitFor(() => expect(f.executeLeased).toHaveBeenCalledTimes(2));
+      expect(new Set(f.requests.map(request => request.session.key)).size).toBe(2);
+      expect(f.requests.every(request => !request.session.key.startsWith('scene-task:'))).toBe(true);
+      expect(f.requests.map(request => request.session.personal?.subjectId).sort()).toEqual(['alice', 'bob']);
+      expect(f.requests.every(request => request.input.mergedSenders === undefined)).toBe(true);
+      expect(mergeRows(log)).toEqual([]);
+    } finally {
+      f.release();
+      await Promise.all([alice, bob]);
+      f.route.dispose();
+    }
+  });
+
+  it('keeps a master @ in its own personal turn while members merge in the scene Session (ADR 0038 §0.3)', async () => {
+    vi.useFakeTimers();
+    const log = new DecisionEventLog();
+    const f = fixture({ merge: true, quietMs: 100, masters: ['boss'], log });
+    try {
+      const turns = [mention(f, 'alice', 'alice question'), mention(f, 'boss', 'boss question'), mention(f, 'bob', 'bob question')];
+      await vi.advanceTimersByTimeAsync(100);
+      await Promise.all(turns);
+      expect(f.executeLeased).toHaveBeenCalledTimes(2);
+      const master = f.requests.find(request => request.principal.subjectId === 'boss')!;
+      expect(master.session.personal?.subjectId).toBe('boss');
+      expect(master.session.key.startsWith('scene-task:')).toBe(false);
+      expect(master.input.mergedSenders).toBeUndefined();
+      const merged = f.requests.find(request => request !== master)!;
+      expect(merged.session.key).toMatch(/^scene-task:v1:[a-f0-9]{64}$/);
+      expect(merged.input.mergedSenders?.map(sender => sender.subjectId)).toEqual(['alice', 'bob']);
+      await vi.waitFor(() => expect(mergeRows(log).map(row => row.reasonCode)).toContain('merge_window_flushed'));
+      expect(mergeRows(log).filter(row => row.userId === 'boss')).toEqual([]);
+    } finally { f.route.dispose(); vi.useRealTimers(); }
+  });
+
+  it('keeps non-mergeable @ messages (media, quote) in personal Sessions with merging enabled', async () => {
+    const f = fixture({ merge: true, quietMs: 100, hold: true });
+    const image = f.run('alice', 'look', conversation, 'account-a', {
+      mentioned: true, segments: [{ type: 'image', data: { url: 'https://example.test/a.png' } }],
+    } as Partial<Message>);
+    const quote = f.run('bob', 'what about this', conversation, 'account-a', {
+      mentioned: true, replyTo: { id: 'quoted-1' },
+    } as Partial<Message>);
+    try {
+      await vi.waitFor(() => expect(f.executeLeased).toHaveBeenCalledTimes(2));
+      expect(f.requests.every(request => !request.session.key.startsWith('scene-task:'))).toBe(true);
+      expect(f.requests.map(request => request.session.personal?.subjectId).sort()).toEqual(['alice', 'bob']);
+      expect(f.requests.every(request => request.input.mergedSenders === undefined)).toBe(true);
+    } finally {
+      f.release();
+      await Promise.all([image, quote]);
+      f.route.dispose();
+    }
+  });
+
+  it('lets the carrier stop a merged scene turn with a stop word from its personal routing', async () => {
+    vi.useFakeTimers();
+    const f = fixture({ merge: true, quietMs: 100, hold: true });
+    try {
+      const alice = mention(f, 'alice', 'alice question');
+      const bob = mention(f, 'bob', 'bob question');
+      await vi.advanceTimersByTimeAsync(100);
+      await vi.waitFor(() => expect(f.requests).toHaveLength(1));
+      const merged = f.requests[0]!;
+      expect(merged.session.key).toMatch(/^scene-task:/);
+      await mention(f, 'alice', '取消');
+      expect(merged.signal.aborted).toBe(true);
+      f.release();
+      await Promise.all([alice, bob]);
+    } finally { f.release(); f.route.dispose(); vi.useRealTimers(); }
+  });
+
+  it('keeps prefix-triggered turns of two people in their personal Sessions even with group merging enabled', async () => {
     const f = fixture({ merge: true, hold: true });
     const alice = f.run('alice', '#alice question');
     const bob = f.run('bob', '#bob question');
