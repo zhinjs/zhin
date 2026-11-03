@@ -263,7 +263,7 @@ export class ConsoleConfigurationStore {
         status: 'conflict',
         revision: snapshot.revision,
         current: Object.freeze(await Promise.all(paths.map(async path => Object.freeze({ path,
-          value: mode !== 'scoped' ? await this.#maskedValue(snapshot.document, path) : readPath(snapshot.document, path) })))),
+          value: mode !== 'scoped' ? await this.#maskedValue(snapshot.document, path, { unknownSchema: 'redact' }) : readPath(snapshot.document, path) })))),
         message: '配置已被其他地方修改，未保存。请查看最新值后重试。',
       });
       if (current.revision !== request.expectedRevision) return await conflict(current);
@@ -396,14 +396,15 @@ export class ConsoleConfigurationStore {
   }
 
   /** Conflict evidence for trusted writes: never echo secrets or unexpanded references. */
-  async #maskedValue(document: RuntimeConfigDocument, path: readonly string[]): Promise<unknown> {
+  async #maskedValue(document: RuntimeConfigDocument, path: readonly string[],
+    options?: Parameters<typeof maskConfigValue>[3]): Promise<unknown> {
     const value = readPath(document, path);
     if (value === undefined) return undefined;
     let schema: Readonly<Record<string, unknown>> | null;
     // Fail closed: without the schema we cannot rule out a schema-marked secret under an ordinary key.
     try { schema = await this.#schemas.readJson(path[0]!, document); }
     catch { return REDACTED_CONFIG_VALUE; }
-    return maskConfigValue(schema, path, value);
+    return maskConfigValue(schema, path, value, options);
   }
 
   async #chatSchema(document: RuntimeConfigDocument, path: readonly string[]): Promise<unknown> {

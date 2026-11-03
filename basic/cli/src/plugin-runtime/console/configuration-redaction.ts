@@ -1,4 +1,4 @@
-import { sensitiveConfigKey } from './configuration-schema-safety.js';
+import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey } from './configuration-schema-safety.js';
 /**
  * Masks stored configuration values before they leave the store in a response that the
  * caller did not ask to read (e.g. a trusted project patch conflict). Conservative: a
@@ -69,31 +69,40 @@ function children(nodes: readonly Schema[], key: string, root: Schema): Schema[]
   return next;
 }
 
-function maskTree(value: unknown, nodes: readonly Schema[], root: Schema, depth: number): unknown {
-  if (nodes.some(sensitiveSchema)) return REDACTED_CONFIG_VALUE;
+type Hidden = (node: Schema) => boolean;
+
+function maskTree(value: unknown, nodes: readonly Schema[], root: Schema, depth: number, hidden: Hidden): unknown {
+  if (nodes.some(hidden)) return REDACTED_CONFIG_VALUE;
   if (typeof value === 'string') return /\$\{|^env:\/\//u.test(value) ? REDACTED_CONFIG_VALUE : value;
   if (value === null || typeof value !== 'object') return value;
   if (depth >= MAX_DEPTH) return REDACTED_CONFIG_VALUE;
   if (Array.isArray(value)) {
-    return Object.freeze(value.map((item, index) => maskTree(item, children(nodes, String(index), root), root, depth + 1)));
+    return Object.freeze(value.map((item, index) => maskTree(item, children(nodes, String(index), root), root, depth + 1, hidden)));
   }
   return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
-    sensitiveConfigKey(key) ? REDACTED_CONFIG_VALUE : maskTree(item, children(nodes, key, root), root, depth + 1)])));
+    sensitiveConfigKey(key) ? REDACTED_CONFIG_VALUE : maskTree(item, children(nodes, key, root), root, depth + 1, hidden)])));
 }
 
 /**
  * Masks `value`, stored at `path` (first segment is the section) under `sectionSchema`.
  * A missing schema still applies key and environment-reference masking.
+ * `unknownSchema: 'redact'` (conflict evidence) also replaces any value under a schema
+ * boundary this masker cannot prove (`if`/`not`/`contains`/…, nested `$id`, non-local
+ * `$ref`; the chat policy's {@link isUnknownConfigurationSchemaBoundary}), since a secret
+ * annotation could hide behind it.
  */
-export function maskConfigValue(sectionSchema: Schema | null | undefined, path: readonly string[], value: unknown): unknown {
+export function maskConfigValue(sectionSchema: Schema | null | undefined, path: readonly string[], value: unknown,
+  options: Readonly<{ unknownSchema?: 'redact' }> = {}): unknown {
   const root: Schema = record(sectionSchema) ? sectionSchema : {};
+  const hidden: Hidden = options.unknownSchema === 'redact'
+    ? node => sensitiveSchema(node) || isUnknownConfigurationSchemaBoundary(node, root) : sensitiveSchema;
   let nodes = record(sectionSchema) ? expand(sectionSchema, root) : [];
   if (path.length > 0 && sensitiveConfigKey(path[0]!)) return REDACTED_CONFIG_VALUE;
-  if (nodes.some(sensitiveSchema)) return REDACTED_CONFIG_VALUE;
+  if (nodes.some(hidden)) return REDACTED_CONFIG_VALUE;
   for (const key of path.slice(1)) {
     if (sensitiveConfigKey(key)) return REDACTED_CONFIG_VALUE;
     nodes = children(nodes, key, root);
-    if (nodes.some(sensitiveSchema)) return REDACTED_CONFIG_VALUE;
+    if (nodes.some(hidden)) return REDACTED_CONFIG_VALUE;
   }
-  return maskTree(value, nodes, root, 0);
+  return maskTree(value, nodes, root, 0, hidden);
 }
