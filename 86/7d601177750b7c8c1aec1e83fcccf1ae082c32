@@ -1,0 +1,25 @@
+.changeset/p6-pause-handler-no-model-wait.md
+  s_58400078c2bd23::t_a130db55136a30 1-4
+basic/cli/tests/plugin-runtime/personal-models/configuration.test.ts
+  s_58400078c2bd23::t_937a898bdb431d 157-198
+docs/concepts/generation-lifecycle.md
+  s_58400078c2bd23::t_58d83460ef59cc 128-143
+docs/en/concepts/generation-lifecycle.md
+  s_58400078c2bd23::t_2c49256eaa08d3 130-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "867d601177750b7c8c1aec1e83fcccf1ae082c32",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
