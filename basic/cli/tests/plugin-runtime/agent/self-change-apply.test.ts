@@ -220,6 +220,25 @@ describe('createSelfChangeConfigPort', () => {
     ])).toEqual({ status: 'conflict', message: 'changed elsewhere' });
     expect(calls).toBe(1);
   });
+
+  it.each([true, false])('trusts a restart-pending receipt only when the save also requires a restart (restartRequired=%s)', async restartRequired => {
+    const receipt = (revision: string) => ({ operationId: 'self-change-config', sourceRevision: revision, saved: true as const, generation: 2,
+      applicationRevision: 1, groups: [
+        { id: 'ambient', paths: [['ai', 'trigger', 'ambient']], effect: 'in-place' as const, status: 'applied' as const, dependsOn: [] },
+        { id: 'http', paths: [['http', 'port']], effect: 'restart-process' as const, status: 'restart-pending' as const, dependsOn: [] },
+      ] });
+    const port = createSelfChangeConfigPort({
+      readSource: async () => ({ source: '', revision: 'r1' }),
+      patch: async request => ({ status: 'saved', revision: `${request.expectedRevision}+`, restartRequired, paths: [], missingEnv: [],
+        message: 'ok', application: receipt(`${request.expectedRevision}+`) }) as ConsoleConfigPatchResult,
+      replaceSource: async (_source, expectedRevision) => ({ revision: `${expectedRevision}!`, restartRequired,
+        application: receipt(`${expectedRevision}!`) }),
+    });
+    const expected = restartRequired ? 'restart-pending' : 'unconfirmed';
+    expect(await port.patch('r1', [{ op: 'set', path: ['http', 'port'], value: 8087 }]))
+      .toEqual({ status: 'saved', revision: 'r1+', restartRequired, application: expected });
+    expect(await port.restore('a: 1\n', 'r9')).toEqual({ revision: 'r9!', restartRequired, application: expected });
+  });
 });
 
 describe('createSelfChangeGenerationPorts', () => {
