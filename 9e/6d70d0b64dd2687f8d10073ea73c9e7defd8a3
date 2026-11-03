@@ -1,0 +1,30 @@
+.changeset/ambient-judge-interval-defer.md
+  h_b680f75345178a 1-7
+basic/cli/src/plugin-runtime/agent/turn/ambient-engagement.ts
+  h_b680f75345178a 43,353-370,374-376,378-380
+basic/cli/tests/plugin-runtime/agent/turn/ambient-engagement.test.ts
+  h_b680f75345178a 18-20,26,30,131,136,138,141-152,154-166,170-185
+docs/ai/index.md
+  h_b680f75345178a 342,351
+docs/configuration/generated.md
+  h_b680f75345178a 436
+docs/en/ai/index.md
+  h_b680f75345178a 315,324
+docs/en/configuration/generated.md
+  h_b680f75345178a 436
+packages/im/ai/src/types.ts
+  h_b680f75345178a 749-752
+packages/im/runtime/src/host-config-schema.json
+  h_b680f75345178a 3190
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9e6d70d0b64dd2687f8d10073ea73c9e7defd8a3",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
