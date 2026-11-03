@@ -1,0 +1,137 @@
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_9622fd28aba994::t_92edacaac6218f 185-194
+basic/cli/tests/plugin-runtime/agent/configuration-update.test.ts
+  s_9622fd28aba994::t_1c365a0362d18e 99
+basic/cli/tests/plugin-runtime/personal-models/configuration.test.ts
+  s_9622fd28aba994::t_77308e6e52a121 132-156
+packages/im/adapter/src/endpoint-profile.ts
+  s_efe26f87c3b074::t_8d25e9f99d715d 68-70
+packages/im/adapter/tests/configuration-live-update.test.ts
+  s_9622fd28aba994::t_85120330fae565 52-72
+packages/im/agent/tests/plugin-runtime/ai-completion.test.ts
+  s_efe26f87c3b074::t_9afc58b25fee38 9,41-62
+packages/im/agent/tests/plugin-runtime/native-image-tool.test.ts
+  s_efe26f87c3b074::t_151b171fc191b0 4-5,19-31
+packages/im/feature-kit/tests/feature-kit.test.ts
+  s_9622fd28aba994::t_7e192a8350c538 215-225
+packages/im/plugin-runtime/src/snapshot.ts
+  s_9622fd28aba994::t_9e951495a40f43 16-17
+packages/im/runtime/src/root-runtime.ts
+  s_efe26f87c3b074::t_fe3f5d8c0160ee 46,747-755
+packages/im/runtime/tests/config-patch-runtime.test.ts
+  s_9622fd28aba994::t_c225830c0815af 32-74,118,123-124
+packages/im/runtime/tests/runtime-input-hmr.test.ts
+  s_efe26f87c3b074::t_6d37c676deaa32 8,61,65-69,71,80
+basic/cli/src/plugin-runtime/console/module.ts
+  s_079f1dc5e6308d::t_9f1ce3ff0a43bd 6
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  s_079f1dc5e6308d::t_c4d5910ccdebf3 13
+basic/cli/tests/plugin-runtime/console/configuration-application.test.ts
+  s_079f1dc5e6308d::t_a94721a42329b3 67-83
+docs/authoring/adapters.md
+  s_58400078c2bd23::t_0b2c6d56607597 132-133
+docs/cli/index.md
+  s_58400078c2bd23::t_dca3bce9b2d73d 44,51-52
+docs/configuration/index.md
+  s_58400078c2bd23::t_219e4a2bfdb290 95,99
+docs/en/ai/self-change.md
+  s_58400078c2bd23::t_9123e3f8c7da4f 44-45
+docs/en/authoring/adapters.md
+  s_58400078c2bd23::t_1907b3f439dfd2 133-134
+docs/en/cli/index.md
+  s_58400078c2bd23::t_94e79c5f57ecad 44,51-52
+docs/en/configuration/index.md
+  s_58400078c2bd23::t_b09f251e91c405 95,99
+docs/plans/configuration-live-update.md
+  s_58400078c2bd23::t_8f5be30c760c8d 353
+packages/im/agent/src/model-runtime/service.ts
+  s_58400078c2bd23::t_ff378623fa0e1a 104-108
+packages/im/agent/src/model-runtime/types.ts
+  s_58400078c2bd23::t_deb597bd187bcf 28-31
+packages/im/agent/src/plugin-runtime/ai-completion.ts
+  s_ce30e957c2b2e6::t_c76b2eeb3d322c 123,135,143-144,166-167
+packages/im/agent/src/plugin-runtime/native-image-tool.ts
+  s_ce30e957c2b2e6::t_585bc20f596446 17-18,81-85
+packages/im/agent/tests/model-runtime/configuration-version.test.ts
+  s_58400078c2bd23::t_e4a61d19a87a96 20-27,101-124
+packages/im/feature-kit/src/provider.ts
+  s_e0efb469ee3bbd::t_7c1b89cf5e8596 87,98-99,135-137
+packages/im/plugin-runtime/src/config-update-declaration.ts
+  s_079f1dc5e6308d::t_8228f4cc742e37 1-18
+packages/im/plugin-runtime/src/plugin.ts
+  s_079f1dc5e6308d::t_aba68d7ddc5224 10-12
+packages/im/plugin-runtime/tests/kernel.test.ts
+  s_079f1dc5e6308d::t_19b2045bd4cca3 75-76
+packages/im/runtime/src/configuration-paths.ts
+  s_9622fd28aba994::t_e793def61ea402 25-27
+packages/im/runtime/src/slot-generation-preparer.ts
+  s_ce30e957c2b2e6::t_f6632aad980f1d 67-68
+packages/im/runtime/src/subtree-generation-preparer.ts
+  s_ce30e957c2b2e6::t_f21ebe08e092d1 86
+packages/im/runtime/src/topology-generation-preparer.ts
+  s_ce30e957c2b2e6::t_8f0050fe39d6fd 96,130,378,382
+packages/im/runtime/tests/config-profile-first-party.test.ts
+  s_ce30e957c2b2e6::t_04d8f3572336ef 69-72,85,90,95,104-107
+packages/im/runtime/tests/configuration-paths.test.ts
+  s_58400078c2bd23::t_91d921152a3304 1-10
+packages/im/runtime/tests/hmr-coordinator.test.ts
+  s_ce30e957c2b2e6::t_ea8979d1525a76 21-24,26,31,41-44,47
+packages/im/runtime/tests/topology-runtime.test.ts
+  s_079f1dc5e6308d::t_51a2c244dab488 27-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "30ee5df2d9839b15fc56ee39cdcd4115fb2a6b89",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
