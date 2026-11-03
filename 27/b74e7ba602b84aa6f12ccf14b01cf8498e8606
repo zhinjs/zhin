@@ -1,0 +1,21 @@
+packages/host/http/src/console-rpc.ts
+  s_58400078c2bd23::t_7cb118d93c2d36 524-526,560,562,567-576,583,585
+packages/host/http/tests/console-config-project-read-rpc.test.ts
+  s_58400078c2bd23::t_9a6981b60ef84b 36-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "27b74e7ba602b84aa6f12ccf14b01cf8498e8606",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
