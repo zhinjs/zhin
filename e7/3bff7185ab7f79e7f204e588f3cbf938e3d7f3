@@ -1,0 +1,25 @@
+examples/multi-agent-room/tsconfig.json
+  s_9622fd28aba994::t_d5075118f326ba 5,9-10
+tsconfig.typecheck.json
+  s_9622fd28aba994::t_d5075118f326ba 392-393
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  s_9622fd28aba994::t_c21508543eab5d 17-37
+docs/plans/ai-provider-behavior-migration.md
+  s_9622fd28aba994::t_c21508543eab5d 106-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e73bff7185ab7f79e7f204e588f3cbf938e3d7f3",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
