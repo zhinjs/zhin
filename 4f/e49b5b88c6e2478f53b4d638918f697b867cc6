@@ -1,0 +1,313 @@
+.changeset/configuration-live-update.md
+  s_efe26f87c3b074::t_a5c7af7499b6e6 1-38
+basic/cli/src/plugin-runtime/agent/deployment-model.ts
+  s_efe26f87c3b074::t_9490990e2a9309 1-15
+basic/cli/src/plugin-runtime/agent/module.ts
+  s_efe26f87c3b074::t_941acb10c84541 19
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_efe26f87c3b074::t_cd92a5ec7373ce 2-3,36,64,107,109-124,181,186
+basic/cli/src/plugin-runtime/agent/runtime-foundation.ts
+  s_efe26f87c3b074::t_9559f6b9419c22 3,34,45,127,131-135,153,160-166,208
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  s_efe26f87c3b074::t_680acb97fa8604 22,51,104
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_efe26f87c3b074::t_8f0d27b138a058 160-161,183,615-647,876
+basic/cli/src/plugin-runtime/personal-models/configuration.ts
+  s_efe26f87c3b074::t_279f2b380ff250 1-69
+basic/cli/src/plugin-runtime/personal-models/deployment-scope.ts
+  s_efe26f87c3b074::t_ad6e3000515dff 6,9-11
+basic/cli/src/plugin-runtime/personal-models/host.ts
+  s_efe26f87c3b074::t_bb483379447e21 11-12,19,46-49,53-58,80-82
+basic/cli/src/plugin-runtime/personal-models/service.ts
+  s_efe26f87c3b074::t_bea5203443c921 16,39,180-184,195,197,204,207,260,276,283,287,290,300,305
+basic/cli/src/plugin-runtime/runtime-model-policy/service.ts
+  s_efe26f87c3b074::t_7db9e3cae4d3a3 3,10-11,21-29,41-48
+basic/cli/src/plugin-runtime/start/options.ts
+  s_efe26f87c3b074::t_63eecd992ab05f 3-4,8,30-31,43-45,52,64-73,97,102-103
+basic/cli/tests/plugin-runtime/agent/configuration-update.test.ts
+  s_efe26f87c3b074::t_ba49d165f80944 1-127
+basic/cli/tests/plugin-runtime/personal-models/configuration.test.ts
+  s_efe26f87c3b074::t_198ea5394e9bbb 1-132
+basic/cli/tests/plugin-runtime/root-host-watch.test.ts
+  s_efe26f87c3b074::t_fb2f352c48bac8 1-85
+basic/cli/tests/plugin-runtime/sender-enrichment-configuration.test.ts
+  s_9622fd28aba994::t_acd8d11d7d7ebf 1-140
+basic/cli/tests/plugin-runtime/start/options.test.ts
+  s_efe26f87c3b074::t_2a8e195378b6a4 19,34-54,65,78
+basic/cli/tests/runtime-start-help.test.ts
+  s_efe26f87c3b074::t_e6386ad79caf8e 16
+docs/authoring/adapters.md
+  s_efe26f87c3b074::t_69b3f3265cb732 123-143
+docs/cli/index.md
+  s_efe26f87c3b074::t_c939bc45babf65 25,44,63
+docs/cli/runtime.md
+  s_efe26f87c3b074::t_6819284abe01bc 8,40-41,85-87
+docs/en/authoring/adapters.md
+  s_efe26f87c3b074::t_11412025766c86 124-144
+docs/en/cli/index.md
+  s_efe26f87c3b074::t_582bbd03ed3b2b 25,44,63
+docs/en/cli/runtime.md
+  s_efe26f87c3b074::t_4b53a4929e1cfa 8,40-41,85-87
+docs/plans/adapter-profile-config-audit.md
+  s_efe26f87c3b074::t_a53389a3f70752 1-40
+docs/plans/configuration-live-update.md
+  s_9622fd28aba994::t_c7ee9768c80d11 1-429
+docs/plans/configuration-update-research.md
+  s_efe26f87c3b074::t_2bbd32d34c828c 1-139
+examples/capabilities-bot/package.json
+  s_efe26f87c3b074::t_40da0af93f2175 8
+examples/full-bot/package.json
+  s_efe26f87c3b074::t_27f8f28f0a788d 8
+examples/life-assistant-bot/package.json
+  s_efe26f87c3b074::t_a612f2182f884f 8
+examples/minimal-bot/package.json
+  s_efe26f87c3b074::t_05d0e0bebc811b 8
+examples/multi-agent-room/package.json
+  s_efe26f87c3b074::t_01447cfef186b4 8
+examples/qq-games-bot/package.json
+  s_efe26f87c3b074::t_fad2b5bd93cb72 8
+examples/self-delivery-bot/package.json
+  s_efe26f87c3b074::t_a6588810096ce9 8
+examples/single-file-bot/package.json
+  s_efe26f87c3b074::t_8eed723fed0c86 8
+examples/test-bot/package.json
+  s_efe26f87c3b074::t_8ea2cf0f6d735c 8
+packages/console/protocol/src/index.ts
+  s_efe26f87c3b074::t_fd09808512f535 475,511-539,544,546-547,614,675
+packages/im/adapter/src/adapter.ts
+  s_efe26f87c3b074::t_f67c46331269f9 5,296-297,305,309,392-396
+packages/im/adapter/src/endpoint-profile.ts
+  s_efe26f87c3b074::t_857725c0c3edd0 15,68-77,159-172,183-186,189
+packages/im/adapter/src/provider.ts
+  s_efe26f87c3b074::t_98ee6bd798ce28 26-28
+packages/im/adapter/tests/configuration-live-update.test.ts
+  s_efe26f87c3b074::t_4689db374337fc 1-139
+packages/im/adapter/tests/endpoint-profile.test.ts
+  s_efe26f87c3b074::t_d0b1cd442ede47 447-464
+packages/im/agent/src/model-runtime/configuration-version.ts
+  s_efe26f87c3b074::t_8883b55ff56c4e 1-58
+packages/im/agent/src/model-runtime/index.ts
+  s_efe26f87c3b074::t_b62e233aa36545 2,9
+packages/im/agent/src/model-runtime/service.ts
+  s_efe26f87c3b074::t_76ef4c74d8ddfc 2,4,9,13-14,19-25,70-77,79-80,82,90,99-114,163,169-239,253,274,279-280,284-285,291-304,307,309,315-321,333,338,358,386,409-415
+packages/im/agent/src/model-runtime/turn-resource.ts
+  s_efe26f87c3b074::t_47d4e0503dd6d8 5-11
+packages/im/agent/src/model-runtime/types.ts
+  s_efe26f87c3b074::t_418edac5377637 2,28-39,70-73,93
+packages/im/agent/src/plugin-runtime/ai-completion.ts
+  s_9622fd28aba994::t_27d5eea52579fb 64-67,122,125-131,141,163
+packages/im/agent/src/plugin-runtime/native-image-tool.ts
+  s_efe26f87c3b074::t_74fd4d866bf285 17,21-26,39,58,69,73-87
+packages/im/agent/src/self-change/apply.ts
+  s_efe26f87c3b074::t_9fee5b36001a48 57-62,69-70,72-73,105,108-110,199,256,261,270-272,274-283,285,288,295,307,313-320,330-331,346,349,351-354,356,361,377,394,396,398-402,404,413,421-422,436-437,457-479,488,539-550,557-570
+packages/im/agent/src/self-change/store.ts
+  s_efe26f87c3b074::t_9f0907feeb4051 8,108-111
+packages/im/agent/src/service.ts
+  s_efe26f87c3b074::t_97760472382f97 345-348,351
+packages/im/agent/src/subagent/subagent-runtime.ts
+  s_efe26f87c3b074::t_c688dadc310cb7 145-159,202,263,273,572-579,581-583,620,629,632,723-725
+packages/im/agent/tests/model-runtime/ai-service.test.ts
+  s_efe26f87c3b074::t_1d6d3cd38f2557 19-52
+packages/im/agent/tests/plugin-runtime/native-image-tool.test.ts
+  s_efe26f87c3b074::t_7dc81a6440e431 59-86
+packages/im/ai/src/model-catalog/runtime.ts
+  s_efe26f87c3b074::t_7b89cb4406b372 15-19,77,79,98,134,137,141
+packages/im/feature-kit/src/provider.ts
+  s_efe26f87c3b074::t_ec4c966d1ce8b5 86-93
+packages/im/plugin-runtime/src/plugin.ts
+  s_efe26f87c3b074::t_a5af412aae749a 70-71,75-91,125
+packages/im/plugin-runtime/src/snapshot.ts
+  s_efe26f87c3b074::t_8ec9f8932aef56 16,30,334-336
+packages/im/plugin-runtime/src/token.ts
+  s_efe26f87c3b074::t_cdf3cf9d269c33 23-25
+packages/im/plugin-runtime/tests/kernel.test.ts
+  s_efe26f87c3b074::t_8e45feb47686dd 12,69-85
+packages/im/runtime/src/configuration-application.ts
+  s_efe26f87c3b074::t_2178390ab7c05f 1-74
+packages/im/runtime/src/configuration-paths.ts
+  s_efe26f87c3b074::t_982ff93111307c 1-29
+packages/im/runtime/src/index.ts
+  s_efe26f87c3b074::t_eeeda9e1764320 5
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_efe26f87c3b074::t_11a5fee02a4867 11,35,216,260,298
+packages/im/runtime/src/root-runtime.ts
+  s_9622fd28aba994::t_28eadfbdb0a316 4-5,14,37,46,114-116,137-138,143-147,153,175-177,197,201,213-220,223-237,266,281-323,362-363,374-377,379-392,397-402,413-420,449-457,530,538,583,590,597,599,609-610,612,617-618,622-625,635-636,641-642,644-645,647-650,653-671,683-684,686,692,696-839,843-881,960-962,967-968,1006,1055-1107,1109,1136,1150,1166-1182
+packages/im/runtime/src/subtree-generation-preparer.ts
+  s_efe26f87c3b074::t_0b394c135e443e 55-58,86,141
+packages/im/runtime/tests/application-runtime.test.ts
+  s_efe26f87c3b074::t_89c797668c90b5 146-147
+packages/im/runtime/tests/config-patch-runtime.test.ts
+  s_efe26f87c3b074::t_fb68f4086b3bd4 7,32-260,368,392-393,399-403,496,530-533,542-544
+packages/im/runtime/tests/hmr-coordinator.test.ts
+  s_efe26f87c3b074::t_8c4e08db2bd3a6 16-41
+packages/im/runtime/tests/runtime-input-hmr.test.ts
+  s_efe26f87c3b074::t_8e302e1854de06 17-20,34-111,175,195-196,198,266,279,290-297
+packages/toolkit/create-zhin/README.md
+  s_efe26f87c3b074::t_80afcb7828ed20 217
+packages/toolkit/create-zhin/src/workspace.ts
+  s_efe26f87c3b074::t_5ed880382f0ad8 140
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_efe26f87c3b074::t_249b105a11a6af 118
+plugins/adapters/bilibili-live/plugin.ts
+  s_efe26f87c3b074::t_48bb07b97bca5c 11
+plugins/adapters/bilibili/plugin.ts
+  s_efe26f87c3b074::t_0d055663737445 16
+plugins/adapters/dingtalk/plugin.ts
+  s_efe26f87c3b074::t_74789fc970f9f3 8
+plugins/adapters/discord/plugin.ts
+  s_efe26f87c3b074::t_cec22b9011f053 8
+plugins/adapters/email/plugin.ts
+  s_efe26f87c3b074::t_b7318bbbc38d00 6
+plugins/adapters/github/plugin.ts
+  s_efe26f87c3b074::t_cc4d9580175289 26
+plugins/adapters/icqq/plugin.ts
+  s_efe26f87c3b074::t_d2d600254d9c76 7
+plugins/adapters/kook/plugin.ts
+  s_efe26f87c3b074::t_be88433ad651f4 8
+plugins/adapters/lark/plugin.ts
+  s_efe26f87c3b074::t_ee815ce93d4753 8
+plugins/adapters/line/plugin.ts
+  s_efe26f87c3b074::t_f9e20eb01e452a 6
+plugins/adapters/milky/plugin.ts
+  s_efe26f87c3b074::t_99153f6f89fb19 6
+plugins/adapters/napcat/plugin.ts
+  s_efe26f87c3b074::t_81ec540371cb48 7
+plugins/adapters/onebot11/plugin.ts
+  s_efe26f87c3b074::t_141cef15759680 7
+plugins/adapters/onebot12/plugin.ts
+  s_efe26f87c3b074::t_9f0244a656c98e 6
+plugins/adapters/qq/plugin.ts
+  s_efe26f87c3b074::t_e9ba94d08819e1 10
+plugins/adapters/sandbox/plugin.ts
+  s_efe26f87c3b074::t_45435600c179a9 5
+plugins/adapters/satori/plugin.ts
+  s_efe26f87c3b074::t_07cab5fd416f08 6
+plugins/adapters/slack/plugin.ts
+  s_efe26f87c3b074::t_84c325955d250e 8
+plugins/adapters/telegram/plugin.ts
+  s_efe26f87c3b074::t_3bb0f654d73144 8
+plugins/adapters/wechat-mp/plugin.ts
+  s_efe26f87c3b074::t_54125dace37a43 6
+plugins/adapters/wecom/plugin.ts
+  s_efe26f87c3b074::t_728736256cc6bd 8
+plugins/adapters/weixin-ilink/plugin.ts
+  s_efe26f87c3b074::t_fe02d4a84a63f2 6
+tests/snapshots/plugin-runtime-api.json
+  s_efe26f87c3b074::t_5d00c28483c547 300
+basic/cli/src/plugin-runtime/agent/configuration-update.ts
+  s_079f1dc5e6308d::t_534b7d71f8f42c 1-68
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_7489ea09ae0933 7-8,86,192,194-195,197-202,213,224,228,231,241,350,418
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_079f1dc5e6308d::t_17418ec426937f 3,11,32-36,45-47,55-57,66-67,72-73,94,99,103,106,111,119-121,125,133-135,185,191,195,198-202,207-255
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_079f1dc5e6308d::t_e9ee3947cf2303 31,33,37-38,40
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_079f1dc5e6308d::t_20791e8aa54d4f 71
+basic/cli/src/plugin-runtime/root-host.ts
+  s_079f1dc5e6308d::t_f0e1439be3eaa4 11-12,21,31-32,34,60,74-76,79,91-92,115,144-145
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  s_9622fd28aba994::t_e45e415af76353 10-13,19,31,113,195,198,230-231,249-250,253-266,269-284,289-305
+basic/cli/src/plugin-runtime/sender-enrichment.ts
+  s_e0efb469ee3bbd::t_e8c57552d67628 2,6,20-23,26-33,35,43,49,56,58-59,69,79-121
+basic/cli/src/plugin-runtime/start-command.ts
+  s_079f1dc5e6308d::t_4b01a25984e3fc 1,194-196,225-227,272,531,539,584
+basic/cli/src/plugin-runtime/start/module.ts
+  s_079f1dc5e6308d::t_574b7adf659aa1 2
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_079f1dc5e6308d::t_0a4c241df4e4fa 6,22-28,30,45
+basic/cli/tests/plugin-runtime/agent/model-consumers-configuration.test.ts
+  s_9622fd28aba994::t_b9c3e16f41b36e 1-203
+basic/cli/tests/plugin-runtime/agent/self-change-configuration-application.test.ts
+  s_9622fd28aba994::t_d39d819b95406c 1-210
+basic/cli/tests/plugin-runtime/console/configuration-application.test.ts
+  s_079f1dc5e6308d::t_748ba2a9311199 1-130
+basic/cli/tests/plugin-runtime/runtime-model-policy/configuration-live-host.test.ts
+  s_079f1dc5e6308d::t_a00ab681db10d7 1-154
+docs/configuration/index.md
+  s_079f1dc5e6308d::t_cf39f4a04818ef 23,71-100,162
+docs/en/configuration/index.md
+  s_079f1dc5e6308d::t_c748e8e524de38 23,71-100,163
+packages/host/http/src/console-rpc.ts
+  s_079f1dc5e6308d::t_8a7b9e213674c5 195,200,206,431-446,470,556,558,1089-1104
+packages/host/http/tests/console-rpc.test.ts
+  s_079f1dc5e6308d::t_83b3acd112359c 410-449
+packages/im/adapter/src/adapter-index.ts
+  s_4a3da79bf26c58::t_36889ef949a49e 48-49,112-113,127-131,133,136-145,229-230,242-278,321,323,328,406,506-524,595
+packages/im/agent/src/decision-events.ts
+  s_079f1dc5e6308d::t_573fb963eb8b2d 186-188
+packages/im/agent/src/plugin-runtime/native-tool-suite.ts
+  s_079f1dc5e6308d::t_38059568a461b7 5,23,39
+packages/im/agent/src/self-change/policy.ts
+  s_079f1dc5e6308d::t_005a1ce54bb706 111-112
+packages/im/agent/tests/decision-events.test.ts
+  s_079f1dc5e6308d::t_92d3b4165dd1c2 164
+packages/im/agent/tests/model-runtime/configuration-version.test.ts
+  s_9622fd28aba994::t_43b12d6595072b 1-136
+packages/im/runtime/src/config-composer.ts
+  s_079f1dc5e6308d::t_07a59cdbcf640c 23-27
+packages/im/runtime/src/hmr-coordinator.ts
+  s_079f1dc5e6308d::t_2ba62bcd779fb8 22-23,56
+packages/im/runtime/src/runtime-generation.ts
+  s_079f1dc5e6308d::t_7b7b1cfd962ff8 6,29-30,37-42
+packages/im/runtime/src/slot-generation-preparer.ts
+  s_079f1dc5e6308d::t_0376470b212730 16,30,67,74
+packages/im/runtime/src/topology-generation-preparer.ts
+  s_079f1dc5e6308d::t_bd1195ca413b75 37,85,96-97,131,180-182
+packages/im/runtime/tests/config-profile-first-party.test.ts
+  s_079f1dc5e6308d::t_1047a707c89ddd 1-150
+packages/im/runtime/tests/config-retained-adapter.test.ts
+  s_9622fd28aba994::t_53ad49fbc201c4 111-114
+packages/toolkit/create-zhin/tests/stable-yes.test.ts
+  s_079f1dc5e6308d::t_6199cc8533dad9 117
+scripts/check-api-docs-surface.mjs
+  s_079f1dc5e6308d::t_98758a6e8e29df 40,132,134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4fe49b5b88c6e2478f53b4d638918f697b867cc6",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_4a3da79bf26c58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66214013-1784-4c6a-9edd-9039237b51db",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
