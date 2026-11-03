@@ -117,22 +117,23 @@ zhin config check [--fix] [--json] [--strict]
 
 `get` / `set` / `unset` / `list` **talk to the running Host by default** (`POST {base}/console/request`). A write first reads the config revision, then submits one `config:patch-project`; the Host performs the CAS, schema validation, save and any live application. The CLI never does its own read-modify-write and never retries.
 
-- Connection: `--host <url>` wins; otherwise the address is derived from `http.host` / `http.port` / `http.base`. The token comes from `ZHIN_CONSOLE_TOKEN` (or the variable named by `--token-env <name>`), falling back to `http.token`. Sending a token to a non-loopback address requires HTTPS.
-- **If the Host is not running the command fails; it never falls back to writing the file.** For offline edits pass `--offline` explicitly: the same `patchProject` rules as the Host (revision check, plugin declarations are read-only, per-section schema validation) run locally before saving. No Runtime is started, no plugin `setup` runs and no network request is made, but loading plugin declarations executes module top-level code. An offline save is not applied to a running Host until `--watch config` or Console "Apply configuration".
+- Connection: `--host <url>` wins, and then the token comes only from `ZHIN_CONSOLE_TOKEN` (or the variable named by `--token-env <name>`). Without `--host` the address is derived from `http.host` / `http.port` / `http.base` (a wildcard bind `0.0.0.0` / `::` connects to `127.0.0.1` / `[::1]`), and only then does an unset variable fall back to `http.token`. Sending a token to a non-loopback address requires HTTPS.
+- **If the Host is not running the command fails; it never falls back to writing the file.** For offline edits pass `--offline` explicitly: the same `patchProject` rules as the Host (revision check, plugin declarations are read-only, per-section schema validation) run locally before saving. No Runtime is started, no plugin `setup` runs and the CLI sends no request to the Host, but loading plugin declarations executes module top-level code (which may itself use the network). An offline save is not applied to a running Host until `--watch config` or Console "Apply configuration".
 - Reads are masked by schema: `secret` / `writeOnly` / `hidden` / password fields, credential-like keys and unexpanded `${...}` / `env://` references print as `[redacted]`. Pass `--reveal` for raw values.
-- `--json` prints compact JSON only, for scripts.
+- With `--json`, `get` / `list` / `set` / `unset` print exactly one line of compact JSON, for scripts; without it they print only human-readable text (`config path` and `config check` have their own formats).
+- Exit code `6` also reports `requestId` and `expectedRevision` (in the result object with `--json`, otherwise on stderr) so the write can be verified.
 
 Exit codes are a public contract:
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Success: saved and applied (or nothing to apply); read succeeded |
+| `0` | Success: saved and applied (or nothing to apply); read succeeded; an `--offline` save (not yet applied to a running Host) |
 | `3` | Saved; some settings take effect after a process restart |
 | `4` | Revision conflict: changed elsewhere, not saved; the latest (masked) values are printed |
-| `5` | Validation failed (including rejected plugin-declaration writes), not saved; field paths are printed |
-| `6` | Unknown: the write was sent but no definitive receipt arrived. Check with `zhin config get` first; **do not blindly retry** |
+| `5` | Validation failed (including rejected plugin-declaration writes): when not saved, field paths are printed; also returned when the file was saved but failed validation before applying, so check with `zhin config get` |
+| `6` | Unknown: the write was sent but no definitive receipt arrived (including non-authoritative errors such as a gateway 502/504), or it was saved but the application result is unconfirmed. `requestId` / `expectedRevision` are reported; check with `zhin config get` first; **do not blindly retry** |
 | `7` | Not connected to a running Host: nothing was sent, the file is unchanged |
-| `1` | Any other error: usage, missing key, authentication (401/403), Host rejection, failed application, etc. |
+| `1` | Any other error: usage, missing key, authentication (401/403), an authoritative Host rejection (not saved); or **saved but not applied** (superseded by a newer revision, or a group failed/was blocked; the file was written) |
 
 `config check` validates the config file, and `--fix` repairs fields that can be migrated safely. Missing database connection variables are always errors; other warnings become errors with `--strict`, which suits CI.
 
