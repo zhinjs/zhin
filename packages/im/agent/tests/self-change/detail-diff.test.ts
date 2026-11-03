@@ -258,6 +258,14 @@ describe('selfChangeDiffExcerpt', () => {
     expect(text).toContain('+const greeting = "hello";');
     expect(text).not.toMatch(/abc123|hunter2|process\.env/u);
     expect(redactSecretAssignments('"token": "[redacted]"')).toBe('"token": "[redacted]"');
+    expect(redactSecretAssignments('{ "clientSecret": "a b c", "name": "x" }')).toBe('{ "clientSecret": "[redacted]", "name": "x" }');
+    expect(redactSecretAssignments('password = "unterminated')).toBe('password = "[redacted]');
+    expect(redactSecretAssignments('a=1; b: 2')).toBe('a=1; b: 2');
+    // Linear on adversarial input (no backtracking).
+    const started = Date.now();
+    redactSecretAssignments(`${'$'.repeat(200_000)}:`);
+    redactSecretAssignments(':'.repeat(200_000));
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 
   it('covers a small change completely and notes unavailable files', () => {

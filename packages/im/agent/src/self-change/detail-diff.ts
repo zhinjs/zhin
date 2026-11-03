@@ -31,8 +31,13 @@ export const MAX_CARD_SKIPPED_CHECKS = 20;
 const LINE_ENDING_ONLY_MARKER = '\\ line endings or the trailing newline changed';
 /** 键名以这些结尾（规范化后）也按密钥处理，例如 `githubToken`、`DB_PASSWORD`。 */
 const SECRET_KEY_SUFFIXES = ['token', 'secret', 'password', 'passwd', 'apikey', 'privatekey', 'credential', 'credentials', 'cookie'];
-/** `key = value` / `key: value` / `"key": "value"`；值可带引号。 */
-const SECRET_ASSIGNMENT = /(["'`]?)([A-Za-z_$][\w$.-]*)\1(\s*[:=]\s*)("[^"]*"|'[^']*'|`[^`]*`|[^\s,;)]+)/gu;
+/** 往回找键名时最多看的字符数（键名再长也不展开，保证线性）。 */
+const MAX_SECRET_KEY_CHARS = 64;
+const QUOTES: ReadonlySet<string> = new Set(['"', "'", '`']);
+const KEY_CHAR = /[\w$.-]/u;
+const KEY_START = /[A-Za-z_$]/u;
+/** 不带引号的值到这些字符为止。 */
+const VALUE_STOP: ReadonlySet<string> = new Set([' ', '\t', ',', ';', ')']);
 
 export type SelfChangeDiffBaseline = 'disk' | 'snapshot';
 
@@ -200,8 +205,10 @@ export function selfChangeDiffExcerpt(detail: SelfChangeDetailDiff, limits: Self
   let bytes = 0;
   let truncated = detail.truncated;
   const push = (raw: string): boolean => {
-    const line = redactSecretAssignments(raw);
-    const clipped = line.length > MAX_EXCERPT_LINE_CHARS ? `${line.slice(0, MAX_EXCERPT_LINE_CHARS - 1)}…` : line;
+    // Clip before redacting so a huge (minified) line costs nothing extra; an unterminated quoted value is
+    // still redacted up to the end of the clipped line.
+    const line = redactSecretAssignments(clipLine(raw));
+    const clipped = clipLine(line);
     const lineBytes = utf8Bytes(clipped) + (lines.length > 0 ? 1 : 0);
     if (lines.length >= maxLines || bytes + lineBytes > maxBytes) return false;
     lines.push(clipped);
@@ -254,11 +261,27 @@ export function skippedTrialChecks(trial: unknown, limit: number = Number.POSITI
 
 /** 把键名像密钥的 `key = value` / `key: value` 赋值的值换成 `[redacted]`（审计密钥键表 + 常见后缀）。 */
 export function redactSecretAssignments(line: string): string {
-  return line.replace(SECRET_ASSIGNMENT, (match: string, keyQuote: string, key: string, separator: string, value: string) => {
-    if (!isSecretLikeKey(key) || value.includes('[redacted]')) return match;
-    const quote = value[0] === '"' || value[0] === "'" || value[0] === '`' ? value[0] : '';
-    return `${keyQuote}${key}${keyQuote}${separator}${quote}[redacted]${quote}`;
-  });
+  // Hand-written scan (no backtracking regex): one pass over the separators, bounded look-back for the key.
+  let output = '';
+  let copied = 0;
+  for (let index = 0; index < line.length; index += 1) {
+    const separator = line[index];
+    if (separator !== ':' && separator !== '=') continue;
+    const key = readKeyBefore(line, index);
+    if (!key || !isSecretLikeKey(key)) continue;
+    const valueStart = skipBlanks(line, index + 1);
+    const valueEnd = readValueEnd(line, valueStart);
+    if (valueEnd <= valueStart) continue;
+    const value = line.slice(valueStart, valueEnd);
+    if (!value.includes('[redacted]')) {
+      const quote = QUOTES.has(value[0]!) ? value[0]! : '';
+      const closing = quote && value.length > 1 && value.endsWith(quote) ? quote : '';
+      output += `${line.slice(copied, valueStart)}${quote}[redacted]${closing}`;
+      copied = valueEnd;
+    }
+    index = valueEnd - 1;
+  }
+  return output + line.slice(copied);
 }
 
 // ── 内部 ─────────────────────────────────────────────────────────────────────
@@ -277,6 +300,40 @@ function unavailableFile(
   reason: SelfChangeFileDiffUnavailableReason,
 ): SelfChangeFileDetailDiff {
   return Object.freeze({ path: target, kind, diff: null, truncated: true, unavailableReason: reason });
+}
+
+function clipLine(line: string): string {
+  return line.length > MAX_EXCERPT_LINE_CHARS ? `${line.slice(0, MAX_EXCERPT_LINE_CHARS - 1)}…` : line;
+}
+
+/** Key name right before a `:` / `=` (optionally quoted), or null. */
+function readKeyBefore(line: string, separatorIndex: number): string | null {
+  let end = separatorIndex;
+  while (end > 0 && (line[end - 1] === ' ' || line[end - 1] === '\t')) end -= 1;
+  if (end > 0 && QUOTES.has(line[end - 1]!)) end -= 1;
+  let start = end;
+  while (start > 0 && end - start < MAX_SECRET_KEY_CHARS && KEY_CHAR.test(line[start - 1]!)) start -= 1;
+  if (start === end || !KEY_START.test(line[start]!)) return null;
+  return line.slice(start, end);
+}
+
+function skipBlanks(line: string, from: number): number {
+  let index = from;
+  while (index < line.length && (line[index] === ' ' || line[index] === '\t')) index += 1;
+  return index;
+}
+
+/** End (exclusive) of a value: a quoted string through its closing quote (or the line end), else up to a stop char. */
+function readValueEnd(line: string, start: number): number {
+  if (start >= line.length) return start;
+  const first = line[start]!;
+  if (QUOTES.has(first)) {
+    const close = line.indexOf(first, start + 1);
+    return close === -1 ? line.length : close + 1;
+  }
+  let end = start;
+  while (end < line.length && !VALUE_STOP.has(line[end]!)) end += 1;
+  return end;
 }
 
 function isSecretLikeKey(key: string): boolean {
