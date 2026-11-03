@@ -17,12 +17,16 @@ const schema = { type: 'object', additionalProperties: false, required: ['name']
   profile: { type: 'object', additionalProperties: false, properties: { bio: { type: 'string' } } },
   rows: { type: 'array', items: { type: 'object', properties: { label: { type: 'string' } } } },
   master: { type: 'string' }, trusted: roles, Admins: roles,
-  endpoints: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, master: { type: 'string' }, trusted: roles } } },
+  endpoints: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, master: { type: 'string' }, trusted: roles } } },
+  adminIds: roles,
+  inbound: { type: 'object', properties: { enabled: { type: 'boolean' }, bypassMasters: { type: 'boolean' },
+    whitelist: { type: 'object', properties: { userIds: roles, conversationIds: roles } } } },
   toolHardGate: { type: 'object', properties: { enabled: { type: 'boolean' } } },
 } };
 const initial = { name: 'bot', nickname: 'Before', tags: ['a'], profile: { bio: 'hi' }, rows: [{ label: 'x' }],
   master: 'owner-id-private', trusted: ['trusted-id-private'], Admins: ['admin-id-private'],
-  endpoints: [{ id: 'e1', master: 'endpoint-owner-private', trusted: ['endpoint-trusted-private'] }], toolHardGate: { enabled: true } };
+  endpoints: [{ id: 'e1', name: 'e1-name', master: 'endpoint-owner-private', trusted: ['endpoint-trusted-private'] }], toolHardGate: { enabled: true },
+  adminIds: ['admin-ids-private'], inbound: { enabled: true, bypassMasters: true, whitelist: { userIds: ['whitelist-private'], conversationIds: ['conv-private'] } } };
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'zhin-chat-policy-')); roots.push(root);
@@ -39,10 +43,13 @@ async function fixture() {
 }
 
 describe('chat field policy units', () => {
-  it.each(['master', 'masters', 'trusted', 'toolHardGate', 'tool_hard_gate', 'Admins', 'approvers', 'permissions', 'owner'])('treats %s as a permission field', key => {
+  it.each(['master', 'masters', 'trusted', 'toolHardGate', 'tool_hard_gate', 'Admins', 'approvers', 'permissions', 'owner',
+    'adminIds', 'ownerId', 'masterId', 'trustedUsers', 'superUsers', 'super_users', 'whitelist', 'allowlist', 'allowList', 'blacklist',
+    'denylist', 'blockedUsers', 'bypassMasters', 'sudoers', 'operators', 'moderators', 'roles', 'userRoles', 'acl', 'allowedUserIds',
+    'masterVolume', 'trustedProxy'])('treats %s as a permission field (contains/prefix/suffix, fail-closed)', key => {
     expect(isChatPermissionSegment(key)).toBe(true);
   });
-  it.each(['nickname', 'mode', 'masterVolume', 'trustedProxy', 'maxTokens'])('does not treat ordinary key %s as a permission field', key => {
+  it.each(['nickname', 'mode', 'maxTokens', 'enabled', 'commandPrefix', 'userIds', 'conversationIds', 'contentModeration', 'inbound', 'timeout'])('does not treat ordinary key %s as a permission field', key => {
     expect(isChatPermissionSegment(key)).toBe(false);
   });
   it('keeps the Host chat whitelist identical to HOST_CONFIG_PATCH_PATHS', () => {
@@ -67,6 +74,8 @@ describe('chat field policy through the store', () => {
   it.each([
     ['demo', 'master'], ['demo', 'trusted'], ['demo', 'Admins'], ['demo', 'endpoints', '0', 'master'], ['demo', 'endpoints', '0', 'trusted'],
     ['demo', 'toolHardGate', 'enabled'], ['ai', 'trigger', 'masters'], ['ai', 'trigger', 'trusted'],
+    ['demo', 'inbound', 'whitelist', 'userIds'], ['demo', 'inbound', 'bypassMasters'], ['demo', 'adminIds'],
+    ['demo', 'endpoints', '0', 'id'], ['demo', 'endpoints', '0', 'name'],
   ])('rejects permission field %j for get, set and unset without disclosing values (C4)', async (...path) => {
     const f = await fixture(); const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
     const prepare = vi.spyOn(f.document, 'prepare');
@@ -87,10 +96,12 @@ describe('chat field policy through the store', () => {
     const result = await f.store.readChat([], 'fields');
     const paths = result.fields!.map(field => field.path.join('.'));
     expect(paths).toEqual(expect.arrayContaining(['demo.name', 'demo.nickname', 'demo.tags', 'demo.profile.bio', 'ai.trigger.ambient.mode']));
-    expect(paths.some(path => /master|trusted|Admins|toolHardGate|endpoints|rows/u.test(path))).toBe(false);
+    expect(paths).toContain('demo.inbound.enabled');
+    expect(paths.some(path => /master|trusted|Admins|adminIds|whitelist|bypass|toolHardGate|endpoints|rows/iu.test(path))).toBe(false);
     expect(paths.some(path => path.startsWith('ai.') && !path.startsWith('ai.trigger.ambient.'))).toBe(false);
     expect(JSON.stringify(result)).not.toMatch(/private|Before/);
-    await expect(f.store.readChat(['demo', 'master'], 'fields')).rejects.toMatchObject({ kind: 'permission' });
+    for (const path of [['demo', 'master'], ['demo', 'inbound', 'whitelist'], ['demo', 'inbound', 'whitelist', 'userIds'], ['demo', 'inbound', 'bypassMasters'],
+      ['demo', 'endpoints', '0', 'id']]) await expect(f.store.readChat(path, 'fields')).rejects.toMatchObject({ kind: 'permission' });
     await expect(f.store.readChat(['locale'], 'fields')).rejects.toMatchObject({ kind: 'scope' });
     expect((await f.store.readChat(['ai'], 'fields')).fields!.every(field => field.path.slice(0, 3).join('.') === 'ai.trigger.ambient')).toBe(true);
   });
@@ -118,5 +129,19 @@ describe('chat field policy through the store', () => {
     const saved = JSON.parse(await readFile(f.file, 'utf8'));
     expect(saved.demo.profile).toEqual({ bio: 'new' }); expect(saved.demo).not.toHaveProperty('nickname');
     expect(saved.demo.master).toBe('owner-id-private');
+  });
+  it('refuses planting new ${…} / env:// references on set, even with non-credential names (M1)', async () => {
+    const f = await fixture(); const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
+    const prepare = vi.spyOn(f.document, 'prepare');
+    for (const [path, value] of [
+      [['demo', 'nickname'], '${HOME}'], [['demo', 'nickname'], 'x ${DB_URL} y'], [['demo', 'nickname'], 'env://GITHUB_PAT'],
+      [['demo', 'nickname'], 'ENV://PATH'], [['demo', 'tags'], ['ok', '${OPENAI_KEY}']], [['ai', 'trigger', 'ambient', 'mode'], '${MODE}'],
+    ] as const) {
+      await expect(f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path, value }] }))
+        .rejects.toMatchObject({ kind: 'sensitive' });
+    }
+    expect(prepare).not.toHaveBeenCalled(); expect(await readFile(f.file, 'utf8')).toBe(before);
+    expect(await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['demo', 'nickname'], value: 'plain $HOME text' }] }))
+      .toMatchObject({ status: 'saved' });
   });
 });

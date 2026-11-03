@@ -29,13 +29,46 @@ export class ConfigChatAccessError extends Error {
 }
 
 /**
- * Role and approval vocabulary (C4): `master`, `trusted`, `endpoints[*].master/trusted`,
- * `ai.trigger.masters/trusted`, `toolHardGate.*` and similar owner/admin/approver keys.
- * Matched per segment after normalization so casing or separators cannot bypass it.
+ * Role, approval and allow/deny-list vocabulary (C4): `master`, `trusted`,
+ * `endpoints[*].master/trusted`, `ai.trigger.masters/trusted`, `toolHardGate.*`, and
+ * compound names such as `adminIds`, `ownerId`, `masterId`, `trustedUsers`,
+ * `superUsers`, `whitelist`, `allowlist`, `blacklist` or `bypassMasters`.
+ * Matched by contains/prefix/suffix after normalization (like `sensitiveConfigKey`) so
+ * casing, separators or compounds cannot bypass it. Deliberately fail-closed: an
+ * ordinary key that merely contains a role word (e.g. `masterVolume`) is CLI-only.
  */
 export function isChatPermissionSegment(segment: string): boolean {
   const normalized = segment.replace(/[^a-z0-9]/giu, '').toLowerCase();
-  return /^(?:masters?|trusted|trustees?|owners?|admins?|administrators?|approvers?|permissions?|permits?|roles?|toolhardgate)$/u.test(normalized);
+  return /(?:master|owner|admin|trust|approv|permission|permit|privilege|superuser|sudo|operator|moderator|bypass|exempt|toolhardgate)/u.test(normalized)
+    || /(?:allow|deny|denied|white|black|block|ban|bann|safe|ignore)(?:ed)?(?:lists?|users?|userids?|ids?|groups?|senders?|members?)$/u.test(normalized)
+    || /^(?:allow|deny|white|black|block|ban)(?:ed)?(?:lists?)?$/u.test(normalized)
+    || /roles?(?:ids?)?$|^roles?|acls?$|grants?$/u.test(normalized);
+}
+
+/**
+ * Indirect role binding (M2): `endpoints[*].id|name` is the key that binds leaf
+ * `master`/`trusted` to an account, so remapping it from chat is a permission change.
+ */
+export function isChatIdentityRemapPath(path: readonly string[]): boolean {
+  return path.some((segment, index) => segment === 'endpoints' && /^(?:0|[1-9][0-9]*)$/u.test(path[index + 1] ?? '')
+    && /^(?:id|name|instanceid|endpointid)$/u.test((path[index + 2] ?? '').replace(/[^a-z0-9]/giu, '').toLowerCase()));
+}
+
+/**
+ * M1/B1: a chat `set` never plants a new `${…}` or `env://` reference (even with a
+ * non-credential-looking name), since a later `get` or runtime echo would expand it.
+ * Existing references are untouched by unrelated operations.
+ */
+export function assertChatValueHasNoEnvironmentReference(value: unknown, depth = 0): void {
+  if (depth > 32) throw new ConfigChatAccessError('unknown');
+  if (typeof value === 'string') {
+    if (value.includes('${') || /env:\/\//iu.test(value)) throw new ConfigChatAccessError('sensitive');
+    return;
+  }
+  if (Array.isArray(value)) for (const item of value) assertChatValueHasNoEnvironmentReference(item, depth + 1);
+  else if (record(value)) for (const [key, item] of Object.entries(value)) {
+    assertChatValueHasNoEnvironmentReference(key, depth + 1); assertChatValueHasNoEnvironmentReference(item, depth + 1);
+  }
 }
 
 export interface ChatConfigurationScope {
@@ -55,7 +88,7 @@ function startsWith(path: readonly string[], prefix: readonly string[]): boolean
 export function assertChatConfigurationScope(path: readonly string[], scope: ChatConfigurationScope): void {
   if (!path.length) throw new ConfigChatAccessError('leaf');
   if (scope.declarationKeys.has(path[0]!)) throw new ConfigChatAccessError('scope');
-  if (path.some(isChatPermissionSegment)) throw new ConfigChatAccessError('permission');
+  if (path.some(isChatPermissionSegment) || isChatIdentityRemapPath(path)) throw new ConfigChatAccessError('permission');
   if (scope.hostKeys.includes(path[0]!) && !scope.hostPaths.some(prefix => startsWith(path, prefix))) {
     throw new ConfigChatAccessError('scope');
   }
@@ -257,7 +290,7 @@ export function chatConfigurationLeaves(schema: unknown, path: readonly string[]
   const found: (readonly string[])[] = [];
   const walk = (relative: readonly string[]) => {
     if (found.length >= limit || relative.length > 12) return;
-    if (relative.some(isChatPermissionSegment) || relative.some(sensitiveKey)) return;
+    if (relative.some(isChatPermissionSegment) || isChatIdentityRemapPath(relative) || relative.some(sensitiveKey)) return;
     let current: Variants;
     try { current = locate(schema, relative); }
     catch (error) { if (error instanceof ConfigChatAccessError) return; throw error; }

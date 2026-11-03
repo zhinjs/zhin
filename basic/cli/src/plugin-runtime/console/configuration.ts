@@ -17,7 +17,7 @@ import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flatt
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 import {
-  assertChatConfigurationAccess, assertChatConfigurationScope, assertChatOptionalLeaf, chatConfigurationLeaves, chatHostRoots, chatLeafTypes,
+  assertChatConfigurationAccess, assertChatConfigurationScope, assertChatValueHasNoEnvironmentReference, assertChatOptionalLeaf, chatConfigurationLeaves, chatHostRoots, chatLeafTypes,
   ConfigChatAccessError, type ChatConfigurationScope,
 } from './configuration-chat-policy.js';
 import { isForbiddenConfigurationPathSegment } from './configuration-path-segment.js';
@@ -275,7 +275,11 @@ export class ConsoleConfigurationStore {
         if (patch.op === 'remove' && readPath(current.document, patch.path) === undefined) throw new ConfigChatAccessError('missing');
         const schema = await this.#chatSchema(current.document, patch.path);
         if (patch.op === 'remove') assertChatOptionalLeaf(schema, patch.path.slice(1));
-        else chatLeafTypes(schema, patch.path.slice(1));
+        else {
+          chatLeafTypes(schema, patch.path.slice(1));
+          // M1: no new `${…}` / `env://` reference may be planted from chat.
+          assertChatValueHasNoEnvironmentReference(patch.value);
+        }
         await this.#assertChatPath(candidate, patch.path, [readPath(candidate, patch.path)]);
         if (readPath(current.document, patch.path) !== undefined) {
           await this.#assertChatPath(current.document, patch.path, [readPath(current.document, patch.path)]);
