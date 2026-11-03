@@ -123,7 +123,7 @@ export function createConfigCommand(): Command {
 
   command.addCommand(new Command('list').alias('ls').description('显示期望配置（默认读取 Host）')
     .action(run(async (_args, options) => { print(await read(options), options); })));
-  command.addCommand(new Command('get').argument('<key>', '点路径或 JSON Pointer，例如 /plugins/com.example')
+  command.addCommand(new Command('get').argument('<key>', '点路径或 JSON Pointer，例如 /plugin/key.with.dot')
     .description('获取配置项').action(run(async ([key], options) => {
       print(readPath(await read(options), commandPath(String(key))), options);
     })));

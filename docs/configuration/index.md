@@ -111,7 +111,7 @@ npx zhin config --offline set menuKeyword '"菜单"'
 
 凭据通过环境变量传给 CLI，不放进命令参数。自动发现地址仅参考本地 HTTP 配置，不证明监听器已经采用该配置。连接失败不会改写本地文件或自动转离线。`schema` 展示表单 Schema 投影，`status` 显示文件版本与生效回执；响应丢失时先只读核对，不能把较新的回执当成先前请求未保存的证明。
 
-路径支持 `ai.enabled` 或 JSON Pointer，例如 `/my.bot/endpoints/0/nickname`；实例名本身有点时使用 Pointer，`~1` 表示 `/`，`~0` 表示 `~`。数组删除会收拢后续索引，不接受越界索引或隐式追加。离线保存会加载声明并校验，但不启动 Runtime、不调用插件 setup；导入内联配置声明仍可能执行模块顶层代码。`config check` 是本地诊断，`check --fix` 必须显式加 `--offline` 才能校验后保存。
+路径支持 `ai.enabled` 或 JSON Pointer，例如 `/plugin/key.with.dot`；字段键本身有点时使用 Pointer，`~1` 表示 `/`，`~0` 表示 `~`。数组删除会收拢后续索引，不接受越界索引或隐式追加。离线保存会加载声明并校验，但不启动 Runtime、不调用插件 setup；导入内联配置声明仍可能执行模块顶层代码。`config check` 是本地诊断，`check --fix` 必须显式加 `--offline` 才能校验后保存。
 
 安装根 Command Feature 后，真实 Bot 主人可以在**私聊**使用 `config` 查看当前调用方式，提供 `list / get / schema / status / set / delete`。实际提示由框架带上当前账号的前缀和 namespace；这里省略前缀。任一账号的合法主人可以管理项目全局配置，不依赖 AI Agent。
 
