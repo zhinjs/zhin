@@ -1,4 +1,11 @@
-import type { SelfChangeApprovals, SelfChangeRecord, SelfChangeStore } from '@zhin.js/agent';
+import type {
+  DecisionPayload,
+  SelfChangeApprovals,
+  SelfChangeConfigOperation,
+  SelfChangeDetailDiff,
+  SelfChangeRecord,
+  SelfChangeStore,
+} from '@zhin.js/agent';
 import {
   definePluginConsoleRpc,
   PluginConsoleRpcError,
@@ -17,6 +24,10 @@ import {
  *
  * - `plugin.root.self-changes` (read: `tool_approvals:read` or `ops:approve`): pending changes with their
  *   preview and trial verdict, recent changes, and the staging-area usage. Never returns file bodies.
+ * - `plugin.root.self-change-detail` (`ops:approve` only, #1142 F3): one change with a unified diff per file
+ *   (baseline: rollback snapshot once applying started, otherwise the production file; total ≤ 64 KB, cut by line
+ *   with `truncated`), the config patch with values redacted like decision audit payloads, and the full trial
+ *   checks including the skipped ones. A slimmed change reports `bodiesAvailable: false` instead of a diff.
  * - `plugin.root.resolve-self-change` (`ops:approve`): approve / reject a pending change. It settles the same
  *   G6 approval card the IM channel uses, so whichever answers first wins.
  * - `plugin.root.mark-self-change-handled` (`ops:approve`): a person has dealt with a `failed` (emergency-stopped)
@@ -25,6 +36,44 @@ import {
  */
 
 const RECENT_LIMIT = 50;
+
+export interface SelfChangeDetailFile {
+  readonly path: string;
+  readonly kind: 'create' | 'modify' | 'delete';
+  /** Unified diff; empty string = identical to the baseline; null = not available (see `unavailableReason`). */
+  readonly diff: string | null;
+  readonly truncated: boolean;
+  readonly unavailableReason: string | null;
+}
+
+export interface SelfChangeDetailConfigOperation {
+  readonly op: SelfChangeConfigOperation['op'];
+  readonly path: readonly string[];
+  /** Redacted value (`set` only). */
+  readonly value?: PluginConsoleRpcJson;
+}
+
+export interface SelfChangeDetailTrial {
+  readonly passed: boolean | null;
+  readonly checks: PluginConsoleRpcJson;
+  readonly pendingStages: readonly string[];
+  /** `<check> <path>` of every skipped check. */
+  readonly skippedChecks: readonly string[];
+}
+
+export interface SelfChangeDetail {
+  readonly change: SelfChangeCard;
+  /** False once the change is slimmed: staged bodies are gone and no diff is returned. */
+  readonly bodiesAvailable: boolean;
+  readonly baseline: 'disk' | 'snapshot';
+  readonly files: readonly SelfChangeDetailFile[];
+  readonly diffBytes: number;
+  readonly maxDiffBytes: number;
+  readonly diffTruncated: boolean;
+  readonly configPatch: Readonly<{ expectedRevision: string; operations: readonly SelfChangeDetailConfigOperation[] }> | null;
+  readonly trial: SelfChangeDetailTrial | null;
+  readonly usageBytes: number;
+}
 
 export interface SelfChangeCard {
   readonly id: string;
@@ -60,6 +109,11 @@ export class HostSelfChanges {
       'self-changes': {
         anyOfPermissions: [TOOL_APPROVALS_READ_PERMISSION, OPS_APPROVE_PERMISSION],
         handler: async () => (await this.snapshot()) as unknown as PluginConsoleRpcJson,
+      },
+      'self-change-detail': {
+        // File bodies and config values: approvers only, never the read-only list permission.
+        anyOfPermissions: [OPS_APPROVE_PERMISSION],
+        handler: async (input) => (await this.detail(input)) as unknown as PluginConsoleRpcJson,
       },
     },
     actions: {
@@ -97,6 +151,50 @@ export class HostSelfChanges {
       available: true,
       pending: records.filter(record => record.status === 'pending').map(toCard),
       recent: records.filter(record => record.status !== 'pending').slice(0, RECENT_LIMIT).map(toCard),
+      usageBytes: await binding.store.usage(),
+    };
+  }
+
+  async detail(input: PluginConsoleRpcInput): Promise<SelfChangeDetail> {
+    const id = requireId(input);
+    const binding = this.#requireBinding();
+    let record: SelfChangeRecord | null;
+    try {
+      record = await binding.store.get(id);
+    } catch (error) {
+      throw consoleError(error);
+    }
+    if (!record) throw new PluginConsoleRpcError('not_found', 'Change not found');
+    // @zhin.js/agent is an optional peer: load its helpers only when a change is actually inspected.
+    const agent = await import('@zhin.js/agent');
+    let diff: SelfChangeDetailDiff;
+    try {
+      diff = await agent.buildSelfChangeDetailDiff({ store: binding.store, record, projectRoot: binding.store.projectRoot });
+    } catch (error) {
+      throw consoleError(error);
+    }
+    const redact = agent.redactDecisionPayload;
+    return {
+      change: card(record, binding.approvals.approvalIdFor(record.id) ?? null),
+      bodiesAvailable: diff.bodiesAvailable,
+      baseline: diff.baseline,
+      files: diff.files.map(file => ({
+        path: file.path,
+        kind: file.kind,
+        diff: file.diff,
+        truncated: file.truncated,
+        unavailableReason: file.unavailableReason,
+      })),
+      diffBytes: diff.bytes,
+      maxDiffBytes: agent.MAX_CHANGE_PREVIEW_BYTES,
+      diffTruncated: diff.truncated,
+      configPatch: record.configPatch
+        ? {
+            expectedRevision: record.configPatch.expectedRevision,
+            operations: record.configPatch.patches.map(operation => redactConfigOperation(operation, redact)),
+          }
+        : null,
+      trial: detailTrial(record.trial, agent.skippedTrialChecks, redact),
       usageBytes: await binding.store.usage(),
     };
   }
@@ -159,6 +257,47 @@ function readStringProp(error: unknown, key: string): string | undefined {
   if (!error || typeof error !== 'object' || !(key in error)) return undefined;
   const value = (error as Record<string, unknown>)[key];
   return typeof value === 'string' ? value : undefined;
+}
+
+type RedactPayload = (payload: DecisionPayload | null | undefined) => DecisionPayload;
+
+/**
+ * Redacts a `set` value with the decision-audit rules: the value is nested under its config path so a secret-like
+ * key anywhere on the path (`token`, `apiKey`, `auth`, …) replaces it, and string values get token masking.
+ */
+function redactConfigOperation(operation: SelfChangeConfigOperation, redact: RedactPayload): SelfChangeDetailConfigOperation {
+  const configPath = [...operation.path];
+  if (operation.op === 'remove') return { op: 'remove', path: configPath };
+  let wrapped: unknown = operation.value;
+  for (const segment of [...configPath].reverse()) {
+    wrapped = { [segment]: wrapped };
+  }
+  let redacted: unknown = redact(wrapped as DecisionPayload);
+  for (const segment of configPath) {
+    if (!redacted || typeof redacted !== 'object' || Array.isArray(redacted)) break;
+    redacted = (redacted as Record<string, unknown>)[segment];
+  }
+  return { op: 'set', path: configPath, value: (redacted ?? null) as PluginConsoleRpcJson };
+}
+
+function detailTrial(
+  trial: unknown,
+  skippedTrialChecks: (trial: unknown) => readonly string[],
+  redact: RedactPayload,
+): SelfChangeDetailTrial | null {
+  if (!trial || typeof trial !== 'object') return null;
+  const value = trial as { passed?: unknown; checks?: unknown; pendingStages?: unknown };
+  const checks = Array.isArray(value.checks) ? value.checks : [];
+  const pendingStages = Array.isArray(value.pendingStages)
+    ? value.pendingStages.filter((stage): stage is string => typeof stage === 'string')
+    : [];
+  return {
+    passed: typeof value.passed === 'boolean' ? value.passed : null,
+    // Check messages may quote file content or tool output: same masking as the audit trail.
+    checks: (redact({ checks }).checks ?? []) as PluginConsoleRpcJson,
+    pendingStages,
+    skippedChecks: [...skippedTrialChecks(trial)],
+  };
 }
 
 function card(record: SelfChangeRecord, approvalId: string | null): SelfChangeCard {

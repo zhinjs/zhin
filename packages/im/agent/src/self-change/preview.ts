@@ -196,14 +196,14 @@ function mergeImpact(files: FileImpact, config: SelfChangeConfigImpact | null): 
   });
 }
 
-interface CurrentFile {
+export interface CurrentFile {
   readonly bytes: number;
   /** 超过上限或不可读时为 null。 */
   readonly content: string | null;
 }
 
 /** 读生产目录里的现有文件：不存在 → null；符号链接或超过上限只报大小，不读内容。 */
-async function readCurrentFile(projectRoot: string, target: string): Promise<CurrentFile | null> {
+export async function readCurrentFile(projectRoot: string, target: string): Promise<CurrentFile | null> {
   const absolute = path.join(projectRoot, ...target.split('/'));
   let stat;
   try {

@@ -19,7 +19,7 @@ Design and defaults: [ADR 0040](../../adr/0040-controlled-self-change.md) (Chine
 
 1. **Draft**: the bot hands complete file contents and a field-level config patch to the host, which stages them in `.zhin/changes/`. Nothing in production is touched and nothing takes effect yet.
 2. **Trial** (next section): if it fails, no card is sent; the bot gets the errors and drafts again.
-3. **Approval**: the card **always** goes to the owner's DM — even if you asked in a business group, and saying "OK" in a business group does not count. It lists the files, lines added / removed, config paths touched, whether a reload or a restart is needed, and the trial verdict. Reply `/approve <card id>` or `/deny <card id>` in the DM, or settle it through the Console approval RPCs. Unanswered cards expire after 24 hours.
+3. **Approval**: the card **always** goes to the owner's DM — even if you asked in a business group, and saying "OK" in a business group does not count. It lists the files, lines added / removed, config paths touched, whether a reload or a restart is needed, a bounded diff excerpt (at most 40 lines / 2 KB; when cut it says the full content is in the Console), and the trial verdict including the names of skipped checks. If you have not seen the full content, open the Console "self-change" page before approving — do not approve blind. Reply `/approve <card id>` or `/deny <card id>` in the DM, or settle it through the Console approval RPCs. Unanswered cards expire after 24 hours.
 4. **Apply**: plugin-only changes hot reload; changes that need a restart (for example host sections such as `http` or `database`) trigger a controlled restart followed by a health check.
 5. **Report**: back in the original conversation ("applied", noting a restart if one happened); if that conversation is unreachable (group gone, bot removed or muted) the report goes to the owner's DM.
 
@@ -33,7 +33,7 @@ Code the bot writes never goes straight into production. Before the card is sent
 - **Sandbox load**: assembles the drafted plugin in a throwaway child process with no real platform and no model, and checks that its commands / tools are discovered;
 - **The plugin's own tests**: in an isolated, offline, read-only, resource-limited container.
 
-When the machine cannot run a check (no Docker, the plugin has no tests, …) it is recorded as skipped: this **does not block** submission, but the card's trial verdict shows how many checks were skipped (e.g. "passed (2 skipped)"). Look twice before approving such a card.
+When the machine cannot run a check (no Docker, the plugin has no tests, …) it is recorded as skipped: this **does not block** submission, but the card's trial verdict shows how many checks were skipped and names them (e.g. "passed (2 skipped); skipped: sandbox_load commands/ping.ts, …"). Look twice before approving such a card.
 
 Trial passed, one human approval, written to the production directories — that is "publishing". There is no second approval.
 
@@ -66,8 +66,12 @@ Any setting that would loosen security or widen the tool surface is refused at d
 
 The full list is in [Default Behavior](./default-behavior.md#dangerous-tool-hard-gate). Edit these in the config file yourself.
 
+## Reviewing the full diff before approving
+
+- **Console "self-change" page**: lists pending and recent changes; the detail view (needs `ops:approve`) shows a unified diff per file (the baseline is the current production file, or the rollback snapshot once applying started; at most 64 KB in total, cut by line and marked), the redacted config patch, every trial check (skipped ones highlighted) and staging usage. You can approve / reject there, and mark an emergency-stopped change as handled. Once a change ends its bodies are cleaned up under the staging retention rules and the detail says so rather than inventing a diff.
+- **IM approval card**: carries a bounded excerpt only and never config values; the excerpt is not the full content (#1142).
+
 ## Not supported yet
 
 - **Creating a new plugin package** (a new `plugins/<name>/package.json` and entry) and **installing npm dependencies**: out of scope for now — install dependencies and create the plugin yourself, then ask the bot to add commands to it.
-- **Reviewing the full code diff before approving**: the Console "self-change" detail page and diff excerpts on the IM card (#1051 F3) are **not available yet**. Today the card carries files, line counts, config paths, impact and the trial verdict — no file bodies or config values.
 - Changing the zhin framework itself, approving several changes together, pushing changes across instances, a visual editor.
