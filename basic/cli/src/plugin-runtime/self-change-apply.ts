@@ -161,14 +161,20 @@ export class HostSelfChangeApply {
     const listApproved = this.#listApproved;
     return this.#run(async () => {
       await applier.recover();
+      // One failing leftover must not strand the rest until the next start; every error is surfaced at the end.
+      const failures: unknown[] = [];
       for (const id of await listApproved?.() ?? []) {
         this.#errorBaseline.set(id, this.#errors);
         try {
           await applier.resumeApproved(id);
+        } catch (error) {
+          failures.push(error);
         } finally {
           this.#errorBaseline.delete(id);
         }
       }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) throw new AggregateError(failures, `${failures.length} approved self-changes failed to resume`);
     });
   }
 

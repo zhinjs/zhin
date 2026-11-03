@@ -146,6 +146,21 @@ describe('HostSelfChangeApply lifecycle', () => {
     expect(String(errors[0])).toContain('no Agent generation');
   });
 
+  it('keeps resuming the other leftover approvals when one throws, then surfaces the error', async () => {
+    const host = new HostSelfChangeApply(hostOptions());
+    const resumed: string[] = [];
+    host.bind({
+      apply: async () => undefined,
+      recover: async () => 0,
+      resumeApproved: async (id: string) => {
+        resumed.push(id);
+        if (id === 'chg_bad') throw new Error('boom');
+      },
+    }, async () => ['chg_bad', 'chg_ok']);
+    await expect(host.started()).rejects.toThrow('boom');
+    expect(resumed).toEqual(['chg_bad', 'chg_ok']);
+  });
+
   it('recovers once per process after start, then applies changes approved but never applied', async () => {
     const host = new HostSelfChangeApply(hostOptions());
     const calls: string[] = [];
