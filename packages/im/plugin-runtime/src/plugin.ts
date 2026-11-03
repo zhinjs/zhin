@@ -7,6 +7,9 @@ import type { GenerationHandoffRegistry } from './handoff.js';
 import type { FeatureId, PluginId } from './identity.js';
 import type { Scope, Token } from './token.js';
 import type { PluginEventSubscriptions } from './plugin-events.js';
+import { freezePluginConfigUpdate, type PluginConfigUpdateDeclaration } from './config-update-declaration.js';
+export { freezePluginConfigUpdate } from './config-update-declaration.js';
+export type { PluginConfigUpdateDeclaration } from './config-update-declaration.js';
 
 export interface PluginMetadata {
   readonly displayName?: string;
@@ -67,6 +70,8 @@ export interface PluginDefinition<TConfig = unknown> {
   readonly config?: PluginConfigSchema<TConfig>;
   readonly metadata?: PluginMetadata;
   readonly requires?: readonly Token<unknown>[];
+  /** Fields owned by Features; setup must not capture these as mutable business configuration. */
+  readonly configUpdate?: PluginConfigUpdateDeclaration;
   setup?(context: PluginSetupContext<TConfig>): void | Dispose | Promise<void | Dispose>;
 }
 
@@ -103,6 +108,7 @@ export function definePlugin<TConfig = unknown>(
     ...definition,
     metadata: definition.metadata ? Object.freeze({ ...definition.metadata }) : undefined,
     requires: Object.freeze([...(definition.requires ?? [])]),
+    ...(definition.configUpdate !== undefined ? { configUpdate: freezePluginConfigUpdate(definition.configUpdate) } : {}),
   });
 }
 

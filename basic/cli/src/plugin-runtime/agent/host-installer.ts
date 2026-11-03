@@ -4,7 +4,8 @@ import { createPersonalSessionDirectory } from '../personal-models/directory.js'
 import { PersonalModelManagementService } from '../personal-models/service.js';
 import { personalModelManagementToken } from '../personal-models/token.js';
 import { createPersonalModelHost } from '../personal-models/host.js';
-import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
+import { modelRuntimeBaselineToken, turnModelPortToken } from '@zhin.js/agent/model-runtime';
+import { createModelConfigurationAccess, type ModelConfigurationAccess, type ModelConfigurationControl } from '../personal-models/configuration.js';
 import { createOwnerApprovalMigrationProvider } from '../data-migration/owner-approval-provider.js';
 import { pluginDataMigrationProviderToken, databaseRootHostToken, type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
@@ -82,6 +83,7 @@ const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
 
 export interface InstallAgentHostOptions {
+  readonly configurationControl?: ModelConfigurationControl;
   /** Process-owned trace archive; reuse the generation's existing persistence maintenance. */
   readonly pruneTraces?: () => Promise<unknown>;
   /** Process-owned 群聊插话 / 技能助手 Console status (#970). */
@@ -187,9 +189,17 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       projectRoot: options.projectRoot,
       state: () => resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken).state : undefined,
       resolveHostSecret: reference => options.resolveModelSecret?.(reference),
+      configurationControl: options.configurationControl,
     });
+    const modelConfiguration: ModelConfigurationAccess = createModelConfigurationAccess({ control: options.configurationControl,
+      runtime: () => agentFoundation.service.getModelRuntime() });
     const agentFoundation = await AgentRuntimeFoundation.create({
-      modelRuntime: personalModels.runtimeOptions,
+      modelRuntime: { ...personalModels.runtimeOptions,
+        acquireDeploymentSelection: (selection, signal) => modelConfiguration.acquireHostModel(selection, signal),
+        acquireDeploymentDefault: signal => modelConfiguration.acquire(async () => ({
+          rootId: personalModels.rootId, ownerId: personalModels.hostOwnerId,
+        }), signal),
+      },
       config: aiConfig,
       localAssets,
       assistantConfig,
@@ -200,6 +210,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       audioTranscriber: options.audioTranscriber,
       resources,
       lifecycle,
+      modelConfiguration,
     });
     const {
       service,
@@ -210,12 +221,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       homeTools,
       assistantEnabled,
     } = agentFoundation;
+    resources.provide(modelRuntimeBaselineToken, service.getModelRuntime());
     resources.provide(pluginDataMigrationProviderToken, createOwnerApprovalMigrationProvider({
       approvals: zhinAgent.ownerApprovals, admission,
     }));
-    resources.provide(turnModelPortToken, personalModels.turnPort(service));
+    resources.provide(turnModelPortToken, personalModels.turnPort(service, modelConfiguration));
     resources.provide(runtimePolicyManagementToken, new RuntimePolicyManagementService({
       rootId: personalModels.rootId, repository: personalModels.runtimePolicy, runtime: () => service.getModelRuntime(),
+      configuration: modelConfiguration,
     }));
     resources.provide(personalModelManagementToken, new PersonalModelManagementService({
       rootId: personalModels.rootId,
@@ -225,6 +238,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       directory: createPersonalSessionDirectory(() => resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken) : undefined),
       vault: personalModels.vault,
       hostCatalog: () => service.getModelRuntime().getCatalogConfig(),
+      configuration: modelConfiguration,
     }));
     zhinAgent.hostProtectedPaths = hostProtectedPaths;
     // #1051 F1: the store (drafts), the trial (grouping by plugin root) and the applier (writes) share one view
@@ -333,6 +347,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     // Resources. DisposeStack continues through later cleanup when one
     // Resource fails.
     publishAgentToolFeatures({
+      modelConfiguration,
       addFeature,
       projectRoot: options.projectRoot,
       service,
@@ -400,6 +415,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resolveEndpointTrusted: options.resolveEndpointTrusted,
       ingress,
       agent: agentFoundation,
+      modelConfiguration,
       ...(workroom ? { workroom } : {}),
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
       toolApprovalIm,

@@ -13,6 +13,7 @@ import { createBilibiliConsoleRpc } from './src/console.js';
  */
 export default definePlugin({
   name: 'bilibili',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Bilibili Comment Adapter (Experimental)',
   },

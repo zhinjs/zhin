@@ -5,7 +5,7 @@ description: "The one command that starts the bot: development, production, daem
 
 # zhin runtime start
 
-`zhin runtime start` is the one command that starts the bot. It runs your TypeScript source directly with no build step, assembles HTTP, database, Console, Agent and other services from config, and in development mode hot-reloads on save without restarting the process.
+`zhin runtime start` is the one command that starts the bot. It runs your TypeScript source directly with no build step and assembles HTTP, database, Console, Agent and other services from config. Watching is enabled only by an explicit `--watch`, independently of runtime mode.
 
 ## Common usage
 
@@ -37,7 +37,8 @@ zhin runtime start --once --mode test
 | --- | --- |
 | `--mode <mode>` | Run mode: `development` (default) / `test` / `production` |
 | `--environment <name>` | Environment name, defaults to the `--mode` value; determines which `.env.<name>` is loaded, must match `/^[a-z0-9][a-z0-9-]*$/` |
-| `--no-watch` | Disable file watching and hot reloading |
+| `--watch <scope...>` | Explicitly watch `source` / `config`, optionally combined as `--watch source config`. Omission watches neither |
+| `--no-watch` | Compatibility spelling for no watching; cannot be combined with `--watch` |
 | `--once` | Output a JSON snapshot after completing one startup, then exit |
 | `--open` | Open Remote Console in the browser after a successful start in a terminal (TTY); `ZHIN_OPEN=1` does the same |
 | `-d, --daemon` | Daemon mode: writes a pid file, redirects logs, auto-restarts on crash |
@@ -81,7 +82,9 @@ Note that the Agent stack is **loaded on demand**: only when `ai` / `assistant` 
 
 ## HMR Semantics
 
-Development mode enables file watching by default (`--once` / `--no-watch` disables it). Changes are handled at two levels based on their scope of impact:
+Only `--watch source config`, `--watch source` or `--watch config` enables the selected scope; `--once` registers no watchers. Omitting `--watch` does not prevent explicitly saving and applying configuration through Console. Scaffolded projects and repository examples explicitly select both scopes in `pnpm dev`; update existing development scripts if automatic reload is wanted.
+
+Source changes are handled at two levels based on their scope of impact:
 
 | Change | Handling |
 | --- | --- |

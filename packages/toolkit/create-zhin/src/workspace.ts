@@ -137,7 +137,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     type: 'module',
     description: `${projectName} - Zhin.js Bot`,
     scripts: {
-      dev: 'zhin runtime start',
+      dev: 'zhin runtime start --watch source config',
       start: 'zhin runtime start --mode production --no-watch',
       build: 'tsc --noEmit',
       'pm2:start': 'pm2 start ecosystem.config.cjs',

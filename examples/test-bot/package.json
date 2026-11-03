@@ -5,7 +5,7 @@
   "description": "Zhin.js Plugin Runtime 厨房水槽（对齐 legacy endpoints：icqq×5 / slack / github / qq×2 / sandbox + games）",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start",
+    "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch",
     "daemon": "zhin runtime start --daemon --mode production --no-watch",
     "build": "tsc --noEmit -p tsconfig.runtime.json",

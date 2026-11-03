@@ -1,4 +1,4 @@
-import { createEndpointRoleResolver, createSenderEnricher } from './sender-enrichment.js';
+import { createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from './sender-enrichment.js';
 export { createEndpointRoleResolver } from './sender-enrichment.js';
 import { migrateConversationColumns, migrateInboxColumns } from './conversation-migration.js';
 import type { StructuredDatabase } from '@zhin.js/database';
@@ -191,6 +191,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const consoleConfigurationStore = new ConsoleConfigurationStore({
     projectRoot: options.root,
     document: config,
+    validateConfiguration: document => host.runtime.validateConfiguration(document),
+    applyConfiguration: revision => host.runtime.applyConfiguration(revision),
+    readApplication: () => host.runtime.configurationApplication,
     environmentName: runtimeEnvironment.name,
     environmentForPlugin: instanceKey => {
       const lease = host.runtime.snapshots.acquire();
@@ -219,7 +222,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     projectRoot: options.root,
     config,
     modules: consoleHost.modules,
-    watch: !parsed.once && !parsed.noWatch,
+    watch: parsed.once ? [] : parsed.watch,
+    configUpdates: agentHost?.configUpdates,
+    pluginConfigurationSelection: createEndpointRoleConfigurationSelection(hostConfig, endpointRoles),
     onGenerationCommit: (generation) => {
       consoleEventHub.publish('hmr:reload', { generation });
     },
@@ -264,6 +269,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       // and dispose hooks are registered before generation commit.
       if (agentHost) {
         await agentHost.install({
+          configurationControl: (operation, context) => host.runtime.control(operation, context),
           im,
           assistantStatus,
           selfChanges,
@@ -522,6 +528,7 @@ function reportSelfChangeRecoverError(error: unknown): void {
 }
 
 interface ConfiguredAgentHost {
+  readonly configUpdates: readonly import('@zhin.js/runtime').RootConfigUpdateHandler[];
   registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
   readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
   attach(
@@ -529,6 +536,7 @@ interface ConfiguredAgentHost {
     sourceOwnership?: () => import('@zhin.js/runtime').SourceOwnershipIndex,
   ): void;
   install(options: {
+    readonly configurationControl: import('@zhin.js/runtime').RootRuntime['control'];
     readonly im: ImRuntime;
     readonly projectRoot: string;
     readonly resolveModelSecret?: (reference: string) => string | undefined | Promise<string | undefined>;
@@ -573,6 +581,7 @@ async function loadConfiguredAgentHost(
     NonNullable<typeof workroom>['createLocalWorkroomDataGovernanceAuthority']
   > | undefined;
   const configured: ConfiguredAgentHost = {
+    configUpdates: initialAi ? [agentHost.createModelConfigurationUpdateHandler(initialAi, projectRoot)] : [],
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
       agentHost.registerPersonalModelHttp({ http, base, snapshots: snapshotReader });

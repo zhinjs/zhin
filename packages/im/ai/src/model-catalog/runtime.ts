@@ -12,6 +12,11 @@ export interface ModelResourceFactory<T> {
   /** The resolved secret exists only at this execution boundary. Never log it. */
   create(connection: ModelConnection, secret: string | undefined): ModelExecutionResource<T> | Promise<ModelExecutionResource<T>>;
 }
+/** A captured configuration version's private execution data. Never a global latest lookup. */
+export interface ModelExecutionSource<T> {
+  readonly secrets: ModelSecretResolver;
+  readonly factory: ModelResourceFactory<T>;
+}
 export interface ModelLease<T> {
   readonly invocation: ResolvedInvocation;
   readonly resource: T;
@@ -69,9 +74,9 @@ export class ModelLeaseRuntime<T> {
   readonly #latest = new Map<string, number>();
   #closed = false;
   #closing?: Promise<void>;
-  constructor(private readonly options: { readonly secrets: ModelSecretResolver; readonly factory: ModelResourceFactory<T> }) {}
+  constructor(private readonly options: ModelExecutionSource<T>) {}
 
-  async acquire(input: ResolvedInvocation, options: { readonly signal?: AbortSignal } = {}): Promise<ModelLease<T>> {
+  async acquire(input: ResolvedInvocation, options: { readonly signal?: AbortSignal; readonly execution?: ModelExecutionSource<T> } = {}): Promise<ModelLease<T>> {
     if (this.#closed) throw new ModelLeaseError('disposed');
     if (options.signal?.aborted) throw new ModelLeaseError('cancelled');
     const invocation = snapshot(input);
@@ -90,7 +95,7 @@ export class ModelLeaseRuntime<T> {
       const retired = connection.revision < latest;
       this.#latest.set(ownerKey, Math.max(latest, connection.revision));
       entry = { connection, refs: 0, retired,
-        pending: this.#create(connection) };
+        pending: this.#create(connection, options.execution ?? this.options) };
       this.#entries.set(key, entry);
       this.#all.add(entry);
       if (!retired) {
@@ -126,14 +131,14 @@ export class ModelLeaseRuntime<T> {
     }
   }
 
-  async #create(connection: ModelConnection): Promise<ModelExecutionResource<T>> {
+  async #create(connection: ModelConnection, execution: ModelExecutionSource<T>): Promise<ModelExecutionResource<T>> {
     let secret: string | undefined;
     if (connection.secretRef !== undefined) {
-      try { secret = await this.options.secrets.resolve(connection); }
+      try { secret = await execution.secrets.resolve(connection); }
       catch { throw new ModelLeaseError('secret-unavailable'); }
       if (typeof secret !== 'string' || !secret.trim()) throw new ModelLeaseError('secret-unavailable');
     }
-    try { return await this.options.factory.create(connection, secret); }
+    try { return await execution.factory.create(connection, secret); }
     catch { throw new ModelLeaseError('resource-create-failed'); }
   }
   async #release(entry: Entry<T>): Promise<void> {

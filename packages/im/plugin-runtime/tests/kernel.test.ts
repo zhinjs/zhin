@@ -9,6 +9,7 @@ import {
   capabilityId,
   childPluginId,
   createToken,
+  definePlugin,
   createSnapshotView,
   featureId,
   rootPluginId,
@@ -65,6 +66,24 @@ describe('Plugin Runtime kernel', () => {
     await closing;
     expect(disposed).toBe(true);
   });
+  it('validates and detaches inert feature configuration ownership declarations', () => {
+    const paths = [['profile']];
+    const definition = definePlugin({ name: 'profile', configUpdate: { featurePaths: paths } });
+    paths[0][0] = 'credentials';
+    expect(definition.configUpdate?.featurePaths).toEqual([['profile']]);
+    expect(Object.isFrozen(definition.configUpdate?.featurePaths[0])).toBe(true);
+    for (const invalid of [null, false, { featurePaths: [['__proto__']] }, { featurePaths: [[]] },
+      { featurePaths: [new Array(1)] }, { featurePaths: new Array(1) }, { featurePaths: [['profile']], apply() {} }]) {
+      expect(() => definePlugin({ name: 'profile', configUpdate: invalid as never })).toThrow(TypeError);
+    }
+    const state = emptyState();
+    const declaration = { featurePaths: [['nickname']] };
+    const snapshot = createSnapshotView(1, { ...state, tree: new Map([[state.root, { id: state.root, instanceKey: 'root',
+      packageName: 'root', packageRoot: '/root', children: [], configUpdate: declaration }]]) });
+    declaration.featurePaths[0][0] = 'token';
+    expect(snapshot.tree.get(state.root)?.configUpdate?.featurePaths).toEqual([['nickname']]);
+  });
+
   it('detaches and deeply freezes custom schema metadata when creating a snapshot', () => {
     const declaration = { type: 'object', properties: { count: { type: 'number', default: 1 } } };
     const state = emptyState();

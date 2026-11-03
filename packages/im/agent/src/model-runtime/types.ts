@@ -1,5 +1,5 @@
 import type {
-  AIConfig, AIProvider, LlmApiRuntime, AiHttpTransport,
+  AIConfig, AIProvider, LlmApiRuntime, AiHttpTransport, ImageGenerationDefaults,
 } from '@zhin.js/ai';
 import type { ModelCatalogConfig, ModelConnection, ResolvedInvocation, InvocationRequirements } from '@zhin.js/ai/model-catalog';
 import type { ModelPolicyConfig, ModelPolicyResolveInput, EffectiveModelPolicy } from '../model-policy/types.js';
@@ -23,6 +23,21 @@ export interface ModelExecutionBundle {
   readonly invocation: ResolvedInvocation;
 }
 export interface ModelExecutionLease extends ModelExecutionBundle {
+  release(): Promise<void>;
+}
+/** Deployment-only selection; never resolves a personal catalog or session override.
+ * `undefined` uses the zhin binding. An empty provider selection intentionally keeps
+ * the standalone subagent's existing default-provider/first-model behavior.
+ */
+export type HostModelSelection = { readonly bindingName: string } | { readonly presetId: string }
+  | { readonly providerAlias?: string; readonly model?: string };
+export interface ResolvedHostProvider {
+  readonly connection: ModelConnection;
+  readonly defaults: Readonly<ImageGenerationDefaults>;
+}
+export interface HostProviderLease {
+  readonly provider: AIProvider;
+  readonly defaults: Readonly<ImageGenerationDefaults>;
   release(): Promise<void>;
 }
 export type ModelSummarySource = 'runtime' | 'static' | 'deployment-chat';
@@ -55,6 +70,10 @@ export interface ResolvedModelExecutionScope {
 export interface ModelRuntimeServiceOptions {
   readonly config: ModelRuntimeConfig;
   readonly hostOwnerId: string;
+  /** Trusted Host admission for deployment defaults; explicit presets retain this view's selection. */
+  readonly acquireDeploymentDefault?: (signal?: AbortSignal) => Promise<ModelExecutionScope>;
+  /** Explicit ServiceAgent references stay fixed; each run leases their current deployment connection. */
+  readonly acquireDeploymentSelection?: (selection: HostModelSelection, signal?: AbortSignal) => Promise<ModelExecutionLease>;
   /** Canonical Host address; required for persisted runtime policy, absent for historical static embedders. */
   readonly rootId?: string;
   /** Read once per turn; failures must never become an empty override. */
@@ -74,7 +93,7 @@ export interface ResolvePresetOptions {
   readonly ownerId: string;
   readonly requirements?: InvocationRequirements;
 }
-export type ModelRuntimeErrorCode = 'invalid-config' | 'migration-model-missing' | 'migration-provider-missing' | 'migration-default-missing' | 'unknown-binding' | 'catalog-conflict' | 'chat-preset-missing' | 'host-connection-unavailable' | 'personal-transport-unavailable' | 'deployment-owner-mismatch';
+export type ModelRuntimeErrorCode = 'disposed' | 'invalid-config' | 'migration-model-missing' | 'migration-provider-missing' | 'migration-default-missing' | 'unknown-binding' | 'catalog-conflict' | 'chat-preset-missing' | 'host-connection-unavailable' | 'personal-transport-unavailable' | 'deployment-owner-mismatch';
 export class ModelRuntimeError extends Error {
   constructor(readonly code: ModelRuntimeErrorCode) {
     super(`Model runtime: ${code}`);

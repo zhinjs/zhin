@@ -157,6 +157,8 @@ import {
   type DecisionAudit,
 } from './decision-audit.js';
 import type { AssistantStatus } from '../../console/assistant-status.js';
+import { withHostDeploymentModel } from '../deployment-model.js';
+import type { ModelRuntimeService, HostModelSelection } from '@zhin.js/agent/model-runtime';
 
 const logger = getLogger('agent');
 /** Read-only consumer: the ambient judge never moves the Agent session's context cursor. */
@@ -178,6 +180,7 @@ function logAmbientDecisionObservation(observation: DecisionObservation): void {
 }
 
 export interface AgentTurnIngressRouteOptions {
+  readonly modelConfiguration?: import('../../personal-models/configuration.js').ModelConfigurationAccess;
   readonly projectRoot: string;
   readonly runtime: AgentRuntime;
   readonly im: ImRuntime;
@@ -609,6 +612,39 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const service = this.options.agent.service;
     const config = service.getTriggerConfig()?.ambient;
     if (!config?.conversations?.length) return this.#ambient = null;
+    const configuration = this.options.modelConfiguration;
+    if (configuration) {
+      const configured = (typeof config.judge === 'string' ? [config.judge] : config.judge ?? [])
+        .map(entry => entry.trim()).filter(Boolean);
+      let version: ModelRuntimeService | undefined;
+      let selected: EngagementJudge | undefined;
+      const judgeFor = (selection?: HostModelSelection): EngagementJudge => ({
+        judge: input => withHostDeploymentModel(configuration, selection, input.signal, model =>
+          new LlmEngagementJudge(model.llmRuntime, model.llmRuntime.model(model.provider.name, model.invocation.model.model)).judge(input)),
+      });
+      this.#ambientLlmJudge = { judge: async input => {
+        // Preserve judge backoff while a deployment version is unchanged. Validate only
+        // local model references in the control queue; acquire/call each judge outside it.
+        const active = await configuration.withRuntime(async runtime => {
+          if (version === runtime && selected) return selected;
+          const judges: EngagementJudge[] = [];
+          for (const entry of configured) {
+            const [providerAlias, ...model] = entry.split('/');
+            const selection = { providerAlias: providerAlias!, model: model.join('/') };
+            try { runtime.resolveHostModel(selection); judges.push(judgeFor(selection)); }
+            catch (error) {
+              logger.warn(formatCompact({ op: 'ambient_judge_unavailable', judge: entry, error: error instanceof Error ? error.message : String(error) }));
+            }
+          }
+          if (!judges.length) judges.push(judgeFor());
+          selected = judges.length === 1 ? judges[0]! : new FallbackEngagementJudge(judges);
+          version = runtime;
+          return selected;
+        });
+        return active.judge(input);
+      } };
+      return this.#ambient = new AmbientEngagement({ config, judge: this.#ambientLlmJudge });
+    }
     const binding = service.getBindingRegistry().requireZhinBinding();
     const llm = service.getLlmRuntime();
     const configured = (typeof config.judge === 'string' ? [config.judge] : config.judge ?? [])
@@ -837,7 +873,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             commandPrefix: message.commandPrefix,
             locale: message.locale,
             senderRoles,
-            withModelScope: operation => withDeploymentModelScope(service, options.projectRoot, operation),
+            withModelScope: operation => withDeploymentModelScope(service, options.projectRoot, operation, options.modelConfiguration),
             semanticMemory: options.agent.semanticMemory,
             senderId: turnAccess.principal.subjectId,
           });

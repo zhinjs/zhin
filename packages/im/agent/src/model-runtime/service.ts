@@ -1,19 +1,28 @@
 import {
-  AiHttpTransport, createSdkProviderAdapter, sdkEntryFromProvider, createLlmApiRuntime,
+  AiHttpTransport, createSdkProviderAdapter, sdkEntryFromProvider, createLlmApiRuntime, type AIProvider,
 } from '@zhin.js/ai';
-import { createModelCatalog, ModelLeaseRuntime, ModelCatalogError, type ModelCatalogConfig, type ModelConnection, type ModelLease, type ResolvedInvocation } from '@zhin.js/ai/model-catalog';
+import { createModelCatalog, ModelLeaseRuntime, ModelCatalogError, type ModelCatalogConfig, type ModelConnection, type ModelExecutionSource, type ModelLease, type ResolvedInvocation } from '@zhin.js/ai/model-catalog';
 import { compileModelPolicy } from '../model-policy/policy.js';
 import { compileRuntimePolicyRefsOverride, normalizeRuntimePolicyRefsOverride, runtimePolicyBelongsToRoot } from '../model-policy/runtime-policy.js';
 import type { EffectiveModelPolicy, ModelPolicyConfig, ModelPurpose } from '../model-policy/types.js';
 import { compileModelRuntimeConfig, legacyModelPresetId, LEGACY_PERCEPTION_PRESET, legacyConnectionBaseUrl } from './compiler.js';
+import { configurationRestartReasons, versionConfiguration } from './configuration-version.js';
 import type { NormalizedAiRoutingConfig } from '../config/normalize-ai-config.js';
 import type { AgentBindingConfig, ProviderInstanceConfig } from '../config/types.js';
 import { ModelRuntimeError, type ModelExecutionBundle, type ModelExecutionLease, type ModelExecutionScope, type ModelRuntimeServiceOptions,
-  type ModelTurnResolveInput, type ResolvePresetOptions, type ResolvedModelExecutionScope } from './types.js';
+  type ModelTurnResolveInput, type ResolvePresetOptions, type ResolvedModelExecutionScope,
+  type HostModelSelection, type ResolvedHostProvider, type HostProviderLease } from './types.js';
 
 type Resource = Omit<ModelExecutionBundle, 'invocation'> & {
   readonly scopedRuntimes: Map<string, ModelExecutionBundle['llmRuntime']>;
 };
+interface ModelRuntimeConstruction {
+  readonly compiled: ReturnType<typeof compileModelRuntimeConfig>;
+  readonly leases: ModelLeaseRuntime<Resource>;
+}
+export type ModelRuntimeConfigurationUpdate =
+  | { readonly kind: 'ready'; readonly runtime: ModelRuntimeService }
+  | { readonly kind: 'restart-required'; readonly reasons: readonly string[] };
 function mergeCatalogs(base: ModelCatalogConfig, personal?: ModelCatalogConfig): ModelCatalogConfig {
   if (!personal) return base;
   const addition = createModelCatalog(personal).config;
@@ -58,10 +67,19 @@ export class ModelRuntimeService {
   readonly #policy: ReturnType<typeof compileModelPolicy>;
   readonly #leases: ModelLeaseRuntime<Resource>;
   readonly #compatibility: NormalizedAiRoutingConfig;
+  readonly #execution: ModelExecutionSource<Resource>;
+  readonly #ownsLeases: boolean;
+  readonly #plans = new WeakSet<ResolvedModelExecutionScope>();
+  readonly #hostModels = new WeakSet<ResolvedInvocation>();
+  readonly #hostProviders = new WeakMap<ResolvedHostProvider, ResolvedInvocation>();
+  readonly #transferredProviders = new WeakSet<AIProvider>();
+  private readonly options: ModelRuntimeServiceOptions;
+  #closed = false;
 
-  constructor(private readonly options: ModelRuntimeServiceOptions) {
+  constructor(options: ModelRuntimeServiceOptions, /** @internal */ construction?: ModelRuntimeConstruction) {
+    this.options = { ...options, config: structuredClone(options.config) };
     if (options.runtimePolicySnapshot && (!options.rootId || options.rootId !== options.rootId.trim())) throw new ModelRuntimeError('invalid-config');
-    this.#compiled = compileModelRuntimeConfig(options.config, options.hostOwnerId, options.hostProviders);
+    this.#compiled = construction?.compiled ?? compileModelRuntimeConfig(this.options.config, options.hostOwnerId, options.hostProviders);
     this.#policy = compileModelPolicy(this.#compiled.policyConfig);
     this.#compatibility = this.#compatibilityRouting();
     const configuredMcp = new Set(this.#compatibility.mcpServerNames);
@@ -69,7 +87,7 @@ export class ModelRuntimeService {
     for (const binding of Object.values(this.#compatibility.agents)) {
       if (binding.mcpServers?.some(name => typeof name !== 'string' || !name.trim() || !configuredMcp.has(name))) throw new ModelRuntimeError('invalid-config');
     }
-    this.#leases = new ModelLeaseRuntime({
+    this.#execution = {
       secrets: { resolve: async connection => {
         if (connection.ownerId === options.hostOwnerId) {
           const data = this.#compiled.hostFactoryData.get(connection.id);
@@ -78,7 +96,26 @@ export class ModelRuntimeService {
         return options.secretResolver?.(connection);
       } },
       factory: { create: async (connection, secret) => this.#createResource(connection, secret) },
-    });
+    };
+    this.#ownsLeases = construction === undefined;
+    this.#leases = construction?.leases ?? new ModelLeaseRuntime(this.#execution);
+  }
+
+  /** Prepare an immutable view; no active binding, secret resolver or provider is touched.
+   * The replacement borrows this Root Scope's pool, rather than owning an independent
+   * pool. Retain the original owner until that Scope retires; retiring a configuration
+   * snapshot must not dispose the Scope owner. Dispose a borrowed view only to close it.
+   */
+  prepareConfiguration(config: ModelRuntimeServiceOptions['config']): ModelRuntimeConfigurationUpdate {
+    this.#assertOpen();
+    // A registered provider is a startup owner, not authority over a later authored definition.
+    const nextOptions = { ...this.options, config: structuredClone(config), hostProviders: undefined };
+    const candidate = compileModelRuntimeConfig(nextOptions.config, this.options.hostOwnerId);
+    const reasons = configurationRestartReasons(this.options.config, nextOptions.config, this.#compiled, candidate);
+    if (reasons.length) return Object.freeze({ kind: 'restart-required', reasons });
+    return Object.freeze({ kind: 'ready', runtime: new ModelRuntimeService(nextOptions, {
+      compiled: versionConfiguration(this.#compiled, candidate), leases: this.#leases,
+    }) });
   }
 
   getCatalogConfig(): ModelCatalogConfig { return this.#compiled.catalogConfig; }
@@ -127,9 +164,81 @@ export class ModelRuntimeService {
   }
 
   async resolvePreset(presetId: string, options: ResolvePresetOptions): Promise<ResolvedInvocation> {
+    this.#assertOpen();
     const ownerId = options.ownerId;
     const catalog = await this.#catalog(ownerId);
     return catalog.resolve(presetId, { ownerId, hostOwnerId: this.options.hostOwnerId }, options.requirements);
+  }
+
+  /** Capture the deployment reviewer/judge model, independent of personal and runtime chat overrides. */
+  resolveHostModel(selection?: HostModelSelection): ResolvedInvocation {
+    this.#assertOpen();
+    const catalog = createModelCatalog(this.#compiled.catalogConfig);
+    const owner = { ownerId: this.options.hostOwnerId, hostOwnerId: this.options.hostOwnerId };
+    let invocation: ResolvedInvocation;
+    if (selection && 'presetId' in selection) invocation = catalog.resolve(selection.presetId, owner);
+    else if (!selection || 'bindingName' in selection) invocation = catalog.resolve(this.presetForBinding(selection?.bindingName ?? 'zhin'), owner);
+    else {
+      const alias = selection.providerAlias ?? this.#compatibility.agents.zhin?.provider;
+      const requested = selection.model ?? (alias ? this.#compatibility.providers[alias]?.models?.[0] : undefined);
+      const connectionId = [...this.#compiled.hostFactoryData].find(([, data]) => data.executionAlias === alias)?.[0];
+      const model = Object.values(catalog.config.models).find(model => model.connectionId === connectionId && model.model === requested);
+      if (!model) throw new ModelRuntimeError('invalid-config');
+      // Judges select a model directly, not preset options or a session policy.
+      invocation = Object.freeze({ connection: catalog.config.connections[model.connectionId]!, model,
+        preset: Object.freeze({ id: `host:judge:${encodeURIComponent(model.id)}`, modelId: model.id }) });
+    }
+    this.#hostModels.add(invocation);
+    return invocation;
+  }
+
+  /** Standalone Host subagents use deployment routing, never a parent's personal chat selection. */
+  resolveHostScope(selection?: HostModelSelection): ResolvedModelExecutionScope {
+    const chat = this.resolveHostModel(selection);
+    const catalog = createModelCatalog(this.#compiled.catalogConfig);
+    const owner = { ownerId: this.options.hostOwnerId, hostOwnerId: this.options.hostOwnerId };
+    const perception = this.#policy.config.defaults.perception;
+    const refs = Object.freeze({ ...this.#policy.config.defaults, chat: chat.preset.id });
+    const policy: EffectiveModelPolicy = Object.freeze({ refs,
+      sources: Object.freeze(Object.fromEntries(Object.keys(refs).map(purpose => [purpose,
+        Object.freeze({ level: 'default' as const, rootId: this.options.rootId ?? this.options.hostOwnerId })]))) });
+    const resolved = Object.freeze({ chat, policy,
+      ...(perception ? { perception: catalog.resolve(perception, owner) } : {}),
+      ...(perception === LEGACY_PERCEPTION_PRESET && this.#compiled.perceptionFallbackPresets.length
+        ? { perceptionFallbacks: Object.freeze(this.#compiled.perceptionFallbackPresets.map(preset => catalog.resolve(preset, owner))) } : {}),
+    });
+    this.#plans.add(resolved);
+    return resolved;
+  }
+
+  async acquireResolvedHostModel(invocation: ResolvedInvocation, signal?: AbortSignal): Promise<ModelExecutionLease> {
+    this.#assertOpen();
+    if (!this.#hostModels.has(invocation)) throw new ModelRuntimeError('invalid-config');
+    const lease = await this.#leases.acquire(invocation, { signal, execution: this.#execution });
+    return Object.freeze({ ...bundle(lease), release: () => lease.release() });
+  }
+
+  /** Provider-only operations retain their explicit model input; only the deployment connection is selected here. */
+  resolveHostProvider(alias: string): ResolvedHostProvider {
+    this.#assertOpen();
+    const entry = [...this.#compiled.hostFactoryData].find(([, data]) => data.executionAlias === alias);
+    const connection = entry && this.#compiled.catalogConfig.connections[entry[0]];
+    if (!connection || connection.ownerId !== this.options.hostOwnerId) throw new ModelRuntimeError('host-connection-unavailable');
+    const defaults = Object.freeze({ ...this.options.config.imageGeneration, ...entry[1].config?.imageGeneration });
+    const plan = Object.freeze({ connection, defaults });
+    // The pool leases connections. This private placeholder never selects a model,
+    // changes the chat allowlist, or escapes to prompts; each operation keeps its own input.
+    const model = Object.freeze({ id: 'host:provider', connectionId: connection.id, model: 'host:provider', capabilities: {} });
+    this.#hostProviders.set(plan, Object.freeze({ connection, model, preset: Object.freeze({ id: 'host:provider', modelId: model.id }) }));
+    return plan;
+  }
+
+  async acquireResolvedHostProvider(plan: ResolvedHostProvider, signal?: AbortSignal): Promise<HostProviderLease> {
+    this.#assertOpen();
+    const invocation = this.#hostProviders.get(plan);
+    if (!invocation) throw new ModelRuntimeError('invalid-config');
+    const lease = await this.#leases.acquire(invocation, { signal, execution: this.#execution });
+    return Object.freeze({ provider: lease.resource.provider, defaults: plan.defaults, release: () => lease.release() });
   }
 
   validateRuntimePolicyOverride(input: unknown, rootId: string) {
@@ -145,6 +254,7 @@ export class ModelRuntimeService {
   }
 
   async resolveForTurn(input: ModelTurnResolveInput): Promise<ResolvedModelExecutionScope> {
+    this.#assertOpen();
     const runtimePolicy = await this.options.runtimePolicySnapshot?.();
     if (this.options.runtimePolicySnapshot && (!runtimePolicy || !Number.isSafeInteger(runtimePolicy.revision) || runtimePolicy.revision < 0)) throw new ModelRuntimeError('invalid-config');
     const policyRevision = runtimePolicy?.revision;
@@ -165,28 +275,54 @@ export class ModelRuntimeService {
     if (!chat) throw new ModelRuntimeError('chat-preset-missing');
     const catalog = await this.#catalog(ownerId);
     const owner = { ownerId, hostOwnerId: this.options.hostOwnerId };
-    return Object.freeze({ summarySource, ...(policyRevision !== undefined ? { policyRevision } : {}), chat: catalog.resolve(chat, owner),
+    const resolved = Object.freeze({ summarySource, ...(policyRevision !== undefined ? { policyRevision } : {}), chat: catalog.resolve(chat, owner),
       ...(policy.refs.perception ? { perception: catalog.resolve(policy.refs.perception, owner) } : {}),
       ...(policy.refs.summary ? { summary: catalog.resolve(policy.refs.summary, owner) } : {}),
       ...(policy.refs.perception === LEGACY_PERCEPTION_PRESET && this.#compiled.perceptionFallbackPresets.length
         ? { perceptionFallbacks: Object.freeze(this.#compiled.perceptionFallbackPresets.map(preset => catalog.resolve(preset, owner))) } : {}), policy });
+    this.#plans.add(resolved);
+    return resolved;
   }
 
   async acquireDefaultForTurn(signal?: AbortSignal): Promise<ModelExecutionScope | ModelExecutionLease> {
+    this.#assertOpen();
+    if (this.options.acquireDeploymentDefault) return this.options.acquireDeploymentDefault(signal);
     return this.options.rootId !== undefined
       ? this.acquireForTurn({ rootId: this.options.rootId, ownerId: this.options.hostOwnerId }, signal)
       : this.acquirePreset(this.presetForBinding('zhin'), { ownerId: this.options.hostOwnerId }, signal);
   }
 
+  /** Capture explicit reference strings at construction, without freezing future Host connection revisions. */
+  createServiceAgentAcquirer(selection: HostModelSelection): (signal?: AbortSignal) => Promise<ModelExecutionLease> {
+    this.#assertOpen();
+    const reference = Object.freeze({ ...selection });
+    if (this.options.acquireDeploymentSelection) return signal => {
+      this.#assertOpen();
+      return this.options.acquireDeploymentSelection!(reference, signal);
+    };
+    // Standalone embedders preserve synchronous selection validation and their fixed-view contract.
+    const presetId = 'presetId' in reference ? reference.presetId : 'bindingName' in reference ? this.presetForBinding(reference.bindingName)
+      : this.presetForLegacyModel(reference.providerAlias ?? this.#compatibility.agents.zhin!.provider, reference.model);
+    return signal => this.acquirePreset(presetId, { ownerId: this.options.hostOwnerId }, signal);
+  }
+
   async acquirePreset(presetId: string, options: ResolvePresetOptions, signal?: AbortSignal): Promise<ModelExecutionLease> {
     const invocation = await this.resolvePreset(presetId, options);
+    this.#assertOpen();
     this.#assertTransport(invocation);
-    const lease = await this.#leases.acquire(invocation, { signal });
+    const lease = await this.#leases.acquire(invocation, { signal, execution: this.#execution });
     return Object.freeze({ ...bundle(lease), release: () => lease.release() });
   }
 
   async acquireForTurn(input: ModelTurnResolveInput, signal?: AbortSignal): Promise<ModelExecutionScope> {
     const resolved = await this.resolveForTurn(input);
+    return this.acquireResolvedForTurn(resolved, signal);
+  }
+
+  /** Execute only after leaving configuration admission; factory/secret work may be asynchronous. */
+  async acquireResolvedForTurn(resolved: ResolvedModelExecutionScope, signal?: AbortSignal): Promise<ModelExecutionScope> {
+    this.#assertOpen();
+    if (!this.#plans.has(resolved)) throw new ModelRuntimeError('invalid-config');
     const acquired: ModelLease<Resource>[] = [];
     for (const invocation of [resolved.chat, resolved.perception, resolved.summary, ...(resolved.perceptionFallbacks ?? [])]) {
       if (invocation) this.#assertTransport(invocation);
@@ -198,12 +334,12 @@ export class ModelRuntimeService {
       for (const purpose of ['chat', 'perception', 'summary'] as const) {
         const invocation = resolved[purpose];
         if (!invocation) continue;
-        const lease = await this.#leases.acquire(invocation, { signal });
+        const lease = await this.#leases.acquire(invocation, { signal, execution: this.#execution });
         acquired.push(lease);
         bundles[purpose] = bundle(lease);
       }
       for (const invocation of resolved.perceptionFallbacks ?? []) {
-        const lease = await this.#leases.acquire(invocation, { signal });
+        const lease = await this.#leases.acquire(invocation, { signal, execution: this.#execution });
         acquired.push(lease);
         perceptionFallbacks.push(bundle(lease));
       }
@@ -223,7 +359,7 @@ export class ModelRuntimeService {
     const legacy = isHost ? this.#compiled.hostFactoryData.get(connection.id) : undefined;
     const candidate = legacy?.origin === 'legacy' ? legacy.provider : undefined;
     const original = candidate ? sdkEntryFromProvider(candidate).config : undefined;
-    const borrowed = original?.sdk === connection.sdk
+    const borrowed = candidate && !this.#transferredProviders.has(candidate) && original?.sdk === connection.sdk
       && legacyConnectionBaseUrl(original) === connection.baseUrl
       && original.apiKey === secret ? candidate : undefined;
     const alias = legacy?.executionAlias ?? connection.id;
@@ -251,6 +387,7 @@ export class ModelRuntimeService {
       const llmRuntime = createLlmApiRuntime([{ ...entry, config, models }], () => models);
       const scopedRuntimes: Resource['scopedRuntimes'] = new Map();
       const disposeTransferred = borrowed ? this.options.takeHostProviderOwnership?.(borrowed) : undefined;
+      if (borrowed && disposeTransferred) this.#transferredProviders.add(borrowed);
       return { resource: Object.freeze({ provider, llmRuntime, scopedRuntimes }), dispose: async () => {
         scopedRuntimes.clear();
         if (disposeTransferred) await disposeTransferred();
@@ -273,5 +410,11 @@ export class ModelRuntimeService {
     const personal = ownerId === this.options.hostOwnerId ? undefined : await this.options.personalCatalogSnapshot?.(ownerId);
     return createModelCatalog(mergeCatalogs(this.#compiled.catalogConfig, personal));
   }
-  dispose(): Promise<void> { return this.#leases.dispose(); }
+  #assertOpen(): void {
+    if (this.#closed) throw new ModelRuntimeError('disposed');
+  }
+  dispose(): Promise<void> {
+    this.#closed = true;
+    return this.#ownsLeases ? this.#leases.dispose() : Promise.resolve();
+  }
 }

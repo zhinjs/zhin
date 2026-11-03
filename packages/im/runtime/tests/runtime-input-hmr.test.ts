@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   childPluginId,
   definePlugin,
+  createToken,
   rootPluginId,
   type ConfigDocumentPort,
   type ConfigDocumentSnapshot,
@@ -14,6 +15,10 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   RootRuntime,
+  createEnvStore,
+  envStoreToken,
+  primaryConfigToken,
+  type PrimaryConfig,
   type EnvironmentLayers,
   type EnvironmentLayersPort,
   type ModuleRuntime,
@@ -27,6 +32,88 @@ afterEach(async () => {
 });
 
 describe('RootRuntime watched inputs', () => {
+  it('validates against the desired environment without publishing it', async () => {
+    const declaration = { configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, log_level: 'debug' };
+    const fixture = await createFixture(declaration);
+    fixture.modules.installSetups({ resources: 0, root: 0, child: 0, sibling: 0 });
+    const environment = new FakeEnvironmentSource(join(fixture.root, '.env'), { base: {} });
+    const runtime = new RootRuntime({ projectRoot: fixture.root, modules: fixture.modules,
+      config: fixture.config, environment: testEnvironment, environmentSource: environment,
+      installResources() {}, configUpdates: [{ id: 'model-like', paths: [['log_level']],
+        validate(input) { if (input.next.log_level === 'warn' && !input.hasEnvironmentValue('NEW_VALUE')) throw new Error('Missing desired environment'); },
+        prepare: async () => undefined,
+      }] });
+    try {
+      await runtime.start();
+      const before = runtime.configurationApplication;
+      environment.write({ base: { NEW_VALUE: 'synthetic-new-value' } });
+      await expect(runtime.validateConfiguration({ ...declaration, log_level: 'warn' })).resolves.toBeUndefined();
+      expect(runtime.configurationApplication).toBe(before);
+      const effectiveEnv = runtime.snapshot.resources.get(rootPluginId())?.get(envStoreToken.id) as ReturnType<typeof createEnvStore>;
+      expect(effectiveEnv.has('NEW_VALUE')).toBe(false);
+    } finally { await runtime.stop(); }
+  });
+
+  it('keeps direct env consumers and process Host captures on the same effective environment', async () => {
+    const declaration = { configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, ai: { apiKey: 'env://AI_KEY' } };
+    const fixture = await createFixture(declaration);
+    const environment = new FakeEnvironmentSource(join(fixture.root, '.env'), { base: { AI_KEY: 'key-before' } });
+    const hostToken = createToken<{ key: string | undefined }>('test.captured-environment');
+    const installs = { resources: 0, root: 0, child: 0, sibling: 0 };
+    fixture.modules.installSetups(installs);
+    const runtime = new RootRuntime({ projectRoot: fixture.root, modules: fixture.modules, config: fixture.config,
+      environment: testEnvironment, environmentSource: environment, installResources({ resources }) {
+        installs.resources++;
+        // A real installed consumer captures the Root-provided startup EnvStore.
+        resources.provide(hostToken, { key: resources.use(envStoreToken).get('AI_KEY') });
+      } });
+    const initial = await runtime.start();
+    const processHost = initial.resources.get(rootPluginId())?.get(hostToken.id) as { key: string | undefined };
+    const hmr = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('unexpected process restart'); }, onError(error) { throw error; } });
+    const effectiveKey = () => (runtime.snapshot.resources.get(rootPluginId())?.get(envStoreToken.id) as ReturnType<typeof createEnvStore>).get('AI_KEY');
+    try {
+      environment.write({ base: { AI_KEY: 'key-after' } });
+      await hmr.enqueue(environment.sources[0]);
+      expect(runtime.snapshot).toBe(initial);
+      expect(effectiveKey()).toBe(processHost.key);
+      expect(installs.resources).toBe(1);
+      expect(runtime.snapshot.resources.get(rootPluginId())?.get(hostToken.id)).toBe(processHost);
+      expect(runtime.configurationApplication.groups).toEqual([expect.objectContaining({ id: 'environment', status: 'restart-pending' })]);
+      expect(JSON.stringify(runtime.configurationApplication)).not.toContain('key-after');
+      fixture.config.writeExternal({ ...declaration, child: { label: 'updated' } });
+      await hmr.enqueue(fixture.configSource);
+      await hmr.enqueue(join(fixture.root, 'plugins/child/plugin.ts'));
+      expect(effectiveKey()).toBe(processHost.key);
+      expect(installs.resources).toBe(1);
+      expect(runtime.configurationApplication.groups).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'environment', status: 'restart-pending' })]));
+      environment.write({ base: { AI_KEY: 'key-before' } });
+      await hmr.enqueue(environment.sources[0]);
+      expect(runtime.configurationApplication.groups.some(group => group.id === 'environment')).toBe(false);
+    } finally { await hmr.stop(); await runtime.stop(); }
+  });
+  it('applies independent plugin changes while retaining pending Host settings across later source reloads', async () => {
+    const declaration = { configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' } };
+    const fixture = await createFixture({ ...declaration, http: { port: 8080 }, child: { label: 'one' } });
+    const installs = { resources: 0, root: 0, child: 0, sibling: 0 };
+    fixture.modules.installSetups(installs);
+    const runtime = new RootRuntime({ projectRoot: fixture.root, modules: fixture.modules, config: fixture.config,
+      environment: testEnvironment, installResources() { installs.resources += 1; } });
+    await runtime.start();
+    const restarts: ProcessInvalidationPlan[] = [];
+    const coordinator = runtime.createHmrCoordinator({ onRestartRequired(plan) { restarts.push(plan); }, onError(error) { throw error; } });
+    try {
+      fixture.config.writeExternal({ ...declaration, http: { port: 9090 }, child: { label: 'two' } });
+      await coordinator.enqueue(fixture.configSource);
+      expect(runtime.snapshot.config.get(childPluginId(rootPluginId(), 'child'))).toEqual({ label: 'two' });
+      expect(restarts).toEqual([]);
+      expect(installs.resources).toBe(1);
+      await coordinator.enqueue(join(fixture.root, 'plugins/child/plugin.ts'));
+      expect(installs.resources).toBe(1);
+      expect(runtime.configurationApplication.groups).toEqual(expect.arrayContaining([
+        expect.objectContaining({ effect: 'restart-process', status: 'restart-pending' }),
+      ]));
+    } finally { await coordinator.stop(); await runtime.stop(); }
+  });
   it('pauses instances before source config preflight can evaluate inline plugin schema modules', async () => {
     const fixture = await createFixture({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, child: { label: 'one' } });
     fixture.modules.installSetups({ root: 0, child: 0, sibling: 0 });
@@ -90,7 +177,7 @@ describe('RootRuntime watched inputs', () => {
     await runtime.stop();
   });
 
-  it('requests a process restart when external config changes Host state', async () => {
+  it('retains unsupported Host edits as pending without locking the HMR coordinator', async () => {
     const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 8080 } });
     fixture.modules.installSetups({ resources: 0, root: 0, child: 0, sibling: 0 });
     const outcomes: string[] = [];
@@ -110,11 +197,10 @@ describe('RootRuntime watched inputs', () => {
 
     fixture.config.writeExternal({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { port: 9090 } });
     await coordinator.enqueue(fixture.configSource);
-    await vi.waitFor(() => expect(restarts).toHaveLength(1));
-
-    expect(restarts[0]?.reasons).toEqual(['Host configuration changed: http']);
+    expect(restarts).toEqual([]);
+    expect(runtime.configurationApplication.groups).toEqual([expect.objectContaining({ status: 'restart-pending', paths: [['http', 'port']] })]);
     expect(runtime.snapshot.generation).toBe(1);
-    expect(outcomes).toEqual(['restart-required']);
+    expect(outcomes).toEqual(['unchanged']);
     await coordinator.stop();
     await runtime.stop();
   });
@@ -182,7 +268,7 @@ describe('RootRuntime watched inputs', () => {
     await runtime.stop();
   });
 
-  it('restarts the process when a dotenv change alters expanded Host config', async () => {
+  it('retains an unapplied Host environment layer through subsequent config and source edits', async () => {
     const fixture = await createFixture({ configVersion: 2, plugins: {"child":"@test/child","sibling":"@test/sibling"}, http: { token: '${HTTP_TOKEN}' } });
     const environment = new FakeEnvironmentSource(
       join(fixture.root, '.env'),
@@ -195,6 +281,7 @@ describe('RootRuntime watched inputs', () => {
       config: fixture.config,
       environment: testEnvironment,
       environmentSource: environment,
+      installResources() {},
     });
     await runtime.start();
     const restarts: ProcessInvalidationPlan[] = [];
@@ -205,9 +292,14 @@ describe('RootRuntime watched inputs', () => {
 
     environment.write({ base: { HTTP_TOKEN: 'two' } });
     await coordinator.enqueue(environment.sources[0]!);
-    await vi.waitFor(() => expect(restarts).toHaveLength(1));
-
-    expect(restarts[0]?.reasons).toEqual(['Host configuration changed: http']);
+    expect(restarts).toEqual([]);
+    expect(runtime.configurationApplication.groups).toEqual([expect.objectContaining({ id: 'environment', status: 'restart-pending' })]);
+    fixture.config.writeExternal({ ...(await fixture.config.read()).document, child: { label: 'new' } });
+    await coordinator.enqueue(fixture.configSource);
+    expect(runtime.configurationApplication.groups).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'environment', status: 'restart-pending' })]));
+    await coordinator.enqueue(join(fixture.root, 'plugins/child/plugin.ts'));
+    const primary = runtime.snapshot.resources.get(rootPluginId())?.get(primaryConfigToken.id) as PrimaryConfig;
+    expect(primary.expanded.http).toEqual({ token: 'one' });
     await coordinator.stop();
     await runtime.stop();
   });

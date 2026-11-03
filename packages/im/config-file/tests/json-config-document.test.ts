@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { definePlugin } from '@zhin.js/plugin-runtime';
-import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
+import { ConfigValidationError, RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import {
   ConfigDocumentConflictError,
   ConfigDocumentParseError,
@@ -124,7 +124,7 @@ describe('createConfigDocument', () => {
 });
 
 describe('RootRuntime with JsonConfigDocument', () => {
-  it('commits JSON through the generation handoff and rolls back a failed shadow', async () => {
+  it('rejects invalid patches before save and retains saved desired JSON when activation fails', async () => {
     const project = await createProject();
     const file = join(project, 'config.json');
     const modules = new FakeModuleRuntime();
@@ -155,10 +155,20 @@ describe('RootRuntime with JsonConfigDocument', () => {
     expect(JSON.parse(stableSource)).toMatchObject({ child: { label: 'v2' } });
 
     await expect(runtime.patchConfig([{
-      op: 'set', path: ['child', 'label'], value: 'broken',
-    }])).rejects.toThrow('shadow setup failed');
+      op: 'set', path: ['child', 'label'], value: 42,
+    }])).rejects.toBeInstanceOf(ConfigValidationError);
     expect(await readFile(file, 'utf8')).toBe(stableSource);
     expect(runtime.snapshot).toBe(committed);
+
+    await expect(runtime.patchConfig([{
+      op: 'set', path: ['child', 'label'], value: 'broken',
+    }])).rejects.toThrow('shadow setup failed');
+    expect(await readFile(file, 'utf8')).toBe(stableSource.replace('"v2"', '"broken"'));
+    expect(runtime.snapshot).toBe(committed);
+    expect([...runtime.snapshot.config.values()]).toContainEqual(expect.objectContaining({ label: 'v2' }));
+    expect(runtime.configurationApplication).toMatchObject({ saved: true, generation: committed.generation,
+      sourceRevision: (await createConfigDocument(file).read()).revision,
+      groups: expect.arrayContaining([expect.objectContaining({ status: 'failed' })]) });
     await runtime.stop();
   });
 });

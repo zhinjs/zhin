@@ -5,7 +5,7 @@ description: "启动 Bot 的唯一命令：开发、生产、守护进程和 CI 
 
 # zhin runtime start
 
-`zhin runtime start` 是启动 Bot 的唯一命令。它直接运行项目里的 TypeScript 源码，不需要先编译；按配置装配 HTTP、数据库、Console、Agent 等服务；开发模式下保存文件即热重载，不用重启进程。
+`zhin runtime start` 是启动 Bot 的唯一命令。它直接运行项目里的 TypeScript 源码，不需要先编译；按配置装配 HTTP、数据库、Console、Agent 等服务。只有显式传入 `--watch` 才监听变化，与运行模式无关。
 
 ## 常见用法
 
@@ -37,7 +37,8 @@ zhin runtime start --once --mode test
 | --- | --- |
 | `--mode <mode>` | 运行模式：`development`（默认）/ `test` / `production` |
 | `--environment <name>` | 环境名，默认与 `--mode` 相同；决定加载 `.env.<name>`，须匹配 `/^[a-z0-9][a-z0-9-]*$/` |
-| `--no-watch` | 关闭文件监听与热重载 |
+| `--watch <scope...>` | 显式监听 `source` / `config`；可组合为 `--watch source config`。不传则均不监听 |
+| `--no-watch` | 全部不监听的兼容入口；不能与 `--watch` 同用 |
 | `--once` | 完成一次启动后输出 JSON 快照并退出 |
 | `--open` | 在终端（TTY）启动成功后用浏览器打开 Remote Console；也可设置 `ZHIN_OPEN=1` |
 | `-d, --daemon` | 守护进程模式：写 pid 文件、日志重定向、崩溃自动重启 |
@@ -81,7 +82,9 @@ flowchart TD
 
 ## HMR 语义
 
-开发模式默认开启文件监听（`--once` / `--no-watch` 关闭）。变更按影响面分两级处理：
+只有显式使用 `--watch source config`、`--watch source` 或 `--watch config` 才监听对应范围，`--once` 不注册监听。不指定 `--watch` 时仍可在 Console 显式保存并申请应用配置；监听范围不等于手动操作权限。脚手架和仓库示例的 `pnpm dev` 已显式选择源码和配置监听，旧项目如需保持开发热重载，请相应更新自己的脚本。
+
+源码变更按影响面分两级处理：
 
 | 变更内容 | 处理方式 |
 | --- | --- |

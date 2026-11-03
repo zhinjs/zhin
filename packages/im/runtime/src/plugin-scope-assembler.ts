@@ -8,6 +8,7 @@ import {
   createGenerationAdmissionGate,
   createToken,
   createPluginEventChannel,
+  freezePluginConfigUpdate,
   projectLocaleToken,
   resolveLocale,
   PluginDatabaseHost,
@@ -31,6 +32,7 @@ import {
   type RuntimeSnapshot,
   type RuntimeConfigDocument,
   type PluginDefinition,
+  type PluginConfigUpdateDeclaration,
   type PluginId,
   type PluginInstanceView,
   type PluginNodeSnapshot,
@@ -211,6 +213,7 @@ export class PluginScopeAssembler {
       role: node.parent ? 'child' : 'root',
     });
     let metadata: PluginDefinition['metadata'];
+    let configUpdate: PluginConfigUpdateDeclaration | undefined;
     // Schema composition is Host-owned even when Plugin execution is isolated.
     // Commit the validated JSON declaration with both kinds of Plugin snapshot.
     const configSchema = this.configResolver.schema?.(node);
@@ -254,6 +257,7 @@ export class PluginScopeAssembler {
         throw new TypeError(`${node.package.name} does not default-export a Plugin definition`);
       }
       metadata = mergePluginMetadata(manifest, definition.metadata, node.id);
+      if (definition.configUpdate !== undefined) configUpdate = freezePluginConfigUpdate(definition.configUpdate);
       for (const token of definition.requires ?? []) {
         if (!scope.has(token)) {
           throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
@@ -291,6 +295,7 @@ export class PluginScopeAssembler {
       children: Object.freeze(node.children.map((child) => child.id)),
       metadata,
       ...(configSchema ? { configSchema } : {}),
+      ...(configUpdate ? { configUpdate } : {}),
     }));
     this.config.set(node.id, config);
     this.resources.set(node.id, scope.snapshot());

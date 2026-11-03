@@ -24,6 +24,38 @@ afterEach(async () => {
 });
 
 describe('Application and Feature topology transaction', () => {
+  it('rebuilds a changed descendant when a pure-updated ancestor is excluded from topology replacements', async () => {
+    const project = await createProject();
+    await writeJson(join(project, 'package.json'), { name: '@test/root', dependencies: { '@test/a': 'workspace:*', '@test/b': 'workspace:*', '@test/command': 'workspace:*' },
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/command' }] } });
+    await writeJson(join(project, 'schema.json'), { type: 'object', properties: { label: { type: 'string' } } });
+    await writeJson(join(project, 'plugins/a/schema.json'), { type: 'object', properties: { label: { type: 'string' } } });
+    const modules = new FakeModuleRuntime();
+    const setups: unknown[] = [];
+    let rootSetups = 0;
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', configUpdate: { featurePaths: [['label']] },
+      setup({ addCommand }) { rootSetups++; addCommand('root-marker', defineCommand({ execute: () => undefined })); } }) });
+    modules.set(join(project, 'plugins/a/plugin.ts'), { default: definePlugin({ name: 'a', setup({ config }) { setups.push(config.get()); } }) });
+    modules.set(join(project, 'plugins/b/plugin.ts'), { default: definePlugin({ name: 'b' }) });
+    for (const name of ['a', 'b']) modules.set(join(project, `plugins/${name}/commands/${name}/status/index.ts`), { default: defineCommand({ execute: () => undefined }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: defineFeatureProvider({ ...commandFeature,
+      runtime: { retain: 'when-owner-unchanged', project(_slots, { snapshot }) { return { value: snapshot.config.get(snapshot.root) }; },
+        prepareConfigUpdate(_previous, { snapshot }) { return snapshot.config.get(snapshot.root); } },
+    }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      config: { configVersion: 2, plugins: { a: '@test/a' }, plugin: { label: 'before' }, a: { label: 'child-before' } },
+    });
+    try {
+      await runtime.start();
+      await runtime.patchConfig([{ op: 'set', path: ['plugin', 'label'], value: 'after' },
+        { op: 'set', path: ['a', 'label'], value: 'child-after' }, { op: 'set', path: ['plugins', 'b'], value: '@test/b' }]);
+      expect(setups).toEqual([{ label: 'child-before' }, { label: 'child-after' }]);
+      expect(rootSetups).toBe(1);
+      expect(runtime.snapshot.config.get(childPluginId(rootPluginId(), 'a'))).toEqual({ label: 'child-after' });
+      expect(Object.isFrozen(runtime.snapshot.config.get(rootPluginId()))).toBe(true);
+    } finally { await runtime.stop(); }
+  });
   it('reprojects a retained Feature when an owner changes even if it has no slots', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();

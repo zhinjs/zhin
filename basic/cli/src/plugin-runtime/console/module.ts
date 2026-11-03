@@ -3,6 +3,7 @@ export {
   startConsoleControlPlane,
 } from './api-installer.js';
 export { ConsoleConfigurationStore } from './configuration.js';
+export { ConfigPatchScopeError } from './configuration-patch.js';
 export {
   createConsoleHostModules,
   installConsoleRuntime,

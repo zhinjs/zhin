@@ -108,6 +108,10 @@ it('retains the untouched adapter transport across config source HMR, patches an
     expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
     await expect(runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'broken' }])).rejects.toThrow('reminder setup failed');
     await expect(runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'activation-broken' }])).rejects.toThrow('reminder activation failed');
+    // Saving and applying are separate: correct the saved rejected desired value
+    // before unrelated later edits, rather than depending on automatic file rollback.
+    expect(config.document.reminder).toEqual({ label: 'activation-broken' });
+    await runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'max-22' }]);
     expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
     expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
     await sinks[0]!.message({ content: 'still alive', conversation: { kind: 'private', id: 'u1' }, sender: { id: 'u1' } });

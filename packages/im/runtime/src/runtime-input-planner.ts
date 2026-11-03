@@ -34,23 +34,30 @@ export class RuntimeInputPlanner {
     readonly nextDocument: RuntimeConfigDocument;
     readonly previousEnvironment: EnvironmentLayers;
     readonly nextEnvironment: EnvironmentLayers;
+    /** Already validated in this control transaction; never a cross-transaction cache. */
+    readonly composed?: ComposedConfig;
+    readonly committed?: Readonly<{
+      expandedDocument: RuntimeConfigDocument;
+      expandedViews: ReadonlyMap<PluginId, unknown>;
+    }>;
   }): Promise<RuntimeInputPlan> {
-    const previous = await this.previousComposer.compose(options.graph, options.previousDocument);
+    const previous = options.committed ? undefined : await this.previousComposer.compose(options.graph, options.previousDocument);
     const nextGraph = options.nextGraph ?? options.graph;
-    const next = await this.composer.compose(nextGraph, options.nextDocument);
+    const next = options.composed ?? await this.composer.compose(nextGraph, options.nextDocument);
     const environmentChanged = !isDeepStrictEqual(
       options.previousEnvironment,
       options.nextEnvironment,
     );
     const hostKeys = HOST_CONFIG_KEYS.filter((key) => !isDeepStrictEqual(
-      expandHostValue(previous.document[key], options.environment, options.previousEnvironment),
+      options.committed ? options.committed.expandedDocument[key]
+        : expandHostValue(previous!.document[key], options.environment, options.previousEnvironment),
       expandHostValue(next.document[key], options.environment, options.nextEnvironment),
     ));
     const changed = indexGraph(nextGraph)
       .filter((node) => !isDeepStrictEqual(
-        expandPluginView(
+        options.committed ? options.committed.expandedViews.get(node.id) : expandPluginView(
           node.id,
-          previous.views.get(node.id),
+          previous!.views.get(node.id),
           options.environment,
           options.previousEnvironment,
         ),

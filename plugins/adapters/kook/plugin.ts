@@ -5,6 +5,7 @@ import { createKookConsoleRpc } from './src/console.js';
 
 export default definePlugin({
   name: 'kook',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'KOOK WebSocket Adapter',
   },

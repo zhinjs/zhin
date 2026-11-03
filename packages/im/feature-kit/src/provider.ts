@@ -83,10 +83,20 @@ export interface FeatureProjection<T> {
 }
 
 export interface FeatureRuntime<TDefinition, TProjection> {
+  /** Prepare an immutable config-only facade sharing the previous projection's lifetime.
+   * Requires retain: 'when-owner-unchanged'; a facade cannot outlive its shared projection.
+   * undefined rejects retaining these owners; ordinary subtree rebuilding remains authoritative.
+   */
+  prepareConfigUpdate?(
+    previous: TProjection,
+    context: ProjectionContext,
+    changedOwners: readonly PluginId[],
+  ): TProjection | undefined | Promise<TProjection | undefined>;
   /**
    * Opt in only for projections that can share external resources across a
    * generation replacement without capturing another owner's old snapshot.
-   * The default is to rebuild; every changed owner/slot still rebuilds this Feature.
+   * The default is to rebuild. Changed slots rebuild; owner config changes may
+   * retain a facade only when their declared prepareConfigUpdate is accepted.
    */
   readonly retain?: 'when-owner-unchanged';
   project(
@@ -121,6 +131,9 @@ export function defineFeatureProvider<TDefinition, TProjection>(
   }
   if (provider.runtime.retain !== undefined && provider.runtime.retain !== 'when-owner-unchanged') {
     throw new TypeError('Unsupported Feature runtime retention policy');
+  }
+  if (provider.runtime.prepareConfigUpdate !== undefined && provider.runtime.retain !== 'when-owner-unchanged') {
+    throw new TypeError("Feature prepareConfigUpdate requires retain: 'when-owner-unchanged'");
   }
   const conventionIds = new Set<string>();
   for (const convention of provider.authoring.conventions) {

@@ -5,6 +5,7 @@ import { createDiscordConsoleRpc } from './src/console.js';
 
 export default definePlugin({
   name: 'discord',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Discord Gateway Adapter',
   },

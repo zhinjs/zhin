@@ -22,7 +22,7 @@ npx zhin --help        # 查看全部命令
 
 | 我想…… | 命令 |
 | --- | --- |
-| 启动 Bot（开发模式，改代码自动热重载） | `pnpm dev`（即 `zhin runtime start`） |
+| 启动 Bot（开发模式，改代码自动热重载） | `pnpm dev`（即 `zhin runtime start --watch source config`） |
 | 接入平台、配置 AI 或数据库 | `npx zhin setup`（可加 `--adapters` / `--ai` / `--database`） |
 | 环境或配置有问题 | `npx zhin doctor` |
 | 检查配置文件是否有效 | `npx zhin config check` |
@@ -41,12 +41,14 @@ npx zhin --help        # 查看全部命令
 ### runtime：运行与管理项目
 
 ```bash
-zhin runtime start [--mode production] [--no-watch] [--daemon]
+zhin runtime start [--mode production] [--watch source config | --no-watch] [--daemon]
 zhin runtime inspect
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
 zhin runtime migrate [extract|cutover|status] [--check|--write]
 ```
+
+`--watch` 与兼容参数 `--no-watch` 互斥；都不传时不监听文件变化。
 
 | 子命令 | 作用 |
 | --- | --- |
@@ -60,7 +62,7 @@ zhin runtime migrate [extract|cutover|status] [--check|--write]
 ```json
 {
   "scripts": {
-    "dev": "zhin runtime start",
+    "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch"
   }
 }

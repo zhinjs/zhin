@@ -39,7 +39,7 @@ describe('multi-agent-room 编排契约', () => {
 
   it('uses the Plugin Runtime package contract and explicit v2 application topology', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(botRoot, 'package.json'), 'utf8'));
-    expect(manifest.scripts.dev).toBe('zhin runtime start');
+    expect(manifest.scripts.dev).toBe('zhin runtime start --watch source config');
     expect(manifest.zhin.entry).toBe('./plugin.ts');
     expect(manifest.zhin.plugins ?? []).toEqual([]);
     expect(config.configVersion).toBe(2);

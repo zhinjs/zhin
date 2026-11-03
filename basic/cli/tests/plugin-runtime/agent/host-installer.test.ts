@@ -3,6 +3,7 @@ import { ingressRouteToken } from '@zhin.js/core/runtime';
 import { workroomHostToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId, definePlugin, createPluginEventChannel } from '@zhin.js/plugin-runtime';
 import { RootRuntime } from '@zhin.js/runtime';
+import { ModelRuntimeService } from '@zhin.js/agent/model-runtime';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,8 +19,15 @@ const agentRef: { current?: InstanceType<typeof import('@zhin.js/agent/runtime')
 
 vi.mock('../../../src/plugin-runtime/agent/runtime-foundation.js', () => ({
   AgentRuntimeFoundation: {
-    create: vi.fn(async () => ({
+    create: vi.fn(async () => {
+      // The real foundation now publishes a model baseline. Keep this fixture
+      // structurally faithful without creating a provider or contacting a model.
+      const modelRuntime = new ModelRuntimeService({ hostOwnerId: 'host/fixture',
+        config: { providers: { p: { sdk: 'openai', apiKey: 'synthetic-test-key', models: ['m'] } },
+          agents: { zhin: { provider: 'p', model: 'm' } } } });
+      return {
       service: {
+        getModelRuntime: () => modelRuntime,
         getBindingRegistry: () => ({
           requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'p', model: 'm' }),
         }),
@@ -34,7 +42,7 @@ vi.mock('../../../src/plugin-runtime/agent/runtime-foundation.js', () => ({
       assistantEnabled: false,
       seedPresets: () => seedPresets(),
       listBindings: () => [],
-    })),
+    }; }),
   },
 }));
 vi.mock('../../../src/plugin-runtime/agent/tool-feature-publisher.js', () => ({

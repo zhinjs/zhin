@@ -2,7 +2,7 @@ import type { AIProvider, ImageGenerationDefaults } from '@zhin.js/ai';
 import type { AgentToolDefinition } from '@zhin.js/tool';
 import { NativeBashToolFeature } from './native-bash-tool.js';
 import { createNativeFileToolFeatures } from './native-file-tools.js';
-import { createNativeImageToolFeature } from './native-image-tool.js';
+import { createNativeImageToolFeature, type NativeImageProviderAcquirer } from './native-image-tool.js';
 import { createNativeImageUploadToolFeature } from './native-image-upload-tool.js';
 import type { ImageAssetPublisher } from '../media/image-assets.js';
 import type { LocalImageAssetStore } from '../media/local-image-assets.js';
@@ -20,6 +20,7 @@ export interface NativeAgentToolFeature {
 export interface NativeAgentToolSuiteOptions {
   readonly resolveProvider: (alias: string) => AIProvider;
   readonly resolveImageDefaults?: (alias: string) => ImageGenerationDefaults;
+  readonly acquireImageProvider?: NativeImageProviderAcquirer;
   readonly imageAssets?: ImageAssetPublisher;
   readonly localAssets?: LocalImageAssetStore;
   readonly knowledgeIndex?: KnowledgeIndex;
@@ -35,7 +36,7 @@ export function createNativeAgentToolSuite(
     ...createNativeFileToolFeatures(),
     ...createNativeWebToolFeatures(),
     ...createNativeSelfProfileToolFeatures({ imageAssets: options.imageAssets, localAssets: options.localAssets }),
-    createNativeImageToolFeature(options.resolveProvider, options.resolveImageDefaults, options.imageAssets),
+    createNativeImageToolFeature(options.resolveProvider, options.resolveImageDefaults, options.imageAssets, options.acquireImageProvider),
     ...(options.imageAssets ? [createNativeImageUploadToolFeature(options.imageAssets)] : []),
     ...(options.localAssets ? [createNativeLocalAssetsToolFeature(options.localAssets)] : []),
     ...(options.knowledgeIndex

@@ -4,6 +4,7 @@ import { createIcqqConsoleRpc } from './src/console.js';
 
 export default definePlugin({
   name: 'icqq',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'ICQQ Adapter',
   },

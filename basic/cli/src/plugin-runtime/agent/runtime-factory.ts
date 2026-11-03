@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { createScopedMediaPerceptionPort } from '@zhin.js/agent/model-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import {
@@ -31,6 +33,7 @@ import {
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
 import { auditControlOutbound, checkControlAtOutbound, logControlBlocked } from './turn/control-gate.js';
 import { auditOutbound, createDecisionAudit, decisionScopeOf } from './turn/decision-audit.js';
+import type { ModelConfigurationAccess } from '../personal-models/configuration.js';
 
 const logger = getLogger('agent');
 
@@ -58,6 +61,7 @@ export function createRuntimeZhinAgent(
   audioTranscriber?: AudioTranscriptionPort,
   knowledgeIndex?: KnowledgeIndex,
   localAssets?: LocalImageAssetStore,
+  modelConfiguration?: ModelConfigurationAccess,
 ): {
   agent: ZhinAgent;
   events: AgentEventBus;
@@ -100,8 +104,24 @@ export function createRuntimeZhinAgent(
     subagentSender: composed.deliverOutbound,
   });
 
-  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, knowledgeIndex));
+  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, knowledgeIndex, modelConfiguration));
   agent.getSubagentSystem()?.configureRouting({
+    acquireModel: modelConfiguration ? async input => {
+      const scope = await modelConfiguration.acquireHostScope(runtime => {
+        if (!input.binding) return { providerAlias: input.providerAlias, model: input.model };
+        const binding = runtime.getCompatibilityRouting().agents[input.binding.name];
+        if (!binding || !isDeepStrictEqual(binding.permission, input.binding.permission)
+          || !isDeepStrictEqual(binding.mcpServers ?? [], input.binding.mcpServers)) {
+          throw new Error('Model configuration is incompatible with the admitted Agent binding');
+        }
+        return { bindingName: input.binding.name };
+      }, input.signal);
+      try {
+        return { provider: scope.chat.provider, llmRuntime: scope.chat.llmRuntime, model: scope.chat.invocation.model.model,
+          mediaPerception: createScopedMediaPerceptionPort({ scope, settings: service.getPerceptionConfig(),
+            resilience: service.getAgentConfig()?.providerResilience }), release: () => scope.release() };
+      } catch (error) { await scope.release(); throw error; }
+    } : undefined,
     imageAssets: service.imageAssets,
     localAssets,
     mediaPerception,
@@ -158,10 +178,12 @@ function createRuntimeMediaPerception(service: AIService) {
 function buildRuntimeSubagentAgentTools(
   service: AIService,
   knowledgeIndex?: KnowledgeIndex,
+  modelConfiguration?: ModelConfigurationAccess,
 ): AgentTool[] {
   const nativeTools = createNativeAgentToolSuite({
     resolveProvider: (alias) => service.getProvider(alias),
     resolveImageDefaults: (alias) => service.getImageGenerationDefaults(alias),
+    acquireImageProvider: modelConfiguration ? (alias, signal) => modelConfiguration.acquireHostProvider(alias, signal) : undefined,
     imageAssets: service.imageAssets,
     knowledgeIndex,
     resolveDecision: getAgentTurnDecisionRuntime,

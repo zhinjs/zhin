@@ -16,6 +16,40 @@ const explicit = { modelCatalog: catalog, modelPolicy: { defaults: { chat: 'chat
 afterEach(() => vi.restoreAllMocks());
 
 describe('AIService canonical model runtime preparation', () => {
+  it('uses Host configuration admission for default standalone runs while explicit selections keep their version', async () => {
+    const requests: Array<{ url: string; model: string; authorization: string | null }> = [];
+    const fetch = vi.fn(async (url, init) => {
+      const model = JSON.parse(String(init?.body)).model;
+      requests.push({ url: String(url), model, authorization: new Headers(init?.headers).get('Authorization') });
+      return new Response(`data: ${JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model,
+        choices: [{ index: 0, delta: { content: model }, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ id: 'synthetic', object: 'chat.completion.chunk', created: 1, model,
+        choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation(fetch);
+    const config = { providers: { main: { sdk: 'openai-compatible' as const, baseUrl: 'https://old.test/v1', apiKey: 'old-synthetic-key', models: ['old', 'next'] } },
+      agents: { zhin: { provider: 'main', model: 'old' } } };
+    const service = new AIService(config);
+    let admitted: ReturnType<AIService['getModelRuntime']>;
+    await service.prepareModelRuntime({ hostOwnerId, rootId: 'root',
+      hostTransportFactory: () => new AiHttpTransport({ fetch }),
+      acquireDeploymentDefault: () => admitted.acquireForTurn({ rootId: 'root', ownerId: hostOwnerId }),
+    });
+    const original = service.getModelRuntime(); admitted = original;
+    const implicit = service.createAgent();
+    const explicitSelection = service.createAgent({ preset: legacyModelPresetId('main', 'old') });
+    const update = original.prepareConfiguration({ ...config, providers: { main: { ...config.providers.main,
+      baseUrl: 'https://next.test/v1', apiKey: 'next-synthetic-key' } }, agents: { zhin: { provider: 'main', model: 'next' } } });
+    if (update.kind !== 'ready') throw new Error('expected compatible update');
+    admitted = update.runtime;
+    try {
+      await implicit.run('hello');
+      await explicitSelection.run('hello');
+      expect(requests).toEqual([
+        { url: 'https://next.test/v1/chat/completions', model: 'next', authorization: 'Bearer next-synthetic-key' },
+        { url: 'https://old.test/v1/chat/completions', model: 'old', authorization: 'Bearer old-synthetic-key' },
+      ]);
+    } finally { await service.dispose(); }
+  });
   it('prepares an explicit catalog with no legacy providers/agents before Host runtime construction', async () => {
     const service = new AIService(explicit);
     expect(service.isReady()).toBe(false);

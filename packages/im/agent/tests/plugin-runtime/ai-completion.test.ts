@@ -6,6 +6,7 @@ import {
   type AiCompletionOptions,
 } from '../../src/plugin-runtime/ai-completion.js';
 import { InMemoryUsageQuotaStore, UsageQuota } from '../../src/security/usage-quota.js';
+import { getLogger } from '@zhin.js/logger';
 
 type Call = { system: string; user: string; opts: TextCompleteOptions };
 
@@ -37,6 +38,28 @@ function fixture(provider: Partial<AIProvider> = {}, agentConfig: Record<string,
 }
 
 describe('aiCompletion.completeText', () => {
+  it.each(['unscoped', 'leased', 'acquisition-failed'] as const)('distinguishes configured binding identity from actual provider execution in logs (%s)', async kind => {
+    const f = fixture({ name: 'catalog:legacy' });
+    const executing = { ...f.provider, name: 'catalog:executing' };
+    const logger = getLogger('agent');
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const completion = createAiCompletion({ service: f.service,
+      acquireExplicitModel: kind === 'unscoped' ? undefined : async () => {
+        if (kind === 'acquisition-failed') throw new Error('synthetic acquisition failure');
+        return { provider: executing, model: 'main', release: async () => undefined };
+      } });
+    try {
+      const result = completion.completeText({ purpose: 'logging-test', prompt: 'hello', agent: 'zhin' });
+      if (kind === 'acquisition-failed') await expect(result).rejects.toThrow('synthetic acquisition failure');
+      else await result;
+      const log = (kind === 'acquisition-failed' ? warn : info).mock.calls.flat().join(' ');
+      expect(log).toContain('bindingProvider: p');
+      if (kind === 'acquisition-failed') {
+        expect(log).not.toContain('provider: p'); expect(log).not.toContain('provider: catalog:legacy');
+      } else expect(log).toContain(`provider: ${kind === 'unscoped' ? 'catalog:legacy' : 'catalog:executing'}`);
+    } finally { info.mockRestore(); warn.mockRestore(); }
+  });
   it('advertises shared attribution only when the injected quota port supports it', async () => {
     const { service, calls } = fixture();
     const quota = new UsageQuota({ perUserTokens: 100 });

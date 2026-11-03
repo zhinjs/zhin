@@ -45,7 +45,8 @@ import {
 import type { AdapterInstance } from './adapter.js';
 import { type EndpointDesiredRepository, type EndpointSecretResolver, type EndpointDesiredRecord, type EndpointChildLease, type EndpointChildView, type EndpointPortScope } from './adapter-types.js';
 import { bindPlatformEndpoint, endpointRuntimeOf, type AnyEndpoint } from './endpoint-specification.js';
-import { endpointCreationConfiguration, mergeEndpointProfileConfiguration, type SelfProfilePort, type SelfProfileSnapshot } from './endpoint-profile.js';
+import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfileConfigurationChange, mergeEndpointProfileConfiguration,
+  type SelfProfile, type SelfProfilePort, type SelfProfileSnapshot } from './endpoint-profile.js';
 
 /** Trusted composition input, excluded from public snapshot resources and authoring contexts. */
 export interface AdapterPersistencePorts {
@@ -108,6 +109,8 @@ interface AdapterIndexConstruction {
   readonly adapters: readonly AdapterInstance[];
   readonly admission: GenerationAdmissionGate;
   readonly ownerAliases: ReadonlyMap<PluginId, string>;
+  readonly configurations: ReadonlyMap<PluginId, unknown>;
+  readonly slots: readonly Readonly<CapabilitySlot>[];
 }
 
 /** An explicit selector is resolved only when exactly one account matches. */
@@ -121,12 +124,25 @@ export class AdapterIndex {
   readonly $projection = 'zhin.adapter-index/1' as const;
   readonly #adapters: readonly AdapterInstance[];
   readonly #ownerAliases: ReadonlyMap<PluginId, string>;
-  readonly [generationAdmissionSource]: readonly GenerationAdmissionGate[];
+  readonly #configurations: ReadonlyMap<PluginId, unknown>;
+  readonly #slots: readonly Readonly<CapabilitySlot>[];
+  readonly #profileDefaults = new Map<PluginId, Readonly<SelfProfile>>();
+  readonly #fileProfiles = new Map<CapabilityId, Readonly<SelfProfile>>();
+  readonly [generationAdmissionSource]: readonly [GenerationAdmissionGate];
 
-  private constructor({ adapters, admission, ownerAliases }: AdapterIndexConstruction) {
+  private constructor({ adapters, admission, ownerAliases, configurations, slots }: AdapterIndexConstruction) {
     this.#adapters = Object.freeze([...adapters]);
     this.#ownerAliases = ownerAliases;
-    this[generationAdmissionSource] = Object.freeze([admission]);
+    this.#configurations = new Map(configurations);
+    this.#slots = Object.freeze([...slots]);
+    for (const slot of slots) {
+      const configuration = configurationObject(configurations.get(slot.owner));
+      this.#profileDefaults.set(slot.owner, configuredSelfProfile(configuration));
+      for (const expansion of expandEndpointConfigs(slot, { config: configurations })) {
+        this.#fileProfiles.set(expansion.id, configuredSelfProfile(expansion.config ?? {}));
+      }
+    }
+    this[generationAdmissionSource] = Object.freeze([admission] as const);
   }
 
   /** Same authority, restricted to one authenticated Plugin owner. No configuration or resource access. */
@@ -210,7 +226,8 @@ export class AdapterIndex {
         const packageName = snapshot.tree.get(adapter.descriptor.owner)?.packageName;
         if (packageName) ownerAliases.set(adapter.descriptor.owner, packageName.replace(/^@[^/]+\/adapter-/, ''));
       }
-      return new AdapterIndex({ adapters, admission, ownerAliases });
+      return new AdapterIndex({ adapters, admission, ownerAliases,
+        configurations: snapshot.config, slots });
     } catch (error) {
       const stack = new DisposeStack();
       for (const adapter of adapters) stack.add(() => adapter.dispose());
@@ -220,6 +237,43 @@ export class AdapterIndex {
       }
       throw error;
     }
+  }
+
+  /**
+   * Prepare a snapshot-owned profile view, sharing the existing projection lifetime.
+   * No Client, account state, admission or persisted desired record is mutated here.
+   */
+  prepareConfigUpdate(snapshot: RuntimeSnapshot, changedOwners: readonly PluginId[]): AdapterIndex | undefined {
+    const configurations = new Map(this.#configurations);
+    for (const owner of changedOwners) {
+      if (!this.#adapters.some(adapter => adapter.descriptor.owner === owner)) return undefined;
+      const previous = configurationObject(configurations.get(owner));
+      const next = configurationObject(snapshot.config.get(owner));
+      if (!profileConfigurationOnly(previous, next)) return undefined;
+      for (const slot of this.#slots.filter(value => value.owner === owner)) {
+        const candidate = snapshot.capabilities.get(slot.id);
+        if (!candidate || candidate.definition !== slot.definition || candidate.source !== slot.source) return undefined;
+        configuredSelfProfile(next);
+        for (const expansion of expandEndpointConfigs(slot, { ...snapshot, config: new Map([[owner, next]]) })) {
+          configuredSelfProfile(expansion.config ?? next);
+        }
+      }
+      configurations.set(owner, next);
+    }
+    return new AdapterIndex({ adapters: this.#adapters,
+      admission: this[generationAdmissionSource][0], ownerAliases: this.#ownerAliases,
+      configurations, slots: this.#slots });
+  }
+
+  #profile(id: CapabilityId): SelfProfilePort | undefined {
+    const adapter = this.adapterForEndpoint(id);
+    const child = adapter?.find(id);
+    const state = child?.endpoint && endpointRuntimeOf(child.endpoint).selfProfile;
+    if (!adapter || !child || !state) return undefined;
+    const defaults = this.#profileDefaults.get(adapter.descriptor.owner);
+    const explicit = adapter.revision === null && this.#fileProfiles.has(id)
+      ? this.#fileProfiles.get(id) : adapter.configuredProfile(child.desired.instanceId);
+    return state.withDefaults({ ...defaults, ...explicit });
   }
 
   list(): readonly AdapterDescriptor[] {
@@ -264,13 +318,14 @@ export class AdapterIndex {
   connection(adapter: string, endpointKey: string): EndpointConnectionInfo | undefined {
     const id = this.resolve(adapter, endpointKey);
     const endpoint = id ? this.#record(id)?.endpoint : undefined;
-    if (!endpoint) return undefined;
+    if (!id || !endpoint) return undefined;
     const runtime = endpointRuntimeOf(endpoint);
+    const profile = this.#profile(id);
     return Object.freeze({
       identity: runtime.identity,
       name: endpointLiveName(endpoint),
       selfUserId: runtime.selfUserId,
-      ...(runtime.selfProfile ? { profile: runtime.selfProfile.peek() } : {}),
+      ...(profile ? { profile: profile.peek() } : {}),
       transportState: runtime.transportState,
       eventDiagnostics: runtime.eventDiagnostics,
     });
@@ -348,7 +403,7 @@ export class AdapterIndex {
   profile(id: CapabilityId, scope?: EndpointPortScope): SelfProfilePort | undefined {
     const record = this.#record(id);
     const endpoint = record?.endpoint;
-    const state = endpoint && endpointRuntimeOf(endpoint).selfProfile;
+    const state = endpoint && this.#profile(id);
     if (!endpoint || !state) return undefined;
     const invoke = this.#portInvoker({ id, endpoint, scope });
     const write = state.write;
@@ -448,6 +503,25 @@ export class AdapterIndex {
   }
 }
 
+function configurationObject(value: unknown): Readonly<Record<string, unknown>> {
+  if (value === undefined) return {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Adapter configuration must be an object');
+  return value as Readonly<Record<string, unknown>>;
+}
+
+/** Endpoint order, identity and connection data remain unchanged, including per-account values. */
+function profileConfigurationOnly(previous: Readonly<Record<string, unknown>>, next: Readonly<Record<string, unknown>>): boolean {
+  const { endpoints: previousEndpoints, ...previousDefaults } = previous;
+  const { endpoints: nextEndpoints, ...nextDefaults } = next;
+  if (!isEndpointProfileConfigurationChange(previousDefaults, nextDefaults)) return false;
+  if (previousEndpoints === undefined && nextEndpoints === undefined) return true;
+  if (!Array.isArray(previousEndpoints) || !Array.isArray(nextEndpoints) || previousEndpoints.length !== nextEndpoints.length) return false;
+  return previousEndpoints.every((value, index) => {
+    const before = configurationObject(value), after = configurationObject(nextEndpoints[index]);
+    return isEndpointProfileConfigurationChange(before, after);
+  });
+}
+
 function projectRecord(adapter: AdapterInstance, child: EndpointChildView): AdapterRecord {
   return {
     id: child.desired.canonicalId, owner: adapter.descriptor.owner, name: child.desired.endpointId,
@@ -518,7 +592,7 @@ interface EndpointExpansion {
  */
 function expandEndpointConfigs(
   slot: Readonly<Pick<CapabilitySlot, 'id' | 'owner' | 'localName'>>,
-  snapshot: RuntimeSnapshot,
+  snapshot: Pick<RuntimeSnapshot, 'config'>,
 ): readonly EndpointExpansion[] {
   const config = snapshot.config.get(slot.owner) as
     | { id?: unknown; endpoints?: unknown }
