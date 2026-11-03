@@ -1,0 +1,75 @@
+docs/plans/configuration-live-update.md
+  s_9622fd28aba994::t_39fc2371db1155 431,433,435,437-440,442,444,446,448,450
+.changeset/configuration-admin-entrypoints.md
+  s_9622fd28aba994::t_d7db8e9c3c10ea 5
+basic/cli/README.md
+  s_079f1dc5e6308d::t_9f204ac86e3d4e 24
+basic/cli/src/commands/config-check.ts
+  s_079f1dc5e6308d::t_f13975b17db311 10-11,29,36,52,57,99,104
+basic/cli/src/commands/config.ts
+  s_079f1dc5e6308d::t_a6aad0355c045f 2-6,8-13,17-29,32-44,47-53,57-79,82-100,102-124,126-147,149-159,161-174,176-179,181-185,188-200,202-209
+basic/cli/src/plugin-management/console-client.ts
+  s_079f1dc5e6308d::t_aafe2ffae683f1 16,19-26,29
+basic/cli/src/plugin-runtime/agent/configuration-update.ts
+  s_079f1dc5e6308d::t_eb7d1aa3b5bd5c 2,9-31,38,57
+basic/cli/src/utils/config-check.ts
+  s_079f1dc5e6308d::t_0b6f9a90ee55e6 133,244,254,264,279,291,302,321
+basic/cli/tests/cli-write-side.test.ts
+  s_079f1dc5e6308d::t_cef966baa21294 68,70-71
+docs/ai/default-behavior.md
+  s_079f1dc5e6308d::t_eedccfad17d2fe 187
+docs/ai/index.md
+  s_079f1dc5e6308d::t_0418b76da19139 247
+docs/cli/index.md
+  s_079f1dc5e6308d::t_7e8df3702dbc65 107,115,118
+docs/configuration/index.md
+  s_9622fd28aba994::t_9e68327a5d7072 97,99,101,103,105,107,352
+docs/en/ai/default-behavior.md
+  s_079f1dc5e6308d::t_aa1fac553b7e21 187
+docs/en/ai/index.md
+  s_079f1dc5e6308d::t_9a80e5fcad27d4 247
+docs/en/cli/index.md
+  s_079f1dc5e6308d::t_8ac7a6a14f76a0 107,115,118
+docs/en/configuration/index.md
+  s_9622fd28aba994::t_98b1146b9e1f36 97,99,101,103,105,107,356
+docs/snippets/install-tiers.md
+  s_079f1dc5e6308d::t_289e9a99167ee4 70
+packages/im/agent/src/config/deprecated-agent-binding-keys.ts
+  s_079f1dc5e6308d::t_f45a29b974ea1c 8
+packages/im/agent/src/config/deprecated-agent-keys.ts
+  s_079f1dc5e6308d::t_2dcedfa990b4f7 6
+packages/im/agent/src/config/normalize-ai-config.ts
+  s_079f1dc5e6308d::t_eaf85f9a1e000c 64
+packages/im/agent/src/config/types.ts
+  s_079f1dc5e6308d::t_955a07cbabbe5e 36,41
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_079f1dc5e6308d::t_891d501d29f57a 91,125,175
+packages/im/agent/src/service.ts
+  s_079f1dc5e6308d::t_95ea1e46de877b 103,131
+packages/im/ai/src/types.ts
+  s_079f1dc5e6308d::t_1fefae4b51a8ec 364,366,614
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7cb5a29d65a020e5749159767f1e17aea3f340bc",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
