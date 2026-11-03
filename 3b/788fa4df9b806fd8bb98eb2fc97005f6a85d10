@@ -1,0 +1,51 @@
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  s_9622fd28aba994::t_d2e34602395421 1-6,256,259-261,266-267
+basic/cli/src/plugin-runtime/console/self-changes.ts
+  s_9622fd28aba994::t_79c0f1289f0150 58,178,180-181,197,200,268-270,272-276,279-280,297-299
+docs/adr/0040-controlled-self-change.md
+  s_9622fd28aba994::t_c11ff9cadcce17 148,181
+docs/ai/default-behavior.md
+  s_9622fd28aba994::t_69455ca6557ed1 58,70
+docs/ai/self-change.md
+  s_9622fd28aba994::t_615e45c967996c 68
+docs/authoring/console-pages.md
+  s_9622fd28aba994::t_7357b70d2d7d2e 432
+docs/en/ai/default-behavior.md
+  s_9622fd28aba994::t_9998ad512a7fbd 58,70
+docs/en/ai/self-change.md
+  s_9622fd28aba994::t_e94a1df71d4fc7 68
+docs/en/authoring/console-pages.md
+  s_9622fd28aba994::t_78a1bfea94d911 432
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_75f76f64149a1b 260,512,516
+packages/im/agent/src/self-change/approval.ts
+  s_9622fd28aba994::t_c3173d6793beb4 24-30,317
+packages/im/agent/src/decision-events.ts
+  s_58400078c2bd23::t_9493b14e5f7db8 330-334
+packages/im/agent/src/self-change/detail-diff.ts
+  s_58400078c2bd23::t_1d7bdfdfe4fb1b 8-9,14-15,28-35,44,95,99,105-118,186-189,192-195,202-203,223-231,241-242,252-261,282-296,298-307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b788fa4df9b806fd8bb98eb2fc97005f6a85d10",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
