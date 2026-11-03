@@ -1,0 +1,25 @@
+packages/im/agent/src/authoring/bridge.ts
+  s_9622fd28aba994::t_6b340b37ffa3f6 1,47
+docs/ai/provider-upgrade.md
+  s_9622fd28aba994::t_5a9fe70480043b 115-116
+packages/im/agent/tests/agent-authoring-surface.test.ts
+  s_9622fd28aba994::t_6b340b37ffa3f6 5-6,15-25
+docs/plans/ai-provider-behavior-migration.md
+  s_9622fd28aba994::t_5a9fe70480043b 88-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "564476d32a2c9e963e25b770ee210470de4e1d9b",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
