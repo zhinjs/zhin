@@ -1,0 +1,19 @@
+packages/im/agent/tests/zhin-agent/inbound-queue-config.test.ts
+  s_4a3da79bf26c58::t_8ab9664e9c3f6d 49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "25de8f7f27bb69449c9fed00b5c9aefbcd03be41",
+  "prompts": {},
+  "sessions": {
+    "s_4a3da79bf26c58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66214013-1784-4c6a-9edd-9039237b51db",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
