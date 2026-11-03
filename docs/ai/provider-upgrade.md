@@ -112,6 +112,8 @@ SQLite 预览只读数据库并提前验证目标；非 SQLite 使用已有 `--s
 - Agent 构造不再要求一个 Provider。独立调用显式借用 `ModelExecutionScope`，由取得作用域的一方负责释放。真实 generation lease 从正式任务入口传入，不能通过最新全局对象补齐。
 - `ProfileSelection` 保存不可复用身份；每回合解析该身份的当前参数。短期 `ProfileRef` 固定本次 revision，不能当长期 Session 选择保存。同 Profile 可以原位更换 native model；已有 Session 下回合跟随，在途调用不变。换 Account 后，旧 Session 的 accountId/incarnation pin 失效，不自动跨账号继承。
 
+已知类型安装边界：完整 Agent 作者入口目前会牵引 Database 各可选方言声明。在未安装 `mongodb`、`mysql2`、`pg`、`redis` 的归档消费项目中，strict 声明检查仍会报告对应类型缺失。这是基线已有的 Database 入口边界问题，尚未在本次改造中解决；不意味着 SQLite 运行必须安装四个驱动，也不能将已通过的纯推理入口检查泛化为完整 Agent 入口检查通过。
+
 ## 恢复
 
 提交结果未知时先用原 mutationId 查询 receipt，不能新建 ID 重试。失败／冲突不报告已保存。恢复旧版本代码前，先按迁移 journal 核对选中记录。只有在同一维护窗口且共享数据库的其他 Root 没有后续写入时，才恢复整库与对应主密钥备份；否则按选中 unit／Session 的 before/after 记录人工核对恢复，不能覆盖其他 Root 新写；不要让旧版本读取新目标图并猜测兼容关系。外部 token 轮换不能通过本地备份撤销。原始迁移源保留到管理员确认恢复完成，不自动删除。

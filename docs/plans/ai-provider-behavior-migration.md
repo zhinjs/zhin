@@ -85,3 +85,9 @@
 - **消费者与风险**：`SubagentSystem.composeSender()` 将 ok 投影成 ResultSink 的 completed；`buildSubagentUserDelivery()` 会显示“完成”；`persistSubagentResultToContext()` 把该状态存入父会话，auto-continue 两种状态都会唤醒主 Agent，并把状态提供给它决定下一步。activity-feedback 的 finish 仅结束进度；Trace 的 subagent_end 仅保存上游给定状态。未找到按此状态自动重放原 Subagent 的确定性队列逻辑，但主模型看到状态后可以再次编排工具／spawn，因此错误分类修复不能同时新增自动重试。
 - **相邻边界**：deferred-worker 同样消费 standalone 返回值并按迭代数判 ok／partial；`AIService.runAgent()` 公开结果亦未携带终态，Workroom planning 再解析 JSON。它们是共享 runner 的既有受影响路径，需要一并核验，不能只改 Console 展示或只让 Subagent catch 抛错而丢失已完成工具和用量。
 - **最小候选方案（未实施）**：从已存在的最后 `AssistantMessage.stopReason`／`errorMessage` 投影窄终态到 standalone 结果，保留 content、usage、toolCalls 与原错误含义；由各既有任务 owner 映射现有 error／cancelled 状态，不增加新重试／降级／触发策略。对完成副作用后模型失败、取消、合法空答和迭代上限分别验证；已执行工具不重放，未知副作用不得误报未执行。该方案待另行确认，不属于本次 child ALS 修复。
+
+### Agent 归档作者声明检查
+
+- 真实 26 包 tarball 闭包的 strict 作者检查发现：`bridgeAuthoringHook()` 的推断返回类型把 handler 参数发射成不存在的根 `AIHookEvent`，而根实际公开名为 `OrchestratorHookEvent`。函数返回结构与已有 resource-hub `AIHook` 完全一致，因此只显式标注该真实返回类型；没有添加根 alias，也没有改变 handler、返回对象或运行行为。原作者发现测试与桥接合同测试共 7 项通过；单包构建后的 `.d.ts` 直接引用 `../resource-hub/types.js` 的 `AIHook`。
+- 该 Agent 宽入口归档检查同时发现 Database 的 `mongodb`、`mysql2/promise`、`pg`、`redis` 可选方言声明需要对应外部类型。四处静态类型依赖在基线 `d8532ddbf` 已存在；未补装四库、添加 shim 或使用 skipLibCheck 来称全入口闭包通过。纯推理入口已经验证的 strict 闭包与这个更宽 Agent 作者入口是不同证据层。
+- **独立候选方案（未实施）**：盘点 Database 公共类型的方言依赖边界，将中性合同与可选方言作者入口分离，设计后单独确认；不能仅删除合法类型、改变数据库运行 API，或要求所有 SQLite 用户默认安装四个驱动来掩盖声明问题。
