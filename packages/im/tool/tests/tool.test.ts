@@ -81,6 +81,7 @@ describe('Tool Feature', () => {
     expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin, principal: { subjectId: 'u', roles: ['master'] } })).toBe(true);
     expect(seen).toEqual({ subjectId: 'u', roles: ['master'] });
     expect(Object.isFrozen(seen)).toBe(true);
+    expect(Object.isFrozen((seen as { roles: readonly string[] }).roles)).toBe(true);
     expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin, principal: { subjectId: 'u', roles: ['user'] } })).toBe(false);
     expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin })).toBe(false);
     expect(() => index.isAvailable(root, 'unknown', { sessionKey: 'bot-a:scene', origin: invocation().origin })).toThrow('Unknown Agent Tool');
