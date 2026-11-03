@@ -1,6 +1,5 @@
 import type { CoreReplyStream } from '@zhin.js/core/runtime';
-import type { AgentOutputElement } from '../outbound/agent-output.js';
-import { renderAgentOutput } from '../outbound/agent-output.js';
+import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { bindActivityFeedbackTurnSource, inheritActivityFeedbackSource } from '../activity-feedback/operation-source.js';
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
@@ -19,7 +18,7 @@ import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
 import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../core/reply-phase.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import type { DeliveryOutcome } from '../turn/turn-ingress.js';
+import type { DeliveryOutcome, TurnIngress } from '../turn/turn-ingress.js';
 import type { AgentCore } from '../core/agent-core.js';
 import { createInteractiveRun } from '../core/interactive-run.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime, type TurnToolRuntimeOptions } from '../tool/turn-tool-runtime.js';
@@ -36,7 +35,6 @@ import type {
 } from './agent-runtime.js';
 import { publishProjectionFailure, type TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
-import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 import { resolveToolTier } from './tool-tier.js';

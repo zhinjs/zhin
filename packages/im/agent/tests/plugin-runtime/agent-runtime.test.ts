@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { LocalImageAssetStore, localImageAssetsToken } from '../../src/media/local-image-assets.js';
 import { FileJournalStore } from '../../src/journal/file-journal-store.js';
 import { expandMcpTools } from '../../src/plugin-runtime/agent-runtime.js';
-import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
+import { TurnToolExecutionAuthority, TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createNativeLocalAssetsToolFeature } from '../../src/plugin-runtime/native-local-assets-tool.js';
 import { AgentResourceHub } from '../../src/resource-hub/index.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -64,7 +64,6 @@ import {
   turnJournalStoreToken,
   type ExternalToolCapability,
 } from '../../src/plugin-runtime/index.js';
-import { TurnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
 import { createDeferredCapabilityPlan } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import { getAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';

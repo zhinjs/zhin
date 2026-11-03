@@ -15,8 +15,7 @@ import {
   type Model,
   type StreamOptions,
 } from '@zhin.js/ai';
-import type { ScriptedModel, ScriptedModelRequest } from './scripted-model.js';
-import { contextText, countImages, lastUserText, toolSchemaTextOf } from './scripted-model.js';
+import { contextText, countImages, lastUserText, toolSchemaTextOf, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 
 export interface LiveModelOptions {
   /** Real completion port; budgets and timeouts are its responsibility. */

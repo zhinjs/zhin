@@ -760,3 +760,42 @@ it.each(['valid', 'wrong-incarnation'] as const)('checks deferred targets at app
     } finally { submit.mockRestore(); connect.mockRestore(); }
   } finally { await f.close(); }
 });
+
+it('refuses inherited dry-run before the real CLI can apply a Session-only preview', async () => {
+  const f = await fixture();
+  try {
+    const preview = await previewSessionBindings({ root: f.root, mapping: f.mapping });
+    const file = join(f.root, 'session-preview.json'),
+      before = await readFile(f.filename);
+    await writeFile(file, JSON.stringify(preview));
+    const repo = resolve(import.meta.dirname, '../../../../..');
+    await expect(
+      promisify(execFile)(
+        process.execPath,
+        [
+          '--conditions=development',
+          '--import',
+          join(repo, 'node_modules/tsx/dist/esm/index.mjs'),
+          join(repo, 'basic/cli/src/cli.ts'),
+          'migrate',
+          '--dry-run',
+          'inference',
+          '--apply',
+          file,
+          '--maintenance',
+          '--backup-confirmed',
+        ],
+        {
+          cwd: f.root,
+          env: { PATH: process.env.PATH ?? '', HOME: f.root, GROQ_API_KEY: '', NODE_OPTIONS: '' },
+        }
+      )
+    ).rejects.toThrow('--dry-run');
+    expect(await readFile(f.filename)).toEqual(before);
+    await expect(
+      access(join(f.root, '.zhin', 'inference-session-bindings', preview.id))
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  } finally {
+    await f.close();
+  }
+});

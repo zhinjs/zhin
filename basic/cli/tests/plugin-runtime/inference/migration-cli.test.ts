@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, writeFile, readFile, symlink, cp, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, symlink, cp, rm, access, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'node:net';
+import { previewInferenceMigration } from '../../../src/plugin-runtime/inference/migration-preview.js';
 
 const repo = resolve('.'),
   tsx = pathToFileURL(join(repo, 'node_modules/tsx/dist/esm/index.mjs')).href;
@@ -42,6 +43,78 @@ async function freePort() {
       });
   });
 }
+it.each(['apply', 'finalize'])(
+  'rejects inherited dry-run before dispatching inference %s',
+  async (operation) => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'inference-cli-dryrun-')));
+    const config = join(root, 'zhin.config.json'),
+      output = join(root, 'preview.json');
+    const original = JSON.stringify({ configVersion: 2, ai: {} });
+    try {
+      await writeFile(config, original);
+      const preview = await previewInferenceMigration({ root });
+      await writeFile(output, JSON.stringify(preview));
+      const cli = join(repo, 'basic/cli/src/cli.ts');
+      const apply = [
+        cli,
+        'migrate',
+        'inference',
+        '--apply',
+        output,
+        '--maintenance',
+        '--backup-confirmed',
+      ];
+      if (operation === 'finalize') expect((await child(root, apply)).code).toBe(0);
+      const result = await child(root, [
+        cli,
+        'migrate',
+        '--dry-run',
+        'inference',
+        `--${operation}`,
+        output,
+        '--maintenance',
+        '--backup-confirmed',
+      ]);
+      expect(result.code, result.output).not.toBe(0);
+      expect(result.output).toContain('--dry-run');
+      expect(await readFile(config, 'utf8')).toBe(original);
+      const journal = join(root, '.zhin', 'inference-migrations', preview.id, 'journal.json');
+      if (operation === 'apply') {
+        await expect(access(journal)).rejects.toMatchObject({ code: 'ENOENT' });
+        await expect(access(join(root, '.zhin', 'data.sqlite'))).rejects.toMatchObject({
+          code: 'ENOENT',
+        });
+      } else expect(JSON.parse(await readFile(journal, 'utf8')).phase).toBe('committed');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+);
+it('rejects inherited dry-run before a preview can create a key, output, database or backup', async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'inference-cli-preview-')));
+  try {
+    const config = join(root, 'zhin.config.json'),
+      output = join(root, 'preview.json');
+    const source = JSON.stringify({ configVersion: 2, ai: {} });
+    await writeFile(config, source);
+    const result = await child(root, [
+      join(repo, 'basic/cli/src/cli.ts'),
+      'migrate',
+      '--dry-run',
+      'inference',
+      '--output',
+      output,
+    ]);
+    expect(result.code, result.output).not.toBe(0);
+    expect(result.output).toContain('--dry-run');
+    expect(result.output).toContain('--output');
+    expect(await readFile(config, 'utf8')).toBe(source);
+    await expect(access(output)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(join(root, '.zhin'))).rejects.toMatchObject({ code: 'ENOENT' });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 it('executes the actual offline CLI, then boots its finalized Root with authenticated model management and no provider request', async () => {
   const root = await mkdtemp(join(tmpdir(), 'inference-cli-upgrade-')),
     port = await freePort();

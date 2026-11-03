@@ -1,6 +1,5 @@
 import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
-import { profileModel } from '../helpers/profile-runtime.js';
-import { createProfileRuntime } from '../helpers/profile-runtime.js';
+import { createProfileRuntime, profileModel } from '../helpers/profile-runtime.js';
 /**
  * Gemini over the real @ai-sdk/google transport with a mocked HTTP endpoint:
  * image input, function calling, a stable cacheable prefix across turns, and

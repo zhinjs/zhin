@@ -62,8 +62,8 @@ import type { Request } from '../../request.js';
 import {
   OutboundDeliveryRuntime,
   failedDeliveryReceipt,
+  type OutboundDeliveryExecution,
 } from './outbound-delivery-runtime.js';
-import type { OutboundDeliveryExecution } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
 import { messageLocale } from './locale.js';
 import { InboundDeduper } from './inbound-dedup.js';

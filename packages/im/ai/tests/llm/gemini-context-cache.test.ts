@@ -1,6 +1,5 @@
 import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
-import { profileModel } from '../helpers/profile-runtime.js';
-import { createProfileRuntime } from '../helpers/profile-runtime.js';
+import { createProfileRuntime, profileModel } from '../helpers/profile-runtime.js';
 /**
  * Explicit Gemini context caching over the real @ai-sdk/google transport with a
  * mocked HTTP endpoint (#769): create once, reuse on the second turn, TTL refresh,

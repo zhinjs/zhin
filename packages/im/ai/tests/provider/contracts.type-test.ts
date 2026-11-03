@@ -49,4 +49,4 @@ await client.evaluate({ profile: language, state: null, questions: {} });
 // @ts-expect-error decision references are not image models
 await client.generateImage({ profile: decision, request: { prompt: 'synthetic' } });
 // @ts-expect-error inference evidence does not assert that business policy was applied
-evidence.applied;
+void evidence.applied;

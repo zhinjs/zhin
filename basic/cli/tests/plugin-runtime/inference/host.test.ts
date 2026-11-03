@@ -15,7 +15,48 @@ import {
 } from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
+import { openHeadlessInferenceHost } from '../../../src/plugin-runtime/inference/headless-host.js';
 
+it.each(['none', 'api-key'])(
+  'rejects unsupported %s authentication for a real subscription Driver before reading credentials',
+  async (method) => {
+    const directory = await mkdtemp(join(tmpdir(), 'inference-subscription-auth-'));
+    const resolveSource = vi.fn(),
+      fetch = vi.spyOn(globalThis, 'fetch');
+    const opened = await openHeadlessInferenceHost({
+      projectRoot: directory,
+      database: { dialect: 'sqlite', filename: join(directory, 'state.sqlite') },
+      resolveSource,
+    });
+    const held = opened.host.acquireManagement(),
+      readCredential = vi.spyOn(opened.host.repository, 'readCredential');
+    try {
+      await expect(
+        held.management.review(
+          { ownerId: opened.host.hostOwnerId, hostAdministrator: true },
+          {
+            plan: {
+              version: 1,
+              services: { subscription: { driver: 'codex-subscription' } },
+              accounts: { noProfile: { service: 'subscription', auth: { method } } },
+            },
+          }
+        )
+      ).rejects.toMatchObject({ code: 'invalid-input' });
+      expect(
+        await opened.host.repository.readGraph({ rootId: opened.host.rootId })
+      ).toBeUndefined();
+      expect(readCredential).not.toHaveBeenCalled();
+      expect(resolveSource).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      fetch.mockRestore();
+      await held.release();
+      await opened.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+);
 it('uses real operation leases while retaining only non-secret binding state across turns and isolating account replacement', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'inference-host-'));
   const db = createDatabaseHost({

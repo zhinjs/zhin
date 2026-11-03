@@ -259,6 +259,72 @@ it('persists unknown external refresh outcomes without retrying on a later or re
   } finally { await fixture.close(); }
 });
 
+it('retains the original identity and an uncertain outcome when refresh proves a different subject', async () => {
+  const fixture = await setup('oauth');
+  fixture.refresh.mockResolvedValue({
+    accessToken: 'subject-b-token',
+    refreshToken: 'rotated-b',
+    expiresAt: 5000,
+    subject: 'subject-b',
+  });
+  try {
+    await fixture.seed({
+      accessToken: 'expired-a',
+      refreshToken: 'refresh-a',
+      expiresAt: 1,
+      subject: 'subject-a',
+    });
+    await expect(
+      fixture.host.createPort(fixture.execution).authorize(fixture.request())
+    ).rejects.toMatchObject({ code: 'identity-change' });
+    const saved = await fixture.store.read(fixture.account);
+    expect(saved?.payload).toMatchObject({ status: 'uncertain', subject: 'subject-a' });
+    expect(saved?.payload).not.toHaveProperty('credential');
+    expect(saved?.record.incarnation).toBe(fixture.account.incarnation);
+    const rebuilt = fixture.runtime();
+    try {
+      await expect(
+        rebuilt.createPort(fixture.execution).authorize(fixture.request())
+      ).rejects.toMatchObject({ code: 'outcome-unknown' });
+      expect(fixture.refresh).toHaveBeenCalledOnce();
+    } finally {
+      await rebuilt.close();
+    }
+  } finally {
+    await fixture.close();
+  }
+});
+
+it.each(['subject-a', undefined])(
+  'preserves the proven subject through refresh reporting %s',
+  async (subject) => {
+    const fixture = await setup('oauth');
+    fixture.refresh.mockResolvedValue({
+      accessToken: 'refreshed-a',
+      refreshToken: 'rotated-a',
+      expiresAt: 5000,
+      ...(subject ? { subject } : {}),
+    });
+    try {
+      await fixture.seed({
+        accessToken: 'expired-a',
+        refreshToken: 'refresh-a',
+        expiresAt: 1,
+        subject: 'subject-a',
+      });
+      expect(
+        await fixture.host.createPort(fixture.execution).authorize(fixture.request())
+      ).toMatchObject({ token: 'refreshed-a' });
+      expect((await fixture.store.read(fixture.account))?.payload).toMatchObject({
+        status: 'ready',
+        subject: 'subject-a',
+      });
+      expect(fixture.refresh).toHaveBeenCalledOnce();
+    } finally {
+      await fixture.close();
+    }
+  }
+);
 it.each([
   { code: 'not-submitted', credentialInvalid: false, expected: 'not-submitted' },
   { code: 'rejected', credentialInvalid: false, expected: 'rejected' },

@@ -359,6 +359,11 @@ export class HostInference {
       },
       authenticationContract: (account, service) => {
         const driver = definition(service);
+        if (
+          !driver.authentication.methods.includes(account.authentication.method) ||
+          (account.authentication.method === 'oauth' && !driver.authentication.oauth)
+        )
+          throw new InferenceManagementError('invalid-input');
         return account.authentication.method === 'oauth'
           ? driver.authentication.oauth!.contractVersion
           : driver.contractVersion;

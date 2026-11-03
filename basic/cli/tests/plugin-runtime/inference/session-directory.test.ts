@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { agentSessionSourceFields } from '@zhin.js/ai';
-import { personalSessionIdentity, type PersonalSessionAddress } from '@zhin.js/agent/personal-session';
+import { PersonalSessionRepositoryIntegrityError, personalSessionIdentity, type PersonalSessionAddress } from '@zhin.js/agent/personal-session';
 import type { DatabaseHost } from '@zhin.js/plugin-runtime';
 import { createPersonalSessionDirectory } from '../../../src/plugin-runtime/inference/session-directory.js';
-import { PersonalSessionRepositoryIntegrityError } from '@zhin.js/agent/personal-session';
 
 function address(): PersonalSessionAddress {
   return { rootId: '/host-a', platform: 'qq', endpoint: 'account-a', subjectId: 'alice',

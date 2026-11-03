@@ -1,6 +1,5 @@
 import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
-import { profileModel } from '../helpers/profile-runtime.js';
-import { createProfileRuntime } from '../helpers/profile-runtime.js';
+import { createProfileRuntime, profileModel } from '../helpers/profile-runtime.js';
 /**
  * ADR 0042 §1: the system prompt is sent as stable + scene. Anthropic gets two system blocks with
  * cache_control on the stable block only; other providers get one string, stable first.

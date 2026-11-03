@@ -1,4 +1,7 @@
-import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
+import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
+import { drainAgentTurnDecisionObservations, isAgentTurnDecisionDisabled, runWithAgentDecisionTurn } from '../plugin-runtime/decision-runtime.js';
+import type { DecisionObservation } from '../decision/types.js';
+import type { MediaPerceptionPort } from '../media/perception.js';
 import type { ModelDelegationAuthority, ModelExecutionScope } from '../model-runtime/types.js';
 /**
  * SubagentRuntime — 后台子任务执行管理器
@@ -114,6 +117,8 @@ export interface SubagentLifecycleEvent {
   status?: 'ok' | 'error';
   result?: string;
   error?: string;
+  /** Decisions observed by this child operation, never its completed parent. */
+  decisionObservations?: readonly DecisionObservation[];
 }
 
 /** Async subagent completion payload — delivered to main agent first. */
@@ -185,6 +190,7 @@ interface SubagentTaskRun {
  readonly context?:Record<string,unknown>;
  readonly options?:{
       delegation: ModelDelegationAuthority;
+      decisionDisabled: boolean;
       binding?: ResolvedAgentBinding | null;
       systemPrompt?: string;
       sync?: boolean;
@@ -206,7 +212,7 @@ interface SubagentTaskRun {
 export class SubagentRuntime {
   private imageAssets?: import('../media/image-assets.js').ImageAssetPublisher;
   private localAssets?: import('../media/local-image-assets.js').LocalImageAssetStore;
-  private mediaPerception?: import('../media/perception.js').MediaPerceptionPort;
+  private createPerception?: (models: ModelExecutionScope) => MediaPerceptionPort | undefined;
   private resolveBindingFn: ((agentName: string) => ResolvedAgentBinding | null) | null;
   private getMcpRegistryFn: (() => McpRegistry | null) | null;
   private workspace: string;
@@ -261,7 +267,8 @@ export class SubagentRuntime {
   configureRouting(deps: {
     imageAssets?: import('../media/image-assets.js').ImageAssetPublisher;
     localAssets?: import('../media/local-image-assets.js').LocalImageAssetStore;
-    mediaPerception?: import('../media/perception.js').MediaPerceptionPort;
+    /** Build a task-local port from the child's acquired model scope. */
+    createPerception?: (models: ModelExecutionScope) => MediaPerceptionPort | undefined;
     resolveBinding?: (agentName: string) => ResolvedAgentBinding | null;
     getMcpRegistry?: () => McpRegistry | null;
     resolveAgentMeta?: (agentName: string) => Promise<AgentMeta | null>;
@@ -269,7 +276,7 @@ export class SubagentRuntime {
   }): void {
     if (deps.imageAssets !== undefined) this.imageAssets = deps.imageAssets;
     if (deps.localAssets !== undefined) this.localAssets = deps.localAssets;
-    if (deps.mediaPerception !== undefined) this.mediaPerception = deps.mediaPerception;
+    if (deps.createPerception !== undefined) this.createPerception = deps.createPerception;
     if (deps.resolveBinding) this.resolveBindingFn = deps.resolveBinding;
     if (deps.getMcpRegistry) this.getMcpRegistryFn = deps.getMcpRegistry;
     if (deps.resolveAgentMeta) this.resolveAgentMetaFn = deps.resolveAgentMeta;
@@ -303,10 +310,10 @@ export class SubagentRuntime {
   spawnSync(options: SpawnOptions): Promise<string> {
     const delegation = getAgentTurnConfiguration()?.models?.retainDelegation();
     if (!delegation) return Promise.reject(new Error('Subagent inference scope is not configured'));
-    return this.spawnSyncInner(options, delegation).finally(() => delegation.release());
+    return this.spawnSyncInner(options, delegation, isAgentTurnDecisionDisabled()).finally(() => delegation.release());
   }
 
-  private async spawnSyncInner(options: SpawnOptions, delegation: ModelDelegationAuthority): Promise<string> {
+  private async spawnSyncInner(options: SpawnOptions, delegation: ModelDelegationAuthority, decisionDisabled: boolean): Promise<string> {
     if (this.disposed) throw new Error('SubagentRuntime has been disposed');
     const capError = this.parallelCapacityError();
     if (capError) return capError;
@@ -330,6 +337,7 @@ export class SubagentRuntime {
       }
       const running = this.runAdmittedTask(taskId, () => this.runSubagent({ taskId: taskId, task: enriched.task, label: displayLabel, origin: enriched.origin, role: role, context: enriched.context, options: {
           delegation,
+          decisionDisabled,
           binding: enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null),
           systemPrompt: enriched.systemPrompt,
           contextPreamble: enriched.contextPreamble,
@@ -355,10 +363,10 @@ export class SubagentRuntime {
   spawn(options: SpawnOptions): Promise<string> {
     const delegation = getAgentTurnConfiguration()?.models?.retainDelegation();
     if (!delegation) return Promise.reject(new Error('Subagent inference scope is not configured'));
-    return this.spawnInner(options, delegation);
+    return this.spawnInner(options, delegation, isAgentTurnDecisionDisabled());
   }
 
-  private async spawnInner(options: SpawnOptions, delegation: ModelDelegationAuthority): Promise<string> {
+  private async spawnInner(options: SpawnOptions, delegation: ModelDelegationAuthority, decisionDisabled: boolean): Promise<string> {
     let admitted: Promise<void> | undefined;
     try {
     if (this.disposed) throw new Error('SubagentRuntime has been disposed');
@@ -413,6 +421,7 @@ export class SubagentRuntime {
       try {
         await this.runSubagent({ taskId: taskId, task: enriched.task, label: displayLabel, origin: enriched.origin, role: role, context: enriched.context, options: {
           delegation,
+          decisionDisabled,
           binding,
           systemPrompt: enriched.systemPrompt,
           contextPreamble: enriched.contextPreamble,
@@ -553,6 +562,7 @@ export class SubagentRuntime {
 
     const binding = opts?.binding ?? null;
     let models: ModelExecutionScope | undefined;
+    const decisionObservations: DecisionObservation[] = [];
     try {
       let allTools = this.createTools();
       const mcps = this.getMcpRegistryFn?.() ?? null;
@@ -593,25 +603,41 @@ export class SubagentRuntime {
       if (!opts?.delegation) throw new Error('Subagent inference scope is not configured');
       models = await opts.delegation.acquire({ operationId: `subagent:${taskId}`, sessionKey: `subagent:${taskId}`,
         epoch: taskId, bindingName: binding?.name ?? opts?.modelRole ?? 'zhin', signal: opts?.signal });
-      const model = models.chat.model.id;
+      const childModels = models;
+      const mediaPerception = this.createPerception?.(childModels);
+      const model = childModels.chat.model.id;
       const bashCommMessage = origin.message;
 
       await aiEvents?.agentStart(model);
       const effortIterations = opts?.agentMeta?.effort
         ? EFFORT_MAX_ITERATIONS[opts.agentMeta.effort]
         : undefined;
-      const result = await runAgentLoopStandaloneTurn({
-        execution: models.chat,
-        imageAssets: this.imageAssets,
-        localAssets: this.localAssets,
-        mediaPerception: this.mediaPerception,
-        systemPrompt,
-        tools,
-        userInput: agentUserInput,
-        maxIterations: effortIterations ?? opts?.agentMeta?.maxIterations ?? this.maxIterations,
-        commMessage: bashCommMessage,
-        callbacks: aiEvents?.createAgentLoopCallbacks(model),
-        signal: opts?.signal,
+      // Tool-side inference must borrow the child's scope too. Async tasks can
+      // inherit a parent ALS store whose client has already been released.
+      const result = await runWithAgentDecisionTurn({
+        turnId: childModels.context.operationId,
+        models: childModels,
+        inferenceSnapshot: childModels.inferenceSnapshot,
+        disabled: opts.decisionDisabled,
+      }, async () => {
+        try {
+          return await runWithAgentTurnConfiguration({ models: childModels, activeBinding: binding ?? undefined, mediaPerception },
+            () => runAgentLoopStandaloneTurn({
+              execution: childModels.chat,
+              imageAssets: this.imageAssets,
+              localAssets: this.localAssets,
+              mediaPerception,
+              systemPrompt,
+              tools,
+              userInput: agentUserInput,
+              maxIterations: effortIterations ?? opts.agentMeta?.maxIterations ?? this.maxIterations,
+              commMessage: bashCommMessage,
+              callbacks: aiEvents?.createAgentLoopCallbacks(model),
+              signal: opts.signal,
+            }));
+        } finally {
+          decisionObservations.push(...drainAgentTurnDecisionObservations());
+        }
       });
       this.onSubagentUsage?.(result.usage);
       const rawResult = result.content || '任务已完成，但未生成最终响应。';
@@ -641,6 +667,7 @@ export class SubagentRuntime {
         agent: opts?.presetName,
         status: 'ok',
         result: finalResult,
+        ...(decisionObservations.length ? { decisionObservations } : {}),
       });
       await aiEvents?.processingFinish(finalResult, {
         model: result.model ?? model,
@@ -681,6 +708,7 @@ export class SubagentRuntime {
         agent: opts?.presetName,
         status: 'error',
         error: errorMsg,
+        ...(decisionObservations.length ? { decisionObservations } : {}),
       });
       if (opts?.sync) return errorMsg;
       await this.deliverAsyncResult({

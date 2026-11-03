@@ -7,9 +7,7 @@ import {
 } from '../../src/workroom-runtime/workroom-capability-realization.js';
 import { createAgentCoreWorkroomLocalTurnPort } from '../../src/workroom-runtime/workroom-local-agent-core-adapter.js';
 import { DurableReportLocalModelExecutionPort } from '../../src/workroom-runtime/workroom-local-agent-loop.js';
-import type { AgentCore } from '@zhin.js/agent/core';
-import type { AgentLoopTurnInput } from '@zhin.js/agent/core';
-import type { ZhinAgentPrivate } from '@zhin.js/agent/core';
+import type { AgentCore, AgentLoopTurnInput, ZhinAgentPrivate } from '@zhin.js/agent/core';
 import {
   createAssignmentExecutionEnvelope,
   type AssignmentExecutionEnvelopeInput,

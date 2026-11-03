@@ -4,6 +4,8 @@
 
 ## 命令与所有权
 
+本子命令不接受父命令的 `--dry-run`，会在读取预览或调用迁移器之前明确拒绝。正常 `--output` 预览不修改源配置与业务数据库，但会写入预览文件，并可能创建私有密封证明所需的本地主密钥；它不是零文件写入操作。
+
 `zhin migrate inference --output <preview.json>` 只读取当前项目已选 Root YAML/JSON 原文，调用纯迁移 compiler 与已审内置 Driver 的纯 schema。预览列出源、资源/用途映射、凭据定位符、未决项和恢复步骤，不解密旧 vault，不读取环境变量。显式映射文件提供 Driver 的 exact owner/id/contract、模型能力与旧 Profile 映射；不足项继续 blocked，不猜协议/模型能力。第三方 Driver 不在自动导入范围：导入其声明模块也会执行顶层代码，不能假称无副作用；管理员需正常建立新 plan、重新录入凭据，再显式绑定旧 Session。原 catalog 和历史保留。
 
 `--apply <preview.json>` 明确表示 Bot 已进入维护期，用户已备份配置、数据库和旧主密钥。命令只构造 Database Host、HostInference 仓储/凭据组件与静态 Driver snapshot，不启动 RootHost、Adapter、Schedule、IM、Workroom 或用户插件。连接数据库需要独立已知配置；不能为方便从 `.env` 读取密钥。配置仍是旧格式不阻断本入口。

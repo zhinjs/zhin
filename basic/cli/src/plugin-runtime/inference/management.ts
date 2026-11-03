@@ -61,6 +61,7 @@ export interface InferenceManagementOptions {
   readonly profileSchema: (
     input: Readonly<{ service: ProviderService; model: ModelDefinition }>
   ) => ProviderSchema<unknown> | undefined;
+  /** Validates the method against the exact held Driver before resolving its private contract. */
   readonly authenticationContract: (
     account: ProviderAccount,
     service: ProviderGraph['services'][string]
@@ -117,6 +118,7 @@ interface PreparedMutation {
   readonly credentials: readonly ProviderCredentialWrite[];
   readonly removedAccounts: readonly ProviderAccount[];
   readonly requiredServices: readonly string[];
+  readonly requiredAccounts: readonly string[];
   readonly requiredProfiles: readonly string[];
   readonly result: JsonObject;
 }
@@ -256,6 +258,12 @@ export class InferenceManagementService {
       validateProfile: (input) => this.#normalizeProfile(input),
     });
     this.#checkEnvironmentSources(reviewed.graph);
+    const dependencies = mutationDependencies({
+      before: graph,
+      after: reviewed.graph,
+      changes: reviewed.changes,
+    });
+    this.#validateAccountAuthentication(reviewed.graph, dependencies.requiredAccounts);
     const credentials: ProviderCredentialWrite[] = [];
     for (const id of reviewed.changes.accounts.removed) {
       const account = graph.accounts[id];
@@ -321,11 +329,7 @@ export class InferenceManagementService {
         graph: reviewed.graph,
         credentials,
         removedAccounts: reviewed.changes.accounts.removed.map((id) => graph.accounts[id]!),
-        ...mutationDependencies({
-          before: graph,
-          after: reviewed.graph,
-          changes: reviewed.changes,
-        }),
+        ...dependencies,
         result,
       })),
       changes: reviewed.changes,
@@ -355,6 +359,7 @@ export class InferenceManagementService {
       credentials: [write],
       removedAccounts: [],
       requiredServices: [account.serviceId],
+      requiredAccounts: [account.id],
       requiredProfiles: [],
       result: {
         ownerId: principal.ownerId,
@@ -386,6 +391,7 @@ export class InferenceManagementService {
       credentials: [write],
       removedAccounts: [],
       requiredServices: [account.serviceId],
+      requiredAccounts: [account.id],
       requiredProfiles: [],
       result: {
         ownerId: principal.ownerId,
@@ -549,6 +555,9 @@ export class InferenceManagementService {
       if (providerPlanFingerprint(resolved.driver) !== providerPlanFingerprint(service.driver))
         throw new InferenceManagementError('conflict');
     }
+    if (!Array.isArray(mutation.requiredAccounts))
+      throw new InferenceManagementError('invalid-input');
+    this.#validateAccountAuthentication(graph, mutation.requiredAccounts);
     if (!Array.isArray(mutation.requiredProfiles))
       throw new InferenceManagementError('invalid-input');
     for (const id of mutation.requiredProfiles) {
@@ -712,6 +721,14 @@ export class InferenceManagementService {
   #aad(ownerId: string): Buffer {
     return Buffer.from(JSON.stringify(['inference-management', 1, this.options.rootId, ownerId]));
   }
+  #validateAccountAuthentication(graph: ProviderGraph, ids: readonly string[]): void {
+    for (const id of ids) {
+      const account = graph.accounts[id],
+        service = account && graph.services[account.serviceId];
+      if (!account || !service) throw new InferenceManagementError('invalid-input');
+      this.options.authenticationContract(account, service);
+    }
+  }
   #checkEnvironmentSources(graph: ProviderGraph): void {
     for (const account of Object.values(graph.accounts)) {
       if (account.ownerId === this.options.hostOwnerId) continue;
@@ -742,21 +759,31 @@ interface MutationServicesInput {
 /** Capture only references changed by this review, including newly selected existing Profiles. */
 function mutationDependencies({ before, after, changes }: MutationServicesInput): Readonly<{
   requiredServices: readonly string[];
+  requiredAccounts: readonly string[];
   requiredProfiles: readonly string[];
 }> {
-  const services = new Set([...changes.services.created, ...changes.services.updated]);
+  const changedServices = new Set([...changes.services.created, ...changes.services.updated]);
+  const services = new Set(changedServices);
+  const accounts = new Set<string>();
   const profiles = new Set([...changes.profiles.created, ...changes.profiles.updated]);
   const account = (id: string) => {
-    if (after.accounts[id]) services.add(after.accounts[id].serviceId);
+    if (after.accounts[id]) {
+      accounts.add(id);
+      services.add(after.accounts[id].serviceId);
+    }
   };
+  for (const value of Object.values(after.accounts))
+    if (changedServices.has(value.serviceId)) account(value.id);
   for (const id of [...changes.accounts.created, ...changes.accounts.updated]) account(id);
   for (const id of profiles) account(after.profiles[id].accountId);
   for (const profile of Object.values(after.profiles)) {
     if (
       services.has(after.accounts[profile.accountId].serviceId) &&
       profile.ownerId === after.services[after.accounts[profile.accountId].serviceId].ownerId
-    )
+    ) {
       profiles.add(profile.id);
+      account(profile.accountId);
+    }
   }
   for (const id of changedPurposeProfileIds(before.purposes, after.purposes)) {
     const profile = after.profiles[id];
@@ -765,7 +792,11 @@ function mutationDependencies({ before, after, changes }: MutationServicesInput)
       account(profile.accountId);
     }
   }
-  return { requiredServices: [...services], requiredProfiles: [...profiles] };
+  return {
+    requiredServices: [...services],
+    requiredAccounts: [...accounts],
+    requiredProfiles: [...profiles],
+  };
 }
 
 function mutationOwner(value: unknown): string | undefined {

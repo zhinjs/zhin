@@ -41,9 +41,9 @@ import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-tr
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalSelfChangeStatus, EvalMemoryEntry, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import type { EvalApprovalBehaviour, EvalCase, EvalSelfChangeStatus, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
-import { createLlmMediaPerceptionPort, resolvePerceptionConfig } from '../../src/media/perception.js';
+import { resolvePerceptionConfig } from '../../src/media/perception.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
 import type { ImageAssetPublisher } from '../../src/media/image-assets.js';
 

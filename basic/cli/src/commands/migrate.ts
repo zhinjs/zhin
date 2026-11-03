@@ -566,6 +566,10 @@ migrateCommand.addCommand(
         withCredentials?: boolean;
       }) => {
         if (options.apply && options.finalize) throw new Error('Choose apply or finalize');
+        if (migrateCommand.opts().dryRun)
+          throw new Error(
+            'Inference migration does not support --dry-run; use --output for an explicit preview'
+          );
         if (options.apply || options.finalize) {
           if (
             options.output ||

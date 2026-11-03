@@ -1,6 +1,5 @@
 import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
-import { profileModel } from '../helpers/profile-runtime.js';
-import { createProfileRuntime } from '../helpers/profile-runtime.js';
+import { createProfileRuntime, profileModel } from '../helpers/profile-runtime.js';
 /**
  * Gemini behind a pass-through proxy: `baseUrl` (with or without /v1beta, with or
  * without a trailing slash) and optional `headers` reach every endpoint over the

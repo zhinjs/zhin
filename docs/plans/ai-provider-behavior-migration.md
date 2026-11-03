@@ -68,3 +68,20 @@
 ## 固定候选前的发布范围复核
 
 本次 changeset 只声明 patch，不执行 bump／发布。按实际 source／manifest／包内文档变更，明确覆盖 21 个可发布包：AI／AI Provider／Agent／CLI，FeatureKit／Command／Tool／Core 及其受控 Context 消费者，Database JSON 存储、A2A／Workroom／HTTP Host／Console client，scaffold／create-zhin。纯测试变动的 adapter 不额外声明。公共升级表由本次实际 Changesets status 的 oldVersion/newVersion 对齐，不把 HEAD 尚未包含的 WIP 漏掉；新增 AI Provider 在当前计划下首发为 1.0.1，尚未发布。完整基线／候选差异将由 Root 的固定 SHA 门禁与独立 reviewer 验证。
+
+## 独立审查后的子任务作用域修复
+
+- 原候选 `0315ba0a6` 已为子任务保留独立语言 Model bundle，但 standalone 的工具执行仍继承父回合 ALS。永久集成测试在父回合释放后复现：语言继续正常，生图／决策 Driver 均未执行，工具得到已关闭 operation 错误。
+- 在子任务真实 Models 生命周期内重绑配置与决策 ALS；生图、识图和决策只使用子任务自身的 client／resolver。决策禁用标记在 spawn 同步准入时捕获，角色选择不改变原发起人的权限、配额或所有权；在途仍固定原图和实际 generation lease。
+- 子任务的 decision observations 在自己的 ALS finally 中收集，通过现有 finish 成功／错误事件携带，使用子任务 turnId，不写入父回合；没有新增事件种类、审计表、通知或保留策略。
+- `delegated-side-inference.test.ts` 覆盖真实 Subagent → standalone → builtin 生图工具与结构化决策，父完成／HMR 后的实际 Driver 调用、原发起人／图版本、禁用策略、取消后的观测保留与最终资源释放。与原生命周期、决策、Subagent 回归合计 5 文件／42 测试通过。都是合成 Driver 的本地集成证据，不代表真实供应商验证。
+- 类型负例保留 `@ts-expect-error`，用 `void evidence.applied` 正确消费不允许的字段访问；未禁用 lint 规则或删除负断言。完整固定候选门禁由 Root 另行重跑。
+- CI 同次指出的迁移新增 duplicate／unused imports 已做纯 import 合并与移除未使用类型；聚焦 ESLint 为零错误／警告。保留逐条退役负类型 import 的 duplicate 警告，以免一个错误掩盖另一个意外恢复的 export。eval:chat 的旧 non-null／any、Command 的旧 escape 和 Workroom 的旧未用 helper 均可在 `d8532ddbf` 找到，不借本次修复改其行为或放宽规则。
+
+### 单独待定：standalone 错误终态的状态投影
+
+- **基线证据**：`git show d8532ddbf:packages/im/ai/src/llm/agent-loop.ts` 的既有 catch 已把 transport throw 转成 `AssistantMessage.stopReason = 'error'`／`errorMessage` 并继续发出 `message_end`；同基线 `core/agent-loop-standalone.ts` 在 `errorMessage` 存在时生成错误文本，但返回值不包含终态；同基线 `subagent/subagent-runtime.ts` 对 runner 的正常返回统一发 `status: 'ok'`。当前源码仍是这条链，本次 Provider 端口替换没有创建这个错误转成功的分支。
+- **当前本地证据**：真实子任务 Driver 在已完成两个工具后普通 throw，语言层记录错误文本，子任务 finish 仍为 ok；这是结果分类缺口，不能称模型／任务成功。为保持本次修复边界，永久取消回归使用真实 `manager.cancel()` 覆盖 catch 与已完成观测保留，没有把上述错误路径改成成功断言。
+- **消费者与风险**：`SubagentSystem.composeSender()` 将 ok 投影成 ResultSink 的 completed；`buildSubagentUserDelivery()` 会显示“完成”；`persistSubagentResultToContext()` 把该状态存入父会话，auto-continue 两种状态都会唤醒主 Agent，并把状态提供给它决定下一步。activity-feedback 的 finish 仅结束进度；Trace 的 subagent_end 仅保存上游给定状态。未找到按此状态自动重放原 Subagent 的确定性队列逻辑，但主模型看到状态后可以再次编排工具／spawn，因此错误分类修复不能同时新增自动重试。
+- **相邻边界**：deferred-worker 同样消费 standalone 返回值并按迭代数判 ok／partial；`AIService.runAgent()` 公开结果亦未携带终态，Workroom planning 再解析 JSON。它们是共享 runner 的既有受影响路径，需要一并核验，不能只改 Console 展示或只让 Subagent catch 抛错而丢失已完成工具和用量。
+- **最小候选方案（未实施）**：从已存在的最后 `AssistantMessage.stopReason`／`errorMessage` 投影窄终态到 standalone 结果，保留 content、usage、toolCalls 与原错误含义；由各既有任务 owner 映射现有 error／cancelled 状态，不增加新重试／降级／触发策略。对完成副作用后模型失败、取消、合法空答和迭代上限分别验证；已执行工具不重放，未知副作用不得误报未执行。该方案待另行确认，不属于本次 child ALS 修复。

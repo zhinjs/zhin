@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ModelExecutionScope } from '@zhin.js/agent/model-runtime';
-import type { FoundationModelOperation } from '../agent/runtime-foundation.js';
+import type { AgentRuntimeFoundation, FoundationModelOperation } from '../agent/runtime-foundation.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { JournalWorkroomAssignmentGrantClaimPreview, WorkroomPlanningClarificationError, createAssignmentExecutionEnvelope, createDurableWorkroomAssignmentAuthorityGrantProvider, createWorkroomRoleCapabilitySnapshot, DurableReportLocalModelExecutionPort, GenerationOwnedWorkroomAssignmentAuthorityProvider, LocalAssignmentExecutor, PinnedProfileCatalogLocalAssignmentRoute, WorkroomLocalAssignmentRuntime, bindWorkroomCapabilityRealization, createAgentCoreWorkroomLocalTurnPort, createGenerationOwnedDynamicPlanningProvider, createSelfDeliveryAssignmentExecutor, createWorkroomDynamicPlanningGenerationSnapshot, createWorkroomGenerationAuthoritySnapshotFromRuntime, structuredTaskReportPrompt, workroomAssignmentAuthorityGrantRepositoryToken, workroomAssignmentAuthorityGrantToken, workroomAssignmentGrantClaimPreviewToken, workroomDynamicPlanningPolicyToken, workroomEvidencePayloadWriterToken, workroomHumanIngressPlanningToken, workroomLocalAssignmentAuthorityToken, workroomLocalAssignmentRuntimeToken, workroomPlanningDisclosureToken, workroomProjectProfileRegistryToken, workroomTaskReportPayloadToken, type SelfDeliveryHostConfiguration, type WorkroomEvidencePayloadWriteInput, type WorkroomStructuredDagModelInput } from '@zhin.js/workroom';
 import { installWorkroomSchedulerPortfolioDispatchResources, type WorkroomSchedulerPortfolioDispatchResources } from '@zhin.js/workroom/scheduler';
@@ -9,7 +9,6 @@ import {
 } from '@zhin.js/agent/runtime';
 import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';
 import {
   createLocalWorkroomAssignmentGrantProvider,
   LOCAL_WORKROOM_RESOURCE_REQUIREMENTS,

@@ -1,4 +1,3 @@
-import { wizardText } from '@zhin.js/scaffold-wizard';
 import { Command } from 'commander';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
@@ -12,6 +11,7 @@ import { globalZhinHome } from '../utils/zhin-home.js';
 import { logger } from '../utils/logger.js';
 import { findConfigFile, prepareConfigSave, readConfig } from '../utils/config-file.js';
 import {
+  wizardText,
   configureDatabaseOptions,
   configureAdapters,
   configureAI,

@@ -1,6 +1,6 @@
 # AI Provider runtime implementation ledger
 
-Approved target: [repository contract](./ai-provider-target-architecture.md). Its header preserves the unchanged original artifact fingerprint. Backend worktree: `feat/ai-provider-runtime`, baseline `d8532ddbf`. Console local review candidate: `a13e26537010ea78dab6d33efb66645c458cc35f` in `feat/ai-provider-console`. Neither branch was pushed or deployed. ROOT performs independent verification and final review; all implementation is delegated.
+Approved target: [repository contract](./ai-provider-target-architecture.md). Its header preserves the unchanged original artifact fingerprint. Backend worktree: `feat/ai-provider-runtime`, baseline `d8532ddbf`. Console local review candidate: `d59c47a1b4c7f4892a0f198f888cb9211f165574` in `feat/ai-provider-console`. Neither branch was pushed or deployed. ROOT performs independent verification and final review; all implementation is delegated.
 
 | Requirement | Implementation owner | Current state | Evidence / remaining verification |
 | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ Approved target: [repository contract](./ai-provider-target-architecture.md). It
 | Six decision tasks and independent ambient language purpose | subscription_provider_research + provider_local_design | Implemented, deterministic tests | Native DecisionResult only; task schemas/modes stay with Agent policy; ambient inherits deployment chat only when unset |
 | Profile generation parameters and perception chain | provider_local_design + subscription_provider_research | Implemented, local tests | Removes framework temperature/output overrides; only the approved explicit perception fallback chain remains |
 | Profile model update / persistent Session following | provider_local_design + subscription_plan_review | Implemented, persistence/in-flight tests | Same Profile may change native model; next operation follows, in-flight binding remains fixed; account incarnation and opaque-model state stay isolated |
-| Console configuration | subscription_plan_review | Local candidate frozen | 645 Console tests, typecheck, Farm build; ROOT browser verified service editor, contextual parameters, roundtrip, wrong-state login, personal scope and save recovery |
+| Console configuration | subscription_plan_review | Local candidate frozen | 650 Console tests, typecheck, Farm build; ROOT browser verified service editor, contextual parameters, roundtrip, wrong-state login, personal scope and save recovery |
 | One-time official resource migration | subscription_plan_review + provider_local_design | Implemented, actual SQLite + real CLI tested | Source-only preview; SQLite readonly selected-root metadata / explicit snapshot; explicit credential transfer, journal + receipt, separate file finalize / backup |
 | Existing third-party Profile → old Session manual binding | provider_local_design + subscription_plan_review | Implemented, local integration tested | 17 cases include real CLI / SQLite CAS / unknown recovery; non-SQLite preview defers target validation to apply; generic port fixture is not a real MySQL/PostgreSQL acceptance |
 | Scaffolding / examples / public schema / docs | provider_local_design | Implemented, local build/tests | Independent plan proposal; runtime startup rejects old authority; official authoring and upgrade documentation updated |
@@ -32,7 +32,7 @@ Approved target: [repository contract](./ai-provider-target-architecture.md). It
 
 ## Evidence and limits
 
-- Final owned-source Host checkpoint: 26 files / 179 tests passed, including Session-only real CLI, Host HMR / approval, native Fetch + GC, ambient metadata and SQLite dialect contracts. CLI typecheck and focused ESLint passed. These are local checkpoints, not the final immutable-candidate repository gates.
+- Owned-source Host checkpoint after security review: 27 files / 190 tests passed, including Session-only real CLI, Host HMR / approval, native Fetch + GC, ambient metadata and SQLite dialect contracts. Focused ESLint passed. The Agent dependency build completed 32 tasks, then CLI typecheck passed against its rebuilt child-perception declarations. These are local checkpoints, not the final immutable-candidate repository gates.
 - Repository/auth/management checks use synthetic data with real local SQLite and the Host cipher. HTTP tests use temporary loopback listeners. Native transport acceptance uses an actual local HTTP server and forced GC; it is not a vendor call.
 - Real CLI upgrade test executes `zhin migrate inference` preview → apply → finalize, then `runStartCommand`; authenticated management works, anonymous access is 401 and external request count is zero. ROOT independently reproduced this. It uses development source entry points, not a released tarball.
 - Original startup failure was reproduced before correcting cleanup registration: `handoff.activateNext` cannot add to an already sealed DisposeStack. Cleanup is now registered in preparation; activation only captures its exact Driver ownership.
@@ -44,3 +44,12 @@ Approved target: [repository contract](./ai-provider-target-architecture.md). It
 - Source preview never loads `.env`, another CLI's authorization cache or executable project plugins. It reports unresolved mapping/owner/session references instead of replacing them with defaults. Official automatic import and explicit existing-Profile Session binding remain different reviewed units sharing the same journal/CAS mechanism.
 - Normal API saves do not write the startup file. Offline migration finalization is a separate explicit operation, preserves the original source in a private backup, and does not restart the process. Database and file cutover are not claimed to be one transaction.
 - Existing process-owned AssistantStatus ambient scenario configuration is still bound by ingress construction; candidate-config residue is a pre-existing boundary outside this change. New model metadata uses the actual Console operation scope and canonical ambient selection rather than the removed static judge selector.
+
+## Security review corrections
+
+| Expected invariant | Actual local evidence | Result and limits |
+| --- | --- | --- |
+| Refresh cannot change a proven subject within one Account incarnation | Real SQLite/cipher regression first issued subject B's grant, then rejects `identity-change`; persisted state is uncertain with subject A and neither token, and a rebuilt runtime does not replay. Missing/same subject retains the proven identity | Passed synthetic exchange tests; vendor identity authenticity is not live-verified |
+| Every affected Account method is supported by the exact held Driver, including Accounts with no Profile | Real builtin Codex `none` / API Key review rejected before credential access; a same-contract Driver methods change rejects an unsubmitted prepared Account, while its old committed receipt still recovers first | Passed metadata/SQLite tests with zero credential/provider calls |
+| Parent `--dry-run` never dispatches an inference migration or creates a preview artifact | Actual Commander red cases committed graph, finalized configuration and changed a Session; repaired cases leave database/journal/source unchanged. Empty-Root preview refusal leaves output and `.zhin` absent | Passed development CLI subprocess tests; ordinary explicit preview/apply remain available |
+| Child perception is created from its acquired child scope | CLI configureRouting regression first lacked the callback, then uses the generation-local scoped factory with the child's Session and existing settings/resilience | Passed integration wiring test; Agent child execution evidence is recorded separately in behavior migration notes |

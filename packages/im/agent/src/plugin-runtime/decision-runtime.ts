@@ -39,7 +39,7 @@ export function resolveAgentDecisionRuntime(
 }
 
 interface AgentDecisionTurnContext {
-  readonly snapshot: RuntimeSnapshot;
+  readonly snapshot?: RuntimeSnapshot;
   readonly turnId: string;
   readonly disabled: boolean;
   readonly runtime?: AgentDecisionRuntime;
@@ -55,6 +55,11 @@ export function getAgentTurnDecisionRuntime(): AgentDecisionRuntime | undefined 
   return decisionTurnStorage.getStore()?.runtime;
 }
 
+/** Delegated work keeps its origin's policy restriction, but never its client. */
+export function isAgentTurnDecisionDisabled(): boolean {
+  return decisionTurnStorage.getStore()?.disabled ?? false;
+}
+
 /** Opaque capture for the same root, turn, session and held generation. */
 export function getAgentTurnInferenceSnapshot(): InferenceGraphSnapshot | undefined {
   return decisionTurnStorage.getStore()?.inferenceSnapshot;
@@ -66,7 +71,7 @@ export function drainAgentTurnDecisionObservations(): readonly DecisionObservati
 
 /** Ingress selection, approval, and native tools share one held-generation decision context. */
 export function runWithAgentDecisionTurn<T>(
-  options: { readonly snapshot: RuntimeSnapshot; readonly turnId: string; readonly models?: DecisionModelScope;
+  options: { readonly snapshot?: RuntimeSnapshot; readonly turnId: string; readonly models?: DecisionModelScope;
     readonly inferenceSnapshot?: InferenceGraphSnapshot;
     readonly disabled?: boolean; readonly observe?: (observation: DecisionObservation) => void },
   run: (runtime: AgentDecisionRuntime | undefined) => Promise<T>,
@@ -74,7 +79,7 @@ export function runWithAgentDecisionTurn<T>(
   const { snapshot, turnId, models } = options;
   const current = decisionTurnStorage.getStore();
   const disabled = options.disabled ?? false;
-  if (current?.snapshot === snapshot && current.turnId === turnId && current.disabled === disabled && current.models === models
+  if (current && current.snapshot === snapshot && current.turnId === turnId && current.disabled === disabled && current.models === models
     && current.inferenceSnapshot === options.inferenceSnapshot) return run(current.runtime);
   const observations: DecisionObservation[] = [];
   const runtime = disabled || !models ? undefined : resolveAgentDecisionRuntime(models, observation => {

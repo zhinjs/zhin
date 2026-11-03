@@ -29,6 +29,7 @@ import {
   type AgentTraceRecorder,
 } from '@zhin.js/agent/runtime';
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
+import { createScopedPerceptionFactory, ModelRuntimeError } from '@zhin.js/agent/model-runtime';
 import { auditControlOutbound, checkControlAtOutbound, logControlBlocked } from './turn/control-gate.js';
 import { auditOutbound, createDecisionAudit, decisionScopeOf } from './turn/decision-audit.js';
 
@@ -94,9 +95,19 @@ export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
   });
 
   agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, knowledgeIndex));
+  const createPerception = createScopedPerceptionFactory();
   agent.getSubagentSystem()?.configureRouting({
     imageAssets: service.imageAssets,
     localAssets,
+    createPerception: (scope) => {
+      if (!scope.context.sessionKey) throw new ModelRuntimeError('invalid-context');
+      return createPerception({
+        scope,
+        sessionKey: scope.context.sessionKey,
+        settings: service.getPerceptionConfig(),
+        resilience: service.getAgentConfig()?.providerResilience,
+      });
+    },
     resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
     getMcpRegistry: () => null,
     resolveAgentMeta: async (name) => {

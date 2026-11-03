@@ -41,6 +41,10 @@ export function createSubagentSystem(opts: SubagentSystemInitOptions): SubagentS
         agentId: event.agent,
         hookContext: {
           subagentAgent: event.agent,
+          ...(event.decisionObservations?.length ? {
+            decisionTurnId: `subagent:${event.taskId}`,
+            decisionObservations: event.decisionObservations,
+          } : {}),
         },
       });
       if (event.phase === 'spawn') {

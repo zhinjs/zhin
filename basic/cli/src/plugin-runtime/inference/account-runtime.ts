@@ -1089,6 +1089,9 @@ export class HostAccountRuntime {
               fetch,
             })
         );
+        const previousSubject = identity(current).subject;
+        if (previousSubject && credential.subject && previousSubject !== credential.subject)
+          throw new InferenceAuthenticationError('identity-change');
         return await this.#publish({
           account,
           previous: pending,
