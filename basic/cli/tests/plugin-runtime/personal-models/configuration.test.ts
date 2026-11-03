@@ -154,4 +154,46 @@ describe('trusted model configuration admission', () => {
       await pending.catch(() => undefined); await runtime.dispose(); await c.close();
     }
   });
+
+  // #1139 P6 guard: model fetching is admitted through the Root control queue that also runs
+  // `hmr.pause` / `hmr.resume`. While the queue is held (as during a reload), no model fetch
+  // can start, so a pause handler that awaited it would wait on itself.
+  it('does not start a model fetch while the control queue is held, as it is during an HMR pause', async () => {
+    const secretResolver = vi.fn(async () => 'synthetic-resolved-key');
+    const network = vi.fn(async () => { throw new Error('unexpected network'); });
+    const explicit: ModelRuntimeConfig = { modelCatalog: {
+      connections: { main: { revision: 1, sdk: 'openai-compatible', baseUrl: 'https://synthetic.invalid/v1', secretRef: 'synthetic-ref' } },
+      models: { old: { connectionId: 'main', model: 'old', capabilities: {} } }, presets: { old: { modelId: 'old' } },
+    }, modelPolicy: { defaults: { chat: 'old' } } };
+    const runtime = new ModelRuntimeService({ config: explicit, hostOwnerId, secretResolver,
+      hostTransportFactory: () => new AiHttpTransport({ fetch: network }) });
+    const c = controller(runtime);
+    const access = createModelConfigurationAccess({ control: c.control, runtime: () => runtime });
+    const pauseEntered = deferred<void>();
+    const pauseHeld = deferred<void>();
+    const reloadInQueue = c.control(async () => {
+      pauseEntered.resolve();
+      await pauseHeld.promise;
+      return 'reloaded';
+    });
+    try {
+      await pauseEntered.promise;
+      const modelFetch = access.acquireHostModel();
+      await new Promise(resolve => setTimeout(resolve, 20));
+      expect(secretResolver).not.toHaveBeenCalled();
+      expect(c.retained).toHaveLength(0);
+
+      pauseHeld.resolve();
+      await expect(reloadInQueue).resolves.toBe('reloaded');
+      const lease = await modelFetch;
+      expect(secretResolver).toHaveBeenCalledTimes(1);
+      expect(network).not.toHaveBeenCalled();
+      await lease.release();
+      expect(c.retained[0].active).toBe(false);
+    } finally {
+      pauseHeld.resolve();
+      await runtime.dispose();
+      await c.close();
+    }
+  });
 });
