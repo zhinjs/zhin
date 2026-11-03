@@ -1,0 +1,23 @@
+basic/cli/src/plugin-runtime/console/configuration-redaction.ts
+  s_ce30e957c2b2e6::t_22c9cadeb97d39 1,72-75,80,83,89-92,94-95,97-98,101,105,107
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_ce30e957c2b2e6::t_2cb011a6e7f151 266,399-400,407
+basic/cli/tests/plugin-runtime/console/configuration-project-patch.test.ts
+  s_ce30e957c2b2e6::t_d384b049fb03b4 120-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2cdc30bf688ad5e94b42238a198665096a3ece2a",
+  "prompts": {},
+  "sessions": {
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
