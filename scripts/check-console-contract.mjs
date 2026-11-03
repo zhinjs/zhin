@@ -96,7 +96,7 @@ try {
       const relative = path.relative(consoleSource, source);
       if (!relative) return true;
       const first = relative.split(path.sep)[0];
-      return first !== '.git' && first !== 'node_modules' && first !== 'dist';
+      return !['.git', '.claude', '.codegraph', 'node_modules', 'dist'].includes(first);
     },
   });
 

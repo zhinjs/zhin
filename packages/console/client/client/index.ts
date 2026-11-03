@@ -110,6 +110,8 @@ export {
   resolveApiUrl,
 } from "./console-utils/remoteApi.js";
 
+export { adapterConsoleStyles } from './adapter-console/styles.js';
+
 export {
   AdapterConsolePage,
   createAdapterConsolePage,

@@ -984,6 +984,9 @@ importers:
       react:
         specifier: ^19.2.8
         version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
       rimraf:
         specifier: ^6.1.3
         version: 6.1.3

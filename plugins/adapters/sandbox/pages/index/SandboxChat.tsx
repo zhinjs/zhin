@@ -2,6 +2,7 @@ import { sandboxText, type SandboxLocale } from './messages.js';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   cn,
+  adapterConsoleStyles,
   CodeBlock,
   MarkdownContent,
   resolveMediaSrc,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor';
 import HtmlMessage from './HtmlMessage.js';
+import { sandboxStyles } from './styles.js';
 import ConversationRecoveryPanel from './ConversationRecoveryPanel.js';
 import { useSandboxHistory } from './useSandboxHistory.js';
 import {
@@ -889,7 +891,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
     const recoveryConnectionId = connectionRef.current.connectionId
     return (
-        <section className={cn("agent-playground-shell", showInspector && "has-inspector")}>
+        <section className={cn("zhin-console-surface zhin-sandbox agent-playground-shell", showInspector && "has-inspector")}>
+            <style>{adapterConsoleStyles}{sandboxStyles}</style>
             <div className="agent-playground-mobilebar">
                 <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "会话列表")}</button>
                 <strong>{sandboxText(locale, "会话")}</strong>
