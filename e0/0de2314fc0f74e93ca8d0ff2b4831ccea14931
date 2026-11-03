@@ -1,0 +1,23 @@
+docs/configuration/index.md
+  s_9622fd28aba994::t_4bcaf4d7620523 88
+docs/en/configuration/index.md
+  s_9622fd28aba994::t_7aa245f534df63 88
+docs/plans/adapter-profile-config-audit.md
+  s_9622fd28aba994::t_c3f6415569280f 17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e00de2314fc0f74e93ca8d0ff2b4831ccea14931",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
