@@ -1,0 +1,47 @@
+packages/im/agent/src/outbound/reply-json-candidate.ts
+  s_efe26f87c3b074::t_be1c8ae75eae7b 36,43,134-136,138-142,151-154,184,186-188,208
+packages/im/agent/src/outbound/structured-reply-stream.ts
+  s_efe26f87c3b074::t_7eee6b09fad367 23,26,28,30
+.changeset/incremental-reply-parser.md
+  s_079f1dc5e6308d::t_15b3193e8c0a1e 5
+packages/im/agent/README.md
+  s_079f1dc5e6308d::t_2f92db2ee018f2 78-80
+packages/im/agent/tests/benchmarks/reply-parser.ts
+  s_4a3da79bf26c58::t_09c83c2726ab83 16,19-21
+packages/im/agent/tests/core/incremental-reply-parser-performance.test.ts
+  s_4a3da79bf26c58::t_b0d781de60ec0d 37-57
+packages/im/agent/tests/core/incremental-reply-parser.test.ts
+  s_079f1dc5e6308d::t_ffbb8fe07bb7f4 72-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "86d9867f94859a42fc7b449fe4d9a7ed3e1c9ece",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_4a3da79bf26c58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66214013-1784-4c6a-9edd-9039237b51db",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
