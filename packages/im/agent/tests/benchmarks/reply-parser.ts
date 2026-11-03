@@ -13,11 +13,12 @@ interface Measurement {
 }
 interface Scenario { name: string; deltas: readonly string[] }
 const gc = (globalThis as { gc?: () => void }).gc;
-const profile = { types: ['text'] as const, reaction: { values: [{ value: 'ok', label: 'OK' }] } };
+const profile = { types: ['text', 'face'] as const, reaction: { values: [{ value: 'ok', label: 'OK' }] } };
 const scenarios: Scenario[] = [];
 for (const count of [300, 1200]) {
-  for (const name of ['non-json', 'withheld-reaction', 'visible-text', 'SDK-compatibility']) {
-    const header = name === 'non-json' ? 'ordinary prose ' :
+  for (const name of ['non-json', 'withheld-reaction', 'visible-text', 'numeric-field', 'SDK-compatibility']) {
+    const header = name === 'non-json' ? 'ordinary prose ' : name === 'numeric-field'
+      ? '{"reaction":"","messages":[{"segments":[{"type":"face","data":{"id":1.5e+1}},{"type":"text","data":{"text":"' :
       `{"${name === 'SDK-compatibility' ? '\\u0072eaction' : 'reaction'}":"${name === 'withheld-reaction' ? 'ok' : ''}","messages":[{"segments":[{"type":"text","data":{"text":"`;
     scenarios.push({ name, deltas: Array.from({ length: count }, (_, index) => (index ? '' : header) + 'x'.repeat(64)) });
   }

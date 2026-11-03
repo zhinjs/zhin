@@ -34,3 +34,24 @@ it.each(['non-json', 'withheld-reaction', 'visible-text'] as const)(
     }
   },
 );
+
+it.each(['-12', '-0', '0.5', '1e+3', '1e-3', '9007199254740992', '1e309'])(
+  'resumes incremental text after a completed numeric segment field: %s', async number => {
+    const header = `{"messages":[{"segments":[{"type":"face","data":{"id":${number}}},`
+      + '{"type":"text","data":{"text":"';
+    const profile = { types: ['face', 'text'] as const };
+    const candidate = createStructuredReplyStreamParser(profile), old = createLegacyStructuredReplyStreamParser(profile);
+    candidate.append(header);
+    let raw = header;
+    work.enabled = true;
+    for (let revision = 1; revision <= 300; revision++) {
+      const delta = 'x'.repeat(64);
+      raw += delta; candidate.append(delta);
+      const expected = await old.parse(raw, revision);
+      if (Number.isFinite(Number(number))) expect(expected?.messages[0]?.segments[1]?.value.type).toBe('text');
+      work.calls = 0;
+      expect(await candidate.snapshot(revision)).toEqual(expected);
+      expect(work.calls).toBe(0);
+    }
+  },
+);

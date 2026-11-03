@@ -69,6 +69,18 @@ it('does not fragment a large single provider delta into per-character string al
   expect(cursor.value()).toEqual({ messages: [{ segments: [{ type: 'text', data: { text } }] }] });
 });
 
+it('keeps numeric-repair snapshot evidence scoped to its captured prefix while later input resumes the cursor', async () => {
+  const profile = { types: ['text'] as const, reaction: { values: [{ value: 'ok', label: 'OK' }] } };
+  const raw = '{"reaction":"","messages":[{"segments":[{"type":"text","data":{"text":"candidate"}}]}],"reaction":-';
+  const candidate = createStructuredReplyStreamParser(profile);
+  candidate.append(raw);
+  const pending = candidate.snapshot(1);
+  candidate.append('1,"reaction":""}');
+  expect(await pending).toEqual(await createLegacyStructuredReplyStreamParser(profile).parse(raw, 1));
+  expect(await pending).toBeUndefined();
+  expect((await candidate.snapshot(2))?.messages[0]?.segments[0]?.value).toEqual({ type: 'text', data: { text: 'candidate' } });
+});
+
 it.each([false, true])('keeps deeply nested non-message candidates non-public without recursion failure (split=%s)', async split => {
   const header = '{"messages":' + '['.repeat(12000), raw = header + '"x';
   const candidate = createStructuredReplyStreamParser();

@@ -75,7 +75,9 @@ Each answering attempt owns one append-only JSON candidate. Standard prefixes sc
 input and reuse unchanged nodes; non-public reactions do not materialize the growing message
 body. The existing decoder/schema still validate segments and the complete final response.
 SDK-specific repair syntax retains the original parser as a compatibility fallback; its worst-case
-cumulative parsing cost remains. No parsing delay or new input/depth limit is introduced.
+cumulative parsing cost remains. Signed, fractional and exponential numbers use it temporarily
+while their partial spelling needs repair, then resume the incremental path once reliably retained.
+No parsing delay or new input/depth limit is introduced.
 
 Differential tests use a frozen pre-migration parser, prefix/chunk corpora, and real reply scheduling.
 Run the synthetic comparison from the repository root with

@@ -33,13 +33,14 @@ export class ReplyJsonCandidate {
   #token?: Token;
   #version = 0;
   #fallback = false;
+  #numericRepair = false;
   #nonObject = false;
   #scannedCharacters = 0;
   #materializedNodes = 0;
   #stringFragments = 0;
 
   get raw(): string { return this.#raw; }
-  get fallback(): boolean { return this.#fallback; }
+  get fallback(): boolean { return this.#fallback || this.#numericRepair; }
   get nonObject(): boolean { return this.#nonObject; }
   /** Internal counters used by deterministic complexity tests, not runtime admission. */
   get work(): Readonly<{ scannedCharacters: number; materializedNodes: number; stringFragments: number }> {
@@ -130,12 +131,15 @@ export class ReplyJsonCandidate {
     }
     if (token) {
       if (token.kind === 'number' && /[0-9eE.\-+]/.test(char)) {
-        // SDK repair has special exponent/trailing-number semantics. Preserve that path.
-        if (char < '0' || char > '9' || token.text === '0') { this.#fallback = true; return; }
+        // A numeric prefix can differ from its final value under SDK repair. Keep scanning
+        // its syntax, but let the SDK own snapshots until a later retained value/delimiter.
+        if (char < '0' || char > '9' || token.text === '0') this.#numericRepair = true;
         token.text += char;
-        const number = Number(token.node!.value) * 10 + Number(char);
-        if (!Number.isSafeInteger(number)) { this.#fallback = true; return; }
-        token.node!.value = number; this.#touch(token.node!);
+        if (!this.#numericRepair) {
+          const number = Number(token.node!.value) * 10 + Number(char);
+          if (!Number.isSafeInteger(number)) this.#numericRepair = true;
+          else { token.node!.value = number; this.#touch(token.node!); }
+        }
         return;
       }
       if (token.kind === 'literal' && /[a-z]/.test(char)) {
@@ -144,6 +148,10 @@ export class ReplyJsonCandidate {
         return;
       }
       if (token.kind === 'literal' && !['true', 'false', 'null'].includes(token.text)) { this.#fallback = true; return; }
+      if (token.kind === 'number') {
+        if (!/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/.test(token.text)) { this.#fallback = true; return; }
+        token.node!.value = Number(token.text);
+      }
       token.node!.complete = true; this.#touch(token.node!); this.#token = undefined;
       // Number/literal terminators also belong to the enclosing container.
     }
@@ -171,12 +179,13 @@ export class ReplyJsonCandidate {
   }
 
   #start(char: string): void {
-    // A dangling negative duplicate value keeps the previous property in SDK repair.
-    if (char === '-') { this.#fallback = true; return; }
     const frame = this.#stack.at(-1), parent = frame?.node;
     const kind = char === '{' ? 'object' : char === '[' ? 'array' : char === '"' ? 'string'
-      : /[0-9tfn]/.test(char) ? 'primitive' : undefined;
+      : /[0-9tfn-]/.test(char) ? 'primitive' : undefined;
     if (!kind) { this.#fallback = true; return; }
+    // A new retained value commits the preceding number's complete original spelling.
+    // A lone minus itself is not retained by SDK repair, so it still needs the old snapshot.
+    this.#numericRepair = char === '-';
     const node: Node = { kind, parent, complete: false, version: this.#version,
       ...(kind === 'object' ? { properties: new Map() } : kind === 'array' ? { items: [] } : {}) };
     if (frame) {
@@ -196,6 +205,7 @@ export class ReplyJsonCandidate {
   }
 
   #close(frame: Frame): void {
+    this.#numericRepair = false;
     frame.node.complete = true; this.#touch(frame.node); this.#stack.pop();
   }
 

@@ -20,13 +20,14 @@ export function createStructuredReplyStreamParser(profile?: AiOutboundSegmentPro
     append: delta => cursor.append(delta),
     async snapshot(revision) {
       const raw = cursor.raw;
+      const fallback = cursor.fallback, reaction = cursor.closedReaction;
       if (cursor.nonObject) return undefined;
       // A withheld reaction must not cause its growing message body to be materialized.
-      if (!cursor.fallback && profile?.reaction && !cursor.whole
+      if (!fallback && profile?.reaction && !cursor.whole
         && (cursor.reaction() !== undefined && cursor.reaction() !== '' || cursor.closedReaction !== '')) return undefined;
-      const parsed = cursor.fallback ? await parsePartialJson(raw)
+      const parsed = fallback ? await parsePartialJson(raw)
         : { value: cursor.value(), state: cursor.whole ? 'successful-parse' : 'repaired-parse' };
-      return project(parsed, revision, false, raw, cursor.closedReaction, cursor.fallback);
+      return project(parsed, revision, false, raw, reaction, fallback);
     },
     async finish(raw, revision) {
       decodeStructuredReply(raw, profile);
