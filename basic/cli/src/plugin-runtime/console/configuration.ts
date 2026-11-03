@@ -275,12 +275,22 @@ export class ConsoleConfigurationStore {
       const { document, revision } = await this.#document.read();
       const path = Object.freeze([...(request.path ?? [])]);
       const reveal = request.reveal === true;
-      const value = path.length ? readPath(document, path) : structuredClone(document);
+      const value = path.length ? readPath(document, path) : document;
       if (value === undefined) return Object.freeze({ revision, path, exists: false, redacted: !reveal });
-      if (reveal) return Object.freeze({ revision, path, exists: true, value, redacted: false });
-      const masked = path.length ? await this.#maskedValue(document, path)
-        : Object.freeze(Object.fromEntries(await Promise.all(Object.keys(document)
-          .map(async key => [key, await this.#maskedValue(document, [key])] as const))));
+      // Only a verbatim whole-document reply needs its own copy; masking builds new values.
+      if (reveal) return Object.freeze({ revision, path, exists: true, value: path.length ? value : structuredClone(document), redacted: false });
+      let masked: unknown;
+      if (path.length) masked = await this.#maskedValue(document, path);
+      else {
+        const keys = Object.keys(document);
+        const schemas = await this.#schemas.readJsonMany(keys, document);
+        masked = Object.freeze(Object.fromEntries(keys.map(key => {
+          const schema = schemas.get(key);
+          // Fail closed: without the schema we cannot rule out a schema-marked secret under an ordinary key.
+          return [key, schema instanceof Error || schema === undefined ? REDACTED_CONFIG_VALUE
+            : maskConfigValue(schema, [key], document[key])] as const;
+        })));
+      }
       return Object.freeze({ revision, path, exists: true, value: masked, redacted: true });
     });
   }
