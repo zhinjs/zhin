@@ -105,7 +105,7 @@ With the root Command Feature installed, a Bot owner can send `config` (Chinese 
 
 Hints use the account's actual command prefix and namespace. AI Agent is not required.
 
-**Who can use it**: only the `master` configured for the account (endpoint) that received the private message (account-level first, otherwise plugin-level), so owner identity stays on the same platform and account. `ai.trigger.masters` has no platform dimension and is not accepted for chat configuration in v1. Groups, channels and forged metadata never reach the save path.
+**Who can use it**: only the `master` of any configured account (endpoint) on the same adapter that received the private message (the account-level `master`, otherwise the inherited plugin-level `master`), so owner identity always stays on the same adapter/platform. Masters of other adapters (including another plugin instance of the same adapter package) cannot use it. `ai.trigger.masters` has no platform dimension and is not accepted for chat configuration in v1. Groups, channels and forged metadata never reach the save path.
 
 **What can change**:
 
