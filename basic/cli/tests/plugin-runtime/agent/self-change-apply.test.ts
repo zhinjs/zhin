@@ -90,6 +90,7 @@ describe('HostSelfChangeApply ports', () => {
         during = await health({ record: record(), restarted: false, signal: new AbortController().signal });
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     await host.apply('chg_1');
     expect(during).toMatchObject({ ok: false, error: expect.stringContaining('1 runtime error') });
@@ -127,6 +128,7 @@ describe('HostSelfChangeApply lifecycle', () => {
         order.push(`end ${id}`);
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     const first = host.apply('a');
     const second = host.apply('b');
@@ -144,12 +146,28 @@ describe('HostSelfChangeApply lifecycle', () => {
     expect(String(errors[0])).toContain('no Agent generation');
   });
 
+  it('keeps resuming the other leftover approvals when one throws, then surfaces the error', async () => {
+    const host = new HostSelfChangeApply(hostOptions());
+    const resumed: string[] = [];
+    host.bind({
+      apply: async () => undefined,
+      recover: async () => 0,
+      resumeApproved: async (id: string) => {
+        resumed.push(id);
+        if (id === 'chg_bad') throw new Error('boom');
+      },
+    }, async () => ['chg_bad', 'chg_ok']);
+    await expect(host.started()).rejects.toThrow('boom');
+    expect(resumed).toEqual(['chg_bad', 'chg_ok']);
+  });
+
   it('recovers once per process after start, then applies changes approved but never applied', async () => {
     const host = new HostSelfChangeApply(hostOptions());
     const calls: string[] = [];
     const applier = {
       apply: async (id: string) => { calls.push(`apply ${id}`); },
       recover: async () => { calls.push('recover'); return 1; },
+      resumeApproved: async (id: string) => { calls.push(`apply ${id}`); },
     };
     const unbind = host.bind(applier, async () => ['chg_left']);
     expect(calls).toEqual([]); // not before the first generation has started
@@ -297,6 +315,7 @@ describe('HostSelfChangeApply deferred restart', () => {
         expect(restarts).toBe(1);
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     await host.apply('chg_1');
     expect(restarts).toBe(2);

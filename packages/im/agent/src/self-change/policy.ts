@@ -19,6 +19,11 @@ export const MAX_CHANGES_TOTAL_BYTES = 50 * 1024 * 1024;
 export const DEFAULT_CHANGE_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 /** `draft` / `ready` 未提交、`pending` 未审批的时限：24 小时。 */
 export const DEFAULT_CHANGE_IDLE_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * 批准后到生效的时限（#1051 Q2=B）：进程在批准与生效之间结束，重启时只自动生效 1 小时内批准的残留 `approved`；
+ * 更早的转 `expired` 并私聊主人重新起草（批准时的上下文可能已经过时）。
+ */
+export const DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS = 60 * 60 * 1000;
 /** 全实例同时等待审批的变更上限（#1051 F4）：挡住多会话刷卡。 */
 export const DEFAULT_MAX_PENDING_CHANGES = 3;
 /** 定期清理间隔：6 小时（启动时另扫一次）。 */
@@ -45,7 +50,7 @@ const TRANSITIONS: Readonly<Record<SelfChangeStatus, readonly SelfChangeStatus[]
   trialing: ['ready', 'trial_failed'],
   ready: ['pending', 'expired'],
   pending: ['approved', 'rejected', 'expired'],
-  approved: ['applying', 'failed'],
+  approved: ['applying', 'failed', 'expired'],
   applying: ['verifying', 'applied', 'rolled_back', 'failed'],
   verifying: ['applied', 'rolled_back', 'failed'],
   applied: [],

@@ -56,6 +56,8 @@ export type SelfChangeGenerationPorts = Pick<SelfChangeApplyPorts, 'emergencySto
 export interface SelfChangeApplierHandle {
   apply(id: string): Promise<unknown>;
   recover(): Promise<number>;
+  /** Leftover `approved` at start: applied within the approval window, else expired (#1051 Q2=B). Required so the window cannot be skipped. */
+  resumeApproved(id: string): Promise<unknown>;
 }
 
 export class HostSelfChangeApply {
@@ -118,8 +120,8 @@ export class HostSelfChangeApply {
 
   /**
    * The newest Agent generation binds its applier; the returned function unbinds it on dispose.
-   * `listApproved` lists changes approved but never applied (the process ended in between); they are applied
-   * once after `recover()`.
+   * `listApproved` lists changes approved but never applied (the process ended in between); after `recover()`
+   * each goes through `resumeApproved` once (applied when approved within the last hour, else expired, Q2=B).
    */
   bind(applier: SelfChangeApplierHandle, listApproved?: () => Promise<readonly string[]>): () => void {
     this.#applier = applier;
@@ -159,14 +161,20 @@ export class HostSelfChangeApply {
     const listApproved = this.#listApproved;
     return this.#run(async () => {
       await applier.recover();
+      // One failing leftover must not strand the rest until the next start; every error is surfaced at the end.
+      const failures: unknown[] = [];
       for (const id of await listApproved?.() ?? []) {
         this.#errorBaseline.set(id, this.#errors);
         try {
-          await applier.apply(id);
+          await applier.resumeApproved(id);
+        } catch (error) {
+          failures.push(error);
         } finally {
           this.#errorBaseline.delete(id);
         }
       }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) throw new AggregateError(failures, `${failures.length} approved self-changes failed to resume: ${failures.map(error => error instanceof Error ? error.message : String(error)).join('; ')}`);
     });
   }
 

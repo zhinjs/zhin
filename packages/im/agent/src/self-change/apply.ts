@@ -11,6 +11,9 @@
  * 5. 健康检查通过 → `applied`，回报「已生效」；失败 → 用快照回滚**一次**，按同样方式恢复：
  *    恢复健康 → `rolled_back`，回报「失败，已回滚」；仍不健康 → `failed` + 控制面 `emergency_stop`，改投主人私聊，不再自动重启。
  *
+ * 启动时残留的 `approved`（批准后进程没等到生效就结束）经 {@link SelfChangeApplier.resumeApproved}：批准不超过
+ * {@link DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS}（1 小时，#1051 Q2=B）照常生效；更早的转 `expired`，私聊主人重新起草。
+ *
  * 宿主能力（文件系统之外的一切：热重载、重启、配置、健康检查、急停、发消息）都经 {@link SelfChangeApplyPorts}
  * 注入；agent 层不依赖 runtime / CLI。所有生产文件写入都在项目根内、重新过一遍路径白名单（防符号链接逃逸）。
  */
@@ -20,6 +23,7 @@ import * as path from 'node:path';
 import type { DecisionReasonCode } from '../decision-events.js';
 import type { HostProtectedPaths } from '../security/host-config-paths.js';
 import {
+  DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS,
   SelfChangeConfigKeyError,
   SelfChangePathError,
   assertConfigPatchAllowed,
@@ -72,7 +76,8 @@ export interface SelfChangeHealthInput {
 
 export type SelfChangeHealth = Readonly<{ ok: true }> | Readonly<{ ok: false; error: string }>;
 
-export type SelfChangeReportKind = 'applied' | 'rolled_back' | 'failed';
+/** `expired`：残留的批准超过时限没生效（#1051 Q2=B），只投主人私聊。 */
+export type SelfChangeReportKind = 'applied' | 'rolled_back' | 'failed' | 'expired';
 
 export interface SelfChangeReportInput {
   readonly record: SelfChangeRecord;
@@ -117,11 +122,17 @@ export interface SelfChangeApplierOptions {
   readonly pluginRoots?: SelfChangePluginRootsSource;
   readonly ports: SelfChangeApplyPorts;
   readonly healthWindowMs?: number;
+  /** 残留 `approved` 自动生效的时限；默认 {@link DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS}。 */
+  readonly approvedApplyWindowMs?: number;
+  readonly now?: () => number;
   readonly onError?: (error: unknown) => void;
 }
 
-/** 生效路径结束时的结论。`restarting` = 已请求重启，结论由下次启动的 `recover()` 给出。 */
-export type SelfChangeApplyOutcome = 'applied' | 'rolled_back' | 'failed' | 'restarting';
+/**
+ * 生效路径结束时的结论。`restarting` = 已请求重启，结论由下次启动的 `recover()` 给出；`expired` = 残留的批准
+ * 已超时（只由 {@link SelfChangeApplier.resumeApproved} 给出）。
+ */
+export type SelfChangeApplyOutcome = 'applied' | 'rolled_back' | 'failed' | 'restarting' | 'expired';
 
 export class SelfChangeApplier {
   readonly #store: SelfChangeStore;
@@ -130,6 +141,8 @@ export class SelfChangeApplier {
   readonly #pluginRoots: () => readonly string[];
   readonly #ports: SelfChangeApplyPorts;
   readonly #healthWindowMs: number;
+  readonly #approvedApplyWindowMs: number;
+  readonly #now: () => number;
   readonly #onError: (error: unknown) => void;
   #tail: Promise<unknown> = Promise.resolve();
 
@@ -140,12 +153,36 @@ export class SelfChangeApplier {
     this.#pluginRoots = selfChangePluginRootsProvider(options.pluginRoots);
     this.#ports = options.ports;
     this.#healthWindowMs = options.healthWindowMs ?? DEFAULT_CHANGE_HEALTH_WINDOW_MS;
+    this.#approvedApplyWindowMs = options.approvedApplyWindowMs ?? DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS;
+    this.#now = options.now ?? Date.now;
     this.#onError = options.onError ?? (() => undefined);
   }
 
   /** 生效一个 `approved` 的变更。同一进程内串行（一次只动一个变更）。 */
   apply(id: string): Promise<SelfChangeApplyOutcome> {
     return this.#serialize(() => this.#apply(id));
+  }
+
+  /**
+   * 启动时接续一个残留的 `approved`（批准了但进程没等到生效就结束，#1051 Q2=B）：批准（最后一次状态变化）
+   * 不超过 1 小时照常 {@link apply}；更早的转 `expired`（不动任何文件），私聊主人「批准已过期，请重新起草」。
+   */
+  resumeApproved(id: string): Promise<SelfChangeApplyOutcome> {
+    return this.#serialize(async () => {
+      const current = await this.#store.get(id);
+      if (!current) throw new SelfChangeNotFoundError(id);
+      if (current.status !== 'approved') throw new SelfChangeStateError(current.status, 'be applied');
+      const age = this.#now() - current.updatedAt;
+      if (age >= 0 && age <= this.#approvedApplyWindowMs) return this.#apply(id);
+      const minutes = Math.round(this.#approvedApplyWindowMs / 60_000);
+      const done = await this.#store.transition(id, 'expired', {
+        actor: 'policy',
+        error: `approved ${Math.round(age / 60_000)} min ago but not applied within ${minutes} min`,
+        auditPayload: { approved_age_ms: age, window_ms: this.#approvedApplyWindowMs },
+      });
+      await this.#report(done, 'expired', `批准已过期，未生效（未改动任何文件）：${describeChange(done)}。批准后 ${minutes} 分钟内没来得及生效，请重新起草。`, true);
+      return 'expired';
+    });
   }
 
   /**

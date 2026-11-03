@@ -94,7 +94,9 @@ export interface EvalTool {
 export type EvalNativeTool =
   | 'bash' | 'read_file' | 'write_file' | 'edit_file' | 'list_dir' | 'glob' | 'grep'
   | 'memory_search' | 'memory_upsert'
-  | 'web_fetch' | 'web_search';
+  | 'web_fetch' | 'web_search'
+  /** ADR 0040 self-change drafting against a real `SelfChangeStore` under `<workspace>/.zhin/changes`. */
+  | 'change_draft';
 
 const MEMORY_TOOLS: readonly EvalNativeTool[] = ['memory_search', 'memory_upsert'];
 /** Native web tools; their transport never reaches the network in evals. */
@@ -102,6 +104,26 @@ export const WEB_TOOLS: readonly EvalNativeTool[] = ['web_fetch', 'web_search'];
 
 /** Seed entry for the semantic-memory store (as written by an earlier turn). */
 export type EvalMemoryEntry = MemoryEntryUpsertInput;
+
+/** A file staged by a seeded self-change. */
+export interface EvalSelfChangeFile {
+  readonly path: string;
+  readonly content: string;
+}
+
+/**
+ * Self-change state before the first turn (`change_draft` cases, ADR 0040 / #1051). Seeded changes belong to
+ * the first inbound message's conversation and sender.
+ */
+export interface EvalSelfChangeFixture {
+  /** A change from this conversation that already passed its trial and waits for the owner's approval. */
+  readonly pending?: Readonly<{ summary: string; files: readonly EvalSelfChangeFile[] }>;
+}
+
+/** Self-change statuses as the store reports them (see `SelfChangeStatus`). */
+export type EvalSelfChangeStatus =
+  | 'draft' | 'trialing' | 'ready' | 'pending' | 'approved' | 'applying' | 'verifying'
+  | 'applied' | 'trial_failed' | 'rejected' | 'expired' | 'rolled_back' | 'failed';
 
 /** How the fake approval channel answers approval requests. */
 export type EvalApprovalBehaviour = 'approve' | 'deny' | 'unavailable';
@@ -157,6 +179,10 @@ export interface EvalExpectations {
    * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`).
    */
   readonly streamToolEvents?: readonly string[];
+  /** Statuses of every self-change in the store after the run, oldest first (seeded ones included). */
+  readonly selfChangeStatuses?: readonly EvalSelfChangeStatus[];
+  /** Production workspace files after the run: content, or `null` when the file must not exist. */
+  readonly workspaceFiles?: Readonly<Record<string, string | null>>;
 }
 
 /** A skill visible to the turn. Only its name and one-line trigger are resident; instructions load on demand. */
@@ -211,6 +237,8 @@ export interface EvalCase {
   /** Canned stdout for native `bash` (it never runs a real shell in evals). */
   readonly bashOutput?: string;
   readonly approval?: EvalApprovalBehaviour;
+  /** Self-change store seed for `change_draft` cases. */
+  readonly selfChange?: EvalSelfChangeFixture;
   /**
    * Extra model ids registered after the primary `scripted-model`, in registration
    * order (legacy `modelCandidates`). Fixed chat selection must not call them.
@@ -274,7 +302,12 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   const duplicates = toolNames.filter((name, index) => toolNames.indexOf(name) !== index);
   if (duplicates.length > 0) problems.push(`duplicate tool names: ${[...new Set(duplicates)].join(', ')}`);
   const workspaceTools = (candidate.nativeTools ?? []).filter((name) => !MEMORY_TOOLS.includes(name) && !WEB_TOOLS.includes(name));
-  if (workspaceTools.length && !candidate.workspace) problems.push('file and shell nativeTools need a workspace');
+  if (workspaceTools.length && !candidate.workspace) problems.push('file, shell and change_draft nativeTools need a workspace');
+  if (candidate.selfChange && !candidate.nativeTools?.includes('change_draft')) problems.push('selfChange needs the change_draft native tool');
+  if (candidate.expect?.selfChangeStatuses && !candidate.nativeTools?.includes('change_draft')) {
+    problems.push('expect.selfChangeStatuses needs the change_draft native tool');
+  }
+  if (candidate.expect?.workspaceFiles && !candidate.workspace) problems.push('expect.workspaceFiles needs a workspace');
   for (const name of toolNames) {
     if (RESERVED_TOOL_NAMES.includes(name) || RESERVED_TOOL_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) {
       problems.push(`tool "${name}" uses a reserved built-in name; mocked tools need their own names`);
