@@ -28,7 +28,7 @@ class Modules implements ModuleRuntime {
   invalidate() {} async close() {}
 }
 type Store = Pick<ConsoleConfigurationStore, 'readChat' | 'patchChat'>;
-async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; globalMasters?: readonly string[]; store?: (real: ConsoleConfigurationStore) => Store } = {}) {
+async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; globalMasters?: readonly string[]; secondEndpoint?: boolean; store?: (real: ConsoleConfigurationStore) => Store } = {}) {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-config-chat-')));
   const modules = new Modules();
   const setups = { root: 0 };
@@ -36,7 +36,8 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   const document: RuntimeConfigDocument = { configVersion: 2, locale: options.locale ?? 'en',
     ...(options.globalMasters ? { ai: { trigger: { masters: options.globalMasters } } } : {}),
     plugins: { bot: '@test/bot', other: '@test/bot' },
-    bot: { master: 'alice', commandPrefix: '!!', nickname: 'Before', count: 1, tags: ['a'], token: 'DO_NOT_DISCLOSE', endpoints: [{ id: 'same' }] },
+    bot: { master: 'alice', commandPrefix: '!!', nickname: 'Before', count: 1, tags: ['a'], token: 'DO_NOT_DISCLOSE',
+      endpoints: [{ id: 'same' }, ...(options.secondEndpoint ? [{ id: 'second', master: 'carol' }] : [])] },
     other: { master: 'bob', commandPrefix: '#', nickname: 'Other', endpoints: [{ id: 'same' }] } };
   await put(join(project, 'package.json'), { name: '@test/root', dependencies: { '@test/command': 'workspace:*', '@test/bot': 'workspace:*' },
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: options.commands === false ? [] : [{ package: '@test/command' }] } });
@@ -71,15 +72,20 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   catch (error) { await runtime.stop(); await rm(project, { recursive: true, force: true }); throw error; }
   const index = runtime.snapshot.projections.get(adapterFeatureId) as AdapterIndex;
   const rows = index.list();
-  const row = rows.find(item => item.owner === 'root/bot')!;
+  const endpointOf = (owner: string, endpointId: string) => rows.find(item => item.owner === owner
+    && index.adapterForEndpoint(item.id)?.find(item.id)?.desired.endpointId === endpointId);
+  const row = endpointOf('root/bot', 'same')!;
+  const second = options.secondEndpoint ? endpointOf('root/bot', 'second')! : undefined;
   const other = rows.find(item => item.owner === 'root/other')!;
   const client = index.clientById<Client>(row.id), otherClient = index.clientById<Client>(other.id);
-  const receive = async (text: string, input: { sender?: string; kind?: 'private' | 'group' | 'channel'; other?: boolean; metadata?: Record<string, unknown> } = {}) => {
-    const selected = input.other ? other : row, endpoint = input.other ? otherClient : client;
+  const secondClient = second ? index.clientById<Client>(second.id) : undefined;
+  const receive = async (text: string, input: { sender?: string; kind?: 'private' | 'group' | 'channel'; other?: boolean; second?: boolean; metadata?: Record<string, unknown> } = {}) => {
+    const selected = input.other ? other : input.second ? second! : row;
+    const endpoint = input.other ? otherClient : input.second ? secondClient! : client;
     return endpoint[endpointSpec].events.message({ conversation: { endpoint: { id: selected.id, adapter: 'platform' }, kind: input.kind ?? 'private', id: 'conversation' },
       content: text, sender: { id: input.sender ?? 'alice' }, metadata: input.metadata });
   };
-  return { project, runtime, realStore, store, document: config, client, otherClient, index, row, receive, setups,
+  return { project, runtime, realStore, store, document: config, client, otherClient, secondClient, index, row, receive, setups,
     close: async () => { await runtime.stop(); await rm(project, { recursive: true, force: true }); } };
 }
 function lastReply(client: Client): string { return String(client.sendNative.mock.calls.at(-1)?.[0].payload); }
@@ -168,6 +174,47 @@ it('does not accept ai.trigger.masters as chat configuration authority in v1 (C2
     expect(read).not.toHaveBeenCalled();
     await f.receive('!!config get other.nickname', { sender: 'alice' });
     expect(lastReply(f.client)).toContain('Other');
+  } finally { await f.close(); }
+});
+
+it('accepts the master of any configured endpoint on the same Adapter in private chat (C2 widen)', async () => {
+  const f = await fixture({ secondEndpoint: true });
+  const read = vi.spyOn(f.realStore, 'readChat');
+  try {
+    // carol is the leaf master of bot/second only; she may manage via bot/same.
+    await f.receive('!!config get bot.nickname', { sender: 'carol' });
+    expect(lastReply(f.client)).toContain('Before');
+    // alice is bot/same's inherited Plugin-level master; she may manage via bot/second.
+    await f.receive('!!config get bot.nickname', { sender: 'alice', second: true });
+    expect(lastReply(f.secondClient!)).toContain('Before');
+    expect(read).toHaveBeenCalledTimes(2);
+    // Still private chat only, even for a same-Adapter master.
+    await f.receive('!!config get bot.nickname', { sender: 'carol', kind: 'group' });
+    expect(lastReply(f.client)).not.toContain('Before');
+    expect(read).toHaveBeenCalledTimes(2);
+  } finally { await f.close(); }
+});
+
+it('denies masters of a different Adapter and ai.trigger.masters even with several endpoints (C2 widen)', async () => {
+  const f = await fixture({ secondEndpoint: true, globalMasters: ['global'] });
+  const read = vi.spyOn(f.realStore, 'readChat');
+  try {
+    const denied = 'Configuration management requires a real Bot owner in a private chat.';
+    // Cross-Adapter: bot's masters (base and leaf) on other's endpoint, and other's master on bot's endpoints.
+    for (const sender of ['alice', 'carol']) {
+      await f.receive('#config get other.nickname', { sender, other: true });
+      expect(lastReply(f.otherClient)).toBe(denied);
+    }
+    await f.receive('!!config get bot.nickname', { sender: 'bob' });
+    expect(lastReply(f.client)).toBe(denied);
+    await f.receive('!!config get bot.nickname', { sender: 'bob', second: true });
+    expect(lastReply(f.secondClient!)).toBe(denied);
+    // Global masters are never consulted.
+    await f.receive('!!config get bot.nickname', { sender: 'global' });
+    expect(lastReply(f.client)).toBe(denied);
+    await f.receive('!!config get bot.nickname', { sender: 'global', second: true });
+    expect(lastReply(f.secondClient!)).toBe(denied);
+    expect(read).not.toHaveBeenCalled();
   } finally { await f.close(); }
 });
 

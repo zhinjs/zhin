@@ -80,9 +80,12 @@ export function parseChatConfigurationValue(text: string, types: readonly string
 
 /**
  * Host-owned `config fields|get|set|unset` (alias `配置`); no Agent, model tool,
- * whole-document apply, or reply side channel. Only the master of the receiving
- * endpoint in a private chat passes (C2); every read/write is limited by the chat
- * field policy (C3/C4).
+ * whole-document apply, or reply side channel. Only a private chat from a master of
+ * any configured endpoint on the receiving Adapter passes (C2, see
+ * `createConfigurationChatAuthorizer`); every read/write is limited by the chat field
+ * policy (C3/C4). The declarative permit is `private()` only: the sender's `master`
+ * role is projected for the receiving endpoint alone, so the authorizer is the
+ * authoritative owner check.
  */
 export function installConfigurationHost(options: Readonly<{ store: Store; authorize: ConfigurationChatAuthorizer }>): RootResourceInstaller {
   return context => {
@@ -97,7 +100,7 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
       context.addFeature(commandFeatureId, action ? `config/${action}` : 'config', defineCommand({
         description: messages('zh-CN', description), descriptionI18n: { en: messages('en', description) },
         alias: [action ? `配置 ${action}` : '配置'],
-        permit: ['role(master)', 'private()'], params, options: {},
+        permit: ['private()'], params, options: {},
         execute: async command => {
           try { if (!allowed(command)) return messages(command.locale, 'denied'); }
           catch { return messages(command.locale, 'denied'); }

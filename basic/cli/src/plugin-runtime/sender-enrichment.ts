@@ -16,9 +16,12 @@ interface PluginRoles { readonly base: Roles; readonly endpoints: Map<string, Ro
 export type ConfigurationChatAuthorizer = (session: OperationSession<string>, adapters: AdapterIndex) => boolean;
 
 /** Startup role authority, matched against the actual operation's Adapter and account.
- * Only the `master` of the endpoint that received this private message (leaf, else its
- * Plugin-level `master`) qualifies, so identity stays on the same platform/account.
- * `ai.trigger.masters` has no platform dimension and is deliberately not accepted in v1.
+ * C2 (Accept): in a private chat, the sender must be the effective `master` of *any*
+ * configured endpoint of the same Adapter that received the message — each endpoint's
+ * leaf `master`, else its inherited Plugin-level `master`. The identity therefore stays
+ * on the receiving Adapter/platform; masters of other Adapters (including another
+ * instance of the same Adapter package) never qualify. `ai.trigger.masters` has no
+ * platform dimension and is deliberately not consulted in v1.
  * Direct declared owners are mapped with the canonical PluginId constructor. Nested
  * owners never borrow their parent's role configuration or a legacy display alias.
  */
@@ -34,7 +37,11 @@ export function createConfigurationChatAuthorizer(
     if (!adapter || !child || session.adapter !== adapter || session.endpoint !== adapter.getEndpoint(child.desired.instanceId)) return false;
     if (!child.started || session.signal.aborted) return false;
     const key = owners.get(adapter.descriptor.owner);
-    return key !== undefined && endpointRoles.resolveOwner(key, child.desired.endpointId) === session.sender.id;
+    if (key === undefined) return false;
+    const sender = session.sender.id;
+    // Receiving endpoint first, then every other endpoint configured on this same Adapter.
+    return endpointRoles.resolveOwner(key, child.desired.endpointId) === sender
+      || adapter.list().some(entry => endpointRoles.resolveOwner(key, entry.endpointId) === sender);
   };
 }
 
