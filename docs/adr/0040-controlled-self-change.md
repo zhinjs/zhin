@@ -77,7 +77,7 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 ### 4. 审批
 
 - 审批卡走 G6 `ToolApprovalQueue`，类别 `self`，`humanOnly`；同一时间每个发起会话最多 1 个 `pending` 变更，全实例最多 3 个（#1051 F4）。
-- **起草人**（#1051 F4，Q3=B）：只有主人与 `toolHardGate.imApproval.approverIds`；其他人的回合里 `change_draft` 不出现在工具面，被调用也直接拒绝（`change_draft_forbidden`）。
+- **起草人**（#1051 F4，Q3=B）：只有主人，以及 `toolHardGate.imApproval` **开启时** `approverIds` 中属于当前平台的人（只填名单、未开启 IM 审批不开放起草）；其他人的回合里 `change_draft` 不出现在工具面，被调用也直接拒绝（`change_draft_forbidden`）。
 - **无守护进程**（#1051 F1，Q6=A）：没有 `zhin start` 守护进程或以 `--once` 启动时，影响面为 `process` 的变更试跑通过后停在 `ready`、不提交审批（`change_restart_unavailable`）。
 - **审批人**：主人（master）与 `toolHardGate.imApproval.approverIds`；渠道为 IM 私聊 / 审批群（G6 `delivery`）或 Console（权限 `ops:approve`）。**不在发起变更的业务群里结算**（#1030 定稿：禁业务群自批），即使发起人是主人——在业务群发起的变更，卡片投递到主人私聊。
 - 审批卡展示 §2 预览；批准绑定 `content_hash`；默认 24 小时超时 → `expired`。
@@ -127,7 +127,7 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 
 payload 记 `changeId`、文件列表（路径 + 摘要，不含内容）、影响面计划、审批人与渠道；不记文件正文与配置值中的密钥。
 
-### 8. 实现切片（ADR 合入后按序做，每个切片单独 PR）
+### 8. 实现切片（历史计划：A–E 已全部合入，见文首「实现」；每个切片单独 PR）
 
 | 切片 | 内容 |
 |---|---|
@@ -137,7 +137,7 @@ payload 记 `changeId`、文件列表（路径 + 摘要，不含内容）、影�
 | D | 审批：G6 `self` 卡（禁业务群结算，改投主人私聊）、Console 列表 / 批准 / 驳回 |
 | E | 生效与恢复：快照、先落盘、`RootRuntime.reload()` / 受控 exit 75、`recover()`、健康检查、回滚一次、失败急停、原会话回报 |
 
-A → B → C → D → E 依次依赖；E 可先用只含 `none` / `generation` 的变更做集成测试，再补 `process` 重启路径。本 ADR 不含代码。
+A → B → C → D → E 依次依赖（以下为当时的计划，均已完成）；E 可先用只含 `none` / `generation` 的变更做集成测试，再补 `process` 重启路径。本 ADR 不含代码。
 
 ### 8a. #1051 收口切片
 
@@ -167,12 +167,12 @@ A → B → C → D → E 依次依赖；E 可先用只含 `none` / `generation`
 
 | 编号 | 事项 | 确认的默认值 | 落地 |
 |---|---|---|---|
-| Q1 | 暂存清理与配额 | 终态删 `files/` 与 `snapshot/`、元数据留 14 天；`draft` / `ready` / `pending` 闲置 24 小时 `expired`；单变更 ≤ 5 MB / 50 个文件，总量 ≤ 50 MB；启动后与每 6 小时清理 | 切片 A |
+| Q1 | 暂存清理与配额 | 终态删 `files/` 与 `snapshot/`、元数据留 14 天（`failed` 已急停例外：保留现场直到人在 Console 标记已处理）；`draft` / `ready` / `pending` 闲置 24 小时 `expired`；单变更 ≤ 5 MB / 50 个文件，总量 ≤ 50 MB；启动后与每 6 小时清理 | 切片 A |
 | Q1 | 草稿与试跑 | 配置值以 `value_json` 传；已试跑的变更不能再改，修正需重新起草；插件测试镜像 `node:22-bookworm-slim`（不联网拉取）、1 GB / 1 CPU / 256 进程 / 120 秒 | 切片 B / C |
 | Q1 | 审批 | 每个发起会话最多 1 个待审，已有待审时不起草新变更；审批超时 24 小时；卡片**总是**投主人私聊（不受 `imApproval.enabled` 限制），业务群发起的也一样，业务群内不能结算 | 切片 D |
 | Q1 | 生效与恢复 | 健康检查窗口 60 秒；只自动回滚一次，之后急停；`content_hash` 不符 → `failed` 且不急停、不动文件；`applying` 中途被杀一律按快照回滚；急停回报不受控制面拦截，回报不可达改投主人私聊 | 切片 E1 / E2 |
 | Q2 | 启动时残留的 `approved` | **B**：批准后 1 小时内的自动生效；更早的转 `expired`、不动文件，并私聊主人「批准已过期，请重新起草」 | F5（`SelfChangeApplier.resumeApproved`，#1138） |
-| Q3 | 谁能起草 | **B**：只有主人与 `toolHardGate.imApproval.approverIds`；其他人工具不可见，调用即拒（`change_draft_forbidden`）；另加全实例待审 ≤ 3 | F4 |
+| Q3 | 谁能起草 | **B**：只有主人，以及 `toolHardGate.imApproval` 开启时 `approverIds` 中属于当前平台的人；其他人工具不可见，调用即拒（`change_draft_forbidden`）；另加全实例待审 ≤ 3 | F4 |
 | Q4 | 试跑 `skipped` | **A**：不阻断；审批卡的试跑结论标出被跳过的检查（当前为「通过 (N skipped)」计数，逐项结论在 `change.json` 的 `trial`） | 切片 C / D |
 | Q5 | 禁改配置键 | **B**：首批安全键全部纳入，经 schema `x-zhin-config.security` 标记 + 守卫单测维护 | F2 |
 | Q6 | 无守护进程时的 `process` 变更 | **A**：不提交审批，告知本实例无法自动生效（`change_restart_unavailable`） | F1 |
