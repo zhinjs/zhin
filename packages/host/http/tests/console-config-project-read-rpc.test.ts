@@ -33,4 +33,27 @@ describe('trusted project configuration read RPC', () => {
     }
     expect(readProjectConfig).not.toHaveBeenCalled();
   });
+
+  it('never echoes the read failure text, which can quote document source', async () => {
+    const readProjectConfig = vi.fn(async () => { throw new Error('YAML parse error near "token: synthetic-secret"'); });
+    const request = { type: method, requestId: 1 };
+    const reply = pickRpcReply(request, await dispatchRuntimeConsoleRpc(request, { authScope: 'full', listPages: async () => [], readProjectConfig }));
+    expect(reply?.error).toEqual(expect.any(String));
+    expect(reply?.error).not.toContain('synthetic-secret');
+  });
+});
+
+describe('trusted project configuration patch RPC', () => {
+  it('a committed save stays a saved receipt even when publishing the update event throws', async () => {
+    const saved = { status: 'saved', revision: 'b'.repeat(64), restartRequired: false, paths: [['log_level']], missingEnv: [], message: 'ok' } as const;
+    const patchProjectConfig = vi.fn(async () => saved);
+    const publishEvent = vi.fn(() => { throw new Error('subscriber failed'); });
+    const request = { type: 'config:patch-project', requestId: 1, expectedRevision: 'a'.repeat(64), patches: [{ op: 'set', path: ['log_level'], value: 'debug' }] };
+    const reply = pickRpcReply(request, await dispatchRuntimeConsoleRpc(request, {
+      authScope: 'full', listPages: async () => [], patchProjectConfig, publishEvent,
+    } as Parameters<typeof dispatchRuntimeConsoleRpc>[1]));
+    expect(publishEvent).toHaveBeenCalledTimes(1);
+    expect(reply?.error).toBeUndefined();
+    expect(reply?.data).toEqual(saved);
+  });
 });

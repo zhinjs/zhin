@@ -521,8 +521,9 @@ export async function dispatchRuntimeConsoleRpc(
       if (!ctx.readProjectConfig) { emit({ requestId, error: 'Config project read is not configured' }); return payloads; }
       try {
         emit({ requestId, data: await ctx.readProjectConfig({ path: (path ?? []) as string[], reveal: reveal === true }) });
-      } catch (error) {
-        emit({ requestId, error: `Failed to read config: ${error instanceof Error ? error.message : String(error)}` });
+      } catch {
+        // Parser/IO messages can quote document source (and therefore secrets): never echo them.
+        emit({ requestId, error: 'Configuration read is unavailable; read the project file locally to diagnose it' });
       }
       return payloads;
     }
@@ -556,27 +557,32 @@ export async function dispatchRuntimeConsoleRpc(
         emit({ requestId, error: 'Config patch is not configured' });
         return payloads;
       }
+      let result: Awaited<ReturnType<typeof patch>>;
       try {
-        const result = await patch.call(ctx, {
+        result = await patch.call(ctx, {
           ...(instanceKey === undefined ? {} : { instanceKey }),
           expectedRevision,
           patches,
         });
-        if (result.status === 'saved') {
+      } catch (error) {
+        emit({
+          requestId,
+          error: `Failed to patch config: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        return payloads;
+      }
+      if (result.status === 'saved') {
+        // The write has committed: a notification failure must not turn the receipt into a rejection.
+        try {
           ctx.publishEvent?.('config:updated', {
             pluginName: instanceKey ?? null,
             keys: [...new Set(result.paths.map(path => path[0]))],
             paths: result.paths,
             revision: result.revision,
           });
-        }
-        emit({ requestId, data: result });
-      } catch (error) {
-        emit({
-          requestId,
-          error: `Failed to patch config: ${error instanceof Error ? error.message : String(error)}`,
-        });
+        } catch { /* subscribers resynchronise from the next read */ }
       }
+      emit({ requestId, data: result });
       return payloads;
     }
     case CONFIG_RPC.SET: {
