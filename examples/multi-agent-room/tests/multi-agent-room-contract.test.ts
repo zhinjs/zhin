@@ -14,6 +14,27 @@ const config = parse(configText);
 const plan = parse(fs.readFileSync(path.join(botRoot, 'ai.plan.yml'), 'utf8'));
 
 describe('multi-agent-room 编排契约', () => {
+  it('keeps production authoring checks local while the root noEmit check includes the cross-workspace contract tests', async () => {
+    const ts = await import('typescript');
+    const read = (file: string) => {
+      const loaded = ts.readConfigFile(file, ts.sys.readFile);
+      expect(loaded.error).toBeUndefined();
+      const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, path.dirname(file));
+      expect(parsed.errors).toEqual([]);
+      return parsed;
+    };
+    const production = read(path.join(botRoot, 'tsconfig.json'));
+    expect(production.options.rootDir).toBe(botRoot);
+    expect(production.options.noEmit).toBe(true);
+    expect(production.fileNames).toContain(path.join(botRoot, 'plugin.ts'));
+    expect(production.fileNames).not.toContain(fileURLToPath(import.meta.url));
+    const repository = path.resolve(botRoot, '../..');
+    const checks = read(path.join(repository, 'tsconfig.typecheck.json'));
+    expect(checks.options.noEmit).toBe(true);
+    expect(checks.fileNames).toContain(fileURLToPath(import.meta.url));
+    expect(checks.fileNames).toContain(path.join(repository, 'tests/helpers/review-ai-plan.ts'));
+  });
+
   it('使用数据库持久化会话', () => {
     expect(config.database.dialect).toBe('sqlite');
     expect(config.ai.sessions.useDatabase).toBe(true);

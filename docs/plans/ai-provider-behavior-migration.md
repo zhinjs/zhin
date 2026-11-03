@@ -103,3 +103,9 @@ sidebar: false
 - 新提案 schema 对三项决策计数漏掉安全整数上限：从提交 `fecfffb1c` 直接读取旧 schema 的红证据为 `MAX_SAFE_INTEGER + 1` 被静态解析接受，canonical graph 早已拒绝 invalid-graph；补齐原约束后静态 schema 与 canonical review 一致拒绝，没有增加新阈值或改变宽 startup schema 的扩展行为。
 - 发现并修复 Console 正常结构化保存的独立缺口：宽 startup schema 为 legacy 只读迁移保留数据，但正常表单／patch 之前可能把必然被 Agent 拒绝的旧选择器写回。现在仅 `validatePluginConfig('ai')` 复用已有纯 startup validator，在环境查询前明确拒绝；缺 Agent 验证器也返回结构化 invalid。真实 RPC 保存、patch、无写入、无环境查询、合法扩展及 legacy 源读取回归均覆盖；file-manager `replaceSource` 合同不改，通用 patch 权限范围断言保留。
 - 本组连同新增 Console 回归为 10 文件／115 测试通过；正式源码 type-check 与本组 ESLint 通过。Root 的初次完整 `check:all` 尚有其他分组失败，此处局部结果不能代替最终完整门禁；所有运行均为合成本地数据，没有实号或迁移用户资料。
+
+### 示例构建与跨仓测试的类型检查归属
+
+`multi-agent-room` 的既有 `tsconfig.json` 把 `tests/**/*` 与生产作者入口一起纳入限定在示例目录的 `rootDir`。本次合同测试引入仓库级纯 review helper 后，该 leaf build 把 helper 及其 AI／Runtime 源码也编入，真实 `pnpm --filter multi-agent-room build` 复现 TS6059；不能通过扩大 rootDir 或添加 AI 生产依赖解决。现在 leaf 只检查 `plugin.ts`／`src/**/*`，并显式保留其正式脚本原已使用的 noEmit；跨仓合同测试和 helper 则明确纳入现有根 `pnpm type-check`。没有关闭测试类型检查、添加 alias 或改变生产代码。
+
+失败脚本原本就是 `tsc --noEmit`。对 AI `src`、Runtime `src`、`tests/helpers` 与示例目录的派生物清点为空；本地红复现后逐一核对诊断中的 67 个越界源文件及其 `.js`／`.d.ts`／map 同名输出，仍为零，没有证据需要清理，因此未删除任何源文件、既有 lib 或其他产物。修复后 leaf build、根 type-check 及相关 plan 合同测试均通过；完整 CI 按下一固定候选另验。

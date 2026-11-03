@@ -389,6 +389,8 @@
     "examples/full-bot/commands/**/*",
     "examples/full-bot/tools/**/*",
     "examples/full-bot/components/**/*",
+    "examples/multi-agent-room/tests/**/*.ts",
+    "tests/helpers/review-ai-plan.ts",
     "examples/test-bot/components/**/*",
     "examples/full-bot/skills/**/*",
     "examples/capabilities-bot/plugin.ts",
