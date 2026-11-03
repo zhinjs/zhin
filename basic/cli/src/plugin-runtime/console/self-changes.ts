@@ -55,6 +55,7 @@ export interface SelfChangeDetailConfigOperation {
 
 export interface SelfChangeDetailTrial {
   readonly passed: boolean | null;
+  /** Every check, each redacted on its own (no list cap). */
   readonly checks: PluginConsoleRpcJson;
   readonly pendingStages: readonly string[];
   /** `<check> <path>` of every skipped check. */
@@ -173,9 +174,16 @@ export class HostSelfChanges {
     } catch (error) {
       throw consoleError(error);
     }
-    const redact = agent.redactDecisionPayload;
+    const redact = redactWith(agent.redactDecisionPayload, agent.redactSecretAssignments);
+    const trial = detailTrial(record.trial, agent.skippedTrialChecks, redact);
     return {
-      change: card(record, binding.approvals.approvalIdFor(record.id) ?? null),
+      // The card's own `trial` / `error` would be second, unredacted copies (the error joins the check messages):
+      // carry an allow-listed, redacted trial and a redacted error instead.
+      change: {
+        ...card(record, binding.approvals.approvalIdFor(record.id) ?? null),
+        trial: redactedTrialRecord(record.trial, redact),
+        error: redactedError(record.error, redact),
+      },
       bodiesAvailable: diff.bodiesAvailable,
       baseline: diff.baseline,
       files: diff.files.map(file => ({
@@ -191,10 +199,10 @@ export class HostSelfChanges {
       configPatch: record.configPatch
         ? {
             expectedRevision: record.configPatch.expectedRevision,
-            operations: record.configPatch.patches.map(operation => redactConfigOperation(operation, redact)),
+            operations: record.configPatch.patches.map(operation => redactConfigOperation(operation, redact, agent.isSecretLikeKey, agent.isPromptPayloadKey)),
           }
         : null,
-      trial: detailTrial(record.trial, agent.skippedTrialChecks, redact),
+      trial,
       usageBytes: await binding.store.usage(),
     };
   }
@@ -262,22 +270,67 @@ function readStringProp(error: unknown, key: string): string | undefined {
 type RedactPayload = (payload: DecisionPayload | null | undefined) => DecisionPayload;
 
 /**
- * Redacts a `set` value with the decision-audit rules: the value is nested under its config path so a secret-like
- * key anywhere on the path (`token`, `apiKey`, `auth`, …) replaces it, and string values get token masking.
+ * Redacts a `set` value with the decision-audit rules: a secret-like key anywhere on the config path (`token`,
+ * `openaiApiKey`, `auth`, …) replaces the whole value with `[redacted]`, a prompt-like key (`systemPrompt`, …) with
+ * `[omitted]`; otherwise the value itself is redacted (secret keys inside it, token-shaped strings). The path is
+ * checked on its own so deep config paths do not eat the depth limit.
  */
-function redactConfigOperation(operation: SelfChangeConfigOperation, redact: RedactPayload): SelfChangeDetailConfigOperation {
+function redactConfigOperation(
+  operation: SelfChangeConfigOperation,
+  redact: RedactPayload,
+  isSecretKey: (key: string) => boolean,
+  isPromptKey: (key: string) => boolean,
+): SelfChangeDetailConfigOperation {
   const configPath = [...operation.path];
   if (operation.op === 'remove') return { op: 'remove', path: configPath };
-  let wrapped: unknown = operation.value;
-  for (const segment of [...configPath].reverse()) {
-    wrapped = { [segment]: wrapped };
-  }
-  let redacted: unknown = redact(wrapped as DecisionPayload);
-  for (const segment of configPath) {
-    if (!redacted || typeof redacted !== 'object' || Array.isArray(redacted)) break;
-    redacted = (redacted as Record<string, unknown>)[segment];
-  }
+  if (configPath.some(isSecretKey)) return { op: 'set', path: configPath, value: '[redacted]' };
+  if (configPath.some(isPromptKey)) return { op: 'set', path: configPath, value: '[omitted]' };
+  const redacted = redact({ value: operation.value }).value;
   return { op: 'set', path: configPath, value: (redacted ?? null) as PluginConsoleRpcJson };
+}
+
+/**
+ * The stored trial for the nested card, allow-listed to the documented `SelfChangeTrialResult` metadata (any other
+ * stored field is dropped) with every check redacted.
+ */
+function redactedTrialRecord(trial: unknown, redact: RedactPayload): PluginConsoleRpcJson {
+  if (!trial || typeof trial !== 'object' || Array.isArray(trial)) return null;
+  const value = trial as Record<string, unknown>;
+  const out: Record<string, PluginConsoleRpcJson> = {};
+  if (typeof value.version === 'number' || typeof value.version === 'string') out.version = value.version;
+  if (typeof value.passed === 'boolean') out.passed = value.passed;
+  if (typeof value.contentHash === 'string') out.contentHash = value.contentHash;
+  out.checks = Array.isArray(value.checks)
+    ? (value.checks.map(check => redact({ check }).check ?? null) as PluginConsoleRpcJson)
+    : [];
+  if (Array.isArray(value.pendingStages)) {
+    out.pendingStages = value.pendingStages.filter((stage): stage is string => typeof stage === 'string');
+  }
+  if (typeof value.startedAt === 'number') out.startedAt = value.startedAt;
+  if (typeof value.durationMs === 'number') out.durationMs = value.durationMs;
+  return out;
+}
+
+/** `record.error` may join raw trial check messages: same masking as the checks. */
+function redactedError(error: string | null, redact: RedactPayload): string | null {
+  if (error === null || error === undefined) return null;
+  const masked = redact({ error: String(error) }).error;
+  return typeof masked === 'string' ? masked : '[redacted]';
+}
+
+/**
+ * Decision-audit masking (secret keys, token-shaped strings) plus the diff excerpt's `key = value` / `key: value`
+ * secret-assignment masking on every string, line by line: check messages and errors quote file content and tool
+ * output, where a secret usually sits in an assignment rather than under a secret-like JSON key.
+ */
+function redactWith(redactPayload: RedactPayload, redactAssignments: (line: string) => string): RedactPayload {
+  const assignments = (value: unknown, depth: number): unknown => {
+    if (typeof value === 'string') return value.split('\n').map(redactAssignments).join('\n');
+    if (depth > 8 || !value || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(item => assignments(item, depth + 1));
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, assignments(item, depth + 1)]));
+  };
+  return payload => assignments(redactPayload(payload), 0) as DecisionPayload;
 }
 
 function detailTrial(
@@ -293,8 +346,9 @@ function detailTrial(
     : [];
   return {
     passed: typeof value.passed === 'boolean' ? value.passed : null,
-    // Check messages may quote file content or tool output: same masking as the audit trail.
-    checks: (redact({ checks }).checks ?? []) as PluginConsoleRpcJson,
+    // Check messages may quote file content or tool output: same masking as the audit trail, one check at a time
+    // so the audit list cap never hides checks from the approver.
+    checks: checks.map(check => redact({ check }).check ?? null) as PluginConsoleRpcJson,
     pendingStages,
     skippedChecks: [...skippedTrialChecks(trial)],
   };

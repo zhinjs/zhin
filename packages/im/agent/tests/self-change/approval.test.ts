@@ -84,6 +84,29 @@ describe('SelfChangeApprovals', () => {
     expect(audit.at(-1)).toMatchObject({ reasonCode: 'change_submitted', outcome: 'defer' });
   });
 
+  it('redacts secret-like assignments in the card excerpt before delivery', async () => {
+    const store = await makeStore();
+    const { queue, approvals } = setup(store);
+    const ready = await readyChange(store, origin, 'const apiKey = "live-secret-value";\nexport default 1;\n');
+    const { approvalId } = await approvals.submit(ready.id);
+    const excerpt = (queue.get(approvalId)!.args as { diffExcerpt?: string[] }).diffExcerpt ?? [];
+    expect(excerpt).toContain('+const apiKey = "[redacted]";');
+    expect(JSON.stringify(excerpt)).not.toContain('live-secret-value');
+  });
+
+  it('caps skipped check names on the card and counts the rest', async () => {
+    const store = await makeStore();
+    const { queue, approvals } = setup(store);
+    const draft = await store.draft({ origin, files: [{ path: 'commands/ping.ts', content: 'export default 1;\n' }] });
+    await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+    const checks = Array.from({ length: 25 }, (_, index) => ({ check: 'syntax', path: `commands/c${index}.tsx`, status: 'skipped' }));
+    await store.transition(draft.id, 'ready', { actor: 'policy', trial: { passed: true, checks } });
+    const { approvalId } = await approvals.submit(draft.id);
+    const args = queue.get(approvalId)!.args as { skippedChecks?: string[]; skippedChecksOmitted?: number };
+    expect(args.skippedChecks).toEqual(Array.from({ length: 20 }, (_, index) => `syntax commands/c${index}.tsx`));
+    expect(args.skippedChecksOmitted).toBe(5);
+  });
+
   it('only submits ready changes and allows one pending change per conversation', async () => {
     const store = await makeStore();
     const { approvals } = setup(store);

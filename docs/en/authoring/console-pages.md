@@ -429,7 +429,7 @@ Controlled self-changes drafted by the bot (see [Letting the bot change itself](
 | Method | Call | Permission |
 | --- | --- | --- |
 | `plugin.root.self-changes` | `pluginRpc('root', 'self-changes')` | `tool_approvals:read` or `ops:approve` (pending / recent changes and staging usage `usageBytes`, no bodies) |
-| `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | `ops:approve` **only** (unified diff per file, ≤ 64 KB in total, cut by line; config patch values redacted like audit payloads; full trial checks and `skippedChecks`; `bodiesAvailable: false` once slimmed) |
+| `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | `ops:approve` **only** (unified diff per file, ≤ 64 KB combined across all files, cut by line; config patch values redacted like audit payloads; full trial checks and `skippedChecks`; `bodiesAvailable: false` once slimmed) |
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve` (action) |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve` (action; a `failed` change was dealt with) |
 
