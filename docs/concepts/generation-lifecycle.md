@@ -132,7 +132,8 @@ cancelled、restart-required 结果。手动 `reload(target)` 沿用完整 Root 
 （`createModelConfigurationAccess` 的 `acquire*` / `withRuntime`）也经同一队列捕获当前代模型配置。因此：
 
 - 处理器内直接调用 `control()` 或取模型，会因同一异步上下文而立即以
-  `Recursive Runtime control` 拒绝，暂停失败并中止这次热更（旧代保留）；
+  `Recursive Runtime control` 拒绝：在 `hmr.pause` 中会使暂停失败并中止这次热更（旧代保留）；
+  在 `hmr.resume` 中只作为控制错误报告，不回滚已提交代；
 - 处理器等待一个「之后还要取模型」的在途任务（例如尚未取到模型的 Agent 回合），该任务的取模型
   请求排在本次热更之后，热更又在等处理器——形成死锁。
 

@@ -131,7 +131,7 @@ A failed HMR transaction cancels the remaining changes in the batch and invokes 
 
 Plugins can subscribe to `hmr.pause` (awaited before any candidate module is evaluated) and `hmr.resume` (delivered after commit or rollback). Both run **inside the Root control queue**, the same serial queue behind `RootRuntime.control`. Host model fetching (`acquire*` / `withRuntime` from `createModelConfigurationAccess`) captures the current generation's model configuration through that queue too. As a result:
 
-- Calling `control()` or fetching a model directly from a handler is rejected immediately with `Recursive Runtime control` (same async context); the pause fails and the reload is aborted, keeping the old generation.
+- Calling `control()` or fetching a model directly from a handler is rejected immediately with `Recursive Runtime control` (same async context). In `hmr.pause` that fails the pause and aborts the reload, keeping the old generation; in `hmr.resume` it is only reported as a control error and does not roll back the committed generation.
 - Awaiting an in-flight task that will still fetch a model (for example an Agent turn that has not resolved its model yet) deadlocks: that fetch is queued behind the reload, and the reload is waiting for the handler.
 
 Keep handlers to local, bounded checkpoints: record the task, set a flag, cooperate with `signal`, and return. Let the plugin's own task finish any model-dependent work after the handler returns; never `await` it inside the handler. The Runtime does not detect such waits; guard tests in `packages/im/runtime/tests/root-runtime.test.ts` and `basic/cli/tests/plugin-runtime/personal-models/configuration.test.ts` lock the current ordering.
