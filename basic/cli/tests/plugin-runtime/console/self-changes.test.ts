@@ -106,6 +106,9 @@ it('serves self-change-detail to ops:approve only, with diffs, redacted config v
         { op: 'set', path: ['ping', 'apiKey'], value: 'sk-live-THIS_IS_SECRET' },
         { op: 'set', path: ['ping', 'greeting'], value: 'hello' },
         { op: 'remove', path: ['ping', 'legacy'] },
+        { op: 'set', path: ['ping', 'a', 'b', 'c', 'd'], value: { nested: { list: [1, 2] } } },
+        { op: 'set', path: ['ping', 'openaiApiKey'], value: 'plain-looking-value' },
+        { op: 'set', path: ['ping', 'systemPrompt'], value: 'You are a very secret prompt' },
       ],
     },
   });
@@ -117,6 +120,8 @@ it('serves self-change-detail to ops:approve only, with diffs, redacted config v
       checks: [
         { check: 'syntax', path: 'commands/ping.ts', status: 'passed' },
         { check: 'sandbox_load', path: 'commands/ping.ts', status: 'skipped' },
+        { check: 'plugin_tests', path: 'commands/ping.ts', status: 'failed', message: 'output: Bearer abcdefghijklmnop' },
+        ...Array.from({ length: 60 }, (_, index) => ({ check: 'syntax', path: `commands/x${index}.ts`, status: 'passed' })),
       ],
       pendingStages: ['plugin_tests'],
     },
@@ -144,16 +149,27 @@ it('serves self-change-detail to ops:approve only, with diffs, redacted config v
             { op: 'set', path: ['ping', 'apiKey'], value: '[redacted]' },
             { op: 'set', path: ['ping', 'greeting'], value: 'hello' },
             { op: 'remove', path: ['ping', 'legacy'] },
+            { op: 'set', path: ['ping', 'a', 'b', 'c', 'd'], value: { nested: { list: [1, 2] } } },
+            { op: 'set', path: ['ping', 'openaiApiKey'], value: '[redacted]' },
+            { op: 'set', path: ['ping', 'systemPrompt'], value: '[omitted]' },
           ],
         },
         trial: { passed: true, pendingStages: ['plugin_tests'], skippedChecks: ['sandbox_load commands/ping.ts'] },
       },
     },
   });
-  const data = (response as { body: { data: { files: { diff: string }[]; usageBytes: number } } }).body.data;
+  const data = (response as { body: { data: { files: { diff: string }[]; usageBytes: number; trial: { checks: unknown[] }; change: { trial: { checks: unknown[]; pendingStages: string[] } } } } }).body.data;
   expect(data.files[0]!.diff).toContain('-export default 1;\n+export default 2;');
   expect(data.usageBytes).toBeGreaterThan(0);
+  // Every check is returned (no audit list cap) and the card's own trial is the sanitized copy.
+  expect(data.trial.checks).toHaveLength(63);
+  expect(data.trial.checks[2]).toEqual({ check: 'plugin_tests', path: 'commands/ping.ts', status: 'failed', message: 'output: Bearer [redacted]' });
+  expect(data.change.trial.checks).toEqual(data.trial.checks);
+  expect(data.change.trial.pendingStages).toEqual(['plugin_tests']);
+  expect(JSON.stringify(response)).not.toContain('plain-looking-value');
+  expect(JSON.stringify(response)).not.toContain('very secret prompt');
   expect(JSON.stringify(response)).not.toContain('THIS_IS_SECRET');
+  expect(JSON.stringify(response)).not.toContain('abcdefghijklmnop');
 
   // The read-only hard-gate list never carries the excerpt that the IM card shows.
   const listed = await call('plugin.root.tool-approvals', reader);
@@ -197,4 +213,46 @@ it('cuts self-change-detail diffs at the 64 KB budget', async () => {
   expect(data.diffBytes).toBeLessThanOrEqual(64 * 1024);
   expect(data.files[0]).toMatchObject({ truncated: true, unavailableReason: null });
   expect(data.files[1]).toMatchObject({ truncated: true, unavailableReason: 'budget_exhausted' });
+});
+
+it('redacts the detail diff, allow-lists the nested trial and redacts change.error (#1145 cubic)', async () => {
+  const store = new SelfChangeStore({ root: join(project, '.zhin', 'changes'), projectRoot: project });
+  const queue = new ToolApprovalQueue();
+  const approvals = new SelfChangeApprovals({ store, queue });
+  const surface = new HostSelfChanges();
+  const call = host(surface, new HostToolApprovals(queue));
+  surface.bind(store, approvals);
+  const draft = await store.draft({
+    origin: { platform: 'icqq', sceneId: 'group:4', userId: '42', endpoint: 'bot-1' },
+    files: [{ path: 'commands/ping.ts', content: 'const apiKey = "DIFF_SECRET_VALUE";\nexport default 1;\n' }],
+  });
+  const pendingResponse = await call('plugin.root.self-change-detail', unrestrictedConsoleAccess, { id: draft.id });
+  const pendingData = (pendingResponse as { body: { data: { files: { diff: string }[] } } }).body.data;
+  expect(pendingData.files[0]!.diff).toContain('+const apiKey = "[redacted]";');
+  expect(JSON.stringify(pendingResponse)).not.toContain('DIFF_SECRET_VALUE');
+
+  await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+  await store.transition(draft.id, 'trial_failed', {
+    actor: 'policy',
+    error: 'plugin_tests commands/ping.ts: password = hunter2 phrase; Bearer abcdefghijklmnop',
+    trial: {
+      version: 1,
+      passed: false,
+      contentHash: draft.contentHash,
+      checks: [{ check: 'plugin_tests', path: 'commands/ping.ts', status: 'failed', message: 'password = hunter2 phrase; Bearer abcdefghijklmnop' }],
+      pendingStages: [],
+      startedAt: 1,
+      durationMs: 2,
+      rawOutput: 'EXTRA_TRIAL_FIELD_SECRET',
+    },
+  });
+  const response = await call('plugin.root.self-change-detail', unrestrictedConsoleAccess, { id: draft.id });
+  const data = (response as { body: { data: { change: { error: string | null; trial: Record<string, unknown> } } } }).body.data;
+  expect(Object.keys(data.change.trial).sort()).toEqual(['checks', 'contentHash', 'durationMs', 'passed', 'pendingStages', 'startedAt', 'version']);
+  expect(data.change.trial).toMatchObject({ version: 1, passed: false, contentHash: draft.contentHash, startedAt: 1, durationMs: 2 });
+  expect(data.change.error).toContain('password = [redacted]');
+  const text = JSON.stringify(response);
+  expect(text).not.toContain('EXTRA_TRIAL_FIELD_SECRET');
+  expect(text).not.toContain('hunter2');
+  expect(text).not.toContain('abcdefghijklmnop');
 });

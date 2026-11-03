@@ -69,7 +69,7 @@ The full list is in [Default Behavior](./default-behavior.md#dangerous-tool-hard
 
 ## Reviewing the full diff before approving
 
-- **Console "self-change" page**: lists pending and recent changes; the detail view (needs `ops:approve`) shows a unified diff per file (the baseline is the current production file, or the rollback snapshot once applying started; at most 64 KB in total, cut by line and marked), the redacted config patch, every trial check (skipped ones highlighted) and staging usage. You can approve / reject there, and mark an emergency-stopped change as handled. Once a change ends its bodies are cleaned up under the staging retention rules and the detail says so rather than inventing a diff.
+- **Console "self-change" page** (ships with the `zhinjs/console` release; the Host RPCs it uses are in this version): lists pending and recent changes; the detail view (needs `ops:approve`) shows a unified diff per file (the baseline is the current production file, or the rollback snapshot once applying started; at most 64 KB combined across all files, cut by line and marked; later files are marked as not shown), the redacted config patch, every trial check (skipped ones highlighted) and staging usage. You can approve / reject there, and mark an emergency-stopped change as handled. Once a change ends its bodies are cleaned up under the staging retention rules and the detail says so rather than inventing a diff.
 - **IM approval card**: carries a bounded excerpt only and never config values; the excerpt is not the full content (#1142).
 
 ## Not supported yet

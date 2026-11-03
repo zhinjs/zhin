@@ -145,7 +145,7 @@ A → B → C → D → E 依次依赖（以下为当时的计划，均已完成
 |---|---|---|
 | F1 | 本地插件根接线（起草 / 试跑 / 生效共用）；`restartSupported`：无守护进程或 `--once` 时 `process` 变更不提交审批，生效中途需重启则回滚 | 已合入 [#1136](https://github.com/zhinjs/zhin/pull/1136) |
 | F2 | 禁改配置键补全：schema `x-zhin-config.security` 标记 + `SELF_CHANGE_SECURITY_CONFIG_KEYS` + 守卫单测；生效前复核 | 已合入 [#1131](https://github.com/zhinjs/zhin/pull/1131) |
-| F3 | 审批可见性：Console 详情 RPC `plugin.root.self-change-detail`（仅 `ops:approve`；逐文件 unified diff ≤ 64 KB、配置值脱敏、完整试跑检查）与 Console「自我变更」页、IM 卡 diff 摘录（≤ 40 行 / 2 KB + 盲批提示）与 skipped 检查名 | 已交付，[#1142](https://github.com/zhinjs/zhin/issues/1142)（zhin + `zhinjs/console` 配套 PR） |
+| F3 | 审批可见性：Console 详情 RPC `plugin.root.self-change-detail`（仅 `ops:approve`；逐文件 unified diff，全部文件合计 ≤ 64 KB，用完后其余文件标「未展示」；配置值脱敏、完整试跑检查）与 Console「自我变更」页、IM 卡 diff 摘录（≤ 40 行 / 2 KB + 盲批提示）与 skipped 检查名 | 已交付，[#1142](https://github.com/zhinjs/zhin/issues/1142)（Host RPC 与 IM 卡在本仓库；Console 页面随 `zhinjs/console` 配套 PR 发布） |
 | F4 | 起草权限（主人 + IM 审批人，其他人工具不可见）、全实例待审 ≤ 3 | 已合入 [#1137](https://github.com/zhinjs/zhin/pull/1137) |
 | F5 | Q2=B 残留 `approved` 1 小时时限（`resumeApproved`）；脚本化 harness eval（`packages/im/agent/evals/cases/self-change-*.case.ts`，6 例）与 `basic/cli` e2e（假守护进程 exit 75 → recover、回滚、急停、中途被杀、残留 `approved`） | 已合入 [#1138](https://github.com/zhinjs/zhin/pull/1138) |
 | F6 | ADR 转 Accepted、默认值表、默认行为规范与用户文档 | 本次 |
@@ -178,7 +178,7 @@ A → B → C → D → E 依次依赖（以下为当时的计划，均已完成
 | Q6 | 无守护进程时的 `process` 变更 | **A**：不提交审批，告知本实例无法自动生效（`change_restart_unavailable`） | F1 |
 | Q7 | 审批可见性 | **A**：Console 详情页看完整 diff + IM 卡 ≤ 40 行摘录 | F3（#1142） |
 | Q8 | 「发布另一步」 | **A**：试跑通过 → 一次人批 → 写入生产即发布，不设第二道审批；新建本地插件包（新 `package.json` + 入口）不在本期 | — |
-| Q9 | 何时关 #1051 | **A**：F1 + F2 + F4 + F5 合入并完成本文档收口（F6）后关闭；F3 如需另开 issue | F6 |
+| Q9 | 何时关 #1051 | **A**：F1 + F2 + F4 + F5 合入并完成本文档收口（F6）后关闭；F3 已另开 [#1142](https://github.com/zhinjs/zhin/issues/1142) 交付 | F6 |
 
 可写范围（插件约定目录 + 根 `AGENTS.md` + `skills/**`，根配置只能走字段级 `configPatch`）与「业务群发起改投主人私聊」按上文 §1 / §4 维持不变。
 
