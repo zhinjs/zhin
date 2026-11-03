@@ -312,7 +312,7 @@ ai:
       cooldownMs: 120000                  # minimum gap between two unprompted interjections
       maxPerHour: 3                       # unprompted interjections per group per hour
       conversationWindowMs: 180000        # after the bot speaks, the group is in a conversation for this long
-      judgeIntervalMs: 30000              # outside a conversation, judge a group at most this often
+      judgeIntervalMs: 30000              # outside a conversation, judge a group at most this often (deferred, not dropped)
       minConfidence: 0.7                  # judge confidence required to engage
       mode: active                        # shadow: log the judgment without replying
 ```
@@ -321,7 +321,7 @@ How it works:
 1. After a new message, wait `quietMs` for the group to go quiet; messages in that window are judged together.
 2. The judge reads the last 20 messages (the bot's own lines are labeled `You (this bot)`) and returns whether to engage and how confident it is.
    - **In a conversation** (the bot spoke within `conversationWindowMs`, addressed or not): replies to it depend only on the judge, not on the cooldown or hourly cap, with a safety ceiling of 30 per hour.
-   - **Otherwise**: unprompted interjections are limited by `cooldownMs` and `maxPerHour`.
+   - **Otherwise**: unprompted interjections are limited by `cooldownMs` and `maxPerHour`; the judge runs at most once per `judgeIntervalMs`, and a burst that arrives inside that window is judged when it ends (or superseded by a newer message) instead of being dropped.
 3. Above the threshold, the main Agent handles the message as usual. Its context says nobody called it, and it can still stay quiet.
 
 Each judgment logs an `ambient_engagement` line (decision, confidence, reason). Run in `shadow` first to see whether the judgments are sound, then switch to `active`.

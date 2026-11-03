@@ -746,7 +746,10 @@ export interface AmbientEngagementConfig {
    * becomes its fallback; in `shadow` mode this list still decides.
    */
   judge?: string | string[];
-  /** Outside a conversation, judge a group at most this often (default 30000), to spare the judge's quota. */
+  /**
+   * Outside a conversation, judge a group at most this often (default 30000), to spare the judge's quota.
+   * A burst inside the window is deferred until it ends (a newer message supersedes it), not dropped.
+   */
   judgeIntervalMs?: number;
   /** Wait for the group to be quiet this long before judging a burst of messages (default 4000). */
   quietMs?: number;

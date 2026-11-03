@@ -40,7 +40,7 @@ export interface EngagementJudge {
 export type AmbientDecision =
   | { readonly kind: 'engage' | 'shadow'; readonly judgment: EngagementJudgment }
   | { readonly kind: 'declined'; readonly judgment: EngagementJudgment }
-  | { readonly kind: 'skipped'; readonly reason: 'superseded' | 'cooldown' | 'hourly_cap' | 'judge_interval' | 'no_context' | 'judge_failed' };
+  | { readonly kind: 'skipped'; readonly reason: 'superseded' | 'cooldown' | 'hourly_cap' | 'no_context' | 'judge_failed' };
 
 const JUDGMENT_SCHEMA = Object.freeze({
   type: 'object',
@@ -350,22 +350,34 @@ export class AmbientEngagement {
     const ticket = (this.#latest.get(input.key) ?? 0) + 1;
     this.#latest.set(input.key, ticket);
     await this.#sleep(this.#config.quietMs);
-    // A newer message in the same group judges the whole burst instead.
-    if (this.#latest.get(input.key) !== ticket) return { kind: 'skipped', reason: 'superseded' };
 
-    const now = this.#now();
-    const lastSpoke = this.#lastSpoke.get(input.key);
-    const inConversation = lastSpoke !== undefined && now - lastSpoke < this.#config.conversationWindowMs;
-    const interjections = withinHour(this.#interjections, input.key, now);
-    const conversationReplies = withinHour(this.#conversationReplies, input.key, now);
-    if (inConversation) {
-      if (conversationReplies.length >= MAX_CONVERSATION_REPLIES_PER_HOUR) return { kind: 'skipped', reason: 'hourly_cap' };
-    } else {
+    let now: number;
+    let lastSpoke: number | undefined;
+    let inConversation: boolean;
+    let interjections: number[];
+    let conversationReplies: number[];
+    for (;;) {
+      // A newer message in the same group judges the whole burst instead.
+      if (this.#latest.get(input.key) !== ticket) return { kind: 'skipped', reason: 'superseded' };
+      now = this.#now();
+      lastSpoke = this.#lastSpoke.get(input.key);
+      inConversation = lastSpoke !== undefined && now - lastSpoke < this.#config.conversationWindowMs;
+      interjections = withinHour(this.#interjections, input.key, now);
+      conversationReplies = withinHour(this.#conversationReplies, input.key, now);
+      if (inConversation) {
+        if (conversationReplies.length >= MAX_CONVERSATION_REPLIES_PER_HOUR) return { kind: 'skipped', reason: 'hourly_cap' };
+        break;
+      }
       const lastInterjection = interjections.at(-1);
       if (lastInterjection !== undefined && now - lastInterjection < this.#config.cooldownMs) return { kind: 'skipped', reason: 'cooldown' };
       if (interjections.length >= this.#config.maxPerHour) return { kind: 'skipped', reason: 'hourly_cap' };
+      // `judgeIntervalMs` limits how often an idle group is judged, not which burst gets judged:
+      // a burst inside the window waits for it to end (on the same ticket, so a newer message still
+      // supersedes it) and is judged then, instead of being dropped until someone speaks again.
       const lastJudged = this.#lastJudged.get(input.key);
-      if (lastJudged !== undefined && now - lastJudged < this.#config.judgeIntervalMs) return { kind: 'skipped', reason: 'judge_interval' };
+      const wait = lastJudged === undefined ? 0 : lastJudged + this.#config.judgeIntervalMs - now;
+      if (wait <= 0) break;
+      await this.#sleep(wait);
     }
 
     const recent = await input.readRecent().catch(() => []);
