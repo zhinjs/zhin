@@ -114,6 +114,7 @@ describe('douyin live outbound formatting (reserved for direct)', () => {
   it('folds mentions into the body as @nickname', () => {
     expect(formatOutboundDanmaku([{ type: 'mention', data: { id: '42', name: '小明' } }, { type: 'text', data: { text: '欢迎！' } }])).toBe('@小明 欢迎！');
     expect(formatOutboundDanmaku([{ type: 'mention', data: { id: '42' } }, 'hi'])).toBe('@42 hi');
+    expect(formatOutboundDanmaku(['hi', { type: 'mention', data: { name: 'A' } }, 'yo'])).toBe('hi @A yo');
     expect(formatOutboundDanmaku([{ type: 'image', data: { url: 'x' } }, { type: 'text', data: { text: ' a  b ' } }])).toBe('a b');
     expect(formatOutboundDanmaku(null)).toBe('');
     expect(formatOutboundDanmaku([null, undefined, 7, { type: 'text', data: { text: 'ok' } }])).toBe('ok');

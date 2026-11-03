@@ -340,7 +340,7 @@ interface WireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-/** 出站：弹幕只支持纯文本；抖音弹幕没有「回复」字段，mention 折叠进正文 `@昵称 `。 */
+/** 出站：弹幕只支持纯文本；抖音弹幕没有「回复」字段，mention 折叠进正文 ` @昵称 `（前后留空格，避免与相邻文本粘连）。 */
 export function formatOutboundDanmaku(payload: unknown): string {
   if (typeof payload === 'string') return payload.replace(/\s+/g, ' ').trim();
   if (payload == null) return '';
@@ -352,7 +352,7 @@ export function formatOutboundDanmaku(payload: unknown): string {
     if (seg.type === 'text') return String(seg.data?.text ?? '');
     if (seg.type === 'mention' || seg.type === 'at') {
       const name = String(seg.data?.name ?? seg.data?.id ?? seg.data?.user_id ?? '').trim();
-      return name ? `@${name} ` : '';
+      return name ? ` @${name} ` : '';
     }
     return '';
   }).join('').replace(/\s+/g, ' ').trim();

@@ -110,10 +110,18 @@ describe('DouyinLiveEndpoint inbound', () => {
     const sign = vi.fn(async (stub: string) => `sig-${stub.slice(0, 6)}`);
     const { harness, sockets, calls } = await connected({ cookie: 'ttwid=mine; sessionid=secret' }, { sign });
     expect(calls.map((call) => call.url)).toEqual([`https://live.douyin.com/${WEB_RID}`]);
-    expect(sign).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f]{32}$/), undefined);
+    expect(sign).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f]{32}$/), expect.any(AbortSignal));
     const url = new URL(sockets[0]!.url);
     expect(url.searchParams.get('signature')).toBe(`sig-${sign.mock.calls[0]![0].slice(0, 6)}`);
     expect(sockets[0]!.headers.cookie).toBe('ttwid=mine; sessionid=secret');
+    await harness.stop();
+  });
+
+  it('fails loudly when a configured signer returns no signature', async () => {
+    const sign = vi.fn(async (stub: string) => `sig-${stub.slice(0, 6)}`);
+    const { harness } = await connected({}, { sign });
+    sign.mockResolvedValueOnce('  ');
+    await expect(harness.endpoint.signature('a'.repeat(32))).rejects.toThrow(/empty signature/);
     await harness.stop();
   });
 

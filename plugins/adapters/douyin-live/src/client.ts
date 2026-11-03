@@ -204,11 +204,15 @@ export class DouyinLiveClient {
     return `${DOUYIN_LIVE_PUSH_URL}?${query}`;
   }
 
-  /** 取签名：优先注入的 signer，其次 `signerUrl`；都没有返回空串。 */
+  /**
+   * 取签名：优先注入的 signer，其次 `signerUrl`；都没有返回空串（unsigned）。
+   * 配了签名来源却拿不到可用签名时抛错（可见、可重试），不静默降级成无签名连接。
+   */
   async signature(stub: string): Promise<string> {
     let value: string;
     if (this.#signer) {
-      value = await this.#signer(stub, this.#signal);
+      const signal = this.#requestSignal();
+      value = await withAbort(Promise.resolve(this.#signer(stub, signal)), signal);
     } else if (this.config.signerUrl) {
       const separator = this.config.signerUrl.includes('?') ? '&' : '?';
       const response = await this.#get(`${this.config.signerUrl}${separator}stub=${encodeURIComponent(stub)}`);
@@ -217,12 +221,25 @@ export class DouyinLiveClient {
       return '';
     }
     value = String(value ?? '').trim();
-    if (!value) return '';
+    if (!value) throw new DouyinLiveApiError('Douyin live signer returned an empty signature');
     if (value.length > MAX_SIGNATURE_LENGTH || /[\s&#]/.test(value)) {
       throw new DouyinLiveApiError('Douyin live signer returned an invalid signature');
     }
     return value;
   }
+}
+
+/** 让不理会 signal 的注入 signer 也受请求超时 / 取消约束。 */
+function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+      (error: unknown) => { signal.removeEventListener('abort', onAbort); reject(error); },
+    );
+  });
 }
 
 /** 直播间页内嵌 JSON（转义或未转义）里的 `roomId`。 */

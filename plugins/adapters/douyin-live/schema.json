@@ -54,6 +54,7 @@
     },
     "signerUrl": {
       "type": "string",
+      "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://",
       "description": "可选：外部签名服务（GET ?stub=<X-MS-STUB> 返回 signature）。本包不内置平台签名脚本；不填时不带签名连接，平台可能拒绝",
       "x-i18n": {
         "en": {
@@ -199,6 +200,7 @@
           },
           "signerUrl": {
             "type": "string",
+            "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://",
             "description": "可选：外部签名服务（GET ?stub=<X-MS-STUB> 返回 signature）。本包不内置平台签名脚本；不填时不带签名连接，平台可能拒绝",
             "x-i18n": {
               "en": {
