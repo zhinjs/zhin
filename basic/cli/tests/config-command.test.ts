@@ -54,14 +54,15 @@ it('config set defaults to the running Host and never silently writes the local 
 });
 
 it('uses explicit Host/token options and shared JSON Pointer paths without changing JSON value semantics', async () => {
-  const { source } = await fixture();
+  const { source } = await fixture({ configVersion: 2, plugins: { business: 'fixture-business' },
+    business: { 'key.with.dot': [{ 'a/b~c': { enabled: false } }] } });
   vi.stubEnv('CLI_TEST_TOKEN', 'synthetic-console-token');
   const fetch = fakeHost(source);
-  await run('set', '/plugin/key.with.dot/0/a~1b~0c', '{"enabled":true}', '--live', 'https://host.test/custom', '--token-env', 'CLI_TEST_TOKEN');
+  await run('set', '/business/key.with.dot/0/a~1b~0c', '{"enabled":true}', '--live', 'https://host.test/custom', '--token-env', 'CLI_TEST_TOKEN');
   expect(fetch.mock.calls[1]![0]).toBeInstanceOf(URL);
   expect(String(fetch.mock.calls[1]![0])).toBe('https://host.test/custom/console/request');
   expect(fetch.mock.calls[1]![1]?.headers).toMatchObject({ authorization: 'Bearer synthetic-console-token' });
-  expect(JSON.parse(String(fetch.mock.calls[1]![1]?.body)).patches).toEqual([{ op: 'set', path: ['plugin', 'key.with.dot', '0', 'a/b~c'], value: { enabled: true } }]);
+  expect(JSON.parse(String(fetch.mock.calls[1]![1]?.body)).patches).toEqual([{ op: 'set', path: ['business', 'key.with.dot', '0', 'a/b~c'], value: { enabled: true } }]);
 });
 
 it('read failures never fall back to local writes', async () => {
@@ -77,7 +78,7 @@ it('a response lost after a mutation is unconfirmed, has evidence, and is never 
   const { file, source, output } = await fixture();
   let committed = false;
   const fetch = fakeHost(source, () => { committed = true; throw new Error('lost reply containing synthetic-sensitive-detail'); });
-  await run('delete', 'plugin.rows.0');
+  await run('delete', 'log_level');
   expect(committed).toBe(true);
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(await readFile(file, 'utf8')).toBe(source);
@@ -134,6 +135,22 @@ it.each(['conflict', 'invalid'] as const)('retains known %s results instead of c
   expect(JSON.parse(String(output.mock.calls.at(-1)?.[0])).status).toBe(status);
   expect(process.exitCode).toBe(1);
 });
+
+it.each(['configVersion', 'plugins.child', 'disable_plugins.0', 'plugin.title', 'undeclared.title'])(
+  'preserves the Host project-patch rejection for %s without a legacy write fallback', async key => {
+    const { file, source, output } = await fixture();
+    const section = key.split('.')[0]!;
+    const invalid = { status: 'invalid', revision: sourceRevision, missingEnv: [],
+      errors: [{ path: `$.${section}`, message: section === 'undeclared' ? '未声明的插件实例；请先在 plugins 中声明'
+        : '插件声明与根插件配置请在配置源码或插件管理中修改' }], message: '配置校验失败，未保存' };
+    const fetch = fakeHost(source, () => invalid);
+    await run('set', key, 'value');
+    expect(JSON.parse(String(output.mock.calls.at(-1)?.[0]))).toEqual(invalid);
+    expect(fetch.mock.calls.map(call => JSON.parse(String(call[1]?.body)).type)).toEqual(['config:get-source', 'config:patch-project']);
+    expect(await readFile(file, 'utf8')).toBe(source);
+    expect(process.exitCode).toBe(1);
+  },
+);
 
 it('keeps an explicit Host permission rejection distinct from an unknown network result', async () => {
   const { file, source, output } = await fixture();

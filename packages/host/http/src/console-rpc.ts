@@ -1,6 +1,7 @@
 import type { AuthScope } from './token-registry.js';
 import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
+  CONFIG_PATCH_LIMITS,
   CONFIG_RPC,
   ENDPOINT_RPC,
   type ConsoleConfigPatchRequest,
@@ -282,6 +283,31 @@ export function pickRpcReply(
   );
 }
 
+const FORBIDDEN_PATCH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Structural check for `config:patch-project` operations at the RPC boundary, so no project
+ * port implementation receives a malformed request. The store repeats the full validation.
+ */
+function invalidProjectPatchOperations(patches: readonly unknown[]): string | undefined {
+  if (patches.length === 0) return 'patches 必须是非空数组';
+  if (patches.length > CONFIG_PATCH_LIMITS.maxOperations) return `一次最多 ${CONFIG_PATCH_LIMITS.maxOperations} 个 patch`;
+  for (const [index, item] of patches.entries()) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return `patches[${index}] 必须是对象`;
+    const operation = item as Record<string, unknown>;
+    const path = operation.path;
+    if (!Array.isArray(path) || path.length === 0 || path.length > CONFIG_PATCH_LIMITS.maxPathDepth
+      || path.some(segment => typeof segment !== 'string' || !segment
+        || segment.length > CONFIG_PATCH_LIMITS.maxSegmentLength || FORBIDDEN_PATCH_SEGMENTS.has(segment))) {
+      return `patches[${index}].path 必须是 1–${CONFIG_PATCH_LIMITS.maxPathDepth} 段的有效字符串数组`;
+    }
+    if (operation.op === 'set') {
+      if (!Object.hasOwn(operation, 'value') || operation.value === undefined) return `patches[${index}] 的 set 需要 value`;
+    } else if (operation.op !== 'remove') return `patches[${index}].op 只能是 set 或 remove`;
+  }
+  return undefined;
+}
+
 export async function dispatchRuntimeConsoleRpc(
   message: RuntimeConsoleRpcMessage,
   ctx: RuntimeConsoleRpcContext,
@@ -501,6 +527,10 @@ export async function dispatchRuntimeConsoleRpc(
       if (!Array.isArray(patches)) {
         emit({ requestId, error: 'patches 必须是数组' });
         return payloads;
+      }
+      if (projectPatch) {
+        const invalid = invalidProjectPatchOperations(patches);
+        if (invalid) { emit({ requestId, error: invalid }); return payloads; }
       }
       const patch = projectPatch ? ctx.patchProjectConfig : ctx.patchConfig;
       if (!patch) {

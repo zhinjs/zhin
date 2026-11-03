@@ -23,6 +23,7 @@ import {
   readPath,
   resolvePatchScope,
 } from './configuration-patch.js';
+import { maskConfigValue, REDACTED_CONFIG_VALUE } from './configuration-redaction.js';
 
 export interface ChatConfigurationRead extends ConsoleConfigApplicationStatus {
   readonly revision: string;
@@ -30,20 +31,23 @@ export interface ChatConfigurationRead extends ConsoleConfigApplicationStatus {
   readonly keys?: readonly string[];
   readonly schema?: unknown;
 }
-/** Only a thrown commit crosses this uncertainty boundary; never prepared cleanup. */
-class ConfigCommitUnconfirmedError extends Error {
-  constructor(cause: unknown) { super('Configuration commit outcome is unconfirmed', { cause }); }
-}
 /** A Host-classified rejection before this operation attempted any commit. */
 export class ConfigChatRequestRejectedError extends Error {
   readonly code = 'configuration_request_rejected';
   constructor() { super('配置操作在保存前失败，未保存。'); this.name = 'ConfigChatRequestRejectedError'; }
 }
-const declarationSchemas: Readonly<Record<string, Readonly<Record<string, unknown>>>> = Object.freeze({
-  configVersion: { type: 'integer', const: 2 },
-  plugins: { type: 'object', additionalProperties: { type: 'string' } },
-  disable_plugins: { type: 'array', items: { type: 'string' } },
-});
+/** Only a thrown commit crosses this uncertainty boundary; never prepared cleanup. */
+class ConfigCommitUnconfirmedError extends Error {
+  constructor(cause: unknown) { super('Configuration commit outcome is unconfirmed', { cause }); }
+}
+
+/**
+ * Top-level keys a trusted project patch must not write: Plugin declarations
+ * (`configVersion` / `plugins` / `disable_plugins`) and the root Plugin section
+ * (`plugin`). Declarations change which schema interprets business config, so they
+ * stay with the source editor and Plugin management, not path patches.
+ */
+const PROJECT_PATCH_DECLARATION_KEYS: ReadonlySet<string> = new Set(['configVersion', 'plugins', 'disable_plugins', 'plugin']);
 
 /** Allow only Runtime's fixed metadata vocabulary into a chat response. */
 function chatApplication(application: ConsoleConfigApplication | undefined): ConsoleConfigApplication | undefined {
@@ -182,12 +186,18 @@ export class ConsoleConfigurationStore {
     return this.#serialize(() => this.#patchCore(request, 'scoped'));
   }
 
-  /** Trusted operator path; it does not widen the ordinary Console patch scope. */
+  /**
+   * Trusted project administration (`config:patch-project`, full scope only). Same
+   * single-CAS core as {@link patch}, without the page allowlist; it does not widen
+   * `config:patch` / `HOST_CONFIG_PATCH_PATHS`. Declaration writes are rejected as
+   * `invalid`, conflict values are masked, and a thrown commit is `unconfirmed`.
+   */
   patchProject(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>): Promise<ConsoleConfigProjectPatchResult> {
     return this.#serialize(async () => {
-      try { return await this.#patchCore(request, 'project'); }
+      try { return await this.#patchCore({ expectedRevision: request.expectedRevision, patches: request.patches }, 'project'); }
       catch (error) {
         if (!(error instanceof ConfigCommitUnconfirmedError)) throw error;
+        // The file may already hold the candidate. Do not retry or roll back.
         return Object.freeze({ status: 'unconfirmed', expectedRevision: request.expectedRevision,
           message: 'Configuration save outcome is unconfirmed; inspect source and runtime status before any further write' });
       }
@@ -211,6 +221,7 @@ export class ConsoleConfigurationStore {
     });
   }
 
+  /** Shared single-CAS write: `scoped` keeps the page allowlist; `project` is the trusted full path. */
   async #patchCore(request: ConsoleConfigPatchRequest, mode: 'scoped' | 'project' | 'chat'): Promise<ConsoleConfigPatchResult> {
     let phase: 'prepare' | 'commit' | 'committed' = 'prepare';
     try {
@@ -225,27 +236,28 @@ export class ConsoleConfigurationStore {
         assertPatchesInScope(patches, allowed, instanceKey === undefined ? 'Host 白名单' : `插件 ${instanceKey}`);
       }
       const paths = Object.freeze(patches.map(patch => patch.path));
-      const conflict = (snapshot: typeof current): ConsoleConfigPatchResult => Object.freeze({
+      if (mode !== 'scoped') {
+        const rejected = projectDeclarationErrors(current.document, paths);
+        if (rejected.length > 0) {
+          return Object.freeze({ status: 'invalid', revision: current.revision, errors: Object.freeze(rejected),
+            missingEnv: Object.freeze([]), message: '插件声明不能通过项目补丁修改，未保存' });
+        }
+      }
+      const conflict = async (snapshot: typeof current): Promise<ConsoleConfigPatchResult> => Object.freeze({
         status: 'conflict',
         revision: snapshot.revision,
-        current: Object.freeze(paths.map(path => Object.freeze({ path, value: readPath(snapshot.document, path) }))),
+        current: Object.freeze(await Promise.all(paths.map(async path => Object.freeze({ path,
+          value: mode !== 'scoped' ? await this.#maskedValue(snapshot.document, path) : readPath(snapshot.document, path) })))),
         message: '配置已被其他地方修改，未保存。请查看最新值后重试。',
       });
-      if (current.revision !== request.expectedRevision) return conflict(current);
+      if (current.revision !== request.expectedRevision) return await conflict(current);
       const candidate = applyConfigPatches(current.document, patches);
-      readApplicationPluginDeclaration(candidate);
       if (mode === 'chat') for (const patch of patches) {
-        const section = patch.path[0];
-        // A removed Plugin namespace has no next schema. Its old authority and
-        // the binding closure below still prove the whole affected old value.
-        const removedNamespace = !HOST_CONFIG_KEYS.includes(section) && !Object.hasOwn(declarationSchemas, section)
-          && typeof readPath(current.document, ['plugins', section]) === 'string'
-          && readPath(candidate, ['plugins', section]) === undefined && readPath(candidate, [section]) === undefined;
-        if (!removedNamespace) await this.#assertChatPath(candidate, patch.path, [readPath(candidate, patch.path)]);
-        // Rebinding a Plugin cannot hide the old schema or erase an existing secret.
-        if (readPath(current.document, patch.path) !== undefined) await this.#assertChatPath(current.document, patch.path, [readPath(current.document, patch.path)]);
-        // Removing an array item shifts later values into different schema
-        // positions. Their entire parent is the affected safety unit.
+        await this.#assertChatPath(candidate, patch.path, [readPath(candidate, patch.path)]);
+        if (readPath(current.document, patch.path) !== undefined) {
+          await this.#assertChatPath(current.document, patch.path, [readPath(current.document, patch.path)]);
+        }
+        // Array removal shifts subsequent values into other schema positions.
         const parent = patch.path.slice(0, -1);
         if (patch.op === 'remove' && Array.isArray(readPath(current.document, parent))) {
           const values = [readPath(current.document, parent), readPath(candidate, parent)];
@@ -253,16 +265,12 @@ export class ConsoleConfigurationStore {
           await this.#assertChatPath(candidate, parent, values);
         }
       }
-      if (mode === 'chat') await this.#assertChatBindingChanges(current.document, candidate);
       const sections = [...new Set(patches.map(patch => patch.path[0]!))];
       const errors: Array<{ path: string; message: string }> = [];
       const missingEnv = new Set<string>();
       for (const section of sections) {
-        // Declaration structure was checked as one complete candidate above;
-        // these are not ordinary per-plugin configuration blocks.
-        if (mode !== 'scoped' && Object.hasOwn(declarationSchemas, section)) continue;
         if (candidate[section] === undefined) continue;
-        const validation = await this.validatePluginConfig(section, candidate[section], candidate);
+        const validation = await this.validatePluginConfig(section, candidate[section], current.document);
         for (const error of validation.errors) errors.push({ path: `$.${section}${error.path.slice(1)}`, message: error.message });
         for (const name of validation.missingEnv) missingEnv.add(name);
       }
@@ -290,15 +298,19 @@ export class ConsoleConfigurationStore {
             missingEnv: Object.freeze([...missingEnv].sort()), message: '配置校验失败，未保存' });
         }
         phase = 'commit';
-        try { committed = await prepared.commit(); phase = 'committed'; }
-        catch (error) {
-          if (error instanceof ConfigDocumentConflictError) { phase = 'prepare'; throw error; }
-          throw new ConfigCommitUnconfirmedError(error);
+        if (mode === 'scoped') committed = await prepared.commit();
+        else {
+          try { committed = await prepared.commit(); }
+          catch (error) {
+            if (error instanceof ConfigDocumentConflictError) { phase = 'prepare'; throw error; }
+            throw new ConfigCommitUnconfirmedError(error);
+          }
         }
       } catch (error) {
-        if (error instanceof ConfigDocumentConflictError) return conflict(await this.#document.read());
+        if (error instanceof ConfigDocumentConflictError) return await conflict(await this.#document.read());
         throw error;
       }
+      phase = 'committed';
       const applied = await this.#applySaved(sections.some(section => HOST_CONFIG_KEYS.includes(section)), committed.revision);
       return Object.freeze({
         status: 'saved',
@@ -312,42 +324,38 @@ export class ConsoleConfigurationStore {
           ? (applied.application ? '配置已保存，部分配置待重启生效' : '配置已保存，需重启进程才能生效') : applied.application
             ? '配置已保存，请查看各项生效结果' : '配置已保存',
       });
+
     } catch (error) {
       if (mode === 'chat') {
         if (phase === 'prepare') {
           if (error instanceof ConfigChatAccessError) throw error;
-          // The authoritative boundary knows no commit was attempted. Do not ask
-          // the message layer to infer this fact from exception text or type.
           throw new ConfigChatRequestRejectedError();
         }
-        // A callback's exception type cannot turn a crossed write boundary into
-        // a pre-save rejection, even if it reuses one of our public error classes.
+        // A callback cannot reclassify a crossed commit as a pre-save failure.
         throw new Error('Configuration operation outcome is unconfirmed', { cause: error });
       }
       throw error;
     }
   }
 
+  /** Conflict evidence for trusted writes: never echo secrets or unexpanded references. */
+  async #maskedValue(document: RuntimeConfigDocument, path: readonly string[]): Promise<unknown> {
+    const value = readPath(document, path);
+    if (value === undefined) return undefined;
+    let schema: Readonly<Record<string, unknown>> | null;
+    // Fail closed: without the schema we cannot rule out a schema-marked secret under an ordinary key.
+    try { schema = await this.#schemas.readJson(path[0]!, document); }
+    catch { return REDACTED_CONFIG_VALUE; }
+    return maskConfigValue(schema, path, value);
+  }
+
   async #assertChatPath(document: RuntimeConfigDocument, path: readonly string[], values: readonly unknown[], deep = true): Promise<unknown> {
     if (!path.length) throw new ConfigChatAccessError('unknown');
     let schema: unknown;
-    try { schema = declarationSchemas[path[0]] ?? await this.#schemas.readJson(path[0], document); }
+    try { schema = await this.#schemas.readJson(path[0], document); }
     catch { throw new ConfigChatAccessError('unknown'); }
     assertChatConfigurationAccess(schema, path.slice(1), values, deep, path);
     return schema;
-  }
-
-  async #assertChatBindingChanges(previous: RuntimeConfigDocument, next: RuntimeConfigDocument): Promise<void> {
-    const before = new Map(readApplicationPluginDeclaration(previous).instances.map(instance => [instance.instanceKey, instance.package]));
-    const after = new Map(readApplicationPluginDeclaration(next).instances.map(instance => [instance.instanceKey, instance.package]));
-    for (const alias of new Set([...before.keys(), ...after.keys()])) {
-      if (before.get(alias) === after.get(alias)) continue;
-      // A binding defines the interpretation of existing business configuration.
-      // Check both authorities, not only the public package-string patch path.
-      const values = [readPath(previous, [alias]), readPath(next, [alias])];
-      if (before.has(alias)) await this.#assertChatPath(previous, [alias], values);
-      if (after.has(alias)) await this.#assertChatPath(next, [alias], values);
-    }
   }
 
   readChat(path: readonly string[], mode: 'get' | 'list' | 'schema' | 'status'): Promise<ChatConfigurationRead> {
@@ -522,11 +530,32 @@ export class ConsoleConfigurationStore {
     return this.#mutationTail.then(operation);
   }
 
+  /**
+   * Lock order: this Console store's domain lock (the mutation tail) is taken first,
+   * then the Root configuration queue via `#applyConfiguration` / `#validateConfiguration`.
+   * Root control must never call back into this store while holding its queue, or the
+   * two locks would wait on each other.
+   */
   #serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.#mutationTail.then(operation);
     this.#mutationTail = result.then(() => undefined, () => undefined);
     return result;
   }
+}
+
+/** Project patches may write Host and declared Plugin business config, never declarations. */
+function projectDeclarationErrors(document: RuntimeConfigDocument, paths: readonly (readonly string[])[]): Array<{ path: string; message: string }> {
+  const plugins = document.plugins && typeof document.plugins === 'object' && !Array.isArray(document.plugins)
+    ? document.plugins as Record<string, unknown> : {};
+  const errors: Array<{ path: string; message: string }> = [];
+  for (const section of new Set(paths.map(path => path[0]!))) {
+    if (PROJECT_PATCH_DECLARATION_KEYS.has(section)) {
+      errors.push({ path: `$.${section}`, message: '插件声明与根插件配置请在配置源码或插件管理中修改' });
+    } else if (!HOST_CONFIG_KEYS.includes(section) && !Object.hasOwn(plugins, section)) {
+      errors.push({ path: `$.${section}`, message: '未声明的插件实例；请先在 plugins 中声明' });
+    }
+  }
+  return errors;
 }
 
 function collectEnvironmentReferences(

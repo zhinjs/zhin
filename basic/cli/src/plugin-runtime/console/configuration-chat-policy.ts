@@ -1,4 +1,5 @@
 import { expandEnvironmentValue } from '@zhin.js/runtime';
+import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey as sensitiveKey } from './configuration-schema-safety.js';
 type Schema = Readonly<Record<string, unknown>>;
 type Variants = readonly (readonly Schema[])[];
 export type ConfigChatAccessKind = 'sensitive' | 'unknown' | 'missing';
@@ -15,13 +16,6 @@ function record(value: unknown): value is Schema {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 function own(value: Schema, key: string): boolean { return Object.hasOwn(value, key); }
-function sensitiveKey(key: string): boolean {
-  const normalized = key.replace(/[^a-z0-9]/giu, '').toLowerCase();
-  // Token budgets (maxTokens, tokenLimit) are ordinary typed settings. The
-  // fallback covers credential names when a plugin omitted a secret annotation.
-  return /(?:password|passwd|secret|apikey|accesskey|privatekey|credential|authorization|cookie)/u.test(normalized)
-    || normalized === 'pwd' || /(?:^|api|access|refresh|auth|bearer|bot|oauth|session|private|client)tokens?(?:v[0-9]+)?$/u.test(normalized);
-}
 function sensitive(schema: Schema): boolean {
   return schema.writeOnly === true || schema.secret === true || schema.format === 'password' || schema.component === 'password'
     || record(schema['x-zhin-config']) && (schema['x-zhin-config'].secret === true || schema['x-zhin-config'].component === 'password');
@@ -39,8 +33,8 @@ function intersect(left: Variants, right: Variants): Variants {
 function variants(value: unknown, root: Schema, seen = new Set<unknown>()): Variants {
   if (!record(value) || seen.has(value)) unknown();
   const nextSeen = new Set([...seen, value]);
-  if (value !== root && own(value, '$id') || value.hidden === true || record(value['x-zhin-config']) && value['x-zhin-config'].hidden === true
-    || ['if', 'then', 'else', 'not', 'contains', 'dependencies', 'dependentSchemas', '$dynamicRef', '$recursiveRef', '$dynamicAnchor', 'unevaluatedProperties', 'unevaluatedItems'].some(key => own(value, key))) unknown();
+  if (isUnknownConfigurationSchemaBoundary(value, root)
+    || value.hidden === true || record(value['x-zhin-config']) && value['x-zhin-config'].hidden === true) unknown();
   let result: Variants = [[value]];
   if (value.$ref !== undefined) {
     if (typeof value.$ref !== 'string' || !value.$ref.startsWith('#/')) unknown();

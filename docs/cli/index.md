@@ -122,6 +122,8 @@ zhin config set log_level debug --offline
 
 `list/get/set/delete/schema/status/apply` 默认连接运行中 Host，使用同一配置服务进行校验、版本检查和按需生效；不会启动第二个 Runtime。可用 `--live https://host.example/api` 指定地址，`--token-env ZHIN_CONSOLE_TOKEN` 指定 full token 的环境变量。未指定地址时从项目配置发现地址和凭据；如果 HTTP 地址或 token 尚待重启，发现值可能与运行中 Host 不同，请显式提供实际地址和凭据。连接失败不会自动改为本地写入。
 
+在线 `set/delete` 使用受保护的 `config:patch-project`：full scope 可修改 Host 配置和已声明插件实例的业务字段；`configVersion`、`plugins`、`disable_plugins`、根插件的 `plugin` 配置区以及未声明实例会返回 `invalid`。CLI 不会改用旧写接口绕过限制。结构调整使用配置源码或插件管理；显式离线保存仍须通过完整校验及源版本检查。下面的 `/plugin/key.with.dot` 是读取示例，不表示该路径允许在线写入。
+
 `get/list` 显示保存的期望配置，不等于所有字段已在运行中生效。保存后可能部分热更新、部分待重启；`status` 显示最近一次回执，`apply` 只申请应用已保存版本，不重复写文件。收到“结果未确认”时，保留输出中的 `expectedRevision` 和在线请求的 `requestId`，再只读查询 `status` 核对文件版本及生效回执。`requestId` 标识 HTTP 请求，不等于应用回执的 `operationId`，当前没有两者的持久查询映射；较新的回执不能证明原操作失败，不要直接重试。`--json` 输出单条紧凑 JSON，省略人读消息行。
 
 路径保留 `ai.enabled` 等点语法；字面包含点的键可用 JSON Pointer，例如 `zhin config get /plugin/key.with.dot`。`~1` 表示 `/`，`~0` 表示 `~`。数组使用已存在的数字索引；删除会收拢后续索引，不支持 `-` 追加或越界创建。追加时设置完整数组，保存时仍按源文件版本检查冲突。

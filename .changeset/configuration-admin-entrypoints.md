@@ -1,7 +1,5 @@
 ---
 "@zhin.js/cli": patch
-"@zhin.js/host-http": patch
-"@zhin.js/console-protocol": patch
 "@zhin.js/agent": patch
 "@zhin.js/ai": patch
 ---

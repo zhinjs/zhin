@@ -88,27 +88,47 @@ describe('Console project/chat configuration entrypoints', () => {
     expect(validateConfiguration).toHaveBeenCalledTimes(1); expect(applyConfiguration).toHaveBeenCalledTimes(1);
     expect(await f.store.readChat(['demo', 'label'], 'get')).toMatchObject({ value: 'after' });
   });
-  it('validates an atomic new declaration and its configuration using the candidate schema', async () => {
+  it('rejects an atomic declaration/configuration addition without saving any field', async () => {
     const f = await fixture();
     const { revision } = await f.store.readSource();
+    const before = await readFile(f.file, 'utf8'); const prepare = vi.spyOn(f.document, 'prepare');
     expect(await f.store.patchProject({ expectedRevision: revision, patches: [
       { op: 'set', path: ['plugins', 'new'], value: './other' }, { op: 'set', path: ['new'], value: { label: 'after' } },
-    ] })).toMatchObject({ status: 'saved' });
-    expect(JSON.parse(await readFile(f.file, 'utf8')).new).toEqual({ label: 'after' });
+    ] })).toMatchObject({ status: 'invalid' });
+    expect(await readFile(f.file, 'utf8')).toBe(before); expect(prepare).not.toHaveBeenCalled();
+  });
+  it.each([
+    [['configVersion'], 2], [['plugins'], { demo: './other' }], [['disable_plugins'], ['demo']],
+    [['plugin', 'label'], 'private-value'], [['undeclared', 'label'], 'private-value'],
+  ])('chat preserves the canonical project write restriction for %j', async (path, value) => {
+    const applyConfiguration = vi.fn(async (): Promise<ConsoleConfigApplication> => { throw new Error('must not apply'); });
+    const f = await fixture(undefined, { applyConfiguration });
+    const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
+    const prepare = vi.spyOn(f.document, 'prepare');
+    const result = await f.store.patchChat({ expectedRevision: revision, patches: [
+      { op: 'set', path: ['demo', 'label'], value: 'after' }, { op: 'set', path, value },
+    ] });
+    expect(result).toMatchObject({ status: 'invalid', revision }); expect(JSON.stringify(result)).not.toContain('private-value');
+    expect(await readFile(f.file, 'utf8')).toBe(before); expect(prepare).not.toHaveBeenCalled(); expect(applyConfiguration).not.toHaveBeenCalled();
+  });
+  it('continues to permit known safe Host business fields through the canonical project boundary', async () => {
+    const f = await fixture(); const { revision } = await f.store.readSource();
+    expect(await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['locale'], value: 'en' }] })).toMatchObject({ status: 'saved' });
+    expect(JSON.parse(await readFile(f.file, 'utf8')).locale).toBe('en');
   });
   it('writes a literal dot key, array index and escaped slash/tilde through the real project CAS path', async () => {
     const f = await fixture();
-    await writeFile(join(f.root, 'schema.json'), JSON.stringify({ type: 'object', properties: {
+    await writeFile(join(f.root, 'demo/schema.json'), JSON.stringify({ ...schema, properties: { ...schema.properties,
       'dot.key': { type: 'array', items: { type: 'object', properties: { 'a/b~c': { type: 'string' } } } },
     } }));
     const before = JSON.parse(await readFile(f.file, 'utf8'));
-    before.plugin = { 'dot.key': [{ 'a/b~c': 'before' }] };
+    before.demo['dot.key'] = [{ 'a/b~c': 'before' }];
     await writeFile(f.file, JSON.stringify(before));
     const { revision } = await f.store.readSource();
-    const patches = [{ op: 'set' as const, path: parseConfigurationPath('/plugin/dot.key/0/a~1b~0c'), value: 'after' }];
+    const patches = [{ op: 'set' as const, path: parseConfigurationPath('/demo/dot.key/0/a~1b~0c'), value: 'after' }];
     await expect(f.store.patch({ expectedRevision: revision, patches })).rejects.toThrow();
     expect(await f.store.patchProject({ expectedRevision: revision, patches })).toMatchObject({ status: 'saved' });
-    expect(JSON.parse(await readFile(f.file, 'utf8')).plugin['dot.key'][0]['a/b~c']).toBe('after');
+    expect(JSON.parse(await readFile(f.file, 'utf8')).demo['dot.key'][0]['a/b~c']).toBe('after');
     expect(await f.store.patchProject({ expectedRevision: revision, patches })).toMatchObject({ status: 'conflict' });
   });
   it('reads precise safe fields and exposes only safe schema structure and keys', async () => {
@@ -136,13 +156,16 @@ describe('Console project/chat configuration entrypoints', () => {
     const f = await fixture({ label: { apiKey: 'private-literal' } });
     await expect(f.store.readChat(['demo', 'label'], 'get')).rejects.toMatchObject({ kind: 'unknown' });
   });
-  it('protects old sensitive schemas when a request also rebinds the plugin to a safe schema', async () => {
+  it('rejects rebinding even inside a combined business update and never exposes old secrets', async () => {
     const f = await fixture();
     await writeFile(join(f.root, 'other/schema.json'), JSON.stringify({ type: 'object', additionalProperties: false, properties: { label: { type: 'string' } } }));
     const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
-    await expect(f.store.patchChat({ expectedRevision: revision, patches: [
+    const prepare = vi.spyOn(f.document, 'prepare');
+    const result = await f.store.patchChat({ expectedRevision: revision, patches: [
       { op: 'set', path: ['plugins', 'demo'], value: './other' }, { op: 'set', path: ['demo'], value: { label: 'after' } },
-    ] })).rejects.toMatchObject({ kind: 'sensitive' });
+    ] });
+    expect(result).toMatchObject({ status: 'invalid' }); expect(JSON.stringify(result)).not.toContain('private-literal');
+    expect(prepare).not.toHaveBeenCalled();
     expect(await readFile(f.file, 'utf8')).toBe(before);
   });
   it('does not launder an existing secret through a binding-only schema change', async () => {
@@ -151,35 +174,40 @@ describe('Console project/chat configuration entrypoints', () => {
     await writeFile(join(f.root, 'other/schema.json'), JSON.stringify({ type: 'object', additionalProperties: false, properties: { label: { type: 'string' } } }));
     await expect(f.store.readChat(['demo', 'label'], 'get')).rejects.toMatchObject({ kind: 'sensitive' });
     const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
-    await expect(f.store.patchChat({ expectedRevision: revision,
-      patches: [{ op: 'set', path: ['plugins', 'demo'], value: './other' }] })).rejects.toMatchObject({ kind: 'sensitive' });
+    const prepare = vi.spyOn(f.document, 'prepare');
+    const result = await f.store.patchChat({ expectedRevision: revision,
+      patches: [{ op: 'set', path: ['plugins', 'demo'], value: './other' }] });
+    expect(result).toMatchObject({ status: 'invalid' }); expect(JSON.stringify(result)).not.toContain('synthetic-private-value');
+    expect(prepare).not.toHaveBeenCalled();
     expect(await readFile(f.file, 'utf8')).toBe(before);
     await expect(f.store.readChat(['demo', 'label'], 'get')).rejects.toMatchObject({ kind: 'sensitive' });
   });
-  it('permits a binding change whose old and new business schemas are both proven safe', async () => {
+  it('preserves the declaration-write boundary even when both business schemas are safe', async () => {
     const f = await fixture({ label: 'before' });
     const safe = { type: 'object', additionalProperties: false, properties: { label: { type: 'string' } } };
     for (const name of ['demo', 'other']) await writeFile(join(f.root, name, 'schema.json'), JSON.stringify(safe));
     const { revision } = await f.store.readSource();
+    const before = await readFile(f.file, 'utf8'); const prepare = vi.spyOn(f.document, 'prepare');
     expect(await f.store.patchChat({ expectedRevision: revision,
-      patches: [{ op: 'set', path: ['plugins', 'demo'], value: './other' }] })).toMatchObject({ status: 'saved' });
+      patches: [{ op: 'set', path: ['plugins', 'demo'], value: './other' }] })).toMatchObject({ status: 'invalid' });
+    expect(await readFile(f.file, 'utf8')).toBe(before); expect(prepare).not.toHaveBeenCalled();
     expect(await f.store.readChat(['demo', 'label'], 'get')).toMatchObject({ value: 'before' });
   });
-  it('permits atomic safe declaration additions and removals without inventing an absent schema', async () => {
+  it('keeps safe declaration additions and removals with the source/plugin-management authority', async () => {
     const f = await fixture({ label: 'before' });
     const safe = { type: 'object', additionalProperties: false, properties: { label: { type: 'string' } } };
     for (const name of ['demo', 'other']) await writeFile(join(f.root, name, 'schema.json'), JSON.stringify(safe));
-    let { revision } = await f.store.readSource();
+    const { revision } = await f.store.readSource(); const before = await readFile(f.file, 'utf8'); const prepare = vi.spyOn(f.document, 'prepare');
     const added = await f.store.patchChat({ expectedRevision: revision, patches: [
       { op: 'set', path: ['plugins', 'new'], value: './other' }, { op: 'set', path: ['new'], value: { label: 'after' } },
     ] });
-    expect(added).toMatchObject({ status: 'saved' });
-    revision = (await f.store.readSource()).revision;
+    expect(added).toMatchObject({ status: 'invalid' });
     expect(await f.store.patchChat({ expectedRevision: revision, patches: [
       { op: 'remove', path: ['plugins', 'demo'] }, { op: 'remove', path: ['demo'] },
-    ] })).toMatchObject({ status: 'saved' });
+    ] })).toMatchObject({ status: 'invalid' });
     const document = JSON.parse(await readFile(f.file, 'utf8'));
-    expect(document.plugins).toEqual({ new: './other' }); expect(document.demo).toBeUndefined(); expect(document.new.label).toBe('after');
+    expect(await readFile(f.file, 'utf8')).toBe(before); expect(prepare).not.toHaveBeenCalled();
+    expect(document.plugins).toEqual({ demo: './demo' }); expect(document.demo.label).toBe('before'); expect(document.new).toBeUndefined();
   });
   it.each([false, true])('checks the affected tuple when removing a shifting array element (secret=%s)', async secret => {
     const f = await fixture({ tuple: ['safe-first', 'safe-second', 'synthetic-private-value'] });
@@ -240,7 +268,7 @@ describe('Console project/chat configuration entrypoints', () => {
     if (stage === 'prepare') prepare.mockRejectedValueOnce(new Error('private-preparation-excerpt'));
     let caught: unknown;
     try { await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set',
-      path: stage === 'candidate' ? ['configVersion'] : ['demo', 'label'], value: stage === 'candidate' ? 3 : 'after' }] }); } catch (error) { caught = error; }
+      path: stage === 'candidate' ? ['demo', 'dictionary', 'literal.dot/key', 'field'] : ['demo', 'label'], value: 'after' }] }); } catch (error) { caught = error; }
     expect(caught).toBeInstanceOf(ConfigChatRequestRejectedError);
     expect(String(caught)).toContain('未保存'); expect(String(caught)).not.toContain('private-');
     expect(await readFile(f.file, 'utf8')).toBe(before);
