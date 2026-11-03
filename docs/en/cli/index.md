@@ -104,16 +104,35 @@ The wizard edits the matching parts of [`zhin.config.yml`](../configuration/inde
 
 For network databases, the CLI checks the port range, writes connection fields as environment references and puts the real values in `.env`. Afterwards run `npx zhin config check` to catch missing database variables before startup; if the values only live in `.env.production`, use `npx zhin config check --environment production`.
 
-### config: Read and Write Configuration Files
+### config: Read and Write Configuration
 
 ```bash
-zhin config list
-zhin config get <key>            # nested paths such as ai.enabled
-zhin config set <key> <value>    # value accepts JSON
-zhin config delete <key>
-zhin config path                 # print the config file path
+zhin config list                       # whole configuration (secrets masked)
+zhin config get <key>                  # dotted path ai.enabled or JSON Pointer /plugin/key.with.dot
+zhin config set <key> <value>          # value is parsed as JSON, otherwise kept as a string
+zhin config unset <key>                # aliases: delete / del
+zhin config path                       # print the local config file path
 zhin config check [--fix] [--json] [--strict]
 ```
+
+`get` / `set` / `unset` / `list` **talk to the running Host by default** (`POST {base}/console/request`). A write first reads the config revision, then submits one `config:patch-project`; the Host performs the CAS, schema validation, save and any live application. The CLI never does its own read-modify-write and never retries.
+
+- Connection: `--host <url>` wins; otherwise the address is derived from `http.host` / `http.port` / `http.base`. The token comes from `ZHIN_CONSOLE_TOKEN` (or the variable named by `--token-env <name>`), falling back to `http.token`. Sending a token to a non-loopback address requires HTTPS.
+- **If the Host is not running the command fails; it never falls back to writing the file.** For offline edits pass `--offline` explicitly: the same `patchProject` rules as the Host (revision check, plugin declarations are read-only, per-section schema validation) run locally before saving. No Runtime is started, no plugin `setup` runs and no network request is made, but loading plugin declarations executes module top-level code. An offline save is not applied to a running Host until `--watch config` or Console "Apply configuration".
+- Reads are masked by schema: `secret` / `writeOnly` / `hidden` / password fields, credential-like keys and unexpanded `${...}` / `env://` references print as `[redacted]`. Pass `--reveal` for raw values.
+- `--json` prints compact JSON only, for scripts.
+
+Exit codes are a public contract:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success: saved and applied (or nothing to apply); read succeeded |
+| `3` | Saved; some settings take effect after a process restart |
+| `4` | Revision conflict: changed elsewhere, not saved; the latest (masked) values are printed |
+| `5` | Validation failed (including rejected plugin-declaration writes), not saved; field paths are printed |
+| `6` | Unknown: the write was sent but no definitive receipt arrived. Check with `zhin config get` first; **do not blindly retry** |
+| `7` | Not connected to a running Host: nothing was sent, the file is unchanged |
+| `1` | Any other error: usage, missing key, authentication (401/403), Host rejection, failed application, etc. |
 
 `config check` validates the config file, and `--fix` repairs fields that can be migrated safely. Missing database connection variables are always errors; other warnings become errors with `--strict`, which suits CI.
 
