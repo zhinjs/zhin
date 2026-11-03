@@ -1,0 +1,27 @@
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_9622fd28aba994::t_9544874e204cb2 40
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_9622fd28aba994::t_98070552db0d3b 71
+packages/console/protocol/src/index.ts
+  s_9622fd28aba994::t_c6cb05cc205f70 475-476,542-548,683
+packages/host/http/src/console-rpc.ts
+  s_9622fd28aba994::t_436206d9268cc5 8,207-208,484,487,489-492,505-506,511
+packages/host/http/tests/console-config-project-patch-rpc.test.ts
+  s_9622fd28aba994::t_3c868c32803cb0 1-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d4b823d04f93d25eb8b36585b833d9c7007642d",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
