@@ -1,0 +1,43 @@
+docs/adapters/douyin-live.md
+  s_9622fd28aba994::t_298f48075e55fd 1-129
+docs/adapters/index.md
+  s_9622fd28aba994::t_61d5bffa21fcfd 70
+docs/snippets/platform-tiers.md
+  s_9622fd28aba994::t_e6ba532ee1fd9d 22
+plugins/adapters/douyin-live/README.md
+  s_9622fd28aba994::t_06e91c8f75972e 1-117
+scripts/adapter-meta.mjs
+  s_9622fd28aba994::t_8c17b41470047f 53
+docs/.vitepress/config.ts
+  s_9622fd28aba994::t_d1c81a8c478deb 88,254
+docs/configuration/generated.md
+  s_58400078c2bd23::t_1f60df859f0d92 865-910
+docs/en/adapters/index.md
+  s_9622fd28aba994::t_7220b129f79c80 75
+docs/en/configuration/generated.md
+  s_58400078c2bd23::t_8a1765cbe8c8b2 865-910
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "57a5188e1b29e0b548366e09cb66c79152d97570",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
