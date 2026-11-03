@@ -1,0 +1,25 @@
+examples/full-bot/tests/full-bot-l4-contract.test.ts
+  s_ce30e957c2b2e6::t_43f11dabdfaddf 27
+examples/life-assistant-bot/tests/config-contract.test.ts
+  s_ce30e957c2b2e6::t_3601b706ed4cfa 26
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  s_ce30e957c2b2e6::t_6991be3da5cce2 42
+examples/qq-games-bot/tests/runtime-contract.test.ts
+  s_ce30e957c2b2e6::t_aeea16c8d9661c 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f518903adddb65c2f93aea19044a9f5c28a8bb8f",
+  "prompts": {},
+  "sessions": {
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
