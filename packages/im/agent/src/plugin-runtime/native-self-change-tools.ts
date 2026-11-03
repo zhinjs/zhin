@@ -9,6 +9,8 @@
  * - 试跑通过即提交审批（§4，切片 D）：`pending` + G6 `self` 审批卡；同一会话已有待审变更时不起草新变更。
  * - 影响面是 `process`（需要重启）而本实例没有守护进程时不提交审批，停在 `ready`（#1051 F1，Q6=A）。
  * - 只在 IM 会话里可用：审计与回报需要发起会话与发起人。
+ * - 起草人只能是主人或 IM 审批人（#1051 F4，Q3=B）：其他人的回合里工具不出现在工具面；万一被调用，
+ *   拒绝并审计 `change_draft_forbidden`。全实例同时待审 ≤ 3（`change_pending_cap_reached`）。
  */
 import {
   defineAgentTool,
@@ -23,7 +25,13 @@ import {
   type SelfChangeImpactPort,
   type SelfChangePreview,
 } from '../self-change/preview.js';
-import { SelfChangePendingLimitError, type SelfChangeApprovals } from '../self-change/approval.js';
+import {
+  SelfChangePendingCapError,
+  SelfChangePendingLimitError,
+  type SelfChangeApprovals,
+} from '../self-change/approval.js';
+import { canDraftSelfChange, SelfChangeDraftForbiddenError } from '../self-change/drafters.js';
+import type { ToolHardGateImApprovalSettings } from '../security/tool-hard-gate.js';
 import type { SelfChangeDraftFile, SelfChangeRecord, SelfChangeStore } from '../self-change/store.js';
 import { runSelfChangeTrial, type SelfChangeTrialOptions, type SelfChangeTrialResult } from '../self-change/trial.js';
 
@@ -48,6 +56,10 @@ export interface NativeSelfChangeToolSources {
    * false 时影响面为 `process` 的变更不提交审批（批准了也只会停机）。
    */
   readonly restartSupported?: () => boolean;
+  /**
+   * 读最新的 IM 审批设置：开启时 `approverIds` 里的人也能起草（#1051 F4）。缺省时只有主人能起草。
+   */
+  readonly imApproval?: () => ToolHardGateImApprovalSettings | undefined;
 }
 
 export function createNativeSelfChangeToolFeatures(sources: NativeSelfChangeToolSources): readonly NativeSelfChangeToolFeature[] {
@@ -115,6 +127,9 @@ export function createNativeSelfChangeToolFeatures(sources: NativeSelfChangeTool
         }),
         requiresApproval: 'never',
         risk: 'safe',
+        // F4：只对主人 / 审批人可见；静态查询（无发起人）一律不可见。
+        isAvailable: ({ origin, principal }) => origin.kind === 'im' && principal !== undefined
+          && mayDraft(sources, origin.platform, principal),
         execute: async (input, context) => draftSelfChange(sources, input, context),
       }) as Readonly<AgentToolDefinition<Record<string, unknown>, string>>,
     }),
@@ -136,10 +151,21 @@ async function draftSelfChange(
   const configPatch = toConfigPatch(input.config_patch);
   const changeId = typeof input.change_id === 'string' && input.change_id.trim() ? input.change_id.trim() : undefined;
   const changeOrigin = { platform: origin.platform, sceneId: `${origin.scope}:${origin.sceneId}`, userId, endpoint: origin.endpoint };
+  // F4 兜底：工具面已对其他人隐藏，这里再拒一次并留审计（不写暂存、不试跑）。
+  if (!mayDraft(sources, origin.platform, { subjectId: userId, roles: context.principal.roles })) {
+    store.auditRequest(changeOrigin, 'change_draft_forbidden', { scope: origin.scope }, { turnId: context.turnId });
+    throw new SelfChangeDraftForbiddenError();
+  }
   const approvals = sources.approvals?.();
   // §4：同一会话同时最多 1 个待审变更——先拒绝，不写暂存、不试跑。
   const waiting = approvals ? await approvals.pendingFor(changeOrigin) : null;
   if (waiting) return describeWaiting(waiting);
+  // F4：全实例待审已满——同样先拒绝，等主人处理掉几张再起草。
+  const pendingTotal = approvals ? await approvals.pendingCount() : 0;
+  if (approvals && pendingTotal >= approvals.maxPending) {
+    store.auditRequest(changeOrigin, 'change_pending_cap_reached', { pending: pendingTotal, limit: approvals.maxPending }, { turnId: context.turnId });
+    return describePendingCap(pendingTotal, approvals.maxPending);
+  }
   const record = await store.draft({
     ...(changeId ? { id: changeId } : {}),
     origin: changeOrigin,
@@ -171,8 +197,34 @@ async function draftSelfChange(
   } catch (error) {
     // 并发起草时另一个变更先提交：这个留在 `ready`，24 小时后按 §6a 过期清理。
     if (error instanceof SelfChangePendingLimitError) return describeDraft(trialed, preview, { blockedBy: error.pendingId });
+    if (error instanceof SelfChangePendingCapError) {
+      store.audit(trialed, 'change_pending_cap_reached', 'policy', { pending: error.pending, limit: error.limit });
+      return describeDraft(trialed, preview, { pendingCap: error.limit });
+    }
     throw error;
   }
+}
+
+function mayDraft(
+  sources: NativeSelfChangeToolSources,
+  platform: string,
+  principal: { readonly subjectId: string; readonly roles: readonly string[] },
+): boolean {
+  let imApproval: ToolHardGateImApprovalSettings | undefined;
+  try {
+    imApproval = sources.imApproval?.();
+  } catch {
+    imApproval = undefined; // 读不到配置就只认主人（fail closed）。
+  }
+  return canDraftSelfChange({ platform, subjectId: principal.subjectId, roles: principal.roles }, imApproval);
+}
+
+function describePendingCap(pending: number, limit: number): string {
+  return [
+    `${pending} changes to this bot are already waiting for the owner's approval (at most ${limit} at a time), so no new change was drafted.`,
+    'Tell the user to ask again after the owner approves or rejects the waiting ones (in a private chat or in the Console). '
+      + 'Do not write these files with other tools.',
+  ].join('\n');
 }
 
 function describeWaiting(record: SelfChangeRecord): string {
@@ -218,7 +270,7 @@ function toConfigOperation(raw: unknown): unknown {
 function describeDraft(
   record: SelfChangeRecord,
   preview: SelfChangePreview,
-  submission: { approvalId?: string; blockedBy?: string; restartUnavailable?: boolean } = {},
+  submission: { approvalId?: string; blockedBy?: string; pendingCap?: number; restartUnavailable?: boolean } = {},
 ): string {
   const lines = preview.files.map((file) => {
     const counts = file.kind === 'delete' ? `-${file.removed}` : `+${file.added} -${file.removed}`;
@@ -252,12 +304,15 @@ function describeDraft(
       ? [`Submitted for approval (card ${submission.approvalId}): the owner gets it in a private chat or in the Console, never in a group; it expires in 24 hours.`]
       : submission.blockedBy
         ? [`Not submitted: change ${submission.blockedBy} from this conversation is still waiting for approval.`]
-        : submission.restartUnavailable
-          ? ['Not submitted for approval: this change needs a process restart, but this instance runs without a supervisor '
-            + '(started with --once or outside `zhin start`), so it cannot restart itself and approving would only stop the bot. '
-            + 'Tell the user it cannot go live automatically here: the owner has to run the bot under `zhin start` '
-            + '(which restarts it) and ask again.']
-          : []),
+        : submission.pendingCap
+          ? [`Not submitted: ${submission.pendingCap} changes are already waiting for approval across this bot; `
+            + 'ask again after the owner settles some of them.']
+          : submission.restartUnavailable
+            ? ['Not submitted for approval: this change needs a process restart, but this instance runs without a supervisor '
+              + '(started with --once or outside `zhin start`), so it cannot restart itself and approving would only stop the bot. '
+              + 'Tell the user it cannot go live automatically here: the owner has to run the bot under `zhin start` '
+              + '(which restarts it) and ask again.']
+            : []),
     'Tell the user briefly what was drafted and that it is waiting; do not claim it is active and do not write these files with other tools. '
       + 'To change it further, call change_draft again WITHOUT change_id (start a new change) with the full file list.',
   ].join('\n');

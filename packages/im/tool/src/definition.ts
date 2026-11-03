@@ -155,6 +155,11 @@ export interface ToolExecutionContext<
 export type ToolAvailabilityContext = Pick<ToolInvocationContext, 'sessionKey' | 'origin'> & Readonly<{
   /** Turn-start snapshot of this account's editable fields; absent without a bound IM account. */
   accountProfile?: Pick<SelfProfileSnapshot, 'writableFields'>;
+  /**
+   * Who started the turn (authenticated sender id and framework / platform roles); absent on static
+   * capability queries. Use it to hide a tool from requesters who may never call it.
+   */
+  principal?: Readonly<{ subjectId: string; roles: readonly string[] }>;
 }>;
 
 export interface AgentToolDefinition<

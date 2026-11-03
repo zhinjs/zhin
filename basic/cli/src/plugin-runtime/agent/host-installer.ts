@@ -350,6 +350,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         impact: () => options.selfChangeImpact,
         trial: () => ({ ...selfChangeTrialOptions, pluginRoots: selfChangePluginRoots() }),
         approvals: () => selfChangeApprovals,
+        // #1051 F4: master + IM approvers (same allowlist as G6 cards) may draft.
+        imApproval: () => resolveToolHardGateImApproval(zhinAgent.config.toolHardGate?.imApproval),
         ...(selfChangeApplyHost ? { restartSupported: () => selfChangeApplyHost.restartSupported } : {}),
       },
     });

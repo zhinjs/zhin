@@ -505,6 +505,27 @@ export class SelfChangeStore {
     this.#emit({ origin: record.origin, changeId: record.id, code, actor, payload: { ...payload }, ...(detail ? { detail } : {}) });
   }
 
+  /**
+   * 写一行不属于任何变更的 `self_change` 审计：起草前就被拒的请求（#1051 F4：起草权限、全实例待审上限）。
+   */
+  auditRequest(
+    origin: SelfChangeOrigin,
+    code: DecisionReasonCode,
+    payload: Readonly<Record<string, unknown>> = {},
+    options: { readonly turnId?: string; readonly detail?: string } = {},
+  ): void {
+    this.#emit({
+      origin,
+      changeId: null,
+      code,
+      actor: 'policy',
+      actorId: origin.userId,
+      payload: { ...payload },
+      ...(options.turnId ? { turnId: options.turnId } : {}),
+      ...(options.detail ? { detail: options.detail } : {}),
+    });
+  }
+
   /** 暂存区当前占用（字节，不跟随符号链接）。 */
   usage(): Promise<number> {
     return this.#totalBytes();

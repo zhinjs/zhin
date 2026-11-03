@@ -19,6 +19,8 @@ export const MAX_CHANGES_TOTAL_BYTES = 50 * 1024 * 1024;
 export const DEFAULT_CHANGE_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 /** `draft` / `ready` 未提交、`pending` 未审批的时限：24 小时。 */
 export const DEFAULT_CHANGE_IDLE_TTL_MS = 24 * 60 * 60 * 1000;
+/** 全实例同时等待审批的变更上限（#1051 F4）：挡住多会话刷卡。 */
+export const DEFAULT_MAX_PENDING_CHANGES = 3;
 /** 定期清理间隔：6 小时（启动时另扫一次）。 */
 export const DEFAULT_CHANGE_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /** `error` 上限（字符）。 */
@@ -93,6 +95,8 @@ export function selfChangeOutcome(code: DecisionReasonCode): DecisionOutcome {
     case 'change_rejected':
     case 'change_hash_mismatch':
     case 'change_restart_unavailable':
+    case 'change_draft_forbidden':
+    case 'change_pending_cap_reached':
       return 'deny';
     case 'change_expired':
     case 'change_pruned':

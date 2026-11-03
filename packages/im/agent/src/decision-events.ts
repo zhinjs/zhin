@@ -180,6 +180,9 @@ export const DECISION_REASON_CODES = [
   'change_report_redirected',
   // #1051 F1：需要重启的变更遇到无守护进程的实例
   'change_restart_unavailable',
+  // #1051 F4：起草权限（只有主人 / 审批人）与全实例待审上限
+  'change_draft_forbidden',
+  'change_pending_cap_reached',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

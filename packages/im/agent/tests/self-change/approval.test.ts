@@ -7,6 +7,7 @@ import { ToolApprovalQueue } from '../../src/security/tool-approval-queue.js';
 import {
   SELF_CHANGE_APPROVAL_TOOL,
   SelfChangeApprovals,
+  SelfChangePendingCapError,
   SelfChangePendingLimitError,
   approvalOrigin,
 } from '../../src/self-change/approval.js';
@@ -95,6 +96,32 @@ describe('SelfChangeApprovals', () => {
     // Another conversation is independent.
     const elsewhere = await readyChange(store, { ...origin, sceneId: 'private:42' });
     await expect(approvals.submit(elsewhere.id)).resolves.toMatchObject({ record: { status: 'pending' } });
+  });
+
+  it('caps pending changes across the instance at 3 by default (#1051 F4)', async () => {
+    const store = await makeStore();
+    const { approvals } = setup(store);
+    expect(approvals.maxPending).toBe(3);
+    for (const scene of ['group:501', 'group:502', 'private:42']) {
+      const ready = await readyChange(store, { ...origin, sceneId: scene });
+      await approvals.submit(ready.id);
+    }
+    expect(await approvals.pendingCount()).toBe(3);
+    const fourth = await readyChange(store, { ...origin, sceneId: 'group:503' });
+    const error = await approvals.submit(fourth.id).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SelfChangePendingCapError);
+    expect(error).toMatchObject({ pending: 3, limit: 3 });
+    expect((await store.get(fourth.id))?.status).toBe('ready');
+  });
+
+  it('honours a custom pending cap and ignores invalid ones', async () => {
+    const store = await makeStore();
+    const queue = new ToolApprovalQueue({ now: () => clock });
+    expect(new SelfChangeApprovals({ store, queue, maxPending: 0 }).maxPending).toBe(3);
+    const approvals = new SelfChangeApprovals({ store, queue, now: () => clock, maxPending: 1 });
+    await approvals.submit((await readyChange(store)).id);
+    const other = await readyChange(store, { ...origin, sceneId: 'group:501' });
+    await expect(approvals.submit(other.id)).rejects.toBeInstanceOf(SelfChangePendingCapError);
   });
 
   it('approves through a human channel and binds the approver and content hash', async () => {
