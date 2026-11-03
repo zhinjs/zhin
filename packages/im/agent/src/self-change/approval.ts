@@ -45,8 +45,10 @@ export interface SelfChangeApprovalArgs {
   readonly impact: string;
   readonly impactDetail: readonly string[];
   readonly trial: string;
-  /** 试跑里 `skipped` 的检查（`<check> <path>`，#1142 F3）。 */
+  /** 试跑里 `skipped` 的检查（`<check> <path>`，#1142 F3），最多 {@link MAX_CARD_SKIPPED_CHECKS} 项。 */
   readonly skippedChecks?: readonly string[];
+  /** 超出上限未列出的 skipped 检查数。 */
+  readonly skippedChecksOmitted?: number;
   /** 有界 diff 摘录（#1142 F3）；生成失败时缺省。 */
   readonly diffExcerpt?: readonly string[];
   /** 摘录没有覆盖全部改动。 */
@@ -314,7 +316,9 @@ export function selfChangeApprovalArgs(record: SelfChangeRecord, excerpt: SelfCh
   const impact = preview?.impact;
   const trial = record.trial as { passed?: unknown; checks?: readonly { status?: unknown }[] } | null;
   const skipped = Array.isArray(trial?.checks) ? trial.checks.filter(check => check?.status === 'skipped').length : 0;
-  const skippedChecks = skippedTrialChecks(record.trial, MAX_CARD_SKIPPED_CHECKS);
+  const allSkippedChecks = skippedTrialChecks(record.trial);
+  const skippedChecks = allSkippedChecks.slice(0, MAX_CARD_SKIPPED_CHECKS);
+  const skippedChecksOmitted = allSkippedChecks.length - skippedChecks.length;
   return Object.freeze({
     changeId: record.id,
     contentHash: record.contentHash,
@@ -326,7 +330,8 @@ export function selfChangeApprovalArgs(record: SelfChangeRecord, excerpt: SelfCh
       ? [...impact.subtrees.map(subtree => `reload ${subtree}`), ...(impact.kind === 'process' ? impact.reasons : [])].slice(0, 10)
       : []),
     trial: trial?.passed === true ? `passed${skipped ? ` (${skipped} skipped)` : ''}` : 'unknown',
-    ...(skippedChecks.length > 0 ? { skippedChecks } : {}),
+    ...(skippedChecks.length > 0 ? { skippedChecks: Object.freeze(skippedChecks) } : {}),
+    ...(skippedChecksOmitted > 0 ? { skippedChecksOmitted } : {}),
     ...(excerpt ? { diffExcerpt: excerpt.lines, diffExcerptTruncated: excerpt.truncated } : {}),
   });
 }

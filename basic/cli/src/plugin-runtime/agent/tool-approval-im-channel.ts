@@ -282,7 +282,10 @@ function trialLine(args: Partial<SelfChangeApprovalArgs>): string {
   const skipped = Array.isArray(args.skippedChecks)
     ? args.skippedChecks.filter((name): name is string => typeof name === 'string' && name.length > 0)
     : [];
-  return skipped.length > 0 ? `试跑：${verdict}；跳过：${skipped.join('，')}` : `试跑：${verdict}`;
+  if (skipped.length === 0) return `试跑：${verdict}`;
+  const omitted = typeof args.skippedChecksOmitted === 'number' && args.skippedChecksOmitted > 0 ? args.skippedChecksOmitted : 0;
+  const more = omitted > 0 ? `，…另 ${omitted} 项（见 Console）` : '';
+  return `试跑：${verdict}；跳过：${skipped.join('，')}${more}`;
 }
 
 function impactLabel(impact: unknown): string {

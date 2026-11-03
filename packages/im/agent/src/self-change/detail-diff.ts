@@ -11,7 +11,7 @@
  * - 只读：不写生产目录，现有文件读取沿用预览的大小上限且不跟随符号链接；暂存区已瘦身时不编造正文。
  */
 import * as path from 'node:path';
-import { isSecretPayloadKey } from '../decision-events.js';
+import { isSecretLikeKey } from '../decision-events.js';
 import { MAX_CHANGE_PREVIEW_BYTES, readCurrentFile, type SelfChangeFileDiff } from './preview.js';
 import type { SelfChangeRecord, SelfChangeSnapshot, SelfChangeStore } from './store.js';
 
@@ -29,8 +29,10 @@ const MAX_LCS_CELLS = 4_000_000;
 export const MAX_CARD_SKIPPED_CHECKS = 20;
 /** 内容只差行尾（CRLF / LF）或文件末尾换行时的提示行。 */
 const LINE_ENDING_ONLY_MARKER = '\\ line endings or the trailing newline changed';
-/** 键名以这些结尾（规范化后）也按密钥处理，例如 `githubToken`、`DB_PASSWORD`。 */
-const SECRET_KEY_SUFFIXES = ['token', 'secret', 'password', 'passwd', 'apikey', 'privatekey', 'credential', 'credentials', 'cookie'];
+const EMPTY_FILE_CREATED_MARKER = '\\ empty file created';
+const EMPTY_FILE_DELETED_MARKER = '\\ empty file deleted';
+/** 已开始生效的状态：此时回滚快照必然已写入，读不到就不能拿（可能已改动的）磁盘当基线。 */
+const SNAPSHOT_REQUIRED_STATUSES: ReadonlySet<string> = new Set(['applying', 'verifying', 'failed']);
 /** 往回找键名时最多看的字符数（键名再长也不展开，保证线性）。 */
 const MAX_SECRET_KEY_CHARS = 64;
 const QUOTES: ReadonlySet<string> = new Set(['"', "'", '`']);
@@ -101,7 +103,7 @@ export async function buildSelfChangeDetailDiff(input: BuildSelfChangeDetailDiff
     return Object.freeze({
       bodiesAvailable: false,
       baseline: 'disk',
-      files: Object.freeze(record.files.map(entry => unavailableFile(entry.path, slimmedKind(entry.path, entry.op, previewKinds), 'slimmed'))),
+      files: Object.freeze(record.files.map(entry => unavailableFile(entry.path, kindFromPreview(entry.path, entry.op, previewKinds), 'slimmed'))),
       bytes: 0,
       truncated: record.files.length > 0,
     });
@@ -111,16 +113,11 @@ export async function buildSelfChangeDetailDiff(input: BuildSelfChangeDetailDiff
   try {
     snapshot = await input.store.readSnapshot(record.id);
   } catch {
-    // A snapshot exists but cannot be read. Once applying started the production files may already be changed,
-    // so the disk is not a trustworthy baseline: report every file as unavailable instead of a wrong diff.
-    return Object.freeze({
-      bodiesAvailable: true,
-      baseline: 'snapshot',
-      files: Object.freeze(record.files.map(entry => unavailableFile(entry.path, entry.op === 'delete' ? 'delete' : 'modify', 'baseline_unreadable'))),
-      bytes: 0,
-      truncated: record.files.length > 0,
-    });
+    return unreadableSnapshotDiff(record);
   }
+  // `readSnapshot` also returns null for a corrupt manifest. Once applying started a snapshot was written before
+  // any production file changed, so a missing one means unreadable: fail closed rather than diff the disk.
+  if (!snapshot && SNAPSHOT_REQUIRED_STATUSES.has(record.status)) return unreadableSnapshotDiff(record);
   const baseline: SelfChangeDiffBaseline = snapshot ? 'snapshot' : 'disk';
   const snapshotContents = new Map(snapshot?.files.map(file => [file.path, file.content]) ?? []);
   const files: SelfChangeFileDetailDiff[] = [];
@@ -189,9 +186,12 @@ export function unifiedDiff(target: string, before: string | null, after: string
     after === null ? '+++ /dev/null' : `+++ b/${target}`,
   ];
   if (hunks.length > 0) return [...header, ...hunks].join('\n');
-  // Same lines but different bytes (CRLF vs LF, trailing newline): still a change the approver must see.
-  if ((before ?? '') !== (after ?? '')) return [...header, LINE_ENDING_ONLY_MARKER].join('\n');
-  return '';
+  if (before === after) return '';
+  // No line differs but the file still changes: an empty file created / deleted, or only the line endings /
+  // trailing newline differ. Still a change the approver must see.
+  if (before === null) return [...header, EMPTY_FILE_CREATED_MARKER].join('\n');
+  if (after === null) return [...header, EMPTY_FILE_DELETED_MARKER].join('\n');
+  return [...header, LINE_ENDING_ONLY_MARKER].join('\n');
 }
 
 /**
@@ -268,7 +268,7 @@ export function redactSecretAssignments(line: string): string {
     const separator = line[index];
     if (separator !== ':' && separator !== '=') continue;
     const key = readKeyBefore(line, index);
-    if (!key || !isSecretLikeKey(key)) continue;
+    if (!key || !isSecretAssignmentKey(key)) continue;
     const valueStart = skipBlanks(line, index + 1);
     const valueEnd = readValueEnd(line, valueStart);
     if (valueEnd <= valueStart) continue;
@@ -336,11 +336,20 @@ function readValueEnd(line: string, start: number): number {
   return end;
 }
 
-function isSecretLikeKey(key: string): boolean {
+function isSecretAssignmentKey(key: string): boolean {
   const name = key.split('.').pop() ?? key;
-  if (isSecretPayloadKey(name)) return true;
-  const normalized = name.replaceAll('-', '').replaceAll('_', '').toLowerCase();
-  return SECRET_KEY_SUFFIXES.some(suffix => normalized.endsWith(suffix));
+  return isSecretLikeKey(name);
+}
+
+function unreadableSnapshotDiff(record: SelfChangeRecord): SelfChangeDetailDiff {
+  const previewKinds = previewFileKinds(record.plan);
+  return Object.freeze({
+    bodiesAvailable: true,
+    baseline: 'snapshot',
+    files: Object.freeze(record.files.map(entry => unavailableFile(entry.path, kindFromPreview(entry.path, entry.op, previewKinds), 'baseline_unreadable'))),
+    bytes: 0,
+    truncated: record.files.length > 0,
+  });
 }
 
 /** 预览里记下的每个文件的 create / modify / delete（瘦身后正文没了，靠它还原类型）。 */
@@ -355,7 +364,7 @@ function previewFileKinds(plan: unknown): ReadonlyMap<string, SelfChangeFileDeta
   return kinds;
 }
 
-function slimmedKind(
+function kindFromPreview(
   target: string,
   op: 'write' | 'delete',
   previewKinds: ReadonlyMap<string, SelfChangeFileDetailDiff['kind']>,

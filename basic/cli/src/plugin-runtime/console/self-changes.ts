@@ -177,8 +177,8 @@ export class HostSelfChanges {
     const redact = agent.redactDecisionPayload;
     const trial = detailTrial(record.trial, agent.skippedTrialChecks, redact);
     return {
-      // The card's own `trial` would be a second, unredacted copy: carry the sanitized one instead.
-      change: { ...card(record, binding.approvals.approvalIdFor(record.id) ?? null), trial: trial as unknown as PluginConsoleRpcJson },
+      // The card's own `trial` would be a second, unredacted copy: keep its metadata, redact its checks.
+      change: { ...card(record, binding.approvals.approvalIdFor(record.id) ?? null), trial: redactedTrialRecord(record.trial, redact) },
       bodiesAvailable: diff.bodiesAvailable,
       baseline: diff.baseline,
       files: diff.files.map(file => ({
@@ -194,7 +194,7 @@ export class HostSelfChanges {
       configPatch: record.configPatch
         ? {
             expectedRevision: record.configPatch.expectedRevision,
-            operations: record.configPatch.patches.map(operation => redactConfigOperation(operation, redact, agent.isSecretPayloadKey)),
+            operations: record.configPatch.patches.map(operation => redactConfigOperation(operation, redact, agent.isSecretLikeKey, agent.isPromptPayloadKey)),
           }
         : null,
       trial,
@@ -266,19 +266,30 @@ type RedactPayload = (payload: DecisionPayload | null | undefined) => DecisionPa
 
 /**
  * Redacts a `set` value with the decision-audit rules: a secret-like key anywhere on the config path (`token`,
- * `apiKey`, `auth`, …) replaces the whole value; otherwise the value itself is redacted (secret keys inside it,
- * token-shaped strings). The path is checked on its own so deep config paths do not eat the depth limit.
+ * `openaiApiKey`, `auth`, …) replaces the whole value with `[redacted]`, a prompt-like key (`systemPrompt`, …) with
+ * `[omitted]`; otherwise the value itself is redacted (secret keys inside it, token-shaped strings). The path is
+ * checked on its own so deep config paths do not eat the depth limit.
  */
 function redactConfigOperation(
   operation: SelfChangeConfigOperation,
   redact: RedactPayload,
   isSecretKey: (key: string) => boolean,
+  isPromptKey: (key: string) => boolean,
 ): SelfChangeDetailConfigOperation {
   const configPath = [...operation.path];
   if (operation.op === 'remove') return { op: 'remove', path: configPath };
   if (configPath.some(isSecretKey)) return { op: 'set', path: configPath, value: '[redacted]' };
+  if (configPath.some(isPromptKey)) return { op: 'set', path: configPath, value: '[omitted]' };
   const redacted = redact({ value: operation.value }).value;
   return { op: 'set', path: configPath, value: (redacted ?? null) as PluginConsoleRpcJson };
+}
+
+/** The stored trial with its metadata intact and every check redacted (for the nested card). */
+function redactedTrialRecord(trial: unknown, redact: RedactPayload): PluginConsoleRpcJson {
+  if (!trial || typeof trial !== 'object' || Array.isArray(trial)) return (trial ?? null) as PluginConsoleRpcJson;
+  const value = trial as Record<string, unknown>;
+  const checks = Array.isArray(value.checks) ? value.checks.map(check => redact({ check }).check ?? null) : value.checks;
+  return { ...value, checks } as PluginConsoleRpcJson;
 }
 
 function detailTrial(

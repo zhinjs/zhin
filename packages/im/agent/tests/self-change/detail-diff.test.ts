@@ -79,6 +79,12 @@ describe('unifiedDiff', () => {
     expect(unifiedDiff('a.ts', 'one', 'one\n')).toContain('trailing newline');
   });
 
+  it('marks creating or deleting an empty file', () => {
+    expect(unifiedDiff('a.ts', null, '')).toBe(['--- /dev/null', '+++ b/a.ts', '\\ empty file created'].join('\n'));
+    expect(unifiedDiff('a.ts', '', null)).toBe(['--- a/a.ts', '+++ /dev/null', '\\ empty file deleted'].join('\n'));
+    expect(unifiedDiff('a.ts', '', '')).toBe('');
+  });
+
   it('keeps moved lines as a remove plus an add (LCS)', () => {
     const diff = unifiedDiff('a.ts', 'x\ny\nz\n', 'y\nz\nx\n');
     expect(diff).toContain('-x');
@@ -182,6 +188,23 @@ describe('buildSelfChangeDetailDiff', () => {
     const detail = await buildSelfChangeDetailDiff({ store, record: approved, projectRoot: project });
     expect(detail).toMatchObject({ baseline: 'snapshot', truncated: true });
     expect(detail.files[0]).toMatchObject({ diff: null, unavailableReason: 'baseline_unreadable' });
+  });
+
+  it('fails closed when applying started but no snapshot can be read (corrupt or missing manifest)', async () => {
+    const store = makeStore();
+    const draft = await store.draft({ origin, files: [{ path: 'commands/new.ts', content: 'export default 2;\n' }] });
+    await store.attachPlan(draft.id, draft.contentHash, {
+      version: 1,
+      contentHash: draft.contentHash,
+      summary: null,
+      files: [{ path: 'commands/new.ts', kind: 'create', added: 1, removed: 0, bytesBefore: null, bytesAfter: 18 }],
+      impact: { kind: 'generation', subtrees: [], slots: [], reasons: [], estimated: true, config: null },
+    });
+    writeProjectFile('commands/new.ts', 'export default 2;\n');
+    const current = (await store.get(draft.id))!;
+    const detail = await buildSelfChangeDetailDiff({ store, record: { ...current, status: 'applying' }, projectRoot: project });
+    expect(detail.baseline).toBe('snapshot');
+    expect(detail.files[0]).toMatchObject({ kind: 'create', diff: null, unavailableReason: 'baseline_unreadable' });
   });
 
   it('keeps the create kind of a slimmed file from the stored preview', async () => {
