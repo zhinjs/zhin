@@ -1,7 +1,7 @@
 /**
  * Masks stored configuration values before they leave the store in a response that the
  * caller did not ask to read (e.g. a trusted project patch conflict). Conservative: a
- * schema secret/writeOnly/password annotation, a secret-like key, or an unexpanded
+ * schema secret/writeOnly/password/hidden annotation, a secret-like key, or an unexpanded
  * environment reference (`${…}`, `env://…`) is replaced as a whole and never echoed.
  */
 type Schema = Readonly<Record<string, unknown>>;
@@ -22,8 +22,10 @@ export function sensitiveConfigKey(key: string): boolean {
 
 function sensitiveSchema(schema: Schema): boolean {
   const metadata = schema['x-zhin-config'];
-  return schema.writeOnly === true || schema.secret === true || schema.format === 'password' || schema.component === 'password'
-    || record(metadata) && (metadata.secret === true || metadata.component === 'password');
+  // `hidden` mirrors the configuration explanation contract: hidden fields are never echoed.
+  return schema.writeOnly === true || schema.secret === true || schema.hidden === true
+    || schema.format === 'password' || schema.component === 'password'
+    || record(metadata) && (metadata.secret === true || metadata.hidden === true || metadata.component === 'password');
 }
 
 /** Expands local `$ref` and every combinator branch; any branch's annotation applies. */

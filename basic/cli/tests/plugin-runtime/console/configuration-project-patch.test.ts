@@ -60,7 +60,7 @@ describe('ordinary config:patch scope stays byte-stable', () => {
 
 describe('trusted project patch (config:patch-project)', () => {
   it('validates and applies one complete candidate across sections under a single CAS', async () => {
-    const validateConfiguration = vi.fn(async () => undefined);
+    const validateConfiguration = vi.fn(async (_candidate: Readonly<Record<string, unknown>>) => undefined);
     const applyConfiguration = vi.fn(async (revision?: string): Promise<ConsoleConfigApplication> => ({ operationId: 'config:1234:1', sourceRevision: revision!, saved: true,
       generation: 2, applicationRevision: 1, groups: [] }));
     const f = await fixture({ validateConfiguration, applyConfiguration });
@@ -68,6 +68,8 @@ describe('trusted project patch (config:patch-project)', () => {
     const result = await f.store.patchProject({ expectedRevision: revision, patches: [set(['demo', 'label'], 'after'), set(['ai', 'enabled'], true)] });
     expect(result).toMatchObject({ status: 'saved', paths: [['demo', 'label'], ['ai', 'enabled']] });
     expect(validateConfiguration).toHaveBeenCalledTimes(1);
+    // Full-candidate validation must see every patched section in one document.
+    expect(validateConfiguration.mock.calls[0]![0]).toMatchObject({ demo: { label: 'after' }, ai: { enabled: true } });
     expect(applyConfiguration).toHaveBeenCalledTimes(1);
     expect(applyConfiguration).toHaveBeenCalledWith((result as { revision: string }).revision);
     expect(JSON.parse(await readFile(f.file, 'utf8'))).toMatchObject({ demo: { label: 'after' }, ai: { enabled: true } });
@@ -113,6 +115,16 @@ describe('trusted project patch (config:patch-project)', () => {
       ['public', REDACTED_CONFIG_VALUE],
     ]);
     expect(JSON.stringify(result)).not.toMatch(/private-|PRIVATE_/u);
+  });
+
+  it('fails closed with whole-value redaction when the section schema cannot be read', async () => {
+    const f = await fixture();
+    await writeFile(join(f.root, 'demo', 'schema.json'), '{ not json');
+    const result = await f.store.patchProject({ expectedRevision: 'f'.repeat(64), patches: [set(['demo', 'label'], 'x'), set(['demo', 'nested'], {})] });
+    expect(result.status).toBe('conflict');
+    const current = (result as { current: Array<{ path: string[]; value: unknown }> }).current;
+    expect(current.map(entry => entry.value)).toEqual([REDACTED_CONFIG_VALUE, REDACTED_CONFIG_VALUE]);
+    expect(JSON.stringify(result)).not.toMatch(/private-|before|blue/u);
   });
 
   it('returns ConfigValidationError as structured invalid without echoing issue text', async () => {
@@ -181,5 +193,8 @@ describe('maskConfigValue', () => {
     expect(maskConfigValue(null, ['x', 'botToken'], 'v')).toBe(REDACTED_CONFIG_VALUE);
     expect(maskConfigValue(null, ['x'], { maxTokens: 100, accessToken: 't', url: 'env://SECRET' })).toEqual({ maxTokens: 100, accessToken: REDACTED_CONFIG_VALUE, url: REDACTED_CONFIG_VALUE });
     expect(maskConfigValue({ type: 'object', patternProperties: { '^k': { secret: true } } }, ['x'], { k1: 'v', other: 'ok' })).toEqual({ k1: REDACTED_CONFIG_VALUE, other: 'ok' });
+    expect(maskConfigValue({ type: 'object', properties: { a: { type: 'string', hidden: true } } }, ['x', 'a'], 'v')).toBe(REDACTED_CONFIG_VALUE);
+    expect(maskConfigValue({ type: 'object', properties: { a: { 'x-zhin-config': { hidden: true } }, b: { type: 'string' } } }, ['x'], { a: 'v', b: 'ok' }))
+      .toEqual({ a: REDACTED_CONFIG_VALUE, b: 'ok' });
   });
 });

@@ -21,7 +21,7 @@ import {
   readPath,
   resolvePatchScope,
 } from './configuration-patch.js';
-import { maskConfigValue } from './configuration-redaction.js';
+import { maskConfigValue, REDACTED_CONFIG_VALUE } from './configuration-redaction.js';
 
 /** Only a thrown commit crosses this uncertainty boundary; never prepared cleanup. */
 class ConfigCommitUnconfirmedError extends Error {
@@ -269,9 +269,10 @@ export class ConsoleConfigurationStore {
   async #maskedValue(document: RuntimeConfigDocument, path: readonly string[]): Promise<unknown> {
     const value = readPath(document, path);
     if (value === undefined) return undefined;
-    let schema: Readonly<Record<string, unknown>> | null = null;
+    let schema: Readonly<Record<string, unknown>> | null;
+    // Fail closed: without the schema we cannot rule out a schema-marked secret under an ordinary key.
     try { schema = await this.#schemas.readJson(path[0]!, document); }
-    catch { schema = null; }
+    catch { return REDACTED_CONFIG_VALUE; }
     return maskConfigValue(schema, path, value);
   }
 
