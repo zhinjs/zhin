@@ -1,0 +1,43 @@
+basic/cli/src/commands/config.ts
+  s_e0efb469ee3bbd::t_b259ff0faffc17 1-6,8-13,15-66,68,70,74-81,83-134,137-151,156-159,161-171,174-186,188-201,203-207,210-216,218-223,225-274
+basic/cli/src/plugin-management/console-client.ts
+  s_e0efb469ee3bbd::t_00d6f25f5f4914 3-57,63,72,75-100,102
+basic/cli/src/plugin-runtime/console/configuration-patch.ts
+  s_e0efb469ee3bbd::t_4f86412b32e210 5,47,66
+basic/cli/src/plugin-runtime/console/configuration-path-segment.ts
+  s_58400078c2bd23::t_432ca69fe18663 1-6
+basic/cli/src/plugin-runtime/console/configuration-path.ts
+  s_58400078c2bd23::t_caef44c093328f 1-19
+basic/cli/src/utils/config-offline.ts
+  s_58400078c2bd23::t_8e462feabf9d5a 1-74
+basic/cli/src/utils/model-configuration-environment.ts
+  s_58400078c2bd23::t_742ad3df0e7fd9 1-34
+basic/cli/tests/cli-write-side.test.ts
+  s_e0efb469ee3bbd::t_ed56d1ac3ab9aa 64-66,71,73-74
+basic/cli/tests/config-command.test.ts
+  s_e0efb469ee3bbd::t_d0054590e7ecf1 1-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "68e6b0efd1263a6acbd261305e99aca462858df7",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
