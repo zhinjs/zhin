@@ -1,0 +1,21 @@
+docs/concepts/generation-lifecycle.md
+  s_58400078c2bd23::t_1bca1588ce00b6 135-136
+docs/en/concepts/generation-lifecycle.md
+  s_58400078c2bd23::t_f1a5ebc840d373 134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9ee4dec82f00bf0d649f9d420fb34868392062c4",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
