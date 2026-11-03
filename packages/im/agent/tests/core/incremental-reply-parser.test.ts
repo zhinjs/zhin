@@ -58,6 +58,17 @@ it('reuses unchanged closed nodes and leaves already observed snapshots immutabl
   expect(after.messages[1]?.segments[0]?.data.text).toBe('first second');
 });
 
+it('does not fragment a large single provider delta into per-character string allocations', () => {
+  const cursor = new ReplyJsonCandidate();
+  cursor.append('{"messages":[{"segments":[{"type":"text","data":{"text":"');
+  const before = cursor.work;
+  const text = 'x'.repeat(1024 * 1024);
+  cursor.append(text);
+  expect(cursor.work.scannedCharacters - before.scannedCharacters).toBe(text.length);
+  expect(cursor.work.stringFragments - before.stringFragments).toBe(1);
+  expect(cursor.value()).toEqual({ messages: [{ segments: [{ type: 'text', data: { text } }] }] });
+});
+
 it.each([false, true])('keeps deeply nested non-message candidates non-public without recursion failure (split=%s)', async split => {
   const header = '{"messages":' + '['.repeat(12000), raw = header + '"x';
   const candidate = createStructuredReplyStreamParser();

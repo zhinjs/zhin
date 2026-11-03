@@ -36,21 +36,39 @@ export class ReplyJsonCandidate {
   #nonObject = false;
   #scannedCharacters = 0;
   #materializedNodes = 0;
+  #stringFragments = 0;
 
   get raw(): string { return this.#raw; }
   get fallback(): boolean { return this.#fallback; }
   get nonObject(): boolean { return this.#nonObject; }
   /** Internal counters used by deterministic complexity tests, not runtime admission. */
-  get work(): Readonly<{ scannedCharacters: number; materializedNodes: number }> {
-    return { scannedCharacters: this.#scannedCharacters, materializedNodes: this.#materializedNodes };
+  get work(): Readonly<{ scannedCharacters: number; materializedNodes: number; stringFragments: number }> {
+    return { scannedCharacters: this.#scannedCharacters, materializedNodes: this.#materializedNodes, stringFragments: this.#stringFragments };
   }
 
   append(delta: string): void {
     this.#raw += delta;
     if (this.#fallback || this.#nonObject) return;
     this.#version++;
-    for (const char of delta) {
-      this.#scannedCharacters += char.length;
+    // Literal U+0000–U+001F must reach JSON's invalid-string path, not the plain-text run.
+    // eslint-disable-next-line no-control-regex -- This range is the JSON string grammar's control-character exclusion.
+    const stringBoundary = /["\\\u0000-\u001f]/g;
+    for (let offset = 0; offset < delta.length;) {
+      const token = this.#token;
+      if ((token?.kind === 'key' || token?.kind === 'string') && !token.escape && token.unicode === undefined) {
+        // A provider may deliver an entire answer in one delta. Keep plain string runs intact
+        // instead of allocating a concatenation node and touching ancestors per character.
+        stringBoundary.lastIndex = offset;
+        const end = stringBoundary.exec(delta)?.index ?? delta.length;
+        if (end > offset) {
+          this.#text(delta.slice(offset, end), token);
+          this.#scannedCharacters += end - offset;
+          offset = end;
+          if (offset === delta.length) break;
+        }
+      }
+      const char = delta[offset++]!;
+      this.#scannedCharacters++;
       this.#consume(char);
       if (this.#fallback || this.#nonObject) break;
     }
@@ -215,6 +233,6 @@ export class ReplyJsonCandidate {
 
   #text(char: string, token: Token): void {
     if (token.kind === 'key') token.text += char;
-    else { token.node!.value = String(token.node!.value) + char; this.#touch(token.node!); }
+    else { this.#stringFragments++; token.node!.value = String(token.node!.value) + char; this.#touch(token.node!); }
   }
 }
