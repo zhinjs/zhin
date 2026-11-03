@@ -410,7 +410,29 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
     expect(text).toContain('未看完整正文请去 Console');
   });
 
-  it('caps a stored excerpt at 40 lines and 2 KB and points to the Console', () => {
+  it('caps a stored excerpt at exactly 40 short lines', () => {
+    const queue = new ToolApprovalQueue();
+    const shortLines = Array.from({ length: 45 }, (_, index) => `+l${index}`);
+    const card = queue.enqueue({
+      ...SELF_CHANGE,
+      args: { ...SELF_CHANGE.args, diffExcerpt: shortLines, diffExcerptTruncated: false },
+    });
+    const text = formatSelfChangeCard(card);
+    const shown = text.split('\n').filter(line => /^\+l\d+$/u.test(line));
+    expect(shown).toHaveLength(40);
+    expect(shown.at(-1)).toBe('+l39');
+    expect(text).toContain('…（摘录已截断）完整内容见 Console。');
+  });
+
+  it('says there are no body changes for an empty excerpt (config-only change)', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue({ ...SELF_CHANGE, args: { ...SELF_CHANGE.args, diffExcerpt: [] } });
+    const text = formatSelfChangeCard(card);
+    expect(text).toContain('差异摘录：无文件正文改动。');
+    expect(text).not.toContain('不可用');
+  });
+
+  it('caps a stored excerpt at 2 KB and points to the Console', () => {
     const queue = new ToolApprovalQueue();
     const longLines = Array.from({ length: 45 }, (_, index) => `+line ${index} ${'z'.repeat(150)}`);
     const card = queue.enqueue({

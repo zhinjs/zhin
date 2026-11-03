@@ -327,6 +327,11 @@ const SECRET_KEYS = new Set([
   'idtoken', 'apikey', 'privatekey', 'authorization', 'auth', 'cookie', 'cookies', 'setcookie',
   'session', 'sessionid', 'sessdata', 'bilijct', 'credential', 'credentials',
 ]);
+/** 键名是否按审计口径视为密钥（去掉 `-` / `_`、小写后命中密钥键表）。 */
+export function isSecretPayloadKey(key: string): boolean {
+  return SECRET_KEYS.has(normalizeKey(key));
+}
+
 /** 提示词类键名：完整提示词不得入审计。 */
 const PROMPT_KEYS = new Set([
   'prompt', 'systemprompt', 'system', 'messages', 'instructions', 'rawprompt', 'fullprompt',

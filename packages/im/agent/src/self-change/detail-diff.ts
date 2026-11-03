@@ -5,12 +5,14 @@
  *   基线是回滚快照（已开始生效时）或生产目录现有文件；全部 diff 总字节 ≤ {@link MAX_CHANGE_PREVIEW_BYTES}，
  *   超出按行截断并标 `truncated`。
  * - IM 审批卡：从同一份 diff 取有界摘录（≤ {@link MAX_IM_DIFF_EXCERPT_LINES} 行且 ≤ {@link MAX_IM_DIFF_EXCERPT_BYTES}
- *   字节），写进卡片参数，启动 `restore()` 重建卡片时同样可得。
+ *   字节），写进卡片参数，启动 `restore()` 重建卡片时同样可得。摘录会发到审批私聊 / 审批群：键名按审计密钥口径
+ *   命中的 `key = value` / `key: value` 赋值把值换成 `[redacted]`（入队时再经 `redactDecisionPayload` 打码令牌形状）。
  * - 不引入第三方 diff 依赖：去掉公共首尾后对中段做 LCS；中段过大时退化为整段删除 + 整段新增（仍是正确的 diff）。
  * - 只读：不写生产目录，现有文件读取沿用预览的大小上限且不跟随符号链接；暂存区已瘦身时不编造正文。
  */
 import * as path from 'node:path';
-import { MAX_CHANGE_PREVIEW_BYTES, readCurrentFile } from './preview.js';
+import { isSecretPayloadKey } from '../decision-events.js';
+import { MAX_CHANGE_PREVIEW_BYTES, readCurrentFile, type SelfChangeFileDiff } from './preview.js';
 import type { SelfChangeRecord, SelfChangeSnapshot, SelfChangeStore } from './store.js';
 
 /** IM 卡片 diff 摘录的行数上限。 */
@@ -23,8 +25,14 @@ const MAX_EXCERPT_LINE_CHARS = 200;
 const DIFF_CONTEXT_LINES = 3;
 /** LCS 表格上限（中段行数乘积）；超过即退化为整段替换。 */
 const MAX_LCS_CELLS = 4_000_000;
-/** 卡片与详情最多列出的 skipped 检查数。 */
-const MAX_SKIPPED_CHECKS = 20;
+/** IM 卡片最多列出的 skipped 检查数（Console 详情不设上限）。 */
+export const MAX_CARD_SKIPPED_CHECKS = 20;
+/** 内容只差行尾（CRLF / LF）或文件末尾换行时的提示行。 */
+const LINE_ENDING_ONLY_MARKER = '\\ line endings or the trailing newline changed';
+/** 键名以这些结尾（规范化后）也按密钥处理，例如 `githubToken`、`DB_PASSWORD`。 */
+const SECRET_KEY_SUFFIXES = ['token', 'secret', 'password', 'passwd', 'apikey', 'privatekey', 'credential', 'credentials', 'cookie'];
+/** `key = value` / `key: value` / `"key": "value"`；值可带引号。 */
+const SECRET_ASSIGNMENT = /(["'`]?)([A-Za-z_$][\w$.-]*)\1(\s*[:=]\s*)("[^"]*"|'[^']*'|`[^`]*`|[^\s,;)]+)/gu;
 
 export type SelfChangeDiffBaseline = 'disk' | 'snapshot';
 
@@ -33,7 +41,7 @@ export type SelfChangeFileDiffUnavailableReason =
   | 'slimmed'
   /** 暂存正文读不到。 */
   | 'staged_unreadable'
-  /** 基线文件超过大小上限、是符号链接或不可读。 */
+  /** 基线文件超过大小上限、是符号链接或不可读；或回滚快照存在但读不出来。 */
   | 'baseline_unreadable'
   /** 总预算已用完，本文件未展示。 */
   | 'budget_exhausted';
@@ -84,16 +92,30 @@ export async function buildSelfChangeDetailDiff(input: BuildSelfChangeDetailDiff
   const record = input.record;
   const maxBytes = input.maxBytes ?? MAX_CHANGE_PREVIEW_BYTES;
   if (record.slimmed) {
+    const previewKinds = previewFileKinds(record.plan);
     return Object.freeze({
       bodiesAvailable: false,
       baseline: 'disk',
-      files: Object.freeze(record.files.map(entry => unavailableFile(entry.path, entry.op === 'delete' ? 'delete' : 'modify', 'slimmed'))),
+      files: Object.freeze(record.files.map(entry => unavailableFile(entry.path, slimmedKind(entry.path, entry.op, previewKinds), 'slimmed'))),
       bytes: 0,
       truncated: record.files.length > 0,
     });
   }
   const projectRoot = path.resolve(input.projectRoot);
-  const snapshot = await readSnapshotOrNull(input.store, record.id);
+  let snapshot: SelfChangeSnapshot | null;
+  try {
+    snapshot = await input.store.readSnapshot(record.id);
+  } catch {
+    // A snapshot exists but cannot be read. Once applying started the production files may already be changed,
+    // so the disk is not a trustworthy baseline: report every file as unavailable instead of a wrong diff.
+    return Object.freeze({
+      bodiesAvailable: true,
+      baseline: 'snapshot',
+      files: Object.freeze(record.files.map(entry => unavailableFile(entry.path, entry.op === 'delete' ? 'delete' : 'modify', 'baseline_unreadable'))),
+      bytes: 0,
+      truncated: record.files.length > 0,
+    });
+  }
   const baseline: SelfChangeDiffBaseline = snapshot ? 'snapshot' : 'disk';
   const snapshotContents = new Map(snapshot?.files.map(file => [file.path, file.content]) ?? []);
   const files: SelfChangeFileDetailDiff[] = [];
@@ -157,22 +179,28 @@ export function unifiedDiff(target: string, before: string | null, after: string
   const newLines = splitLines(after ?? '');
   const operations = diffLines(oldLines, newLines);
   const hunks = formatHunks(operations);
-  if (hunks.length === 0) return '';
   const header = [
     before === null ? '--- /dev/null' : `--- a/${target}`,
     after === null ? '+++ /dev/null' : `+++ b/${target}`,
   ];
-  return [...header, ...hunks].join('\n');
+  if (hunks.length > 0) return [...header, ...hunks].join('\n');
+  // Same lines but different bytes (CRLF vs LF, trailing newline): still a change the approver must see.
+  if ((before ?? '') !== (after ?? '')) return [...header, LINE_ENDING_ONLY_MARKER].join('\n');
+  return '';
 }
 
-/** 从详情 diff 取 IM 卡片摘录：每个文件以 `# <kind> <path>` 开头，随后是改动块。 */
+/**
+ * 从详情 diff 取 IM 卡片摘录：每个文件以 `# <kind> <path>` 开头，随后是改动块（不含 `---` / `+++` 文件头）。
+ * 键名像密钥的赋值把值换成 `[redacted]`。
+ */
 export function selfChangeDiffExcerpt(detail: SelfChangeDetailDiff, limits: SelfChangeDiffExcerptLimits = {}): SelfChangeDiffExcerpt {
   const maxLines = limits.maxLines ?? MAX_IM_DIFF_EXCERPT_LINES;
   const maxBytes = limits.maxBytes ?? MAX_IM_DIFF_EXCERPT_BYTES;
   const lines: string[] = [];
   let bytes = 0;
   let truncated = detail.truncated;
-  const push = (line: string): boolean => {
+  const push = (raw: string): boolean => {
+    const line = redactSecretAssignments(raw);
     const clipped = line.length > MAX_EXCERPT_LINE_CHARS ? `${line.slice(0, MAX_EXCERPT_LINE_CHARS - 1)}…` : line;
     const lineBytes = utf8Bytes(clipped) + (lines.length > 0 ? 1 : 0);
     if (lines.length >= maxLines || bytes + lineBytes > maxBytes) return false;
@@ -192,8 +220,15 @@ export function selfChangeDiffExcerpt(detail: SelfChangeDetailDiff, limits: Self
       }
       continue;
     }
-    for (const line of file.diff.split('\n')) {
-      if (line.startsWith('--- ') || line.startsWith('+++ ')) continue;
+    if (file.diff === '') {
+      if (!push('  （与改动前相同）')) {
+        truncated = true;
+        break;
+      }
+      continue;
+    }
+    // Every non-empty diff starts with exactly two file header lines; everything after them is content.
+    for (const line of file.diff.split('\n').slice(2)) {
       if (!push(line)) {
         truncated = true;
         break outer;
@@ -203,8 +238,8 @@ export function selfChangeDiffExcerpt(detail: SelfChangeDetailDiff, limits: Self
   return Object.freeze({ lines: Object.freeze(lines), truncated });
 }
 
-/** 试跑结果里 `skipped` 的检查：`<check> <path>`，去重、有上限。 */
-export function skippedTrialChecks(trial: unknown): readonly string[] {
+/** 试跑结果里 `skipped` 的检查：`<check> <path>`，去重；`limit` 缺省不设上限。 */
+export function skippedTrialChecks(trial: unknown, limit: number = Number.POSITIVE_INFINITY): readonly string[] {
   const checks = (trial as { checks?: unknown } | null | undefined)?.checks;
   if (!Array.isArray(checks)) return Object.freeze([]);
   const names = new Set<string>();
@@ -214,7 +249,16 @@ export function skippedTrialChecks(trial: unknown): readonly string[] {
     const target = typeof check.path === 'string' && check.path ? ` ${check.path}` : '';
     names.add(`${name}${target}`);
   }
-  return Object.freeze([...names].slice(0, MAX_SKIPPED_CHECKS));
+  return Object.freeze([...names].slice(0, limit));
+}
+
+/** 把键名像密钥的 `key = value` / `key: value` 赋值的值换成 `[redacted]`（审计密钥键表 + 常见后缀）。 */
+export function redactSecretAssignments(line: string): string {
+  return line.replace(SECRET_ASSIGNMENT, (match: string, keyQuote: string, key: string, separator: string, value: string) => {
+    if (!isSecretLikeKey(key) || value.includes('[redacted]')) return match;
+    const quote = value[0] === '"' || value[0] === "'" || value[0] === '`' ? value[0] : '';
+    return `${keyQuote}${key}${keyQuote}${separator}${quote}[redacted]${quote}`;
+  });
 }
 
 // ── 内部 ─────────────────────────────────────────────────────────────────────
@@ -235,15 +279,32 @@ function unavailableFile(
   return Object.freeze({ path: target, kind, diff: null, truncated: true, unavailableReason: reason });
 }
 
-async function readSnapshotOrNull(
-  store: Pick<SelfChangeStore, 'readSnapshot'>,
-  id: string,
-): Promise<SelfChangeSnapshot | null> {
-  try {
-    return await store.readSnapshot(id);
-  } catch {
-    return null;
+function isSecretLikeKey(key: string): boolean {
+  const name = key.split('.').pop() ?? key;
+  if (isSecretPayloadKey(name)) return true;
+  const normalized = name.replaceAll('-', '').replaceAll('_', '').toLowerCase();
+  return SECRET_KEY_SUFFIXES.some(suffix => normalized.endsWith(suffix));
+}
+
+/** 预览里记下的每个文件的 create / modify / delete（瘦身后正文没了，靠它还原类型）。 */
+function previewFileKinds(plan: unknown): ReadonlyMap<string, SelfChangeFileDetailDiff['kind']> {
+  const files = (plan as { files?: unknown } | null | undefined)?.files;
+  const kinds = new Map<string, SelfChangeFileDetailDiff['kind']>();
+  if (!Array.isArray(files)) return kinds;
+  for (const file of files as readonly Partial<SelfChangeFileDiff>[]) {
+    if (typeof file?.path !== 'string') continue;
+    if (file.kind === 'create' || file.kind === 'modify' || file.kind === 'delete') kinds.set(file.path, file.kind);
   }
+  return kinds;
+}
+
+function slimmedKind(
+  target: string,
+  op: 'write' | 'delete',
+  previewKinds: ReadonlyMap<string, SelfChangeFileDetailDiff['kind']>,
+): SelfChangeFileDetailDiff['kind'] {
+  if (op === 'delete') return 'delete';
+  return previewKinds.get(target) ?? 'modify';
 }
 
 function baselineFromSnapshot(contents: ReadonlyMap<string, string | null>, target: string): Baseline {

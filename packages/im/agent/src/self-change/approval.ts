@@ -21,7 +21,13 @@ import {
   type ToolApprovalOrigin,
   type ToolApprovalQueue,
 } from '../security/tool-approval-queue.js';
-import { buildSelfChangeDetailDiff, selfChangeDiffExcerpt, skippedTrialChecks, type SelfChangeDiffExcerpt } from './detail-diff.js';
+import {
+  MAX_CARD_SKIPPED_CHECKS,
+  buildSelfChangeDetailDiff,
+  selfChangeDiffExcerpt,
+  skippedTrialChecks,
+  type SelfChangeDiffExcerpt,
+} from './detail-diff.js';
 import { DEFAULT_CHANGE_IDLE_TTL_MS, DEFAULT_MAX_PENDING_CHANGES } from './policy.js';
 import type { SelfChangePreview } from './preview.js';
 import { SelfChangeNotFoundError, SelfChangeStateError, type SelfChangeOrigin, type SelfChangeRecord, type SelfChangeStore } from './store.js';
@@ -308,7 +314,7 @@ export function selfChangeApprovalArgs(record: SelfChangeRecord, excerpt: SelfCh
   const impact = preview?.impact;
   const trial = record.trial as { passed?: unknown; checks?: readonly { status?: unknown }[] } | null;
   const skipped = Array.isArray(trial?.checks) ? trial.checks.filter(check => check?.status === 'skipped').length : 0;
-  const skippedChecks = skippedTrialChecks(record.trial);
+  const skippedChecks = skippedTrialChecks(record.trial, MAX_CARD_SKIPPED_CHECKS);
   return Object.freeze({
     changeId: record.id,
     contentHash: record.contentHash,

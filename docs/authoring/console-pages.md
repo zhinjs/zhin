@@ -429,7 +429,7 @@ Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)�
 | 方法 | 调用 | 需要的权限 |
 | --- | --- | --- |
 | `plugin.root.self-changes` | `pluginRpc('root', 'self-changes')` | `tool_approvals:read` 或 `ops:approve`（待审 / 最近变更与暂存区占用 `usageBytes`，不含正文） |
-| `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | **仅** `ops:approve`（逐文件 unified diff，总计 ≤ 64 KB 按行截断；配置补丁值按审计口径脱敏；完整试跑检查与 `skippedChecks`；已瘦身时 `bodiesAvailable: false`） |
+| `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | **仅** `ops:approve`（逐文件 unified diff，全部文件合计 ≤ 64 KB，按行截断；配置补丁值按审计口径脱敏；完整试跑检查与 `skippedChecks`；已瘦身时 `bodiesAvailable: false`） |
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve`（动作） |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve`（动作；`failed` 现场已处理） |
 

@@ -55,6 +55,7 @@ export interface SelfChangeDetailConfigOperation {
 
 export interface SelfChangeDetailTrial {
   readonly passed: boolean | null;
+  /** Every check, each redacted on its own (no list cap). */
   readonly checks: PluginConsoleRpcJson;
   readonly pendingStages: readonly string[];
   /** `<check> <path>` of every skipped check. */
@@ -174,8 +175,10 @@ export class HostSelfChanges {
       throw consoleError(error);
     }
     const redact = agent.redactDecisionPayload;
+    const trial = detailTrial(record.trial, agent.skippedTrialChecks, redact);
     return {
-      change: card(record, binding.approvals.approvalIdFor(record.id) ?? null),
+      // The card's own `trial` would be a second, unredacted copy: carry the sanitized one instead.
+      change: { ...card(record, binding.approvals.approvalIdFor(record.id) ?? null), trial: trial as unknown as PluginConsoleRpcJson },
       bodiesAvailable: diff.bodiesAvailable,
       baseline: diff.baseline,
       files: diff.files.map(file => ({
@@ -191,10 +194,10 @@ export class HostSelfChanges {
       configPatch: record.configPatch
         ? {
             expectedRevision: record.configPatch.expectedRevision,
-            operations: record.configPatch.patches.map(operation => redactConfigOperation(operation, redact)),
+            operations: record.configPatch.patches.map(operation => redactConfigOperation(operation, redact, agent.isSecretPayloadKey)),
           }
         : null,
-      trial: detailTrial(record.trial, agent.skippedTrialChecks, redact),
+      trial,
       usageBytes: await binding.store.usage(),
     };
   }
@@ -262,21 +265,19 @@ function readStringProp(error: unknown, key: string): string | undefined {
 type RedactPayload = (payload: DecisionPayload | null | undefined) => DecisionPayload;
 
 /**
- * Redacts a `set` value with the decision-audit rules: the value is nested under its config path so a secret-like
- * key anywhere on the path (`token`, `apiKey`, `auth`, …) replaces it, and string values get token masking.
+ * Redacts a `set` value with the decision-audit rules: a secret-like key anywhere on the config path (`token`,
+ * `apiKey`, `auth`, …) replaces the whole value; otherwise the value itself is redacted (secret keys inside it,
+ * token-shaped strings). The path is checked on its own so deep config paths do not eat the depth limit.
  */
-function redactConfigOperation(operation: SelfChangeConfigOperation, redact: RedactPayload): SelfChangeDetailConfigOperation {
+function redactConfigOperation(
+  operation: SelfChangeConfigOperation,
+  redact: RedactPayload,
+  isSecretKey: (key: string) => boolean,
+): SelfChangeDetailConfigOperation {
   const configPath = [...operation.path];
   if (operation.op === 'remove') return { op: 'remove', path: configPath };
-  let wrapped: unknown = operation.value;
-  for (const segment of [...configPath].reverse()) {
-    wrapped = { [segment]: wrapped };
-  }
-  let redacted: unknown = redact(wrapped as DecisionPayload);
-  for (const segment of configPath) {
-    if (!redacted || typeof redacted !== 'object' || Array.isArray(redacted)) break;
-    redacted = (redacted as Record<string, unknown>)[segment];
-  }
+  if (configPath.some(isSecretKey)) return { op: 'set', path: configPath, value: '[redacted]' };
+  const redacted = redact({ value: operation.value }).value;
   return { op: 'set', path: configPath, value: (redacted ?? null) as PluginConsoleRpcJson };
 }
 
@@ -293,8 +294,9 @@ function detailTrial(
     : [];
   return {
     passed: typeof value.passed === 'boolean' ? value.passed : null,
-    // Check messages may quote file content or tool output: same masking as the audit trail.
-    checks: (redact({ checks }).checks ?? []) as PluginConsoleRpcJson,
+    // Check messages may quote file content or tool output: same masking as the audit trail, one check at a time
+    // so the audit list cap never hides checks from the approver.
+    checks: checks.map(check => redact({ check }).check ?? null) as PluginConsoleRpcJson,
     pendingStages,
     skippedChecks: [...skippedTrialChecks(trial)],
   };

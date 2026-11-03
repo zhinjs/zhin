@@ -257,6 +257,7 @@ export {
   decisionEventFromRow,
   decisionEventToExport,
   decisionEventToRow,
+  isSecretPayloadKey,
   redactDecisionPayload,
   speakBlockReasonCode,
   type DecisionActor,
@@ -508,9 +509,11 @@ export {
   type SelfChangePreview,
 } from './self-change/preview.js';
 export {
+  MAX_CARD_SKIPPED_CHECKS,
   MAX_IM_DIFF_EXCERPT_BYTES,
   MAX_IM_DIFF_EXCERPT_LINES,
   buildSelfChangeDetailDiff,
+  redactSecretAssignments,
   selfChangeDiffExcerpt,
   skippedTrialChecks,
   unifiedDiff as selfChangeUnifiedDiff,

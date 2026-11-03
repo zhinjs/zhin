@@ -106,6 +106,7 @@ it('serves self-change-detail to ops:approve only, with diffs, redacted config v
         { op: 'set', path: ['ping', 'apiKey'], value: 'sk-live-THIS_IS_SECRET' },
         { op: 'set', path: ['ping', 'greeting'], value: 'hello' },
         { op: 'remove', path: ['ping', 'legacy'] },
+        { op: 'set', path: ['ping', 'a', 'b', 'c', 'd'], value: { nested: { list: [1, 2] } } },
       ],
     },
   });
@@ -117,6 +118,8 @@ it('serves self-change-detail to ops:approve only, with diffs, redacted config v
       checks: [
         { check: 'syntax', path: 'commands/ping.ts', status: 'passed' },
         { check: 'sandbox_load', path: 'commands/ping.ts', status: 'skipped' },
+        { check: 'plugin_tests', path: 'commands/ping.ts', status: 'failed', message: 'output: Bearer abcdefghijklmnop' },
+        ...Array.from({ length: 60 }, (_, index) => ({ check: 'syntax', path: `commands/x${index}.ts`, status: 'passed' })),
       ],
       pendingStages: ['plugin_tests'],
     },
@@ -144,16 +147,21 @@ it('serves self-change-detail to ops:approve only, with diffs, redacted config v
             { op: 'set', path: ['ping', 'apiKey'], value: '[redacted]' },
             { op: 'set', path: ['ping', 'greeting'], value: 'hello' },
             { op: 'remove', path: ['ping', 'legacy'] },
+            { op: 'set', path: ['ping', 'a', 'b', 'c', 'd'], value: { nested: { list: [1, 2] } } },
           ],
         },
         trial: { passed: true, pendingStages: ['plugin_tests'], skippedChecks: ['sandbox_load commands/ping.ts'] },
       },
     },
   });
-  const data = (response as { body: { data: { files: { diff: string }[]; usageBytes: number } } }).body.data;
+  const data = (response as { body: { data: { files: { diff: string }[]; usageBytes: number; trial: { checks: unknown[] }; change: { trial: { checks: unknown[] } } } } }).body.data;
   expect(data.files[0]!.diff).toContain('-export default 1;\n+export default 2;');
   expect(data.usageBytes).toBeGreaterThan(0);
+  // Every check is returned (no audit list cap) and the card's own trial is the sanitized copy.
+  expect(data.trial.checks).toHaveLength(63);
+  expect(data.change.trial).toEqual(data.trial);
   expect(JSON.stringify(response)).not.toContain('THIS_IS_SECRET');
+  expect(JSON.stringify(response)).not.toContain('abcdefghijklmnop');
 
   // The read-only hard-gate list never carries the excerpt that the IM card shows.
   const listed = await call('plugin.root.tool-approvals', reader);

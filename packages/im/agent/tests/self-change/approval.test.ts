@@ -84,6 +84,16 @@ describe('SelfChangeApprovals', () => {
     expect(audit.at(-1)).toMatchObject({ reasonCode: 'change_submitted', outcome: 'defer' });
   });
 
+  it('redacts secret-like assignments in the card excerpt before delivery', async () => {
+    const store = await makeStore();
+    const { queue, approvals } = setup(store);
+    const ready = await readyChange(store, origin, 'const apiKey = "live-secret-value";\nexport default 1;\n');
+    const { approvalId } = await approvals.submit(ready.id);
+    const excerpt = (queue.get(approvalId)!.args as { diffExcerpt?: string[] }).diffExcerpt ?? [];
+    expect(excerpt).toContain('+const apiKey = "[redacted]";');
+    expect(JSON.stringify(excerpt)).not.toContain('live-secret-value');
+  });
+
   it('only submits ready changes and allows one pending change per conversation', async () => {
     const store = await makeStore();
     const { approvals } = setup(store);

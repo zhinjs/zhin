@@ -1,4 +1,9 @@
-import { SELF_CHANGE_APPROVAL_TOOL, type SelfChangeApprovalArgs } from '@zhin.js/agent';
+import {
+  MAX_IM_DIFF_EXCERPT_BYTES,
+  MAX_IM_DIFF_EXCERPT_LINES,
+  SELF_CHANGE_APPROVAL_TOOL,
+  type SelfChangeApprovalArgs,
+} from '@zhin.js/agent';
 import {
   DANGEROUS_TOOL_CATEGORY_LABELS,
   imApproversFor,
@@ -242,23 +247,24 @@ export function formatSelfChangeCard(entry: ToolApprovalEntry, commandPrefix = '
   ].filter((line): line is string => Boolean(line)).join('\n');
 }
 
-/** Hard bounds for the excerpt on the card, re-checked here because restored cards come from stored args. */
-const CARD_EXCERPT_MAX_LINES = 40;
-const CARD_EXCERPT_MAX_BYTES = 2 * 1024;
 const BLIND_APPROVAL_WARNING = '⚠️ 未看完整正文请去 Console 查看后再批准，不要盲批。';
 
 function diffExcerptLines(args: Partial<SelfChangeApprovalArgs>): string[] {
   const excerpt = Array.isArray(args.diffExcerpt)
     ? args.diffExcerpt.filter((line): line is string => typeof line === 'string')
     : null;
-  if (!excerpt || excerpt.length === 0) {
+  if (!excerpt) {
     return ['差异摘录：不可用，完整内容见 Console。', BLIND_APPROVAL_WARNING];
+  }
+  if (excerpt.length === 0) {
+    return ['差异摘录：无文件正文改动。', BLIND_APPROVAL_WARNING];
   }
   const kept: string[] = [];
   let bytes = 0;
   for (const line of excerpt) {
     const lineBytes = Buffer.byteLength(line, 'utf8') + (kept.length > 0 ? 1 : 0);
-    if (kept.length >= CARD_EXCERPT_MAX_LINES || bytes + lineBytes > CARD_EXCERPT_MAX_BYTES) break;
+    // Re-checked here because restored cards come from stored args.
+    if (kept.length >= MAX_IM_DIFF_EXCERPT_LINES || bytes + lineBytes > MAX_IM_DIFF_EXCERPT_BYTES) break;
     kept.push(line);
     bytes += lineBytes;
   }

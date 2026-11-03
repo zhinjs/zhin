@@ -5,6 +5,7 @@ import {
   MAX_IM_DIFF_EXCERPT_BYTES,
   MAX_IM_DIFF_EXCERPT_LINES,
   buildSelfChangeDetailDiff,
+  redactSecretAssignments,
   selfChangeDiffExcerpt,
   skippedTrialChecks,
   unifiedDiff,
@@ -72,6 +73,12 @@ describe('unifiedDiff', () => {
     expect(unifiedDiff('a.ts', 'same\n', 'same\n')).toBe('');
   });
 
+  it('marks line-ending or trailing-newline-only changes instead of reporting them as identical', () => {
+    const diff = unifiedDiff('a.ts', 'one\r\ntwo\r\n', 'one\ntwo\n');
+    expect(diff).toBe(['--- a/a.ts', '+++ b/a.ts', '\\ line endings or the trailing newline changed'].join('\n'));
+    expect(unifiedDiff('a.ts', 'one', 'one\n')).toContain('trailing newline');
+  });
+
   it('keeps moved lines as a remove plus an add (LCS)', () => {
     const diff = unifiedDiff('a.ts', 'x\ny\nz\n', 'y\nz\nx\n');
     expect(diff).toContain('-x');
@@ -135,6 +142,63 @@ describe('buildSelfChangeDetailDiff', () => {
     expect(JSON.stringify(detail)).not.toContain('outside secret');
   });
 
+  it('diffs against the rollback snapshot once one exists, not the already-changed production file', async () => {
+    const store = makeStore();
+    const draft = await store.draft({
+      origin,
+      files: [
+        { path: 'commands/ping.ts', content: 'export default 2;\n' },
+        { path: 'commands/new.ts', content: 'export default 3;\n' },
+      ],
+    });
+    await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+    await store.transition(draft.id, 'ready', { actor: 'policy', trial: { passed: true, checks: [] } });
+    await store.transition(draft.id, 'pending', { actor: 'policy' });
+    const approved = await store.transition(draft.id, 'approved', { actor: 'operator', actorId: 'console' });
+    await store.writeSnapshot(draft.id, {
+      files: [{ path: 'commands/ping.ts', content: 'export default 1;\n' }, { path: 'commands/new.ts', content: null }],
+      config: null,
+    });
+    // Applying already wrote the new content to production.
+    writeProjectFile('commands/ping.ts', 'export default 2;\n');
+    writeProjectFile('commands/new.ts', 'export default 3;\n');
+    const detail = await buildSelfChangeDetailDiff({ store, record: approved, projectRoot: project });
+    expect(detail.baseline).toBe('snapshot');
+    expect(detail.files.map(file => file.kind)).toEqual(['modify', 'create']);
+    expect(detail.files[0]!.diff).toContain('-export default 1;\n+export default 2;');
+    expect(detail.files[1]!.diff).toContain('--- /dev/null');
+  });
+
+  it('reports an unreadable snapshot as baseline_unreadable rather than falling back to the disk', async () => {
+    const store = makeStore();
+    const draft = await store.draft({ origin, files: [{ path: 'commands/ping.ts', content: 'export default 2;\n' }] });
+    await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+    await store.transition(draft.id, 'ready', { actor: 'policy', trial: { passed: true, checks: [] } });
+    await store.transition(draft.id, 'pending', { actor: 'policy' });
+    const approved = await store.transition(draft.id, 'approved', { actor: 'operator', actorId: 'console' });
+    await store.writeSnapshot(draft.id, { files: [{ path: 'commands/ping.ts', content: 'export default 1;\n' }], config: null });
+    rmSync(join(project, '.zhin', 'changes', draft.id, 'snapshot', 'files', 'commands', 'ping.ts'));
+    writeProjectFile('commands/ping.ts', 'export default 2;\n');
+    const detail = await buildSelfChangeDetailDiff({ store, record: approved, projectRoot: project });
+    expect(detail).toMatchObject({ baseline: 'snapshot', truncated: true });
+    expect(detail.files[0]).toMatchObject({ diff: null, unavailableReason: 'baseline_unreadable' });
+  });
+
+  it('keeps the create kind of a slimmed file from the stored preview', async () => {
+    const store = makeStore();
+    const draft = await store.draft({ origin, files: [{ path: 'commands/new.ts', content: 'export default 1;\n' }] });
+    await store.attachPlan(draft.id, draft.contentHash, {
+      version: 1,
+      contentHash: draft.contentHash,
+      summary: null,
+      files: [{ path: 'commands/new.ts', kind: 'create', added: 1, removed: 0, bytesBefore: null, bytesAfter: 18 }],
+      impact: { kind: 'generation', subtrees: [], slots: [], reasons: [], estimated: true, config: null },
+    });
+    const expired = await store.transition(draft.id, 'expired', { actor: 'policy' });
+    const detail = await buildSelfChangeDetailDiff({ store, record: expired, projectRoot: project });
+    expect(detail.files[0]).toMatchObject({ kind: 'create', unavailableReason: 'slimmed' });
+  });
+
   it('reports a slimmed change as bodies unavailable instead of inventing a diff', async () => {
     const store = makeStore();
     const draft = await store.draft({ origin, files: [{ path: 'commands/ping.ts', content: 'export default 1;\n' }] });
@@ -162,6 +226,40 @@ describe('selfChangeDiffExcerpt', () => {
     expect(excerpt.lines.some(line => line.startsWith('+++ ') || line.startsWith('--- '))).toBe(false);
   });
 
+  it('keeps removed lines that look like file headers and notes unchanged files', () => {
+    const excerpt = selfChangeDiffExcerpt({
+      bodiesAvailable: true,
+      baseline: 'disk',
+      bytes: 0,
+      truncated: false,
+      files: [
+        { path: 'notes.md', kind: 'modify', diff: unifiedDiff('notes.md', '-- note\nkeep\n', 'keep\n'), truncated: false, unavailableReason: null },
+        { path: 'same.ts', kind: 'modify', diff: '', truncated: false, unavailableReason: null },
+      ],
+    });
+    expect(excerpt.lines).toEqual(['# modify notes.md', '@@ -1,2 +1,1 @@', '--- note', ' keep', '# modify same.ts', '  （与改动前相同）']);
+  });
+
+  it('redacts secret-like assignments in the excerpt', () => {
+    const diff = unifiedDiff('commands/a.ts', null, [
+      'const apiKey = "abc123";',
+      'password: hunter2',
+      'const GITHUB_TOKEN = process.env.GITHUB_TOKEN',
+      'const greeting = "hello";',
+    ].join('\n'));
+    const excerpt = selfChangeDiffExcerpt({
+      bodiesAvailable: true, baseline: 'disk', bytes: 0, truncated: false,
+      files: [{ path: 'commands/a.ts', kind: 'create', diff, truncated: false, unavailableReason: null }],
+    });
+    const text = excerpt.lines.join('\n');
+    expect(text).toContain('+const apiKey = "[redacted]";');
+    expect(text).toContain('+password: [redacted]');
+    expect(text).toContain('+const GITHUB_TOKEN = [redacted]');
+    expect(text).toContain('+const greeting = "hello";');
+    expect(text).not.toMatch(/abc123|hunter2|process\.env/u);
+    expect(redactSecretAssignments('"token": "[redacted]"')).toBe('"token": "[redacted]"');
+  });
+
   it('covers a small change completely and notes unavailable files', () => {
     const excerpt = selfChangeDiffExcerpt({
       bodiesAvailable: true,
@@ -187,5 +285,8 @@ describe('skippedTrialChecks', () => {
       ],
     })).toEqual(['syntax commands/a.tsx', 'plugin_tests']);
     expect(skippedTrialChecks(null)).toEqual([]);
+    const many = { checks: Array.from({ length: 30 }, (_, index) => ({ check: 'syntax', path: `f${index}.tsx`, status: 'skipped' })) };
+    expect(skippedTrialChecks(many)).toHaveLength(30);
+    expect(skippedTrialChecks(many, 20)).toHaveLength(20);
   });
 });
