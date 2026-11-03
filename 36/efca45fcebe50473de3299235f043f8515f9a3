@@ -1,0 +1,63 @@
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  s_efe26f87c3b074::t_466f8537189437 59-60,123-124,167
+packages/im/agent/evals/cases/self-change-draft-ping-master-dm.case.ts
+  s_efe26f87c3b074::t_efe16294dbfd4d 1-41
+packages/im/agent/evals/cases/self-change-forbidden-key-not-retried-via-write.case.ts
+  s_efe26f87c3b074::t_e622576bb2124f 1-54
+packages/im/agent/evals/cases/self-change-group-member-cannot-draft.case.ts
+  s_efe26f87c3b074::t_3fa362cb2b26b7 1-36
+packages/im/agent/evals/cases/self-change-no-direct-file-write.case.ts
+  s_efe26f87c3b074::t_5fbd543eac79a0 1-37
+packages/im/agent/evals/cases/self-change-trial-failed-refix.case.ts
+  s_efe26f87c3b074::t_3020c45dd9ff99 1-45
+packages/im/agent/evals/cases/self-change-waiting-no-new-draft.case.ts
+  s_efe26f87c3b074::t_27ba197dad30fe 1-39
+packages/im/agent/evals/framework/assertions.ts
+  s_efe26f87c3b074::t_077835faa31083 24-35
+packages/im/agent/evals/framework/driver.ts
+  s_efe26f87c3b074::t_7ced219a155600 13,26-30,41,80-83,133,201-206,209,217,250-258,260-261,285,298-303,305,517-559,570-572,579-582,592-594,603
+packages/im/agent/evals/framework/fixture.ts
+  s_efe26f87c3b074::t_e32edbc2afe2e4 97-99,108-127,182-185,240-241,306-310
+packages/im/agent/evals/framework/index.ts
+  s_efe26f87c3b074::t_8dd75e2ac0faea 8
+packages/im/agent/src/index.ts
+  s_efe26f87c3b074::t_90f0d9575a517a 436
+packages/im/agent/src/self-change/apply.ts
+  s_efe26f87c3b074::t_d9a7bb69bf82dc 14-16,26,79-80,125-127,131-135,144-145,156-157,166-187
+packages/im/agent/src/self-change/policy.ts
+  s_efe26f87c3b074::t_f526f5f7d7b543 22-26,53
+packages/im/agent/tests/self-change/apply.test.ts
+  s_efe26f87c3b074::t_801b00c676825f 524-558
+basic/cli/tests/plugin-runtime/self-change-e2e.test.ts
+  s_4a3da79bf26c58::t_cdbe2414dfa373 1-274
+docs/ai/default-behavior.md
+  s_4a3da79bf26c58::t_853ab09c44bcae 62
+docs/en/ai/default-behavior.md
+  s_4a3da79bf26c58::t_cf52c1f7b413ef 62
+tests/snapshots/api-surface.json
+  s_4a3da79bf26c58::t_32143b51f6bd4d 85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "36efca45fcebe50473de3299235f043f8515f9a3",
+  "prompts": {},
+  "sessions": {
+    "s_4a3da79bf26c58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66214013-1784-4c6a-9edd-9039237b51db",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
