@@ -1,0 +1,19 @@
+plugins/adapters/douyin-live/src/client.ts
+  s_58400078c2bd23::t_b8d032aa87ce3e 52-55,181-182,190,192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1c7b8599b98828b69e757cd96789e722f86b55c5",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
