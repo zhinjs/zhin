@@ -536,8 +536,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/im/workroom
       ai:
-        specifier: ^6.0.238
-        version: 6.0.238(zod@4.4.3)
+        specifier: ^7.0.44
+        version: 7.0.44(zod@4.4.3)
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/im/zhin
