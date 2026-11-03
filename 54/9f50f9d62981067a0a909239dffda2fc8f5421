@@ -1,0 +1,57 @@
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_efe26f87c3b074::t_100ea55bba5a33 145-149,230-232,238,265,348-354
+basic/cli/src/plugin-runtime/agent/module.ts
+  s_efe26f87c3b074::t_38f62b79c2515c 18
+basic/cli/src/plugin-runtime/agent/self-change-plugin-roots.ts
+  s_efe26f87c3b074::t_7b2e43786ced88 1-69
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  s_efe26f87c3b074::t_c27d75c3ead32f 44-49,77-81,111
+basic/cli/src/plugin-runtime/start-command.ts
+  s_efe26f87c3b074::t_3a00c11d55de18 81,216,605
+basic/cli/src/plugin-runtime/start/module.ts
+  s_efe26f87c3b074::t_e354c820d12e6d 11
+basic/cli/src/plugin-runtime/start/process-supervisor.ts
+  s_efe26f87c3b074::t_3e1852ad400b34 50-63
+basic/cli/tests/plugin-runtime/agent/self-change-apply.test.ts
+  s_efe26f87c3b074::t_fa287eef598266 72-80
+basic/cli/tests/plugin-runtime/start/process-supervisor.test.ts
+  s_efe26f87c3b074::t_44b441a095c409 6,10-20
+docs/adr/0040-controlled-self-change.md
+  s_efe26f87c3b074::t_04a3e615ce275e 120
+docs/ai/default-behavior.md
+  s_efe26f87c3b074::t_4843f7fda0609e 64-65
+docs/en/ai/default-behavior.md
+  s_efe26f87c3b074::t_5b74ed2b204428 64-65
+packages/im/agent/src/decision-events.ts
+  s_efe26f87c3b074::t_9fd0733ee7dcd3 181-182
+packages/im/agent/src/plugin-runtime/native-self-change-tools.ts
+  s_efe26f87c3b074::t_0b480da0eba753 10,46-50,163-167,221,255-260
+packages/im/agent/src/self-change/apply.ts
+  s_efe26f87c3b074::t_31f37fc9d33072 28,32,50-51,100-105,116,129,139,184-187,240-242,300-337,465
+packages/im/agent/src/self-change/policy.ts
+  s_efe26f87c3b074::t_29fb234e0e7181 95,137-152
+packages/im/agent/src/self-change/store.ts
+  s_efe26f87c3b074::t_71c35ce118dcb2 40,44,165-166,220,235,270,274
+packages/im/agent/tests/decision-events.test.ts
+  s_efe26f87c3b074::t_117e8eb12e6c59 163
+packages/im/agent/tests/plugin-runtime/native-self-change-tools.test.ts
+  s_efe26f87c3b074::t_5d28ef79aafc6a 24,33-38,168-198
+packages/im/agent/tests/self-change/apply.test.ts
+  s_efe26f87c3b074::t_ab0b5cabebcdcd 42-43,54,65,370-443
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "549f50f9d62981067a0a909239dffda2fc8f5421",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
