@@ -1,0 +1,37 @@
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_e0efb469ee3bbd::t_340548d4cc09c1 3,268-287
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_e0efb469ee3bbd::t_104e674e16f4ee 40
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_e0efb469ee3bbd::t_9c6f69a7cfabbd 71
+packages/console/protocol/src/index.ts
+  s_e0efb469ee3bbd::t_9e9764a82f562d 477-478,545-561
+packages/host/http/src/console-rpc.ts
+  s_e0efb469ee3bbd::t_1bb0e13cb42e85 210-211,512-528
+packages/host/http/tests/console-config-project-read-rpc.test.ts
+  s_58400078c2bd23::t_e8abaa8137345f 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f813bf222ff7460a340b201273ef3ca4de1e83db",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
