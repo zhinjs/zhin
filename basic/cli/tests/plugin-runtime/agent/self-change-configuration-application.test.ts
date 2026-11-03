@@ -211,7 +211,7 @@ it.each(['superseded', 'legacy', 'in-flight', 'owned'] as const)('a fresh recove
 
 // Upgrade across #1146: records persisted mid-flight by an older build carry a configPatch but no
 // `apply.configRevision`. Recovery must not guess ownership: stop, keep evidence, ask for manual verification.
-it.each(['applying', 'verifying'] as const)('upgrade: a pre-#1146 %s record without configRevision recovers to failed for manual verification', async status => {
+it.each([['applying', true], ['verifying', true], ['applying', false], ['verifying', false]] as const)('upgrade: a pre-#1146 %s record without configRevision recovers to failed for manual verification (config port=%s)', async (status, configPort) => {
   const f = await fixture({ files: true });
   const { revision, source: initial } = await f.configuration.readSource();
   await f.store.writeSnapshot(f.draft.id, { files: [{ path: 'commands/ping.ts', content: null }], config: { source: initial, revision } });
@@ -233,8 +233,8 @@ it.each(['applying', 'verifying'] as const)('upgrade: a pre-#1146 %s record with
   const events: DecisionEventInput[] = [];
   const freshStore = new SelfChangeStore({ root: join(f.projectRoot, '.zhin/changes'), projectRoot: f.projectRoot,
     protectedPaths: await createHostProtectedPaths({ projectRoot: f.projectRoot }), audit: () => ({ record: event => events.push(event) }) });
-  const host = new HostSelfChangeApply({ projectRoot: f.projectRoot, configFile: f.configFile, configuration, reload, restart,
-    snapshot: () => ({ generation: 2, tree: new Map() }) });
+  const host = new HostSelfChangeApply({ projectRoot: f.projectRoot, configFile: f.configFile, reload, restart,
+    ...(configPort ? { configuration } : {}), snapshot: () => ({ generation: 2, tree: new Map() }) });
   const applier = new SelfChangeApplier({ projectRoot: f.projectRoot, store: freshStore, ports: { ...host.ports({
     emergencyStop, report: async () => 'sent',
   }), health: async () => ({ ok: true }) } });
@@ -249,6 +249,6 @@ it.each(['applying', 'verifying'] as const)('upgrade: a pre-#1146 %s record with
   expect(restore).not.toHaveBeenCalled(); expect(applyConfiguration).not.toHaveBeenCalled();
   expect(reload).not.toHaveBeenCalled(); expect(restart).not.toHaveBeenCalled(); expect(emergencyStop).not.toHaveBeenCalled();
   expect(await readFile(f.configFile, 'utf8')).toBe(source);
-  expect(await readFile(join(f.projectRoot, 'commands/ping.ts'), 'utf8')).toContain('new');
+  expect(await readFile(join(f.projectRoot, 'commands/ping.ts'), 'utf8')).toBe('export default "new";\n');
   expect(await freshStore.readSnapshot(f.draft.id)).toMatchObject({ config: { revision } });
 });

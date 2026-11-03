@@ -539,6 +539,9 @@ export class SelfChangeApplier {
   async #restoreSnapshot(record: SelfChangeRecord, snapshot: SelfChangeSnapshot): Promise<{ mode: SelfChangeImpactKind; configurationHandled: boolean; record: SelfChangeRecord }> {
     // Check ownership before any compensating file or config write. A fresh read
     // may prove equality, but may never supply a newer revision as rollback authority.
+    // A config-patching record without a durably acknowledged revision (e.g. persisted by a
+    // pre-#1146 build) can never prove ownership, whether or not a config snapshot/port exists.
+    if (record.configPatch && !record.apply?.configRevision) throw new ConfigApplicationError('unconfirmed');
     let config: Awaited<ReturnType<SelfChangeConfigPort['read']>> | undefined;
     if (snapshot.config && record.configPatch && this.#ports.config) {
       try { config = await this.#ports.config.read(); }
