@@ -23,6 +23,8 @@ describe('douyin live config', () => {
     expect(() => resolveDouyinLiveConfig({ id: 'live', roomId: '000' })).toThrow(/roomId/);
     expect(() => resolveDouyinLiveConfig({ id: 'live', roomId: '0123' })).toThrow(/roomId/);
     expect(() => resolveDouyinLiveConfig({ id: 'live', roomId: 1.5 })).toThrow(/roomId/);
+    expect(() => resolveDouyinLiveConfig({ id: 'live', roomId: 2 ** 53 })).toThrow(/roomId/);
+    expect(resolveDouyinLiveConfig({ id: 'live', roomId: '9007199254740993' }).roomId).toBe('9007199254740993');
   });
 
   it('defaults to listen-only (sendMode off) and clamps limits', () => {

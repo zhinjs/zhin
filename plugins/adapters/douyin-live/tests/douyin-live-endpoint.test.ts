@@ -122,6 +122,8 @@ describe('DouyinLiveEndpoint inbound', () => {
     const { harness } = await connected({}, { sign });
     sign.mockResolvedValueOnce('  ');
     await expect(harness.endpoint.signature('a'.repeat(32))).rejects.toThrow(/empty signature/);
+    sign.mockRejectedValueOnce(new Error('signer down'));
+    await expect(harness.endpoint.signature('a'.repeat(32))).rejects.toThrow(/signer down/);
     await harness.stop();
   });
 

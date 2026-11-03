@@ -74,7 +74,9 @@ export function resolveDouyinLiveConfig(raw: unknown): ResolvedDouyinLiveConfig 
   const id = optionalString(config.id);
   if (!id) throw new Error('douyin-live endpoint requires an id');
   const roomId = String(config.roomId ?? '').trim();
-  if (!/^[1-9]\d*$/.test(roomId)) {
+  // 未加引号的超大整数会被 YAML/JS 解析器静默取整，指向别的直播间：数字形式只收安全整数。
+  const unsafeNumber = typeof config.roomId === 'number' && !Number.isSafeInteger(config.roomId);
+  if (unsafeNumber || !/^[1-9]\d*$/.test(roomId)) {
     throw new Error(`douyin-live endpoint "${id}" requires a numeric roomId (web_rid)`);
   }
   const cookie = optionalString(config.cookie);

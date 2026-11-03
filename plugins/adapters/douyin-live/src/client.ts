@@ -20,7 +20,11 @@ export type DouyinLiveFetch = (
   text(): Promise<string>;
 }>;
 
-/** 由 `X-MS-STUB`（参数串 md5）算出 WebSocket `signature`。返回空串表示不带签名。 */
+/**
+ * 由 `X-MS-STUB`（参数串 md5）算出 WebSocket `signature`。
+ * 返回空串 / 缺失视为签名失败并抛错（不会静默降级为无签名）；想无签名连接就不要配置 signer。
+ * `signal` 带 15 s 请求超时与客户端取消。
+ */
 export type DouyinLiveSigner = (stub: string, signal?: AbortSignal) => Promise<string> | string;
 
 export interface DouyinLiveRoomInfo {
@@ -212,7 +216,8 @@ export class DouyinLiveClient {
     let value: string;
     if (this.#signer) {
       const signal = this.#requestSignal();
-      value = await withAbort(Promise.resolve(this.#signer(stub, signal)), signal);
+      signal.throwIfAborted();
+      value = await withAbort(Promise.resolve().then(() => this.#signer!(stub, signal)), signal);
     } else if (this.config.signerUrl) {
       const separator = this.config.signerUrl.includes('?') ? '&' : '?';
       const response = await this.#get(`${this.config.signerUrl}${separator}stub=${encodeURIComponent(stub)}`);
@@ -231,6 +236,8 @@ export class DouyinLiveClient {
 
 /** 让不理会 signal 的注入 signer 也受请求超时 / 取消约束。 */
 function withAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  // 超时 / 取消后 signer 仍可能 reject：始终挂上处理器，避免 unhandled rejection。
+  promise.catch(() => undefined);
   if (signal.aborted) return Promise.reject(signal.reason);
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(signal.reason);

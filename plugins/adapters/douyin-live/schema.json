@@ -142,6 +142,7 @@
             ],
             "pattern": "^[1-9][0-9]*$",
             "minimum": 1,
+            "maximum": 9007199254740991,
             "description": "直播间 web_rid（live.douyin.com/ 后面的数字）；只填你自己的直播间",
             "x-i18n": {
               "en": {
