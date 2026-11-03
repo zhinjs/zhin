@@ -1,0 +1,65 @@
+.changeset/self-change-f3-visibility.md
+  s_9622fd28aba994::t_7e7fb26fd1e639 1-6
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  s_9622fd28aba994::t_492677d4efef59 214-218,234,236,245-281
+basic/cli/src/plugin-runtime/console/self-changes.ts
+  s_9622fd28aba994::t_6d1a9dae5ea299 1-8,27-30,40-77,113-117,158-201,262-302
+basic/cli/src/plugin-runtime/console/tool-approvals.ts
+  s_9622fd28aba994::t_d7e6b464671e3c 125-134,142
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  s_9622fd28aba994::t_e15c0d7b9e2144 11,394-435
+basic/cli/tests/plugin-runtime/console/self-changes.test.ts
+  s_9622fd28aba994::t_29b6ee7207b50e 1,86-200
+docs/adr/0040-controlled-self-change.md
+  s_9622fd28aba994::t_5296bc4a7d1478 9,148,176,179,192
+docs/ai/default-behavior.md
+  s_9622fd28aba994::t_f8d1496ef47753 58,70
+docs/ai/self-change.md
+  s_9622fd28aba994::t_8efab4aaffe9cf 22,36,66-70
+docs/authoring/console-pages.md
+  s_9622fd28aba994::t_f455b728685b82 425-435
+docs/en/ai/default-behavior.md
+  s_9622fd28aba994::t_ef770c9cdc0aa0 58,70
+docs/en/ai/self-change.md
+  s_9622fd28aba994::t_a6b51e0291aea0 22,36,66-70
+docs/en/authoring/console-pages.md
+  s_9622fd28aba994::t_da5e0846e5a85f 425-435
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_3b2e9af93147ec 510-524
+packages/im/agent/src/self-change/approval.ts
+  s_9622fd28aba994::t_7532ba1e40c479 5-6,24,42-47,155-156,176-177,217-228,235,299-303,311,323-324
+packages/im/agent/src/self-change/preview.ts
+  s_9622fd28aba994::t_dd1c4e7b6c89e7 199,206
+packages/im/agent/tests/self-change/approval.test.ts
+  s_9622fd28aba994::t_0a4feffe849bb0 58,78-80,211-212
+packages/im/agent/tests/self-change/detail-diff.test.ts
+  s_9622fd28aba994::t_348f5bb3befd7e 1-191
+tests/snapshots/api-surface.json
+  s_9622fd28aba994::t_d8f7a1b514de8e 93
+packages/im/agent/src/self-change/detail-diff.ts
+  s_079f1dc5e6308d::t_3c1ad559c886aa 1-404
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44a64563bd05c07c35aa0d24fa02a0eff73a086e",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
