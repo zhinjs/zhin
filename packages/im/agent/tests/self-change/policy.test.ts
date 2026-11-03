@@ -15,6 +15,7 @@ import {
   normalizeChangeConfigPatch,
   normalizeChangeTarget,
   selfChangeContentHash,
+  selfChangeOutcome,
   sha256Hex,
   type SelfChangeFileEntry,
 } from '../../src/self-change/policy.js';
@@ -234,5 +235,12 @@ describe('host config schema security tags', () => {
 
   it('tags every forbidden key in the schema', () => {
     expect([...taggedKeys].sort()).toEqual([...SELF_CHANGE_SECURITY_CONFIG_KEYS].sort());
+  });
+});
+
+describe('decision outcome', () => {
+  // The change record ends `failed` (stopped for manual verification); the decision event stays `defer`.
+  it.each(['change_config_unconfirmed', 'change_config_superseded'] as const)('maps %s to defer, not error or deny', code => {
+    expect(selfChangeOutcome(code)).toBe('defer');
   });
 });

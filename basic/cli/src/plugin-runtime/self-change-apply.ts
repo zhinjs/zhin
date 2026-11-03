@@ -288,7 +288,9 @@ export function createSelfChangeConfigPort(configuration: SelfChangeConfiguratio
 }
 
 type ConfigApplication = NonNullable<Awaited<ReturnType<SelfChangeConfigPort['restore']>>['application']>;
-function configApplication(result: Readonly<{ revision: string }> & ConsoleConfigApplicationStatus): ConfigApplication | undefined {
+function configApplication(
+  result: Readonly<{ revision: string; restartRequired?: boolean }> & ConsoleConfigApplicationStatus,
+): ConfigApplication | undefined {
   if (result.applicationError) return result.applicationError;
   const application = result.application;
   if (!application) return undefined;
@@ -301,5 +303,7 @@ function configApplication(result: Readonly<{ revision: string }> & ConsoleConfi
   if (application.groups.some(group => group.status === 'failed')) return 'failed';
   if (application.groups.some(group => group.status === 'blocked')) return 'blocked';
   if (application.groups.some(group => group.status !== 'applied' && group.status !== 'restart-pending')) return 'unconfirmed';
-  return application.groups.some(group => group.status === 'restart-pending') ? 'restart-pending' : 'applied';
+  if (!application.groups.some(group => group.status === 'restart-pending')) return 'applied';
+  // A group waiting for a restart while the save says none is required is inconsistent: do not trust either.
+  return result.restartRequired === true ? 'restart-pending' : 'unconfirmed';
 }

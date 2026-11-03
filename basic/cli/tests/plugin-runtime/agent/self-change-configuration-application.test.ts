@@ -208,3 +208,47 @@ it.each(['superseded', 'legacy', 'in-flight', 'owned'] as const)('a fresh recove
   expect(failed?.status).toBe('failed'); expect(failed?.slimmed).toBe(false);
   expect(failed?.error).toContain(scenario === 'superseded' ? 'superseded' : 'unconfirmed');
 });
+
+// Upgrade across #1146: records persisted mid-flight by an older build carry a configPatch but no
+// `apply.configRevision`. Recovery must not guess ownership: stop, keep evidence, ask for manual verification.
+it.each(['applying', 'verifying'] as const)('upgrade: a pre-#1146 %s record without configRevision recovers to failed for manual verification', async status => {
+  const f = await fixture({ files: true });
+  const { revision, source: initial } = await f.configuration.readSource();
+  await f.store.writeSnapshot(f.draft.id, { files: [{ path: 'commands/ping.ts', content: null }], config: { source: initial, revision } });
+  // The older build already wrote the change before the process went away.
+  await mkdir(join(f.projectRoot, 'commands'), { recursive: true });
+  await writeFile(join(f.projectRoot, 'commands/ping.ts'), 'export default "new";\n');
+  await writeFile(f.configFile, JSON.stringify({ configVersion: 2, plugins: {}, ai: { trigger: { ambient: { mode: 'active', quietMs: 100 } } } }));
+  const legacyApply = { phase: 'forward' as const, mode: 'process' as const, restarts: 0, failure: null };
+  await f.store.transition(f.draft.id, 'applying', { actor: 'policy', reasonCode: 'change_restart_requested', apply: legacyApply });
+  if (status === 'verifying') await f.store.transition(f.draft.id, 'verifying', { actor: 'policy', apply: { ...legacyApply, restarts: 1 } });
+  const before = (await f.store.get(f.draft.id))!;
+  expect(before.status).toBe(status); expect(before.apply?.configRevision).toBeUndefined();
+  const source = await readFile(f.configFile, 'utf8');
+
+  const applyConfiguration = vi.fn(async (next?: string) => application(next!));
+  const configuration = new ConsoleConfigurationStore({ projectRoot: f.projectRoot, document: createConfigDocument(f.configFile), applyConfiguration });
+  const restore = vi.spyOn(configuration, 'replaceSource');
+  const reload = vi.fn(async () => 'reloaded' as const), restart = vi.fn(), emergencyStop = vi.fn(async () => undefined);
+  const events: DecisionEventInput[] = [];
+  const freshStore = new SelfChangeStore({ root: join(f.projectRoot, '.zhin/changes'), projectRoot: f.projectRoot,
+    protectedPaths: await createHostProtectedPaths({ projectRoot: f.projectRoot }), audit: () => ({ record: event => events.push(event) }) });
+  const host = new HostSelfChangeApply({ projectRoot: f.projectRoot, configFile: f.configFile, configuration, reload, restart,
+    snapshot: () => ({ generation: 2, tree: new Map() }) });
+  const applier = new SelfChangeApplier({ projectRoot: f.projectRoot, store: freshStore, ports: { ...host.ports({
+    emergencyStop, report: async () => 'sent',
+  }), health: async () => ({ ok: true }) } });
+  expect(await applier.recover()).toBe(1);
+
+  const failed = await freshStore.get(f.draft.id);
+  expect(failed?.status).toBe('failed'); expect(failed?.slimmed).toBe(false);
+  expect(failed?.error).toContain('unconfirmed'); expect(failed?.error).toContain('manual verification required');
+  expect(failed?.apply?.configApplication).toBe('unconfirmed');
+  // Terminal record `failed` (stopped for manual verification) while the decision outcome stays `defer`.
+  expect(events.find(event => event.reasonCode === 'change_config_unconfirmed')?.outcome).toBe('defer');
+  expect(restore).not.toHaveBeenCalled(); expect(applyConfiguration).not.toHaveBeenCalled();
+  expect(reload).not.toHaveBeenCalled(); expect(restart).not.toHaveBeenCalled(); expect(emergencyStop).not.toHaveBeenCalled();
+  expect(await readFile(f.configFile, 'utf8')).toBe(source);
+  expect(await readFile(join(f.projectRoot, 'commands/ping.ts'), 'utf8')).toContain('new');
+  expect(await freshStore.readSnapshot(f.draft.id)).toMatchObject({ config: { revision } });
+});
