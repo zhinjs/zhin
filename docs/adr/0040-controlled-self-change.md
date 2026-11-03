@@ -4,7 +4,9 @@ sidebar: false
 
 # ADR 0040：受控自我进化——变更草稿、审批生效与重启回报
 
-状态：Proposed
+状态：Accepted（2026-11-03，Fin 确认默认值，见文末「Fin 已确认的默认值」）
+
+实现：MVP 切片 A–E2 已合入 main（[#1058](https://github.com/zhinjs/zhin/pull/1058) / [#1062](https://github.com/zhinjs/zhin/pull/1062) / [#1064](https://github.com/zhinjs/zhin/pull/1064) / [#1069](https://github.com/zhinjs/zhin/pull/1069) / [#1071](https://github.com/zhinjs/zhin/pull/1071) / [#1072](https://github.com/zhinjs/zhin/pull/1072) / [#1075](https://github.com/zhinjs/zhin/pull/1075) / [#1076](https://github.com/zhinjs/zhin/pull/1076)）；#1051 收口切片 F1 / F2 / F4 / F5 已合入（[#1136](https://github.com/zhinjs/zhin/pull/1136) / [#1131](https://github.com/zhinjs/zhin/pull/1131) / [#1137](https://github.com/zhinjs/zhin/pull/1137) / [#1138](https://github.com/zhinjs/zhin/pull/1138)），F6 为本文与用户文档收口；**F3（Console 详情 / diff 页与 IM 卡 diff 摘录）延后**，不在本 ADR 已交付范围内（见 §8a）。用户向说明见[让 Bot 改自己](../ai/self-change.md)，运行时细节见[默认行为规范](../ai/default-behavior.md)。
 
 关联：[#1051](https://github.com/zhinjs/zhin/issues/1051)（Phase 2C 实现轨）、[#1030](https://github.com/zhinjs/zhin/issues/1030)（产品拍板与 P0 / MVP 方案定稿）。建立在 #1030 P0 之上：宿主配置与硬闸路径未批不可写（[#1041](https://github.com/zhinjs/zhin/pull/1041) / [#1048](https://github.com/zhinjs/zhin/pull/1048)，隔离 shell 只读挂载见 P0-c）；审批复用 ADR 0036 硬闸与 G6 IM 审批通道（[#1021](https://github.com/zhinjs/zhin/pull/1021)）。
 
@@ -48,7 +50,8 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 状态只前进：`draft` → `trialing` → `ready` → `pending` → `approved` → `applying` → `verifying` → `applied`；旁路 `trial_failed` / `rejected` / `expired` / `rolled_back` / `failed`。
 
 - **可改的范围**（`files[]` 目标路径白名单）：插件约定目录（`commands/`、`middlewares/`、`handlers/`、`tools/`、`components/`、`skills/`、`agents/`，相对项目根或已安装的本地插件根）、根 `AGENTS.md`、`skills/**`。P0 B 名单里的根配置文件**不能**整文件写入，只能经 `configPatch`。
-- **永远不能改**：P0 A 名单（`node_modules`、lockfile、`.zhin/**`、`.env*` 等）；`ai.agent.toolHardGate`、`ai.agent.execApprovalMode`、`ai.agent.masterShell`、`ai.agent.toolHardGate.imApproval` 等**放松安全**的配置键——补丁里出现这些键直接拒绝，不进审批（「模型不能自解禁」）。
+- **永远不能改**：P0 A 名单（`node_modules`、lockfile、`.zhin/**`、`.env*` 等）；`ai.agent.toolHardGate`、`ai.agent.execApprovalMode`、`ai.agent.masterShell`、`ai.agent.toolHardGate.imApproval` 等**放松安全**的配置键——补丁里出现这些键直接拒绝，不进审批（「模型不能自解禁」）。#1051 F2 起，这份名单由宿主 schema 的 `x-zhin-config.security` 标记与集中常量 `SELF_CHANGE_SECURITY_CONFIG_KEYS` 维护（含执行安全 / 执行审批 / 注入防护 / 配额豁免 / 定时安全、`ai.decisions.approval`、`http.token(s)`、`a2a.workroomRemoteExecutors` 等，完整名单见[默认行为规范](../ai/default-behavior.md)），守卫单测保证 schema 标记的键都在拒绝集里；生效前按当前名单再复核一次。
+- **本地插件根**（#1051 F1）：「已安装的本地插件根」取当前 generation 源码归属中位于项目内、且真实路径不含 `node_modules` 的插件根；`node_modules` 里的插件不可写。
 - **`configPatch`**：沿用 Console `config:patch` 的白名单路径与 `expectedRevision` 语义（字段级，#1030 MVP「字段级配置补丁」在此落地）。
 - 依赖安装（`npm` 装插件）不在本期；需要新依赖的变更在预览里标为「需要人工安装」，不自动执行（后置，复用 Console `plugin:install` 事务）。
 
@@ -73,7 +76,9 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 
 ### 4. 审批
 
-- 审批卡走 G6 `ToolApprovalQueue`，类别 `self`，`humanOnly`；同一时间每个发起会话最多 1 个 `pending` 变更。
+- 审批卡走 G6 `ToolApprovalQueue`，类别 `self`，`humanOnly`；同一时间每个发起会话最多 1 个 `pending` 变更，全实例最多 3 个（#1051 F4）。
+- **起草人**（#1051 F4，Q3=B）：只有主人，以及 `toolHardGate.imApproval` **开启时** `approverIds` 中属于当前平台的人（只填名单、未开启 IM 审批不开放起草）；其他人的回合里 `change_draft` 不出现在工具面，被调用也直接拒绝（`change_draft_forbidden`）。
+- **无守护进程**（#1051 F1，Q6=A）：没有 `zhin start` 守护进程或以 `--once` 启动时，影响面为 `process` 的变更试跑通过后停在 `ready`、不提交审批（`change_restart_unavailable`）。
 - **审批人**：主人（master）与 `toolHardGate.imApproval.approverIds`；渠道为 IM 私聊 / 审批群（G6 `delivery`）或 Console（权限 `ops:approve`）。**不在发起变更的业务群里结算**（#1030 定稿：禁业务群自批），即使发起人是主人——在业务群发起的变更，卡片投递到主人私聊。
 - 审批卡展示 §2 预览；批准绑定 `content_hash`；默认 24 小时超时 → `expired`。
 
@@ -117,11 +122,12 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 |---|---|
 | 起草 / 试跑 | `change_drafted`、`change_quota_exceeded`、`change_pruned`、`change_path_forbidden`、`change_config_key_forbidden`、`change_trial_passed`、`change_trial_failed` |
 | 审批 | `change_submitted`、`change_approved`、`change_rejected`、`change_expired`、`change_hash_mismatch` |
+| 起草权限 | `change_draft_forbidden`、`change_pending_cap_reached`（#1051 F4） |
 | 生效 / 恢复 | `change_applied_none`、`change_applied_reload`、`change_restart_requested`、`change_verified`、`change_rolled_back`、`change_failed_emergency_stop`、`change_report_sent`、`change_report_redirected`、`change_restart_unavailable`（#1051 F1：无守护进程或以 `--once` 启动，均无法自动重启） |
 
 payload 记 `changeId`、文件列表（路径 + 摘要，不含内容）、影响面计划、审批人与渠道；不记文件正文与配置值中的密钥。
 
-### 8. 实现切片（ADR 合入后按序做，每个切片单独 PR）
+### 8. 实现切片（历史计划：A–E 已全部合入，见文首「实现」；每个切片单独 PR）
 
 | 切片 | 内容 |
 |---|---|
@@ -131,7 +137,18 @@ payload 记 `changeId`、文件列表（路径 + 摘要，不含内容）、影�
 | D | 审批：G6 `self` 卡（禁业务群结算，改投主人私聊）、Console 列表 / 批准 / 驳回 |
 | E | 生效与恢复：快照、先落盘、`RootRuntime.reload()` / 受控 exit 75、`recover()`、健康检查、回滚一次、失败急停、原会话回报 |
 
-A → B → C → D → E 依次依赖；E 可先用只含 `none` / `generation` 的变更做集成测试，再补 `process` 重启路径。本 ADR 不含代码。
+A → B → C → D → E 依次依赖（以下为当时的计划，均已完成）；E 可先用只含 `none` / `generation` 的变更做集成测试，再补 `process` 重启路径。本 ADR 不含代码。
+
+### 8a. #1051 收口切片
+
+| 切片 | 内容 | 状态 |
+|---|---|---|
+| F1 | 本地插件根接线（起草 / 试跑 / 生效共用）；`restartSupported`：无守护进程或 `--once` 时 `process` 变更不提交审批，生效中途需重启则回滚 | 已合入 [#1136](https://github.com/zhinjs/zhin/pull/1136) |
+| F2 | 禁改配置键补全：schema `x-zhin-config.security` 标记 + `SELF_CHANGE_SECURITY_CONFIG_KEYS` + 守卫单测；生效前复核 | 已合入 [#1131](https://github.com/zhinjs/zhin/pull/1131) |
+| F3 | 审批可见性：Console 详情 RPC 与「自我变更」页（完整 diff）、IM 卡 diff 摘录 | **延后**（Q7=A 方向已定，未实现；按 Q9=A 不阻塞关闭 #1051，如需另开 issue） |
+| F4 | 起草权限（主人 + IM 审批人，其他人工具不可见）、全实例待审 ≤ 3 | 已合入 [#1137](https://github.com/zhinjs/zhin/pull/1137) |
+| F5 | Q2=B 残留 `approved` 1 小时时限（`resumeApproved`）；脚本化 harness eval（`packages/im/agent/evals/cases/self-change-*.case.ts`，6 例）与 `basic/cli` e2e（假守护进程 exit 75 → recover、回滚、急停、中途被杀、残留 `approved`） | 已合入 [#1138](https://github.com/zhinjs/zhin/pull/1138) |
+| F6 | ADR 转 Accepted、默认值表、默认行为规范与用户文档 | 本次 |
 
 ## 验收标准
 
@@ -144,14 +161,26 @@ A → B → C → D → E 依次依赖；E 可先用只含 `none` / `generation`
 7. 变更终态后 `.zhin/changes/<id>/` 只剩 `change.json`，14 天后整个目录消失；超过配额的草稿被拒绝。
 8. 生效过程中强杀进程：重启后 `recover()` 接着完成校验或回滚，并完成回报。
 
-## 待 Fin 确认的默认值
+## Fin 已确认的默认值
 
-- 暂存清理：终态删正文、元数据留 14 天、未提交草稿 24 小时、单变更 5 MB / 50 文件、总量 50 MB、每 6 小时清理一次。
-- 健康检查窗口 `60` 秒；回滚只自动一次，之后急停。
-- 每个发起会话同时最多 1 个待审变更；审批超时 24 小时。
-- 可写范围 = 插件约定目录 + 根 `AGENTS.md` + `skills/**`；根配置只能走字段级 `configPatch`。
-- 永不可改的配置键：`ai.agent.toolHardGate.*`、`ai.agent.execApprovalMode`、`ai.agent.masterShell`（可按需追加）。
-- 业务群发起的变更一律改投主人私聊审批（与 #1051「群内或私聊」的表述不同，按 #1030 定稿「禁业务群自批」）。
+2026-11-03 经 Fin 确认（#1051 Q1–Q9）。Q1 = 除下表 Q2 / Q3 / Q4 另行拍板外，当时 ADR 与实现中的默认值全部按现值接受。
+
+| 编号 | 事项 | 确认的默认值 | 落地 |
+|---|---|---|---|
+| Q1 | 暂存清理与配额 | 终态删 `files/` 与 `snapshot/`、元数据留 14 天（`failed` 已急停例外：保留现场直到人在 Console 标记已处理）；`draft` / `ready` / `pending` 闲置 24 小时 `expired`；单变更 ≤ 5 MB / 50 个文件，总量 ≤ 50 MB；启动后与每 6 小时清理 | 切片 A |
+| Q1 | 草稿与试跑 | 配置值以 `value_json` 传；已试跑的变更不能再改，修正需重新起草；插件测试镜像 `node:22-bookworm-slim`（不联网拉取）、1 GB / 1 CPU / 256 进程 / 120 秒 | 切片 B / C |
+| Q1 | 审批 | 每个发起会话最多 1 个待审，已有待审时不起草新变更；审批超时 24 小时；卡片**总是**投主人私聊（不受 `imApproval.enabled` 限制），业务群发起的也一样，业务群内不能结算 | 切片 D |
+| Q1 | 生效与恢复 | 健康检查窗口 60 秒；只自动回滚一次，之后急停；`content_hash` 不符 → `failed` 且不急停、不动文件；`applying` 中途被杀一律按快照回滚；急停回报不受控制面拦截，回报不可达改投主人私聊 | 切片 E1 / E2 |
+| Q2 | 启动时残留的 `approved` | **B**：批准后 1 小时内的自动生效；更早的转 `expired`、不动文件，并私聊主人「批准已过期，请重新起草」 | F5（`SelfChangeApplier.resumeApproved`，#1138） |
+| Q3 | 谁能起草 | **B**：只有主人，以及 `toolHardGate.imApproval` 开启时 `approverIds` 中属于当前平台的人；其他人工具不可见，调用即拒（`change_draft_forbidden`）；另加全实例待审 ≤ 3 | F4 |
+| Q4 | 试跑 `skipped` | **A**：不阻断；审批卡的试跑结论标出被跳过的检查（当前为「通过 (N skipped)」计数，逐项结论在 `change.json` 的 `trial`） | 切片 C / D |
+| Q5 | 禁改配置键 | **B**：首批安全键全部纳入，经 schema `x-zhin-config.security` 标记 + 守卫单测维护 | F2 |
+| Q6 | 无守护进程时的 `process` 变更 | **A**：不提交审批，告知本实例无法自动生效（`change_restart_unavailable`） | F1 |
+| Q7 | 审批可见性 | **A**：Console 详情页看完整 diff + IM 卡 ≤ 40 行摘录——**F3 延后，尚未实现**；目前卡片只含路径、增删行数、配置路径、影响面与试跑结论 | F3（延后） |
+| Q8 | 「发布另一步」 | **A**：试跑通过 → 一次人批 → 写入生产即发布，不设第二道审批；新建本地插件包（新 `package.json` + 入口）不在本期 | — |
+| Q9 | 何时关 #1051 | **A**：F1 + F2 + F4 + F5 合入并完成本文档收口（F6）后关闭；F3 如需另开 issue | F6 |
+
+可写范围（插件约定目录 + 根 `AGENTS.md` + `skills/**`，根配置只能走字段级 `configPatch`）与「业务群发起改投主人私聊」按上文 §1 / §4 维持不变。
 
 ## 非目标
 
@@ -160,6 +189,7 @@ A → B → C → D → E 依次依赖；E 可先用只含 `none` / `generation`
 - 修改 zhin 框架自身（`node_modules` 里的包、`packages/**` 源码）。
 - 多个变更的批量 / 事务合并；跨实例下发。
 - 变更的可视化编辑器。
+- 新建本地插件包（Q8）；Console 详情 / diff 审批页（F3，延后，非永久非目标）。
 
 ## 结果
 
