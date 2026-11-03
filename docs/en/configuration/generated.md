@@ -862,6 +862,51 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `discord.profile.interests` | array \| null | no | — | — |
 | `discord.profile.bio` | string \| null | no | — | — |
 
+### douyin-live
+
+[`plugins/adapters/douyin-live/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/douyin-live/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `douyin-live.sendMode` | string: `"off"`, `"direct"` | no | `"off"` | Outbound mode: off (default) only listens; direct is not implemented yet and returns not_implemented. |
+| `douyin-live.maxLength` | number | no | `50` | Maximum characters per danmaku (default 50; reserved for future direct sending). |
+| `douyin-live.maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
+| `douyin-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
+| `douyin-live.signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
+| `douyin-live.master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
+| `douyin-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
+| `douyin-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `douyin-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `douyin-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Douyin account ID. |
+| `douyin-live.endpoints[].cookie` | string | no | — | Full browser cookie string. Reference ${DOUYIN_LIVE_COOKIE}; never commit it. Omit to request a guest ttwid at startup. |
+| `douyin-live.endpoints[].roomId` | string \| integer | yes | — | Live room web_rid (the number after live.douyin.com/); use your own room only. |
+| `douyin-live.endpoints[].sendMode` | string: `"off"`, `"direct"` | no | `"off"` | Outbound mode: off (default) only listens; direct is not implemented yet and returns not_implemented. |
+| `douyin-live.endpoints[].maxLength` | number | no | `50` | Maximum characters per danmaku (default 50; reserved for future direct sending). |
+| `douyin-live.endpoints[].maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
+| `douyin-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
+| `douyin-live.endpoints[].signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
+| `douyin-live.endpoints[].master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
+| `douyin-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
+| `douyin-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `douyin-live.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `douyin-live.endpoints[].profile` | object | no | — | Fallback account profile |
+| `douyin-live.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `douyin-live.endpoints[].profile.age` | integer \| null | no | — | — |
+| `douyin-live.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.signature` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.interests` | array \| null | no | — | — |
+| `douyin-live.endpoints[].profile.bio` | string \| null | no | — | — |
+| `douyin-live.nickname` | string \| null | no | — | Fallback account nickname |
+| `douyin-live.profile` | object | no | — | Fallback account profile |
+| `douyin-live.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `douyin-live.profile.age` | integer \| null | no | — | — |
+| `douyin-live.profile.birthday` | string \| null | no | — | — |
+| `douyin-live.profile.signature` | string \| null | no | — | — |
+| `douyin-live.profile.avatar` | string \| null | no | — | — |
+| `douyin-live.profile.interests` | array \| null | no | — | — |
+| `douyin-live.profile.bio` | string \| null | no | — | — |
+
 ### email
 
 [`plugins/adapters/email/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/email/schema.json)

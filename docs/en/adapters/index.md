@@ -72,6 +72,7 @@ _(Currently none)_
 | Email | `@zhin.js/adapter-email` | — | [Email](/adapters/email) |
 | Bilibili Comments | `@zhin.js/adapter-bilibili` | — | [Bilibili Comments](/en/adapters/bilibili) |
 | Bilibili Live Danmaku | `@zhin.js/adapter-bilibili-live` | — | [Bilibili Live Danmaku](/en/adapters/bilibili-live) |
+| Douyin Live Danmaku | `@zhin.js/adapter-douyin-live` | — | [Douyin Live Danmaku](/en/adapters/douyin-live) |
 | GitHub | `@zhin.js/adapter-github` | — | [GitHub](/adapters/github) |
 | LINE | `@zhin.js/adapter-line` | — | [LINE](/adapters/line) |
 | Milky | `@zhin.js/adapter-milky` | — | [Milky](/adapters/milky) |

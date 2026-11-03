@@ -50,6 +50,7 @@ export const ADAPTER_META = {
   line: { tier: 'Experimental', label: 'LINE', packageName: '@zhin.js/adapter-line' },
   bilibili: { tier: 'Experimental', label: 'Bilibili 评论', packageName: '@zhin.js/adapter-bilibili' },
   'bilibili-live': { tier: 'Experimental', label: 'Bilibili 直播弹幕', packageName: '@zhin.js/adapter-bilibili-live' },
+  'douyin-live': { tier: 'Experimental', label: '抖音直播弹幕', packageName: '@zhin.js/adapter-douyin-live' },
   wecom: { tier: 'Experimental', label: '企业微信', packageName: '@zhin.js/adapter-wecom' },
   'weixin-ilink': { tier: 'Experimental', label: '微信 iLink', packageName: '@zhin.js/adapter-weixin-ilink' },
 };

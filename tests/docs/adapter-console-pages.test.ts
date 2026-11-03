@@ -5,12 +5,15 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
+/** Experimental adapters whose Console page is explicitly deferred (douyin-live: #1135 Accept, Console UI later). */
+const consoleDeferred = new Set(['douyin-live']);
 
 function adapterDirectories(): string[] {
   return fs.readdirSync(adaptersRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .filter((name) => fs.existsSync(path.join(adaptersRoot, name, 'plugin.ts')))
+    .filter((name) => !consoleDeferred.has(name))
     .sort();
 }
 
@@ -23,6 +26,14 @@ function pageSource(directory: string): string | undefined {
 }
 
 describe('adapter Console pages', () => {
+  it('deferred adapters really ship no Console page or RPC yet', () => {
+    for (const directory of consoleDeferred) {
+      expect(pageSource(directory), directory).toBeUndefined();
+      const plugin = fs.readFileSync(path.join(adaptersRoot, directory, 'plugin.ts'), 'utf8');
+      expect(plugin, directory).not.toContain('pluginConsoleRpcToken');
+    }
+  });
+
   it('every adapter ships a page and declares the page feature', () => {
     const directories = adapterDirectories();
     expect(directories.length).toBeGreaterThanOrEqual(20);
