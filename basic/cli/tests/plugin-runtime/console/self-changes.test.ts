@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
@@ -82,4 +82,119 @@ it('lists pending changes and lets ops:approve approve or reject them', async ()
   expect(await call('plugin.root.mark-self-change-handled', approver, { id: first.record.id })).toMatchObject({ status: 409 });
   unbind();
   expect(await call('plugin.root.resolve-self-change', approver, { id: first.record.id, decision: 'approve' })).toMatchObject({ status: 503 });
+});
+
+it('serves self-change-detail to ops:approve only, with diffs, redacted config values and skipped checks (#1142 F3)', async () => {
+  const store = new SelfChangeStore({ root: join(project, '.zhin', 'changes'), projectRoot: project });
+  const queue = new ToolApprovalQueue();
+  const approvals = new SelfChangeApprovals({ store, queue });
+  const surface = new HostSelfChanges();
+  const toolApprovals = new HostToolApprovals(queue);
+  const call = host(surface, toolApprovals);
+  const reader: ConsoleAccess = { unrestricted: false, permissions: ['tool_approvals:read'], roles: [] };
+  const approver: ConsoleAccess = { unrestricted: false, permissions: ['ops:approve'], roles: [] };
+  surface.bind(store, approvals);
+
+  mkdirSync(join(project, 'commands'), { recursive: true });
+  writeFileSync(join(project, 'commands', 'ping.ts'), 'export default 1;\n');
+  const draft = await store.draft({
+    origin: { platform: 'icqq', sceneId: 'group:1', userId: '42', endpoint: 'bot-1' },
+    files: [{ path: 'commands/ping.ts', content: 'export default 2;\n' }],
+    configPatch: {
+      expectedRevision: 'rev-1',
+      patches: [
+        { op: 'set', path: ['ping', 'apiKey'], value: 'sk-live-THIS_IS_SECRET' },
+        { op: 'set', path: ['ping', 'greeting'], value: 'hello' },
+        { op: 'remove', path: ['ping', 'legacy'] },
+      ],
+    },
+  });
+  await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+  await store.transition(draft.id, 'ready', {
+    actor: 'policy',
+    trial: {
+      passed: true,
+      checks: [
+        { check: 'syntax', path: 'commands/ping.ts', status: 'passed' },
+        { check: 'sandbox_load', path: 'commands/ping.ts', status: 'skipped' },
+      ],
+      pendingStages: ['plugin_tests'],
+    },
+  });
+  const { record, approvalId } = await approvals.submit(draft.id);
+
+  expect(await call('plugin.root.self-change-detail', reader, { id: record.id })).toMatchObject({ status: 403 });
+  expect(await call('plugin.root.self-change-detail', approver, {})).toMatchObject({ status: 400 });
+  expect(await call('plugin.root.self-change-detail', approver, { id: 'missing' })).toMatchObject({ status: 404 });
+
+  const response = await call('plugin.root.self-change-detail', approver, { id: record.id });
+  expect(response).toMatchObject({
+    status: 200,
+    body: {
+      data: {
+        change: { id: record.id, status: 'pending', approvalId },
+        bodiesAvailable: true,
+        baseline: 'disk',
+        diffTruncated: false,
+        maxDiffBytes: 64 * 1024,
+        files: [{ path: 'commands/ping.ts', kind: 'modify', truncated: false, unavailableReason: null }],
+        configPatch: {
+          expectedRevision: 'rev-1',
+          operations: [
+            { op: 'set', path: ['ping', 'apiKey'], value: '[redacted]' },
+            { op: 'set', path: ['ping', 'greeting'], value: 'hello' },
+            { op: 'remove', path: ['ping', 'legacy'] },
+          ],
+        },
+        trial: { passed: true, pendingStages: ['plugin_tests'], skippedChecks: ['sandbox_load commands/ping.ts'] },
+      },
+    },
+  });
+  const data = (response as { body: { data: { files: { diff: string }[]; usageBytes: number } } }).body.data;
+  expect(data.files[0]!.diff).toContain('-export default 1;\n+export default 2;');
+  expect(data.usageBytes).toBeGreaterThan(0);
+  expect(JSON.stringify(response)).not.toContain('THIS_IS_SECRET');
+
+  // The read-only hard-gate list never carries the excerpt that the IM card shows.
+  const listed = await call('plugin.root.tool-approvals', reader);
+  expect(JSON.stringify(listed)).not.toContain('export default 2');
+  expect(JSON.stringify(listed)).toContain(record.id);
+
+  // Once decided the change is slimmed: no diff is invented.
+  await call('plugin.root.resolve-self-change', approver, { id: record.id, decision: 'reject' });
+  const slimmed = await call('plugin.root.self-change-detail', approver, { id: record.id });
+  expect(slimmed).toMatchObject({
+    status: 200,
+    body: {
+      data: {
+        change: { status: 'rejected', slimmed: true },
+        bodiesAvailable: false,
+        files: [{ path: 'commands/ping.ts', diff: null, unavailableReason: 'slimmed' }],
+      },
+    },
+  });
+});
+
+it('cuts self-change-detail diffs at the 64 KB budget', async () => {
+  const store = new SelfChangeStore({ root: join(project, '.zhin', 'changes'), projectRoot: project });
+  const queue = new ToolApprovalQueue();
+  const approvals = new SelfChangeApprovals({ store, queue });
+  const surface = new HostSelfChanges();
+  const call = host(surface, new HostToolApprovals(queue));
+  surface.bind(store, approvals);
+  const line = `// ${'y'.repeat(100)}`;
+  const big = Array.from({ length: 1_000 }, () => line).join('\n');
+  const draft = await store.draft({
+    origin: { platform: 'icqq', sceneId: 'group:3', userId: '42', endpoint: 'bot-1' },
+    files: [
+      { path: 'commands/big.ts', content: big },
+      { path: 'commands/after.ts', content: 'export default 1;\n' },
+    ],
+  });
+  const response = await call('plugin.root.self-change-detail', unrestrictedConsoleAccess, { id: draft.id });
+  const data = (response as { body: { data: { diffBytes: number; diffTruncated: boolean; files: { truncated: boolean; unavailableReason: string | null }[] } } }).body.data;
+  expect(data.diffTruncated).toBe(true);
+  expect(data.diffBytes).toBeLessThanOrEqual(64 * 1024);
+  expect(data.files[0]).toMatchObject({ truncated: true, unavailableReason: null });
+  expect(data.files[1]).toMatchObject({ truncated: true, unavailableReason: 'budget_exhausted' });
 });

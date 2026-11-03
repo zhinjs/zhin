@@ -122,6 +122,16 @@ export function composeHostConsoleRpc(...surfaces: readonly PluginConsoleRpc[]):
   });
 }
 
+/**
+ * Self-change cards carry a diff excerpt for the IM channel (#1142 F3). This list is readable with
+ * `tool_approvals:read`, so the excerpt is dropped here; bodies are served by `self-change-detail` (`ops:approve`).
+ */
+function cardArgs(entry: ToolApprovalEntry): PluginConsoleRpcJson {
+  if (entry.category !== 'self' || !('diffExcerpt' in entry.args)) return entry.args as PluginConsoleRpcJson;
+  const { diffExcerpt: _excerpt, ...rest } = entry.args;
+  return rest as PluginConsoleRpcJson;
+}
+
 function toCard(entry: ToolApprovalEntry): ToolApprovalCard {
   return {
     id: entry.id,
@@ -129,7 +139,7 @@ function toCard(entry: ToolApprovalEntry): ToolApprovalCard {
     category: entry.category,
     sessionKey: entry.sessionKey,
     requesterId: entry.requesterId,
-    args: entry.args as PluginConsoleRpcJson,
+    args: cardArgs(entry),
     createdAt: entry.createdAt,
     expiresAt: entry.expiresAt,
     status: entry.status,
