@@ -868,7 +868,6 @@ outline: [2, 3]
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
-| `douyin-live.roomId` | string \| number | 否 | — | 直播间 web_rid（live.douyin.com/ 后面的数字）；只填你自己的直播间 |
 | `douyin-live.sendMode` | string: `"off"`, `"direct"` | 否 | `"off"` | 出站模式：off=只听不说（默认）；direct=尚未实现，发送返回 not_implemented |
 | `douyin-live.maxLength` | number | 否 | `50` | 单条弹幕最多字符数（默认 50，为后续 direct 发送预留） |
 | `douyin-live.maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2） |
@@ -880,7 +879,7 @@ outline: [2, 3]
 | `douyin-live.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `douyin-live.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是抖音账号） |
 | `douyin-live.endpoints[].cookie` | string | 否 | — | 浏览器 Cookie 整串（请用 ${DOUYIN_LIVE_COOKIE} 注入，切勿写入仓库）。不填时启动时申请游客 ttwid |
-| `douyin-live.endpoints[].roomId` | string \| number | 否 | — | 直播间 web_rid（live.douyin.com/ 后面的数字）；只填你自己的直播间 |
+| `douyin-live.endpoints[].roomId` | string \| integer | 是 | — | 直播间 web_rid（live.douyin.com/ 后面的数字）；只填你自己的直播间 |
 | `douyin-live.endpoints[].sendMode` | string: `"off"`, `"direct"` | 否 | `"off"` | 出站模式：off=只听不说（默认）；direct=尚未实现，发送返回 not_implemented |
 | `douyin-live.endpoints[].maxLength` | number | 否 | `50` | 单条弹幕最多字符数（默认 50，为后续 direct 发送预留） |
 | `douyin-live.endpoints[].maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2） |

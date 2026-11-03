@@ -214,14 +214,17 @@ export class DouyinLiveEndpoint extends DouyinLiveClient implements Endpoint {
   }
 
   async #admit(roomId: string, chat: DouyinLiveChat): Promise<void> {
-    if (!this.#open && !this.#lifecycle.started) return;
+    if (!this.#open) return;
     this.#sequence += 1;
     const id = chat.id ?? `${chat.timestamp}-${chat.uid}-${this.#sequence}`;
-    if (this.#seen.has(id)) return;
-    this.#seen.add(id);
-    if (this.#seen.size > SEEN_CAPACITY) {
-      const oldest = this.#seen.values().next().value;
-      if (oldest !== undefined) this.#seen.delete(oldest);
+    // 只有平台 id 可去重；兜底 id 含序号、永不重复，不占去重窗口。
+    if (chat.id) {
+      if (this.#seen.has(chat.id)) return;
+      this.#seen.add(chat.id);
+      if (this.#seen.size > SEEN_CAPACITY) {
+        const oldest = this.#seen.values().next().value;
+        if (oldest !== undefined) this.#seen.delete(oldest);
+      }
     }
     // 取不到 uid 时按昵称区分观众，避免所有人被当成同一个人。
     const senderId = chat.uid && chat.uid !== '0' ? chat.uid : `anon:${chat.nickname}`;

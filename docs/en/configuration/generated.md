@@ -868,7 +868,6 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `douyin-live.roomId` | string \| number | no | — | Live room web_rid (the number after live.douyin.com/); use your own room only. |
 | `douyin-live.sendMode` | string: `"off"`, `"direct"` | no | `"off"` | Outbound mode: off (default) only listens; direct is not implemented yet and returns not_implemented. |
 | `douyin-live.maxLength` | number | no | `50` | Maximum characters per danmaku (default 50; reserved for future direct sending). |
 | `douyin-live.maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
@@ -880,7 +879,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `douyin-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `douyin-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Douyin account ID. |
 | `douyin-live.endpoints[].cookie` | string | no | — | Full browser cookie string. Reference ${DOUYIN_LIVE_COOKIE}; never commit it. Omit to request a guest ttwid at startup. |
-| `douyin-live.endpoints[].roomId` | string \| number | no | — | Live room web_rid (the number after live.douyin.com/); use your own room only. |
+| `douyin-live.endpoints[].roomId` | string \| integer | yes | — | Live room web_rid (the number after live.douyin.com/); use your own room only. |
 | `douyin-live.endpoints[].sendMode` | string: `"off"`, `"direct"` | no | `"off"` | Outbound mode: off (default) only listens; direct is not implemented yet and returns not_implemented. |
 | `douyin-live.endpoints[].maxLength` | number | no | `50` | Maximum characters per danmaku (default 50; reserved for future direct sending). |
 | `douyin-live.endpoints[].maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |

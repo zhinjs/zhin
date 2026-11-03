@@ -74,7 +74,7 @@ export function resolveDouyinLiveConfig(raw: unknown): ResolvedDouyinLiveConfig 
   const id = optionalString(config.id);
   if (!id) throw new Error('douyin-live endpoint requires an id');
   const roomId = String(config.roomId ?? '').trim();
-  if (!/^\d+$/.test(roomId) || /^0+$/.test(roomId)) {
+  if (!/^[1-9]\d*$/.test(roomId)) {
     throw new Error(`douyin-live endpoint "${id}" requires a numeric roomId (web_rid)`);
   }
   const cookie = optionalString(config.cookie);
@@ -347,6 +347,7 @@ export function formatOutboundDanmaku(payload: unknown): string {
   const items = Array.isArray(payload) ? payload : [payload];
   return items.map((item) => {
     if (typeof item === 'string') return item;
+    if (!item || typeof item !== 'object') return '';
     const seg = item as WireSegment;
     if (seg.type === 'text') return String(seg.data?.text ?? '');
     if (seg.type === 'mention' || seg.type === 'at') {

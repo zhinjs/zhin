@@ -21,6 +21,8 @@ describe('douyin live config', () => {
     expect(() => resolveDouyinLiveConfig({ id: 'live' })).toThrow(/roomId/);
     expect(() => resolveDouyinLiveConfig({ id: 'live', roomId: 'abc' })).toThrow(/roomId/);
     expect(() => resolveDouyinLiveConfig({ id: 'live', roomId: '000' })).toThrow(/roomId/);
+    expect(() => resolveDouyinLiveConfig({ id: 'live', roomId: '0123' })).toThrow(/roomId/);
+    expect(() => resolveDouyinLiveConfig({ id: 'live', roomId: 1.5 })).toThrow(/roomId/);
   });
 
   it('defaults to listen-only (sendMode off) and clamps limits', () => {
@@ -114,6 +116,7 @@ describe('douyin live outbound formatting (reserved for direct)', () => {
     expect(formatOutboundDanmaku([{ type: 'mention', data: { id: '42' } }, 'hi'])).toBe('@42 hi');
     expect(formatOutboundDanmaku([{ type: 'image', data: { url: 'x' } }, { type: 'text', data: { text: ' a  b ' } }])).toBe('a b');
     expect(formatOutboundDanmaku(null)).toBe('');
+    expect(formatOutboundDanmaku([null, undefined, 7, { type: 'text', data: { text: 'ok' } }])).toBe('ok');
   });
 
   it('splits into bounded chunks and truncates the rest', () => {

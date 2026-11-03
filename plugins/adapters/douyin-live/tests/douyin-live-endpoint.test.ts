@@ -146,6 +146,17 @@ describe('DouyinLiveEndpoint inbound', () => {
     await harness.stop();
   });
 
+  it('never dedupes or remembers messages without a platform id', async () => {
+    const { harness, sockets, receive } = await connected();
+    const socket = sockets[0]!;
+    socket.receive(chatFrame({ text: '同一句', uid: 5, nickname: 'n', createTime: 1_700_000_000_000 }));
+    socket.receive(chatFrame({ text: '同一句', uid: 5, nickname: 'n', createTime: 1_700_000_000_000 }));
+    await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+    const ids = receive.mock.calls.map((call) => (call[0] as { message: { id: string } }).message.id);
+    expect(new Set(ids).size).toBe(2);
+    await harness.stop();
+  });
+
   it('acks frames that ask for it', async () => {
     const { harness, sockets } = await connected();
     const socket = sockets[0]!;
