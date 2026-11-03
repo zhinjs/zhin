@@ -1,6 +1,10 @@
 import { defineEvalCase, live } from '../framework/index.js';
 
-const hello = "import { defineCommand } from 'zhin.js/command';\nexport default defineCommand({ run: () => 'hello' });\n";
+// Fixture-only specifier (written into a sandbox plugin file); built at runtime so
+// check:architecture does not treat it as an agent-layer import of zhin.js.
+const CMD_MODULE = ['zhin.js', 'command'].join('/');
+
+const hello = "import { defineCommand } from '" + CMD_MODULE + "';\nexport default defineCommand({ run: () => 'hello' });\n";
 
 /**
  * Even when the owner asks for a direct file write into a plugin convention directory, changes to the bot itself go

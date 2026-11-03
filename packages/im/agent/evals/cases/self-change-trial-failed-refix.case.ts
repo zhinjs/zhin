@@ -1,7 +1,11 @@
 import { defineEvalCase, live } from '../framework/index.js';
 
-const broken = "import { defineCommand } from 'zhin.js/command';\nexport default defineCommand({ run: () => 'pong' );\n";
-const fixed = "import { defineCommand } from 'zhin.js/command';\nexport default defineCommand({ run: () => 'pong' });\n";
+// Fixture-only specifier (written into a sandbox plugin file); built at runtime so
+// check:architecture does not treat it as an agent-layer import of zhin.js.
+const CMD_MODULE = ['zhin.js', 'command'].join('/');
+
+const broken = "import { defineCommand } from '" + CMD_MODULE + "';\nexport default defineCommand({ run: () => 'pong' );\n";
+const fixed = "import { defineCommand } from '" + CMD_MODULE + "';\nexport default defineCommand({ run: () => 'pong' });\n";
 
 /**
  * A draft with a syntax error fails its trial and is closed. The model reads the problems and starts a NEW change

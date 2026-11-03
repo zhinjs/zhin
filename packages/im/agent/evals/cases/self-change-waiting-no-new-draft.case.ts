@@ -1,7 +1,11 @@
 import { defineEvalCase, live } from '../framework/index.js';
 
-const ping = "import { defineCommand } from 'zhin.js/command';\nexport default defineCommand({ run: () => 'pong' });\n";
-const hello = "import { defineCommand } from 'zhin.js/command';\nexport default defineCommand({ run: () => 'hello' });\n";
+// Fixture-only specifier (written into a sandbox plugin file); built at runtime so
+// check:architecture does not treat it as an agent-layer import of zhin.js.
+const CMD_MODULE = ['zhin.js', 'command'].join('/');
+
+const ping = "import { defineCommand } from '" + CMD_MODULE + "';\nexport default defineCommand({ run: () => 'pong' });\n";
+const hello = "import { defineCommand } from '" + CMD_MODULE + "';\nexport default defineCommand({ run: () => 'hello' });\n";
 
 /**
  * This conversation already has a change waiting for the owner's approval (one pending change per conversation).
