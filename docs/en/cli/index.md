@@ -129,7 +129,7 @@ Exit codes are a public contract:
 | --- | --- |
 | `0` | Success: saved and applied (or nothing to apply); read succeeded; an `--offline` save (not yet applied to a running Host) |
 | `3` | Saved; some settings take effect after a process restart |
-| `4` | Revision conflict: changed elsewhere, not saved; the latest (masked) values are printed |
+| `4` | Revision conflict: changed elsewhere, not saved; the latest (masked) values are printed (values under schema branches that cannot be proven safe, such as `if`/`not`/`contains`, a nested `$id` or a non-local `$ref`, are masked whole) |
 | `5` | Validation failed (including rejected plugin-declaration writes): when not saved, field paths are printed; also returned when the file was saved but failed validation before applying, so check with `zhin config get` |
 | `6` | Unknown: the write was sent but no definitive receipt arrived (including non-authoritative errors such as a gateway 502/504), or it was saved but the application result is unconfirmed. `requestId` / `expectedRevision` are reported; check with `zhin config get` first; **do not blindly retry** |
 | `7` | Not connected to a running Host: nothing was sent, the file is unchanged |

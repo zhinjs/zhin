@@ -34,7 +34,7 @@ await runtime.patchConfig([{
 }]);
 ```
 
-Root 先用组合后的 JSON Schema 校验候选文档，再执行受影响 Plugin forest 的 shadow setup。两步都成功后，文件事务才作为 generation handoff participant 提交；后续 participant 失败时，文件事务恢复原始字节。
+Root 先用组合后的 JSON Schema 和配置 handler 预检完整候选文档，全部通过后才按 revision 提交文件（保存），然后再准备并交接受影响的 generation（生效）。保存与生效是分开的两步：文件一旦提交，后续生效失败、待重启或结果未确认都**不会**自动恢复原始字节，这与直接在外部编辑文件的语义一致。调用方应读取 Root 的配置应用状态（Console / `zhin config` 回执中的 `application` / `applicationError`）判断是否已生效，需要时再显式申请应用，而不是重复保存。
 
 ## 文档事务
 
