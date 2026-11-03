@@ -147,7 +147,7 @@ A → B → C → D → E 依次依赖；E 可先用只含 `none` / `generation`
 | F2 | 禁改配置键补全：schema `x-zhin-config.security` 标记 + `SELF_CHANGE_SECURITY_CONFIG_KEYS` + 守卫单测；生效前复核 | 已合入 [#1131](https://github.com/zhinjs/zhin/pull/1131) |
 | F3 | 审批可见性：Console 详情 RPC 与「自我变更」页（完整 diff）、IM 卡 diff 摘录 | **延后**（Q7=A 方向已定，未实现；按 Q9=A 不阻塞关闭 #1051，如需另开 issue） |
 | F4 | 起草权限（主人 + IM 审批人，其他人工具不可见）、全实例待审 ≤ 3 | 已合入 [#1137](https://github.com/zhinjs/zhin/pull/1137) |
-| F5 | 脚本化 harness eval（`packages/im/agent/evals/cases/self-change-*.case.ts`，6 例）与 `basic/cli` e2e（假守护进程 exit 75 → recover、回滚、急停、中途被杀、残留 `approved`） | 已合入 [#1138](https://github.com/zhinjs/zhin/pull/1138) |
+| F5 | Q2=B 残留 `approved` 1 小时时限（`resumeApproved`）；脚本化 harness eval（`packages/im/agent/evals/cases/self-change-*.case.ts`，6 例）与 `basic/cli` e2e（假守护进程 exit 75 → recover、回滚、急停、中途被杀、残留 `approved`） | 已合入 [#1138](https://github.com/zhinjs/zhin/pull/1138) |
 | F6 | ADR 转 Accepted、默认值表、默认行为规范与用户文档 | 本次 |
 
 ## 验收标准
@@ -171,7 +171,7 @@ A → B → C → D → E 依次依赖；E 可先用只含 `none` / `generation`
 | Q1 | 草稿与试跑 | 配置值以 `value_json` 传；已试跑的变更不能再改，修正需重新起草；插件测试镜像 `node:22-bookworm-slim`（不联网拉取）、1 GB / 1 CPU / 256 进程 / 120 秒 | 切片 B / C |
 | Q1 | 审批 | 每个发起会话最多 1 个待审，已有待审时不起草新变更；审批超时 24 小时；卡片**总是**投主人私聊（不受 `imApproval.enabled` 限制），业务群发起的也一样，业务群内不能结算 | 切片 D |
 | Q1 | 生效与恢复 | 健康检查窗口 60 秒；只自动回滚一次，之后急停；`content_hash` 不符 → `failed` 且不急停、不动文件；`applying` 中途被杀一律按快照回滚；急停回报不受控制面拦截，回报不可达改投主人私聊 | 切片 E1 / E2 |
-| Q2 | 启动时残留的 `approved` | **B**：批准后 1 小时内的自动生效；更早的转 `expired`、不动文件，并私聊主人「批准已过期，请重新起草」 | 切片 E2 / F5 e2e |
+| Q2 | 启动时残留的 `approved` | **B**：批准后 1 小时内的自动生效；更早的转 `expired`、不动文件，并私聊主人「批准已过期，请重新起草」 | F5（`SelfChangeApplier.resumeApproved`，#1138） |
 | Q3 | 谁能起草 | **B**：只有主人与 `toolHardGate.imApproval.approverIds`；其他人工具不可见，调用即拒（`change_draft_forbidden`）；另加全实例待审 ≤ 3 | F4 |
 | Q4 | 试跑 `skipped` | **A**：不阻断；审批卡的试跑结论标出被跳过的检查（当前为「通过 (N skipped)」计数，逐项结论在 `change.json` 的 `trial`） | 切片 C / D |
 | Q5 | 禁改配置键 | **B**：首批安全键全部纳入，经 schema `x-zhin-config.security` 标记 + 守卫单测维护 | F2 |
