@@ -140,11 +140,17 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
     const write = async (command: CommandContext, action: 'set' | 'unset') => {
       const path = pathOf(command);
       if (!path?.length) return messages(command.locale, 'path');
-      // Resolve the exact leaf first: its revision is this write's CAS base and its
-      // type drives value parsing. Non-leaf or denied paths stop here.
+      // Resolve the exact leaf first: denied paths stop here with their fixed reason,
+      // its revision is this write's CAS base and its type drives value parsing.
+      const same = (entry: { readonly path: readonly string[] }) => entry.path.length === path.length && entry.path.every((segment, index) => segment === path[index]);
       const leaf = await options.store.readChat(path, 'fields');
-      const field = leaf.fields?.find(entry => entry.path.length === path.length && entry.path.every((segment, index) => segment === path[index]));
+      const field = leaf.fields?.find(same);
       if (!field) return messages(command.locale, 'leaf');
+      // M2: a write may only target a path `config fields <root>` would show, so array
+      // items such as `endpoints.0.id` that the listing never enumerates are refused.
+      const listed = await options.store.readChat(path.slice(0, 1), 'fields');
+      if (listed.revision !== leaf.revision) return messages(command.locale, 'conflict');
+      if (!listed.fields?.some(same)) return messages(command.locale, 'leaf');
       let value: unknown;
       if (action === 'set') {
         const parsed = parseChatConfigurationValue(String(command.params.value ?? ''), field.type);

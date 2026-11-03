@@ -254,12 +254,42 @@ it('never reads or mutates sensitive or unknown fields, including parent replace
     for (const text of ['!!config get bot.token', '!!config unset bot', '!!config set bot -- {"nickname":"new"}',
       '!!config set bot.token -- "SHOULD_NOT_APPEAR"', '!!config get bot.absent', '!!config get bot.master', '!!config set bot.master -- mallory',
       '!!config unset bot.master', '!!config set bot.endpoints.0.master -- mallory', '!!config get bot', '!!config unset bot.commandPrefix',
-      '!!config set plugins.bot -- "@test/other"']) {
+      '!!config set plugins.bot -- "@test/other"', '!!config set bot.endpoints.0.id -- mallory', '!!config unset bot.endpoints.0.id',
+      '!!config get bot.endpoints.0.id', '!!config set bot.tags.0 -- b', '!!config set bot.nickname -- ${HOME}', '!!config set bot.nickname -- env://HOME',
+      '!!config set bot.tags -- ["ok","${PATH}"]']) {
       await f.receive(text);
       expect(lastReply(f.client)).not.toMatch(/DO_NOT_DISCLOSE|SHOULD_NOT_APPEAR/);
       expect(lastReply(f.client)).not.toContain('Configuration saved.');
     }
     expect((await f.realStore.readSource()).revision).toBe(revision);
+  } finally { await f.close(); }
+});
+
+it('refuses endpoint identity remaps and environment references with fixed reasons (M1/M2)', async () => {
+  const f = await fixture();
+  try {
+    const revision = (await f.realStore.readSource()).revision;
+    for (const text of ['!!config set bot.endpoints.0.id -- mallory', '!!config unset bot.endpoints.0.id']) {
+      await f.receive(text);
+      expect(lastReply(f.client)).toMatch(/^(?:Owner, trust and approval settings|Chat can only read or change a single field)/u);
+    }
+    for (const text of ['!!config set bot.nickname -- ${HOME}', '!!config set bot.nickname -- "prefix env://HOME"']) {
+      await f.receive(text);
+      expect(lastReply(f.client)).toBe('Sensitive configuration cannot be read or changed in chat. Use the local CLI.');
+    }
+    expect((await f.realStore.readSource()).revision).toBe(revision);
+  } finally { await f.close(); }
+});
+
+it('keeps project-wide field scope once an owner is authorized (I2 Accept)', async () => {
+  const f = await fixture();
+  try {
+    // Entry is per-Adapter (alice is a master of `bot`'s Adapter); field scope is every
+    // project chat-safe leaf plus HOST_CONFIG_PATCH_PATHS, including another plugin's.
+    await f.receive('!!config set other.nickname -- "Changed by bot owner"');
+    expect(lastReply(f.client)).toContain('Configuration saved.');
+    await f.receive('!!config get other.nickname');
+    expect(lastReply(f.client)).toContain('Changed by bot owner');
   } finally { await f.close(); }
 });
 

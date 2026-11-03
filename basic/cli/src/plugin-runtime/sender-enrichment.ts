@@ -39,9 +39,10 @@ export function createConfigurationChatAuthorizer(
     const key = owners.get(adapter.descriptor.owner);
     if (key === undefined) return false;
     const sender = session.sender.id;
-    // Receiving endpoint first, then every other endpoint configured on this same Adapter.
+    // Receiving endpoint first, then every other endpoint configured on this same Adapter
+    // (removed/retiring entries never qualify).
     return endpointRoles.resolveOwner(key, child.desired.endpointId) === sender
-      || adapter.list().some(entry => endpointRoles.resolveOwner(key, entry.endpointId) === sender);
+      || adapter.list().some(entry => !entry.removed && !entry.retiring && endpointRoles.resolveOwner(key, entry.endpointId) === sender);
   };
 }
 
