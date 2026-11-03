@@ -1,0 +1,71 @@
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_efe26f87c3b074::t_641903a5e8af1b 353-354
+packages/im/agent/src/self-change/drafters.ts
+  s_efe26f87c3b074::t_ee40e147401069 1-40
+packages/im/agent/src/self-change/approval.ts
+  s_4a3da79bf26c58::t_23969bbff5904f 10-11,24,53-64,70-71,91-92,107-110,124-128,130-131,141-142
+docs/ai/default-behavior.md
+  s_efe26f87c3b074::t_b4c1cfc1eb2f1d 66-67
+packages/im/agent/src/self-change/store.ts
+  s_4a3da79bf26c58::t_5a21c5ea067bf8 508-528
+docs/en/ai/default-behavior.md
+  s_efe26f87c3b074::t_562932f372addf 66-67
+packages/im/tool/src/definition.ts
+  s_efe26f87c3b074::t_b3da721f954de7 158-162
+packages/im/agent/src/decision-events.ts
+  s_4a3da79bf26c58::t_b5813b28e51150 183-185
+packages/im/agent/src/index.ts
+  s_efe26f87c3b074::t_1ef27c3035beec 439,512,537-542
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_efe26f87c3b074::t_03a945c8edb66f 311
+packages/im/agent/tests/self-change/approval.test.ts
+  s_efe26f87c3b074::t_bfa6d84b067bcf 10,101-126
+packages/im/agent/tests/plugin-runtime/tool-availability.test.ts
+  s_efe26f87c3b074::t_fc9abfa452f19c 8-9,40,43,66-82,90
+packages/im/agent/tests/decision-events.test.ts
+  s_efe26f87c3b074::t_2559b483e866ae 163
+packages/im/tool/tests/tool.test.ts
+  s_efe26f87c3b074::t_dc297ec28dc760 74-85
+packages/im/agent/tests/plugin-runtime/native-self-change-tools.test.ts
+  s_efe26f87c3b074::t_4e55d94a47ce51 13,15,26-31,45,50-54,62,180-247
+packages/im/agent/src/self-change/policy.ts
+  s_4a3da79bf26c58::t_2658b195c8df39 22-23,98-99
+packages/im/tool/src/tool-index.ts
+  s_efe26f87c3b074::t_f61f6cac401181 82
+tests/snapshots/api-surface.json
+  s_8ecde7caf687e9::t_56412aba5d4b21 85,105-106
+packages/im/agent/src/plugin-runtime/native-self-change-tools.ts
+  s_efe26f87c3b074::t_07cfdb5cba3983 12-13,28-34,59-62,130-132,154-158,163-168,200-203,208-229,273,307-315
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dfd5a4532138e02b072f27d4a4913490b489fad8",
+  "prompts": {},
+  "sessions": {
+    "s_4a3da79bf26c58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66214013-1784-4c6a-9edd-9039237b51db",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_8ecde7caf687e9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a15d7d-fd53-7212-bcec-b99ba70a313f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
