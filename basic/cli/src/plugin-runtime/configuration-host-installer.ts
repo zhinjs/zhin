@@ -1,5 +1,6 @@
 import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
 import { commandFeatureId, defineCommand, type CommandContext, type CommandParams } from '@zhin.js/command';
+import type { ConsoleConfigApplicationStatus } from '@zhin.js/console-protocol';
 import { readOperationSession } from '@zhin.js/feature-kit';
 import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
@@ -8,14 +9,23 @@ import type { ConfigurationChatAuthorizer } from './sender-enrichment.js';
 
 const messages = createMessages({
   description: { 'zh-CN': '管理可在聊天中安全访问的项目配置', en: 'Manage project configuration that is safe to access in chat' },
+  fieldsDescription: { 'zh-CN': '列出聊天可管理的配置字段与类型（不含值）', en: 'List chat-manageable configuration fields and types (no values)' },
+  getDescription: { 'zh-CN': '读取一个聊天可管理的配置字段', en: 'Read one chat-manageable configuration field' },
+  setDescription: { 'zh-CN': '修改一个聊天可管理的配置字段', en: 'Change one chat-manageable configuration field' },
+  unsetDescription: { 'zh-CN': '删除一个可选的聊天可管理配置字段', en: 'Remove one optional chat-manageable configuration field' },
   denied: { 'zh-CN': '仅允许真实 Bot 主人在私聊中管理配置。', en: 'Configuration management requires a real Bot owner in a private chat.' },
   sensitive: { 'zh-CN': '敏感配置不能通过聊天读写，请使用本机 CLI。', en: 'Sensitive configuration cannot be read or changed in chat. Use the local CLI.' },
+  permission: { 'zh-CN': '主人、信任名单与审批等权限配置不能通过聊天读写，请使用本机 CLI。', en: 'Owner, trust and approval settings cannot be read or changed in chat. Use the local CLI.' },
+  scope: { 'zh-CN': '该配置不在聊天可管理范围内，请使用本机 CLI。', en: 'This configuration is outside the chat-manageable scope. Use the local CLI.' },
+  leaf: { 'zh-CN': '聊天只能读写单个字段（标量或标量数组），不能整体覆盖或删除对象。', en: 'Chat can only read or change a single field (a scalar or scalar array), never a whole object.' },
+  required: { 'zh-CN': '必填字段不能通过聊天删除。', en: 'A required field cannot be removed in chat.' },
   unknown: { 'zh-CN': '无法证明该配置可安全用于聊天，请使用本机 CLI。', en: 'This configuration is not proven safe for chat. Use the local CLI.' },
   missing: { 'zh-CN': '配置路径不存在。', en: 'The configuration path does not exist.' },
   path: { 'zh-CN': '配置路径格式不正确。', en: 'The configuration path is invalid.' },
-  json: { 'zh-CN': '配置值必须是有效 JSON；字符串需要双引号。', en: 'The value must be valid JSON. Strings need double quotes.' },
+  value: { 'zh-CN': '配置值与字段类型不符，期望：', en: 'The value does not match the field type. Expected: ' },
+  noFields: { 'zh-CN': '没有可在聊天中管理的配置字段。', en: 'No configuration fields can be managed in chat.' },
   unavailable: { 'zh-CN': '当前环境无法确定配置指令的调用方式。', en: 'The configuration command invocation is unavailable in this environment.' },
-  unconfirmed: { 'zh-CN': '配置操作结果未确认，请只读检查状态；不会自动重试。', en: 'The configuration outcome is unconfirmed. Check status read-only; no automatic retry is made.' },
+  unconfirmed: { 'zh-CN': '配置操作结果未确认，请勿重复发送，先只读核对当前值；不会自动重试。', en: 'The configuration outcome is unconfirmed. Do not resend; check the current value read-only first. No automatic retry is made.' },
   rejected: { 'zh-CN': '配置操作在保存前失败，本次未保存。', en: 'The configuration request failed before saving. This change was not saved.' },
   conflict: { 'zh-CN': '配置已被其他操作修改，本次未保存，请重新读取。', en: 'Another operation changed the configuration. This change was not saved; read it again.' },
   invalid: { 'zh-CN': '配置校验失败，本次未保存。', en: 'Configuration validation failed. This change was not saved.' },
@@ -30,9 +40,9 @@ const messages = createMessages({
 });
 
 type Store = Pick<ConsoleConfigurationStore, 'readChat' | 'patchChat'>;
-type ReadResult = Awaited<ReturnType<Store['readChat']>>;
+type Saved = ConsoleConfigApplicationStatus & { readonly revision: string };
 
-function applicationSummary(result: ReadResult, locale: Locale): string {
+function applicationSummary(result: Saved, locale: Locale): string {
   if (result.applicationError === 'unconfirmed') return messages(locale, 'unconfirmed');
   if (result.applicationError === 'superseded') return messages(locale, 'superseded');
   if (result.applicationError === 'invalid') return messages(locale, 'invalidApplication');
@@ -46,7 +56,34 @@ function applicationSummary(result: ReadResult, locale: Locale): string {
   return messages(locale, app.saved && app.generation > 0 ? 'active' : 'noEvidence');
 }
 
-/** Host-owned commands; no Agent, model tool, independent apply, or reply side channel. */
+function valueType(value: unknown): string {
+  return value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+}
+
+/**
+ * Leaf-typed value parsing: JSON when it yields an allowed leaf type, otherwise the raw
+ * text for string leaves. Objects are never accepted (C4 leaf-only).
+ */
+export function parseChatConfigurationValue(text: string, types: readonly string[]): { readonly value: unknown } | undefined {
+  const allowed = (value: unknown) => {
+    const type = valueType(value);
+    if (type === 'object') return false;
+    if (type === 'number') return types.includes('number') || types.includes('integer') && Number.isInteger(value);
+    return types.includes(type);
+  };
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (allowed(parsed)) return { value: parsed };
+  } catch { /* fall through to a raw string */ }
+  return types.includes('string') ? { value: text } : undefined;
+}
+
+/**
+ * Host-owned `config fields|get|set|unset` (alias `配置`); no Agent, model tool,
+ * whole-document apply, or reply side channel. Only the master of the receiving
+ * endpoint in a private chat passes (C2); every read/write is limited by the chat
+ * field policy (C3/C4).
+ */
 export function installConfigurationHost(options: Readonly<{ store: Store; authorize: ConfigurationChatAuthorizer }>): RootResourceInstaller {
   return context => {
     if (!context.hasFeature?.(commandFeatureId)) return;
@@ -55,9 +92,11 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
       const adapters = command.project<AdapterIndex>(adapterFeatureId);
       return !!session && session.scene.kind === 'private' && isAdapterIndex(adapters) && options.authorize(session, adapters);
     };
-    const register = (action: string, params: CommandParams, execute: (command: CommandContext) => Promise<string> | string) => {
+    const register = (action: '' | 'fields' | 'get' | 'set' | 'unset', params: CommandParams, execute: (command: CommandContext) => Promise<string> | string) => {
+      const description = action ? `${action}Description` as const : 'description';
       context.addFeature(commandFeatureId, action ? `config/${action}` : 'config', defineCommand({
-        description: messages('zh-CN', 'description'), descriptionI18n: { en: messages('en', 'description') },
+        description: messages('zh-CN', description), descriptionI18n: { en: messages('en', description) },
+        alias: [action ? `配置 ${action}` : '配置'],
         permit: ['role(master)', 'private()'], params, options: {},
         execute: async command => {
           try { if (!allowed(command)) return messages(command.locale, 'denied'); }
@@ -79,36 +118,44 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
       catch { return undefined; }
     };
     register('', {}, command => {
-      const lines = ['list', 'get', 'schema', 'status', 'set', 'delete'].map(action => command.formatCommand(`config ${action}`));
+      const lines = ['fields', 'get', 'set', 'unset'].map(action => command.formatCommand(`config ${action}`));
       return lines.some(line => line === undefined) ? messages(command.locale, 'unavailable') : lines.join('\n');
     });
-    for (const mode of ['get', 'list', 'schema', 'status'] as const) {
-      register(mode, mode === 'status' ? {} : { path: { type: 'string', optional: mode !== 'get' } }, async command => {
-        const path = pathOf(command);
-        if (!path) return messages(command.locale, 'path');
-        const result = await options.store.readChat(path, mode);
-        if (mode === 'status') return `${applicationSummary(result, command.locale)}\n${JSON.stringify(result, null, 2)}`;
-        const value = mode === 'list' ? result.keys : mode === 'schema' ? result.schema : result.value;
-        return `${messages(command.locale, 'read')}\n${JSON.stringify(value, null, 2)}`;
-      });
-    }
-    for (const action of ['set', 'delete'] as const) {
-      register(action, { path: { type: 'string' }, ...(action === 'set' ? { value: { type: 'text' as const } } : {}) }, async command => {
-        const path = pathOf(command);
-        if (!path?.length) return messages(command.locale, 'path');
-        let value: unknown;
-        if (action === 'set') {
-          try { value = JSON.parse(String(command.params.value)); }
-          catch { return messages(command.locale, 'json'); }
-        }
-        const before = await options.store.readChat([], 'status');
-        command.signal.throwIfAborted();
-        const result = await options.store.patchChat({ expectedRevision: before.revision,
-          patches: action === 'set' ? [{ op: 'set', path, value }] : [{ op: 'remove', path }] });
-        if (result.status === 'conflict') return messages(command.locale, 'conflict');
-        if (result.status === 'invalid') return messages(command.locale, 'invalid');
-        return `${messages(command.locale, 'saved')} ${applicationSummary(result, command.locale)}`;
-      });
-    }
+    register('fields', { path: { type: 'string', optional: true } }, async command => {
+      const path = pathOf(command);
+      if (!path) return messages(command.locale, 'path');
+      const { fields = [] } = await options.store.readChat(path, 'fields');
+      if (!fields.length) return messages(command.locale, 'noFields');
+      return fields.map(field => `${field.path.join('.')}: ${field.type.join(' | ')}`).join('\n');
+    });
+    register('get', { path: { type: 'string' } }, async command => {
+      const path = pathOf(command);
+      if (!path?.length) return messages(command.locale, 'path');
+      const result = await options.store.readChat(path, 'get');
+      return `${messages(command.locale, 'read')}\n${JSON.stringify(result.value, null, 2)}`;
+    });
+    const write = async (command: CommandContext, action: 'set' | 'unset') => {
+      const path = pathOf(command);
+      if (!path?.length) return messages(command.locale, 'path');
+      // Resolve the exact leaf first: its revision is this write's CAS base and its
+      // type drives value parsing. Non-leaf or denied paths stop here.
+      const leaf = await options.store.readChat(path, 'fields');
+      const field = leaf.fields?.find(entry => entry.path.length === path.length && entry.path.every((segment, index) => segment === path[index]));
+      if (!field) return messages(command.locale, 'leaf');
+      let value: unknown;
+      if (action === 'set') {
+        const parsed = parseChatConfigurationValue(String(command.params.value ?? ''), field.type);
+        if (!parsed) return `${messages(command.locale, 'value')}${field.type.join(' | ')}`;
+        value = parsed.value;
+      }
+      command.signal.throwIfAborted();
+      const result = await options.store.patchChat({ expectedRevision: leaf.revision,
+        patches: action === 'set' ? [{ op: 'set', path, value }] : [{ op: 'remove', path }] });
+      if (result.status === 'conflict') return messages(command.locale, 'conflict');
+      if (result.status === 'invalid') return messages(command.locale, 'invalid');
+      return `${messages(command.locale, 'saved')} ${applicationSummary(result, command.locale)}`;
+    };
+    register('set', { path: { type: 'string' }, value: { type: 'text' } }, command => write(command, 'set'));
+    register('unset', { path: { type: 'string' } }, command => write(command, 'unset'));
   };
 }

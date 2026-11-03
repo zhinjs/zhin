@@ -16,6 +16,9 @@ interface PluginRoles { readonly base: Roles; readonly endpoints: Map<string, Ro
 export type ConfigurationChatAuthorizer = (session: OperationSession<string>, adapters: AdapterIndex) => boolean;
 
 /** Startup role authority, matched against the actual operation's Adapter and account.
+ * Only the `master` of the endpoint that received this private message (leaf, else its
+ * Plugin-level `master`) qualifies, so identity stays on the same platform/account.
+ * `ai.trigger.masters` has no platform dimension and is deliberately not accepted in v1.
  * Direct declared owners are mapped with the canonical PluginId constructor. Nested
  * owners never borrow their parent's role configuration or a legacy display alias.
  */
@@ -23,9 +26,6 @@ export function createConfigurationChatAuthorizer(
   startup: RuntimeConfigDocument, endpointRoles: EndpointRoleResolver,
 ): ConfigurationChatAuthorizer {
   const owners = new Map(Object.keys(readPluginConfigurationMap(startup)).map(key => [childPluginId(rootPluginId(), key), key]));
-  const ai = isRecord(startup.ai) ? startup.ai : undefined;
-  const trigger = ai && isRecord(ai.trigger) ? ai.trigger : undefined;
-  const globalMasters = new Set(normalizeTrustedIdList(trigger?.masters));
   return (session, adapters) => {
     if (session.scene.kind !== 'private' || !session.sender?.id || !isAdapterIndex(adapters)) return false;
     const id = session.scene.endpoint.id as CapabilityId;
@@ -33,7 +33,6 @@ export function createConfigurationChatAuthorizer(
     const child = adapter?.find(id);
     if (!adapter || !child || session.adapter !== adapter || session.endpoint !== adapter.getEndpoint(child.desired.instanceId)) return false;
     if (!child.started || session.signal.aborted) return false;
-    if (globalMasters.has(session.sender.id)) return true;
     const key = owners.get(adapter.descriptor.owner);
     return key !== undefined && endpointRoles.resolveOwner(key, child.desired.endpointId) === session.sender.id;
   };

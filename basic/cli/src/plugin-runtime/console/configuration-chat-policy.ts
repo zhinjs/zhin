@@ -2,14 +2,69 @@ import { expandEnvironmentValue } from '@zhin.js/runtime';
 import { isUnknownConfigurationSchemaBoundary, sensitiveConfigKey as sensitiveKey } from './configuration-schema-safety.js';
 type Schema = Readonly<Record<string, unknown>>;
 type Variants = readonly (readonly Schema[])[];
-export type ConfigChatAccessKind = 'sensitive' | 'unknown' | 'missing';
+/**
+ * Fixed reason codes; a denial never carries a stored value or schema detail.
+ * - `permission`: role/approval fields (C4), never manageable from chat.
+ * - `scope`: outside the chat scope (C3: Host keys beyond `HOST_CONFIG_PATCH_PATHS`, declarations).
+ * - `leaf`: not a single scalar / scalar-array leaf (no object overwrite or deletion).
+ * - `required`: a required leaf cannot be unset.
+ */
+export type ConfigChatAccessKind = 'sensitive' | 'unknown' | 'missing' | 'permission' | 'scope' | 'leaf' | 'required';
+
+const accessMessages: Readonly<Record<ConfigChatAccessKind, string>> = Object.freeze({
+  sensitive: '敏感配置不能通过聊天读取或修改，请使用 CLI 或 Console。',
+  missing: '配置项不存在。',
+  unknown: '无法确认配置范围安全，请使用 CLI 或 Console。',
+  permission: '权限相关配置不能通过聊天读取或修改，请使用 CLI 或 Console。',
+  scope: '该配置不在聊天可管理范围内，请使用 CLI 或 Console。',
+  leaf: '聊天只能读写单个叶子字段（标量或标量数组）。',
+  required: '必填字段不能通过聊天删除。',
+});
 
 export class ConfigChatAccessError extends Error {
   constructor(readonly kind: ConfigChatAccessKind) {
-    super(kind === 'sensitive' ? '敏感配置不能通过聊天读取或修改，请使用 CLI 或 Console。'
-      : kind === 'missing' ? '配置项不存在。' : '无法确认配置范围安全，请使用 CLI 或 Console。');
+    super(accessMessages[kind]);
     this.name = 'ConfigChatAccessError';
   }
+}
+
+/**
+ * Role and approval vocabulary (C4): `master`, `trusted`, `endpoints[*].master/trusted`,
+ * `ai.trigger.masters/trusted`, `toolHardGate.*` and similar owner/admin/approver keys.
+ * Matched per segment after normalization so casing or separators cannot bypass it.
+ */
+export function isChatPermissionSegment(segment: string): boolean {
+  const normalized = segment.replace(/[^a-z0-9]/giu, '').toLowerCase();
+  return /^(?:masters?|trusted|trustees?|owners?|admins?|administrators?|approvers?|permissions?|permits?|roles?|toolhardgate)$/u.test(normalized);
+}
+
+export interface ChatConfigurationScope {
+  /** Host-owned top-level keys (Runtime `HOST_CONFIG_KEYS`). */
+  readonly hostKeys: readonly string[];
+  /** Host chat whitelist; v1 is exactly `HOST_CONFIG_PATCH_PATHS`. */
+  readonly hostPaths: readonly (readonly string[])[];
+  /** Declaration keys owned by source/plugin management. */
+  readonly declarationKeys: ReadonlySet<string>;
+}
+
+function startsWith(path: readonly string[], prefix: readonly string[]): boolean {
+  return prefix.length <= path.length && prefix.every((segment, index) => path[index] === segment);
+}
+
+/** C3/C4 scope gate, checked before any schema proof or value read. */
+export function assertChatConfigurationScope(path: readonly string[], scope: ChatConfigurationScope): void {
+  if (!path.length) throw new ConfigChatAccessError('leaf');
+  if (scope.declarationKeys.has(path[0]!)) throw new ConfigChatAccessError('scope');
+  if (path.some(isChatPermissionSegment)) throw new ConfigChatAccessError('permission');
+  if (scope.hostKeys.includes(path[0]!) && !scope.hostPaths.some(prefix => startsWith(path, prefix))) {
+    throw new ConfigChatAccessError('scope');
+  }
+}
+
+/** Whitelisted Host roots reachable from a (possibly shorter) `fields` scope. */
+export function chatHostRoots(prefix: readonly string[], scope: ChatConfigurationScope): readonly (readonly string[])[] {
+  return scope.hostPaths.filter(entry => startsWith(entry, prefix) || startsWith(prefix, entry))
+    .map(entry => entry.length >= prefix.length ? entry : prefix);
 }
 
 function record(value: unknown): value is Schema {
@@ -160,20 +215,58 @@ export function assertChatConfigurationAccess(schema: unknown, path: readonly st
   }
 }
 
-/** Public structure only: never defaults, examples, enum values or descriptions. */
-export function chatConfigurationSchema(schema: unknown, path: readonly string[], value: unknown): Readonly<Record<string, unknown>> {
+const scalarTypes: ReadonlySet<string> = new Set(['string', 'number', 'integer', 'boolean', 'null']);
+
+/**
+ * Leaf-only chat writes: the target must resolve to scalars or arrays of scalars in
+ * every schema branch. Object targets would let a parent overwrite/removal bypass
+ * per-child checks, so they are rejected as `leaf`.
+ */
+export function chatLeafTypes(schema: unknown, path: readonly string[]): readonly string[] {
   if (!record(schema)) unknown();
   const current = locate(schema, path);
-  const type = [...new Set(current.flatMap(typeNames))];
-  const keys = new Set<string>();
-  for (const nodes of current) for (const node of nodes) if (record(node.properties)) for (const key of Object.keys(node.properties)) keys.add(key);
-  if (record(value) || Array.isArray(value)) for (const key of Object.keys(value)) keys.add(key);
-  const properties: Record<string, unknown> = {};
-  for (const key of keys) {
-    try {
-      const child = locate(schema, [...path, key]);
-      Object.defineProperty(properties, key, { value: { type: [...new Set(child.flatMap(typeNames))] }, enumerable: true });
-    } catch (error) { if (!(error instanceof ConfigChatAccessError)) throw error; }
+  const types = new Set<string>();
+  for (const nodes of current) {
+    const names = typeNames(nodes);
+    if (names.includes('object')) throw new ConfigChatAccessError('leaf');
+    if (names.includes('array')) {
+      if (!nodes.some(node => node.items !== undefined || node.prefixItems !== undefined)) unknown();
+      for (const items of descend([nodes], '0', schema)) {
+        if (typeNames(items).some(type => !scalarTypes.has(type))) throw new ConfigChatAccessError('leaf');
+      }
+    }
+    for (const name of names) types.add(name);
   }
-  return Object.freeze({ type: Object.freeze(type), properties: Object.freeze(properties) });
+  return Object.freeze([...types]);
+}
+
+/** `unset` removes only optional leaves; any branch listing the key as required refuses. */
+export function assertChatOptionalLeaf(schema: unknown, path: readonly string[]): void {
+  if (!record(schema)) unknown();
+  chatLeafTypes(schema, path);
+  if (!path.length) throw new ConfigChatAccessError('required');
+  const key = path.at(-1)!;
+  for (const nodes of locate(schema, path.slice(0, -1))) {
+    if (nodes.some(node => Array.isArray(node.required) && node.required.includes(key))) throw new ConfigChatAccessError('required');
+  }
+}
+
+/** Declared leaf paths below `path` (properties only), each still re-checked by the store. */
+export function chatConfigurationLeaves(schema: unknown, path: readonly string[], limit = 256): readonly (readonly string[])[] {
+  if (!record(schema)) return [];
+  const found: (readonly string[])[] = [];
+  const walk = (relative: readonly string[]) => {
+    if (found.length >= limit || relative.length > 12) return;
+    if (relative.some(isChatPermissionSegment) || relative.some(sensitiveKey)) return;
+    let current: Variants;
+    try { current = locate(schema, relative); }
+    catch (error) { if (error instanceof ConfigChatAccessError) return; throw error; }
+    try { chatLeafTypes(schema, relative); found.push(Object.freeze([...relative])); return; }
+    catch (error) { if (!(error instanceof ConfigChatAccessError)) throw error; }
+    const keys = new Set<string>();
+    for (const nodes of current) for (const node of nodes) if (record(node.properties)) for (const key of Object.keys(node.properties)) keys.add(key);
+    for (const key of [...keys].sort()) walk([...relative, key]);
+  };
+  walk(path);
+  return Object.freeze(found);
 }

@@ -36,7 +36,7 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   const document: RuntimeConfigDocument = { configVersion: 2, locale: options.locale ?? 'en',
     ...(options.globalMasters ? { ai: { trigger: { masters: options.globalMasters } } } : {}),
     plugins: { bot: '@test/bot', other: '@test/bot' },
-    bot: { master: 'alice', commandPrefix: '!!', nickname: 'Before', token: 'DO_NOT_DISCLOSE', endpoints: [{ id: 'same' }] },
+    bot: { master: 'alice', commandPrefix: '!!', nickname: 'Before', count: 1, tags: ['a'], token: 'DO_NOT_DISCLOSE', endpoints: [{ id: 'same' }] },
     other: { master: 'bob', commandPrefix: '#', nickname: 'Other', endpoints: [{ id: 'same' }] } };
   await put(join(project, 'package.json'), { name: '@test/root', dependencies: { '@test/command': 'workspace:*', '@test/bot': 'workspace:*' },
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: options.commands === false ? [] : [{ package: '@test/command' }] } });
@@ -44,8 +44,8 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   modules.values.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', setup() { setups.root++; } }) });
   await put(join(project, 'plugins/bot/package.json'), { name: '@test/bot', dependencies: { '@test/adapter': 'workspace:*', '@test/command': 'workspace:*' },
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/adapter' }, ...(options.commands === false ? [{ package: '@test/command' }] : [])] } });
-  await put(join(project, 'plugins/bot/schema.json'), { type: 'object', additionalProperties: false, properties: {
-    master: { type: 'string' }, commandPrefix: { type: 'string' }, nickname: { type: 'string' },
+  await put(join(project, 'plugins/bot/schema.json'), { type: 'object', additionalProperties: false, required: ['commandPrefix'], properties: {
+    master: { type: 'string' }, commandPrefix: { type: 'string' }, nickname: { type: 'string' }, count: { type: 'integer' }, tags: { type: 'array', items: { type: 'string' } },
     token: { type: 'string', writeOnly: true }, endpoints: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' } } } },
   } });
   await put(join(project, 'plugins/bot/plugin.ts'), {});
@@ -102,38 +102,22 @@ it('applies a safe nickname through real IM dispatch, store and Root without wai
   } finally { await f.close(); }
 });
 
-it('rebuilds Root from a real chat operation, replies once in its original language and admits new authorized messages', async () => {
+it('limits Host chat writes to HOST_CONFIG_PATCH_PATHS through the real message chain (C3)', async () => {
   const f = await fixture({ locale: 'en' });
-  const read = vi.spyOn(f.realStore, 'readChat');
+  const patch = vi.spyOn(f.realStore, 'patchChat');
   try {
-    const generation = f.runtime.snapshot.generation;
-    expect(f.setups.root).toBe(1);
-    const changed = await f.receive('!!config set locale -- "zh-CN"');
-    expect(changed).toMatchObject({ status: 'executed', value: expect.stringContaining('Configuration saved.') });
-    expect(f.runtime.snapshot.generation).toBeGreaterThan(generation);
-    expect(f.setups.root).toBe(2);
-    expect(f.client.sendNative).toHaveBeenCalledOnce();
+    const before = await f.document.readSource();
+    for (const text of ['!!config set locale -- "zh-CN"', '!!config set http.port -- 1', '!!config get locale', '!!config set ai.trigger.enabled -- false']) {
+      await f.receive(text);
+      expect(lastReply(f.client)).toBe('This configuration is outside the chat-manageable scope. Use the local CLI.');
+    }
+    expect(patch).not.toHaveBeenCalled();
+    expect(await f.document.readSource()).toEqual(before);
+    await f.receive('!!config set ai.trigger.ambient.mode -- shadow');
     expect(lastReply(f.client)).toContain('Configuration saved.');
-    const next = f.runtime.snapshot.projections.get(adapterFeatureId) as AdapterIndex;
-    const row = next.list().find(item => item.owner === 'root/bot')!;
-    const client = next.clientById<Client>(row.id);
-    expect(client).not.toBe(f.client);
-    expect(client.sendNative).not.toHaveBeenCalled();
-    const receive = (sender: string) => client[endpointSpec].events.message({
-      conversation: { endpoint: { id: row.id, adapter: 'platform' }, kind: 'private', id: 'conversation' },
-      content: '!!config status', sender: { id: sender },
-    });
-    await receive('alice');
-    expect(lastReply(client)).toContain('此文件版本与当前运行配置一致。');
-    expect(client.sendNative).toHaveBeenCalledOnce();
-    expect(f.client.sendNative).toHaveBeenCalledOnce();
-    const reads = read.mock.calls.length;
-    await receive('stranger');
-    expect(read).toHaveBeenCalledTimes(reads);
-    expect(lastReply(client)).not.toContain('此文件版本与当前运行配置一致。');
-    expect(f.otherClient.sendNative).not.toHaveBeenCalled();
-    await f.client.stopped.promise;
-    expect(f.client.stopNative).toHaveBeenCalledOnce();
+    expect((await f.document.readSource()).document).toMatchObject({ ai: { trigger: { ambient: { mode: 'shadow' } } } });
+    await f.receive('!!config get ai.trigger.ambient.mode');
+    expect(lastReply(f.client)).toContain('"shadow"');
   } finally { await f.close(); }
 });
 
@@ -149,7 +133,7 @@ it('requires the owner of the actual source Bot in private chat, including same-
     expect(read).toHaveBeenCalledOnce();
     expect(lastReply(f.otherClient)).toContain('Before');
     const commands = f.runtime.snapshot.projections.get(commandFeatureId) as CommandIndex;
-    await expect(commands.execute('config status')).rejects.toThrow('Permission denied');
+    await expect(commands.execute('config fields')).rejects.toThrow('Permission denied');
     await commands.dispatch({ input: 'config get bot.nickname', source: { content: 'config get bot.nickname', sender: { id: 'alice', roles: ['master'] },
       conversation: { endpoint: { id: f.row.id, adapter: 'platform' }, kind: 'private', id: 'conversation' } } });
     expect(read).toHaveBeenCalledOnce();
@@ -161,20 +145,29 @@ it('uses actual prefixes and both locales without inventing a command invocation
   try {
     await f.receive('!!config');
     expect(lastReply(f.client)).toContain('!!config set');
-    await f.receive('!!config set bot.nickname -- invalid-json');
-    expect(lastReply(f.client)).toBe('配置值必须是有效 JSON；字符串需要双引号。');
+    expect(lastReply(f.client)).toMatch(/!!config fields\n!!config get\n!!config set\n!!config unset/u);
+    await f.receive('!!config set bot.count -- not-a-number');
+    expect(lastReply(f.client)).toBe('配置值与字段类型不符，期望：integer');
+    await f.receive('!!配置 get bot.nickname');
+    expect(lastReply(f.client)).toContain('Before');
+    await f.receive('!!配置');
+    expect(lastReply(f.client)).toContain('!!config fields');
     await f.receive('#config', { sender: 'bob', other: true });
     expect(lastReply(f.otherClient)).toContain('#config get');
   } finally { await f.close(); }
 });
 
-it('retains existing global master authority only through a real source Bot operation', async () => {
+it('does not accept ai.trigger.masters as chat configuration authority in v1 (C2)', async () => {
   const f = await fixture({ globalMasters: ['global'] });
+  const read = vi.spyOn(f.realStore, 'readChat');
   try {
     await f.receive('!!config get other.nickname', { sender: 'global' });
-    expect(lastReply(f.client)).toContain('Other');
+    expect(lastReply(f.client)).toBe('Configuration management requires a real Bot owner in a private chat.');
     await f.receive('#config get bot.nickname', { sender: 'global', other: true });
-    expect(lastReply(f.otherClient)).toContain('Before');
+    expect(lastReply(f.otherClient)).toBe('Configuration management requires a real Bot owner in a private chat.');
+    expect(read).not.toHaveBeenCalled();
+    await f.receive('!!config get other.nickname', { sender: 'alice' });
+    expect(lastReply(f.client)).toContain('Other');
   } finally { await f.close(); }
 });
 
@@ -186,15 +179,24 @@ it('does not register root commands merely because a child mounts the Command Fe
   } finally { await f.close(); }
 });
 
-it('retains JSON text and types across the actual command parser and operation', async () => {
+it('parses values by leaf type across the actual command parser and never accepts objects', async () => {
   const patches: unknown[] = [];
   const f = await fixture({ store: real => ({ readChat: (...args) => real.readChat(...args), patchChat: async request => {
     patches.push(request.patches[0]); return { status: 'saved', revision: request.expectedRevision, paths: [], restartRequired: false };
   } }) });
   try {
-    const values = [{ text: 'line\n say "hi" \\ end', list: [false, 0, null] }, ['--help', true, { 'a.b': 'x/y' }], false, null, '  double  spaces  '];
-    for (const value of values) await f.receive(`!!config set bot.nickname -- ${JSON.stringify(value)}`);
-    expect(patches).toEqual(values.map(value => ({ op: 'set', path: ['bot', 'nickname'], value })));
+    const cases: [string, string, unknown][] = [
+      ['nickname', JSON.stringify('line\n say "hi" \\ end'), 'line\n say "hi" \\ end'],
+      ['nickname', 'plain words', 'plain words'], ['nickname', '123', '123'], ['nickname', '{"a":1}', '{"a":1}'],
+      ['count', '5', 5], ['tags', '["x","y"]', ['x', 'y']],
+    ];
+    for (const [key, text] of cases) await f.receive(`!!config set bot.${key} -- ${text}`);
+    expect(patches).toEqual(cases.map(([key, , value]) => ({ op: 'set', path: ['bot', key], value })));
+    for (const text of ['!!config set bot.count -- 1.5', '!!config set bot.count -- {"n":1}', '!!config set bot.tags -- {"a":1}']) {
+      await f.receive(text);
+      expect(lastReply(f.client)).toContain('does not match the field type');
+    }
+    expect(patches).toHaveLength(cases.length);
   } finally { await f.close(); }
 });
 
@@ -202,8 +204,10 @@ it('never reads or mutates sensitive or unknown fields, including parent replace
   const f = await fixture();
   try {
     const revision = (await f.realStore.readSource()).revision;
-    for (const text of ['!!config get bot.token', '!!config delete bot', '!!config set bot -- {"nickname":"new"}',
-      '!!config set bot.token -- "SHOULD_NOT_APPEAR"', '!!config get bot.absent']) {
+    for (const text of ['!!config get bot.token', '!!config unset bot', '!!config set bot -- {"nickname":"new"}',
+      '!!config set bot.token -- "SHOULD_NOT_APPEAR"', '!!config get bot.absent', '!!config get bot.master', '!!config set bot.master -- mallory',
+      '!!config unset bot.master', '!!config set bot.endpoints.0.master -- mallory', '!!config get bot', '!!config unset bot.commandPrefix',
+      '!!config set plugins.bot -- "@test/other"']) {
       await f.receive(text);
       expect(lastReply(f.client)).not.toMatch(/DO_NOT_DISCLOSE|SHOULD_NOT_APPEAR/);
       expect(lastReply(f.client)).not.toContain('Configuration saved.');
@@ -212,19 +216,22 @@ it('never reads or mutates sensitive or unknown fields, including parent replace
   } finally { await f.close(); }
 });
 
-it('lists safe fields and exposes status without an independent whole-document apply command', async () => {
+it('lists only manageable leaves and types and registers exactly fields/get/set/unset (C1)', async () => {
   const f = await fixture();
   try {
-    await f.receive('!!config list bot');
-    expect(lastReply(f.client)).toContain('nickname');
-    expect(lastReply(f.client)).not.toMatch(/token|DO_NOT_DISCLOSE/);
-    await f.receive('!!config schema bot.nickname');
-    expect(lastReply(f.client)).toContain('string');
-    await f.receive('!!config status');
-    expect(lastReply(f.client)).toContain('matches the active configuration');
-    expect(lastReply(f.client)).not.toContain('DO_NOT_DISCLOSE');
+    await f.receive('!!config fields bot');
+    const listed = lastReply(f.client);
+    expect(listed).toContain('bot.nickname: string');
+    expect(listed).toContain('bot.count: integer');
+    expect(listed).not.toMatch(/token|master|endpoints|DO_NOT_DISCLOSE|Before/);
+    await f.receive('!!config fields');
+    expect(lastReply(f.client)).toContain('ai.trigger.ambient.mode: string');
+    expect(lastReply(f.client)).not.toMatch(/^locale|^http|DO_NOT_DISCLOSE/mu);
+    await f.receive('!!config fields locale');
+    expect(lastReply(f.client)).toBe('This configuration is outside the chat-manageable scope. Use the local CLI.');
     const commands = f.runtime.snapshot.projections.get(commandFeatureId) as CommandIndex;
-    expect(commands.list().some(command => command.name === 'config apply')).toBe(false);
+    const names = commands.list().map(command => command.name).filter(name => name.startsWith('config'));
+    expect(names.sort()).toEqual(['config', 'config fields', 'config get', 'config set', 'config unset']);
   } finally { await f.close(); }
 });
 
@@ -245,7 +252,7 @@ it('does not disclose raw service exceptions or conflict values', async () => {
 
 it.each([
   { locale: 'en' as const, action: 'set' }, { locale: 'zh-CN' as const, action: 'set' },
-  { locale: 'en' as const, action: 'delete' }, { locale: 'zh-CN' as const, action: 'delete' },
+  { locale: 'en' as const, action: 'unset' }, { locale: 'zh-CN' as const, action: 'unset' },
 ])('reports a definite prepare rejection as not saved through the real SDK/store boundary ($locale/$action)', async ({ locale, action }) => {
   const f = await fixture({ locale });
   const prepare = vi.spyOn(f.document, 'prepare').mockRejectedValueOnce(new Error('DO_NOT_DISCLOSE_prepare_detail'));
@@ -253,7 +260,7 @@ it.each([
   try {
     const before = await f.document.readSource();
     const generation = f.runtime.snapshot.generation;
-    await f.receive(action === 'set' ? '!!config set bot.nickname -- "Not saved"' : '!!config delete bot.nickname');
+    await f.receive(action === 'set' ? '!!config set bot.nickname -- "Not saved"' : '!!config unset bot.count');
     expect(lastReply(f.client)).toContain(locale === 'en' ? 'not saved' : '未保存');
     expect(lastReply(f.client)).not.toMatch(/unconfirmed|未确认|DO_NOT_DISCLOSE/);
     expect(prepare).toHaveBeenCalledOnce();

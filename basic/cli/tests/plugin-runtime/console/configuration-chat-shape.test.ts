@@ -23,20 +23,22 @@ async function fixture(value: unknown) {
 }
 
 it.each([
-  { value: { safe: { size: { apiKey: 'synthetic-private-value' } } }, parent: ['demo', 'safe'], direct: ['demo', 'safe', 'size'] },
-  { value: { numbers: [1, { apiKey: 'synthetic-private-value' }] }, parent: ['demo', 'numbers'], direct: ['demo', 'numbers', '1'] },
-])('refuses malformed scalar descendants through direct, parent and root reads: $parent', async ({ value, parent, direct }) => {
+  // An object parent is never a chat leaf; a scalar-array parent is, so its malformed element is `unknown`.
+  { value: { safe: { size: { apiKey: 'synthetic-private-value' } } }, parent: ['demo', 'safe'], direct: ['demo', 'safe', 'size'], parentKind: 'leaf' },
+  { value: { numbers: [1, { apiKey: 'synthetic-private-value' }] }, parent: ['demo', 'numbers'], direct: ['demo', 'numbers', '1'], parentKind: 'unknown' },
+])('refuses malformed scalar descendants through direct, parent and root reads: $parent', async ({ value, parent, direct, parentKind }) => {
   const store = await fixture(value);
-  for (const path of [direct, parent, ['demo'], []]) {
-    await expect(store.readChat(path, 'get')).rejects.toMatchObject({ kind: 'unknown' });
-  }
+  await expect(store.readChat(direct, 'get')).rejects.toMatchObject({ kind: 'unknown' });
+  await expect(store.readChat(parent, 'get')).rejects.toMatchObject({ kind: parentKind });
+  for (const path of [['demo'], []]) await expect(store.readChat(path, 'get')).rejects.toMatchObject({ kind: 'leaf' });
 });
 
-it.each([1, 'public', null])('keeps safe objects, arrays and scalar unions usable (%j)', async flexible => {
+it.each([1, 'public', null])('keeps scalar leaves, scalar arrays and scalar unions usable but never whole objects (%j)', async flexible => {
   const value = { safe: { size: 4 }, numbers: [1, 2, 3], flexible };
   const store = await fixture(value);
-  expect((await store.readChat(['demo'], 'get')).value).toEqual(value);
-  expect((await store.readChat(['demo', 'safe'], 'get')).value).toEqual({ size: 4 });
+  await expect(store.readChat(['demo'], 'get')).rejects.toMatchObject({ kind: 'leaf' });
+  await expect(store.readChat(['demo', 'safe'], 'get')).rejects.toMatchObject({ kind: 'leaf' });
+  expect((await store.readChat(['demo', 'safe', 'size'], 'get')).value).toBe(4);
   expect((await store.readChat(['demo', 'numbers'], 'get')).value).toEqual([1, 2, 3]);
   expect((await store.readChat(['demo', 'flexible'], 'get')).value).toBe(flexible);
 });

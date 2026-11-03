@@ -1,6 +1,8 @@
 import { ConfigDocumentConflictError, type ConfigFileDocument } from '@zhin.js/config-file';
 import { isDeepStrictEqual } from 'node:util';
-import type { ConsoleConfigApplication, ConsoleConfigApplicationStatus, ConsoleConfigApplyResult, ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigProjectPatchResult, ConsoleConfigProjectRead, ConsoleConfigProjectReadRequest, ConsoleConfigSource } from '@zhin.js/console-protocol';
+import {
+  HOST_CONFIG_PATCH_PATHS, type ConsoleConfigApplication, type ConsoleConfigApplicationStatus, type ConsoleConfigApplyResult, type ConsoleConfigPatchRequest, type ConsoleConfigPatchResult, type ConsoleConfigProjectPatchResult, type ConsoleConfigProjectRead, type ConsoleConfigProjectReadRequest, type ConsoleConfigSource,
+} from '@zhin.js/console-protocol';
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
   applyConfigPatches,
@@ -14,7 +16,10 @@ import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
-import { assertChatConfigurationAccess, chatConfigurationSchema, ConfigChatAccessError } from './configuration-chat-policy.js';
+import {
+  assertChatConfigurationAccess, assertChatConfigurationScope, assertChatOptionalLeaf, chatConfigurationLeaves, chatHostRoots, chatLeafTypes,
+  ConfigChatAccessError, type ChatConfigurationScope,
+} from './configuration-chat-policy.js';
 import { isForbiddenConfigurationPathSegment } from './configuration-path-segment.js';
 import {
   assertPatchesInScope,
@@ -25,11 +30,16 @@ import {
 } from './configuration-patch.js';
 import { maskConfigValue, REDACTED_CONFIG_VALUE } from './configuration-redaction.js';
 
-export interface ChatConfigurationRead extends ConsoleConfigApplicationStatus {
+export interface ChatConfigurationField {
+  readonly path: readonly string[];
+  readonly type: readonly string[];
+}
+export interface ChatConfigurationRead {
   readonly revision: string;
+  /** `get`: the single leaf value (already proven non-sensitive). */
   readonly value?: unknown;
-  readonly keys?: readonly string[];
-  readonly schema?: unknown;
+  /** `fields`: chat-manageable leaves under the scope; never values. */
+  readonly fields?: readonly ChatConfigurationField[];
 }
 /** A Host-classified rejection before this operation attempted any commit. */
 export class ConfigChatRequestRejectedError extends Error {
@@ -48,6 +58,12 @@ class ConfigCommitUnconfirmedError extends Error {
  * stay with the source editor and Plugin management, not path patches.
  */
 const PROJECT_PATCH_DECLARATION_KEYS: ReadonlySet<string> = new Set(['configVersion', 'plugins', 'disable_plugins', 'plugin']);
+
+/** C3: Host chat whitelist is exactly the ordinary page patch allowlist. */
+const CHAT_SCOPE: ChatConfigurationScope = Object.freeze({
+  hostKeys: HOST_CONFIG_KEYS, hostPaths: HOST_CONFIG_PATCH_PATHS, declarationKeys: PROJECT_PATCH_DECLARATION_KEYS,
+});
+const MAX_CHAT_FIELDS = 256;
 
 /** Allow only Runtime's fixed metadata vocabulary into a chat response. */
 function chatApplication(application: ConsoleConfigApplication | undefined): ConsoleConfigApplication | undefined {
@@ -216,7 +232,7 @@ export class ConsoleConfigurationStore {
         if (error instanceof ConfigChatAccessError || error instanceof ConfigChatRequestRejectedError) throw error;
         // The save boundary may have been crossed. Never misclassify an unknown
         // operation as an access denial or recommend repeating the write.
-        throw new Error('配置保存或生效结果未确认，请先在 CLI 或 Console 核验当前状态。');
+        throw new Error('配置保存或生效结果未确认，请先在 CLI 或 Console 核验当前状态。', { cause: error });
       }
     });
   }
@@ -252,7 +268,14 @@ export class ConsoleConfigurationStore {
       });
       if (current.revision !== request.expectedRevision) return await conflict(current);
       const candidate = applyConfigPatches(current.document, patches);
+      // Chat writes exactly one leaf (C1/C4); scope and leaf shape are proven before values.
+      if (mode === 'chat' && patches.length !== 1) throw new ConfigChatAccessError('leaf');
       if (mode === 'chat') for (const patch of patches) {
+        assertChatConfigurationScope(patch.path, CHAT_SCOPE);
+        if (patch.op === 'remove' && readPath(current.document, patch.path) === undefined) throw new ConfigChatAccessError('missing');
+        const schema = await this.#chatSchema(current.document, patch.path);
+        if (patch.op === 'remove') assertChatOptionalLeaf(schema, patch.path.slice(1));
+        else chatLeafTypes(schema, patch.path.slice(1));
         await this.#assertChatPath(candidate, patch.path, [readPath(candidate, patch.path)]);
         if (readPath(current.document, patch.path) !== undefined) {
           await this.#assertChatPath(current.document, patch.path, [readPath(current.document, patch.path)]);
@@ -379,40 +402,68 @@ export class ConsoleConfigurationStore {
     return maskConfigValue(schema, path, value);
   }
 
-  async #assertChatPath(document: RuntimeConfigDocument, path: readonly string[], values: readonly unknown[], deep = true): Promise<unknown> {
-    if (!path.length) throw new ConfigChatAccessError('unknown');
-    let schema: unknown;
-    try { schema = await this.#schemas.readJson(path[0], document); }
+  async #chatSchema(document: RuntimeConfigDocument, path: readonly string[]): Promise<unknown> {
+    if (!path.length) throw new ConfigChatAccessError('leaf');
+    try { return await this.#schemas.readJson(path[0]!, document); }
     catch { throw new ConfigChatAccessError('unknown'); }
+  }
+
+  async #assertChatPath(document: RuntimeConfigDocument, path: readonly string[], values: readonly unknown[], deep = true): Promise<unknown> {
+    assertChatConfigurationScope(path, CHAT_SCOPE);
+    const schema = await this.#chatSchema(document, path);
     assertChatConfigurationAccess(schema, path.slice(1), values, deep, path);
     return schema;
   }
 
-  readChat(path: readonly string[], mode: 'get' | 'list' | 'schema' | 'status'): Promise<ChatConfigurationRead> {
+  /** Leaves under `prefix` that pass the same scope, leaf and value checks as `get`. */
+  async #chatFields(document: RuntimeConfigDocument, prefix: readonly string[]): Promise<readonly ChatConfigurationField[]> {
+    if (prefix.length) {
+      if (CHAT_SCOPE.declarationKeys.has(prefix[0]!)) throw new ConfigChatAccessError('scope');
+      if (!CHAT_SCOPE.hostKeys.includes(prefix[0]!)) assertChatConfigurationScope(prefix, CHAT_SCOPE);
+    }
+    const roots: (readonly string[])[] = [];
+    if (!prefix.length || CHAT_SCOPE.hostKeys.includes(prefix[0]!)) roots.push(...chatHostRoots(prefix, CHAT_SCOPE));
+    if (!prefix.length) {
+      for (const key of await this.#listKeys(document)) {
+        if (!CHAT_SCOPE.hostKeys.includes(key) && !CHAT_SCOPE.declarationKeys.has(key)) roots.push([key]);
+      }
+    } else if (!CHAT_SCOPE.hostKeys.includes(prefix[0]!)) roots.push(prefix);
+    if (prefix.length && !roots.length) throw new ConfigChatAccessError('scope');
+    const fields: ChatConfigurationField[] = [];
+    for (const root of roots) {
+      let schema: unknown;
+      try { schema = await this.#chatSchema(document, root); }
+      catch (error) { if (error instanceof ConfigChatAccessError) continue; throw error; }
+      for (const relative of chatConfigurationLeaves(schema, root.slice(1), MAX_CHAT_FIELDS)) {
+        if (fields.length >= MAX_CHAT_FIELDS) break;
+        const path = Object.freeze([root[0]!, ...relative]);
+        try {
+          await this.#assertChatPath(document, path, [readPath(document, path)]);
+          fields.push(Object.freeze({ path, type: chatLeafTypes(schema, relative) }));
+        } catch (error) { if (!(error instanceof ConfigChatAccessError)) throw error; }
+      }
+    }
+    return Object.freeze(fields);
+  }
+
+  /**
+   * Host-authenticated owner chat reads (C1). `get` returns one proven-safe leaf;
+   * `fields` lists manageable leaves and their types without values. Denials carry
+   * only a reason code.
+   */
+  readChat(path: readonly string[], mode: 'get' | 'fields'): Promise<ChatConfigurationRead> {
     return this.#afterMutations(async () => {
       try {
         if (!Array.isArray(path) || path.some(key => typeof key !== 'string' || !key || isForbiddenConfigurationPathSegment(key))) throw new ConfigChatAccessError('unknown');
         const { document, revision } = await this.#document.read();
-        const application = this.#readApplication?.();
-        if (application && application.operationId !== this.#applicationErrorAtOperationId) this.#applicationError = undefined;
-        if (mode === 'status') return Object.freeze({ revision, application: chatApplication(application), ...(this.#applicationError ? { applicationError: this.#applicationError } : {}) });
+        if (mode === 'fields') return Object.freeze({ revision, fields: await this.#chatFields(document, path) });
+        assertChatConfigurationScope(path, CHAT_SCOPE);
+        const schema = await this.#chatSchema(document, path);
+        chatLeafTypes(schema, path.slice(1));
         const value = readPath(document, path);
-        if (mode === 'get') {
-          await this.#assertChatPath(document, path, [value]);
-          if (value === undefined) throw new ConfigChatAccessError('missing');
-          return Object.freeze({ revision, value });
-        }
-        if (!path.length) {
-          const keys: string[] = [];
-          for (const key of await this.#listKeys(document)) {
-            try { await this.#assertChatPath(document, [key], [], false); keys.push(key); }
-            catch (error) { if (!(error instanceof ConfigChatAccessError)) throw error; }
-          }
-          return Object.freeze({ revision, ...(mode === 'list' ? { keys: Object.freeze(keys) } : { schema: { type: ['object'], properties: Object.fromEntries(keys.map(key => [key, {}])) } }) });
-        }
-        const schema = await this.#assertChatPath(document, path, [value], false);
-        const summary = chatConfigurationSchema(schema, path.slice(1), value);
-        return Object.freeze({ revision, ...(mode === 'list' ? { keys: Object.freeze(Object.keys(summary.properties as object)) } : { schema: summary }) });
+        await this.#assertChatPath(document, path, [value]);
+        if (value === undefined) throw new ConfigChatAccessError('missing');
+        return Object.freeze({ revision, value });
       } catch (error) {
         if (error instanceof ConfigChatAccessError) throw error;
         throw new ConfigChatAccessError('unknown');

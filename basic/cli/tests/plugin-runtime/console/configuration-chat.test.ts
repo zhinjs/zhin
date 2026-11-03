@@ -111,10 +111,17 @@ describe('Console project/chat configuration entrypoints', () => {
     expect(result).toMatchObject({ status: 'invalid', revision }); expect(JSON.stringify(result)).not.toContain('private-value');
     expect(await readFile(f.file, 'utf8')).toBe(before); expect(prepare).not.toHaveBeenCalled(); expect(applyConfiguration).not.toHaveBeenCalled();
   });
-  it('continues to permit known safe Host business fields through the canonical project boundary', async () => {
-    const f = await fixture(); const { revision } = await f.store.readSource();
-    expect(await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['locale'], value: 'en' }] })).toMatchObject({ status: 'saved' });
-    expect(JSON.parse(await readFile(f.file, 'utf8')).locale).toBe('en');
+  it('limits Host fields to the HOST_CONFIG_PATCH_PATHS chat whitelist (C3)', async () => {
+    const f = await fixture(); const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
+    const prepare = vi.spyOn(f.document, 'prepare');
+    for (const path of [['locale'], ['http', 'port'], ['ai', 'trigger', 'enabled'], ['database', 'dialect']]) {
+      await expect(f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path, value: 'en' }] })).rejects.toMatchObject({ kind: 'scope' });
+      await expect(f.store.readChat(path, 'get')).rejects.toMatchObject({ kind: 'scope' });
+    }
+    expect(prepare).not.toHaveBeenCalled(); expect(await readFile(f.file, 'utf8')).toBe(before);
+    expect(await f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['ai', 'trigger', 'ambient', 'mode'], value: 'shadow' }] }))
+      .toMatchObject({ status: 'saved' });
+    expect(JSON.parse(await readFile(f.file, 'utf8')).ai.trigger.ambient.mode).toBe('shadow');
   });
   it('writes a literal dot key, array index and escaped slash/tilde through the real project CAS path', async () => {
     const f = await fixture();
@@ -131,15 +138,19 @@ describe('Console project/chat configuration entrypoints', () => {
     expect(JSON.parse(await readFile(f.file, 'utf8')).demo['dot.key'][0]['a/b~c']).toBe('after');
     expect(await f.store.patchProject({ expectedRevision: revision, patches })).toMatchObject({ status: 'conflict' });
   });
-  it('reads precise safe fields and exposes only safe schema structure and keys', async () => {
+  it('reads precise safe leaves and lists only manageable leaf paths and types', async () => {
     const f = await fixture();
-    expect(await f.store.readChat(['demo', 'safe'], 'get')).toMatchObject({ value: { size: 1 } });
+    expect(await f.store.readChat(['demo', 'safe', 'size'], 'get')).toMatchObject({ value: 1 });
+    await expect(f.store.readChat(['demo', 'safe'], 'get')).rejects.toMatchObject({ kind: 'leaf' });
     expect(await f.store.readChat(parseConfigurationPath('/demo/dictionary/literal.dot~1key'), 'get')).toMatchObject({ value: 'public' });
-    const list = await f.store.readChat(['demo'], 'list');
-    expect(list.keys).toContain('label'); expect(list.keys).not.toContain('password'); expect(list.keys).not.toContain('unspecified');
-    const summary = JSON.stringify(await f.store.readChat(['demo'], 'schema'));
-    expect(summary).not.toMatch(/private-|password|writeOnly|default|examples|enum/);
-    expect((await f.store.readChat([], 'list')).keys).toContain('demo');
+    const fields = (await f.store.readChat(['demo'], 'fields')).fields!.map(field => field.path.join('.'));
+    expect(fields).toEqual(expect.arrayContaining(['demo.label', 'demo.count', 'demo.safe.size', 'demo.nested.color']));
+    expect(fields.join()).not.toMatch(/password|unspecified|credential|dictionary/);
+    const summary = JSON.stringify(await f.store.readChat(['demo'], 'fields'));
+    expect(summary).not.toMatch(/private-|writeOnly|default|examples|enum/);
+    const all = (await f.store.readChat([], 'fields')).fields!.map(field => field.path.join('.'));
+    expect(all).toContain('demo.label'); expect(all).toContain('ai.trigger.ambient.mode');
+    expect(all.some(path => /^(?:locale|http|database|plugins|configVersion)\b/u.test(path) || path === 'ai.trigger.enabled')).toBe(false);
   });
   it.each([['demo', 'password'], ['demo'], ['demo', 'nested'], ['demo', 'unspecified'], ['demo', 'absent']])('rejects sensitive or unknown target %j without returning data', async (...path) => {
     const f = await fixture();
@@ -148,7 +159,7 @@ describe('Console project/chat configuration entrypoints', () => {
   it('rejects ancestor replacement/removal even when secrets are omitted from the new value', async () => {
     const f = await fixture(); const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
     for (const patch of [{ op: 'set' as const, path: ['demo'], value: { label: 'after' } }, { op: 'remove' as const, path: ['demo'] }]) {
-      await expect(f.store.patchChat({ expectedRevision: revision, patches: [patch] })).rejects.toMatchObject({ kind: 'sensitive' });
+      await expect(f.store.patchChat({ expectedRevision: revision, patches: [patch] })).rejects.toMatchObject({ kind: 'leaf' });
     }
     expect(await readFile(f.file, 'utf8')).toBe(before);
   });
@@ -284,8 +295,8 @@ describe('Console project/chat configuration entrypoints', () => {
     expect((await f.store.validatePluginConfig('demo', value)).valid).toBe(true);
     const before = await readFile(f.file, 'utf8'); const { revision } = await f.store.readSource();
     await expect(f.store.readChat(['demo', keyword === 'contains' ? 'samples' : 'label'], 'get')).rejects.toMatchObject({ kind: 'unknown' });
-    await expect(f.store.readChat(['demo'], 'get')).rejects.toMatchObject({ kind: 'unknown' });
-    await expect(f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['demo'], value }] })).rejects.toMatchObject({ kind: 'unknown' });
+    await expect(f.store.readChat(['demo'], 'get')).rejects.toBeInstanceOf(ConfigChatAccessError);
+    await expect(f.store.patchChat({ expectedRevision: revision, patches: [{ op: 'set', path: ['demo'], value }] })).rejects.toBeInstanceOf(ConfigChatAccessError);
     expect(await readFile(f.file, 'utf8')).toBe(before);
   });
   it('rejects nested schema resource scopes rather than resolving their references against the wrong root', async () => {
