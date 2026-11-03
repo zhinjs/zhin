@@ -1,3 +1,4 @@
+import { sensitiveConfigKey } from './configuration-schema-safety.js';
 /**
  * Masks stored configuration values before they leave the store in a response that the
  * caller did not ask to read (e.g. a trusted project patch conflict). Conservative: a
@@ -13,12 +14,8 @@ function record(value: unknown): value is Schema {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Credential-like names; token budgets (`maxTokens`, `tokenLimit`) stay ordinary settings. */
-export function sensitiveConfigKey(key: string): boolean {
-  const normalized = key.replace(/[^a-z0-9]/giu, '').toLowerCase();
-  return /(?:password|passwd|secret|apikey|accesskey|privatekey|credential|authorization|cookie)/u.test(normalized)
-    || normalized === 'pwd' || /(?:^|api|access|refresh|auth|bearer|bot|oauth|session|private|client)tokens?(?:v[0-9]+)?$/u.test(normalized);
-}
+/** Credential-like names; shared with the chat field policy (single source). */
+export { sensitiveConfigKey } from './configuration-schema-safety.js';
 
 function sensitiveSchema(schema: Schema): boolean {
   const metadata = schema['x-zhin-config'];

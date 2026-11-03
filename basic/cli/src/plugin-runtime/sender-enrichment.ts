@@ -1,8 +1,9 @@
-import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, type AdapterIndex } from '@zhin.js/adapter';
+import type { OperationSession } from '@zhin.js/feature-kit';
 import { isDeepStrictEqual } from 'node:util';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
-import { readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type RuntimeConfigDocument, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { childPluginId, rootPluginId, readPluginConfigurationMap, type CapabilityId, type ConfigDocumentPort, type RuntimeConfigDocument, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { expandEnvironmentValue, type RootPluginConfigurationSelection } from '@zhin.js/runtime';
 
 export interface EndpointRoleResolver {
@@ -11,6 +12,39 @@ export interface EndpointRoleResolver {
 }
 interface Roles { readonly master?: string; readonly trusted: readonly string[] }
 interface PluginRoles { readonly base: Roles; readonly endpoints: Map<string, Roles | undefined> }
+
+export type ConfigurationChatAuthorizer = (session: OperationSession<string>, adapters: AdapterIndex) => boolean;
+
+/** Startup role authority, matched against the actual operation's Adapter and account.
+ * C2 (Accept): in a private chat, the sender must be the effective `master` of *any*
+ * configured endpoint of the same Adapter that received the message — each endpoint's
+ * leaf `master`, else its inherited Plugin-level `master`. The identity therefore stays
+ * on the receiving Adapter/platform; masters of other Adapters (including another
+ * instance of the same Adapter package) never qualify. `ai.trigger.masters` has no
+ * platform dimension and is deliberately not consulted in v1.
+ * Direct declared owners are mapped with the canonical PluginId constructor. Nested
+ * owners never borrow their parent's role configuration or a legacy display alias.
+ */
+export function createConfigurationChatAuthorizer(
+  startup: RuntimeConfigDocument, endpointRoles: EndpointRoleResolver,
+): ConfigurationChatAuthorizer {
+  const owners = new Map(Object.keys(readPluginConfigurationMap(startup)).map(key => [childPluginId(rootPluginId(), key), key]));
+  return (session, adapters) => {
+    if (session.scene.kind !== 'private' || !session.sender?.id || !isAdapterIndex(adapters)) return false;
+    const id = session.scene.endpoint.id as CapabilityId;
+    const adapter = adapters.adapterForEndpoint(id);
+    const child = adapter?.find(id);
+    if (!adapter || !child || session.adapter !== adapter || session.endpoint !== adapter.getEndpoint(child.desired.instanceId)) return false;
+    if (!child.started || session.signal.aborted) return false;
+    const key = owners.get(adapter.descriptor.owner);
+    if (key === undefined) return false;
+    const sender = session.sender.id;
+    // Receiving endpoint first, then every other endpoint configured on this same Adapter
+    // (removed/retiring entries never qualify).
+    return endpointRoles.resolveOwner(key, child.desired.endpointId) === sender
+      || adapter.list().some(entry => !entry.removed && !entry.retiring && endpointRoles.resolveOwner(key, entry.endpointId) === sender);
+  };
+}
 
 /** Resolve account roles inside their declaring Plugin. Legacy aliases are accepted only when unique. */
 export async function createEndpointRoleResolver(config: RuntimeConfigDocument | ConfigDocumentPort): Promise<EndpointRoleResolver> {
