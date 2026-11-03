@@ -65,6 +65,10 @@
 
 **谁能起草与全实例待审上限（#1051 F4）。** 只有 Bot 的**主人**（端点 owner / `trigger.masters`，回合角色 `master`）与 **IM 审批人**（`toolHardGate.imApproval` 开启时 `approverIds` 里该平台的人）能起草：其他人的回合里 `change_draft` 不出现在工具面（模型看不到就不会尝试）；万一被调用，直接拒绝、不写暂存，审计 `change_draft_forbidden`（`deny`）。群成员、群管理员、`trusted`、私聊陌生人都不能起草；审批人范围不变。另外全实例同时最多 3 个待审变更：已满时 `change_draft` 不起草、告诉模型等主人处理掉几张再来（审计 `change_pending_cap_reached`），挡住多会话刷卡。
 
+**禁改配置键的维护方式（#1051 F2）。** 上文暂存区一段列出的 `SELF_CHANGE_SECURITY_CONFIG_KEYS` 与宿主 schema 中标 `x-zhin-config.security` 的键由守卫单测保持一致：schema 里新加安全标记的键一定进拒绝集，避免名单漏网；拒绝发生在起草时，生效前再按当前名单复核一次。bypass、自动审核、主人身份、记住授权都不能让这些键经 `configPatch` 进审批——要改只能由人自己编辑配置文件——人在编辑器里直接改不经过 Bot 的任何闸门；让 Bot 用文件工具或 shell 写根配置仍是 `self` 硬闸，每次都要新鲜人工批准。
+
+**收口状态（#1051，ADR 0040 已 Accepted）。** Fin 确认的默认值见 [ADR 0040「Fin 已确认的默认值」](../adr/0040-controlled-self-change.md#fin-已确认的默认值)。要点：试跑里被跳过（`skipped`）的检查不阻断提交，审批卡的试跑结论标出跳过数（「通过 (N skipped)」，逐项结论在 `change.json` 的 `trial`）；一次人工批准即发布，不设第二道审批；新建本地插件包与 npm 安装依赖不在本期。回归由脚本化 harness eval（`packages/im/agent/evals/cases/self-change-*.case.ts`：主人私聊起草 `/ping`、试跑失败后重新起草、禁改键被拒后不改用文件写入、已有待审时不再起草、群成员不能起草、不直接写约定目录）与 `basic/cli/tests/plugin-runtime/self-change-e2e.test.ts`（假守护进程 exit 75 → `recover()` → 回报、回滚一次、急停、生效中途被杀、残留 `approved` 的 1 小时时限）覆盖，随 `pnpm --filter @zhin.js/agent eval` 与单测运行。**尚未提供**：Console「自我变更」详情 / diff 页面与 IM 卡 diff 摘录（#1051 F3，延后）——目前审批卡与 Console RPC 都不含文件正文与配置值。用户向说明见[让 Bot 改自己](./self-change.md)。
+
 ```yaml
 ai:
   agent:
