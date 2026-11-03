@@ -1,0 +1,27 @@
+plugins/adapters/douyin-live/schema.json
+  s_9622fd28aba994::t_099baa0cb581a9 145
+plugins/adapters/douyin-live/src/client.ts
+  s_9622fd28aba994::t_897715263b86ff 23-27,219-220,239-240
+plugins/adapters/douyin-live/src/protocol.ts
+  s_9622fd28aba994::t_24126c0f339201 77-79
+plugins/adapters/douyin-live/tests/douyin-live-endpoint.test.ts
+  s_9622fd28aba994::t_df47a963f6eb4c 125-126
+plugins/adapters/douyin-live/tests/douyin-live-protocol.test.ts
+  s_9622fd28aba994::t_9fdcd607291142 26-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "80a34565daa99ba8b4bca0e3abb2c5d2ecbcc4b2",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
