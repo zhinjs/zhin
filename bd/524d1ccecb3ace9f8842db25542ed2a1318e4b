@@ -1,0 +1,25 @@
+.changeset/config-cli-online-offline-p1.md
+  s_58400078c2bd23::t_3efe6aa36727c3 1-7
+basic/cli/README.md
+  s_58400078c2bd23::t_06e2dda71536e1 25
+docs/cli/index.md
+  s_58400078c2bd23::t_83d423262f1ff2 107,110-114,118-136
+docs/en/cli/index.md
+  s_58400078c2bd23::t_48610983d8785f 107,110-114,118-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bd524d1ccecb3ace9f8842db25542ed2a1318e4b",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
