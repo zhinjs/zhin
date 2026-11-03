@@ -5,7 +5,7 @@
  * IM inbound always resolves the `zhin` binding; the matcher that read these
  * fields had no production caller. They stay accepted for compatibility:
  * startup logs a warning, `zhin config check` reports them, and
- * `zhin config check --fix --offline` deletes them. Other agents are still reached by
+ * `zhin config check --fix` deletes them. Other agents are still reached by
  * binding name (spawn_task, collaboration roles, assistant runtime).
  */
 export const DEPRECATED_AGENT_BINDING_KEYS: Readonly<Record<string, string>> = Object.freeze({

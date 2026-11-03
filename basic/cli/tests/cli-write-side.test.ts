@@ -61,17 +61,14 @@ describe('utils/config-file', () => {
 
 describe('config 命令（JSON 落盘）', () => {
   it('config set 真正写入 config.json', async () => {
-    fs.writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'config-command-fixture', version: '1.0.0', type: 'module',
-      zhin: { protocol: 1, type: 'plugin', entry: './plugin.mjs', platformFeatures: false } }));
-    fs.writeFileSync(path.join(tmp, 'plugin.mjs'), 'export default {};');
     fs.writeFileSync(
       path.join(tmp, 'config.json'),
       JSON.stringify({configVersion: 2, plugins: {}, log_level: 'info', ai: {enabled: false}}),
     );
-    await configCommand.parseAsync(['node', 'zhin', 'set', 'log_level', 'debug', '--offline']);
+    await configCommand.parseAsync(['node', 'zhin', 'set', 'ai.enabled', 'true']);
     const config = await readConfig(path.join(tmp, 'config.json'));
-    expect((config.ai as Record<string, unknown>).enabled).toBe(false);
-    expect(config.log_level).toBe('debug');
+    expect((config.ai as Record<string, unknown>).enabled).toBe(true);
+    expect(config.log_level).toBe('info');
   });
 });
 

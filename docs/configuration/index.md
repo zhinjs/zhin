@@ -94,30 +94,17 @@ npx zhin runtime start --mode production      # 均不监听
 
 模型目录项删除、重命名、Agent 绑定拓扑或能力契约的破坏性修改不支持热更新，保留为待进程重启。第三方代码若长期保存自己取得的 SDK/provider 引用，也不会自动换成新对象，应在新操作时通过框架入口重新取得。
 
-### CLI 和聊天入口
+### 在聊天中管理配置
 
-除了编辑文件和 Console，也可以通过 CLI 管理配置。默认连接运行中的 Host，保存前完整校验，使用文件修订防止覆盖并发编辑，然后按上述边界申请生效；不需要开启 watch：
+安装根 Command Feature 后，真实 Bot 主人可以在**私聊**使用 `config` 查看当前调用方式。命令包括 `list / get / schema / status / set / delete`，提示会自动带上当前账号的命令前缀和 namespace；无需 AI Agent。任一账号的合法主人可以管理项目范围，群聊和频道均不开放此入口。
 
-```bash
-npx zhin config get ai.enabled
-npx zhin config set ai.agents.zhin.model '"my-model"'
-npx zhin config status
-npx zhin config apply
-# 待重启的 HTTP 配置、随机端口或远程 Host：指定实际服务地址
-npx zhin config --live http://127.0.0.1:8068 --token-env ZHIN_CONSOLE_TOKEN status
-# Host 停止时，仅保存本地文件，不请求生效
-npx zhin config --offline set menuKeyword '"菜单"'
-```
+路径可用 `mybot.nickname` 或 JSON Pointer，例如 `/mybot/endpoints/0/nickname`；字面含点的字段键需要 Pointer，`~1` 表示 `/`，`~0` 表示 `~`。`set` 的值必须是 JSON，例如 `config set mybot.nickname -- "小智"`（这里省略实际前缀）。
 
-凭据通过环境变量传给 CLI，不放进命令参数。自动发现地址仅参考本地 HTTP 配置，不证明监听器已经采用该配置。连接失败不会改写本地文件或自动转离线。`schema` 展示表单 Schema 投影，`status` 显示文件版本与生效回执；响应丢失时先只读核对，不能把较新的回执当成先前请求未保存的证明。
+聊天修改复用项目补丁的结构保护：`configVersion`、`plugins`、`disable_plugins`、根 `plugin` 和未声明实例不能写入。这些范围由配置源码或既有专门管理入口处理，不会绕过到旧写接口。
 
-在线 `set/delete` 与聊天修改沿用项目补丁的结构保护：`configVersion`、`plugins`、`disable_plugins`、根 `plugin` 和未声明实例不能写入，返回拒绝且不保存。这些范围仍由配置源码或既有专门管理入口处理，命令不会改走旧写接口来绕过保护。
+密钥、token、密码等敏感字段不经聊天读取或写入。缺少 Schema、无法确定安全范围、父对象包含敏感后代或数组移位会影响敏感范围时也会拒绝，并引导使用配置源码、Console 或对应 CLI 功能。`schema` 仅展示允许披露的结构，不回显默认值、示例、枚举、冲突原值或原始异常。
 
-路径支持 `ai.enabled` 或 JSON Pointer，例如 `/plugin/key.with.dot`；字段键本身有点时使用 Pointer，`~1` 表示 `/`，`~0` 表示 `~`。数组删除会收拢后续索引，不接受越界索引或隐式追加。离线保存会加载声明并校验，但不启动 Runtime、不调用插件 setup；导入内联配置声明仍可能执行模块顶层代码。`config check` 是本地诊断，`check --fix` 必须显式加 `--offline` 才能校验后保存。
-
-安装根 Command Feature 后，真实 Bot 主人可以在**私聊**使用 `config` 查看当前调用方式，提供 `list / get / schema / status / set / delete`。实际提示由框架带上当前账号的前缀和 namespace；这里省略前缀。任一账号的合法主人可以管理项目全局配置，不依赖 AI Agent。
-
-聊天 `set` 的值必须是 JSON，例如 `config set mybot.nickname -- "小智"`。聊天不读取或写入密钥、token、密码等敏感字段；缺少 Schema、无法确定安全范围、覆盖或删除父对象会触及敏感后代时也会拒绝，并引导使用 CLI／Console。安全列表和 Schema 只展示允许披露的结构，不回显敏感默认值、冲突原值或原始校验异常。保存与生效仍遵守整份期望配置的应用流程，不会只应用本条命令涉及的字段。
+`get` 读取的是已保存的期望配置；`status` 区分保存与运行生效，修改仍遵守上文按组应用的边界。保存前失败明确提示未保存；提交确认丢失则提示结果未确认，不重试、不回滚。一次操作的回复语言固定；配置更新引起 Root 重建时仍通过原消息链回复一次，新操作再采用新语言。
 
 ### 文件与数据库记录各管什么
 
@@ -362,7 +349,7 @@ ai:
 | `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
 | `permission.task` | `spawn_task` 可见子 Agent 类型（glob → `allow` / `deny`） |
 
-IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix --offline` 会删除，详见 [ai.agents](../ai/index.md#ai-agents)。
+IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除，详见 [ai.agents](../ai/index.md#ai-agents)。
 
 ### mcpServers：外部 MCP Server
 

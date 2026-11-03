@@ -3,7 +3,7 @@
  *
  * Each one is read by nothing at runtime, so removing it changes no
  * behaviour. They stay accepted for compatibility: startup logs a warning,
- * `zhin config check` reports them, and `zhin config check --fix --offline` deletes
+ * `zhin config check` reports them, and `zhin config check --fix` deletes
  * them. See docs/ai/default-behavior.md for the full switch inventory.
  */
 export const DEPRECATED_AGENT_CONFIG_KEYS: Readonly<Record<string, string>> = Object.freeze({

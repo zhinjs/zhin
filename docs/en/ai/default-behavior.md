@@ -184,7 +184,7 @@ Dispositions: **keep**, **preset** (advanced, use defaults), **merge-candidate**
 1. Deprecated keys are still accepted and never block startup;
 2. A warning is logged once per deprecated key at startup;
 3. `zhin config check` reports `ai.agent_<key>_deprecated`;
-4. `zhin config check --fix --offline` removes them;
+4. `zhin config check --fix` removes them;
 5. Types keep them for at least one minor release before removal.
 
 ## Gate for new switches

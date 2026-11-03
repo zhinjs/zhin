@@ -88,7 +88,7 @@ export interface ZhinAgentConfig {
   maxIterations?: number;
   timeout?: number;
   preExecTimeout?: number;
-  /** @deprecated No effect (#735); `zhin config check --fix --offline` removes it. */
+  /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
   maxSkills?: number;
   maxTools?: number;
   contextTailMessageLimit?: number;
@@ -122,7 +122,7 @@ export interface ZhinAgentConfig {
   subagentAutoContinue?: boolean;
   subagentDirectImDelivery?: boolean;
   workerExecApprovalMode?: ExecApprovalMode;
-  /** @deprecated No effect (#735); `zhin config check --fix --offline` removes it. */
+  /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
   taskExecApprovalMode?: ExecApprovalMode;
   maxSubagentIterations?: number;
   /** Plugin-runtime turns: `sync` offers spawn_task as an in-turn sub-agent; `off` (default) hides it. */
@@ -172,7 +172,7 @@ export interface ZhinAgentConfig {
   outputSchema?: boolean | 'segments' | Record<string, unknown>;
   steeringMode?: QueueMode;
   followUpMode?: QueueMode;
-  /** @deprecated No effect (#735); `zhin config check --fix --offline` removes it. */
+  /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
   policyDenialStopAfter?: number;
   deferredAutoContinue?: boolean;
   deferredAutoContinueMaxDepth?: number;

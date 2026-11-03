@@ -94,28 +94,17 @@ A save can apply partially. For example, an account nickname fallback and defaul
 
 Deleting or renaming model definitions, changing Agent binding topology, and breaking capability contracts are not hot-updated; they remain pending a process restart. Third-party code that retains its own SDK/provider reference does not receive a replacement automatically; acquire it through the framework again for a new operation.
 
-### CLI and chat configuration
+### Manage configuration in chat
 
-The CLI connects to the running Host by default, validates the complete candidate, saves with a source-revision check, and requests selective application. Watch mode is not required:
+With the root Command Feature installed, a real Bot owner can use `config` in a **private chat** to discover `list / get / schema / status / set / delete`. Hints include the actual account prefix and namespace. AI Agent is not required. Any legitimate account owner can manage project scope; groups and channels cannot use this entry point.
 
-```bash
-npx zhin config get ai.enabled
-npx zhin config set ai.agents.zhin.model '"my-model"'
-npx zhin config status
-npx zhin config apply
-npx zhin config --live http://127.0.0.1:8068 --token-env ZHIN_CONSOLE_TOKEN status
-npx zhin config --offline set menuKeyword '"Menu"'
-```
+Paths accept simple dotted notation or JSON Pointer, such as `/mybot/endpoints/0/nickname`. Use Pointer for literal dots; `~1` escapes `/` and `~0` escapes `~`. Values must be JSON, for example `config set mybot.nickname -- "My Bot"` (add the actual configured prefix).
 
-Pass credentials through environment variables rather than command arguments. Address discovery reads local HTTP configuration; pending changes or a random port may require `--live` with the actual listener address. Connection failures never fall back to local writes. `schema` displays the Console form projection; `status` reports saved revisions and application receipts. A lost response is unconfirmed: inspect status without automatically repeating the mutation. A newer receipt does not prove an earlier request was not saved.
+Chat writes preserve the project-patch protections: `configVersion`, `plugins`, `disable_plugins`, root `plugin`, and undeclared instances cannot be written. Use source editing or existing dedicated management entry points for those scopes. Commands never bypass this protection through older write APIs.
 
-Online `set/delete` and chat writes preserve the project-patch protections: writes to `configVersion`, `plugins`, `disable_plugins`, root `plugin`, and undeclared instances are rejected without saving. Use configuration-source editing or the existing dedicated management entry points for those scopes. Commands never fall back to older write APIs to bypass the protection.
+Chat cannot read or write secrets, tokens or passwords. Missing schemas, uncertain scopes, sensitive descendants, and array shifts affecting sensitive data are rejected with guidance to source editing, Console or the appropriate CLI function. Schema summaries expose permitted structure without defaults, examples, enum values, conflict values or raw exceptions.
 
-Paths accept simple dotted notation or JSON Pointer, such as `/plugin/key.with.dot`. Use Pointer for literal dots; `~1` escapes `/` and `~0` escapes `~`. Array deletion closes the gap; out-of-range indices and implicit append are rejected. Offline saves validate declarations without starting a Runtime or calling plugin setup. Importing inline declarations can still execute module top-level code. `config check` remains a local diagnostic; `check --fix` requires explicit `--offline` before validated local saving.
-
-When the root Command Feature is installed, a real Bot owner can use `config` in a **private chat** to discover `list / get / schema / status / set / delete`. The framework generates hints with the current account's prefix and namespace. Any legitimate account owner can manage project-wide configuration; AI Agent is not required.
-
-Chat values must be JSON, for example `config set mybot.nickname -- "My Bot"` (add the actual configured prefix). Chat cannot read or write secrets, tokens or passwords. Missing schemas, uncertain scopes, and replacing or deleting ancestors of sensitive fields are rejected with guidance to CLI/Console. Lists and schema summaries expose permitted structure without secret defaults, conflict values or raw exceptions. Saving still follows the complete desired-configuration pipeline; it does not apply only the field mentioned in the command.
+`get` reads the saved desired configuration. `status` distinguishes persistence from runtime application; changes follow the selective-application boundaries above. Failures before saving are reported as not saved; lost commit acknowledgement remains unconfirmed, without retry or rollback. A reply keeps its operation's language. If configuration rebuilds Root, that operation still replies once through its original message chain; new operations adopt the new language.
 
 ### Files and database records have separate ownership
 
@@ -364,7 +353,7 @@ ai:
 | `mcpServers` | List of MCP Server names visible to this Agent |
 | `permission.task` | `spawn_task` visible child Agent types (glob -> `allow` / `deny`) |
 
-IM messages always go to `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix --offline` deletes them. See [ai.agents](../ai/index.md#ai-agents).
+IM messages always go to `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` deletes them. See [ai.agents](../ai/index.md#ai-agents).
 
 ### mcpServers: External MCP Servers
 

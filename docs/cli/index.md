@@ -104,35 +104,18 @@ zhin setup --global        # 在 ~/.zhin 初始化全局实例
 
 选择网络数据库时，CLI 会检查端口范围，把连接字段写成环境变量引用，实际值写入 `.env`。完成后运行 `npx zhin config check`，可以在启动前发现缺失的数据库变量；如果连接值只在 `.env.production` 里，使用 `npx zhin config check --environment production`。
 
-### config：查询、保存与应用配置
+### config：读写配置文件
 
 ```bash
 zhin config list
 zhin config get <key>            # 支持嵌套路径，如 ai.enabled
 zhin config set <key> <value>    # value 支持 JSON
 zhin config delete <key>
-zhin config schema [section]     # Console 表单 Schema 投影
-zhin config status               # 保存版本与最近一次生效回执
-zhin config apply [--expected-revision <revision>]
 zhin config path                 # 显示配置文件路径
-zhin config check [--json] [--strict] [--environment production]
-zhin config check --fix --offline
-zhin config set log_level debug --offline
+zhin config check [--fix] [--json] [--strict]
 ```
 
-`list/get/set/delete/schema/status/apply` 默认连接运行中 Host，使用同一配置服务进行校验、版本检查和按需生效；不会启动第二个 Runtime。可用 `--live https://host.example/api` 指定地址，`--token-env ZHIN_CONSOLE_TOKEN` 指定 full token 的环境变量。未指定地址时从项目配置发现地址和凭据；如果 HTTP 地址或 token 尚待重启，发现值可能与运行中 Host 不同，请显式提供实际地址和凭据。连接失败不会自动改为本地写入。
-
-在线 `set/delete` 使用受保护的 `config:patch-project`：full scope 可修改 Host 配置和已声明插件实例的业务字段；`configVersion`、`plugins`、`disable_plugins`、根插件的 `plugin` 配置区以及未声明实例会返回 `invalid`。CLI 不会改用旧写接口绕过限制。结构调整使用配置源码或插件管理；显式离线保存仍须通过完整校验及源版本检查。下面的 `/plugin/key.with.dot` 是读取示例，不表示该路径允许在线写入。
-
-`get/list` 显示保存的期望配置，不等于所有字段已在运行中生效。保存后可能部分热更新、部分待重启；`status` 显示最近一次回执，`apply` 只申请应用已保存版本，不重复写文件。收到“结果未确认”时，保留输出中的 `expectedRevision` 和在线请求的 `requestId`，再只读查询 `status` 核对文件版本及生效回执。`requestId` 标识 HTTP 请求，不等于应用回执的 `operationId`，当前没有两者的持久查询映射；较新的回执不能证明原操作失败，不要直接重试。`--json` 输出单条紧凑 JSON，省略人读消息行。
-
-路径保留 `ai.enabled` 等点语法；字面包含点的键可用 JSON Pointer，例如 `zhin config get /plugin/key.with.dot`。`~1` 表示 `/`，`~0` 表示 `~`。数组使用已存在的数字索引；删除会收拢后续索引，不支持 `-` 追加或越界创建。追加时设置完整数组，保存时仍按源文件版本检查冲突。
-
-`--offline` 才允许直接保存本地文件，保存后不会请求运行中 Host 生效。离线保存先加载插件声明并组合完整 Schema、校验候选配置，再以原始源文件版本提交；不会执行插件 `setup`，但声明导入会执行模块顶层代码。声明或 Schema 不可用时拒绝保存。`schema` 展示的是表单投影，完整校验仍由 Host 或离线组合器负责。
-
-离线 `schema` 通过完整组合器生成，因此当前配置必须先通过校验；配置无效时可先运行只读 `check`，或连接仍在运行的 Host 查询 Schema。
-
-`config check` 保留只读本地诊断，不代表运行中 Host 已完整验证或应用配置。数据库连接变量缺失本身就是错误；其他警告可用 `--strict` 提升为错误。`--fix` 仅允许显式 `--offline`，完整预检后保存可安全迁移的字段，不自动请求生效。`path` 始终显示本地配置文件位置。
+`config check` 校验配置文件，`--fix` 自动修复可以安全迁移的字段。数据库连接变量缺失本身就是错误；其他警告可以用 `--strict` 提升为错误，适合在 CI 中使用。
 
 ### doctor：环境诊断
 

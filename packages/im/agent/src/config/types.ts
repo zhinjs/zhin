@@ -33,12 +33,12 @@ export interface AgentBindingConfig {
   mcpServers?: string[];
   /**
    * @deprecated Never took effect; accepted with a warning and removed by
-   * `zhin config check --fix --offline`. Dropped from the effective config.
+   * `zhin config check --fix`. Dropped from the effective config.
    */
   priority?: number;
   /**
    * @deprecated Never took effect (including `hasMedia`); accepted with a
-   * warning and removed by `zhin config check --fix --offline`. Dropped from the
+   * warning and removed by `zhin config check --fix`. Dropped from the
    * effective config.
    */
   match?: RouteMatchConfig | RouteMatchConfig[];

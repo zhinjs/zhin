@@ -244,7 +244,7 @@ ai:
 IM messages always go to `zhin`; other Agents are only called by name (`spawn_task`, collaboration roles).
 
 ::: warning Deprecated: `priority` / `match`
-`ai.agents.<name>.priority` and `match` (including `hasMedia`, `scene`, `adapter` and every other condition) never took effect. They are still accepted, but startup logs a warning, `zhin config check --fix --offline` deletes them, and they will be removed in the next minor release. To let a text-only model understand images, use [`ai.multimodal.perception`](#ai-multimodal-perception).
+`ai.agents.<name>.priority` and `match` (including `hasMedia`, `scene`, `adapter` and every other condition) never took effect. They are still accepted, but startup logs a warning, `zhin config check --fix` deletes them, and they will be removed in the next minor release. To let a text-only model understand images, use [`ai.multimodal.perception`](#ai-multimodal-perception).
 :::
 
 ### ai.mcpServers

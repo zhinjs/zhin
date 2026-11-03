@@ -6,7 +6,6 @@ export { ConsoleConfigurationStore, ConfigChatRequestRejectedError } from './con
 export type { ChatConfigurationRead } from './configuration.js';
 export { ConfigChatAccessError } from './configuration-chat-policy.js';
 export { parseConfigurationPath } from './configuration-path.js';
-export { jsonSchemaToConsoleSchema } from './console-schema.js';
 export { ConfigPatchScopeError } from './configuration-patch.js';
 export {
   createConsoleHostModules,

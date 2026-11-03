@@ -100,7 +100,7 @@ export class AIService {
     this.sourceConfig = config;
     this.imageAssets = config.imageStorage ? new R2ImageAssetPublisher(config.imageStorage) : undefined;
     for (const { agent, key, reason } of findDeprecatedAgentBindingKeys((config as { agents?: unknown }).agents)) {
-      logger.warn(`ai.agents.${agent}.${key} 已弃用，${reason} 运行 zhin config check --fix --offline 可移除。`);
+      logger.warn(`ai.agents.${agent}.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
     }
     const canonical = config.modelCatalog !== undefined || config.modelPolicy !== undefined
       || Object.values(config.agents ?? {}).some(binding => binding.preset !== undefined);
@@ -128,7 +128,7 @@ export class AIService {
     this.accessConfig = config.access || {};
     this.agentConfig = config.agent;
     for (const { key, reason } of findDeprecatedAgentConfigKeys(config.agent)) {
-      logger.warn(`ai.agent.${key} 已弃用，${reason} 运行 zhin config check --fix --offline 可移除。`);
+      logger.warn(`ai.agent.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
     }
     this.imageGenerationGlobal = config.imageGeneration;
     this.perceptionConfig = resolvePerceptionConfig(
