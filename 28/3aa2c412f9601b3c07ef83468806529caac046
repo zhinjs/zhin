@@ -1,0 +1,23 @@
+.changeset/configuration-chat-field-policy.md
+  s_ce30e957c2b2e6::t_090bef356d0227 5
+docs/configuration/index.md
+  s_ce30e957c2b2e6::t_5a83110cc3fdf6 110-111,116-118
+docs/en/configuration/index.md
+  s_ce30e957c2b2e6::t_274ae9e4d75aad 110-111,116-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "283aa2c412f9601b3c07ef83468806529caac046",
+  "prompts": {},
+  "sessions": {
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
