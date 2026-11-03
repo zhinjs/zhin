@@ -1,0 +1,21 @@
+docs/configuration/index.md
+  s_58400078c2bd23::t_5d1d073299e08a 108
+docs/en/configuration/index.md
+  s_58400078c2bd23::t_2ce84c4c0be961 108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c58fecb714be3d55859e15a293e42ec33691c3b2",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
