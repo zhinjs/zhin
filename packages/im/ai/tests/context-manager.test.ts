@@ -364,16 +364,15 @@ describe('ContextManager', () => {
         });
       }
 
-      const mockProvider = {
-        models: ['test-model'],
-        completeText: vi.fn().mockResolvedValue('这是总结'),
-      };
-
-      manager.setAIProvider(mockProvider as any);
+      const complete = vi.fn().mockResolvedValue('这是总结');
+      manager.setSummaryCompletion(complete);
 
       const result = await manager.summarize('group-123');
 
-      expect(mockProvider.completeText).toHaveBeenCalled();
+      expect(complete).toHaveBeenCalledWith(expect.objectContaining({ system: expect.any(String), prompt: expect.stringContaining('消息') }));
+      expect(complete.mock.calls[0]).toHaveLength(1);
+      expect(complete.mock.calls[0][0]).not.toHaveProperty('temperature');
+      expect(complete.mock.calls[0][0]).not.toHaveProperty('maxTokens');
     });
   });
 

@@ -16,9 +16,9 @@ const next={...snapshot,generation:8,config:new Map([[root,{label:'new-config'}]
 const invocation={signal:new AbortController().signal,traceId:'trace',turnId:'turn',sessionKey:'session',origin:{kind:'internal',source:'test'},principal:{subjectId:'test',roles:[]},policy:{permissions:[],unattended:true,network:{enabled:false,httpsOnly:true,allowedDomains:[]}}};
 let oldActive=true,newActive=true;
 const ingress=new CapabilityIngress();
-const old=await ingress.read(snapshot,root,()=>oldActive);
+const old=await ingress.read({snapshot,owner:root,isActive:()=>oldActive});
 const pending=old.tools[0].execute({wait:true},invocation);
-const current=await ingress.read(next,root,()=>newActive);
+const current=await ingress.read({snapshot:next,owner:root,isActive:()=>newActive});
 const currentValue=await current.tools[0].execute({},invocation);
 resume();const oldValue=await pending;
 newActive=false;let retired=false;try{await current.tools[0].execute({},invocation);}catch(error){retired=error.message.includes('scope has ended');}

@@ -279,7 +279,7 @@ describe('DecisionEngagementJudge', () => {
     expect(observe).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'abstained', reason: 'low_confidence' }));
   });
 
-  it('throws on invalid answers, provider errors and timeouts so the chat-model judges can take over', async () => {
+  it('preserves invalid answers, provider errors and timeouts as failed judgments', async () => {
     for (const [result, reason] of [
       [{ model: 'jev-1.14', answers: { engagement: { type: 'choice', choice: 'maybe', probabilities: {} } }, usage: { inputTokens: 1, outputTokens: 1 } }, 'invalid_response'],
       [new Error('503 channel_unavailable'), 'provider_error'],
@@ -349,13 +349,14 @@ describe('createAmbientDecisionJudge', () => {
     expect(createAmbientDecisionJudge({ base: { judge: async () => yes }, provider: service(quiet), policy: { mode: 'off' } })).toBeUndefined();
   });
 
-  it('active: the decision provider decides and the chat-model judges are the fallback', async () => {
+  it('active: the selected decision model fails without invoking another model', async () => {
     const base = { judge: vi.fn(async () => yes) } satisfies EngagementJudge;
     const active = createAmbientDecisionJudge({ base, provider: service(quiet), policy: { mode: 'active' } })!;
     await expect(active.judge(input())).resolves.toMatchObject({ engage: false, source: 'decision:jev-1.14' });
     expect(base.judge).not.toHaveBeenCalled();
     const failing = createAmbientDecisionJudge({ base, provider: service(new Error('down')), policy: { mode: 'active' } })!;
-    await expect(failing.judge(input())).resolves.toEqual(yes);
+    await expect(failing.judge(input())).rejects.toThrow('provider_error');
+    expect(base.judge).not.toHaveBeenCalled();
   });
 
   it('shadow: the chat-model judges decide and the decision is only reported', async () => {

@@ -222,7 +222,7 @@ export const doctorCommand = new Command('doctor')
           try {
             const decisionPackage = fs.existsSync(path.join(cwd, 'package.json'))
               ? await fs.readJSON(path.join(cwd, 'package.json')) : {};
-            const decisionIssues = diagnoseDecisionConfig(loadedConfig, decisionPackage);
+            const decisionIssues = diagnoseDecisionConfig({ config: loadedConfig, packageJson: decisionPackage });
             if (decisionIssues.length) {
               results.push({ name: '结构化决策配置', status: 'error', message: decisionIssues.join('；'), fix: 'zhin setup --decisions' });
             } else {
@@ -241,7 +241,6 @@ export const doctorCommand = new Command('doctor')
             ensureConsole: true,
             ensureSandbox: true,
             ensureHttp: true,
-            migrateAiLegacy: true,
           });
           if (await applyProjectConfigPlan(plan)) {
             loadedConfig = plan.after;

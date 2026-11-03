@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { RED_CIRCLE_PNG } from '../../evals/fixtures/images.js';
 import { describe, expect, it, vi } from 'vitest';
 import { aiOutboundJsonSchema, buildAiOutboundJsonSchema, DEFAULT_AI_OUTBOUND_SEGMENT_TYPES, type AiOutboundSegmentProfile } from '@zhin.js/core';
@@ -53,8 +54,8 @@ async function run(responses: ReturnType<typeof assistantTextReply>[], options: 
       loadContext: async () => ({ messages: [] }),
       appendMessages: async (_session: string, messages: AgentMessage[]) => { persisted.push(...messages); },
     },
-    getTurnProvider: () => ({ name: 'mock' }),
-    llmRuntime: llm.runtime,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(llm.runtime).model((llm.provider).name, (llm.provider).models?.[0]) }, completion: llm.runtime }),
+    completion: llm.runtime,
     config: { maxIterations: options.maxIterations ?? 3, outputSchema: options.outputSchema,
       providerResilience: { emptyReplyRetries: options.emptyReplyRetries ?? 0 },
       toolExecution: 'sequential', compaction: {}, contextTokens: 100_000,

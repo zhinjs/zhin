@@ -742,3 +742,13 @@ describe('runtime console RPC', () => {
     expect(restarted).toBe(true);
   });
 });
+
+it('does not retain removed model authorities in the demo HTTP allowlist', () => {
+  for (const route of ['personal-models', 'personal-session', 'personal-sessions', 'model-policy']) {
+    for (const method of ['GET', 'PUT', 'POST']) expect(isDemoHttpAllowed(method, `/api/agent/${route}`, '/api')).toBe(false);
+  }
+  expect(isDemoHttpAllowed('POST', '/api/agent/inference/key/prepare', '/api')).toBe(true);
+  for (const route of ['login/begin', 'login/complete', 'client/prepare', 'disconnect', 'targets']) {
+    expect(isDemoHttpAllowed(route === 'targets' ? 'GET' : 'POST', `/api/agent/inference/${route}`, '/api')).toBe(false);
+  }
+});

@@ -5,19 +5,23 @@
 ## 运行
 
 ```bash
-pnpm eval:chat --workspace ~/zhin-workspace --judge groq/openai/gpt-oss-120b
+pnpm eval:chat --workspace ~/zhin-workspace --model profile-chat --judge profile-judge
 ```
 
 | 参数 | 默认 | 说明 |
 |---|---|---|
-| `--workspace` | 当前目录 | 被测工作区，读取它的 `zhin.config.yml`、`.env`、`SOUL.md` 等引导文件 |
-| `--agent` | `zhin`，没有则取第一个 | 读取 `ai.agents.<name>` 的 provider、model 和 nickname |
-| `--model` | Agent 绑定的模型 | 被测模型，写成 `providerAlias/model` |
-| `--judge` | 同 `--model` | 打分模型；建议换一个模型，避免自己给自己打分 |
+| `--workspace` | 当前目录 | 被测工作区，读取启动配置、持久化推理图与 `SOUL.md` 等引导文件；不加载 `.env` 或用户插件 |
+| `--agent` | `zhin`，没有则取第一个 | 读取角色用途所选 Profile 与启动配置中的 nickname |
+| `--model` | Agent 绑定的模型 | 被测模型的运行时 Profile ID；不接受旧 `providerAlias/model` |
+| `--judge` | 同 `--model` | 打分模型的运行时 Profile ID；建议换一个模型，避免自己给自己打分 |
 | `--runs` | `2` | 每个场景跑几次，用来看稳定性 |
 | `--only` | 全部 | 只跑指定的场景 id 或 tag，逗号分隔 |
 | `--baseline` | `reports/` 里最近的一份 | 对比的基线报告，`none` 表示不对比 |
 | `--concurrency` | `2` | 并发数；判断模型被限流时会按服务端要求的时间等待后重试 |
+
+此入口借用正式 headless Host，只装配官方 Driver 声明，不执行项目插件 setup；第三方 Driver 明确不可用。凭据由正式 Host 端口取得，环境变量引用从已授权启动进程取得，不自动加载 dotenv。运行会真实调用所选服务，离线测试不代表真实模型评测已执行。
+
+被测模型与判断模型的采样／输出参数均来自各自 Profile，不再隐含覆盖判断模型的 temperature 或 maxTokens；需要旧值 0／2048 时在判断 Profile 中显式配置。120 秒超时、单次请求重试配置、429 节流和评测总预算保持原有规则。报告记录 Profile、native model 与显式参数；供应商未返回的默认值保持未知。
 
 报告写到 `evals/chat/reports/<时间>.{json,md}`（不入库），Markdown 版本也会打印到终端。
 

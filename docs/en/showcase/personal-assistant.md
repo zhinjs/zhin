@@ -75,7 +75,7 @@ ai:
 
 - Add `@zhin.js/adapter-qq` -> Same assistant goes to QQ
 - `pnpm add @zhin.js/speech` -> Voice input/playback
-- Switch to a cloud model by just changing `ai.providers`; local and cloud can coexist for routing
+- Switch to a cloud model by selecting a runtime Profile; local and cloud Services can coexist
 
 ## Next steps
 

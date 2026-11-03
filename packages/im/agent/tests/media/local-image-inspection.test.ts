@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -38,17 +39,21 @@ it.each([[true, false], [false, false], [true, true]])('inspects only on demand 
   const perception: MediaPerceptionPort = { kinds: ['image'], maxItemsPerTurn: 4, accepts: () => true,
     describe: vi.fn(async () => ({ text: 'A tiny private image.', provider: 'vision', model: 'vision-model',
       usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 } })) };
-  const result = await runAgentLoopStandaloneTurn({ provider: llm.provider, llmRuntime: llm.runtime, model: 'mock-model',
-    systemPrompt: '', userInput: 'Inspect the screenshot', maxIterations: 5, localAssets: store, localAssetScope: scope,
-    mediaPerception: perception, callbacks,
-    ...(hidden ? { transformToolResult: ({ toolName, result }: { toolName: string; result: unknown }) =>
+  const result = await runAgentLoopStandaloneTurn({ execution: executionBundle({ model: (llm.runtime).model((llm.provider).name, 'mock-model'), completion: llm.runtime }),
+systemPrompt: '',
+userInput: 'Inspect the screenshot',
+maxIterations: 5,
+localAssets: store,
+localAssetScope: scope,
+mediaPerception: perception,
+callbacks,
+...(hidden ? { transformToolResult: ({ toolName, result }: { toolName: string; result: unknown }) =>
       toolName === 'get_local_assets' ? 'Image hidden by output policy' : result } : {}),
-    tools: [
+tools: [
       { name: 'screenshot', description: 'Capture', source: 'mcp:browser', kind: 'mcp', parameters: {},
         execute: async () => ({ content: [{ type: 'image', data: image, mimeType: 'image/gif' }] }) },
       { name: 'noop', description: 'Continue', parameters: {}, execute: async () => 'ok' },
-    ],
-  });
+    ] });
   expect(requests, JSON.stringify(result)).toHaveLength(4);
   expect(JSON.stringify(requests[2])).toContain(hidden ? 'Image hidden by output policy' : vision ? image : 'A tiny private image.');
   const transient = requests[2].messages.at(-1);

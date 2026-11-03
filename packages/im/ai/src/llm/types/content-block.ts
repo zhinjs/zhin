@@ -79,6 +79,8 @@ export interface AnthropicThinkingProviderOptions {
 export interface ThinkingProviderOptions extends AnthropicThinkingProviderOptions {
   readonly google?: { readonly thoughtSignature?: string };
   readonly vertex?: { readonly thoughtSignature?: string };
+  /** Responses stateless reasoning replay. Only replay within its bound execution scope. */
+  readonly openai?: { readonly itemId?: string; readonly reasoningEncryptedContent?: string };
 }
 
 export interface ThinkingContentBlock {

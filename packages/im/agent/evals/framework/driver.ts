@@ -1,3 +1,6 @@
+import { createEvalInference } from './inference.js';
+import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
+import { createScopedPerceptionFactory } from '../../src/media/scoped-perception.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
 import { plannedReplyTexts } from '../../src/session/context-provenance.js';
 /**
@@ -138,7 +141,7 @@ async function runInWorkspace(
     ...(definition.agentConfig?.deferredTools?.alwaysLoadedTools ?? []),
     ...toolNames,
   ];
-  const agent = new ZhinAgent(model.provider, {
+  const agent = new ZhinAgent({ config: {
     maxIterations: 6,
     toolExecution: 'sequential',
     providerTimers: clock,
@@ -147,8 +150,8 @@ async function runInWorkspace(
       ...definition.agentConfig?.deferredTools,
       alwaysLoadedTools,
     },
-  }, undefined, model.runtime);
-  agent.activeBinding = { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] };
+  } });
+  agent.activeBinding = { name: 'zhin', mcpServers: [] };
   agent.markMemoryPersistenceReady();
   // The CLI host hands bootstrap to the turn engine (not the agent setter); mirror that.
   const bootstrapContext = definition.hostBootstrap ? await hostBootstrapText(process.cwd()) : undefined;
@@ -168,16 +171,8 @@ async function runInWorkspace(
       ...(definition.perception.maxItemsPerTurn ? { maxItemsPerTurn: definition.perception.maxItemsPerTurn } : {}),
     })
     : undefined;
-  if (perceptionConfig) {
-    agent.configure({
-      mediaPerception: createLlmMediaPerceptionPort({
-        runtime: model.runtime,
-        config: perceptionConfig,
-        resilience: definition.agentConfig?.providerResilience,
-        timers: clock,
-      }),
-    });
-  }
+  const inference = createEvalInference(model, liveModel ? { ...definition, perception: undefined } : definition);
+  const perception = createScopedPerceptionFactory();
   const host = asPrivate(agent);
   if (imageAssets) agent.configure({ imageAssets });
   const { sessionSystem, contextSystem } = host;
@@ -230,18 +225,23 @@ async function runInWorkspace(
         toolCapabilities: turnTools,
         tools: new TurnToolRuntime(turn, turnTools),
         selection: {
-          binding: { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] },
+          binding: { name: 'zhin', mcpServers: [] },
           mcpServers: [],
         },
       };
+      const lease = inference.snapshots.acquire();
+      const models = await inference.runtime.acquireForTurn({ request: turn, binding: context.selection.binding, lease, snapshots: inference.snapshots });
+      const mediaPerception = perception({ scope: models, sessionKey: turn.session.key, settings: perceptionConfig,
+        resilience: definition.agentConfig?.providerResilience, timers: clock });
       try {
         // Same path as AgentRuntime: the journal is the single source and
         // `events` is the journal-derived feed (includes authority tool events).
-        await executeAgentTurn(turn, () => engine.run(context), (event) => {
+        await runWithAgentTurnConfiguration({ models, mediaPerception }, () => executeAgentTurn(turn, () => engine.run(context), (event) => {
           events.push(event);
           if (isTurnTerminalEvent(event)) terminals.push(event);
-        });
+        }));
       } finally {
+        await models.release(); lease.release();
         releaseTrace();
         trace.finalize();
         traces.push(trace.snapshot());
@@ -278,6 +278,7 @@ async function runInWorkspace(
   } finally {
     selfChange?.approvals.dispose();
     selfChange?.queue.dispose();
+    await agent.dispose(); await inference.runtime.dispose(); await inference.snapshots.close();
   }
 }
 
@@ -611,7 +612,7 @@ async function nativeCapabilities(
     ...descriptor,
     execute: (async (input: unknown, invocation: Parameters<ToolCapability['execute']>[1]) => {
       executed.push({ name: descriptor.name, args: (input ?? {}) as Record<string, unknown> });
-      const result = await index.execute(owner, descriptor.name, input, invocation as never);
+      const result = await index.execute({ requester: owner, name: descriptor.name, input, invocation: invocation as never });
       rawOutputs.push(typeof result === 'string' ? result : JSON.stringify(result));
       return result;
     }) as ToolCapability['execute'],

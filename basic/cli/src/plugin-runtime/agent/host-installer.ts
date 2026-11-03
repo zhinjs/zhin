@@ -1,9 +1,7 @@
-import { RuntimePolicyManagementService } from '../runtime-model-policy/service.js';
-import { runtimePolicyManagementToken } from '../runtime-model-policy/token.js';
-import { createPersonalSessionDirectory } from '../personal-models/directory.js';
-import { PersonalModelManagementService } from '../personal-models/service.js';
-import { personalModelManagementToken } from '../personal-models/token.js';
-import { createPersonalModelHost } from '../personal-models/host.js';
+import { createHostOperationResources } from '../inference/operation-resources.js';
+import { listSnapshotAiProviders, provideAiProviders } from '@zhin.js/ai-provider';
+import { builtinAiProviders } from '@zhin.js/ai/providers';
+import type { HostInference } from '../inference/host.js';
 import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
 import { createOwnerApprovalMigrationProvider } from '../data-migration/owner-approval-provider.js';
 import { pluginDataMigrationProviderToken, databaseRootHostToken, type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
@@ -16,6 +14,7 @@ import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   groupRuleViolationToken,
+  imOperationResourcesToken,
   ingressRouteToken,
   memberWelcomeOwnerToken,
   type GroupRuleViolationSink,
@@ -47,10 +46,8 @@ import type {
 } from '@zhin.js/workroom';
 import {
   AgentRuntime,
+  agentOperationResourcesToken,
   CapabilityIngress,
-  agentDecisionConfigToken,
-  normalizeAgentDecisionConfig,
-  resolveAgentDecisionRuntime,
   type TurnIntentResolver,
 } from '@zhin.js/agent/runtime';
 import { AgentTurnIngressRoute } from './turn/ingress-route.js';
@@ -105,7 +102,7 @@ export interface InstallAgentHostOptions {
   readonly workroomStorageMode: WorkroomStorageMode;
   readonly im: ImRuntime;
   readonly projectRoot: string;
-  readonly resolveModelSecret?: (reference: string) => string | undefined | Promise<string | undefined>;
+  readonly inference: HostInference;
   /**
    * Resolve Endpoint Owner id for `/approve` + bashAlways key.
    * Key: `localName` (e.g. icqq) or live endpoint name (uin).
@@ -166,30 +163,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
-    const decisions = normalizeAgentDecisionConfig(aiConfig.decisions);
-    if (decisions) {
-      resources.provide(agentDecisionConfigToken, decisions);
-      handoff.add({
-        activateNext(activationSignal) {
-          activationSignal.throwIfAborted();
-          if (!readCandidateSnapshot) throw new Error('DecisionProvider validation requires the candidate generation snapshot');
-          resolveAgentDecisionRuntime(readCandidateSnapshot());
-        },
-      });
-    }
+    provideAiProviders(resources, builtinAiProviders);
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
     // #1030 P0: tell the file/bash policy where the project root is and which files only a person may change.
     const hostProtectedPaths = await resolveHostProtectedPaths(options.projectRoot);
     resources.provide(hostProtectedPathsToken, hostProtectedPaths);
     lifecycle.add(await localAssets.acquire());
     resources.provide(localImageAssetsToken, localAssets);
-    const personalModels = createPersonalModelHost({
-      projectRoot: options.projectRoot,
-      state: () => resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken).state : undefined,
-      resolveHostSecret: reference => options.resolveModelSecret?.(reference),
-    });
     const agentFoundation = await AgentRuntimeFoundation.create({
-      modelRuntime: personalModels.runtimeOptions,
+      modelRuntime: options.inference.modelRuntimeOptions(),
+      acquireDeploymentModels: (input) => options.inference.acquireDeploymentModels(input),
       config: aiConfig,
       localAssets,
       assistantConfig,
@@ -213,19 +196,17 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     resources.provide(pluginDataMigrationProviderToken, createOwnerApprovalMigrationProvider({
       approvals: zhinAgent.ownerApprovals, admission,
     }));
-    resources.provide(turnModelPortToken, personalModels.turnPort(service));
-    resources.provide(runtimePolicyManagementToken, new RuntimePolicyManagementService({
-      rootId: personalModels.rootId, repository: personalModels.runtimePolicy, runtime: () => service.getModelRuntime(),
-    }));
-    resources.provide(personalModelManagementToken, new PersonalModelManagementService({
-      rootId: personalModels.rootId,
-      hostOwnerId: personalModels.hostOwnerId,
-      bindings: aiConfig.personalPrincipals ?? {},
-      state: personalModels.state,
-      directory: createPersonalSessionDirectory(() => resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken) : undefined),
-      vault: personalModels.vault,
-      hostCatalog: () => service.getModelRuntime().getCatalogConfig(),
-    }));
+    resources.provide(turnModelPortToken, options.inference.turnPort(service));
+    const operationResources = createHostOperationResources({ host: options.inference, quota: zhinAgent.usageQuota });
+    resources.provide(imOperationResourcesToken, operationResources.im);
+    resources.provide(agentOperationResourcesToken, operationResources.agent);
+    // Driver cache state belongs to its declaration, not to account authentication.
+    if (readCandidateSnapshot) {
+      let definitions: ReturnType<typeof listSnapshotAiProviders> = [];
+      // Disposal is registered while the stack is open; activation only captures ownership.
+      lifecycle.add(() => options.inference.retireUnusedDrivers(definitions.map(entry => entry.definition)));
+      handoff.add({ activateNext() { definitions = listSnapshotAiProviders(readCandidateSnapshot()); } });
+    }
     zhinAgent.hostProtectedPaths = hostProtectedPaths;
     // #1051 F1: the store (drafts), the trial (grouping by plugin root) and the applier (writes) share one view
     // of the local plugin roots, so a draft accepted under `plugins/<x>/commands/` is also trial-run and written.
@@ -403,6 +384,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ...(workroom ? { workroom } : {}),
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
       toolApprovalIm,
+      withInferenceScope: (input, operation) => options.inference.withInferenceScope(input, operation),
+      withModelScope: (input, operation) => options.inference.withDeploymentModels({ ...input, service }, operation),
     });
     resources.provide(ingressRouteToken, ingressRoute);
     // #1012 A9 方案②：插件旧欢迎（group-suite）发送前询问；会话开启 welcome.enabled 时让给 MemberLifecycle。
@@ -425,7 +408,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     if (signal.aborted) stopSceneEvents();
     else signal.addEventListener('abort', stopSceneEvents, { once: true });
 
-    const providers = service.listProviders();
     const features = [
       zhinAgent.getSubagentSystem() ? 'subagent' : '',
       options.transcribeUrl ? 'inboundStt' : '',
@@ -436,15 +418,14 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       options.resolveEndpointOwner ? 'approve' : '',
     ].filter(Boolean).join(',');
     logger.info(
-      `ready | ${binding.name}@${binding.providerAlias}/${binding.model}`
-      + ` | providers: ${providers.length}`
+      `ready | ${binding.name}`
       + ` | presets: ${presetCount}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | ${features}`
       + ` | persistence: ${workroom ? (workroom.persistence.pendingActivation ? 'pending_activate' : 'file') : '-'}`,
     );
     logger.debug(
-      `ready detail | providers: ${providers.join(',')}`
+      `ready detail | runtime model selection`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | tools: ${(options.extraTools ?? []).map((tool) => tool.name).join(',') || '-'}`,
     );

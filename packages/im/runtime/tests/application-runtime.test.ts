@@ -41,8 +41,8 @@ describe('flat application Runtime', () => {
     await runtime.patchConfig([{ op: 'set', path: ['disabled'], value: { draft: true } }]);
     expect(primary(runtime.snapshot).document.disabled).toEqual({ draft: true });
     expect(runtime.snapshot.resources.get('root/child' as never)?.get(primaryConfigToken.id)).toBe(primary(runtime.snapshot));
-    expect(createCapabilityContext(runtime.snapshot, 'root/child' as never).use(primaryConfigToken).document.disabled).toEqual({ draft: true });
-    expect(createCapabilityContext(lease.value, 'root/child' as never).use(primaryConfigToken).document.disabled).toEqual({});
+    expect(createCapabilityContext({ snapshot: runtime.snapshot, ownerId: 'root/child' as never }).use(primaryConfigToken).document.disabled).toEqual({ draft: true });
+    expect(createCapabilityContext({ snapshot: lease.value, ownerId: 'root/child' as never }).use(primaryConfigToken).document.disabled).toEqual({});
     expect(f.setups).toEqual(['root', 'child', 'child']);
     const coordinator = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('unexpected restart'); }, onError(error) { throw error; } });
     f.document.replace({ ...f.document.document, disabled: { draft: false } });

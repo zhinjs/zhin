@@ -1,68 +1,45 @@
-import { createModelCatalog, normalizeModelCatalogConfig, type ModelCatalogConfig } from '../../src/model-catalog/index.js';
+import { normalizeProviderGraph, resolveProviderProfile, providerModelSupports } from '../../src/provider/index.js';
+import { graphFixture, context } from '../provider/fixtures.js';
 
-function fixture(): ModelCatalogConfig {
-  return {
-    connections: { main: { id: 'main', ownerId: 'host', revision: 1, sdk: 'openai-compatible', baseUrl: 'https://example.test/v1', secretRef: 'secret/main' } },
-    models: { chat: { id: 'chat', connectionId: 'main', model: 'chat-v1', capabilities: { input: ['text', 'image'], toolCalling: true }, contextWindow: 16000 } },
-    presets: { default: { id: 'default', modelId: 'chat' } },
-  };
-}
-const owner = { ownerId: 'alice', hostOwnerId: 'host' };
+it('resolves detached, deeply frozen, secret-free binding snapshots from the sole graph', () => {
+  const input = structuredClone(graphFixture()), graph = normalizeProviderGraph(input);
+  const binding = resolveProviderProfile({ graph, context, kind: 'language', purpose: 'chat' });
+  for (const value of [binding, binding.service, binding.account, binding.profile, binding.model, graph, graph.services]) expect(Object.isFrozen(value)).toBe(true);
+  expect(binding.service).not.toBe(input.services.service);
+  input.services.service.options = { baseUrl: 'https://changed.test' };
+  expect(binding.service.options).toEqual({}); expect(JSON.stringify(binding)).not.toContain('apiKey');
+});
 
-describe('model catalog', () => {
-  it('resolves detached, deeply frozen, secret-free invocation snapshots', () => {
-    const input = fixture();
-    const catalog = createModelCatalog(input);
-    expect(Reflect.set(catalog, 'config', {})).toBe(false);
-    const invocation = catalog.resolve('default', owner, { input: ['image'], toolCalling: true });
-    expect(invocation.model.model).toBe('chat-v1');
-    for (const value of [invocation, invocation.connection, invocation.model, invocation.model.capabilities, invocation.model.capabilities.input, invocation.preset, catalog.config, catalog.config.connections]) expect(Object.isFrozen(value)).toBe(true);
-    expect(invocation.connection).not.toBe(input.connections.main);
-    Reflect.set(input.connections.main, 'baseUrl', 'https://changed.test');
-    expect(invocation.connection.baseUrl).toBe('https://example.test/v1');
-    expect(JSON.stringify(invocation)).not.toContain('apiKey');
-    expect(invocation.model.maxOutputTokens).toBeUndefined();
-  });
+it('permits Host profiles for current callers and rejects another private owner before returning a binding', () => {
+  const source = graphFixture();
+  const graph = normalizeProviderGraph({ ...source, accounts: { ...source.accounts, alice: { ...source.accounts.account, id: 'alice', ownerId: 'alice', incarnation: 'alice' } },
+    profiles: { ...source.profiles, alice: { ...source.profiles.text, id: 'alice', ownerId: 'alice', accountId: 'alice' } } });
+  expect(resolveProviderProfile({ graph, context: { ...context, ownerId: 'alice' }, kind: 'language', purpose: 'chat' }).profile.ownerId).toBe(context.hostOwnerId);
+  const selection = { id: 'alice', rootId: 'root', accountId: 'alice', accountIncarnation: 'alice', kind: 'language' as const };
+  expect(resolveProviderProfile({ graph, context: { ...context, ownerId: 'alice', sessionChat: selection }, kind: 'language', purpose: 'chat' }).profile.ownerId).toBe('alice');
+  expect(() => resolveProviderProfile({ graph, context: { ...context, ownerId: 'bob', sessionChat: selection }, kind: 'language', purpose: 'chat' })).toThrow('forbidden');
+});
 
-  it('permits the current owner and host owner, rejects other private owners before returning metadata', () => {
-    const input = fixture();
-    const personal = { ...input, connections: { main: { ...input.connections.main, ownerId: 'alice' } } };
-    const catalog = createModelCatalog(personal);
-    expect(catalog.resolve('default', owner).connection.ownerId).toBe('alice');
-    expect(() => catalog.resolve('default', { ownerId: 'bob', hostOwnerId: 'host' })).toThrow('connection-forbidden');
-  });
+it('checks unknown capabilities only when explicitly required, without guessing from a name', () => {
+  const model = { id: 'sounds-like-vision-model', protocol: 'fixture', kinds: ['language'] as const };
+  expect(providerModelSupports({ model, requirements: {} })).toBe(true);
+  expect(providerModelSupports({ model, requirements: { streaming: false } })).toBe(true);
+  expect(providerModelSupports({ model, requirements: { streaming: true } })).toBe(false);
+  expect(providerModelSupports({ model, requirements: { input: ['image'] } })).toBe(false);
+});
 
-  it('checks unknown capability only when explicitly required', () => {
-    const catalog = createModelCatalog(fixture());
-    expect(() => catalog.resolve('default', owner)).not.toThrow();
-    expect(() => catalog.resolve('default', owner, { streaming: false })).not.toThrow();
-    expect(() => catalog.resolve('default', owner, { streaming: true })).toThrow('unsupported-capability');
-    expect(() => catalog.resolve('default', owner, { input: ['audio'] })).toThrow('unsupported-capability');
-    expect(() => catalog.resolve('missing', owner)).toThrow('unknown-preset');
-  });
+it.each(['apiKey', 'headers', 'factory', 'permission'])('rejects %s outside its approved resource role without echoing input', key => {
+  const source = graphFixture();
+  expect(() => normalizeProviderGraph({ ...source, accounts: { account: { ...source.accounts.account, [key]: 'synthetic-secret' } } })).toThrow('invalid-graph');
+  try { normalizeProviderGraph({ ...source, [key]: 'synthetic-secret' }); } catch (error) { expect(String(error)).not.toContain('synthetic-secret'); }
+});
 
-  it.each([
-    { extra: true },
-    { connections: { main: { ...fixture().connections.main, id: 'wrong' } } },
-    { connections: { main: { ...fixture().connections.main, revision: 0 } } },
-    { connections: { main: { ...fixture().connections.main, apiKey: 'secret-value' } } },
-    { connections: { main: { ...fixture().connections.main, headers: { Authorization: 'secret-value' } } } },
-    { connections: { main: { ...fixture().connections.main, sdk: 'made-up' } } },
-    { connections: { main: { ...fixture().connections.main, baseUrl: 'https://user:secret-value@example.test' } } },
-    { models: { chat: { ...fixture().models.chat, connectionId: 'missing' } } },
-    { models: { chat: { ...fixture().models.chat, contextWindow: -1 } } },
-    { models: { chat: { ...fixture().models.chat, capabilities: { permission: 'admin' } } } },
-    { presets: { default: { ...fixture().presets.default, modelId: 'missing' } } },
-    { presets: { default: { ...fixture().presets.default, maxTokens: 4000 } } },
-  ])('rejects invalid closed schemas and references without echoing secrets (%#)', patch => {
-    const run = () => normalizeModelCatalogConfig({ ...fixture(), ...patch });
-    expect(run).toThrow('invalid-config');
-    try { run(); } catch (error) { expect(String(error)).not.toContain('secret-value'); }
-  });
-
-  it('rejects authority and arbitrary generation parameters at lower levels', () => {
-    const catalog = createModelCatalog(fixture());
-    expect(() => catalog.resolve('default', owner, { maxTokens: 1000 } as never)).toThrow('invalid-config');
-    expect(() => catalog.resolve('default', { ...owner, permission: 'admin' } as never)).toThrow('invalid-config');
-  });
+it('rejects a missing account/model, invalid revisions and capability field expansion', () => {
+  const graph = graphFixture();
+  for (const patch of [
+    { accounts: { account: { ...graph.accounts.account, serviceId: 'missing' } } },
+    { profiles: { ...graph.profiles, text: { ...graph.profiles.text, accountId: 'missing' } } },
+    { profiles: { ...graph.profiles, text: { ...graph.profiles.text, revision: 0 } } },
+    { services: { service: { ...graph.services.service, models: { text: { ...graph.services.service.models.text, permission: 'admin' } } } } },
+  ]) expect(() => normalizeProviderGraph({ ...graph, ...patch })).toThrow('invalid-graph');
 });

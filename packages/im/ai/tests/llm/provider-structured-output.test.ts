@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { anthropicMessages, createProviderHarness, openaiChat } from '../helpers/provider-harness/index.js';
-import { generateTextViaAiSdk } from '../../src/llm/bridge/ai-sdk-stream.js';
 
 const outputSchema = {
   type: 'object', properties: { answer: { type: 'string' } },
@@ -16,7 +15,7 @@ describe.each(['minimax', 'anthropic'] as const)('%s structured response transpo
       .reply(anthropicMessages.reply({ toolCalls: [{ name: 'json', arguments: { answer: '完成' } }] }));
     const input = { system: 'Return an object.', user: 'hello' };
     const message = stream ? await h.complete(input, { outputSchema })
-      : await generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, h.context(input), { outputSchema });
+      : await h.runtime.generate(h.model, h.context(input), { outputSchema });
     expect(message.content).toEqual([{ type: 'text', text: '{"answer":"完成"}' }]);
     expect(h.lastRequest().body.tools).toContainEqual(expect.objectContaining({ name: 'json', input_schema: outputSchema }));
   });
@@ -47,7 +46,7 @@ describe('MiniMax JSON text compatibility', () => {
       blocks: [{ type: 'thinking', thinking: 'private reasoning', signature: 'sig' }], text: '{"answer":"完成"}',
     }));
     const message = stream ? await h.complete('hello', { outputSchema })
-      : await generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, h.context('hello'), { outputSchema });
+      : await h.runtime.generate(h.model, h.context('hello'), { outputSchema });
     expect(message.content.filter(b => b.type === 'text')).toEqual([{ type: 'text', text: '{"answer":"完成"}' }]);
   });
 
@@ -89,7 +88,7 @@ describe('prompt-mode structured output', () => {
     const h = createProviderHarness({ sdk: 'deepseek' }).reply(openaiChat.reply({ text: '好的\n```json\n{"answer":"完成"}\n```' }));
     const input = { system: 'Return an object.', user: 'hello' };
     const message = stream ? await h.complete(input, { outputSchema })
-      : await generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, h.context(input), { outputSchema });
+      : await h.runtime.generate(h.model, h.context(input), { outputSchema });
     expect(message.content.filter(b => b.type === 'text')).toEqual([{ type: 'text', text: '{"answer":"完成"}' }]);
     const body = h.lastRequest().body as Record<string, any>;
     expect(body.response_format).toBeUndefined();

@@ -34,6 +34,22 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
+  it('binds an owned operation after validation, forwards its signal and closes once after a thrown tool', async () => {
+    const root = rootPluginId(), token = createToken<string>('test.operation'), signal = new AbortController().signal;
+    const failure = new Error('real tool failure'), close = vi.fn(async () => { throw new Error('cleanup'); });
+    const execute = vi.fn((_input, context) => { expect(context.use(token)).toBe('operation-bound'); expect(context.signal).toBe(signal); throw failure; });
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'operation', source: '/tools/operation/index.ts',
+      definition: defineAgentTool({ description: 'Operation fixture', inputSchema: { toJSONSchema: () => ({ type: 'object', properties: { value: { type: 'string' } }, required: ['value'] }),
+        safeParse: (input: unknown) => typeof (input as { value?: unknown })?.value === 'string' ? { success: true as const, data: input }
+          : { success: false as const, error: { issues: [{ message: 'string required', path: [] }] } } }, execute }) });
+    const create = vi.fn(({ owner }: { owner: typeof root }) => { expect(owner).toBe(root); return { signal,
+      resources: { has: (candidate: unknown) => candidate === token, use: <T>() => 'operation-bound' as T, close } }; });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id)), operation = { signal, create };
+    await expect(index.execute({ requester: root, name: 'operation', input: {}, invocation: invocation(), operation })).rejects.toThrow('Invalid Agent Tool');
+    expect(create).not.toHaveBeenCalled();
+    await expect(index.execute({ requester: root, name: 'operation', input: { value: 'ok' }, invocation: invocation(), operation })).rejects.toBe(failure);
+    expect(create).toHaveBeenCalledTimes(1); expect(close).toHaveBeenCalledTimes(1);
+  });
   it('forwards optional action-owner evidence without accepting it from model arguments or requiring it on older Hosts', async () => {
     const root = rootPluginId();
     const report = vi.fn();
@@ -43,9 +59,9 @@ describe('Tool Feature', () => {
         return 'done';
       } }) });
     const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
-    expect(await index.execute(root, 'effect', {}, { ...invocation(), effects: { report } })).toBe('done');
+    expect(await index.execute({ requester: root, name: 'effect', input: {}, invocation: { ...invocation(), effects: { report } } })).toBe('done');
     expect(report).toHaveBeenCalledExactlyOnceWith({ disposition: 'committed' });
-    expect(await index.execute(root, 'effect', { effects: { report } }, invocation())).toBe('done');
+    expect(await index.execute({ requester: root, name: 'effect', input: { effects: { report } }, invocation: invocation() })).toBe('done');
     expect(report).toHaveBeenCalledTimes(1);
   });
   it('passes only the originating account profile port through Tool execution', async () => {
@@ -55,8 +71,8 @@ describe('Tool Feature', () => {
     const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'profile', source: '/tools/profile/index.ts',
       definition: defineAgentTool({ description: 'Read current account', execute: (_input, context) => context.selfProfile }) });
     const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
-    expect(await index.execute(root, 'profile', {}, { ...invocation(), selfProfile })).toBe(selfProfile);
-    expect(await index.execute(root, 'profile', { selfProfile }, invocation())).toBeUndefined();
+    expect(await index.execute({ requester: root, name: 'profile', input: {}, invocation: { ...invocation(), selfProfile } })).toBe(selfProfile);
+    expect(await index.execute({ requester: root, name: 'profile', input: { selfProfile }, invocation: invocation() })).toBeUndefined();
   });
   it('reads synchronous availability from the same owner definition without invoking the tool', () => {
     const root = rootPluginId();
@@ -109,10 +125,10 @@ describe('Tool Feature', () => {
       [root, new Map([[projectLocaleToken.id, 'en']])],
     ]) };
     const index = new ToolIndex([slot], snapshot);
-    expect(await index.execute(root, 'locale', { locale: 'zh-CN' }, invocation())).toBe('en');
+    expect(await index.execute({ requester: root, name: 'locale', input: { locale: 'zh-CN' }, invocation: invocation() })).toBe('en');
     const results = await Promise.all([
-      index.execute(root, 'locale', { locale: 'en' }, { ...invocation(), locale: 'zh-CN' }),
-      index.execute(root, 'locale', {}, { ...invocation(), locale: 'en' }),
+      index.execute({ requester: root, name: 'locale', input: { locale: 'en' }, invocation: { ...invocation(), locale: 'zh-CN' } }),
+      index.execute({ requester: root, name: 'locale', input: {}, invocation: { ...invocation(), locale: 'en' } }),
     ]);
     expect(results).toEqual(['zh-CN', 'en']);
   });
@@ -378,9 +394,9 @@ describe('Tool Feature', () => {
     const snapshot = createSnapshot([rootSlot, childSlot], secret.id);
     const index = new ToolIndex([rootSlot, childSlot], snapshot);
 
-    await expect(index.execute(child, 'lookup', { query: 'q' }, invocation()))
+    await expect(index.execute({ requester: child, name: 'lookup', input: { query: 'q' }, invocation: invocation() }))
       .resolves.toBe('child:q:http:child:child-secret');
-    await expect(index.execute(root, 'lookup', { query: 'q' }, invocation()))
+    await expect(index.execute({ requester: root, name: 'lookup', input: { query: 'q' }, invocation: invocation() }))
       .resolves.toBe('root:q:http:root:root-secret');
     expect(index.visible(child).map((tool) => tool.qualifiedName)).toEqual(['child__lookup']);
   });
@@ -398,9 +414,9 @@ describe('Tool Feature', () => {
       ...previous, generation: 2,
       tree: new Map([...previous.tree].map(([id, node]) => [id, id === child ? { ...node, parent: undefined } : node])),
     };
-    await expect(index.execute(child, 'inherited', {}, invocation(), current)).rejects.toThrow('Unknown Agent Tool');
-    await expect(index.execute(root, 'inherited', {}, invocation(), current)).resolves.toBe(2);
-    await expect(index.execute(child, 'inherited', {}, invocation())).resolves.toBe(1);
+    await expect(index.execute({ requester: child, name: 'inherited', input: {}, invocation: invocation(), snapshot: current })).rejects.toThrow('Unknown Agent Tool');
+    await expect(index.execute({ requester: root, name: 'inherited', input: {}, invocation: invocation(), snapshot: current })).resolves.toBe(2);
+    await expect(index.execute({ requester: child, name: 'inherited', input: {}, invocation: invocation() })).resolves.toBe(1);
   });
 
   it('passes immutable invocation policy into the Tool execution context', async () => {
@@ -419,7 +435,7 @@ describe('Tool Feature', () => {
     const snapshot = createSnapshot([slot], createToken('unused').id);
     const index = new ToolIndex([slot], snapshot);
 
-    await expect(index.execute(root, 'network-policy', {}, invocation())).resolves.toEqual({
+    await expect(index.execute({ requester: root, name: 'network-policy', input: {}, invocation: invocation() })).resolves.toEqual({
       permissions: ['user'],
       unattended: false,
       network: { enabled: false, httpsOnly: undefined, allowedDomains: [] },
@@ -443,16 +459,16 @@ describe('Tool Feature', () => {
     });
     const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
 
-    await expect(index.execute(root, 'client-id', {}, {
+    await expect(index.execute({ requester: root, name: 'client-id', input: {}, invocation: {
       ...invocation(),
       client: { adapter: 'other', get: () => client },
-    })).rejects.toThrow('requires adapter tool-test');
+    } })).rejects.toThrow('requires adapter tool-test');
     expect(reads).toBe(0);
 
-    await expect(index.execute(root, 'client-id', {}, {
+    await expect(index.execute({ requester: root, name: 'client-id', input: {}, invocation: {
       ...invocation(),
       client: { adapter: 'tool-test', get: () => { reads += 1; return client; } },
-    })).resolves.toBe('client-1');
+    } })).resolves.toBe('client-1');
     expect(reads).toBe(1);
   });
 
@@ -474,7 +490,7 @@ describe('Tool Feature', () => {
     const index = new ToolIndex([slot], snapshot);
 
     expect(index.list().map((tool) => tool.qualifiedName)).toEqual(['child__history']);
-    await expect(index.execute(child, 'history', { game: 'ssq' }, invocation()))
+    await expect(index.execute({ requester: child, name: 'history', input: { game: 'ssq' }, invocation: invocation() }))
       .resolves.toBe('history:ssq');
   });
 
@@ -508,7 +524,7 @@ describe('Tool Feature', () => {
     const snapshot = createSnapshot([slot], createToken('unused').id);
     const index = new ToolIndex([slot], snapshot);
 
-    await expect(index.execute(root, 'save', { value: '' }, invocation()))
+    await expect(index.execute({ requester: root, name: 'save', input: { value: '' }, invocation: invocation() }))
       .rejects.toThrow('Invalid Agent Tool input for save');
     expect(executed).toEqual([]);
   });

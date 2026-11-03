@@ -101,7 +101,7 @@ describe('physical reply aliases through Core, CLI and Agent', () => {
         capabilities: { tools: ['recall_own_message'], skills: [] }, signal: new AbortController().signal,
         ports: { journal: { append: async () => undefined }, reply: { segments: { types: ['text'] }, send } },
       });
-      const capabilities = await new CapabilityIngress().read(store.current, root, () => true, turn);
+      const capabilities = await new CapabilityIngress().read({ snapshot: store.current, owner: root, isActive: () => true, turn: turn });
       const context = { turn, capabilities, toolCapabilities: capabilities.tools, tools: new TurnToolRuntime(turn, capabilities.tools),
         selection: { binding: agent.activeBinding!, mcpServers: [] },
       };

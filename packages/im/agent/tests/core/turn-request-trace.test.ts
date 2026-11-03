@@ -5,7 +5,6 @@ import { createProviderHarness, openaiChat } from '../../../ai/tests/helpers/pro
 import { trackTurnCompletionUsage } from '../../src/core/turn-completion-usage.js';
 import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
 import { registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
-import { generateTextViaAiSdk } from '../../../ai/src/llm/bridge/ai-sdk-stream.js';
 
 const releases: Array<() => void> = [];
 afterEach(() => { for (const release of releases.splice(0)) release(); vi.restoreAllMocks(); });
@@ -26,7 +25,7 @@ describe('turn requests through real SDK and completion boundaries', () => {
       .reply(openaiChat.error(503, { message: 'unavailable' }))
       .reply(openaiChat.reply({ text: 'done', usage: { prompt: 18, completion: 2 } }));
     const complete: LlmCompletionPort['complete'] = (model, context, options) =>
-      generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, model, context, options);
+      h.runtime.generate(model, context, options);
     const t = traceTransport(stream ? h.runtime : { complete, completeSimple: complete });
     const onRequest = vi.fn();
     await t.tracker.transport.complete(h.model, h.context('same input'), { maxRetries: 1, onRequest });
@@ -60,19 +59,13 @@ describe('turn requests through real SDK and completion boundaries', () => {
     expect(JSON.stringify(result.requests)).not.toContain('test-key');
   });
 
-  it('retains the actual selected model for fallback attempts', async () => {
+  it('records failure only on the selected model instead of inventing a fallback trace', async () => {
     const first = createProviderHarness({ sdk: 'openai', model: 'first-model' }).reply(openaiChat.error(503, { message: 'unavailable' }));
-    const second = createProviderHarness({ sdk: 'openai', model: 'second-model' }).reply(openaiChat.reply({ text: 'done' }));
-    const complete: LlmCompletionPort['complete'] = (model, context, options) =>
-      (model.id === first.model.id ? first : second).runtime.complete(model, context, options);
-    const t = traceTransport({ complete, completeSimple: complete });
-    const port = createResilientCompletionPort(t.tracker.transport, { config: { maxRetries: 0, requestTimeoutMs: 0 }, fallbackModels: [second.model] });
-    await port.complete(first.model, first.context('hello'));
-    expect(t.snapshot().requests?.map(request => [request.model, request.status])).toEqual([
-      ['first-model', 'failed'], ['second-model', 'completed'],
-    ]);
+    const t = traceTransport(first.runtime);
+    const port = createResilientCompletionPort(t.tracker.transport, { config: { maxRetries: 0, requestTimeoutMs: 0 } });
+    await expect(port.complete(first.model, first.context('hello'))).rejects.toMatchObject({ kind: 'server' });
+    expect(t.snapshot().requests?.map(request => [request.model, request.status])).toEqual([['first-model', 'failed']]);
     expect(first.requests).toHaveLength(1);
-    expect(second.requests).toHaveLength(1);
   });
 
   it('records the rebuilt input after actual loop compaction rather than copying the first attempt', async () => {

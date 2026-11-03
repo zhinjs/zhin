@@ -121,7 +121,7 @@ export class AgentCompactionRuntime {
     if (cfg.enabled === false) return messages;
 
     const state = this.#getState(options.sessionId);
-    const compactionPrompt = resolveWorkspacePrompt('compaction', options.model.sdk);
+    const compactionPrompt = resolveWorkspacePrompt('compaction', options.model.promptFamily);
     const customInstructions = [
       compactionPrompt?.trim(),
       options.customInstructions?.trim(),

@@ -83,66 +83,22 @@ outline: [2, 3]
 | `database.disableOfflineQueue` | boolean \| string | 否 | — | Redis 禁止离线队列。 |
 | `database.pingInterval` | number \| string | 否 | — | Redis 心跳间隔毫秒。 |
 | `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
-| `ai.decisions` | object | 否 | — | 可选的结构化决策服务。未配置的任务关闭；建议先用 shadow 验证。 |
-| `ai.decisions.provider` | string | 是 | — | 提供已启用 DecisionProvider 的精确插件身份，例如 root/typesafe。 |
-| `ai.decisions.skills` | object | 否 | — | — |
-| `ai.decisions.skills.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
-| `ai.decisions.skills.timeoutMs` | integer | 否 | — | — |
-| `ai.decisions.skills.minConfidence` | number | 否 | — | — |
-| `ai.decisions.skills.topK` | integer | 否 | — | — |
-| `ai.decisions.skills.maxCandidates` | integer | 否 | — | — |
-| `ai.decisions.skills.maxSelections` | integer | 否 | — | — |
-| `ai.decisions.tools` | object | 否 | — | — |
-| `ai.decisions.tools.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
-| `ai.decisions.tools.timeoutMs` | integer | 否 | — | — |
-| `ai.decisions.tools.minConfidence` | number | 否 | — | — |
-| `ai.decisions.tools.topK` | integer | 否 | — | — |
-| `ai.decisions.tools.maxCandidates` | integer | 否 | — | — |
-| `ai.decisions.tools.maxSelections` | integer | 否 | — | — |
-| `ai.decisions.memory` | object | 否 | — | — |
-| `ai.decisions.memory.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
-| `ai.decisions.memory.timeoutMs` | integer | 否 | — | — |
-| `ai.decisions.memory.minConfidence` | number | 否 | — | — |
-| `ai.decisions.memory.topK` | integer | 否 | — | — |
-| `ai.decisions.memory.maxCandidates` | integer | 否 | — | — |
-| `ai.decisions.memory.maxSelections` | integer | 否 | — | — |
-| `ai.decisions.agents` | object | 否 | — | — |
-| `ai.decisions.agents.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
-| `ai.decisions.agents.timeoutMs` | integer | 否 | — | — |
-| `ai.decisions.agents.minConfidence` | number | 否 | — | — |
-| `ai.decisions.agents.topK` | integer | 否 | — | — |
-| `ai.decisions.agents.maxCandidates` | integer | 否 | — | — |
-| `ai.decisions.agents.maxSelections` | integer | 否 | — | — |
-| `ai.decisions.approval` | object | 否 | — | — |
-| `ai.decisions.approval.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
-| `ai.decisions.approval.timeoutMs` | integer | 否 | — | — |
-| `ai.decisions.approval.minConfidence` | number | 否 | — | — |
-| `ai.decisions.approval.topK` | integer | 否 | — | — |
-| `ai.decisions.approval.maxCandidates` | integer | 否 | — | — |
-| `ai.decisions.approval.maxSelections` | integer | 否 | — | — |
-| `ai.decisions.ambient` | object | 否 | — | 群聊旁听（ai.trigger.ambient）是否接话。active：由决策服务判断，ambient.judge 模型列表作为兜底；shadow：只记录。 |
-| `ai.decisions.ambient.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
-| `ai.decisions.ambient.timeoutMs` | integer | 否 | — | — |
-| `ai.decisions.ambient.minConfidence` | number | 否 | — | — |
-| `ai.decisions.ambient.topK` | integer | 否 | — | — |
-| `ai.decisions.ambient.maxCandidates` | integer | 否 | — | — |
-| `ai.decisions.ambient.maxSelections` | integer | 否 | — | — |
 | `ai.workroom` | object | 否 | — | 进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。 |
 | `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | 否 | — | 允许发布共享 Capability Pack 的 Console 认证 principalId。 |
 | `ai.workroom.disclosure` | object | 否 | — | Workroom 披露初始化使用的显式 P12 模型处理方契约。 |
 | `ai.workroom.disclosure.tenantId` | string | 否 | — | — |
-| `ai.workroom.disclosure.modelProviders` | object | 否 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.endpoint` | string | 是 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.owner` | string | 否 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.trustDomain` | string | 否 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.processingRegions` | array&lt;string&gt; | 是 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.maxConfidentiality` | string: `"public"`, `"project_internal"`, `"confidential"`, `"restricted"` | 是 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.external` | boolean | 是 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.noTraining` | boolean | 是 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.loggingMode` | string: `"disabled"`, `"metadata_only"`, `"full"` | 是 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.maximumRetentionSeconds` | integer | 是 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.allowsRedisclosure` | boolean | 是 | — | — |
-| `ai.workroom.disclosure.modelProviders.<key>.supportsDeletion` | boolean | 是 | — | — |
+| `ai.workroom.disclosure.modelServices` | object | 否 | — | Explicit processor contract keyed by the selected runtime Service id, never a legacy Provider alias. |
+| `ai.workroom.disclosure.modelServices.<key>.endpoint` | string | 是 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.owner` | string | 否 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.trustDomain` | string | 否 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.processingRegions` | array&lt;string&gt; | 是 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.maxConfidentiality` | string: `"public"`, `"project_internal"`, `"confidential"`, `"restricted"` | 是 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.external` | boolean | 是 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.noTraining` | boolean | 是 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.loggingMode` | string: `"disabled"`, `"metadata_only"`, `"full"` | 是 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.maximumRetentionSeconds` | integer | 是 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.allowsRedisclosure` | boolean | 是 | — | — |
+| `ai.workroom.disclosure.modelServices.<key>.supportsDeletion` | boolean | 是 | — | — |
 | `ai.agent` | object | 否 | — | Agent 执行、排队、工具与模型策略。 |
 | `ai.agent.inboundQueue` | object | 否 | — | 入站回合排队策略。 |
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | supersede（默认）：同一发起人的新消息会替换他自己尚未回复的回合；fifo：全部按到达顺序排队。其他成员的消息总是排队。 |
@@ -223,30 +179,30 @@ outline: [2, 3]
 | `ai.agent.execAllowlist` | array&lt;string&gt; | 否 | — | allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 |
 | `ai.agent.phaseTrace` | boolean \| string | 否 | — | 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） |
 | `ai.agent.modelHarness` | object | 否 | — | 按模型 / provider 模式覆盖 model harness |
-| `ai.agent.modelHarness.models` | object | 否 | — | 模型级覆盖：支持 "gpt-4o" 或 "openai:gpt-4o" |
-| `ai.agent.modelHarness.models.<key>.maxIterations` | number \| string | 否 | — | — |
-| `ai.agent.modelHarness.models.<key>.explorationBudget` | number \| string | 否 | — | 连续只读探索调用达到该次数时注入提示；0 关闭 |
-| `ai.agent.modelHarness.models.<key>.explorationGuidance` | boolean \| string | 否 | — | 在系统提示中加入"先规划、限定目标文件"的探索纪律 |
-| `ai.agent.modelHarness.models.<key>.iterationExtension` | number \| string | 否 | — | 每次有进展时延长的步数（覆盖 toolBudget.extendBy） |
-| `ai.agent.modelHarness.models.<key>.maxTotalIterations` | number \| string | 否 | — | 单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations） |
-| `ai.agent.modelHarness.models.<key>.emptyReplyRetries` | number \| string | 否 | — | 空回复（无文本且无工具调用）时额外重试次数；默认 0 |
-| `ai.agent.modelHarness.models.<key>.requestTimeoutMs` | number \| string | 否 | — | 单次模型请求超时（毫秒）；0 关闭 |
-| `ai.agent.modelHarness.providerPatterns` | object | 否 | — | provider 模式覆盖（支持 * 通配符） |
-| `ai.agent.modelHarness.providerPatterns.<key>.maxIterations` | number \| string | 否 | — | — |
-| `ai.agent.modelHarness.providerPatterns.<key>.explorationBudget` | number \| string | 否 | — | 连续只读探索调用达到该次数时注入提示；0 关闭 |
-| `ai.agent.modelHarness.providerPatterns.<key>.explorationGuidance` | boolean \| string | 否 | — | 在系统提示中加入"先规划、限定目标文件"的探索纪律 |
-| `ai.agent.modelHarness.providerPatterns.<key>.iterationExtension` | number \| string | 否 | — | 每次有进展时延长的步数（覆盖 toolBudget.extendBy） |
-| `ai.agent.modelHarness.providerPatterns.<key>.maxTotalIterations` | number \| string | 否 | — | 单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations） |
-| `ai.agent.modelHarness.providerPatterns.<key>.emptyReplyRetries` | number \| string | 否 | — | 空回复（无文本且无工具调用）时额外重试次数；默认 0 |
-| `ai.agent.modelHarness.providerPatterns.<key>.requestTimeoutMs` | number \| string | 否 | — | 单次模型请求超时（毫秒）；0 关闭 |
-| `ai.agent.providerResilience` | object | 否 | — | Provider 韧性：重试 / 退避 / 超时 / fallback（见 ProviderResilienceConfig，默认保守） |
+| `ai.agent.modelHarness.services` | object | 否 | — | Exact runtime Service id; native-model entries override that Service default. |
+| `ai.agent.modelHarness.services.<key>.defaults` | object | 否 | — | — |
+| `ai.agent.modelHarness.services.<key>.defaults.maxIterations` | number \| string | 否 | — | — |
+| `ai.agent.modelHarness.services.<key>.defaults.explorationBudget` | number \| string | 否 | — | 连续只读探索调用达到该次数时注入提示；0 关闭 |
+| `ai.agent.modelHarness.services.<key>.defaults.explorationGuidance` | boolean \| string | 否 | — | 在系统提示中加入"先规划、限定目标文件"的探索纪律 |
+| `ai.agent.modelHarness.services.<key>.defaults.iterationExtension` | number \| string | 否 | — | 每次有进展时延长的步数（覆盖 toolBudget.extendBy） |
+| `ai.agent.modelHarness.services.<key>.defaults.maxTotalIterations` | number \| string | 否 | — | 单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations） |
+| `ai.agent.modelHarness.services.<key>.defaults.emptyReplyRetries` | number \| string | 否 | — | 空回复（无文本且无工具调用）时额外重试次数；默认 0 |
+| `ai.agent.modelHarness.services.<key>.defaults.requestTimeoutMs` | number \| string | 否 | — | 单次模型请求超时（毫秒）；0 关闭 |
+| `ai.agent.modelHarness.services.<key>.models` | object | 否 | — | — |
+| `ai.agent.modelHarness.services.<key>.models.<key>.maxIterations` | number \| string | 否 | — | — |
+| `ai.agent.modelHarness.services.<key>.models.<key>.explorationBudget` | number \| string | 否 | — | 连续只读探索调用达到该次数时注入提示；0 关闭 |
+| `ai.agent.modelHarness.services.<key>.models.<key>.explorationGuidance` | boolean \| string | 否 | — | 在系统提示中加入"先规划、限定目标文件"的探索纪律 |
+| `ai.agent.modelHarness.services.<key>.models.<key>.iterationExtension` | number \| string | 否 | — | 每次有进展时延长的步数（覆盖 toolBudget.extendBy） |
+| `ai.agent.modelHarness.services.<key>.models.<key>.maxTotalIterations` | number \| string | 否 | — | 单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations） |
+| `ai.agent.modelHarness.services.<key>.models.<key>.emptyReplyRetries` | number \| string | 否 | — | 空回复（无文本且无工具调用）时额外重试次数；默认 0 |
+| `ai.agent.modelHarness.services.<key>.models.<key>.requestTimeoutMs` | number \| string | 否 | — | 单次模型请求超时（毫秒）；0 关闭 |
+| `ai.agent.providerResilience` | object | 否 | — | 固定模型韧性：重试 / 退避 / 超时（见 ProviderResilienceConfig） |
 | `ai.agent.providerResilience.maxRetries` | number \| string | 否 | — | Retries per model after the first attempt. Default 2. `0` disables retry. |
 | `ai.agent.providerResilience.baseDelayMs` | number \| string | 否 | — | First backoff delay in ms; doubles each retry. Default 1000. |
 | `ai.agent.providerResilience.maxDelayMs` | number \| string | 否 | — | Upper bound for one backoff delay in ms. Default 10000. |
-| `ai.agent.providerResilience.maxRetryAfterMs` | number \| string | 否 | — | A `Retry-After` longer than this skips retry and goes to fallback. Default 30000. |
+| `ai.agent.providerResilience.maxRetryAfterMs` | number \| string | 否 | — | A `Retry-After` longer than this stops retry. Default 30000. |
 | `ai.agent.providerResilience.requestTimeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms (whole streamed completion). Default 180000. `0` disables. |
 | `ai.agent.providerResilience.emptyReplyRetries` | number \| string | 否 | — | Extra attempts when the model returns neither text nor tool calls (or a tool call without a name). Default 0: the reply is passed through unchanged. Quirk presets (see model harness) raise this for models known to emit spurious empty replies. |
-| `ai.agent.providerResilience.fallback` | boolean \| string | 否 | — | Try the next entry of `modelCandidates` after retries are exhausted. Default true. |
 | `ai.agent.deferredTools` | object | 否 | — | 工具 schema 按需加载 |
 | `ai.agent.deferredTools.maxLoadedPerSession` | number \| string | 否 | — | — |
 | `ai.agent.deferredTools.discoverTopK` | number \| string | 否 | — | — |
@@ -295,49 +251,9 @@ outline: [2, 3]
 | `ai.agent.thinkingPreview` | boolean \| string | 否 | — | Activity feedback 展示 LLM 实际 thinking 内容（截断），而非静态 "思考中..."。 |
 | `ai.agent.thinkingPreviewMaxLength` | number \| string | 否 | — | thinkingPreview 展示的最大字符数。 |
 | `ai.enabled` | boolean \| string | 否 | — | — |
-| `ai.providers` | object \| null | 否 | — | 命名 provider 实例 |
-| `ai.providers.<key>.sdk` | string | 否 | — | — |
-| `ai.providers.<key>.apiKey` | string | 否 | — | — |
-| `ai.providers.<key>.authScheme` | string | 否 | — | Authorization 头方案。不写时用各 SDK 默认（OpenAI 系 `Bearer`，Anthropic `x-api-key`，Google `x-goog-api-key`）； 设为 `''` 时 `Authorization: &lt;key&gt;`；设为 `'Bearer'` / `'Token'` 等时 `Authorization: &lt;scheme&gt; &lt;key&gt;`（结尾空格可有可无）。 |
-| `ai.providers.<key>.baseUrl` | string | 否 | — | — |
-| `ai.providers.<key>.defaultModel` | string | 否 | — | — |
-| `ai.providers.<key>.models` | array&lt;string&gt; | 否 | — | — |
-| `ai.providers.<key>.timeout` | number \| string | 否 | — | 单次请求超时（ms），覆盖 `ai.providerResilience.requestTimeoutMs`；模型 harness 的 `requestTimeoutMs` 优先。0 关闭。 |
-| `ai.providers.<key>.maxRetries` | number \| string | 否 | — | 每个模型的重试次数，覆盖 `ai.providerResilience.maxRetries`。 |
-| `ai.providers.<key>.firstChunkTimeoutMs` | number \| string | 否 | — | 流式请求首个 chunk 超时（ms，含等待响应头），默认关闭；超时按 timeout 重试 / 切换备用模型。 |
-| `ai.providers.<key>.chunkTimeoutMs` | number \| string | 否 | — | 流式请求两个 chunk 之间的静默超时（ms），默认关闭。 |
-| `ai.providers.<key>.headers` | object | 否 | — | — |
-| `ai.providers.<key>.contextWindow` | number \| string | 否 | — | 上下文窗口大小（token 数），各 Provider 映射到自身参数 |
-| `ai.providers.<key>.maxOutputTokens` | number \| string | 否 | — | 每次请求的输出 token 上限，默认 8192；Gemini/Claude 的思考 token 也计入 |
-| `ai.providers.<key>.thinkingLevel` | string | 否 | — | 思考深度：`off` \| `low` \| `medium` \| `high`；不填用 provider 默认；`providerOptions` 里的思考设置优先 |
-| `ai.providers.<key>.capabilities` | object | 否 | — | Provider 能力声明 |
-| `ai.providers.<key>.capabilities.input` | array&lt;string&gt; | 否 | — | Explicit model input modalities. Absence is text-only (fail closed), except Gemini chat models on `sdk: google` (see `defaultModelInput`). |
-| `ai.providers.<key>.capabilities.streaming` | boolean \| string | 否 | — | — |
-| `ai.providers.<key>.capabilities.toolCalling` | boolean \| string | 否 | — | — |
-| `ai.providers.<key>.capabilities.thinking` | boolean \| string | 否 | — | — |
-| `ai.providers.<key>.input` | array&lt;string&gt; | 否 | — | Explicit model input modalities. Prefer this over inferred provider identity. |
-| `ai.providers.<key>.providerOptions` | object | 否 | — | Extra AI SDK `providerOptions`, merged into every request of this provider, keyed by SDK provider id. For Gemini: `{ google: { safetySettings: [...], thinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings. |
-| `ai.providers.<key>.contextCache` | object | 否 | — | Gemini context caching (`sdk: google`): `{ mode: 'explicit', ttlSeconds }`. Default implicit. |
-| `ai.providers.<key>.contextCache.mode` | string | 否 | — | `implicit` (default) leaves requests untouched. `explicit` creates cachedContents. |
-| `ai.providers.<key>.contextCache.ttlSeconds` | number \| string | 否 | — | Lifetime of each created cache. Default 600. |
-| `ai.providers.<key>.contextCache.minPrefixChars` | number \| string | 否 | — | Prefixes shorter than this (characters of JSON) are not worth a cache. Default 8000 (~2k tokens). |
-| `ai.providers.<key>.imageGeneration` | object | 否 | — | 文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver） |
-| `ai.providers.<key>.imageGeneration.watermarkEnabled` | boolean \| string | 否 | — | 智谱 API `watermark_enabled`；默认 true |
-| `ai.providers.<key>.imageGeneration.defaultModel` | string | 否 | — | — |
-| `ai.providers.<key>.imageGeneration.defaultSize` | string | 否 | — | 智谱：如 1024x1024、1280x1280 |
-| `ai.providers.<key>.imageGeneration.numSteps` | number \| string | 否 | — | Cloudflare Flux：推理步数，默认 4 |
-| `ai.providers.<key>.imageGeneration.quality` | string | 否 | — | OpenAI GPT Image：low \| medium \| high \| auto |
-| `ai.providers.<key>.imageGeneration.aspectRatio` | string | 否 | — | Gemini：如 1:1、16:9 |
-| `ai.providers.<key>.imageGeneration.imageSize` | string | 否 | — | Gemini：如 1K、2K、4K |
-| `ai.providers.<key>.imageGeneration.promptSuffix` | string | 否 | — | 追加到 agent/用户 prompt 末尾的风格约束（如写实摄影）。 需要动漫风时不要配置，或在工具 prompt 里写明即可。 |
-| `ai.providers.<key>.host` | string | 否 | — | — |
-| `ai.providers.<key>.num_ctx` | number \| string | 否 | — | — |
-| `ai.agents` | object \| null | 否 | — | per-agent 绑定（协作角色如 researcher 亦用 agents.&lt;role&gt;）；IM 入站总是交给 zhin |
-| `ai.agents.<key>.provider` | string | 否 | — | — |
-| `ai.agents.<key>.model` | string | 否 | — | — |
+| `ai.agents` | object \| null | 否 | — | Agent authority and display metadata. Model selection belongs to runtime Profile purposes. |
 | `ai.agents.<key>.mcpServers` | array \| null | 否 | — | — |
-| `ai.agents.<key>.nickname` | string | 否 | — | Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 |
-| `ai.agents.<key>.preset` | string | 否 | — | Invocation preset reference; do not combine with legacy provider/model. MCP and permission fields remain Agent authority. |
+| `ai.agents.<key>.nickname` | string | 否 | — | Fallback nickname when the Endpoint does not provide account profile data. |
 | `ai.sessions` | object \| null | 否 | — | — |
 | `ai.sessions.maxHistory` | number \| string | 否 | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
 | `ai.sessions.expireMs` | number \| string | 否 | — | 会话过期时间（毫秒，数据库模式默认7天，内存模式默认24小时） |
@@ -356,15 +272,6 @@ outline: [2, 3]
 | `ai.context.keepAfterSummary` | number \| string | 否 | — | 总结后保留的消息数量（默认 10） |
 | `ai.context.maxContextTokens` | number \| string | 否 | — | 上下文最大 token 估算（默认 4000） |
 | `ai.context.summaryPrompt` | string | 否 | — | 自定义总结提示词 |
-| `ai.imageGeneration` | object \| null | 否 | — | 文生图全局默认（可被 `providers.&lt;alias&gt;.imageGeneration` 覆盖）。 智谱：`watermarkEnabled: false` 需先在智谱开放平台签署去水印免责声明。 |
-| `ai.imageGeneration.watermarkEnabled` | boolean \| string | 否 | — | 智谱 API `watermark_enabled`；默认 true |
-| `ai.imageGeneration.defaultModel` | string | 否 | — | — |
-| `ai.imageGeneration.defaultSize` | string | 否 | — | 智谱：如 1024x1024、1280x1280 |
-| `ai.imageGeneration.numSteps` | number \| string | 否 | — | Cloudflare Flux：推理步数，默认 4 |
-| `ai.imageGeneration.quality` | string | 否 | — | OpenAI GPT Image：low \| medium \| high \| auto |
-| `ai.imageGeneration.aspectRatio` | string | 否 | — | Gemini：如 1:1、16:9 |
-| `ai.imageGeneration.imageSize` | string | 否 | — | Gemini：如 1K、2K、4K |
-| `ai.imageGeneration.promptSuffix` | string | 否 | — | 追加到 agent/用户 prompt 末尾的风格约束（如写实摄影）。 需要动漫风时不要配置，或在工具 prompt 里写明即可。 |
 | `ai.multimodal` | object \| null | 否 | — | 入站/出站多模态（base64 契约；平台 adapter 负责编解码与发送） |
 | `ai.multimodal.enabled` | boolean \| string | 否 | — | — |
 | `ai.multimodal.maxFileBytes` | number \| string | 否 | — | — |
@@ -382,15 +289,10 @@ outline: [2, 3]
 | `ai.multimodal.outbound` | object | 否 | — | — |
 | `ai.multimodal.outbound.splitMessages` | string | 否 | — | — |
 | `ai.multimodal.perception` | object \| null | 否 | — | Perception pre-pass: when the turn's model cannot take an image / video / PDF, this media-capable model describes it and the description is injected as untrusted text (`[图片描述] …`). Unset = off (placeholders as before). |
-| `ai.multimodal.perception.provider` | string | 否 | — | `ai.providers` alias of the perception model. |
-| `ai.multimodal.perception.model` | string | 否 | — | — |
 | `ai.multimodal.perception.kinds` | array&lt;string&gt; | 否 | — | Kinds to describe. Default `['image']`; `file` covers PDFs only. |
 | `ai.multimodal.perception.maxChars` | number \| string | 否 | — | Description length cap in characters. Default 800. |
 | `ai.multimodal.perception.timeoutMs` | number \| string | 否 | — | Per-attempt timeout in ms. Default 30000. |
 | `ai.multimodal.perception.maxItemsPerTurn` | number \| string | 否 | — | Media described per turn; the rest keep the placeholder. Default 4. |
-| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | 否 | — | — |
-| `ai.multimodal.perception.fallbacks[].provider` | string | 是 | — | — |
-| `ai.multimodal.perception.fallbacks[].model` | string | 是 | — | — |
 | `ai.memory` | object \| null | 否 | — | 三层 Markdown 文件记忆（global / platform / session）。 默认启用；设 enabled: false 可关闭注入。 |
 | `ai.memory.enabled` | boolean \| string | 否 | — | — |
 | `ai.memory.semantic` | object \| null | 否 | — | L4 语义记忆：memory_entries 表 + memory_search/upsert 工具 |
@@ -428,7 +330,6 @@ outline: [2, 3]
 | `ai.trigger.errorTemplate` | string | 否 | — | 入口层错误提示模板，{error} 为错误信息（可选；不配置时用聊天口吻说"刚卡了一下"，主人额外看到原因） |
 | `ai.trigger.ambient` | object | 否 | — | 群聊旁听：群里没人叫机器人时，由判断模型决定是否接话。被 @、引用和私聊不经过这里，总会交给 Agent（Agent 也可以选择不回复）。 |
 | `ai.trigger.ambient.conversations` | array&lt;string&gt; | 否 | — | 开启旁听的群，格式 platform:groupId；* 表示所有群。默认为空（关闭） |
-| `ai.trigger.ambient.judge` | string \| array | 否 | — | 判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型。ai.decisions.ambient 为 active 时由决策服务先判断，这里的模型作为兜底 |
 | `ai.trigger.ambient.quietMs` | number \| string | 否 | — | 群安静多久后才判断一次（毫秒，默认 4000） |
 | `ai.trigger.ambient.cooldownMs` | number \| string | 否 | — | 两次主动插话之间的最短间隔（毫秒，默认 120000）；对话进行中不受限制 |
 | `ai.trigger.ambient.maxPerHour` | number \| string | 否 | — | 每个群每小时最多主动插话次数（默认 3）；对话进行中不计入 |
@@ -451,63 +352,6 @@ outline: [2, 3]
 | `ai.imageStorage.secretAccessKey` | string | 是 | — | — |
 | `ai.imageStorage.publicBaseUrl` | string | 是 | — | Public HTTPS base URL; not the S3 upload endpoint. |
 | `ai.imageStorage.prefix` | string | 是 | — | Object directory ending in /; must be covered by the bucket lifecycle. |
-| `ai.modelCatalog` | object | 否 | — | Closed Host connection/model/preset catalog. Dictionary keys supply omitted ids; this Host supplies omitted connection owners. Explicit identities must match; references are checked by the model compiler. |
-| `ai.modelCatalog.connections` | object | 是 | — | — |
-| `ai.modelCatalog.connections.<key>.id` | string | 否 | — | Defaults to the dictionary key; an explicit id must match that key. |
-| `ai.modelCatalog.connections.<key>.ownerId` | string | 否 | — | Defaults to this Host owner; an explicit owner must match this Host. |
-| `ai.modelCatalog.connections.<key>.revision` | integer | 是 | — | — |
-| `ai.modelCatalog.connections.<key>.sdk` | string: `"openai"`, `"anthropic"`, `"google"`, `"deepseek"`, `"minimax"`, `"ollama"`, `"openai-compatible"` | 是 | — | — |
-| `ai.modelCatalog.connections.<key>.baseUrl` | string | 否 | — | — |
-| `ai.modelCatalog.connections.<key>.secretRef` | string | 否 | — | Opaque credential reference; plaintext credentials are resolved only by the execution factory. |
-| `ai.modelCatalog.models` | object | 是 | — | — |
-| `ai.modelCatalog.models.<key>.id` | string | 否 | — | Defaults to the dictionary key; an explicit id must match that key. |
-| `ai.modelCatalog.models.<key>.connectionId` | string | 是 | — | — |
-| `ai.modelCatalog.models.<key>.model` | string | 是 | — | — |
-| `ai.modelCatalog.models.<key>.capabilities` | object | 是 | — | — |
-| `ai.modelCatalog.models.<key>.capabilities.input` | array&lt;string: `"text"`, `"image"`, `"audio"`, `"video"`, `"file"`&gt; | 否 | — | — |
-| `ai.modelCatalog.models.<key>.capabilities.streaming` | boolean | 否 | — | — |
-| `ai.modelCatalog.models.<key>.capabilities.toolCalling` | boolean | 否 | — | — |
-| `ai.modelCatalog.models.<key>.capabilities.thinking` | boolean | 否 | — | — |
-| `ai.modelCatalog.models.<key>.contextWindow` | integer | 否 | — | — |
-| `ai.modelCatalog.models.<key>.maxOutputTokens` | integer | 否 | — | — |
-| `ai.modelCatalog.presets` | object | 是 | — | — |
-| `ai.modelCatalog.presets.<key>.id` | string | 否 | — | Defaults to the dictionary key; an explicit id must match that key. |
-| `ai.modelCatalog.presets.<key>.modelId` | string | 是 | — | — |
-| `ai.modelPolicy` | object | 否 | — | Purpose references only. Adapter/Endpoint may select chat/perception; Scene may select chat. Session chat selection is stored separately. |
-| `ai.modelPolicy.defaults` | object | 是 | — | — |
-| `ai.modelPolicy.defaults.chat` | string | 是 | — | — |
-| `ai.modelPolicy.defaults.perception` | string | 否 | — | — |
-| `ai.modelPolicy.defaults.summary` | string | 否 | — | When omitted, compilation selects deployment defaults.chat. Personal/Adapter/Endpoint/Scene chat overrides do not change summary. |
-| `ai.modelPolicy.adapters` | object | 否 | — | — |
-| `ai.modelPolicy.adapters.<key>.chat` | string | 否 | — | — |
-| `ai.modelPolicy.adapters.<key>.perception` | string | 否 | — | — |
-| `ai.modelPolicy.endpoints` | array&lt;object&gt; | 否 | — | — |
-| `ai.modelPolicy.endpoints[].address` | object | 是 | — | — |
-| `ai.modelPolicy.endpoints[].address.rootId` | string | 是 | — | — |
-| `ai.modelPolicy.endpoints[].address.platform` | string | 是 | — | — |
-| `ai.modelPolicy.endpoints[].address.endpoint` | string | 是 | — | — |
-| `ai.modelPolicy.endpoints[].address.adapterId` | string | 是 | — | — |
-| `ai.modelPolicy.endpoints[].models` | object | 是 | — | — |
-| `ai.modelPolicy.endpoints[].models.chat` | string | 否 | — | — |
-| `ai.modelPolicy.endpoints[].models.perception` | string | 否 | — | — |
-| `ai.modelPolicy.scenes` | array&lt;object&gt; | 否 | — | — |
-| `ai.modelPolicy.scenes[].address` | object | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.rootId` | string | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.platform` | string | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.endpoint` | string | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation` | object | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.endpoint` | object | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.endpoint.adapter` | string | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.endpoint.id` | string | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.id` | string | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.parent` | object | 否 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.parent.kind` | string: `"private"`, `"group"`, `"channel"` | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.parent.id` | string | 是 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.threadId` | string | 否 | — | — |
-| `ai.modelPolicy.scenes[].address.conversation.name` | string | 否 | — | — |
-| `ai.modelPolicy.scenes[].models` | object | 是 | — | — |
-| `ai.modelPolicy.scenes[].models.chat` | string | 否 | — | — |
 | `ai.personalPrincipals` | object | 否 | — | Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input. |
 | `menuKeyword` | string \| `false` | 否 | — | 内置指令菜单关键词；默认 菜单，false 或空字符串关闭菜单。 |
 | `menuStyle` | object | 否 | — | HTML 渲染可用时的指令菜单外观；始终保留纯文本降级。 |
@@ -636,6 +480,60 @@ outline: [2, 3]
 | `log_level` | string \| number | 否 | — | Runtime 日志级别。 |
 | `plugin` | object | 否 | — | Root Plugin 配置；组合时由项目 Schema 替换。 |
 | `locale` | string: `"zh-CN"`, `"en"` | 否 | — | 未设置个人偏好时使用的语言；未配置时使用简体中文，语言与时区独立。 |
+
+## 独立 AI 导入提案
+
+`ai.plan.yml` 仅供显式预览、应用和导出，不是启动配置，不会自动加载或覆盖运行时图。
+
+[`packages/im/ai/provider-plan.schema.json`](https://github.com/zhinjs/zhin/blob/main/packages/im/ai/provider-plan.schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `version` | `1` | 是 | — | — |
+| `services` | object | 否 | — | — |
+| `services.<key>.driver` | string \| object | 是 | — | — |
+| `services.<key>.label` | string | 否 | — | — |
+| `services.<key>.options` | object | 否 | — | — |
+| `services.<key>.models` | object | 否 | — | — |
+| `services.<key>.models.<key>.id` | string | 是 | — | — |
+| `services.<key>.models.<key>.kinds` | array&lt;string: `"language"`, `"decision"`, `"image"`&gt; | 是 | — | — |
+| `services.<key>.models.<key>.protocol` | string | 是 | — | — |
+| `services.<key>.models.<key>.input` | array&lt;string: `"text"`, `"image"`, `"audio"`, `"video"`, `"file"`&gt; | 否 | — | — |
+| `services.<key>.models.<key>.streaming` | boolean | 否 | — | — |
+| `services.<key>.models.<key>.toolCalling` | boolean | 否 | — | — |
+| `services.<key>.models.<key>.thinking` | boolean | 否 | — | — |
+| `services.<key>.models.<key>.contextWindow` | integer | 否 | — | — |
+| `services.<key>.models.<key>.maxOutputTokens` | integer | 否 | — | — |
+| `accounts` | object | 否 | — | — |
+| `accounts.<key>.service` | string | 是 | — | — |
+| `accounts.<key>.label` | string | 否 | — | — |
+| `accounts.<key>.auth` | object \| object \| object | 是 | — | — |
+| `profiles` | object | 否 | — | — |
+| `profiles.<key>.account` | string | 是 | — | — |
+| `profiles.<key>.model` | string | 是 | — | — |
+| `profiles.<key>.label` | string | 否 | — | — |
+| `profiles.<key>.parameters` | object | 否 | — | — |
+| `purposes` | object | 否 | — | — |
+| `purposes.chat` | object \| null | 否 | — | — |
+| `purposes.summary` | object \| null | 否 | — | — |
+| `purposes.ambient` | object \| null | 否 | — | — |
+| `purposes.image` | object \| null | 否 | — | — |
+| `purposes.perception` | object \| null | 否 | — | — |
+| `purposes.decisions` | object | 否 | — | — |
+| `purposes.decisions.skills` | object \| null | 否 | — | — |
+| `purposes.decisions.tools` | object \| null | 否 | — | — |
+| `purposes.decisions.memory` | object \| null | 否 | — | — |
+| `purposes.decisions.agents` | object \| null | 否 | — | — |
+| `purposes.decisions.approval` | object \| null | 否 | — | — |
+| `purposes.decisions.ambient` | object \| null | 否 | — | — |
+| `purposes.agents` | object | 否 | — | — |
+| `purposes.adapters` | object | 否 | — | — |
+| `purposes.endpoints` | object | 否 | — | — |
+| `purposes.scenes` | object | 否 | — | — |
+| `remove` | object | 否 | — | — |
+| `remove.services` | array&lt;string&gt; | 否 | — | — |
+| `remove.accounts` | array&lt;string&gt; | 否 | — | — |
+| `remove.profiles` | array&lt;string&gt; | 否 | — | — |
 
 ## 插件实例字段
 
@@ -2327,14 +2225,7 @@ _该 Schema 没有声明字段。_
 
 [`plugins/services/typesafe/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/services/typesafe/schema.json)
 
-| 路径 | 类型 | 必填 | 默认值 | 说明 |
-| --- | --- | --- | --- | --- |
-| `typesafe.enabled` | boolean | 否 | `true` | 启用该决策服务。 |
-| `typesafe.apiKey` | string | 否 | — | 通过环境变量 TYPESAFE_API_KEY 引用密钥。 |
-| `typesafe.model` | string | 否 | `"jev-latest"` | 模型名称；校准后的策略应固定模型版本。 |
-| `typesafe.baseUrl` | string | 否 | `"https://api.typesafe.ai"` | API 根地址，不包含凭据、查询或片段。 |
-| `typesafe.timeoutMs` | integer | 否 | `10000` | 包含全部请求与重试等待的总超时。 |
-| `typesafe.maxRetries` | integer | 否 | `2` | 首次请求后的最大重试次数。 |
+_该 Schema 没有声明字段。_
 
 ### 60s
 

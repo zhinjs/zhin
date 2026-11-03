@@ -25,31 +25,31 @@ describe('native file ToolFeatures', () => {
     const index = createIndex();
     const invocation = createInvocation(workspace);
 
-    await expect(index.execute(rootPluginId(), 'read_file', {
+    await expect(index.execute({ requester: rootPluginId(), name: 'read_file', input: {
       file_path: join(workspace, 'src', 'answer.ts'),
-    }, invocation)).resolves.toContain('export const answer = 42');
-    await expect(index.execute(rootPluginId(), 'list_dir', {
+    }, invocation: invocation })).resolves.toContain('export const answer = 42');
+    await expect(index.execute({ requester: rootPluginId(), name: 'list_dir', input: {
       path: join(workspace, 'src'),
-    }, invocation)).resolves.toContain('answer.ts');
-    await expect(index.execute(rootPluginId(), 'glob', {
+    }, invocation: invocation })).resolves.toContain('answer.ts');
+    await expect(index.execute({ requester: rootPluginId(), name: 'glob', input: {
       cwd: workspace,
       pattern: '**/*.ts',
-    }, invocation)).resolves.toContain('src/answer.ts');
-    await expect(index.execute(rootPluginId(), 'grep', {
+    }, invocation: invocation })).resolves.toContain('src/answer.ts');
+    await expect(index.execute({ requester: rootPluginId(), name: 'grep', input: {
       path: workspace,
       pattern: 'answer = 42',
-    }, invocation)).resolves.toContain('src/answer.ts:1');
-    await expect(index.execute(rootPluginId(), 'edit_file', {
+    }, invocation: invocation })).resolves.toContain('src/answer.ts:1');
+    await expect(index.execute({ requester: rootPluginId(), name: 'edit_file', input: {
       file_path: join(workspace, 'src', 'answer.ts'),
       old_string: 'answer = 42',
       new_string: 'answer = 43',
-    }, invocation)).resolves.toContain('Edited');
+    }, invocation: invocation })).resolves.toContain('Edited');
     await expect(readFile(join(workspace, 'src', 'answer.ts'), 'utf8'))
       .resolves.toContain('answer = 43');
-    await expect(index.execute(rootPluginId(), 'write_file', {
+    await expect(index.execute({ requester: rootPluginId(), name: 'write_file', input: {
       file_path: join(workspace, 'src', 'created.ts'),
       content: 'export const created = true;\n',
-    }, invocation)).resolves.toContain('Wrote 29 bytes');
+    }, invocation: invocation })).resolves.toContain('Wrote 29 bytes');
     await expect(readFile(join(workspace, 'src', 'created.ts'), 'utf8'))
       .resolves.toBe('export const created = true;\n');
   });
@@ -73,20 +73,20 @@ describe('native file ToolFeatures', () => {
     const index = createIndex();
     const invocation = createInvocation(workspace);
 
-    const all = await index.execute(rootPluginId(), 'grep', { path: workspace, pattern: 'needle' }, invocation);
+    const all = await index.execute({ requester: rootPluginId(), name: 'grep', input: { path: workspace, pattern: 'needle' }, invocation: invocation });
     expect(String(all).split('\n').map((line) => line.split(':')[0]).sort()).toEqual(['keep.log', 'src/lib/util.ts']);
 
-    const manifests = await index.execute(rootPluginId(), 'glob', { cwd: workspace, pattern: '**/package.json' }, invocation);
+    const manifests = await index.execute({ requester: rootPluginId(), name: 'glob', input: { cwd: workspace, pattern: '**/package.json' }, invocation: invocation });
     expect(manifests).toBe('Found 1 files:\npackage.json');
 
-    await expect(index.execute(rootPluginId(), 'grep', {
+    await expect(index.execute({ requester: rootPluginId(), name: 'grep', input: {
       path: join(workspace, 'node_modules', 'dep'),
       pattern: 'needle',
-    }, invocation)).resolves.toContain('package.json:1');
-    await expect(index.execute(rootPluginId(), 'glob', {
+    }, invocation: invocation })).resolves.toContain('package.json:1');
+    await expect(index.execute({ requester: rootPluginId(), name: 'glob', input: {
       cwd: join(workspace, 'lib'),
       pattern: '*.js',
-    }, invocation)).resolves.toContain('out.js');
+    }, invocation: invocation })).resolves.toContain('out.js');
   });
 
   it('honours an ancestor .gitignore when searching a sub-directory', async () => {
@@ -96,20 +96,20 @@ describe('native file ToolFeatures', () => {
       'pkg/generated/a.ts': 'needle\n',
       'pkg/src/b.ts': 'needle\n',
     });
-    await expect(createIndex().execute(rootPluginId(), 'grep', {
+    await expect(createIndex().execute({ requester: rootPluginId(), name: 'grep', input: {
       path: join(workspace, 'pkg'),
       pattern: 'needle',
-    }, createInvocation(workspace))).resolves.toBe('src/b.ts:1:needle');
+    }, invocation: createInvocation(workspace) })).resolves.toBe('src/b.ts:1:needle');
   });
 
   it.each(['.*', '^', '$', 'x*', '(?:)'])('rejects the match-everything grep pattern %j with guidance', async (pattern) => {
     const workspace = await tempWorkspace();
     await writeFiles(workspace, { 'package.json': '{}\n' });
-    await expect(createIndex().execute(rootPluginId(), 'grep', {
+    await expect(createIndex().execute({ requester: rootPluginId(), name: 'grep', input: {
       path: workspace,
       pattern,
       include: 'package.json',
-    }, createInvocation(workspace))).rejects.toThrow(/matches every line.*read_file.*glob or list_dir/);
+    }, invocation: createInvocation(workspace) })).rejects.toThrow(/matches every line.*read_file.*glob or list_dir/);
   });
 
   it('caps grep matches and output size with a narrowing notice', async () => {
@@ -121,19 +121,19 @@ describe('native file ToolFeatures', () => {
     const index = createIndex();
     const invocation = createInvocation(workspace);
 
-    const capped = String(await index.execute(rootPluginId(), 'grep', {
+    const capped = String(await index.execute({ requester: rootPluginId(), name: 'grep', input: {
       path: join(workspace, 'many.txt'),
       pattern: 'hit',
       limit: 10_000,
-    }, invocation));
+    }, invocation: invocation }));
     expect(capped.split('\n')).toHaveLength(201);
     expect(capped).toMatch(/\[truncated at 200 matches; narrow the pattern/);
 
-    const wide = String(await index.execute(rootPluginId(), 'grep', {
+    const wide = String(await index.execute({ requester: rootPluginId(), name: 'grep', input: {
       path: join(workspace, 'wide.txt'),
       pattern: 'hit',
       limit: 200,
-    }, invocation));
+    }, invocation: invocation }));
     expect(Buffer.byteLength(wide)).toBeLessThan(26 * 1024);
     expect(wide).toContain('[line truncated, 1004 chars]');
     expect(wide).toMatch(/\[truncated at 24576 bytes; narrow the pattern/);
@@ -143,10 +143,10 @@ describe('native file ToolFeatures', () => {
     const workspace = await tempWorkspace();
     await writeFile(join(workspace, 'blob.bin'), Buffer.from([0x6e, 0x65, 0x65, 0x64, 0x6c, 0x65, 0x00, 0x01]));
     await writeFiles(workspace, { 'text.txt': 'needle\n' });
-    await expect(createIndex().execute(rootPluginId(), 'grep', {
+    await expect(createIndex().execute({ requester: rootPluginId(), name: 'grep', input: {
       path: workspace,
       pattern: 'needle',
-    }, createInvocation(workspace))).resolves.toBe('text.txt:1:needle');
+    }, invocation: createInvocation(workspace) })).resolves.toBe('text.txt:1:needle');
   });
 
   it('caps glob, list_dir and read_file output with continuation hints', async () => {
@@ -158,13 +158,13 @@ describe('native file ToolFeatures', () => {
     const index = createIndex();
     const invocation = createInvocation(workspace);
 
-    await expect(index.execute(rootPluginId(), 'glob', { cwd: workspace, pattern: 'd/*.ts' }, invocation))
+    await expect(index.execute({ requester: rootPluginId(), name: 'glob', input: { cwd: workspace, pattern: 'd/*.ts' }, invocation: invocation }))
       .resolves.toMatch(/Found 100 files:[\s\S]*\[truncated at 100 files; narrow the pattern/);
-    await expect(index.execute(rootPluginId(), 'list_dir', { path: join(workspace, 'd') }, invocation))
+    await expect(index.execute({ requester: rootPluginId(), name: 'list_dir', input: { path: join(workspace, 'd') }, invocation: invocation }))
       .resolves.toMatch(/\[truncated: showing 500 of 520 entries/);
-    const read = String(await index.execute(rootPluginId(), 'read_file', {
+    const read = String(await index.execute({ requester: rootPluginId(), name: 'read_file', input: {
       file_path: join(workspace, 'big.txt'),
-    }, invocation));
+    }, invocation: invocation }));
     expect(read).toContain('(2500 lines, showing 1-2000)');
     expect(read).toContain('[500 more lines; call read_file again with offset=2000 to continue]');
   });
@@ -176,9 +176,9 @@ describe('native file ToolFeatures', () => {
     controller.abort('turn ended');
     const index = createIndex();
 
-    await expect(index.execute(rootPluginId(), 'read_file', {
+    await expect(index.execute({ requester: rootPluginId(), name: 'read_file', input: {
       file_path: join(workspace, 'missing.txt'),
-    }, createInvocation(workspace, controller.signal))).rejects.toBe('turn ended');
+    }, invocation: createInvocation(workspace, controller.signal) })).rejects.toBe('turn ended');
   });
 });
 

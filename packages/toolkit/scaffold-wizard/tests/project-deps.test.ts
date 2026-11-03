@@ -34,14 +34,12 @@ describe('project-deps', () => {
     const config = {
       ai: {
         enabled: true,
-        agents: { zhin: { provider: 'openai', model: 'gpt-4o' } },
-        providers: { openai: { sdk: 'openai' } },
       },
     };
     const pkg = { dependencies: { 'zhin.js': '^4.0.0' } };
     const diagnosis = diagnoseAIDependencies('/tmp', config, pkg);
     expect(diagnosis?.missingFromPackageJson).toContain('@zhin.js/agent');
-    expect(diagnosis?.missingFromPackageJson).toContain('@ai-sdk/openai');
+    expect(diagnosis?.missingFromPackageJson).not.toContain('@ai-sdk/openai');
     expect(diagnosis?.missingFromPackageJson).not.toContain('@modelcontextprotocol/sdk');
   });
 
@@ -49,11 +47,9 @@ describe('project-deps', () => {
     const config = {
       ai: {
         enabled: true,
-        agents: { zhin: { provider: 'agnes-ai' } },
-        providers: { 'agnes-ai': { sdk: 'openai-compatible' } },
       },
     };
-    const required = getRequiredAIDependenciesForConfig(config);
+    const required = getRequiredAIDependenciesForConfig(config, { services: { 'agnes-ai': { driver: 'openai-compatible' } } });
     expect(required['@ai-sdk/openai-compatible']).toBe('latest');
     expect(required.ai).toBe('latest');
   });
@@ -75,8 +71,6 @@ describe('project-deps', () => {
       ai: {
         enabled: true,
         memoryMcp: true,
-        agents: { zhin: { provider: 'ollama' } },
-        providers: { ollama: { sdk: 'ollama' } },
       },
     };
     const diagnosis = diagnoseAIDependencies('/tmp', config, { dependencies: {} });
@@ -165,4 +159,16 @@ describe('project-deps', () => {
       await fs.remove(dir);
     }
   });
+});
+
+
+it('installs the explicit proposal protocol SDKs without treating it as startup configuration', () => {
+  const plan = { services: {
+    codex: { driver: 'codex-subscription' }, claude: { driver: 'claude-subscription' }, google: { driver: 'antigravity' },
+    go: { driver: 'opencode-go', models: { arbitrary: { protocol: 'openai-chat' }, another: { protocol: 'anthropic-messages' } } },
+    mini: { driver: 'minimax' },
+  } };
+  const required = getRequiredAIDependenciesForConfig({ ai: { enabled: true } }, plan);
+  expect(required).toMatchObject({ '@ai-sdk/openai': 'latest', '@ai-sdk/anthropic': 'latest', '@ai-sdk/google': 'latest', '@ai-sdk/minimax': 'latest', '@ai-sdk/openai-compatible': 'latest' });
+  expect(getRequiredAIDependenciesForConfig({ ai: { enabled: true } }, { services: { unknown: { driver: 'opencode-go', models: { 'claude-name-does-not-prove-protocol': {} } } } })).not.toHaveProperty('@ai-sdk/anthropic');
 });

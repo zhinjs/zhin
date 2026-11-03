@@ -13,6 +13,7 @@ import { collectEnvironmentSecrets } from '../security/outbound-leak-guard.js';
 import { scrubSecrets, type TurnTrace } from './turn-trace.js';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_TRACE_MAX_BYTES } from './request-trace.js';
+import { projectProviderDiagnostics } from '@zhin.js/ai';
 import type { TurnTraceStore } from './turn-trace-store.js';
 
 export const DEFAULT_TRACE_RETENTION_DAYS = 7;
@@ -316,7 +317,7 @@ export function redactStrings<T>(value: T, secrets: readonly string[] = []): T {
     }
     return item;
   };
-  return visit(value) as T;
+  return visit(projectProviderDiagnostics(value)) as T;
 }
 
 /**

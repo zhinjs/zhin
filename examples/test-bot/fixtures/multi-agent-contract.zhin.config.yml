@@ -6,11 +6,9 @@ ai:
       - "ai:"
   agents:
     planner:
-      provider: ollama
-      model: placeholder
+      nickname: Planner
     researcher:
-      provider: ollama
-      model: placeholder
+      nickname: Researcher
   agent:
     tools:
       - spawn_task

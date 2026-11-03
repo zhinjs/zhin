@@ -12,7 +12,7 @@ import {
   collectWizardDependencies,
   collectWizardFeatures,
   finalizeWizardOptions,
-  mergeFeaturesIntoPackageJson,
+  mergeFeaturesIntoPackageJson, readAIPlanProposal,
   serializeRuntimeConfig,
 } from '../src/apply.js';
 import type { AdapterSetupResult, InitOptions } from '../src/types.js';
@@ -32,7 +32,7 @@ describe('apply wizard to config', () => {
         }],
         envVars: { TELEGRAM_TOKEN: 'x' },
       },
-      ai: { enabled: true, agentProvider: 'ollama', providers: { ollama: { host: 'http://127.0.0.1:11434' } } },
+      ai: { enabled: true, agentProvider: 'ollama', providers: { ollama: { host: 'http://127.0.0.1:11434', models: ['chosen-model'] } } },
     };
 
     finalizeWizardOptions(options);
@@ -43,10 +43,7 @@ describe('apply wizard to config', () => {
     expect(plugins.telegram).toEqual({ polling: true, endpoints: [{ id: 'tg', token: '${TELEGRAM_TOKEN}' }] });
     expect(config.database).toEqual({ dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' });
     expect(config.inbox).toBeUndefined();
-    expect(config.ai).toMatchObject({
-      providers: { ollama: { sdk: 'ollama', host: 'http://127.0.0.1:11434' } },
-      agents: { zhin: { provider: 'ollama' } },
-    });
+    expect(config.ai).not.toHaveProperty('plan');
     expect(config.ai).not.toHaveProperty('defaultProvider');
   });
 
@@ -114,7 +111,7 @@ describe('appendWizardEnvVars', () => {
       const ai = {
         enabled: true,
         agentProvider: 'openai',
-        providers: { openai: { apiKey: '${AI_API_KEY}', __envApiKey: 'sk-real key' } },
+        providers: { openai: { apiKey: '${AI_API_KEY}', __envApiKey: 'sk-real key', models: ['explicit-model'] } },
       } as never;
 
       await appendWizardEnvVars(dir, adapters, ai, database);
@@ -177,10 +174,11 @@ describe('buildRuntimeConfigDocument', () => {
   it('writes ai section only when enabled', () => {
     const aiOptions: InitOptions = {
       ...options,
-      ai: { enabled: true, agentProvider: 'ollama', providers: { ollama: { host: 'http://127.0.0.1:11434' } } },
+      ai: { enabled: true, agentProvider: 'ollama', providers: { ollama: { host: 'http://127.0.0.1:11434', models: ['chosen-model'] } } },
     };
     const doc = buildRuntimeConfigDocument(aiOptions);
-    expect(doc.ai).toMatchObject({ agents: { zhin: { provider: 'ollama' } } });
+    expect(doc.ai).toBeDefined();
+    expect(doc.ai).not.toHaveProperty('plan');
     expect(buildRuntimeConfigDocument(options)).not.toHaveProperty('ai');
   });
 });
@@ -269,7 +267,7 @@ describe('collectWizardDependencies / collectWizardFeatures', () => {
     const ai = {
       enabled: true,
       agentProvider: 'ollama',
-      providers: { ollama: { host: 'http://127.0.0.1:11434' } },
+      providers: { ollama: { host: 'http://127.0.0.1:11434', models: ['chosen-model'] } },
     };
 
     const deps = collectWizardDependencies({ ai });
@@ -323,4 +321,16 @@ describe('mergeFeaturesIntoPackageJson', () => {
       await fs.remove(dir);
     }
   });
+});
+
+
+it('writes a separate import proposal, preserving unrelated resource declarations and keeping models out of startup config', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-plan-proposal-'));
+  try {
+    await fs.writeFile(path.join(root, 'ai.plan.yml'), 'version: 1\nservices:\n  preserved:\n    driver: custom\n');
+    const ai = { enabled: true, agentProvider: 'ollama', providers: { ollama: { host: 'http://localhost:11434', models: ['explicit-model'] } } };
+    await appendWizardEnvVars(root, undefined, ai);
+    expect(await readAIPlanProposal(root)).toMatchObject({ version: 1, services: { preserved: { driver: 'custom' }, ollama: { driver: 'ollama' } }, purposes: { chat: { profile: 'ollama:explicit-model' } } });
+    expect(buildRuntimeConfigDocument({ ai }).ai).not.toHaveProperty('plan');
+  } finally { await fs.remove(root); }
 });

@@ -152,9 +152,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const {listeners: additionalHttpListeners = [], ...primaryHttpListener} = httpConfig;
   const httpHost = createHttpHostGroup([primaryHttpListener, ...additionalHttpListeners]);
   const databaseConfig = await resolveDatabaseConfig(options.root, hostConfig);
+  const databaseHost = createDatabaseHost(databaseConfig);
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
-  const agentHost = await loadConfiguredAgentHost(hostConfig, options.root);
+  const agentHost = await loadConfiguredAgentHost({ config: hostConfig, projectRoot: options.root, database: databaseHost,
+    resolveSource: reference => {
+      const match = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(reference);
+      return match ? hostEnvironment.get(match[1]!) : undefined;
+    },
+  });
   const endpointRoles = await createEndpointRoleResolver(hostConfig);
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
   const htmlRendererHost = await prepareHtmlRendererHost(hostConfig);
@@ -165,7 +171,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   };
   const senderEnricher = await createSenderEnricher(hostConfig, endpointRoles);
   const im = new ImRuntime({ enrichSender: senderEnricher });
-  const databaseHost = createDatabaseHost(databaseConfig);
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
   databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
@@ -269,10 +274,6 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
           selfChanges,
           selfChangeApply,
           projectRoot: options.root,
-          resolveModelSecret: reference => {
-            const match = /^env:\/\/([A-Z_][A-Z0-9_]*)$/u.exec(reference);
-            return match ? hostEnvironment.get(match[1]!) : undefined;
-          },
           resolveEndpointOwner: endpointRoles.resolveOwner,
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
           resolveConfiguredEndpointKeys: () => {
@@ -360,7 +361,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     databaseHost,
     scheduleHost,
     eventHub: consoleEventHub,
-    hostConsoleRpc: lease => composeHostConsoleRpc(assistantStatus.consoleRpc,
+    hostConsoleRpc: lease => composeHostConsoleRpc(assistantStatus.forOperation({
+      ...(agentHost ? { ambientModels: signal => agentHost.ambientModels({ lease, signal }) } : {}),
+    }),
       createHostToolApprovalConsoleRpc({ snapshots: host.runtime.snapshots, lease }),
       selfChanges.consoleRpc),
     pluginLifecycleFile,
@@ -404,7 +407,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       await stage('http', () => httpHost.close());
     } finally {
       try {
-        await stage('runtime', () => host.stop());
+        try { await stage('inference', () => agentHost?.close()); }
+        finally { await stage('runtime', () => host.stop()); }
       } finally {
         try {
           await stage('schedule', () => scheduleHost.stop());
@@ -522,7 +526,9 @@ function reportSelfChangeRecoverError(error: unknown): void {
 }
 
 interface ConfiguredAgentHost {
+  close(): Promise<void>;
   registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
+  ambientModels(input: Readonly<{ lease: import('@zhin.js/plugin-runtime').SnapshotLease; signal: AbortSignal }>): Promise<readonly string[]>;
   readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
   attach(
     snapshots: import('@zhin.js/plugin-runtime').SnapshotReader,
@@ -531,7 +537,6 @@ interface ConfiguredAgentHost {
   install(options: {
     readonly im: ImRuntime;
     readonly projectRoot: string;
-    readonly resolveModelSecret?: (reference: string) => string | undefined | Promise<string | undefined>;
     readonly resolveEndpointOwner: (adapter: string, endpoint: string) => string | undefined;
     readonly resolveEndpointTrusted: (adapter: string, endpoint: string) => readonly string[];
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
@@ -544,10 +549,13 @@ interface ConfiguredAgentHost {
   }): RootResourceInstaller;
 }
 
-async function loadConfiguredAgentHost(
-  config: RuntimeConfigDocument | ConfigDocumentPort,
-  projectRoot: string,
-): Promise<ConfiguredAgentHost | undefined> {
+async function loadConfiguredAgentHost(options: Readonly<{
+  config: RuntimeConfigDocument | ConfigDocumentPort;
+  projectRoot: string;
+  database: import('@zhin.js/plugin-runtime').DatabaseHost;
+  resolveSource: (reference: string) => string | undefined | Promise<string | undefined>;
+}>): Promise<ConfiguredAgentHost | undefined> {
+  const { config, projectRoot } = options;
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
   const agentHost = await import('./agent/module.js');
@@ -568,14 +576,38 @@ async function loadConfiguredAgentHost(
     turnTraceStore,
   });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
+  const inference = new agentHost.HostInference({ projectRoot, database: options.database, resolveSource: options.resolveSource,
+    personalOwners: Object.values(initialAi?.personalPrincipals ?? {}).flat(),
+    snapshots: () => {
+      if (!snapshotReader) throw new Error('Inference Snapshot reader is not attached');
+      return snapshotReader;
+    },
+  });
+  const { personalSessionOwnerId } = await import('@zhin.js/agent/personal-session');
+  const principalBindings = Object.fromEntries(Object.entries(initialAi?.personalPrincipals ?? {}).map(([id, owners]) => [id,
+    owners.map(owner => {
+      if (owner.rootId !== inference.rootId) throw new Error('Personal principal binding belongs to another Host');
+      return personalSessionOwnerId(owner);
+    }),
+  ]));
   let sourceOwnership: (() => import('@zhin.js/runtime').SourceOwnershipIndex) | undefined;
   let localWorkroomDataGovernance: ReturnType<
     NonNullable<typeof workroom>['createLocalWorkroomDataGovernanceAuthority']
   > | undefined;
   const configured: ConfiguredAgentHost = {
+    close: () => inference.close(),
+    ambientModels: input => inference.ambientModels(input),
     registerHttp(http, base) {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
-      agentHost.registerPersonalModelHttp({ http, base, snapshots: snapshotReader });
+      agentHost.registerInferenceRoutes({ http, base, acquire: () => inference.acquireManagement(),
+        principal: input => agentHost.resolveInferenceManagementPrincipal({ ...input, hostOwnerId: inference.hostOwnerId, bindings: principalBindings }),
+        owners: input => {
+          if (input.scope === 'full') return [{ id: inference.hostOwnerId, label: '部署模型', kind: 'host' }];
+          const bound = input.principalId ? initialAi?.personalPrincipals?.[input.principalId] : undefined;
+          if (!bound?.length) throw new agentHost.InferenceManagementError('forbidden');
+          return bound.map(owner => ({ id: personalSessionOwnerId(owner), label: `${owner.platform} · ${owner.endpoint} · ${owner.subjectId}`, kind: 'personal' as const, personal: owner }));
+        },
+      });
     },
     bindings: (snapshot) => {
       const port = snapshot.resources.get(snapshot.root)?.get(agentHostToken.id) as
@@ -594,6 +626,7 @@ async function loadConfiguredAgentHost(
       });
       return agentHost.installAgentHost({
         ...options,
+        inference,
         pruneTraces: () => turnTraceStore.prune(),
         runtime,
         snapshots: snapshotReader,

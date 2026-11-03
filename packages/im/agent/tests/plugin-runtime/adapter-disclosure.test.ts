@@ -84,7 +84,7 @@ describe('adapter-owned scene disclosure (#949)', () => {
       // ICQQ admin is eligible for both current-group recall and safe leave;
       // keep the full scene-disclosure assertion independent of missing role data.
       const botRole = platform === 'icqq' && scope === 'group' ? 'admin' : undefined;
-      const capabilities = await ingress.read(snapshot, snapshot.root, () => true, turn(platform, scope, botRole), platform);
+      const capabilities = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: turn(platform, scope, botRole), selectedAgent: platform });
       const expected = index.list().filter(skill => !skill.scopes || skill.scopes.includes(scope));
       expect(capabilities.skills.map(skill => skill.qualifiedName)).toEqual(expected.map(skill => skill.qualifiedName));
       expect(capabilities.tools.map(tool => tool.name)).toEqual(tools.list()
@@ -114,16 +114,16 @@ describe('adapter-owned scene disclosure (#949)', () => {
         expect(plan.allTools.some(tool => tool.name === hidden.qualifiedName)).toBe(false);
       }
     }
-    expect((await ingress.read(snapshot, snapshot.root, () => true, turn('unrelated', 'group'), platform)).skills).toEqual([]);
+    expect((await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: turn('unrelated', 'group'), selectedAgent: platform })).skills).toEqual([]);
   });
 
   it('hides only role-dependent ICQQ group tools when Bot role lookup fails, including prior session loads', async () => {
     const snapshot = await loadAdapter('icqq');
     const ingress = new CapabilityIngress();
-    const admin = await ingress.read(snapshot, snapshot.root, () => true, turn('icqq', 'group', 'admin'), 'icqq');
-    const unknown = await ingress.read(snapshot, snapshot.root, () => true, {
+    const admin = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: turn('icqq', 'group', 'admin'), selectedAgent: 'icqq' });
+    const unknown = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: {
       ...turn('icqq', 'group'), input: { contextState: { bot: { platformRoleError: 'lookup_failed' } } },
-    }, 'icqq');
+    }, selectedAgent: 'icqq' });
     const roleDependent = [
       'agent__icqq__skill__icqq-group-admin__group_leave',
       'agent__icqq__skill__icqq-group-admin__recall_member_message',

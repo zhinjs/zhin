@@ -1,13 +1,9 @@
-import type {
-  CapabilitySlot,
-  PluginId,
-  RuntimeSnapshot,
-} from '@zhin.js/plugin-runtime';
-import { isLocale, projectLocaleToken, resolveLocale } from '@zhin.js/plugin-runtime';
+import { isLocale, projectLocaleToken, resolveLocale, type CapabilitySlot, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   OwnerCapabilityIndex,
   createCapabilityContext,
   type OwnerCapabilityEntry,
+  type CapabilityOperationFactory,
 } from '@zhin.js/feature-kit';
 import type {
   AgentToolDefinition,
@@ -19,8 +15,7 @@ import type {
   ToolScope,
   ToolAvailabilityContext,
 } from './definition.js';
-import { parseToolInputSchema } from './input-schema.js';
-import type { ToolInputSchema } from './input-schema.js';
+import { parseToolInputSchema, type ToolInputSchema } from './input-schema.js';
 
 export interface ToolDescriptor {
   readonly owner: PluginId;
@@ -46,6 +41,15 @@ export interface ToolDescriptor {
   readonly readOnly?: boolean;
   readonly placement?: AgentToolDefinition['placement'];
   readonly source: string;
+}
+
+export interface ToolExecuteRequest<TInput = unknown> {
+  readonly requester: PluginId;
+  readonly name: string;
+  readonly input: TInput;
+  readonly invocation: ToolInvocationContext;
+  readonly snapshot?: RuntimeSnapshot;
+  readonly operation?: CapabilityOperationFactory;
 }
 
 export class ToolIndex {
@@ -87,13 +91,8 @@ export class ToolIndex {
     return available;
   }
 
-  async execute<TInput = unknown, TResult = unknown>(
-    requester: PluginId,
-    name: string,
-    input: TInput,
-    invocation: ToolInvocationContext,
-    operationSnapshot: RuntimeSnapshot = this.snapshot,
-  ): Promise<TResult> {
+  async execute<TInput = unknown, TResult = unknown>({ requester, name, input, invocation,
+    snapshot: operationSnapshot = this.snapshot, operation: operationFactory }: ToolExecuteRequest<TInput>): Promise<TResult> {
     // An unchanged projection may be reused; each operation owns its snapshot.
     const index = operationSnapshot === this.snapshot
       ? this.#index
@@ -110,46 +109,51 @@ export class ToolIndex {
     if (expectedAdapter && invocation.client?.adapter !== expectedAdapter) {
       throw new Error(`Agent Tool ${entry.qualifiedName} requires adapter ${expectedAdapter}`);
     }
-    const capability = createCapabilityContext(operationSnapshot, entry.owner);
-    const context = {
-      ...capability,
-      locale: isLocale(invocation.locale) ? invocation.locale
-        : resolveLocale(operationSnapshot.resources.get(entry.owner)?.get(projectLocaleToken.id)),
-      signal: invocation.signal,
-      traceId: invocation.traceId,
-      turnId: invocation.turnId,
-      sessionKey: invocation.sessionKey,
-      origin: Object.freeze({ ...invocation.origin }),
-      principal: Object.freeze({
-        subjectId: invocation.principal.subjectId,
-        displayName: invocation.principal.displayName,
-        roles: Object.freeze([...invocation.principal.roles]),
-      }),
-      policy: Object.freeze({
-        permissions: Object.freeze([...invocation.policy.permissions]),
-        unattended: invocation.policy.unattended,
-        network: Object.freeze({
-          enabled: invocation.policy.network.enabled,
-          httpsOnly: invocation.policy.network.httpsOnly,
-          allowedDomains: Object.freeze([...(invocation.policy.network.allowedDomains ?? [])]),
+    const operation = operationFactory?.create({ owner: entry.owner, signal: invocation.signal });
+    try {
+      const capability = createCapabilityContext({ snapshot: operationSnapshot, ownerId: entry.owner, signal: invocation.signal, operation });
+      const context = {
+        ...capability,
+        locale: isLocale(invocation.locale) ? invocation.locale
+          : resolveLocale(operationSnapshot.resources.get(entry.owner)?.get(projectLocaleToken.id)),
+        signal: capability.signal,
+        traceId: invocation.traceId,
+        turnId: invocation.turnId,
+        sessionKey: invocation.sessionKey,
+        origin: Object.freeze({ ...invocation.origin }),
+        principal: Object.freeze({
+          subjectId: invocation.principal.subjectId,
+          displayName: invocation.principal.displayName,
+          roles: Object.freeze([...invocation.principal.roles]),
         }),
-        ...(invocation.policy.shell
-          ? { shell: Object.freeze({ ...invocation.policy.shell }) }
-          : {}),
-        ...(invocation.policy.filesystem
-          ? { filesystem: Object.freeze({ ...invocation.policy.filesystem }) }
-          : {}),
-      }),
-      ...(invocation.question ? { question: invocation.question } : {}),
-      ...(invocation.selfProfile ? { selfProfile: invocation.selfProfile } : {}),
-      ...(invocation.effects ? { effects: invocation.effects } : {}),
-    } as ToolExecutionContext;
-    Object.defineProperty(context, '$client', {
-      enumerable: true,
-      get: () => invocation.client?.get(),
-    });
-    Object.freeze(context);
-    return entry.slot.definition.execute(parsed.data as TInput, context) as TResult | Promise<TResult>;
+        policy: Object.freeze({
+          permissions: Object.freeze([...invocation.policy.permissions]),
+          unattended: invocation.policy.unattended,
+          network: Object.freeze({
+            enabled: invocation.policy.network.enabled,
+            httpsOnly: invocation.policy.network.httpsOnly,
+            allowedDomains: Object.freeze([...(invocation.policy.network.allowedDomains ?? [])]),
+          }),
+          ...(invocation.policy.shell
+            ? { shell: Object.freeze({ ...invocation.policy.shell }) }
+            : {}),
+          ...(invocation.policy.filesystem
+            ? { filesystem: Object.freeze({ ...invocation.policy.filesystem }) }
+            : {}),
+        }),
+        ...(invocation.question ? { question: invocation.question } : {}),
+        ...(invocation.selfProfile ? { selfProfile: invocation.selfProfile } : {}),
+        ...(invocation.effects ? { effects: invocation.effects } : {}),
+      } as ToolExecutionContext;
+      Object.defineProperty(context, '$client', {
+        enumerable: true,
+        get: () => invocation.client?.get(),
+      });
+      Object.freeze(context);
+      return await entry.slot.definition.execute(parsed.data as TInput, context) as TResult;
+    } finally {
+      try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the tool's actual outcome. */ }
+    }
   }
 }
 

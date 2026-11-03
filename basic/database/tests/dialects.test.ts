@@ -75,7 +75,7 @@ describe('Database Dialects', () => {
 
       // 通过 processRowData 间接测试 processFieldValue
       function processValue(value: any, key = 'field'): any {
-        const result = (dialect as any).processRowData({ [key]: value })
+        const result = (dialect as any).processRowData({ [key]: value }, new Set(key === 'field' ? ['field'] : []))
         return result[key]
       }
 
@@ -132,7 +132,7 @@ describe('Database Dialects', () => {
       it('should NOT parse JSON-looking text when no schema registered', async () => {
         const { SQLiteDialect } = await import('../src/dialects/sqlite')
         const bare = new SQLiteDialect({ filename: ':memory:' } as any)
-        const result = (bare as any).processRowData({ field: '{"a":1}' })
+        const result = (bare as any).processRowData({ field: '{"a":1}' }, new Set())
         expect(result.field).toBe('{"a":1}')
       })
     })

@@ -1,3 +1,6 @@
+import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
+import { profileModel } from '../helpers/profile-runtime.js';
+import { createProfileRuntime } from '../helpers/profile-runtime.js';
 /**
  * Explicit Gemini context caching over the real @ai-sdk/google transport with a
  * mocked HTTP endpoint (#769): create once, reuse on the second turn, TTL refresh,
@@ -6,13 +9,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getLogger } from '@zhin.js/logger';
 import { z } from 'zod';
-import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
-import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
+
+
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import { createGeminiCachingFetch } from '../../src/llm/gemini-context-cache.js';
-import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
-import { createSdkProviderAdapter } from '../../src/sdk-provider-adapter.js';
-import { AiHttpTransport } from '../../src/llm/http-transport.js';
+
+import { fixedProfileClient } from '../helpers/fixed-profile-client.js';
 
 type Call = { url: string; method: string; body: Record<string, any>; keyed: boolean };
 const SYSTEM = 'You are zhin, a group-chat assistant. '.repeat(400);
@@ -22,8 +24,9 @@ function server(options: { createStatus?: number; generateStatus?: (call: Call) 
   const calls: Call[] = [];
   let created = 0;
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input instanceof Request ? input.url : input);
-    const call = { url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : {}, keyed: new Headers(init?.headers).has('x-goog-api-key') };
+    const request = new Request(input, init), url = request.url;
+    const text = request.body ? await request.text() : '';
+    const call = { url, method: request.method, body: text ? JSON.parse(text) : {}, keyed: request.headers.has('x-goog-api-key') };
     calls.push(call);
     if (url.endsWith('/cachedContents')) {
       if (options.createStatus && options.createStatus !== 200) return new Response('{"error":{"code":400,"status":"INVALID_ARGUMENT"}}', { status: options.createStatus });
@@ -45,10 +48,10 @@ function server(options: { createStatus?: number; generateStatus?: (call: Call) 
   return { fetch, calls };
 }
 
-function setup(srv: ReturnType<typeof server>, extra: Partial<ProviderInstanceConfig> = {}) {
-  const config: ProviderInstanceConfig = { sdk: 'google', apiKey: 'test-key', contextCache: { mode: 'explicit' }, ...extra };
-  const runtime = createLlmApiRuntime([{ alias: 'gemini', config, models: ['gemini-3.8-flash'], fetch: srv.fetch }], () => ['gemini-3.8-flash']);
-  return { runtime, model: createLlmTransportModel('gemini', config, 'gemini-3.8-flash') };
+function setup(srv: ReturnType<typeof server>, extra: Partial<ProviderFixtureConfig> = {}) {
+  const config: ProviderFixtureConfig = { sdk: 'google', apiKey: 'test-key', contextCache: { mode: 'explicit' }, ...extra };
+  const runtime = createProfileRuntime({ alias: 'gemini', config, models: ['gemini-3.8-flash'], fetch: srv.fetch });
+  return { runtime, model: profileModel('gemini', config, 'gemini-3.8-flash') };
 }
 
 const generates = (calls: Call[]) => calls.filter((c) => /:(?:generateContent|streamGenerateContent)/.test(c.url));
@@ -57,11 +60,11 @@ const creates = (calls: Call[]) => calls.filter((c) => c.url.endsWith('/cachedCo
 describe('Gemini explicit context caching', () => {
   it('retains failure backoff across standalone completions and keeps provider instances isolated', async () => {
     const srv = server({ createStatus: 404 });
-    const config: ProviderInstanceConfig = {
+    const config: ProviderFixtureConfig = {
       sdk: 'google', apiKey: 'test-key', models: ['gemini-3.8-flash'], contextCache: { mode: 'explicit' },
     };
-    const first = createSdkProviderAdapter('gemini', config, new AiHttpTransport({ fetch: srv.fetch }))!;
-    const second = createSdkProviderAdapter('gemini', config, new AiHttpTransport({ fetch: srv.fetch }))!;
+    const first = fixedProfileClient(config, srv.fetch);
+    const second = fixedProfileClient(config, srv.fetch);
     try {
       expect(await first.completeText(SYSTEM, 'a')).toBe('ok');
       expect(await first.completeText(SYSTEM, 'b')).toBe('ok');
@@ -79,7 +82,7 @@ describe('Gemini explicit context caching', () => {
     const srv = server();
     const secret = 'sensitive upstream error contents';
     const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).endsWith('/cachedContents')) {
+      if ((input instanceof Request ? input.url : String(input)).endsWith('/cachedContents')) {
         if (failure === 'network') throw new Error(secret);
         return new Response(`<html>${secret}</html>`, { headers: { 'content-type': 'text/html' } });
       }
@@ -99,9 +102,9 @@ describe('Gemini explicit context caching', () => {
 
   it('reuses the configured cache across standalone text completions', async () => {
     const srv = server();
-    const provider = createSdkProviderAdapter('gemini', {
+    const provider = fixedProfileClient({
       sdk: 'google', apiKey: 'test-key', models: ['gemini-3.8-flash'], contextCache: { mode: 'explicit' },
-    }, new AiHttpTransport({ fetch: srv.fetch }))!;
+    }, srv.fetch);
     try {
       await provider.completeTextResult(SYSTEM, 'a');
       const second = await provider.completeTextResult(SYSTEM, 'b');
@@ -114,9 +117,9 @@ describe('Gemini explicit context caching', () => {
 
   it('keeps the standalone runtime but replaces its cache when the supplied system changes', async () => {
     const srv = server();
-    const provider = createSdkProviderAdapter('gemini', {
+    const provider = fixedProfileClient({
       sdk: 'google', apiKey: 'test-key', models: ['gemini-3.8-flash'], contextCache: { mode: 'explicit' },
-    }, new AiHttpTransport({ fetch: srv.fetch }))!;
+    }, srv.fetch);
     try {
       for (const system of [SYSTEM, SYSTEM, `${SYSTEM} New policy.`, `${SYSTEM} New policy.`]) {
         await provider.completeTextResult(system, 'synthetic task');
@@ -178,7 +181,7 @@ describe('Gemini explicit context caching', () => {
   it('re-creates the cache when the TTL is about to run out', async () => {
     const srv = server();
     let clock = 0;
-    const cachingFetch = createGeminiCachingFetch({ mode: 'explicit', ttlSeconds: 120 }, srv.fetch, () => clock);
+    const cachingFetch = createGeminiCachingFetch({ config: { mode: 'explicit', ttlSeconds: 120 }, fetch: srv.fetch, now: () => clock });
     const body = JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents: [] });
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
     await cachingFetch(url, { method: 'POST', body });

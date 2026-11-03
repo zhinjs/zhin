@@ -1,3 +1,4 @@
+import type { CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
@@ -69,29 +70,25 @@ export interface AgentCapabilities {
   readonly promptSegments?: readonly PromptSegment[];
 }
 
+export interface CapabilityIngressInput {
+  readonly snapshot: RuntimeSnapshot;
+  readonly owner: PluginId;
+  readonly isActive?: () => boolean;
+  readonly turn?: TurnAccessContext;
+  readonly selectedAgent?: string;
+  readonly operation?: CapabilityOperationFactory;
+}
 export class CapabilityIngress {
-  async read(
-    snapshot: RuntimeSnapshot,
-    owner: PluginId,
-    isActive: () => boolean = () => true,
-    turn?: TurnAccessContext,
-    selectedAgent?: string,
-  ): Promise<AgentCapabilities> {
+  async read(input: CapabilityIngressInput): Promise<AgentCapabilities> {
+    const { snapshot, owner, isActive = () => true, turn, selectedAgent, operation } = input;
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Agent capability owner: ${owner}`);
     const tools = projection(snapshot, toolFeatureId, isToolIndex);
     const mcp = projection(snapshot, mcpFeatureId, isMcpIndex);
     const promptProjection = snapshot.projections.get(promptSectionFeatureId);
     const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
-    const featureTools = await bindTools(
-      tools,
-      owner,
-      isActive,
-      turn,
-      resolvePermissionHost(snapshot),
-      selectedAgent,
-      snapshot,
-    );
+    const featureTools = await bindTools({ index: tools, owner, isActive, turn,
+      host: resolvePermissionHost(snapshot), selectedAgent, operationSnapshot: snapshot, operation });
     const featureSkills = await bindSkills(
       projection(snapshot, skillFeatureId, isSkillIndex),
       turn,
@@ -284,15 +281,18 @@ function assertDistinctCapabilities(
   }
 }
 
-async function bindTools(
-  index: ToolIndex | undefined,
-  owner: PluginId,
-  isActive: () => boolean,
-  turn?: TurnAccessContext,
-  host?: PermissionHost,
-  selectedAgent?: string,
-  operationSnapshot?: RuntimeSnapshot,
-): Promise<readonly ToolCapability[]> {
+interface BindToolsInput {
+  readonly index: ToolIndex | undefined;
+  readonly owner: PluginId;
+  readonly isActive: () => boolean;
+  readonly turn?: TurnAccessContext;
+  readonly host?: PermissionHost;
+  readonly selectedAgent?: string;
+  readonly operationSnapshot?: RuntimeSnapshot;
+  readonly operation?: CapabilityOperationFactory;
+}
+async function bindTools(input: BindToolsInput): Promise<readonly ToolCapability[]> {
+  const { index, owner, isActive, turn, host, selectedAgent, operationSnapshot, operation } = input;
   if (!index) return Object.freeze([]);
   const descriptors = index.list();
   const accessResults = await Promise.all(
@@ -318,7 +318,7 @@ async function bindTools(
       name: r.descriptor.qualifiedName,
       execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
         assertActive(isActive);
-        return index.execute<TInput, TResult>(r.descriptor.owner, r.descriptor.name, input, invocation, operationSnapshot);
+        return index.execute<TInput, TResult>({ requester: r.descriptor.owner, name: r.descriptor.name, input, invocation, snapshot: operationSnapshot, operation });
       },
     })));
 }

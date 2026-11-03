@@ -142,13 +142,10 @@ function agentPathPromptContext(
     runtime?: PromptRuntimeOverrides;
   },
 ): RichSystemPromptContext {
-  const bindingModel = options.runtime?.modelId ?? agent.activeBinding?.model;
-  const providerAlias = options.runtime?.providerAlias
-    ?? agent.activeBinding?.providerAlias
-    ?? agent.getTurnProvider().name;
-  const llmModel = bindingModel
-    ? agent.llmRuntime.model(providerAlias, bindingModel)
-    : undefined;
+  const selected = agent.getTurnExecution();
+  const bindingModel = selected.model.id;
+  const providerAlias = selected.binding.account.id;
+  const llmModel = selected.model;
   return {
     profile: options.profile,
     config: agent.config,

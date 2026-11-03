@@ -1,12 +1,15 @@
+import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
+import { profileModel } from '../helpers/profile-runtime.js';
+import { createProfileRuntime } from '../helpers/profile-runtime.js';
 /**
  * ADR 0042 §1: the system prompt is sent as stable + scene. Anthropic gets two system blocks with
  * cache_control on the stable block only; other providers get one string, stable first.
  */
 import { describe, expect, it } from 'vitest';
-import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
-import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
+
+
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
-import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+
 import { splitSystemPrompt } from '../../src/llm/bridge/ai-sdk-messages.js';
 import { wrapSystemForPromptCache } from '../../src/llm/bridge/ai-sdk-prompt-cache.js';
 
@@ -31,14 +34,14 @@ function anthropicStream(): string {
 async function capture(sdk: 'anthropic' | 'openai-compatible', breakpoint: number | undefined) {
   const bodies: Array<Record<string, any>> = [];
   const fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    bodies.push(JSON.parse(String(init?.body)));
+    bodies.push(await new Request(_input, init).json());
     return sdk === 'anthropic'
       ? new Response(anthropicStream(), { status: 200, headers: { 'content-type': 'text/event-stream' } })
       : Response.json({ id: 'c', object: 'chat.completion', created: 0, model: 'm', choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } });
   }) as typeof globalThis.fetch;
-  const config = { sdk, apiKey: 'k', ...(sdk === 'openai-compatible' ? { baseUrl: 'https://example.test/v1' } : {}) } as ProviderInstanceConfig;
-  const runtime = createLlmApiRuntime([{ alias: 'p', config, models: ['m'], fetch }], () => ['m']);
-  await runtime.complete(createLlmTransportModel('p', config, 'm'), {
+  const config = { sdk, apiKey: 'k', ...(sdk === 'openai-compatible' ? { baseUrl: 'https://example.test/v1' } : {}) } as ProviderFixtureConfig;
+  const runtime = createProfileRuntime({ alias: 'p', config, models: ['m'], fetch });
+  await runtime.complete(profileModel('p', config, 'm'), {
     systemPrompt: SYSTEM,
     systemPromptCacheBreakpoint: breakpoint,
     messages: [createUserMessage('hi')],

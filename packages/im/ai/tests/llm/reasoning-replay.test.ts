@@ -1,3 +1,4 @@
+import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
 /**
  * S6 / S18: assistant turns replay in stream order with thinking first, and keep
  * their signatures: Anthropic signed thinking ahead of text + tool_use, Gemini
@@ -8,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { contextToAiSdkPrompt } from '../../src/llm/bridge/ai-sdk-messages.js';
 import { createUserMessage, type AssistantMessage, type ToolResultMessage } from '../../src/llm/types/agent-message.js';
-import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+
 import { createProviderHarness, type MockResponse } from '../helpers/provider-harness/index.js';
 
 const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
@@ -21,7 +22,7 @@ function toolResult(id: string): ToolResultMessage {
   return { role: 'toolResult', toolCallId: id, toolName: 'get_weather', content: [{ type: 'text', text: '晴' }], isError: false, timestamp: Date.now() } as ToolResultMessage;
 }
 
-async function twoTurns({ sdk, ...config }: ProviderInstanceConfig, modelId: string, first: () => MockResponse) {
+async function twoTurns({ sdk, ...config }: ProviderFixtureConfig, modelId: string, first: () => MockResponse) {
   const h = createProviderHarness({ sdk, model: modelId, config });
   h.reply(first());
   const assistant = await h.complete({ system: 's', user: '上海天气？', tools: [weather] }, { maxRetries: 0 });

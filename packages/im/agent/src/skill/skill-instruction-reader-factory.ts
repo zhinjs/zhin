@@ -5,7 +5,7 @@ import { SkillInstructionReader, type SkillInstructionSource } from './skill-ins
 
 /** Bind Skill discovery rules and model-specific limits for one Agent runtime. */
 export function buildSkillInstructionReaderForAgent(host: ZhinAgentPrivate): SkillInstructionSource {
-  const modelId = host.getTurnProvider().models[0] || host.config.chatModel || 'gpt-4o-mini';
+  const modelId = host.getTurnExecution().model.id;
   return new SkillInstructionReader({
     maxChars: resolveSkillInstructionMaxChars(host.config, modelId),
     directories: () => mergeSkillDirsWithResolver(),

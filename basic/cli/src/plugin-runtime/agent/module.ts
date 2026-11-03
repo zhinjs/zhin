@@ -17,4 +17,7 @@ export {
 export { createSelfChangeImpactPort } from './self-change-impact.js';
 export { createSelfChangePluginRoots } from './self-change-plugin-roots.js';
 
-export { registerPersonalModelHttp } from '../personal-models/register-http.js';
+export { HostInference } from '../inference/host.js';
+export { registerInferenceRoutes } from '../inference/routes.js';
+export { resolveInferenceManagementPrincipal } from '../inference/principal.js';
+export { InferenceManagementError } from '../inference/management.js';

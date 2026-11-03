@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateAIConfigJSON, generateAIConfigYaml, generateAIEnvVars, PROVIDER_DEFAULT_BASE_URLS, providerSdkFor, RECOMMENDED_AI_DEFAULTS, type AISetupConfig } from '../src/ai';
+import { generateAIConfigJSON, generateAIConfigYaml, generateAIEnvVars, PROVIDER_DEFAULT_BASE_URLS, providerSdkFor, RECOMMENDED_AI_DEFAULTS, materializeAIPlan, type AISetupConfig } from '../src/ai';
 
 const aiConfig: AISetupConfig = {
   enabled: true,
@@ -34,9 +34,8 @@ describe('create-zhin ai config', () => {
     expect(yaml).toContain('summaryThreshold: 50')
     expect(yaml).toContain('agent:')
     expect(yaml).toContain('execSecurity: deny')
-    expect(yaml).toContain('agents:')
-    expect(yaml).toContain('provider: openai')
-    expect(yaml).toContain('sdk: openai')
+    expect(yaml).not.toContain('plan:')
+    expect(materializeAIPlan(aiConfig)).toMatchObject({ services: { openai: { driver: 'openai' } } })
     expect(yaml).not.toContain('toolSearch:')
     expect(yaml).not.toContain('defaultProvider:')
     expect(yaml).toContain('ignorePrefixes:')
@@ -48,8 +47,8 @@ describe('create-zhin ai config', () => {
     const parsed = JSON.parse(json)
 
     expect(parsed.ai.defaultProvider).toBeUndefined()
-    expect(parsed.ai.agents.zhin.provider).toBe('openai')
-    expect(parsed.ai.providers.openai.sdk).toBe('openai')
+    expect(parsed.ai).not.toHaveProperty('plan')
+    expect(materializeAIPlan(aiConfig)).toMatchObject({ purposes: { chat: { profile: 'openai:gpt-4o' } }, services: { openai: { driver: 'openai' } }, accounts: { openai: { auth: { source: 'env://AI_API_KEY' } } } })
     expect(parsed.ai.sessions.useDatabase).toBe(true)
     expect(parsed.ai.context.maxRecentMessages).toBe(100)
     expect(parsed.ai.agent.execSecurity).toBe('deny')

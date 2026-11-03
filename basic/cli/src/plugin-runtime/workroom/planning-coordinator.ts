@@ -43,6 +43,7 @@ export interface WorkroomPlanningCoordinatorOptions {
   readonly signal: AbortSignal;
   readonly snapshots: SnapshotReader;
   readonly service: AIService;
+  readonly withModelSelection: AgentRuntimeFoundation['withModelSelection'];
   readonly runtime: WorkroomRuntimeFoundation;
   readonly profiles: WorkroomProfileCoordinator;
   readonly governance: WorkroomDataGovernanceCoordinator;
@@ -65,12 +66,16 @@ export class WorkroomPlanningCoordinator {
     const localDataGovernance = options.governance.localAuthority;
     const listGenerationBindings = options.listBindings;
     const trustedPackPublishers = new Set(options.workroomTrustedPackPublishers ?? []);
-    const resolveDisclosureBootstrap = (definition: WorkroomDefinition | undefined) =>
-      resolveWorkroomDisclosureBootstrap(
-        definition,
-        agentId => service.getBindingRegistry().getBinding(agentId)?.providerAlias,
-        aiConfig,
-      );
+    const resolveDisclosureBootstrap = async (definition: WorkroomDefinition | undefined) => {
+      const bindingName = definition?.conversation?.agent;
+      if (!bindingName) return resolveWorkroomDisclosureBootstrap({ ai: aiConfig });
+      const lease = options.snapshots.acquire();
+      try {
+        if (lease.value.generation !== generation) throw new Error('Workroom disclosure generation is unavailable');
+        return await options.withModelSelection({ lease, snapshots: options.snapshots, bindingName, signal }, async binding =>
+          resolveWorkroomDisclosureBootstrap({ ai: aiConfig, serviceId: binding.service.id }));
+      } finally { lease.release(); }
+    };
     const ensureDisclosureAuthority = async (input: Readonly<{
       projectId: string;
       catalogRevision: string;
@@ -101,12 +106,12 @@ export class WorkroomPlanningCoordinator {
       if (!localDataGovernance) {
         throw new Error('Workroom 披露初始化缺少 Root-private Data Governance 签发能力');
       }
-      const { modelProviderAlias, contract } = resolveDisclosureBootstrap(input.definition);
-      if (!modelProviderAlias) {
+      const { modelServiceId, contract } = await resolveDisclosureBootstrap(input.definition);
+      if (!modelServiceId) {
         throw new Error('Workroom orchestrator 没有可用的 ai.agents model binding');
       }
       if (!contract) {
-        throw new Error(`请先配置 ai.workroom.disclosure.modelProviders.${modelProviderAlias}`);
+        throw new Error(`请先配置 ai.workroom.disclosure.modelServices.${modelServiceId}`);
       }
       const candidate = createWorkroomDataGovernanceBootstrapCandidate({
         projectId: input.projectId,
@@ -115,7 +120,7 @@ export class WorkroomPlanningCoordinator {
         revision: publication.revision,
         ...(publication.previousDigest ? { previousDigest: publication.previousDigest } : {}),
         model: {
-          providerId: modelProviderAlias,
+          providerId: modelServiceId,
           endpoint: contract.endpoint,
           ...(contract.owner ? { owner: contract.owner } : {}),
           ...(contract.trustDomain ? { trustDomain: contract.trustDomain } : {}),
@@ -254,7 +259,7 @@ export class WorkroomPlanningCoordinator {
             diagnostics.push('active Planning Policy 的 Scheduler 序列锚点已过期');
           }
         }
-        const { modelProviderAlias, contract } = resolveDisclosureBootstrap(definition);
+        const { modelServiceId, contract } = await resolveDisclosureBootstrap(definition);
         const disclosureAuthority = await dataGovernanceRuntime.options.repository.readProject(projectId);
         const disclosureAuthorization = principalId
           ? await consoleProjectionAuthority.authorize({
@@ -265,7 +270,7 @@ export class WorkroomPlanningCoordinator {
             })
           : null;
         const disclosure = assessWorkroomDisclosureSetup({
-          resolution: { modelProviderAlias, contract },
+          resolution: { modelServiceId, contract },
           authorityPublished: disclosureAuthority !== undefined,
           authorityCurrent: disclosureAuthorization !== null,
           localIssuerAvailable: localDataGovernance !== undefined,
@@ -289,7 +294,7 @@ export class WorkroomPlanningCoordinator {
           planningPolicyReady,
           disclosureReady,
           disclosureConfigReady,
-          ...(modelProviderAlias ? { modelProviderAlias } : {}),
+          ...(modelServiceId ? { modelServiceId } : {}),
           availableAgents: Object.freeze(availableAgents),
           availableTools: Object.freeze(availableTools),
           availableSkills: Object.freeze(availableSkills),

@@ -1,7 +1,7 @@
+import type { AgentStartupConfig } from '../config/agent-startup.js';
 /**
  * bootstrapAssistantHome — Plugin Runtime 可注入装配（无 getPlugin）
  */
-import type { AIConfig } from '@zhin.js/ai';
 import {
   resolveAssistantHomeConfig,
   type AssistantHomeConfig,
@@ -27,7 +27,7 @@ export interface BootstrapAssistantHomeOptions {
   homeRaw?: AssistantHomeConfig;
   /** assistant.profile for device alias merge */
   profile?: import('./profile-types.js').AssistantProfileConfig;
-  ai?: AIConfig;
+  ai?: AgentStartupConfig;
   projectRoot: string;
   notificationRouter: NotificationRouter;
   /** assistant.defaults.notify — required for watch */

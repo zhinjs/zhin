@@ -1,59 +1,77 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AIProvider, ImageGenerateRequest } from '@zhin.js/ai';
+import { createInferenceRuntime, type ProviderGraph, type ProviderDefinition } from '@zhin.js/ai/provider';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { createNativeImageToolFeature } from '../../src/plugin-runtime/native-image-tool.js';
 
 const context = Object.freeze({
-  signal: new AbortController().signal,
-  traceId: 'trace',
-  turnId: 'turn',
-  sessionKey: 'session',
-  origin: Object.freeze({ kind: 'http' as const, sessionId: 'session' }),
-  principal: Object.freeze({ subjectId: 'owner', roles: Object.freeze(['master']) }),
-  policy: Object.freeze({ permissions: Object.freeze(['master']), unattended: false, network: Object.freeze({ enabled: false }) }),
+  signal: new AbortController().signal, traceId: 'trace', turnId: 'turn', sessionKey: 'session',
+  origin: { kind: 'http', sessionId: 'session' }, principal: { subjectId: 'owner', roles: ['master'] },
+  policy: { permissions: ['master'], unattended: false, network: { enabled: false } },
 }) as unknown as ToolExecutionContext;
+async function setup() {
+  const generateImage = vi.fn(async () => ({ base64: 'aW1hZ2U=', mimeType: 'image/png', model: 'image-model', revisedPrompt: 'revised' }));
+  const definition: ProviderDefinition<unknown, unknown> = { id: 'fixture', contractVersion: '1',
+    authentication: { methods: ['none'] }, serviceSchema: { parse: value => value }, models: service => service.models,
+    targets: () => ({ authentication: [], inference: [] }), createExecution: () => ({ image: { generate: generateImage } }) };
+  const graph: ProviderGraph = { rootId: 'root', revision: 1, services: { service: { id: 'service', rootId: 'root', ownerId: 'host', revision: 1,
+    driver: { id: 'fixture', owner: 'root/driver', contractVersion: '1' }, options: {}, models: { 'image-model': { id: 'image-model', kinds: ['image'], protocol: 'fixture' } } } },
+    accounts: { account: { id: 'account', rootId: 'root', ownerId: 'host', revision: 1, serviceId: 'service', incarnation: 'first', authentication: { method: 'none' } } },
+    profiles: { image: { id: 'image', rootId: 'root', ownerId: 'host', revision: 1, accountId: 'account', model: 'image-model', parameters: {} } },
+    purposes: { defaults: { image: 'image' } } };
+  const runtime = createInferenceRuntime({ repository: { readGraph: async () => graph },
+    drivers: { acquire: async () => ({ definition, reference: graph.services.service!.driver, release() {} }) },
+    credentials: () => ({ bindRequest: (input: { request: Request }) => input.request, authorize: async () => ({ headers: {}, revision: 'none' }) }), fetch: () => vi.fn() });
+  const client = await runtime.openOperation({ context: { rootId: 'root', ownerId: 'host', hostOwnerId: 'host', operationId: 'turn' } });
+  return { client, generateImage };
+}
 
 describe('native image ToolFeature', () => {
-  it('resolves the configured provider at execution time and applies host defaults', async () => {
-    const generateImage = vi.fn(async (_request: ImageGenerateRequest) => ({
-      base64: 'aW1hZ2U=',
-      mimeType: 'image/png',
-      model: 'image-model',
-      revisedPrompt: 'revised',
-    }));
-    const resolveProvider = vi.fn(() => ({ generateImage }) as unknown as AIProvider);
-    const feature = createNativeImageToolFeature(resolveProvider, () => ({
-      defaultModel: 'image-model',
-      defaultSize: '1024x1024',
-      promptSuffix: 'photorealistic',
-    }));
-
-    const output = await feature.definition.execute({
-      provider_alias: 'images',
-      prompt: 'a cat',
-    }, context);
-
-    expect(resolveProvider).toHaveBeenCalledWith('images');
-    expect(generateImage).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: 'a cat photorealistic',
-      model: 'image-model',
-      size: '1024x1024',
-    }));
-    expect(JSON.parse(output)).toEqual({
-      image: 'aW1hZ2U=',
-      mime: 'image/png',
-      model: 'image-model',
-      provider: 'images',
-      revised_prompt: 'revised',
-    });
+  it('resolves the current operation at execution and uses its configured image purpose', async () => {
+    const fixture = await setup();
+    try {
+      const resolveInference = vi.fn(() => fixture.client);
+      const feature = createNativeImageToolFeature({ resolveInference });
+      const output = await feature.definition.execute({ prompt: 'a cat', size: '1024x1024' }, context);
+      expect(resolveInference).toHaveBeenCalledOnce();
+      expect(fixture.generateImage).toHaveBeenCalledWith(expect.objectContaining({ request: expect.objectContaining({ prompt: 'a cat', size: '1024x1024' }) }));
+      expect(JSON.parse(output)).toEqual({ image: 'aW1hZ2U=', mime: 'image/png', model: 'image-model', revised_prompt: 'revised' });
+    } finally { await fixture.client.close(); }
   });
 
-  it('rejects providers without image generation instead of publishing a false success', async () => {
-    const feature = createNativeImageToolFeature(() => ({}) as AIProvider);
+  it('accepts only an available image Profile and never calls another model for an unavailable selection', async () => {
+    const fixture = await setup();
+    try {
+      const feature = createNativeImageToolFeature({ resolveInference: () => fixture.client });
+      await expect(feature.definition.execute({ profile_id: 'not-available', prompt: 'a cat' }, context)).rejects.toThrow('unavailable');
+      expect(fixture.generateImage).not.toHaveBeenCalled();
+      const output = await feature.definition.execute({ profile_id: 'image', prompt: 'a cat' }, context);
+      expect(JSON.parse(output)).toMatchObject({ profile_id: 'image', model: 'image-model' });
+      expect(fixture.generateImage).toHaveBeenCalledOnce();
+    } finally { await fixture.client.close(); }
+  });
 
-    await expect(feature.definition.execute({
-      provider_alias: 'text-only',
-      prompt: 'a cat',
-    }, context)).rejects.toThrow('does not support image generation');
+  it('does not publish a known generated image after its operation was cancelled', async () => {
+    const fixture = await setup(), controller = new AbortController();
+    const publish = vi.fn();
+    fixture.generateImage.mockImplementationOnce(async () => {
+      controller.abort(new Error('synthetic operation cancelled'));
+      return { base64: 'aW1hZ2U=', mimeType: 'image/png', model: 'image-model', revisedPrompt: 'revised' };
+    });
+    try {
+      const feature = createNativeImageToolFeature({ resolveInference: () => fixture.client, imageAssets: { publish, ownsUrl: () => false } });
+      await expect(feature.definition.execute({ prompt: 'a cat' }, { ...context, signal: controller.signal })).rejects.toThrow('synthetic operation cancelled');
+      expect(fixture.generateImage).toHaveBeenCalledOnce();
+      expect(publish).not.toHaveBeenCalled();
+    } finally { await fixture.client.close(); }
+  });
+
+  it('reports an upload failure after generation without replaying the paid generation', async () => {
+    const fixture = await setup();
+    try {
+      const publish = vi.fn(async () => { throw new Error('synthetic upload unavailable'); });
+      const feature = createNativeImageToolFeature({ resolveInference: () => fixture.client, imageAssets: { publish, ownsUrl: () => false } });
+      await expect(feature.definition.execute({ prompt: 'a cat' }, context)).rejects.toThrow('Do not regenerate automatically');
+      expect(fixture.generateImage).toHaveBeenCalledOnce(); expect(publish).toHaveBeenCalledOnce();
+    } finally { await fixture.client.close(); }
   });
 });

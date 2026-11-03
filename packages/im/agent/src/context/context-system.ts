@@ -15,7 +15,6 @@ import {
 } from './turn-envelope.js';
 import { getGitStatusLine } from '../prompt/git-context.js';
 import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
-import { resolveModelCandidates } from './model-resolver.js';
 import type { ContextFile } from '../bootstrap.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
@@ -118,19 +117,11 @@ export class ContextSystem {
     // Final request assemblers own style/safety injection; context preparation only supplies content.
     const personaEnhanced = persona;
 
-    const selected = getAgentTurnConfiguration()?.models?.chat;
-    const resolvedCandidates = selected ? [selected.invocation.model.model] : resolveModelCandidates(
-      host.getTurnProvider().models,
-      host.modelRegistry,
-      host.getTurnProvider().name,
-      host.config,
-      mode === 'vision' ? 'vision' : 'chat',
-    );
-    const modelId = resolvedCandidates[0] || host.getTurnProvider().models[0];
-    if (!modelId) throw new Error('Chat model is not configured');
+    const selected = host.getTurnExecution();
+    const modelId = selected.model.id;
     const modelCandidates = [modelId];
-    const providerAlias = host.getTurnProvider().name;
-    const llmModel = host.llmRuntime.model(providerAlias, modelId);
+    const providerAlias = selected.binding.account.id;
+    const llmModel = selected.model;
     // Captured files decide root presence or absence (including []); never borrow a newer root from disk.
     const rootHandledBySystem = input.contextFiles !== undefined
       || /(?:^|\n)## AGENTS\.md\n/u.test((!isScheduleTurn ? systemBootstrap : input.systemBootstrap) ?? '');
@@ -178,7 +169,7 @@ export class ContextSystem {
       modelCandidates,
       modelId,
       providerAlias,
-      modelSdk: llmModel.sdk,
+      modelSdk: llmModel.promptFamily,
       modelInput: Object.freeze(Array.isArray(llmModel.input) ? [...llmModel.input] : ['text']),
       turnEnvelope,
     };

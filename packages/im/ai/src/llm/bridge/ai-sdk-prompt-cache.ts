@@ -1,5 +1,7 @@
 import type { ModelMessage, SystemModelMessage, ToolSet } from 'ai';
 import type { SdkId } from '../sdk-registry.js';
+import type { PromptCacheRetention } from '../prompt-cache.js';
+export { buildPromptCacheKey, supportsPromptCacheSdk, isStreamPromptCacheEnabled, type PromptCacheRetention } from '../prompt-cache.js';
 import { isRuntimeContextMarkerText } from '../types/runtime-context.js';
 
 export type PromptCacheProviderOptions = {
@@ -8,14 +10,6 @@ export type PromptCacheProviderOptions = {
   /** @ai-sdk/openai-compatible passes unknown keys through as raw body fields. */
   openaiCompatible?: Record<string, string>;
 };
-
-export type PromptCacheRetention = 'in_memory' | '24h';
-
-const PROMPT_CACHE_SDKS: ReadonlySet<string> = new Set([
-  'anthropic',
-  'openai',
-  'openai-compatible',
-]);
 
 const ANTHROPIC_EPHEMERAL_CACHE = {
   anthropic: { cacheControl: { type: 'ephemeral' as const } },
@@ -28,22 +22,6 @@ export interface PromptCacheApplyInput {
   retention?: PromptCacheRetention;
   /** `compat.promptCacheKey` for `sdk: openai-compatible`. */
   compatPromptCacheKey?: boolean;
-}
-
-export function supportsPromptCacheSdk(sdk?: string): sdk is SdkId {
-  return !!sdk && PROMPT_CACHE_SDKS.has(sdk);
-}
-
-/** Stable routing key for OpenAI `prompt_cache_key` (not per-session). */
-export function buildPromptCacheKey(parts: {
-  label: string;
-  provider: string;
-  modelId: string;
-  prefix?: string;
-}): string {
-  const base = parts.prefix?.trim() || 'zhin';
-  const safe = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, '_');
-  return `${safe(base)}:${safe(parts.label)}:${safe(parts.provider)}:${safe(parts.modelId)}`;
 }
 
 function normalizeInput(input: PromptCacheApplyInput | boolean): PromptCacheApplyInput {
@@ -137,11 +115,6 @@ export function resolvePromptCacheApplyInput(
     retention: options?.promptCacheRetention,
     ...(compat?.promptCacheKey === true ? { compatPromptCacheKey: true } : {}),
   };
-}
-
-/** Stream 层默认启用 prompt cache；仅显式 `promptCache: false` 关闭。 */
-export function isStreamPromptCacheEnabled(promptCache?: boolean): boolean {
-  return promptCache !== false;
 }
 
 export interface StreamPromptCacheOptions {

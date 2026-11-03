@@ -1,6 +1,7 @@
 import { wizardText } from './messages.js';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
+import yaml from 'yaml';
 import { formatEnvValue } from './env.js';
 
 export interface AISetupConfig {
@@ -12,6 +13,7 @@ export interface AISetupConfig {
     host?: string;
     models?: string[];
     baseUrl?: string;
+    capabilities?: { input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]; streaming?: boolean; toolCalling?: boolean };
   }>;
   sessions?: { useDatabase: boolean; maxHistory: number; expireMs: number };
   context?: { enabled: boolean; maxRecentMessages: number; summaryThreshold: number; keepAfterSummary: number };
@@ -119,19 +121,13 @@ export function providerSdkFor(name: string): string {
 }
 
 /**
- * openai-compatible sdk 在 runtime 无 baseUrl 无法建 provider
- * （packages/im/ai sdk-provider-adapter 直接拒绝），这些 provider 的 baseUrl 必填，
- * 向导预填官方地址。
+ * OpenAI-compatible Services require an explicit endpoint. The wizard offers
+ * known product addresses; the selected Driver validates them during plan review.
  */
 export const PROVIDER_DEFAULT_BASE_URLS: Readonly<Record<string, string>> = Object.freeze({
   zhipu: 'https://open.bigmodel.cn/api/paas/v4',
   moonshot: 'https://api.moonshot.cn/v1',
 });
-
-function defaultModelForProvider(driver: string): string {
-  const entry = PROVIDERS.find(p => p.value === driver);
-  return entry?.defaultModel ?? '';
-}
 
 export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentProvider' | 'providers'>): string {
   return config.agentProvider
@@ -139,50 +135,39 @@ export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentPr
     ?? 'openai';
 }
 
-function resolveAISetupAgentModel(config: AISetupConfig, providerAlias: string): string {
-  return config.providers?.[providerAlias]?.models?.[0]
-    ?? defaultModelForProvider(providerAlias)
-    ?? '';
+/** Produce an import proposal, never a second startup model authority. */
+export function materializeAIPlan(config: AISetupConfig): Record<string, unknown> {
+  const primary = resolveAISetupAgentProvider(config);
+  const services: Record<string, unknown> = {}, accounts: Record<string, unknown> = {}, profiles: Record<string, unknown> = {};
+  let chosen: string | undefined;
+  for (const [name, provider] of Object.entries(config.providers ?? {})) {
+    const driver = provider.sdk ?? providerSdkFor(name);
+    const models = provider.models?.filter(model => model.trim()) ?? [];
+    if (!models.length) throw new Error(`A model ID is required for ${name}`);
+    const protocol = driver === 'anthropic' ? 'anthropic-messages' : driver === 'google' ? 'google-generate-content' : 'openai-chat';
+    const baseUrl = provider.baseUrl ?? provider.host;
+    services[name] = { driver, ...(baseUrl ? { options: { baseUrl } } : {}),
+      models: Object.fromEntries(models.map(id => [id, { id, kinds: ['language'], protocol, input: provider.capabilities?.input ?? ['text'], ...(provider.capabilities?.streaming !== undefined ? { streaming: provider.capabilities.streaming } : {}), ...(provider.capabilities?.toolCalling !== undefined ? { toolCalling: provider.capabilities.toolCalling } : {}) }])) };
+    const env = provider.apiKey?.match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/u);
+    if (provider.apiKey && !env) throw new Error('AI setup keys must use an environment reference');
+    accounts[name] = { service: name, auth: driver === 'ollama' && !provider.apiKey
+      ? { method: 'none' } : { method: 'api-key', ...(env ? { source: `env://${env[1]}` } : {}) } };
+    for (const model of models) {
+      const profile = `${name}:${model}`; profiles[profile] = { account: name, model };
+      if (name === primary && !chosen) chosen = profile;
+    }
+  }
+  if (!chosen) throw new Error('The selected AI service has no model');
+  return { version: 1, services, accounts, profiles, purposes: { chat: { profile: chosen } } };
 }
 
+/** Startup policies only. Model definitions are written to the separate proposal. */
 export function materializeAIConfig(config: AISetupConfig): Record<string, unknown> {
-  const providerAlias = resolveAISetupAgentProvider(config);
-  const providers: Record<string, Record<string, unknown>> = {};
-
-  for (const [name, providerConfig] of Object.entries(config.providers ?? {})) {
-    const clean: Record<string, unknown> = {
-      sdk: providerConfig.sdk ?? providerSdkFor(name),
-    };
-    if (providerConfig.apiKey) clean.apiKey = providerConfig.apiKey;
-    if (providerConfig.host) clean.host = providerConfig.host;
-    if (providerConfig.models) clean.models = providerConfig.models;
-    if (providerConfig.baseUrl) clean.baseUrl = providerConfig.baseUrl;
-    providers[name] = clean;
-  }
-
-  if (Object.keys(providers).length === 0) {
-    providers[providerAlias] = { sdk: providerSdkFor(providerAlias) };
-  }
-
-  const agent: Record<string, unknown> = {
-    provider: providerAlias,
-  };
-  const model = resolveAISetupAgentModel(config, providerAlias);
-  if (model) agent.model = model;
-
   const obj: Record<string, unknown> = {
-    providers,
-    agents: {
-      zhin: agent,
-    },
-    sessions: config.sessions,
-    context: config.context,
-    agent: config.agent,
+    sessions: config.sessions, context: config.context, agent: config.agent,
     trigger: config.trigger ? { ...config.trigger } : undefined,
-    memoryMcp: config.memoryMcp ?? false,
-    mcpServers: config.mcpServers ?? [],
+    memoryMcp: config.memoryMcp ?? false, mcpServers: config.mcpServers ?? [],
   };
-
   return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined));
 }
 
@@ -327,6 +312,20 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
   }
 
   console.log('');
+  const featureChoices = [
+    { name: wizardText(locale, "未知"), value: 'unknown' },
+    { name: wizardText(locale, "支持"), value: 'yes' },
+    { name: wizardText(locale, "不支持"), value: 'no' },
+  ];
+  const features = await inquirer.prompt([
+    { type: 'select', name: 'toolCalling', message: wizardText(locale, "模型支持工具调用？"), choices: featureChoices },
+    { type: 'select', name: 'streaming', message: wizardText(locale, "模型支持流式输出？"), choices: featureChoices },
+    { type: 'checkbox', name: 'input', message: wizardText(locale, "模型支持的输入类型："),
+      choices: ['text', 'image', 'audio', 'video', 'file'].map(value => ({ name: value, value, ...(value === 'text' ? { checked: true, disabled: true } : {}) })) },
+  ]);
+  providerConfig.capabilities = { input: ['text', ...(features.input ?? []).filter((value: string) => value !== 'text')],
+    ...(features.toolCalling === 'unknown' ? {} : { toolCalling: features.toolCalling === 'yes' }),
+    ...(features.streaming === 'unknown' ? {} : { streaming: features.streaming === 'yes' }) };
   console.log(chalk.blue(wizardText(locale, "⚡ 配置 AI 触发方式")));
   console.log(chalk.gray(wizardText(locale, "  决定 Endpoint 何时自动调用大模型；命令（/ 开头）不会被 AI 拦截。")));
 
@@ -440,91 +439,7 @@ export function generateAIEnvVars(config: AISetupConfig, locale: 'zh-CN' | 'en' 
  * 生成 YAML 格式的 AI 配置段
  */
 export function generateAIConfigYaml(config: AISetupConfig): string {
-  if (!config.enabled) return '';
-
-  const providerAlias = resolveAISetupAgentProvider(config);
-
-  const lines: string[] = [
-    '',
-    'ai:',
-    '  providers:',
-  ];
-
-  if (config.providers) {
-    for (const [name, providerConfig] of Object.entries(config.providers)) {
-      lines.push(`    ${name}:`);
-      lines.push(`      sdk: ${providerConfig.sdk ?? providerSdkFor(name)}`);
-      if (providerConfig.apiKey) {
-        lines.push(`      apiKey: ${providerConfig.apiKey}`);
-      }
-      if (providerConfig.host) {
-        lines.push(`      host: ${providerConfig.host}`);
-      }
-      if (providerConfig.models) {
-        lines.push('      models:');
-        for (const model of providerConfig.models) {
-          lines.push(`        - ${model}`);
-        }
-      }
-      if (providerConfig.baseUrl) {
-        lines.push(`      baseUrl: ${providerConfig.baseUrl}`);
-      }
-    }
-  }
-
-  const zhinModel = resolveAISetupAgentModel(config, providerAlias);
-  lines.push('  agents:');
-  lines.push('    zhin:');
-  lines.push(`      provider: ${providerAlias}`);
-  if (zhinModel) {
-    lines.push(`      model: ${zhinModel}`);
-  }
-  if (config.trigger) {
-    lines.push('  trigger:');
-    lines.push(`    respondToAt: ${config.trigger.respondToAt}`);
-    lines.push(`    respondToPrivate: ${config.trigger.respondToPrivate}`);
-    lines.push('    prefixes:');
-    for (const prefix of config.trigger.prefixes) {
-      lines.push(`      - "${prefix}"`);
-    }
-    if (config.trigger.ignorePrefixes.length > 0) {
-      lines.push('    ignorePrefixes:');
-      for (const prefix of config.trigger.ignorePrefixes) {
-        lines.push(`      - "${prefix}"`);
-      }
-    }
-    lines.push(`    timeout: ${config.trigger.timeout}`);
-  }
-
-  if (config.sessions) {
-    lines.push('  sessions:');
-    lines.push(`    useDatabase: ${config.sessions.useDatabase}`);
-    lines.push(`    maxHistory: ${config.sessions.maxHistory}`);
-    lines.push(`    expireMs: ${config.sessions.expireMs}`);
-  }
-
-  if (config.context) {
-    lines.push('  context:');
-    lines.push(`    enabled: ${config.context.enabled}`);
-    lines.push(`    maxRecentMessages: ${config.context.maxRecentMessages}`);
-    lines.push(`    summaryThreshold: ${config.context.summaryThreshold}`);
-    lines.push(`    keepAfterSummary: ${config.context.keepAfterSummary}`);
-  }
-
-  if (config.agent) {
-    lines.push('  agent:');
-    lines.push(`    execSecurity: ${config.agent.execSecurity}`);
-    lines.push(`    execPreset: ${config.agent.execPreset}`);
-    lines.push(`    phaseTrace: ${config.agent.phaseTrace}`);
-    lines.push('    execAllowlist:');
-    for (const command of config.agent.execAllowlist) {
-      lines.push(`      - "${command}"`);
-    }
-  }
-
-  lines.push(`  memoryMcp: ${config.memoryMcp ?? false}`);
-
-  return lines.join('\n');
+  return config.enabled ? `\n${yaml.stringify({ ai: materializeAIConfig(config) })}` : '';
 }
 
 /**

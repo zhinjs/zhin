@@ -1,3 +1,4 @@
+import type { StatementColumnMetadata } from 'node:sqlite';
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { Dialect, Database } from '../base/index.js';
@@ -89,66 +90,41 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     // SELECT / WITH / PRAGMA / DDL / 带 RETURNING 的 DML：按可能有结果集处理。
     // node:sqlite 的 all() 对无结果集语句返回空数组，不会抛错。
     const rows = stmt.all(...args) as any[];
-    return this.processQueryResults(rows) as U;
+    return this.processQueryResults(rows, stmt.columns()) as U;
   }
 
-  /** 声明为 json 的列名集合（由 Database 层注册表结构时填充），读路径仅对这些列做 JSON 反序列化 */
-  private readonly jsonColumns = new Set<string>();
+  /** Column declarations are scoped to the table in this database, never the result alias. */
+  private readonly jsonColumns = new Map<string, ReadonlySet<string>>();
 
-  /**
-   * 注册表的列声明类型，用于读路径按声明类型反序列化（避免对 TEXT 列做启发式 JSON 解析破坏往返）
-   */
   registerTableSchema(table: string, definition: Record<string, { type: string }>): void {
-    for (const [columnName, column] of Object.entries(definition)) {
-      if (column && column.type === 'json') {
-        this.jsonColumns.add(columnName);
+    this.jsonColumns.set(table, new Set(Object.entries(definition)
+      .filter(([, column]) => column?.type === 'json').map(([name]) => name)));
+  }
+
+  /** node:sqlite columns() is available since Node 22.16. It preserves table/column
+   * provenance through aliases and joins; expression results have no origin. */
+  private processQueryResults(data: any, columns: readonly StatementColumnMetadata[]): any {
+    const decoded = new Set<string>();
+    for (const column of columns) {
+      // Registered model definitions describe the main database. Attached tables
+      // with the same name do not inherit their schema.
+      if (column.database === 'main' && column.table && column.column
+        && this.jsonColumns.get(column.table)?.has(column.column)) decoded.add(column.name);
+      else decoded.delete(column.name);
+    }
+    return Array.isArray(data) ? data.map(row => this.processRowData(row, decoded)) : data;
+  }
+
+  private processRowData(row: any, decoded: ReadonlySet<string>): any {
+    if (!row || typeof row !== 'object') return row;
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) {
+      result[key] = value;
+      if (decoded.has(key) && typeof value === 'string') {
+        try { result[key] = JSON.parse(value); } catch { /* Preserve invalid JSON exactly as before. */ }
       }
     }
-  }
-
-  /**
-   * 处理查询结果，按列声明类型反序列化（json 列）
-   */
-  private processQueryResults(data: any): any {
-    if (!data) return data;
-    
-    if (Array.isArray(data)) {
-      return data.map(row => this.processRowData(row));
-    } else if (typeof data === 'object') {
-      return this.processRowData(data);
-    }
-    
-    return data;
-  }
-
-  /**
-   * 处理单行数据
-   */
-  private processRowData(row: any): any {
-    if (!row || typeof row !== 'object') return row;
-    
-    const processedRow: any = {};
-    
-    for (const [key, value] of Object.entries(row)) {
-      processedRow[key] = this.processFieldValue(key, value);
-    }
-    
-    return processedRow;
-  }
-
-  /**
-   * 处理字段值：仅对声明为 json 的列做 JSON 反序列化；
-   * 普通 TEXT 列原样返回，保证写入什么读出什么（不剥离引号、不启发式 JSON.parse）
-   */
-  private processFieldValue(key: string, value: any): any {
-    if (typeof value !== 'string') return value;
-    if (!this.jsonColumns.has(key)) return value;
-    try {
-      return JSON.parse(value);
-    } catch {
-      // 解析失败，返回原始字符串
-      return value;
-    }
+    return result;
   }
 
   async dispose(): Promise<void> {

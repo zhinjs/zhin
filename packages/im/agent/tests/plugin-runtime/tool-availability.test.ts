@@ -59,9 +59,9 @@ describe('Tool availability projection', () => {
         writableFields, platformStatus: 'unsupported' as const } } } },
     });
     const ingress = new CapabilityIngress();
-    expect((await ingress.read(snapshot, owner, () => true, profile([]))).tools.map(tool => tool.name)).toEqual(['get_self_profile']);
-    expect((await ingress.read(snapshot, owner, () => true, profile(['nickname']))).tools.map(tool => tool.name)).toEqual(['get_self_profile', 'set_self_profile']);
-    expect((await ingress.read(snapshot, owner, () => true, { ...access, origin: { kind: 'http', sessionId: 'http' } })).tools).toEqual([]);
+    expect((await ingress.read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: profile([]) })).tools.map(tool => tool.name)).toEqual(['get_self_profile']);
+    expect((await ingress.read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: profile(['nickname']) })).tools.map(tool => tool.name)).toEqual(['get_self_profile', 'set_self_profile']);
+    expect((await ingress.read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: { ...access, origin: { kind: 'http', sessionId: 'http' } } })).tools).toEqual([]);
   });
   it('shows change_draft only to the master and IM approvers (#1051 F4)', async () => {
     const { owner, snapshot: existing } = fixture();
@@ -73,7 +73,7 @@ describe('Tool availability projection', () => {
     const snapshot = { ...base, projections: new Map([[toolFeatureId, new ToolIndex(slots, base)]]) };
     const ingress = new CapabilityIngress();
     const names = async (principal: { subjectId: string; roles: readonly string[] }) =>
-      (await ingress.read(snapshot, owner, () => true, turn('current', principal))).tools.map(tool => tool.name);
+      (await ingress.read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: turn('current', principal) })).tools.map(tool => tool.name);
     expect(await names({ subjectId: 'member', roles: ['user', 'admin'] })).toEqual([]);
     expect(await names({ subjectId: 'friend', roles: ['trusted'] })).toEqual([]);
     expect(await names({ subjectId: 'owner', roles: ['master'] })).toEqual(['change_draft']);
@@ -83,7 +83,7 @@ describe('Tool availability projection', () => {
   it('filters cooldown tools before resident, persisted loads, discovery and load_tool are built', async () => {
     const { owner, snapshot, ready } = fixture();
     const ingress = new CapabilityIngress();
-    const capabilities = await ingress.read(snapshot, owner, () => true, turn('icqq:bot-a:group:scene'));
+    const capabilities = await ingress.read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: turn('icqq:bot-a:group:scene') });
     expect(capabilities.tools.map(tool => tool.name)).toEqual(['ordinary']);
     expect(ready).toHaveBeenCalledTimes(3);
     expect(ready).toHaveBeenCalledWith({ sessionKey: 'icqq:bot-a:group:scene',
@@ -103,23 +103,23 @@ describe('Tool availability projection', () => {
     }
     const discover = plan.capabilities.find(tool => tool.name === 'discover')!;
     expect(String(await discover.execute({ query: 'sticker', kind: 'tool' }, { signal: new AbortController().signal } as never))).not.toMatch(/resident|deferred|loaded/);
-    const otherAccount = await ingress.read(snapshot, owner, () => true, turn('icqq:bot-b:group:scene'));
+    const otherAccount = await ingress.read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: turn('icqq:bot-b:group:scene') });
     expect(otherAccount.tools.map(tool => tool.name)).toEqual(['deferred', 'loaded', 'ordinary', 'resident']);
   });
 
   it('keeps static queries compatible and propagates predicate errors instead of reporting absence', async () => {
     const { owner, snapshot, ready } = fixture();
     const ingress = new CapabilityIngress();
-    expect((await ingress.read(snapshot, owner)).tools).toHaveLength(4);
+    expect((await ingress.read({ snapshot: snapshot, owner: owner })).tools).toHaveLength(4);
     expect(ready).not.toHaveBeenCalled();
     ready.mockImplementation(() => { throw new Error('cooldown state unavailable'); });
-    await expect(ingress.read(snapshot, owner, () => true, turn('icqq:bot-a:group:scene')))
+    await expect(ingress.read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: turn('icqq:bot-a:group:scene') }))
       .rejects.toThrow('cooldown state unavailable');
   });
 
   it('checks platform and permissions before reading plugin eligibility', async () => {
     const { owner, snapshot } = fixture(true);
-    const capabilities = await new CapabilityIngress().read(snapshot, owner, () => true, turn('icqq:bot-a:group:scene'));
+    const capabilities = await new CapabilityIngress().read({ snapshot: snapshot, owner: owner, isActive: () => true, turn: turn('icqq:bot-a:group:scene') });
     expect(capabilities.tools.map(tool => tool.name)).toEqual(['ordinary']);
   });
 });

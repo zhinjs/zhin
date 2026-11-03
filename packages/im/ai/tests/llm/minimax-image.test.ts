@@ -1,185 +1,72 @@
-/**
- * MiniMax image generation (direct REST bridge) tests.
- */
+/** Native MiniMax image protocol through the formal Profile and actual product Driver. */
+import { miniMaxProvider } from '../../src/providers/api-key.js';
+import { driverFixture, callContext } from '../providers/fixtures.js';
+import type { JsonObject, GenerateImageInput } from '../../src/provider/types.js';
 
-import { generateMiniMaxImage } from '../../src/llm/minimax-image.js';
-import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
-
-function mockConfig(overrides: Partial<ProviderInstanceConfig> = {}): ProviderInstanceConfig {
-  return {
-    sdk: 'minimax',
-    apiKey: 'test-key-123',
-    ...overrides,
-  } as ProviderInstanceConfig;
+function fixture(input: { model?: string; parameters?: JsonObject; response?: () => Response; token?: string } = {}) {
+  const requests: Request[] = [];
+  const value = driverFixture({ definition: miniMaxProvider,
+    model: { id: input.model ?? 'image-01', kinds: ['image'], protocol: 'minimax-images' }, parameters: input.parameters,
+    grant: { token: input.token ?? 'test-key-123', headers: {}, revision: '1' },
+    fetch: async (url, init) => { requests.push(new Request(url, init)); return input.response?.() ?? Response.json({ data: { image_base64: ['aW1hZ2VkYXRh'] }, base_resp: { status_code: 0 } }); } });
+  async function generate(request: GenerateImageInput['request']) {
+    const client = await value.runtime.openOperation({ context: callContext });
+    try { return await client.generateImage({ request }); } finally { await client.close(); }
+  }
+  return { ...value, requests, generate };
 }
 
-describe('generateMiniMaxImage', () => {
-  const originalFetch = globalThis.fetch;
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  it('throws when apiKey is missing', async () => {
-    await expect(
-      generateMiniMaxImage(mockConfig({ apiKey: '' }), { prompt: 'a cat' }),
-    ).rejects.toThrow('requires apiKey');
-  });
-
-  it('throws when prompt is empty', async () => {
-    await expect(
-      generateMiniMaxImage(mockConfig(), { prompt: '' }),
-    ).rejects.toThrow('requires prompt');
-  });
-
-  it('sends correct request to MiniMax API and returns base64', async () => {
-    let capturedUrl = '';
-    let capturedBody: Record<string, unknown> = {};
-    let capturedHeaders: Record<string, string> = {};
-
-    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-      capturedUrl = typeof input === 'string' ? input : (input as URL).toString();
-      capturedBody = JSON.parse(init?.body as string);
-      capturedHeaders = init?.headers as Record<string, string>;
-      return new Response(JSON.stringify({
-        data: { image_base64: ['aW1hZ2VkYXRh'] },
-        base_resp: { status_code: 0, status_msg: 'success' },
-      }), { status: 200 });
-    }) as typeof fetch;
-
-    const result = await generateMiniMaxImage(
-      mockConfig(),
-      { prompt: 'a cute cat', aspectRatio: '16:9' },
-      { defaultModel: 'image-01' },
-    );
-
-    expect(capturedUrl).toBe('https://api.minimaxi.com/v1/image_generation');
-    expect(capturedBody.model).toBe('image-01');
-    expect(capturedBody.prompt).toBe('a cute cat');
-    expect(capturedBody.response_format).toBe('base64');
-    expect(capturedBody.aspect_ratio).toBe('16:9');
-    expect(capturedHeaders.Authorization).toBe('Bearer test-key-123');
-
-    expect(result.base64).toBe('aW1hZ2VkYXRh');
-    expect(result.mimeType).toBe('image/png');
-    expect(result.model).toBe('image-01');
-  });
-
-  it('always uses fixed API URL regardless of config.baseUrl', async () => {
-    let capturedUrl = '';
-
-    globalThis.fetch = (async (input: string | URL | Request) => {
-      capturedUrl = typeof input === 'string' ? input : (input as URL).toString();
-      return new Response(JSON.stringify({
-        data: { image_base64: ['dGVzdA=='] },
-        base_resp: { status_code: 0 },
-      }), { status: 200 });
-    }) as typeof fetch;
-
-    await generateMiniMaxImage(
-      mockConfig({ baseUrl: 'https://api.minimaxi.com/anthropic/v1' }),
-      { prompt: 'test' },
-    );
-
-    expect(capturedUrl).toBe('https://api.minimaxi.com/v1/image_generation');
-  });
-
-  it('passes width/height for image-01 when size is specified', async () => {
-    let capturedBody: Record<string, unknown> = {};
-
-    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
-      capturedBody = JSON.parse(init?.body as string);
-      return new Response(JSON.stringify({
-        data: { image_base64: ['dGVzdA=='] },
-        base_resp: { status_code: 0 },
-      }), { status: 200 });
-    }) as typeof fetch;
-
-    await generateMiniMaxImage(
-      mockConfig(),
-      { prompt: 'test', model: 'image-01', size: '1024x768' },
-    );
-
-    expect(capturedBody.width).toBe(1024);
-    expect(capturedBody.height).toBe(768);
-  });
-
-  it('does not pass width/height for image-01-live', async () => {
-    let capturedBody: Record<string, unknown> = {};
-
-    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
-      capturedBody = JSON.parse(init?.body as string);
-      return new Response(JSON.stringify({
-        data: { image_base64: ['dGVzdA=='] },
-        base_resp: { status_code: 0 },
-      }), { status: 200 });
-    }) as typeof fetch;
-
-    await generateMiniMaxImage(
-      mockConfig(),
-      { prompt: 'test', model: 'image-01-live', size: '1024x768' },
-    );
-
-    expect(capturedBody.width).toBeUndefined();
-    expect(capturedBody.height).toBeUndefined();
-  });
-
-  it('throws on API error status_code', async () => {
-    globalThis.fetch = (async () => {
-      return new Response(JSON.stringify({
-        base_resp: { status_code: 1026, status_msg: 'sensitive content' },
-      }), { status: 200 });
-    }) as typeof fetch;
-
-    await expect(
-      generateMiniMaxImage(mockConfig(), { prompt: 'bad prompt' }),
-    ).rejects.toThrow('error 1026: sensitive content');
-  });
-
-  it('throws on HTTP error', async () => {
-    globalThis.fetch = (async () => {
-      return new Response('Unauthorized', { status: 401 });
-    }) as typeof fetch;
-
-    await expect(
-      generateMiniMaxImage(mockConfig(), { prompt: 'test' }),
-    ).rejects.toThrow('failed (401)');
-  });
-
-  it('throws when response has no image data', async () => {
-    globalThis.fetch = (async () => {
-      return new Response(JSON.stringify({
-        data: {},
-        base_resp: { status_code: 0 },
-      }), { status: 200 });
-    }) as typeof fetch;
-
-    await expect(
-      generateMiniMaxImage(mockConfig(), { prompt: 'test' }),
-    ).rejects.toThrow('returned no image data');
-  });
-
-  it('truncates prompt to 1500 chars', async () => {
-    let capturedBody: Record<string, unknown> = {};
-
-    globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
-      capturedBody = JSON.parse(init?.body as string);
-      return new Response(JSON.stringify({
-        data: { image_base64: ['dGVzdA=='] },
-        base_resp: { status_code: 0 },
-      }), { status: 200 });
-    }) as typeof fetch;
-
-    const longPrompt = 'x'.repeat(2000);
-    await generateMiniMaxImage(mockConfig(), { prompt: longPrompt });
-
-    expect((capturedBody.prompt as string).length).toBe(1500);
-  });
+it('rejects a missing real key before HTTP', async () => {
+  const f = fixture({ token: '' }); await expect(f.generate({ prompt: 'a cat' })).rejects.toMatchObject({ code: 'invalid-credential' }); expect(f.requests).toHaveLength(0);
+});
+it('rejects an empty prompt before authorization or HTTP', async () => {
+  const f = fixture(); await expect(f.generate({ prompt: '' })).rejects.toThrow('requires prompt'); expect(f.authorize).not.toHaveBeenCalled(); expect(f.requests).toHaveLength(0);
+});
+it('sends the explicit fixed model, prompt, ratio and current key to the native MiniMax image target', async () => {
+  const f = fixture(); const result = await f.generate({ prompt: 'a cute cat', aspectRatio: '16:9' });
+  expect(f.requests[0].url).toBe('https://api.minimaxi.com/v1/image_generation');
+  expect(await f.requests[0].json()).toMatchObject({ model: 'image-01', prompt: 'a cute cat', response_format: 'base64', aspect_ratio: '16:9' });
+  expect(f.requests[0].headers.get('authorization')).toBe('Bearer test-key-123');
+  expect(result).toEqual({ base64: 'aW1hZ2VkYXRh', mimeType: 'image/png', model: 'image-01' });
+  expect(f.bindRequest).toHaveBeenCalledOnce();
+});
+it('uses width/height only on the model whose explicit protocol supports them', async () => {
+  const f = fixture(); await f.generate({ prompt: 'test', size: '1024x768' }); expect(await f.requests[0].json()).toMatchObject({ width: 1024, height: 768 });
+  const live = fixture({ model: 'image-01-live' }); await expect(live.generate({ prompt: 'test', size: '1024x768' })).rejects.toMatchObject({ code: 'unsupported-parameter' });
+  expect(live.requests).toHaveLength(0); expect(live.authorize).not.toHaveBeenCalled();
+});
+it('retains a default ratio and appends an explicit Profile style suffix', async () => {
+  const f = fixture({ parameters: { imageGeneration: { aspectRatio: '1:1', promptSuffix: 'watercolor' } } });
+  await f.generate({ prompt: 'test' }); expect(await f.requests[0].json()).toMatchObject({ aspect_ratio: '1:1', prompt: 'test\nwatercolor' });
+});
+it('reports native API failure without copying remote diagnostics', async () => {
+  const f = fixture({ response: () => Response.json({ base_resp: { status_code: 1026, status_msg: 'synthetic-private-rejection' } }) });
+  const error = await f.generate({ prompt: 'bad prompt' }).catch(error => error);
+  expect(error).toMatchObject({ code: 'invalid-response' }); expect(String(error)).not.toContain('synthetic-private');
+});
+it('preserves HTTP rejection status without copying response contents or replaying a paid request', async () => {
+  const f = fixture({ response: () => new Response('synthetic-private-error', { status: 401 }) });
+  const error = await f.generate({ prompt: 'test' }).catch(error => error);
+  expect(error).toMatchObject({ statusCode: 401 }); expect(String(error)).not.toContain('synthetic-private'); expect(f.requests).toHaveLength(1);
+});
+it('rejects success without base64 image data rather than claiming a generated image', async () => {
+  const f = fixture({ response: () => Response.json({ data: {}, base_resp: { status_code: 0 } }) });
+  await expect(f.generate({ prompt: 'test' })).rejects.toMatchObject({ code: 'invalid-response' }); expect(f.requests).toHaveLength(1);
+});
+it('keeps the existing native prompt limit of 1500 characters', async () => {
+  const f = fixture(); await f.generate({ prompt: 'x'.repeat(2000) }); expect((await f.requests[0].json()).prompt).toHaveLength(1500);
+});
+it('does not send a custom gateway key or prompt to the default image domain', async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>();
+  const f = driverFixture({ definition: miniMaxProvider, options: { baseUrl: 'https://gateway.example/v1' }, model: { id: 'image-01', kinds: ['image'], protocol: 'minimax-images' }, fetch });
+  const client = await f.runtime.openOperation({ context: callContext });
+  try { await expect(client.generateImage({ request: { prompt: 'private prompt' } })).rejects.toMatchObject({ code: 'unsupported-capability' }); expect(fetch).not.toHaveBeenCalled(); expect(f.authorize).not.toHaveBeenCalled(); }
+  finally { await client.close(); }
 });
 
-describe('sdkSupportsImageGeneration includes minimax', () => {
-  it('returns true for minimax', async () => {
-    const { sdkSupportsImageGeneration } = await import('../../src/llm/sdk-registry.js');
-    expect(sdkSupportsImageGeneration('minimax')).toBe(true);
-  });
+
+it('does not expose malformed native success content as JSON parser diagnostics', async () => {
+  const f = fixture({ response: () => new Response('PRIVATE') });
+  const error = await f.generate({ prompt: 'test' }).catch(error => error);
+  expect(error).toBeInstanceOf(Error); expect(String(error)).not.toContain('PRIVATE');
 });

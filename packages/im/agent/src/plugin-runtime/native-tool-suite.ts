@@ -1,4 +1,4 @@
-import type { AIProvider, ImageGenerationDefaults } from '@zhin.js/ai';
+import type { InferenceClient } from '@zhin.js/ai/provider';
 import type { AgentToolDefinition } from '@zhin.js/tool';
 import { NativeBashToolFeature } from './native-bash-tool.js';
 import { createNativeFileToolFeatures } from './native-file-tools.js';
@@ -18,8 +18,7 @@ export interface NativeAgentToolFeature {
 }
 
 export interface NativeAgentToolSuiteOptions {
-  readonly resolveProvider: (alias: string) => AIProvider;
-  readonly resolveImageDefaults?: (alias: string) => ImageGenerationDefaults;
+  readonly resolveInference: () => InferenceClient;
   readonly imageAssets?: ImageAssetPublisher;
   readonly localAssets?: LocalImageAssetStore;
   readonly knowledgeIndex?: KnowledgeIndex;
@@ -35,7 +34,7 @@ export function createNativeAgentToolSuite(
     ...createNativeFileToolFeatures(),
     ...createNativeWebToolFeatures(),
     ...createNativeSelfProfileToolFeatures({ imageAssets: options.imageAssets, localAssets: options.localAssets }),
-    createNativeImageToolFeature(options.resolveProvider, options.resolveImageDefaults, options.imageAssets),
+    createNativeImageToolFeature({ resolveInference: options.resolveInference, imageAssets: options.imageAssets }),
     ...(options.imageAssets ? [createNativeImageUploadToolFeature(options.imageAssets)] : []),
     ...(options.localAssets ? [createNativeLocalAssetsToolFeature(options.localAssets)] : []),
     ...(options.knowledgeIndex

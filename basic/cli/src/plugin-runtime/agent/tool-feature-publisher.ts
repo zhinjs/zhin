@@ -1,3 +1,4 @@
+import { currentAgentInference } from '../inference/current-operation.js';
 import { join } from 'node:path';
 import type { AIService, AiAnnouncements, AiGroupRules, AiSessionEvents, McpServerEntry, LocalImageAssetStore } from '@zhin.js/agent';
 import {
@@ -97,8 +98,7 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
     options.addFeature(toolFeatureId, tool.name, tool.definition);
   }
   for (const tool of createNativeAgentToolSuite({
-    resolveProvider: (alias) => options.service.getProvider(alias),
-    resolveImageDefaults: (alias) => options.service.getImageGenerationDefaults(alias),
+    resolveInference: currentAgentInference,
     imageAssets: options.service.imageAssets,
     localAssets: options.localAssets,
     knowledgeIndex: options.knowledgeIndex,

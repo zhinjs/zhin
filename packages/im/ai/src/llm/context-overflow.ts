@@ -9,6 +9,8 @@
  * history cannot fix those.
  */
 
+import { ProviderResponseError } from './provider-error-facts.js';
+
 const CONTEXT_OVERFLOW_PATTERNS: readonly RegExp[] = [
   // OpenAI / DeepSeek / Mistral / openai-compatible: "maximum context length is N tokens", code context_length_exceeded.
   /context[_ .-]?length/i,
@@ -32,24 +34,26 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
 }
 
-/** Message texts worth checking: the error message, the provider's body message, and the cause. */
-function errorTexts(error: unknown, depth = 0): string[] {
-  if (typeof error === 'string') return [error];
+/** Follow the existing error boundary once, including explicit safe classification. */
+function hasContextOverflow(error: unknown, depth = 0): boolean {
+  if (error instanceof ProviderResponseError) return error.classification.kind === 'context_overflow';
+  if (typeof error === 'string') return isContextOverflowMessage(error);
   const rec = record(error);
-  if (!rec) return error === undefined || error === null ? [] : [String(error)];
+  if (!rec) return error !== undefined && error !== null && isContextOverflowMessage(String(error));
   const texts: string[] = [];
   if (typeof rec.message === 'string') texts.push(rec.message);
   // AI SDK APICallError keeps the raw body; providers often put the precise wording there.
   if (typeof rec.responseBody === 'string') texts.push(rec.responseBody);
   const bodyMessage = record(record(rec.data)?.error)?.message;
   if (typeof bodyMessage === 'string') texts.push(bodyMessage);
+  if (texts.some(isContextOverflowMessage)) return true;
   // AI SDK RetryError wraps the real failure in lastError; ours wrap it in cause.
   if (depth < 3) {
     for (const nested of [rec.lastError, rec.cause]) {
-      if (nested !== undefined) texts.push(...errorTexts(nested, depth + 1));
+      if (nested !== undefined && hasContextOverflow(nested, depth + 1)) return true;
     }
   }
-  return texts;
+  return false;
 }
 
 /** True when `text` reads like a context-window overflow from any supported provider. */
@@ -59,5 +63,5 @@ export function isContextOverflowMessage(text: string): boolean {
 
 /** True when the error (or its body / cause) reports a context-window overflow. */
 export function isContextOverflowError(error: unknown): boolean {
-  return errorTexts(error).some(isContextOverflowMessage);
+  return hasContextOverflow(error);
 }

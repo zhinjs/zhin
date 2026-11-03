@@ -1,3 +1,4 @@
+import { readOperationInputResources } from '@zhin.js/feature-kit';
 import { createMessages } from '@zhin.js/plugin-runtime';
 import type { CommandDispatchResult, CommandIndex } from '@zhin.js/command';
 import { Fragment, jsx } from '@zhin.js/jsx';
@@ -38,7 +39,7 @@ export async function commandMenuReply(result: CommandDispatchResult, { commands
     onClick: async (message: Message): Promise<SendContent> => {
       if (disabled) return [];
       const input = `${menu.keyword}${menu.pluginKey ? ` ${menu.pluginKey}` : ''} --page ${page}`;
-      const next = await commands.dispatch({ input: input, source: message, commandPrefix: prefix, snapshot: snapshot, locale: menu.locale });
+      const next = await commands.dispatch({ input: input, source: message, commandPrefix: prefix, snapshot: snapshot, locale: menu.locale, operation: readOperationInputResources(message, snapshot) });
       return commandMenuReply(next, { commands: commands, snapshot: snapshot, conversation: message.conversation, prefix: prefix });
     },
   });

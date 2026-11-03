@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { describe, expect, it } from 'vitest';
 import { buildAgentPathSystemPrompt, buildChatPathSystemPrompt, buildMultimodalVisionSystemPrompt, describeAgentPathPromptSections } from '../../src/prompt/assembly.js';
 import { PromptAssemblyRegistry } from '../../src/prompt/prompt-assembly-registry.js';
@@ -58,8 +59,8 @@ describe('explicit Turn prompt profile', () => {
     });
     const host = {
       config: DEFAULT_CONFIG, getTurnActiveSkills: () => '', globalContext: '', bootstrapContext: '',
-      skillRegistry: null, skillsSummaryXML: '', getTurnProvider: () => ({ name: 'test' }),
-      llmRuntime: { model: () => ({ contextWindow: 128_000 }) },
+      skillRegistry: null, skillsSummaryXML: '', getTurnExecution: () => executionBundle({ model: { id: 'configured-model', api: 'fixture', provider: 'provider', promptFamily: 'google', input: ['text'], contextWindow: 128_000, maxTokens: 8192 }, completion: { complete: async () => { throw new Error('No completion expected'); } } }),
+      completion: { model: () => ({ contextWindow: 128_000 }) },
     } as never;
     const turn = {
       origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'group' },

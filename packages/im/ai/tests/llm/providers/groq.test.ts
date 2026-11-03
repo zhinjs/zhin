@@ -1,3 +1,5 @@
+import { profileModel } from '../../helpers/profile-runtime.js';
+import type { ProviderFixtureConfig } from '../../helpers/provider-fixture-config.js';
 /**
  * Groq behind `sdk: openai-compatible` over a mocked HTTP endpoint (shared provider
  * harness). Wire details follow https://console.groq.com/docs/openai,
@@ -6,19 +8,19 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { GROQ_BASE_URL, groqDefaultModelInput, isGroqGateway, transformGroqRequestBody } from '../../../src/llm/groq.js';
-import { applyProviderGatewayPreset, resolveTransportContextWindow, validateProviderGatewayConfig } from '../../../src/llm/provider-gateway-presets.js';
-import { createLlmTransportModel } from '../../../src/llm/llm-api-runtime.js';
+import { openAiCompatibleProvider } from '../../../src/providers/api-key.js';
+
 import { classifyProviderError, type ProviderResilienceEvent } from '../../../src/llm/provider-resilience.js';
 import { createUserMessage, type AssistantMessage } from '../../../src/llm/types/agent-message.js';
-import type { ProviderInstanceConfig } from '../../../src/llm/types/model.js';
+
 import { createProviderHarness, openaiChat, TEST_API_KEY, type MockResponse } from '../../helpers/provider-harness/index.js';
 
 const GPT_OSS = 'openai/gpt-oss-120b';
 const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
 const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-function groq(model = GPT_OSS, config: Partial<ProviderInstanceConfig> = {}, alias = 'groq') {
-  return createProviderHarness({ sdk: 'openai-compatible', alias, model, config: { baseUrl: GROQ_BASE_URL, ...config } });
+function groq(model = GPT_OSS, config: Partial<ProviderFixtureConfig> = {}, alias = 'groq') {
+  return createProviderHarness({ sdk: 'openai-compatible', alias, model, config: { baseUrl: GROQ_BASE_URL, input: [...groqDefaultModelInput(model)], ...config } });
 }
 
 /** Groq streams reasoning in `delta.reasoning` (not `reasoning_content`). */
@@ -37,14 +39,10 @@ function groqToolCallStream(reasoning: string): MockResponse {
 
 const toolResult = { role: 'toolResult' as const, toolCallId: 'call_0', toolName: 'get_weather', content: [{ type: 'text' as const, text: '晴' }], isError: false, timestamp: 1 };
 
-describe('Groq gateway preset', () => {
-  it('fills sdk and baseUrl for alias groq and coerces sdk openai on api.groq.com', () => {
-    expect(applyProviderGatewayPreset('groq', { apiKey: 'k' } as ProviderInstanceConfig)).toMatchObject({ sdk: 'openai-compatible', baseUrl: GROQ_BASE_URL });
-    expect(applyProviderGatewayPreset('groqcloud', { apiKey: 'k' } as ProviderInstanceConfig).baseUrl).toBe(GROQ_BASE_URL);
-    expect(applyProviderGatewayPreset('fast', { sdk: 'openai', baseUrl: GROQ_BASE_URL }).sdk).toBe('openai-compatible');
-    expect(validateProviderGatewayConfig('fast', { sdk: 'openai', baseUrl: GROQ_BASE_URL })).toEqual([expect.stringContaining('coerced to "openai-compatible"')]);
-    // A proxy URL configured explicitly is kept.
-    expect(applyProviderGatewayPreset('groq', { sdk: 'openai-compatible', baseUrl: 'https://proxy.test/groq/v1' }).baseUrl).toBe('https://proxy.test/groq/v1');
+describe('explicit Groq gateway', () => {
+  it('requires an explicit gateway address instead of deriving it from a mutable alias', () => {
+    expect(() => openAiCompatibleProvider.serviceSchema.parse({})).toThrow();
+    expect(openAiCompatibleProvider.serviceSchema.parse({ baseUrl: 'https://proxy.test/groq/v1' }).baseUrl).toBe('https://proxy.test/groq/v1');
   });
 
   it('detects Groq by alias or by host only', () => {
@@ -65,22 +63,18 @@ describe('Groq gateway preset', () => {
     ];
     for (const baseUrl of groqUrls) {
       expect(isGroqGateway('fast', baseUrl), baseUrl).toBe(true);
-      expect(applyProviderGatewayPreset('fast', { sdk: 'openai', baseUrl }).sdk, baseUrl).toBe('openai-compatible');
     }
     for (const baseUrl of lookalikes) {
       expect(isGroqGateway('fast', baseUrl), baseUrl).toBe(false);
-      // The preset no longer matches on a substring, so sdk is left alone.
-      expect(applyProviderGatewayPreset('fast', { sdk: 'openai', baseUrl }).sdk, baseUrl).toBe('openai');
     }
     // And no Groq request fix leaks to the lookalike host.
     const evil = groq(GPT_OSS, { baseUrl: 'https://api.groq.com.evil.example/openai/v1' }, 'fast');
     expect((await evil.capture('hi')).body).not.toHaveProperty('reasoning_effort');
   });
 
-  it('takes the context window from the model id (gpt-oss 131072), explicit config first', () => {
-    expect(resolveTransportContextWindow({ sdk: 'openai-compatible', baseUrl: GROQ_BASE_URL }, 'openai/gpt-oss-120b')).toBe(131_072);
-    expect(resolveTransportContextWindow({ sdk: 'openai-compatible', baseUrl: GROQ_BASE_URL }, 'openai/gpt-oss-20b')).toBe(131_072);
-    expect(resolveTransportContextWindow({ sdk: 'openai-compatible', baseUrl: GROQ_BASE_URL, contextWindow: 32_000 }, GPT_OSS)).toBe(32_000);
+  it('keeps native context capacity unknown unless it was explicitly declared', () => {
+    expect(groq().model.contextWindow).toBe(0);
+    expect(groq(GPT_OSS, { contextWindow: 32000 }).model.contextWindow).toBe(32000);
   });
 });
 
@@ -122,8 +116,8 @@ describe('Groq requests', () => {
     expect(transformGroqRequestBody({ model: GPT_OSS, n: 1 }).n).toBe(1);
   });
 
-  it('applies to alias groq behind a proxy URL, but leaves other gateways alone', async () => {
-    expect((await groq(GPT_OSS, { baseUrl: 'https://proxy.test/v1' }).capture('hi')).body.reasoning_effort).toBe('low');
+  it('does not derive protocol compatibility from a mutable alias behind a proxy URL', async () => {
+    expect((await groq(GPT_OSS, { baseUrl: 'https://proxy.test/v1' }).capture('hi')).body).not.toHaveProperty('reasoning_effort');
     const other = createProviderHarness({ sdk: 'openai-compatible', model: GPT_OSS });
     expect((await other.capture('hi')).body).not.toHaveProperty('reasoning_effort');
   });
@@ -136,14 +130,14 @@ describe('Groq images', () => {
     expect(groqDefaultModelInput('meta-llama/llama-4-scout-17b-16e-instruct')).toEqual(['text', 'image']);
     expect(groqDefaultModelInput('meta-llama/llama-4-maverick-17b-128e-instruct')).toEqual(['text', 'image']);
     // Explicit `input` still wins.
-    expect(createLlmTransportModel('groq', { sdk: 'openai-compatible', baseUrl: GROQ_BASE_URL, input: ['text', 'image'] }, GPT_OSS).input).toEqual(['text', 'image']);
+    expect(profileModel('groq', { sdk: 'openai-compatible', baseUrl: GROQ_BASE_URL, input: ['text', 'image'] }, GPT_OSS).input).toEqual(['text', 'image']);
   });
 
   it('never sends an image part to GPT-OSS', async () => {
     const image = [{ type: 'image' as const, data: { media: { kind: 'base64' as const, value: PNG_1X1, mime_type: 'image/png' } } }];
     const gptOss = groq();
-    const { rawBody } = await gptOss.capture({ messages: [createUserMessage('图里是什么？', image)] });
-    expect(rawBody).not.toContain('image_url');
+    await expect(gptOss.complete({ messages: [createUserMessage('图里是什么？', image)] })).rejects.toMatchObject({ code: 'unsupported-capability' });
+    expect(gptOss.requests).toHaveLength(0);
     const scout = groq('meta-llama/llama-4-scout-17b-16e-instruct');
     expect((await scout.capture({ messages: [createUserMessage('图里是什么？', image)] })).rawBody).toContain('image_url');
   });
@@ -161,10 +155,9 @@ describe('Groq 429s', () => {
     'x-ratelimit-limit-tokens': '8000', 'x-ratelimit-remaining-tokens': '0', 'x-ratelimit-reset-tokens': '4.1s',
   });
 
-  function run(h: ReturnType<typeof groq>, fallbackIds: string[] = []) {
+  function run(h: ReturnType<typeof groq>) {
     const events: ProviderResilienceEvent[] = [];
     const port = h.resilient({
-      fallbackModels: fallbackIds.map((id) => createLlmTransportModel(h.alias, h.config, id)),
       sleep: async () => {}, random: () => 0, onEvent: (e) => events.push(e), config: { requestTimeoutMs: 0 },
     });
     return { port, events };
@@ -178,17 +171,16 @@ describe('Groq 429s', () => {
     expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'rate_limit', delayMs: 4_000 })]);
   });
 
-  it('falls back without retrying when the requests-per-day window is spent', async () => {
+  it('reports the spent requests-per-day window without retry or model switching', async () => {
     const h = groq().reply(openaiChat.error(429, limit('requests per day (RPD)'), headers('86')), openaiChat.reply({ text: '备用模型' }));
-    const { port, events } = run(h, ['openai/gpt-oss-20b']);
-    const reply = await port.complete('hi');
-    expect(reply.content).toEqual([expect.objectContaining({ text: '备用模型' })]);
-    expect(h.requests.map((r) => r.body.model)).toEqual([GPT_OSS, 'openai/gpt-oss-20b']);
-    expect(events).toEqual([expect.objectContaining({ type: 'fallback', kind: 'quota_exhausted' })]);
+    const { port, events } = run(h);
+    await expect(port.complete('hi')).rejects.toMatchObject({ kind: 'quota_exhausted', attempts: 1 });
+    expect(h.requests.map((r) => r.body.model)).toEqual([GPT_OSS]);
+    expect(events).toEqual([expect.objectContaining({ type: 'give_up', kind: 'quota_exhausted' })]);
   });
 
   it('classifies tokens-per-day like requests-per-day', () => {
     const error = Object.assign(new Error(limit('tokens per day (TPD)').message), { statusCode: 429, responseHeaders: headers('300') });
-    expect(classifyProviderError(error)).toMatchObject({ kind: 'quota_exhausted', retryable: false, fallbackEligible: true });
+    expect(classifyProviderError(error)).toMatchObject({ kind: 'quota_exhausted', retryable: false });
   });
 });

@@ -150,9 +150,13 @@ function thinkingToReasoningParts(
 
     const text = block.thinking
       || (options?.ensureToolCallReasoning ? TOOL_CALL_REASONING_PLACEHOLDER : '');
-    if (!text) continue;
     const signed = googleSignatures(block.providerOptions);
-    reasoningParts.push({ type: 'reasoning', text, ...(signed ? { providerOptions: signed } : {}) });
+    const openai = options?.sdk === 'openai' ? block.providerOptions?.openai : undefined;
+    const encrypted = typeof openai?.reasoningEncryptedContent === 'string' && openai.reasoningEncryptedContent
+      ? { openai } : undefined;
+    if (!text && !encrypted) continue;
+    const providerOptions = signed || encrypted ? { ...signed, ...encrypted } : undefined;
+    reasoningParts.push({ type: 'reasoning', text, ...(providerOptions ? { providerOptions } : {}) });
   }
 
   return reasoningParts;

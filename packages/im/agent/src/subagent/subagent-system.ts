@@ -1,4 +1,4 @@
-import type { ModelRegistry, AIProvider, AgentTool } from '@zhin.js/ai';
+import type { AgentTool } from '@zhin.js/ai';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentConfig } from '../config/index.js';
 import type { ResultSink, SubagentDefinition, SubagentSystemConfig } from './contracts.js';
@@ -78,9 +78,6 @@ export class SubagentSystem {
     this.addSender(sender);
   }
 
-  setModelRegistry(registry: ModelRegistry | null): void {
-    this.runtime?.setModelRegistry(registry);
-  }
 
   setEventEmitter(emitter: ZhinAgentEventEmitter | null): void {
     this.runtime?.setEventEmitter(emitter);

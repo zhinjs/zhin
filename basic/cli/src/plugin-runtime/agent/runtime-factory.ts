@@ -1,3 +1,4 @@
+import { currentAgentInference } from '../inference/current-operation.js';
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
@@ -5,7 +6,6 @@ import {
   AIService,
   AgentEventBus,
   AgentResourceHub,
-  createLlmMediaPerceptionPort,
   discoverWorkspaceAgents,
   publishOutboundElements,
   NO_MEDIA_AUTHORITY,
@@ -50,35 +50,31 @@ export function observeAgentTurnTrace(
   };
 }
 
-export function createRuntimeZhinAgent(
-  service: AIService,
-  im: ImRuntime,
-  projectRoot: string,
-  approvalPort?: ApprovalPort,
-  audioTranscriber?: AudioTranscriptionPort,
-  knowledgeIndex?: KnowledgeIndex,
-  localAssets?: LocalImageAssetStore,
-): {
+export interface RuntimeZhinAgentOptions {
+  readonly service: AIService;
+  readonly im: ImRuntime;
+  readonly projectRoot: string;
+  readonly approvalPort?: ApprovalPort;
+  readonly audioTranscriber?: AudioTranscriptionPort;
+  readonly knowledgeIndex?: KnowledgeIndex;
+  readonly localAssets?: LocalImageAssetStore;
+}
+
+export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
   agent: ZhinAgent;
   events: AgentEventBus;
   runtime: ReturnType<typeof composeZhinAgentRuntime>;
   seedPresets: () => Promise<number>;
 } {
+  const { service, im, projectRoot, approvalPort, audioTranscriber, knowledgeIndex, localAssets } = options;
   const binding = service.getBindingRegistry().requireZhinBinding();
-  const provider = service.getProvider(binding.providerAlias);
   const events = new AgentEventBus();
-  const agent = new ZhinAgent(provider, {
-    ...(service.getAgentConfig() ?? {}),
-    contextHistory: service.getContextHistoryConfig(),
-    chatModel: binding.model,
-  }, events, service.getLlmRuntime());
-  const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(
-    im,
-    () => agent.getControlPlane(),
-    () => agent.getDecisionEvents(),
-    service.imageAssets,
-  ));
-  const mediaPerception = createRuntimeMediaPerception(service);
+  const agent = new ZhinAgent({ config: {
+    ...(service.getAgentConfig() ?? {}), contextHistory: service.getContextHistoryConfig(),
+  }, events });
+  const composed = composeZhinAgentRuntime({ agent, proactiveOutbound: createRuntimeProactiveOutbound(
+    im, () => agent.getControlPlane(), () => agent.getDecisionEvents(), service.imageAssets,
+  ) });
   composed.host.approvalPort = approvalPort;
   const resourceHub = new AgentResourceHub();
   agent.configure({
@@ -89,12 +85,9 @@ export function createRuntimeZhinAgent(
     sessionSystem: composed.sessionSystem,
     eventSystem: composed.eventSystem,
     resourceHub,
-    providerResolver: (alias) => service.getProvider(alias),
-    llmRuntime: service.getLlmRuntime(),
     audioTranscriber,
     imageAssets: service.imageAssets,
     localAssets,
-    ...(mediaPerception ? { mediaPerception } : {}),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,
     subagentSender: composed.deliverOutbound,
@@ -104,8 +97,6 @@ export function createRuntimeZhinAgent(
   agent.getSubagentSystem()?.configureRouting({
     imageAssets: service.imageAssets,
     localAssets,
-    mediaPerception,
-    getProvider: (alias) => service.getProvider(alias),
     resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
     getMcpRegistry: () => null,
     resolveAgentMeta: async (name) => {
@@ -127,30 +118,6 @@ export function createRuntimeZhinAgent(
 }
 
 /**
- * `ai.multimodal.perception` → perception port on the service-owned LLM runtime
- * (same transport and resilience layer as turns). Unset → undefined (no pre-pass).
- */
-function createRuntimeMediaPerception(service: AIService) {
-  const config = service.getPerceptionConfig();
-  if (!config) return undefined;
-  logger.info(formatCompact({
-    op: 'media_perception_enabled',
-    provider: config.provider,
-    model: config.model,
-    kinds: config.kinds.join(','),
-  }));
-  return createLlmMediaPerceptionPort({
-    runtime: service.getLlmRuntime(),
-    config,
-    resilience: service.getAgentConfig()?.providerResilience,
-    onEvent: (event) => {
-      const { type, ...fields } = event;
-      logger.warn(formatCompact({ op: `media_perception_${type}`, ...fields }));
-    },
-  });
-}
-
-/**
  * Subagent tool pool — derived from the same generation projection as the
  * main turn so the ToolIndex is the single source of truth. Native builtin
  * tools are projected from the same native ToolFeature definitions used by the main turn.
@@ -160,8 +127,7 @@ function buildRuntimeSubagentAgentTools(
   knowledgeIndex?: KnowledgeIndex,
 ): AgentTool[] {
   const nativeTools = createNativeAgentToolSuite({
-    resolveProvider: (alias) => service.getProvider(alias),
-    resolveImageDefaults: (alias) => service.getImageGenerationDefaults(alias),
+    resolveInference: currentAgentInference,
     imageAssets: service.imageAssets,
     knowledgeIndex,
     resolveDecision: getAgentTurnDecisionRuntime,

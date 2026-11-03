@@ -1,3 +1,5 @@
+import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
+import type { ModelDelegationAuthority, ModelExecutionScope } from '../model-runtime/types.js';
 /**
  * SubagentRuntime — 后台子任务执行管理器
  *
@@ -12,7 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Message } from '@zhin.js/core';
 import { getLogger, formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
-import { type AIProvider, type AgentTool, type Usage, type ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
+import { type AgentTool, type Usage } from '@zhin.js/ai';
 import type { AgentRunInput, AgentRunInputPart } from '../media/media-types.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import {
@@ -143,9 +145,6 @@ export type SubagentResultSender = (
 ) => Promise<void>;
 
 export interface SubagentRuntimeOptions {
-  provider: AIProvider;
-  llmRuntime: LlmApiRuntime;
-  getProvider?: (alias: string) => AIProvider;
   resolveBinding?: (agentName: string) => ResolvedAgentBinding | null;
   getMcpRegistry?: () => McpRegistry | null;
   workspace: string;
@@ -156,7 +155,6 @@ export interface SubagentRuntimeOptions {
   maxParallelSubagents?: number;
   /** Exec policy config to enforce on subagent bash tools */
   execPolicyConfig?: Required<ZhinAgentConfig>;
-  modelRegistry?: ModelRegistry | null;
   /** 子 agent 完成后回传 token 用量（并入主会话 turn 统计） */
   onSubagentUsage?: (usage: Usage) => void;
   /** 注册子 agent 生命周期 Promise，供主会话在 turn 结束前可选等待 */
@@ -177,13 +175,38 @@ export interface SubagentRuntimeOptions {
 // SubagentRuntime
 // ============================================================================
 
+/** One generation-owned subtask; presentation metadata cannot choose model ownership. */
+interface SubagentTaskRun {
+ readonly taskId:string;
+ readonly task:string;
+ readonly label:string;
+ readonly origin:SubagentOrigin;
+ readonly role?:AgentRole;
+ readonly context?:Record<string,unknown>;
+ readonly options?:{
+      delegation: ModelDelegationAuthority;
+      binding?: ResolvedAgentBinding | null;
+      systemPrompt?: string;
+      sync?: boolean;
+      presetName?: string;
+      modelRole?: string;
+      /** 为 true 时 processing.finish 不停止 typing（由上层在最终回复前统一 stop） */
+      keepTypingUntilUpstreamFinish?: boolean;
+      runInput?: AgentRunInput;
+      contextPreamble?: string;
+      agentMeta?: AgentMeta;
+      requestedTools?: string[];
+      requestedSkills?: string[];
+      parentSessionLoaded?: string[];
+      parentLoadedSkills?: string[];
+      signal?: AbortSignal;
+    };
+}
+
 export class SubagentRuntime {
   private imageAssets?: import('../media/image-assets.js').ImageAssetPublisher;
   private localAssets?: import('../media/local-image-assets.js').LocalImageAssetStore;
   private mediaPerception?: import('../media/perception.js').MediaPerceptionPort;
-  private provider: AIProvider;
-  private readonly llmRuntime: LlmApiRuntime;
-  private getProviderFn: ((alias: string) => AIProvider) | null;
   private resolveBindingFn: ((agentName: string) => ResolvedAgentBinding | null) | null;
   private getMcpRegistryFn: (() => McpRegistry | null) | null;
   private workspace: string;
@@ -192,7 +215,6 @@ export class SubagentRuntime {
   private maxParallelSubagents: number;
   private subagentTools: string[];
   private execPolicyConfig: Required<ZhinAgentConfig> | null;
-  private modelRegistry: ModelRegistry | null;
   private runningTasks: Map<string, AbortController> = new Map();
   private resultSender: SubagentResultSender | null = null;
   private onSubagentUsage: ((usage: Usage) => void) | null;
@@ -210,9 +232,6 @@ export class SubagentRuntime {
   private readonly taskSettlements = new Map<string, Promise<void>>();
 
   constructor(options: SubagentRuntimeOptions) {
-    this.provider = options.provider;
-    this.llmRuntime = options.llmRuntime;
-    this.getProviderFn = options.getProvider ?? null;
     this.resolveBindingFn = options.resolveBinding ?? null;
     this.getMcpRegistryFn = options.getMcpRegistry ?? null;
     this.workspace = options.workspace;
@@ -221,7 +240,6 @@ export class SubagentRuntime {
     this.maxParallelSubagents = options.maxParallelSubagents ?? 5;
     this.subagentTools = options.subagentTools || [];
     this.execPolicyConfig = options.execPolicyConfig ?? null;
-    this.modelRegistry = options.modelRegistry ?? null;
     this.onSubagentUsage = options.onSubagentUsage ?? null;
     this.registerSubagentTask = options.registerSubagentTask ?? null;
     this.onEvent = options.onEvent ?? null;
@@ -239,15 +257,11 @@ export class SubagentRuntime {
     this.resultSender = sender;
   }
 
-  setModelRegistry(registry: ModelRegistry | null): void {
-    this.modelRegistry = registry;
-  }
 
   configureRouting(deps: {
     imageAssets?: import('../media/image-assets.js').ImageAssetPublisher;
     localAssets?: import('../media/local-image-assets.js').LocalImageAssetStore;
     mediaPerception?: import('../media/perception.js').MediaPerceptionPort;
-    getProvider?: (alias: string) => AIProvider;
     resolveBinding?: (agentName: string) => ResolvedAgentBinding | null;
     getMcpRegistry?: () => McpRegistry | null;
     resolveAgentMeta?: (agentName: string) => Promise<AgentMeta | null>;
@@ -256,7 +270,6 @@ export class SubagentRuntime {
     if (deps.imageAssets !== undefined) this.imageAssets = deps.imageAssets;
     if (deps.localAssets !== undefined) this.localAssets = deps.localAssets;
     if (deps.mediaPerception !== undefined) this.mediaPerception = deps.mediaPerception;
-    if (deps.getProvider) this.getProviderFn = deps.getProvider;
     if (deps.resolveBinding) this.resolveBindingFn = deps.resolveBinding;
     if (deps.getMcpRegistry) this.getMcpRegistryFn = deps.getMcpRegistry;
     if (deps.resolveAgentMeta) this.resolveAgentMetaFn = deps.resolveAgentMeta;
@@ -288,10 +301,12 @@ export class SubagentRuntime {
 
   /** 同步执行子 agent（入站 route 用）；返回最终文本，不经过 resultSender */
   spawnSync(options: SpawnOptions): Promise<string> {
-    return this.spawnSyncInner(options);
+    const delegation = getAgentTurnConfiguration()?.models?.retainDelegation();
+    if (!delegation) return Promise.reject(new Error('Subagent inference scope is not configured'));
+    return this.spawnSyncInner(options, delegation).finally(() => delegation.release());
   }
 
-  private async spawnSyncInner(options: SpawnOptions): Promise<string> {
+  private async spawnSyncInner(options: SpawnOptions, delegation: ModelDelegationAuthority): Promise<string> {
     if (this.disposed) throw new Error('SubagentRuntime has been disposed');
     const capError = this.parallelCapacityError();
     if (capError) return capError;
@@ -313,13 +328,14 @@ export class SubagentRuntime {
         });
         this.assertActive(signal);
       }
-      const running = this.runAdmittedTask(taskId, () => this.runSubagent(
-        taskId, enriched.task, displayLabel, enriched.origin, role, enriched.context, {
+      const running = this.runAdmittedTask(taskId, () => this.runSubagent({ taskId: taskId, task: enriched.task, label: displayLabel, origin: enriched.origin, role: role, context: enriched.context, options: {
+          delegation,
           binding: enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null),
           systemPrompt: enriched.systemPrompt,
           contextPreamble: enriched.contextPreamble,
           sync: true,
           presetName: enriched.agent ?? enriched.label,
+          modelRole: enriched.agent,
           keepTypingUntilUpstreamFinish: true,
           runInput: enriched.runInput,
           agentMeta: enriched._agentMeta,
@@ -328,8 +344,7 @@ export class SubagentRuntime {
           parentSessionLoaded: enriched.parentSessionLoaded,
           parentLoadedSkills: enriched.parentLoadedSkills,
           signal,
-        },
-      ));
+        } }));
       const result = await running;
       return result ?? '任务已完成，但未生成最终响应。';
     } finally {
@@ -338,10 +353,14 @@ export class SubagentRuntime {
   }
 
   spawn(options: SpawnOptions): Promise<string> {
-    return this.spawnInner(options);
+    const delegation = getAgentTurnConfiguration()?.models?.retainDelegation();
+    if (!delegation) return Promise.reject(new Error('Subagent inference scope is not configured'));
+    return this.spawnInner(options, delegation);
   }
 
-  private async spawnInner(options: SpawnOptions): Promise<string> {
+  private async spawnInner(options: SpawnOptions, delegation: ModelDelegationAuthority): Promise<string> {
+    let admitted: Promise<void> | undefined;
+    try {
     if (this.disposed) throw new Error('SubagentRuntime has been disposed');
     const capError = this.parallelCapacityError();
     if (capError) return capError;
@@ -392,25 +411,29 @@ export class SubagentRuntime {
     const binding = enriched.binding ?? (enriched.agent ? this.resolveBindingFn?.(enriched.agent) ?? null : null);
     const done = this.runAdmittedTask(taskId, async () => {
       try {
-        await this.runSubagent(taskId, enriched.task, displayLabel, enriched.origin, role, enriched.context, {
+        await this.runSubagent({ taskId: taskId, task: enriched.task, label: displayLabel, origin: enriched.origin, role: role, context: enriched.context, options: {
+          delegation,
           binding,
           systemPrompt: enriched.systemPrompt,
           contextPreamble: enriched.contextPreamble,
           presetName: enriched.agent ?? enriched.label,
+          modelRole: enriched.agent,
           agentMeta: enriched._agentMeta,
           requestedTools: enriched.requestedTools,
           requestedSkills: enriched.requestedSkills,
           parentSessionLoaded: enriched.parentSessionLoaded,
           parentLoadedSkills: enriched.parentLoadedSkills,
           signal: abortController.signal,
-        });
+        } });
       } catch (error) {
         logger.error({ error, taskId }, 'Subagent failed');
       }
-    }, () => this.runningTasks.delete(taskId));
+    }, () => this.runningTasks.delete(taskId)).finally(() => delegation.release());
+    admitted = done;
     this.registerSubagentTask?.(done);
 
     return `子任务 [${displayLabel}] 已启动 (id: ${taskId})，完成后会自动通知你。`;
+    } finally { if (!admitted) await delegation.release(); }
   }
 
   getRunningCount(): number {
@@ -488,30 +511,8 @@ export class SubagentRuntime {
 
   // ── 内部方法 ──────────────────────────────────────────────────────
 
-  private async runSubagent(
-    taskId: string,
-    task: string,
-    label: string,
-    origin: SubagentOrigin,
-    role: AgentRole = 'subtask',
-    context?: Record<string, unknown>,
-    opts?: {
-      binding?: ResolvedAgentBinding | null;
-      systemPrompt?: string;
-      sync?: boolean;
-      presetName?: string;
-      /** 为 true 时 processing.finish 不停止 typing（由上层在最终回复前统一 stop） */
-      keepTypingUntilUpstreamFinish?: boolean;
-      runInput?: AgentRunInput;
-      contextPreamble?: string;
-      agentMeta?: AgentMeta;
-      requestedTools?: string[];
-      requestedSkills?: string[];
-      parentSessionLoaded?: string[];
-      parentLoadedSkills?: string[];
-      signal?: AbortSignal;
-    },
-  ): Promise<string | void> {
+  private async runSubagent(input: SubagentTaskRun): Promise<string | void> {
+    const { taskId, task, label, origin, role = 'subtask', context, options: opts } = input;
     const startedAt = Date.now();
     const agentUserInput = opts?.runInput ?? task;
     const inputKind = typeof agentUserInput === 'string' ? 'text' : `parts:${agentUserInput.length}`;
@@ -551,22 +552,17 @@ export class SubagentRuntime {
     });
 
     const binding = opts?.binding ?? null;
-    const manifestProvider = opts?.agentMeta?.provider && this.getProviderFn
-      ? this.getProviderFn(opts.agentMeta.provider)
-      : undefined;
-    const provider = binding && this.getProviderFn
-      ? this.getProviderFn(binding.providerAlias)
-      : manifestProvider ?? this.provider;
+    let models: ModelExecutionScope | undefined;
     try {
       let allTools = this.createTools();
       const mcps = this.getMcpRegistryFn?.() ?? null;
       if (mcps && binding?.mcpServers?.length) {
         if (aiEvents) {
-          await aiEvents.ensureMcpForBinding(mcps, binding.mcpServers);
+          await aiEvents.ensureMcpForBinding(mcps, [...binding.mcpServers]);
         } else {
-          await ensureMcpConnectionsForBinding(mcps, binding.mcpServers);
+          await ensureMcpConnectionsForBinding(mcps, [...binding.mcpServers]);
         }
-        allTools = [...allTools, ...getMcpToolsForBinding(mcps, binding.mcpServers)];
+        allTools = [...allTools, ...getMcpToolsForBinding(mcps, [...binding.mcpServers])];
       }
 
       let tools = resolveSubagentAgentTools({
@@ -594,7 +590,10 @@ export class SubagentRuntime {
       if (opts?.contextPreamble?.trim()) {
         systemPrompt = `${systemPrompt}\n\n## Parent session context (fork)\n${opts.contextPreamble.trim()}`;
       }
-      const model = binding?.model || opts?.agentMeta?.model || provider.models[0];
+      if (!opts?.delegation) throw new Error('Subagent inference scope is not configured');
+      models = await opts.delegation.acquire({ operationId: `subagent:${taskId}`, sessionKey: `subagent:${taskId}`,
+        epoch: taskId, bindingName: binding?.name ?? opts?.modelRole ?? 'zhin', signal: opts?.signal });
+      const model = models.chat.model.id;
       const bashCommMessage = origin.message;
 
       await aiEvents?.agentStart(model);
@@ -602,13 +601,10 @@ export class SubagentRuntime {
         ? EFFORT_MAX_ITERATIONS[opts.agentMeta.effort]
         : undefined;
       const result = await runAgentLoopStandaloneTurn({
-        provider,
-        llmRuntime: this.llmRuntime,
+        execution: models.chat,
         imageAssets: this.imageAssets,
         localAssets: this.localAssets,
         mediaPerception: this.mediaPerception,
-        resolveProvider: this.getProviderFn ?? undefined,
-        model,
         systemPrompt,
         tools,
         userInput: agentUserInput,
@@ -697,6 +693,9 @@ export class SubagentRuntime {
         toolCalls: [],
         agent: opts?.presetName,
       });
+    } finally {
+      try { await models?.release(); }
+      catch { logger.warn('Subagent inference cleanup failed'); }
     }
     return;
   }

@@ -595,17 +595,17 @@ routines:
 
 ## 按模型调整参数
 
-按 provider / model 覆盖执行参数（目前用于 `maxIterations`）。合并顺序：内置默认 → `providerPatterns`（支持 `*` 通配）→ `models` 精确匹配：
+合并顺序：内置 exact Driver／native model 默认 → 真实 Service 的 `defaults` → 该 Service 的精确 native model。Profile 继续决定采样参数与输出上限；旧别名／通配符须显式迁移到真实 Service。
 
 ```yaml
 ai:
   agent:
     modelHarness:
-      providerPatterns:
-        "open*": { maxIterations: 7 }
-      models:
-        "gpt-4o": { maxIterations: 8 }
-        "openai:gpt-4o": { maxIterations: 9 }
+      services:
+        service-7f42:          # actual Service ID from Console
+          defaults: { maxIterations: 7 }
+          models:
+            gpt-4o: { maxIterations: 9 }
 ```
 
 ## Provider 韧性
@@ -635,7 +635,7 @@ ai:
       emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
 ```
 
-`providerResilience.fallback` 不会开启聊天跨模型降级，也不控制媒体感知的外层备用链。感知仅按显式配置的 `ai.multimodal.perception.fallbacks` 顺序尝试备用模型；不配置则只用感知主模型。
+旧 `ai.agent.providerResilience.fallback` 已退役。感知仅按运行时 perception 用途明确选择的 Profile 备用链顺序尝试，不配置则只用感知主 Profile；它不让聊天自动换模型。
 
 按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 
@@ -741,8 +741,8 @@ ai:
     trustedPackPublishers:
       - workroom-admin
     disclosure:
-      modelProviders:
-        PROVIDER_ALIAS:
+      modelServices:
+        ACTUAL_SERVICE_ID:
           endpoint: REPLACE_WITH_CONTRACTED_ENDPOINT
           processingRegions: [REPLACE_WITH_CONTRACTED_REGION]
           maxConfidentiality: project_internal
@@ -754,7 +754,7 @@ ai:
           supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE
 ```
 
-1. 上面的 `REPLACE_WITH_*` 是故意无效的占位符，不能原样保存。`modelProviders` 的键必须是 Orchestrator 使用的 `ai.providers` 别名；处理地区、训练、日志、保留和删除等字段是治理声明，必须与提供商的真实策略和账号设置一致。使用 OpenRouter 时，还应在其 [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) 中启用零留存并禁止 data collection。
+1. 上面的 `REPLACE_WITH_*` 是故意无效的占位符，不能原样保存。`modelServices` 的键必须是 Orchestrator 实际选中 Profile 所属的运行时 Service ID；处理地区、训练、日志、保留和删除等字段是治理声明，必须与提供商的真实策略和账号设置一致。使用 OpenRouter 时，还应在其 [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) 中启用零留存并禁止 data collection。
 2. 保存真实配置后重启 Host，用该 token 登录 Console，并在 Catalog Project 的 `sponsors` 中加入 `workroom-admin`。
 3. 诊断通过后点击"初始化编排能力"。Console 会根据当前版本真实的 Agent / Tool / Skill digest 发布 Capability Pack，激活首个 Project Profile，发布默认 Planning Policy，并由认证的 Sponsor 签发 Project Data Governance 权限。
 4. 成功后状态会显示 Planning 与 Disclosure 都已就绪，此时才能提交 `/work`。

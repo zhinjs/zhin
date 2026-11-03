@@ -23,7 +23,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, it } from 'vitest';
-import { createLlmApiRuntime, createLlmTransportModel } from '@zhin.js/ai';
+import { createNightlyInference } from './inference.js';
 import { BudgetedCompletionPort, resolveNightlyBudget } from './budget.js';
 import { RateLimitedCompletionPort, resolveRateLimitPolicy } from './rate-limit.js';
 import { CAPABILITY_MATRIX } from './matrix-cases.js';
@@ -44,12 +44,12 @@ describe('nightly real-model evals', () => {
   it.skipIf(!provider.config.apiKey)(`capability matrix + seed cases on ${provider.id} (skipped without ${provider.keyEnv})`, async () => {
     const budget = resolveNightlyBudget(env);
     const modelIds = resolveNightlyModels(env, provider);
-    const { config } = provider;
-    const runtime = createLlmApiRuntime([{ alias: provider.id, config, models: modelIds, fetch: globalThis.fetch }], () => modelIds);
+    const inference = await createNightlyInference({ provider, modelIds });
+    try {
     // Every real request (matrix, seed-case turns, tool steps, retries) is paced and
     // serialized by the limiter; the budget counts each request it lets through.
     const policy = resolveRateLimitPolicy(env);
-    const port = new RateLimitedCompletionPort(new BudgetedCompletionPort(runtime, budget), policy, {
+    const port = new RateLimitedCompletionPort(new BudgetedCompletionPort(inference.port, budget), policy, {
       onEvent: (event) => {
         if (event.type === 'backoff') console.warn(`[nightly] 429 on ${event.model}: retry ${event.retry} in ${event.delayMs} ms`);
         if (event.type === 'give_up') console.warn(`[nightly] 429 on ${event.model}: gave up after ${event.retries} retries`);
@@ -60,7 +60,7 @@ describe('nightly real-model evals', () => {
     });
     const report = await runNightlyMatrix({
       provider: provider.id,
-      models: modelIds.map((id) => createLlmTransportModel(provider.id, config, id)),
+      models: inference.models,
       cases: CAPABILITY_MATRIX,
       seedCases,
       port,
@@ -86,5 +86,6 @@ describe('nightly real-model evals', () => {
     if (report.infra?.flaky) {
       throw new Error(`infra-flaky: ${report.infra.providerUnavailable} of ${report.infra.attempted} attempted runs were provider-unavailable (503 UNAVAILABLE after retry); no quality signal tonight`);
     }
+    } finally { await inference.close(); }
   }, 30 * 60_000);
 });

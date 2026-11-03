@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createUserMessage } from '@zhin.js/ai';
 import {
@@ -27,11 +28,10 @@ describe('ContextSystem', () => {
     const host = {
       config: { persona: 'p', toneAwareness: false },
       userProfiles: { buildProfileSummary: async () => '' },
-      getTurnProvider: () => ({ name: 'openai', models: ['gpt-4o-mini'] }),
-      modelRegistry: null,
+      getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'openai', models: ['gpt-4o-mini'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({ model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) }).model(((() => ({ name: 'openai', models: ['gpt-4o-mini'] }))()).name, ((() => ({ name: 'openai', models: ['gpt-4o-mini'] }))()).models?.[0]) }, completion: { model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) } }),
       buildDisciplinedPrompt: (p: string) => p,
       getTurnActiveSkills: () => '',
-      llmRuntime: { model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) },
+      completion: { model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) },
     } as any;
 
     const system = createContextSystemForHost(host);
@@ -80,11 +80,10 @@ describe('ContextSystem', () => {
     const host = {
       config: { persona: 'chat persona', toneAwareness: true },
       userProfiles: { buildProfileSummary: async () => 'interactive profile' },
-      getTurnProvider: () => ({ name: 'openai', models: ['gpt-4o-mini'] }),
-      modelRegistry: null,
+      getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'openai', models: ['gpt-4o-mini'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({ model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) }).model(((() => ({ name: 'openai', models: ['gpt-4o-mini'] }))()).name, ((() => ({ name: 'openai', models: ['gpt-4o-mini'] }))()).models?.[0]) }, completion: { model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) } }),
       buildDisciplinedPrompt: (prompt: string) => prompt,
       getTurnActiveSkills: () => '',
-      llmRuntime: { model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) },
+      completion: { model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) },
     } as any;
     const system = createContextSystemForHost(host);
     system.addBuilder({ name: 'history-leak', build: async () => [createUserMessage('must not leak')] });
@@ -120,9 +119,9 @@ describe('ContextSystem', () => {
   it('keeps explicit current schedule metadata while discarding prebuilt history, media and native message ids', async () => {
     const host = {
       config: { persona: 'task', toneAwareness: false },
-      getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+      getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'openai', models: ['m'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({ model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) }).model(((() => ({ name: 'openai', models: ['m'] }))()).name, ((() => ({ name: 'openai', models: ['m'] }))()).models?.[0]) }, completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) } }),
       buildDisciplinedPrompt: (prompt: string) => prompt, getTurnActiveSkills: () => '',
-      llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+      completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
     } as any;
     const actor = { subjectId: 'schedule-owner', authorizationRoles: ['trusted'] };
     const cause = { turnId: 'schedule-exec', intent: 'new' as const };

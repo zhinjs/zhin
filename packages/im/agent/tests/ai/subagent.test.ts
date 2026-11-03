@@ -1,3 +1,4 @@
+import { createTestSubagentRuntime } from '../helpers/scoped-subagent.js';
 /**
  * SubagentRuntime 测试
  */
@@ -86,14 +87,11 @@ describe('SubagentRuntime', () => {
     ({ provider, llm } = createMockProvider());
     mockTools = createMockTools();
     onSubagentComplete = vi.fn().mockResolvedValue(undefined);
-    manager = new SubagentRuntime({
-      provider: provider as any,
-      llmRuntime: llm.runtime,
-      workspace: '/tmp/test-workspace',
-      createTools: () => mockTools,
-      maxIterations: 5,
-      onSubagentComplete,
-    });
+    manager = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+maxIterations: 5,
+onSubagentComplete } });
   });
 
   afterEach(async () => {
@@ -104,16 +102,13 @@ describe('SubagentRuntime', () => {
     it('dispose during async enrichment must fail closed before starting work', async () => {
       let releaseMeta!: () => void;
       const enrichment = new Promise<void>((resolve) => { releaseMeta = resolve; });
-      const guarded = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        resolveAgentMeta: async () => {
+      const guarded = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+resolveAgentMeta: async () => {
           await enrichment;
           return null;
-        },
-      });
+        } } });
 
       const spawning = guarded.spawn({ task: 'late', agent: 'worker', origin: baseOrigin });
       await Promise.resolve();
@@ -129,17 +124,14 @@ describe('SubagentRuntime', () => {
       let releaseSpawn!: () => void;
       let spawnObserved!: () => void;
       const observed = new Promise<void>((resolve) => { spawnObserved = resolve; });
-      const guarded = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        onEvent: async (event) => {
+      const guarded = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+onEvent: async (event) => {
           if (event.phase !== 'spawn') return;
           spawnObserved();
           await new Promise<void>((resolve) => { releaseSpawn = resolve; });
-        },
-      });
+        } } });
 
       const spawning = guarded.spawn({ task: 'late', origin: baseOrigin });
       await observed;
@@ -185,15 +177,12 @@ describe('SubagentRuntime', () => {
 
     it('应触发生命周期事件回调', async () => {
       const onEvent = vi.fn();
-      const eventManager = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        maxIterations: 5,
-        onEvent,
-        onSubagentComplete: vi.fn().mockResolvedValue(undefined),
-      });
+      const eventManager = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+maxIterations: 5,
+onEvent,
+onSubagentComplete: vi.fn().mockResolvedValue(undefined) } });
 
       await eventManager.spawn({ task: '分析 README', label: 'README分析', origin: baseOrigin });
       await vi.waitFor(() => expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'finish' })), { timeout: 2000 });
@@ -230,14 +219,11 @@ describe('SubagentRuntime', () => {
         execute: async () => 'ok',
       };
       const onComplete = vi.fn().mockResolvedValue(undefined);
-      const customManager = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => [...mockTools, extraTool],
-        execPolicyConfig: { ...DEFAULT_CONFIG, subagentTools: ['todo_write'] },
-        onSubagentComplete: onComplete,
-      });
+      const customManager = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => [...mockTools, extraTool],
+execPolicyConfig: { ...DEFAULT_CONFIG, subagentTools: ['todo_write'] },
+onSubagentComplete: onComplete } });
 
       await customManager.spawn({ task: '帮我列一份 todo 任务清单', origin: baseOrigin });
       await vi.waitFor(() => expect(onComplete).toHaveBeenCalled(), { timeout: 2000 });
@@ -298,14 +284,11 @@ describe('SubagentRuntime', () => {
       const blockingComplete = vi.fn(async () => {
         await completeGate;
       });
-      const blockingManager = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        maxIterations: 5,
-        onSubagentComplete: blockingComplete,
-      });
+      const blockingManager = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+maxIterations: 5,
+onSubagentComplete: blockingComplete } });
 
       await blockingManager.spawn({ task: '快速任务', origin: baseOrigin });
 
@@ -318,13 +301,10 @@ describe('SubagentRuntime', () => {
     });
 
     it('无 onSubagentComplete 时不应崩溃', async () => {
-      const bare = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        maxIterations: 5,
-      });
+      const bare = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+maxIterations: 5 } });
       await bare.spawn({ task: '测试', origin: baseOrigin });
 
       await new Promise(r => setTimeout(r, 200));
@@ -411,17 +391,14 @@ describe('SubagentRuntime', () => {
       let finishEntered!: () => void;
       let releaseFinish!: () => void;
       const entered = new Promise<void>((resolve) => { finishEntered = resolve; });
-      const guarded = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        onEvent: async (event) => {
+      const guarded = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+onEvent: async (event) => {
           if (event.phase !== 'finish') return;
           finishEntered();
           await new Promise<void>((resolve) => { releaseFinish = resolve; });
-        },
-      });
+        } } });
       await guarded.spawn({ task: 'tracked', origin: baseOrigin });
       await vi.waitFor(() => expect(llm.calls).toHaveLength(1));
 
@@ -452,18 +429,15 @@ describe('SubagentRuntime', () => {
         }),
         emit: vi.fn(),
       } as unknown as ZhinAgentEventEmitter;
-      const guarded = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        eventEmitter: emitter,
-        onEvent: async (event) => {
+      const guarded = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+eventEmitter: emitter,
+onEvent: async (event) => {
           if (event.phase !== 'finish') return;
           finishEntered();
           await new Promise<void>((resolve) => { releaseFinish = resolve; });
-        },
-      });
+        } } });
       holder.current = guarded;
 
       await guarded.spawn({ task: 'dispose-from-processing-start', origin: baseOrigin });
@@ -480,17 +454,14 @@ describe('SubagentRuntime', () => {
     it('finish observer 内 dispose 排除当前 task，不与自身 settlement 死锁', async () => {
       const holder: { current?: SubagentRuntime } = {};
       let finishDisposeReturned = false;
-      const guarded = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        onEvent: async (event) => {
+      const guarded = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+onEvent: async (event) => {
           if (event.phase !== 'finish') return;
           await holder.current!.dispose();
           finishDisposeReturned = true;
-        },
-      });
+        } } });
       holder.current = guarded;
 
       await guarded.spawn({ task: 'dispose-from-finish', origin: baseOrigin });
@@ -516,15 +487,12 @@ describe('SubagentRuntime', () => {
         }),
       } as unknown as ZhinAgentEventEmitter;
 
-      const mgr = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        maxIterations: 5,
-        eventEmitter: emitter,
-        onSubagentComplete: vi.fn().mockResolvedValue(undefined),
-      });
+      const mgr = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+maxIterations: 5,
+eventEmitter: emitter,
+onSubagentComplete: vi.fn().mockResolvedValue(undefined) } });
 
       await mgr.spawnSync({
         task: '分析图片',
@@ -557,15 +525,12 @@ describe('SubagentRuntime', () => {
         emit: vi.fn((name: string) => { emitted.push(name); }),
       } as unknown as import('../../src/event/event-emitter.js').ZhinAgentEventEmitter;
 
-      const mgr = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        maxIterations: 5,
-        eventEmitter: emitter,
-        onSubagentComplete: vi.fn().mockResolvedValue(undefined),
-      });
+      const mgr = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+maxIterations: 5,
+eventEmitter: emitter,
+onSubagentComplete: vi.fn().mockResolvedValue(undefined) } });
 
       await mgr.spawn({ task: 'hi', origin: { ...baseOrigin, messageId: 'msg-1' } });
       await vi.waitFor(() => expect(dispatched).toContain('ai.processing.finish'), { timeout: 2000 });
@@ -577,14 +542,11 @@ describe('SubagentRuntime', () => {
   describe('maxParallelSubagents cap', () => {
     it('rejects spawn when at capacity', async () => {
       llm.hang();
-      const capped = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        maxIterations: 5,
-        maxParallelSubagents: 1,
-      });
+      const capped = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+maxIterations: 5,
+maxParallelSubagents: 1 } });
       await capped.spawn({ task: 'task-1', origin: baseOrigin });
       expect(capped.getRunningCount()).toBe(1);
       const rejected = await capped.spawn({ task: 'task-2', origin: baseOrigin });
@@ -594,15 +556,12 @@ describe('SubagentRuntime', () => {
 
     it('spawnSync rejects when at capacity', async () => {
       llm.hang();
-      const capped = new SubagentRuntime({
-        provider: provider as any,
-        llmRuntime: llm.runtime,
-        workspace: '/tmp/test-workspace',
-        createTools: () => mockTools,
-        maxIterations: 5,
-        maxParallelSubagents: 1,
-        onSubagentComplete: vi.fn().mockResolvedValue(undefined),
-      });
+      const capped = createTestSubagentRuntime({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], options: {
+workspace: '/tmp/test-workspace',
+createTools: () => mockTools,
+maxIterations: 5,
+maxParallelSubagents: 1,
+onSubagentComplete: vi.fn().mockResolvedValue(undefined) } });
       void capped.spawn({ task: 'bg task', origin: baseOrigin });
       await vi.waitFor(() => expect(capped.getRunningCount()).toBe(1));
       const rejected = await capped.spawnSync({ task: 'sync task', origin: baseOrigin });

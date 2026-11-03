@@ -5,7 +5,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { classifyProviderError } from '../../../src/llm/provider-resilience.js';
-import { generateTextViaAiSdk } from '../../../src/llm/bridge/ai-sdk-stream.js';
 import { createProviderHarness, openaiChat, TEST_API_KEY } from '../../helpers/provider-harness/index.js';
 
 const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
@@ -139,8 +138,7 @@ describe('openai provider (baseline)', () => {
   it('surfaces a refusal on the non-streaming path', async () => {
     const h = createProviderHarness({ sdk: 'openai' });
     h.reply(openaiChat.reply({ refusal: 'No.' }));
-    const languageModel = h.runtime.resolveLanguageModel(h.alias, h.modelId)!;
-    const message = await generateTextViaAiSdk(languageModel, h.model, h.context('x'));
+    const message = await h.runtime.generate(h.model, h.context('x'));
     expect(h.lastRequest().stream).toBe(false);
     expect(message.stopReason).toBe('error');
     expect(message.errorMessage).toContain('refusal: No.');

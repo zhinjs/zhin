@@ -50,8 +50,7 @@ import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress
 import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector, guardReplyPort, type LeakFinding } from '../security/outbound-leak-guard.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
-import type { UsageSubject } from '../security/usage-quota.js';
-import { usageGroupId } from '@zhin.js/core';
+import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { getLogger } from '@zhin.js/logger';
 import { isLocale } from '@zhin.js/plugin-runtime';
 import {
@@ -136,7 +135,7 @@ async function* runInteractiveTurn(
     };
   }
 
-  const quotaSubject = usageSubjectOf(context.turn, prep.userId);
+  const quotaSubject = usageSubjectFromTurn(context.turn);
   const quota = host.usageQuota.check(quotaSubject);
   if (!quota.allowed) {
     // #727: only this user (or this group) is stopped; everyone else carries on.
@@ -1006,16 +1005,6 @@ function guardedReply(
 }
 
 /** Quota key for a turn: the sender, plus the group when the turn comes from a group or channel. */
-function usageSubjectOf(turn: TurnIngress, userId: string): UsageSubject {
-  const origin = turn.origin;
-  const shared = origin.kind === 'im' && (origin.scope === 'group' || origin.scope === 'channel');
-  return Object.freeze({
-    userId,
-    ...(shared ? { groupId: usageGroupId(origin.platform, origin.endpoint, origin.sceneId) } : {}),
-    owner: resolveTurnTrustLevel(turn) === 'owner',
-  });
-}
-
 /** #726: loaded skill instructions are labelled per skill as third-party guidance. */
 function labelSkillInstructions(instructions: readonly string[]): string {
   return instructions.map(text => labelThirdPartyGuidance('skill', text)).join('\n\n');

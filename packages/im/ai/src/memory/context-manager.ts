@@ -10,7 +10,7 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
-import type { ChatMessage, AIProvider } from '../types.js';
+import type { ChatMessage } from '../types.js';
 
 const logger = getLogger('ContextManager');
 
@@ -130,11 +130,14 @@ export interface SceneContext {
  * 上下文管理器
  * 负责消息记录、历史读取和智能总结
  */
+/** Caller-owned inference operation. The manager does not own a Provider, credential or model directory. */
+export type ContextSummaryCompletion = (input: Readonly<{ system: string; prompt: string; signal?: AbortSignal }>) => Promise<string>;
+
 export class ContextManager {
   private messageModel: any;
   private summaryModel: any;
   private config: Required<Omit<ContextConfig, 'historyTokens'>>;
-  private aiProvider?: AIProvider;
+  private summaryCompletion?: ContextSummaryCompletion;
 
   constructor(
     messageModel: any,
@@ -153,11 +156,9 @@ export class ContextManager {
     };
   }
 
-  /**
-   * 设置 AI 提供商（用于自动总结）
-   */
-  setAIProvider(provider: AIProvider): void {
-    this.aiProvider = provider;
+  /** Supply an operation-bound summary call; the caller owns its model selection and cleanup. */
+  setSummaryCompletion(completion: ContextSummaryCompletion): void {
+    this.summaryCompletion = completion;
   }
 
   /**
@@ -305,7 +306,7 @@ export class ContextManager {
    * 执行总结
    */
   async summarize(sceneId: string, signal?: AbortSignal): Promise<string | null> {
-    if (!this.aiProvider) {
+    if (!this.summaryCompletion) {
       logger.warn('未设置 AI provider，无法总结');
       return null;
     }
@@ -330,11 +331,7 @@ export class ContextManager {
 
     try {
       // 调用 AI 进行总结
-      const summary = await this.aiProvider.completeText(
-        this.config.summaryPrompt,
-        conversationText,
-        { temperature: 0.3, maxTokens: 500, signal },
-      );
+      const summary = await this.summaryCompletion({ system: this.config.summaryPrompt, prompt: conversationText, signal });
 
       if (!summary.trim()) {
         return null;

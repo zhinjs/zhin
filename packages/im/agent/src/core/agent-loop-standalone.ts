@@ -1,3 +1,4 @@
+import type { ModelExecutionBundle } from '../model-runtime/types.js';
 /**
  * Standalone agentLoop runner (subagent / deferred worker) — isolated memory context.
  */
@@ -8,7 +9,7 @@ import {
   turnPolicyAllowsShell,
   withoutForbiddenShell,
 } from '../plugin-runtime/native-bash-tool.js';
-import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, agentToolsToLlmTools, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
+import { type AgentTool, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../resource-hub/types.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
@@ -67,33 +68,18 @@ function buildUserMessages(input: AgentRunInput): AgentMessage[] {
   return [createUserMessage(texts.join(' ') || '[多模态消息]', media.length > 0 ? media : undefined)];
 }
 
-function createStandaloneLlmRuntime(
-  provider: AIProvider,
-  resolveProvider?: (alias: string) => AIProvider | undefined,
-): LlmApiRuntime {
-  return createLlmApiRuntime(
-    [sdkEntryFromProvider(provider)],
-    (alias) => {
-      const p = alias === provider.name ? provider : resolveProvider?.(alias);
-      return p?.models ?? [];
-    },
-  );
-}
-
 export interface AgentLoopStandaloneCallbacks {
   onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
   onToolResult?: (toolName: string, result: unknown) => void;
 }
 
 export interface AgentLoopStandaloneInput {
-  provider: AIProvider;
-  resolveProvider?: (alias: string) => AIProvider | undefined;
-  llmRuntime?: LlmApiRuntime;
+  /** Already selected, generation-owned model and transport. */
+  execution: ModelExecutionBundle;
   imageAssets?: ImageAssetPublisher;
   localAssets?: LocalImageAssetStore;
   localAssetScope?: LocalImageScope;
   mediaPerception?: MediaPerceptionPort;
-  model: string;
   systemPrompt: string;
   tools: AgentTool[];
   userInput: AgentRunInput;
@@ -130,8 +116,7 @@ export async function runAgentLoopStandaloneTurn(
   input: AgentLoopStandaloneInput,
 ): Promise<AgentLoopStandaloneResult> {
   const {
-    provider,
-    model,
+    execution,
     systemPrompt,
     tools,
     userInput,
@@ -144,9 +129,9 @@ export async function runAgentLoopStandaloneTurn(
   } = input;
   signal?.throwIfAborted();
 
-  const llmRuntime = input.llmRuntime
-    ?? createStandaloneLlmRuntime(provider, input.resolveProvider);
-  const llmModel = llmRuntime.model(provider.name, model);
+  const llmRuntime = execution.completion;
+  const llmModel = execution.model;
+  const model = llmModel.id;
   const { repository } = createMemoryContextRepository();
   const sessionId = `standalone:${Date.now()}`;
   const assetScope = input.localAssetScope ?? localImageScopeFromMessage(commMessage, sessionId);

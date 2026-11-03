@@ -15,7 +15,7 @@ function clock(start = 1_000_000_000_000) {
 it('summarizes ambient decisions without chat text or judge reasons', () => {
   const time = clock();
   const status = new AssistantStatus({ now: time.now });
-  status.bindAmbientConfig(() => ({ conversations: ['qq:1', 'qq:2'], judge: ['groq/llama', ' '], mode: 'shadow' }));
+  status.bindAmbientConfig(() => ({ conversations: ['qq:1', 'qq:2'], mode: 'shadow' }));
   status.recordAmbient('qq:1', { kind: 'engage', judgment: { engage: true, confidence: 0.876, reason: SECRET } });
   time.advance(1);
   status.recordAmbient('qq:1', { kind: 'declined', judgment: { engage: false, confidence: 0.2, reason: SECRET, source: 'decision:small' } });
@@ -28,7 +28,7 @@ it('summarizes ambient decisions without chat text or judge reasons', () => {
   status.recordAmbientShadow(true, false);
   status.recordAmbientShadow(undefined, false);
 
-  const snapshot = status.ambient();
+  const snapshot = status.ambient(['groq/llama', ' ']);
   expect(snapshot).toMatchObject({
     enabled: true, mode: 'shadow', groups: 2, judges: ['groq/llama'],
     last24h: { spoke: 1, watched: 1, stayed_quiet: 1, skipped: 1 },
@@ -45,8 +45,8 @@ it('summarizes ambient decisions without chat text or judge reasons', () => {
 it('reports off without configured groups and all for the wildcard', () => {
   const status = new AssistantStatus();
   expect(status.ambient()).toMatchObject({ enabled: false, mode: 'off', groups: 0, judges: [], recent: [], updatedAt: null });
-  status.bindAmbientConfig(() => ({ conversations: ['*'], judge: 'a/b' }));
-  expect(status.ambient()).toMatchObject({ enabled: true, mode: 'active', groups: 'all', judges: ['a/b'] });
+  status.bindAmbientConfig(() => ({ conversations: ['*'] }));
+  expect(status.ambient(['a/b'])).toMatchObject({ enabled: true, mode: 'active', groups: 'all', judges: ['a/b'] });
 });
 
 it('keeps a rolling 24h window and at most 20 recent items', () => {

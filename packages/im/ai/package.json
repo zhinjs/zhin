@@ -46,14 +46,21 @@
       "development": "./src/journal-store.ts",
       "import": "./lib/journal-store.js"
     },
-    "./model-catalog": {
-      "types": "./lib/model-catalog/index.d.ts",
-      "development": "./src/model-catalog/index.ts",
-      "import": "./lib/model-catalog/index.js"
-    }
+    "./provider": {
+      "types": "./lib/provider/index.d.ts",
+      "development": "./src/provider/index.ts",
+      "import": "./lib/provider/index.js"
+    },
+    "./providers": {
+      "types": "./lib/providers/index.d.ts",
+      "development": "./src/providers/index.ts",
+      "import": "./lib/providers/index.js"
+    },
+    "./provider-plan.schema.json": "./provider-plan.schema.json"
   },
   "files": [
-    "lib"
+    "lib",
+    "provider-plan.schema.json"
   ],
   "scripts": {
     "build": "tsc",
@@ -71,7 +78,7 @@
     "@ai-sdk/minimax": "^3.0.15",
     "@ai-sdk/openai": "^4.0.8",
     "@ai-sdk/openai-compatible": "^3.0.5",
-    "ai": "^7.0.0",
+    "ai": "^7.0.35",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
@@ -149,10 +156,15 @@
         "types": "./lib/journal-store.d.ts",
         "import": "./lib/journal-store.js"
       },
-      "./model-catalog": {
-        "types": "./lib/model-catalog/index.d.ts",
-        "import": "./lib/model-catalog/index.js"
-      }
+      "./provider": {
+        "types": "./lib/provider/index.d.ts",
+        "import": "./lib/provider/index.js"
+      },
+      "./providers": {
+        "types": "./lib/providers/index.d.ts",
+        "import": "./lib/providers/index.js"
+      },
+      "./provider-plan.schema.json": "./provider-plan.schema.json"
     }
   },
   "license": "MIT",

@@ -35,13 +35,13 @@ describe('life-assistant-bot 配置契约', () => {
   })
 
   it('配置了 AI provider', () => {
-    expect(configText).toMatch(/providers:\s*\n/)
+    expect(configText).toMatch(/services:\s*\n/)
     expect(configText).toMatch(/ollama:/)
   })
 
   it('配置了 agent 绑定', () => {
-    expect(configText).toMatch(/agents:\s*\n/)
-    expect(configText).toMatch(/zhin:/)
+    expect(configText).toMatch(/profiles:\s*\n/)
+    expect(configText).toMatch(/purposes:/)
     expect(configText).toMatch(/model:/)
   })
 

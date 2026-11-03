@@ -1,6 +1,6 @@
+import { SyntheticCompletionRuntime } from '../helpers/synthetic-completion-runtime.js';
 import { describe, expect, it, beforeEach } from "vitest";
 import {
-  LlmApiRuntime,
   agentLoop,
   createAssistantMessageEventStream,
   createUserMessage,
@@ -50,9 +50,9 @@ function assistantText(text: string): AssistantMessage {
 }
 
 describe("agentLoop harness 不变量", () => {
-  let runtime: LlmApiRuntime;
+  let runtime: SyntheticCompletionRuntime;
   beforeEach(() => {
-    runtime = new LlmApiRuntime();
+    runtime = new SyntheticCompletionRuntime();
     runtime.registerProvider("test", { sdk: "openai" }, ["mock"]);
   });
 

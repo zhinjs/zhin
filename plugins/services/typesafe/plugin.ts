@@ -1,15 +1,11 @@
 import { definePlugin } from 'zhin.js';
-import { provideAgentDecisionProvider } from '@zhin.js/agent/runtime';
-import { TypeSafeDecisionProvider, type TypeSafeDecisionConfig } from './src/decision-provider.js';
+import { provideAiProviders } from '@zhin.js/ai-provider';
+import { typeSafeProvider } from './src/provider.js';
 
-export default definePlugin<TypeSafeDecisionConfig>({
+export default definePlugin({
   name: 'typesafe',
   metadata: { displayName: 'TypeSafe AI' },
   setup(context) {
-    const config = context.config.get();
-    if (config.enabled === false) return;
-    const provider = new TypeSafeDecisionProvider(config);
-    provideAgentDecisionProvider(context.resources, provider);
-    context.lifecycle.add(() => provider.dispose());
+    provideAiProviders(context.resources, [typeSafeProvider]);
   },
 });

@@ -1,3 +1,6 @@
+import { createProfileRuntime } from '../../../ai/tests/helpers/profile-runtime.js';
+import { executionBundle, executionScope } from '../helpers/execution-bundle.js';
+import { createTestZhinAgent, testAgentModels } from '../helpers/scoped-agent.js';
 import { turnModelPortToken } from '../../src/model-runtime/turn-resource.js';
 import type { ModelExecutionScope } from '../../src/model-runtime/types.js';
 import { agentUsageStoreToken } from '../../src/usage/usage-store.js';
@@ -49,7 +52,7 @@ import {
   promptSectionFeatureId,
 } from '@zhin.js/prompt-section';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { compactAgentMessages, createLlmApiRuntime } from '@zhin.js/ai';
+import { compactAgentMessages } from '@zhin.js/ai';
 import { createTurnIngress, type TurnContextState } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
@@ -83,14 +86,14 @@ describe('leased turn model execution', () => {
       .reply(anthropicMessages.reply({ text: 'Other model must not answer.' }));
     const provider = h.adapter();
     provider.models.push('other-model');
-    const llm = createLlmApiRuntime([{ alias: h.alias, config: h.config, models: provider.models, fetch: h.server.fetch }]);
-    const agent = new ZhinAgent(provider, { outputSchema: false, maxIterations: 2,
-      providerResilience: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 } }, undefined, llm);
+    const llm = createProfileRuntime({ alias: h.alias, config: h.config, models: provider.models, fetch: h.server.fetch });
+    const agent = createTestZhinAgent({ runtime: llm, alias: (provider).name, model: (provider).models[0], config: { outputSchema: false, maxIterations: 2,
+      providerResilience: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 } }, events: undefined });
     agent.markMemoryPersistenceReady();
     const host = asPrivate(agent);
     const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
       sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
-    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, context => engine.run(context)));
+    const store = new SnapshotStore(await stateWithModelEngine(fixture.snapshot, context => engine.run(context), agent));
     const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
     try {
       const result = await runtime.execute(fixture.child, { ...externalRequest('fixed-model'), input: { text: 'Reply briefly.' } }, {
@@ -107,26 +110,18 @@ describe('leased turn model execution', () => {
     const old = createProviderHarness({ sdk: 'anthropic' });
     const chosen = createProviderHarness({ sdk: 'anthropic', alias: 'personal-provider', model: 'personal-model' })
       .reply(anthropicMessages.reply({ text: 'Scoped answer.' }));
-    const agent = new ZhinAgent(old.adapter(), { outputSchema: false, maxIterations: 2 }, undefined, old.runtime);
+    const agent = createTestZhinAgent({ runtime: old.runtime, alias: (old.adapter()).name, model: (old.adapter()).models[0], config: { outputSchema: false, maxIterations: 2 }, events: undefined });
     agent.markMemoryPersistenceReady();
     const host = asPrivate(agent);
     const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
       sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
     const release = vi.fn(async () => { if (cleanupFails) throw new Error('synthetic cleanup failure'); });
-    const scope: ModelExecutionScope = {
-      chat: { provider: chosen.adapter(), llmRuntime: chosen.runtime, invocation: {
-        connection: { id: 'connection', ownerId: 'person', revision: 1, sdk: 'anthropic' },
-        model: { id: 'model', connectionId: 'connection', model: chosen.modelId, capabilities: { input: ['text'] } },
-        preset: { id: 'preset', modelId: 'model' },
-      } },
-      summary: { provider: old.adapter(), llmRuntime: old.runtime, invocation: {
-        connection: { id: 'host-connection', ownerId: 'host', revision: 1, sdk: 'anthropic' },
-        model: { id: 'host-model', connectionId: 'host-connection', model: old.modelId, capabilities: { input: ['text'] } },
-        preset: { id: 'host-summary', modelId: 'host-model' },
-      } },
-      policy: { refs: { chat: 'preset', summary: 'host-summary' }, sources: {} }, release,
-    };
-    const state = stateWithEngine(fixture.snapshot, context => engine.run(context));
+    const acquired = await executionScope({
+      chat: executionBundle({ model: chosen.model, completion: chosen.runtime }),
+      summary: executionBundle({ model: old.model, completion: old.runtime }),
+    });
+    const scope: ModelExecutionScope = { ...acquired, release: async () => { await acquired.release(); await release(); } };
+    const state = await stateWithModelEngine(fixture.snapshot, context => engine.run(context), agent);
     const root = new Map(state.resources.get(state.root));
     root.set(turnModelPortToken.id, { acquire: async () => scope });
     const store = new SnapshotStore({ ...state, resources: new Map(state.resources).set(state.root, root) });
@@ -138,7 +133,7 @@ describe('leased turn model execution', () => {
       expect(chosen.requests[0]!.body).toMatchObject({ model: 'personal-model' });
       expect(old.requests).toHaveLength(0);
       expect(release).toHaveBeenCalledOnce();
-      expect(agent.getTurnProvider().name).toBe(old.alias);
+      expect(() => agent.getTurnExecution()).toThrow('not configured');
       expect(getAgentTurnConfiguration()).toBeUndefined();
     } finally { await agent.dispose(); await fixture.mcp.stop(); await store.close(); }
   });
@@ -147,7 +142,8 @@ describe('leased turn model execution', () => {
     const fixture = await createFixture();
     const release = vi.fn(async () => undefined);
     const h = createProviderHarness({ sdk: 'anthropic' });
-    const scope = { chat: { provider: h.adapter(), invocation: { model: { model: h.modelId } } }, release };
+    const acquired = await executionScope({ chat: executionBundle({ model: h.model, completion: h.runtime }) });
+    const scope = { ...acquired, release: async () => { await acquired.release(); await release(); } };
     const state = stateWithEngine(fixture.snapshot, async function* () {
       yield { type: 'text_delta', delta: 'partial' };
       throw new Error('engine failed');
@@ -171,16 +167,16 @@ describe('full Agent request tracing', () => {
   ] as const)('binds the SDK request to origin and usage with body status $bodyStatus', async ({ recordRequestBodies, maxBytes, bodyStatus }) => {
     const fixture = await createFixture();
     const h = createProviderHarness({ sdk: 'anthropic' }).reply(anthropicMessages.reply({ text: 'Done.' }));
-    const agent = new ZhinAgent(h.adapter(), { outputSchema: false, maxIterations: 2,
+    const agent = createTestZhinAgent({ runtime: h.runtime, alias: (h.adapter()).name, model: (h.adapter()).models[0], config: { outputSchema: false, maxIterations: 2,
       ...(recordRequestBodies === undefined ? {} : { recordRequestBodies }),
-    }, undefined, h.runtime);
+    }, events: undefined });
     const binding = { name: 'zhin', providerAlias: h.alias, model: h.modelId, mcpServers: [] };
     agent.activeBinding = binding;
     agent.markMemoryPersistenceReady();
     const host = asPrivate(agent);
     const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
       sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
-    const snapshot = new SnapshotStore(stateWithEngine(fixture.snapshot, context => engine.run(context)));
+    const snapshot = new SnapshotStore(await stateWithModelEngine(fixture.snapshot, context => engine.run(context), agent));
     const traces: TurnTrace[] = [];
     const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator(), turnTraceStore: {
       maxBytes, save: async trace => { traces.push(trace); }, list: async () => [], latest: async () => undefined, find: async () => undefined,
@@ -216,8 +212,8 @@ describe('Agent CapabilityIngress', () => {
     const llm = wireMockLlmApi();
     const model = { ...llm.runtime.model('mock', 'mock-model'), input: ['text', 'image'] as const };
     vi.spyOn(llm.runtime, 'model').mockReturnValue(model);
-    const agent = new ZhinAgent(llm.provider, { outputSchema: false, maxIterations: 6, toolExecution: 'sequential',
-      deferredTools: { alwaysLoadedTools: ['child__memory__search', 'get_local_assets', 'child__lookup'] } }, undefined, llm.runtime);
+    const agent = createTestZhinAgent({ runtime: llm.runtime, alias: (llm.provider).name, model: (llm.provider).models[0], config: { outputSchema: false, maxIterations: 6, toolExecution: 'sequential',
+      deferredTools: { alwaysLoadedTools: ['child__memory__search', 'get_local_assets', 'child__lookup'] } }, events: undefined });
     agent.activeBinding = { name: 'zhin', providerAlias: 'mock', model: 'mock-model', mcpServers: ['memory'] };
     agent.markMemoryPersistenceReady();
     const resourceHub = new AgentResourceHub();
@@ -233,7 +229,7 @@ describe('Agent CapabilityIngress', () => {
     const host = asPrivate(agent);
     const engine = createFullAgentTurnEngine({ host, core: new AgentCore(DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps()),
       sessionSystem: host.sessionSystem, contextSystem: host.contextSystem });
-    const snapshot = new SnapshotStore(stateWithEngine(fixture.snapshot, context => engine.run(context)));
+    const snapshot = new SnapshotStore(await stateWithModelEngine(fixture.snapshot, context => engine.run(context), agent));
     const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(snapshot);
     const requests: unknown[] = [];
     let step = 0;
@@ -272,7 +268,7 @@ describe('Agent CapabilityIngress', () => {
     const image = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
     const fixture = await createFixture({ localAssets, mcpResult: { content: [{ type: 'image', data: image, mimeType: 'image/gif' }] } });
     try {
-      const capabilities = await new CapabilityIngress().read(fixture.snapshot, fixture.child);
+      const capabilities = await new CapabilityIngress().read({ snapshot: fixture.snapshot, owner: fixture.child });
       const tools = await expandMcpTools(capabilities, ['memory']);
       const events: unknown[] = [];
       const turn = createTurnIngress({ ...accessTurn('icqq'), capabilities: { tools: [...capabilities.tools, ...tools].map(tool => tool.name), skills: [] }, ports: { journal: { append: event => { events.push(event); } }, approval: { requestApproval: async () => true } } });
@@ -440,7 +436,7 @@ describe('Agent CapabilityIngress', () => {
 
   it('builds a collision-free Agent Tool catalog across plugin owners', async () => {
     const fixture = await createFixture();
-    const capabilities = await new CapabilityIngress().read(fixture.snapshot, fixture.child);
+    const capabilities = await new CapabilityIngress().read({ snapshot: fixture.snapshot, owner: fixture.child });
 
     expect(capabilities.tools.map((tool) => tool.name)).toEqual(['child__lookup']);
     expect(capabilities.skills.map((skill) => skill.name)).toEqual(['research']);
@@ -514,7 +510,7 @@ describe('Agent CapabilityIngress', () => {
       tags: ['lookup'],
       keywords: ['find'],
     });
-    const [capability] = (await new CapabilityIngress().read(fixture.snapshot, rootPluginId())).tools;
+    const [capability] = (await new CapabilityIngress().read({ snapshot: fixture.snapshot, owner: rootPluginId() })).tools;
     expect(capabilityToTool(capability!, invocation())).toMatchObject({
       requiresApproval: 'on-risk',
       tags: ['lookup'],
@@ -693,12 +689,12 @@ describe('Agent CapabilityIngress', () => {
     const started = new Promise<void>((resolve) => { activeStarted = resolve; });
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const llm = wireMockLlmApi({ name: 'shared-session', models: ['model'] });
-    const agent = new ZhinAgent(llm.provider, {
+    const agent = createTestZhinAgent({ runtime: llm.runtime, alias: (llm.provider).name, model: (llm.provider).models[0], config: {
       outputSchema: false,
       maxIterations: 5,
       toolExecution: 'sequential',
       deferredTools: { maxLoadedPerSession: 8, alwaysLoadedTools: ['child__lookup'] },
-    }, undefined, llm.runtime);
+    }, events: undefined });
     agent.activeBinding = {
       name: 'zhin', providerAlias: 'shared-session', model: 'model', mcpServers: [],
     };
@@ -729,7 +725,7 @@ describe('Agent CapabilityIngress', () => {
       sessionSystem: host.sessionSystem,
       contextSystem: host.contextSystem,
     });
-    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, (context) => engine.run(context)));
+    const store = new SnapshotStore(await stateWithModelEngine(fixture.snapshot, (context) => engine.run(context), agent));
     const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
     runtime.attach(store);
     const request = (
@@ -970,27 +966,19 @@ describe('Agent CapabilityIngress', () => {
       permissions: ['role(trusted)'],
     });
     const ingress = new CapabilityIngress();
-    expect((await ingress.read(restricted.snapshot, restricted.child)).tools).toEqual([]);
+    expect((await ingress.read({ snapshot: restricted.snapshot, owner: restricted.child })).tools).toEqual([]);
 
     const allowedTurn = accessTurn('qq');
-    expect((await ingress.read(
-      restricted.snapshot,
-      restricted.child,
-      () => true,
-      allowedTurn,
+    expect((await ingress.read({ snapshot: restricted.snapshot, owner: restricted.child, isActive: () => true, turn: allowedTurn }
     )).tools.map((tool) => tool.name)).toEqual(['child__lookup']);
 
     const wrongPlatform = accessTurn('telegram');
-    expect((await ingress.read(
-      restricted.snapshot,
-      restricted.child,
-      () => true,
-      wrongPlatform,
+    expect((await ingress.read({ snapshot: restricted.snapshot, owner: restricted.child, isActive: () => true, turn: wrongPlatform }
     )).tools).toEqual([]);
     await restricted.mcp.stop();
 
     const hidden = await createFixture({ hidden: true });
-    const hiddenCapabilities = await ingress.read(hidden.snapshot, hidden.child);
+    const hiddenCapabilities = await ingress.read({ snapshot: hidden.snapshot, owner: hidden.child });
     expect(hiddenCapabilities.tools.map((tool) => tool.name)).toEqual(['child__lookup']);
     expect(hiddenCapabilities.tools[0]?.hidden).toBe(true);
     await hidden.mcp.stop();
@@ -1007,17 +995,9 @@ permissions: [role(trusted)]
     });
     const ingress = new CapabilityIngress();
 
-    expect((await ingress.read(
-      fixture.snapshot,
-      rootPluginId(),
-      () => true,
-      accessTurn('qq'),
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: rootPluginId(), isActive: () => true, turn: accessTurn('qq') }
     )).skills.map((skill) => skill.qualifiedName)).toEqual(['child__research']);
-    expect((await ingress.read(
-      fixture.snapshot,
-      rootPluginId(),
-      () => true,
-      accessTurn('telegram'),
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: rootPluginId(), isActive: () => true, turn: accessTurn('telegram') }
     )).skills).toEqual([]);
     await fixture.mcp.stop();
   });
@@ -1030,8 +1010,7 @@ permissions: [role(trusted)]
       skillMarkdown: '---\ntools: [lookup]\n---\n# Research',
     });
     const ingress = new CapabilityIngress();
-    const first = await ingress.read(fixture.snapshot, fixture.child, () => true,
-      accessTurn('qq', ['trusted'], 'group', { platformRole: 'admin' }));
+    const first = await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn: accessTurn('qq', ['trusted'], 'group', { platformRole: 'admin' }) });
     let saved = { loadedTools: {} as Record<string, number>, loadedSkills: [] as string[] };
     const firstPlan = createDeferredCapabilityPlan({
       capabilities: first, sessionSnapshot: saved, config: { deferredTools: {} },
@@ -1051,8 +1030,7 @@ permissions: [role(trusted)]
     ] as const) {
       const bot = role ? { platformRole: role } : { platformRoleError: 'lookup_failed' };
       const turn = accessTurn(platform, [sender], scope, bot);
-      const capabilities = await ingress.read(fixture.snapshot, fixture.child, () => true,
-        turn);
+      const capabilities = await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn: turn });
       expect(capabilities.tools.map(tool => tool.name)).toEqual(allowed ? ['child__lookup'] : []);
       expect(capabilities.skills.map(skill => skill.name)).toEqual(allowed ? ['research'] : []);
       const plan = createDeferredCapabilityPlan({
@@ -1077,8 +1055,7 @@ permissions: [role(trusted)]
     await fixture.mcp.stop();
 
     const guidance = await createFixture({ currentConversationBotRoles: ['admin'] });
-    const unknown = await ingress.read(guidance.snapshot, guidance.child, () => true,
-      accessTurn('qq', ['trusted'], 'group', { platformRoleError: 'unsupported' }));
+    const unknown = await ingress.read({ snapshot: guidance.snapshot, owner: guidance.child, isActive: () => true, turn: accessTurn('qq', ['trusted'], 'group', { platformRoleError: 'unsupported' }) });
     expect(unknown.tools).toEqual([]);
     expect(unknown.skills.map(skill => skill.name)).toEqual(['research']);
     await guidance.mcp.stop();
@@ -1088,13 +1065,8 @@ permissions: [role(trusted)]
     const fixture = await createFixture({ privateSkillAgent: 'planner' });
     const ingress = new CapabilityIngress();
 
-    expect((await ingress.read(fixture.snapshot, rootPluginId())).skills).toEqual([]);
-    expect((await ingress.read(
-      fixture.snapshot,
-      rootPluginId(),
-      () => true,
-      undefined,
-      'planner',
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: rootPluginId() })).skills).toEqual([]);
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: rootPluginId(), isActive: () => true, turn: undefined, selectedAgent: 'planner' }
     )).skills).toMatchObject([{ name: 'research', agentName: 'planner' }]);
     await fixture.mcp.stop();
   });
@@ -1103,24 +1075,15 @@ permissions: [role(trusted)]
     const fixture = await createFixture({ promptPlatforms: ['github'], promptScopes: ['group'] });
     const ingress = new CapabilityIngress();
 
-    expect((await ingress.read(
-      fixture.snapshot,
-      fixture.child,
-      () => true,
-      accessTurn('github'),
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn: accessTurn('github') }
     )).promptSections.map((section) => section.title)).toEqual(['Project rules']);
-    expect((await ingress.read(
-      fixture.snapshot,
-      fixture.child,
-      () => true,
-      accessTurn('icqq'),
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn: accessTurn('icqq') }
     )).promptSections).toEqual([]);
 
     for (const scope of ['private', 'channel'] as const) {
-      expect((await ingress.read(fixture.snapshot, fixture.child, () => true,
-        accessTurn('github', ['trusted'], scope))).promptSections).toEqual([]);
+      expect((await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child, isActive: () => true, turn: accessTurn('github', ['trusted'], scope) })).promptSections).toEqual([]);
     }
-    expect((await ingress.read(fixture.snapshot, fixture.child)).promptSections).toEqual([]);
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: fixture.child })).promptSections).toEqual([]);
 
     await fixture.mcp.stop();
   });
@@ -1129,11 +1092,11 @@ permissions: [role(trusted)]
     const fixture = await createFixture({ platforms: ['github'], permissions: ['role(admin)'] });
     const ingress = new CapabilityIngress();
 
-    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('github')))
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: rootPluginId(), isActive: () => true, turn: accessTurn('github') }))
       .agents).toHaveLength(0);
-    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('github', ['admin'])))
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: rootPluginId(), isActive: () => true, turn: accessTurn('github', ['admin']) }))
       .agents.map((agent) => agent.name)).toEqual(['planner']);
-    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('icqq', ['admin'])))
+    expect((await ingress.read({ snapshot: fixture.snapshot, owner: rootPluginId(), isActive: () => true, turn: accessTurn('icqq', ['admin']) }))
       .agents).toHaveLength(0);
 
     await fixture.mcp.stop();
@@ -1366,6 +1329,13 @@ function stateFrom(snapshot: RuntimeSnapshot): SnapshotState {
     capabilities: snapshot.capabilities,
     projections: snapshot.projections,
   };
+}
+
+async function stateWithModelEngine(snapshot: RuntimeSnapshot, run: Parameters<typeof stateWithEngine>[1], agent: ZhinAgent): Promise<SnapshotState> {
+  const state = stateWithEngine(snapshot, run);
+  const root = new Map(state.resources.get(state.root));
+  root.set(turnModelPortToken.id, { acquire: () => testAgentModels(agent) });
+  return { ...state, resources: new Map(state.resources).set(state.root, root) };
 }
 
 function stateWithEngine(

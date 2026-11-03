@@ -1,3 +1,4 @@
+import { validateAgentMcpBindings } from '../model-runtime/validation.js';
 import type { AgentTool } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
 import {
@@ -38,6 +39,10 @@ export async function prepareTurnTools(
 ): Promise<TurnToolsPrep> {
   const userId = opts.userId;
   const contextForTools = opts.commMessage;
+  const bindingName = host.activeBinding?.name ?? 'zhin';
+  const mcpErrors = validateAgentMcpBindings({ agents: { [bindingName]: { mcpServers: opts.mcpServerNames } },
+    mcpServerNames: host.resourceHub?.mcps.getAll().map(server => server.name) ?? [] });
+  if (mcpErrors.length) throw new Error(mcpErrors.join('\n'));
 
   if (host.resourceHub && opts.mcpServerNames.length > 0) {
     await ensureMcpConnectionsForBinding(host.resourceHub.mcps, opts.mcpServerNames, (event) => {

@@ -5,7 +5,7 @@ import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-me
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
  * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
  */
-import type { AIProvider, Usage, AgentSessionRepository, ContextRepository, RateLimiter, ModelRegistry, LlmApiRuntime } from '@zhin.js/ai';
+import type { Usage, AgentSessionRepository, ContextRepository, RateLimiter } from '@zhin.js/ai';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
@@ -106,13 +106,13 @@ export interface ZhinAgentPrivate
   extends AgentSessionHost, AgentContextHost, AgentTurnLifecycleHost, AgentEmitterHost {
   config: RequiredHostConfig;
   activeBinding: ResolvedAgentBinding | null;
-  llmRuntime: LlmApiRuntime;
+  completion: import('@zhin.js/ai').LlmCompletionPort;
   audioTranscriber?: AudioTranscriptionPort;
   /** `ai.multimodal.perception` pre-pass; absent when not configured. */
   mediaPerception?: MediaPerceptionPort;
   imageAssets?: ImageAssetPublisher;
   localAssets?: LocalImageAssetStore;
-  getTurnProvider(): AIProvider;
+  getTurnExecution(): import('../model-runtime/types.js').ModelExecutionBundle;
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;
   resourceHub: AgentResourceHub | null;
@@ -124,7 +124,6 @@ export interface ZhinAgentPrivate
   readonly externalTools: Map<string, RegisteredAgentTool>;
   readonly userProfiles: UserProfileStore;
   subagentSystem: SubagentSystem | null;
-  modelRegistry: ModelRegistry | null;
   /** deferred 工具族的跨 turn 状态（目录/快照/统计/自动续轮深度/结果回投器）。 */
   readonly deferred: DeferredTurnState;
 }

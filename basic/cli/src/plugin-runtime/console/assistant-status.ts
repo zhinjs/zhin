@@ -69,7 +69,7 @@ export interface AmbientStatus {
   readonly mode: 'off' | 'shadow' | 'active';
   /** Configured groups: a count, or `all` for `*`. */
   readonly groups: number | 'all';
-  /** Configured chat-model judges in fallback order (`provider/model`). */
+  /** Selected ambient language model (`service/model`), or an empty list when unconfigured. */
   readonly judges: readonly string[];
   readonly last24h: Readonly<Record<AmbientOutcome, number>>;
   /** Structured-decision shadow comparison over 24h: same / different call than the chat-model judge. */
@@ -147,9 +147,14 @@ export class AssistantStatus {
 
   constructor(options: AssistantStatusOptions = {}) {
     this.#now = options.now ?? Date.now;
-    this.consoleRpc = definePluginConsoleRpc({
+    this.consoleRpc = this.forOperation();
+  }
+
+  /** Request-owned metadata reader; no model runtime is cached by this process status store. */
+  forOperation(options: Readonly<{ ambientModels?: (signal: AbortSignal) => Promise<readonly string[]> }> = {}): PluginConsoleRpc {
+    return definePluginConsoleRpc({
       queries: {
-        ambient: { requiredPermissions: [AMBIENT_STATUS_PERMISSION], handler: () => this.ambient() as unknown as PluginConsoleRpcJson },
+        ambient: { requiredPermissions: [AMBIENT_STATUS_PERMISSION], handler: async (_input, call) => this.ambient(await options.ambientModels?.(call.signal) ?? []) as unknown as PluginConsoleRpcJson },
         skills: { requiredPermissions: [SKILLS_STATUS_PERMISSION], handler: () => this.skills() as unknown as PluginConsoleRpcJson },
         ...decisionReplayQueries(() => this.#readDecisionEvents(), this.#now),
         ...controlQueries(() => this.#readControlPlane()),
@@ -259,12 +264,11 @@ export class AssistantStatus {
     });
   }
 
-  ambient(): AmbientStatus {
+  ambient(judges: readonly string[] = []): AmbientStatus {
     const since = this.#now() - WINDOW_MS;
     const config = this.#readAmbientConfig();
     const conversations = config?.conversations ?? [];
     const enabled = conversations.length > 0;
-    const judges = typeof config?.judge === 'string' ? [config.judge] : config?.judge ?? [];
     const window = this.#ambient.filter((entry) => entry.at >= since);
     const last24h: Record<AmbientOutcome, number> = { spoke: 0, watched: 0, stayed_quiet: 0, skipped: 0 };
     for (const entry of window) last24h[entry.outcome] += 1;

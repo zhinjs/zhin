@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createInteractiveRun, type InteractiveRun } from '../../src/core/interactive-run.js';
 import { AgentCompactionRuntime } from '../../src/memory/compaction-runtime.js';
@@ -88,8 +89,8 @@ async function run(options: {
       loadContext: async () => ({ messages: options.history ?? [] }),
       appendMessages: async (_id: string, messages: AgentMessage[]) => { appended.push(...messages); },
     },
-    getTurnProvider: () => ({ name: 'mock' }),
-    llmRuntime: options.llm.runtime,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (options.llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(options.llm.runtime).model((options.llm.provider).name, (options.llm.provider).models?.[0]) }, completion: options.llm.runtime }),
+    completion: options.llm.runtime,
     config: {
       outputSchema: false, // this fixture exercises prose progress/recovery
       maxIterations: options.maxIterations ?? 3,
