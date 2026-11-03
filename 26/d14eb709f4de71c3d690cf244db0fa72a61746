@@ -1,0 +1,125 @@
+.changeset/configuration-admin-entrypoints.md
+  s_9622fd28aba994::t_7b9f0a9ff3e36f 1-9
+basic/cli/src/plugin-runtime/agent/configuration-update.ts
+  s_9622fd28aba994::t_56ae493caa6c76 2,6,10,17,36
+basic/cli/src/plugin-runtime/console/configuration-path.ts
+  s_9622fd28aba994::t_21cc60fe491d05 1-18
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_9622fd28aba994::t_c6e0ee4bc6dc4f 40
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_9622fd28aba994::t_b78b143c39d7d9 71
+basic/cli/src/plugin-runtime/sender-enrichment.ts
+  s_9622fd28aba994::t_ca9622e23a326f 1-2,6,16-41
+basic/cli/src/utils/config-check.ts
+  s_9622fd28aba994::t_90689b928c40a0 133,244,254,264,279,291,302,321
+basic/cli/src/utils/model-configuration-environment.ts
+  s_9622fd28aba994::t_7a7a50d978d0a1 1-34
+basic/cli/tests/cli-write-side.test.ts
+  s_9622fd28aba994::t_4733c7c3290f35 64-66,71,73-74
+basic/cli/tests/config-command.test.ts
+  s_9622fd28aba994::t_63ce4727694cf7 1-254
+basic/cli/tests/plugin-runtime/configuration-cli-live-host.test.ts
+  s_9622fd28aba994::t_c81509da0b48e2 1-110
+docs/ai/default-behavior.md
+  s_9622fd28aba994::t_e03e46ba0b8533 187
+docs/ai/index.md
+  s_9622fd28aba994::t_07d506b3dcb276 247
+docs/configuration/index.md
+  s_9622fd28aba994::t_df8a3cf5445e2d 97-119,363
+docs/en/ai/default-behavior.md
+  s_9622fd28aba994::t_dab2b3e2c12ab6 187
+docs/en/ai/index.md
+  s_9622fd28aba994::t_85ed85d042d0ae 247
+docs/en/configuration/index.md
+  s_9622fd28aba994::t_8a3165ebb43ab0 97-117,365
+docs/snippets/install-tiers.md
+  s_9622fd28aba994::t_b687c7a5948d51 70
+packages/console/protocol/src/index.ts
+  s_9622fd28aba994::t_819907b2c1b20c 475-476,542-548,683
+packages/host/http/src/console-rpc.ts
+  s_9622fd28aba994::t_dd114629223808 8,207-208,484,487,489-492,505-506,511
+packages/host/http/tests/console-config-project-patch-rpc.test.ts
+  s_9622fd28aba994::t_e3c32a005e4029 1-66
+packages/im/agent/src/config/deprecated-agent-binding-keys.ts
+  s_9622fd28aba994::t_d7db5f8c468196 8
+packages/im/agent/src/config/deprecated-agent-keys.ts
+  s_9622fd28aba994::t_4fe0f8fd6def67 6
+packages/im/agent/src/config/normalize-ai-config.ts
+  s_9622fd28aba994::t_ffbf66b2125af4 64
+packages/im/agent/src/config/types.ts
+  s_9622fd28aba994::t_4371912959ff50 36,41
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_9622fd28aba994::t_2be55ef857327b 91,125,175
+packages/im/agent/src/service.ts
+  s_9622fd28aba994::t_285194a043aed5 103,131
+packages/im/ai/src/types.ts
+  s_9622fd28aba994::t_505cdde0a8d313 364,366,614
+basic/cli/README.md
+  s_079f1dc5e6308d::t_0621b2eef392d1 24-26
+basic/cli/src/commands/config.ts
+  s_9622fd28aba994::t_09eb96f57931ee 2-10,12-22,25-26,29-34,36,39-42,45-87,89-90,93-98,100-108,110-129,131-135,137-142,144-158,161-164,166-219,221
+basic/cli/src/plugin-management/console-client.ts
+  s_079f1dc5e6308d::t_e189bdac262c3a 3-10,16,25,28-43,46
+basic/cli/src/plugin-runtime/configuration-host-installer.ts
+  s_079f1dc5e6308d::t_8fbf7a0ca50116 1-112
+basic/cli/src/plugin-runtime/console/configuration-chat-policy.ts
+  s_079f1dc5e6308d::t_b6aa5bc0f6b991 1-185
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_e0efb469ee3bbd::t_78707b26c04cf0 3,17,26-55,176-192,194-209,212,218,228-248,253-255,257,284-288,306-358
+basic/cli/src/plugin-runtime/console/module.ts
+  s_079f1dc5e6308d::t_9e702cd57815df 6-9
+basic/cli/src/plugin-runtime/start-command.ts
+  s_079f1dc5e6308d::t_fa4d13a7a5f0d1 1,60,211,248
+basic/cli/tests/config-offline.test.ts
+  s_9622fd28aba994::t_0c091ade02bb5a 1-147
+basic/cli/tests/plugin-runtime/configuration-host-installer.test.ts
+  s_58400078c2bd23::t_d8f7b981da1225 1-257
+basic/cli/tests/plugin-runtime/console/configuration-chat-shape.test.ts
+  s_e0efb469ee3bbd::t_e7da73b8cb9383 1-42
+basic/cli/tests/plugin-runtime/console/configuration-chat.test.ts
+  s_e0efb469ee3bbd::t_638d6c093b117f 1-252
+docs/cli/index.md
+  s_079f1dc5e6308d::t_c19b6645b9ef5d 107,114-116,118-120,123-133
+docs/en/cli/index.md
+  s_079f1dc5e6308d::t_442d269096a569 107,114-116,118-120,123-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "26d14eb709f4de71c3d690cf244db0fa72a61746",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
