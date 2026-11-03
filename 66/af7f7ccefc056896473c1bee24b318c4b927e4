@@ -1,0 +1,33 @@
+docs/cli/index.md
+  s_9622fd28aba994::t_12cbc8d2b402cd 132
+docs/en/cli/index.md
+  s_9622fd28aba994::t_055af117ade42f 132
+packages/im/config-file/README.md
+  s_9622fd28aba994::t_63ec9cbfda4f05 37
+.changeset/config-cross-entry-p4.md
+  s_ce30e957c2b2e6::t_89d066fab1c088 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "66af7f7ccefc056896473c1bee24b318c4b927e4",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
