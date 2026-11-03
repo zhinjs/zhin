@@ -61,6 +61,10 @@ export interface AiCompletionOptions {
   readonly now?: () => number;
   /** A default Host operation leases one complete runtime policy snapshot; explicit calls stay fixed. */
   readonly acquireDefaultModel?: (signal?: AbortSignal) => Promise<ModelExecutionScope>;
+  /** Explicit binding/model input keeps its semantics while leasing the current Host connection. */
+  readonly acquireExplicitModel?: (bindingName: string, model: string | undefined, signal?: AbortSignal) => Promise<{
+    readonly provider: AIProvider; readonly model: string; release(): Promise<void>;
+  }>;
 }
 
 export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
@@ -115,11 +119,16 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       };
       const started = now();
       let result: TextCompleteResult;
-      let scope: ModelExecutionScope | undefined;
+      let scope: { release(): Promise<void> } | undefined;
       try {
         if (!input.agent && !input.model?.trim() && options.acquireDefaultModel) {
-          scope = await options.acquireDefaultModel(input.signal);
-          provider = scope.chat.provider; model = scope.chat.invocation.model.model; opts.model = model;
+          const models = await options.acquireDefaultModel(input.signal);
+          scope = models;
+          provider = models.chat.provider; model = models.chat.invocation.model.model; opts.model = model;
+        } else if (options.acquireExplicitModel) {
+          const selected = await options.acquireExplicitModel(input.agent ?? 'zhin', input.model?.trim() || undefined, input.signal);
+          scope = selected;
+          provider = selected.provider; model = selected.model; opts.model = model;
         }
         record(reserved);
         result = provider.completeTextResult
@@ -129,7 +138,7 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         logger.warn(formatCompact({
           op: 'ai_completion',
           purpose,
-          provider: binding.providerAlias,
+          provider: scope ? provider.name : binding.providerAlias,
           model,
           outcome: 'error',
           durationMs: now() - started,
@@ -151,7 +160,7 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       logger.info(formatCompact({
         op: 'ai_completion',
         purpose,
-        provider: binding.providerAlias,
+        provider: scope ? provider.name : binding.providerAlias,
         model: result.model,
         outcome: 'ok',
         durationMs,

@@ -3,10 +3,12 @@ import type { AIService } from '@zhin.js/agent';
 import { runWithAgentTurnConfiguration } from '@zhin.js/agent/turn';
 import { resolve } from 'node:path';
 import { hostModelOwnerId } from './host-identity.js';
+import type { ModelConfigurationAccess } from './configuration.js';
 
 /** Operator management and Console branch work have no personal inference authority. */
-export async function withDeploymentModelScope<T>(service: AIService, projectRoot: string, operation: () => Promise<T>): Promise<T> {
-  const models = await service.getModelRuntime().acquireForTurn({ rootId: resolve(projectRoot), ownerId: hostModelOwnerId(projectRoot) });
+export async function withDeploymentModelScope<T>(service: AIService, projectRoot: string, operation: () => Promise<T>, configuration?: ModelConfigurationAccess): Promise<T> {
+  const input = { rootId: resolve(projectRoot), ownerId: hostModelOwnerId(projectRoot) };
+  const models = configuration ? await configuration.acquire(async () => input) : await service.getModelRuntime().acquireForTurn(input);
   try {
     return await runWithAgentTurnConfiguration({ models, activeBinding: service.getBindingRegistry().requireZhinBinding() }, operation);
   } finally {

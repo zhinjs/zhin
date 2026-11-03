@@ -114,6 +114,6 @@ describe('create-zhin -y Stable 默认值', () => {
       { package: '@zhin.js/skill', api: '^1.0.0' },
     ]);
     expect(pkg.zhin.plugins).toEqual([]);
-    expect(pkg.scripts.dev).toBe('zhin runtime start');
+    expect(pkg.scripts.dev).toBe('zhin runtime start --watch source config');
   });
 });

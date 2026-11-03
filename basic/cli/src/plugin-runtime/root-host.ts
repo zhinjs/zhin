@@ -8,6 +8,8 @@ import {
   type ModuleRuntime,
   type ProcessInvalidationPlan,
   type RootResourceInstaller,
+  type RootConfigUpdateHandler,
+  type RootPluginConfigurationSelection,
   type RuntimeEnvironment,
 } from '@zhin.js/runtime';
 import type {
@@ -16,7 +18,7 @@ import type {
   RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 
-import { createTsxModuleLoader } from './start/module.js';
+import { createTsxModuleLoader, type RuntimeWatchScope } from './start/module.js';
 
 export interface RootHostOptions {
   readonly projectRoot: string;
@@ -26,8 +28,10 @@ export interface RootHostOptions {
   readonly environmentSource?: EnvironmentLayersPort;
   readonly modules?: ModuleRuntime;
   readonly installResources?: RootResourceInstaller;
+  readonly configUpdates?: readonly RootConfigUpdateHandler[];
+  readonly pluginConfigurationSelection?: RootPluginConfigurationSelection;
   readonly disabledPluginInstanceKeys?: readonly string[];
-  readonly watch?: boolean;
+  readonly watch?: boolean | readonly RuntimeWatchScope[];
   onRestartRequired?(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError?(error: unknown): void | Promise<void>;
   onPlan?(plan: InvalidationPlan): void | Promise<void>;
@@ -53,7 +57,7 @@ export interface RootHostSnapshot {
 /** Owns one Root process lifecycle; callers own signals and restart policy. */
 export class RootHost {
   readonly runtime: RootRuntime;
-  readonly #watch: boolean;
+  readonly #watch: ReadonlySet<RuntimeWatchScope>;
   readonly #onRestartRequired: NonNullable<RootHostOptions['onRestartRequired']>;
   readonly #onError: NonNullable<RootHostOptions['onError']>;
   readonly #onPlan?: RootHostOptions['onPlan'];
@@ -67,12 +71,14 @@ export class RootHost {
   #stopPromise?: Promise<void>;
 
   constructor(options: RootHostOptions) {
+    const scopes = typeof options.watch === 'boolean' || options.watch === undefined
+      ? (options.watch === false ? [] : ['source', 'config'] as const) : options.watch;
+    this.#watch = new Set(scopes);
     const modules = options.modules ?? new NativeDevelopmentModuleRuntime({
       projectRoot: options.projectRoot,
-      watch: options.watch,
+      watch: this.#watch.size > 0,
       tsxLoader: createTsxModuleLoader(options.projectRoot),
     });
-    this.#watch = options.watch ?? true;
     this.#onRestartRequired = options.onRestartRequired ?? (() => undefined);
     this.#onError = options.onError ?? (() => undefined);
     this.#onPlan = options.onPlan;
@@ -82,6 +88,8 @@ export class RootHost {
       modules,
       config: options.config,
       installResources: options.installResources,
+      configUpdates: options.configUpdates,
+      pluginConfigurationSelection: options.pluginConfigurationSelection,
       environmentVariables: options.environmentVariables,
       environmentSource: options.environmentSource,
       environment: options.environment ?? {
@@ -104,7 +112,7 @@ export class RootHost {
     this.#started = true;
     try {
       const snapshot = await this.runtime.start();
-      if (this.#watch) this.#startHmr();
+      if (this.#watch.size > 0) this.#startHmr();
       return describeSnapshot(snapshot);
     } catch (error) {
       await this.runtime.stop().catch(() => undefined);
@@ -133,6 +141,8 @@ export class RootHost {
 
   #startHmr(): HmrCoordinator {
     const hmr = this.runtime.createHmrCoordinator({
+      acceptWatchedSource: source => this.#watch.has(
+        this.runtime.isConfigurationSource(source) ? 'config' : 'source'),
       onRestartRequired: (plan) => {
         this.#restartPending = true;
         return this.#onRestartRequired(plan);

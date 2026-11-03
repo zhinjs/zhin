@@ -12,6 +12,7 @@ import {
 } from '@zhin.js/im-contract';
 import { createEndpointOperation } from './endpoint-operation.js';
 import { AdapterManagementError } from './adapter-types.js';
+import { isDeepStrictEqual } from 'node:util';
 
 export type {
   SelfProfile, SelfProfileField, SelfProfileChange, SelfProfileReadRequest, SelfProfileWriteRequest,
@@ -62,6 +63,16 @@ export function endpointCreationConfiguration(
 ): Readonly<Record<string, unknown>> {
   const { nickname: _nickname, profile: _profile, ...connectionDefaults } = defaults;
   return { ...connectionDefaults, ...explicit };
+}
+
+/** @internal Profile-only changes cannot alter connection, credentials or account identity. */
+export function isEndpointProfileConfigurationChange(
+  previous: Readonly<Record<string, unknown>>,
+  next: Readonly<Record<string, unknown>>,
+): boolean {
+  const { nickname: _previousNickname, profile: _previousProfile, ...previousConnection } = previous;
+  const { nickname: _nextNickname, profile: _nextProfile, ...nextConnection } = next;
+  return isDeepStrictEqual(previousConnection, nextConnection);
 }
 
 /** @internal Validate the public configuration once, before constructing profile runtime state. */
@@ -145,6 +156,20 @@ export class EndpointProfileState implements SelfProfilePort {
     if (!source?.write) Object.defineProperty(this, 'write', { value: undefined });
   }
 
+  /** Capture immutable configured fallbacks while sharing this exact account's observed facts. */
+  withDefaults(defaults: Readonly<SelfProfile>): SelfProfilePort {
+    const captured = copyProfile(defaults);
+    const write = this.write;
+    return Object.freeze({
+      peek: () => this.#peek(captured),
+      read: async request => {
+        await this.read(request);
+        return this.#peek(captured);
+      },
+      ...(write ? { write: request => write.call(this, request) } : {}),
+    } satisfies SelfProfilePort);
+  }
+
   /** End this account's captured ports and start with the same configured fallbacks. */
   nextAccount(): EndpointProfileState {
     const next = new EndpointProfileState({ source: this.#source, defaults: this.#defaults });
@@ -155,9 +180,13 @@ export class EndpointProfileState implements SelfProfilePort {
   }
 
   peek(): SelfProfileSnapshot {
+    return this.#peek(this.#defaults);
+  }
+
+  #peek(defaults: Readonly<SelfProfile>): SelfProfileSnapshot {
     this.#account.signal.throwIfAborted();
     this.#observeNative();
-    const values = copyProfile({ ...this.#defaults, ...this.#observed });
+    const values = copyProfile({ ...defaults, ...this.#observed });
     const sources = Object.freeze(Object.fromEntries(SELF_PROFILE_FIELDS
       .filter(field => values[field] !== undefined)
       .map(field => [field, this.#observed[field] !== undefined ? 'platform' : 'configured'])));

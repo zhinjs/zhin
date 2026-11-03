@@ -28,21 +28,16 @@ export interface ConsoleRpcComposition {
 }
 
 export interface ConsoleRpcConfigurationPort {
-  readSource(): Promise<Readonly<{
-    source: string;
-    format: 'yaml' | 'json';
-    revision: string;
-    configKeys: readonly string[];
-    configPaths?: Readonly<Record<string, readonly string[]>>;
-  }>>;
+  readSource(): Promise<import('@zhin.js/console-protocol').ConsoleConfigSource>;
   readDocument(): Promise<Record<string, unknown>>;
+  apply?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   replaceSource(
     source: string,
     expectedRevision: string,
-  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }>;
-  setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
+  setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   patch(request: import('@zhin.js/console-protocol').ConsoleConfigPatchRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigPatchResult>;
-  removeKey(pluginName: string): Promise<{ restartRequired: boolean }>;
+  removeKey(pluginName: string): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   readEnvironmentFile(filename: string): Promise<string>;
   writeEnvironmentFile(filename: string, content: string): Promise<void>;
   readSchema(pluginName?: string): Promise<unknown>;

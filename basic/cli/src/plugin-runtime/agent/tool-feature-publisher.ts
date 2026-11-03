@@ -19,6 +19,7 @@ import {
   type SemanticMemoryRuntime,
 } from '@zhin.js/agent/runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
+import type { ModelConfigurationAccess } from '../personal-models/configuration.js';
 
 type AddFeature = Parameters<RootResourceInstaller>[0]['addFeature'];
 
@@ -47,6 +48,7 @@ interface RuntimeToolFeature {
 }
 
 export interface PublishAgentToolFeaturesOptions {
+  readonly modelConfiguration?: ModelConfigurationAccess;
   readonly addFeature: AddFeature;
   readonly projectRoot: string;
   readonly service: AIService;
@@ -99,6 +101,7 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
   for (const tool of createNativeAgentToolSuite({
     resolveProvider: (alias) => options.service.getProvider(alias),
     resolveImageDefaults: (alias) => options.service.getImageGenerationDefaults(alias),
+    acquireImageProvider: options.modelConfiguration ? (alias, signal) => options.modelConfiguration!.acquireHostProvider(alias, signal) : undefined,
     imageAssets: options.service.imageAssets,
     localAssets: options.localAssets,
     knowledgeIndex: options.knowledgeIndex,

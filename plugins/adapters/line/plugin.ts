@@ -3,6 +3,7 @@ import { createLineConsoleRpc } from './src/console.js';
 
 export default definePlugin({
   name: 'line',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'LINE Messaging API Adapter',
   },

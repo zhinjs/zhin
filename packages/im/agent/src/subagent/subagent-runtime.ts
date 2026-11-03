@@ -142,6 +142,21 @@ export type SubagentResultSender = (
   delivery: SubagentResultDelivery,
 ) => Promise<void>;
 
+/** Host injection only: one admitted standalone task owns this deployment resource lease. */
+export interface SubagentModelLease {
+  readonly provider: AIProvider;
+  readonly llmRuntime: LlmApiRuntime;
+  readonly model: string;
+  readonly mediaPerception?: import('../media/perception.js').MediaPerceptionPort;
+  release(): Promise<void>;
+}
+export type SubagentModelAcquirer = (input: {
+  readonly binding?: ResolvedAgentBinding | null;
+  readonly providerAlias?: string;
+  readonly model?: string;
+  readonly signal?: AbortSignal;
+}) => Promise<SubagentModelLease>;
+
 export interface SubagentRuntimeOptions {
   provider: AIProvider;
   llmRuntime: LlmApiRuntime;
@@ -184,6 +199,7 @@ export class SubagentRuntime {
   private provider: AIProvider;
   private readonly llmRuntime: LlmApiRuntime;
   private getProviderFn: ((alias: string) => AIProvider) | null;
+  private acquireModel?: SubagentModelAcquirer;
   private resolveBindingFn: ((agentName: string) => ResolvedAgentBinding | null) | null;
   private getMcpRegistryFn: (() => McpRegistry | null) | null;
   private workspace: string;
@@ -244,6 +260,7 @@ export class SubagentRuntime {
   }
 
   configureRouting(deps: {
+    acquireModel?: SubagentModelAcquirer;
     imageAssets?: import('../media/image-assets.js').ImageAssetPublisher;
     localAssets?: import('../media/local-image-assets.js').LocalImageAssetStore;
     mediaPerception?: import('../media/perception.js').MediaPerceptionPort;
@@ -253,6 +270,7 @@ export class SubagentRuntime {
     resolveAgentMeta?: (agentName: string) => Promise<AgentMeta | null>;
     getParentContextSnapshot?: (origin: SubagentOrigin) => Promise<string | undefined>;
   }): void {
+    if (deps.acquireModel) this.acquireModel = deps.acquireModel;
     if (deps.imageAssets !== undefined) this.imageAssets = deps.imageAssets;
     if (deps.localAssets !== undefined) this.localAssets = deps.localAssets;
     if (deps.mediaPerception !== undefined) this.mediaPerception = deps.mediaPerception;
@@ -551,13 +569,18 @@ export class SubagentRuntime {
     });
 
     const binding = opts?.binding ?? null;
-    const manifestProvider = opts?.agentMeta?.provider && this.getProviderFn
-      ? this.getProviderFn(opts.agentMeta.provider)
-      : undefined;
-    const provider = binding && this.getProviderFn
-      ? this.getProviderFn(binding.providerAlias)
-      : manifestProvider ?? this.provider;
+    // Pure embedders keep their synchronous lookup/error contract. A Host injects
+    // the leased route instead; no startup provider is consulted for that route.
+    const unscopedProvider = this.acquireModel ? undefined : (() => {
+      const manifestProvider = opts?.agentMeta?.provider && this.getProviderFn
+        ? this.getProviderFn(opts.agentMeta.provider) : undefined;
+      return binding && this.getProviderFn ? this.getProviderFn(binding.providerAlias) : manifestProvider ?? this.provider;
+    })();
+    let models: SubagentModelLease | undefined;
     try {
+      models = await this.acquireModel?.({ binding, providerAlias: opts?.agentMeta?.provider,
+        model: opts?.agentMeta?.model, signal: opts?.signal });
+      const provider = models?.provider ?? unscopedProvider!;
       let allTools = this.createTools();
       const mcps = this.getMcpRegistryFn?.() ?? null;
       if (mcps && binding?.mcpServers?.length) {
@@ -594,7 +617,7 @@ export class SubagentRuntime {
       if (opts?.contextPreamble?.trim()) {
         systemPrompt = `${systemPrompt}\n\n## Parent session context (fork)\n${opts.contextPreamble.trim()}`;
       }
-      const model = binding?.model || opts?.agentMeta?.model || provider.models[0];
+      const model = models?.model ?? (binding?.model || opts?.agentMeta?.model || provider.models[0]);
       const bashCommMessage = origin.message;
 
       await aiEvents?.agentStart(model);
@@ -603,10 +626,10 @@ export class SubagentRuntime {
         : undefined;
       const result = await runAgentLoopStandaloneTurn({
         provider,
-        llmRuntime: this.llmRuntime,
+        llmRuntime: models?.llmRuntime ?? this.llmRuntime,
         imageAssets: this.imageAssets,
         localAssets: this.localAssets,
-        mediaPerception: this.mediaPerception,
+        mediaPerception: models ? models.mediaPerception : this.mediaPerception,
         resolveProvider: this.getProviderFn ?? undefined,
         model,
         systemPrompt,
@@ -697,6 +720,9 @@ export class SubagentRuntime {
         toolCalls: [],
         agent: opts?.presetName,
       });
+    } finally {
+      try { await models?.release(); }
+      catch { try { logger.warn('Subagent model lease cleanup failed'); } catch { /* Diagnostic only. */ } }
     }
     return;
   }

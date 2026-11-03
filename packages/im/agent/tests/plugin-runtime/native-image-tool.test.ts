@@ -56,4 +56,32 @@ describe('native image ToolFeature', () => {
       prompt: 'a cat',
     }, context)).rejects.toThrow('does not support image generation');
   });
+
+  it.each(['success', 'generation-failed', 'cancelled', 'upload-failed', 'release-failed'] as const)('holds its provider lease through generation and publication, then releases on %s', async outcome => {
+    const controller = new AbortController();
+    const release = vi.fn(async () => { if (outcome === 'release-failed') throw new Error('synthetic cleanup failure'); });
+    const publish = vi.fn(async () => {
+      expect(release).not.toHaveBeenCalled();
+      if (outcome === 'upload-failed') throw new Error('synthetic upload failure');
+      return { image: 'published', mime: 'image/png' };
+    });
+    const generateImage = vi.fn(async (request: ImageGenerateRequest) => {
+      expect(release).not.toHaveBeenCalled();
+      expect(request.model).toBe('explicit-model');
+      if (outcome === 'generation-failed') throw new Error('synthetic generation failure');
+      if (outcome === 'cancelled') controller.abort();
+      return { base64: 'aW1hZ2U=', mimeType: 'image/png', model: 'explicit-model' };
+    });
+    const legacyLookup = vi.fn(() => { throw new Error('stale provider lookup'); });
+    const acquire = vi.fn(async () => ({ provider: { generateImage } as unknown as AIProvider, defaults: { defaultModel: 'ignored-default' }, release }));
+    const feature = createNativeImageToolFeature(legacyLookup, legacyLookup, { publish } as never, acquire);
+    const result = feature.definition.execute({ provider_alias: 'images', prompt: 'a tree', model: 'explicit-model' },
+      { ...context, signal: controller.signal });
+    if (outcome === 'success' || outcome === 'release-failed') await expect(result).resolves.toContain('published');
+    else await expect(result).rejects.toThrow();
+    expect(acquire).toHaveBeenCalledWith('images', controller.signal);
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(legacyLookup).not.toHaveBeenCalled();
+    expect(publish).toHaveBeenCalledTimes(outcome === 'success' || outcome === 'upload-failed' || outcome === 'release-failed' ? 1 : 0);
+  });
 });

@@ -115,7 +115,7 @@ describe('createWorkspace', () => {
     const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
     // scripts：新 runtime 启动命令
-    expect(pkg.scripts.dev).toBe('zhin runtime start')
+    expect(pkg.scripts.dev).toBe('zhin runtime start --watch source config')
     expect(pkg.scripts.start).toBe('zhin runtime start --mode production --no-watch')
 
     // 依赖：用户面只直列 zhin.js + 适配器 +（卡片示例）components；无 legacy host

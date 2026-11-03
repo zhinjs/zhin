@@ -1,6 +1,6 @@
 import { ConfigDocumentConflictError, type ConfigFileDocument } from '@zhin.js/config-file';
 import { isDeepStrictEqual } from 'node:util';
-import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
+import type { ConsoleConfigApplication, ConsoleConfigApplicationStatus, ConsoleConfigApplyResult, ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
   applyConfigPatches,
@@ -8,7 +8,7 @@ import {
   rootPluginId,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import { HOST_CONFIG_KEYS, readApplicationPluginDeclaration, parsePluginConfigSchema, createEnvStore, type EnvStore } from '@zhin.js/runtime';
+import { ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS, readApplicationPluginDeclaration, parsePluginConfigSchema, createEnvStore, type EnvStore } from '@zhin.js/runtime';
 import { loadRuntimeEnvironmentLayers } from '../start/environment.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
@@ -29,6 +29,11 @@ export class ConsoleConfigurationStore {
   readonly #schemas: PluginSchemaCatalog;
   readonly #environmentName: () => string;
   readonly #environmentForPlugin?: (pluginName: string) => Pick<EnvStore, 'has'> | undefined;
+  readonly #applyConfiguration?: (expectedRevision?: string) => Promise<ConsoleConfigApplication>;
+  readonly #readApplication?: () => ConsoleConfigApplication | undefined;
+  readonly #validateConfiguration?: (document: RuntimeConfigDocument) => Promise<void>;
+  #applicationError?: 'unconfirmed' | 'superseded' | 'invalid';
+  #applicationErrorAtOperationId?: string;
   #mutationTail: Promise<void> = Promise.resolve();
 
   constructor(options: {
@@ -37,6 +42,9 @@ export class ConsoleConfigurationStore {
     readonly configDeclarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>> | Promise<ReadonlyMap<string, Readonly<Record<string, unknown>>>>;
     readonly environmentName?: string | (() => string);
     readonly environmentForPlugin?: (pluginName: string) => Pick<EnvStore, 'has'> | undefined;
+    readonly applyConfiguration?: (expectedRevision?: string) => Promise<ConsoleConfigApplication>;
+    readonly readApplication?: () => ConsoleConfigApplication | undefined;
+    readonly validateConfiguration?: (document: RuntimeConfigDocument) => Promise<void>;
   }) {
     this.#projectRoot = options.projectRoot;
     this.#document = options.document;
@@ -44,6 +52,9 @@ export class ConsoleConfigurationStore {
     const environmentName = options.environmentName;
     this.#environmentName = typeof environmentName === 'function' ? environmentName : () => environmentName ?? (process.env.NODE_ENV === 'production' ? 'production' : 'development');
     this.#environmentForPlugin = options.environmentForPlugin;
+    this.#applyConfiguration = options.applyConfiguration;
+    this.#readApplication = options.readApplication;
+    this.#validateConfiguration = options.validateConfiguration;
   }
 
   readSource(): Promise<ConsoleConfigSource> {
@@ -52,10 +63,14 @@ export class ConsoleConfigurationStore {
       const configKeys = await this.#listKeys(snapshot.document);
       const declaredPlugins = await readPluginPackageMap(this.#projectRoot, snapshot.document);
       const pluginConfigs = readPluginConfigurationMap(snapshot.document);
+      const application = this.#readApplication?.();
+      if (application && application.operationId !== this.#applicationErrorAtOperationId) this.#applicationError = undefined;
       return Object.freeze({
         source: snapshot.source,
         format: snapshot.format === 'YAML' ? 'yaml' : 'json',
         revision: snapshot.revision,
+        ...(application ? { application } : {}),
+        ...(this.#applicationError ? { applicationError: this.#applicationError } : {}),
         configKeys,
         configPaths: Object.freeze(Object.fromEntries(configKeys.filter(key =>
           !HOST_CONFIG_KEYS.includes(key as typeof HOST_CONFIG_KEYS[number])
@@ -76,23 +91,24 @@ export class ConsoleConfigurationStore {
   replaceSource(
     source: string,
     expectedRevision: string,
-  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }> {
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean } & ConsoleConfigApplicationStatus> {
     return this.#serialize(async () => {
       const current = await this.#document.read();
       const prepared = await this.#document.prepareReplacement(expectedRevision, source);
       readApplicationPluginDeclaration(prepared.document);
+      await this.#validatePrepared(prepared);
       const committed = await prepared.commit();
       return Object.freeze({
         revision: committed.revision,
-        restartRequired: HOST_CONFIG_KEYS.some((key) => !isDeepStrictEqual(
+        ...await this.#applySaved(HOST_CONFIG_KEYS.some((key) => !isDeepStrictEqual(
           current.document[key],
           prepared.document[key],
-        )),
+        )), committed.revision),
       });
     });
   }
 
-  setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }> {
+  setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean } & ConsoleConfigApplicationStatus> {
     return this.#serialize(async () => {
       const current = await this.#document.read();
       await this.#assertUnambiguousKey(current.document, pluginName);
@@ -100,12 +116,13 @@ export class ConsoleConfigurationStore {
         configKeyPatch(current.document, pluginName, data),
       ]);
       readApplicationPluginDeclaration(prepared.document);
-      await prepared.commit();
-      return Object.freeze({ restartRequired: HOST_CONFIG_KEYS.includes(pluginName) });
+      await this.#validatePrepared(prepared);
+      const committed = await prepared.commit();
+      return this.#applySaved(HOST_CONFIG_KEYS.includes(pluginName), committed.revision);
     });
   }
 
-  removeKey(pluginName: string): Promise<{ restartRequired: boolean }> {
+  removeKey(pluginName: string): Promise<{ restartRequired: boolean } & ConsoleConfigApplicationStatus> {
     return this.#serialize(async () => {
       const current = await this.#document.read();
       await this.#assertUnambiguousKey(current.document, pluginName);
@@ -113,8 +130,9 @@ export class ConsoleConfigurationStore {
         configKeyRemovePatch(current.document, pluginName),
       ]);
       readApplicationPluginDeclaration(prepared.document);
-      await prepared.commit();
-      return Object.freeze({ restartRequired: HOST_CONFIG_KEYS.includes(pluginName) });
+      await this.#validatePrepared(prepared);
+      const committed = await prepared.commit();
+      return this.#applySaved(HOST_CONFIG_KEYS.includes(pluginName), committed.revision);
     });
   }
 
@@ -164,21 +182,75 @@ export class ConsoleConfigurationStore {
       try {
         const prepared = await this.#document.prepare(current, patches);
         readApplicationPluginDeclaration(prepared.document);
+        await this.#validatePrepared(prepared);
         committed = await prepared.commit();
       } catch (error) {
         if (error instanceof ConfigDocumentConflictError) return conflict(await this.#document.read());
         throw error;
       }
-      const restartRequired = sections.some(section => HOST_CONFIG_KEYS.includes(section));
+      const applied = await this.#applySaved(sections.some(section => HOST_CONFIG_KEYS.includes(section)), committed.revision);
       return Object.freeze({
         status: 'saved',
         revision: committed.revision,
-        restartRequired,
+        ...applied,
         paths,
         missingEnv: Object.freeze([...missingEnv].sort()),
-        message: restartRequired ? '配置已保存，需重启进程才能生效' : '配置已保存',
+        message: applied.applicationError === 'superseded' ? '配置已保存，但该次生效申请已被替代'
+          : applied.applicationError === 'invalid' ? '配置已保存，但配置校验失败，未生效'
+          : applied.applicationError ? '配置已保存，生效结果未确认' : applied.restartRequired
+          ? (applied.application ? '配置已保存，部分配置待重启生效' : '配置已保存，需重启进程才能生效') : applied.application
+            ? '配置已保存，请查看各项生效结果' : '配置已保存',
       });
     });
+  }
+
+  async #validatePrepared(prepared: import('@zhin.js/plugin-runtime').PreparedConfigDocument): Promise<void> {
+    try { await this.#validateConfiguration?.(prepared.document); }
+    catch (error) {
+      const failures: unknown[] = [error];
+      try { await prepared.rollback(); }
+      catch (rollback) { failures.push(rollback); }
+      if (failures.length > 1) throw new AggregateError(failures, 'Configuration validation and preparation cleanup failed', { cause: error });
+      throw error;
+    }
+  }
+
+  apply(expectedRevision: string): Promise<ConsoleConfigApplyResult> {
+    return this.#serialize(async () => {
+      const current = await this.#document.read();
+      if (current.revision !== expectedRevision) return Object.freeze({ status: 'conflict', revision: current.revision,
+        message: '配置已被其他地方修改，请重新读取后申请应用' });
+      if (!this.#applyConfiguration) return Object.freeze({ status: 'unconfirmed', message: '当前 Host 未提供配置应用能力' });
+      try {
+        const application = await this.#applyConfiguration(expectedRevision);
+        this.#applicationError = undefined;
+        return Object.freeze({ status: 'applied', application });
+      } catch (error) {
+        if (error instanceof ConfigurationSupersededError) return Object.freeze({ status: 'conflict',
+          revision: (await this.#document.read()).revision, message: '配置已被较新修订替代，请重新读取' });
+        if (error instanceof ConfigValidationError) return Object.freeze({ status: 'invalid', message: '配置校验失败，未应用' });
+        this.#applicationError = 'unconfirmed';
+        this.#applicationErrorAtOperationId = this.#readApplication?.()?.operationId;
+        return Object.freeze({ status: 'unconfirmed', message: '配置生效结果未确认，请读取运行状态核对' });
+      }
+    });
+  }
+
+  async #applySaved(legacyRestartRequired: boolean, expectedRevision: string): Promise<{ readonly restartRequired: boolean } & ConsoleConfigApplicationStatus> {
+    if (!this.#applyConfiguration) return Object.freeze({ restartRequired: legacyRestartRequired });
+    try {
+      const application = await this.#applyConfiguration(expectedRevision);
+      this.#applicationError = undefined;
+      return Object.freeze({ application,
+        restartRequired: application.groups.some(group => group.status === 'restart-pending') });
+    } catch (error) {
+      // Saving has already succeeded. An exception cannot prove whether handoff
+      // published a generation; do not turn it into a misleading save failure.
+      this.#applicationError = error instanceof ConfigurationSupersededError ? 'superseded'
+        : error instanceof ConfigValidationError ? 'invalid' : 'unconfirmed';
+      this.#applicationErrorAtOperationId = this.#readApplication?.()?.operationId;
+      return Object.freeze({ restartRequired: false, applicationError: this.#applicationError });
+    }
   }
 
   async #ownSchema(document: RuntimeConfigDocument, instanceKey: string): Promise<Readonly<Record<string, unknown>> | null> {

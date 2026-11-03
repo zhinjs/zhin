@@ -108,6 +108,8 @@ export function selfChangeOutcome(code: DecisionReasonCode): DecisionOutcome {
       return 'skip';
     case 'change_submitted':
     case 'change_restart_requested':
+    case 'change_config_unconfirmed':
+    case 'change_config_superseded':
       return 'defer';
     case 'change_trial_failed':
     case 'change_rolled_back':

@@ -1,5 +1,6 @@
 import { withDeploymentModelScope } from '../personal-models/deployment-scope.js';
 import type { ModelRuntimeServiceOptions } from '@zhin.js/agent/model-runtime';
+import type { ModelConfigurationAccess } from '../personal-models/configuration.js';
 import { projectLocaleToken, resolveLocale } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
@@ -30,6 +31,7 @@ import {
   type AgentHostAIConfig,
 } from './config.js';
 import { createRuntimeZhinAgent } from './runtime-factory.js';
+import { withHostDeploymentModel } from './deployment-model.js';
 import {
   createAssistantHomeRuntime,
   createAssistantScheduleRuntime,
@@ -40,6 +42,7 @@ type RuntimeZhinAgent = ReturnType<typeof createRuntimeZhinAgent>;
 type AssistantHomeRuntime = Awaited<ReturnType<typeof createAssistantHomeRuntime>>;
 
 export interface AgentRuntimeFoundationOptions {
+  readonly modelConfiguration?: ModelConfigurationAccess;
   readonly modelRuntime: Omit<ModelRuntimeServiceOptions, 'config' | 'hostProviders'>;
   readonly config: AgentHostAIConfig;
   readonly assistantConfig?: AssistantConfig;
@@ -121,10 +124,15 @@ export class AgentRuntimeFoundation {
     if (semanticMemory) options.lifecycle.add(() => semanticMemory.dispose());
     const traceRuntime = createAgentTraceRuntime();
     const binding = service.getBindingRegistry().requireZhinBinding();
-    const approvalJudgment = new LlmApprovalJudgment({
+    const startupApprovalJudgment = new LlmApprovalJudgment({
       completion: service.getLlmRuntime(),
       model: service.getLlmRuntime().model(binding.providerAlias, binding.model),
     });
+    const approvalJudgment: ApprovalJudgmentPort = options.modelConfiguration ? {
+      judge: input => withHostDeploymentModel(options.modelConfiguration!, undefined, input.signal, model =>
+        new LlmApprovalJudgment({ completion: model.llmRuntime,
+          model: model.llmRuntime.model(model.provider.name, model.invocation.model.model) }).judge(input)),
+    } : startupApprovalJudgment;
     const approvalReviewer = new ApprovalReviewAgent({ judgment: approvalJudgment });
     const bypassApprovalPort = createBypassApprovalPort();
     const approvalMode = service.getAgentConfig()?.execApprovalMode ?? 'auto';
@@ -142,14 +150,20 @@ export class AgentRuntimeFoundation {
         options.audioTranscriber,
         knowledgeIndex,
         options.localAssets,
+        options.modelConfiguration,
       );
       options.lifecycle.add(() => created.agent.dispose());
       options.lifecycle.add(() => created.events.clear());
       options.resources.provide(agentEventBusToken, created.events);
       options.resources.provide(aiCompletionToken, createAiCompletion({
         service,
-        acquireDefaultModel: signal => service.getModelRuntime().acquireForTurn({ rootId: options.modelRuntime.rootId ?? options.projectRoot,
-          ownerId: options.modelRuntime.hostOwnerId }, signal),
+        acquireExplicitModel: options.modelConfiguration
+          ? (bindingName, model, signal) => options.modelConfiguration!.acquireHostCompletion(bindingName, model, signal) : undefined,
+        acquireDefaultModel: signal => {
+          const input = { rootId: options.modelRuntime.rootId ?? options.projectRoot, ownerId: options.modelRuntime.hostOwnerId };
+          return options.modelConfiguration ? options.modelConfiguration.acquire(async () => input, signal)
+            : service.getModelRuntime().acquireForTurn(input, signal);
+        },
         usageQuota: created.agent.usageQuota,
       }));
 
@@ -191,7 +205,7 @@ export class AgentRuntimeFoundation {
         schedule,
         home,
         sessionTreeRuntime: createSessionTreeRuntimeFromAgent(created.runtime.host, operation =>
-          withDeploymentModelScope(service, options.projectRoot, operation)),
+          withDeploymentModelScope(service, options.projectRoot, operation, options.modelConfiguration)),
         seedPresets: created.seedPresets,
         approvalReviewer,
         approvalJudgment,

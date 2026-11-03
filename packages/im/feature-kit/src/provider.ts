@@ -83,6 +83,14 @@ export interface FeatureProjection<T> {
 }
 
 export interface FeatureRuntime<TDefinition, TProjection> {
+  /** Prepare an immutable config-only facade sharing the previous projection's lifetime.
+   * undefined rejects retaining these owners; ordinary subtree rebuilding remains authoritative.
+   */
+  prepareConfigUpdate?(
+    previous: TProjection,
+    context: ProjectionContext,
+    changedOwners: readonly PluginId[],
+  ): TProjection | undefined | Promise<TProjection | undefined>;
   /**
    * Opt in only for projections that can share external resources across a
    * generation replacement without capturing another owner's old snapshot.

@@ -20,6 +20,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 | 设置 master、命令前缀 | [适配器实例](#适配器实例-master-trusted-commandprefix) |
 | 配置 AI 模型 | [ai](#ai)，或直接看 [AI 总览](../ai/index.md) |
 | 引用 `.env` 里的密钥 | [环境变量展开](#环境变量展开) |
+| 修改配置后按需生效 | [修改后如何生效](#修改后如何生效) |
 | 看一份完整的最小配置 | [最小配置](#最小配置) |
 
 ## 配置文件的位置
@@ -66,6 +67,36 @@ flowchart LR
 配置文件会经过 JSON Schema 校验，**顶层只允许下文列出的键**。键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`。
 
 Host 键由 CLI 装配层消费；每个插件只收到顶层同名块的业务值，不会收到其他实例的配置。
+
+## 修改后如何生效
+
+`zhin runtime start` **只有显式传入 `--watch` 才监听变化**。不传时，编辑文件不会自动应用；已有开发脚本若需要热更新，应显式选择范围：
+
+```bash
+npx zhin runtime start --watch source config  # 源码与配置
+npx zhin runtime start --watch config         # 仅配置
+npx zhin runtime start --watch source         # 仅源码
+npx zhin runtime start --mode production      # 均不监听
+```
+
+`--no-watch` 保留为均不监听的兼容入口，不能与 `--watch` 同用。源码监听不代替配置监听；源码重载也不会顺带应用尚待重启的配置。
+
+**保存成功不等于全部生效。** Console 配置表单保存后会请求应用，并分别显示文件修订与各项生效结果。关闭监听时，仍可在新版 Console 的运行生效状态面板点击“应用已保存配置”：它只应用当前已保存版本，不保存未提交的表单草稿，也不重启进程。旧 Host 未提供生效明细时，Console 会明确提示无法确认。
+
+| 修改内容 | 生效边界 |
+| --- | --- |
+| 仅修改官方适配器的 `nickname` / `profile` 配置兜底 | 新资料读取使用新兜底，保留连接；不调用平台资料写入。已观察到的平台昵称仍优先 |
+| 修改模型选择，或新增、兼容修订 provider/model 定义 | 标准 Host 模型入口的新操作取得新版本；在途操作继续使用已取得的模型与租约，不在工具循环中切换 |
+| HTTP 监听、数据库连接、`.env` 输入、YAML 中的账号角色等启动依赖 | 未支持安全替换的部分显示待进程重启，当前继续使用旧值 |
+| 其他插件配置 | 沿所属插件的现有局部重载；未声明更新能力不视为原地更新 |
+
+同次保存可以部分生效。例如同时修改账号兜底昵称、默认模型和 HTTP 端口，前两项在满足条件时生效，端口仍待重启；依赖待重启环境变量的模型修改也不会提前启用。完整候选配置校验失败时保留当前运行。失败、结果未确认和被较新修订替代分别显示；结果未确认时先只读刷新核对，不重复提交。
+
+模型目录删除、重命名、Agent 绑定拓扑或能力契约的破坏性修改不在本轮热更新范围。第三方代码若长期保存自己取得的 SDK/provider 引用，也不会自动换成新对象，应在新操作时通过框架入口重新取得。
+
+### 文件与数据库记录各管什么
+
+`zhin.config.yml` 继续保存部署声明，Console 配置表单仍写回该文件，不会把整份配置迁入数据库。受管账号 desired 记录、个人模型与会话选择、模型运行策略覆写继续由各自现有数据库/API 管理；文件热更新不覆盖显式领域记录，也不清空个人选择。YAML 中的账号种子不会改写已经存在的受管账号记录；适配器资料默认值仍能作用于继承它的账号。文件账号资料与部署模型热更新不要求新增 SQL 存储。
 
 ## 环境变量展开
 
@@ -128,7 +159,7 @@ npx zhin config check
 
 `setup` 会把非敏感结构写入 `zhin.config.yml`，把实际连接值写入项目根目录 `.env`。Runtime
 先读取 `.env`，再用所选环境的 `.env.<environment>` 覆盖同名变量；例如生产启动使用
-`zhin runtime start --mode production --no-watch` 默认读取 `.env.production`；显式传入
+`zhin runtime start --mode production` 默认读取 `.env.production`；显式传入
 `--environment <name>` 可选择其他环境覆盖层。
 
 ### SQLite

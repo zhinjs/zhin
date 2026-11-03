@@ -2,6 +2,13 @@ import { createRootPrivateToken } from '@zhin.js/plugin-runtime';
 import type { TurnRequest } from '../turn/turn-ingress.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { ModelExecutionScope } from './types.js';
+import type { ModelRuntimeService } from './service.js';
+
+/** Immutable model configuration view; only a trusted Host with its owned lease may read it. */
+export const modelRuntimeBaselineToken = createRootPrivateToken<ModelRuntimeService>(
+  'zhin.agent.model-runtime-baseline',
+  'Generation-owned deployment model configuration',
+);
 
 /** Host resolves authenticated ownership and leases one immutable invocation scope. */
 export interface TurnModelPort {

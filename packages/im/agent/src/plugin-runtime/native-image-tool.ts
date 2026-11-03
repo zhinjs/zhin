@@ -14,9 +14,16 @@ import {
 import type { ImageAssetPublisher } from '../media/image-assets.js';
 import { decodeBase64 } from '../media/media-normalize.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
+import { getLogger } from '@zhin.js/logger';
 
 export type ImageProviderResolver = (alias: string) => AIProvider;
 export type ImageGenerationDefaultsResolver = (alias: string) => ImageGenerationDefaults;
+export interface NativeImageProviderLease {
+  readonly provider: AIProvider;
+  readonly defaults: Readonly<ImageGenerationDefaults>;
+  release(): Promise<void>;
+}
+export type NativeImageProviderAcquirer = (alias: string, signal: AbortSignal) => Promise<NativeImageProviderLease>;
 
 export interface NativeImageToolFeature {
   readonly feature: typeof toolFeatureId;
@@ -29,6 +36,7 @@ export function createNativeImageToolFeature(
   resolveProvider: ImageProviderResolver,
   resolveDefaults: ImageGenerationDefaultsResolver = () => ({}),
   imageAssets?: ImageAssetPublisher,
+  acquireProvider?: NativeImageProviderAcquirer,
 ): NativeImageToolFeature {
   return Object.freeze({
     feature: toolFeatureId,
@@ -47,7 +55,7 @@ export function createNativeImageToolFeature(
         watermark_enabled: { type: 'boolean' },
       }, ['provider_alias', 'prompt']),
       requiresApproval: 'never',
-      execute: (input, context) => generateImage(input, context, resolveProvider, resolveDefaults, imageAssets),
+      execute: (input, context) => generateImage(input, context, resolveProvider, resolveDefaults, imageAssets, acquireProvider),
     }),
   });
 }
@@ -58,15 +66,29 @@ async function generateImage(
   resolveProvider: ImageProviderResolver,
   resolveDefaults: ImageGenerationDefaultsResolver,
   imageAssets?: ImageAssetPublisher,
+  acquireProvider?: NativeImageProviderAcquirer,
 ): Promise<string> {
   const alias = requiredString(input.provider_alias, 'provider_alias');
   const prompt = requiredString(input.prompt, 'prompt');
-  const provider = resolveProvider(alias);
+  context.signal.throwIfAborted();
+  const lease = await acquireProvider?.(alias, context.signal);
+  try {
+    return await generateWithProvider(input, context, alias, prompt, lease?.provider ?? resolveProvider(alias),
+      lease?.defaults ?? resolveDefaults(alias), imageAssets);
+  } finally {
+    try { await lease?.release(); }
+    catch { try { getLogger('agent').warn('Image provider lease cleanup failed'); } catch { /* Diagnostic only. */ } }
+  }
+}
+
+async function generateWithProvider(
+  input: Record<string, unknown>, context: ToolExecutionContext, alias: string, prompt: string,
+  provider: AIProvider, defaults: Readonly<ImageGenerationDefaults>, imageAssets?: ImageAssetPublisher,
+): Promise<string> {
   if (!hasGenerateImage(provider)) {
     throw new Error(`AI provider "${alias}" does not support image generation`);
   }
 
-  const defaults = resolveDefaults(alias);
   const suffix = optionalString(defaults.promptSuffix);
   const finalPrompt = suffix ? `${prompt} ${suffix}` : prompt;
   context.signal.throwIfAborted();

@@ -192,17 +192,18 @@ export type RuntimeConsoleRpcContext = {
   replaceConfigSource?(
     source: string,
     expectedRevision: string,
-  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }>;
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   /**
    * Full-scope write: set `document[pluginName] = data` and persist.
    * Returns whether a process restart is required.
    */
-  setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
+  setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   /**
    * Full-scope, path-allowlisted and revision-checked write (`config:patch`).
    * Scope and schema checks belong to the implementation; scope violations throw.
    */
   patchConfig?(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult>;
+  applyConfig?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
   setPluginEnabled?(
     instanceKey: string,
@@ -427,6 +428,22 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
+    case CONFIG_RPC.APPLY: {
+      if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full Console scope is required' }); return payloads; }
+      if (typeof message.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(message.expectedRevision)) {
+        emit({ requestId, error: 'expectedRevision is required' }); return payloads;
+      }
+      if (!ctx.applyConfig) { emit({ requestId, error: 'Config application is not configured' }); return payloads; }
+      try {
+        const result = await ctx.applyConfig(message.expectedRevision);
+        emit({ requestId, data: result });
+      } catch {
+        // Source reads can fail before an operation is admitted. Do not echo a
+        // YAML parser's source excerpt or turn unavailable evidence into success.
+        emit({ requestId, error: 'Configuration application is unavailable; read the source and runtime status before retrying' });
+      }
+      return payloads;
+    }
     case CONFIG_RPC.REPLACE_SOURCE: {
       try {
         const source = message.source;
@@ -450,9 +467,7 @@ export async function dispatchRuntimeConsoleRpc(
           data: {
             success: true,
             ...result,
-            message: result.restartRequired
-              ? '配置已保存，需重启进程才能生效'
-              : '配置已保存',
+            message: configurationSaveMessage(result),
           },
         });
       } catch (error) {
@@ -538,10 +553,9 @@ export async function dispatchRuntimeConsoleRpc(
           requestId,
           data: {
             success: true,
+            ...result,
             reloaded: false,
-            message: result.restartRequired
-              ? '配置已保存，需重启进程才能生效'
-              : '配置已保存',
+            message: configurationSaveMessage(result),
           },
         });
       } catch (error) {
@@ -1070,6 +1084,22 @@ export function isDemoHttpAllowed(method: string, pathname: string, apiBase: str
   if (m === 'GET' && (pathname === `${normalizedBase}/plugins`
     || pathname.startsWith(`${normalizedBase}/plugins/`))) return true;
   return false;
+}
+
+function configurationSaveMessage(result: { restartRequired: boolean; revision?: string }
+  & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus): string {
+  if (result.applicationError === 'superseded') return '配置已保存，但该次生效申请已被替代';
+  if (result.applicationError === 'invalid') return '配置已保存，但配置校验失败，未生效';
+  if (result.applicationError) return '配置已保存，生效结果未确认';
+  if (result.application) {
+    if (result.revision && result.application.sourceRevision !== result.revision) return '配置已保存，但已被较新修订替代';
+    if (result.application.groups.some(group => group.status === 'unknown')) return '配置已保存，生效结果未确认';
+    if (result.application.groups.some(group => group.status === 'superseded')) return '配置已保存，但该次生效申请已被替代';
+    if (result.application.groups.some(group => ['failed', 'blocked'].includes(group.status))) return '配置已保存，部分配置未生效';
+    if (result.restartRequired) return '配置已保存，部分配置待重启生效';
+    return '配置已保存并已生效';
+  }
+  return result.restartRequired ? '配置已保存，需重启进程才能生效' : '配置已保存';
 }
 
 const DEMO_INTROSPECTION_PATHS: ReadonlySet<string> = new Set([

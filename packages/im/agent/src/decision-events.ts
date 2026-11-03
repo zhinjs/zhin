@@ -183,6 +183,9 @@ export const DECISION_REASON_CODES = [
   // #1051 F4：起草权限（只有主人 / 审批人）与全实例待审上限
   'change_draft_forbidden',
   'change_pending_cap_reached',
+  // Configuration outcome/ownership requires manual verification; neither implies emergency stop.
+  'change_config_unconfirmed',
+  'change_config_superseded',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

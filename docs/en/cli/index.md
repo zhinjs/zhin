@@ -22,7 +22,7 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 
 | I want to… | Command |
 | --- | --- |
-| Start the bot (dev mode, hot reload on save) | `pnpm dev` (i.e. `zhin runtime start`) |
+| Start the bot (dev mode, hot reload on save) | `pnpm dev` (i.e. `zhin runtime start --watch source config`) |
 | Connect a platform, configure AI or a database | `npx zhin setup` (optionally `--adapters` / `--ai` / `--database`) |
 | Diagnose environment or config problems | `npx zhin doctor` |
 | Check the config file is valid | `npx zhin config check` |
@@ -41,7 +41,7 @@ All commands, grouped by purpose, follow.
 ### runtime: Run and Manage Projects
 
 ```bash
-zhin runtime start [--mode production] [--no-watch] [--daemon]
+zhin runtime start [--mode production] [--watch source config] [--daemon]
 zhin runtime inspect
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
@@ -60,7 +60,7 @@ Scaffolded projects already have two conventional scripts:
 ```json
 {
   "scripts": {
-    "dev": "zhin runtime start",
+    "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch"
   }
 }

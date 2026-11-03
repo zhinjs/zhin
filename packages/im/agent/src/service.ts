@@ -78,7 +78,6 @@ export class AIService {
   private readonly providerRegistrations = new Set<Promise<void>>();
   private readonly sourceConfig: AIServiceConfig;
   private modelRuntime: ModelRuntimeService | null = null;
-  private modelRuntimeOwnerId?: string;
   private readonly compatibilityLeases: ModelExecutionLease[] = [];
   private modelPreparation?: Promise<void>;
   private disposal?: Promise<void>;
@@ -180,7 +179,6 @@ export class AIService {
       this.defaultProvider = routing.agents[DEFAULT_ZHIN_AGENT_NAME].provider;
       this.refreshLlmApiRuntime();
       this.compatibilityLeases.push(...leases);
-      this.modelRuntimeOwnerId = options.hostOwnerId;
       this.modelRuntime = runtime;
     } catch (error) {
       await Promise.all(leases.map(lease => lease.release().catch(() => undefined)));
@@ -344,14 +342,13 @@ export class AIService {
     const config = { ...DEFAULT_CONFIG, ...(this.agentConfig ?? {}) } as typeof DEFAULT_CONFIG;
     if (this.modelRuntime) {
       const runtime = this.modelRuntime;
-      const ownerId = this.modelRuntimeOwnerId!;
-      const preset = options.preset ?? (options.provider !== undefined || options.model !== undefined
-        ? runtime.presetForLegacyModel(options.provider ?? this.defaultProvider, options.model)
-        : undefined);
+      const acquireSelection = options.preset !== undefined
+        ? runtime.createServiceAgentAcquirer({ presetId: options.preset })
+        : options.provider !== undefined || options.model !== undefined
+          ? runtime.createServiceAgentAcquirer({ providerAlias: options.provider ?? this.defaultProvider, model: options.model }) : undefined;
       return {
         run: async (userInput) => {
-          const execution = preset === undefined ? await runtime.acquireDefaultForTurn(options.signal)
-            : await runtime.acquirePreset(preset, { ownerId }, options.signal);
+          const execution = acquireSelection ? await acquireSelection(options.signal) : await runtime.acquireDefaultForTurn(options.signal);
           const lease = 'chat' in execution ? execution.chat : execution;
           try {
             const run = () => runAgentLoopStandaloneTurn({

@@ -13,7 +13,7 @@ describe('zhin runtime start --help', () => {
 
     expect(help).toContain('Usage: zhin runtime start [options]');
     expect(help).toContain('Start options:');
-    for (const flag of ['--mode <mode>', '--environment <name>', '--no-watch', '--once', '--open', '-d, --daemon', '--log-file <path>']) {
+    for (const flag of ['--mode <mode>', '--environment <name>', '--watch <scope...>', '--no-watch', '--once', '--open', '-d, --daemon', '--log-file <path>']) {
       expect(help).toContain(flag);
     }
   });

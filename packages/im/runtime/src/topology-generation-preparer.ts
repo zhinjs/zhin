@@ -34,6 +34,7 @@ import {
   prepareRuntimeGeneration,
   type PreparedRuntimeGeneration,
   type RuntimeGenerationModel,
+  type ConfigViewUpdates,
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import {
@@ -81,6 +82,7 @@ export class TopologyGenerationPreparer {
     private readonly installResources?: RootResourceInstaller,
     private readonly environmentLayers: EnvironmentLayers = {},
     private readonly isolation?: IsolatedPluginRuntimePort,
+    private readonly configUpdates?: ConfigViewUpdates,
   ) {}
 
   async prepare(
@@ -91,7 +93,8 @@ export class TopologyGenerationPreparer {
     signal.throwIfAborted();
     const planned = new TopologyTransactionPlanner().plan(this.model.graph, this.graph);
     const nextNodes = graphNodes(this.graph);
-    const configReplacements = changedConfigRoots(current, nextNodes, this.configResolver);
+    const configReplacements = changedConfigRoots(current, nextNodes, this.configResolver)
+      .filter(owner => !this.configUpdates?.config.has(owner));
     const replacedPluginRoots = collapseRoots([
       ...planned.replacedPluginRoots,
       ...configReplacements,
@@ -125,6 +128,7 @@ export class TopologyGenerationPreparer {
       this.isolation,
     );
     plugins.installSetupFeatureAliases(featureSetupAliases(featureTopology.providers.values()), featureTopology.rootsByFeature);
+    for (const [owner, view] of this.configUpdates?.config ?? []) plugins.config.set(owner, view);
     const setupRoots = collapseRoots([
       ...plan.addedPluginRoots,
       ...plan.replacedPluginRoots,
@@ -173,6 +177,9 @@ export class TopologyGenerationPreparer {
         )
         || !sameFeatureSlots(provider.id, current.capabilities, capabilities));
       const retained = new Map([...current.projections].filter(([id]) => featureTopology.providers.has(id)));
+      for (const [feature, projection] of this.configUpdates?.projections ?? []) {
+        if (featureTopology.providers.has(feature)) retained.set(feature, projection);
+      }
       const projected = await new FeatureProjector(providers, plugins.scopes.get(current.root)).project(
         current.generation + 1,
         {

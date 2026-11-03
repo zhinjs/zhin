@@ -23,6 +23,9 @@ const adapterFeature = defineFeatureProvider({
     // Bound transport callbacks enter the current Host gateway; unrelated owner
     // updates need not reconnect accounts whose scopes and definitions are unchanged.
     retain: 'when-owner-unchanged',
+    prepareConfigUpdate(previous: AdapterIndex, context, changedOwners) {
+      return previous.prepareConfigUpdate(context.snapshot, changedOwners);
+    },
     async project(slots, context) {
       const index = await AdapterIndex.create(slots, context.snapshot, context.signal, {
         repository: context.featureResource?.(endpointDesiredRepositoryToken),

@@ -20,6 +20,7 @@ This is the complete reference for `zhin.config.yml`. When configuring for the f
 | Set masters or the command prefix | [Adapter instances](#adapter-instances-master-trusted-commandprefix) |
 | Configure AI models | [ai](#ai), or the [AI overview](../ai/index.md) |
 | Reference secrets from `.env` | [Environment variable expansion](#environment-variable-expansion) |
+| Apply configuration changes selectively | [Applying configuration changes](#applying-configuration-changes) |
 | See a complete minimal config | [Minimal configuration](#minimal-configuration) |
 
 ## Where the config file lives
@@ -66,6 +67,36 @@ flowchart LR
 Configuration passes JSON Schema validation, and **only the keys listed below are allowed at the top level**. A misspelled key produces `Invalid Plugin config in zhin.config.yml` at startup.
 
 Host sections are consumed by CLI assembly. Each plugin receives only its own same-named business block.
+
+## Applying configuration changes
+
+`zhin runtime start` **watches changes only when `--watch` is explicit**. Without it, editing a file does not apply it automatically. Development scripts that need watching should select their scopes:
+
+```bash
+npx zhin runtime start --watch source config  # Source and configuration
+npx zhin runtime start --watch config         # Configuration only
+npx zhin runtime start --watch source         # Source only
+npx zhin runtime start --mode production      # Neither
+```
+
+`--no-watch` remains a compatibility alias for watching neither and cannot be combined with `--watch`. Source watching does not enable configuration watching; a source reload does not pull in configuration that is still pending a restart.
+
+**A successful save does not mean every change is active.** Console configuration forms request application after saving and display the file revision separately from each application result. Even with watching disabled, the new Console's runtime status panel offers “Apply saved configuration”: it applies the saved revision, without saving an unsubmitted form draft or restarting the process. An older Host without application details is explicitly shown as unconfirmed.
+
+| Change | Application boundary |
+| --- | --- |
+| Only a first-party adapter's configured `nickname` / `profile` fallback | New profile reads use the new fallback while retaining the connection. No platform profile write is made; an observed platform nickname still takes precedence |
+| Model selection, or new and compatible provider/model definitions | New operations through standard Host model entry points acquire the new version. In-flight operations retain their captured model and leases throughout their tool loop |
+| HTTP listeners, database connections, `.env` inputs, YAML account roles, and other startup dependencies | Parts without a safe replacement path remain pending a process restart and keep their old effective values |
+| Other plugin configuration | Uses the owning plugin's existing local reload path; an undeclared update capability does not imply an in-place update |
+
+A save can apply partially. For example, an account nickname fallback and default model may apply while an HTTP port change waits for restart. A model change depending on a pending environment-variable change also stays pending. If the complete candidate fails validation, the current runtime is retained. Failure, an unconfirmed outcome, and supersession by a newer revision are distinct; refresh read-only to verify an unconfirmed outcome rather than submitting it again.
+
+Deleting or renaming model definitions, changing Agent binding topology, and breaking capability contracts are outside this round's hot-update scope. Third-party code that retains its own SDK/provider reference does not receive a replacement automatically; acquire it through the framework again for a new operation.
+
+### Files and database records have separate ownership
+
+`zhin.config.yml` remains the deployment declaration, and Console configuration forms still write that file. The entire configuration is not moved into a database. Managed Endpoint desired records, personal models and session choices, and runtime model-policy overrides keep their existing databases and APIs. File updates do not overwrite explicit domain records or clear personal choices. YAML account seeds do not rewrite existing managed accounts; adapter profile defaults can still update accounts that inherit them. Updating file-account profiles and deployment models does not require adding SQL storage.
 
 ## Environment Variable Expansion
 
@@ -129,7 +160,7 @@ npx zhin config check
 `setup` writes the non-secret structure to `zhin.config.yml` and the actual connection values to the
 project-root `.env`. Runtime reads `.env` first, then overrides matching keys from the selected
 `.env.<environment>`. For example, use
-`zhin runtime start --mode production --no-watch` to load `.env.production` by default; an explicit
+`zhin runtime start --mode production` to load `.env.production` by default; an explicit
 `--environment <name>` selects a different environment overlay.
 
 ### SQLite

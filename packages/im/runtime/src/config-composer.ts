@@ -20,6 +20,11 @@ export const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
 export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));
 
 const ROOT_FEATURE_CONFIG_KEYS = ['menuKeyword', 'menuStyle', 'locale'] as const;
+// compose() maps document.plugin through rootOwn and injects these reserved
+// fields into the Root ConfigView. Their owner is the Root Plugin lifecycle,
+// unlike HTTP/database/AI process resources consumed only by Host installers.
+const ROOT_PROJECTED_CONFIG_KEYS: readonly string[] = ['plugin', ...ROOT_FEATURE_CONFIG_KEYS];
+export const HOST_RESOURCE_CONFIG_KEYS = Object.freeze(HOST_CONFIG_KEYS.filter(key => !ROOT_PROJECTED_CONFIG_KEYS.includes(key)));
 /** Command routing keys the framework injects into every Plugin config schema. */
 const COMMAND_CONFIG_KEYS = ['commandNamespace', 'disabledCommands'] as const;
 

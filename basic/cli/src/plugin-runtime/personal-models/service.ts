@@ -13,6 +13,7 @@ import {
 import { createPersonalModelFetch } from './network.js';
 import type { PersonalModelCredentialVault } from './types.js';
 import type { PersonalModelCatalogSnapshot, PersonalModelCatalogWriteResult } from './state.js';
+import type { ModelConfigurationAccess } from './configuration.js';
 
 export type PersonalModelManagementErrorCode = 'invalid_input' | 'unauthenticated' | 'forbidden' | 'conflict' | 'unavailable';
 export class PersonalModelManagementError extends Error {
@@ -35,6 +36,7 @@ export interface PersonalModelManagementOptions {
   readonly vault: PersonalModelCredentialVault;
   readonly hostCatalog: () => ModelCatalogConfig | Promise<ModelCatalogConfig>;
   readonly directory?: import('./directory.js').PersonalSessionDirectory;
+  readonly configuration?: Pick<ModelConfigurationAccess, 'withRuntime'>;
 }
 export interface PersonalModelConnectionMetadata {
   readonly id: string;
@@ -175,6 +177,11 @@ export class PersonalModelManagementService {
     try { return normalizeModelCatalogConfig(await this.options.hostCatalog()); }
     catch { return fail('unavailable'); }
   }
+  #configured<T>(operation: (hostCatalog: () => Promise<ModelCatalogConfig>) => Promise<T>): Promise<T> {
+    return this.options.configuration
+      ? this.options.configuration.withRuntime(runtime => operation(async () => runtime.getCatalogConfig()))
+      : operation(() => this.#host());
+  }
   async #personal(ownerId: string): Promise<PersonalModelCatalogSnapshot> {
     const snapshot = await this.options.state.loadCatalog(ownerId);
     if (!snapshot) return Object.freeze({ revision: 0, value: EMPTY });
@@ -185,19 +192,19 @@ export class PersonalModelManagementService {
     return Object.freeze({ revision: snapshot.revision, value: catalog });
   }
   listModels(principalId: string): Promise<PersonalModelsView> {
-    return this.#safe(async () => {
+    return this.#safe(() => this.#configured(async hostCatalog => {
       const owners = this.#owners(principalId);
-      const host = await this.#host();
+      const host = await hostCatalog();
       const personal = await Promise.all(owners.map(async binding => {
         const ownerId = personalSessionOwnerId(binding);
         const snapshot = await this.#personal(ownerId);
         return Object.freeze({ owner: binding, ownerId, revision: snapshot.revision, ...metadata(snapshot.value, ownerId) });
       }));
       return Object.freeze({ owners: Object.freeze(personal), deployment: deploymentPresets(host, this.#hostOwnerId) });
-    });
+    }));
   }
   putModel(principalId: string, value: unknown): Promise<PersonalModelWriteView> {
-    return this.#safe(async () => {
+    return this.#safe(() => this.#configured(async () => {
       this.#owners(principalId);
       const input = object(value, ['owner', 'expectedRevision', 'entry']);
       const binding = this.#authorize(principalId, owner(input.owner));
@@ -250,7 +257,7 @@ export class PersonalModelManagementService {
         fail('conflict');
       }
       return Object.freeze({ owner: binding, ownerId, revision: result.snapshot.revision, presetId, ...metadata(result.snapshot.value, ownerId) });
-    });
+    }));
   }
   listSessions(principalId: string, value: unknown): Promise<import('./directory.js').PersonalSessionDirectoryPage> {
     return this.#safe(async () => {
@@ -266,21 +273,21 @@ export class PersonalModelManagementService {
     });
   }
   readSession(principalId: string, value: unknown): Promise<PersonalModelSessionView> {
-    return this.#safe(async () => {
+    return this.#safe(() => this.#configured(async hostCatalog => {
       this.#owners(principalId);
       const target = address(value);
       const binding = this.#authorize(principalId, personalSessionIdentity(target).owner);
       const state = await this.#sessions.read({ address: target, owner: binding });
       const ownerId = personalSessionOwnerId(binding);
       const personal = await this.#personal(ownerId);
-      const host = await this.#host();
+      const host = await hostCatalog();
       return Object.freeze({ state, presets: Object.freeze({
         personal: metadata(personal.value, ownerId).presets, deployment: deploymentPresets(host, this.#hostOwnerId),
       }) });
-    });
+    }));
   }
   selectSession(principalId: string, value: unknown): Promise<PersonalSessionState> {
-    return this.#safe(async () => {
+    return this.#safe(() => this.#configured(async hostCatalog => {
       this.#owners(principalId);
       const input = object(value, ['address', 'expectedRevision', 'selection']);
       const target = address(input.address);
@@ -290,11 +297,11 @@ export class PersonalModelManagementService {
       if (selected.kind === 'preset') {
         const ownerId = personalSessionOwnerId(binding);
         const personal = await this.#personal(ownerId);
-        const host = await this.#host();
+        const host = await hostCatalog();
         // No provider initialization or KeyStore reads occur during selection.
         createModelCatalog(mergeCatalogs(host, personal.value)).resolve(selected.presetId, { ownerId, hostOwnerId: this.#hostOwnerId });
       }
       return this.#sessions.select({ address: target, owner: binding, expectedRevision, selection: selected });
-    });
+    }));
   }
 }

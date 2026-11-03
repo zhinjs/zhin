@@ -8,12 +8,15 @@ import type { PersistentStatePort } from '@zhin.js/plugin-runtime';
 import { PersonalModelStateStore } from './state.js';
 import { createPersonalModelCredentialVault } from './credential-vault.js';
 import { createPersonalModelFetch } from './network.js';
+import { isDeepStrictEqual } from 'node:util';
+import { createModelConfigurationAccess, type ModelConfigurationAccess, type ModelConfigurationControl } from './configuration.js';
 
 /** Host wiring; domain services never read process.env, filesystem credentials or IM metadata. */
 export function createPersonalModelHost(options: Readonly<{
   projectRoot: string;
   state: () => PersistentStatePort | undefined;
   resolveHostSecret: (reference: string) => string | undefined | Promise<string | undefined>;
+  configurationControl?: ModelConfigurationControl;
 }>) {
   const rootId = resolve(options.projectRoot);
   const hostOwnerId = hostModelOwnerId(rootId);
@@ -40,11 +43,19 @@ export function createPersonalModelHost(options: Readonly<{
     },
   };
   return Object.freeze({ rootId, hostOwnerId, state, sessions, vault, runtimeOptions, runtimePolicy,
-    turnPort(service: AIService): TurnModelPort {
+    configuration(service: AIService): ModelConfigurationAccess {
+      return createModelConfigurationAccess({ control: options.configurationControl, runtime: () => service.getModelRuntime() });
+    },
+    turnPort(service: AIService, configuration = createModelConfigurationAccess({ control: options.configurationControl, runtime: () => service.getModelRuntime() })): TurnModelPort {
       const port: TurnModelPort = {
         createPerception: (scope, request) => perception({ scope, sessionKey: request.session.key,
           settings: service.getPerceptionConfig(), resilience: service.getAgentConfig()?.providerResilience }),
-        acquire: async (request, binding) => {
+        acquire: (request, binding) => configuration.acquire(async runtime => {
+          const currentBinding = runtime.getCompatibilityRouting().agents[binding.name];
+          if (!currentBinding || !isDeepStrictEqual(currentBinding.permission, binding.permission)
+            || !isDeepStrictEqual(currentBinding.mcpServers ?? [], binding.mcpServers)) {
+            throw new Error('Model configuration is incompatible with the admitted Agent binding');
+          }
           const personal = request.session.personal;
           let ownerId = hostOwnerId;
           let sessionSelection;
@@ -66,9 +77,9 @@ export function createPersonalModelHost(options: Readonly<{
           const origin = request.origin.kind === 'im' && request.origin.conversation
             ? { platform: request.origin.platform, endpoint: request.origin.endpoint, conversation: request.origin.conversation }
             : undefined;
-          return service.getModelRuntime().acquireForTurn({ rootId, ownerId, origin,
-            sessionSelection, bindingName: binding.name }, request.signal);
-      } };
+          return { rootId, ownerId, origin, sessionSelection, bindingName: binding.name };
+        }, request.signal),
+      };
       return Object.freeze(port);
     },
   });

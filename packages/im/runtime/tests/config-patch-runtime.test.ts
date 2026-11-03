@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   childPluginId,
+  createRootPrivateToken,
   ConfigDocumentDivergenceError,
   definePlugin,
   rootPluginId,
@@ -28,6 +29,235 @@ afterEach(async () => {
 });
 
 describe('RootRuntime config patches', () => {
+  it('retains a Host-selected plugin owner and its declaration while applying independent edits', async () => {
+    const project = await createProject();
+    await writeJson(join(project, 'plugins/child/schema.json'), { type: 'object', additionalProperties: false,
+      properties: { nickname: { type: 'string' }, master: { type: 'string' }, endpoints: { type: 'array', items: { type: 'object' } } } });
+    const modules = new FakeModuleRuntime();
+    for (const source of ['plugin.ts', 'plugins/child/plugin.ts', 'plugins/sibling/plugin.ts']) modules.set(join(project, source), { default: definePlugin({ name: 'fixture' }) });
+    const child = { nickname: 'Before', master: 'owner-before', endpoints: [{ id: 'one', master: 'one-before' }, { id: 'two', master: 'two-before' }] };
+    const port = new class extends FakeConfigDocumentPort {
+      override async read(): Promise<ConfigDocumentSnapshot> {
+        const snapshot = await super.read();
+        return { ...snapshot, pluginOrder: Object.keys(snapshot.document.plugins ?? {}) };
+      }
+    }({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, child });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: port,
+      environment: { name: 'test', mode: 'test', platform: 'node' }, installResources() {},
+      pluginConfigurationSelection: { select: ({ next }) => next.plugins && Object.hasOwn(next.plugins, 'child')
+        ? [{ instanceKey: 'child', reasonCode: 'startup-role-mapping' }] : [] },
+    });
+    await runtime.start();
+    const old = runtime.snapshots.acquire();
+    try {
+      await runtime.patchConfig([{ op: 'set', path: ['child'], value: { nickname: 'After', master: 'owner-after',
+        endpoints: [{ id: 'two', master: 'two-after' }, { id: 'one', master: 'one-after' }] } },
+      { op: 'set', path: ['sibling', 'label'], value: 'independent' }]);
+      expect(runtime.snapshot.config.get(childPluginId(rootPluginId(), 'child'))).toEqual(child);
+      expect(runtime.snapshot.config.get(childPluginId(rootPluginId(), 'sibling'))).toEqual({ label: 'independent' });
+      expect(port.document.child).toMatchObject({ master: 'owner-after' });
+      expect(runtime.configurationApplication.groups).toContainEqual(expect.objectContaining({ id: 'plugin-host:child', status: 'restart-pending', reasonCode: 'startup-role-mapping' }));
+      expect(runtime.configurationApplication.groups.find(group => group.id === 'plugins')?.paths).not.toContainEqual(['child', 'master']);
+      await runtime.reload();
+      expect(runtime.snapshot.config.get(childPluginId(rootPluginId(), 'child'))).toEqual(child);
+      port.writeExternal({ configVersion: 2, plugins: { sibling: '@test/sibling', child: '@test/sibling' }, child: { label: 'rebound' } });
+      await runtime.applyConfiguration();
+      expect(runtime.snapshot.tree.get(childPluginId(rootPluginId(), 'child'))?.packageName).toBe('@test/child');
+      expect(runtime.snapshot.config.get(childPluginId(rootPluginId(), 'child'))).toEqual(child);
+      // Disabling/removing an account retires its consumers immediately. Later
+      // re-addition must still be checked against the process startup role map.
+      port.writeExternal({ configVersion: 2, plugins: { sibling: '@test/sibling', child: '@test/child' }, disable_plugins: ['child'], child: { ...child, master: 'owner-after' } });
+      await runtime.applyConfiguration();
+      expect(runtime.snapshot.tree.has(childPluginId(rootPluginId(), 'child'))).toBe(false);
+      port.writeExternal({ configVersion: 2, plugins: { sibling: '@test/sibling' }, sibling: { label: 'next' } });
+      await runtime.applyConfiguration();
+      expect(runtime.snapshot.tree.has(childPluginId(rootPluginId(), 'child'))).toBe(false);
+      port.writeExternal({ configVersion: 2, plugins: { sibling: '@test/sibling', child: '@test/sibling' }, disable_plugins: ['child'], child: { label: 'rebound' } });
+      await runtime.applyConfiguration();
+      expect(runtime.snapshot.tree.has(childPluginId(rootPluginId(), 'child'))).toBe(false);
+      await runtime.reload();
+      expect(runtime.snapshot.tree.has(childPluginId(rootPluginId(), 'child'))).toBe(false);
+      expect(old.value.config.get(childPluginId(rootPluginId(), 'child'))).toEqual(child);
+    } finally { old.release(); await runtime.stop(); }
+  });
+  it('uses distinct operation evidence across Root instances with the same source revision', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    for (const source of ['plugin.ts', 'plugins/child/plugin.ts', 'plugins/sibling/plugin.ts']) modules.set(join(project, source), { default: definePlugin({ name: 'fixture' }) });
+    const roots = [0, 1].map(() => new RootRuntime({ projectRoot: project, modules,
+      config: new FakeConfigDocumentPort({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' } }),
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    }));
+    const initialIds = roots.map(root => root.configurationApplication.operationId);
+    await Promise.all(roots.map(root => root.start()));
+    try {
+      expect(initialIds[0]).not.toBe(initialIds[1]);
+      expect(roots[0].configurationApplication.sourceRevision).toBe(roots[1].configurationApplication.sourceRevision);
+      expect(roots[0].configurationApplication.operationId).not.toBe(roots[1].configurationApplication.operationId);
+    } finally { await Promise.all(roots.map(root => root.stop())); }
+  });
+  it.each([true, false])('replaced Root seeds its own private binding=%s without transferring the previous owner version', async seedsBinding => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    for (const source of ['plugin.ts', 'plugins/child/plugin.ts', 'plugins/sibling/plugin.ts']) modules.set(join(project, source), { default: definePlugin({ name: 'fixture' }) });
+    const token = createRootPrivateToken<{ generation: number; level: unknown }>('test.owner-config');
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      config: { configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, log_level: 'info' },
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      installResources({ generation, resources, config }) {
+        if (generation === 1 || seedsBinding) resources.provide(token, { generation, level: config.get('log_level') });
+      },
+      configUpdates: [{ id: 'level', paths: [['log_level']], async prepare(input) {
+        return { effect: 'in-place', rootResources: new Map([[token, { generation: 0, level: input.next.log_level }]]) };
+      } }],
+    });
+    await runtime.start();
+    await runtime.patchConfig([{ op: 'set', path: ['log_level'], value: 'debug' }]);
+    const previous = runtime.snapshots.acquire();
+    try {
+      const replacement = runtime.patchConfig([{ op: 'set', path: ['log_level'], value: 'warn' }, { op: 'set', path: ['plugin', 'mode'], value: 'production' }]);
+      if (seedsBinding) {
+        await replacement;
+        await runtime.control(async context => { expect(context.readRootResource(token)).toEqual({ generation: 3, level: 'warn' }); });
+        expect(runtime.snapshot.generation).toBe(3);
+      } else {
+        await expect(replacement).rejects.toThrow('replaced Root owner did not provide');
+        expect(runtime.snapshot).toBe(previous.value);
+      }
+      expect(runtime.snapshots.rootResource?.(previous, token)).toEqual({ generation: 0, level: 'debug' });
+    } finally { previous.release(); await runtime.stop(); }
+  });
+  it('rejects a superseded prepared source without overwriting the newer external edit', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    for (const source of ['plugin.ts', 'plugins/child/plugin.ts', 'plugins/sibling/plugin.ts']) modules.set(join(project, source), { default: definePlugin({ name: 'fixture' }) });
+    const token = createRootPrivateToken<unknown>('test.superseded');
+    const source = { configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, log_level: 'info' };
+    const port = new FakeConfigDocumentPort(source);
+    let entered!: () => void; let proceed!: () => void;
+    const enteredPrepare = new Promise<void>(resolve => { entered = resolve; });
+    const proceedPrepare = new Promise<void>(resolve => { proceed = resolve; });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: port,
+      environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources }) { resources.provide(token, 'info'); },
+      configUpdates: [{ id: 'level', paths: [['log_level']], async prepare(input) {
+        entered(); await proceedPrepare;
+        return { effect: 'in-place', rootResources: new Map([[token, input.next.log_level]]) };
+      } }],
+    });
+    const initial = await runtime.start();
+    try {
+      await expect(runtime.applyConfiguration('stale-source-revision')).rejects.toMatchObject({ code: 'configuration_superseded' });
+      expect(runtime.snapshot).toBe(initial); expect(port.commits).toBe(0);
+      const applying = runtime.patchConfig([{ op: 'set', path: ['log_level'], value: 'debug' }]);
+      void applying.catch(() => undefined);
+      await enteredPrepare;
+      port.writeExternal({ ...source, log_level: 'warn' });
+      proceed();
+      await expect(applying).rejects.toThrow('Configuration source changed');
+      expect(runtime.snapshot).toBe(initial); expect(port.document.log_level).toBe('warn');
+      expect(runtime.configurationApplication.groups).toEqual([expect.objectContaining({ status: 'superseded' })]);
+      await runtime.applyConfiguration();
+      await runtime.control(async context => { expect(context.readRootResource(token)).toBe('warn'); });
+    } finally { proceed(); await runtime.stop(); }
+  });
+  it('keeps candidate private bindings invisible while asynchronous handoff fails', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    const token = createRootPrivateToken<string>('test.activation-version');
+    let entered!: () => void;
+    let finish!: () => void;
+    const enteredHandoff = new Promise<void>(resolve => { entered = resolve; });
+    const finishHandoff = new Promise<void>(resolve => { finish = resolve; });
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', setup() {} }) });
+    modules.set(join(project, 'plugins/sibling/plugin.ts'), { default: definePlugin({ name: 'sibling', setup() {} }) });
+    modules.set(join(project, 'plugins/child/plugin.ts'), { default: definePlugin({ name: 'child', setup({ config, handoff }) {
+      if ((config.get() as { label: string }).label === 'activation-broken') handoff.add({ async activateNext() {
+        entered(); await finishHandoff; throw new Error('activation failed');
+      } });
+    } }) });
+    const port = new FakeConfigDocumentPort({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, log_level: 'info' });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: port,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      installResources({ resources }) { resources.provide(token, 'old'); },
+      configUpdates: [{ id: 'level', paths: [['log_level']], async prepare() { return { effect: 'in-place', rootResources: new Map([[token, 'new']]) }; } }],
+    });
+    const initial = await runtime.start();
+    const old = runtime.snapshots.acquire();
+    try {
+      const applying = runtime.patchConfig([{ op: 'set', path: ['log_level'], value: 'debug' },
+        { op: 'set', path: ['child', 'label'], value: 'activation-broken' }]);
+      void applying.catch(() => undefined);
+      await enteredHandoff;
+      expect(runtime.snapshot).toBe(initial);
+      expect(runtime.snapshots.rootResource?.(old, token)).toBe('old');
+      finish();
+      await expect(applying).rejects.toThrow('activation failed');
+      expect(runtime.snapshot).toBe(initial);
+      expect(runtime.snapshots.rootResource?.(old, token)).toBe('old');
+      expect(port.document.log_level).toBe('debug');
+    } finally { finish(); old.release(); await runtime.stop(); }
+  });
+
+  it('validates the complete desired Host document before saving any independent change', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    for (const source of ['plugin.ts', 'plugins/child/plugin.ts', 'plugins/sibling/plugin.ts']) modules.set(join(project, source), { default: definePlugin({ name: 'fixture' }) });
+    const port = new FakeConfigDocumentPort({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, log_level: 'info' });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config: port,
+      environment: { name: 'test', mode: 'test', platform: 'node' }, configUpdates: [{ id: 'model', paths: [['log_level']],
+        validate({ next }) { if (next.log_level === 'debug') throw new Error('invalid model reference'); }, async prepare() { throw new Error('must not prepare invalid input'); },
+      }],
+    });
+    const initial = await runtime.start();
+    try {
+      await expect(runtime.patchConfig([{ op: 'set', path: ['log_level'], value: 'debug' }, { op: 'set', path: ['child', 'label'], value: 'two' }])).rejects.toThrow('invalid model reference');
+      expect(port.commits).toBe(0); expect(runtime.snapshot).toBe(initial);
+      expect(port.document.log_level).toBe('info');
+    } finally { await runtime.stop(); }
+  });
+  it('publishes exact Host paths and generation-private versions without exposing them to old or forged leases', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    for (const source of ['plugin.ts', 'plugins/child/plugin.ts', 'plugins/sibling/plugin.ts']) {
+      modules.set(join(project, source), { default: definePlugin({ name: 'fixture', setup() {} }) });
+    }
+    const token = createRootPrivateToken<{ level: unknown }>('test.versioned-config');
+    const config = new FakeConfigDocumentPort({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' },
+      log_level: 'info', http: { port: 8080 } });
+    const runtime = new RootRuntime({ projectRoot: project, modules, config,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      installResources({ resources, config: primary }) { resources.provide(token, { level: primary.get('log_level') }); },
+      configUpdates: [{ id: 'level', paths: [['log_level']], async prepare(input) {
+        expect(input.readRootResource(token)).toEqual({ level: 'info' });
+        expect(input.current.resources.get(rootPluginId())?.has(token.id)).toBe(false);
+        return { effect: 'in-place', rootResources: new Map([[token, { level: input.next.log_level }]]) };
+      } }],
+    });
+    await runtime.start();
+    const old = runtime.snapshots.acquire();
+    try {
+      await runtime.patchConfig([{ op: 'set', path: ['http', 'port'], value: 9090 }, { op: 'set', path: ['log_level'], value: 'debug' }]);
+      const current = runtime.snapshots.acquire();
+      try {
+        expect(runtime.snapshots.rootResource?.(old, token)).toEqual({ level: 'info' });
+        expect(runtime.snapshots.rootResource?.(current, token)).toEqual({ level: 'debug' });
+        expect(runtime.snapshots.rootResource?.(current, createRootPrivateToken(token.id))).toBeUndefined();
+        expect((current.value.resources.get(rootPluginId())?.get(primaryConfigToken.id) as PrimaryConfig).document.http).toEqual({ port: 8080 });
+      } finally { current.release(); }
+      expect(runtime.configurationApplication.groups).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'level', status: 'applied' }), expect.objectContaining({ status: 'restart-pending' }),
+      ]));
+      await runtime.reload(childPluginId(rootPluginId(), 'child'));
+      await runtime.control(async context => {
+        expect(context.readRootResource(token)).toEqual({ level: 'debug' });
+        const retained = context.retain();
+        expect(retained.value).toBe(context.lease.value);
+        retained.release();
+        expect(await runtime.control(async nested => nested === context, context)).toBe(true);
+        await expect(runtime.control(async () => undefined)).rejects.toThrow('Recursive Runtime control');
+      });
+    } finally { old.release(); await runtime.stop(); }
+  });
   it('validates and atomically replaces only the shallowest changed Plugin forests', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
@@ -135,7 +365,7 @@ describe('RootRuntime config patches', () => {
     await runtime.stop();
   });
 
-  it('rebuilds the full generation for host-level patches when an installer exists', async () => {
+  it('saves unsupported Host patches as pending without rebuilding captured resources', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
     modules.set(join(project, 'plugin.ts'), {
@@ -159,16 +389,18 @@ describe('RootRuntime config patches', () => {
     const started = await runtime.start();
     expect(installed).toHaveLength(1);
 
-    // http never lands in a Plugin ConfigView, so the patch plans zero roots;
-    // the Root Resource installer must still be rebuilt on the new document.
+    // A captured Host resource cannot claim a live update simply because its
+    // installer ran again. Preserve it until an explicit process restart.
     const patched = await runtime.patchConfig([{
       op: 'set',
       path: ['http', 'port'],
       value: 8080,
     }]);
-    expect(patched.generation).toBe(started.generation + 1);
-    expect(installed).toHaveLength(2);
-    expect(installed[1]).toMatchObject({ http: { port: 8080 } });
+    expect(patched.generation).toBe(started.generation);
+    expect(installed).toHaveLength(1);
+    expect(runtime.configurationApplication.groups).toEqual([
+      expect.objectContaining({ effect: 'restart-process', status: 'restart-pending', paths: [['http', 'port']] }),
+    ]);
 
     await runtime.stop();
   });
@@ -261,7 +493,7 @@ describe('RootRuntime config patches', () => {
     await runtime.stop();
   });
 
-  it('rolls back a prepared document transaction when the shadow phase fails', async () => {
+  it('keeps the saved desired source and old effective generation when shadow setup fails', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
     modules.set(join(project, 'plugin.ts'), {
@@ -295,9 +527,10 @@ describe('RootRuntime config patches', () => {
       value: 'broken',
     }])).rejects.toThrow('child config setup failed');
     expect(runtime.snapshot).toBe(started);
-    expect(port.commits).toBe(0);
-    expect(port.rollbacks).toBe(1);
-    expect(port.document).toEqual({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' } });
+    expect(port.commits).toBe(1);
+    expect(port.rollbacks).toBe(0);
+    expect(port.document).toEqual({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, child: { label: 'broken' } });
+    expect(runtime.configurationApplication).toMatchObject({ saved: true, generation: started.generation });
 
     port.diverge = true;
     await expect(runtime.patchConfig([{
@@ -306,9 +539,9 @@ describe('RootRuntime config patches', () => {
       value: 'v2',
     }])).rejects.toBeInstanceOf(ConfigDocumentDivergenceError);
     expect(runtime.snapshot).toBe(started);
-    expect(port.commits).toBe(0);
-    expect(port.rollbacks).toBe(2);
-    expect(port.document).toEqual({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' } });
+    expect(port.commits).toBe(1);
+    expect(port.rollbacks).toBe(1);
+    expect(port.document).toEqual({ configVersion: 2, plugins: { child: '@test/child', sibling: '@test/sibling' }, child: { label: 'broken' } });
 
     await runtime.stop();
   });

@@ -2,7 +2,7 @@ import { redactConfigurationUrl } from './configuration-metadata.js';
 import { AsyncResource } from 'node:async_hooks';
 import { sameConfigurationIdentity } from './configuration-identity.js';
 import { readConfigurationPath, writeConfigurationPath } from './configuration-fields.js';
-import { configuredSelfProfile, endpointCreationConfiguration } from './endpoint-profile.js';
+import { configuredSelfProfile, endpointCreationConfiguration, isEndpointProfileConfigurationChange, type SelfProfile } from './endpoint-profile.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { EndpointDeliveryError, SELF_PROFILE_FIELDS } from '@zhin.js/im-contract';
@@ -293,6 +293,8 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     }
     configuredSelfProfile(input.config);
     this.validateConfiguration(input.config as Config);
+    const profileOnly = isEndpointProfileConfigurationChange(target.desired.config, input.config)
+      && isDeepStrictEqual(target.desired.secretRefs ?? {}, input.secretRefs ?? {});
     const commit = () => this.#commit({
       expectedRevision,
       next: () => this.#replace(instanceId, record => ({
@@ -300,11 +302,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
       })),
       execution: {
         instanceId, action: 'update', child: target,
-        run: async () => {
+        ...(profileOnly ? {} : { run: async () => {
           const child = this.#require(instanceId);
           await this.#stop(child);
           if (child.desired.desiredEnabled) await this.#start(child);
-        },
+        } }),
       },
     }, options);
     const changedFields = this.configurationIdentityProbeFields.filter(field =>
@@ -385,6 +387,11 @@ export abstract class Adapter<E extends AnyEndpoint = AnyEndpoint, Config = Read
     const config = structuredClone(previous.config) as Record<string, unknown>;
     for (const [field, value] of Object.entries(patch)) writeConfigurationPath(config, field, value);
     return this.update(instanceId, expectedRevision, { config, secretRefs }, options);
+  }
+
+  /** @internal Public profile fields only; connection data and credentials never leave their owner. */
+  configuredProfile(instanceId: string): Readonly<SelfProfile> {
+    return configuredSelfProfile(this.#require(instanceId).desired.config);
   }
 
   async activate(signal: AbortSignal): Promise<void> {

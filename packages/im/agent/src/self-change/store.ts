@@ -5,7 +5,7 @@
  * - 状态只前进（见 `policy.ts`），每次迁移先原子落盘 `change.json`，再写一行 `kind=self_change` 审计；
  *   审计写失败不影响迁移。
  * - 磁盘有界（§6a）：
- *   - 进入终态立即删 `files/` 与 `snapshot/`，只留 `change.json`；`failed`（已急停）保留现场直到人标记已处理。
+ *   - 进入终态立即删 `files/` 与 `snapshot/`，只留 `change.json`；`failed`（人工核验或急停）保留现场直到人标记已处理。
  *   - 终态 `change.json` 保留 14 天后删除整个目录；`draft` / `ready` / `pending` 闲置 24 小时 → `expired`。
  *   - 单变更 ≤ 5 MB / 50 文件，总量 ≤ 50 MB；超限在写入**之前**拒绝（`change_quota_exceeded`）。
  *   - 清理在 {@link SelfChangeStore.startPruning} 启动时扫一次、之后每 6 小时一次；只删暂存区内、
@@ -105,6 +105,10 @@ export interface SelfChangeApplyState {
   readonly restarts: number;
   /** 正向生效失败的原因（回滚后回报用）。 */
   readonly failure: string | null;
+  /** Exact last revision acknowledged to this change; absent on older/interrupted records. */
+  readonly configRevision?: string;
+  /** Durable Host outcome, so recover cannot turn an unknown handoff into a rollback/retry. */
+  readonly configApplication?: 'applied' | 'restart-pending' | 'unconfirmed' | 'superseded' | 'invalid' | 'failed' | 'blocked';
 }
 
 /** 回滚快照里的一个文件：`content: null` 表示原本不存在。 */

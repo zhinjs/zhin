@@ -3,6 +3,7 @@ import { createWechatMpConsoleRpc } from './src/console.js';
 
 export default definePlugin({
   name: 'wechat-mp',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'WeChat Official Account Adapter',
   },

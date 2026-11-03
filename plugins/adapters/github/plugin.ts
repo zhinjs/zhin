@@ -23,6 +23,7 @@ const GITHUB_SUBSCRIPTIONS_SCHEMA = {
  */
 export default definePlugin({
   name: 'github',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'GitHub Adapter',
   },

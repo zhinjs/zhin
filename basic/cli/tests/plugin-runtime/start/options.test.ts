@@ -16,6 +16,7 @@ describe('start options', () => {
       open: true,
       once: true,
       noWatch: true,
+      watch: [],
       environment: 'test',
       mode: 'test',
       daemon: true,
@@ -30,6 +31,27 @@ describe('start options', () => {
     expect(() => parseStartOptions(['--mode', 'staging'])).toThrow('Invalid Runtime mode');
   });
 
+  it('only watches explicitly selected sources', () => {
+    expect(parseStartOptions([]).watch).toEqual([]);
+    expect(parseStartOptions([]).noWatch).toBe(true);
+    expect(parseStartOptions(['--watch', 'config']).watch).toEqual(['config']);
+    expect(parseStartOptions(['--watch', 'source']).watch).toEqual(['source']);
+    const both = parseStartOptions(['--watch', 'source', 'config', 'source', '--mode', 'production']);
+    expect(both.watch).toEqual(['source', 'config']);
+    expect(both.noWatch).toBe(false);
+    expect(both.mode).toBe('production');
+    expect(Object.isFrozen(both.watch)).toBe(true);
+    expect(parseStartOptions(['--no-watch']).watch).toEqual([]);
+  });
+
+  it('rejects empty, unknown and contradictory watch selections', () => {
+    for (const args of [['--watch'], ['--watch', '--open'], ['--watch', 'none'],
+      ['--watch', 'config', 'other'], ['--watch', 'config', '--no-watch'],
+      ['--no-watch', '--watch', 'source']]) {
+      expect(() => parseStartOptions(args), args.join(' ')).toThrow(/watch/u);
+    }
+  });
+
   it('uses the runtime mode as the default environment while preserving explicit overlays', () => {
     expect(parseStartOptions(['--mode', 'production']).environment).toBe('production');
     expect(parseStartOptions(['--mode', 'production', '--environment', 'staging']).environment).toBe('staging');
@@ -40,6 +62,7 @@ describe('start options', () => {
       '<mode>': 'production',
       '<name>': 'staging',
       '<path>': '.zhin/runtime.log',
+      '<scope...>': 'config',
     };
     for (const option of START_OPTION_HELP) {
       const longFlag = option.flags.split(', ').at(-1)!;
@@ -52,7 +75,7 @@ describe('start options', () => {
 
   it('lists every parsed option in the help text', () => {
     const help = formatStartOptionHelp();
-    const parsedFlags = ['--mode', '--environment', '--no-watch', '--once', '--open', '--daemon', '-d', '--log-file'];
+    const parsedFlags = ['--mode', '--environment', '--watch', '--no-watch', '--once', '--open', '--daemon', '-d', '--log-file'];
 
     for (const flag of parsedFlags) {
       expect(help).toContain(flag);
