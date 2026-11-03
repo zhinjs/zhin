@@ -94,6 +94,30 @@ A save can apply partially. For example, an account nickname fallback and defaul
 
 Deleting or renaming model definitions, changing Agent binding topology, and breaking capability contracts are not hot-updated; they remain pending a process restart. Third-party code that retains its own SDK/provider reference does not receive a replacement automatically; acquire it through the framework again for a new operation.
 
+### Manage configuration in chat
+
+With the root Command Feature installed, a Bot owner can send `config` (Chinese alias `配置`) in a **private chat** with the Bot to see its usage. There are exactly four subcommands:
+
+- `config fields [scope]`: list chat-manageable field paths and types, without values;
+- `config get <path>`: read one field's saved value;
+- `config set <path> <value>`: change one field;
+- `config unset <path>`: remove one optional field.
+
+Hints use the account's actual command prefix and namespace. AI Agent is not required.
+
+**Who can use it**: only the `master` configured for the account (endpoint) that received the private message (account-level first, otherwise plugin-level), so owner identity stays on the same platform and account. `ai.trigger.masters` has no platform dimension and is not accepted for chat configuration in v1. Groups, channels and forged metadata never reach the save path.
+
+**What can change**:
+
+- Host config is limited to the same allowlist as ordinary Console pages (`HOST_CONFIG_PATCH_PATHS`, currently fields under `ai.trigger.ambient`). Use the CLI or Console for `locale`, `http`, `database` and other Host settings.
+- Plugin config must be proven safe by its schema. Secrets, tokens, passwords, missing schemas and uncertain scopes are rejected.
+- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `endpoints[*].master`, `ai.trigger.masters`, `toolHardGate.*`) cannot be read or changed in chat.
+- Chat reads and writes a **single leaf field** (a scalar or scalar array) only; whole objects cannot be overwritten or removed, and required fields cannot be unset. `configVersion`, `plugins`, `disable_plugins`, root `plugin` and undeclared instances cannot be changed either.
+
+Paths accept dotted notation such as `mybot.nickname` or JSON Pointer such as `/mybot/dot.key` (`~1` escapes `/`, `~0` escapes `~`). Values are parsed by field type: numbers, booleans and arrays use JSON; string fields accept plain text, for example `config set mybot.nickname -- My Bot` (add the actual prefix). Object values are not accepted.
+
+Saving follows the complete candidate validation and selective application described above. Failures before saving are reported as not saved. A lost commit acknowledgement is reported as unconfirmed: do not resend, check with `get` first; the command never retries or rolls back automatically. Denials only state a reason and never echo values, defaults or raw exceptions.
+
 ### Files and database records have separate ownership
 
 `zhin.config.yml` remains the deployment declaration, and Console configuration forms still write that file. The entire configuration is not moved into a database. Managed Endpoint desired records, personal models and session choices, and runtime model-policy overrides keep their existing databases and APIs. File updates do not overwrite explicit domain records or clear personal choices. YAML account seeds do not rewrite existing managed accounts; adapter profile defaults can still update accounts that inherit them.
