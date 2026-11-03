@@ -1,0 +1,65 @@
+basic/cli/src/commands/config-check.ts
+  s_9622fd28aba994::t_0160ac7827e4f9 51-53,72,76-77,83-85,98,108
+basic/cli/src/plugin-runtime/console/configuration-chat-policy.ts
+  s_9622fd28aba994::t_588d2c23e95118 42-43
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_9622fd28aba994::t_e6204aab7ba6bd 18,37-41,206,215-217,221-225,292-293,295,315-328,356
+basic/cli/tests/plugin-runtime/configuration-host-installer.test.ts
+  s_9622fd28aba994::t_6baab57851195d 82,246-294
+basic/cli/tests/plugin-runtime/console/configuration-chat.test.ts
+  s_9622fd28aba994::t_3b7dcc76e50cd1 4,6,9,45-50,236-302
+basic/cli/src/plugin-runtime/configuration-host-installer.ts
+  s_ce30e957c2b2e6::t_4c21ad7e51b3e6 6,19,71
+basic/cli/src/plugin-runtime/console/configuration-patch.ts
+  s_9622fd28aba994::t_1928fc952606cb 5,47,66
+basic/cli/src/plugin-runtime/console/configuration-path-segment.ts
+  s_9622fd28aba994::t_0e8cb7b7aa31fa 1-6
+basic/cli/src/plugin-runtime/console/configuration-path.ts
+  s_9622fd28aba994::t_3fc22839810acf 2,14
+basic/cli/src/plugin-runtime/console/module.ts
+  s_9622fd28aba994::t_6ba60b134af9e3 5
+basic/cli/tests/config-command.test.ts
+  s_ce30e957c2b2e6::t_e236264bcae6cf 6,241-245,252-315
+docs/cli/index.md
+  s_079f1dc5e6308d::t_411d2f314d7315 125
+docs/configuration/index.md
+  s_079f1dc5e6308d::t_11e09d85d5c2dc 107
+docs/en/cli/index.md
+  s_079f1dc5e6308d::t_7784b2d4a59c21 125
+docs/en/configuration/index.md
+  s_079f1dc5e6308d::t_fa41b4ddf65f2b 106
+packages/host/http/tests/console-config-project-patch-rpc.test.ts
+  s_079f1dc5e6308d::t_3290cf29f92fe9 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3244408fb5fd61c9ea54f6263fc70022f208ad68",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
