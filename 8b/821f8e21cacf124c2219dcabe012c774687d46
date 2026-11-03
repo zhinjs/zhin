@@ -1,0 +1,21 @@
+plugins/adapters/douyin-live/src/endpoint.ts
+  s_9622fd28aba994::t_29f26dfa9f3d3c 8,28,30,117-122,242-258
+plugins/adapters/douyin-live/tests/douyin-live-endpoint.test.ts
+  s_9622fd28aba994::t_142603f9a0cfdb 176-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8b821f8e21cacf124c2219dcabe012c774687d46",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
