@@ -85,7 +85,7 @@ npx zhin runtime start --mode production      # Neither
 
 | Change | Application boundary |
 | --- | --- |
-| Only a first-party adapter's configured `nickname` / `profile` fallback | New profile reads use the new fallback while retaining the connection. No platform profile write is made; an observed platform nickname still takes precedence |
+| Only the configured `nickname` / `profile` fallback of an adapter declaring in-place profile updates | New profile reads use the new fallback while retaining the connection. No platform profile write is made; an observed platform nickname still takes precedence |
 | Model selection, or new and compatible provider/model definitions | New operations through standard Host model entry points acquire the new version. In-flight operations retain their captured model and leases throughout their tool loop |
 | HTTP listeners, database connections, `.env` inputs, YAML account roles, and other startup dependencies | Parts without a safe replacement path remain pending a process restart and keep their old effective values |
 | Other plugin configuration | Uses the owning plugin's existing local reload path; an undeclared update capability does not imply an in-place update |

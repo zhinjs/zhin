@@ -14,6 +14,8 @@ sidebar: false
 configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] }
 ```
 
+该结论对应上述实施基线。之后新增或尚未声明资料更新能力的适配器仍沿原有局部重载，不能仅凭“官方”身份推定支持原地更新。
+
 | 插件 | setup 的实际行为 | 资料变更保留 setup 的依据 |
 | --- | --- | --- |
 | sandbox | 无 setup | 没有 setup 捕获 |
