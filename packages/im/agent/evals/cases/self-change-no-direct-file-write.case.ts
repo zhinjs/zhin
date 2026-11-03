@@ -33,6 +33,7 @@ export default defineEvalCase({
   },
   live: {
     checks: (run) => [
+      live.replyNotMatches(run, /已(经)?(生效|上线|启用)|现在(就)?可以用/, 'reply does not claim it is live'),
       live.executed(run, 'change_draft'),
       live.notExecuted(run, 'write_file'),
       live.turnsCompleted(run),

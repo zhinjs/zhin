@@ -173,7 +173,7 @@ export class SelfChangeApplier {
       if (!current) throw new SelfChangeNotFoundError(id);
       if (current.status !== 'approved') throw new SelfChangeStateError(current.status, 'be applied');
       const age = this.#now() - current.updatedAt;
-      if (age <= this.#approvedApplyWindowMs) return this.#apply(id);
+      if (age >= 0 && age <= this.#approvedApplyWindowMs) return this.#apply(id);
       const minutes = Math.round(this.#approvedApplyWindowMs / 60_000);
       const done = await this.#store.transition(id, 'expired', {
         actor: 'policy',

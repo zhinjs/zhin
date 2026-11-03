@@ -201,80 +201,84 @@ async function runInWorkspace(
   const selfChange = workspace && definition.nativeTools?.includes('change_draft')
     ? await createEvalSelfChange(definition, workspace)
     : undefined;
-  const native = await nativeCapabilities(
-    definition.nativeTools ?? [], definition.bashOutput ?? '', semanticMemory, executedTools, rawToolOutputs, selfChange,
-  );
-  const tools = [
-    ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
-    ...native.tools,
-  ];
-  const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
+  try {
+    const native = await nativeCapabilities(
+      definition.nativeTools ?? [], definition.bashOutput ?? '', semanticMemory, executedTools, rawToolOutputs, selfChange,
+    );
+    const tools = [
+      ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
+      ...native.tools,
+    ];
+    const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
 
-  const inbound = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
-  for (const [index, message] of (inbound as readonly EvalInboundMessage[]).entries()) {
-    const trace = createTurnTrace(definition, message, index);
-    const releaseTrace = registerTurnTrace(trace);
-    const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, native.available, approval, outbound, workspace, trace);
-    const context: AgentTurnExecutionContext = {
-      turn,
-      capabilities: {
-        generation: 1,
-        owner: rootPluginId(),
-        tools: turnTools,
-        skills: evalSkills(definition),
-        agents: [],
-        mcp: [],
-        promptSections: promptSections(definition),
-      },
-      toolCapabilities: turnTools,
-      tools: new TurnToolRuntime(turn, turnTools),
-      selection: {
-        binding: { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] },
-        mcpServers: [],
-      },
-    };
-    try {
-      // Same path as AgentRuntime: the journal is the single source and
-      // `events` is the journal-derived feed (includes authority tool events).
-      await executeAgentTurn(turn, () => engine.run(context), (event) => {
-        events.push(event);
-        if (isTurnTerminalEvent(event)) terminals.push(event);
-      });
-    } finally {
-      releaseTrace();
-      trace.finalize();
-      traces.push(trace.snapshot());
+    const inbound = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
+    for (const [index, message] of (inbound as readonly EvalInboundMessage[]).entries()) {
+      const trace = createTurnTrace(definition, message, index);
+      const releaseTrace = registerTurnTrace(trace);
+      const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, native.available, approval, outbound, workspace, trace);
+      const context: AgentTurnExecutionContext = {
+        turn,
+        capabilities: {
+          generation: 1,
+          owner: rootPluginId(),
+          tools: turnTools,
+          skills: evalSkills(definition),
+          agents: [],
+          mcp: [],
+          promptSections: promptSections(definition),
+        },
+        toolCapabilities: turnTools,
+        tools: new TurnToolRuntime(turn, turnTools),
+        selection: {
+          binding: { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] },
+          mcpServers: [],
+        },
+      };
+      try {
+        // Same path as AgentRuntime: the journal is the single source and
+        // `events` is the journal-derived feed (includes authority tool events).
+        await executeAgentTurn(turn, () => engine.run(context), (event) => {
+          events.push(event);
+          if (isTurnTerminalEvent(event)) terminals.push(event);
+        });
+      } finally {
+        releaseTrace();
+        trace.finalize();
+        traces.push(trace.snapshot());
+      }
     }
-  }
 
-  const selfChanges = selfChange
-    ? [...await selfChange.store.list()].sort((left, right) => left.createdAt - right.createdAt).map((record) => Object.freeze({ id: record.id, status: record.status as EvalSelfChangeStatus }))
-    : [];
-  selfChange?.approvals.dispose();
-  const workspaceFiles: Record<string, string | null> = {};
-  for (const relative of Object.keys(definition.expect.workspaceFiles ?? {})) {
-    workspaceFiles[relative] = workspace ? await readFile(join(workspace, relative), 'utf8').catch(() => null) : null;
-  }
+    const selfChanges = selfChange
+      ? [...await selfChange.store.list()].sort((left, right) => left.createdAt - right.createdAt).map((record) => Object.freeze({ id: record.id, status: record.status as EvalSelfChangeStatus }))
+      : [];
+    const workspaceFiles: Record<string, string | null> = {};
+    for (const relative of Object.keys(definition.expect.workspaceFiles ?? {})) {
+      workspaceFiles[relative] = workspace ? await readWorkspaceFile(join(workspace, relative)) : null;
+    }
 
-  return {
-    selfChanges,
-    workspaceFiles,
-    events,
-    executedTools,
-    attemptedTools: model.requests.flatMap((request) => request.toolCalls),
-    outbound,
-    rawToolOutputs,
-    approvalRequests,
-    approvalQuestions,
-    terminals,
-    modelRequests: model.requests,
-    unusedScriptSteps: model.remainingSteps(),
-    extraModelRequests: model.exhaustedRequests(),
-    unofferedToolCalls: model.unofferedToolCalls,
-    modelMismatches: model.modelMismatches,
-    unexpectedlyOfferedToolCalls: model.unexpectedlyOfferedToolCalls,
-    traces,
-  };
+    return {
+      selfChanges,
+      workspaceFiles,
+      events,
+      executedTools,
+      attemptedTools: model.requests.flatMap((request) => request.toolCalls),
+      outbound,
+      rawToolOutputs,
+      approvalRequests,
+      approvalQuestions,
+      terminals,
+      modelRequests: model.requests,
+      unusedScriptSteps: model.remainingSteps(),
+      extraModelRequests: model.exhaustedRequests(),
+      unofferedToolCalls: model.unofferedToolCalls,
+      modelMismatches: model.modelMismatches,
+      unexpectedlyOfferedToolCalls: model.unexpectedlyOfferedToolCalls,
+      traces,
+    };
+  } finally {
+    selfChange?.approvals.dispose();
+    selfChange?.queue.dispose();
+  }
 }
 
 function buildTurn(
@@ -520,6 +524,7 @@ type NativeAvailability = (name: string, context: ToolAvailabilityContext) => bo
 interface EvalSelfChange {
   readonly store: SelfChangeStore;
   readonly approvals: SelfChangeApprovals;
+  readonly queue: ToolApprovalQueue;
 }
 
 /**
@@ -533,7 +538,8 @@ async function createEvalSelfChange(definition: EvalCase, workspace: string): Pr
     projectRoot: workspace,
     protectedPaths: await createHostProtectedPaths({ projectRoot: workspace }),
   });
-  const approvals = new SelfChangeApprovals({ store, queue: new ToolApprovalQueue() });
+  const queue = new ToolApprovalQueue();
+  const approvals = new SelfChangeApprovals({ store, queue });
   const seed = definition.selfChange?.pending;
   if (seed) {
     const first = (Array.isArray(definition.inbound) ? definition.inbound[0] : definition.inbound) as EvalInboundMessage;
@@ -554,7 +560,17 @@ async function createEvalSelfChange(definition: EvalCase, workspace: string): Pr
     await store.transition(draft.id, 'ready', { actor: 'policy', trial: { passed: true, checks: [] } });
     await approvals.submit(draft.id);
   }
-  return { store, approvals };
+  return { store, approvals, queue };
+}
+
+/** `null` only when the file is absent; other read errors (EACCES, EISDIR…) surface instead of passing as "missing". */
+async function readWorkspaceFile(file: string): Promise<string | null> {
+  try {
+    return await readFile(file, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
 }
 
 /**

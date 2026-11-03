@@ -38,7 +38,7 @@ export default defineEvalCase({
   live: {
     checks: (run) => {
       const drafts = run.executedTools.filter((call) => call.name === 'change_draft');
-      const reused = drafts.filter((call) => call.args.change_id !== undefined && call.args.change_id !== '');
+      const reused = drafts.filter((call) => typeof call.args.change_id === 'string' && call.args.change_id.trim() !== '');
       return [
         { name: 're-drafted after the failed trial', pass: drafts.length >= 2, ...(drafts.length >= 2 ? {} : { detail: `${drafts.length} change_draft call(s)` }) },
         { name: 'never reuses a change_id', pass: reused.length === 0, ...(reused.length === 0 ? {} : { detail: JSON.stringify(reused.map((call) => call.args.change_id)) }) },

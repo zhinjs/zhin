@@ -302,7 +302,7 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   const duplicates = toolNames.filter((name, index) => toolNames.indexOf(name) !== index);
   if (duplicates.length > 0) problems.push(`duplicate tool names: ${[...new Set(duplicates)].join(', ')}`);
   const workspaceTools = (candidate.nativeTools ?? []).filter((name) => !MEMORY_TOOLS.includes(name) && !WEB_TOOLS.includes(name));
-  if (workspaceTools.length && !candidate.workspace) problems.push('file and shell nativeTools need a workspace');
+  if (workspaceTools.length && !candidate.workspace) problems.push('file, shell and change_draft nativeTools need a workspace');
   if (candidate.selfChange && !candidate.nativeTools?.includes('change_draft')) problems.push('selfChange needs the change_draft native tool');
   if (candidate.expect?.selfChangeStatuses && !candidate.nativeTools?.includes('change_draft')) {
     problems.push('expect.selfChangeStatuses needs the change_draft native tool');

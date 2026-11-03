@@ -56,8 +56,8 @@ export type SelfChangeGenerationPorts = Pick<SelfChangeApplyPorts, 'emergencySto
 export interface SelfChangeApplierHandle {
   apply(id: string): Promise<unknown>;
   recover(): Promise<number>;
-  /** Leftover `approved` at start: applied within the approval window, else expired (#1051 Q2=B). Defaults to `apply`. */
-  resumeApproved?(id: string): Promise<unknown>;
+  /** Leftover `approved` at start: applied within the approval window, else expired (#1051 Q2=B). Required so the window cannot be skipped. */
+  resumeApproved(id: string): Promise<unknown>;
 }
 
 export class HostSelfChangeApply {
@@ -164,7 +164,7 @@ export class HostSelfChangeApply {
       for (const id of await listApproved?.() ?? []) {
         this.#errorBaseline.set(id, this.#errors);
         try {
-          await (applier.resumeApproved ? applier.resumeApproved(id) : applier.apply(id));
+          await applier.resumeApproved(id);
         } finally {
           this.#errorBaseline.delete(id);
         }

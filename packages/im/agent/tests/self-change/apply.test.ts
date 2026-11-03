@@ -14,7 +14,7 @@ import {
 } from '../../src/self-change/apply.js';
 import { selfChangeContentHash } from '../../src/self-change/policy.js';
 import type { SelfChangeImpactKind } from '../../src/self-change/preview.js';
-import { SelfChangeStore, type SelfChangeOrigin } from '../../src/self-change/store.js';
+import { SelfChangeStateError, SelfChangeStore, type SelfChangeOrigin } from '../../src/self-change/store.js';
 
 const origin: SelfChangeOrigin = { platform: 'icqq', sceneId: 'private:42', userId: '42', endpoint: 'bot-1' };
 
@@ -552,7 +552,7 @@ describe('SelfChangeApplier — leftover approved at start (#1051 Q2=B)', () => 
     const change = await approvedChange(store);
     const strict = new SelfChangeApplier({ store, projectRoot: project, ports: host.ports, approvedApplyWindowMs: 1_000, now: () => change.updatedAt + 2_000 });
     expect(await strict.resumeApproved(change.id)).toBe('expired');
-    await expect(strict.resumeApproved(change.id)).rejects.toThrow();
+    await expect(strict.resumeApproved(change.id)).rejects.toBeInstanceOf(SelfChangeStateError);
   });
 });
 

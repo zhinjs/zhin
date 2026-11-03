@@ -90,6 +90,7 @@ describe('HostSelfChangeApply ports', () => {
         during = await health({ record: record(), restarted: false, signal: new AbortController().signal });
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     await host.apply('chg_1');
     expect(during).toMatchObject({ ok: false, error: expect.stringContaining('1 runtime error') });
@@ -127,6 +128,7 @@ describe('HostSelfChangeApply lifecycle', () => {
         order.push(`end ${id}`);
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     const first = host.apply('a');
     const second = host.apply('b');
@@ -150,6 +152,7 @@ describe('HostSelfChangeApply lifecycle', () => {
     const applier = {
       apply: async (id: string) => { calls.push(`apply ${id}`); },
       recover: async () => { calls.push('recover'); return 1; },
+      resumeApproved: async (id: string) => { calls.push(`apply ${id}`); },
     };
     const unbind = host.bind(applier, async () => ['chg_left']);
     expect(calls).toEqual([]); // not before the first generation has started
@@ -297,6 +300,7 @@ describe('HostSelfChangeApply deferred restart', () => {
         expect(restarts).toBe(1);
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     await host.apply('chg_1');
     expect(restarts).toBe(2);
