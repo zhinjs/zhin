@@ -1,0 +1,63 @@
+.changeset/incremental-reply-parser.md
+  s_efe26f87c3b074::t_a790a051303872 1-5
+packages/im/agent/README.md
+  s_efe26f87c3b074::t_ef1fde67e2a1ae 72-84
+packages/im/agent/src/outbound/reply-json-candidate.ts
+  s_efe26f87c3b074::t_cf86e527503058 1-220
+packages/im/agent/src/outbound/structured-reply-stream.ts
+  s_efe26f87c3b074::t_85d271cba6d416 6,9-11,16-18,20-54,56-72,74-84,86-89
+packages/im/agent/tests/benchmarks/reply-parser.ts
+  s_efe26f87c3b074::t_bcea1b9b7247e9 1-35
+packages/im/agent/tests/core/incremental-reply-parser-edges.test.ts
+  s_efe26f87c3b074::t_47ff03c0ae52d4 1-80
+packages/im/agent/tests/core/incremental-reply-parser-performance.test.ts
+  s_4a3da79bf26c58::t_ae3e239b9a8397 1-36
+packages/im/agent/src/core/reply-stream-run.ts
+  s_58400078c2bd23::t_fefd5bf5de4a04 9-10,26,41,56,66,88,92
+packages/im/agent/tests/core/reply-stream-candidate-lifecycle.test.ts
+  s_4a3da79bf26c58::t_64a316c5253ac5 1-66
+packages/im/agent/tests/core/structured-reply-stream-baseline.ts
+  s_079f1dc5e6308d::t_e87a0ec1bfba7d 1-200
+packages/im/agent/tests/core/structured-reply-stream.test.ts
+  s_58400078c2bd23::t_99f63bf2ae58a2 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "17272ec8f925d1851a436b57604a51a1c508f49e",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_4a3da79bf26c58": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66214013-1784-4c6a-9edd-9039237b51db",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
