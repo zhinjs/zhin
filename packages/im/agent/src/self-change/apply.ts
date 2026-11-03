@@ -25,9 +25,11 @@ import {
   assertConfigPatchAllowed,
   normalizeChangeTarget,
   selfChangeContentHash,
+  selfChangePluginRootsProvider,
   sha256Hex,
   type SelfChangeConfigOperation,
   type SelfChangeFileEntry,
+  type SelfChangePluginRootsSource,
 } from './policy.js';
 import type { SelfChangeImpactKind } from './preview.js';
 import {
@@ -45,6 +47,8 @@ import {
 export const DEFAULT_CHANGE_HEALTH_WINDOW_MS = 60_000;
 /** 一次变更最多为它受控重启的次数：正向一次 + 回滚一次。 */
 const MAX_CHANGE_RESTARTS = 2;
+/** 没有守护进程（`--once`、裸 node 等）时，需要重启的变更不能自动生效。 */
+const RESTART_UNAVAILABLE_REASON = 'the change needs a process restart, but this instance has no supervisor to restart it';
 
 /** 根配置文档（字段级补丁 + 整份源文回滚）。 */
 export interface SelfChangeConfigPort {
@@ -93,6 +97,12 @@ export interface SelfChangeApplyPorts {
   reload(input: { readonly record: SelfChangeRecord; readonly changed: readonly string[] }): Promise<'reloaded' | 'restart'>;
   /** 受控重启（exit 75）；调用前 `verifying` 已落盘。 */
   requestRestart(record: SelfChangeRecord): void | Promise<void>;
+  /**
+   * 受控重启能否把进程拉起来（有守护进程、不是 `--once`）。缺省视为可以。
+   * 返回 false 时：计划要重启的变更不动文件直接 `failed`；生效中途才发现要重启的按快照回滚（`rolled_back`），
+   * 两者原因码都是 `change_restart_unavailable`。
+   */
+  restartSupported?(): boolean;
   health(input: SelfChangeHealthInput): Promise<SelfChangeHealth>;
   /** 打开控制面实例级 `emergency_stop`（§6）。 */
   emergencyStop(record: SelfChangeRecord, reason: string): Promise<void>;
@@ -103,7 +113,7 @@ export interface SelfChangeApplierOptions {
   readonly store: SelfChangeStore;
   readonly projectRoot: string;
   readonly protectedPaths?: HostProtectedPaths;
-  readonly pluginRoots?: readonly string[];
+  readonly pluginRoots?: SelfChangePluginRootsSource;
   readonly ports: SelfChangeApplyPorts;
   readonly healthWindowMs?: number;
   readonly onError?: (error: unknown) => void;
@@ -116,7 +126,7 @@ export class SelfChangeApplier {
   readonly #store: SelfChangeStore;
   readonly #projectRoot: string;
   readonly #protectedPaths?: HostProtectedPaths;
-  readonly #pluginRoots: readonly string[];
+  readonly #pluginRoots: () => readonly string[];
   readonly #ports: SelfChangeApplyPorts;
   readonly #healthWindowMs: number;
   readonly #onError: (error: unknown) => void;
@@ -126,7 +136,7 @@ export class SelfChangeApplier {
     this.#store = options.store;
     this.#projectRoot = path.resolve(options.projectRoot);
     this.#protectedPaths = options.protectedPaths;
-    this.#pluginRoots = Object.freeze([...(options.pluginRoots ?? [])]);
+    this.#pluginRoots = selfChangePluginRootsProvider(options.pluginRoots);
     this.#ports = options.ports;
     this.#healthWindowMs = options.healthWindowMs ?? DEFAULT_CHANGE_HEALTH_WINDOW_MS;
     this.#onError = options.onError ?? (() => undefined);
@@ -171,6 +181,10 @@ export class SelfChangeApplier {
     // 禁改名单可能在起草 / 批准之后扩充：按当前名单重查，旧批准不能放行新禁改键。
     const forbiddenConfigError = findForbiddenConfigPatchError(current);
     if (forbiddenConfigError) return this.#failUntouched(current, 'change_config_key_forbidden', forbiddenConfigError);
+    // 起草时有守护进程、生效时没有（例如换成 `--once` / 裸 node 启动）：要重启的变更不动文件。
+    if (plannedMode(current) === 'process' && !this.#restartSupported()) {
+      return this.#failUntouched(current, 'change_restart_unavailable', RESTART_UNAVAILABLE_REASON);
+    }
     let configRevision: string | null = null;
     let configSource: string | null = null;
     if (current.configPatch) {
@@ -222,6 +236,9 @@ export class SelfChangeApplier {
       } catch (error) {
         return this.#rollback(record, `reload failed: ${errorText(error)}`);
       }
+    }
+    if (mode === 'process' && !this.#restartSupported()) {
+      return this.#rollbackWithoutRestart(record, RESTART_UNAVAILABLE_REASON);
     }
     if (mode === 'process') {
       return this.#restart(record, 'verifying', { phase: 'forward', mode, restarts: 1, failure: null });
@@ -278,6 +295,44 @@ export class SelfChangeApplier {
     }
     if (current.apply?.mode !== mode) current = await this.#store.setApplyState(current.id, { phase: 'rollback', mode, restarts: current.apply?.restarts ?? 0, failure });
     return this.#verifyRollback(current, failure, false);
+  }
+
+  #restartSupported(): boolean {
+    return this.#ports.restartSupported?.() ?? true;
+  }
+
+  /**
+   * 生效中途才发现要重启（热重载说需要重启 / 配置补丁需要重启），而本实例没有守护进程：按快照回滚，不重启。
+   * 正向改动没有在本进程里生效过（热重载拒绝了、需要重启的配置也还没生效），恢复磁盘即可；
+   * 恢复配置只需热重载时照常热重载，热重载再说要重启也不重启。之后校验：健康 → `rolled_back`，否则急停。
+   */
+  async #rollbackWithoutRestart(record: SelfChangeRecord, failure: string): Promise<SelfChangeApplyOutcome> {
+    const snapshot = await this.#store.readSnapshot(record.id).catch(() => null);
+    if (!snapshot) return this.#emergency(record, `${failure}; rollback snapshot is missing`);
+    const current = await this.#store.setApplyState(record.id, { phase: 'rollback', mode: 'generation', restarts: 0, failure });
+    let restoreMode: SelfChangeImpactKind;
+    try {
+      restoreMode = await this.#restoreSnapshot(current, snapshot);
+    } catch (error) {
+      return this.#emergency(current, `${failure}; rollback failed: ${errorText(error)}`);
+    }
+    if (restoreMode === 'generation') {
+      try {
+        await this.#ports.reload({ record: current, changed: current.files.map(file => file.path) });
+      } catch (error) {
+        return this.#emergency(current, `${failure}; reload after rollback failed: ${errorText(error)}`);
+      }
+    }
+    const health = await this.#health(current, false);
+    if (!health.ok) return this.#emergency(current, `${failure}; still unhealthy after rollback: ${health.error}`);
+    const done = await this.#store.transition(current.id, 'rolled_back', {
+      actor: 'policy',
+      reasonCode: 'change_restart_unavailable',
+      error: failure,
+      auditPayload: { restarted: false },
+    });
+    await this.#report(done, 'rolled_back', `未生效，已回滚：${describeChange(done)}。原因：这个变更需要重启，但本实例没有守护进程，无法自动重启。`);
+    return 'rolled_back';
   }
 
   async #verifyRollback(record: SelfChangeRecord, failure: string, restarted: boolean): Promise<SelfChangeApplyOutcome> {
@@ -407,7 +462,7 @@ export class SelfChangeApplier {
   }
 
   async #resolveTarget(target: string): Promise<string> {
-    const rel = normalizeChangeTarget(target, { projectRoot: this.#projectRoot, protectedPaths: this.#protectedPaths, pluginRoots: this.#pluginRoots });
+    const rel = normalizeChangeTarget(target, { projectRoot: this.#projectRoot, protectedPaths: this.#protectedPaths, pluginRoots: this.#pluginRoots() });
     const absolute = path.join(this.#projectRoot, ...rel.split('/'));
     // 已存在的目标若是符号链接，拒绝跟随。
     try {

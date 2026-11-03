@@ -78,6 +78,7 @@ import {
   ProjectEnvironmentFileSource,
   parseStartOptions,
   processRestartExitCode,
+  processRestartSupported,
   startSupervisorWatchdog,
 } from './start/module.js';
 
@@ -212,6 +213,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     ownership: () => host.runtime.sourceOwnership,
     configuration: consoleConfigurationStore,
     configFile,
+    restartSupported: processRestartSupported(parsed.once),
   });
   const host = new RootHost({
     projectRoot: options.root,
@@ -600,6 +602,7 @@ async function loadConfiguredAgentHost(
         workroomTrustedPackPublishers: agentHost.resolveWorkroomTrustedPackPublishers(initialAi),
         workroomLocalDataGovernance: localWorkroomDataGovernance,
         selfChangeImpact: agentHost.createSelfChangeImpactPort(sourceOwnership),
+        selfChangePluginRoots: agentHost.createSelfChangePluginRoots(options.projectRoot, sourceOwnership),
         extraTools: options.extraTools as Parameters<typeof agentHost.installAgentHost>[0]['extraTools'],
       });
     },

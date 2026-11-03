@@ -117,7 +117,7 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 |---|---|
 | 起草 / 试跑 | `change_drafted`、`change_quota_exceeded`、`change_pruned`、`change_path_forbidden`、`change_config_key_forbidden`、`change_trial_passed`、`change_trial_failed` |
 | 审批 | `change_submitted`、`change_approved`、`change_rejected`、`change_expired`、`change_hash_mismatch` |
-| 生效 / 恢复 | `change_applied_none`、`change_applied_reload`、`change_restart_requested`、`change_verified`、`change_rolled_back`、`change_failed_emergency_stop`、`change_report_sent`、`change_report_redirected` |
+| 生效 / 恢复 | `change_applied_none`、`change_applied_reload`、`change_restart_requested`、`change_verified`、`change_rolled_back`、`change_failed_emergency_stop`、`change_report_sent`、`change_report_redirected`、`change_restart_unavailable`（#1051 F1：无守护进程） |
 
 payload 记 `changeId`、文件列表（路径 + 摘要，不含内容）、影响面计划、审批人与渠道；不记文件正文与配置值中的密钥。
 

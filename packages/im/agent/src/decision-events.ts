@@ -178,6 +178,8 @@ export const DECISION_REASON_CODES = [
   'change_failed_emergency_stop',
   'change_report_sent',
   'change_report_redirected',
+  // #1051 F1：需要重启的变更遇到无守护进程的实例
+  'change_restart_unavailable',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 

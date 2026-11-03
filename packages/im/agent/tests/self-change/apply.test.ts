@@ -39,6 +39,8 @@ interface FakeHost {
   /** 依次返回的健康结论；用尽后为健康。 */
   health: SelfChangeHealth[];
   reloadResult: 'reloaded' | 'restart' | Error;
+  /** false：模拟没有守护进程（`--once` / 裸 node）。 */
+  restartSupported: boolean;
 }
 
 function fakeHost(config?: SelfChangeConfigPort): FakeHost {
@@ -49,6 +51,7 @@ function fakeHost(config?: SelfChangeConfigPort): FakeHost {
     stops: [],
     health: [],
     reloadResult: 'reloaded',
+    restartSupported: true,
     ports: undefined as unknown as SelfChangeApplyPorts,
   };
   host.ports = {
@@ -59,6 +62,7 @@ function fakeHost(config?: SelfChangeConfigPort): FakeHost {
       return host.reloadResult;
     },
     requestRestart() { host.restarts += 1; },
+    restartSupported() { return host.restartSupported; },
     async health() { return host.health.shift() ?? { ok: true }; },
     async emergencyStop(_record, reason) { host.stops.push(reason); },
     async report(input) { host.reports.push(input); return 'sent'; },
@@ -360,6 +364,80 @@ describe('SelfChangeApplier — restart path and recover()', () => {
     expect(await applier(store, host).apply(change.id)).toBe('rolled_back');
     expect(config.source).toBe('weather:\n  unit: f\n');
     expect(config.restored).toBe(1);
+  });
+});
+
+describe('SelfChangeApplier — no supervisor to restart (#1051 F1)', () => {
+  it('fails a change planned as a restart without touching any file', async () => {
+    const store = await makeStore();
+    const host = fakeHost();
+    host.restartSupported = false;
+    const change = await approvedChange(store, { impact: 'process' });
+    expect(await applier(store, host).apply(change.id)).toBe('failed');
+    expect(existsSync(join(project, 'commands', 'ping.ts'))).toBe(false);
+    expect(host.restarts).toBe(0);
+    expect(host.reloads).toBe(0);
+    expect(host.stops).toEqual([]);
+    const record = await store.get(change.id);
+    expect(record?.status).toBe('failed');
+    expect(record?.error).toContain('no supervisor');
+    expect(audit.map(event => event.reasonCode)).toContain('change_restart_unavailable');
+    expect(host.reports.map(report => report.kind)).toEqual(['failed']);
+    expect(host.reports[0]!.text).toContain('未改动任何文件');
+  });
+
+  it('rolls back instead of restarting when the reload asks for a restart', async () => {
+    mkdirSync(join(project, 'commands'), { recursive: true });
+    writeFileSync(join(project, 'commands', 'ping.ts'), 'export default "old";\n');
+    const store = await makeStore();
+    const host = fakeHost();
+    host.restartSupported = false;
+    host.reloadResult = 'restart';
+    const change = await approvedChange(store, { files: [{ path: 'commands/ping.ts', content: 'export default "new";\n' }] });
+    expect(await applier(store, host).apply(change.id)).toBe('rolled_back');
+    expect(readFileSync(join(project, 'commands', 'ping.ts'), 'utf8')).toBe('export default "old";\n');
+    expect(host.restarts).toBe(0);
+    expect(host.reloads).toBe(1);
+    expect(host.stops).toEqual([]);
+    const record = await store.get(change.id);
+    expect(record?.status).toBe('rolled_back');
+    expect(record?.error).toContain('no supervisor');
+    const rolledBack = audit.find(event => event.reasonCode === 'change_restart_unavailable');
+    expect(rolledBack).toBeDefined();
+    expect(audit.map(event => event.reasonCode)).not.toContain('change_restart_requested');
+    expect(host.reports.map(report => report.kind)).toEqual(['rolled_back']);
+    expect(host.reports[0]!.text).toContain('没有守护进程');
+  });
+
+  it('rolls the config back without restarting when the config patch needs a restart', async () => {
+    const store = await makeStore();
+    const config = fakeConfig('http:\n  port: 8086\n', 'r1', true);
+    const host = fakeHost(config);
+    host.restartSupported = false;
+    const change = await approvedChange(store, {
+      files: [{ path: 'commands/b.ts', content: 'export default 1;\n' }],
+      configPatch: { expectedRevision: 'r1', patches: [{ op: 'set', path: ['http', 'port'], value: 1 }] },
+    });
+    expect(await applier(store, host).apply(change.id)).toBe('rolled_back');
+    expect(config.patched).toBe(1);
+    expect(config.restored).toBe(1);
+    expect(config.source).toBe('http:\n  port: 8086\n');
+    expect(existsSync(join(project, 'commands', 'b.ts'))).toBe(false);
+    expect(host.restarts).toBe(0);
+    expect((await store.get(change.id))?.status).toBe('rolled_back');
+  });
+
+  it('enters emergency stop when still unhealthy after that rollback', async () => {
+    const store = await makeStore();
+    const host = fakeHost();
+    host.restartSupported = false;
+    host.reloadResult = 'restart';
+    host.health = [{ ok: false, error: 'broken' }];
+    const change = await approvedChange(store);
+    expect(await applier(store, host).apply(change.id)).toBe('failed');
+    expect(host.restarts).toBe(0);
+    expect(host.stops).toHaveLength(1);
+    expect(host.reports[0]).toMatchObject({ kind: 'failed', ownerOnly: true });
   });
 });
 

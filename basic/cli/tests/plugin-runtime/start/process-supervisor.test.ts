@@ -3,8 +3,20 @@ import {
   MAX_RESPAWNS_PER_MINUTE,
   planRespawn,
   processRestartExitCode,
+  processRestartSupported,
   supervisedNodeArguments,
 } from '../../../src/plugin-runtime/start/process-supervisor.js';
+
+describe('processRestartSupported (#1051 F1)', () => {
+  it('is true only under a zhin supervisor and not with --once', () => {
+    expect(processRestartSupported(false, { ZHIN_SUPERVISOR_PID: '4242' })).toBe(true);
+    expect(processRestartSupported(true, { ZHIN_SUPERVISOR_PID: '4242' })).toBe(false);
+    expect(processRestartSupported(false, {})).toBe(false);
+    expect(processRestartSupported(false, { ZHIN_SUPERVISOR_PID: '' })).toBe(false);
+    expect(processRestartSupported(false, { ZHIN_SUPERVISOR_PID: 'abc' })).toBe(false);
+    expect(processRestartSupported(false, { ZHIN_SUPERVISOR_PID: '0' })).toBe(false);
+  });
+});
 
 describe('native TypeScript process supervisor', () => {
   it('preserves configured Node loaders in supervised and daemon children', () => {
