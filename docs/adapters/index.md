@@ -67,6 +67,7 @@ _（当前无）_
 
 | 适配器 | 包名 | Endpoint 管理能力 | 文档 |
 |--------|------|-------------------|------|
+| 抖音直播弹幕 | `@zhin.js/adapter-douyin-live` | — | [抖音直播弹幕](/adapters/douyin-live) |
 | 企业微信 | `@zhin.js/adapter-wecom` | — | [企业微信](/adapters/wecom) |
 | 微信 iLink | `@zhin.js/adapter-weixin-ilink` | — | [微信 iLink](/adapters/weixin-ilink) |
 | Bilibili 评论 | `@zhin.js/adapter-bilibili` | — | [Bilibili 评论](/adapters/bilibili) |

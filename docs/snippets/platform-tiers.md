@@ -19,6 +19,7 @@ sidebar: false
 | wechat-mp | Advanced | 微信公众号 | `@zhin.js/adapter-wechat-mp` | — |
 | bilibili | Experimental | Bilibili 评论 | `@zhin.js/adapter-bilibili` | — |
 | bilibili-live | Experimental | Bilibili 直播弹幕 | `@zhin.js/adapter-bilibili-live` | — |
+| douyin-live | Experimental | 抖音直播弹幕 | `@zhin.js/adapter-douyin-live` | — |
 | email | Experimental | Email | `@zhin.js/adapter-email` | — |
 | github | Experimental | GitHub | `@zhin.js/adapter-github` | — |
 | line | Experimental | LINE | `@zhin.js/adapter-line` | — |
