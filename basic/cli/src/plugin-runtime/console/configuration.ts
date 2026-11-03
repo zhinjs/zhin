@@ -1,6 +1,6 @@
 import { ConfigDocumentConflictError, type ConfigFileDocument } from '@zhin.js/config-file';
 import { isDeepStrictEqual } from 'node:util';
-import type { ConsoleConfigApplication, ConsoleConfigApplicationStatus, ConsoleConfigApplyResult, ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
+import type { ConsoleConfigApplication, ConsoleConfigApplicationStatus, ConsoleConfigApplyResult, ConsoleConfigPatchRequest, ConsoleConfigPatchResult, ConsoleConfigProjectPatchResult, ConsoleConfigSource } from '@zhin.js/console-protocol';
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
   applyConfigPatches,
@@ -21,6 +21,20 @@ import {
   readPath,
   resolvePatchScope,
 } from './configuration-patch.js';
+import { maskConfigValue } from './configuration-redaction.js';
+
+/** Only a thrown commit crosses this uncertainty boundary; never prepared cleanup. */
+class ConfigCommitUnconfirmedError extends Error {
+  constructor(cause: unknown) { super('Configuration commit outcome is unconfirmed', { cause }); }
+}
+
+/**
+ * Top-level keys a trusted project patch must not write: Plugin declarations
+ * (`configVersion` / `plugins` / `disable_plugins`) and the root Plugin section
+ * (`plugin`). Declarations change which schema interprets business config, so they
+ * stay with the source editor and Plugin management, not path patches.
+ */
+const PROJECT_PATCH_DECLARATION_KEYS: ReadonlySet<string> = new Set(['configVersion', 'plugins', 'disable_plugins', 'plugin']);
 
 /** Owns one project's Console configuration projection over the Root config authority. */
 export class ConsoleConfigurationStore {
@@ -142,75 +156,123 @@ export class ConsoleConfigurationStore {
    * values instead of overwriting; every touched section is validated by its schema.
    */
   patch(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult> {
-    const instanceKey = request.instanceKey;
+    return this.#serialize(() => this.#patchCore(request, 'scoped'));
+  }
+
+  /**
+   * Trusted project administration (`config:patch-project`, full scope only). Same
+   * single-CAS core as {@link patch}, without the page allowlist; it does not widen
+   * `config:patch` / `HOST_CONFIG_PATCH_PATHS`. Declaration writes are rejected as
+   * `invalid`, conflict values are masked, and a thrown commit is `unconfirmed`.
+   */
+  patchProject(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>): Promise<ConsoleConfigProjectPatchResult> {
     return this.#serialize(async () => {
-      const patches = normalizeConfigPatchOperations(request.patches);
-      const current = await this.#document.read();
+      try { return await this.#patchCore({ expectedRevision: request.expectedRevision, patches: request.patches }, 'project'); }
+      catch (error) {
+        if (!(error instanceof ConfigCommitUnconfirmedError)) throw error;
+        // The file may already hold the candidate. Do not retry or roll back.
+        return Object.freeze({ status: 'unconfirmed', expectedRevision: request.expectedRevision,
+          message: 'Configuration save outcome is unconfirmed; inspect source and runtime status before any further write' });
+      }
+    });
+  }
+
+  /** Shared single-CAS write: `scoped` keeps the page allowlist; `project` is the trusted full path. */
+  async #patchCore(request: ConsoleConfigPatchRequest, mode: 'scoped' | 'project'): Promise<ConsoleConfigPatchResult> {
+    const instanceKey = request.instanceKey;
+    const patches = normalizeConfigPatchOperations(request.patches);
+    const current = await this.#document.read();
+    if (mode === 'scoped') {
       const declared = instanceKey === undefined
         ? []
         : readDeclaredPatchPaths(await this.#ownSchema(current.document, instanceKey), instanceKey);
       const allowed = resolvePatchScope(current.document, instanceKey, declared);
       assertPatchesInScope(patches, allowed, instanceKey === undefined ? 'Host 白名单' : `插件 ${instanceKey}`);
-      const paths = Object.freeze(patches.map(patch => patch.path));
-      const conflict = (snapshot: typeof current): ConsoleConfigPatchResult => Object.freeze({
-        status: 'conflict',
-        revision: snapshot.revision,
-        current: Object.freeze(paths.map(path => Object.freeze({ path, value: readPath(snapshot.document, path) }))),
-        message: '配置已被其他地方修改，未保存。请查看最新值后重试。',
-      });
-      if (current.revision !== request.expectedRevision) return conflict(current);
-      const candidate = applyConfigPatches(current.document, patches);
-      const sections = [...new Set(patches.map(patch => patch.path[0]!))];
-      const errors: Array<{ path: string; message: string }> = [];
-      const missingEnv = new Set<string>();
-      for (const section of sections) {
-        if (candidate[section] === undefined) continue;
-        const validation = await this.validatePluginConfig(section, candidate[section], current.document);
-        for (const error of validation.errors) errors.push({ path: `$.${section}${error.path.slice(1)}`, message: error.message });
-        for (const name of validation.missingEnv) missingEnv.add(name);
+    }
+    const paths = Object.freeze(patches.map(patch => patch.path));
+    if (mode === 'project') {
+      const rejected = projectDeclarationErrors(current.document, paths);
+      if (rejected.length > 0) {
+        return Object.freeze({ status: 'invalid', revision: current.revision, errors: Object.freeze(rejected),
+          missingEnv: Object.freeze([]), message: '插件声明不能通过项目补丁修改，未保存' });
       }
-      if (errors.length > 0) {
-        return Object.freeze({
-          status: 'invalid',
-          revision: current.revision,
-          errors: Object.freeze(errors),
-          missingEnv: Object.freeze([...missingEnv].sort()),
-          message: '配置校验失败，未保存',
-        });
-      }
-      let committed;
-      try {
-        const prepared = await this.#document.prepare(current, patches);
-        readApplicationPluginDeclaration(prepared.document);
-        try { await this.#validatePrepared(prepared); }
-        catch (error) {
-          if (!(error instanceof ConfigValidationError)) throw error;
-          // Runtime validation may report cross-field constraints without a
-          // structured path. Preserve the invalid contract at the document
-          // boundary; arbitrary issue strings can contain private values.
-          return Object.freeze({ status: 'invalid', revision: current.revision,
-            errors: Object.freeze([Object.freeze({ path: '$', message: '完整配置未通过运行校验' })]),
-            missingEnv: Object.freeze([...missingEnv].sort()), message: '配置校验失败，未保存' });
-        }
-        committed = await prepared.commit();
-      } catch (error) {
-        if (error instanceof ConfigDocumentConflictError) return conflict(await this.#document.read());
-        throw error;
-      }
-      const applied = await this.#applySaved(sections.some(section => HOST_CONFIG_KEYS.includes(section)), committed.revision);
-      return Object.freeze({
-        status: 'saved',
-        revision: committed.revision,
-        ...applied,
-        paths,
-        missingEnv: Object.freeze([...missingEnv].sort()),
-        message: applied.applicationError === 'superseded' ? '配置已保存，但该次生效申请已被替代'
-          : applied.applicationError === 'invalid' ? '配置已保存，但配置校验失败，未生效'
-          : applied.applicationError ? '配置已保存，生效结果未确认' : applied.restartRequired
-          ? (applied.application ? '配置已保存，部分配置待重启生效' : '配置已保存，需重启进程才能生效') : applied.application
-            ? '配置已保存，请查看各项生效结果' : '配置已保存',
-      });
+    }
+    const conflict = async (snapshot: typeof current): Promise<ConsoleConfigPatchResult> => Object.freeze({
+      status: 'conflict',
+      revision: snapshot.revision,
+      current: Object.freeze(await Promise.all(paths.map(async path => Object.freeze({ path,
+        value: mode === 'project' ? await this.#maskedValue(snapshot.document, path) : readPath(snapshot.document, path) })))),
+      message: '配置已被其他地方修改，未保存。请查看最新值后重试。',
     });
+    if (current.revision !== request.expectedRevision) return await conflict(current);
+    const candidate = applyConfigPatches(current.document, patches);
+    const sections = [...new Set(patches.map(patch => patch.path[0]!))];
+    const errors: Array<{ path: string; message: string }> = [];
+    const missingEnv = new Set<string>();
+    for (const section of sections) {
+      if (candidate[section] === undefined) continue;
+      const validation = await this.validatePluginConfig(section, candidate[section], current.document);
+      for (const error of validation.errors) errors.push({ path: `$.${section}${error.path.slice(1)}`, message: error.message });
+      for (const name of validation.missingEnv) missingEnv.add(name);
+    }
+    if (errors.length > 0) {
+      return Object.freeze({
+        status: 'invalid',
+        revision: current.revision,
+        errors: Object.freeze(errors),
+        missingEnv: Object.freeze([...missingEnv].sort()),
+        message: '配置校验失败，未保存',
+      });
+    }
+    let committed;
+    try {
+      const prepared = await this.#document.prepare(current, patches);
+      readApplicationPluginDeclaration(prepared.document);
+      try { await this.#validatePrepared(prepared); }
+      catch (error) {
+        if (!(error instanceof ConfigValidationError)) throw error;
+        // Runtime validation may report cross-field constraints without a
+        // structured path. Preserve the invalid contract at the document
+        // boundary; arbitrary issue strings can contain private values.
+        return Object.freeze({ status: 'invalid', revision: current.revision,
+          errors: Object.freeze([Object.freeze({ path: '$', message: '完整配置未通过运行校验' })]),
+          missingEnv: Object.freeze([...missingEnv].sort()), message: '配置校验失败，未保存' });
+      }
+      if (mode === 'scoped') committed = await prepared.commit();
+      else {
+        try { committed = await prepared.commit(); }
+        catch (error) {
+          if (error instanceof ConfigDocumentConflictError) throw error;
+          throw new ConfigCommitUnconfirmedError(error);
+        }
+      }
+    } catch (error) {
+      if (error instanceof ConfigDocumentConflictError) return await conflict(await this.#document.read());
+      throw error;
+    }
+    const applied = await this.#applySaved(sections.some(section => HOST_CONFIG_KEYS.includes(section)), committed.revision);
+    return Object.freeze({
+      status: 'saved',
+      revision: committed.revision,
+      ...applied,
+      paths,
+      missingEnv: Object.freeze([...missingEnv].sort()),
+      message: applied.applicationError === 'superseded' ? '配置已保存，但该次生效申请已被替代'
+        : applied.applicationError === 'invalid' ? '配置已保存，但配置校验失败，未生效'
+        : applied.applicationError ? '配置已保存，生效结果未确认' : applied.restartRequired
+        ? (applied.application ? '配置已保存，部分配置待重启生效' : '配置已保存，需重启进程才能生效') : applied.application
+          ? '配置已保存，请查看各项生效结果' : '配置已保存',
+    });
+  }
+
+  /** Conflict evidence for trusted writes: never echo secrets or unexpanded references. */
+  async #maskedValue(document: RuntimeConfigDocument, path: readonly string[]): Promise<unknown> {
+    const value = readPath(document, path);
+    if (value === undefined) return undefined;
+    let schema: Readonly<Record<string, unknown>> | null = null;
+    try { schema = await this.#schemas.readJson(path[0]!, document); }
+    catch { schema = null; }
+    return maskConfigValue(schema, path, value);
   }
 
   async #validatePrepared(prepared: import('@zhin.js/plugin-runtime').PreparedConfigDocument): Promise<void> {
@@ -353,11 +415,32 @@ export class ConsoleConfigurationStore {
     return this.#mutationTail.then(operation);
   }
 
+  /**
+   * Lock order: this Console store's domain lock (the mutation tail) is taken first,
+   * then the Root configuration queue via `#applyConfiguration` / `#validateConfiguration`.
+   * Root control must never call back into this store while holding its queue, or the
+   * two locks would wait on each other.
+   */
   #serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.#mutationTail.then(operation);
     this.#mutationTail = result.then(() => undefined, () => undefined);
     return result;
   }
+}
+
+/** Project patches may write Host and declared Plugin business config, never declarations. */
+function projectDeclarationErrors(document: RuntimeConfigDocument, paths: readonly (readonly string[])[]): Array<{ path: string; message: string }> {
+  const plugins = document.plugins && typeof document.plugins === 'object' && !Array.isArray(document.plugins)
+    ? document.plugins as Record<string, unknown> : {};
+  const errors: Array<{ path: string; message: string }> = [];
+  for (const section of new Set(paths.map(path => path[0]!))) {
+    if (PROJECT_PATCH_DECLARATION_KEYS.has(section)) {
+      errors.push({ path: `$.${section}`, message: '插件声明与根插件配置请在配置源码或插件管理中修改' });
+    } else if (!HOST_CONFIG_KEYS.includes(section) && !Object.hasOwn(plugins, section)) {
+      errors.push({ path: `$.${section}`, message: '未声明的插件实例；请先在 plugins 中声明' });
+    }
+  }
+  return errors;
 }
 
 function collectEnvironmentReferences(
