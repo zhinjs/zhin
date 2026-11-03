@@ -214,3 +214,45 @@ it('cuts self-change-detail diffs at the 64 KB budget', async () => {
   expect(data.files[0]).toMatchObject({ truncated: true, unavailableReason: null });
   expect(data.files[1]).toMatchObject({ truncated: true, unavailableReason: 'budget_exhausted' });
 });
+
+it('redacts the detail diff, allow-lists the nested trial and redacts change.error (#1145 cubic)', async () => {
+  const store = new SelfChangeStore({ root: join(project, '.zhin', 'changes'), projectRoot: project });
+  const queue = new ToolApprovalQueue();
+  const approvals = new SelfChangeApprovals({ store, queue });
+  const surface = new HostSelfChanges();
+  const call = host(surface, new HostToolApprovals(queue));
+  surface.bind(store, approvals);
+  const draft = await store.draft({
+    origin: { platform: 'icqq', sceneId: 'group:4', userId: '42', endpoint: 'bot-1' },
+    files: [{ path: 'commands/ping.ts', content: 'const apiKey = "DIFF_SECRET_VALUE";\nexport default 1;\n' }],
+  });
+  const pendingResponse = await call('plugin.root.self-change-detail', unrestrictedConsoleAccess, { id: draft.id });
+  const pendingData = (pendingResponse as { body: { data: { files: { diff: string }[] } } }).body.data;
+  expect(pendingData.files[0]!.diff).toContain('+const apiKey = "[redacted]";');
+  expect(JSON.stringify(pendingResponse)).not.toContain('DIFF_SECRET_VALUE');
+
+  await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+  await store.transition(draft.id, 'trial_failed', {
+    actor: 'policy',
+    error: 'plugin_tests commands/ping.ts: password = hunter2 phrase; Bearer abcdefghijklmnop',
+    trial: {
+      version: 1,
+      passed: false,
+      contentHash: draft.contentHash,
+      checks: [{ check: 'plugin_tests', path: 'commands/ping.ts', status: 'failed', message: 'password = hunter2 phrase; Bearer abcdefghijklmnop' }],
+      pendingStages: [],
+      startedAt: 1,
+      durationMs: 2,
+      rawOutput: 'EXTRA_TRIAL_FIELD_SECRET',
+    },
+  });
+  const response = await call('plugin.root.self-change-detail', unrestrictedConsoleAccess, { id: draft.id });
+  const data = (response as { body: { data: { change: { error: string | null; trial: Record<string, unknown> } } } }).body.data;
+  expect(Object.keys(data.change.trial).sort()).toEqual(['checks', 'contentHash', 'durationMs', 'passed', 'pendingStages', 'startedAt', 'version']);
+  expect(data.change.trial).toMatchObject({ version: 1, passed: false, contentHash: draft.contentHash, startedAt: 1, durationMs: 2 });
+  expect(data.change.error).toContain('password = [redacted]');
+  const text = JSON.stringify(response);
+  expect(text).not.toContain('EXTRA_TRIAL_FIELD_SECRET');
+  expect(text).not.toContain('hunter2');
+  expect(text).not.toContain('abcdefghijklmnop');
+});

@@ -103,7 +103,7 @@ describe('SelfChangeApprovals', () => {
     await store.transition(draft.id, 'ready', { actor: 'policy', trial: { passed: true, checks } });
     const { approvalId } = await approvals.submit(draft.id);
     const args = queue.get(approvalId)!.args as { skippedChecks?: string[]; skippedChecksOmitted?: number };
-    expect(args.skippedChecks).toHaveLength(20);
+    expect(args.skippedChecks).toEqual(Array.from({ length: 20 }, (_, index) => `syntax commands/c${index}.tsx`));
     expect(args.skippedChecksOmitted).toBe(5);
   });
 

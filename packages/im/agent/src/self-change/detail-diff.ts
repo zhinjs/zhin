@@ -3,7 +3,7 @@
  *
  * - Console 详情（`plugin.root.self-change-detail`，仅 `ops:approve`）：每个文件一段 unified diff，
  *   基线是回滚快照（已开始生效时）或生产目录现有文件；全部 diff 总字节 ≤ {@link MAX_CHANGE_PREVIEW_BYTES}，
- *   超出按行截断并标 `truncated`。
+ *   超出按行截断并标 `truncated`。diff 正文行与 IM 摘录同口径脱敏（{@link redactSecretAssignments}）。
  * - IM 审批卡：从同一份 diff 取有界摘录（≤ {@link MAX_IM_DIFF_EXCERPT_LINES} 行且 ≤ {@link MAX_IM_DIFF_EXCERPT_BYTES}
  *   字节），写进卡片参数，启动 `restore()` 重建卡片时同样可得。摘录会发到审批私聊 / 审批群：键名按审计密钥口径
  *   命中的 `key = value` / `key: value` 赋值把值换成 `[redacted]`（入队时再经 `redactDecisionPayload` 打码令牌形状）。
@@ -38,8 +38,8 @@ const MAX_SECRET_KEY_CHARS = 64;
 const QUOTES: ReadonlySet<string> = new Set(['"', "'", '`']);
 const KEY_CHAR = /[\w$.-]/u;
 const KEY_START = /[A-Za-z_$]/u;
-/** 不带引号的值到这些字符为止。 */
-const VALUE_STOP: ReadonlySet<string> = new Set([' ', '\t', ',', ';', ')']);
+/** 不带引号的值到这些字符为止（空白不算：`password: my secret` 整段都是值）。 */
+const VALUE_STOP: ReadonlySet<string> = new Set([',', ';', ')', ']', '}']);
 
 export type SelfChangeDiffBaseline = 'disk' | 'snapshot';
 
@@ -144,7 +144,8 @@ export async function buildSelfChangeDetailDiff(input: BuildSelfChangeDetailDiff
       files.push(unavailableFile(entry.path, kind, 'budget_exhausted'));
       continue;
     }
-    const fullDiff = unifiedDiff(entry.path, before.exists ? before.content : null, after);
+    // Same secret-assignment masking as the IM excerpt: the Console detail must not be the unredacted copy.
+    const fullDiff = redactDiffBody(unifiedDiff(entry.path, before.exists ? before.content : null, after));
     const clipped = clipToBytes(fullDiff, remaining);
     if (clipped.truncated && clipped.text === '') {
       remaining = 0;
@@ -328,12 +329,26 @@ function readValueEnd(line: string, start: number): number {
   if (start >= line.length) return start;
   const first = line[start]!;
   if (QUOTES.has(first)) {
-    const close = line.indexOf(first, start + 1);
-    return close === -1 ? line.length : close + 1;
+    // Skip escaped characters (`\"`) so an escaped quote never ends the value early.
+    for (let index = start + 1; index < line.length; index += 1) {
+      if (line[index] === '\\') index += 1;
+      else if (line[index] === first) return index + 1;
+    }
+    return line.length;
   }
   let end = start;
   while (end < line.length && !VALUE_STOP.has(line[end]!)) end += 1;
+  // Keep trailing blanks before a stop char (or the line end) outside the redacted value.
+  while (end > start && (line[end - 1] === ' ' || line[end - 1] === '\t')) end -= 1;
   return end;
+}
+
+/** Redacts every content line of a unified diff; the two `---` / `+++` file header lines stay as they are. */
+function redactDiffBody(diff: string): string {
+  if (!diff) return diff;
+  const lines = diff.split('\n');
+  for (let index = 2; index < lines.length; index += 1) lines[index] = redactSecretAssignments(lines[index]!);
+  return lines.join('\n');
 }
 
 function isSecretAssignmentKey(key: string): boolean {

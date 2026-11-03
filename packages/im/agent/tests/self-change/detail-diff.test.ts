@@ -190,7 +190,43 @@ describe('buildSelfChangeDetailDiff', () => {
     expect(detail.files[0]).toMatchObject({ diff: null, unavailableReason: 'baseline_unreadable' });
   });
 
-  it('fails closed when applying started but no snapshot can be read (corrupt or missing manifest)', async () => {
+  it.each([
+    ['not JSON', '{not json'],
+    ['files is not a list', JSON.stringify({ files: 'commands/ping.ts', config: null })],
+  ])('fails closed on a malformed snapshot manifest (%s) instead of diffing the disk', async (_label, manifest) => {
+    const store = makeStore();
+    const draft = await store.draft({ origin, files: [{ path: 'commands/ping.ts', content: 'export default 2;\n' }] });
+    await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+    await store.transition(draft.id, 'ready', { actor: 'policy', trial: { passed: true, checks: [] } });
+    await store.transition(draft.id, 'pending', { actor: 'policy' });
+    const approved = await store.transition(draft.id, 'approved', { actor: 'operator', actorId: 'console' });
+    await store.writeSnapshot(draft.id, { files: [{ path: 'commands/ping.ts', content: 'export default 1;\n' }], config: null });
+    writeFileSync(join(project, '.zhin', 'changes', draft.id, 'snapshot', 'manifest.json'), manifest, 'utf8');
+    writeProjectFile('commands/ping.ts', 'export default 2;\n');
+    const detail = await buildSelfChangeDetailDiff({ store, record: { ...approved, status: 'applying' }, projectRoot: project });
+    expect(detail).toMatchObject({ baseline: 'snapshot', truncated: true });
+    expect(detail.files[0]).toMatchObject({ diff: null, unavailableReason: 'baseline_unreadable' });
+  });
+
+  it('redacts secret assignments in the Console detail diff, not only in the IM excerpt', async () => {
+    const store = makeStore();
+    writeProjectFile('commands/ping.ts', 'const password = "old-secret";\nexport default 1;\n');
+    const draft = await store.draft({
+      origin,
+      files: [{ path: 'commands/ping.ts', content: 'const password = "new-secret";\nconst apiKey = live key value\nexport default 2;\n' }],
+    });
+    const detail = await buildSelfChangeDetailDiff({ store, record: draft, projectRoot: project });
+    const diff = detail.files[0]!.diff!;
+    expect(diff.split('\n').slice(0, 2)).toEqual(['--- a/commands/ping.ts', '+++ b/commands/ping.ts']);
+    expect(diff).toContain('-const password = "[redacted]";');
+    expect(diff).toContain('+const password = "[redacted]";');
+    expect(diff).toContain('+const apiKey = [redacted]');
+    expect(diff).toContain('+export default 2;');
+    expect(diff).not.toMatch(/old-secret|new-secret|live key value/u);
+    expect(detail.bytes).toBe(Buffer.byteLength(diff, 'utf8'));
+  });
+
+  it('fails closed when applying started but no snapshot exists at all', async () => {
     const store = makeStore();
     const draft = await store.draft({ origin, files: [{ path: 'commands/new.ts', content: 'export default 2;\n' }] });
     await store.attachPlan(draft.id, draft.contentHash, {
@@ -284,6 +320,14 @@ describe('selfChangeDiffExcerpt', () => {
     expect(redactSecretAssignments('{ "clientSecret": "a b c", "name": "x" }')).toBe('{ "clientSecret": "[redacted]", "name": "x" }');
     expect(redactSecretAssignments('password = "unterminated')).toBe('password = "[redacted]');
     expect(redactSecretAssignments('a=1; b: 2')).toBe('a=1; b: 2');
+    // Escaped quotes do not end a quoted value early.
+    expect(redactSecretAssignments('password = "abc\\"def"; next = 1')).toBe('password = "[redacted]"; next = 1');
+    expect(redactSecretAssignments("token: 'it\\'s-secret'")).toBe("token: '[redacted]'");
+    expect(redactSecretAssignments('password = "abc\\"tail')).toBe('password = "[redacted]');
+    // Unquoted values run past spaces up to a stop char or the line end.
+    expect(redactSecretAssignments('password: my secret phrase')).toBe('password: [redacted]');
+    expect(redactSecretAssignments('{ password: my secret, user: bob }')).toBe('{ password: [redacted], user: bob }');
+    expect(redactSecretAssignments('password = two words   ')).toBe('password = [redacted]   ');
     // Linear on adversarial input (no backtracking).
     const started = Date.now();
     redactSecretAssignments(`${'$'.repeat(200_000)}:`);

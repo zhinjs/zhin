@@ -174,11 +174,16 @@ export class HostSelfChanges {
     } catch (error) {
       throw consoleError(error);
     }
-    const redact = agent.redactDecisionPayload;
+    const redact = redactWith(agent.redactDecisionPayload, agent.redactSecretAssignments);
     const trial = detailTrial(record.trial, agent.skippedTrialChecks, redact);
     return {
-      // The card's own `trial` would be a second, unredacted copy: keep its metadata, redact its checks.
-      change: { ...card(record, binding.approvals.approvalIdFor(record.id) ?? null), trial: redactedTrialRecord(record.trial, redact) },
+      // The card's own `trial` / `error` would be second, unredacted copies (the error joins the check messages):
+      // carry an allow-listed, redacted trial and a redacted error instead.
+      change: {
+        ...card(record, binding.approvals.approvalIdFor(record.id) ?? null),
+        trial: redactedTrialRecord(record.trial, redact),
+        error: redactedError(record.error, redact),
+      },
       bodiesAvailable: diff.bodiesAvailable,
       baseline: diff.baseline,
       files: diff.files.map(file => ({
@@ -284,12 +289,48 @@ function redactConfigOperation(
   return { op: 'set', path: configPath, value: (redacted ?? null) as PluginConsoleRpcJson };
 }
 
-/** The stored trial with its metadata intact and every check redacted (for the nested card). */
+/**
+ * The stored trial for the nested card, allow-listed to the documented `SelfChangeTrialResult` metadata (any other
+ * stored field is dropped) with every check redacted.
+ */
 function redactedTrialRecord(trial: unknown, redact: RedactPayload): PluginConsoleRpcJson {
-  if (!trial || typeof trial !== 'object' || Array.isArray(trial)) return (trial ?? null) as PluginConsoleRpcJson;
+  if (!trial || typeof trial !== 'object' || Array.isArray(trial)) return null;
   const value = trial as Record<string, unknown>;
-  const checks = Array.isArray(value.checks) ? value.checks.map(check => redact({ check }).check ?? null) : value.checks;
-  return { ...value, checks } as PluginConsoleRpcJson;
+  const out: Record<string, PluginConsoleRpcJson> = {};
+  if (typeof value.version === 'number' || typeof value.version === 'string') out.version = value.version;
+  if (typeof value.passed === 'boolean') out.passed = value.passed;
+  if (typeof value.contentHash === 'string') out.contentHash = value.contentHash;
+  out.checks = Array.isArray(value.checks)
+    ? (value.checks.map(check => redact({ check }).check ?? null) as PluginConsoleRpcJson)
+    : [];
+  if (Array.isArray(value.pendingStages)) {
+    out.pendingStages = value.pendingStages.filter((stage): stage is string => typeof stage === 'string');
+  }
+  if (typeof value.startedAt === 'number') out.startedAt = value.startedAt;
+  if (typeof value.durationMs === 'number') out.durationMs = value.durationMs;
+  return out;
+}
+
+/** `record.error` may join raw trial check messages: same masking as the checks. */
+function redactedError(error: string | null, redact: RedactPayload): string | null {
+  if (error === null || error === undefined) return null;
+  const masked = redact({ error: String(error) }).error;
+  return typeof masked === 'string' ? masked : '[redacted]';
+}
+
+/**
+ * Decision-audit masking (secret keys, token-shaped strings) plus the diff excerpt's `key = value` / `key: value`
+ * secret-assignment masking on every string, line by line: check messages and errors quote file content and tool
+ * output, where a secret usually sits in an assignment rather than under a secret-like JSON key.
+ */
+function redactWith(redactPayload: RedactPayload, redactAssignments: (line: string) => string): RedactPayload {
+  const assignments = (value: unknown, depth: number): unknown => {
+    if (typeof value === 'string') return value.split('\n').map(redactAssignments).join('\n');
+    if (depth > 8 || !value || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map(item => assignments(item, depth + 1));
+    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, assignments(item, depth + 1)]));
+  };
+  return payload => assignments(redactPayload(payload), 0) as DecisionPayload;
 }
 
 function detailTrial(
