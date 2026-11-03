@@ -55,7 +55,7 @@ beforeEach(() => {
 afterEach(() => rmSync(project, { recursive: true, force: true }));
 
 describe('SelfChangeApprovals', () => {
-  it('submits a ready change as a self-category card without file bodies', async () => {
+  it('submits a ready change as a self-category card with a bounded diff excerpt (#1142 F3)', async () => {
     const store = await makeStore();
     const { queue, approvals } = setup(store);
     const ready = await readyChange(store);
@@ -75,10 +75,12 @@ describe('SelfChangeApprovals', () => {
         files: [{ path: 'commands/ping.ts', kind: 'create', added: 1, removed: 0 }],
         impact: 'generation',
         trial: 'passed (1 skipped)',
+        skippedChecks: ['unknown'],
+        diffExcerpt: ['# create commands/ping.ts', '@@ -0,0 +1,1 @@', '+export default 1;'],
+        diffExcerptTruncated: false,
       },
     });
     expect(card.expiresAt - card.createdAt).toBe(24 * HOUR);
-    expect(JSON.stringify(card.args)).not.toContain('export default');
     expect(audit.at(-1)).toMatchObject({ reasonCode: 'change_submitted', outcome: 'defer' });
   });
 
@@ -206,6 +208,8 @@ describe('SelfChangeApprovals', () => {
     expect(await after.approvals.restore()).toBe(2);
     const card = after.queue.get(after.approvals.approvalIdFor(kept.id)!)!;
     expect(card.expiresAt - clock).toBe(22 * HOUR);
+    // The rebuilt card carries the diff excerpt too, recomputed from the staged files.
+    expect(card.args).toMatchObject({ diffExcerpt: ['# create commands/ping.ts', '@@ -0,0 +1,1 @@', '+export default 1;'] });
 
     clock += 23 * HOUR;
     const later = setup(store);

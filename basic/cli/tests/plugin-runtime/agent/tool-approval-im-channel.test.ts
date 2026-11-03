@@ -8,6 +8,7 @@ import {
 import {
   ImToolApprovalChannel,
   formatImApprovalCard,
+  formatSelfChangeCard,
   imApprovalOperatorId,
   type ImApprovalCommandInput,
   type ImApprovalDeliveryTarget,
@@ -389,5 +390,47 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
     const queue = new ToolApprovalQueue();
     const card = queue.enqueue(SELF_CHANGE);
     expect(formatImApprovalCard(card, 'dm')).toContain('【变更审批】');
+  });
+
+  it('shows the diff excerpt, the skipped check names and the blind-approval warning (#1142 F3)', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue({
+      ...SELF_CHANGE,
+      args: {
+        ...SELF_CHANGE.args,
+        trial: 'passed (1 skipped)',
+        skippedChecks: ['sandbox_load commands/ping.ts'],
+        diffExcerpt: ['# create commands/ping.ts', '@@ -0,0 +1,1 @@', '+export default 1;'],
+        diffExcerptTruncated: false,
+      },
+    });
+    const text = formatImApprovalCard(card, 'dm');
+    expect(text).toContain('差异摘录：\n# create commands/ping.ts\n@@ -0,0 +1,1 @@\n+export default 1;\n（以上为全部改动）');
+    expect(text).toContain('试跑：通过 (1 skipped)；跳过：sandbox_load commands/ping.ts');
+    expect(text).toContain('未看完整正文请去 Console');
+  });
+
+  it('caps a stored excerpt at 40 lines and 2 KB and points to the Console', () => {
+    const queue = new ToolApprovalQueue();
+    const longLines = Array.from({ length: 45 }, (_, index) => `+line ${index} ${'z'.repeat(150)}`);
+    const card = queue.enqueue({
+      ...SELF_CHANGE,
+      args: { ...SELF_CHANGE.args, diffExcerpt: longLines, diffExcerptTruncated: false },
+    });
+    const text = formatSelfChangeCard(card);
+    const shown = text.split('\n').filter(line => line.startsWith('+line '));
+    expect(shown.length).toBeLessThan(40);
+    expect(Buffer.byteLength(shown.join('\n'), 'utf8')).toBeLessThanOrEqual(2 * 1024);
+    expect(text).toContain('…（摘录已截断）完整内容见 Console。');
+  });
+
+  it('still warns when the card has no excerpt (older or failed excerpt)', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue(SELF_CHANGE);
+    const text = formatSelfChangeCard(card);
+    expect(text).toContain('差异摘录：不可用，完整内容见 Console。');
+    expect(text).toContain('未看完整正文请去 Console');
+    expect(text).toContain('试跑：通过');
+    expect(text).not.toContain('跳过：');
   });
 });

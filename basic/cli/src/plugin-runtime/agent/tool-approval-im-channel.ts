@@ -211,7 +211,11 @@ export function formatImApprovalCard(
   ].filter((line): line is string => Boolean(line)).join('\n');
 }
 
-/** Self-change card (ADR 0040 §4): summary, diff counts, impact, trial verdict — never file bodies. */
+/**
+ * Self-change card (ADR 0040 §4, #1142 F3): summary, diff counts, a bounded diff excerpt (≤ 40 lines / 2 KB,
+ * already cut and redacted when the card was enqueued), impact, trial verdict with the skipped check names, and
+ * a reminder not to approve blind. Never full file bodies or config values.
+ */
 export function formatSelfChangeCard(entry: ToolApprovalEntry, commandPrefix = '/'): string {
   const args = entry.args as Partial<SelfChangeApprovalArgs>;
   const origin = entry.origin;
@@ -227,14 +231,52 @@ export function formatSelfChangeCard(entry: ToolApprovalEntry, commandPrefix = '
     ...shown,
     files.length > shown.length ? `  …另 ${files.length - shown.length} 个文件` : undefined,
     configPaths.length > 0 ? `配置：${configPaths.join('，')}` : undefined,
+    ...diffExcerptLines(args),
     `影响：${impactLabel(args.impact)}${Array.isArray(args.impactDetail) && args.impactDetail.length > 0 ? `（${args.impactDetail.join('；')}）` : ''}`,
-    `试跑：${args.trial === undefined ? '-' : String(args.trial).replace(/^passed/u, '通过')}`,
+    trialLine(args),
     `审批卡片：${entry.id}`,
     `过期时间：${formatExpiry(entry.expiresAt)}（超时自动作废）`,
     `批准：${commandPrefix}approve ${entry.id}`,
     `驳回：${commandPrefix}deny ${entry.id}`,
     '批准只对这一版内容有效；只能在私聊或 Console 处理，不能在群里结算。',
   ].filter((line): line is string => Boolean(line)).join('\n');
+}
+
+/** Hard bounds for the excerpt on the card, re-checked here because restored cards come from stored args. */
+const CARD_EXCERPT_MAX_LINES = 40;
+const CARD_EXCERPT_MAX_BYTES = 2 * 1024;
+const BLIND_APPROVAL_WARNING = '⚠️ 未看完整正文请去 Console 查看后再批准，不要盲批。';
+
+function diffExcerptLines(args: Partial<SelfChangeApprovalArgs>): string[] {
+  const excerpt = Array.isArray(args.diffExcerpt)
+    ? args.diffExcerpt.filter((line): line is string => typeof line === 'string')
+    : null;
+  if (!excerpt || excerpt.length === 0) {
+    return ['差异摘录：不可用，完整内容见 Console。', BLIND_APPROVAL_WARNING];
+  }
+  const kept: string[] = [];
+  let bytes = 0;
+  for (const line of excerpt) {
+    const lineBytes = Buffer.byteLength(line, 'utf8') + (kept.length > 0 ? 1 : 0);
+    if (kept.length >= CARD_EXCERPT_MAX_LINES || bytes + lineBytes > CARD_EXCERPT_MAX_BYTES) break;
+    kept.push(line);
+    bytes += lineBytes;
+  }
+  const truncated = args.diffExcerptTruncated === true || kept.length < excerpt.length;
+  return [
+    '差异摘录：',
+    ...kept,
+    truncated ? '…（摘录已截断）完整内容见 Console。' : '（以上为全部改动）',
+    BLIND_APPROVAL_WARNING,
+  ];
+}
+
+function trialLine(args: Partial<SelfChangeApprovalArgs>): string {
+  const verdict = args.trial === undefined ? '-' : String(args.trial).replace(/^passed/u, '通过');
+  const skipped = Array.isArray(args.skippedChecks)
+    ? args.skippedChecks.filter((name): name is string => typeof name === 'string' && name.length > 0)
+    : [];
+  return skipped.length > 0 ? `试跑：${verdict}；跳过：${skipped.join('，')}` : `试跑：${verdict}`;
 }
 
 function impactLabel(impact: unknown): string {

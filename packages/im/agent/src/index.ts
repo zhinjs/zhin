@@ -508,6 +508,21 @@ export {
   type SelfChangePreview,
 } from './self-change/preview.js';
 export {
+  MAX_IM_DIFF_EXCERPT_BYTES,
+  MAX_IM_DIFF_EXCERPT_LINES,
+  buildSelfChangeDetailDiff,
+  selfChangeDiffExcerpt,
+  skippedTrialChecks,
+  unifiedDiff as selfChangeUnifiedDiff,
+  type BuildSelfChangeDetailDiffInput,
+  type SelfChangeDetailDiff,
+  type SelfChangeDiffBaseline,
+  type SelfChangeDiffExcerpt,
+  type SelfChangeDiffExcerptLimits,
+  type SelfChangeFileDetailDiff,
+  type SelfChangeFileDiffUnavailableReason,
+} from './self-change/detail-diff.js';
+export {
   SELF_CHANGE_APPROVAL_TOOL,
   SelfChangeApprovals,
   SelfChangePendingCapError,
