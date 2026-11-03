@@ -1,0 +1,29 @@
+basic/cli/tests/config-offline.test.ts
+  s_e0efb469ee3bbd::t_1b5661e0098c0a 94-96
+basic/cli/tests/plugin-runtime/console/configuration-cli-live-host.test.ts
+  s_58400078c2bd23::t_3b0811a7bfc74c 15,26-36,44-46,50-53,55,103-104,107-108,111-112,170-186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1acee1120c66fe0388a31e7b1a38eba873d78068",
+  "prompts": {},
+  "sessions": {
+    "s_58400078c2bd23": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10a-48da-7853-81e1-9117fda44a34",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_e0efb469ee3bbd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a112-3d2d-7803-922e-3d4469743e32",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
