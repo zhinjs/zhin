@@ -25,11 +25,16 @@ describe('trusted project configuration patch RPC', () => {
     });
   });
 
-  it('rejects demo, missing revision, non-array patches and scoped-field ambiguity before a write', async () => {
+  it('rejects demo, missing revision, malformed patch operations and scoped-field ambiguity before a write', async () => {
     const patchProjectConfig = vi.fn(async () => saved);
     for (const [extra, authScope] of [
       [{}, 'demo'], [{ expectedRevision: 'stale' }, 'full'], [{ patches: null }, 'full'],
-      [{ instanceKey: 'bot' }, 'full'],
+      [{ instanceKey: 'bot' }, 'full'], [{ patches: [] }, 'full'], [{ patches: [null] }, 'full'],
+      [{ patches: [{ op: 'set' }] }, 'full'], [{ patches: [{ op: 'set', path: ['ai'] }] }, 'full'],
+      [{ patches: [{ op: 'move', path: ['ai'] }] }, 'full'], [{ patches: [{ op: 'remove', path: ['__proto__'] }] }, 'full'],
+      [{ patches: [{ op: 'remove', path: [''] }] }, 'full'],
+      [{ patches: Array.from({ length: 33 }, () => ({ op: 'remove', path: ['ai'] })) }, 'full'],
+      [{ patches: [{ op: 'remove', path: Array.from({ length: 17 }, () => 'a') }] }, 'full'],
     ] as const) {
       const request = message(extra);
       const reply = pickRpcReply(request, await dispatchRuntimeConsoleRpc(request, {
