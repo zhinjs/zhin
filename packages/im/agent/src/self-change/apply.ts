@@ -2,7 +2,8 @@
  * 受控自我进化：生效、校验、回滚与回报（ADR 0040 §5 / §6，切片 E1）。
  *
  * 批准（`approved`）后按序：
- * 1. 复核 `content_hash`（逐个暂存文件重算摘要）与 `configPatch.expectedRevision`；不符 → `failed`，不动任何文件。
+ * 1. 复核 `content_hash`（逐个暂存文件重算摘要）、配置补丁是否触及当前禁改键、`configPatch.expectedRevision`；
+ *    不符 → `failed`，不动任何文件。
  * 2. 写回滚快照 `snapshot/`；把 `applying` + 回报目标 + 生效进度**先落盘**，再动手。
  * 3. 暂存文件写入目标路径（同目录临时文件 + rename），应用 `configPatch`。
  * 4. 按影响面：`none` 直接校验；`generation` 调热重载端口（返回需重启时按 `process`）；
@@ -19,7 +20,9 @@ import * as path from 'node:path';
 import type { DecisionReasonCode } from '../decision-events.js';
 import type { HostProtectedPaths } from '../security/host-config-paths.js';
 import {
+  SelfChangeConfigKeyError,
   SelfChangePathError,
+  assertConfigPatchAllowed,
   normalizeChangeTarget,
   selfChangeContentHash,
   sha256Hex,
@@ -165,6 +168,9 @@ export class SelfChangeApplier {
     const staged = await this.#readStaged(current);
     const mismatch = verifyStaged(current, staged);
     if (mismatch) return this.#failUntouched(current, 'change_hash_mismatch', mismatch);
+    // 禁改名单可能在起草 / 批准之后扩充：按当前名单重查，旧批准不能放行新禁改键。
+    const forbiddenConfigError = findForbiddenConfigPatchError(current);
+    if (forbiddenConfigError) return this.#failUntouched(current, 'change_config_key_forbidden', forbiddenConfigError);
     let configRevision: string | null = null;
     let configSource: string | null = null;
     if (current.configPatch) {
@@ -423,6 +429,18 @@ export class SelfChangeApplier {
     const run = this.#tail.then(task, task);
     this.#tail = run.catch(() => undefined);
     return run;
+  }
+}
+
+/** 配置补丁按当前禁改名单复核；触及禁改键返回原因。 */
+function findForbiddenConfigPatchError(record: SelfChangeRecord): string | null {
+  if (!record.configPatch) return null;
+  try {
+    assertConfigPatchAllowed(record.configPatch);
+    return null;
+  } catch (error) {
+    if (error instanceof SelfChangeConfigKeyError) return error.message;
+    throw error;
   }
 }
 

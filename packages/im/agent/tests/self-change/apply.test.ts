@@ -12,6 +12,7 @@ import {
   type SelfChangeHealth,
   type SelfChangeReportInput,
 } from '../../src/self-change/apply.js';
+import { selfChangeContentHash } from '../../src/self-change/policy.js';
 import type { SelfChangeImpactKind } from '../../src/self-change/preview.js';
 import { SelfChangeStore, type SelfChangeOrigin } from '../../src/self-change/store.js';
 
@@ -217,6 +218,30 @@ describe('SelfChangeApplier — verification before touching anything', () => {
     expect(await applier(store, host).apply(change.id)).toBe('failed');
     expect(config.patched).toBe(0);
     expect(existsSync(join(project, 'commands', 'ping.ts'))).toBe(false);
+  });
+
+  it('fails without writing when an approved config patch touches a key forbidden after approval', async () => {
+    const store = await makeStore();
+    const config = fakeConfig('a: 1\n', 'r1');
+    const host = fakeHost(config);
+    const change = await approvedChange(store, { configPatch: { expectedRevision: 'r1', patches: [{ op: 'set', path: ['weather', 'unit'], value: 'c' }] } });
+    // 模拟名单扩充前已批准的旧记录：补丁指向如今的禁改键，摘要与批准绑定都与之一致。
+    const recordFile = join(changeDir(change.id), 'change.json');
+    const record = JSON.parse(readFileSync(recordFile, 'utf8'));
+    record.configPatch.patches[0].path = ['ai', 'agent', 'execSecurity'];
+    const staleHash = selfChangeContentHash(record.files, record.configPatch);
+    record.contentHash = staleHash;
+    record.approvedHash = staleHash;
+    writeFileSync(recordFile, JSON.stringify(record));
+
+    expect(await applier(store, host).apply(change.id)).toBe('failed');
+    expect(config.patched).toBe(0);
+    expect(existsSync(join(project, 'commands', 'ping.ts'))).toBe(false);
+    expect(host.reloads).toBe(0);
+    expect(host.stops).toEqual([]);
+    expect(audit.map(event => event.reasonCode)).toContain('change_config_key_forbidden');
+    expect(host.reports[0]!.text).toContain('ai.agent.execSecurity');
+    expect((await store.get(change.id))?.status).toBe('failed');
   });
 
   it('refuses to follow a symlinked target out of the project', async () => {

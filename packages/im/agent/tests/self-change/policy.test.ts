@@ -1,12 +1,16 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  FORBIDDEN_CHANGE_CONFIG_KEYS,
+  SELF_CHANGE_SECURITY_CONFIG_KEYS,
   SELF_CHANGE_STATUSES,
   SelfChangeConfigKeyError,
   SelfChangePathError,
   SelfChangeValidationError,
+  assertConfigPatchAllowed,
   canTransitionSelfChange,
+  findForbiddenConfigKey,
   isSelfChangeTerminal,
   normalizeChangeConfigPatch,
   normalizeChangeTarget,
@@ -111,6 +115,53 @@ describe('config patch', () => {
       .toThrow(SelfChangeConfigKeyError);
   });
 
+  it.each(SELF_CHANGE_SECURITY_CONFIG_KEYS.map(key => [key]))('rejects set, remove and nested writes of security key %s', (key) => {
+    const segments = key.split('.');
+    const nested = [...segments, 'child'];
+    for (const path of [segments, nested]) {
+      expect(() => normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'set', path, value: {} }] }))
+        .toThrow(SelfChangeConfigKeyError);
+      expect(() => normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'remove', path }] }))
+        .toThrow(SelfChangeConfigKeyError);
+    }
+  });
+
+  it.each(SELF_CHANGE_SECURITY_CONFIG_KEYS.map(key => [key]))('rejects overwriting or removing every ancestor of %s', (key) => {
+    const segments = key.split('.');
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      const ancestor = segments.slice(0, depth);
+      expect(() => normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'set', path: ancestor, value: {} }] }))
+        .toThrow(SelfChangeConfigKeyError);
+      expect(() => normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'remove', path: ancestor }] }))
+        .toThrow(SelfChangeConfigKeyError);
+    }
+  });
+
+  it('rejects a mixed patch when any single operation touches a security key', () => {
+    const input = {
+      expectedRevision: 'r1',
+      patches: [
+        { op: 'set', path: ['ai', 'agent', 'maxIterations'], value: 8 },
+        { op: 'set', path: ['http', 'tokens'], value: [{ token: 'x', scope: 'full' }] },
+      ],
+    };
+    expect(() => normalizeChangeConfigPatch(input)).toThrow(SelfChangeConfigKeyError);
+  });
+
+  it('keeps the dotted list and the segment list in sync', () => {
+    expect(FORBIDDEN_CHANGE_CONFIG_KEYS.map(segments => segments.join('.'))).toEqual([...SELF_CHANGE_SECURITY_CONFIG_KEYS]);
+    expect(new Set(SELF_CHANGE_SECURITY_CONFIG_KEYS).size).toBe(SELF_CHANGE_SECURITY_CONFIG_KEYS.length);
+  });
+
+  it('finds the forbidden key a path touches and re-checks normalized patches', () => {
+    expect(findForbiddenConfigKey(['ai', 'agent', 'execSecurity', 'mode'])).toEqual(['ai', 'agent', 'execSecurity']);
+    expect(findForbiddenConfigKey(['ai', 'agent', 'maxIterations'])).toBeNull();
+    const allowed = normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'set', path: ['weather', 'unit'], value: 'c' }] });
+    expect(() => assertConfigPatchAllowed(allowed)).not.toThrow();
+    const stale = { expectedRevision: 'r1', patches: [{ op: 'set' as const, path: ['mcp', 'enabled'], value: true }] };
+    expect(() => assertConfigPatchAllowed(stale)).toThrow(SelfChangeConfigKeyError);
+  });
+
   it('allows siblings of forbidden keys', () => {
     expect(() => normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'set', path: ['ai', 'agent', 'maxIterations'], value: 8 }] }))
       .not.toThrow();
@@ -144,5 +195,44 @@ describe('content_hash', () => {
     expect(selfChangeContentHash([file('commands/a.ts', 'A')], null)).not.toBe(base);
     expect(selfChangeContentHash([{ path: 'commands/a.ts', op: 'delete', sha256: null, bytes: 0 }], null)).not.toBe(base);
     expect(selfChangeContentHash([file('commands/a.ts', 'a')], patch)).not.toBe(base);
+  });
+});
+
+// ── 守卫：schema 安全标记 ⇔ 禁改名单 ───────────────────────────────────────────
+
+type SchemaNode = Readonly<Record<string, unknown>>;
+
+const HOST_CONFIG_SCHEMA_URL = new URL('../../../runtime/src/host-config-schema.json', import.meta.url);
+
+function isSchemaNode(value: unknown): value is SchemaNode {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** 只沿 `properties` 走（宿主配置的固定字段）；返回所有标了 `x-zhin-config.security` 的点分路径。 */
+function collectSecurityTaggedKeys(node: SchemaNode, path: readonly string[], found: string[]): string[] {
+  const metadata = node['x-zhin-config'];
+  if (isSchemaNode(metadata) && metadata.security === true) found.push(path.join('.'));
+  const properties = node.properties;
+  if (!isSchemaNode(properties)) return found;
+  for (const [key, child] of Object.entries(properties)) {
+    if (isSchemaNode(child)) collectSecurityTaggedKeys(child, [...path, key], found);
+  }
+  return found;
+}
+
+describe('host config schema security tags', () => {
+  const hostSchema = JSON.parse(readFileSync(HOST_CONFIG_SCHEMA_URL, 'utf8')) as SchemaNode;
+  const taggedKeys = collectSecurityTaggedKeys(hostSchema, [], []);
+
+  it('rejects every schema key tagged as security-sensitive', () => {
+    for (const key of taggedKeys) {
+      expect(SELF_CHANGE_SECURITY_CONFIG_KEYS, `${key} is tagged security in host-config-schema.json`).toContain(key);
+      expect(() => normalizeChangeConfigPatch({ expectedRevision: 'r1', patches: [{ op: 'remove', path: key.split('.') }] }))
+        .toThrow(SelfChangeConfigKeyError);
+    }
+  });
+
+  it('tags every forbidden key in the schema', () => {
+    expect([...taggedKeys].sort()).toEqual([...SELF_CHANGE_SECURITY_CONFIG_KEYS].sort());
   });
 });
