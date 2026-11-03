@@ -1,0 +1,39 @@
+basic/cli/tests/plugin-runtime/agent/self-change-apply.test.ts
+  s_9622fd28aba994::t_8809612662a5c8 223-241
+.changeset/self-change-1146-followup.md
+  s_ce30e957c2b2e6::t_a0e481b51b5988 1-5
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  s_ce30e957c2b2e6::t_eb6d5cf21c806a 291-293,306-308
+basic/cli/tests/plugin-runtime/agent/self-change-configuration-application.test.ts
+  s_ce30e957c2b2e6::t_099e19d56423ca 211-254
+docs/ai/self-change.md
+  s_ce30e957c2b2e6::t_04892a1883f31f 45-47
+docs/en/ai/self-change.md
+  s_ce30e957c2b2e6::t_0ae5d299ea27dc 46-48
+packages/im/agent/tests/self-change/policy.test.ts
+  s_ce30e957c2b2e6::t_edd64ea54dc62b 18,240-246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be5c36e0365c3d63d3b1df5e4023fc29d4bc426f",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
