@@ -1,0 +1,19 @@
+basic/cli/src/plugin-runtime/agent/configuration-update.ts
+  s_9622fd28aba994::t_74c3220b2cad24 2,6,10-11,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d11685b9bc0b1b9c46e3f426acf6c16f1d5184fe",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
