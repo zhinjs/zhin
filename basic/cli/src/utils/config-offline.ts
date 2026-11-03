@@ -20,8 +20,10 @@ export function requireConfigFile(root: string): string {
   return join(root, name);
 }
 
+export const ENVIRONMENT_NAME = /^[a-z0-9][a-z0-9-]*$/u;
+
 export function assertEnvironmentName(environment: string): string {
-  if (!/^[a-z0-9][a-z0-9-]*$/u.test(environment)) throw new TypeError('无效的环境名称');
+  if (!ENVIRONMENT_NAME.test(environment)) throw new TypeError('无效的环境名称');
   return environment;
 }
 

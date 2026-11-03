@@ -44,6 +44,17 @@ function fakeHost(mutate: (request: Record<string, unknown>) => unknown = () => 
 }
 const body = (fetch: ReturnType<typeof vi.fn>, index: number) => JSON.parse(String(fetch.mock.calls[index]![1]?.body));
 async function run(...args: string[]) { await createConfigCommand().parseAsync(['node', 'zhin', '--json', ...args]); }
+async function runHuman(...args: string[]) { await createConfigCommand().parseAsync(['node', 'zhin', ...args]); }
+const sourceReply = { source: '{}', revision: sourceRevision, format: 'json', configKeys: [] };
+/** A Host that answers the pre-mutation read and then replies to the single write with `write(request)`. */
+function rawHost(write: (request: Record<string, unknown>) => Response) {
+  const fetch = vi.fn(async (_url: unknown, options?: RequestInit) => {
+    const request = JSON.parse(String(options?.body));
+    return request.type === 'config:get-source' ? new Response(JSON.stringify({ data: sourceReply, requestId: request.requestId })) : write(request);
+  });
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
 const last = (output: ReturnType<typeof vi.spyOn>) => JSON.parse(String(output.mock.calls.at(-1)?.[0]));
 
 it('set defaults to the running Host (derived from http.*) and never writes the local file', async () => {
@@ -150,28 +161,94 @@ it.each([
   expect(process.exitCode).toBe(code);
 });
 
-it('an HTTP 401/403 is an authentication failure (exit 1), distinct from unknown and never falls back', async () => {
+it.each([401, 403])('an HTTP %i is an authentication failure (exit 1), distinct from unknown and never falls back', async status => {
   const { file, source, output } = await fixture();
   let calls = 0;
-  vi.stubGlobal('fetch', vi.fn(async () => { calls++; return new Response('{"error":"Unauthorized"}', { status: 401 }); }));
+  vi.stubGlobal('fetch', vi.fn(async () => { calls++; return new Response('{"error":"Unauthorized"}', { status }); }));
   await run('set', 'log_level', 'debug');
   expect(calls).toBe(1);
   expect(await readFile(file, 'utf8')).toBe(source);
-  expect(last(output)).toMatchObject({ status: 'unauthorized', httpStatus: 401 });
+  expect(last(output)).toMatchObject({ status: 'unauthorized', httpStatus: status });
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
 });
 
-it('an authoritative Host rejection of the mutation is exit 1, not unknown', async () => {
+it('an authoritative Host rejection (HTTP 400 echoing this requestId) of the mutation is exit 1, not unknown', async () => {
   const { output } = await fixture();
-  let calls = 0;
-  vi.stubGlobal('fetch', vi.fn(async () => ++calls === 1
-    ? new Response(JSON.stringify({ data: { source: '{}', revision: sourceRevision, format: 'json', configKeys: [] } }))
-    : new Response(JSON.stringify({ error: 'Full scope required' }))));
+  const fetch = rawHost(request => new Response(JSON.stringify({ success: false, error: 'Full scope required', requestId: request.requestId }), { status: 400 }));
   await run('set', 'log_level', 'debug');
-  expect(calls).toBe(2);
-  expect(last(output)).toMatchObject({ status: 'rejected', message: expect.stringContaining('Full scope required') });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(last(output)).toMatchObject({ status: 'rejected', expectedRevision: sourceRevision, message: expect.stringContaining('Full scope required') });
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
 });
+
+it.each([
+  ['proxy 502 with an error string', () => new Response('{"error":"Bad Gateway"}', { status: 502 })],
+  ['proxy 504 with an empty object', () => new Response('{}', { status: 504 })],
+  ['route-level 500 with an error string', () => new Response('{"success":false,"error":"No response"}', { status: 500 })],
+  ['400 without a requestId', () => new Response('{"success":false,"error":"Bad request"}', { status: 400 })],
+  ['400 with another requestId', () => new Response('{"success":false,"error":"Bad request","requestId":"other"}', { status: 400 })],
+  ['200 carrying an error string', () => new Response('{"error":"odd"}', { status: 200 })],
+  ['409 with an error string', () => new Response('{"error":"Conflict"}', { status: 409 })],
+] as const)('after the write was dispatched, %s is unknown (exit 6): one write, no offline fallback', async (_name, reply) => {
+  const { file, source, output } = await fixture();
+  const fetch = rawHost(reply);
+  await run('set', 'log_level', 'debug');
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(fetch.mock.calls.filter(call => body(fetch, fetch.mock.calls.indexOf(call)).type === 'config:patch-project')).toHaveLength(1);
+  expect(await readFile(file, 'utf8')).toBe(source);
+  expect(last(output)).toMatchObject({ status: 'unknown', expectedRevision: sourceRevision, requestId: body(fetch, 1).requestId });
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.unknown);
+});
+
+it.each([
+  ['application unconfirmed', saved({ applicationError: 'unconfirmed' })],
+  ['group unknown', saved({ application: receipt([{ status: 'applied' }, { status: 'unknown' }]) })],
+  ['server unconfirmed', { status: 'unconfirmed', expectedRevision: sourceRevision, message: 'unconfirmed' }],
+] as const)('every exit-6 receipt (%s) carries requestId and expectedRevision', async (_name, data) => {
+  const { output } = await fixture();
+  const fetch = fakeHost(() => data);
+  await run('set', 'log_level', 'debug');
+  expect(last(output)).toMatchObject({ status: data.status, requestId: body(fetch, 1).requestId, expectedRevision: sourceRevision });
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.unknown);
+});
+
+it('human mode prints exit-6 evidence (requestId, expectedRevision) and no JSON', async () => {
+  const { output, errors } = await fixture();
+  const fetch = rawHost(() => new Response('{"error":"Bad Gateway"}', { status: 502 }));
+  await runHuman('set', 'log_level', 'debug');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.unknown);
+  const stderr = errors.mock.calls.map(call => String(call[0])).join('\n');
+  expect(stderr).toContain(`requestId=${body(fetch, 1).requestId}`);
+  expect(stderr).toContain(`expectedRevision=${sourceRevision}`);
+  expect(output).not.toHaveBeenCalled();
+});
+
+it('human mode prints evidence for a saved-but-unconfirmed receipt and only the human line on stdout', async () => {
+  const { output, errors } = await fixture();
+  const fetch = fakeHost(() => saved({ application: receipt([{ status: 'unknown' }]) }));
+  await runHuman('set', 'log_level', 'debug');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.unknown);
+  expect(output.mock.calls.map(call => String(call[0]))).toEqual([expect.stringContaining('生效结果未知')]);
+  expect(String(errors.mock.calls.at(-1)?.[0])).toBe(`requestId=${body(fetch, 1).requestId} expectedRevision=${sourceRevision}`);
+});
+
+it('human mode shows the latest (masked) values of a conflict instead of a JSON dump', async () => {
+  const { output } = await fixture();
+  fakeHost(() => ({ status: 'conflict', revision: savedRevision, current: [{ path: ['log_level'], value: 'warn' }], message: 'conflict' }));
+  await runHuman('set', 'log_level', 'debug');
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.conflict);
+  expect(output.mock.calls.map(call => String(call[0]))).toEqual(['conflict（版本冲突，未保存）\n  log_level: "warn"']);
+});
+
+it.each([['0.0.0.0', 'http://127.0.0.1:18086/api/console/request'], ['::', 'http://[::1]:18086/api/console/request']])(
+  'a wildcard bind address %s derives a loopback connection that may carry the token', async (bind, url) => {
+    await fixture({ configVersion: 2, plugins: {}, http: { host: bind, port: 18086, token: 'file-token' } });
+    const fetch = fakeHost();
+    await run('set', 'log_level', 'debug');
+    expect(String(fetch.mock.calls[0]![0])).toBe(url);
+    expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ authorization: 'Bearer file-token' });
+    expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+  });
 
 it('reads ask the Host to redact by default and only reveal on --reveal', async () => {
   const { output } = await fixture();
@@ -192,6 +269,20 @@ it('get of a missing path exits 1 with not-found', async () => {
   fakeHost(undefined, request => ({ revision: sourceRevision, path: request.path, exists: false, redacted: true }));
   await run('get', 'missing.key');
   expect(last(output)).toMatchObject({ status: 'not-found', path: ['missing', 'key'] });
+  expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
+});
+
+it.each([
+  ['an invalid --offline --environment', ['--offline', '--environment', 'Bad/Name']],
+  ['an invalid --token-env', ['--token-env', 'not-a-name!']],
+  ['an unset --token-env', ['--token-env', 'CLI_TEST_UNSET_TOKEN']],
+] as const)('%s is a structured usage error (exit 1) without any request', async (_name, flags) => {
+  const { file, source, output } = await fixture();
+  const fetch = fakeHost();
+  await run('set', 'log_level', 'debug', ...flags);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(await readFile(file, 'utf8')).toBe(source);
+  expect(last(output).status).toBe('usage');
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
 });
 

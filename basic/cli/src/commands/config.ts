@@ -10,11 +10,12 @@ import {
   ConsoleAuthenticationError, ConsoleConnectionError, ConsoleRequestUnconfirmedError, ConsoleRpcError, requestPluginConsole,
 } from '../plugin-management/console-client.js';
 import { parseConfigurationPath } from '../plugin-runtime/console/configuration-path.js';
-import { createOfflineConfigurationStore, requireConfigFile } from '../utils/config-offline.js';
+import { createOfflineConfigurationStore, ENVIRONMENT_NAME, requireConfigFile } from '../utils/config-offline.js';
 
 /**
  * Public exit-code contract of `zhin config get|set|unset|list` (documented in docs/cli).
- * 1 covers every other failure (usage, not found, authentication, Host rejection, failed apply).
+ * 1 covers every other failure (usage, not found, authentication, authoritative Host rejection) and a write
+ * that was saved but not applied (superseded, or a failed/blocked group): the file was written in that case.
  */
 export const CONFIG_EXIT_CODES = Object.freeze({
   ok: 0,
@@ -40,16 +41,30 @@ class ConfigCommandError extends Error {
 
 const NOT_CONNECTED_MESSAGE = '未连接到运行中的 Host，未发送任何请求，文件未修改；如确认要离线操作，请显式加 --offline';
 
-function emit(outcome: unknown, options: Options, human?: string): void {
-  if (!options.json && human) console.log(human);
-  console.log(JSON.stringify(outcome, null, options.json ? undefined : 2));
+/** Verification evidence for operators: what to look up before deciding whether to resubmit. */
+function evidence(outcome: Readonly<Record<string, unknown>>): string | undefined {
+  const parts = (['requestId', 'expectedRevision'] as const)
+    .filter(key => typeof outcome[key] === 'string').map(key => `${key}=${String(outcome[key])}`);
+  return parts.length ? parts.join(' ') : undefined;
+}
+
+/** `--json` prints exactly one compact JSON object; otherwise only the human-readable lines. */
+function emit(outcome: Readonly<Record<string, unknown>>, options: Options, human: string): void {
+  if (options.json) { console.log(JSON.stringify(outcome)); return; }
+  console.log(human);
+  const line = evidence(outcome);
+  if (line) console.error(line);
+}
+
+function usage(message: string): ConfigCommandError {
+  return new ConfigCommandError({ status: 'usage', message }, CONFIG_EXIT_CODES.error);
 }
 
 async function connection(options: Options): Promise<Connection> {
   const tokenEnvironment = options.tokenEnv ?? 'ZHIN_CONSOLE_TOKEN';
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(tokenEnvironment)) throw new TypeError('无效的 token 环境变量名');
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(tokenEnvironment)) throw usage('无效的 token 环境变量名');
   if (tokenEnvironment !== 'ZHIN_CONSOLE_TOKEN' && process.env[tokenEnvironment] === undefined) {
-    throw new TypeError(`指定的 Console token 环境变量 ${tokenEnvironment} 未设置`);
+    throw usage(`指定的 Console token 环境变量 ${tokenEnvironment} 未设置`);
   }
   const explicit = options.host ?? options.live;
   if (explicit) return { host: explicit, token: process.env[tokenEnvironment], tokenEnvironment };
@@ -71,7 +86,7 @@ async function read<T>(target: Connection, data: Record<string, unknown>): Promi
   }
 }
 
-function transportFailure(error: unknown, dispatchedMutation: boolean, evidence: Record<string, unknown> = {}): unknown {
+function transportFailure(error: unknown, dispatchedMutation: boolean, extra: Readonly<Record<string, unknown>> = {}): unknown {
   if (error instanceof ConsoleConnectionError) {
     return new ConfigCommandError({ status: 'not-connected', host: error.host, code: error.code ?? null, message: NOT_CONNECTED_MESSAGE },
       CONFIG_EXIT_CODES.notConnected);
@@ -81,13 +96,14 @@ function transportFailure(error: unknown, dispatchedMutation: boolean, evidence:
       message: 'Host 拒绝了 Console 凭据（检查 ZHIN_CONSOLE_TOKEN / http.token）；未回退离线' }, CONFIG_EXIT_CODES.error);
   }
   if (error instanceof ConsoleRpcError) {
-    return new ConfigCommandError({ status: 'rejected', ...evidence, message: `Host 拒绝请求：${error.message}` }, CONFIG_EXIT_CODES.error);
+    return new ConfigCommandError({ status: 'rejected', ...extra, message: `Host 拒绝请求：${error.message}` }, CONFIG_EXIT_CODES.error);
   }
   if (error instanceof ConsoleRequestUnconfirmedError) {
+    const httpStatus = error.httpStatus === undefined ? {} : { httpStatus: error.httpStatus };
     return dispatchedMutation
-      ? new ConfigCommandError({ status: 'unknown', ...evidence, requestId: error.requestId,
+      ? new ConfigCommandError({ status: 'unknown', ...extra, requestId: error.requestId, ...httpStatus,
         message: '结果未知：请求已发出但未收到确定回执。请先用 zhin config get 核对，勿重复提交；未回退离线、未重试。' }, CONFIG_EXIT_CODES.unknown)
-      : new ConfigCommandError({ status: 'error', requestId: error.requestId,
+      : new ConfigCommandError({ status: 'error', requestId: error.requestId, ...httpStatus,
         message: '未收到 Host 的有效响应；未发送任何写入' }, CONFIG_EXIT_CODES.error);
   }
   return error;
@@ -154,7 +170,10 @@ export function configPatchExitCode(result: ConsoleConfigProjectPatchResult): nu
 }
 
 function patchMessage(result: ConsoleConfigProjectPatchResult, code: number): string {
-  if (result.status === 'conflict') return `${result.message}（版本冲突，未保存）`;
+  if (result.status === 'conflict') {
+    return [`${result.message}（版本冲突，未保存）`,
+      ...result.current.map(item => `  ${item.path.join('.')}: ${item.value === undefined ? '(不存在)' : JSON.stringify(item.value)}`)].join('\n');
+  }
   if (result.status === 'invalid') {
     return [`${result.message}`, ...result.errors.map(error => `  ${error.path}: ${error.message}`)].join('\n');
   }
@@ -181,7 +200,7 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
       ? { status: 'saved', revision: result.revision, paths: result.paths, missingEnv: result.missingEnv, application: 'not-requested',
         message: '已离线保存；运行中的 Host 只有在 --watch config 或 Console「应用配置」之后才会生效' }
       : result;
-    emit(outcome, options, result.status === 'saved' ? outcome.message : patchMessage(result, code));
+    emit(outcome, options, result.status === 'saved' ? outcome.message as string : patchMessage(result, code));
     process.exitCode = code;
     return;
   }
@@ -203,7 +222,8 @@ async function mutate(options: Options, patches: readonly ConsoleConfigPatchOper
   const result = patchResult(reply, expectedRevision);
   if (!result) throw transportFailure(new ConsoleRequestUnconfirmedError(requestId), true, { expectedRevision });
   const code = configPatchExitCode(result);
-  emit(result.status === 'unconfirmed' ? { ...result, requestId } : result, options, patchMessage(result, code));
+  // Every exit-6 outcome (unconfirmed write, unconfirmed application, unknown group) carries its evidence.
+  emit(code === CONFIG_EXIT_CODES.unknown ? { ...result, requestId, expectedRevision } : result, options, patchMessage(result, code));
   process.exitCode = code;
 }
 
@@ -212,14 +232,19 @@ function run(action: (args: unknown[], options: Options) => Promise<void>) {
     const invoked = args.at(-1) as Command;
     const options = invoked.optsWithGlobals<Options>();
     try {
-      if (options.offline && (options.host || options.live)) {
-        throw new ConfigCommandError({ status: 'usage', message: '--offline 不能与 --host 同时使用' }, CONFIG_EXIT_CODES.error);
+      if (options.offline && (options.host || options.live)) throw usage('--offline 不能与 --host 同时使用');
+      if (options.offline && !ENVIRONMENT_NAME.test(options.environment ?? 'development')) {
+        throw usage(`无效的环境名称：${options.environment}（仅允许小写字母、数字和 -）`);
       }
       await action(args, options);
     } catch (error) {
       if (!(error instanceof ConfigCommandError)) throw error;
       if (options.json) console.log(JSON.stringify(error.outcome));
-      else console.error(error.outcome.message);
+      else {
+        console.error(error.outcome.message);
+        const line = evidence(error.outcome);
+        if (line) console.error(line);
+      }
       process.exitCode = error.exitCode;
     }
   };

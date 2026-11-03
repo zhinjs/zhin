@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 /** A request was dispatched but no authoritative RPC result was received. Never retry a mutation blindly. */
 export class ConsoleRequestUnconfirmedError extends Error {
-  constructor(readonly requestId: string) {
-    super('Console request result is unconfirmed');
+  constructor(readonly requestId: string, readonly httpStatus?: number) {
+    super(`Console request result is unconfirmed${httpStatus === undefined ? '' : ` (HTTP ${httpStatus})`}`);
     this.name = 'ConsoleRequestUnconfirmedError';
   }
 }
@@ -24,7 +24,10 @@ export class ConsoleAuthenticationError extends Error {
   }
 }
 
-/** An authoritative error reply from the Host RPC handler. */
+/**
+ * An authoritative error reply from the Host RPC handler: HTTP 400 carrying an `error`
+ * string and echoing this request's `requestId` (the `/console/request` route contract).
+ */
 export class ConsoleRpcError extends Error {
   constructor(message: string) {
     super(message);
@@ -93,12 +96,16 @@ export async function requestPluginConsole<T>(
     try { message = ((await response.json()) as { error?: unknown } | null)?.error; } catch { message = undefined; }
     throw new ConsoleAuthenticationError(response.status, typeof message === 'string' ? message.slice(0, 200) : undefined);
   }
-  let reply: { error?: unknown; data?: T };
-  try { reply = await response.json() as { error?: unknown; data?: T }; }
-  catch { throw new ConsoleRequestUnconfirmedError(requestId); }
-  if (!reply || typeof reply !== 'object') throw new ConsoleRequestUnconfirmedError(requestId);
-  if (typeof reply.error === 'string') throw new ConsoleRpcError(reply.error);
-  if (!response.ok) throw new Error(`Console request failed: HTTP ${response.status}`);
+  let reply: { error?: unknown; data?: T; requestId?: unknown };
+  try { reply = await response.json() as { error?: unknown; data?: T; requestId?: unknown }; }
+  catch { throw new ConsoleRequestUnconfirmedError(requestId, response.ok ? undefined : response.status); }
+  if (!reply || typeof reply !== 'object') throw new ConsoleRequestUnconfirmedError(requestId, response.ok ? undefined : response.status);
+  // Only the RPC handler's own rejection is a definitive receipt. A proxy 502/504, a route-level 500
+  // or any other non-2xx reply (even with an `error` string) says nothing about whether it was executed.
+  if (response.status === 400 && typeof reply.error === 'string' && reply.requestId === requestId) {
+    throw new ConsoleRpcError(reply.error);
+  }
+  if (!response.ok || reply.error !== undefined) throw new ConsoleRequestUnconfirmedError(requestId, response.status);
   if (!Object.hasOwn(reply, 'data')) throw new ConsoleRequestUnconfirmedError(requestId);
   return reply.data as T;
 }
