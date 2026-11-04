@@ -87,6 +87,35 @@ fallback is separate and remains covered by `multimodal-perception-fallback`.
 | `models` | Extra model ids registered after the primary `scripted-model`, in registration order (legacy `modelCandidates`; fixed chat selection must not call the later models). A step's optional `model` pins which model must receive that request. |
 | `modelInput` | Input modalities the scripted model declares (default `['text']`). Add `'image'` so turn images reach it. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
+| `agents` | ADR 0048 H2 peer Agents (`name`, `description`, `tools`, optional `collaboration: { contacts, acceptsFrom }`). The driver registers them as `capabilities.agents` (owned by the driver's root plugin) and awaits `collaborationIdle()` after every inbound turn, then `closeCollaborations()` at the end of the case. See "Peer agents and actors". |
+
+### Peer agents and actors (ADR 0048 H2)
+
+A case with `agents` lets the entry agent (`zhin`) collaborate with peers through `agents` / `ask` / `delegate` /
+`tell`. Peers run as child turns while the entry turn is live, and delegated work continues after it, so their model
+requests can interleave non-deterministically. The scripted model therefore keeps **one queue per actor**:
+
+- A step may carry `actor: '<agent name>'` (text, tool-call and fault steps alike). Steps without `actor` belong to the
+  entry agent.
+- Each request consumes the next unconsumed step of **its own actor's** queue, so every actor's steps stay in script
+  order whatever the interleaving. Cases without any `actor` tag behave as a single queue, exactly as before.
+- The requesting actor is read from `StreamOptions.sessionId`, which the agent loop already passes to the model
+  provider: child turns use `<root session key>#actor:<agent>` (a `#<uuid>` suffix before or after is fine; the entry agent's own loop id is `<session key>#<uuid>`), anything else is the entry agent.
+- "Unused steps" and "requests after the script ran out" are reported per actor.
+- A model response with tool calls is always followed by another request from the same actor once the tool results are
+  in. `ask` blocks the asker until the target finishes; `delegate` returns at once, the target runs in the background,
+  and when the entry turn ends the delegated results come back as a new entry-agent turn whose text goes to the user.
+  Script the entry agent's acknowledgement and its wake-up reply as two separate untagged steps.
+
+Until the turn engine runs peers, validation rejects non-skipped cases with `agents`, and the `harness-*` cases are
+skipped with a reason starting `ADR 0048 H2`. The engine author can run them with:
+
+```bash
+ZHIN_EVAL_HARNESS=1 pnpm eval:agent
+```
+
+`ZHIN_EVAL_HARNESS=1` lifts the `agents` validation and un-skips every case whose `skip` reason starts with
+`ADR 0048 H2`; other skipped cases stay skipped.
 
 ### Assertions (`expect`)
 
