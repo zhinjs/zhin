@@ -180,6 +180,11 @@ describe('locale and plugin id helpers', () => {
     expect(locale.translate('zh-CN', { 你好: 'Hello {0}' }, '你好 {0}', 'Ann')).toBe('你好 Ann');
     vi.stubGlobal('navigator', { languages: ['en-US'] }); expect(locale.detectLocale()).toBe('en');
     vi.stubGlobal('navigator', { languages: ['zh-TW', 'en'] }); expect(locale.detectLocale()).toBe('zh-CN');
+    // The Console's chosen language (<html lang>) wins over the browser's languages.
+    vi.stubGlobal('document', { documentElement: { lang: 'zh-CN' } }); vi.stubGlobal('navigator', { languages: ['en-US'] }); expect(locale.detectLocale()).toBe('zh-CN');
+    vi.stubGlobal('document', { documentElement: { lang: 'en' } }); vi.stubGlobal('navigator', { languages: ['zh-CN'] }); expect(locale.detectLocale()).toBe('en');
+    vi.stubGlobal('document', { documentElement: { lang: '' } }); vi.stubGlobal('navigator', { languages: ['zh-CN'] }); expect(locale.detectLocale()).toBe('zh-CN');
+    vi.unstubAllGlobals();
     expect(locale.formatClock(new Date(2026, 0, 2, 3, 4).getTime())).toBe('03:04');
   });
 

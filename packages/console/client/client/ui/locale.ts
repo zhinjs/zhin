@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 
 export type PluginUiLocale = 'zh-CN' | 'en';
 
@@ -19,11 +19,24 @@ const KIT_EN: Readonly<Record<string, string>> = {
   '确认：{0}': 'Confirm: {0}',
 };
 
-/** `navigator.languages` 里有 zh 就用中文，否则英文；无 DOM 时默认中文。 */
+/**
+ * 跟随 Console：Console 把用户选的界面语言写在 `<html lang>` 上，优先读它；
+ * 没有时才看 `navigator.languages`；无 DOM 时默认中文。
+ */
 export function detectLocale(): PluginUiLocale {
+  const lang = typeof document !== 'undefined' ? document.documentElement.lang : '';
+  if (lang) return lang.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en';
   if (typeof navigator === 'undefined') return 'zh-CN';
   const languages = navigator.languages?.length ? navigator.languages : [navigator.language];
   return languages.some((language) => language?.toLowerCase().startsWith('zh')) ? 'zh-CN' : 'en';
+}
+
+/** 在 Console 里切换语言时 `<html lang>` 会变，页面随之重新渲染。 */
+function subscribeLocale(onChange: () => void): () => void {
+  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return () => {};
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+  return () => observer.disconnect();
 }
 
 /** 以中文原文为键翻译，`{0}` `{1}` 为位置占位符；缺失翻译时回退原文。 */
@@ -50,7 +63,7 @@ export interface PluginUiText {
  * 取代各页面重复的 `detectLocale` + `text` 辅助函数。
  */
 export function useLocale(dictionary?: Readonly<Record<string, string>>): PluginUiText {
-  const locale = useMemo(detectLocale, []);
+  const locale = useSyncExternalStore(subscribeLocale, detectLocale, () => 'zh-CN' as PluginUiLocale);
   return useMemo(() => ({
     locale,
     t: (zh: string, ...values: readonly (string | number)[]) => translate(locale, dictionary, zh, ...values),
