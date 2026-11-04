@@ -1365,6 +1365,8 @@ describe('durable final reply delivery', () => {
     try {
       const outcome = await runtime.execute(fixture.child, { ...externalRequest('offline'),
         origin: mutableOrigin,
+        // ADR 0044: sandbox behaviour follows the declared `runtime.sandbox` capability, not the platform name.
+        input: { platformCapabilities: { has: (path: string) => adapter === 'sandbox' && path === 'runtime.sandbox' } },
         session: { key: sessionKey }, policy: { permissions: ['authenticated'], unattended: false }, ports: { reply: { send: sends } },
       }, selection([]));
       expect(outcome.status).toBe('completed'); expect(sends).toHaveBeenCalledTimes(2);

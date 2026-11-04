@@ -45,6 +45,7 @@ export class ImResultSink implements ResultSink {
       origin,
       delivery,
       imageAssets: this.deps.imageAssets?.(),
+      mediaCapabilities: this.deps.proactiveOutbound.mediaCapabilities?.(scene),
       send: (opts: SendOptions) => this.deps.proactiveOutbound.send({
         scene,
         source: 'subagent',

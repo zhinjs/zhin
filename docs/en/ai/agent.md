@@ -399,7 +399,7 @@ Mutes, joins, pokes, and similar events used to land only in `conversation_event
 | `member.card_changed` / `title_changed` / `remark_changed` | Low | Card / special title / remark |
 | `conversation.poked` (person to person) | Low | Aggregated |
 
-Each event keeps only the platform, scene, actor, target, a short summary, and the time; **raw platform JSON never reaches the model**. Adapters normalize through the shared `receiveOneBotLikeSideEvent`: icqq pokes, reactions, admin changes, mutes, and join requests; OneBot11 / NapCat / QQ `group_card` (card) and `notify.title` (title), and so on. The icqq SDK has no card or notice events today; they appear when a platform provides them.
+Each event keeps only the platform, scene, actor, target, a short summary, and the time; **raw platform JSON never reaches the model**. Adapters normalize through `receiveOneBotLikeSideEvent` from the shared `@zhin.js/adapter-onebot-events` package (KOOK and Slack map inside their own adapters): icqq pokes, reactions, admin changes, mutes, and join requests; OneBot11 / NapCat / QQ `group_card` (card) and `notify.title` (title), and so on. The icqq SDK has no card or notice events today; they appear when a platform provides them.
 
 **Wake rules**
 

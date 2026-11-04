@@ -1,5 +1,6 @@
 import {
   resolveActivityFeedbackPhaseConfig,
+  type ActivityFeedbackKindCapabilities,
   type ActivityFeedbackPhase,
   type ActivitySceneType,
   type ResolvedActivityFeedbackPhaseConfig,
@@ -28,6 +29,8 @@ export class ActivityFeedbackPolicy {
     phase: ActivityFeedbackPhase,
     sceneType: ActivitySceneType,
     locale?: Locale,
+    /** The Endpoint's declared capabilities for this conversation kind (ADR 0044). */
+    kind?: ActivityFeedbackKindCapabilities,
   ): PhaseResolution {
     if (this.service.enabled === false) {
       return { kind: 'disabled' };
@@ -44,7 +47,7 @@ export class ActivityFeedbackPolicy {
       return { kind: 'disabled' };
     }
 
-    const config = resolveActivityFeedbackPhaseConfig(platform, policy, phase, sceneType, locale);
+    const config = resolveActivityFeedbackPhaseConfig(kind, policy, phase, sceneType, locale);
     if (config.type === 'none') {
       return { kind: 'none' };
     }

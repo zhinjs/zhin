@@ -12,6 +12,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; enabled: boo
   }),
   adapter: 'icqq',
   scopes: ['group'],
+  requiresCapabilities: ['actions.setAdmin'],
   currentConversationBotRoles: ['owner'],
   permissions: ['role(master,admin,trusted,owner)'],
   requiresApproval: 'human',

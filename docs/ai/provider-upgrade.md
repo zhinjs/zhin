@@ -64,7 +64,7 @@ Workroom 的旧 `disclosure.modelProviders` 需要明确映射到 `modelServices
 
 ### 官方 TypeSafe 的手工迁移
 
-TypeSafe 不属于 headless 内置目录，离线 compiler 会把旧 `ai.decisions` 标为待显式处理，不会为预览执行插件 JS。先进入维护期并备份原配置、数据库和主密钥；保留 TypeSafe 插件声明，按[TypeSafe 升级步骤](../../plugins/services/typesafe/README.md)移除其已退役的 secret/model/enabled 插件配置以及旧 `ai.decisions` 路由，再启动新 Host 管理界面。使用插件实际注册的 exact `typesafe` Driver，建立 API Key Account、`typesafe-system-one`／`decision` 模型与 Profile，然后逐项重建六个决策用途。native ID 沿用旧配置的实际值；每项原 mode、阈值与超时必须明确保留，不因升级自动启用。
+TypeSafe 不属于 headless 内置目录，离线 compiler 会把旧 `ai.decisions` 标为待显式处理，不会为预览执行插件 JS。先进入维护期并备份原配置、数据库和主密钥；保留 TypeSafe 插件声明，按[TypeSafe 升级步骤](https://github.com/zhinjs/zhin/blob/main/plugins/services/typesafe/README.md)移除其已退役的 secret/model/enabled 插件配置以及旧 `ai.decisions` 路由，再启动新 Host 管理界面。使用插件实际注册的 exact `typesafe` Driver，建立 API Key Account、`typesafe-system-one`／`decision` 模型与 Profile，然后逐项重建六个决策用途。native ID 沿用旧配置的实际值；每项原 mode、阈值与超时必须明确保留，不因升级自动启用。
 
 尚未完成新用途配置前不要恢复自动业务；Session 旧选择需要单独显式绑定。恢复时先按下方恢复段核对 journal 与共享数据库的后续写入，再使用对应原包版本、配置、选中数据与主密钥；不能覆盖其他 Root 新写，也不能让旧程序读取新图猜兼容。新图与旧原文在确认前都保留，不自动删除。
 
@@ -114,7 +114,7 @@ SQLite 预览只读数据库并提前验证目标；非 SQLite 使用已有 `--s
 
 数据库类型入口已隔离：`@zhin.js/database` 默认入口保留中性数据库／模型／事务 API 与 Memory／SQLite；Core、Agent、Zhin 的默认声明不再牵引未选外部方言。SQLite 用户无需安装 MySQL、PostgreSQL、MongoDB、Redis 驱动或声明。使用外部方言的 TypeScript 作者从 `@zhin.js/database/dialects/mysql`、`@zhin.js/database/dialects/pg`、`@zhin.js/database/dialects/mongodb` 或 `@zhin.js/database/dialects/redis` 引入对应类与完整原厂配置类型。
 
-PostgreSQL 的 TypeScript 消费者还需显式安装与 `pg` 匹配的 `@types/pg`；JavaScript-only 用户只需 `pg`。默认入口仍自动注册六个 factory，`Registry.create()` 保持同步，所选客户端只在连接时加载。导入示例见 [Database TypeScript 入口](../../basic/database/README.md#typescript-entry-points)，隔离合同与真实归档验证见[数据库可选方言类型隔离](../plans/database-optional-dialect-types.md)。
+PostgreSQL 的 TypeScript 消费者还需显式安装与 `pg` 匹配的 `@types/pg`；JavaScript-only 用户只需 `pg`。默认入口仍自动注册六个 factory，`Registry.create()` 保持同步，所选客户端只在连接时加载。导入示例见 [Database TypeScript 入口](https://github.com/zhinjs/zhin/blob/main/basic/database/README.md#typescript-entry-points)，隔离合同与真实归档验证见[数据库可选方言类型隔离](../plans/database-optional-dialect-types.md)。
 
 ## 恢复
 

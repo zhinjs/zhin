@@ -102,10 +102,12 @@ async function main() {
   console.error('How to first-publish (maintainer machine or one-off CI job):');
   console.error('  1. Ensure packages are built:  pnpm build');
   console.error('  2. Login / set token:          npm login   # or NODE_AUTH_TOKEN=…');
-  console.error('  3. Publish each package once:');
+  // pnpm publish (not npm publish) rewrites `workspace:` ranges and swaps in publishConfig.exports;
+  // npm publish would ship literal `workspace:*` dependencies and a development export to src/.
+  console.error('  3. Publish each package once (pnpm, so workspace: ranges are rewritten):');
   for (const p of unpublished) {
     console.error(
-      `       (cd ${rel(p.path)} && npm publish --access public)`,
+      `       (cd ${rel(p.path)} && pnpm publish --access public --no-git-checks)`,
     );
   }
   console.error('  4. Add the trusted publisher for each new package (npm >= 11.15.0):');

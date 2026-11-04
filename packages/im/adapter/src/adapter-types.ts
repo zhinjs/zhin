@@ -2,6 +2,7 @@ import { createFeaturePrivateToken, featureId, type CapabilityId, type PluginId 
 import type { AdapterCapability, AdapterOperation, AdapterSegmentPolicy } from './definition.js';
 import type { AnyEndpoint } from './endpoint-specification.js';
 import type { EndpointSendRequest, EndpointSendResult } from './endpoint-contract.js';
+import type { AdapterCapabilityProfile, AdapterCapabilityResolver } from './capability-profile.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
 
 /** Persistent account identity is independent of its reusable display/config name. */
@@ -64,6 +65,9 @@ export interface AdapterDescriptorInfo {
   readonly source: string;
   readonly capabilities: readonly AdapterCapability[];
   readonly segments?: AdapterSegmentPolicy;
+  /** ADR 0044: the definition's declared profile (absent = derived per Endpoint from its legacy declarations). */
+  readonly profile?: AdapterCapabilityProfile;
+  readonly resolveCapabilities?: AdapterCapabilityResolver;
 }
 
 export type EndpointDesiredMetadata = Omit<EndpointDesiredRecord, 'config' | 'secretRefs' | 'platformUserId'>;

@@ -1,7 +1,8 @@
-import { composeSideEventName, buildNotice, mapNoticeParts, senderFromId, SLACK_NOTICE_PARTS_MAP } from '@zhin.js/core';
+import { composeSideEventName, buildNotice, senderFromId } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import { slackInboundConversation, type SlackEvent } from './protocol.js';
+import { mapSlackNoticeParts } from './side-event-map.js';
 
 export function receiveSlackSideEvent(
   emit: EndpointEventEmitter,
@@ -12,9 +13,9 @@ export function receiveSlackSideEvent(
 ): void {
   if (!emit) return;
   const eventType = String(event.type ?? '');
-  if (!Object.prototype.hasOwnProperty.call(SLACK_NOTICE_PARTS_MAP, eventType)) return;
+  const parts = mapSlackNoticeParts(eventType);
+  if (!parts) return;
   const record = event as Record<string, unknown>;
-  const parts = mapNoticeParts('slack', eventType);
   const item = asRecord(record.item);
   const channel = stringField(record.channel) ?? stringField(asRecord(record.channel).id) ?? stringField(item.channel);
   const user = stringField(record.user) ?? stringField(asRecord(record.user).id);

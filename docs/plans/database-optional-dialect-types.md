@@ -11,7 +11,7 @@ sidebar: false
 - `@zhin.js/database` 保留中性数据库、模型、事务、迁移、结构化表工具与 Memory/SQLite。Core/Zhin 继续转出这层，不再携带未选驱动的声明。
 - MySQL、PG、MongoDB、Redis 类及完整原厂 Config 从 `@zhin.js/database/dialects/mysql|pg|mongodb|redis` 导入。其配置仍继承原厂类型，没有替换成宽 Record 或删减原厂字段。
 - 使用远程 `Registry.create()` 的 TS 作者显式引入对应类型入口；CLI 的 YAML/JSON 配置不变。
-- 第三方只在 `@zhin.js/database/registry` 增补真实 Databases<S> 与 Registry.Config。该子口 types 指唯一 registry.d.ts，runtime 指 root，避免先注册后加载 root 时覆盖用户 factory。
+- 第三方只在 `@zhin.js/database/registry` 增补真实 `Databases<S>` 与 Registry.Config。该子口 types 指唯一 registry.d.ts，runtime 指 root，避免先注册后加载 root 时覆盖用户 factory。
 - `@types/pg` 保持原有 devDependency，不增加 optional type peer。选 PG 类型的 TS 消费者显式安装匹配的声明，JavaScript-only PG 用户仍只需 pg。驱动版本范围、连接池参数和重试没有改变。
 - 新入口最低 `@zhin.js/database >=1.1.6`，当前为待发布 patch；本次只写 changeset，不 bump/publish。同步更新相关 Core/Agent/Zhin patch 的依赖链，不能让新插件依赖仍未提供子入口的旧数据库包。
 

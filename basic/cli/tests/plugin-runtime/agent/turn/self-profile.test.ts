@@ -6,6 +6,7 @@ const signal = new AbortController().signal;
 const conversation = { endpoint: { id: 'endpoint', adapter: 'telegram' }, kind: 'private' as const, id: 'friend' };
 const snapshot = (selfUserId?: string) => ({ projections: new Map([[adapterFeatureId, {
   $projection: 'zhin.adapter-index/1',
+  capabilityProfile: () => undefined,
   connection: () => ({ identity: conversation.endpoint, selfUserId }),
 }]]) }) as never;
 const facts = (nickname: string): SelfProfileSnapshot => ({

@@ -43,6 +43,7 @@
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "dependencies": {
+    "@zhin.js/adapter-onebot-events": "workspace:*",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/client": "workspace:*",
@@ -59,6 +60,7 @@
   "peerDependencies": {
     "@icqqjs/icqq": "^1.12.2",
     "@zhin.js/adapter": "workspace:^",
+    "@zhin.js/agent": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "@zhin.js/core": "workspace:^",
     "@zhin.js/prompt-section": "workspace:^",
@@ -67,6 +69,9 @@
   },
   "peerDependenciesMeta": {
     "@icqqjs/icqq": {
+      "optional": true
+    },
+    "@zhin.js/agent": {
       "optional": true
     },
     "@zhin.js/command": {
@@ -85,6 +90,7 @@
   "devDependencies": {
     "@icqqjs/icqq": "^1.12.2",
     "@types/node": "^26.1.2",
+    "@zhin.js/agent": "workspace:*",
     "@zhin.js/prompt-section": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",

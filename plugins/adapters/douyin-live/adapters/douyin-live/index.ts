@@ -12,11 +12,18 @@ export type { DouyinLiveEndpointOptions } from '../../src/endpoint.js';
 export default defineAdapter<DouyinLiveEndpointConfig>({
   capabilities: ['inbound', 'outbound', 'liveDanmaku'],
   // 弹幕只支持纯文本；平台没有「回复」字段，mention 折叠进正文 `@昵称`。
-  segments: {
-    supported: ['text', 'mention'],
-    html: 'text',
-    markdown: 'text',
-    interactive: 'text',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          supported: ['text', 'mention'],
+          html: 'text',
+          markdown: 'text',
+          interactive: 'text',
+        },
+      },
+      delivery: { send: true, spool: true },
+    },
   },
   createAdapter: context => new DouyinLiveAdapter(context),
 });

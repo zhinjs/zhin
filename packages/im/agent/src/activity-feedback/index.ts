@@ -35,12 +35,11 @@ export {
 } from './manager.js';
 
 export {
-  PLATFORM_FEATURES,
   buildTypingSendContent,
   createActivityFeedbackAdapter,
 } from './adapter-integration.js';
 export type {
-  PlatformFeatures,
+  ActivityFeedbackKindCapabilities,
   ActivityFeedbackIO,
 } from './adapter-integration.js';
 

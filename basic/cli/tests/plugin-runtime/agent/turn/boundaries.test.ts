@@ -4,7 +4,7 @@ import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { UserInteractionRequest } from '@zhin.js/interaction';
 import type { AITriggerConfig } from '@zhin.js/core';
 import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
-import { adapterFeatureId } from '@zhin.js/adapter';
+import { adapterFeatureId, resolveTurnCapabilities, type AdapterCapabilityProfile } from '@zhin.js/adapter';
 import {
   createDeterministicApprovalPort,
   createRuntimeApprovalPort,
@@ -15,6 +15,7 @@ import {
   isPlainTextRuntimeMessage,
   resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
+  resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
   resolveRuntimeTurnIntent,
   resolveSnapshotTurnIntentResolver,
@@ -34,6 +35,9 @@ import {
   createEndpointRoleResolver,
   readConfiguredEndpointKeys,
 } from '../../../../src/plugin-runtime/start-command.js';
+
+/** A declared profile (not a legacy-derived one): group scene lookups are usable, private ones are not. */
+const sceneProfile = { group: { scene: { groupInfo: true, memberProfile: true } } };
 
 const adapter = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
 
@@ -234,7 +238,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const connection = vi.fn((adapterKey, endpointKey) => adapterKey === endpointId && endpointKey === endpointId
       ? { identity: message.conversation.endpoint, selfUserId: 'platform-account' }
       : undefined);
-    const snapshot = { projections: new Map([[adapterFeatureId, { $projection: 'zhin.adapter-index/1', connection }]]) };
+    const snapshot = { projections: new Map([[adapterFeatureId, { $projection: 'zhin.adapter-index/1', capabilityProfile: () => ({}), connection }]]) };
     const signal = new AbortController().signal;
     const state = await resolveRuntimeTurnContextState({ snapshot: snapshot as never, conversation: message.conversation, signal });
     const request = createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: false, isTrusted: false } }, {
@@ -246,7 +250,7 @@ describe('canonical IM TurnRequest ingress', () => {
     expect(request.input.contextState).toEqual({ bot: { id: 'platform-account' } });
     expect(Object.isFrozen(state?.bot)).toBe(true);
     const nextGeneration = { projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: message.conversation.endpoint, selfUserId: 'replacement-account' }),
+      $projection: 'zhin.adapter-index/1', capabilityProfile: () => ({}), connection: () => ({ identity: message.conversation.endpoint, selfUserId: 'replacement-account' }),
     }]]) };
     expect(await resolveRuntimeTurnContextState({ snapshot: nextGeneration as never, conversation: message.conversation, signal })).toEqual({ bot: { id: 'replacement-account' } });
     expect(request.input.contextState?.bot?.id).toBe('platform-account');
@@ -257,7 +261,7 @@ describe('canonical IM TurnRequest ingress', () => {
       endpoint: '10001', self_id: '20002', botRole: 'owner', muteAll: false,
     } });
     const unknownAccount = { projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: message.conversation.endpoint, name: '10001' }),
+      $projection: 'zhin.adapter-index/1', capabilityProfile: () => ({}), connection: () => ({ identity: message.conversation.endpoint, name: '10001' }),
     }]]) };
     const signal = new AbortController().signal;
     expect(await resolveRuntimeTurnContextState({ snapshot: unknownAccount as never, conversation: message.conversation, signal })).toBeUndefined();
@@ -269,12 +273,43 @@ describe('canonical IM TurnRequest ingress', () => {
     expect(request.input.contextState).toBeUndefined();
   });
 
+  it('computes ADR 0044 platform capabilities once from the resolved facts and attaches them to the turn input', async () => {
+    const message = makeMessage({ content: 'hello', metadata: { endpoint: '10001' } });
+    const profile: AdapterCapabilityProfile = {
+      default: { delivery: { send: true }, actions: { poke: { scopes: ['group'] } } },
+      group: { actions: { mute: { scopes: ['group'], requiresRole: 'admin' } } },
+    };
+    const turnCapabilities = vi.fn((_id: string, input: Parameters<typeof resolveTurnCapabilities>[0] extends infer T
+      ? Omit<T & object, 'profile' | 'narrow'> : never) => resolveTurnCapabilities({ ...input, profile }));
+    const snapshot = { projections: new Map([[adapterFeatureId, {
+      $projection: 'zhin.adapter-index/1', capabilityProfile: () => sceneProfile, turnCapabilities,
+    }]]) } as never;
+    const asAdmin = resolveRuntimeTurnCapabilities(snapshot, message.conversation, { bot: { id: 'b', platformRole: 'admin' } });
+    const asMember = resolveRuntimeTurnCapabilities(snapshot, message.conversation, { bot: { id: 'b', platformRole: 'member' } });
+    expect(asAdmin?.has('actions.mute')).toBe(true);
+    expect(asMember?.has('actions.mute')).toBe(false);
+    expect(asMember?.has('actions.poke')).toBe(true);
+    expect(turnCapabilities.mock.calls[0]?.[0]).toBe(message.conversation.endpoint.id);
+    expect(resolveRuntimeTurnCapabilities({ projections: new Map() }, message.conversation, undefined)).toBeUndefined();
+
+    const request = createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: false, isTrusted: false } }, {
+      traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
+      projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' }, platformCapabilities: asAdmin,
+    });
+    expect(request.input.platformCapabilities).toBe(asAdmin);
+    expect(request.input.platformCapabilities?.has('actions.mute')).toBe(true);
+    expect(createRuntimeTurnRequest({ message, text: 'hello', roles: { isMaster: false, isTrusted: false } }, {
+      traceId: 'trace', turnId: 'turn', signal: new AbortController().signal,
+      projectRoot: '/workspace', workspaceRoot: '/workspace', ports: {}, intent: { kind: 'new' },
+    }).input.platformCapabilities).toBeUndefined();
+  });
+
   it.each(['owner', 'admin', 'member'] as const)('propagates the queried Bot %s role through capability access', async platformRole => {
     const message = makeMessage({ content: 'hello', metadata: { endpoint: 'configured-name' } });
     const conversation = { ...message.conversation, endpoint: { ...message.conversation.endpoint, adapter: 'icqq' } };
     const inspectGroupMember = vi.fn(async () => ({ canModerate: false, platformRole }));
     const snapshot = { projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: '8596238' }), management: () => ({ inspectGroupMember }),
+      $projection: 'zhin.adapter-index/1', capabilityProfile: () => sceneProfile, connection: () => ({ identity: conversation.endpoint, selfUserId: '8596238' }), management: () => ({ inspectGroupMember }),
     }]]) };
     const signal = new AbortController().signal;
     const contextState = await resolveRuntimeTurnContextState({ snapshot: snapshot as never, conversation, signal });
@@ -284,14 +319,14 @@ describe('canonical IM TurnRequest ingress', () => {
   });
 
   it.each([
-    { adapter: 'icqq', kind: 'private' },
-    { adapter: 'icqq', kind: 'channel' },
-    { adapter: 'telegram', kind: 'group' },
-  ] as const)('does not query a Bot role outside ICQQ groups: %j', async scope => {
+    { adapter: 'icqq', kind: 'private', profile: sceneProfile },
+    { adapter: 'icqq', kind: 'channel', profile: sceneProfile },
+    { adapter: 'telegram', kind: 'group', profile: {} },
+  ] as const)('does not query a Bot role where the profile declares no scene lookup: %j', async scope => {
     const inspectGroupMember = vi.fn();
     const conversation = { endpoint: { id: 'endpoint', adapter: scope.adapter }, kind: scope.kind, id: 'scene' };
     const snapshot = { projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: 'actual-account' }), management: () => ({ inspectGroupMember }),
+      $projection: 'zhin.adapter-index/1', capabilityProfile: () => scope.profile, connection: () => ({ identity: conversation.endpoint, selfUserId: 'actual-account' }), management: () => ({ inspectGroupMember }),
     }]]) };
     expect(await resolveRuntimeTurnContextState({ snapshot: snapshot as never, conversation, signal: new AbortController().signal }))
       .toEqual({ bot: { id: 'actual-account' } });
@@ -302,7 +337,7 @@ describe('canonical IM TurnRequest ingress', () => {
     const conversation = { endpoint: { id: 'endpoint', adapter: 'icqq' }, kind: 'group' as const, id: '100' };
     const signal = new AbortController().signal;
     const snapshot = (management?: object) => ({ projections: new Map([[adapterFeatureId, {
-      $projection: 'zhin.adapter-index/1', connection: () => ({ identity: conversation.endpoint, selfUserId: '8596238' }), management: () => management,
+      $projection: 'zhin.adapter-index/1', capabilityProfile: () => sceneProfile, connection: () => ({ identity: conversation.endpoint, selfUserId: '8596238' }), management: () => management,
     }]]) });
     expect(await resolveRuntimeTurnContextState({ snapshot: snapshot() as never, conversation, signal }))
       .toEqual({ bot: { id: '8596238', platformRoleError: 'unsupported' } });

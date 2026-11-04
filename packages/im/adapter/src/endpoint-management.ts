@@ -52,6 +52,12 @@ export interface EndpointAdminRequest extends EndpointMemberRequest { readonly e
 export interface EndpointApproveRequest extends EndpointManagementRequest { readonly requestId: string; readonly remark?: string; }
 export interface EndpointRejectRequest extends EndpointManagementRequest { readonly requestId: string; readonly reason?: string; }
 export interface EndpointGroupNoticeRequest extends EndpointGroupRequest { readonly content: string; }
+/** ADR 0044 action requests. */
+export interface EndpointPokeRequest extends EndpointUserRequest { readonly groupId?: string; }
+export interface EndpointMuteAllRequest extends EndpointGroupRequest { readonly enabled: boolean; }
+export interface EndpointCardRequest extends EndpointMemberRequest { readonly card: string; }
+export interface EndpointTitleRequest extends EndpointMemberRequest { readonly title: string; readonly durationSeconds?: number; }
+export interface EndpointEssenceRequest extends EndpointGroupRequest { readonly messageId: string; readonly enabled: boolean; }
 
 /**
  * Platform-neutral semantic requests. Native SDK method signatures are not changed.
@@ -75,10 +81,30 @@ export interface EndpointManagement {
   rejectRequest?(request: EndpointRejectRequest): Promise<void>;
   kickGroupMember?(request: EndpointMemberRequest): Promise<void>;
   muteGroupMember?(request: EndpointMuteRequest): Promise<void>;
+  /** `actions.setAdmin`: grant or revoke group admin (`enabled`). */
   setGroupAdmin?(request: EndpointAdminRequest): Promise<void>;
   deleteFriend?(request: EndpointUserRequest): Promise<void>;
   /** Owner-approved publication remains in its existing policy path, outside Console capabilities. */
   sendGroupNotice?(request: EndpointGroupNoticeRequest): Promise<void>;
+  /**
+   * ADR 0044 action ports (host-internal, absent from {@link endpointManagementCapabilityIds}). An
+   * Adapter profile that declares the matching `actions.*` entry must implement the method; see
+   * `ADAPTER_ACTION_PORTS`.
+   */
+  /** `actions.poke`: poke a user (in `groupId` when given, else privately). */
+  pokeUser?(request: EndpointPokeRequest): Promise<void>;
+  /** `actions.unmute` */
+  unmuteGroupMember?(request: EndpointMemberRequest): Promise<void>;
+  /** `actions.muteAll`: turn the whole-group mute on or off. */
+  muteAllGroupMembers?(request: EndpointMuteAllRequest): Promise<void>;
+  /** `actions.setCard` */
+  setGroupCard?(request: EndpointCardRequest): Promise<void>;
+  /** `actions.setTitle` (`durationSeconds` omitted = permanent where the platform supports it). */
+  setGroupTitle?(request: EndpointTitleRequest): Promise<void>;
+  /** `actions.essence`: set or clear an essence message. */
+  setGroupEssence?(request: EndpointEssenceRequest): Promise<void>;
+  /** `actions.invite` */
+  inviteGroupMember?(request: EndpointMemberRequest): Promise<void>;
 }
 
 export { createEndpointOperation } from './endpoint-operation.js';

@@ -234,9 +234,9 @@ await operation.models.evaluate({
 });
 ```
 
-每个 input 是具名 Interface，所有实际执行都由同一个配置解析/权限/绑定工厂完成；方法区分真实合同，不做 execute(any):any。ProfileQuery<K> 明确 kind，ProfileView<K> 含 ProfileRef<K>；list({kind:'decision'}) 返回的引用可直接用于 evaluate。存量字符串从同一个 resolver 按 kind 验证后取得引用，不要求插件类型断言。generate/stream 接收 language，evaluate 接收 decision，generateImage 接收 image；运行时仍验证引用可见性与真实能力，类型不是授权票据。
+每个 input 是具名 Interface，所有实际执行都由同一个配置解析/权限/绑定工厂完成；方法区分真实合同，不做 execute(any):any。`ProfileQuery<K>` 明确 kind，`ProfileView<K>` 含 `ProfileRef<K>`；list({kind:'decision'}) 返回的引用可直接用于 evaluate。存量字符串从同一个 resolver 按 kind 验证后取得引用，不要求插件类型断言。generate/stream 接收 language，evaluate 接收 decision，generateImage 接收 image；运行时仍验证引用可见性与真实能力，类型不是授权票据。
 
-generate/stream 是语言推理，不擅自执行返回的工具调用；Agent 工具循环继续由现有正式引擎承担。evaluate 仅返回一次真实结构化推理的 DecisionResult<Q>，不报告 Skill 已激活、工具已授权或业务已应用。泛型 Q 保留 Choice/Score/Noul 结果推导，业务调用不再传第二个原生 model ID 覆盖已绑定模型。其使用要求正常的模型推理权限，不因返回 approve 一词获得执行权。
+generate/stream 是语言推理，不擅自执行返回的工具调用；Agent 工具循环继续由现有正式引擎承担。evaluate 仅返回一次真实结构化推理的 `DecisionResult<Q>`，不报告 Skill 已激活、工具已授权或业务已应用。泛型 Q 保留 Choice/Score/Noul 结果推导，业务调用不再传第二个原生 model ID 覆盖已绑定模型。其使用要求正常的模型推理权限，不因返回 approve 一词获得执行权。
 
 六类自动决策另由 Agent 的用途策略模块拥有：它先处理 off/shadow/active，按该用途固定的问题 schema 和候选范围取推理证据，再交给路由/Skill 激活/审批/旁听等实际业务所有者应用。off 不调用 evaluate；shadow 只记录建议；合法弃选独立于失败；applied 只在业务所有者确认实际应用后记录，硬权限拒绝或 Skill 激活失败不能被推理层提前记为 applied。六用途的受信 Profile override 也经过此模块，不改变 mode。原始 evaluate 是独立的明确模型调用，不隐式冒充 tools/approval 等自动策略。
 

@@ -11,7 +11,7 @@
  *  - checkExecPolicy 端到端场景
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -34,6 +34,20 @@ import {
 import type { ZhinAgentConfig } from '../src/config/index.js';
 import { OwnerApprovalRuntime, ownerApprovalAddressFromMessage } from '../src/security/owner-approval-runtime.js';
 import { runWithCommMessage } from '../src/security/comm-message-context.js';
+import { registerSensitiveExecCommand } from '../src/security/sensitive-exec-commands.js';
+
+// The platform CLI rule is declared by its adapter plugin (ADR 0044); the policy only reads the registry.
+let disposeSensitiveRule: (() => void) | undefined;
+beforeAll(() => {
+  disposeSensitiveRule = registerSensitiveExecCommand({
+    command: 'icqq',
+    sensitive: [
+      /\bicqq\s+friend\s+(?:delete|block|move)\b/i,
+      /\bicqq\s+group\s+(?:kick|mute|set|admin|announce|transfer|quit|dissolve|invite)\b/i,
+    ],
+  });
+});
+afterAll(() => disposeSensitiveRule?.());
 import type { AgentTool } from '@zhin.js/ai';
 
 // ── Helpers ──
@@ -385,7 +399,23 @@ describe('checkExecPolicy', () => {
     expect(checkExecPolicy(config, 'npm install').allowed).toBe(false);
   });
 
-  // icqq：非敏感直接放行；敏感需审批或 Owner 规则
+  it('no sensitive-command rule registered: the CLI is judged by the allowlist like any other command', () => {
+    disposeSensitiveRule?.();
+    try {
+      const config = makeConfig({ execAllowlist: [], execApprovalMode: 'ask' });
+      expect(checkExecPolicy(config, 'icqq friend like 123456').allowed).toBe(false);
+    } finally {
+      disposeSensitiveRule = registerSensitiveExecCommand({
+        command: 'icqq',
+        sensitive: [
+          /\bicqq\s+friend\s+(?:delete|block|move)\b/i,
+          /\bicqq\s+group\s+(?:kick|mute|set|admin|announce|transfer|quit|dissolve|invite)\b/i,
+        ],
+      });
+    }
+  });
+
+  // 平台 CLI（规则由适配器注册）：非敏感直接放行；敏感需审批或 Owner 规则
   it('allowlist: icqq 非敏感（如 friend like）无需白名单即可放行', () => {
     const config = makeConfig({ execAllowlist: [], execApprovalMode: 'ask' });
     expect(checkExecPolicy(config, 'icqq friend like 123456').allowed).toBe(true);

@@ -59,3 +59,27 @@ Root 对 `fe678c74824f6bc5bf7408ebf7b9fcc2b2bbf82c` 的完整 `check:all` 退出
 | 新测试还应经 TypeScript 检查 | 额外 include 整个 AdapterDisclosure 测试后发现夹具异构 Map 推断错误；补精确 `Map<FeatureId, ToolIndex \| SkillIndex>`，无 cast。复用根原 include/ambient 与此前六个新测试的额外 tsc 通过；`/tmp/zhin-main-followup-test-types.log` / `test-types-green.log`；脚本 `/tmp/zhin-main-sync-test-typecheck.py` | 类型红绿独立于运行通过；未扩大或放宽正式类型门禁 |
 
 同轮正式 `check:plugin-capability-publish`、`check:doc-links`、变更测试 ESLint 与 `git diff --check` 通过。新固定候选由 Root 执行完整构建／门禁；本轮没有改生产调用逻辑、执行真实供应商或读写用户配置。
+
+## 后续固定 main 13ce 同步
+
+输入为本分支已验收的 `4ad0d7e84f913418c85e9c79a19f69b6e2035689` 与固定 main `13ce0c1af70264c8623b7342b23f28ccb1c176dd`，普通 merge，不 rebase、不发布。保留 main 的 ADR 0044 能力画像／事件迁出、no-platform 门禁、发布清单与 ADR 0047；模型图、身份与终态沿已批准目标合同。
+
+- `CapabilityIngress` 合并 main 的 `requiresCapabilities` fail-closed 与 Adapter guidance 信任标记，同时保留对象入参、独立 operation 工厂及真实 snapshot／principal 生命周期。
+- 两个 Adapter 披露测试保留 main 的真实 profile、owner/admin/unknown、降级恢复与历史加载断言，所有调用迁到目标对象接口；自动合并之外新增的 guidance 信任测试也迁移同一接口。夹具的精确 Map 联合类型保留。
+- 审查自动合并的 CLI turn/request/factory、Agent runtime/prompt、ToolIndex 与 snapshot：capabilities 来自已持有 generation 的 Adapter profile／受信事实；目标 current inference、子任务独立侧推理、固定模型图与取消／终态代码未被替换为旧 Provider 权威。
+- Douyin 在该 main 已转为 public，按公开包合同使用 `./plugin.js`；之前 private 阶段的 TS 入口修正不再适用，未恢复 private。新发布清单以已有生成器补入本分支的 `ai-provider`，同时包含 main 的 `adapter-onebot-events`。
+
+| 预期 | 实际证据 | 结论／未覆盖 |
+| --- | --- | --- |
+| ADR 0044 与事件迁出合同保留 | 31 文件 / 613 项测试通过；路径清单 `/tmp/zhin-main-13ce-capability-tests.lst`、结果 `/tmp/zhin-main-13ce-capability-tests.log` | 本地合成能力／事件回归，无平台账号或供应商调用 |
+| 目标身份、operation、固定图、子任务与终态不退化 | 17 文件 / 152 项通过，含真实 Host/SQLite、HMR 排队子任务、image/decision 和终态；`/tmp/zhin-main-13ce-provider-tests.log` | 不是完整全仓或模型行为验收 |
+| 依赖与类型同步 | 离线 frozen ignore-scripts 安装通过；CLI 与新事件包依赖构建 45/45；source type-check 与额外测试 tsc 通过；`/tmp/zhin-main-13ce-dependencies-build.log`、`typecheck.log`、`extra-test-types.log` | 最终固定 merge SHA 的 CI 构建与全量门禁仍由 Root 复验 |
+| 正式门禁不弱化 | API／Plugin Runtime surface、architecture、no-platform、runtime/config 与 LLM boundaries、readiness、Adapter docs、publishing manifest、capability publish、依赖／feature peers／release plan 与 lint 通过 | 发布清单原先遗漏新包导致失败，生成同步后通过；不修改门禁或 allowlist |
+
+文档链接检查通过（344 文件）；doc-orphans 在原树仅报告既有未跟踪的早期订阅研究稿，不属于本次合并，保留原样、不提交、不为它放宽门禁。全仓 lint 为 0 errors／722 warnings，未据此宣称无历史 warning。旧候选、Console 与用户工作树未改；不将本地专项通过称为已发布或真实平台验收。
+
+### 完整站点构建补验
+
+仅复制 git 已跟踪的当前候选到 `/private/tmp/zhin-main-13ce-docs-52roe2gp`，排除上述未跟踪稿；复用已构建的依赖，生成器与站点产物写受控副本。`pnpm docs:build` 首次在 Vue 编译阶段暴露目标架构计划正文的裸泛型标签，第二轮暴露 Database 计划同类 `Databases<S>`；只为这些实际 TypeScript 类型词补 inline code，未改代码块或合同。第三轮 Vue 通过，但 VitePress 检出 Provider 升级页两条跨 docs 根的包 README 相对链接（TypeSafe 既有链接、此前 DB 说明新增链接）；改为同仓库 GitHub README 路径并保锚点，未禁用 dead-link 检查。
+
+三轮独立红日志为 `/tmp/zhin-main-13ce-docs-build.log`、`docs-build-second.log`、`docs-build-third.log`。限定标记／链接修复后完整 pipeline（TypeDoc、配置／排障生成、Adapter 同步、VitePress client/server 与页面渲染）通过，日志 `/tmp/zhin-main-13ce-docs-build-fourth.log`。文件系统 `check:doc-links` 只证明文件存在，不替代站点编译与路由检查；这些本地实证不能证明 Cloudflare 的无日志失败具有同一原因。

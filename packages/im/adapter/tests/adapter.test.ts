@@ -34,6 +34,7 @@ import adapterFeature, {
   defineAdapter as defineAdapterContract,
   endpointEventGatewayToken,
   endpointCapabilitiesOf,
+  resolveStaticCapabilities,
   isAdapterIndex,
   parseAdapterDefinition,
   endpointControlOf,
@@ -271,16 +272,19 @@ describe('Adapter Feature', () => {
     const hook = index.describe().find((row) => row.name === 'hook');
     expect(socket?.operations).toEqual(['recall', 'reaction']);
     expect(hook?.operations).toEqual(['recall']);
-    expect(index.capabilities(socket!.id)).toEqual({
+    expect(index.capabilities(socket!.id)).toMatchObject({
       inbound: true,
       outbound: true,
       operations: { recall: true, reaction: true },
     });
-    expect(index.capabilities(hook!.id)).toEqual({
+    expect(index.capabilities(hook!.id)).toMatchObject({
       inbound: true,
       outbound: true,
       operations: { recall: true },
     });
+    // ADR 0044: the serializable per-kind view; the socket derives reaction/recall from its operations.
+    expect(index.capabilities(socket!.id).kinds?.group).toMatchObject({ recall: true, spool: true, needsReply: false, groupInfo: false });
+    expect(index.capabilities(hook!.id).kinds?.group).toMatchObject({ reaction: false, recall: true });
     await index.stop();
   });
 
@@ -1256,6 +1260,124 @@ describe('defineAdapter segments policy', () => {
       ...definition,
       segments: { markdown: 'rich' },
     })).toThrow('markdown');
+  });
+});
+
+describe('Adapter capability profile assembly (ADR 0044)', () => {
+  const group = { endpoint: { id: 'icqq-like', adapter: 'icqq-like' }, kind: 'group' as const, id: 'g1' };
+  const profile = {
+    default: { delivery: { send: true } },
+    group: { actions: { mute: { scopes: ['group'], requiresRole: 'admin', params: { durationSeconds: { min: 60, max: 3600 } } } } },
+  } as const;
+
+  it('rejects a declared action whose port is missing and names the port', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'icqq-like', source: '/adapters/x/index.ts',
+      definition: defineFixtureAdapter({ capabilities: ['outbound'], profile, createEndpoint: () => new TestEndpoint({ send: async () => 'id' }) }),
+    });
+    await expect(createAdapterIndex([slot], snapshot([slot])))
+      .rejects.toThrow('declares actions.mute but management.muteGroupMember is missing');
+  });
+
+  it('resolves per-turn capabilities from the effective profile and the adapter patch', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'icqq-like', source: '/adapters/x/index.ts',
+      definition: defineFixtureAdapter({
+        capabilities: ['outbound'],
+        profile,
+        resolveCapabilities: ({ facts }) => facts.bot?.platformRole === 'member'
+          ? { actions: { mute: false } } : undefined,
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', management: { muteGroupMember: async () => undefined } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    expect(index.turnCapabilities(slot.id, { conversation: group, facts: { bot: { platformRole: 'admin' } } })
+      ?.has('actions.mute')).toBe(true);
+    expect(index.turnCapabilities(slot.id, { conversation: group, facts: { bot: { platformRole: 'member' } } })
+      ?.has('actions.mute')).toBe(false);
+    expect(index.turnCapabilities('missing' as typeof slot.id, { conversation: group })).toBeUndefined();
+    await index.stop();
+  });
+
+  it('derives a conservative profile from legacy declarations when none is declared', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'legacy', source: '/adapters/legacy/index.ts',
+      definition: defineFixtureAdapter({
+        capabilities: ['inbound', 'outbound'],
+        operations: ['recall'],
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', control: { recall: async () => undefined } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const caps = index.turnCapabilities(slot.id, { conversation: { ...group, endpoint: { id: 'legacy', adapter: 'legacy' } } });
+    expect(caps?.has('delivery.send')).toBe(true);
+    expect(caps?.has('actions.recall')).toBe(true);
+    expect(caps?.has('actions.mute')).toBe(false);
+    await index.stop();
+  });
+
+  it('a legacy-derived profile gains scene lookups from the management ports the Endpoint implements', async () => {
+    const make = (name: string, management?: object) => createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: name, source: `/adapters/${name}/index.ts`,
+      definition: defineFixtureAdapter({
+        capabilities: ['inbound', 'outbound'],
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', ...(management ? { management } : {}) }),
+      }),
+    });
+    const withPorts = make('with-ports', {
+      inspectGroupScene: async () => ({}), inspectGroupMemberProfile: async () => ({}),
+    });
+    const without = make('without-ports');
+    const index = await createAdapterIndex([withPorts, without], snapshot([withPorts, without]));
+    const sceneOf = (id: typeof withPorts.id, kind: 'group' | 'private') => resolveStaticCapabilities(
+      index.capabilityProfile(id)!, [kind]).scene;
+    expect(sceneOf(withPorts.id, 'group')).toMatchObject({ groupInfo: true, memberProfile: true });
+    expect(sceneOf(withPorts.id, 'private')?.groupInfo).toBeUndefined();
+    expect(sceneOf(without.id, 'group')?.groupInfo).toBeUndefined();
+    expect(index.capabilities(withPorts.id).kinds?.group).toMatchObject({ groupInfo: true, memberProfile: true });
+    expect(index.capabilities(withPorts.id).kinds?.private).toMatchObject({ groupInfo: false });
+    await index.stop();
+  });
+
+  it('exposes feedback, spool and quote-only delivery of a declared profile as the serializable kinds view', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'declared', source: '/adapters/declared/index.ts',
+      definition: defineFixtureAdapter({
+        capabilities: ['outbound'],
+        profile: {
+          default: { delivery: { send: true, spool: false }, feedback: { mode: 'reaction', emoji: '⏳' }, runtime: { sandbox: true } },
+          group: { delivery: { proactive: false } },
+          private: { feedback: { mode: 'typing', refreshSeconds: 5 }, delivery: { spool: true } },
+        },
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', control: { typing: async () => undefined } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const kinds = index.capabilities(slot.id).kinds!;
+    expect(kinds.group).toMatchObject({ needsReply: true, spool: false, feedback: { mode: 'reaction', emoji: '⏳' } });
+    expect(kinds.private).toMatchObject({ needsReply: false, spool: true, feedback: { mode: 'typing', refreshSeconds: 5 } });
+    expect(resolveStaticCapabilities(index.capabilityProfile(slot.id)!, []).runtime?.sandbox).toBe(true);
+    await index.stop();
+  });
+
+  it('a declared profile implies its operations and keeps segments as an alias', async () => {
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'implied', source: '/adapters/implied/index.ts',
+      definition: defineFixtureAdapter({
+        capabilities: ['outbound'],
+        profile: {
+          default: {
+            messaging: { segments: { supported: ['text'] } },
+            actions: { recall: { scopes: ['group'] } },
+          },
+        },
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', control: { recall: async () => undefined } }),
+      }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    expect(index.segmentPolicy(slot.id)).toEqual({ supported: ['text'] });
+    expect(index.list()[0]?.operations).toEqual(['recall']);
+    await index.stop();
   });
 });
 

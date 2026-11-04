@@ -49,6 +49,7 @@
   },
   "dependencies": {
     "@imhelper/onebot-v12": "1.0.7",
+    "@zhin.js/adapter-onebot-events": "workspace:*",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/client": "workspace:*",
     "@zhin.js/console-contract": "workspace:*",

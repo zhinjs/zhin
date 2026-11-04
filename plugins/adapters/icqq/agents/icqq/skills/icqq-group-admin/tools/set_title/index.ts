@@ -11,6 +11,8 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
     duration: z.number().optional().describe('持续时间(秒)，-1永久').default(-1),
   }),
   adapter: 'icqq',
+  // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
+  requiresCapabilities: ['actions.setTitle'],
   scopes:['group'],
   requiresApproval: 'always',
   async execute({ group_id, user_id, title, duration }, context) {

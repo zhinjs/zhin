@@ -10,6 +10,39 @@ export interface EndpointCapabilities {
   readonly inbound: boolean;
   readonly outbound: boolean;
   readonly operations?: Readonly<Partial<Record<EndpointOperation, true>>>;
+  /**
+   * ADR 0044: what the Endpoint's static capability profile says per conversation kind. Consumers read
+   * these instead of branching on the platform name; a missing kind or field means "not supported".
+   */
+  readonly kinds?: Readonly<Partial<Record<EndpointConversationKind, EndpointKindCapabilities>>>;
+}
+
+export type EndpointConversationKind = 'private' | 'group' | 'channel';
+
+/** How the Endpoint shows "working on it" in this conversation kind. */
+export interface EndpointFeedbackCapability {
+  readonly mode: 'typing' | 'reaction' | 'status-message' | 'none';
+  /** Emoji for `reaction`, text for `status-message`. */
+  readonly emoji?: string;
+  readonly text?: string;
+  /** Refresh interval of a native `typing` indicator. */
+  readonly refreshSeconds?: number;
+}
+
+/** Serializable consumer view of one conversation kind of a capability profile. */
+export interface EndpointKindCapabilities {
+  readonly feedback?: EndpointFeedbackCapability;
+  /** The Bot can react to a message with an emoji here. */
+  readonly reaction: boolean;
+  readonly edit: boolean;
+  readonly recall: boolean;
+  /** Large media must be written to disk before sending (`delivery.spool`). */
+  readonly spool: boolean;
+  /** Messages here must quote an inbound message (`delivery.proactive === false`). */
+  readonly needsReply: boolean;
+  /** The group / member lookup ports are usable (`scene.groupInfo`, `scene.memberProfile`). */
+  readonly groupInfo: boolean;
+  readonly memberProfile: boolean;
 }
 
 export type DeliveryStatus = 'sent' | 'suppressed' | 'unsupported' | 'rejected' | 'failed';

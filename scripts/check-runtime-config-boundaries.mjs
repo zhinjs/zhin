@@ -28,7 +28,8 @@ const canonicalAiConsumers = [
 const violations = [];
 for (const relative of canonicalConsumers) {
   const source = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
-  if (/Array\.isArray\((?:(?:config|document|next|state\.config)\.plugins|plugins)\)/u.test(source)) {
+  // Only a positive check interprets a legacy array; `!Array.isArray(plugins)` rejects it and is the canonical guard.
+  if (/(?<!!\s*)Array\.isArray\((?:(?:config|document|next|state\.config)\.plugins|plugins)\)/u.test(source)) {
     violations.push(`${relative}: normal runtime/configuration paths must not interpret plugins arrays`);
   }
   if (/\bnormalizePluginsMap\b/u.test(source)) {

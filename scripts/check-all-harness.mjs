@@ -189,6 +189,11 @@ const checks = [
     description: '检查平台适配器文档是否与 plugins/adapters README 同步',
   },
   {
+    name: 'Publishing Manifest',
+    command: 'pnpm check:publishing-manifest',
+    description: 'docs/contributing/publishing.md 包清单覆盖全部非 private 包（可信发布者）',
+  },
+  {
     name: 'Operability Docs',
     command: 'pnpm check:operability-docs',
     description: '检查适配器、Console 与插件交付文档是否形成可验收闭环',
@@ -277,6 +282,11 @@ const checks = [
     name: 'Config Docs',
     command: 'pnpm check:config-docs',
     description: '配置文档与 DEFAULT_CONFIG 关键字段对齐',
+  },
+  {
+    name: 'No Platform Branches',
+    command: 'pnpm check:no-platform-branches',
+    description: 'core/agent/ai/adapter/cli 运行时不得出现平台名分支，只读适配器能力（ADR 0044）',
   },
   {
     name: 'Removed Plugin API',

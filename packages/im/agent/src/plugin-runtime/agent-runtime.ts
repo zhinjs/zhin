@@ -522,10 +522,12 @@ function createIngressTurn(
   usage?: AgentUsageCollector,
 ) {
   const store = resolveJournalStore(snapshot);
+  // ADR 0044: sandbox behaviour is a declared Endpoint capability, never a platform-name check.
+  const sandboxRuntime = request.input?.platformCapabilities?.has('runtime.sandbox') === true;
   const journal = new PersistentTurnJournal({
     sessionId: request.session.key,
     turnId: request.identity.turnId,
-  }, store, request.principal, () => turn.origin);
+  }, store, request.principal, sandboxRuntime ? () => turn.origin : undefined);
   const traced = trace ? createTracingJournal(journal, trace) : journal;
   const observed = usage ? { append(event: TurnEvent) { usage.record(event); return traced.append(event); } } : traced;
   const turn = createTurnIngress({
@@ -548,7 +550,7 @@ function createIngressTurn(
       }),
     },
   });
-  if (!turn.ports.reply || turn.origin.kind !== 'im' || turn.origin.conversation?.endpoint.adapter !== 'sandbox'
+  if (!sandboxRuntime || !turn.ports.reply || turn.origin.kind !== 'im'
     || typeof (store as Partial<TurnDeliveryStore>).recordDelivery !== 'function') return turn;
   return Object.freeze({ ...turn, ports: Object.freeze({ ...turn.ports,
     reply: recordFinalReply(turn.ports.reply, { run: { sessionId: turn.session.key, turnId: turn.identity.turnId },

@@ -24,7 +24,7 @@ it('reads the connected endpoint canonical history even when display names canno
   }
   const root = rootPluginId(), owner = childPluginId(root, 'sandbox');
   const slot = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'sandbox', source: '/sandbox/adapters/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(); } }() }) });
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], profile: { default: { delivery: { send: true }, runtime: { sandbox: true } } }, createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(); } }() }) });
   const base: SnapshotState = { root, tree: new Map([
     [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: directory, children: [owner] }],
     [owner, { id: owner, instanceKey: 'sandbox', packageName: '@zhin.js/adapter-sandbox', packageRoot: directory, parent: root, children: [] }],

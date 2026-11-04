@@ -8,6 +8,8 @@ export default defineAgentTool<{ message_id: string; action: 'add' | 'remove' }>
     action: z.enum(['add', 'remove']).describe('add=设为精华, remove=移除精华'),
   }),
   adapter: 'icqq',
+  // ADR 0044: offered only while the Bot can actually do this here (e.g. it is a group admin).
+  requiresCapabilities: ['actions.essence'],
   requiresApproval: 'once',
   scopes:['group'],
   permissions: ['role(master,admin,trusted,owner)'],

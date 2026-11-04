@@ -33,7 +33,8 @@ import {
   type EndpointGroupNoticeRequest,
 } from 'zhin.js/adapter';
 import type { EndpointContentPort } from '@zhin.js/adapter';
-import { receiveOneBotLikeSideEvent, buildSystem, toCanonicalSegments, type LoginAssist, type LoginAssistEndpointIdentity, type PendingLoginTask } from '@zhin.js/core';
+import { receiveOneBotLikeSideEvent } from '@zhin.js/adapter-onebot-events';
+import { buildSystem, toCanonicalSegments, type LoginAssist, type LoginAssistEndpointIdentity, type PendingLoginTask } from '@zhin.js/core';
 import { EndpointDeliveryError, type EndpointSendPart, type EndpointSendResult, type MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -77,6 +78,7 @@ import {
 } from './protocol.js';
 import type { SystemMessage as IcqqSystemMessage } from './types.js';
 import { ManagedIcqqClient, type IcqqBackgroundOperation } from './managed-client.js';
+import { createIcqqActionPorts } from './group-actions.js';
 import { inspectGroupMember, moderateGroupMember } from './group-moderation.js';
 import { inspectGroupMemberProfile, inspectGroupScene } from './group-scene.js';
 import { createIcqqSelfProfile } from './self-profile.js';
@@ -189,6 +191,7 @@ export class IcqqEndpoint extends ManagedIcqqClient implements Endpoint {
         throw new Error('QQ did not confirm the group notice');
       }
     },
+    ...createIcqqActionPorts(() => this),
   });
 
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({

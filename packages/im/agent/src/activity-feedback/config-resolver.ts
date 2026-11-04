@@ -1,4 +1,4 @@
-import { PLATFORM_FEATURES } from '../typing-indicator/adapter-integration.js';
+import type { ActivityFeedbackKindCapabilities } from '../typing-indicator/adapter-integration.js';
 import type {
   ActivityFeedbackConfig,
   ActivityFeedbackPhase,
@@ -10,40 +10,51 @@ import type {
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { activityMessages } from './messages.js';
 
-function sceneKey(sceneType: ActivitySceneType): keyof ActivityFeedbackConfig['phases'] extends infer _ ? 'private' | 'group' | 'channel' : never {
+function sceneKey(sceneType: ActivitySceneType): 'private' | 'group' | 'channel' {
   return sceneType;
 }
 
+/**
+ * How to show "working on it" (ADR 0044). Driven by the Endpoint's declared capabilities for this
+ * conversation kind: `feedback.mode` picks the way, `feedback.emoji` / `feedback.text` its content,
+ * and what the Bot cannot do here (reaction, edit, recall) is never chosen. Nothing declared = the
+ * conservative status message.
+ */
 function resolvePlatformPhaseDefault(
-  platform: string,
+  kind: ActivityFeedbackKindCapabilities | undefined,
   phase: ActivityFeedbackPhase,
   locale?: Locale,
 ): ResolvedActivityFeedbackPhaseConfig {
-  const features = PLATFORM_FEATURES[platform] ?? {
-    platform,
-    supportsReaction: false,
-    supportsEdit: false,
-    supportsDelete: true,
-    supportsTyping: false,
-    defaultType: 'message' as const,
-  };
+  const feedback = kind?.feedback;
+  const supportsReaction = kind?.reaction === true;
+  const supportsEdit = kind?.edit === true;
+  const supportsTyping = feedback?.mode === 'typing';
+  const emoji = feedback?.emoji ?? activityMessages(locale, 'queued');
+  const statusText = feedback?.text ?? activityMessages(locale, 'active');
+  const platformConfig = feedback?.refreshSeconds
+    ? { platformConfig: { keepaliveIntervalMs: feedback.refreshSeconds * 1000 } }
+    : {};
 
   if (phase === 'queued') {
-    if (features.supportsReaction) {
-      return { type: 'reaction', emoji: activityMessages(locale, 'queued'), autoRemove: true };
+    if (supportsReaction) {
+      return { type: 'reaction', emoji, autoRemove: true };
+    }
+    // The Endpoint prefers reactions but cannot react in this conversation kind: show the marker as text.
+    if (feedback?.mode === 'reaction') {
+      return { type: 'message', message: emoji, autoRemove: true };
     }
     return { type: 'none' };
   }
 
   if (phase === 'thinking') {
-    if (features.supportsEdit) {
+    if (supportsEdit) {
       return { type: 'message', message: activityMessages(locale, 'thinking'), autoRemove: true };
     }
-    if (features.supportsReaction) {
-      return { type: 'reaction', emoji: activityMessages(locale, 'queued'), autoRemove: true };
+    if (supportsReaction) {
+      return { type: 'reaction', emoji, autoRemove: true };
     }
-    if (features.supportsTyping) {
-      return { type: 'typing', autoRemove: true };
+    if (supportsTyping) {
+      return { type: 'typing', autoRemove: true, ...platformConfig };
     }
     return { type: 'message', message: activityMessages(locale, 'thinking'), autoRemove: true };
   }
@@ -53,44 +64,20 @@ function resolvePlatformPhaseDefault(
   }
 
   // active
-  // Group-oriented reaction APIs (icqq GROUP_SET_REACTION, etc.) do not work in
-  // private chats — fall back to a short status message (classic typingIndicator).
-  if (features.defaultType === 'reaction') {
-    return { type: 'reaction', emoji: activityMessages(locale, 'queued'), autoRemove: true };
+  if (feedback?.mode === 'reaction' && supportsReaction) {
+    return { type: 'reaction', emoji, autoRemove: true };
   }
-  if (features.defaultType === 'typing') {
-    return { type: 'typing', autoRemove: true };
+  if (feedback?.mode === 'typing') {
+    return { type: 'typing', autoRemove: true, ...platformConfig };
   }
-  if (features.defaultType === 'none') {
-    return { type: 'message', message: activityMessages(locale, 'active'), autoRemove: true };
+  if (feedback?.mode === 'none') {
+    return { type: 'none' };
   }
-  return { type: 'message', message: activityMessages(locale, 'active'), autoRemove: true };
-}
-
-function resolvePrivateSceneDefault(
-  platform: string,
-  phase: ActivityFeedbackPhase,
-  locale?: Locale,
-): ResolvedActivityFeedbackPhaseConfig {
-  const groupDefault = resolvePlatformPhaseDefault(platform, phase, locale);
-  if (groupDefault.type !== 'reaction') return groupDefault;
-  // Private: reaction → status message (icqq / napcat group-only emoji APIs).
-  if (phase === 'queued' || phase === 'active' || phase === 'thinking') {
-    return {
-      type: 'message',
-      message: phase === 'thinking'
-        ? activityMessages(locale, 'thinking')
-        : phase === 'queued'
-          ? '⏳'
-          : activityMessages(locale, 'active'),
-      autoRemove: true,
-    };
-  }
-  return groupDefault;
+  return { type: 'message', message: statusText, autoRemove: true };
 }
 
 export function resolveActivityFeedbackPhaseConfig(
-  platform: string,
+  kind: ActivityFeedbackKindCapabilities | undefined,
   endpointConfig: ActivityFeedbackConfig | undefined,
   phase: ActivityFeedbackPhase,
   sceneType: ActivitySceneType,
@@ -101,19 +88,17 @@ export function resolveActivityFeedbackPhaseConfig(
   }
 
   const sceneCfg = endpointConfig?.phases?.[phase]?.[sceneKey(sceneType)];
-  const defaults = sceneType === 'private'
-    ? resolvePrivateSceneDefault(platform, phase, locale)
-    : resolvePlatformPhaseDefault(platform, phase, locale);
+  const defaults = resolvePlatformPhaseDefault(kind, phase, locale);
   const merged: ActivityFeedbackPhaseConfig = { ...defaults, ...sceneCfg };
 
   if (merged.type === 'none') {
     return { type: 'none' };
   }
 
-  // Private + reaction only when the scene config explicitly asks for it.
-  // Otherwise coerce to message (icqq GROUP_SET_REACTION is group-only).
+  // A reaction the Endpoint cannot make in this conversation kind is only used when the operator's
+  // scene config explicitly asks for it; otherwise it degrades to a status message.
   let type = merged.type ?? defaults.type;
-  if (type === 'reaction' && sceneType === 'private' && sceneCfg?.type !== 'reaction') {
+  if (type === 'reaction' && kind?.reaction !== true && sceneCfg?.type !== 'reaction') {
     type = 'message';
   }
 

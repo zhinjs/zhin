@@ -10,7 +10,7 @@ import { join, relative, resolve } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
 import { createConfigDocument, type ConfigFileDocument } from '@zhin.js/config-file';
-import { adapterFeatureId, isAdapterIndex, endpointDesiredRepositoryToken } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, endpointDesiredRepositoryToken, resolveStaticCapabilities } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_CURSOR_MODEL,
@@ -357,6 +357,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     console: consoleHost.console,
     clientOutDir: consoleHost.clientOutDir,
     projectRoot: options.root,
+    isSandboxPage: (page) => runtimeSandboxOwners(host.runtime.snapshot).has(page.owner),
   });
   agentHost?.registerHttp(httpHost, httpConfig.apiBase ?? '/api');
   const disposeConsoleControlPlane = startConsoleControlPlane({
@@ -711,6 +712,19 @@ function openBrowser(url: string): void {
       error: error instanceof Error ? error.message : String(error),
     }));
   });
+}
+
+/** Plugins owning an Endpoint whose profile declares `runtime.sandbox` (ADR 0044). */
+export function runtimeSandboxOwners(snapshot: RuntimeSnapshot | undefined): ReadonlySet<string> {
+  const owners = new Set<string>();
+  const adapters = snapshot?.projections.get(adapterFeatureId);
+  if (!isAdapterIndex(adapters)) return owners;
+  for (const row of adapters.describe()) {
+    const profile = adapters.capabilityProfile(row.id);
+    if (!profile) continue;
+    if (resolveStaticCapabilities(profile, []).runtime?.sandbox === true) owners.add(String(row.owner));
+  }
+  return owners;
 }
 
 /** Reads Bot Endpoint identities from the candidate config, not the old live ImRuntime. */

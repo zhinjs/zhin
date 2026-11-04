@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { resolveTurnCapabilities, type AdapterCapabilityProfile } from '@zhin.js/adapter';
 import { createCapabilitySlot, rootPluginId, type FeatureId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { parseSkillMarkdown, SkillIndex, skillFeatureId } from '@zhin.js/skill';
 import { ToolIndex, toolFeatureId, parseAgentToolDefinition } from '@zhin.js/tool';
@@ -60,12 +61,57 @@ async function loadAdapter(platform: string): Promise<RuntimeSnapshot> {
   ]) };
 }
 
+/**
+ * A declared fixture profile shaped like a QQ group adapter (ADR 0044): moderation actions need a Bot admin,
+ * and the adapter narrows `recall.others` the same way. Real adapters declare their own.
+ */
+const groupModerationProfile: AdapterCapabilityProfile = {
+  default: { delivery: { send: true } },
+  group: {
+    actions: {
+      mute: { scopes: ['group'], requiresRole: 'admin' },
+      kick: { scopes: ['group'], requiresRole: 'admin' },
+      essence: { scopes: ['group'], requiresRole: 'admin' },
+      announce: { scopes: ['group'], requiresRole: 'admin' },
+      setTitle: { scopes: ['group'], requiresRole: 'admin' },
+      setAdmin: { scopes: ['group'], requiresRole: 'owner' },
+      recall: { scopes: ['group'], params: { others: true } },
+    },
+  },
+};
+
+function platformCapabilities(scope: 'private' | 'group' | 'channel', botPlatformRole?: string) {
+  return resolveTurnCapabilities({
+    profile: groupModerationProfile,
+    conversation: { endpoint: { id: 'bot', adapter: 'icqq' }, kind: scope, id: 'scene' },
+    facts: botPlatformRole ? { bot: { platformRole: botPlatformRole } } : {},
+    narrow: ({ facts }) => facts.bot?.platformRole === 'admin' || facts.bot?.platformRole === 'owner'
+      ? undefined
+      : { actions: { recall: { params: { others: false } } } },
+  });
+}
+
+/** The tools whose declaration says a platform capability is required (the icqq group-admin set). */
+const capabilityGated = [
+  'agent__icqq__skill__icqq-group-admin__announce',
+  'agent__icqq__skill__icqq-group-admin__essence',
+  'agent__icqq__skill__icqq-group-admin__group_kick',
+  'agent__icqq__skill__icqq-group-admin__recall_member_message',
+  'agent__icqq__skill__icqq-group-admin__set_group_admin',
+  'agent__icqq__skill__icqq-group-admin__set_mute',
+  'agent__icqq__skill__icqq-group-admin__set_title',
+];
+
 function turn(platform: string, scope: 'private' | 'group' | 'channel', botPlatformRole?: string): TurnAccessContext {
+  const caps = platform === 'icqq' ? platformCapabilities(scope, botPlatformRole) : undefined;
   return {
     origin: { kind: 'im', platform, endpoint: 'bot', scope, sceneId: 'scene' },
     principal: { subjectId: 'sender', roles: ['master'] },
     policy: { permissions: ['master'], unattended: false },
-    ...(botPlatformRole ? { input: { contextState: { bot: { platformRole: botPlatformRole } } } } : {}),
+    ...(botPlatformRole || caps ? { input: {
+      ...(botPlatformRole ? { contextState: { bot: { platformRole: botPlatformRole } } } : {}),
+      ...(caps ? { platformCapabilities: caps } : {}),
+    } } : {}),
   };
 }
 
@@ -125,7 +171,8 @@ describe('adapter-owned scene disclosure (#949)', () => {
     const ingress = new CapabilityIngress();
     const admin = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: turn('icqq', 'group', 'admin'), selectedAgent: 'icqq' });
     const unknown = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: {
-      ...turn('icqq', 'group'), input: { contextState: { bot: { platformRoleError: 'lookup_failed' } } },
+      ...turn('icqq', 'group'),
+      input: { contextState: { bot: { platformRoleError: 'lookup_failed' } }, platformCapabilities: platformCapabilities('group') },
     }, selectedAgent: 'icqq' });
     const roleDependent = [
       'agent__icqq__skill__icqq-group-admin__group_leave',
@@ -133,11 +180,12 @@ describe('adapter-owned scene disclosure (#949)', () => {
     ];
     expect(admin.tools.filter(tool => tool.currentConversationBotRoles?.length).map(tool => tool.name))
       .toEqual(roleDependent);
+    // An unknown Bot role fails closed for every capability that needs one, too.
     expect(unknown.tools.map(tool => tool.name))
-      .toEqual(admin.tools.filter(tool => !roleDependent.includes(tool.name)).map(tool => tool.name));
+      .toEqual(admin.tools.filter(tool => !roleDependent.includes(tool.name) && !capabilityGated.includes(tool.name)).map(tool => tool.name));
     expect(unknown.skills.map(skill => skill.qualifiedName)).toEqual(admin.skills.map(skill => skill.qualifiedName));
     expect(unknown.tools.some(tool => tool.name.endsWith('__recall_own_message'))).toBe(true);
-    const owner = await ingress.read({ snapshot, owner: snapshot.root, isActive: () => true, turn: turn('icqq', 'group', 'owner'), selectedAgent: 'icqq' });
+    const owner = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: turn('icqq', 'group', 'owner'), selectedAgent: 'icqq' });
     expect(owner.tools.some(tool => tool.name === 'agent__icqq__skill__icqq-group-admin__set_group_admin')).toBe(true);
     expect([...admin.tools, ...unknown.tools].some(tool => tool.name.endsWith('__set_group_admin'))).toBe(false);
     const plan = createDeferredCapabilityPlan({
@@ -153,5 +201,34 @@ describe('adapter-owned scene disclosure (#949)', () => {
       expect(plan.allTools.some(tool => tool.name === name)).toBe(false);
       expect(await plan.controller.load(name)).toBe(false);
     }
+  });
+
+  it('requiresCapabilities: the Bot losing admin hides mute/kick/essence/announce/title/recall-others tools, restoring shows them', async () => {
+    const snapshot = await loadAdapter('icqq');
+    const ingress = new CapabilityIngress();
+    const names = async (role?: string) => (await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: turn('icqq', 'group', role), selectedAgent: 'icqq' })).tools.map(tool => tool.name);
+
+    const ownerOnly = 'agent__icqq__skill__icqq-group-admin__set_group_admin';
+    const asAdmin = await names('admin');
+    expect(asAdmin).toEqual(expect.arrayContaining(capabilityGated.filter(name => name !== ownerOnly)));
+    expect(asAdmin).not.toContain(ownerOnly);
+
+    const asMember = await names('member');
+    for (const gated of capabilityGated) expect(asMember).not.toContain(gated);
+    // ungated tools stay: own-message recall, leaving the group (its own role gate admits a member), info lookups
+    expect(asMember).toContain('agent__icqq__skill__icqq-messages__recall_own_message');
+    expect(asMember).toContain('agent__icqq__skill__icqq-group-admin__group_leave');
+
+    expect(await names('admin')).toEqual(asAdmin);
+    expect(await names('owner')).toEqual(expect.arrayContaining(capabilityGated));
+  });
+
+  it('requiresCapabilities fails closed without per-turn platform capabilities (non-IM or unresolved)', async () => {
+    const snapshot = await loadAdapter('icqq');
+    const ingress = new CapabilityIngress();
+    const bare = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: {
+      ...turn('icqq', 'group'), input: { contextState: { bot: { platformRole: 'admin' } } },
+    }, selectedAgent: 'icqq' });
+    for (const gated of capabilityGated) expect(bare.tools.map(tool => tool.name)).not.toContain(gated);
   });
 });
