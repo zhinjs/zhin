@@ -2528,9 +2528,6 @@ importers:
       '@zhin.js/adapter-onebot-events':
         specifier: workspace:*
         version: link:../../../packages/im/adapter-onebot-events
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../../../packages/im/agent-feature
@@ -2574,6 +2571,9 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent
       '@zhin.js/prompt-section':
         specifier: workspace:*
         version: link:../../../packages/im/prompt-section
