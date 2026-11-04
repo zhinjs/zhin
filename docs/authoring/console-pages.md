@@ -470,6 +470,10 @@ export default createAdapterConsolePage('telegram');
 
 `createAdapterConsoleRpc` 的 `spec` 只放可公开的字段元数据：`env: true` 或 `secret: true` 的字段按敏感内容遮蔽，前者不再授予写 `.env` 的能力。编辑仅提交平台声明的可更新字段，空白或遮蔽的 secret 保留原值；替换账号需完整填写新配置。`extraStatus` 只返回少量状态（如 `bindState`、`scanUrl`），不要放日志、聊天原文或密钥。
 
+## 评论审批页
+
+「AI 起草 → 人工审批 → 发送」的评论回复适配器（Bilibili、掘金）不需要自己写页面：`pages/index/index.tsx` 用 `@zhin.js/client` 的 `createCommentReviewPage(spec)` 即可得到账号区、登录状态、草稿卡片（修改 / 发送 / 丢弃草稿）和统一的错误、过期数据提示。`spec` 只描述平台差异：平台名与中英文案、资源名词、账号 / 草稿资源的字段映射，以及可选的 `renderLoginExtras`（如扫码登录）、`renderResources`、`isLoginPending`（登录进行中加快轮询）。服务端按 `plugin.<pluginId>.status` / `edit` / `send` / `drop` 提供数据，各适配器仍在自己的 `src/console.ts` 里实现。完整字段见 [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md)。
+
 ## 在页面里保存设置 (config:patch)
 
 页面要改几项设置时，用 `config:patch` 只写具体路径，不要用 `config:set` 覆盖整块配置。`zhin.config.yml` 里其他内容和注释都会保留；YAML/配置页仍然保留给高级用户。

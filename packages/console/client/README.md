@@ -95,7 +95,30 @@ export default function Page() {
 | `useLocale(dictionary?)` | `{ locale, t }`，取代各页面重复的 `detectLocale` + `text` |
 | `resolvePluginId({ adapter } \| { source }, fallback?)` | 从 `/console/api/pages` 解析页面所属 PluginId |
 
-`adapterConsoleStyles` 仍然导出（尚未迁移的页面在用），内容是套件样式加一小段旧版 `ac-*` 兼容样式。
+`adapterConsoleStyles` 仍然导出（sandbox 页在用），内容是套件样式加一小段通用兼容样式；旧版 `ac-*` 评论审批样式已删除。
+
+## 评论审批页
+
+「AI 起草 → 人工审批 → 发送」类的评论回复适配器（Bilibili、掘金…）用 `createCommentReviewPage(spec)` 生成整页：账号区、登录状态、草稿卡片（修改 / 发送 / 丢弃草稿，丢弃走行内确认）、可关闭的错误提示、刷新失败时的“数据可能已过期”。页面只依赖 `@zhin.js/client/ui` 套件，会先解析 PluginId，再读 `plugin.<pluginId>.status` 并调用 `edit` / `send` / `drop` 与你声明的登录动作。
+
+```tsx
+import { createCommentReviewPage, ReviewResourceList } from '@zhin.js/client';
+
+export default createCommentReviewPage({
+  adapter: 'juejin',                              // 解析 PluginId
+  platform: { zh: '掘金', en: 'Juejin' },
+  mark: '掘',
+  resource: { zh: '文章', en: 'articles' },
+  account: endpoint => ({ id: endpoint.login.userId, name: endpoint.login.userName }),
+  draftResource: (draft, t) => t('文章 {0}', draft.articleId),
+  renderLoginExtras: (endpoint, { t, act, pending }) => /* 如“重新检查登录”按钮：act('login-check') */ null,
+  renderResources: (endpoint, { t, noun }) => <ReviewResourceList title={t('管理的{0}', noun)} items={[]} />,
+  dictionary: { '文章 {0}': 'Article {0}' },       // 中文原文 → English
+  isLoginPending: endpoint => endpoint.qr.state === 'waiting', // 此时轮询由 10 秒加快到 2 秒（pendingPollMs）
+});
+```
+
+`status` 返回 `{ endpoints: [{ id, sendMode, persistent, circuit, login: { state }, pendingCount, drafts }], updatedAt }`，草稿含 `id / url / message / status / interrupted / createdAt / author? / original?`（见 `ReviewEndpointBase` / `ReviewDraftBase`）。上次发送被中断或结果未知的草稿会显示“结果未确认”警告。
 
 ## 启动：加载插件 Console Entry
 

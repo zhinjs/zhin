@@ -470,6 +470,10 @@ Each mutation supplies the directory’s `expectedGeneration` and `expectedRevis
 
 Keep `createAdapterConsoleRpc` specs limited to public field metadata. Fields marked `env: true` or `secret: true` are masked; `env` no longer grants file-writing behavior. Editing submits only fields declared mutable by the platform; blank or masked secrets retain their current value. Replacement requires a complete new configuration. `extraStatus` should expose only a few state values (for example `bindState` or `scanUrl`), never logs, chat text or secrets.
 
+## Comment review pages
+
+Reply-drafting adapters that go "AI drafts → human approves → send" (Bilibili, Juejin) do not need a hand-written page: `pages/index/index.tsx` calls `createCommentReviewPage(spec)` from `@zhin.js/client` and gets the account section, login status, draft cards (edit / send / discard draft) and consistent error and stale-data notices. The `spec` only describes what differs per platform: platform name and zh/en copy, the resource noun, field mappers for the account and draft resource, plus optional `renderLoginExtras` (for example QR login), `renderResources` and `isLoginPending` (poll faster while a login is in flight). The server provides `plugin.<pluginId>.status` / `edit` / `send` / `drop`, still implemented per adapter in its own `src/console.ts`. See the [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) for the full field list.
+
 ## Saving settings from a page (config:patch)
 
 When a page changes a few settings, use `config:patch` to write exact paths instead of overwriting a whole section with `config:set`. Everything else in `zhin.config.yml`, including comments, is kept; the YAML/Config page stays available for advanced users.
