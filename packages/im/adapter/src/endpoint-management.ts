@@ -81,6 +81,7 @@ export interface EndpointManagement {
   rejectRequest?(request: EndpointRejectRequest): Promise<void>;
   kickGroupMember?(request: EndpointMemberRequest): Promise<void>;
   muteGroupMember?(request: EndpointMuteRequest): Promise<void>;
+  /** `actions.setAdmin`: grant or revoke group admin (`enabled`). */
   setGroupAdmin?(request: EndpointAdminRequest): Promise<void>;
   deleteFriend?(request: EndpointUserRequest): Promise<void>;
   /** Owner-approved publication remains in its existing policy path, outside Console capabilities. */

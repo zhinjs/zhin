@@ -78,6 +78,7 @@ export default defineAdapter<IcqqEndpointConfig>({
         kick: { scopes: ['group'], requiresRole: 'admin' },
         setCard: { scopes: ['group'], requiresRole: 'admin' },
         setTitle: { scopes: ['group'], requiresRole: 'owner' },
+        setAdmin: { scopes: ['group'], requiresRole: 'owner' },
         essence: { scopes: ['group'], requiresRole: 'admin' },
         announce: { scopes: ['group'], requiresRole: 'admin' },
         invite: { scopes: ['group'] },
@@ -87,7 +88,7 @@ export default defineAdapter<IcqqEndpointConfig>({
       },
       feedback: { mode: 'reaction', emoji: '⏳' },
       prompt: {
-        text: '被禁言或不是管理员时不要尝试管理类操作；头衔只有群主能设；邀请只能邀请你的好友。',
+        text: '被禁言或不是管理员时不要尝试管理类操作；头衔和设/撤管理员只有群主能做；邀请只能邀请你的好友。',
       },
     },
     channel: {

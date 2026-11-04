@@ -59,17 +59,19 @@ describe('icqq capability profile', () => {
       expect(caps.has(`actions.${action}`), action).toBe(true);
     }
     expect(caps.has('actions.setTitle')).toBe(false);
+    expect(caps.has('actions.setAdmin')).toBe(false);
     expect(caps.get('actions.mute.durationSeconds')).toEqual({ min: 60, max: 2592000 });
     expect(caps.get('actions.recall.timeLimitSeconds')).toBe(120);
   });
 
-  it('group, bot is owner: title works too', () => {
+  it('group, bot is owner: title and set/unset admin work too', () => {
     expect(resolve('group', 'owner').has('actions.setTitle')).toBe(true);
+    expect(resolve('group', 'owner').has('actions.setAdmin')).toBe(true);
   });
 
   it('group, bot is a plain member: management actions off, social actions stay', () => {
     const caps = resolve('group', 'member');
-    for (const action of ['mute', 'unmute', 'muteAll', 'kick', 'setCard', 'setTitle', 'essence', 'announce']) {
+    for (const action of ['mute', 'unmute', 'muteAll', 'kick', 'setCard', 'setTitle', 'setAdmin', 'essence', 'announce']) {
       expect(caps.has(`actions.${action}`), action).toBe(false);
     }
     for (const action of ['poke', 'reaction', 'recall', 'invite', 'quoteReply', 'forward']) {

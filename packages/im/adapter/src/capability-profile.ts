@@ -48,7 +48,7 @@ export type StandardEventName =
   | 'poke';
 
 export const ADAPTER_ACTION_NAMES = [
-  'reaction', 'poke', 'mute', 'unmute', 'muteAll', 'kick', 'setCard', 'setTitle',
+  'reaction', 'poke', 'mute', 'unmute', 'muteAll', 'kick', 'setCard', 'setTitle', 'setAdmin',
   'recall', 'essence', 'announce', 'invite', 'quoteReply', 'forward',
 ] as const;
 export type AdapterActionName = (typeof ADAPTER_ACTION_NAMES)[number];
@@ -73,6 +73,7 @@ export interface AdapterActionParams {
   readonly kick: Readonly<{ block?: boolean }>;
   readonly setCard: Readonly<{ maxLength?: number }>;
   readonly setTitle: Readonly<{ maxLength?: number }>;
+  readonly setAdmin: NoParams;
   readonly recall: Readonly<{ timeLimitSeconds?: number; others?: boolean }>;
   readonly essence: NoParams;
   readonly announce: Readonly<{ maxLength?: number }>;
@@ -265,6 +266,7 @@ export const ADAPTER_ACTION_PORTS: Readonly<Record<AdapterActionName, ActionPort
   kick: { port: 'management', method: 'kickGroupMember' },
   setCard: { port: 'management', method: 'setGroupCard' },
   setTitle: { port: 'management', method: 'setGroupTitle' },
+  setAdmin: { port: 'management', method: 'setGroupAdmin' },
   recall: { port: 'control', method: 'recall' },
   essence: { port: 'management', method: 'setGroupEssence' },
   announce: { port: 'management', method: 'sendGroupNotice' },
@@ -306,6 +308,7 @@ const ACTION_PARAM_NODES: Readonly<Record<AdapterActionName, Record<string, Node
   kick: { block: FLAG },
   setCard: { maxLength: MAX },
   setTitle: { maxLength: MAX },
+  setAdmin: {},
   recall: { timeLimitSeconds: MAX, others: FLAG },
   essence: {},
   announce: { maxLength: MAX },

@@ -74,6 +74,7 @@ const groupModerationProfile: AdapterCapabilityProfile = {
       essence: { scopes: ['group'], requiresRole: 'admin' },
       announce: { scopes: ['group'], requiresRole: 'admin' },
       setTitle: { scopes: ['group'], requiresRole: 'admin' },
+      setAdmin: { scopes: ['group'], requiresRole: 'owner' },
       recall: { scopes: ['group'], params: { others: true } },
     },
   },
@@ -96,6 +97,7 @@ const capabilityGated = [
   'agent__icqq__skill__icqq-group-admin__essence',
   'agent__icqq__skill__icqq-group-admin__group_kick',
   'agent__icqq__skill__icqq-group-admin__recall_member_message',
+  'agent__icqq__skill__icqq-group-admin__set_group_admin',
   'agent__icqq__skill__icqq-group-admin__set_mute',
   'agent__icqq__skill__icqq-group-admin__set_title',
 ];
@@ -208,8 +210,10 @@ describe('adapter-owned scene disclosure (#949)', () => {
       snapshot, snapshot.root, () => true, turn('icqq', 'group', role), 'icqq',
     )).tools.map(tool => tool.name);
 
+    const ownerOnly = 'agent__icqq__skill__icqq-group-admin__set_group_admin';
     const asAdmin = await names('admin');
-    expect(asAdmin).toEqual(expect.arrayContaining(capabilityGated));
+    expect(asAdmin).toEqual(expect.arrayContaining(capabilityGated.filter(name => name !== ownerOnly)));
+    expect(asAdmin).not.toContain(ownerOnly);
 
     const asMember = await names('member');
     for (const gated of capabilityGated) expect(asMember).not.toContain(gated);
