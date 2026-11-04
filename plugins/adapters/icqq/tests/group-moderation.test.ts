@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { inspectGroupMember, moderateGroupMember } from '../src/group-moderation.js';
 import type { Client, MemberInfo } from '@icqqjs/icqq';
 import kickTool from '../agents/icqq/skills/icqq-group-admin/tools/group_kick/index.ts';
+import setAdminTool from '../agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.ts';
 
 function fixture() {
   const joinedAt = Date.now() - 1000;
@@ -11,6 +12,7 @@ function fixture() {
     uin: 8596238, isOnline: () => true,
     getGroupMemberInfo: vi.fn(async (_group: number, id: number) => id === 8596238 ? self : member),
     setGroupKick: vi.fn(async () => true), setGroupBan: vi.fn(async () => true),
+    setGroupAdmin: vi.fn(async () => true),
   };
   const client = native as unknown as Client;
   const abort = new AbortController();
@@ -28,6 +30,58 @@ describe('ICQQ checked moderation port', () => {
     expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 123, true);
     expect(f.native.setGroupKick).toHaveBeenCalledTimes(1);
   });
+  describe('set_group_admin', () => {
+    const run = (f: ReturnType<typeof fixture>, enabled: boolean, user_id = 123) => setAdminTool.execute(
+      { group_id: 129043431, user_id, enabled, reason: '经人工确认' },
+      { $client: f.client, signal: f.abort.signal, locale: 'en' } as never);
+
+    it('is owner-only and human-approved', () => {
+      expect(setAdminTool).toMatchObject({ requiresApproval: 'human', currentConversationBotRoles: ['owner'],
+        permissions: ['role(master,admin,trusted,owner)'], scopes: ['group'] });
+    });
+
+    it.each([[true, 'member', 'Member 123 is now an administrator'], [false, 'admin', 'Administrator role removed from 123']] as const)(
+      'enabled=%s changes a %s with fresh role reads', async (enabled, role, message) => {
+        const f = fixture(); f.self.role = 'owner'; f.member.role = role;
+        await expect(run(f, enabled)).resolves.toEqual({ success: true, message });
+        expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 8596238, true);
+        expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 123, true);
+        expect(f.native.setGroupAdmin).toHaveBeenCalledExactlyOnceWith(129043431, 123, enabled);
+      });
+
+    it.each(['admin', 'member'] as const)('refuses when the Bot is only %s at execution time', async role => {
+      const f = fixture(); f.self.role = role;
+      await expect(run(f, true)).resolves.toMatchObject({ success: false, message: 'The bot must be the group owner to set or remove administrators' });
+      expect(f.native.setGroupAdmin).not.toHaveBeenCalled();
+    });
+
+    it.each([[true, 'admin'], [true, 'owner'], [false, 'member'], [false, 'owner']] as const)(
+      'enabled=%s refuses a %s target', async (enabled, role) => {
+        const f = fixture(); f.self.role = 'owner'; f.member.role = role;
+        await expect(run(f, enabled)).resolves.toMatchObject({ success: false, message: expect.stringContaining("role does not allow") });
+        expect(f.native.setGroupAdmin).not.toHaveBeenCalled();
+      });
+
+    it('refuses self and missing targets', async () => {
+      const f = fixture(); f.self.role = 'owner';
+      await expect(run(f, false, 8596238)).resolves.toMatchObject({ success: false });
+      f.native.getGroupMemberInfo.mockImplementation(async (_g: number, id: number) => {
+        if (id === 8596238) return f.self;
+        throw new Error('not a member');
+      });
+      await expect(run(f, true)).resolves.toMatchObject({ success: false, message: 'The target member does not exist' });
+      expect(f.native.setGroupAdmin).not.toHaveBeenCalled();
+    });
+
+    it.each(['false', 'throw'] as const)('reports an unconfirmed result (%s) without retrying', async mode => {
+      const f = fixture(); f.self.role = 'owner';
+      if (mode === 'false') f.native.setGroupAdmin.mockResolvedValue(false);
+      else f.native.setGroupAdmin.mockRejectedValue(new Error('platform error'));
+      await expect(run(f, true)).resolves.toMatchObject({ success: false, message: 'The platform did not confirm the administrator change; do not retry automatically' });
+      expect(f.native.setGroupAdmin).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('reads uncached roles and actual platform join time', async () => {
     const f = fixture();
     await expect(inspectGroupMember(f.client, { groupId: '129043431', userId: '123', signal: f.abort.signal }))
