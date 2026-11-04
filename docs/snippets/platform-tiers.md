@@ -22,6 +22,7 @@ sidebar: false
 | douyin-live | Experimental | 抖音直播弹幕 | `@zhin.js/adapter-douyin-live` | — |
 | email | Experimental | Email | `@zhin.js/adapter-email` | — |
 | github | Experimental | GitHub | `@zhin.js/adapter-github` | — |
+| juejin | Experimental | 掘金评论 | `@zhin.js/adapter-juejin` | — |
 | line | Experimental | LINE | `@zhin.js/adapter-line` | — |
 | milky | Experimental | Milky | `@zhin.js/adapter-milky` | — |
 | napcat | Experimental | NapCat | `@zhin.js/adapter-napcat` | — |

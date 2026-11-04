@@ -1089,6 +1089,62 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.profile.interests` | array \| null | no | — | — |
 | `icqq.profile.bio` | string \| null | no | — | — |
 
+### juejin
+
+[`plugins/adapters/juejin/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/juejin/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `juejin.apiBaseUrl` | string | no | `"https://api.juejin.cn"` | — |
+| `juejin.pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
+| `juejin.sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send on the Console page or with juejin-draft send. off disables outbound messages. Automatic direct replies are not supported. |
+| `juejin.minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
+| `juejin.dataDir` | string | no | `"data/juejin"` | Local data directory. Pending drafts are stored in &lt;dataDir&gt;/&lt;endpoint id&gt;/drafts.json (mode 600, relative to the working directory) and survive restarts. Keep it out of the repository. |
+| `juejin.notify` | object | no | — | Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Juejin comment review page and in logs. |
+| `juejin.notify.adapter` | string | yes | — | Adapter name, such as icqq or telegram. |
+| `juejin.notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `juejin.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
+| `juejin.notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
+| `juejin.articles` | array&lt;string&gt; | no | — | Allowed articles: article IDs (quoted strings) or https://juejin.cn/post/&lt;id&gt; links. Only these articles are polled; there is no site-wide search. Empty means nothing is polled. |
+| `juejin.master` | string \| number | no | — | Framework masters (Juejin uid). endpoints[i].master can override this value. |
+| `juejin.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Juejin uid). |
+| `juejin.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `juejin.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `juejin.endpoints[].id` | string | yes | — | Local endpoint name, not a Juejin account ID. |
+| `juejin.endpoints[].cookie` | string | no | — | Full Juejin web login Cookie header (must include sessionid), acting as your account. Reference ${JUEJIN_COOKIE}; never commit it to the repository. |
+| `juejin.endpoints[].articles` | array&lt;string&gt; | no | — | Allowed articles: article IDs (quoted strings) or https://juejin.cn/post/&lt;id&gt; links. Only these articles are polled; there is no site-wide search. Empty means nothing is polled. |
+| `juejin.endpoints[].pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
+| `juejin.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send on the Console page or with juejin-draft send. off disables outbound messages. Automatic direct replies are not supported. |
+| `juejin.endpoints[].minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
+| `juejin.endpoints[].dataDir` | string | no | `"data/juejin"` | Local data directory. Pending drafts are stored in &lt;dataDir&gt;/&lt;endpoint id&gt;/drafts.json (mode 600, relative to the working directory) and survive restarts. Keep it out of the repository. |
+| `juejin.endpoints[].notify` | object | no | — | Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Juejin comment review page and in logs. |
+| `juejin.endpoints[].notify.adapter` | string | yes | — | Adapter name, such as icqq or telegram. |
+| `juejin.endpoints[].notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `juejin.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
+| `juejin.endpoints[].notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
+| `juejin.endpoints[].apiBaseUrl` | string | no | `"https://api.juejin.cn"` | — |
+| `juejin.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Juejin uid). |
+| `juejin.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `juejin.endpoints[].commandPrefix` | string | no | — | — |
+| `juejin.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `juejin.endpoints[].profile` | object | no | — | Fallback account profile |
+| `juejin.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `juejin.endpoints[].profile.age` | integer \| null | no | — | — |
+| `juejin.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `juejin.endpoints[].profile.signature` | string \| null | no | — | — |
+| `juejin.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `juejin.endpoints[].profile.interests` | array \| null | no | — | — |
+| `juejin.endpoints[].profile.bio` | string \| null | no | — | — |
+| `juejin.nickname` | string \| null | no | — | Fallback account nickname |
+| `juejin.profile` | object | no | — | Fallback account profile |
+| `juejin.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `juejin.profile.age` | integer \| null | no | — | — |
+| `juejin.profile.birthday` | string \| null | no | — | — |
+| `juejin.profile.signature` | string \| null | no | — | — |
+| `juejin.profile.avatar` | string \| null | no | — | — |
+| `juejin.profile.interests` | array \| null | no | — | — |
+| `juejin.profile.bio` | string \| null | no | — | — |
+
 ### kook
 
 [`plugins/adapters/kook/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/kook/schema.json)

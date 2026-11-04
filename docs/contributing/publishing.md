@@ -208,6 +208,7 @@ done < names.txt
 
 - [ ] `@zhin.js/adapter-bilibili` — `plugins/adapters/bilibili`
 - [ ] `@zhin.js/adapter-bilibili-live` — `plugins/adapters/bilibili-live`
+- [ ] `@zhin.js/adapter-juejin` — `plugins/adapters/juejin`
 - [ ] `@zhin.js/adapter-dingtalk` — `plugins/adapters/dingtalk`
 - [ ] `@zhin.js/adapter-discord` — `plugins/adapters/discord`
 - [ ] `@zhin.js/adapter-email` — `plugins/adapters/email`
