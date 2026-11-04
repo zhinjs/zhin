@@ -112,7 +112,9 @@ SQLite 预览只读数据库并提前验证目标；非 SQLite 使用已有 `--s
 - Agent 构造不再要求一个 Provider。独立调用显式借用 `ModelExecutionScope`，由取得作用域的一方负责释放。真实 generation lease 从正式任务入口传入，不能通过最新全局对象补齐。
 - `ProfileSelection` 保存不可复用身份；每回合解析该身份的当前参数。短期 `ProfileRef` 固定本次 revision，不能当长期 Session 选择保存。同 Profile 可以原位更换 native model；已有 Session 下回合跟随，在途调用不变。换 Account 后，旧 Session 的 accountId/incarnation pin 失效，不自动跨账号继承。
 
-已知类型安装边界：完整 Agent 作者入口目前会牵引 Database 各可选方言声明。在未安装 `mongodb`、`mysql2`、`pg`、`redis` 的归档消费项目中，strict 声明检查仍会报告对应类型缺失。这是基线已有的 Database 入口边界问题，尚未在本次改造中解决；不意味着 SQLite 运行必须安装四个驱动，也不能将已通过的纯推理入口检查泛化为完整 Agent 入口检查通过。
+数据库类型入口已隔离：`@zhin.js/database` 默认入口保留中性数据库／模型／事务 API 与 Memory／SQLite；Core、Agent、Zhin 的默认声明不再牵引未选外部方言。SQLite 用户无需安装 MySQL、PostgreSQL、MongoDB、Redis 驱动或声明。使用外部方言的 TypeScript 作者从 `@zhin.js/database/dialects/mysql`、`@zhin.js/database/dialects/pg`、`@zhin.js/database/dialects/mongodb` 或 `@zhin.js/database/dialects/redis` 引入对应类与完整原厂配置类型。
+
+PostgreSQL 的 TypeScript 消费者还需显式安装与 `pg` 匹配的 `@types/pg`；JavaScript-only 用户只需 `pg`。默认入口仍自动注册六个 factory，`Registry.create()` 保持同步，所选客户端只在连接时加载。导入示例见 [Database TypeScript 入口](../../basic/database/README.md#typescript-entry-points)，隔离合同与真实归档验证见[数据库可选方言类型隔离](../plans/database-optional-dialect-types.md)。
 
 ## 恢复
 
