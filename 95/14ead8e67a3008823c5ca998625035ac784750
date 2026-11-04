@@ -1,0 +1,22 @@
+packages/im/harness/tests/guard.test.ts
+  s_178aad69aa64a5::t_6909fd3d490bdb 60-64,76
+  s_178aad69aa64a5::t_e464d351c41e9c 181-187
+packages/im/harness/src/guard.ts
+  s_178aad69aa64a5::t_40c7242117b450 202-206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9514ead8e67a3008823c5ca998625035ac784750",
+  "prompts": {},
+  "sessions": {
+    "s_178aad69aa64a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0eca046-2ac8-49e0-a6a9-b7766f7049bb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
