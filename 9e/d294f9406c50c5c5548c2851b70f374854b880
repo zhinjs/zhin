@@ -1,0 +1,77 @@
+plugins/adapters/juejin/adapters/juejin/index.ts
+  s_9622fd28aba994::t_2ab85f25962823 1-22
+plugins/adapters/juejin/commands/juejin-draft/drop/[id]/index.ts
+  s_9622fd28aba994::t_2555666ee084af 1-13
+plugins/adapters/juejin/commands/juejin-draft/edit/[id]/index.ts
+  s_9622fd28aba994::t_cdb80cf04d93b2 1-15
+plugins/adapters/juejin/commands/juejin-draft/list/index.ts
+  s_9622fd28aba994::t_4dd3f58c9ada03 1-12
+plugins/adapters/juejin/commands/juejin-draft/send/[id]/index.ts
+  s_9622fd28aba994::t_f6a8bc603799c8 1-13
+plugins/adapters/juejin/commands/juejin-draft/show/[id]/index.ts
+  s_9622fd28aba994::t_cf9a69924d6fac 1-13
+plugins/adapters/juejin/commands/juejin-login/status/index.ts
+  s_9622fd28aba994::t_14bdbbf9dcab7e 1-12
+plugins/adapters/juejin/package.json
+  s_9622fd28aba994::t_3a3a980fd146c1 1-126
+plugins/adapters/juejin/pages/index/CommentReview.tsx
+  s_9622fd28aba994::t_623d99b27b7dcd 1-264
+plugins/adapters/juejin/pages/index/index.tsx
+  s_9622fd28aba994::t_833c36cbcb8938 1-18
+plugins/adapters/juejin/pages/index/messages.ts
+  s_9622fd28aba994::t_6a9f1918e80d23 1-59
+plugins/adapters/juejin/pages/index/rpc.ts
+  s_9622fd28aba994::t_5c12db2ed2b6e2 1-72
+plugins/adapters/juejin/plugin.ts
+  s_9622fd28aba994::t_c3fd3ad98640f7 1-32
+plugins/adapters/juejin/schema.json
+  s_9622fd28aba994::t_405d7bc295439c 1-485
+plugins/adapters/juejin/src/adapter.ts
+  s_9622fd28aba994::t_1d2bfdfb7837f3 1-45
+plugins/adapters/juejin/src/client.ts
+  s_9622fd28aba994::t_480bc07dc59b3a 1-247
+plugins/adapters/juejin/src/console.ts
+  s_9622fd28aba994::t_b0283b9f548549 1-161
+plugins/adapters/juejin/src/drafts.ts
+  s_9622fd28aba994::t_964df5642511b1 1-180
+plugins/adapters/juejin/src/endpoint-directory.ts
+  s_9622fd28aba994::t_c9ec82d5c32c52 1-64
+plugins/adapters/juejin/src/endpoint.ts
+  s_9622fd28aba994::t_4c5915f75f8f7c 1-504
+plugins/adapters/juejin/src/index.ts
+  s_9622fd28aba994::t_7196c1a5be7c17 1-50
+plugins/adapters/juejin/src/juejin-runtime-state.ts
+  s_9622fd28aba994::t_2f0e4d904af358 1-11
+plugins/adapters/juejin/src/login-text.ts
+  s_9622fd28aba994::t_57db278be96c7f 1-28
+plugins/adapters/juejin/src/protocol.ts
+  s_9622fd28aba994::t_86b3a3910d8477 1-377
+plugins/adapters/juejin/src/review.ts
+  s_9622fd28aba994::t_b6d2e1016c2407 1-149
+plugins/adapters/juejin/src/self-profile.ts
+  s_9622fd28aba994::t_fbb42aec8dd0d4 1-20
+plugins/adapters/juejin/src/storage.ts
+  s_9622fd28aba994::t_5532286003ffb9 1-52
+plugins/adapters/juejin/tsconfig.json
+  s_9622fd28aba994::t_53c262f1f0b5b9 1-12
+pnpm-lock.yaml
+  s_9622fd28aba994::t_15fe7964a48969 159-161,2571-2622
+tsconfig.typecheck.json
+  s_9622fd28aba994::t_43d5f8f2d22691 23-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9ed294f9406c50c5c5548c2851b70f374854b880",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
