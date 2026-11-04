@@ -198,7 +198,7 @@ async function runSubagentTurn(
       contextFiles: options.contextFiles,
       agentNickname: host.activeBinding?.nickname,
       modelId: run.model.modelId,
-      providerAlias: host.activeBinding?.providerAlias,
+      providerAlias: host.getTurnExecution().binding.account.id,
     },
     personaEnhanced: SUBAGENT_PERSONA,
     modelId: run.model.modelId,

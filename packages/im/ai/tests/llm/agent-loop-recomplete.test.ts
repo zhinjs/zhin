@@ -1,6 +1,6 @@
+import { SyntheticCompletionRuntime } from '../helpers/synthetic-completion-runtime.js';
 import { describe, expect, it } from "vitest";
 import {
-  LlmApiRuntime,
   agentLoop,
   createAssistantMessageEventStream,
   createUserMessage,
@@ -31,9 +31,9 @@ function result(call: ParsedToolCall, text: string): AgentMessage {
 }
 
 /** Scripted transport: each request gets the next reply. */
-function scripted(replies: AssistantMessage[]): { runtime: LlmApiRuntime; requests: Context[] } {
+function scripted(replies: AssistantMessage[]): { runtime: SyntheticCompletionRuntime; requests: Context[] } {
   const requests: Context[] = [];
-  const runtime = new LlmApiRuntime();
+  const runtime = new SyntheticCompletionRuntime();
   runtime.registerProvider("test", { sdk: "openai" }, ["mock"]);
   runtime.registerApiProvider({
     api: "ai-sdk",

@@ -7,6 +7,7 @@ import {
   SUBAGENT_ARTIFACT_THRESHOLD,
   writeSubagentArtifact,
 } from '../src/subagent-artifact.js';
+import { formatTaskFailure } from '../src/core/agent-run-shared.js';
 
 describe('subagent-artifact', () => {
   let cwd: string;
@@ -41,4 +42,20 @@ describe('subagent-artifact', () => {
     expect(p).toContain(path.join('data', 'artifacts', 'subagent', 'task1.md'));
     expect(fs.readFileSync(p, 'utf-8')).toBe('# report');
   });
+
+  it('keeps a failure reason visible in the existing artifact preview even when it also appears at the body tail', () => {
+    const reason = 'Necessary failure reason';
+    const body = `Observed partial output ${'.'.repeat(SUBAGENT_ARTIFACT_THRESHOLD)} ${reason}`;
+    const formatted = formatTaskFailure({ content: body, errorMessage: reason });
+    const result = packageSubagentResult(formatted, 'error-tail');
+    expect(result.text).toContain(reason);
+    expect(result.text).toContain('Observed partial output');
+    expect(fs.readFileSync(result.artifactPath!, 'utf8')).toContain(body);
+  });
+
+  it.each(['Necessary failure reason', 'Error: Necessary failure reason\n\nObserved partial output'])(
+    'does not repeat a failure reason already visible at the beginning: %s', content => {
+      expect(formatTaskFailure({ content, errorMessage: 'Necessary failure reason' })).toBe(content);
+    },
+  );
 });

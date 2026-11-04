@@ -29,41 +29,39 @@ describe('handleRuntimeManagementCommand', () => {
   });
 
   it('lists models for operators', async () => {
-    const listModels = vi.fn().mockResolvedValue([
-      { provider: 'openai', models: ['gpt-4o', 'o1', 'o3', 'a', 'b', 'c'] },
-    ]);
+    const list = vi.fn().mockResolvedValue(['gpt-4o', 'o1', 'o3', 'a', 'b', 'c'].map(model => ({ label: `openai/${model}`, model })));
     const reply = await handleRuntimeManagementCommand({
-      service: { listModels } as never,
+      service: {} as never, inference: { list } as never,
       zhinAgent: {} as never,
       sessionKey: 'test:session',
       commandPrefix: '/',
       content: '/models',
       senderRoles,
     });
-    expect(listModels).toHaveBeenCalled();
+    expect(list).toHaveBeenCalledWith({ kind: 'language' });
     expect(reply).toContain('openai');
     expect(reply).toContain('gpt-4o');
-    expect(reply).toContain('还有 1 个');
+    expect(reply).toContain('openai/c');
   });
 
   it('formats ai.health', async () => {
-    const healthCheck = vi.fn().mockResolvedValue({ openai: true, local: false });
+    const list = vi.fn().mockResolvedValue([{ label: 'openai', model: 'selected' }]);
     const reply = await handleRuntimeManagementCommand({
-      service: { healthCheck } as never,
+      service: {} as never, inference: { list } as never,
       zhinAgent: {} as never,
       sessionKey: 'test:session',
       commandPrefix: '/',
       content: 'ai.health',
       senderRoles: { isMaster: false, isTrusted: true },
     });
-    expect(reply).toContain('✅ openai');
-    expect(reply).toContain('❌ local');
+    expect(reply).toContain('1 configured language profiles');
+    expect(list).toHaveBeenCalledWith({ kind: 'language' });
   });
 });
 
 it.each(['!', '', '/'])('uses the actual %j prefix and keeps plugin namespaces distinct', async commandPrefix => {
-  const listModels = vi.fn().mockResolvedValue([{ provider: 'custom', models: ['中文模型名'] }]);
-  const base = { service: { listModels } as never, zhinAgent: {} as never, sessionKey: 's',
+  const list = vi.fn().mockResolvedValue([{ label: 'custom', model: '中文模型名' }]);
+  const base = { service: {} as never, inference: { list } as never, zhinAgent: {} as never, sessionKey: 's',
     senderRoles: { isMaster: true, isTrusted: false }, commandPrefix, locale: 'en' as const };
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models` })).toContain('Available models');
   expect(await handleRuntimeManagementCommand({ ...base, content: `${commandPrefix}models` })).toContain('中文模型名');
@@ -75,7 +73,7 @@ it.each(['!', '', '/'])('uses the actual %j prefix and keeps plugin namespaces d
 it('uses immutable per-invocation presentation for concurrent locales', async () => {
   let release!: () => void;
   const ready = new Promise<void>(resolve => { release = resolve; });
-  const base = { service: { listModels: async () => { await ready; return []; } } as never,
+  const base = { service: {} as never, inference: { list: async () => { await ready; return []; } } as never,
     zhinAgent: {} as never, sessionKey: 's', content: '!models', commandPrefix: '!',
     senderRoles: { isMaster: true, isTrusted: false } };
   const en = handleRuntimeManagementCommand({ ...base, locale: 'en' });

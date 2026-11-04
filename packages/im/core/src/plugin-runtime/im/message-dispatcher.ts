@@ -1,3 +1,4 @@
+import { readOperationInputResources } from '@zhin.js/feature-kit';
 import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import {
   commandFeatureId,
@@ -114,7 +115,7 @@ export class MessageDispatcher {
       : undefined;
     const matchInput = structuredInput ?? input;
     note('dispatch', 'started');
-    const result = await commands.dispatch({ input: matchInput, source: message, interactionFactory: interactionFactory, commandPrefix: prefix, snapshot: snapshot });
+    const result = await commands.dispatch({ input: matchInput, source: message, interactionFactory: interactionFactory, commandPrefix: prefix, snapshot: snapshot, operation: readOperationInputResources(message, snapshot) });
     const feedback = await renderCommandFeedback(result, message, snapshot);
     if (feedback) return dispatchOutcome(Object.freeze({ ...result, value: feedback.content }), feedback.owner);
     if (result.matched && result.value !== undefined) {

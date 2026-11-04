@@ -13,7 +13,7 @@ type PlanningSetupStatus = {
   planningPolicyReady: boolean;
   disclosureReady: boolean;
   disclosureConfigReady: boolean;
-  modelProviderAlias?: string;
+  modelServiceId?: string;
   availableAgents: string[];
   availableTools: string[];
   availableSkills: string[];
@@ -234,11 +234,11 @@ export default function WorkroomRunsPage() {
                 <p className="border-t px-3 py-2 text-xs text-muted-foreground">重启后用 WORKROOM_SPONSOR_TOKEN 登录 Console，并在 Project sponsors 中加入 workroom-admin。</p>
               </details>
             ) : null}
-            {!planning.disclosureReady && planning.modelProviderAlias && !planning.disclosureConfigReady ? (
+            {!planning.disclosureReady && planning.modelServiceId && !planning.disclosureConfigReady ? (
               <details className="rounded-lg border bg-muted/20" open>
                 <summary className="cursor-pointer px-3 py-2 text-xs font-medium">模型处理方披露契约（保存后重启）</summary>
                 <p className="border-t px-3 py-2 text-xs text-muted-foreground">下面的占位符不能原样保存；必须按模型提供商合同与账号级设置填写。外部 Provider 只有在已禁止训练时才能初始化。</p>
-                <pre className="overflow-auto border-t p-3 text-xs">{`ai:\n  workroom:\n    disclosure:\n      modelProviders:\n        ${planning.modelProviderAlias}:\n          endpoint: REPLACE_WITH_CONTRACTED_ENDPOINT\n          processingRegions: [REPLACE_WITH_CONTRACTED_REGION]\n          maxConfidentiality: project_internal\n          external: true\n          noTraining: REPLACE_WITH_PROVIDER_GUARANTEE\n          loggingMode: REPLACE_WITH_LOGGING_MODE\n          maximumRetentionSeconds: REPLACE_WITH_MAX_RETENTION_SECONDS\n          allowsRedisclosure: REPLACE_WITH_PROVIDER_GUARANTEE\n          supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE`}</pre>
+                <pre className="overflow-auto border-t p-3 text-xs">{`ai:\n  workroom:\n    disclosure:\n      modelServices:\n        ${planning.modelServiceId}:\n          endpoint: REPLACE_WITH_CONTRACTED_ENDPOINT\n          processingRegions: [REPLACE_WITH_CONTRACTED_REGION]\n          maxConfidentiality: project_internal\n          external: true\n          noTraining: REPLACE_WITH_PROVIDER_GUARANTEE\n          loggingMode: REPLACE_WITH_LOGGING_MODE\n          maximumRetentionSeconds: REPLACE_WITH_MAX_RETENTION_SECONDS\n          allowsRedisclosure: REPLACE_WITH_PROVIDER_GUARANTEE\n          supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE`}</pre>
                 <p className="border-t px-3 py-2 text-xs text-muted-foreground">OpenRouter 还需在其 Privacy/Guardrail 中启用 ZDR，并禁止 data collection；YAML 声明不会替你修改第三方账号策略。</p>
               </details>
             ) : null}

@@ -17,6 +17,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const checkOnly = process.argv.includes('--check');
 const hostSource = 'basic/cli/src/plugin-runtime/console/configuration-projection.ts';
 const hostReferencePath = 'packages/im/runtime/src/host-config-schema.json';
+const planReferencePath = 'packages/im/ai/provider-plan.schema.json';
+const planReference = JSON.parse(fs.readFileSync(path.join(repoRoot, planReferencePath), 'utf8'));
 const hostReference = JSON.parse(fs.readFileSync(path.join(repoRoot, hostReferencePath), 'utf8'));
 const hostRuntimeSource = fs.readFileSync(path.join(repoRoot, hostSource), 'utf8');
 const composerSource = 'packages/im/runtime/src/config-composer.ts';
@@ -199,6 +201,14 @@ function render(locale) {
   ];
 
   for (const row of flattenProperties(hostReference, '', new Set(), hostReference)) {
+    lines.push(`| \`${row.path}\` | ${escapeCell(row.type)} | ${row.required ? (zh ? '是' : 'yes') : (zh ? '否' : 'no')} | ${escapeCell(row.defaultValue)} | ${escapeCell(zh ? row.descriptionZh : row.description)} |`);
+  }
+
+  lines.push('', `## ${zh ? '独立 AI 导入提案' : 'Standalone AI import proposal'}`, '',
+    zh ? '`ai.plan.yml` 仅供显式预览、应用和导出，不是启动配置，不会自动加载或覆盖运行时图。'
+      : '`ai.plan.yml` is for explicit review, apply and export. It is not startup configuration and never automatically replaces the runtime graph.',
+    '', `[\`${planReferencePath}\`](https://github.com/zhinjs/zhin/blob/main/${planReferencePath})`, '', tableHeader(locale));
+  for (const row of flattenProperties(planReference, '', new Set(), planReference)) {
     lines.push(`| \`${row.path}\` | ${escapeCell(row.type)} | ${row.required ? (zh ? '是' : 'yes') : (zh ? '否' : 'no')} | ${escapeCell(row.defaultValue)} | ${escapeCell(zh ? row.descriptionZh : row.description)} |`);
   }
 

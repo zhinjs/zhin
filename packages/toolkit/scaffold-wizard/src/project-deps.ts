@@ -19,6 +19,7 @@ export const AI_STACK_VERSIONS = {
   '@ai-sdk/anthropic': 'latest',
   '@ai-sdk/google': 'latest',
   '@ai-sdk/deepseek': 'latest',
+  '@ai-sdk/minimax': 'latest',
   '@ai-sdk/openai-compatible': 'latest',
 } as const;
 
@@ -41,6 +42,10 @@ const SDK_TO_NPM_PACKAGE: Record<string, keyof typeof AI_STACK_VERSIONS> = {
   anthropic: '@ai-sdk/anthropic',
   google: '@ai-sdk/google',
   deepseek: '@ai-sdk/deepseek',
+  minimax: '@ai-sdk/minimax',
+  'codex-subscription': '@ai-sdk/openai',
+  'claude-subscription': '@ai-sdk/anthropic',
+  antigravity: '@ai-sdk/google',
   ollama: '@ai-sdk/openai-compatible',
   'openai-compatible': '@ai-sdk/openai-compatible',
 };
@@ -103,34 +108,22 @@ function collectSdkPackagesFromSetup(ai: AISetupConfig): Record<string, string> 
   return packagesForSdkIds(sdkIds);
 }
 
-function collectSdkPackagesFromConfig(config: { ai?: unknown }): Record<string, string> {
-  const ai = config.ai;
-  if (!ai || typeof ai !== 'object' || Array.isArray(ai)) return {};
-  const rec = ai as Record<string, unknown>;
-  const providers = rec.providers as Record<string, { sdk?: string }> | undefined;
+function collectSdkPackagesFromPlan(proposal: unknown): Record<string, string> {
+  if (!proposal || typeof proposal !== 'object' || Array.isArray(proposal)) return {};
+  const rec = proposal as Record<string, unknown>;
   const sdkIds = new Set<string>();
-
-  if (providers) {
-    for (const [alias, entry] of Object.entries(providers)) {
-      const id = inferSdkId(alias, entry);
-      if (id) sdkIds.add(id);
-    }
-  }
-
-  const agents = rec.agents as Record<string, { provider?: string }> | undefined;
-  if (agents && providers) {
-    for (const agent of Object.values(agents)) {
-      if (!agent?.provider) continue;
-      const id = inferSdkId(agent.provider, providers[agent.provider]);
-      if (id) sdkIds.add(id);
-    }
-  }
-
-  if (sdkIds.size === 0) {
-    const alias = resolveAgentProviderFromConfig(config);
-    if (alias) {
-      const id = inferSdkId(alias, providers?.[alias]);
-      if (id) sdkIds.add(id);
+  const services = (rec as { services?: Record<string, { driver?: string | { id?: string }; models?: Record<string, { protocol?: string }> }> } | undefined)?.services;
+  for (const service of Object.values(services ?? {})) {
+    const driver = typeof service.driver === 'string' ? service.driver : service.driver?.id;
+    if (driver && SDK_TO_NPM_PACKAGE[driver]) sdkIds.add(driver);
+    // OpenCode selects its wire contract explicitly per model. A native model ID
+    // cannot identify which optional SDK is needed.
+    if (driver === 'opencode-go' || driver === 'opencode-zen') {
+      const protocols: Record<string, string> = { 'openai-chat': 'openai-compatible', 'openai-responses': 'openai', 'anthropic-messages': 'anthropic', 'google-generate-content': 'google' };
+      for (const model of Object.values(service.models ?? {})) {
+        const sdk = model.protocol ? protocols[model.protocol] : undefined;
+        if (sdk) sdkIds.add(sdk);
+      }
     }
   }
 
@@ -197,7 +190,7 @@ export function findInstalledAiStackIncompatibilities(
   if (aiMajor < 7) {
     issues.push({
       package: 'ai',
-      reason: wizardText(locale, "ai@6 与 @ai-sdk/openai-compatible@3（v4 model spec）不兼容，请升级 ai 至 ^7.0.0"),
+      reason: wizardText(locale, "ai@6 与 @ai-sdk/openai-compatible@3（v4 model spec）不兼容，请升级 ai 至 ^7.0.35"),
     });
   }
 
@@ -235,41 +228,20 @@ export interface PackageJsonLike {
   devDependencies?: Record<string, string>;
 }
 
-/** zhin.config 中是否启用了 AI（enabled 未显式 false 且存在 agents/providers） */
+/** AI can start empty; the graph is configured after startup. */
 export function isAiEnabledInConfig(config: { ai?: unknown }): boolean {
-  const ai = config.ai;
-  if (!ai || typeof ai !== 'object' || Array.isArray(ai)) return false;
-  const rec = ai as Record<string, unknown>;
-  if (rec.enabled === false) return false;
-  if (rec.enabled === true) return true;
-  const agents = rec.agents;
-  if (agents && typeof agents === 'object' && !Array.isArray(agents) && Object.keys(agents).length > 0) {
-    return true;
-  }
-  const providers = rec.providers;
-  if (providers && typeof providers === 'object' && !Array.isArray(providers) && Object.keys(providers).length > 0) {
-    return true;
-  }
-  return false;
+  return Boolean(config.ai && typeof config.ai === 'object' && !Array.isArray(config.ai)
+    && (config.ai as Record<string, unknown>).enabled !== false);
 }
 
-export function resolveAgentProviderFromConfig(config: { ai?: unknown }): string | undefined {
-  const ai = config.ai;
-  if (!ai || typeof ai !== 'object' || Array.isArray(ai)) return undefined;
-  const rec = ai as Record<string, unknown>;
-  const agents = rec.agents;
-  if (agents && typeof agents === 'object' && !Array.isArray(agents)) {
-    const zhin = (agents as Record<string, { provider?: string }>).zhin;
-    if (zhin?.provider) return String(zhin.provider);
-    const firstAgent = Object.values(agents as Record<string, { provider?: string }>)[0];
-    if (firstAgent?.provider) return String(firstAgent.provider);
-  }
-  const providers = rec.providers;
-  if (providers && typeof providers === 'object' && !Array.isArray(providers)) {
-    const first = Object.keys(providers as Record<string, unknown>)[0];
-    if (first) return first;
-  }
-  return undefined;
+/** Presentation only: resolve the explicitly selected import-plan chat Driver. */
+export function resolveAgentProviderFromPlan(proposal: unknown): string | undefined {
+  const plan = proposal as { services?: Record<string, { driver?: string | { id?: string } }>; accounts?: Record<string, { service?: string }>; profiles?: Record<string, { account?: string }>; purposes?: { chat?: { profile?: string } } } | undefined;
+  const profileId = plan?.purposes?.chat?.profile;
+  const accountId = profileId ? plan?.profiles?.[profileId]?.account : undefined;
+  const serviceId = accountId ? plan?.accounts?.[accountId]?.service : undefined;
+  const driver = serviceId ? plan?.services?.[serviceId]?.driver : undefined;
+  return typeof driver === 'string' ? driver : driver?.id;
 }
 
 function aiConfigNeedsMcp(ai: Record<string, unknown>): boolean {
@@ -279,18 +251,17 @@ function aiConfigNeedsMcp(ai: Record<string, unknown>): boolean {
 }
 
 /** 根据 zhin.config 的 ai 段推导应安装的 production 依赖 */
-export function getRequiredAIDependenciesForConfig(config: { ai?: unknown }): Record<string, string> {
+export function getRequiredAIDependenciesForConfig(config: { ai?: unknown }, proposal?: unknown): Record<string, string> {
   if (!isAiEnabledInConfig(config)) return {};
   const ai = config.ai as Record<string, unknown>;
   const setup: AISetupConfig = {
     enabled: true,
-    agentProvider: resolveAgentProviderFromConfig(config),
-    providers: ai.providers as AISetupConfig['providers'],
+    agentProvider: resolveAgentProviderFromPlan(proposal),
     memoryMcp: aiConfigNeedsMcp(ai),
   };
   const deps = {
     ...getAIDependencies(setup),
-    ...collectSdkPackagesFromConfig(config),
+    ...collectSdkPackagesFromPlan(proposal),
   };
   if (!aiConfigNeedsMcp(ai)) {
     delete deps['@modelcontextprotocol/sdk'];
@@ -369,7 +340,7 @@ export function diagnoseAIDependencies(
   const notInstalled = findUnresolvedPackageInstalls(cwd, declared);
   return {
     enabled: true,
-    provider: resolveAgentProviderFromConfig(config),
+
     required,
     missingFromPackageJson,
     outdatedInPackageJson,

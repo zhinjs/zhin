@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Registry } from '@zhin.js/database';
+import type {} from '@zhin.js/database/dialects/pg';
 import {
   AGENT_MESSAGE_MODEL,
   AGENT_SESSION_MODEL,

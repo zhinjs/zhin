@@ -1,7 +1,7 @@
 /**
  * Chat eval: how human the bot sounds in IM, scored on fixed scenarios with real models.
  *
- *   pnpm eval:chat --workspace ~/zhin-workspace [--model alias/model] [--judge alias/model]
+ *   pnpm eval:chat --workspace ~/zhin-workspace [--model profile-id] [--judge profile-id]
  *                  [--runs 2] [--only id-or-tag,...] [--baseline report.json|none]
  *
  * Writes reports/<timestamp>.{json,md} next to this file and compares with the latest earlier report.
@@ -36,7 +36,8 @@ const { values } = parseArgs({
 });
 
 const workspaceDir = resolve(values.workspace.replace(/^~(?=\/|$)/, process.env.HOME ?? '~'));
-const workspace = loadEvalWorkspace(workspaceDir, values.agent);
+const workspace = await loadEvalWorkspace(workspaceDir, { agentName: values.agent, profileId: values.model });
+try {
 const modelRef = values.model ?? workspace.agentModel;
 const judgeRef = values.judge ?? modelRef;
 const runs = Math.max(1, Number.parseInt(values.runs, 10) || 1);
@@ -46,8 +47,8 @@ if (scenarios.length === 0) throw new Error('No scenario matches --only');
 
 const soulPath = join(workspaceDir, 'SOUL.md');
 const persona = existsSync(soulPath) ? fillPromptSlots(readFileSync(soulPath, 'utf8'), workspace.nickname) : '(no SOUL.md)';
-const model = workspace.model(modelRef);
-const judge = workspace.model(judgeRef);
+const model = await workspace.model(modelRef);
+const judge = await workspace.model(judgeRef);
 const startedAt = new Date().toISOString();
 print(`chat eval: ${scenarios.length} scenarios × ${runs} runs, model ${modelRef}, judge ${judgeRef}`);
 
@@ -83,7 +84,7 @@ async function worker(): Promise<void> {
 await Promise.all(Array.from({ length: Math.min(concurrency, jobs.length) }, worker));
 records.sort((a, b) => a.scenario.localeCompare(b.scenario) || a.run - b.run);
 
-const report = buildReport({ startedAt, model: modelRef, judge: judgeRef, runsPerScenario: runs, scenarios, records });
+const report = buildReport({ startedAt, model: modelRef, judge: judgeRef, runsPerScenario: runs, scenarios, records, selections: { model: workspace.selection(model), judge: workspace.selection(judge) } });
 mkdirSync(values.out, { recursive: true });
 const earlier = readdirSync(values.out).filter(name => name.endsWith('.json')).sort();
 const baselinePath = values.baseline === 'none' ? undefined : values.baseline ?? (earlier.length > 0 ? join(values.out, earlier.at(-1)!) : undefined);
@@ -94,3 +95,5 @@ const markdown = renderMarkdown(report, baseline);
 writeFileSync(join(values.out, `${stamp}.md`), markdown);
 print(`\n${markdown}`);
 print(`report: ${join(values.out, `${stamp}.md`)}${baselinePath ? ` (baseline ${baselinePath})` : ''}`);
+
+} finally { await workspace.close(); }

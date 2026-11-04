@@ -148,7 +148,7 @@ export class SpawnTaskTool {
       }
       const result = await this.manager.spawnSync(opts);
       return (
-        `子任务${labelStr ? `「${labelStr}」` : ''}已完成（同步等待）。\n\n${result}\n\n`
+        `子任务${labelStr ? `「${labelStr}」` : ''}${result.status === 'error' ? '未能完成' : '已完成'}（同步等待）。\n\n${result.result}\n\n`
         + '请根据以上结果继续后续步骤。'
       );
     }

@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { describe, expect, it } from 'vitest';
 import { createProviderHarness, geminiGenerate, openaiChat, type ProviderHarness } from '../../../ai/tests/helpers/provider-harness/index.js';
 import type { ModelExecutionBundle } from '../../src/model-runtime/types.js';
@@ -7,12 +8,7 @@ import { DEFAULT_PERCEPTION_SETTINGS, resolvePerceptionConfig } from '../../src/
 const payload = { kind: 'image' as const, base64: Buffer.from('synthetic image').toString('base64'), mimeType: 'image/png' };
 const NO_RETRY = { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0 };
 function bundle(h: ProviderHarness): ModelExecutionBundle {
-  return { provider: h.adapter(), llmRuntime: h.runtime,
-    invocation: {
-      preset: { id: `preset:${h.alias}`, modelId: `model:${h.alias}` },
-      model: { id: `model:${h.alias}`, connectionId: h.alias, model: h.modelId, capabilities: { input: h.model.input } },
-      connection: { id: h.alias, ownerId: 'host', revision: 1, sdk: h.sdk },
-    } };
+  return executionBundle({ model: h.model, completion: h.runtime });
 }
 
 describe('scoped perception against real SDK completion with mocked HTTP', () => {
@@ -87,7 +83,7 @@ describe('scoped perception against real SDK completion with mocked HTTP', () =>
     expect(await factory(options)!.describe(payload)).toMatchObject({ cached: false });
     expect(await factory(options)!.describe(payload)).toMatchObject({ cached: true, text: 'same picture' });
     expect(await factory({ ...options, sessionKey: 'personal-session:v1:bob' })!.describe(payload)).toMatchObject({ cached: false, text: 'other owner' });
-    const revised = { ...acquired, invocation: { ...acquired.invocation, connection: { ...acquired.invocation.connection, revision: 2 } } };
+    const revised = { ...acquired, binding: { ...acquired.binding, profile: { ...acquired.binding.profile, revision: 2 } } };
     expect(await factory({ ...options, scope: { perception: revised } })!.describe(payload)).toMatchObject({ cached: false, text: 'new revision' });
     expect(h.requests).toHaveLength(3);
   });

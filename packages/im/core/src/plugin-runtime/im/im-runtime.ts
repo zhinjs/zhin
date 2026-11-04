@@ -1,7 +1,9 @@
+import { imOperationResourcesToken } from './operation-resources.js';
 import {
   Scope,
   OwnerOperation,
   createToken,
+  readLeasedRootResource,
   generationAdmissionBinder,
   type CapabilityId,
   type GenerationAdmissionGate,
@@ -60,8 +62,8 @@ import type { Request } from '../../request.js';
 import {
   OutboundDeliveryRuntime,
   failedDeliveryReceipt,
+  type OutboundDeliveryExecution,
 } from './outbound-delivery-runtime.js';
-import type { OutboundDeliveryExecution } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
 import { messageLocale } from './locale.js';
 import { InboundDeduper } from './inbound-dedup.js';
@@ -160,6 +162,11 @@ export class ImRuntime implements OutboundMessageService {
       diagnostics: this.#messageDiagnostics,
       interactions: this.#interactions,
       captureOperation: input => this.endpoints.captureOperation(input),
+      createOperationResources: input => {
+        const snapshots = this.#snapshots;
+        if (!snapshots || !snapshots.owns(input.lease) || !input.lease.active) throw new Error('IM operation lease is not active');
+        return readLeasedRootResource(snapshots, input.lease, imOperationResourcesToken)?.open({ ...input, snapshots });
+      },
       inboundClaim: options.inboundClaim,
       originClassifier,
       deduper,

@@ -1,3 +1,5 @@
+import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
+import { createProfileRuntime, profileModel } from '../helpers/profile-runtime.js';
 /**
  * Gemini over the real @ai-sdk/google transport with a mocked HTTP endpoint:
  * image input, function calling, a stable cacheable prefix across turns, and
@@ -5,10 +7,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
-import { createLlmTransportModel, defaultModelInput } from '../../src/llm/llm-api-runtime.js';
+
 import { createUserMessage, EMPTY_TOKEN_USAGE, type AssistantMessage } from '../../src/llm/types/agent-message.js';
-import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+
 import {
   ProviderRequestError,
   classifyProviderError,
@@ -37,13 +38,14 @@ function geminiServer(responses: Array<(body: Record<string, any>) => unknown>, 
   const captured: Captured[] = [];
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
-    const body = JSON.parse(String(init?.body ?? '{}'));
+    const request = new Request(input, init);
+    const body = JSON.parse(await request.clone().text());
     captured.push({ url, body });
     const respond = responses[Math.min(captured.length - 1, responses.length - 1)]!;
     const payload = respond(body) as { __chunks?: unknown[]; __status?: number; __hang?: boolean };
     if (payload && payload.__hang) {
       return new Promise<Response>((_, reject) => {
-        const signal = init?.signal;
+        const signal = request.signal;
         signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
         setImmediate(() => onHang?.());
       });
@@ -68,15 +70,15 @@ const FALLBACK = 'gemini-3.8-flash-lite';
 
 function setup(
   responses: Array<(body: Record<string, any>) => unknown>,
-  extra: Partial<ProviderInstanceConfig> = {},
+  extra: Partial<ProviderFixtureConfig> = {},
   onHang?: () => void,
 ) {
   const server = geminiServer(responses, onHang);
-  const config: ProviderInstanceConfig = { sdk: 'google', apiKey: 'test-key', ...extra };
+  const config: ProviderFixtureConfig = { sdk: 'google', apiKey: 'test-key', ...extra };
   const models = [PRIMARY, FALLBACK];
-  const runtime = createLlmApiRuntime([{ alias: 'gemini', config, models, fetch: server.fetch }], () => models);
-  const model = createLlmTransportModel('gemini', config, PRIMARY);
-  const fallback = createLlmTransportModel('gemini', config, FALLBACK);
+  const runtime = createProfileRuntime({ alias: 'gemini', config, models, fetch: server.fetch });
+  const model = profileModel('gemini', config, PRIMARY);
+  const fallback = profileModel('gemini', config, FALLBACK);
   return { runtime, model, fallback, captured: server.captured };
 }
 
@@ -109,17 +111,14 @@ describe('Gemini provider (google sdk)', () => {
     const contents = captured[0]!.body.contents;
     const index = contents.findIndex((c: any) => c.parts.some((p: any) => p.functionCall));
     expect(contents[index - 1]?.role).toBe('user');
-    expect(contents[index].parts).toContainEqual(expect.objectContaining({ thoughtSignature: 'c2ln' }));
+    expect(contents[index].parts).toContainEqual(expect.objectContaining({ thoughtSignature: 'skip_thought_signature_validator' }));
     expect(contents[index + 1].parts[0]).toMatchObject({ functionResponse: { name: 'get_weather' } });
     expect(contents[index].parts.filter((part: any) => part.text === '先查天气')).toHaveLength(precedingTexts);
   });
 
-  it('defaults Gemini chat models to multimodal input, but not TTS/embedding models or other SDKs', () => {
-    expect(defaultModelInput('google', 'gemini-3.8-flash')).toContain('image');
-    expect(defaultModelInput('google', 'gemini-3.8-flash-tts')).toEqual(['text']);
-    expect(defaultModelInput('google', 'gemini-embedding-001')).toEqual(['text']);
-    expect(defaultModelInput('deepseek', 'deepseek-chat')).toEqual(['text']);
-    expect(createLlmTransportModel('g', { sdk: 'google', input: ['text'] }, 'gemini-3.8-flash').input).toEqual(['text']);
+  it('uses explicit Google model input instead of deriving it from a name', () => {
+    expect(profileModel('g', { sdk: 'google', input: ['text'] }, 'gemini-3.8-flash').input).toEqual(['text']);
+    expect(profileModel('g', { sdk: 'google', input: ['text', 'image'] }, 'unknown-native-id').input).toEqual(['text', 'image']);
   });
 
   it('sends a group-message image as inline data next to the text', async () => {
@@ -327,14 +326,13 @@ describe('Gemini provider (google sdk)', () => {
 
     async function resilientRun(
       responses: Array<() => unknown>,
-      options: { fallback?: boolean; config?: ProviderResilienceConfig; timers?: ProviderTimers; onHang?: () => void } = {},
+      options: { config?: ProviderResilienceConfig; timers?: ProviderTimers; onHang?: () => void } = {},
     ) {
-      const { runtime, model, fallback, captured } = setup(responses, {}, options.onHang);
+      const { runtime, model, captured } = setup(responses, {}, options.onHang);
       const events: ProviderResilienceEvent[] = [];
       const delays: number[] = [];
       const port = createResilientCompletionPort(runtime, {
         config: options.config,
-        fallbackModels: options.fallback ? [fallback] : [],
         onEvent: (event) => events.push(event),
         sleep: async (ms) => { delays.push(ms); },
         random: () => 0.5,
@@ -374,27 +372,28 @@ describe('Gemini provider (google sdk)', () => {
       expect(exhausted.requests).toBe(3);
     });
 
-    it('falls back to the next model after 503 UNAVAILABLE retries run out', async () => {
+    it('stops on the selected model after 503 UNAVAILABLE retries run out', async () => {
       const unavailable = rpcError(503, 'UNAVAILABLE');
-      const run = await resilientRun([unavailable, unavailable, unavailable, ok], { fallback: true });
-      expect(run.message?.stopReason).toBe('stop');
-      expect(run.models).toEqual([PRIMARY, PRIMARY, PRIMARY, FALLBACK]);
-      expect(run.events.at(-1)).toMatchObject({ type: 'fallback', from: PRIMARY, to: FALLBACK, kind: 'server' });
+      const run = await resilientRun([unavailable, unavailable, unavailable, ok]);
+      expect(run.error).toMatchObject({ kind: 'server', attempts: 3 });
+      expect(run.models).toEqual([PRIMARY, PRIMARY, PRIMARY]);
+      expect(run.events.at(-1)).toMatchObject({ type: 'give_up', kind: 'server' });
     });
 
-    it('falls back after 429 retries run out, and skips the retries when RetryInfo is too long', async () => {
+    it('stops without waiting or switching when RetryInfo is too long', async () => {
       const longDelay = rpcError(429, 'RESOURCE_EXHAUSTED', [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '3600s' }]);
-      const run = await resilientRun([longDelay, ok], { fallback: true });
-      expect(run.models).toEqual([PRIMARY, FALLBACK]);
-      expect(run.events).toEqual([expect.objectContaining({ type: 'fallback', kind: 'rate_limit' })]);
+      const run = await resilientRun([longDelay, ok]);
+      expect(run.models).toEqual([PRIMARY]);
+      expect(run.error).toMatchObject({ kind: 'rate_limit', attempts: 1 });
+      expect(run.events).toEqual([expect.objectContaining({ type: 'give_up', kind: 'rate_limit' })]);
     });
 
-    it('does not retry a per-day quota (QuotaFailure PerDay) but falls back to another model', async () => {
+    it('does not retry or change model for a per-day quota (QuotaFailure PerDay)', async () => {
       const exhausted = await resilientRun([dailyQuota]);
-      expect(classifyProviderError(exhausted.error?.cause)).toMatchObject({ kind: 'quota_exhausted', retryable: false, fallbackEligible: true });
-      const run = await resilientRun([dailyQuota, ok], { fallback: true });
-      expect(run.message?.stopReason).toBe('stop');
-      expect(run.models).toEqual([PRIMARY, FALLBACK]);
+      expect(classifyProviderError(exhausted.error?.cause)).toMatchObject({ kind: 'quota_exhausted', retryable: false });
+      const run = await resilientRun([dailyQuota, ok]);
+      expect(run.error).toMatchObject({ kind: 'quota_exhausted', attempts: 1 });
+      expect(run.models).toEqual([PRIMARY]);
       expect(run.delays).toEqual([]);
     });
 
@@ -430,7 +429,7 @@ describe('Gemini provider (google sdk)', () => {
       ['a PROHIBITED_CONTENT finish', finished('PROHIBITED_CONTENT')],
       ['a blocked prompt', () => ({ promptFeedback: { blockReason: 'PROHIBITED_CONTENT' }, usageMetadata: { promptTokenCount: 10, totalTokenCount: 10 } })],
     ])('passes %s to the user without retrying or falling back', async (_label, blocked) => {
-      const run = await resilientRun([blocked, ok], { fallback: true, config: { emptyReplyRetries: 2 } });
+      const run = await resilientRun([blocked, ok], { config: { emptyReplyRetries: 2 } });
       expect(run.requests).toBe(1);
       expect(run.models).toEqual([PRIMARY]);
       expect(run.message?.stopReason).toBe('error');
@@ -439,12 +438,12 @@ describe('Gemini provider (google sdk)', () => {
     });
 
     it('re-asks MALFORMED_FUNCTION_CALL on the same model only when the preset opts in', async () => {
-      const reasked = await resilientRun([finished('MALFORMED_FUNCTION_CALL'), ok], { fallback: true, config: { emptyReplyRetries: 1 } });
+      const reasked = await resilientRun([finished('MALFORMED_FUNCTION_CALL'), ok], { config: { emptyReplyRetries: 1 } });
       expect(reasked.message?.stopReason).toBe('stop');
       expect(reasked.models).toEqual([PRIMARY, PRIMARY]);
       expect(reasked.events[0]).toMatchObject({ type: 'retry', kind: 'malformed_tool_call', delayMs: 0 });
 
-      const passedThrough = await resilientRun([finished('MALFORMED_FUNCTION_CALL'), ok], { fallback: true });
+      const passedThrough = await resilientRun([finished('MALFORMED_FUNCTION_CALL'), ok]);
       expect(passedThrough.requests).toBe(1);
       expect(passedThrough.message?.stopReason).toBe('error');
       expect(passedThrough.message?.errorMessage).toContain('MALFORMED_FUNCTION_CALL');
@@ -452,7 +451,7 @@ describe('Gemini provider (google sdk)', () => {
 
     it('treats 400 API_KEY_INVALID as auth: no retry, no fallback', async () => {
       const run = await resilientRun([rpcError(400, 'INVALID_ARGUMENT', [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_INVALID' }])]);
-      expect(classifyProviderError(run.error)).toMatchObject({ kind: 'auth', retryable: false, fallbackEligible: false });
+      expect(classifyProviderError(run.error)).toMatchObject({ kind: 'auth', retryable: false });
       expect(run.requests).toBe(1);
     });
 
@@ -498,7 +497,7 @@ describe('Gemini streaming: thoughts and usage accounting (streamGenerateContent
       { candidates: [{ content: { role: 'model', parts: [{ text: '内部推理第二段', thought: true }] } }] },
       { candidates: [{ content: { role: 'model', parts: [{ text: '上海今天' }] } }] },
       { candidates: [{ content: { role: 'model', parts: [{ text: '晴。' }] }, finishReason: 'STOP' }], usageMetadata: finalUsage },
-    ] })], { providerOptions: { google: { thinkingConfig: { includeThoughts: true } } } });
+    ] })], { thinkingLevel: 'low' });
     const stream = runtime.stream(model, { systemPrompt: SYSTEM, messages: [createUserMessage('上海天气？')] });
     let message: AssistantMessage | undefined;
     for await (const event of stream) {
@@ -508,7 +507,7 @@ describe('Gemini streaming: thoughts and usage accounting (streamGenerateContent
     if (!message) throw new Error('stream ended without a message');
 
     expect(captured[0]!.url).toContain('streamGenerateContent');
-    expect(captured[0]!.body.generationConfig.thinkingConfig).toMatchObject({ includeThoughts: true });
+    expect(captured[0]!.body.generationConfig.thinkingConfig).toMatchObject({ thinkingLevel: 'low' });
     const visible = message.content.filter((b) => b.type === 'text').map((b) => (b as { text: string }).text).join('');
     expect(visible).toBe('上海今天晴。');
     expect(visible).not.toContain('推理');
@@ -532,7 +531,7 @@ describe('Gemini streaming: thoughts and usage accounting (streamGenerateContent
       { candidates: [{ content: { role: 'model', parts: [{ text: '要查天气', thought: true }] } }] },
       { candidates: [{ content: { role: 'model', parts: [{ functionCall: { name: 'get_weather', args: { city: '上海' } }, thoughtSignature: 'c2ln' }] }, finishReason: 'STOP' }],
         usageMetadata: { promptTokenCount: 4300, candidatesTokenCount: 9, thoughtsTokenCount: 40, cachedContentTokenCount: 4096, totalTokenCount: 4349 } },
-    ] })], { providerOptions: { google: { thinkingConfig: { includeThoughts: true } } } });
+    ] })], { thinkingLevel: 'low' });
     const message = await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('上海天气？')], tools: [weather] });
     expect(message.stopReason).toBe('toolCalls');
     expect(message.content.filter((b) => b.type === 'text')).toEqual([]);

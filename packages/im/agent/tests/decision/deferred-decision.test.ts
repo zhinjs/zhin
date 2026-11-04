@@ -35,7 +35,7 @@ function decision(mode: 'off' | 'shadow' | 'active', relevance: number = 0.95): 
         ])) } as DecisionResult<Q>;
     },
   };
-  return { provider, config: { provider: 'root/typesafe', skills: { mode, maxSelections: 2 }, tools: { mode } } };
+  return { forTask: () => provider, config: { skills: { mode, maxSelections: 2 }, tools: { mode } } };
 }
 
 const invocation: ToolInvocationContext = {
@@ -61,13 +61,13 @@ describe('decision-driven deferred capabilities', () => {
     expect((await primeSkillsForIntent({ ...options, decision: decision('shadow') })).skill?.name).toBe('admin');
     expect((await primeSkillsForIntent({ ...options, decision: decision('active', 0.1) })).skill).toBeUndefined();
     expect((await primeSkillsForIntent({ ...options, decision: {
-      ...decision('active'), provider: { evaluate: async () => { throw new Error('network'); } },
+      ...decision('active'), forTask: () => ({ evaluate: async () => { throw new Error('network'); } }),
     } })).skill?.name).toBe('admin');
   });
 
   it('discloses private Tool descriptors only after its Skill is loaded, and sends no instructions', async () => {
     const runtime = decision('active');
-    const evaluate = vi.spyOn(runtime.provider, 'evaluate');
+    const evaluate = vi.spyOn(runtime.forTask('skills')!, 'evaluate');
     const plan = createDeferredCapabilityPlan({ capabilities: capabilities(),
       sessionSnapshot: { loadedTools: {}, loadedSkills: [] }, config: { deferredTools: {} },
       decision: runtime, persistSnapshot: async () => undefined });

@@ -10,7 +10,7 @@ import {
   generateAdapterEnvVars,
   getAdapterDependencies,
 } from './adapter.js';
-import { generateAIEnvVars, materializeAIConfig } from './ai.js';
+import { generateAIEnvVars, materializeAIConfig, materializeAIPlan } from './ai.js';
 import { generateDatabaseEnvVars, mergeEnvText } from './env.js';
 import { getDatabaseDialectDefinition } from './database-definitions.js';
 import { ensureDatabaseForAdapters, ensureDatabaseForAI, getAIDependencies } from './project-deps.js';
@@ -111,6 +111,44 @@ export function applyAIToConfig(config: Record<string, unknown>, ai: AISetupConf
   config.ai = materializeAIConfig(ai);
 }
 
+/** Read the standalone proposal, never a startup seed or active runtime snapshot. */
+export async function readAIPlanProposal(projectDir: string): Promise<Record<string, unknown>> {
+  const filename = path.join(projectDir, 'ai.plan.yml');
+  if (!(await fs.pathExists(filename))) return { version: 1 };
+  const value: unknown = yaml.parse(await fs.readFile(filename, 'utf8'));
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid ai.plan.yml import proposal');
+  return value as Record<string, unknown>;
+}
+
+/** Merge draft declarations without applying them to runtime state. */
+export function mergeAIPlanProposals(previous: Readonly<Record<string, unknown>>, proposal: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const merged = { ...previous, ...proposal };
+  for (const key of ['services', 'accounts', 'profiles', 'purposes']) {
+    const value = proposal[key];
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const current = previous[key];
+      merged[key] = { ...(current && typeof current === 'object' && !Array.isArray(current) ? current : {}), ...value };
+    }
+  }
+  return merged;
+}
+
+/** Persist only the standalone proposal, preserving untouched YAML declarations. */
+export async function saveAIPlanProposal(projectDir: string, proposal: Readonly<Record<string, unknown>>): Promise<void> {
+  const filename = path.join(projectDir, 'ai.plan.yml');
+  const exists = await fs.pathExists(filename);
+  const document = yaml.parseDocument(exists ? await fs.readFile(filename, 'utf8') : 'version: 1\n');
+  if (document.errors.length) throw document.errors[0];
+  const previous: unknown = document.toJS();
+  if (!previous || typeof previous !== 'object' || Array.isArray(previous)) throw new Error('Invalid ai.plan.yml import proposal');
+  for (const [key, value] of Object.entries(proposal)) {
+    if (['services', 'accounts', 'profiles', 'purposes'].includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [alias, entry] of Object.entries(value)) document.setIn([key, alias], entry);
+    } else document.set(key, value);
+  }
+  await fs.writeFile(filename, String(document));
+}
+
 export async function appendWizardEnvVars(
   projectDir: string,
   adapters?: AdapterSetupResult,
@@ -118,6 +156,7 @@ export async function appendWizardEnvVars(
   database?: DatabaseConfig,
   locale: 'zh-CN' | 'en' = 'zh-CN'
 ): Promise<void> {
+  if (ai?.enabled) await saveAIPlanProposal(projectDir, materializeAIPlan(ai));
   const extra =
     (database ? generateDatabaseEnvVars(database, locale) : '') +
     (adapters ? generateAdapterEnvVars(adapters, locale) : '') +

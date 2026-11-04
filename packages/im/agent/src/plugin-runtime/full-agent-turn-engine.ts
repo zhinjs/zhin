@@ -1,6 +1,5 @@
 import type { CoreReplyStream } from '@zhin.js/core/runtime';
-import type { AgentOutputElement } from '../outbound/agent-output.js';
-import { renderAgentOutput } from '../outbound/agent-output.js';
+import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { bindActivityFeedbackTurnSource, inheritActivityFeedbackSource } from '../activity-feedback/operation-source.js';
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
@@ -19,7 +18,7 @@ import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
 import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../core/reply-phase.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import type { DeliveryOutcome } from '../turn/turn-ingress.js';
+import type { DeliveryOutcome, TurnIngress } from '../turn/turn-ingress.js';
 import type { AgentCore } from '../core/agent-core.js';
 import { createInteractiveRun } from '../core/interactive-run.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime, type TurnToolRuntimeOptions } from '../tool/turn-tool-runtime.js';
@@ -36,7 +35,6 @@ import type {
 } from './agent-runtime.js';
 import { publishProjectionFailure, type TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
-import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 import { resolveToolTier } from './tool-tier.js';
@@ -50,8 +48,7 @@ import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress
 import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector, guardReplyPort, type LeakFinding } from '../security/outbound-leak-guard.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
-import type { UsageSubject } from '../security/usage-quota.js';
-import { usageGroupId } from '@zhin.js/core';
+import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { getLogger } from '@zhin.js/logger';
 import { isLocale } from '@zhin.js/plugin-runtime';
 import {
@@ -136,7 +133,7 @@ async function* runInteractiveTurn(
     };
   }
 
-  const quotaSubject = usageSubjectOf(context.turn, prep.userId);
+  const quotaSubject = usageSubjectFromTurn(context.turn);
   const quota = host.usageQuota.check(quotaSubject);
   if (!quota.allowed) {
     // #727: only this user (or this group) is stopped; everyone else carries on.
@@ -1007,16 +1004,6 @@ function guardedReply(
 }
 
 /** Quota key for a turn: the sender, plus the group when the turn comes from a group or channel. */
-function usageSubjectOf(turn: TurnIngress, userId: string): UsageSubject {
-  const origin = turn.origin;
-  const shared = origin.kind === 'im' && (origin.scope === 'group' || origin.scope === 'channel');
-  return Object.freeze({
-    userId,
-    ...(shared ? { groupId: usageGroupId(origin.platform, origin.endpoint, origin.sceneId) } : {}),
-    owner: resolveTurnTrustLevel(turn) === 'owner',
-  });
-}
-
 /** #726: loaded skill instructions are labelled per skill as third-party guidance. */
 function labelSkillInstructions(instructions: readonly string[]): string {
   return instructions.map(text => labelThirdPartyGuidance('skill', text)).join('\n\n');

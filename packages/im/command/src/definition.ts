@@ -5,6 +5,7 @@
 import { resolveLocale, type Locale, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import {
   createCapabilityContext,
+  type CapabilityOperation,
   readOperationClient,
   readOperationSession,
   type OperationSession,
@@ -598,6 +599,7 @@ export interface CommandInvocationArguments {
 export interface CommandInvocationOperation {
   readonly snapshot: RuntimeSnapshot;
   readonly ownerId: PluginId;
+  readonly operation?: CapabilityOperation;
   readonly input?: unknown;
   readonly interaction?: UserInteraction;
   readonly adapter?: string;
@@ -611,7 +613,7 @@ export interface CommandInvocationOperation {
 export function createCommandContext(operation: CommandInvocationOperation, invocation: CommandInvocationArguments): CommandContext {
   const { snapshot, ownerId, input, interaction, adapter, presentation } = operation;
   const { args, params = {}, options = {}, segments = [] } = invocation;
-  const context = createCapabilityContext(snapshot, ownerId, undefined, readOperationInputSignal(input));
+  const context = createCapabilityContext({ snapshot, ownerId, signal: readOperationInputSignal(input), operation: operation.operation });
   const session = resolveCommandSession(input);
   const parameterValues: Record<string, CommandParameterValue> = { __proto__: null, ...params };
   const optionValues: Record<string, CommandParameterValue> = { __proto__: null, ...options };

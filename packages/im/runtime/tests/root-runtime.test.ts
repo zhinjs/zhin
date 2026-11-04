@@ -502,10 +502,9 @@ describe('RootRuntime tracer bullet', () => {
 
 /**
  * #1139 P6 guard: `hmr.pause` / `hmr.resume` run inside the Root control queue
- * (`RootRuntime.control`). Model fetching (`createModelConfigurationAccess`)
- * captures its configuration through the same queue, so a lifecycle handler
- * that awaits model-fetching work either fails fast (same async context) or
- * waits on work queued behind the reload it is part of (a deadlock).
+ * (`RootRuntime.control`). Any task that still needs this queue must not be awaited from a lifecycle
+ * handler: it either fails fast (same async context) or waits behind the reload
+ * that is waiting for it. Inference network work itself runs outside control.
  * These tests lock that ordering; they do not change Runtime behavior.
  */
 describe('HMR lifecycle handlers and the Root control queue', () => {

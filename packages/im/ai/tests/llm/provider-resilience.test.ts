@@ -56,12 +56,11 @@ function scripted(steps: Step[]) {
 const ctx = { systemPrompt: '', messages: [] } as unknown as Context;
 const noSleep = vi.fn(async () => {});
 
-function harness(steps: Step[], config = {}, fallbacks: string[] = []) {
+function harness(steps: Step[], config = {}) {
   const { port, calls } = scripted(steps);
   const events: ProviderResilienceEvent[] = [];
   const resilient = createResilientCompletionPort(port, {
     config,
-    fallbackModels: fallbacks.map(model),
     onEvent: (e) => events.push(e),
     sleep: noSleep,
     random: () => 0.5,
@@ -73,8 +72,8 @@ describe('classifyProviderError', () => {
   it('classifies HTTP status codes', () => {
     expect(classifyProviderError(apiError(429)).kind).toBe('rate_limit');
     expect(classifyProviderError(apiError(503))).toMatchObject({ kind: 'server', retryable: true });
-    expect(classifyProviderError(apiError(401))).toMatchObject({ kind: 'auth', retryable: false, fallbackEligible: false });
-    expect(classifyProviderError(apiError(400))).toMatchObject({ kind: 'bad_request', retryable: false, fallbackEligible: true });
+    expect(classifyProviderError(apiError(401))).toMatchObject({ kind: 'auth', retryable: false });
+    expect(classifyProviderError(apiError(400))).toMatchObject({ kind: 'bad_request', retryable: false });
   });
 
   it('unwraps AI SDK RetryError and reads Retry-After', () => {
@@ -115,23 +114,20 @@ describe('backoff helpers', () => {
   it('documents conservative defaults and ignores invalid overrides', () => {
     expect(resolveProviderResilienceConfig()).toEqual({
       maxRetries: 2, baseDelayMs: 1_000, maxDelayMs: 10_000, maxRetryAfterMs: 30_000,
-      requestTimeoutMs: 180_000, emptyReplyRetries: 0, fallback: true,
+      requestTimeoutMs: 180_000, emptyReplyRetries: 0,
     });
     expect(resolveProviderResilienceConfig({ maxRetries: -1 }, { maxRetries: 1 }).maxRetries).toBe(1);
   });
 });
 
 describe('createResilientCompletionPort (fault injection)', () => {
-  it.each(['retry', 'fallback'] as const)('keeps %s decisions independent of a throwing event observer', async mode => {
+  it('keeps retries independent of a throwing event observer', async () => {
     const result = reply('ok');
-    const { port, calls } = scripted([apiError(mode === 'retry' ? 429 : 400), result]);
-    const resilient = createResilientCompletionPort(port, {
-      config: { maxRetries: mode === 'retry' ? 1 : 0, requestTimeoutMs: 0 },
-      fallbackModels: [model('b')], sleep: noSleep,
-      onEvent: () => { throw new Error('diagnostic unavailable'); },
-    });
+    const { port, calls } = scripted([apiError(429), result]);
+    const resilient = createResilientCompletionPort(port, { config: { maxRetries: 1, requestTimeoutMs: 0 }, sleep: noSleep,
+      onEvent: () => { throw new Error('diagnostic unavailable'); } });
     await expect(resilient.complete(model('a'), ctx)).resolves.toBe(result);
-    expect(calls.map(call => call.model)).toEqual(['a', mode === 'retry' ? 'a' : 'b']);
+    expect(calls.map(call => call.model)).toEqual(['a', 'a']);
   });
 
   it('retries a 429 with backoff, then succeeds, and disables SDK-level retries', async () => {
@@ -141,21 +137,17 @@ describe('createResilientCompletionPort (fault injection)', () => {
     expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'rate_limit', delayMs: 750 })]);
   });
 
-  it('falls back to the next candidate once retries are exhausted', async () => {
-    const { resilient, calls, events } = harness(
-      [apiError(503), apiError(503), reply('from b')],
-      { maxRetries: 1 },
-      ['b'],
-    );
-    await expect(resilient.complete(model('a'), ctx)).resolves.toMatchObject({ content: [{ text: 'from b' }] });
-    expect(calls.map((c) => c.model)).toEqual(['a', 'a', 'b']);
-    expect(events.map((e) => e.type)).toEqual(['retry', 'fallback']);
+  it('stops on the selected model when its retries are exhausted', async () => {
+    const { resilient, calls, events } = harness([apiError(503), apiError(503), reply('unused')], { maxRetries: 1 });
+    await expect(resilient.complete(model('a'), ctx)).rejects.toMatchObject({ kind: 'server', attempts: 2 });
+    expect(calls.map(call => call.model)).toEqual(['a', 'a']);
+    expect(events.map(event => event.type)).toEqual(['retry', 'give_up']);
   });
 
-  it('skips retry and falls back when Retry-After exceeds the cap', async () => {
-    const { resilient, calls } = harness([apiError(429, { 'retry-after': '120' }), reply('b')], {}, ['b']);
-    await resilient.complete(model('a'), ctx);
-    expect(calls.map((c) => c.model)).toEqual(['a', 'b']);
+  it('does not wait or choose a different model when Retry-After exceeds the cap', async () => {
+    const { resilient, calls } = harness([apiError(429, { 'retry-after': '120' }), reply('unused')]);
+    await expect(resilient.complete(model('a'), ctx)).rejects.toMatchObject({ kind: 'rate_limit', attempts: 1 });
+    expect(calls.map(call => call.model)).toEqual(['a']);
   });
 
   it('times out a hung attempt and retries it', async () => {
@@ -178,14 +170,14 @@ describe('createResilientCompletionPort (fault injection)', () => {
 
   it('rethrows non-retryable errors unchanged so upstream handlers still see them', async () => {
     const overflow = apiError(400, {}, 'maximum context length exceeded');
-    const { resilient, calls } = harness([overflow], {}, ['b']);
+    const { resilient, calls } = harness([overflow], {});
     await expect(resilient.complete(model('a'), ctx)).rejects.toBe(overflow);
     expect(calls).toHaveLength(1);
   });
 
   it('passes empty replies through by default', async () => {
     const empty = reply('');
-    const { resilient, calls } = harness([empty], {}, ['b']);
+    const { resilient, calls } = harness([empty], {});
     await expect(resilient.complete(model('a'), ctx)).resolves.toBe(empty);
     expect(calls).toHaveLength(1);
   });
@@ -215,8 +207,8 @@ describe('createResilientCompletionPort (fault injection)', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('respects fallback: false', async () => {
-    const { resilient, calls } = harness([apiError(500)], { maxRetries: 0, fallback: false }, ['b']);
+  it('never switches away from the selected model', async () => {
+    const { resilient, calls } = harness([apiError(500)], { maxRetries: 0 });
     await expect(resilient.complete(model('a'), ctx)).rejects.toBeInstanceOf(ProviderRequestError);
     expect(calls.map((c) => c.model)).toEqual(['a']);
   });
@@ -256,4 +248,11 @@ describe('injected timers', () => {
     await expect(resilient.complete(model('a'), ctx)).resolves.toMatchObject({ content: [{ text: 'ok' }] });
     expect(events[0]).toMatchObject({ type: 'retry', kind: 'timeout' });
   });
+});
+
+it.each([Number.NaN, -1, 2_147_483_648])('rejects invalid explicit timeout %s before submitting a request', async requestTimeoutMs => {
+  const complete = vi.fn<LlmCompletionPort['complete']>();
+  const port = createResilientCompletionPort({ complete, completeSimple: complete });
+  await expect(port.complete(model('selected'), ctx, { requestTimeoutMs })).rejects.toThrow('Invalid requestTimeoutMs');
+  expect(complete).not.toHaveBeenCalled();
 });

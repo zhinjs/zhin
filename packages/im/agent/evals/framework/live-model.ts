@@ -1,3 +1,4 @@
+import { SyntheticCompletionRuntime } from '../../../ai/tests/helpers/synthetic-completion-runtime.js';
 /**
  * Real-model source for the eval driver (#723 nightly tier).
  *
@@ -9,15 +10,12 @@
  */
 import {
   createAssistantMessageEventStream,
-  LlmApiRuntime,
-  SdkProviderAdapter,
   type Context,
   type LlmCompletionPort,
   type Model,
   type StreamOptions,
 } from '@zhin.js/ai';
-import type { ScriptedModel, ScriptedModelRequest } from './scripted-model.js';
-import { contextText, countImages, lastUserText, toolSchemaTextOf } from './scripted-model.js';
+import { contextText, countImages, lastUserText, toolSchemaTextOf, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 
 export interface LiveModelOptions {
   /** Real completion port; budgets and timeouts are its responsibility. */
@@ -32,12 +30,10 @@ const PROVIDER_ALIAS = 'eval-live';
 
 export function createLiveModel(options: LiveModelOptions): ScriptedModel {
   const modelId = options.model.id;
-  const provider = new SdkProviderAdapter(PROVIDER_ALIAS, 'openai', { sdk: 'openai', apiKey: 'eval' }, [modelId]);
-  const runtime = new LlmApiRuntime((alias) => (alias === PROVIDER_ALIAS ? [modelId] : []));
+  const runtime = new SyntheticCompletionRuntime((alias) => (alias === PROVIDER_ALIAS ? [modelId] : []));
   const contextWindow = options.contextWindow ?? options.model.contextWindow;
   runtime.registerProvider(PROVIDER_ALIAS, {
     sdk: 'openai',
-    apiKey: 'eval',
     ...(contextWindow ? { contextWindow } : {}),
     // Declare the real model's modalities so the harness forwards turn images to it.
     ...(options.model.input?.length ? { input: [...options.model.input] } : {}),
@@ -75,7 +71,7 @@ export function createLiveModel(options: LiveModelOptions): ScriptedModel {
   return {
     providerAlias: PROVIDER_ALIAS,
     modelId,
-    provider,
+    modelIds: [modelId],
     runtime,
     requests,
     // A real model only sees offered tools and has no script to exhaust.

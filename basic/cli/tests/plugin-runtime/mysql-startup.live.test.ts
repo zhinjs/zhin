@@ -4,7 +4,7 @@ import {
   type ConversationEvent,
 } from '@zhin.js/im-contract';
 import { CHAT_MESSAGE_MODEL, CONTEXT_SUMMARY_MODEL } from '@zhin.js/ai';
-import type { MySQL } from '@zhin.js/database';
+import type { MySQL } from '@zhin.js/database/dialects/mysql';
 
 describe.skipIf(process.env.ZHIN_TEST_EXTERNAL_DATABASES !== '1')('MySQL startup through CLI DatabaseHost', () => {
   it.each([false, true])('creates canonical and AI tables, applies defaults and persists cursors (pool=%s)', async (pooled) => {

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { OLLAMA_DEFAULT_CONTEXT_WINDOW, resolveTransportContextWindow, validateProviderGatewayConfig } from '../../../src/llm/provider-gateway-presets.js';
+import { ollamaProvider } from '../../../src/providers/api-key.js';
 import { createProviderHarness, openaiChat } from '../../helpers/provider-harness/index.js';
 
 const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
@@ -38,18 +38,12 @@ describe('ollama provider (baseline)', () => {
     expect(message.usage).toMatchObject({ input: 30, output: 5, totalTokens: 35 });
   });
 
-  it('plans for Ollama\'s smallest default context unless told otherwise', () => {
-    expect(OLLAMA_DEFAULT_CONTEXT_WINDOW).toBe(4_096);
-    expect(resolveTransportContextWindow({ sdk: 'ollama' }, 'qwen3:8b', {})).toBe(4_096);
-    expect(resolveTransportContextWindow({ sdk: 'ollama' }, 'qwen3:8b', { OLLAMA_CONTEXT_LENGTH: '65536' })).toBe(65_536);
-    expect(resolveTransportContextWindow({ sdk: 'ollama' }, 'qwen3:8b', { OLLAMA_CONTEXT_LENGTH: 'big' })).toBe(4_096);
-    expect(resolveTransportContextWindow({ sdk: 'ollama', contextWindow: 32_768 }, 'qwen3:8b', { OLLAMA_CONTEXT_LENGTH: '65536' })).toBe(32_768);
-    // Other sdks keep the previous default.
-    expect(resolveTransportContextWindow({ sdk: 'openai-compatible', baseUrl: 'https://gw.test/v1' }, 'm', {})).toBe(128_000);
+  it('keeps context capacity unknown without explicit model metadata', () => {
+    expect(createProviderHarness({ sdk: 'ollama' }).model.contextWindow).toBe(0);
+    expect(createProviderHarness({ sdk: 'ollama', config: { contextWindow: 32768 } }).model.contextWindow).toBe(32768);
   });
 
-  it('warns when an Ollama provider has no contextWindow', () => {
-    expect(validateProviderGatewayConfig('local', { sdk: 'ollama' }).some((w) => w.includes('contextWindow'))).toBe(true);
-    expect(validateProviderGatewayConfig('local', { sdk: 'ollama', contextWindow: 32_768 })).toEqual([]);
+  it('does not invent model capacity from the account or local endpoint address', () => {
+    expect(ollamaProvider.models({ id: 's', rootId: 'r', ownerId: 'h', revision: 1, driver: { id: 'ollama', owner: 'root', contractVersion: '1' }, options: ollamaProvider.serviceSchema.parse({}), models: {} })).toEqual({});
   });
 });

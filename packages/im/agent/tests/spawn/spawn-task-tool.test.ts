@@ -53,7 +53,7 @@ describe('SpawnTaskTool / createSpawnTaskTool', () => {
   });
 
   it('wait: true calls spawnSync and returns completed result', async () => {
-    const spawnSync = vi.fn().mockResolvedValue('架构 Artifact 已创建');
+    const spawnSync = vi.fn().mockResolvedValue({ status: 'ok', result: '架构 Artifact 已创建', toolCalls: [], terminal: { stopReason: 'stop' } });
     const spawn = vi.fn();
     const system = { spawn, spawnSync } as unknown as SubagentSystem;
     const commMessage = mockMessage({ $adapter: 'sandbox' });

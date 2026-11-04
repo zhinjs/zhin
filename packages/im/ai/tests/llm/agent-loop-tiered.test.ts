@@ -1,6 +1,6 @@
+import { SyntheticCompletionRuntime } from '../helpers/synthetic-completion-runtime.js';
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
-  LlmApiRuntime,
   agentLoop,
   agentContextFrom,
   createAssistantMessageEventStream,
@@ -13,7 +13,7 @@ import {
 } from "../../src/llm/index.js";
 
 describe("agentLoop tiered execution", () => {
-  let runtime: LlmApiRuntime;
+  let runtime: SyntheticCompletionRuntime;
   let parallelStartOrder: string[] = [];
   let parallelEndOrder: string[] = [];
 
@@ -32,7 +32,7 @@ describe("agentLoop tiered execution", () => {
   beforeEach(() => {
     parallelStartOrder = [];
     parallelEndOrder = [];
-    runtime = new LlmApiRuntime();
+    runtime = new SyntheticCompletionRuntime();
     runtime.registerProvider("test", { sdk: "openai" }, ["mock"]);
     runtime.registerApiProvider({
       api: "ai-sdk",

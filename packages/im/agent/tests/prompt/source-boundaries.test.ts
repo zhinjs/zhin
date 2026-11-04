@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { createUserMessage, type AgentMessage, type AgentTool } from '@zhin.js/ai';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolExecutionContext } from '@zhin.js/tool';
@@ -22,7 +23,7 @@ function hostFor(llm: ReturnType<typeof capturePromptRequests>): ZhinAgentPrivat
     activeBinding: { nickname: 'Configured identity', providerAlias: 'mock', model: 'synthetic-model' },
     bootstrapContext: '## SOUL.md\nLATEST_HOST_PERSONA_MUST_NOT_BE_READ', globalContext: '',
     skillRegistry: null, skillsSummaryXML: '', getTurnActiveSkills: () => '', userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => llm.provider, modelRegistry: null, llmRuntime: llm.runtime,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(llm.runtime).model((llm.provider).name, (llm.provider).models?.[0]) }, completion: llm.runtime }), completion: llm.runtime,
     contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async () => {} },
     compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },
     getActiveTurnTracker: () => undefined, promptTraceConfig: {}, phaseConfig: {},

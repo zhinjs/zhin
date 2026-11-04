@@ -45,7 +45,7 @@ export function buildAgentCardForBinding(
     makeSkill({
       id: agentName,
       name: nickname,
-      description: `Zhin agent "${agentName}" (${binding.providerAlias}/${binding.model})`,
+      description: `Zhin agent "${agentName}"`,
       tags: ['zhin', agentName],
     }),
     ...DEFAULT_SKILLS,
@@ -53,7 +53,7 @@ export function buildAgentCardForBinding(
 
   return {
     name: nickname,
-    description: `Zhin.js A2A agent "${agentName}" — provider ${binding.providerAlias}, model ${binding.model}`,
+    description: `Zhin.js A2A agent "${agentName}"`,
     version: '1.0.0',
     supportedInterfaces: [
       {

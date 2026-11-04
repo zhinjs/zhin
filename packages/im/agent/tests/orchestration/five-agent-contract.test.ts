@@ -51,22 +51,22 @@ describe('builtin prompts (opt-in WorkflowStrategy)', () => {
 });
 
 describe('pipeline role binding', () => {
-  const agents = { zhin: { provider: 'agnes', model: 'flash', nickname: '总监' } };
-  it('inherits zhin provider/model when role agent omits', () => {
+  const agents = { zhin: { nickname: '总监', mcpServers: ['facts'], permission: { level: 'user' } } };
+  it('inherits role capabilities while model selection stays in runtime purposes', () => {
     const b = resolveFiveAgentRoleBinding('executor', { agents });
-    expect(b.providerAlias).toBe('agnes');
-    expect(b.model).toBe('flash');
+    expect(b.mcpServers).toEqual(['facts']);
+    expect(b).not.toHaveProperty('providerAlias');
+    expect(b).not.toHaveProperty('model');
     expect(b.nickname).toBe('Executor');
   });
   it('uses ai.agents.<role> override', () => {
     const b = resolveFiveAgentRoleBinding('evaluator', {
       agents: {
         ...agents,
-        evaluator: { provider: 'bigmodel', model: 'glm', nickname: '分析师' },
+        evaluator: { mcpServers: ['review'], nickname: '分析师' },
       },
     });
-    expect(b.providerAlias).toBe('bigmodel');
-    expect(b.model).toBe('glm');
+    expect(b.mcpServers).toEqual(['review']);
     expect(b.nickname).toBe('分析师');
   });
   it('planner inherits zhin nickname', () => {

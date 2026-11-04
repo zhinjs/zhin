@@ -1,52 +1,30 @@
-import { ModelRegistry } from '@zhin.js/ai';
-import { resolveModelCandidates } from '../../src/context/model-resolver.js';
+import { normalizeProviderGraph, resolveProviderProfile, createProfileReference } from '@zhin.js/ai/provider';
+import { graphFixture, context } from '../../../ai/tests/provider/fixtures.js';
 
-describe('resolveModelCandidates', () => {
-  it('显式 models 白名单应过滤 ModelRegistry 缓存中的域外模型', () => {
-    const registry = new ModelRegistry();
-    registry.seedProviderModels('aihub', [
-      'mistralai/mistral-large-3-675b-instruct-2512',
-      'agnes-2.0-flash',
-    ]);
-
-    const allowlist = ['agnes-2.0-flash', 'mimo-v2.5-pro'];
-    const candidates = resolveModelCandidates(
-      allowlist,
-      registry,
-      'aihub',
-      {},
-      'chat',
-    );
-
-    expect(candidates.every((id) => allowlist.includes(id))).toBe(true);
-    expect(candidates).not.toContain('mistralai/mistral-large-3-675b-instruct-2512');
-    expect(candidates[0]).toBe('agnes-2.0-flash');
+// The candidate registry is retired. Preserve its external invariants against
+// the actual target authority instead of recreating a compatibility resolver.
+describe('explicit model selection', () => {
+  it('cannot select an out-of-catalog model through a forged Profile', () => {
+    const original = graphFixture();
+    expect(() => normalizeProviderGraph({ ...original, profiles: { text: { ...original.profiles.text, model: 'outside-allowlist' } } })).toThrow();
   });
-
-  it('vision 任务仍把绑定的 chatModel 放在第一位，registry 的视觉模型只作后备', () => {
-    const registry = new ModelRegistry();
-    registry.seedProviderModels('groq', ['openai/gpt-oss-120b', 'llama-4-scout-vision']);
-
-    const candidates = resolveModelCandidates(
-      ['openai/gpt-oss-120b', 'llama-4-scout-vision'],
-      registry,
-      'groq',
-      { chatModel: 'openai/gpt-oss-120b' },
-      'vision',
-    );
-
-    expect(candidates[0]).toBe('openai/gpt-oss-120b');
-    expect(candidates).toContain('llama-4-scout-vision');
+  it('keeps chat fixed when a separate perception Profile is configured', () => {
+    const original = graphFixture();
+    const graph = normalizeProviderGraph({ ...original,
+      services: { service: { ...original.services.service, models: { ...original.services.service.models, vision: { id: 'vision', kinds: ['language'], protocol: 'fixture', input: ['text', 'image'] } } } },
+      profiles: { ...original.profiles, vision: { ...original.profiles.text, id: 'vision', model: 'vision' } },
+      purposes: { defaults: { chat: 'text', perception: { profile: 'vision' } } } });
+    expect(resolveProviderProfile({ graph, context, kind: 'language', purpose: 'chat' }).model.id).toBe('text');
+    expect(resolveProviderProfile({ graph, context, kind: 'language', purpose: 'perception' }).model.id).toBe('vision');
   });
-
-  it('vision 任务：preferred 仍优先于 chatModel', () => {
-    const candidates = resolveModelCandidates(['a', 'b'], null, 'p', { chatModel: 'a' }, 'vision', 'b');
-    expect(candidates.slice(0, 2)).toEqual(['b', 'a']);
+  it('honors an authorized explicit Profile without adding other catalog models as candidates', () => {
+    const graph = graphFixture();
+    const binding = resolveProviderProfile({ graph, context, kind: 'language', purpose: 'chat' });
+    const selected = resolveProviderProfile({ graph, context, kind: 'language', purpose: 'chat', profile: createProfileReference({ binding, kind: 'language' }) });
+    expect(selected.model.id).toBe('text');
+    expect(selected.profile.id).toBe('text');
   });
-
-  it('已弃用的 visionModel 仍作为后备候选（排在绑定模型之后），保持兼容', () => {
-    const candidates = resolveModelCandidates(['a', 'v'], null, 'p', { chatModel: 'a', visionModel: 'v' }, 'vision');
-    expect(candidates.slice(0, 2)).toEqual(['a', 'v']);
-    expect(resolveModelCandidates(['a', 'v'], null, 'p', { visionModel: 'v' }, 'vision')[0]).toBe('v');
+  it('does not manufacture a vision fallback when none is configured', () => {
+    expect(() => resolveProviderProfile({ graph: graphFixture(), context, kind: 'language', purpose: 'perception' })).toThrow('not-configured');
   });
 });

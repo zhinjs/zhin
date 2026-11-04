@@ -39,12 +39,10 @@ export async function summarizeAbandonedBranchIfNeeded(
   const keepRecentTokens = compaction?.keepRecentTokens ?? 20_000;
   if (estimateAgentMessagesTokens(messages) <= keepRecentTokens) return;
 
-  const provider = host.getTurnProvider();
-  const modelId = host.config.chatModel || provider.models[0] || '';
-  const llmModel = host.llmRuntime.model(provider.name, modelId);
-  const contextWindow = options.contextWindow ?? llmModel.contextWindow ?? host.config.contextTokens;
+  const llmModel = host.getTurnExecution().model;
+  const contextWindow = options.contextWindow ?? (llmModel.contextWindow || host.config.contextTokens);
 
-  const summary = resolveTurnSummaryExecution({ transport: host.llmRuntime, model: llmModel });
+  const summary = resolveTurnSummaryExecution({ transport: host.completion, model: llmModel });
   let result: Awaited<ReturnType<typeof compactAgentMessages>>;
   try {
     result = await compactAgentMessages({

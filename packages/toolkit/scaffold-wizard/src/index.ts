@@ -60,7 +60,7 @@ export {
   listAIDependencyNames,
   formatAIDependencyHint,
   isAiEnabledInConfig,
-  resolveAgentProviderFromConfig,
+  resolveAgentProviderFromPlan,
   getRequiredAIDependenciesForConfig,
   diagnoseAIDependencies,
   formatAIDependencyFixCommand,
@@ -115,7 +115,6 @@ export {
   createProjectConfigPlan,
   renderProjectConfigPatch,
   applyProjectConfigPlan,
-  migrateAiLegacyConfig,
   diagnoseConsoleConfig,
   applyConsoleConfigFixes,
   packageToInstanceKey,
@@ -132,7 +131,7 @@ export {
   applyDatabaseToConfig,
   applyAdaptersToConfig,
   applyAIToConfig,
-  appendWizardEnvVars,
+  appendWizardEnvVars, readAIPlanProposal, saveAIPlanProposal, mergeAIPlanProposals,
   collectWizardDependencies,
   collectWizardFeatures,
   mergeDependenciesIntoPackageJson,
@@ -150,3 +149,5 @@ export {
   saveTypeSafeSetupDependencies, diagnoseDecisionConfig,
 } from './decisions.js';
 export type { TypeSafeSetupConfig } from './decisions.js';
+
+export { materializeAIConfig, materializeAIPlan } from './ai.js';

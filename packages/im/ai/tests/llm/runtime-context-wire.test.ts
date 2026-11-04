@@ -1,3 +1,4 @@
+import { mediaBlockPlaceholder } from '../../src/llm/convert/media-blocks.js';
 import { describe, expect, it } from 'vitest';
 import { agentMessagesToAiSdk } from '../../src/llm/bridge/ai-sdk-messages.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
@@ -44,11 +45,13 @@ describe('runtime context at the provider boundary', () => {
     }
   });
 
-  it('keeps unsupported-media placeholders before the host tail and outside the body anchor', async () => {
+  it('rejects unsupported native media and keeps explicitly preprocessed placeholders before the host tail', async () => {
     const h = createProviderHarness({ sdk: 'anthropic', config: { input: ['text'] } });
-    const message = createUserMessage('question', [
-      { type: 'image', data: { media: { kind: 'base64', value: PNG, mime_type: 'image/png' } } },
-    ]);
+    const media = { type: 'image' as const, data: { media: { kind: 'base64' as const, value: PNG, mime_type: 'image/png' } } };
+    await expect(h.complete({ messages: [createUserMessage('question', [media])] })).rejects.toMatchObject({ code: 'unsupported-capability' });
+    expect(h.requests).toHaveLength(0);
+    const message = createUserMessage('question');
+    message.content.push({ type: 'text', text: mediaBlockPlaceholder(media) });
     message.content.push({ type: 'text', text: RUNTIME_CONTEXT_MARKER, perTurn: true });
     const { body } = await h.capture({ messages: [message] });
     const parts = body.messages[0].content;

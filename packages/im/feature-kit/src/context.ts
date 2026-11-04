@@ -1,3 +1,4 @@
+import type { CapabilityOperation } from './operation-resources.js';
 import {
   bindGenerationAdmission,
   type FeatureId,
@@ -57,14 +58,25 @@ export function createConstructionContext<TConfig = unknown>(
   });
 }
 
-export function createCapabilityContext<TConfig = unknown>(
-  snapshot: RuntimeSnapshot,
-  ownerId: PluginId,
-  admission?: GenerationAdmissionGate,
-  signal: AbortSignal = new AbortController().signal,
-): CapabilityContext<TConfig> {
+export interface CapabilityContextOptions {
+  readonly snapshot: RuntimeSnapshot;
+  readonly ownerId: PluginId;
+  readonly admission?: GenerationAdmissionGate;
+  readonly signal?: AbortSignal;
+  readonly operation?: CapabilityOperation;
+}
+export function createCapabilityContext<TConfig = unknown>(input: CapabilityContextOptions): CapabilityContext<TConfig> {
+  const { snapshot, ownerId, admission, operation } = input;
+  const signal = operation?.signal ?? input.signal ?? new AbortController().signal;
+  const owner = createConstructionContext<TConfig>(snapshot, ownerId, admission, signal);
   return Object.freeze({
-    ...createConstructionContext<TConfig>(snapshot, ownerId, admission, signal),
+    ...owner,
+    use<T>(token: Token<T>): T {
+      return operation?.resources?.has(token) ? operation.resources.use(token) : owner.use(token);
+    },
+    has(token: Token<unknown>): boolean {
+      return operation?.resources?.has(token) === true || owner.has?.(token) === true;
+    },
     project<T>(feature: FeatureId): T {
       if (!snapshot.projections.has(feature)) {
         throw new Error(`Missing Feature projection ${feature}`);

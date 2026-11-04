@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { LlmApiRuntime, type Model, type ProviderInstanceConfig } from '@zhin.js/ai';
+import { type Model } from '@zhin.js/ai';
 import type { ModelExecutionBundle, ModelExecutionScope } from '../model-runtime/types.js';
 import { createLlmMediaPerceptionPort, resolvePerceptionConfig,
   type LlmMediaPerceptionOptions, type MediaPerceptionPort, type ResolvedPerceptionConfig, type PerceptionCacheEntry } from './perception.js';
@@ -15,48 +15,44 @@ export interface ScopedMediaPerceptionOptions {
 }
 
 /** Routes only already acquired models; it cannot discover or construct another provider. */
-class ScopedPerceptionRuntime extends LlmApiRuntime {
+class ScopedPerceptionRuntime {
   readonly #candidates = new Map<string, ModelExecutionBundle>();
   readonly #models = new WeakMap<Model, ModelExecutionBundle>();
 
   constructor(bundles: readonly ModelExecutionBundle[]) {
-    super();
     for (const bundle of bundles) {
-      const key = JSON.stringify([bundle.provider.name, bundle.invocation.model.model]);
+      const key = JSON.stringify([bundle.binding.profile.id, bundle.model.id]);
       const previous = this.#candidates.get(key);
-      if (previous && (previous.invocation.connection.id !== bundle.invocation.connection.id
-        || previous.invocation.connection.revision !== bundle.invocation.connection.revision)) {
+      if (previous && (previous.binding.profile.id !== bundle.binding.profile.id
+        || previous.binding.profile.revision !== bundle.binding.profile.revision)) {
         throw new Error('Ambiguous acquired perception candidate');
       }
       this.#candidates.set(key, bundle);
     }
   }
 
-  override model(alias: string, modelId: string): Model {
+  model(alias: string, modelId: string): Model {
     const bundle = this.#candidates.get(JSON.stringify([alias, modelId]));
     if (!bundle) throw new Error('Perception model is outside the acquired scope');
-    const model = bundle.llmRuntime.model(alias, modelId);
+    const model = bundle.model;
     this.#models.set(model, bundle);
     return model;
   }
 
-  override providerConfig(alias: string): Readonly<ProviderInstanceConfig> | undefined {
-    for (const bundle of this.#candidates.values()) {
-      if (bundle.provider.name === alias) return bundle.llmRuntime.providerConfig(alias);
-    }
-    return undefined;
+  resilience(profileId: string): Model['executionPolicy'] {
+    return [...this.#candidates.values()].find(bundle => bundle.binding.profile.id === profileId)?.model.executionPolicy;
   }
 
-  override complete(...args: Parameters<LlmApiRuntime['complete']>): ReturnType<LlmApiRuntime['complete']> {
+  complete(...args: Parameters<ModelExecutionBundle['completion']['complete']>): ReturnType<ModelExecutionBundle['completion']['complete']> {
     const bundle = this.#models.get(args[0]);
     if (!bundle) throw new Error('Perception model is outside the acquired scope');
-    return bundle.llmRuntime.complete(...args);
+    return bundle.completion.complete(...args);
   }
 
-  override completeSimple(...args: Parameters<LlmApiRuntime['completeSimple']>): ReturnType<LlmApiRuntime['completeSimple']> {
+  completeSimple(...args: Parameters<ModelExecutionBundle['completion']['completeSimple']>): ReturnType<ModelExecutionBundle['completion']['completeSimple']> {
     const bundle = this.#models.get(args[0]);
     if (!bundle) throw new Error('Perception model is outside the acquired scope');
-    return bundle.llmRuntime.completeSimple(...args);
+    return bundle.completion.completeSimple(...args);
   }
 }
 
@@ -65,7 +61,7 @@ export function createScopedMediaPerceptionPort(options: ScopedMediaPerceptionOp
   const primary = options.scope.perception;
   if (!primary) return undefined;
   const fallbacks = options.scope.perceptionFallbacks ?? [];
-  const candidate = (bundle: ModelExecutionBundle) => ({ provider: bundle.provider.name, model: bundle.invocation.model.model });
+  const candidate = (bundle: ModelExecutionBundle) => ({ provider: bundle.binding.profile.id, model: bundle.model.id });
   const config = resolvePerceptionConfig({
     ...candidate(primary),
     fallbacks: fallbacks.map(candidate),
@@ -88,8 +84,8 @@ export function createScopedPerceptionFactory(): (options: Omit<ScopedMediaPerce
   const cache = new Map<string, PerceptionCacheEntry>();
   return options => {
     const candidates = [options.scope.perception, ...(options.scope.perceptionFallbacks ?? [])].map(bundle => bundle ?
-      [bundle.invocation.connection.ownerId, bundle.invocation.connection.id, bundle.invocation.connection.revision,
-        bundle.invocation.preset.id, bundle.invocation.model] : null);
+      [bundle.binding.account.ownerId, bundle.binding.account.id, bundle.binding.account.incarnation,
+        bundle.binding.profile.id, bundle.binding.profile.revision, bundle.binding.model] : null);
     const cacheNamespace = createHash('sha256').update(JSON.stringify([options.sessionKey, candidates,
       options.settings?.kinds, options.settings?.maxChars, options.settings?.timeoutMs, options.settings?.maxItemsPerTurn])).digest('hex');
     return createScopedMediaPerceptionPort({ ...options, cache, cacheNamespace });

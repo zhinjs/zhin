@@ -127,20 +127,13 @@ cancelled、restart-required 结果。手动 `reload(target)` 沿用完整 Root 
 
 #### 暂停／完成处理器不得等待取模型的工作
 
-`hmr.pause` 与 `hmr.resume` 都在 Root 控制队列（`RootRuntime.control` 背后的同一串行队列）
-内执行：暂停在候选 setup 之前，完成在提交或回滚之后、事务释放队列之前。Host 取模型
-（`createModelConfigurationAccess` 的 `acquire*` / `withRuntime`）也经同一队列捕获当前代模型配置。因此：
+`hmr.pause` 与 `hmr.resume` 都在 Root 控制队列（`RootRuntime.control` 背后的同一串行队列）内执行：暂停在候选 setup 之前，完成在提交或回滚之后、事务释放队列之前。
 
-- 处理器内直接调用 `control()` 或取模型，会因同一异步上下文而立即以
-  `Recursive Runtime control` 拒绝：在 `hmr.pause` 中会使暂停失败并中止这次热更（旧代保留）；
-  在 `hmr.resume` 中只作为控制错误报告，不回滚已提交代；
-- 处理器等待一个「之后还要取模型」的在途任务（例如尚未取到模型的 Agent 回合），该任务的取模型
-  请求排在本次热更之后，热更又在等处理器——形成死锁。
+- 处理器内直接递归调用 `control()`，会以 `Recursive Runtime control` 拒绝：在 `hmr.pause` 中会中止本次热更并保留旧代；`hmr.resume` 中的错误只上报，不回滚已提交代。
+- 等待仍需进入该控制队列的任务会造成互等。处理器只做有界的本地检查点，不等待模型或其他外部 I/O。
+- Provider 目标运行时从实际 operation 的持有租约和权威图建立 scope，模型请求、凭据和网络工作不放在控制队列中。旧的 `createModelConfigurationAccess` 已退役；不能再把所有模型调用描述为经由它取配置，也不能宣称所有模型调用会触发递归控制拒绝。
 
-处理器只做本地、有界的检查点：记录任务、设置标志、按 `signal` 协作取消，然后立即返回；
-需要模型的续作放到处理器返回之后由插件自己的任务完成，不要在处理器里 `await` 它。
-运行时不检测这种等待，本约束由 `packages/im/runtime/tests/root-runtime.test.ts`
-与 `basic/cli/tests/plugin-runtime/personal-models/configuration.test.ts` 的守护测试锁定当前顺序。
+插件决定保留、取消和恢复自己的工作；需要模型的续作交给插件任务完成。Runtime 不自动检测任意任务的互等。控制队列的守护测试位于 `packages/im/runtime/tests/root-runtime.test.ts`；实际模型等待不占用控制阶段的回归位于 `basic/cli/tests/plugin-runtime/inference/configuration.test.ts`。
 
 Worker 与子进程通过独立控制请求交付同一事件，本地重建 AbortSignal。事件取消只通知对应
 处理器，不强杀 isolate，也不重新开放已退休实例的业务 RPC。

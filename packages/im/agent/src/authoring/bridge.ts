@@ -1,4 +1,4 @@
-import type { Skill, Tool } from '../resource-hub/types.js';
+import type { AIHook, Skill, Tool } from '../resource-hub/types.js';
 import {
   type AuthoringSkillDefinition,
   type AuthoringHookDefinition,
@@ -44,7 +44,7 @@ export function bridgeAuthoringSkill(
 
 export function bridgeAuthoringHook(
   discovered: { runtimeName: string; definition: AuthoringHookDefinition },
-) {
+): AIHook {
   return {
     name: discovered.runtimeName,
     event: discovered.definition.event,

@@ -188,4 +188,4 @@ export type {
 } from './turn-admission-gate.js';
 
 // Host-integration seam for external host packages.
-export { runWithAgentTurnConfiguration } from './agent-turn-context.js';
+export { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from './agent-turn-context.js';

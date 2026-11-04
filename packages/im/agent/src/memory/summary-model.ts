@@ -13,7 +13,7 @@ export function resolveTurnSummaryExecution(legacy: SummaryExecution): SummaryEx
   const summary = scope.summary;
   if (!summary) throw new Error('Summary model is not configured in the turn scope');
   return Object.freeze({
-    model: summary.llmRuntime.model(summary.provider.name, summary.invocation.model.model),
-    transport: summary.llmRuntime,
+    model: summary.model,
+    transport: summary.completion,
   });
 }

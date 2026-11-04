@@ -1,6 +1,5 @@
 import { Dialect, Database } from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
-import {Registry} from "../registry.js";
 import { getLogger } from '@zhin.js/logger';
 import type { ConnectionOptions, PoolOptions } from 'mysql2/promise';
 
@@ -399,4 +398,12 @@ export class MySQL<S extends Record<string, object> = Record<string, object>> ex
     await super.initialize();
   }
 }
-Registry.register('mysql', MySQL);
+
+declare module '../registry.js' {
+  interface Databases<S extends Record<string, object> = Record<string, object>> {
+    mysql: MySQL<S>;
+  }
+  namespace Registry {
+    interface Config { mysql: MySQLDialectConfig; }
+  }
+}

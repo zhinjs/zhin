@@ -112,8 +112,8 @@ turn 会跨代执行。
 - 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）
 - 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository`；IM 事实由 `ConversationEventStore` 独占
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
-- 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`；结果写入 `provider.models` 并供 owner-scoped `LlmApiRuntime` 校验
-- 🔄 **固定模型与重试**：聊天（含旧配置）、多模态主回合与 standalone 固定本轮选定模型；失败仅按原配置在同一模型上重试，不跨模型降级。媒体感知保留显式配置的 `ai.multimodal.perception.fallbacks` 备用链
+- 🔍 **明确模型目录**：管理员确认协议与能力后写入 Service；刷新仅返回观察结果，不自动扩大可用模型
+- 🔄 **固定模型与重试**：聊天、多模态主回合与 standalone 固定本轮选定模型；失败仅按原配置在同一模型上重试，不跨模型降级。媒体感知保留显式配置的 perception 用途的 fallbacks 备用链
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
 - 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
@@ -209,50 +209,32 @@ pnpm add @zhin.js/agent zod ai
 pnpm add @ai-sdk/openai   # 示例：按厂商安装 provider SDK
 ```
 
-仅 IM、不需要 Agent 时可只装 `zhin.js`（见 [ADR 0019](../../docs/adr/0019-install-size-layering.md)）。
+仅 IM、不需要 Agent 时可只装 `zhin.js`（见 [ADR 0019](../../../docs/adr/0019-install-size-layering.md)）。
 
 ## 使用
 
-### 在 Zhin 项目中（推荐）
+### 在 Zhin 项目中
 
-安装本包后，从 **`zhin.js/agent`** 或 **`@zhin.js/agent`** 引入：
+CLI 装配 Agent Host；Service、Account、Profile 和用途在 Console 管理。向导只生成 `ai.plan.yml` 导入提案，保存后由管理员预览并显式导入。模型能力必须明确声明，不由模型名字推测。见[模型服务与订阅账号](../../../docs/ai/providers.md)。
 
-```typescript
-import {
-  ZhinAgent,
-  AIService,
-} from 'zhin.js/agent'
+普通命令／工具通过 `context.use(aiInferenceClientToken)` 使用本次受控执行作用域的 `list/generate/stream/evaluate/image`，不持有全局 Provider 或填写 owner。框架不会自动执行普通推理返回的工具调用。
 
-// 使用 ctx.ai (AIService)
-useContext('ai', async (ai) => {
-  const result = await ai.runAgent('你好', { provider: 'ollama' })
-  // ...
-})
-```
+### 非 Zhin 宿主／独立 Agent
 
-Agent 模块由 Plugin Runtime (`basic/cli`) 自动装配，插件没有手动初始化入口。
+`AIService.createAgent({ models, systemPrompt, tools })` 和 `runAgent(input, { models, ... })` 显式借用 `ModelExecutionScope`；由 Host 从真实 operation/generation lease 与可信身份创建。创建方负责释放 scope，Agent 不接收 Provider／模型别名，也不自建认证目录。未配置模型时可以构造服务；真正推理明确返回未配置。
 
-### 非 Zhin 宿主 / 单独集成
+独立任务结果的 `terminal` 保留最后一次实际模型响应的 `stopReason`／`errorMessage`；有正文或可解析 JSON 不代表执行成功，调用方应先检查 `error`／`aborted`。`usage` 累计本次运行已观测的各次模型响应及识图用量，未返回的用量不作推算。取消仍以原始 `signal.reason` 拒绝；可通过 `onInterrupted(snapshot)` 同步取得当时已观测的正文、用量和工具结果。快照不会被晚到结果追加；`toolCalls` 只表示已观测的结算结果，缺少记录不表示工具未执行，不应据此自动重放。
 
-```javascript
-import { AIService } from '@zhin.js/agent'
+`SubagentRuntime`／`SubagentSystem.spawnSync()` 统一返回 `SubagentSyncResult`（`status`、`result`、`toolCalls`、可选 `terminal`），不再返回字符串；先判断 `status`，再读取 `result`。这个结果不包含 Origin、Message 或路由元数据。`spawn_task wait=true` 根据真实状态显示完成或失败，保留部分正文和错误原因。新调用方最低版本是本批计划中的 `@zhin.js/agent@1.1.47`，尚未发布；`1.1.46` 及以前仍是旧字符串合同，升级时应使用同批配套版本，不提供双入口兼容层。
 
-// 程序化 Agent（agentLoop 隔离 context）
-useContext('ai', async (ai) => {
-  const result = await ai.runAgent('你好', {
-    provider: 'ollama',
-    systemPrompt: '你是一个助手',
-  })
-  console.log(result.content)
-})
-```
+工具加载后的补全失败现在能被主回合现有错误 gate 识别并停止续段；不会新增重试，但此前错误被隐藏时继续执行的请求可能不再发生。共享 loop 在预算内原定的下一轮仍按原规则运行。
 
 ## 核心导出
 
 | 类别 | 导出 |
 |------|------|
 | 初始化 | Plugin Runtime composition root 自动装配 |
-| Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
+| Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；底层循环使用 `@zhin.js/ai` 的 `agentLoop` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`） |
 | ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / `@zhin.js/agent/tool` / prompt 等 |
@@ -272,27 +254,9 @@ useContext('ai', async (ai) => {
 
 类型（如 `ZhinAgentConfig`、`ContextConfig`、`AgentState`、`McpServerEntry` 等）均从包入口导出或从 `@zhin.js/core` 再导出。
 
-## 全局上下文
+## 执行上下文
 
-Agent 模块装配后，插件可声明：
-
-```typescript
-declare module '@zhin.js/core' {
-  namespace Plugin {
-    interface Contexts {
-      ai: AIService              // 会话、Provider、ZhinAgent、runAgent 等
-      agent: AgentResourceHub    // 技能/子代理/MCP 条目/Hook 注册表
-    }
-  }
-}
-```
-
-| Context | 用途 |
-|---------|------|
-| `ctx.ai` | 业务侧 AI 服务：会话、`createAgent`（→ `ServiceAgent`）/ `runAgent`、全局 ZhinAgent |
-| `ctx.agent` | `AgentResourceHub` 支持资源注册：`addSkill(...)`、`addSubAgent(...)`、`addMcp(...)`、`addHook(...)`；Tool 使用 `context.addTool()` |
-
-主包 `zhin.js` 的 `Plugin.Contexts` 类型已包含上述两项。
+插件能力通过 Plugin Runtime 注册，运行时通过正式 capability context 使用资源。普通 AI 调用的 token 是 `@zhin.js/ai-provider` 的 `aiInferenceClientToken`。命令与工具结束后 Host 关闭本次资源；流必须完整消费或主动关闭，不能把 client 保存到下一次执行。底层 AI 库不依赖 IM/Core。
 
 ## MCP（Client）
 
@@ -343,51 +307,13 @@ ai:
 
 无需额外配置即可使用；若需放宽子 Agent 的工具范围，使用 `ai.agent.subagentTools` 显式追加白名单（不会自动继承主会话全部 skill/tool）。
 
-### 2. 用 AIService 创建多个不同配置的 Agent
+### 2. 独立任务
 
-`ctx.ai`（AIService）可以按需创建**多个互不共享状态的 Agent**（`ServiceAgent`），每个可指定不同 provider、model、systemPrompt、tools；底层均为 **`runAgentLoopStandaloneTurn`**：
+独立 Agent 的工具只来自显式 `tools`，或明确的 `includeRegisteredTools: true`。真实 Host 为每个任务保留自己的 operation scope；不得把父 client 或最新 Provider 对象长期借给后台任务。子任务在入队前同步 retain 父 generation 与可信权限，角色选用 Host Profile 不会提升发起者权限。
 
-```javascript
-import { useContext } from 'zhin.js'
+### 3. 单次推理
 
-useContext('ai', async (ai) => {
-  const codeAgent = ai.createAgent({
-    provider: 'openai',
-    model: 'gpt-4o',
-    systemPrompt: '你只负责代码审查与建议，不闲聊。',
-  })
-  const codeResult = await codeAgent.run('审查这段 TypeScript 的类型安全')
-
-  const translateAgent = ai.createAgent({
-    provider: 'ollama',
-    model: 'qwen2.5',
-    systemPrompt: '只做中英互译，不解释。',
-  })
-  const translated = await translateAgent.run('Hello world')
-})
-```
-
-Standalone Agent 不隐式继承主 Agent 的 native Tool，也**默认不带** `ai.registerTool()` 注册的工具：
-能力必须通过 `tools` 显式传入，或传 `includeRegisteredTools: true` 使用已注册的工具。
-
-只需要文本（总结群聊、分类消息、改写回复）时，不要借整轮 Agent，改用 `aiCompletionToken`：
-它只做一次补全，不带任何工具，固定所选模型并保留同模型重试与超时；不可信内容放进 `untrusted` 按数据渲染。见
-[Host Token 总览](../../../docs/authoring/host-tokens.md)。
-适合：按场景/按接口使用不同「角色」的 Agent（代码、翻译、总结等），彼此独立。
-
-### 3. 一次调用、单次任务（不持有 Agent 实例）
-
-不需要长期持有 Agent 时，可直接用 `runAgent` 跑单次任务：
-
-```javascript
-useContext('ai', async (ai) => {
-  const result = await ai.runAgent('总结以下内容：...', {
-    provider: 'deepseek',
-    systemPrompt: '只输出 3 条要点。',
-  })
-  console.log(result.content)
-})
-```
+无需工具循环时，优先用 operation-bound inference client 的 `generate`；需要 Agent 循环时，用 `AIService.runAgent(input, { models, systemPrompt, tools })`。两者都固定本次选择；显式模型失败不自动切换。摘要、审批和旁听的采样／输出参数由其所选 Profile 决定。
 
 ### 4. 多 Agent 协作与普通 chat 委派
 
@@ -399,87 +325,30 @@ useContext('ai', async (ai) => {
 - 非保留工具同名时采用 **后注册覆盖前注册**。
 - 冲突统一以 warn 记录：包含 `name`、`source`、`action`（`ignored`/`overridden`）。
 
-## Provider 与模型列表
+## 模型配置
 
-`AIService` 构造时：
+运行时图是唯一选型权威：Service 定义协议与公开设置，Account 持有私有认证身份，Profile 绑定账号、native model 与生成参数；用途和个人 Session 选择 Profile。配置更新下一回合生效，在途请求保留原图。同 Profile 改模型后，已有 Session 下回合跟随；跨 Account/incarnation 不自动继承。
 
-1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `sdk`，如 `openai` 或 `openai-compatible`）。
-2. `AIService` 创建独立的 `LlmApiRuntime`：**未写 `models` 的 provider** 先使用空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
-3. `createZhinAgent` 启动时 `loadCache()` 先恢复上次发现结果，再异步刷新 `/v1/models`。
-
-`agents.<name>.model`（如 `mimo-v2.5-pro`）须在发现列表中，或在中转 API 的 `/v1/models` 响应里出现；无需为每个模型手写 yaml，除非要锁定白名单。
-
-```yaml
-ai:
-  providers:
-    openai-main:
-      sdk: openai-compatible
-      baseUrl: ${OPENAI_BASE_URL}
-      apiKey: ${OPENAI_API_KEY}
-      # models 省略 → 自动 GET /v1/models
-    cloudflare-flash:
-      sdk: openai-compatible
-      models: ["@cf/zai-org/glm-4.7-flash"]  # 显式列表
-  agents:
-    zhin:
-      provider: openai-main
-      model: mimo-v2.5-pro
-```
-
-## Provider 与模型列表
-
-`AIService` 构造时：
-
-1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `sdk`，如 `openai` 或 `openai-compatible`）。
-2. `AIService` 创建独立的 `LlmApiRuntime`：**未写 `models` 的 provider** 先使用空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
-3. `createZhinAgent` 启动时 `loadCache()` 先恢复上次发现结果，再异步刷新 `/v1/models`。
-
-`agents.<name>.model`（如 `mimo-v2.5-pro`）须在发现列表中，或在中转 API 的 `/v1/models` 响应里出现；无需为每个模型手写 yaml，除非要锁定白名单。
-
-```yaml
-ai:
-  providers:
-    openai-main:
-      sdk: openai-compatible
-      baseUrl: ${OPENAI_BASE_URL}
-      apiKey: ${OPENAI_API_KEY}
-      # models 省略 → 自动 GET /v1/models
-    cloudflare-flash:
-      sdk: openai-compatible
-      models: ["@cf/zai-org/glm-4.7-flash"]  # 显式列表
-  agents:
-    zhin:
-      provider: openai-main
-      model: mimo-v2.5-pro
-```
+目录刷新是显式管理操作，只返回上游观察结果；管理员确认协议与能力后才能纳入 Service。普通调用不自动 `/models` 探测。旧 Provider／ModelCatalog／model-policy 接口及升级版本边界见[公开升级说明](../../../docs/ai/provider-upgrade.md)。
 
 ## Model harness
 
-按 provider / model 覆盖 Agent 循环默认参数（当前主要为 **`maxIterations`**）。
+按真实 Service 与 native model 调整执行预算；采样参数与输出上限仍由 Profile 管理。
 
-**合并顺序**（约定优先，详见 [ADR 0007](../../docs/adr/0007-ai-agent-model-harness-yaml-overrides.md)）：
-
-1. TypeScript 默认表 `MODEL_HARNESS_DEFAULTS`（[`src/config/model-harness.ts`](./src/config/model-harness.ts) + [`model-harness-runtime.ts`](./src/config/model-harness-runtime.ts)）
-2. YAML `ai.agent.modelHarness.providerPatterns`（匹配当前 provider，支持 `*` 通配；按对象键插入顺序叠加）
-3. YAML `ai.agent.modelHarness.models`（`model` 或 `provider:model` 精确键）
+合并顺序：内置 exact Driver／native model 默认 → `services.<Service ID>.defaults` → `services.<Service ID>.models.<native model>`。旧 Provider 别名、通配符和 `provider:model` 键不能继续使用，迁移时须明确选择目标 Service。
 
 ```yaml
 ai:
   agent:
     modelHarness:
-      providerPatterns:
-        "open*":
-          maxIterations: 7
-      models:
-        "gpt-4o":
-          maxIterations: 8
-        "openai:gpt-4o":
-          maxIterations: 9
+      services:
+        service-7f42:          # Console 中的真实 Service ID
+          defaults: { maxIterations: 7 }
+          models:
+            gpt-4o: { maxIterations: 9 }
 ```
 
-运行时由 `resolveModelHarness(providerName, modelName, config?.modelHarness)` 解析；包入口导出 `MODEL_HARNESS_DEFAULTS`、`resolveModelHarness`、`mergeModelHarnessValues` 与 `ModelHarnessConfig` 类型。未命中任何规则时回退 TS 默认行或空对象；当前仅消费 `maxIterations`，未知 YAML 字段会被忽略。
-
-增补内置默认值：在 `config/model-harness.ts` 增加 `ModelHarnessRow` 并附测试；YAML 只做覆盖，不替代 TS 约定层。
+运行时使用 `resolveModelHarness({ driver, serviceId, modelId, config })`。支持迭代上限、探索预算／提醒、空回复重问及请求超时；未知设置不授予额外能力。新增内置规则必须声明完整 Driver owner/id/contract 与 native model 模式，并附正反回归，不能只凭模型名字给未知 Driver 应用规则。
 
 ## IM 管理命令
 
@@ -491,7 +360,7 @@ ai:
 | 运维 | `/models` · `/health` |
 | 内省 | `/cmd` · `/endpoints` · `/bindings` · `/tools` · `/mcp` |
 
-zhin-package CLI：`zhin packages`（`basic/cli`）。详见 [ADR 0010](../../docs/adr/0010-pi-coding-agent-harness-alignment.md)。
+zhin-package CLI：`zhin packages`（`basic/cli`）。详见 [ADR 0010](../../../docs/adr/0010-pi-coding-agent-harness-alignment.md)。
 
 ## 开发
 

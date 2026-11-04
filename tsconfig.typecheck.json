@@ -356,14 +356,38 @@
       "zhin.js/i18n": [
         "./packages/im/zhin/src/i18n.ts"
       ],
-      "@zhin.js/agent/model-policy": [
-        "./packages/im/agent/src/model-policy/index.ts"
-      ],
       "@zhin.js/agent/model-runtime": [
         "./packages/im/agent/src/model-runtime/index.ts"
       ],
       "@zhin.js/agent/personal-session": [
         "./packages/im/agent/src/personal-session/index.ts"
+      ],
+      "@zhin.js/ai/provider": [
+        "./packages/im/ai/src/provider/index.ts"
+      ],
+      "@zhin.js/ai/providers": [
+        "./packages/im/ai/src/providers/index.ts"
+      ],
+      "@zhin.js/ai-provider": [
+        "./packages/im/ai-provider/src/index.ts"
+      ],
+      "@zhin.js/agent/migration": [
+        "./packages/im/agent/src/migration/index.ts"
+      ],
+      "@zhin.js/database/registry": [
+        "./basic/database/src/registry.ts"
+      ],
+      "@zhin.js/database/dialects/mysql": [
+        "./basic/database/src/dialects/mysql.ts"
+      ],
+      "@zhin.js/database/dialects/pg": [
+        "./basic/database/src/dialects/pg.ts"
+      ],
+      "@zhin.js/database/dialects/mongodb": [
+        "./basic/database/src/dialects/mongodb.ts"
+      ],
+      "@zhin.js/database/dialects/redis": [
+        "./basic/database/src/dialects/redis.ts"
       ]
     },
     "types": [],
@@ -390,6 +414,8 @@
     "examples/full-bot/commands/**/*",
     "examples/full-bot/tools/**/*",
     "examples/full-bot/components/**/*",
+    "examples/multi-agent-room/tests/**/*.ts",
+    "tests/helpers/review-ai-plan.ts",
     "examples/test-bot/components/**/*",
     "examples/full-bot/skills/**/*",
     "examples/capabilities-bot/plugin.ts",
@@ -419,7 +445,8 @@
     "packages/toolkit/testing/tests/types/public.ts",
     "packages/im/schedule-feature/tests/types/config.ts",
     "packages/im/feature-kit/tests/construction-types.fixture.ts",
-    "packages/im/agent/tests/types/ai-completion-contract.ts"
+    "packages/im/agent/tests/types/ai-completion-contract.ts",
+    "tests/fixtures/database-types/third-party.ts"
   ],
   "exclude": [
     "node_modules",

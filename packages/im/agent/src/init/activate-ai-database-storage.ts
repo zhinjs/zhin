@@ -1,8 +1,8 @@
+import type { AgentStartupConfig } from '../config/agent-startup.js';
 /**
  * Wire agent session stores into ZhinAgent.
  */
 import {
-  type AIConfig,
   AgentSessionStore,
   DatabaseContextRepository,
   DatabaseMemoryEntryRepository,
@@ -22,7 +22,7 @@ import { AI_SESSION_EVENTS_TABLE } from '../session-events.js';
 export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,
-  config: Pick<AIConfig, 'sessions' | 'memory'>,
+  config: Pick<AgentStartupConfig, 'sessions' | 'memory'>,
   semanticMemory: SemanticMemoryRuntime | null,
 ): Promise<void> {
   if (!refs.zhinAgent) throw new Error('Agent database activation requires a ZhinAgent instance');

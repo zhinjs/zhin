@@ -634,6 +634,7 @@ export { SubagentRuntime } from './subagent/subagent-runtime.js';
 export type {
   SubagentOrigin, SubagentResultDelivery, SubagentResultSender, SpawnOptions, SubagentRuntimeOptions,
   SubagentCompletePayload,
+  SubagentSyncResult,
 } from './subagent/index.js';
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 

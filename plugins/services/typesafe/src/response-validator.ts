@@ -1,4 +1,4 @@
-import type { DecisionQuestions, DecisionResult, JsonValue } from '@zhin.js/ai';
+import type { DecisionQuestions, DecisionResult, JsonValue } from '@zhin.js/ai/provider';
 
 /** Never includes a remote body, credential, prompt or candidate label. */
 export class TypeSafeDecisionError extends Error {

@@ -96,7 +96,7 @@ export class MiddlewareIndex {
       if (!record) return terminal();
       const authorInput = bindOperationInput(input, record.owner, operationSnapshot);
       const context = {
-        ...createCapabilityContext(operationSnapshot, record.owner, undefined, readOperationSession(authorInput, record.adapter)?.signal),
+        ...createCapabilityContext({ snapshot: operationSnapshot, ownerId: record.owner, admission: undefined, signal: readOperationSession(authorInput, record.adapter)?.signal }),
         input: authorInput,
       } as MiddlewareContext<TInput>;
       Object.defineProperty(context, 'session', {
@@ -132,7 +132,7 @@ export class MiddlewareIndex {
       if (definition.target !== 'inbound') throw new Error('Invalid inbound Middleware');
       const authorInput = bindOperationInput(input, record.owner, operationSnapshot);
       const context = {
-        ...createCapabilityContext(operationSnapshot, record.owner, undefined, readOperationSession(authorInput, record.adapter)?.signal), input: authorInput,
+        ...createCapabilityContext({ snapshot: operationSnapshot, ownerId: record.owner, admission: undefined, signal: readOperationSession(authorInput, record.adapter)?.signal }), input: authorInput,
       } as MiddlewareContext<TInput>;
       Object.defineProperty(context, 'session', {
         enumerable: true, get: () => readOperationSession(authorInput, record.adapter),
