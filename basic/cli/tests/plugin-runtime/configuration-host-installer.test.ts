@@ -29,7 +29,7 @@ class Modules implements ModuleRuntime {
 }
 type Store = Pick<ConsoleConfigurationStore, 'readChat' | 'patchChat'>;
 async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; globalMasters?: readonly string[]; secondEndpoint?: boolean;
-  extraFields?: Readonly<Record<string, string | number>>; endpointNickname?: string; store?: (real: ConsoleConfigurationStore) => Store } = {}) {
+  extraFields?: Readonly<Record<string, string | number>>; endpointNickname?: string; objectTuple?: boolean; store?: (real: ConsoleConfigurationStore) => Store } = {}) {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-config-chat-')));
   const modules = new Modules();
   const setups = { root: 0 };
@@ -37,7 +37,8 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   const document: RuntimeConfigDocument = { configVersion: 2, locale: options.locale ?? 'en',
     ...(options.globalMasters ? { ai: { trigger: { masters: options.globalMasters } } } : {}),
     plugins: { bot: '@test/bot', other: '@test/bot' },
-    bot: { ...options.extraFields, master: 'alice', commandPrefix: '!!', nickname: 'Before', count: 1, tags: ['a'], token: 'DO_NOT_DISCLOSE',
+    bot: { ...options.extraFields, ...(options.objectTuple ? { entries: ['name', { master: 'before' }] } : {}),
+      master: 'alice', commandPrefix: '!!', nickname: 'Before', count: 1, tags: ['a'], token: 'DO_NOT_DISCLOSE',
       endpoints: [{ id: 'same', ...(options.endpointNickname ? { nickname: options.endpointNickname } : {}) }, ...(options.secondEndpoint ? [{ id: 'second', master: 'carol' }] : [])] },
     other: { master: 'bob', commandPrefix: '#', nickname: 'Other', endpoints: [{ id: 'same' }] } };
   await put(join(project, 'package.json'), { name: '@test/root', dependencies: { '@test/command': 'workspace:*', '@test/bot': 'workspace:*' },
@@ -48,6 +49,8 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/adapter' }, ...(options.commands === false ? [{ package: '@test/command' }] : [])] } });
   await put(join(project, 'plugins/bot/schema.json'), { type: 'object', additionalProperties: false, required: ['commandPrefix'], properties: {
     ...Object.fromEntries(Object.entries(options.extraFields ?? {}).map(([key, value]) => [key, { type: typeof value }])),
+    ...(options.objectTuple ? { entries: { type: 'array', minItems: 2, maxItems: 2, items: false,
+      prefixItems: [{ type: 'string' }, { type: 'object', properties: { master: { type: 'string' } }, required: ['master'], additionalProperties: false }] } } : {}),
     master: { type: 'string' }, commandPrefix: { type: 'string' }, nickname: { type: 'string' }, count: { type: 'integer' }, tags: { type: 'array', items: { type: 'string' } },
     token: { type: 'string', writeOnly: true }, endpoints: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, nickname: { type: 'string' } } } },
   } });
@@ -91,6 +94,23 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
     close: async () => { await runtime.stop(); await rm(project, { recursive: true, force: true }); } };
 }
 function lastReply(client: Client): string { return String(client.sendNative.mock.calls.at(-1)?.[0].payload); }
+
+it('refuses tuple objects through real owner chat without preparing or applying configuration', async () => {
+  const f = await fixture({ objectTuple: true });
+  const prepare = vi.spyOn(f.document, 'prepare');
+  const apply = vi.spyOn(f.runtime, 'applyConfiguration');
+  try {
+    const before = await f.document.readSource();
+    for (const text of ['!!config get bot.entries', '!!config set bot.entries -- ["name",{"master":"after"}]', '!!config unset bot.entries']) {
+      await f.receive(text);
+      expect(lastReply(f.client)).toContain('single field');
+    }
+    await f.receive('!!config fields bot');
+    expect(lastReply(f.client)).not.toContain('bot.entries');
+    expect(prepare).not.toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled();
+    expect(await f.document.readSource()).toEqual(before);
+  } finally { prepare.mockRestore(); apply.mockRestore(); await f.close(); }
+});
 
 it('allows an exact declared safe leaf after the first 256 displayed fields', async () => {
   const f = await fixture({ extraFields: Object.fromEntries(Array.from({ length: 257 }, (_, i) => [`field${String(i).padStart(3, '0')}`, 1])) });

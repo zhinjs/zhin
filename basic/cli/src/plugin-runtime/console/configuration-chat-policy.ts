@@ -164,8 +164,10 @@ function children(nodes: readonly Schema[], key: string): readonly unknown[] {
     if (node.items !== undefined || node.prefixItems !== undefined || node.type === 'array') {
       if (!/^(?:0|[1-9][0-9]*)$/u.test(key)) unknown();
       const index = Number(key);
-      const prefix = Array.isArray(node.prefixItems) ? node.prefixItems : Array.isArray(node.items) ? node.items : undefined;
-      const item = prefix && index < prefix.length ? prefix[index] : prefix ? node.additionalItems ?? node.items : node.items;
+      const modernPrefix = Array.isArray(node.prefixItems) ? node.prefixItems : undefined;
+      const legacyPrefix = !modernPrefix && Array.isArray(node.items) ? node.items : undefined;
+      const prefix = modernPrefix ?? legacyPrefix;
+      const item = prefix && index < prefix.length ? prefix[index] : legacyPrefix ? node.additionalItems : node.items;
       if (item !== undefined) found.push(item);
       continue;
     }
@@ -255,17 +257,39 @@ const scalarTypes: ReadonlySet<string> = new Set(['string', 'number', 'integer',
  * every schema branch. Object targets would let a parent overwrite/removal bypass
  * per-child checks, so they are rejected as `leaf`.
  */
-export function chatLeafTypes(schema: unknown, path: readonly string[]): readonly string[] {
+export function chatLeafTypes(schema: unknown, path: readonly string[], values: readonly unknown[] = []): readonly string[] {
   if (!record(schema)) unknown();
   const current = locate(schema, path);
+  // Desired files can be edited outside the Host. Schema bounds do not prove
+  // that the currently stored array actually contains only scalar values.
+  for (const value of values) if (Array.isArray(value)) for (const item of value) {
+    if (!scalarTypes.has(item === null ? 'null' : typeof item)) throw new ConfigChatAccessError('leaf');
+  }
   const types = new Set<string>();
   for (const nodes of current) {
     const names = typeNames(nodes);
     if (names.includes('object')) throw new ConfigChatAccessError('leaf');
     if (names.includes('array')) {
       if (!nodes.some(node => node.items !== undefined || node.prefixItems !== undefined)) unknown();
-      for (const items of descend([nodes], '0', schema)) {
-        if (typeNames(items).some(type => !scalarTypes.has(type))) throw new ConfigChatAccessError('leaf');
+      let prefixLength = 0;
+      let maxItems = Infinity;
+      for (const node of nodes) {
+        const prefix = Array.isArray(node.prefixItems) ? node.prefixItems : Array.isArray(node.items) ? node.items : [];
+        prefixLength = Math.max(prefixLength, prefix.length);
+        if (node.maxItems !== undefined) {
+          if (typeof node.maxItems !== 'number' || !Number.isInteger(node.maxItems) || node.maxItems < 0) unknown();
+          maxItems = Math.min(maxItems, node.maxItems);
+        }
+      }
+      // Every prefix position can have a different type. One position past the
+      // longest prefix represents the homogeneous tail; never iterate to maxItems.
+      for (let index = 0; index <= prefixLength && index < maxItems; index++) {
+        const key = String(index);
+        // A forbidden position also makes all later positions unreachable.
+        if (children(nodes, key).includes(false)) break;
+        for (const items of descend([nodes], key, schema)) {
+          if (typeNames(items).some(type => !scalarTypes.has(type))) throw new ConfigChatAccessError('leaf');
+        }
       }
     }
     for (const name of names) types.add(name);
