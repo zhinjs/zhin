@@ -38,11 +38,15 @@ Zhin 将模型设置保存在 Host 数据库中。Console 保存修改后，下�
 | `ollama` | 免认证或 API Key | OpenAI Chat |
 | `openai-compatible` | API Key | OpenAI Chat、Images |
 | `codex-subscription` | OAuth | Codex Responses |
-| `claude-subscription` | OAuth | Claude 订阅 Messages |
-| `opencode-go` / `opencode-zen` | API Key | 由服务目录中明确选择的协议决定 |
-| `antigravity` | OAuth | Antigravity generateContent |
+| `claude-subscription`（实验） | OAuth | Claude 订阅 Messages |
+| `opencode-go` / `opencode-zen` | 各产品 API Key | 由服务目录中明确选择的协议决定 |
+| `antigravity`（实验） | OAuth | Antigravity generateContent |
 
-OpenCode 产品使用其原生 API Key；不把它虚构成 OAuth 订阅。Codex、Claude 和 Antigravity 的协议适配已做合成请求回归；这不代表真实订阅账号、供应商可用性或计费已验收。Antigravity 登录后的只读资料／项目准备可以独立重试，不重放已成功的 token 交换。
+Claude 订阅与 Antigravity：实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担。Codex：未经 OpenAI 对第三方客户端的明确授权。
+
+Console 只为实验集成显示简短标识，在选中详情或登录时显示必要提示。支持标识不代表账号已登录、供应商授权或使用权限；第三方 Driver 未声明支持信息时不推断为常规支持或官方支持。
+
+OpenCode Go 与 OpenCode Zen 是分别使用产品 API Key 的服务；套餐、模型和适用场景应按各自产品条款核对，不能套用 Free 产品的条件。Anthropic API Key 与 Claude 订阅、Gemini API Key 与 Antigravity 是独立服务及认证身份。Antigravity 登录后的只读资料／项目准备可以独立重试，不重放已成功的 token 交换。
 
 Codex 不接受温度和输出 token 上限。它的 Profile 表单不提供这些字段；明确提交不支持的参数会报错，不静默删除。摘要、旁听、审批不再写入隐藏的温度或输出上限，由选中 Profile 统一决定参数。需要供应商硬输出上限的用途应显式选择支持该参数的 Profile。
 

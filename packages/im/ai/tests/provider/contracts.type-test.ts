@@ -1,10 +1,11 @@
 import {
   defineProvider, defineAIPlan,
-  type InferenceClient, type ModelProfile, type ProviderService,
+  type InferenceClient, type ModelProfile, type ProviderService, type ProviderSupportMetadata,
 } from '@zhin.js/ai/provider';
 
 const driver = defineProvider({
   id: 'typed-fixture', contractVersion: '1',
+  support: { status: 'experimental', notice: 'Fixture notice' },
   serviceSchema: { parse: (_value: unknown): { region: string } => ({ region: 'test' }) },
   profileSchema: () => ({ parse: (_value: unknown): { temperature: number } => ({ temperature: 0.5 }) }),
   authentication: { methods: ['none'] as const },
@@ -50,3 +51,16 @@ await client.evaluate({ profile: language, state: null, questions: {} });
 await client.generateImage({ profile: decision, request: { prompt: 'synthetic' } });
 // @ts-expect-error inference evidence does not assert that business policy was applied
 void evidence.applied;
+
+const support: ProviderSupportMetadata = { status: 'standard' };
+const experimentalSupport: ProviderSupportMetadata = { status: 'experimental', notice: 'Plain text' };
+const invalidSupport: ProviderSupportMetadata = {
+  // @ts-expect-error absence does not authorize an invented official-support state
+  status: 'official',
+};
+const invalidNotice: ProviderSupportMetadata = {
+  status: 'standard',
+  // @ts-expect-error notices are ordinary text, not executable or structured objects
+  notice: { html: 'not a notice' },
+};
+void support; void experimentalSupport; void invalidSupport; void invalidNotice;

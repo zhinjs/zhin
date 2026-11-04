@@ -99,3 +99,17 @@ Root 对 `fe678c74824f6bc5bf7408ebf7b9fcc2b2bbf82c` 的完整 `check:all` 退出
 | CodeQL 指向夹具本地调度，不扩成生产防御 | 仅把 HTTP URL 查 Map 函数的调用改为 `/v1/models`、`/token` 两字面路径各通知自己的本地 waiter；未知 URL 原响应不变。原生 Fetch／GC／disconnect／discovery／OAuth 夹具修前后均在原 12 s 子进程／15 s 测试预算通过；`/tmp/zhin-ci-native-lifetime-before.log` / `after.log` | 原调用数与取消断言保留；本地没有 CodeQL CLI，告警是否消除仍须远端扫描，不宣称扫描已绿 |
 
 TS 源码／测试 lint 为 0 errors。MJS 在仓库常规规则中原本被忽略；额外以 `--no-ignore` 及准确 Node 全局声明检查为 0 errors／1 个既有 console marker warning，未修改 lint 规则或添加抑制。source 与原九 fixture 其余内容未改；metadata 仍只是外部待确认提案，本次不实施。唯一未跟踪研究稿保持原样。
+
+## ADR 0047 支持信息展示（后续用户明确批准）
+
+本节接续前文“metadata 待确认”的历史状态：用户现已批准最小支持信息方案。`ProviderSupportMetadata` 只含 `status: standard | experimental` 与可选纯文本 `notice`。Claude 订阅与 Antigravity 声明实验及条款风险提示；Codex 声明未经 OpenAI 对第三方客户端的明确授权；OpenCode Go／Zen 保持各产品 API Key 名称与认证合同，其余内置产品声明 standard。没有声明不推断 standard 或官方支持。
+
+Host 从同一 held snapshot 的既有 Driver 列表做一次白名单投影，deployment 只按 owner／id／contractVersion 精确匹配复用。未安装、不同版本或未知声明不使原可读图失败；不为展示调用执行 resolver、探测、登录或网络。支持字段不进入 graph、导出 plan、fingerprint、mutation receipt 或 cache identity。原可见集合、账号 statuses 读取与 B3 权限政策均不变；B3 是独立政策，未在本次实施。
+
+| 预期 | 实际证据 | 结论／未覆盖 |
+| --- | --- | --- |
+| 真实声明经 Host／SQLite 只投影公开展示字段 | 新 2 文件／9 项通过；`/tmp/zhin-support-focused-first.log`。含同 id 不同 owner、错版本、缺 Driver、malformed metadata、私有 marker 剔除、held 旧代／新代及原图／导出／receipt 不变 | 使用 none 账号证明该夹具无额外 credential／HTTP 调用，不声称正常账号 statuses 不读取凭据 |
+| 管理与产品原合同不退化 | 受影响 6 文件／73 项通过；`/tmp/zhin-support-related-final.log`，包括 management、Host、contextual Profile schema 与 13 内置产品注册／认证合同 | 合成／本地 SQLite，不是真实供应商验收；没有把新增功能先行验证宣称为 baseline 红绿 |
+| 类型与文档一致 | root source tsc 及额外 4 fixture tsc 通过；`/tmp/zhin-support-source-types.log`、`extra-types.log`；后者脚本 `/tmp/zhin-support-extra-types.py`，含 status／notice 正反类型；受影响 ESLint 0 errors，`check:doc-links` 344 文件通过 | 最终固定候选完整 CI、站点构建、实际归档与独立审查由 Root 另验 |
+
+Console 对照样本由相同真实 producer 生成：`/tmp/zhin-support-producer/operator.json` 与 `member.json`，生成器复用 `support-fixture.ts`，仅含合成公开 DTO，无真实资料。普通列表只显示 experimental 短标识，选中详情／单次登录显示必要提示；工程验收状态保留在本节及 PR，不放进 Driver notice。默认注册、认证、请求行为和 contractVersion 未变。

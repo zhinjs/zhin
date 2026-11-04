@@ -63,6 +63,7 @@ function apiKeyProvider<const Id extends string, const Methods extends readonly 
   };
   return defineProvider({
     id: input.id, label: input.label, contractVersion: '1',
+    support: { status: 'standard' },
     identity: service => serviceIdentity({ product: input.id, service: service.options }),
     modelContracts: modelContracts(input.protocols),
     describeModel: ({ service, model, profile }) => executionTraits({ family: input.family, service: service.options, parameters: profile.parameters, model, nativeDeferredTools: input.nativeDeferredTools }),
@@ -140,6 +141,7 @@ const cloudflareProfileSchema = ({ service, model }: Readonly<{ service: Provide
 };
 export const cloudflareProvider = defineProvider({
   id: 'cloudflare', label: 'Cloudflare Workers AI', contractVersion: '1',
+  support: { status: 'standard' },
   identity: service => serviceIdentity({ product: 'cloudflare', service: service.options, extra: { accountId: service.options.accountId } }),
   modelContracts: modelContracts(cloudflareProtocols),
   describeModel: ({ service, model, profile }) => executionTraits({ family: 'openai-compatible', service: service.options, parameters: profile.parameters, model }),

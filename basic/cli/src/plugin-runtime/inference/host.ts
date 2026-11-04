@@ -33,6 +33,7 @@ import { HostAccountRuntime } from './account-runtime.js';
 import { createProviderNetwork, matchesProviderTarget } from './network.js';
 import { InferenceManagementService, InferenceManagementError } from './management.js';
 import type { InferenceManagementLease } from './routes.js';
+import { projectProviderSupport } from './support-metadata.js';
 import { InferenceSessionRepository } from './session-state.js';
 import { resolveInferenceTurnContext } from './turn-context.js';
 import { InferenceSessionManagement } from './session-management.js';
@@ -331,18 +332,22 @@ export class HostInference {
       repository: this.repository,
       accounts: this.accounts,
       drivers: () =>
-        listSnapshotAiProviders(lease.value).map(({ owner, definition }) => ({
-          owner,
-          id: definition.id,
-          contractVersion: definition.contractVersion,
-          label: definition.label ?? definition.id,
-          source: lease.value.tree.get(owner)?.packageName ?? String(owner),
-          authentication: definition.authentication.methods,
-          ...(definition.serviceSchema.inputSchema
-            ? { serviceSchema: definition.serviceSchema.inputSchema }
-            : {}),
-          modelContracts: definition.modelContracts ?? [],
-        })),
+        listSnapshotAiProviders(lease.value).map(({ owner, definition }) => {
+          const support = projectProviderSupport(definition.support);
+          return {
+            owner,
+            id: definition.id,
+            contractVersion: definition.contractVersion,
+            label: definition.label ?? definition.id,
+            source: lease.value.tree.get(owner)?.packageName ?? String(owner),
+            authentication: definition.authentication.methods,
+            ...(definition.serviceSchema.inputSchema
+              ? { serviceSchema: definition.serviceSchema.inputSchema }
+              : {}),
+            modelContracts: definition.modelContracts ?? [],
+            ...(support ? { support } : {}),
+          };
+        }),
       profileSchema: ({ service, model }) => {
         const driver = definition(service);
         try {

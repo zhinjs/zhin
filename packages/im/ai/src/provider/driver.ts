@@ -132,10 +132,17 @@ export interface DescribeProviderModelInput<S = JsonObject, P = JsonObject> {
   readonly profile: ModelProfile<P>;
   readonly model: ModelDefinition;
 }
+/** Display classification only; neither supplier authorization nor account readiness. */
+export interface ProviderSupportMetadata {
+  readonly status: 'standard' | 'experimental';
+  /** Plain text for selected details or a login flow, never model instructions. */
+  readonly notice?: string;
+}
 export interface ProviderDefinition<S = JsonObject, P = JsonObject> {
   readonly id: string;
   readonly contractVersion: string;
   readonly label?: string;
+  readonly support?: ProviderSupportMetadata;
   readonly modelContracts?: readonly ProviderModelContract[];
   readonly serviceSchema: ProviderSchema<S>;
   /** Parameters depend on the selected protocol/model, not only the product. */

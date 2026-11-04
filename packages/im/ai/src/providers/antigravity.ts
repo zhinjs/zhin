@@ -6,6 +6,7 @@ import { antigravityOAuth } from './oauth.js';
 import { sdkProfileSchema, fixedServiceSchema, type FixedServiceOptions, type StandardModelParameters } from './schema.js';
 import { ProviderProtocolError, sdkExecution } from './sdk-execution.js';
 import { executionTraits, serviceIdentity } from './traits.js';
+import { EXPERIMENTAL_SUBSCRIPTION_NOTICE } from './support.js';
 
 const baseUrl = 'https://daily-cloudcode-pa.googleapis.com';
 const protocols = [{ name: 'antigravity-generate-content', kind: 'language' }, { name: 'antigravity-images', kind: 'image' }] as const;
@@ -69,6 +70,7 @@ function unwrapResponse(response: Response): Response {
 
 export const antigravityProvider = defineProvider({
   id: 'antigravity', label: 'Antigravity', contractVersion: '1',
+  support: { status: 'experimental', notice: EXPERIMENTAL_SUBSCRIPTION_NOTICE },
   identity: service => serviceIdentity({ product: 'antigravity', service: service.options }),
   modelContracts: modelContracts(protocols),
   describeModel: ({ service, model, profile }) => executionTraits({ family: 'google', service: service.options, parameters: profile.parameters, model }),

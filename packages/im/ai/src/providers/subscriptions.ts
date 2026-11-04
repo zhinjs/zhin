@@ -7,6 +7,7 @@ import { declaredModels, modelContracts } from './api-key.js';
 import { codexOAuth, claudeOAuth } from './oauth.js';
 import { discoverModels } from './discovery.js';
 import { executionTraits, serviceIdentity } from './traits.js';
+import { CODEX_CLIENT_NOTICE, EXPERIMENTAL_SUBSCRIPTION_NOTICE } from './support.js';
 
 const require = createRequire(import.meta.url);
 const version = (require('../../package.json') as { version: string }).version;
@@ -30,6 +31,7 @@ function claudeProfileSchema({ model }: ProfileInput): ProviderSchema<StandardMo
 
 export const codexProvider = defineProvider({
   id: 'codex-subscription', label: 'Codex subscription', contractVersion: '1',
+  support: { status: 'standard', notice: CODEX_CLIENT_NOTICE },
   identity: service => serviceIdentity({ product: 'codex-subscription', service: service.options }),
   modelContracts: modelContracts(codexProtocols),
   describeModel: ({ service, model, profile }) => ({ ...executionTraits({ family: 'openai', service: service.options, parameters: profile.parameters, model }), promptCacheRouting: codexCacheRouting }),
@@ -78,6 +80,7 @@ export const codexProvider = defineProvider({
 
 export const claudeSubscriptionProvider = defineProvider({
   id: 'claude-subscription', label: 'Claude subscription', contractVersion: '1',
+  support: { status: 'experimental', notice: EXPERIMENTAL_SUBSCRIPTION_NOTICE },
   identity: service => serviceIdentity({ product: 'claude-subscription', service: service.options }),
   modelContracts: modelContracts(claudeProtocols),
   describeModel: ({ service, model, profile }) => executionTraits({ family: 'anthropic', service: service.options, parameters: profile.parameters, model, nativeDeferredTools: true }),
@@ -109,6 +112,7 @@ function openCodeProvider<const Product extends 'go' | 'zen'>(product: Product) 
   };
   return defineProvider({
     id: `opencode-${product}`, label: product === 'go' ? 'OpenCode Go' : 'OpenCode Zen', contractVersion: '1',
+    support: { status: 'standard' },
     identity: service => serviceIdentity({ product: `opencode-${product}`, service: service.options }),
     modelContracts: modelContracts(openCodeProtocols),
     describeModel: ({ service, model, profile }) => executionTraits({ family: model.protocol === 'anthropic-messages' ? 'anthropic' : model.protocol === 'google-generate-content' ? 'google' : model.protocol === 'openai-chat' ? 'openai-compatible' : 'openai', service: service.options, parameters: profile.parameters, model }),

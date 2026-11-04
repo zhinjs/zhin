@@ -43,6 +43,12 @@ async function makeImage(client: InferenceClient) {
 
 内置产品声明从 `@zhin.js/ai/providers` 导入；自定义 Driver 统一通过 `@zhin.js/ai/provider` 的 `defineProvider` 编写。插件在 setup 一次调用 `provideAiProviders(resources, definitions)` 注册，类型只增补唯一的 `@zhin.js/ai/provider` 接口。完整合同、账户配置和升级见 [Provider 文档](../../../docs/ai/providers.md) 与 [升级说明](../../../docs/ai/provider-upgrade.md)。
 
+### 订阅集成与支持信息
+
+Claude 订阅与 Antigravity：实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担。Codex：未经 OpenAI 对第三方客户端的明确授权。OpenCode Go 与 OpenCode Zen 分别使用各产品的 API Key；套餐、模型和适用场景应按各自产品条款核对，不能套用 Free 产品的条件。Anthropic API Key 与 Claude 订阅、Gemini API Key 与 Antigravity 是独立服务及认证身份。
+
+Driver 可通过 `support?: ProviderSupportMetadata` 声明 `status: 'standard' | 'experimental'` 和可选纯文本 `notice`。Host 按已持有声明的 owner、id、contractVersion 精确投影到管理视图；缺少声明不推断为常规或官方支持。Console 只为实验集成显示短标识，必要提示放在选中详情或登录流程。支持信息不决定账号就绪、权限、注册或请求行为，也不进入模型图和请求上下文。
+
 ### agentLoop（回合引擎）
 
 `agentLoop` 继续负责唯一的工具执行循环。它消费一个已绑定模型的 `LlmCompletionPort` 与模型元数据，既不读取 Host 凭据，也不重新解析 Provider 目录。Zhin 主回合、子任务与定时任务通过当前操作的 ModelExecutionScope 提供这两项。

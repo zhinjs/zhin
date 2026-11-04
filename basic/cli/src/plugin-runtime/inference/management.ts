@@ -19,6 +19,7 @@ import {
   type ProviderService,
   type PurposePolicy,
   type ProviderSchema,
+  type ProviderSupportMetadata,
   normalizeProviderJson,
 } from '@zhin.js/ai/provider';
 import { createHostDocumentCipher } from '../host-credential-storage.js';
@@ -82,6 +83,7 @@ export interface InferenceDriverView {
   readonly contractVersion: string;
   readonly label: string;
   readonly source?: string;
+  readonly support?: ProviderSupportMetadata;
   readonly authentication: readonly AuthenticationMethod[];
   readonly serviceSchema?: Readonly<Record<string, unknown>>;
   readonly modelContracts: readonly Readonly<{
@@ -105,6 +107,7 @@ export interface InferenceManagementView {
     accountId: string;
     accountIncarnation: string;
     definition: ModelDefinition;
+    support?: ProviderSupportMetadata;
   }>[];
   readonly drivers: readonly InferenceDriverView[];
   readonly purposes?: PurposePolicy;
@@ -199,18 +202,26 @@ export class InferenceManagementService {
       graph,
       accounts: Object.values(accounts),
     });
+    const drivers = this.options.drivers();
     // Host Profiles are consumable, but their account configuration and authentication state are not personal management data.
     const deployment = Object.values(graph.profiles)
       .filter((profile) => profile.ownerId === this.options.hostOwnerId)
-      .map((profile) => ({
-        id: profile.id,
-        label: profile.label,
-        model: profile.model,
-        accountId: profile.accountId,
-        accountIncarnation: graph.accounts[profile.accountId].incarnation,
-        definition:
-          graph.services[graph.accounts[profile.accountId].serviceId].models[profile.model],
-      }));
+      .map((profile) => {
+        const account = graph.accounts[profile.accountId];
+        const service = graph.services[account.serviceId];
+        const driver = drivers.find((candidate) =>
+          candidate.id === service.driver.id && candidate.owner === service.driver.owner
+          && candidate.contractVersion === service.driver.contractVersion);
+        return {
+          id: profile.id,
+          label: profile.label,
+          model: profile.model,
+          accountId: profile.accountId,
+          accountIncarnation: account.incarnation,
+          definition: service.models[profile.model],
+          ...(driver?.support ? { support: driver.support } : {}),
+        };
+      });
     return {
       rootId: graph.rootId,
       revision: graph.revision,
@@ -221,7 +232,7 @@ export class InferenceManagementService {
       profiles,
       statuses,
       deployment,
-      drivers: this.options.drivers(),
+      drivers,
       ...(principal.hostAdministrator ? { purposes: graph.purposes } : {}),
     };
   }
