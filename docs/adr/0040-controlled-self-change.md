@@ -6,7 +6,7 @@ sidebar: false
 
 状态：Accepted（2026-11-03，Fin 确认默认值，见文末「Fin 已确认的默认值」）
 
-实现：MVP 切片 A–E2 已合入 main（[#1058](https://github.com/zhinjs/zhin/pull/1058) / [#1062](https://github.com/zhinjs/zhin/pull/1062) / [#1064](https://github.com/zhinjs/zhin/pull/1064) / [#1069](https://github.com/zhinjs/zhin/pull/1069) / [#1071](https://github.com/zhinjs/zhin/pull/1071) / [#1072](https://github.com/zhinjs/zhin/pull/1072) / [#1075](https://github.com/zhinjs/zhin/pull/1075) / [#1076](https://github.com/zhinjs/zhin/pull/1076)）；#1051 收口切片 F1 / F2 / F4 / F5 已合入（[#1136](https://github.com/zhinjs/zhin/pull/1136) / [#1131](https://github.com/zhinjs/zhin/pull/1131) / [#1137](https://github.com/zhinjs/zhin/pull/1137) / [#1138](https://github.com/zhinjs/zhin/pull/1138)），F6 为本文与用户文档收口；**F3（Console 详情 / diff 页与 IM 卡 diff 摘录）延后**，不在本 ADR 已交付范围内（见 §8a）。用户向说明见[让 Bot 改自己](../ai/self-change.md)，运行时细节见[默认行为规范](../ai/default-behavior.md)。
+实现：MVP 切片 A–E2 已合入 main（[#1058](https://github.com/zhinjs/zhin/pull/1058) / [#1062](https://github.com/zhinjs/zhin/pull/1062) / [#1064](https://github.com/zhinjs/zhin/pull/1064) / [#1069](https://github.com/zhinjs/zhin/pull/1069) / [#1071](https://github.com/zhinjs/zhin/pull/1071) / [#1072](https://github.com/zhinjs/zhin/pull/1072) / [#1075](https://github.com/zhinjs/zhin/pull/1075) / [#1076](https://github.com/zhinjs/zhin/pull/1076)）；#1051 收口切片 F1 / F2 / F4 / F5 已合入（[#1136](https://github.com/zhinjs/zhin/pull/1136) / [#1131](https://github.com/zhinjs/zhin/pull/1131) / [#1137](https://github.com/zhinjs/zhin/pull/1137) / [#1138](https://github.com/zhinjs/zhin/pull/1138)），F6 为本文与用户文档收口；F3（Console 详情 / diff 页与 IM 卡 diff 摘录）按 [#1142](https://github.com/zhinjs/zhin/issues/1142) 交付（见 §8a）。用户向说明见[让 Bot 改自己](../ai/self-change.md)，运行时细节见[默认行为规范](../ai/default-behavior.md)。
 
 关联：[#1051](https://github.com/zhinjs/zhin/issues/1051)（Phase 2C 实现轨）、[#1030](https://github.com/zhinjs/zhin/issues/1030)（产品拍板与 P0 / MVP 方案定稿）。建立在 #1030 P0 之上：宿主配置与硬闸路径未批不可写（[#1041](https://github.com/zhinjs/zhin/pull/1041) / [#1048](https://github.com/zhinjs/zhin/pull/1048)，隔离 shell 只读挂载见 P0-c）；审批复用 ADR 0036 硬闸与 G6 IM 审批通道（[#1021](https://github.com/zhinjs/zhin/pull/1021)）。
 
@@ -145,7 +145,7 @@ A → B → C → D → E 依次依赖（以下为当时的计划，均已完成
 |---|---|---|
 | F1 | 本地插件根接线（起草 / 试跑 / 生效共用）；`restartSupported`：无守护进程或 `--once` 时 `process` 变更不提交审批，生效中途需重启则回滚 | 已合入 [#1136](https://github.com/zhinjs/zhin/pull/1136) |
 | F2 | 禁改配置键补全：schema `x-zhin-config.security` 标记 + `SELF_CHANGE_SECURITY_CONFIG_KEYS` + 守卫单测；生效前复核 | 已合入 [#1131](https://github.com/zhinjs/zhin/pull/1131) |
-| F3 | 审批可见性：Console 详情 RPC 与「自我变更」页（完整 diff）、IM 卡 diff 摘录 | **延后**（Q7=A 方向已定，未实现；按 Q9=A 不阻塞关闭 #1051，如需另开 issue） |
+| F3 | 审批可见性：Console 详情 RPC `plugin.root.self-change-detail`（仅 `ops:approve`；逐文件 unified diff，全部文件合计 ≤ 64 KB，用完后其余文件标「未展示」；配置值脱敏、完整试跑检查）与 Console「自我变更」页、IM 卡 diff 摘录（≤ 40 行 / 2 KB + 盲批提示）与 skipped 检查名 | 已交付，[#1142](https://github.com/zhinjs/zhin/issues/1142)（Host RPC 与 IM 卡在本仓库；Console 页面随 `zhinjs/console` 配套 PR 发布） |
 | F4 | 起草权限（主人 + IM 审批人，其他人工具不可见）、全实例待审 ≤ 3 | 已合入 [#1137](https://github.com/zhinjs/zhin/pull/1137) |
 | F5 | Q2=B 残留 `approved` 1 小时时限（`resumeApproved`）；脚本化 harness eval（`packages/im/agent/evals/cases/self-change-*.case.ts`，6 例）与 `basic/cli` e2e（假守护进程 exit 75 → recover、回滚、急停、中途被杀、残留 `approved`） | 已合入 [#1138](https://github.com/zhinjs/zhin/pull/1138) |
 | F6 | ADR 转 Accepted、默认值表、默认行为规范与用户文档 | 本次 |
@@ -173,12 +173,12 @@ A → B → C → D → E 依次依赖（以下为当时的计划，均已完成
 | Q1 | 生效与恢复 | 健康检查窗口 60 秒；只自动回滚一次，之后急停；`content_hash` 不符 → `failed` 且不急停、不动文件；`applying` 中途被杀一律按快照回滚；急停回报不受控制面拦截，回报不可达改投主人私聊 | 切片 E1 / E2 |
 | Q2 | 启动时残留的 `approved` | **B**：批准后 1 小时内的自动生效；更早的转 `expired`、不动文件，并私聊主人「批准已过期，请重新起草」 | F5（`SelfChangeApplier.resumeApproved`，#1138） |
 | Q3 | 谁能起草 | **B**：只有主人，以及 `toolHardGate.imApproval` 开启时 `approverIds` 中属于当前平台的人；其他人工具不可见，调用即拒（`change_draft_forbidden`）；另加全实例待审 ≤ 3 | F4 |
-| Q4 | 试跑 `skipped` | **A**：不阻断；审批卡的试跑结论标出被跳过的检查（当前为「通过 (N skipped)」计数，逐项结论在 `change.json` 的 `trial`） | 切片 C / D |
+| Q4 | 试跑 `skipped` | **A**：不阻断；审批卡的试跑结论标出被跳过的检查（「通过 (N skipped)；跳过：<检查> <路径>…」，逐项结论在 `change.json` 的 `trial` 与 Console 详情） | 切片 C / D、F3 |
 | Q5 | 禁改配置键 | **B**：首批安全键全部纳入，经 schema `x-zhin-config.security` 标记 + 守卫单测维护 | F2 |
 | Q6 | 无守护进程时的 `process` 变更 | **A**：不提交审批，告知本实例无法自动生效（`change_restart_unavailable`） | F1 |
-| Q7 | 审批可见性 | **A**：Console 详情页看完整 diff + IM 卡 ≤ 40 行摘录——**F3 延后，尚未实现**；目前卡片只含路径、增删行数、配置路径、影响面与试跑结论 | F3（延后） |
+| Q7 | 审批可见性 | **A**：Console 详情页看完整 diff + IM 卡 ≤ 40 行摘录 | F3（#1142） |
 | Q8 | 「发布另一步」 | **A**：试跑通过 → 一次人批 → 写入生产即发布，不设第二道审批；新建本地插件包（新 `package.json` + 入口）不在本期 | — |
-| Q9 | 何时关 #1051 | **A**：F1 + F2 + F4 + F5 合入并完成本文档收口（F6）后关闭；F3 如需另开 issue | F6 |
+| Q9 | 何时关 #1051 | **A**：F1 + F2 + F4 + F5 合入并完成本文档收口（F6）后关闭；F3 已另开 [#1142](https://github.com/zhinjs/zhin/issues/1142) 交付 | F6 |
 
 可写范围（插件约定目录 + 根 `AGENTS.md` + `skills/**`，根配置只能走字段级 `configPatch`）与「业务群发起改投主人私聊」按上文 §1 / §4 维持不变。
 
@@ -189,7 +189,7 @@ A → B → C → D → E 依次依赖（以下为当时的计划，均已完成
 - 修改 zhin 框架自身（`node_modules` 里的包、`packages/**` 源码）。
 - 多个变更的批量 / 事务合并；跨实例下发。
 - 变更的可视化编辑器。
-- 新建本地插件包（Q8）；Console 详情 / diff 审批页（F3，延后，非永久非目标）。
+- 新建本地插件包（Q8）。
 
 ## 结果
 

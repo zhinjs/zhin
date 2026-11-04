@@ -1,4 +1,4 @@
-import { createEndpointRoleResolver, createSenderEnricher } from './sender-enrichment.js';
+import { createConfigurationChatAuthorizer, createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from './sender-enrichment.js';
 export { createEndpointRoleResolver } from './sender-enrichment.js';
 import { migrateConversationColumns, migrateInboxColumns } from './conversation-migration.js';
 import type { StructuredDatabase } from '@zhin.js/database';
@@ -57,6 +57,7 @@ import {
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
 import { installLocaleHost } from './locale-host-installer.js';
+import { installConfigurationHost } from './configuration-host-installer.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installComponentHost } from './component-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
@@ -196,6 +197,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const consoleConfigurationStore = new ConsoleConfigurationStore({
     projectRoot: options.root,
     document: config,
+    validateConfiguration: document => host.runtime.validateConfiguration(document),
+    applyConfiguration: revision => host.runtime.applyConfiguration(revision),
+    readApplication: () => host.runtime.configurationApplication,
     environmentName: runtimeEnvironment.name,
     environmentForPlugin: instanceKey => {
       const lease = host.runtime.snapshots.acquire();
@@ -209,6 +213,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       return host.runtime.configurationSchemas;
     },
   });
+  const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
   // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / exit 75 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
   const selfChangeApply = new HostSelfChangeApply({
     projectRoot: options.root,
@@ -224,7 +229,8 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     projectRoot: options.root,
     config,
     modules: consoleHost.modules,
-    watch: !parsed.once && !parsed.noWatch,
+    watch: parsed.once ? [] : parsed.watch,
+    pluginConfigurationSelection: createEndpointRoleConfigurationSelection(hostConfig, endpointRoles),
     onGenerationCommit: (generation) => {
       consoleEventHub.publish('hmr:reload', { generation });
     },
@@ -243,6 +249,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
         context.resources.provide(endpointDesiredRepositoryToken, endpointRepository);
       }
       installLocaleHost(databaseHost)(context);
+      installConfigurationHost({ store: consoleConfigurationStore, authorize: authorizeConfigurationChat })(context);
       context.handoff.add({
         activateNext: async (signal) => {
           signal.throwIfAborted();

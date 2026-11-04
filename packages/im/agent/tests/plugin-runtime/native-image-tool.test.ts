@@ -74,4 +74,27 @@ describe('native image ToolFeature', () => {
       expect(fixture.generateImage).toHaveBeenCalledOnce(); expect(publish).toHaveBeenCalledOnce();
     } finally { await fixture.client.close(); }
   });
+
+  it.each(['success', 'generation-failed', 'upload-failed'] as const)(
+    'keeps the caller-owned operation available through publication and after %s', async outcome => {
+      const fixture = await setup();
+      const publish = vi.fn(async () => {
+        await expect(fixture.client.list({ kind: 'image' })).resolves.toHaveLength(1);
+        if (outcome === 'upload-failed') throw new Error('synthetic upload failure');
+        return { image: 'published', mime: 'image/png' };
+      });
+      if (outcome === 'generation-failed') fixture.generateImage.mockRejectedValueOnce(new Error('synthetic generation failure'));
+      try {
+        const feature = createNativeImageToolFeature({ resolveInference: () => fixture.client,
+          imageAssets: { publish, ownsUrl: () => false } });
+        const pending = feature.definition.execute({ prompt: 'a tree' }, context);
+        if (outcome === 'success') await expect(pending).resolves.toContain('published');
+        else await expect(pending).rejects.toThrow(outcome === 'generation-failed' ? 'synthetic generation failure' : 'Do not regenerate automatically');
+        expect(fixture.generateImage).toHaveBeenCalledOnce();
+        expect(publish).toHaveBeenCalledTimes(outcome === 'generation-failed' ? 0 : 1);
+        await expect(fixture.client.list({ kind: 'image' })).resolves.toHaveLength(1);
+      } finally { await fixture.client.close(); }
+      await expect(fixture.client.list({ kind: 'image' })).rejects.toMatchObject({ code: 'operation-closed' });
+    },
+  );
 });

@@ -20,6 +20,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 | 设置 master、命令前缀 | [适配器实例](#适配器实例-master-trusted-commandprefix) |
 | 配置 AI 模型 | [ai](#ai)，或直接看 [AI 总览](../ai/index.md) |
 | 引用 `.env` 里的密钥 | [环境变量展开](#环境变量展开) |
+| 修改配置后按需生效 | [修改后如何生效](#修改后如何生效) |
 | 看一份完整的最小配置 | [最小配置](#最小配置) |
 
 ## 配置文件的位置
@@ -66,6 +67,64 @@ flowchart LR
 配置文件会经过 JSON Schema 校验，**顶层只允许下文列出的键**。键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`。
 
 Host 键由 CLI 装配层消费；每个插件只收到顶层同名块的业务值，不会收到其他实例的配置。
+
+## 修改后如何生效
+
+`zhin runtime start` **只有显式传入 `--watch` 才监听变化**。不传时，编辑文件不会自动应用；已有开发脚本若需要热更新，应显式选择范围：
+
+```bash
+npx zhin runtime start --watch source config  # 源码与配置
+npx zhin runtime start --watch config         # 仅配置
+npx zhin runtime start --watch source         # 仅源码
+npx zhin runtime start --mode production      # 均不监听
+```
+
+`--no-watch` 保留为均不监听的兼容入口，不能与 `--watch` 同用。源码监听不代替配置监听；源码重载也不会顺带应用尚待重启的配置。
+
+**保存成功不等于全部生效。** Console 配置表单保存后会请求应用，并分别显示文件修订与各项生效结果。关闭监听时，仍可在新版 Console 的运行生效状态面板点击“应用已保存配置”：它只应用当前已保存版本，不保存未提交的表单草稿，也不重启进程。旧 Host 未提供生效明细时，Console 会明确提示无法确认。
+
+| 修改内容 | 生效边界 |
+| --- | --- |
+| 仅修改已声明资料原地更新能力的适配器的 `nickname` / `profile` 配置兜底 | 新资料读取使用新兜底，保留连接；不调用平台资料写入。已观察到的平台昵称仍优先 |
+| 在模型管理中修改 Profile／用途选择 | 领域事务独立持久化，下一操作读取新图；在途操作保持原图、模型与租约，不属于文件应用分组 |
+| HTTP 监听、数据库连接、`.env` 输入、YAML 中的账号角色等启动依赖 | 未支持安全替换的部分显示待进程重启，当前继续使用旧值 |
+| 其他插件配置 | 沿所属插件的现有局部重载；未声明更新能力不视为原地更新 |
+
+同次文件保存可以部分生效。例如同时修改账号兜底昵称和 HTTP 端口，昵称在满足条件时生效，端口仍待重启。模型图更新有独立的领域修订和提交回执，文件保存／应用不修改模型图、凭据或个人绑定。完整候选配置校验失败时保留当前运行。失败、结果未确认和被较新修订替代分别显示；结果未确认时先只读刷新核对，不重复提交。
+
+Agent 安装、角色权限和其他未声明可替换的启动依赖保留待重启边界。Profile 的模型／参数修改下一回合生效；旧选择不因同名资源删除重建而继承账号身份。插件推理通过本次 operation 的 InferenceClient 取得，不能长期保存 SDK/provider 实例。
+
+### 在聊天中管理配置
+
+安装根 Command Feature 后，Bot 主人可以在与 Bot 的**私聊**中使用 `config`（中文别名 `配置`）查看用法。子命令只有四个：
+
+- `config fields [范围]`：列出聊天可管理的字段路径和类型，不含值；
+- `config get <路径>`：读取一个字段的当前保存值；
+- `config set <路径> <值>`：修改一个字段；
+- `config unset <路径>`：删除一个可选字段。
+
+提示会自动带上当前账号的实际命令前缀和 namespace，无需 AI Agent。
+
+**谁能用**：只有接收这条私聊的同一适配器（同一平台实例）下，任一已配置账号（端点）的 `master`（账号级 `master`，未设置时继承插件级 `master`）才能使用；这样主人身份与消息始终来自同一适配器/平台。其他适配器（包括同一适配器包的另一个插件实例）的主人不能使用。`ai.trigger.masters` 不带平台信息，首版不作为聊天配置的授权依据。群聊、频道和伪造的 metadata 都不能进入保存流程。
+
+**入口按适配器，字段范围按项目**：授权（入口）只看接收消息的同一适配器实例上的主人；一旦通过，可管理的字段范围是**整个项目**中所有聊天安全的叶子字段加上 Host 白名单 `HOST_CONFIG_PATCH_PATHS`，并不局限于授权适配器所属的插件——即任一合法主人可管理全局的聊天安全字段（包括其他插件的字段）。若不希望某个主人改动其他插件，请勿在聊天中授予其主人身份，或改用 CLI/Console 管理。
+
+**能改什么**：
+
+- Host 段只开放与 Console 普通页面相同的白名单（`HOST_CONFIG_PATCH_PATHS`，目前只有 `ai.trigger.ambient` 下的字段）；`locale`、`http`、`database` 等其余 Host 配置请用 CLI 或 Console。
+- 插件段需要 Schema 能证明安全：密钥、token、密码等敏感字段、缺少 Schema 或无法判断范围的字段一律拒绝。
+- 主人、信任名单、审批与工具门槛等权限字段（如 `master`、`trusted`、`endpoints[*].master`、`ai.trigger.masters`、`toolHardGate.*`）不能通过聊天读写。按包含/前后缀匹配，复合名同样拒绝，例如 `adminIds`、`ownerId`、`masterId`、`trustedUsers`、`superUsers`、`whitelist`/`allowlist`/`blacklist`、`bypassMasters`（如 content-moderation 的 `inbound.whitelist.userIds`、`inbound.bypassMasters`）；该规则偏保守，名称中含这些词的普通字段（如 `masterVolume`）也请用 CLI 修改。
+- `endpoints[*].id` / `endpoints[*].name` 用于绑定账号级主人与信任名单，属于间接的权限变更，不能通过聊天修改；`set`/`unset` 只能作用于 `config fields <根>` 列出的字段。
+- `set` 的新值不能包含 `${…}` 或 `env://` 环境变量引用（无论变量名是否像密钥），以免之后读取或回显时泄露环境值；已有引用不受其他操作影响。
+- 只能读写**单个叶子字段**（标量或标量数组），不能整体覆盖或删除对象；必填字段不能 `unset`。`configVersion`、`plugins`、`disable_plugins`、根 `plugin` 和未声明实例同样不能修改。
+
+路径可写 `mybot.nickname`，也可写 JSON Pointer，例如 `/mybot/dot.key`（`~1` 表示 `/`，`~0` 表示 `~`）。值按字段类型解析：数字、布尔和数组用 JSON 写法；字符串字段可以直接写文本，例如 `config set mybot.nickname -- 小智`（这里省略实际前缀）。不接受对象值。
+
+保存沿用上文的完整候选校验和按组应用。保存前失败会明确提示未保存；提交确认丢失时提示结果未确认，请勿重复发送，先用 `get` 核对，指令层不会自动重试或回滚。拒绝回执只给原因，不回显任何值、默认值或原始异常。
+
+### 文件与数据库记录各管什么
+
+`zhin.config.yml` 继续保存部署声明，Console 配置表单仍写回该文件，不会把整份配置迁入数据库。受管 Endpoint desired 记录、模型 Service／Account／Profile／用途与个人会话选择分别由所属领域数据库/API 管理；文件热更新不覆盖显式领域记录，也不清空个人选择。YAML 中的账号种子不会改写已经存在的受管账号记录；适配器资料默认值仍能作用于继承它的账号。
 
 ## 环境变量展开
 
@@ -128,7 +187,7 @@ npx zhin config check
 
 `setup` 会把非敏感结构写入 `zhin.config.yml`，把实际连接值写入项目根目录 `.env`。Runtime
 先读取 `.env`，再用所选环境的 `.env.<environment>` 覆盖同名变量；例如生产启动使用
-`zhin runtime start --mode production --no-watch` 默认读取 `.env.production`；显式传入
+`zhin runtime start --mode production` 默认读取 `.env.production`；显式传入
 `--environment <name>` 可选择其他环境覆盖层。
 
 ### SQLite
@@ -247,66 +306,33 @@ transport binding（A2A 扩展，已冻结并移出 `@zhin.js/workroom` 包根�
 
 ## ai
 
-`ai` 段由 Agent Host 消费。只要配置了 `ai` / `assistant` 任一段，启动图就会加载 Agent 栈；缺凭据的 provider 会被 soft-prune，不阻断启动。
+`ai` 只保存 Agent 启动行为与工具权限。模型资源由 Console 的模型管理或显式 plan 导入维护，持久化到 inference 数据库；空模型图仍可启动管理界面，缺少所需 Profile 时推理明确报未配置。
 
-### providers：命名模型服务商
+### providers：模型资源改由运行时管理
 
-```yaml
-ai:
-  providers:
-    deepseek:
-      sdk: deepseek                  # 必填
-      apiKey: ${DEEP_SEEK_API_KEY}
-    openrouter:
-      sdk: openai-compatible
-      baseUrl: ${OPENROUTER_BASE_URL}
-      apiKey: ${OPENROUTER_API_KEY}
-      contextWindow: 32768
-      models:                        # 可用模型白名单
-        - "openrouter/free"
-    ollama-local:
-      sdk: ollama
-      host: http://127.0.0.1:11434   # ollama 用 host 而非 baseUrl
-    cloudflare:
-      sdk: openai-compatible
-      apiKey: ${CLOUDFLARE_API_TOKEN}
-      accountId: ${CLOUDFLARE_ACCOUNT_ID}
-```
+启动文件不再接受 `ai.providers`、`modelCatalog`、`modelPolicy`、`decisions` 或 Agent 的 `provider/model/preset` 选择器。Service 描述服务协议，Account 保存认证方式与私有凭据引用，Profile 选择模型与参数；chat、summary、ambient、image、perception 和决策用途引用 Profile。个人 Session 可单独选择已授权的语言 Profile。
 
-| 字段 | 说明 |
-| --- | --- |
-| `sdk` | 必填，七种之一：`openai`、`anthropic`、`google`、`deepseek`、`minimax`、`ollama`、`openai-compatible` |
-| `apiKey` / `baseUrl` / `host` | 凭据与接入点；`ollama` 用 `host`，Cloudflare 另需 `accountId` |
-| `models` | 显式模型列表 |
-| `defaultModel`、`contextWindow`、`timeout`、`maxRetries`、`firstChunkTimeoutMs`、`chunkTimeoutMs`、`headers` | 行为微调（见 [AI 文档](../ai/index.md)） |
-| `authScheme` | Authorization 头方案；不写用 SDK 默认，`''` 只发 key，`Bearer` / `Token` 发 `<scheme> <key>` |
-| `imageGeneration` | 文生图默认（支持该能力的 driver，如 `defaultModel`、`defaultSize`、`watermarkEnabled`、`promptSuffix`） |
+`ai.plan.yml` 是显式 review/apply/export 的输入，不是启动种子，也不放在 `zhin.config.yml` 的 `ai.plan` 下。升级步骤、备份和恢复边界见[模型接口升级](../ai/provider-upgrade.md)。
 
-provider 别名可任意命名；未显式写 `sdk` 时会按别名前缀推断（如 `deepseek-main` → `deepseek`），推断不出则回退 `openai-compatible`。对应 `@ai-sdk/*` 包是 optional peer，按所用 sdk 自行安装。
-
-### agents：绑定模型与角色
+### agents：角色与工具权限
 
 ```yaml
 ai:
+  enabled: true
   agents:
-    zhin:                            # 主 Agent，默认入口
-      provider: openrouter           # 引用 providers 的别名
-      model: openrouter/free
+    zhin:
       mcpServers: [icqq]             # 引用 ai.mcpServers 的 name
     researcher:
-      provider: openrouter
-      model: openrouter/free
-      nickname: '搜搜'               # Agent 自称与界面展示名
+      nickname: '搜搜'               # 任务角色显示名；IM 资料优先取当前 Endpoint
 ```
 
 | 字段 | 说明 |
 | --- | --- |
-| `provider` / `model` | 必填，绑定的 provider 别名与模型 |
-| `nickname` | Agent 自称与界面展示名 |
+| `nickname` | 任务角色显示名；当前账号资料仍由 Endpoint 提供 |
 | `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
 | `permission.task` | `spawn_task` 可见子 Agent 类型（glob → `allow` / `deny`） |
 
-IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除，详见 [ai.agents](../ai/index.md#ai-agents)。
+模型角色绑定在运行时用途配置中管理。IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除。
 
 ### mcpServers：外部 MCP Server
 
@@ -372,7 +398,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` 管理多模态入出站；主模型不能看图时可用 `ai.multimodal.perception` 让另一个模型先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
+`ai.multimodal` 管理多模态入出站；主模型不能看图时可用 模型管理中的 perception 用途让另一个 Profile 先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
 
 远程 Agent 不再通过 `ai.remoteAgents` 旁路接入。可选 A2A Executor 只通过持久 Workroom Catalog 和 generation-owned authority 接入，并服从 Assignment lease/fence 与 Journal 契约。
 

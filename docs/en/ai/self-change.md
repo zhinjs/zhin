@@ -19,7 +19,7 @@ Design and defaults: [ADR 0040](../../adr/0040-controlled-self-change.md) (Chine
 
 1. **Draft**: the bot hands complete file contents and a field-level config patch to the host, which stages them in `.zhin/changes/`. Nothing in production is touched and nothing takes effect yet.
 2. **Trial** (next section): if it fails, no card is sent; the bot gets the errors and drafts again.
-3. **Approval**: the card **always** goes to the owner's DM — even if you asked in a business group, and saying "OK" in a business group does not count. It lists the files, lines added / removed, config paths touched, whether a reload or a restart is needed, and the trial verdict. Reply `/approve <card id>` or `/deny <card id>` in the DM, or settle it through the Console approval RPCs. Unanswered cards expire after 24 hours.
+3. **Approval**: the card **always** goes to the owner's DM — even if you asked in a business group, and saying "OK" in a business group does not count. It lists the files, lines added / removed, config paths touched, whether a reload or a restart is needed, a bounded diff excerpt (at most 40 lines / 2 KB; when cut it says the full content is in the Console), and the trial verdict including the names of skipped checks. If you have not seen the full content, open the Console "self-change" page before approving — do not approve blind. Reply `/approve <card id>` or `/deny <card id>` in the DM, or settle it through the Console approval RPCs. Unanswered cards expire after 24 hours.
 4. **Apply**: plugin-only changes hot reload; changes that need a restart (for example host sections such as `http` or `database`) trigger a controlled restart followed by a health check.
 5. **Report**: back in the original conversation ("applied", noting a restart if one happened); if that conversation is unreachable (group gone, bot removed or muted) the report goes to the owner's DM.
 
@@ -33,7 +33,7 @@ Code the bot writes never goes straight into production. Before the card is sent
 - **Sandbox load**: assembles the drafted plugin in a throwaway child process with no real platform and no model, and checks that its commands / tools are discovered;
 - **The plugin's own tests**: in an isolated, offline, read-only, resource-limited container.
 
-When the machine cannot run a check (no Docker, the plugin has no tests, …) it is recorded as skipped: this **does not block** submission, but the card's trial verdict shows how many checks were skipped (e.g. "passed (2 skipped)"). Look twice before approving such a card.
+When the machine cannot run a check (no Docker, the plugin has no tests, …) it is recorded as skipped: this **does not block** submission, but the card's trial verdict shows how many checks were skipped and names them (e.g. "passed (2 skipped); skipped: sandbox_load commands/ping.ts, …"). Look twice before approving such a card.
 
 Trial passed, one human approval, written to the production directories — that is "publishing". There is no second approval.
 
@@ -41,7 +41,12 @@ Trial passed, one human approval, written to the production directories — that
 
 - Health check fails after apply: the bot **rolls back once** from its snapshot and reports "failed, rolled back" with the reason.
 - Still unhealthy after the rollback: an instance-level **emergency stop** opens, only the owner's DM is told, and there are **no more automatic restarts** until you deal with it (the evidence is kept until you mark it handled in the Console).
-- Process killed mid-apply: the next start rolls back from the snapshot, checks health and reports as usual.
+- A configuration save/application is unconfirmed, or a newer revision has replaced it: the flow stops and keeps evidence for manual verification. It does not retry the operation or overwrite another edit. Here, `failed` means the flow stopped, not that the configuration is known to be unapplied. This outcome does not enable emergency stop by itself.
+- During recovery, the bot checks the last durably acknowledged revision. If it cannot prove ownership, it keeps the older records for manual verification.
+- Upgrading from a build before #1146: an `applying` / `verifying` record that carries a configuration patch but no durably acknowledged revision (`configRevision`) cannot prove ownership. Recovery does not continue, restore, reload or restart it; the record becomes `failed` with evidence kept for manual verification.
+- A configuration receipt that reports a group as `restart-pending` while the save says no restart is required is inconsistent and is treated as unconfirmed (stop and verify manually), not as a pending restart.
+- Record status vs. decision outcome: for `change_config_unconfirmed` and `change_config_superseded` the change record ends as `failed` (automatic continuation stopped, manual verification required), while the matching decision event keeps outcome `defer` — the result is not known to be an error or a denial, it is waiting on a human.
+- Process killed mid-apply: the next start checks durable progress and configuration ownership. Confirmed operations retain snapshot rollback and health checks; unconfirmed writes or applications retain evidence for manual verification.
 - Process exited right after approval: on the next start, approvals younger than one hour are applied; older ones expire and the owner gets "approval expired, please draft again".
 
 ## Automatic restarts need the supervisor
@@ -54,6 +59,8 @@ Automatic restarts rely on the `zhin start` supervisor. Without it (running the 
 - The bot may only write plugin convention directories (`commands/`, `middlewares/`, `handlers/`, `tools/`, `components/`, `skills/`, `agents/`, in the project root or a local plugin inside the project), the root `AGENTS.md` and `skills/**`; root config can only be patched field by field, never overwritten as a file.
 - Never writable: `node_modules`, lockfiles, `.env*`, `.zhin/` and other host files.
 
+The configuration allowlist is unchanged: the self-change tool can directly patch only `ai.trigger.ambient` within Host settings, and the default CLI still marks it pending restart. Model provider/model fields are outside this tool's Host allowlist. A trusted Host receipt confirming every pure configuration change applied avoids a redundant restart; approval and the pre-write supervisor gate remain unchanged.
+
 ## Config the bot cannot change
 
 Any setting that would loosen security or widen the tool surface is refused at draft time — no card is sent. For example:
@@ -63,8 +70,12 @@ Any setting that would loosen security or widen the tool surface is refused at d
 
 The full list is in [Default Behavior](./default-behavior.md#dangerous-tool-hard-gate). Edit these in the config file yourself.
 
+## Reviewing the full diff before approving
+
+- **Console "self-change" page** (ships with the `zhinjs/console` release; the Host RPCs it uses are in this version): lists pending and recent changes; the detail view (needs `ops:approve`) shows a unified diff per file (the baseline is the current production file, or the rollback snapshot once applying started; at most 64 KB combined across all files, cut by line and marked; later files are marked as not shown), the redacted config patch, every trial check (skipped ones highlighted) and staging usage. You can approve / reject there, and mark an emergency-stopped change as handled. Once a change ends its bodies are cleaned up under the staging retention rules and the detail says so rather than inventing a diff.
+- **IM approval card**: carries a bounded excerpt only and never config values; the excerpt is not the full content (#1142).
+
 ## Not supported yet
 
 - **Creating a new plugin package** (a new `plugins/<name>/package.json` and entry) and **installing npm dependencies**: out of scope for now — install dependencies and create the plugin yourself, then ask the bot to add commands to it.
-- **Reviewing the full code diff before approving**: the Console "self-change" detail page and diff excerpts on the IM card (#1051 F3) are **not available yet**. Today the card carries files, line counts, config paths, impact and the trial verdict — no file bodies or config values.
 - Changing the zhin framework itself, approving several changes together, pushing changes across instances, a visual editor.

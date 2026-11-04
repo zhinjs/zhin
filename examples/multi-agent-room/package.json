@@ -5,7 +5,7 @@
   "description": "3 Bot 同群协作示例（Room 核心端到端验收）",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start",
+    "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch",
     "build": "tsc --noEmit",
     "test": "vitest run"

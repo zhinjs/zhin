@@ -214,7 +214,7 @@ packages:
 ```json
 {
   "scripts": {
-    "dev": "zhin runtime start",
+    "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch",
     "build": "tsc --noEmit"
   }

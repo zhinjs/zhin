@@ -20,6 +20,7 @@ This is the complete reference for `zhin.config.yml`. When configuring for the f
 | Set masters or the command prefix | [Adapter instances](#adapter-instances-master-trusted-commandprefix) |
 | Configure AI models | [ai](#ai), or the [AI overview](../ai/index.md) |
 | Reference secrets from `.env` | [Environment variable expansion](#environment-variable-expansion) |
+| Apply configuration changes selectively | [Applying configuration changes](#applying-configuration-changes) |
 | See a complete minimal config | [Minimal configuration](#minimal-configuration) |
 
 ## Where the config file lives
@@ -66,6 +67,64 @@ flowchart LR
 Configuration passes JSON Schema validation, and **only the keys listed below are allowed at the top level**. A misspelled key produces `Invalid Plugin config in zhin.config.yml` at startup.
 
 Host sections are consumed by CLI assembly. Each plugin receives only its own same-named business block.
+
+## Applying configuration changes
+
+`zhin runtime start` **watches changes only when `--watch` is explicit**. Without it, editing a file does not apply it automatically. Development scripts that need watching should select their scopes:
+
+```bash
+npx zhin runtime start --watch source config  # Source and configuration
+npx zhin runtime start --watch config         # Configuration only
+npx zhin runtime start --watch source         # Source only
+npx zhin runtime start --mode production      # Neither
+```
+
+`--no-watch` remains a compatibility alias for watching neither and cannot be combined with `--watch`. Source watching does not enable configuration watching; a source reload does not pull in configuration that is still pending a restart.
+
+**A successful save does not mean every change is active.** Console configuration forms request application after saving and display the file revision separately from each application result. Even with watching disabled, the new Console's runtime status panel offers “Apply saved configuration”: it applies the saved revision, without saving an unsubmitted form draft or restarting the process. An older Host without application details is explicitly shown as unconfirmed.
+
+| Change | Application boundary |
+| --- | --- |
+| Only the configured `nickname` / `profile` fallback of an adapter declaring in-place profile updates | New profile reads use the new fallback while retaining the connection. No platform profile write is made; an observed platform nickname still takes precedence |
+| Profile or purpose selection in model management | A separate domain transaction persists the graph. New operations read it; in-flight operations retain their graph, model and leases. This is not a file-application group |
+| HTTP listeners, database connections, `.env` inputs, YAML account roles, and other startup dependencies | Parts without a safe replacement path remain pending a process restart and keep their old effective values |
+| Other plugin configuration | Uses the owning plugin's existing local reload path; an undeclared update capability does not imply an in-place update |
+
+A file save can apply partially. For example, an account nickname fallback may apply while an HTTP port change waits for restart. Model graph changes have separate domain revisions and mutation receipts; file save/apply does not mutate that graph, credentials or personal bindings. If the complete candidate fails validation, the current runtime is retained. Failure, an unconfirmed outcome, and supersession by a newer revision are distinct; refresh read-only to verify an unconfirmed outcome rather than submitting it again.
+
+Agent installation, role permissions and other startup dependencies without declared replacement support remain pending restart. Profile model/parameter edits apply to the next turn; deleting and recreating a resource does not transfer its old account identity. Plugins use the operation-bound InferenceClient instead of retaining SDK/provider instances.
+
+### Manage configuration in chat
+
+With the root Command Feature installed, a Bot owner can send `config` (Chinese alias `配置`) in a **private chat** with the Bot to see its usage. There are exactly four subcommands:
+
+- `config fields [scope]`: list chat-manageable field paths and types, without values;
+- `config get <path>`: read one field's saved value;
+- `config set <path> <value>`: change one field;
+- `config unset <path>`: remove one optional field.
+
+Hints use the account's actual command prefix and namespace. AI Agent is not required.
+
+**Who can use it**: only the `master` of any configured account (endpoint) on the same adapter that received the private message (the account-level `master`, otherwise the inherited plugin-level `master`), so owner identity always stays on the same adapter/platform. Masters of other adapters (including another plugin instance of the same adapter package) cannot use it. `ai.trigger.masters` has no platform dimension and is not accepted for chat configuration in v1. Groups, channels and forged metadata never reach the save path.
+
+**Entry is per adapter; field scope is project-wide**: authorization (entry) only considers masters on the same Adapter instance that received the message. Once authorized, the manageable field scope is **every chat-safe leaf in the project** plus the Host allowlist `HOST_CONFIG_PATCH_PATHS`; it is not limited to the authorizing adapter's own plugin, so any legitimate owner can manage chat-safe fields globally (including other plugins' fields). If an owner should not change other plugins, do not grant them master, or manage those settings with the CLI/Console.
+
+**What can change**:
+
+- Host config is limited to the same allowlist as ordinary Console pages (`HOST_CONFIG_PATCH_PATHS`, currently fields under `ai.trigger.ambient`). Use the CLI or Console for `locale`, `http`, `database` and other Host settings.
+- Plugin config must be proven safe by its schema. Secrets, tokens, passwords, missing schemas and uncertain scopes are rejected.
+- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `endpoints[*].master`, `ai.trigger.masters`, `toolHardGate.*`) cannot be read or changed in chat. Matching is by contains/prefix/suffix, so compound names are refused too, e.g. `adminIds`, `ownerId`, `masterId`, `trustedUsers`, `superUsers`, `whitelist`/`allowlist`/`blacklist` and `bypassMasters` (such as content-moderation's `inbound.whitelist.userIds` and `inbound.bypassMasters`). The rule is deliberately conservative: ordinary fields whose names contain these words (e.g. `masterVolume`) must be changed with the CLI.
+- `endpoints[*].id` / `endpoints[*].name` bind account-level masters and trust lists, so remapping them is an indirect permission change and is refused in chat; `set`/`unset` only target fields listed by `config fields <root>`.
+- A `set` value cannot contain a `${…}` or `env://` environment reference (regardless of whether the name looks like a secret), so a later read or echo cannot leak an environment value; existing references are not affected by other operations.
+- Chat reads and writes a **single leaf field** (a scalar or scalar array) only; whole objects cannot be overwritten or removed, and required fields cannot be unset. `configVersion`, `plugins`, `disable_plugins`, root `plugin` and undeclared instances cannot be changed either.
+
+Paths accept dotted notation such as `mybot.nickname` or JSON Pointer such as `/mybot/dot.key` (`~1` escapes `/`, `~0` escapes `~`). Values are parsed by field type: numbers, booleans and arrays use JSON; string fields accept plain text, for example `config set mybot.nickname -- My Bot` (add the actual prefix). Object values are not accepted.
+
+Saving follows the complete candidate validation and selective application described above. Failures before saving are reported as not saved. A lost commit acknowledgement is reported as unconfirmed: do not resend, check with `get` first; the command never retries or rolls back automatically. Denials only state a reason and never echo values, defaults or raw exceptions.
+
+### Files and database records have separate ownership
+
+`zhin.config.yml` remains the deployment declaration, and Console configuration forms still write that file. The entire configuration is not moved into a database. Managed Endpoint desired records, model Services/Accounts/Profiles/purposes, and personal Session choices retain their own domain databases and APIs. File updates do not overwrite explicit domain records or clear personal choices. YAML account seeds do not rewrite existing managed accounts; adapter profile defaults can still update accounts that inherit them.
 
 ## Environment Variable Expansion
 
@@ -129,7 +188,7 @@ npx zhin config check
 `setup` writes the non-secret structure to `zhin.config.yml` and the actual connection values to the
 project-root `.env`. Runtime reads `.env` first, then overrides matching keys from the selected
 `.env.<environment>`. For example, use
-`zhin runtime start --mode production --no-watch` to load `.env.production` by default; an explicit
+`zhin runtime start --mode production` to load `.env.production` by default; an explicit
 `--environment <name>` selects a different environment overlay.
 
 ### SQLite
@@ -251,66 +310,33 @@ Both sections are mounted on the HTTP Host and enabled as needed; when not confi
 
 ## ai
 
-The `ai` section is consumed by the Agent Host. Whenever `ai` / `assistant` is configured in any section, the startup graph loads the Agent stack; providers missing credentials are soft-pruned and do not block startup.
+`ai` stores Agent startup behavior and tool permissions. Models are managed through the Console or explicit plan imports and persisted in the inference database. An empty graph still permits management startup; inference reports a missing Profile when its purpose is not configured.
 
-### providers: Named Model Providers
+### providers: Runtime model resources
 
-```yaml
-ai:
-  providers:
-    deepseek:
-      sdk: deepseek                  # Required
-      apiKey: ${DEEP_SEEK_API_KEY}
-    openrouter:
-      sdk: openai-compatible
-      baseUrl: ${OPENROUTER_BASE_URL}
-      apiKey: ${OPENROUTER_API_KEY}
-      contextWindow: 32768
-      models:                        # Allowed model whitelist
-        - "openrouter/free"
-    ollama-local:
-      sdk: ollama
-      host: http://127.0.0.1:11434   # ollama uses host instead of baseUrl
-    cloudflare:
-      sdk: openai-compatible
-      apiKey: ${CLOUDFLARE_API_TOKEN}
-      accountId: ${CLOUDFLARE_ACCOUNT_ID}
-```
+Startup configuration no longer accepts `ai.providers`, `modelCatalog`, `modelPolicy`, `decisions`, or an Agent's `provider/model/preset` selectors. A Service describes its protocol, an Account owns authentication and private credential references, and a Profile selects a model and parameters. Chat, summary, ambient, image, perception and decision purposes select Profiles. Personal Sessions can select an authorized language Profile.
 
-| Field | Description |
-| --- | --- |
-| `sdk` | Required, one of seven: `openai`, `anthropic`, `google`, `deepseek`, `minimax`, `ollama`, `openai-compatible` |
-| `apiKey` / `baseUrl` / `host` | Credentials and endpoint; `ollama` uses `host`, Cloudflare also requires `accountId` |
-| `models` | Explicit model list |
-| `defaultModel`, `contextWindow`, `timeout`, `maxRetries`, `firstChunkTimeoutMs`, `chunkTimeoutMs`, `headers` | Behavior tuning (see the [AI docs](../ai/index.md)) |
-| `authScheme` | Authorization scheme; unset uses the SDK default, `''` sends the bare key, `Bearer` / `Token` send `<scheme> <key>` |
-| `imageGeneration` | Text-to-image defaults (for drivers that support this capability, e.g., `defaultModel`, `defaultSize`, `watermarkEnabled`, `promptSuffix`) |
+`ai.plan.yml` is explicit review/apply/export input, not a startup seed or an `ai.plan` property in `zhin.config.yml`. See the [model interface upgrade](../../ai/provider-upgrade.md) for migration, backup and recovery boundaries.
 
-Provider aliases can be named arbitrarily; when `sdk` is not explicitly specified, it is inferred from the alias prefix (e.g., `deepseek-main` -> `deepseek`); if inference fails, it falls back to `openai-compatible`. The corresponding `@ai-sdk/*` packages are optional peers and should be installed based on which SDK is used.
-
-### agents: Bind Models and Roles
+### agents: Roles and tool permissions
 
 ```yaml
 ai:
+  enabled: true
   agents:
-    zhin:                            # Main Agent, default entry point
-      provider: openrouter           # References the provider alias
-      model: openrouter/free
+    zhin:
       mcpServers: [icqq]             # References names in ai.mcpServers
     researcher:
-      provider: openrouter
-      model: openrouter/free
-      nickname: 'Researcher'         # Agent self-reference and UI display name
+      nickname: 'Researcher'         # Task role name; IM identity comes from the Endpoint
 ```
 
 | Field | Description |
 | --- | --- |
-| `provider` / `model` | Required, the bound provider alias and model |
-| `nickname` | Agent self-reference and UI display name |
-| `mcpServers` | List of MCP Server names visible to this Agent |
-| `permission.task` | `spawn_task` visible child Agent types (glob -> `allow` / `deny`) |
+| `nickname` | Task role display name; the Endpoint supplies the current account profile |
+| `mcpServers` | MCP Server names visible to this Agent |
+| `permission.task` | Visible `spawn_task` child roles (glob → `allow` / `deny`) |
 
-IM messages always go to `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` deletes them. See [ai.agents](../ai/index.md#ai-agents).
+Model role bindings belong to runtime purpose configuration. IM messages always enter `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` removes them.
 
 ### mcpServers: External MCP Servers
 
@@ -376,7 +402,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` governs multimodal input and output. When the main model cannot see images, `ai.multimodal.perception` lets another model describe them first; see [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception). `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
+`ai.multimodal` governs multimodal input and output. When the main model cannot see images, the perception purpose in model management selects a Profile to describe them first; see [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception). `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
 
 Remote Agents no longer attach through `ai.remoteAgents`. An optional A2A Executor enters through the persistent Workroom Catalog and generation-owned authority, under Assignment lease/fence and Journal contracts.
 

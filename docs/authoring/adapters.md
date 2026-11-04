@@ -120,7 +120,29 @@ terminal:
 
 平台统一定义 `Adapter<E, Config, Events>` 子类，由它创建与管理所有 Endpoint。Endpoint 继承实际 SDK Client，并通过 `endpointSpec` / `createEndpointSpecification` 注册框架钩子；不覆盖 SDK 的 `on`、`off`、`emit`。通过唯一增补入口 `@zhin.js/feature-kit` 的 `AdapterRegistry` 注册一次 Adapter 类型，Command 的字符串平台声明即可推导子类与 Endpoint。
 
-新增账号只保存停用配置，不创建 SDK 对象；显式启动才连接。停止、更新、删除和替换都由所属 Adapter 控制。更新运行账号只重连该账号，旧操作固定到原 incarnation。`defineAdapter` 只接受 `createAdapter`；不要另建全局账号 Controller、Client token 或可写 Endpoint 目录。
+新增账号只保存停用配置，不创建 SDK 对象；显式启动才连接。停止、更新、删除和替换都由所属 Adapter 控制。仅更新配置资料 `nickname` / `profile` 时保留连接；连接配置变化才重连对应账号，旧操作固定到原 incarnation。`defineAdapter` 只接受 `createAdapter`；不要另建全局账号 Controller、Client token 或可写 Endpoint 目录。
+
+### 配置资料的原地更新
+
+`nickname` / `profile` 是平台资料缺失时的配置兜底，不是修改真实平台资料的命令。适配器级资料默认值按字段继承，账号显式值优先；已观察到的平台资料仍优先于配置。更新默认值不写账号库、不覆盖显式资料、不调用 SDK 资料写入。账号库已有 desired 记录时，文件中的账号启动种子不能覆盖它。
+
+如果插件的 `setup` 不依赖这些字段建立业务状态，可以显式把它们声明为 Feature 所有：
+
+```ts
+import { definePlugin } from 'zhin.js';
+
+export default definePlugin({
+  name: 'example-adapter',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
+  setup(context) {
+    // 仅初始化与资料配置无关的资源。
+  },
+});
+```
+
+这份声明不等于整个 `endpoints` 数组都能原地更新：Adapter 会再次检查实际差异，只接受资料字段变化；账号增删、身份和连接参数变化仍走原生命周期。同一插件的其他 Feature 通过新的 snapshot 配置视图重建投影，不能简单返回旧索引。未声明的第三方插件保持原有重载行为。
+
+已接纳操作持有原资料兜底门面，新操作使用新配置视图；平台观察事实和连接仍属于原账号。不要在异步 `activateNext` 修改共享 defaults，不要把 `setup` 捕获的 `context.config.get()` 当成能随配置变化的全局 getter。命令、工具与处理器应从本次操作的配置视图读取所需值；若 setup 必须捕获资料字段，就不要添加上述声明。
 
 SDK 的 `emit/on/off` 与原生方法保持原合同。通过 `AdapterRegistry` 的 `Adapter<Endpoint, Config, Events>` 泛型一次推断 Client 和 EventMap；公开导出重用同一个 registry，不另注册 Client descriptor 或 token。
 

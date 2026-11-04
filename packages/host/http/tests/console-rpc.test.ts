@@ -407,6 +407,46 @@ describe('runtime console RPC', () => {
     expect(document.http).toEqual({ port: 8080 });
   });
 
+  it('preserves saved-but-unconfirmed application metadata instead of claiming a save failure', async () => {
+    const request = { type: 'config:replace-source', requestId: 110, source: 'configVersion: 2\n', expectedRevision: 'a'.repeat(64) };
+    const replies = await dispatchRuntimeConsoleRpc(request, {
+      authScope: 'full', listPages: async () => [],
+      replaceConfigSource: async () => ({ revision: 'b'.repeat(64), restartRequired: false, applicationError: 'unconfirmed' }),
+    });
+    expect(pickRpcReply(request, replies)).toMatchObject({ data: {
+      success: true, revision: 'b'.repeat(64), applicationError: 'unconfirmed', message: '配置已保存，生效结果未确认',
+    } });
+  });
+
+  it('returns the actual application groups for legacy key writes as well as source writes', async () => {
+    const application = { operationId: 'config-1', sourceRevision: 'b'.repeat(64), saved: true,
+      generation: 3, applicationRevision: 1, groups: [{ id: 'locale', paths: [['locale']],
+        effect: 'reload-plugin' as const, status: 'applied' as const, dependsOn: [] }] };
+    const request = { type: 'config:set', requestId: 111, pluginName: 'locale', data: 'en' };
+    const replies = await dispatchRuntimeConsoleRpc(request, {
+      authScope: 'full', listPages: async () => [],
+      setConfigKey: async () => ({ restartRequired: false, application }),
+    });
+    expect(pickRpcReply(request, replies)).toMatchObject({ data: {
+      success: true, application, message: '配置已保存并已生效',
+    } });
+  });
+
+  it('checks full scope and revision before invoking explicit configuration application', async () => {
+    let calls = 0;
+    const applyConfig = async () => { calls++; return { status: 'unconfirmed' as const, message: 'Unknown result' }; };
+    const request = { type: 'config:apply', requestId: 112, expectedRevision: 'a'.repeat(64) };
+    const demo = await dispatchRuntimeConsoleRpc(request, { authScope: 'demo', listPages: async () => [], applyConfig });
+    expect(pickRpcReply(request, demo)).toHaveProperty('error');
+    const malformed = { ...request, expectedRevision: 'missing' };
+    expect(pickRpcReply(malformed, await dispatchRuntimeConsoleRpc(malformed,
+      { authScope: 'full', listPages: async () => [], applyConfig }))).toHaveProperty('error');
+    expect(calls).toBe(0);
+    const result = await dispatchRuntimeConsoleRpc(request, { authScope: 'full', listPages: async () => [], applyConfig });
+    expect(pickRpcReply(request, result)).toMatchObject({ data: { status: 'unconfirmed' } });
+    expect(calls).toBe(1);
+  });
+
   it('does not persist config when shared validation rejects it', async () => {
     let writes = 0;
     const replies = await dispatchRuntimeConsoleRpc(

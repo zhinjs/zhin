@@ -549,8 +549,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
 | `bilibili.sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send with the bili-draft send command. off disables outbound messages. Automatic direct replies are not supported. |
 | `bilibili.minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
-| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default. |
-| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video. |
+| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments, plus dynamic or article comments when dynamics or articles are configured. Disabled by default. |
+| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos, dynamics and articles; all accepts notifications from any video, plus any dynamic or article comment when dynamics or articles are configured. |
 | `bilibili.dataDir` | string | no | `"data/bilibili"` | Local data directory. Pending drafts and QR-login credentials are stored under &lt;dataDir&gt;/&lt;endpoint id&gt;/ (relative to the working directory) and survive restarts. Keep it out of the repository. |
 | `bilibili.notify` | object | no | — | Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Comment review page and in logs. |
 | `bilibili.notify.adapter` | string | yes | — | Adapter name, such as icqq or telegram. |
@@ -558,6 +558,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
 | `bilibili.notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
 | `bilibili.videos` | array&lt;string \| number&gt; | no | — | Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search. |
+| `bilibili.dynamics` | array&lt;string&gt; | no | — | Allowed dynamics (posts), as dynamic IDs quoted as strings (the number in t.bilibili.com/&lt;id&gt; or bilibili.com/opus/&lt;id&gt;). Each is resolved to its comment area at startup (image post type=11 / text post type=17); dynamics that cannot be resolved are skipped. No site-wide search. |
+| `bilibili.articles` | array&lt;string \| number&gt; | no | — | Allowed articles, as cv IDs (cv123 or 123); comment area type=12. No site-wide search. |
 | `bilibili.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
 | `bilibili.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
 | `bilibili.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
@@ -566,11 +568,13 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.endpoints[].sessdata` | string | no | — | SESSDATA cookie, acting as your account. Reference ${BILIBILI_SESSDATA}; never commit it to the repository. |
 | `bilibili.endpoints[].biliJct` | string | no | — | bili_jct cookie (CSRF token). Reference ${BILIBILI_BILI_JCT}. |
 | `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | no | — | Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search. |
+| `bilibili.endpoints[].dynamics` | array&lt;string&gt; | no | — | Allowed dynamics (posts), as dynamic IDs quoted as strings (the number in t.bilibili.com/&lt;id&gt; or bilibili.com/opus/&lt;id&gt;). Each is resolved to its comment area at startup (image post type=11 / text post type=17); dynamics that cannot be resolved are skipped. No site-wide search. |
+| `bilibili.endpoints[].articles` | array&lt;string \| number&gt; | no | — | Allowed articles, as cv IDs (cv123 or 123); comment area type=12. No site-wide search. |
 | `bilibili.endpoints[].pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
 | `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send with the bili-draft send command. off disables outbound messages. Automatic direct replies are not supported. |
 | `bilibili.endpoints[].minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
-| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default. |
-| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video. |
+| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments, plus dynamic or article comments when dynamics or articles are configured. Disabled by default. |
+| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos, dynamics and articles; all accepts notifications from any video, plus any dynamic or article comment when dynamics or articles are configured. |
 | `bilibili.endpoints[].dataDir` | string | no | `"data/bilibili"` | Local data directory. Pending drafts and QR-login credentials are stored under &lt;dataDir&gt;/&lt;endpoint id&gt;/ (relative to the working directory) and survive restarts. Keep it out of the repository. |
 | `bilibili.endpoints[].notify` | object | no | — | Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Comment review page and in logs. |
 | `bilibili.endpoints[].notify.adapter` | string | yes | — | Adapter name, such as icqq or telegram. |
@@ -760,6 +764,51 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `discord.profile.interests` | array \| null | no | — | — |
 | `discord.profile.bio` | string \| null | no | — | — |
 
+### douyin-live
+
+[`plugins/adapters/douyin-live/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/douyin-live/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `douyin-live.sendMode` | string: `"off"`, `"direct"` | no | `"off"` | Outbound mode: off (default) only listens; direct is not implemented yet and returns not_implemented. |
+| `douyin-live.maxLength` | number | no | `50` | Maximum characters per danmaku (default 50; reserved for future direct sending). |
+| `douyin-live.maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
+| `douyin-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
+| `douyin-live.signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
+| `douyin-live.master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
+| `douyin-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
+| `douyin-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `douyin-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `douyin-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Douyin account ID. |
+| `douyin-live.endpoints[].cookie` | string | no | — | Full browser cookie string. Reference ${DOUYIN_LIVE_COOKIE}; never commit it. Omit to request a guest ttwid at startup. |
+| `douyin-live.endpoints[].roomId` | string \| integer | yes | — | Live room web_rid (the number after live.douyin.com/); use your own room only. |
+| `douyin-live.endpoints[].sendMode` | string: `"off"`, `"direct"` | no | `"off"` | Outbound mode: off (default) only listens; direct is not implemented yet and returns not_implemented. |
+| `douyin-live.endpoints[].maxLength` | number | no | `50` | Maximum characters per danmaku (default 50; reserved for future direct sending). |
+| `douyin-live.endpoints[].maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
+| `douyin-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
+| `douyin-live.endpoints[].signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
+| `douyin-live.endpoints[].master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
+| `douyin-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
+| `douyin-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `douyin-live.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `douyin-live.endpoints[].profile` | object | no | — | Fallback account profile |
+| `douyin-live.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `douyin-live.endpoints[].profile.age` | integer \| null | no | — | — |
+| `douyin-live.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.signature` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.interests` | array \| null | no | — | — |
+| `douyin-live.endpoints[].profile.bio` | string \| null | no | — | — |
+| `douyin-live.nickname` | string \| null | no | — | Fallback account nickname |
+| `douyin-live.profile` | object | no | — | Fallback account profile |
+| `douyin-live.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `douyin-live.profile.age` | integer \| null | no | — | — |
+| `douyin-live.profile.birthday` | string \| null | no | — | — |
+| `douyin-live.profile.signature` | string \| null | no | — | — |
+| `douyin-live.profile.avatar` | string \| null | no | — | — |
+| `douyin-live.profile.interests` | array \| null | no | — | — |
+| `douyin-live.profile.bio` | string \| null | no | — | — |
+
 ### email
 
 [`plugins/adapters/email/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/email/schema.json)
@@ -937,6 +986,62 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.profile.avatar` | string \| null | no | — | — |
 | `icqq.profile.interests` | array \| null | no | — | — |
 | `icqq.profile.bio` | string \| null | no | — | — |
+
+### juejin
+
+[`plugins/adapters/juejin/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/juejin/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `juejin.apiBaseUrl` | string | no | `"https://api.juejin.cn"` | — |
+| `juejin.pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
+| `juejin.sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send on the Console page or with juejin-draft send. off disables outbound messages. Automatic direct replies are not supported. |
+| `juejin.minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
+| `juejin.dataDir` | string | no | `"data/juejin"` | Local data directory. Pending drafts are stored in &lt;dataDir&gt;/&lt;endpoint id&gt;/drafts.json (mode 600, relative to the working directory) and survive restarts. Keep it out of the repository. |
+| `juejin.notify` | object | no | — | Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Juejin comment review page and in logs. |
+| `juejin.notify.adapter` | string | yes | — | Adapter name, such as icqq or telegram. |
+| `juejin.notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `juejin.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
+| `juejin.notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
+| `juejin.articles` | array&lt;string&gt; | no | — | Allowed articles: article IDs (quoted strings) or https://juejin.cn/post/&lt;id&gt; links. Only these articles are polled; there is no site-wide search. Empty means nothing is polled. |
+| `juejin.master` | string \| number | no | — | Framework masters (Juejin uid). endpoints[i].master can override this value. |
+| `juejin.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Juejin uid). |
+| `juejin.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `juejin.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `juejin.endpoints[].id` | string | yes | — | Local endpoint name, not a Juejin account ID. |
+| `juejin.endpoints[].cookie` | string | no | — | Full Juejin web login Cookie header (must include sessionid), acting as your account. Reference ${JUEJIN_COOKIE}; never commit it to the repository. |
+| `juejin.endpoints[].articles` | array&lt;string&gt; | no | — | Allowed articles: article IDs (quoted strings) or https://juejin.cn/post/&lt;id&gt; links. Only these articles are polled; there is no site-wide search. Empty means nothing is polled. |
+| `juejin.endpoints[].pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
+| `juejin.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send on the Console page or with juejin-draft send. off disables outbound messages. Automatic direct replies are not supported. |
+| `juejin.endpoints[].minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
+| `juejin.endpoints[].dataDir` | string | no | `"data/juejin"` | Local data directory. Pending drafts are stored in &lt;dataDir&gt;/&lt;endpoint id&gt;/drafts.json (mode 600, relative to the working directory) and survive restarts. Keep it out of the repository. |
+| `juejin.endpoints[].notify` | object | no | — | Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Juejin comment review page and in logs. |
+| `juejin.endpoints[].notify.adapter` | string | yes | — | Adapter name, such as icqq or telegram. |
+| `juejin.endpoints[].notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `juejin.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
+| `juejin.endpoints[].notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
+| `juejin.endpoints[].apiBaseUrl` | string | no | `"https://api.juejin.cn"` | — |
+| `juejin.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Juejin uid). |
+| `juejin.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
+| `juejin.endpoints[].commandPrefix` | string | no | — | — |
+| `juejin.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `juejin.endpoints[].profile` | object | no | — | Fallback account profile |
+| `juejin.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `juejin.endpoints[].profile.age` | integer \| null | no | — | — |
+| `juejin.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `juejin.endpoints[].profile.signature` | string \| null | no | — | — |
+| `juejin.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `juejin.endpoints[].profile.interests` | array \| null | no | — | — |
+| `juejin.endpoints[].profile.bio` | string \| null | no | — | — |
+| `juejin.nickname` | string \| null | no | — | Fallback account nickname |
+| `juejin.profile` | object | no | — | Fallback account profile |
+| `juejin.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `juejin.profile.age` | integer \| null | no | — | — |
+| `juejin.profile.birthday` | string \| null | no | — | — |
+| `juejin.profile.signature` | string \| null | no | — | — |
+| `juejin.profile.avatar` | string \| null | no | — | — |
+| `juejin.profile.interests` | array \| null | no | — | — |
+| `juejin.profile.bio` | string \| null | no | — | — |
 
 ### kook
 

@@ -3,7 +3,7 @@ import { createMessages, type Locale } from 'zhin.js/i18n';
 import type { BilibiliReplyDraft } from './drafts.js';
 import { BilibiliReviewError, type BilibiliNotice } from './endpoint.js';
 import type { BilibiliEndpointDirectory, BilibiliEndpointView } from './endpoint-directory.js';
-import { BILIBILI_COMMENT_MAX_LENGTH } from './protocol.js';
+import { BILIBILI_COMMENT_MAX_LENGTH, commentAreaLabel, commentAreaUrl } from './protocol.js';
 
 const LIST_LIMIT = 10;
 const t = createMessages({
@@ -64,20 +64,25 @@ export function formatNotice(notice: BilibiliNotice, presentation: DraftPresenta
 }
 
 /** 给 Console 用的草稿链接。 */
-export function draftCommentUrl(draft: Pick<BilibiliReplyDraft, 'oid' | 'parent'>): string {
-  return commentUrl(draft.oid, draft.parent);
+export function draftCommentUrl(draft: Pick<BilibiliReplyDraft, 'oid' | 'parent' | 'type' | 'dynamicId'>): string {
+  return commentAreaUrl(draft, draft.parent);
+}
+
+/** 草稿所在评论区的简短标签（`av123` / `cv456` / `dynamic 789`）。 */
+export function draftResourceLabel(draft: Pick<BilibiliReplyDraft, 'oid' | 'type' | 'dynamicId'>): string {
+  return commentAreaLabel(draft);
 }
 
 function excerpt(text: string, max = 60): string {
   const chars = [...text.replace(/\s+/g, ' ').trim()];
   return chars.length > max ? `${chars.slice(0, max).join('')}…` : chars.join('');
 }
-function commentUrl(oid: string, rpid: string): string {
-  return `https://www.bilibili.com/video/av${oid}#reply${rpid}`;
+function commentUrl(draft: Pick<BilibiliReplyDraft, 'oid' | 'type' | 'dynamicId'>, rpid: string): string {
+  return commentAreaUrl(draft, rpid);
 }
 export function formatDraft(draft: BilibiliReplyDraft, options: { readonly full?: boolean; readonly locale?: Locale } = {}): string {
   const { locale } = options;
-  const lines = [`[${draft.id}] ${commentUrl(draft.oid, draft.parent)}${draft.status === 'sending' ? t(locale, 'sending') : ''}${draft.interrupted ? t(locale, 'interrupted') : ''}`];
+  const lines = [`[${draft.id}] ${commentUrl(draft, draft.parent)}${draft.status === 'sending' ? t(locale, 'sending') : ''}${draft.interrupted ? t(locale, 'interrupted') : ''}`];
   if (draft.context) lines.push(t(locale, 'original', { author: draft.context.author, text: options.full ? draft.context.text : excerpt(draft.context.text) }));
   lines.push(t(locale, 'reply', { text: options.full ? draft.message : excerpt(draft.message) }));
   return lines.join('\n');
@@ -136,7 +141,7 @@ export async function approveDraftText(registry: BilibiliEndpointDirectory, id: 
   if (!found) return t(presentation.locale, 'missing', { id });
   try {
     const { draft, rpid } = await found.endpoint.approveDraft(id);
-    return `${t(presentation.locale, 'sent', { url: commentUrl(draft.oid, rpid) })}\n${excerpt(draft.message, 120)}`;
+    return `${t(presentation.locale, 'sent', { url: commentUrl(draft, rpid) })}\n${excerpt(draft.message, 120)}`;
   } catch (error) { return reviewErrorText(id, error, presentation.locale); }
 }
 export function reviewErrorText(id: string, error: unknown, locale?: Locale): string {

@@ -127,6 +127,16 @@ Committing only switches the pointer -- the old generation is not destroyed imme
 
 A failed HMR transaction cancels the remaining changes in the batch and invokes `onError`; it will not silently replay. HMR stop closes admission and awaits the in-flight reload. Once a process restart is required, the coordinator rejects further generation work. Post-commit Console or logging observer failures are diagnostic only and cannot rewrite a committed reload as failed.
 
+### Pause and resume handlers must not wait on model-fetching work
+
+`hmr.pause` and `hmr.resume` run inside the Root control queue behind `RootRuntime.control`: pause precedes candidate setup; resume follows commit or rollback, before the transaction releases that queue.
+
+- A recursive `control()` call from a handler rejects with `Recursive Runtime control`. A pause rejection keeps the old generation; a resume error is reported without rolling back the committed generation.
+- Waiting for work that still needs to enter the same control queue can deadlock. Handlers should make bounded local checkpoints instead of awaiting model or other external I/O.
+- The target Provider runtime builds scopes from an operation's actual held lease and authoritative graph. Model requests, credentials and network work stay outside control. The old `createModelConfigurationAccess` is retired; it is no longer accurate to describe every model call as using that queue or receiving its recursive-control rejection.
+
+Plugins decide how to retain, cancel and resume their work, and run model-dependent follow-ups in their own tasks. Runtime does not detect arbitrary waits. `packages/im/runtime/tests/root-runtime.test.ts` guards control ordering; `basic/cli/tests/plugin-runtime/inference/configuration.test.ts` verifies that model waits do not occupy the control phase.
+
 ## Why Resources Must Be Attached to Lifecycle
 
 Hot reload = old generation destroyed, new generation rebuilt. If a plugin stores resources in **module-level variables** (`let _db = ...`), when the module is reloaded the old variable dies with the old generation, but some callbacks still hold references to it -- this is the classic cause of "ghost singleton" incidents (timers firing repeatedly, using an already-closed database connection).

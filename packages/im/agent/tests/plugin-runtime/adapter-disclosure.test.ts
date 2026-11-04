@@ -87,8 +87,11 @@ describe('adapter-owned scene disclosure (#949)', () => {
       const capabilities = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: turn(platform, scope, botRole), selectedAgent: platform });
       const expected = index.list().filter(skill => !skill.scopes || skill.scopes.includes(scope));
       expect(capabilities.skills.map(skill => skill.qualifiedName)).toEqual(expected.map(skill => skill.qualifiedName));
+      // Owner-only tools (ICQQ set_group_admin) stay hidden from an admin Bot; scene filtering is unchanged.
       expect(capabilities.tools.map(tool => tool.name)).toEqual(tools.list()
-        .filter(tool => !tool.scopes || tool.scopes.includes(scope)).map(tool => tool.qualifiedName));
+        .filter(tool => !tool.scopes || tool.scopes.includes(scope))
+        .filter(tool => !botRole || !tool.currentConversationBotRoles?.length || tool.currentConversationBotRoles.includes(botRole))
+        .map(tool => tool.qualifiedName));
       if (platform === 'qq' && scope === 'channel') {
         const disclosed = capabilities.tools.map(tool => tool.name);
         expect(disclosed).toContain('agent__qq__skill__qq-group-admin__recall_member_message');
@@ -134,6 +137,9 @@ describe('adapter-owned scene disclosure (#949)', () => {
       .toEqual(admin.tools.filter(tool => !roleDependent.includes(tool.name)).map(tool => tool.name));
     expect(unknown.skills.map(skill => skill.qualifiedName)).toEqual(admin.skills.map(skill => skill.qualifiedName));
     expect(unknown.tools.some(tool => tool.name.endsWith('__recall_own_message'))).toBe(true);
+    const owner = await ingress.read(snapshot, snapshot.root, () => true, turn('icqq', 'group', 'owner'), 'icqq');
+    expect(owner.tools.some(tool => tool.name === 'agent__icqq__skill__icqq-group-admin__set_group_admin')).toBe(true);
+    expect([...admin.tools, ...unknown.tools].some(tool => tool.name.endsWith('__set_group_admin'))).toBe(false);
     const plan = createDeferredCapabilityPlan({
       capabilities: unknown, platform: 'icqq', config: { deferredTools: {} },
       sessionSnapshot: {

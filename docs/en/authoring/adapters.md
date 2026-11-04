@@ -121,7 +121,29 @@ Convert platform-specific structures such as `share`, audio or cards at the `sen
 
 Implement `Adapter<E, Config, Events>` and let it own every Endpoint. An Endpoint extends the actual SDK Client and uses `endpointSpec` / `createEndpointSpecification` for framework hooks without replacing native `on`, `off`, or `emit`. Register the Adapter type once through the canonical `@zhin.js/feature-kit` `AdapterRegistry`; literal platform declarations in commands infer its Endpoint.
 
-Adding an account saves disabled configuration without constructing an SDK object. Explicit start connects it. The owning Adapter handles update, stop, removal, and replacement. Updating a running account reconnects only that account; existing operations remain bound to their original incarnation. `defineAdapter` accepts only `createAdapter`; do not add another global account controller, Client token, or writable Endpoint directory.
+Adding an account saves disabled configuration without constructing an SDK object. Explicit start connects it. The owning Adapter handles update, stop, removal, and replacement. Updating only configured `nickname` / `profile` preserves the connection; connection changes reconnect only that account, and existing operations remain bound to their original incarnation. `defineAdapter` accepts only `createAdapter`; do not add another global account controller, Client token, or writable Endpoint directory.
+
+### Updating configured profile fallbacks
+
+`nickname` / `profile` provide fallbacks when platform facts are unavailable; they do not instruct the platform to change the real account. Account fields override inherited Adapter defaults, while observed platform facts still take precedence. Updating defaults does not write account records, overwrite explicit values, or call an SDK profile mutation. File startup seeds cannot replace existing managed desired records.
+
+If `setup` does not use these fields to construct business state, the plugin can explicitly declare them as Feature-owned:
+
+```ts
+import { definePlugin } from 'zhin.js';
+
+export default definePlugin({
+  name: 'example-adapter',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
+  setup(context) {
+    // Initialize resources that do not depend on these profile fields.
+  },
+});
+```
+
+This declaration does not make every `endpoints` edit safe in place. The Adapter checks the actual differences and accepts only profile changes; account membership, identity and connection edits keep their lifecycle rules. Other Features in the same plugin rebuild their projections with the new snapshot configuration; returning an old index is insufficient. Third-party plugins without this declaration keep their existing reload behavior.
+
+Admitted operations retain their original fallback facade, while new operations use the new configuration view. Platform observations and transport remain owned by the same account. Do not change shared defaults during asynchronous `activateNext`, and do not treat a captured setup `context.config.get()` as a global getter that updates automatically. Commands, tools and handlers should read the configuration attached to their own operation. If setup must capture profile fields, omit this declaration.
 
 SDK `emit/on/off` and native methods retain their own contracts. Register the actual Adapter once in `AdapterRegistry`; its `Adapter<Endpoint, Config, Events>` parameters infer Client and EventMap through that same registry, without another Client descriptor or token.
 

@@ -5,7 +5,7 @@
   "description": "QQ 群游戏机器人（大厅 + 群工具，无 AI）",
   "type": "module",
   "scripts": {
-    "dev": "zhin runtime start",
+    "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch",
     "build": "tsc --noEmit",
     "test": "vitest run --root ../.. examples/qq-games-bot/tests"

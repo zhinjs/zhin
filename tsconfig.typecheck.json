@@ -20,8 +20,14 @@
       "@zhin.js/adapter-bilibili": [
         "./plugins/adapters/bilibili/src/index.ts"
       ],
+      "@zhin.js/adapter-juejin": [
+        "./plugins/adapters/juejin/src/index.ts"
+      ],
       "@zhin.js/adapter-bilibili-live": [
         "./plugins/adapters/bilibili-live/src/index.ts"
+      ],
+      "@zhin.js/adapter-douyin-live": [
+        "./plugins/adapters/douyin-live/src/index.ts"
       ],
       "@zhin.js/adapter-dingtalk": [
         "./plugins/adapters/dingtalk/src/index.ts"

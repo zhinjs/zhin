@@ -13,9 +13,13 @@ export interface BilibiliReplyDraft {
   readonly id: string;
   /** 本地 endpoint id（配置里的 endpoints[i].id）。 */
   readonly endpointId?: string;
-  /** 评论楼会话 id：`video:<aid>:<根评论rpid>`。 */
+  /** 评论楼会话 id：`<video|album|article|dynamic>:<oid>:<根评论rpid>`。 */
   readonly target?: string;
+  /** 评论区 type（1 视频 / 11 图文动态 / 12 专栏 / 17 文字动态）；省略 = 1（v1 草稿）。 */
+  readonly type?: number;
   readonly oid: string;
+  /** 评论区来自动态白名单时的动态 id（只用于链接展示）。 */
+  readonly dynamicId?: string;
   readonly root: string;
   readonly parent: string;
   readonly message: string;
@@ -45,11 +49,14 @@ interface DraftFile {
 }
 
 const DIGITS = /^\d+$/u;
+const COMMENT_TYPES: ReadonlySet<number> = new Set([1, 11, 12, 17]);
 
 function isDraft(value: unknown): value is BilibiliReplyDraft {
   if (!value || typeof value !== 'object') return false;
   const draft = value as Record<string, unknown>;
   return typeof draft.id === 'string' && /^[a-z0-9]+$/u.test(draft.id)
+    && (draft.type === undefined || (typeof draft.type === 'number' && COMMENT_TYPES.has(draft.type)))
+    && (draft.dynamicId === undefined || (typeof draft.dynamicId === 'string' && DIGITS.test(draft.dynamicId)))
     && typeof draft.oid === 'string' && DIGITS.test(draft.oid)
     && typeof draft.root === 'string' && DIGITS.test(draft.root)
     && typeof draft.parent === 'string' && DIGITS.test(draft.parent)

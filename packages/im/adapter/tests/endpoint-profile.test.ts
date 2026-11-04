@@ -444,6 +444,24 @@ async function fixture(config: Readonly<Record<string, unknown>> = { id: 'native
 }
 
 describe('profile port through the owning Adapter/Index', () => {
+  it('updates configured profile fallbacks without reconstructing the native account or writing platform facts', async () => {
+    const h = await fixture({ id: 'native', nickname: 'Configured before', profile: { bio: 'Before' } });
+    try {
+      const account = h.account.list()[0]!;
+      const endpoint = h.endpoint;
+      const captured = h.index.profile(account.canonicalId)!;
+      await h.account.patchConfiguration(account.instanceId, h.account.revision, { nickname: 'Configured after', 'profile.bio': 'After' });
+      expect(h.endpoint).toBe(endpoint);
+      expect(h.constructed).toHaveLength(1);
+      expect(h.profiles[0]!.reads).toEqual([]);
+      expect(h.profiles[0]!.writes).toEqual([]);
+      expect(captured.peek().values).toMatchObject({ nickname: 'Login cache', bio: 'Before' });
+      expect(h.index.profile(account.canonicalId)!.peek()).toMatchObject({
+        values: { nickname: 'Login cache', bio: 'After' }, sources: { nickname: 'platform', bio: 'configured' },
+      });
+    } finally { await h.stop(); }
+  });
+
   it('binds current Host profile defaults to restored accounts without changing transport snapshots or saving rows', async () => {
     const connection = { id: 'native', transport: { source: 'stored connection' } };
     const original = await fixture(connection, { native: false });

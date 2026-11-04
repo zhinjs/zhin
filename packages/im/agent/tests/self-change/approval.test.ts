@@ -55,7 +55,7 @@ beforeEach(() => {
 afterEach(() => rmSync(project, { recursive: true, force: true }));
 
 describe('SelfChangeApprovals', () => {
-  it('submits a ready change as a self-category card without file bodies', async () => {
+  it('submits a ready change as a self-category card with a bounded diff excerpt (#1142 F3)', async () => {
     const store = await makeStore();
     const { queue, approvals } = setup(store);
     const ready = await readyChange(store);
@@ -75,11 +75,36 @@ describe('SelfChangeApprovals', () => {
         files: [{ path: 'commands/ping.ts', kind: 'create', added: 1, removed: 0 }],
         impact: 'generation',
         trial: 'passed (1 skipped)',
+        skippedChecks: ['unknown'],
+        diffExcerpt: ['# create commands/ping.ts', '@@ -0,0 +1,1 @@', '+export default 1;'],
+        diffExcerptTruncated: false,
       },
     });
     expect(card.expiresAt - card.createdAt).toBe(24 * HOUR);
-    expect(JSON.stringify(card.args)).not.toContain('export default');
     expect(audit.at(-1)).toMatchObject({ reasonCode: 'change_submitted', outcome: 'defer' });
+  });
+
+  it('redacts secret-like assignments in the card excerpt before delivery', async () => {
+    const store = await makeStore();
+    const { queue, approvals } = setup(store);
+    const ready = await readyChange(store, origin, 'const apiKey = "live-secret-value";\nexport default 1;\n');
+    const { approvalId } = await approvals.submit(ready.id);
+    const excerpt = (queue.get(approvalId)!.args as { diffExcerpt?: string[] }).diffExcerpt ?? [];
+    expect(excerpt).toContain('+const apiKey = "[redacted]";');
+    expect(JSON.stringify(excerpt)).not.toContain('live-secret-value');
+  });
+
+  it('caps skipped check names on the card and counts the rest', async () => {
+    const store = await makeStore();
+    const { queue, approvals } = setup(store);
+    const draft = await store.draft({ origin, files: [{ path: 'commands/ping.ts', content: 'export default 1;\n' }] });
+    await store.transition(draft.id, 'trialing', { actor: 'policy', reasonCode: 'change_drafted' });
+    const checks = Array.from({ length: 25 }, (_, index) => ({ check: 'syntax', path: `commands/c${index}.tsx`, status: 'skipped' }));
+    await store.transition(draft.id, 'ready', { actor: 'policy', trial: { passed: true, checks } });
+    const { approvalId } = await approvals.submit(draft.id);
+    const args = queue.get(approvalId)!.args as { skippedChecks?: string[]; skippedChecksOmitted?: number };
+    expect(args.skippedChecks).toEqual(Array.from({ length: 20 }, (_, index) => `syntax commands/c${index}.tsx`));
+    expect(args.skippedChecksOmitted).toBe(5);
   });
 
   it('only submits ready changes and allows one pending change per conversation', async () => {
@@ -206,6 +231,8 @@ describe('SelfChangeApprovals', () => {
     expect(await after.approvals.restore()).toBe(2);
     const card = after.queue.get(after.approvals.approvalIdFor(kept.id)!)!;
     expect(card.expiresAt - clock).toBe(22 * HOUR);
+    // The rebuilt card carries the diff excerpt too, recomputed from the staged files.
+    expect(card.args).toMatchObject({ diffExcerpt: ['# create commands/ping.ts', '@@ -0,0 +1,1 @@', '+export default 1;'] });
 
     clock += 23 * HOUR;
     const later = setup(store);

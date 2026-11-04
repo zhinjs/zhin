@@ -69,6 +69,21 @@ path, rather than racing a Promise and leaving work running in the background.
 `TurnCancelledError` means an explicit caller cancellation. Hosts should not
 turn either condition into an ordinary assistant reply.
 
+### Incremental reply parsing
+
+Each answering attempt owns one append-only JSON candidate. Standard prefixes scan only new
+input and reuse unchanged nodes; non-public reactions do not materialize the growing message
+body. The existing decoder/schema still validate segments and the complete final response.
+SDK-specific repair syntax retains the original parser as a compatibility fallback; its worst-case
+cumulative parsing cost remains. Signed, fractional and exponential numbers use it temporarily
+while their partial spelling needs repair, then resume the incremental path once reliably retained.
+No parsing delay or new input/depth limit is introduced.
+
+Differential tests use a frozen pre-migration parser, prefix/chunk corpora, and real reply scheduling.
+Run the synthetic comparison from the repository root with
+`node --expose-gc --conditions=development --import tsx packages/im/agent/tests/benchmarks/reply-parser.ts`.
+Its timings and sampled heap are local parser evidence, not provider latency or a production bound.
+
 ### Shared-session intent
 
 `TurnRequest.intent` 明确描述一条入站消息如何影响同 session 的 active turn：

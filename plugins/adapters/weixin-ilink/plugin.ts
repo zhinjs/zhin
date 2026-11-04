@@ -3,6 +3,7 @@ import { createWeixinIlinkConsoleRpc } from './src/console.js';
 
 export default definePlugin({
   name: 'weixin-ilink',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Weixin iLink Adapter',
   },

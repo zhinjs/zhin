@@ -257,6 +257,8 @@ export {
   decisionEventFromRow,
   decisionEventToExport,
   decisionEventToRow,
+  isPromptPayloadKey,
+  isSecretLikeKey,
   redactDecisionPayload,
   speakBlockReasonCode,
   type DecisionActor,
@@ -507,6 +509,23 @@ export {
   type SelfChangeImpactPort,
   type SelfChangePreview,
 } from './self-change/preview.js';
+export {
+  MAX_CARD_SKIPPED_CHECKS,
+  MAX_IM_DIFF_EXCERPT_BYTES,
+  MAX_IM_DIFF_EXCERPT_LINES,
+  buildSelfChangeDetailDiff,
+  redactSecretAssignments,
+  selfChangeDiffExcerpt,
+  skippedTrialChecks,
+  unifiedDiff as selfChangeUnifiedDiff,
+  type BuildSelfChangeDetailDiffInput,
+  type SelfChangeDetailDiff,
+  type SelfChangeDiffBaseline,
+  type SelfChangeDiffExcerpt,
+  type SelfChangeDiffExcerptLimits,
+  type SelfChangeFileDetailDiff,
+  type SelfChangeFileDiffUnavailableReason,
+} from './self-change/detail-diff.js';
 export {
   SELF_CHANGE_APPROVAL_TOOL,
   SelfChangeApprovals,

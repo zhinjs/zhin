@@ -143,7 +143,8 @@ describe('flat application Runtime', () => {
     await expect(runtime.patchConfig([{ op: 'set', path: ['plugins'], value: { absent: '@test/missing' } }])).rejects.toThrow('@test/missing');
     expect(runtime.snapshot.generation).toBe(1);
     expect(f.document.document).toEqual({ configVersion: 2 });
-    expect(f.document.rollbacks).toBe(1);
+    // Complete graph validation now precedes even an inert document prepare.
+    expect(f.document.rollbacks).toBe(0);
   });
 
   it('uses committed schema declarations to compare inputs without importing an owner being disabled', async () => {

@@ -161,6 +161,7 @@ describe('reason_code registry', () => {
       'change_applied_none', 'change_applied_reload', 'change_restart_requested', 'change_verified',
       'change_rolled_back', 'change_failed_emergency_stop', 'change_report_sent', 'change_report_redirected',
       'change_restart_unavailable', 'change_draft_forbidden', 'change_pending_cap_reached',
+      'change_config_unconfirmed', 'change_config_superseded',
     ];
     const start = DECISION_REASON_CODES.indexOf('change_drafted');
     expect(start).toBeGreaterThan(DECISION_REASON_CODES.indexOf('rule_hit_flood'));

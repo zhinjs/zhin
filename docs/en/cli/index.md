@@ -22,7 +22,7 @@ Inside a project that has `@zhin.js/cli` installed, `npx zhin` uses it directly.
 
 | I want to… | Command |
 | --- | --- |
-| Start the bot (dev mode, hot reload on save) | `pnpm dev` (i.e. `zhin runtime start`) |
+| Start the bot (dev mode, hot reload on save) | `pnpm dev` (i.e. `zhin runtime start --watch source config`) |
 | Connect a platform, configure AI or a database | `npx zhin setup` (optionally `--adapters` / `--ai` / `--database`) |
 | Diagnose environment or config problems | `npx zhin doctor` |
 | Check the config file is valid | `npx zhin config check` |
@@ -41,12 +41,14 @@ All commands, grouped by purpose, follow.
 ### runtime: Run and Manage Projects
 
 ```bash
-zhin runtime start [--mode production] [--no-watch] [--daemon]
+zhin runtime start [--mode production] [--watch source config | --no-watch] [--daemon]
 zhin runtime inspect
 zhin runtime build
 zhin runtime publish [--execute|--resume] [--tag latest]
 zhin runtime migrate [extract|cutover|status] [--check|--write]
 ```
+
+`--watch` and the compatibility flag `--no-watch` are mutually exclusive. Without either, no files are watched.
 
 | Subcommand | Purpose |
 | --- | --- |
@@ -60,7 +62,7 @@ Scaffolded projects already have two conventional scripts:
 ```json
 {
   "scripts": {
-    "dev": "zhin runtime start",
+    "dev": "zhin runtime start --watch source config",
     "start": "zhin runtime start --mode production --no-watch"
   }
 }
@@ -102,16 +104,36 @@ The wizard edits the matching parts of [`zhin.config.yml`](../configuration/inde
 
 For network databases, the CLI checks the port range, writes connection fields as environment references and puts the real values in `.env`. Afterwards run `npx zhin config check` to catch missing database variables before startup; if the values only live in `.env.production`, use `npx zhin config check --environment production`.
 
-### config: Read and Write Configuration Files
+### config: Read and Write Configuration
 
 ```bash
-zhin config list
-zhin config get <key>            # nested paths such as ai.enabled
-zhin config set <key> <value>    # value accepts JSON
-zhin config delete <key>
-zhin config path                 # print the config file path
+zhin config list                       # whole configuration (secrets masked)
+zhin config get <key>                  # dotted path ai.enabled or JSON Pointer /plugin/key.with.dot
+zhin config set <key> <value>          # value is parsed as JSON, otherwise kept as a string
+zhin config unset <key>                # aliases: delete / del
+zhin config path                       # print the local config file path
 zhin config check [--fix] [--json] [--strict]
 ```
+
+`get` / `set` / `unset` / `list` **talk to the running Host by default** (`POST {base}/console/request`). A write first reads the config revision, then submits one `config:patch-project`; the Host performs the CAS, schema validation, save and any live application. The CLI never does its own read-modify-write and never retries.
+
+- Connection: `--host <url>` wins, and then the token comes only from `ZHIN_CONSOLE_TOKEN` (or the variable named by `--token-env <name>`). Without `--host` the address is derived from `http.host` / `http.port` / `http.base` (a wildcard bind `0.0.0.0` / `::` connects to `127.0.0.1` / `[::1]`), and only then does an unset variable fall back to `http.token`. Sending a token to a non-loopback address requires HTTPS.
+- **If the Host is not running the command fails; it never falls back to writing the file.** For offline edits pass `--offline` explicitly: the same `patchProject` rules as the Host (revision check, plugin declarations are read-only, per-section schema validation) run locally before saving. No Runtime is started, no plugin `setup` runs and the CLI sends no request to the Host, but loading plugin declarations executes module top-level code (which may itself use the network). An offline save is not applied to a running Host until `--watch config` or Console "Apply configuration".
+- Reads are masked by schema: `secret` / `writeOnly` / `hidden` / password fields, credential-like keys and unexpanded `${...}` / `env://` references print as `[redacted]`. Pass `--reveal` for raw values.
+- With `--json`, `get` / `list` / `set` / `unset` print exactly one line of compact JSON, for scripts; without it they print only human-readable text (`config path` and `config check` have their own formats).
+- Exit code `6` also reports `requestId` and `expectedRevision` (in the result object with `--json`, otherwise on stderr) so the write can be verified.
+
+Exit codes are a public contract:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success: saved and applied (or nothing to apply); read succeeded; an `--offline` save (not yet applied to a running Host) |
+| `3` | Saved; some settings take effect after a process restart |
+| `4` | Revision conflict: changed elsewhere, not saved; the latest (masked) values are printed (values under schema branches that cannot be proven safe, such as `if`/`not`/`contains`, a nested `$id` or a non-local `$ref`, are masked whole) |
+| `5` | Validation failed (including rejected plugin-declaration writes): when not saved, field paths are printed; also returned when the file was saved but failed validation before applying, so check with `zhin config get` |
+| `6` | Unknown: the write was sent but no definitive receipt arrived (including non-authoritative errors such as a gateway 502/504), or it was saved but the application result is unconfirmed. `requestId` / `expectedRevision` are reported; check with `zhin config get` first; **do not blindly retry** |
+| `7` | Not connected to a running Host: nothing was sent, the file is unchanged |
+| `1` | Any other error: usage, missing key, authentication (401/403), an authoritative Host rejection (not saved); or **saved but not applied** (superseded by a newer revision, or a group failed/was blocked; the file was written) |
 
 `config check` validates the config file, and `--fix` repairs fields that can be migrated safely. Missing database connection variables are always errors; other warnings become errors with `--strict`, which suits CI.
 

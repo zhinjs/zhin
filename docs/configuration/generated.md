@@ -549,8 +549,8 @@ outline: [2, 3]
 | `bilibili.pollIntervalSec` | number | 否 | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
 | `bilibili.sendMode` | string: `"review"`, `"off"` | 否 | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
 | `bilibili.minSendIntervalSec` | number | 否 | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
-| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | 否 | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开 |
-| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | 否 | `"whitelist"` | 通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知 |
+| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | 否 | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；收视频评论，配置了 dynamics / articles 时也收动态 / 专栏评论）。默认不开 |
+| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | 否 | `"whitelist"` | 通知入站范围：whitelist=只收 videos / dynamics / articles 白名单下的通知（默认）；all=所有视频评论通知，以及配置了 dynamics / articles 时对应种类的全部评论通知 |
 | `bilibili.dataDir` | string | 否 | `"data/bilibili"` | 本地数据目录：待审草稿与扫码登录凭据存在 &lt;dataDir&gt;/&lt;endpoint id&gt;/ 下（相对进程工作目录），重启不丢。不要放进仓库 |
 | `bilibili.notify` | object | 否 | — | 有新草稿或登录失效时，主动发消息提醒到这个聊天会话（通常是你和机器人的私聊）。不填则只在 Console「评论审批」页和日志里看到 |
 | `bilibili.notify.adapter` | string | 是 | — | 适配器名，如 icqq、telegram |
@@ -558,6 +558,8 @@ outline: [2, 3]
 | `bilibili.notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
 | `bilibili.notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
 | `bilibili.videos` | array&lt;string \| number&gt; | 否 | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
+| `bilibili.dynamics` | array&lt;string&gt; | 否 | — | 白名单动态：动态 id（t.bilibili.com/&lt;id&gt; 或 bilibili.com/opus/&lt;id&gt; 里的数字，请写成字符串）。启动时经动态详情解析出评论区（图文动态 type=11 / 文字动态 type=17），无法解析的动态会跳过。不做全站搜索 |
+| `bilibili.articles` | array&lt;string \| number&gt; | 否 | — | 白名单专栏：cv 号（cv123 或 123），评论区 type=12。不做全站搜索 |
 | `bilibili.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
 | `bilibili.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
 | `bilibili.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
@@ -566,11 +568,13 @@ outline: [2, 3]
 | `bilibili.endpoints[].sessdata` | string | 否 | — | Cookie SESSDATA（以你的账号身份操作；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库） |
 | `bilibili.endpoints[].biliJct` | string | 否 | — | Cookie bili_jct（csrf token；请用 ${BILIBILI_BILI_JCT} 注入） |
 | `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | 否 | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
+| `bilibili.endpoints[].dynamics` | array&lt;string&gt; | 否 | — | 白名单动态：动态 id（t.bilibili.com/&lt;id&gt; 或 bilibili.com/opus/&lt;id&gt; 里的数字，请写成字符串）。启动时经动态详情解析出评论区（图文动态 type=11 / 文字动态 type=17），无法解析的动态会跳过。不做全站搜索 |
+| `bilibili.endpoints[].articles` | array&lt;string \| number&gt; | 否 | — | 白名单专栏：cv 号（cv123 或 123），评论区 type=12。不做全站搜索 |
 | `bilibili.endpoints[].pollIntervalSec` | number | 否 | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
 | `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | 否 | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
 | `bilibili.endpoints[].minSendIntervalSec` | number | 否 | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
-| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | 否 | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开 |
-| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | 否 | `"whitelist"` | 通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知 |
+| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | 否 | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；收视频评论，配置了 dynamics / articles 时也收动态 / 专栏评论）。默认不开 |
+| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | 否 | `"whitelist"` | 通知入站范围：whitelist=只收 videos / dynamics / articles 白名单下的通知（默认）；all=所有视频评论通知，以及配置了 dynamics / articles 时对应种类的全部评论通知 |
 | `bilibili.endpoints[].dataDir` | string | 否 | `"data/bilibili"` | 本地数据目录：待审草稿与扫码登录凭据存在 &lt;dataDir&gt;/&lt;endpoint id&gt;/ 下（相对进程工作目录），重启不丢。不要放进仓库 |
 | `bilibili.endpoints[].notify` | object | 否 | — | 有新草稿或登录失效时，主动发消息提醒到这个聊天会话（通常是你和机器人的私聊）。不填则只在 Console「评论审批」页和日志里看到 |
 | `bilibili.endpoints[].notify.adapter` | string | 是 | — | 适配器名，如 icqq、telegram |
@@ -760,6 +764,51 @@ outline: [2, 3]
 | `discord.profile.interests` | array \| null | 否 | — | — |
 | `discord.profile.bio` | string \| null | 否 | — | — |
 
+### douyin-live
+
+[`plugins/adapters/douyin-live/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/douyin-live/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `douyin-live.sendMode` | string: `"off"`, `"direct"` | 否 | `"off"` | 出站模式：off=只听不说（默认）；direct=尚未实现，发送返回 not_implemented |
+| `douyin-live.maxLength` | number | 否 | `50` | 单条弹幕最多字符数（默认 50，为后续 direct 发送预留） |
+| `douyin-live.maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2） |
+| `douyin-live.minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2 |
+| `douyin-live.signerUrl` | string | 否 | — | 可选：外部签名服务（GET ?stub=&lt;X-MS-STUB&gt; 返回 signature）。本包不内置平台签名脚本；不填时不带签名连接，平台可能拒绝 |
+| `douyin-live.master` | string \| number | 否 | — | 框架 master（抖音 user id）。endpoints[i].master 可逐项覆盖 |
+| `douyin-live.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（抖音 user id） |
+| `douyin-live.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `douyin-live.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `douyin-live.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是抖音账号） |
+| `douyin-live.endpoints[].cookie` | string | 否 | — | 浏览器 Cookie 整串（请用 ${DOUYIN_LIVE_COOKIE} 注入，切勿写入仓库）。不填时启动时申请游客 ttwid |
+| `douyin-live.endpoints[].roomId` | string \| integer | 是 | — | 直播间 web_rid（live.douyin.com/ 后面的数字）；只填你自己的直播间 |
+| `douyin-live.endpoints[].sendMode` | string: `"off"`, `"direct"` | 否 | `"off"` | 出站模式：off=只听不说（默认）；direct=尚未实现，发送返回 not_implemented |
+| `douyin-live.endpoints[].maxLength` | number | 否 | `50` | 单条弹幕最多字符数（默认 50，为后续 direct 发送预留） |
+| `douyin-live.endpoints[].maxChunks` | number | 否 | `2` | 一次回复最多拆成几条弹幕（默认 2） |
+| `douyin-live.endpoints[].minSendIntervalSec` | number | 否 | `5` | 两次回复的最小间隔（秒），最小 2 |
+| `douyin-live.endpoints[].signerUrl` | string | 否 | — | 可选：外部签名服务（GET ?stub=&lt;X-MS-STUB&gt; 返回 signature）。本包不内置平台签名脚本；不填时不带签名连接，平台可能拒绝 |
+| `douyin-live.endpoints[].master` | string \| number | 否 | — | 框架 master（抖音 user id）。endpoints[i].master 可逐项覆盖 |
+| `douyin-live.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（抖音 user id） |
+| `douyin-live.endpoints[].commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `douyin-live.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `douyin-live.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `douyin-live.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `douyin-live.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `douyin-live.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `douyin-live.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `douyin-live.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `douyin-live.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `douyin-live.endpoints[].profile.bio` | string \| null | 否 | — | — |
+| `douyin-live.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `douyin-live.profile` | object | 否 | — | 账号资料兜底 |
+| `douyin-live.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `douyin-live.profile.age` | integer \| null | 否 | — | — |
+| `douyin-live.profile.birthday` | string \| null | 否 | — | — |
+| `douyin-live.profile.signature` | string \| null | 否 | — | — |
+| `douyin-live.profile.avatar` | string \| null | 否 | — | — |
+| `douyin-live.profile.interests` | array \| null | 否 | — | — |
+| `douyin-live.profile.bio` | string \| null | 否 | — | — |
+
 ### email
 
 [`plugins/adapters/email/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/email/schema.json)
@@ -937,6 +986,62 @@ outline: [2, 3]
 | `icqq.profile.avatar` | string \| null | 否 | — | — |
 | `icqq.profile.interests` | array \| null | 否 | — | — |
 | `icqq.profile.bio` | string \| null | 否 | — | — |
+
+### juejin
+
+[`plugins/adapters/juejin/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/juejin/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `juejin.apiBaseUrl` | string | 否 | `"https://api.juejin.cn"` | — |
+| `juejin.pollIntervalSec` | number | 否 | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
+| `juejin.sendMode` | string: `"review"`, `"off"` | 否 | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 在 Console 或用 juejin-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
+| `juejin.minSendIntervalSec` | number | 否 | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
+| `juejin.dataDir` | string | 否 | `"data/juejin"` | 本地数据目录：待审草稿存在 &lt;dataDir&gt;/&lt;endpoint id&gt;/drafts.json（权限 600，相对进程工作目录），重启不丢。不要放进仓库 |
+| `juejin.notify` | object | 否 | — | 有新草稿或登录失效时，主动发消息提醒到这个聊天会话（通常是你和机器人的私聊）。不填则只在 Console「掘金评论审批」页和日志里看到 |
+| `juejin.notify.adapter` | string | 是 | — | 适配器名，如 icqq、telegram |
+| `juejin.notify.endpoint` | string | 是 | — | 该适配器的 endpoint id |
+| `juejin.notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
+| `juejin.notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
+| `juejin.articles` | array&lt;string&gt; | 否 | — | 白名单文章：文章 id（请写成带引号的字符串）或 https://juejin.cn/post/&lt;id&gt; 链接。只轮询这些文章的评论，不做全站搜索；留空 = 不轮询 |
+| `juejin.master` | string \| number | 否 | — | 框架 master（掘金 uid）。endpoints[i].master 可逐项覆盖 |
+| `juejin.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（掘金 uid） |
+| `juejin.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `juejin.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `juejin.endpoints[].id` | string | 是 | — | Endpoint 名称（本地标识，不是掘金账号） |
+| `juejin.endpoints[].cookie` | string | 否 | — | 掘金网页登录态 Cookie 整串（至少含 sessionid；以你的账号身份操作；请用 ${JUEJIN_COOKIE} 注入，切勿写入仓库） |
+| `juejin.endpoints[].articles` | array&lt;string&gt; | 否 | — | 白名单文章：文章 id（请写成带引号的字符串）或 https://juejin.cn/post/&lt;id&gt; 链接。只轮询这些文章的评论，不做全站搜索；留空 = 不轮询 |
+| `juejin.endpoints[].pollIntervalSec` | number | 否 | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
+| `juejin.endpoints[].sendMode` | string: `"review"`, `"off"` | 否 | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 在 Console 或用 juejin-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
+| `juejin.endpoints[].minSendIntervalSec` | number | 否 | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
+| `juejin.endpoints[].dataDir` | string | 否 | `"data/juejin"` | 本地数据目录：待审草稿存在 &lt;dataDir&gt;/&lt;endpoint id&gt;/drafts.json（权限 600，相对进程工作目录），重启不丢。不要放进仓库 |
+| `juejin.endpoints[].notify` | object | 否 | — | 有新草稿或登录失效时，主动发消息提醒到这个聊天会话（通常是你和机器人的私聊）。不填则只在 Console「掘金评论审批」页和日志里看到 |
+| `juejin.endpoints[].notify.adapter` | string | 是 | — | 适配器名，如 icqq、telegram |
+| `juejin.endpoints[].notify.endpoint` | string | 是 | — | 该适配器的 endpoint id |
+| `juejin.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
+| `juejin.endpoints[].notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
+| `juejin.endpoints[].apiBaseUrl` | string | 否 | `"https://api.juejin.cn"` | — |
+| `juejin.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（掘金 uid） |
+| `juejin.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `juejin.endpoints[].commandPrefix` | string | 否 | — | — |
+| `juejin.endpoints[].nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `juejin.endpoints[].profile` | object | 否 | — | 账号资料兜底 |
+| `juejin.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `juejin.endpoints[].profile.age` | integer \| null | 否 | — | — |
+| `juejin.endpoints[].profile.birthday` | string \| null | 否 | — | — |
+| `juejin.endpoints[].profile.signature` | string \| null | 否 | — | — |
+| `juejin.endpoints[].profile.avatar` | string \| null | 否 | — | — |
+| `juejin.endpoints[].profile.interests` | array \| null | 否 | — | — |
+| `juejin.endpoints[].profile.bio` | string \| null | 否 | — | — |
+| `juejin.nickname` | string \| null | 否 | — | 账号昵称兜底 |
+| `juejin.profile` | object | 否 | — | 账号资料兜底 |
+| `juejin.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | 否 | — | — |
+| `juejin.profile.age` | integer \| null | 否 | — | — |
+| `juejin.profile.birthday` | string \| null | 否 | — | — |
+| `juejin.profile.signature` | string \| null | 否 | — | — |
+| `juejin.profile.avatar` | string \| null | 否 | — | — |
+| `juejin.profile.interests` | array \| null | 否 | — | — |
+| `juejin.profile.bio` | string \| null | 否 | — | — |
 
 ### kook
 

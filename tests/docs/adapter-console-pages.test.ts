@@ -5,12 +5,17 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
+/** Experimental adapters whose Console page is explicitly deferred (douyin-live: #1135 Accept, Console UI later). */
+const consoleDeferred = new Set(['douyin-live']);
+/** ADR 0035 comment-reply adapters ship a custom review page (drafts / approve) instead of the shared endpoint page. */
+const customCommentReviewPages = new Set(['bilibili', 'juejin']);
 
 function adapterDirectories(): string[] {
   return fs.readdirSync(adaptersRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .filter((name) => fs.existsSync(path.join(adaptersRoot, name, 'plugin.ts')))
+    .filter((name) => !consoleDeferred.has(name))
     .sort();
 }
 
@@ -23,6 +28,14 @@ function pageSource(directory: string): string | undefined {
 }
 
 describe('adapter Console pages', () => {
+  it('deferred adapters really ship no Console page or RPC yet', () => {
+    for (const directory of consoleDeferred) {
+      expect(pageSource(directory), directory).toBeUndefined();
+      const plugin = fs.readFileSync(path.join(adaptersRoot, directory, 'plugin.ts'), 'utf8');
+      expect(plugin, directory).not.toContain('pluginConsoleRpcToken');
+    }
+  });
+
   it('every adapter ships a page and declares the page feature', () => {
     const directories = adapterDirectories();
     expect(directories.length).toBeGreaterThanOrEqual(20);
@@ -45,7 +58,7 @@ describe('adapter Console pages', () => {
 
   it('shared adapter pages are permission-gated and use the shared component', () => {
     for (const directory of adapterDirectories()) {
-      if (directory === 'bilibili' || directory === 'sandbox') continue;
+      if (customCommentReviewPages.has(directory) || directory === 'sandbox') continue;
       const source = pageSource(directory) ?? '';
       expect(source, directory).toContain('createAdapterConsolePage');
       expect(source, directory).toMatch(/requiredPermissions:\s*\[\s*['"][a-z0-9-]+:read['"]\s*\]/u);

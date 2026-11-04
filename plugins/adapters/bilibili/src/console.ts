@@ -1,15 +1,15 @@
 /**
  * Console「评论审批」页的插件 RPC（`plugin.<pluginId>.status` / 动作）。
  *
- * - 只返回页面需要的字段：登录态（不含 Cookie）、白名单视频、待审草稿。
+ * - 只返回页面需要的字段：登录态（不含 Cookie）、白名单视频 / 动态 / 专栏、待审草稿。
  * - 动作都声明了 requiredPermissions：普通用户令牌只有持有对应权限才能操作（#977：未声明 = 仅管理员）。
- * - 配置（白名单视频、sendMode 等）不在这里改：用 YAML / config:patch。
+ * - 配置（白名单、sendMode 等）不在这里改：用 YAML / config:patch。
  */
 import { definePluginConsoleRpc, PluginConsoleRpcError, type PluginConsoleRpc, type PluginConsoleRpcInput, type PluginConsoleRpcCall, type PluginConsoleRpcJson } from 'zhin.js';
 import { isLocale, type Locale } from 'zhin.js/i18n';
 import { bilibiliEndpoints, type BilibiliEndpointDirectory, type BilibiliEndpointView } from './endpoint-directory.js';
 import { BilibiliReviewError } from './endpoint.js';
-import { draftCommentUrl, findDraft, reviewErrorText } from './review.js';
+import { draftCommentUrl, draftResourceLabel, findDraft, reviewErrorText } from './review.js';
 
 export const BILIBILI_CONSOLE_PAGE = 'index';
 /** 看页面与状态。 */
@@ -84,11 +84,19 @@ function endpointView(endpoint: BilibiliEndpointView) {
       url: `https://www.bilibili.com/video/${video.ref}`,
       ...(video.aid ? { aid: video.aid } : {}),
     })),
+    resources: endpoint.resources.map(resource => ({
+      kind: resource.kind,
+      ref: resource.ref,
+      url: resource.url,
+      ...(resource.area ? { commentType: resource.area.type, oid: resource.area.oid } : {}),
+      ...(resource.error ? { error: resource.error } : {}),
+    })),
     pendingCount: endpoint.drafts.size,
     drafts: drafts.map(draft => ({
       id: draft.id,
       url: draftCommentUrl(draft),
-      video: `av${draft.oid}`,
+      video: draftResourceLabel(draft),
+      resource: draftResourceLabel(draft),
       message: draft.message,
       status: draft.status ?? 'pending',
       interrupted: draft.interrupted === true,
@@ -130,7 +138,7 @@ export function createBilibiliConsoleRpc(): PluginConsoleRpc {
           if (!found) throw new PluginConsoleRpcError('not_found', reviewErrorText(id, new BilibiliReviewError('not_found', id), localeOf(input)));
           try {
             const { rpid, draft } = await found.endpoint.approveDraft(id);
-            return { id, url: draftCommentUrl({ oid: draft.oid, parent: rpid }) };
+            return { id, url: draftCommentUrl({ ...draft, parent: rpid }) };
           } catch (error) { return reviewFailure(id, error, localeOf(input)); }
         }),
       },

@@ -85,6 +85,8 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'GitHub', link: '/adapters/github' },
       { text: 'Bilibili 评论', link: '/adapters/bilibili' },
       { text: 'Bilibili 直播弹幕', link: '/adapters/bilibili-live' },
+      { text: '掘金评论', link: '/adapters/juejin' },
+      { text: '抖音直播弹幕', link: '/adapters/douyin-live' },
     ]),
   ]),
   sidebarGroup('AI 能力（可选）', [
@@ -252,6 +254,8 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'GitHub', link: '/en/adapters/github' },
       { text: 'Bilibili Comments', link: '/en/adapters/bilibili' },
       { text: 'Bilibili Live Danmaku', link: '/en/adapters/bilibili-live' },
+      { text: 'Juejin Comments', link: '/en/adapters/juejin' },
+      { text: 'Douyin Live Danmaku', link: '/en/adapters/douyin-live' },
     ]),
   ]),
   sidebarGroup('AI (Optional)', [

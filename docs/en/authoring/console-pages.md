@@ -422,6 +422,17 @@ Calls stopped by the hard gate (ADR 0036 §3) leave an approval card here. The a
 | `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` or `ops:approve` |
 | `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` or `tool_approvals:resolve` (action; the admin token can always call it) |
 
+### Built-in actions: self-change approval (ADR 0040)
+
+Controlled self-changes drafted by the bot (see [Letting the bot change itself](../ai/self-change.md)). The list carries metadata only; file bodies and config values are served to approvers through the detail call.
+
+| Method | Call | Permission |
+| --- | --- | --- |
+| `plugin.root.self-changes` | `pluginRpc('root', 'self-changes')` | `tool_approvals:read` or `ops:approve` (pending / recent changes and staging usage `usageBytes`, no bodies) |
+| `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | `ops:approve` **only** (unified diff per file, ≤ 64 KB combined across all files, cut by line; config patch values redacted like audit payloads; full trial checks and `skippedChecks`; `bodiesAvailable: false` once slimmed) |
+| `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve` (action) |
+| `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve` (action; a `failed` change was dealt with) |
+
 ## Adapter Console pages
 
 Every built-in platform adapter (`plugins/adapters/*`) ships a `pages/index/index.ts`. Pages use `createAdapterConsolePage(adapterKey)` from `@zhin.js/client`; the server side uses `createAdapterConsoleRpc(spec)` from `@zhin.js/adapter`:

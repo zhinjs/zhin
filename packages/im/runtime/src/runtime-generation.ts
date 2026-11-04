@@ -3,6 +3,7 @@ import type {
   PluginId,
   PreparedGeneration,
   Scope,
+  Token,
 } from '@zhin.js/plugin-runtime';
 import type {
   CapabilityRoot,
@@ -25,10 +26,18 @@ export interface RuntimeGenerationModel {
 export interface RuntimeGenerationState {
   readonly ownership: SourceOwnershipIndex;
   readonly model?: RuntimeGenerationModel;
+  /** Real-token keyed private overrides owned by this generation, never a public snapshot map. */
+  readonly rootResources?: ReadonlyMap<Token<unknown>, unknown>;
 }
 
 export interface PreparedRuntimeGeneration {
   readonly generation: PreparedGeneration<RuntimeGenerationState>;
+}
+
+/** Config-only facades share the existing Scope/projection lifetimes. */
+export interface ConfigViewUpdates {
+  readonly config: ReadonlyMap<PluginId, unknown>;
+  readonly projections: ReadonlyMap<FeatureId, unknown>;
 }
 
 export function prepareRuntimeGeneration(

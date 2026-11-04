@@ -9,6 +9,7 @@ import {
   type AiCompletionOptions,
 } from '../../src/plugin-runtime/ai-completion.js';
 import { InMemoryUsageQuotaStore, UsageQuota } from '../../src/security/usage-quota.js';
+import { getLogger } from '@zhin.js/logger';
 
 type Call = { system: string; user: string; opts: FixtureTextOptions };
 
@@ -53,6 +54,32 @@ function fixture(provider: Partial<FixtureTextProvider> = {}, agentConfig: Recor
 }
 
 describe('aiCompletion.completeText', () => {
+  it.each(['executed', 'acquisition-failed'] as const)('logs only the actual acquired account identity (%s)', async outcome => {
+    const f = fixture({ name: 'retired-binding-provider' });
+    const logger = getLogger('agent');
+    const info = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const acquireDefaultModel = vi.fn(async () => {
+      if (outcome === 'acquisition-failed') throw new Error('synthetic acquisition failure');
+      return executionScope({ chat: executionBundle({
+        model: { id: 'selected', provider: 'actual-account', api: 'fixture', input: ['text'], contextWindow: 0, maxTokens: 0 },
+        completion: { complete: async () => assistantTextReply('observed result') },
+      }) });
+    });
+    try {
+      const pending = createAiCompletion({ service: f.service, acquireDefaultModel })
+        .completeText({ purpose: 'logging-test', prompt: 'hello', agent: 'zhin' });
+      if (outcome === 'acquisition-failed') await expect(pending).rejects.toThrow('synthetic acquisition failure');
+      else await expect(pending).resolves.toMatchObject({ text: 'observed result', model: 'selected' });
+      const log = (outcome === 'acquisition-failed' ? warn : info).mock.calls.flat().join(' ');
+      expect(log).not.toContain('retired-binding-provider');
+      expect(log).not.toContain('provider: p');
+      if (outcome === 'executed') expect(log).toContain('provider: actual-account');
+      else expect(log).not.toContain('provider: actual-account');
+      expect(acquireDefaultModel).toHaveBeenCalledOnce();
+    } finally { info.mockRestore(); warn.mockRestore(); }
+  });
+
   it('advertises shared attribution only when the injected quota port supports it', async () => {
     const { service, calls } = fixture();
     const quota = new UsageQuota({ perUserTokens: 100 });

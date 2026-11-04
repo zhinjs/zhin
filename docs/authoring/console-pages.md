@@ -422,6 +422,17 @@ interface SkillsStatus {
 | `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` 或 `ops:approve` |
 | `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` 或 `tool_approvals:resolve`（动作；管理员令牌总可调用） |
 
+### 内置操作：自我变更审批（ADR 0040）
+
+Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)）。列表只含元数据；文件正文与配置值只在详情里给审批人。
+
+| 方法 | 调用 | 需要的权限 |
+| --- | --- | --- |
+| `plugin.root.self-changes` | `pluginRpc('root', 'self-changes')` | `tool_approvals:read` 或 `ops:approve`（待审 / 最近变更与暂存区占用 `usageBytes`，不含正文） |
+| `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | **仅** `ops:approve`（逐文件 unified diff，全部文件合计 ≤ 64 KB，按行截断；配置补丁值按审计口径脱敏；完整试跑检查与 `skippedChecks`；已瘦身时 `bodiesAvailable: false`） |
+| `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve`（动作） |
+| `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve`（动作；`failed` 现场已处理） |
+
 ## 适配器 Console 页面
 
 内置平台适配器（`plugins/adapters/*`）各自带一个 `pages/index/index.ts`，统一用 `@zhin.js/client` 的 `createAdapterConsolePage(adapterKey)` 渲染，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec)` 提供数据：

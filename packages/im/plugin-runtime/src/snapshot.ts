@@ -14,6 +14,7 @@ import type {
   TokenId,
 } from './identity.js';
 import type { PluginMetadata } from './plugin.js';
+import { freezePluginConfigUpdate, type PluginConfigUpdateDeclaration } from './config-update-declaration.js';
 
 export interface PluginNodeSnapshot {
   readonly id: PluginId;
@@ -27,6 +28,7 @@ export interface PluginNodeSnapshot {
   readonly metadata?: PluginMetadata;
   /** Immutable schema declaration belonging to this committed generation. */
   readonly configSchema?: Readonly<Record<string, unknown>>;
+  readonly configUpdate?: PluginConfigUpdateDeclaration;
 }
 
 export interface RuntimeSnapshot {
@@ -330,8 +332,9 @@ export function createSnapshotView(
   return Object.freeze({
     ...state,
     generation,
-    tree: readonlyMap([...state.tree].map(([owner, node]) => [owner, node.configSchema
-      ? Object.freeze({ ...node, configSchema: freezeSchema(structuredClone(node.configSchema)) })
+    tree: readonlyMap([...state.tree].map(([owner, node]) => [owner, node.configSchema || node.configUpdate
+      ? Object.freeze({ ...node, ...(node.configSchema ? { configSchema: freezeSchema(structuredClone(node.configSchema)) } : {}),
+        ...(node.configUpdate ? { configUpdate: freezePluginConfigUpdate(node.configUpdate) } : {}) })
       : node])),
     config: readonlyMap(state.config),
     resources: readonlyMap(

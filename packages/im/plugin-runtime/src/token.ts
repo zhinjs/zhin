@@ -20,6 +20,9 @@ export function createRootPrivateToken<T>(id: string, description?: string): Tok
   return Object.freeze(token);
 }
 
+/** @internal Verify token identity before accepting a generation-private binding. */
+export function isRootPrivateToken(token: Token<unknown>): boolean { return rootPrivateTokens.has(token); }
+
 /** A Root-private capability readable only while projecting its owning Feature. */
 export function createFeaturePrivateToken<T>(id: string, feature: FeatureId, description?: string): Token<T> {
   const token = createRootPrivateToken<T>(id, description);

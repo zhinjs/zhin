@@ -22,6 +22,7 @@ zhin new <name>           # 创建约定式插件
 zhin install <pkg>        # 安装插件并写入 plugins.<instanceKey>
 zhin setup                # 交互式配置向导（适配器 / AI / 数据库）
 zhin config check [--fix] # 校验/修复 zhin.config.yml
+zhin config set <key> <value> # 经运行中 Host 校验、保存并按需生效；--offline 显式离线
 zhin doctor               # 环境诊断
 zhin send <scene_id> ...  # 向运行中的实例发消息
 zhin agent workroom runs --project <id> # 查看在线 Workroom Run 状态

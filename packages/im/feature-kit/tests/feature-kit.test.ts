@@ -212,6 +212,17 @@ it('retention is explicit and rejects unknown policies instead of silently treat
   expect(() => defineFeatureProvider({ ...provider, runtime: { ...provider.runtime, retain: 'always' } } as never)).toThrow('retention policy');
 });
 
+it('rejects a config-only update hook without the retention lifetime it requires', () => {
+  const prepareConfigUpdate = vi.fn((previous: unknown) => previous);
+  expect(() => defineFeatureProvider({ ...provider, runtime: { ...provider.runtime, prepareConfigUpdate } }))
+    .toThrow('prepareConfigUpdate requires');
+  const retained = defineFeatureProvider({ ...provider, runtime: {
+    ...provider.runtime, retain: 'when-owner-unchanged', prepareConfigUpdate,
+  } });
+  expect(retained.runtime.prepareConfigUpdate).toBe(prepareConfigUpdate);
+  expect(prepareConfigUpdate).not.toHaveBeenCalled();
+});
+
 
 it('construction context contains only owner-lifetime resources while operations retain project', () => {
   const owner = rootPluginId();

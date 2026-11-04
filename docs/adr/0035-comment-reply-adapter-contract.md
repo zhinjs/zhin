@@ -59,7 +59,9 @@ sidebar: false
 ### 6. 平台优先级
 
 1. **Bilibili（v1）**：仅视频评论（`type=1`）；动态（11/17）、专栏（12）留到 v1.1。
+   - 状态更新（#971 B1）：动态（11/17，经动态详情解析评论区）与专栏（12）已按同一契约接入，仍为 Experimental、review-only。
 2. **掘金**：第二个实现，用来验证本契约是否足够通用。
+   - 状态更新（#971 B3）：`@zhin.js/adapter-juejin`（Experimental、review-only）按同一契约接入白名单文章评论（`article:<文章id>:<根评论id>`，只回复评论不发顶层）；真实发送在纯 HTTP 下尚待人工验证。
 3. **抖音：v1 不做**。个人号无可用评论能力，企业号接口需审核且风控最严。
 
 ## Bilibili MVP 范围

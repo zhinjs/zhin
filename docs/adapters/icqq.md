@@ -183,7 +183,7 @@ IM turn 的场景，应通过 Host 提供的显式账号作用域操作，不能
 
 ICQQ Agent 可按需加载 `icqq-conversation` 查询当前群／频道和 Bot 自身角色。`icqq-messages` 提供当前会话的引用回复、真实消息合并转发和撤回自己发言；自己的消息撤回不要求群管身份或逐次审批，时限由平台决定。
 
-`icqq-group-admin` 新增撤回他人消息与退群：前者保留群管发起权限、实时平台角色检查，无需逐次审批；退群仅主人可发起、每次审批，Bot 为群主时拒绝执行。引用／转发走统一发送链路，不支持跨会话转发。当前 guild-channel 接入仅提供身份查询，不能使用这些群／私聊操作。详见 [权限与能力说明](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/PERMITS.md)。
+`icqq-group-admin` 新增撤回他人消息与退群：前者保留群管发起权限、实时平台角色检查，无需逐次审批；退群仅主人可发起、每次审批，Bot 为群主时拒绝执行。引用／转发走统一发送链路，不支持跨会话转发。`set_group_admin` 设置／取消管理员仅在 Bot 为当前群群主时注入，每次人工审批并实时复核角色。当前 guild-channel 接入仅提供身份查询，不能使用这些群／私聊操作。详见 [权限与能力说明](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/PERMITS.md)。
 
 ## Console 页面
 

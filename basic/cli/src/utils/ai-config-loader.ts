@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export type AiConfigUtils = {
-  /** Canonical model catalog/policy validation; no execution or credential IO. */
+  /** Startup AI consumer validation and retired-authority rejection; no execution or credential IO. */
   validateModelRuntimeConfig?: (ai: unknown, hostOwnerId: string) => string[];
   applyAiConfigFixes: (
     ai: unknown,

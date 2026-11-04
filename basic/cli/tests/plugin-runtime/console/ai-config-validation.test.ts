@@ -30,7 +30,7 @@ async function fixture(ai: Record<string, unknown> = {}) {
 }
 
 it.each([
-  { providers: {} }, { modelCatalog: {} }, { modelPolicy: {} }, { decisions: {} }, { plan: {} },
+  { providers: {} }, { providers: {}, enabled: 'invalid' }, { modelCatalog: {} }, { modelPolicy: {} }, { decisions: {} }, { plan: {} },
   { agents: { helper: { model: 'retired-native-selector' } } },
   { multimodal: { perception: { provider: 'retired' } } },
 ])('rejects retired startup selectors before environment lookup or an actual RPC save: %j', async value => {
@@ -61,7 +61,7 @@ it('leaves legacy source readable for migration while refusing a structured patc
 it('preserves legal startup extensions and saves through the same actual RPC authority', async () => {
   const f = await fixture();
   const value = { enabled: true, extension: { retained: true }, agents: { helper: { mcpServers: [] } } };
-  expect(await f.save(value)).toContainEqual(expect.objectContaining({ data: { success: true, reloaded: false, message: '配置已保存，需重启进程才能生效' } }));
+  expect(await f.save(value)).toContainEqual(expect.objectContaining({ data: { success: true, reloaded: false, restartRequired: true, message: '配置已保存，需重启进程才能生效' } }));
   expect(f.write).toHaveBeenCalledOnce();
   expect(JSON.parse(await readFile(f.file, 'utf8')).ai).toEqual(value);
 });

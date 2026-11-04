@@ -2,7 +2,11 @@ export {
   installConsoleApiResources,
   startConsoleControlPlane,
 } from './api-installer.js';
-export { ConsoleConfigurationStore } from './configuration.js';
+export { ConsoleConfigurationStore, ConfigChatRequestRejectedError } from './configuration.js';
+export type { ChatConfigurationRead } from './configuration.js';
+export { ConfigChatAccessError } from './configuration-chat-policy.js';
+export { parseConfigurationPath, formatConfigurationPath } from './configuration-path.js';
+export { ConfigPatchScopeError } from './configuration-patch.js';
 export {
   createConsoleHostModules,
   installConsoleRuntime,

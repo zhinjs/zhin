@@ -183,6 +183,9 @@ export const DECISION_REASON_CODES = [
   // #1051 F4：起草权限（只有主人 / 审批人）与全实例待审上限
   'change_draft_forbidden',
   'change_pending_cap_reached',
+  // Configuration outcome/ownership requires manual verification; neither implies emergency stop.
+  'change_config_unconfirmed',
+  'change_config_superseded',
 ] as const;
 export type DecisionReasonCode = typeof DECISION_REASON_CODES[number];
 
@@ -327,6 +330,23 @@ const SECRET_KEYS = new Set([
   'idtoken', 'apikey', 'privatekey', 'authorization', 'auth', 'cookie', 'cookies', 'setcookie',
   'session', 'sessionid', 'sessdata', 'bilijct', 'credential', 'credentials',
 ]);
+/** 规范化后以这些结尾的键名也视为密钥，例如 `openaiApiKey`、`DB_PASSWORD`、`githubToken`。 */
+const SECRET_KEY_SUFFIXES = ['token', 'secret', 'password', 'passwd', 'apikey', 'privatekey', 'credential', 'credentials', 'cookie'];
+
+/**
+ * 键名是否像密钥：命中审计密钥键表（去掉 `-` / `_`、小写后），或以常见密钥后缀结尾。
+ * 供审批详情 / IM 摘录这类展示正文的地方使用；`redactDecisionPayload` 本身仍只按键表精确匹配。
+ */
+export function isSecretLikeKey(key: string): boolean {
+  const normalized = normalizeKey(key);
+  return SECRET_KEYS.has(normalized) || SECRET_KEY_SUFFIXES.some(suffix => normalized.endsWith(suffix));
+}
+
+/** 键名是否是提示词类（完整提示词不得外露，审计里替换为 `[omitted]`）。 */
+export function isPromptPayloadKey(key: string): boolean {
+  return PROMPT_KEYS.has(normalizeKey(key));
+}
+
 /** 提示词类键名：完整提示词不得入审计。 */
 const PROMPT_KEYS = new Set([
   'prompt', 'systemprompt', 'system', 'messages', 'instructions', 'rawprompt', 'fullprompt',
