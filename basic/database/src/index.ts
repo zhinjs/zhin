@@ -10,11 +10,11 @@ export * from './type/keyvalue/database.js';
 export * from './type/keyvalue/model.js';
 export * from './registry.js';
 export * from './dialects/memory.js';
-export * from './dialects/mysql.js';
-export * from './dialects/pg.js';
-export * from './dialects/redis.js';
 export * from './dialects/sqlite.js';
-export * from './dialects/mongodb.js';
 export * from './migration.js';
 
 export * from './structured-schema.js';
+
+import { registerBuiltinDatabases } from './builtin-runtime.js';
+
+registerBuiltinDatabases();

@@ -2,7 +2,6 @@ import type { StatementColumnMetadata } from 'node:sqlite';
 import * as fs from 'node:fs';
 import path from 'node:path';
 import { Dialect, Database } from '../base/index.js';
-import { Registry } from '../registry.js';
 
 import { Column, Transaction, TransactionOptions } from '../types.js';
 import { RelatedDatabase } from '../type/related/database.js';
@@ -281,4 +280,3 @@ export class Sqlite<S extends Record<string, object> = Record<string, object>> e
     super(new SQLiteDialect<S>(config), definitions);
   }
 }
-Registry.register('sqlite', Sqlite);

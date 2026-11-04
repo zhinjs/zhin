@@ -94,7 +94,8 @@ sidebar: false
 
 - 真实 26 包 tarball 闭包的 strict 作者检查发现：`bridgeAuthoringHook()` 的推断返回类型把 handler 参数发射成不存在的根 `AIHookEvent`，而根实际公开名为 `OrchestratorHookEvent`。函数返回结构与已有 resource-hub `AIHook` 完全一致，因此只显式标注该真实返回类型；没有添加根 alias，也没有改变 handler、返回对象或运行行为。原作者发现测试与桥接合同测试共 7 项通过；单包构建后的 `.d.ts` 直接引用 `../resource-hub/types.js` 的 `AIHook`。
 - 该 Agent 宽入口归档检查同时发现 Database 的 `mongodb`、`mysql2/promise`、`pg`、`redis` 可选方言声明需要对应外部类型。四处静态类型依赖在基线 `d8532ddbf` 已存在；未补装四库、添加 shim 或使用 skipLibCheck 来称全入口闭包通过。纯推理入口已经验证的 strict 闭包与这个更宽 Agent 作者入口是不同证据层。
-- **独立候选方案（未实施）**：盘点 Database 公共类型的方言依赖边界，将中性合同与可选方言作者入口分离，设计后单独确认；不能仅删除合法类型、改变数据库运行 API，或要求所有 SQLite 用户默认安装四个驱动来掩盖声明问题。
+- **历史检查点**：此时 Database 类型隔离尚未实施，需单独设计确认，不能删除合法原厂类型或要求 SQLite 用户默认安装四个驱动掩盖声明问题。
+- **用户确认后的本地实施**：方案 B 已实现中性 root、精确方言子入口与唯一 Registry 增补入口，保留六 factory 自动注册、同步创建、连接时加载 SDK 和现有依赖范围。29 包真实归档的默认宽入口、四单驱动、PG 缺声明／仅声明消费者及真实泛型正负例通过，默认声明不包含未选方言；本地 Host／Memory／SQLite 生命周期回归通过。没有外部数据库或 Provider 调用，尚未发布；最终集成候选仍需全仓门禁。合同及验收见[数据库可选方言类型隔离](./database-optional-dialect-types.md)。
 
 ### 全量回归后的配置与脚手架收敛
 

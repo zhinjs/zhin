@@ -42,13 +42,21 @@ describe('DatabaseHost', () => {
     expect(() => host.define('tasks', { required: { type: 'text', nullable: false } }, { addColumns: ['required'] })).toThrow('nullable or defaulted');
     expect(host.tables()).toEqual([]);
   });
-  it.each(['mysql', 'pg'] as const)('passes only connection options to the %s factory', (dialect) => {
+  it.each([
+    ['memory', {}, 'Memory'],
+    ['mysql', { host: 'localhost', port: 3306, user: 'zhin', database: 'zhin_test', pool: { max: 2 } }, 'MySQL'],
+    ['pg', { host: 'localhost', port: 5432, application_name: 'host-contract', statement_timeout: 123 }, 'PG'],
+    ['mongodb', { url: 'mongodb://localhost', dbName: 'zhin_test', appName: 'host-contract' }, 'MongoDB'],
+    ['redis', { socket: { host: 'localhost', port: 6379 }, disableOfflineQueue: true }, 'Redis'],
+    ['sqlite', { filename: ':memory:' }, 'Sqlite'],
+  ] as const)('passes only original connection options to the real %s factory', (dialect, connection, constructorName) => {
     const factory = vi.spyOn(Registry, 'create');
     try {
-      const connection = { host: 'localhost', port: dialect === 'mysql' ? 3306 : 5432,
-        user: 'zhin', database: 'zhin_test', pool: { max: 2 } };
-      createDatabaseHost({ dialect, ...connection });
-      expect(factory).toHaveBeenCalledWith(dialect, connection);
+      const host = createDatabaseHost({ dialect, ...connection });
+      expect(factory).toHaveBeenCalledExactlyOnceWith(dialect, connection);
+      expect(host.db.constructor.name).toBe(constructorName);
+      expect(host.db).not.toBeInstanceOf(Promise);
+      expect(factory.mock.results[0]?.value.isStarted).toBe(false);
     } finally {
       factory.mockRestore();
     }

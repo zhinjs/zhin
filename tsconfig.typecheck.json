@@ -364,6 +364,21 @@
       ],
       "@zhin.js/agent/migration": [
         "./packages/im/agent/src/migration/index.ts"
+      ],
+      "@zhin.js/database/registry": [
+        "./basic/database/src/registry.ts"
+      ],
+      "@zhin.js/database/dialects/mysql": [
+        "./basic/database/src/dialects/mysql.ts"
+      ],
+      "@zhin.js/database/dialects/pg": [
+        "./basic/database/src/dialects/pg.ts"
+      ],
+      "@zhin.js/database/dialects/mongodb": [
+        "./basic/database/src/dialects/mongodb.ts"
+      ],
+      "@zhin.js/database/dialects/redis": [
+        "./basic/database/src/dialects/redis.ts"
       ]
     },
     "types": [],
@@ -420,7 +435,8 @@
     "packages/toolkit/testing/tests/types/public.ts",
     "packages/im/schedule-feature/tests/types/config.ts",
     "packages/im/feature-kit/tests/construction-types.fixture.ts",
-    "packages/im/agent/tests/types/ai-completion-contract.ts"
+    "packages/im/agent/tests/types/ai-completion-contract.ts",
+    "tests/fixtures/database-types/third-party.ts"
   ],
   "exclude": [
     "node_modules",
