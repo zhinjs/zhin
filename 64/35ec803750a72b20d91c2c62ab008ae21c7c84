@@ -1,0 +1,29 @@
+plugins/adapters/bilibili/tests/bilibili-resources.test.ts
+  s_9622fd28aba994::t_2abcd4ec267c71 1-341
+plugins/adapters/bilibili/tests/bilibili-endpoint.test.ts
+  s_079f1dc5e6308d::t_3d9ab8f1b51a40 62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6435ec803750a72b20d91c2c62ab008ae21c7c84",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
