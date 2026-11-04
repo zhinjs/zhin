@@ -17,6 +17,12 @@
 import type { ActorId, AgentCeiling, AgentName, Harness, Mail } from '@zhin.js/harness';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 
+/** Model chosen for the root turn; actor turns reuse it. */
+export interface ActorModelSelection {
+  readonly modelId: string;
+  readonly modelCandidates: readonly string[];
+}
+
 /** One collaborating agent, resolved for a turn. */
 export interface CollaborationAgent {
   readonly name: AgentName;

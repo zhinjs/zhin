@@ -33,7 +33,6 @@ import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentCapabilities, ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import { createDeferredCapabilityPlan } from '../plugin-runtime/deferred-capability-plan.js';
 import { BASH_TOOL_NAME, turnPolicyAllowsShell } from '../plugin-runtime/native-bash-tool.js';
-import type { SubagentModelSelection } from '../plugin-runtime/subagent-turn-capability.js';
 import { NETWORK_TOOL_NAMES } from '../security/network-authority.js';
 import { hostnameMatchesList } from '../security/network-policy.js';
 import { deriveSubagentPolicy } from '../security/policy-narrowing.js';
@@ -47,7 +46,7 @@ import {
 import { TurnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
 import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
-import type { CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
+import type { ActorModelSelection, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
 
 /** The legacy delegation tool; collaboration replaces it inside actor turns. */
 const SPAWN_TASK_TOOL_NAME = 'spawn_task';
@@ -64,7 +63,7 @@ export interface ActorTurnRunnerOptions {
   readonly harness: () => Harness;
   readonly createTools: CreateCollaborationTools;
   /** Resolved lazily: the root prompt (and model choice) is built after its capability plan. */
-  readonly resolveModel: () => SubagentModelSelection | undefined;
+  readonly resolveModel: () => ActorModelSelection | undefined;
   readonly loopHooks?: PluginAILoopHookRegistry;
   /** Workspace text captured with the engine's generation; never resolve a latest Host value. */
   readonly bootstrapContext?: string;
