@@ -2,11 +2,11 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-  OAuthCredential, ProviderAccount, ProviderDefinition, ProviderDriverLease, ProviderExecutionContext, ProviderGraph,
+  OAuthAuthentication, OAuthCredential, ProviderAccount, ProviderDefinition, ProviderDriverLease, ProviderExecutionContext, ProviderGraph,
 } from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { DatabaseInferenceRepository } from '../../../src/plugin-runtime/inference/repository.js';
-import { InferenceCredentialStore } from '../../../src/plugin-runtime/inference/credentials.js';
+import { InferenceAuthenticationError, InferenceCredentialStore } from '../../../src/plugin-runtime/inference/credentials.js';
 import { HostAccountRuntime } from '../../../src/plugin-runtime/inference/account-runtime.js';
 
 function deferred<T>() {
@@ -23,13 +23,13 @@ async function setup(method: 'api-key' | 'oauth' | 'none', source?: string) {
   const service = { id: 'service', rootId: '/root', ownerId: 'host', revision: 1,
     driver: { id: 'fixture', owner: 'root/provider', contractVersion: '1' }, options: {}, models: {} };
   const graph: ProviderGraph = { rootId: '/root', revision: 1, services: { service }, accounts: { account }, profiles: {}, purposes: { defaults: {} } };
-  const refresh = vi.fn(async (): Promise<OAuthCredential> => ({ accessToken: 'new-access', refreshToken: 'rotated-refresh', expiresAt: 5000 }));
-  const complete = vi.fn(async (): Promise<OAuthCredential> => ({ accessToken: 'logged-in', refreshToken: 'login-refresh', expiresAt: 5000 }));
-  const prepare = vi.fn(async ({ credential }: { credential: OAuthCredential }): Promise<OAuthCredential> => ({ ...credential,
+  const refresh = vi.fn<OAuthAuthentication<unknown>['refresh']>(async (): Promise<OAuthCredential> => ({ accessToken: 'new-access', refreshToken: 'rotated-refresh', expiresAt: 5000 }));
+  const complete = vi.fn<OAuthAuthentication<unknown>['complete']>(async (): Promise<OAuthCredential> => ({ accessToken: 'logged-in', refreshToken: 'login-refresh', expiresAt: 5000 }));
+  const prepare = vi.fn<NonNullable<OAuthAuthentication<unknown>['prepare']>>(async ({ credential }): Promise<OAuthCredential> => ({ ...credential,
     subject: 'verified-subject', preparation: { status: 'ready' }, metadata: { projectId: 'real-synthetic-project' } }));
   const release = vi.fn(async () => {});
   const definition: ProviderDefinition<unknown, unknown> = { id: 'fixture', contractVersion: '1',
-    serviceSchema: { parse: input => input }, authentication: { methods: [method], ...(method === 'oauth' ? { oauth: {
+    serviceSchema: { parse: input => input }, models: service => service.models, authentication: { methods: [method], ...(method === 'oauth' ? { oauth: {
       contractVersion: '1', redirectUri: 'http://localhost:1455/auth/callback', begin: async () => ({ authorizationUrl: 'https://provider.example/authorize', state: 'synthetic-state', privateState: { verifier: 'private-verifier' } }),
       complete, refresh, prepare,
     } } : {}) },
@@ -390,4 +390,167 @@ it('cannot publish a late exchange over a disconnected account, even if a provid
     expect(await fixture.host.status(fixture.account)).toEqual({ status: 'disconnected', revision: 2 });
     await expect(fixture.host.createPort(fixture.execution).authorize(fixture.request())).rejects.toMatchObject({ code: 'disconnected' });
   } finally { await fixture.close(); }
+});
+
+it.each(['late-result', 'signal-rejection'] as const)(
+  'preserves unknown exchange outcome and disconnected local state with an observing provider (%s)',
+  async settlement => {
+    const fixture = await setup('oauth');
+    const entered = deferred<AbortSignal>(), result = deferred<OAuthCredential>();
+    const aborted = vi.fn();
+    fixture.complete.mockImplementation(async ({ signal }) => {
+      // Real transports listen before submission; this makes the first abort reason observable.
+      signal.addEventListener('abort', aborted, { once: true });
+      entered.resolve(signal);
+      const credential = await result.promise;
+      if (settlement === 'signal-rejection') signal.throwIfAborted();
+      return credential;
+    });
+    try {
+      const signal = new AbortController().signal;
+      const login = await fixture.host.beginLogin({ account: fixture.account, signal });
+      const completion = fixture.host.completeLogin({ account: fixture.account, ...login, code: 'synthetic-code', signal });
+      const rejected = expect(completion).rejects.toMatchObject({ code: 'outcome-unknown' });
+      const exchangeSignal = await entered.promise;
+      expect((await fixture.store.read(fixture.account))?.payload.status).toBe('exchange-pending');
+      await fixture.host.disconnect({ account: fixture.account, expectedRevision: 1, authContractVersion: '1' });
+      expect(aborted).toHaveBeenCalledOnce();
+      expect(exchangeSignal.reason).toMatchObject({ code: 'disconnected' });
+      result.resolve({ accessToken: 'must-not-publish', refreshToken: 'must-not-publish-refresh' });
+      await rejected;
+      expect(await fixture.host.status(fixture.account)).toEqual({ status: 'disconnected', revision: 2 });
+      expect((await fixture.store.read(fixture.account))?.payload).toMatchObject({ status: 'disconnected' });
+      await expect(fixture.host.createPort(fixture.execution).authorize(fixture.request())).rejects.toMatchObject({ code: 'disconnected' });
+      expect(fixture.complete).toHaveBeenCalledOnce();
+      expect(fixture.prepare).not.toHaveBeenCalled();
+      expect(fixture.release).toHaveBeenCalledOnce();
+    } finally { result.resolve({ accessToken: 'unused' }); await fixture.close(); }
+  },
+);
+
+it('reports an already cancelled exchange as not submitted without calling the provider', async () => {
+  const fixture = await setup('oauth');
+  try {
+    const controller = new AbortController();
+    const login = await fixture.host.beginLogin({ account: fixture.account, signal: controller.signal });
+    controller.abort(new Error('synthetic cancellation before exchange'));
+    await expect(fixture.host.completeLogin({ account: fixture.account, ...login, code: 'synthetic-code', signal: controller.signal }))
+      .rejects.toMatchObject({ code: 'not-submitted' });
+    expect(fixture.complete).not.toHaveBeenCalled();
+    expect(fixture.prepare).not.toHaveBeenCalled();
+    expect(fixture.release).toHaveBeenCalledOnce();
+    expect(await fixture.host.status(fixture.account)).toEqual({ status: 'reauthorize', revision: 2 });
+  } finally { await fixture.close(); }
+});
+
+it.each((['not-submitted', 'rejected', 'identity-change', 'conflict'] as const).flatMap(code =>
+  [false, true].map(cancelled => ({ code, cancelled }))))(
+  'preserves a concrete exchange error $code (cancelled=$cancelled)', async ({ code, cancelled }) => {
+    const fixture = await setup('oauth');
+    const failure = new InferenceAuthenticationError(code);
+    const entered = deferred<void>(), proceed = deferred<void>();
+    fixture.complete.mockImplementation(async () => { entered.resolve(); await proceed.promise; throw failure; });
+    try {
+      const controller = new AbortController(), signal = controller.signal;
+      const login = await fixture.host.beginLogin({ account: fixture.account, signal });
+      const completion = fixture.host.completeLogin({ account: fixture.account, ...login, code: 'synthetic-code', signal });
+      const rejected = expect(completion).rejects.toBe(failure);
+      await entered.promise;
+      if (cancelled) controller.abort(new Error('synthetic cancellation distinct from provider failure'));
+      proceed.resolve();
+      await rejected;
+      expect(fixture.complete).toHaveBeenCalledOnce();
+      expect(fixture.prepare).not.toHaveBeenCalled();
+      expect(fixture.release).toHaveBeenCalledOnce();
+    } finally { proceed.resolve(); await fixture.close(); }
+  },
+);
+
+
+it.each(['late-result', 'signal-rejection'] as const)(
+  'preserves unknown refresh outcome without reviving a disconnected account (%s)', async settlement => {
+    const fixture = await setup('oauth');
+    const entered = deferred<AbortSignal>(), result = deferred<OAuthCredential>();
+    const aborted = vi.fn();
+    fixture.refresh.mockImplementation(async ({ signal }) => {
+      signal.addEventListener('abort', aborted, { once: true });
+      entered.resolve(signal);
+      const credential = await result.promise;
+      if (settlement === 'signal-rejection') signal.throwIfAborted();
+      return credential;
+    });
+    try {
+      await fixture.seed({ accessToken: 'expired', refreshToken: 'old-refresh', expiresAt: 1 });
+      const authorization = fixture.host.createPort(fixture.execution).authorize(fixture.request());
+      const rejected = expect(authorization).rejects.toMatchObject({ code: 'outcome-unknown' });
+      const exchangeSignal = await entered.promise;
+      expect((await fixture.store.read(fixture.account))?.payload.status).toBe('exchange-pending');
+      await fixture.host.disconnect({ account: fixture.account, expectedRevision: 2, authContractVersion: '1' });
+      expect(aborted).toHaveBeenCalledOnce();
+      expect(exchangeSignal.reason).toMatchObject({ code: 'disconnected' });
+      result.resolve({ accessToken: 'must-not-publish', refreshToken: 'must-not-publish-refresh' });
+      await rejected;
+      expect(await fixture.host.status(fixture.account)).toEqual({ status: 'disconnected', revision: 3 });
+      expect((await fixture.store.read(fixture.account))?.payload).toMatchObject({ status: 'disconnected' });
+      await expect(fixture.host.createPort(fixture.execution).authorize(fixture.request())).rejects.toMatchObject({ code: 'disconnected' });
+      expect(fixture.refresh).toHaveBeenCalledOnce();
+      expect(fixture.complete).not.toHaveBeenCalled();
+      expect(fixture.release).toHaveBeenCalledOnce();
+    } finally { result.resolve({ accessToken: 'unused' }); await fixture.close(); }
+  },
+);
+
+it('does not submit a refresh cancelled while publishing its pending record', async () => {
+  const fixture = await setup('oauth');
+  const pending = deferred<void>(), proceed = deferred<void>();
+  try {
+    await fixture.seed({ accessToken: 'expired', refreshToken: 'old-refresh', expiresAt: 1 });
+    const commit = fixture.repo.commitCredential.bind(fixture.repo);
+    vi.spyOn(fixture.repo, 'commitCredential').mockImplementation(async input => {
+      const result = await commit(input);
+      if (input.write.record?.revision === 2) {
+        pending.resolve();
+        await proceed.promise;
+      }
+      return result;
+    });
+    const authorization = fixture.host.createPort(fixture.execution).authorize(fixture.request());
+    const rejected = expect(authorization).rejects.toMatchObject({ code: 'not-submitted' });
+    await pending.promise;
+    await fixture.host.disconnect({ account: fixture.account, expectedRevision: 2, authContractVersion: '1' });
+    proceed.resolve();
+    await rejected;
+    expect(fixture.refresh).not.toHaveBeenCalled();
+    expect(fixture.complete).not.toHaveBeenCalled();
+    expect(fixture.release).toHaveBeenCalledOnce();
+    expect(await fixture.host.status(fixture.account)).toEqual({ status: 'disconnected', revision: 3 });
+  } finally { proceed.resolve(); await fixture.close(); }
+});
+
+it('keeps read-only preparation cancellation separate from exchange outcome uncertainty', async () => {
+  const fixture = await setup('oauth');
+  const entered = deferred<AbortSignal>(), result = deferred<OAuthCredential>();
+  const aborted = vi.fn();
+  const credential = { accessToken: 'existing', refreshToken: 'existing-refresh', preparation: { status: 'required' as const } };
+  fixture.prepare.mockImplementation(async ({ signal }) => {
+    signal.addEventListener('abort', aborted, { once: true });
+    entered.resolve(signal);
+    return result.promise;
+  });
+  try {
+    await fixture.seed(credential);
+    const preparation = fixture.host.prepareLogin({ account: fixture.account, expectedRevision: 1, signal: new AbortController().signal });
+    const rejected = expect(preparation).rejects.toMatchObject({ code: 'disconnected' });
+    const preparationSignal = await entered.promise;
+    await fixture.host.disconnect({ account: fixture.account, expectedRevision: 1, authContractVersion: '1' });
+    expect(aborted).toHaveBeenCalledOnce();
+    expect(preparationSignal.reason).toMatchObject({ code: 'disconnected' });
+    result.resolve({ ...credential, preparation: { status: 'ready' } });
+    await rejected;
+    expect(await fixture.host.status(fixture.account)).toEqual({ status: 'disconnected', revision: 2 });
+    expect(fixture.prepare).toHaveBeenCalledOnce();
+    expect(fixture.complete).not.toHaveBeenCalled();
+    expect(fixture.refresh).not.toHaveBeenCalled();
+    expect(fixture.release).toHaveBeenCalledOnce();
+  } finally { result.resolve(credential); await fixture.close(); }
 });

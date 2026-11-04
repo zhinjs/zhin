@@ -141,6 +141,17 @@ function publicFailure(
   const result = authenticationFailure(error);
   return result === 'credential-invalid' ? 'reauthorize' : result;
 }
+/** Cancellation describes this exchange attempt separately from the account's local state. */
+function exchangeFailure(input: Readonly<{
+  error: unknown;
+  signal: AbortSignal;
+  /** Driver callback was invoked; this does not prove an upstream submission. */
+  invoked: boolean;
+}>): unknown {
+  if (input.signal.aborted && input.error === input.signal.reason)
+    return new InferenceAuthenticationError(input.invoked ? 'outcome-unknown' : 'not-submitted');
+  return input.error;
+}
 function ready(open: OpenCredential | undefined): asserts open is OpenCredential & {
   payload: Extract<CredentialPayload, { status: 'ready' }>;
 } {
@@ -716,6 +727,7 @@ export class HostAccountRuntime {
         this.#closed.signal,
         this.#signal(login.account),
       ]);
+      let invoked = false;
       try {
         signal.throwIfAborted();
         const credential = await this.#withFetch(
@@ -724,8 +736,10 @@ export class HostAccountRuntime {
             account: login.account,
             definition: login.definition,
           },
-          (fetch) =>
-            login.definition.authentication.oauth!.complete({
+          (fetch) => {
+            signal.throwIfAborted();
+            invoked = true;
+            return login.definition.authentication.oauth!.complete({
               service: login.service,
               redirectUri: login.redirectUri,
               code: input.code,
@@ -734,7 +748,8 @@ export class HostAccountRuntime {
               signal,
               ...(previous?.payload.client ? { client: previous.payload.client } : {}),
               fetch,
-            })
+            });
+          }
         );
         signal.throwIfAborted();
         const previousSubject = identity(previous).subject;
@@ -784,16 +799,17 @@ export class HostAccountRuntime {
           }
         }
       } catch (error) {
+        const failure = exchangeFailure({ error, signal, invoked });
         await this.#finishFailedExchange({
           account: login.account,
           pending,
           contract: login.contractVersion,
-          error,
+          error: failure,
           previous,
         });
-        throw error instanceof InferenceAuthenticationError
-          ? error
-          : new InferenceAuthenticationError(publicFailure(error));
+        throw failure instanceof InferenceAuthenticationError
+          ? failure
+          : new InferenceAuthenticationError(publicFailure(failure));
       }
     } finally {
       this.#logins.delete(input.loginId);
@@ -1075,20 +1091,25 @@ export class HostAccountRuntime {
           ...identity(current),
         },
       });
+      let invoked = false;
       try {
         signal.throwIfAborted();
         const bundle = current.payload.credential;
         const credential = await this.#withFetch(
           { service, account, definition: lease.definition },
-          (fetch) =>
-            oauth.refresh({
+          (fetch) => {
+            signal.throwIfAborted();
+            invoked = true;
+            return oauth.refresh({
               service,
               credential: bundle,
               signal,
               ...(current.payload.client ? { client: current.payload.client } : {}),
               fetch,
-            })
+            });
+          }
         );
+        signal.throwIfAborted();
         const previousSubject = identity(current).subject;
         if (previousSubject && credential.subject && previousSubject !== credential.subject)
           throw new InferenceAuthenticationError('identity-change');
@@ -1105,16 +1126,17 @@ export class HostAccountRuntime {
           },
         });
       } catch (error) {
+        const failure = exchangeFailure({ error, signal, invoked });
         await this.#finishFailedExchange({
           account,
           pending,
           contract: oauth.contractVersion,
-          error,
+          error: failure,
           previous: current,
         });
-        throw error instanceof InferenceAuthenticationError
-          ? error
-          : new InferenceAuthenticationError(publicFailure(error));
+        throw failure instanceof InferenceAuthenticationError
+          ? failure
+          : new InferenceAuthenticationError(publicFailure(failure));
       }
     } finally {
       await this.#release(() => lease.release());

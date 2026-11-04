@@ -83,3 +83,19 @@ Root 对 `fe678c74824f6bc5bf7408ebf7b9fcc2b2bbf82c` 的完整 `check:all` 退出
 仅复制 git 已跟踪的当前候选到 `/private/tmp/zhin-main-13ce-docs-52roe2gp`，排除上述未跟踪稿；复用已构建的依赖，生成器与站点产物写受控副本。`pnpm docs:build` 首次在 Vue 编译阶段暴露目标架构计划正文的裸泛型标签，第二轮暴露 Database 计划同类 `Databases<S>`；只为这些实际 TypeScript 类型词补 inline code，未改代码块或合同。第三轮 Vue 通过，但 VitePress 检出 Provider 升级页两条跨 docs 根的包 README 相对链接（TypeSafe 既有链接、此前 DB 说明新增链接）；改为同仓库 GitHub README 路径并保锚点，未禁用 dead-link 检查。
 
 三轮独立红日志为 `/tmp/zhin-main-13ce-docs-build.log`、`docs-build-second.log`、`docs-build-third.log`。限定标记／链接修复后完整 pipeline（TypeDoc、配置／排障生成、Adapter 同步、VitePress client/server 与页面渲染）通过，日志 `/tmp/zhin-main-13ce-docs-build-fourth.log`。文件系统 `check:doc-links` 只证明文件存在，不替代站点编译与路由检查；这些本地实证不能证明 Cloudflare 的无日志失败具有同一原因。
+
+## c9 远端 CI 取消语义与夹具通知跟进
+
+远端 test(2) 的登录交换用例收到 `disconnected` 而非既有 `outcome-unknown`；原本地单跑通过不能排除该问题。实际 SQLite／Host 受控交错显示：Provider 监听组合 signal 时首个取消 reason 是账号的 `InferenceAuthenticationError(disconnected)`，原 catch 直接透传；不监听时本机 Node 的延迟组合 reason 可为 DOM AbortError，经既有 publicFailure 才得到 unknown。两者均已进入一次 Driver callback，账号 tombstone 都为 disconnected／revision 2。原断言保留。
+
+登录与 refresh 在现有交换调用处记录本地 `invoked` 事实，它不证明上游已提交。共享纯错误映射只处理 `error === 本次 signal.reason`：调用前 `not-submitted`，调用后 `outcome-unknown`；其它显式 Driver 拒绝与 Host identity-change／conflict 等错误保持原对象／含义。refresh 补同样的返回后取消检查；CAS、tombstone、刷新单飞、账号使用权与重试配置不变。只读 preparation 保持原取消含义，不应用交换 unknown 映射。
+
+| 预期 | 实际证据 | 结论／未覆盖 |
+| --- | --- | --- |
+| 原 CI 错误可控复现，不能靠运行到绿 | `/tmp/zhin-account-ci-race-probe-observed.log` 与 `/tmp/zhin-ci-account-deterministic-red.log`；sibling 交错红 `/tmp/zhin-ci-account-sibling-red.log` | 本地实际 SQLite／Host；无真实账号或供应商请求 |
+| 调用前后取消、迟到结果和具体错误均有正确含义 | 最终账号 37 项连同仓储／管理共 3 文件 48 项通过；`/tmp/zhin-ci-exchange-related-final.log`。包含监听 signal 后的迟到结果／同 reason 拒绝、pending 提交屏障、已取消但未调用、取消并存的具体错误原对象、只读 preparation 与精确调用／释放次数 | 不新增重试或回放，迟到凭据不覆盖 disconnected |
+| 相同受控原探针修后通过 | `/tmp/zhin-account-ci-race-probe-observed-green.log`：unknown 交换结果、disconnected revision 2、complete 仅一次 | 本机 Node 24；远端 Node／CI 后续另验 |
+| 新测试也满足真实类型合同 | source tsc 与原 9 fixture 加整份 account-runtime.test.ts 的 10 fixture tsc 通过；mock 从 canonical OAuthAuthentication complete／refresh／prepare 推导，并补夹具原来缺少的 models 声明。脚本 `/tmp/zhin-ci-exchange-extra-types.py`，日志 `/tmp/zhin-ci-exchange-extra10-types-final.log` | 无 cast／any／skipLibCheck；继承原根 include、exclude 与严格配置 |
+| CodeQL 指向夹具本地调度，不扩成生产防御 | 仅把 HTTP URL 查 Map 函数的调用改为 `/v1/models`、`/token` 两字面路径各通知自己的本地 waiter；未知 URL 原响应不变。原生 Fetch／GC／disconnect／discovery／OAuth 夹具修前后均在原 12 s 子进程／15 s 测试预算通过；`/tmp/zhin-ci-native-lifetime-before.log` / `after.log` | 原调用数与取消断言保留；本地没有 CodeQL CLI，告警是否消除仍须远端扫描，不宣称扫描已绿 |
+
+TS 源码／测试 lint 为 0 errors。MJS 在仓库常规规则中原本被忽略；额外以 `--no-ignore` 及准确 Node 全局声明检查为 0 errors／1 个既有 console marker warning，未修改 lint 规则或添加抑制。source 与原九 fixture 其余内容未改；metadata 仍只是外部待确认提案，本次不实施。唯一未跟踪研究稿保持原样。

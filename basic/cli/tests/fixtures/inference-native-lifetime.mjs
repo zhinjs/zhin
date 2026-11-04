@@ -29,7 +29,8 @@ const chunk = {
   choices: [{ index: 0, delta: { content: 'partial' }, finish_reason: null }],
 };
 let submitted = 0;
-const waitingHeaders = new Map();
+let notifyDiscoveryHeaders;
+let notifyTokenHeaders;
 const server = createServer(async (request, response) => {
   for await (const value of request) void value;
   submitted++;
@@ -40,7 +41,8 @@ const server = createServer(async (request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' });
     response.write(request.url === '/token' ? '{"access_token":' : '{"data":[');
   }
-  waitingHeaders.get(request.url)?.();
+  if (request.url === '/v1/models') notifyDiscoveryHeaders?.();
+  else if (request.url === '/token') notifyTokenHeaders?.();
 });
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const base = `http://127.0.0.1:${server.address().port}`;
@@ -269,7 +271,7 @@ try {
   }
   await putKey(2);
   const discoveryController = new AbortController();
-  const discoveryHeaders = new Promise((resolve) => waitingHeaders.set('/v1/models', resolve));
+  const discoveryHeaders = new Promise((resolve) => { notifyDiscoveryHeaders = resolve; });
   const discovery = observe(
     management.management.discover(principal, { accountId }, discoveryController.signal)
   );
@@ -284,7 +286,7 @@ try {
     signal: new AbortController().signal,
   });
   const controller = new AbortController();
-  const tokenHeaders = new Promise((resolve) => waitingHeaders.set('/token', resolve));
+  const tokenHeaders = new Promise((resolve) => { notifyTokenHeaders = resolve; });
   const completing = observe(
     host.accounts.completeLogin({
       account: authAccount,
