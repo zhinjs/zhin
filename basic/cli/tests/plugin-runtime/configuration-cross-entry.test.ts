@@ -24,7 +24,7 @@ import { createConfigurationChatAuthorizer, createEndpointRoleResolver, createSe
  * #1139 P4: cross-entry regression. Console (`config:patch` over the real HTTP RPC route),
  * CLI (`zhin config` against the same Host, or `--offline` on the same file) and IM
  * (owner private chat through the real adapter → command dispatch) all share ONE
- * ConsoleConfigurationStore and ONE RootRuntime, exactly as `zhin start` wires them.
+ * ConsoleConfigurationStore and ONE RootRuntime, mirroring how `zhin start` wires them.
  *
  * `--offline` normally validates by importing the project's declarations from disk; this
  * fixture's modules are in memory, so the offline store below keeps the shared
@@ -59,6 +59,7 @@ type Store = Pick<ConsoleConfigurationStore, 'readChat' | 'patchChat'>;
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  vi.useRealTimers();
   process.exitCode = previousExitCode;
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
@@ -265,9 +266,13 @@ describe('offline save while the Host runs without watch (#1139 P4)', () => {
 describe('unknown consistency across entries when Root apply throws mid-way (#1139 P4)', () => {
   it.each([
     { when: 'before publishing a generation', publish: false, json: true },
+    { when: 'before publishing a generation', publish: false, json: false },
+    { when: 'after publishing a generation (acknowledgement lost)', publish: true, json: true },
     { when: 'after publishing a generation (acknowledgement lost)', publish: true, json: false },
-  ])('saved + unconfirmed everywhere, with evidence and no automatic replay ($when)', async ({ publish, json }) => {
+  ])('saved + unconfirmed everywhere, with evidence and no automatic replay ($when, json=$json)', async ({ publish, json }) => {
     const f = await fixture();
+    // Fake only setTimeout so a delayed automatic retry cannot slip past the replay checks below.
+    vi.useFakeTimers({ toFake: ['setTimeout'], shouldAdvanceTime: true });
     const realApply = f.runtime.applyConfiguration.bind(f.runtime);
     const apply = vi.spyOn(f.runtime, 'applyConfiguration').mockImplementation(async revision => {
       if (publish) await realApply(revision);
@@ -316,8 +321,9 @@ describe('unknown consistency across entries when Root apply throws mid-way (#11
     expect(JSON.stringify(consoleResult)).not.toContain('DO_NOT_DISCLOSE');
     expect(await f.consoleRpc<ConsoleConfigSource>({ type: 'config:get-source' })).toMatchObject({ applicationError: 'unconfirmed' });
 
-    // No entry replays anything on its own: one commit and one apply per user action.
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // No entry replays anything on its own: one commit and one apply per user action,
+    // even after every pending timer (any delayed retry) has run.
+    await vi.runAllTimersAsync();
     expect(prepare).toHaveBeenCalledTimes(3);
     expect(apply).toHaveBeenCalledTimes(3);
     expect(patchChat).toHaveBeenCalledOnce();
@@ -332,5 +338,36 @@ describe('unknown consistency across entries when Root apply throws mid-way (#11
     expect(recovered.applicationError).toBeUndefined();
     expect(recovered.application?.sourceRevision).toBe(recovered.revision);
     expect(f.effectiveNickname()).toBe('From Console');
+  });
+
+  it.each([
+    { when: 'before publishing a generation', publish: false },
+    { when: 'after publishing a generation (acknowledgement lost)', publish: true },
+  ])('an explicit Console apply that throws is unconfirmed and is not retried ($when)', async ({ publish }) => {
+    const f = await fixture();
+    const saved = await f.cli(['set', 'bot.nickname', 'Offline value'], { offline: true });
+    expect(saved.code).toBe(CONFIG_EXIT_CODES.ok);
+    const pending = await f.consoleRpc<ConsoleConfigSource>({ type: 'config:get-source' });
+    vi.useFakeTimers({ toFake: ['setTimeout'], shouldAdvanceTime: true });
+    const realApply = f.runtime.applyConfiguration.bind(f.runtime);
+    const apply = vi.spyOn(f.runtime, 'applyConfiguration').mockImplementation(async revision => {
+      if (publish) await realApply(revision);
+      throw new Error('DO_NOT_DISCLOSE synthetic apply failure');
+    });
+    const prepare = vi.spyOn(f.document, 'prepare');
+
+    const applied = await f.consoleRpc<ConsoleConfigApplyResult>({ type: 'config:apply', expectedRevision: pending.revision });
+    expect(applied).toMatchObject({ status: 'unconfirmed' });
+    expect(JSON.stringify(applied)).not.toContain('DO_NOT_DISCLOSE');
+    const afterApply = await f.consoleRpc<ConsoleConfigSource>({ type: 'config:get-source' });
+    expect(afterApply).toMatchObject({ applicationError: 'unconfirmed', revision: pending.revision });
+
+    // Nothing replays the apply on its own, even after every pending timer has run; applying never commits.
+    await vi.runAllTimersAsync();
+    expect(apply).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledWith(pending.revision);
+    expect(prepare).not.toHaveBeenCalled();
+    expect(await f.fileNickname()).toBe('Offline value');
+    expect(f.effectiveNickname()).toBe(publish ? 'Offline value' : 'Before');
   });
 });
