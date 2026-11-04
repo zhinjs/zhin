@@ -1,0 +1,22 @@
+packages/im/harness/src/mailbox.ts
+  s_178aad69aa64a5::t_e9456a60a07d62 1-124,126-222
+  s_178aad69aa64a5::t_8830fec2781d36 125
+packages/im/harness/tests/mailbox.test.ts
+  s_178aad69aa64a5::t_91e7ff1d94bb7f 1-256
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c75f47935f8ae08ee6163e9ffd83e2035c11b147",
+  "prompts": {},
+  "sessions": {
+    "s_178aad69aa64a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0eca046-2ac8-49e0-a6a9-b7766f7049bb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
