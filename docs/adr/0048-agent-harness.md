@@ -90,7 +90,7 @@ sidebar: false
 2. **预算守恒**：Engagement 有一个预算池（token、模型调用次数、墙钟时间、工具副作用次数）；委派时从委派方剩余额度中**划拨**，子树用量不能超过划拨额。超支 → 该分支 `budget_exceeded`，结果照常回到委派方。
 3. **因果完整**：每封 Mail 都有 `engagementId`、`causationId`、`principal`。没有根的 Mail 拒收。
 4. **审批只归人**：需要审批的动作（硬闸、危险工具、自我变更）一律路由给 Engagement 的发起主体或其配置的审批人，**永远不交给另一个 Agent 批准**。
-5. **防环与收敛**：委派深度上限、单 Engagement 扇出上限、同一对 Actor 往返次数上限、相同内容哈希重复检测。触发任一条 → 冻结该分支并 `escalate` 给人。
+5. **防环与收敛**：委派深度上限、单 Engagement 扇出上限、同一对 Actor 往返次数上限、相同内容哈希重复检测，以及「互相等待」检测（A 在等 B 时 B 反问 A）。触发任一条 → 整个 Engagement 冻结：只通知人一次，取消所有在途的 ask / delegate，之后的发送一律拒绝。
 6. **身份来自传输**：`from` 由 Mailbox 填写；正文里的“我是主人 / 我是 reviewer”一律无效。IM 入站的 `origin`（`self / member / peer_bot / human`）由 Peer Registry 判定，沿用 Room 方案 §3.4 的三层判定。
 7. **Bot 不能用说话触发 Bot**：成员 Bot 在群里的发言只是投影和上下文，不会成为另一个 Actor 的 `human` Mail；Actor 之间只走 Mail。
 8. **全程留痕**：每封 Mail、每次工具调用、每次护栏拦截都写进 Engagement Journal；没有写进去的事情视为没发生。
@@ -183,8 +183,8 @@ packages/im/
 | 阶段 | 内容 | 结束时删除 |
 |---|---|---|
 | H0 | 本文定稿为 ADR；盘点引用（`docs/plans/agent-harness-h0-inventory.md`）；写第 7 节评测用例（`packages/im/agent/evals/cases/harness-*.case.ts`，先以 `skip` 标注实现阶段） | — |
-| H1 | `harness` 包：Mail、Mailbox、Engagement、Authority `attenuate()`、预算池、Guard Kernel、Journal；`executeAgentTurn` 接到 Mailbox 上 | — |
-| H2 | 协作工具 `agents / ask / delegate / tell / cancel / escalate`；IM 主路径改为 `human` Mail | `spawn/`、`subagent/`、deferred worker、detached task、standalone loop |
+| H1 | `harness` 包：Mail、Mailbox、Engagement、Authority `attenuate()`、预算池、Guard Kernel、Journal。**已完成（2026-11-04）**：`packages/im/harness`；实时回合以 `attach` 作为根 Actor 接入，其余 Actor 回合由 Mailbox 驱动 | — |
+| H2 | 协作工具 `agents / ask / delegate / tell / cancel / escalate`；IM 主路径改为 `human` Mail。**进展（2026-11-04）**：协作工具与 Actor 回合已接入插件运行时回合（有同伴 Agent 时启用），8 条 harness 评测进入 CI；IM 回合仍走现有准入，H3 再收进 Mailbox | `spawn/`、`subagent/`、deferred worker、detached task、standalone loop |
 | H3 | 收件箱策略吸收准入 / 排队 / 合流 / 弹幕；定时改为 `timer` Mail | `assistant/` job engine、ingress 里的散落调度 |
 | H4 | Venue 层（合入 Room 分支的路由与身份部分）、多 Bot 投影、可见性策略、发言权 | `packages/im/workroom/` 整包、五角色 |
 | H5 | `board`、协作图 trace 与 Console 页面、A2A 远程传输 | 旧文档与示例 |
