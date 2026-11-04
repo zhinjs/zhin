@@ -65,6 +65,11 @@ export function createHookEnv() {
       return (slots[at] as { value: unknown }).value;
     },
     useCallback(fn: () => unknown, deps: unknown[]) { return hooks.useMemo(() => fn, deps); },
+    useSyncExternalStore(subscribe: (onChange: () => void) => () => void, getSnapshot: () => unknown) {
+      const at = cursor++;
+      if (!(at in slots)) slots[at] = subscribe(() => { dirty = true; });
+      return getSnapshot();
+    },
     useEffect(fn: () => (() => void) | void, deps: unknown[]) {
       const at = cursor++;
       const old = slots[at] as { deps: unknown[]; cleanup?: () => void } | undefined;
