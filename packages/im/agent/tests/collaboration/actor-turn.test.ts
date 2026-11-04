@@ -259,7 +259,8 @@ describe('actor turn runner', () => {
     const ctx = setup({ agents: [agentDef('zhin', ALL), agentDef('researcher', ALL)], tools: [], budget: { ...BUDGET, modelCalls: 1 }, script: reply('done', 3) });
     const { root } = await ctx.attach();
     const result = await ctx.runner('researcher', [mailFrom(root, { kind: 'ask', body: { kind: 'ask', question: 'q' } })], new AbortController().signal);
-    expect(result).toEqual({ status: 'budget_exceeded', content: 'done' });
+    // Overspend is caught live and stops the turn; the partial reply is kept with a budget note.
+    expect(result).toMatchObject({ status: 'budget_exceeded', content: expect.stringMatching(/^done\n\nStopped: the budget granted for this work ran out after 3 model call\(s\)\.$/) });
   });
 
   it('fails for an unknown agent', async () => {

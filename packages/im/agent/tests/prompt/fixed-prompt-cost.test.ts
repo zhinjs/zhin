@@ -25,7 +25,7 @@ describe('built-in IM prompt cost (#949)', () => {
     });
     // Baseline: ~1,180 estimated tokens, excluding message schema/tool catalogs.
     // This is a regression budget, not a runtime truncation limit or provider billing.
-    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(940);
+    expect(estimatePromptTokens(prompt)).toBeLessThanOrEqual(900);
     for (const rule of ['<critical_rules>', '# Workspace tasks in chat', '# Chat style', '# Security',
       'SOUL.md', 'delegate', 'ask_user', 'master', 'trusted', 'user', 'ZHIN_NEEDS_OWNER:',
       '/approve', 'policyBlocked', 'sensitive', 'tool output']) {
