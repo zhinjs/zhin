@@ -1,0 +1,73 @@
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_9622fd28aba994::t_6075740368e362 174-176
+packages/im/agent/tests/spawn/spawn-task-tool.test.ts
+  s_9622fd28aba994::t_6075740368e362 56
+packages/im/agent/tests/core/standalone-recompletion-terminal.test.ts
+  s_9622fd28aba994::t_6075740368e362 1-205
+packages/im/agent/README.md
+  s_9622fd28aba994::t_6075740368e362 211-216
+packages/im/agent/src/subagent/index.ts
+  s_9622fd28aba994::t_6075740368e362 21
+.changeset/standalone-terminal-outcomes.md
+  s_9622fd28aba994::t_6075740368e362 1-9
+packages/im/agent/tests/core/progress-budget.test.ts
+  s_9622fd28aba994::t_6075740368e362 637-654
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_6075740368e362 614
+packages/im/agent/tests/model-runtime/standalone-terminal.test.ts
+  s_9622fd28aba994::t_6075740368e362 1-220
+packages/im/agent/tests/subagent/terminal-outcomes.test.ts
+  s_9622fd28aba994::t_6075740368e362 1-309
+packages/im/agent/src/core/agent-run-shared.ts
+  s_9622fd28aba994::t_6075740368e362 11-19
+packages/im/agent/tests/subagent-artifact.test.ts
+  s_9622fd28aba994::t_6075740368e362 10,45-60
+packages/im/agent/tests/core/standalone-terminal.test.ts
+  s_9622fd28aba994::t_6075740368e362 1-362
+packages/im/agent/src/service.ts
+  s_9622fd28aba994::t_6075740368e362 22,52-53,71-72,197,236
+packages/im/agent/src/spawn/spawn-task-tool.ts
+  s_9622fd28aba994::t_6075740368e362 151
+packages/im/agent/src/subagent/subagent-system.ts
+  s_9622fd28aba994::t_6075740368e362 10,96,127
+packages/im/agent/src/deferred-worker-runner.ts
+  s_9622fd28aba994::t_6075740368e362 7,11-12,66-68,163,185,208,210-214,218,227-228,232,239,241-242,262-263,266,268-269
+basic/cli/tests/plugin-runtime/workroom/planning-terminal.test.ts
+  s_9622fd28aba994::t_6075740368e362 1-105
+packages/im/agent/src/subagent/subagent-runtime.ts
+  s_9622fd28aba994::t_6075740368e362 28-29,134,138-140,314-315,321,324,362-363,529,571-579,650-651,658-665,667-672,676,694,696,699-706,711,714,716-718,720-724,745,748,754-756,758-760
+tests/snapshots/api-surface.json
+  s_9622fd28aba994::t_6075740368e362 64
+packages/im/agent/tests/spawn/spawn-task-terminal.test.ts
+  s_9622fd28aba994::t_6075740368e362 1-204
+packages/im/ai/tests/llm/agent-loop-failure-terminal.test.ts
+  s_9622fd28aba994::t_6075740368e362 1-128
+packages/im/agent/tests/helpers/scoped-subagent.ts
+  s_9622fd28aba994::t_6075740368e362 13,16,19-20
+packages/im/agent/src/core/agent-loop-standalone.ts
+  s_9622fd28aba994::t_6075740368e362 12-13,75-76,115,117-118,183-194,308-311,315-320,348-356,365
+packages/im/agent/src/subagent/contracts.ts
+  s_9622fd28aba994::t_6075740368e362 8,42
+docs/plans/ai-provider-behavior-migration.md
+  s_9622fd28aba994::t_6075740368e362 85,87-88,91-110
+packages/im/agent/tests/ai/subagent.test.ts
+  s_9622fd28aba994::t_6075740368e362 275-277,570-571
+packages/im/ai/src/llm/agent-loop.ts
+  s_9622fd28aba994::t_6075740368e362 114-124,345,397-412
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d1f8f1bd3bb8a34fb4b7c5b9402087a3d62085a5",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
