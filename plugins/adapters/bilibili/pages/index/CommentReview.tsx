@@ -157,7 +157,7 @@ function DraftCard({ draft, endpoint, locale, onChanged, setNotice }: {
   return (
     <li className="ac-draft">
       <div className="ac-draft-meta">
-        <span>{draft.video}</span>
+        <span>{draft.resource ?? draft.video}</span>
         <span>·</span>
         <span>{ago(draft.createdAt, locale)}</span>
         <a href={draft.url} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">{text(locale, '查看原评论')}</a>
@@ -241,6 +241,21 @@ function EndpointSection({ endpoint, locale, showTitle, onChanged, setNotice }: 
               ))}
             </ul>
           )}
+        {(endpoint.resources ?? []).length > 0 && (
+          <>
+            <h3 className="font-medium">{text(locale, '管理的动态 / 专栏')}</h3>
+            <ul className="flex flex-wrap gap-2">
+              {(endpoint.resources ?? []).map(resource => (
+                <li key={`${resource.kind}:${resource.ref}`}>
+                  <a href={resource.url} target="_blank" rel="noreferrer" className="rounded-md border px-2 py-1 text-sm hover:bg-accent">
+                    {resource.kind === 'article' ? `cv${resource.ref}` : `${text(locale, '动态')} ${resource.ref}`}
+                  </a>
+                  {resource.error !== undefined && <span className="ml-1 text-xs text-destructive">{text(locale, '无法解析，已跳过')}</span>}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <p className="text-xs text-muted-foreground">{text(locale, '视频列表来自配置，要增删请改配置文件。')}</p>
       </section>
     </div>

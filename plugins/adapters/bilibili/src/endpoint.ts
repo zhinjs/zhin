@@ -1,6 +1,7 @@
 /**
- * BilibiliEndpoint — 白名单视频评论轮询 + 先审再发（Experimental）。
+ * BilibiliEndpoint — 白名单视频 / 动态 / 专栏评论轮询 + 先审再发（Experimental）。
  *
+ * - 动态先经动态详情解析出评论区 (type, oid)，解析不了的动态跳过（只记日志，不猜 oid）。
  * - 入站：轮询 `x/v2/reply`，首轮只建基线；新评论按「评论楼」归 conversation 后 emit `message.receive`。
  *   可选再轮询「回复我的 / @我的」通知（`x/msgfeed/reply|at`），以 `mentioned: true` 入站。
  * - 出站：`send()` 永远只把回复放进草稿队列（review），不会调用平台写接口。
@@ -24,15 +25,21 @@ import {
 } from './login.js';
 import { BilibiliStateFiles, readJson, removeFile, writeJsonAtomic } from './storage.js';
 import {
+  BILIBILI_ARTICLE_COMMENT_TYPE,
   BILIBILI_COMMENT_MAX_LENGTH,
+  BILIBILI_VIDEO_COMMENT_TYPE,
   bilibiliThreadConversation,
+  commentAreaUrl,
   flattenReplies,
   formatOutboundText,
-  notificationToReply,
+  notificationToComment,
   outboundReplyTarget,
   parseThreadConversationId,
+  resolveDynamicCommentArea,
   threadRootOf,
+  type BilibiliCommentArea,
   type BilibiliNotificationKind,
+  type BilibiliResourceKind,
   type BilibiliReply,
   type BilibiliEndpointConfig,
   type ResolvedBilibiliConfig,
@@ -67,7 +74,19 @@ export interface BilibiliSentReply {
   readonly rpid: string;
 }
 
-type InboundVia = 'video' | BilibiliNotificationKind;
+/** 入站来源：直接轮询的评论区种类，或「回复我的 / @我的」通知。 */
+type InboundVia = BilibiliResourceKind | BilibiliNotificationKind;
+
+/** Console / 状态用的白名单动态、专栏视图（不含 Cookie）。 */
+export interface BilibiliResourceView {
+  readonly kind: 'dynamic' | 'article';
+  /** 配置里的原始 id（动态 id / cvid）。 */
+  readonly ref: string;
+  readonly url: string;
+  /** 已解析的评论区；动态解析失败时省略并给出 `error`。 */
+  readonly area?: { readonly kind: BilibiliResourceKind; readonly type: number; readonly oid: string };
+  readonly error?: string;
+}
 
 /** 登录态：none=没有 Cookie；ok=Cookie 有效；expired=Cookie 失效需要重新登录。 */
 export type BilibiliLoginState = 'none' | 'ok' | 'expired';
@@ -132,6 +151,10 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
   readonly #options: BilibiliEndpointOptions;
   readonly #logger: ReturnType<typeof getAdapterLogger>;
   readonly #aids: string[] = [];
+  /** 全部要轮询的评论区：视频、已解析的动态、专栏。 */
+  readonly #areas: BilibiliCommentArea[] = [];
+  /** 动态 id → 解析结果（成功的评论区或失败原因）。 */
+  readonly #dynamicResolution = new Map<string, { readonly area?: BilibiliCommentArea; readonly error?: string }>();
   readonly #baselined = new Set<string>();
   readonly #seen = new Set<string>();
   /** rpid → 评论摘要，用于草稿审批时展示被回复的原文。 */
@@ -203,6 +226,30 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     })));
   }
 
+  /** 配置里的白名单动态 / 专栏，以及解析出的评论区。 */
+  get resources(): readonly BilibiliResourceView[] {
+    const { dynamics, articles } = this.#options.config;
+    return Object.freeze([
+      ...dynamics.map((ref) => {
+        const resolved = this.#dynamicResolution.get(ref);
+        return Object.freeze({
+          kind: 'dynamic' as const, ref, url: `https://t.bilibili.com/${ref}`,
+          ...(resolved?.area ? { area: Object.freeze({ kind: resolved.area.kind, type: resolved.area.type, oid: resolved.area.oid }) } : {}),
+          ...(resolved?.error ? { error: resolved.error } : {}),
+        });
+      }),
+      ...articles.map(ref => Object.freeze({
+        kind: 'article' as const, ref, url: `https://www.bilibili.com/read/cv${ref}`,
+        area: Object.freeze({ kind: 'article' as const, type: BILIBILI_ARTICLE_COMMENT_TYPE, oid: ref }),
+      })),
+    ]);
+  }
+
+  /** 当前轮询的全部评论区（视频 + 已解析动态 + 专栏）。 */
+  get commentAreas(): readonly BilibiliCommentArea[] {
+    return Object.freeze([...this.#areas]);
+  }
+
   get sendMode(): ResolvedBilibiliConfig['sendMode'] {
     return this.#options.config.sendMode;
   }
@@ -227,8 +274,21 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     try {
       await this.#resolveLogin();
       this[endpointSpec].reportSelfUserId(this.#selfMid);
+      // 重新启动时按当前配置重新解析，不叠加上一轮的结果。
+      this.#aids.length = 0;
+      this.#areas.length = 0;
+      this.#dynamicResolution.clear();
       for (const video of this.#options.config.videos) {
-        this.#aids.push(video.kind === 'aid' ? video.aid : await this.resolveAid(video.bvid));
+        const aid = video.kind === 'aid' ? video.aid : await this.resolveAid(video.bvid);
+        this.#aids.push(aid);
+        this.#addArea({ kind: 'video', type: BILIBILI_VIDEO_COMMENT_TYPE, oid: aid });
+      }
+      for (const dynamicId of this.#options.config.dynamics) {
+        if (this.#tripped) break;
+        await this.#resolveDynamic(dynamicId);
+      }
+      for (const cvid of this.#options.config.articles) {
+        this.#addArea({ kind: 'article', type: BILIBILI_ARTICLE_COMMENT_TYPE, oid: cvid });
       }
     } catch (error) {
       this.#handleError('start', error);
@@ -238,11 +298,50 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     if (this.#options.config.notifications.length > 0 && !this.#selfMid) {
       this.#logger.warn(formatCompact({ op: 'bilibili_notifications_disabled', hint: '「回复我的 / @我的」需要有效 Cookie' }));
     }
-    if (this.#aids.length === 0) {
-      this.#logger.warn(formatCompact({ op: 'bilibili_no_videos', hint: '未配置 videos 白名单，不会轮询' }));
+    if (this.#tripped) return;
+    if (this.#areas.length === 0) {
+      this.#logger.warn(formatCompact({ op: 'bilibili_no_videos', hint: '未配置 videos / dynamics / articles 白名单（或动态都无法解析），不会轮询' }));
     }
     this.#state = 'open';
-    if (this.#options.autoPoll !== false && this.#aids.length > 0) this.#schedule(0);
+    if (this.#options.autoPoll !== false && this.#areas.length > 0) this.#schedule(0);
+  }
+
+  #addArea(area: BilibiliCommentArea): void {
+    if (this.#areas.some(existing => existing.type === area.type && existing.oid === area.oid)) return;
+    this.#areas.push(Object.freeze({ ...area }));
+  }
+
+  #findArea(type: number, oid: string): BilibiliCommentArea | undefined {
+    return this.#areas.find(area => area.type === type && area.oid === oid);
+  }
+
+  /**
+   * 动态 id → 评论区。平台风控码照常熔断；平台业务错误码（动态已删除 / 不可见等）与不支持的动态形状
+   * 只跳过这一条动态并记日志，不影响视频与其它资源。HTTP 错误、网络等暂时性错误向上抛出
+   * （与 BV 号解析一致：启动失败，交给运行时重试），避免一次抖动就永久跳过某条动态。
+   */
+  async #resolveDynamic(dynamicId: string): Promise<void> {
+    let detail;
+    try {
+      detail = await this.getDynamicDetail(dynamicId);
+    } catch (error) {
+      if (!(error instanceof BilibiliApiError) || (error.httpStatus !== undefined && !error.risk)) throw error;
+      if (error.risk) {
+        this.#handleError('resolve_dynamic', error, dynamicId);
+        return;
+      }
+      this.#dynamicResolution.set(dynamicId, Object.freeze({ error: `code ${error.code}` }));
+      this.#logger.warn(formatCompact({ op: 'bilibili_dynamic_unresolved', dynamic: dynamicId, code: error.code, hint: '动态不存在或不可见，已跳过' }));
+      return;
+    }
+    const resolution = resolveDynamicCommentArea(dynamicId, detail);
+    if (!resolution.ok) {
+      this.#dynamicResolution.set(dynamicId, Object.freeze({ error: resolution.reason }));
+      this.#logger.warn(formatCompact({ op: 'bilibili_dynamic_unsupported', dynamic: dynamicId, reason: resolution.reason }));
+      return;
+    }
+    this.#dynamicResolution.set(dynamicId, Object.freeze({ area: resolution.area }));
+    this.#addArea(resolution.area);
   }
 
   #openEndpoint(): void {
@@ -505,28 +604,29 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     (this.#timer as { unref?: () => void }).unref?.();
   }
 
-  /** 轮询一次全部白名单视频。首轮只记录基线，不入站。 */
+  /** 轮询一次全部白名单评论区（视频 / 动态 / 专栏）。每个评论区首轮只记录基线，不入站。 */
   async pollOnce(): Promise<void> {
-    for (const aid of this.#aids) {
+    for (const area of [...this.#areas]) {
       if (this.#tripped) return;
+      const key = `${area.type}:${area.oid}`;
       try {
-        const page = await this.listLatestVideoReplies(aid);
+        const page = await this.listLatestReplies(area.type, area.oid);
         await this[endpointSpec].events.run(async () => {
           const replies = flattenReplies(page.replies).sort((a, b) => a.ctime - b.ctime);
-          if (!this.#baselined.has(aid)) {
+          if (!this.#baselined.has(key)) {
             for (const reply of replies) this.#markSeen(String(reply.rpid));
-            this.#baselined.add(aid);
+            this.#baselined.add(key);
             return;
           }
           for (const reply of replies) {
             const rpid = String(reply.rpid);
             if (this.#seen.has(rpid)) continue;
             this.#markSeen(rpid);
-            await this.#admit(aid, reply, { via: 'video', upperMid: page.upper?.mid });
+            await this.#admit(area, reply, { via: area.kind, upperMid: page.upper?.mid });
           }
         });
       } catch (error) {
-        this.#handleError('poll', error, aid);
+        this.#handleError('poll', error, `${area.kind}:${area.oid}`);
       }
     }
     await this.pollNotificationsOnce();
@@ -534,11 +634,13 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
 
   /**
    * 轮询「回复我的 / @我的」通知（配置 `notifications` 开启时）。首轮只记录基线。
-   * 只收视频评论通知；`notificationScope: whitelist`（默认）时只收白名单视频下的。
+   * 收视频评论通知；配置了 `dynamics` / `articles` 时再收对应种类（11/17、12）的评论通知。
+   * `notificationScope: whitelist`（默认）时只收白名单评论区下的。
    */
   async pollNotificationsOnce(): Promise<void> {
     const { notifications, notificationScope } = this.#options.config;
     if (notifications.length === 0 || !this.hasCookie || !this.#selfMid || this.#login.state !== 'ok') return;
+    const kinds = this.#notificationKinds();
     for (const kind of notifications) {
       if (this.#tripped) return;
       try {
@@ -551,20 +653,29 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
           if (cursor === undefined) return; // 首轮基线
           for (const entry of items) {
             if (entry.id <= cursor) continue;
-            const reply = notificationToReply(entry);
-            if (!reply) continue;
-            const aid = String(reply.oid);
-            if (notificationScope === 'whitelist' && !this.#aids.includes(aid)) continue;
-            const rpid = String(reply.rpid);
+            const comment = notificationToComment(entry, kinds);
+            if (!comment) continue;
+            const known = this.#findArea(comment.area.type, comment.area.oid);
+            if (notificationScope === 'whitelist' && !known) continue;
+            const rpid = String(comment.reply.rpid);
             if (this.#seen.has(rpid)) continue;
             this.#markSeen(rpid);
-            await this.#admit(aid, reply, { via: kind });
+            await this.#admit(known ?? comment.area, comment.reply, { via: kind });
           }
         });
       } catch (error) {
         this.#handleError(`notify_${kind}`, error);
       }
     }
+  }
+
+  /** 通知接受的评论区种类：视频始终接受（兼容 v1）；动态 / 专栏只在配置了对应白名单时接受。 */
+  #notificationKinds(): ReadonlySet<BilibiliResourceKind> {
+    const { dynamics, articles } = this.#options.config;
+    const kinds = new Set<BilibiliResourceKind>(['video']);
+    if (dynamics.length > 0) { kinds.add('dynamic'); kinds.add('album'); }
+    if (articles.length > 0) kinds.add('article');
+    return kinds;
   }
 
   #markSeen(rpid: string): void {
@@ -586,7 +697,7 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
   }
 
   async #admit(
-    aid: string,
+    area: BilibiliCommentArea,
     reply: BilibiliReply,
     options: { readonly via: InboundVia; readonly upperMid?: number },
   ): Promise<void> {
@@ -596,8 +707,8 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     this.#remember(reply);
     const rootId = threadRootOf(reply);
     const parentId = String(reply.parent || reply.rpid);
-    const conversation = { ...bilibiliThreadConversation(String(this.#options.id), aid, rootId), endpoint: this[endpointSpec].identity };
-    const addressedToMe = options.via !== 'video';
+    const conversation = { ...bilibiliThreadConversation(String(this.#options.id), area.oid, rootId, area.kind), endpoint: this[endpointSpec].identity };
+    const addressedToMe = options.via === 'reply' || options.via === 'at';
     void this[endpointSpec].events.platform('reply', reply).catch(() => undefined);
     await this[endpointSpec].events.message({
       event: reply,
@@ -610,7 +721,11 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
       ...(addressedToMe ? { mentioned: true } : {}),
       ...(reply.parent && String(reply.parent) !== String(reply.rpid) ? { replyTo: { id: String(reply.parent) } } : {}),
       metadata: Object.freeze({
-        resource: Object.freeze({ type: 'video', oid: aid }),
+        resource: Object.freeze({
+          type: area.kind, oid: area.oid, commentType: area.type,
+          ...(area.dynamicId ? { dynamicId: area.dynamicId } : {}),
+          url: commentAreaUrl(area, String(reply.rpid)),
+        }),
         rootId,
         parentId,
         via: options.via,
@@ -627,7 +742,7 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     });
   }
 
-  #handleError(op: string, error: unknown, aid?: string): void {
+  #handleError(op: string, error: unknown, target?: string): void {
     if (error instanceof BilibiliApiError && error.code === -101 && (op.startsWith('notify_') || op === 'send')) {
       this.#markLoginExpired(op);
       return;
@@ -638,13 +753,13 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
       this.#timer = undefined;
       this.#state = 'closed';
       this.#logger.error(formatCompact({
-        op: 'bilibili_circuit_open', stage: op, aid, code: error.code,
+        op: 'bilibili_circuit_open', stage: op, target, code: error.code,
         hint: '触发平台风控，已停止轮询；请人工确认账号状态后重启',
       }));
       return;
     }
     this.#logger.warn(formatCompact({
-      op: `bilibili_${op}_failed`, aid,
+      op: `bilibili_${op}_failed`, target,
       error: error instanceof Error ? error.message : String(error),
     }));
   }
@@ -657,7 +772,7 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     const thread = parseThreadConversationId(conversation.id);
     if (!thread) {
       throw new EndpointDeliveryError('invalid_recipient',
-        `Bilibili conversation must be video:<aid>:<rootRpid>, got "${conversation.id}"`, 'not_sent');
+        `Bilibili conversation must be <video|album|article|dynamic>:<oid>:<rootRpid>, got "${conversation.id}"`, 'not_sent');
     }
     const message = formatOutboundText(payload);
     const invalid = validateReplyText(message);
@@ -667,10 +782,13 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     }
     const parent = outboundReplyTarget(payload) ?? thread.root;
     const context = this.#context.get(parent) ?? this.#context.get(thread.root);
+    const dynamicId = this.#findArea(thread.commentType, thread.oid)?.dynamicId;
     const draft: BilibiliReplyDraft = this.drafts.add({
       endpointId: this.#options.config.id,
       target: conversation.id,
+      type: thread.commentType,
       oid: thread.oid,
+      ...(dynamicId ? { dynamicId } : {}),
       root: thread.root,
       parent,
       message,
@@ -732,6 +850,7 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     this.#lastSentAt = this.#now;
     try {
       const rpid = await this.addReply({
+        type: draft.type ?? BILIBILI_VIDEO_COMMENT_TYPE,
         oid: draft.oid,
         root: draft.root,
         parent: draft.parent,

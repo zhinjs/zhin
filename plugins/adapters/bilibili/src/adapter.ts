@@ -12,7 +12,7 @@ export class BilibiliAdapter extends Adapter<BilibiliEndpoint, BilibiliEndpointC
   override get configurationIdentityFields(): readonly string[] { return ['id']; }
   override get configurationIdentityProbeFields(): readonly string[] { return ['sessdata', 'biliJct', 'apiBaseUrl']; }
   override get configurationUpdateFields(): readonly string[] {
-    return ['sessdata', 'biliJct', 'videos', 'pollIntervalSec', 'sendMode', 'minSendIntervalSec', 'notifications', 'notificationScope', 'notify', 'apiBaseUrl', 'passportBaseUrl'];
+    return ['sessdata', 'biliJct', 'videos', 'dynamics', 'articles', 'pollIntervalSec', 'sendMode', 'minSendIntervalSec', 'notifications', 'notificationScope', 'notify', 'apiBaseUrl', 'passportBaseUrl'];
   }
   protected override validateConfiguration(config: BilibiliEndpointConfig): void { resolveBilibiliConfig(config); }
   protected override prepareConfiguration(config: BilibiliEndpointConfig, identity: Readonly<{ instanceId: string }>): BilibiliEndpointConfig {
