@@ -6,6 +6,8 @@ title: "LLM Providers & SDK Bridging"
 
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-ai-providers) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/archive).
+
+Claude subscription and Antigravity are experimental channels: 实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担 (experimental · not officially supported · may violate vendor terms · use at your own risk). See [AI providers](/ai/providers).
 :::
 
 ::: details Relevant source files

@@ -28,8 +28,19 @@ const experimentalProvider = /claude[^\n]{0,40}(订阅|subscription)|(订阅|sub
 const officialClaim = /(?<!不受|非|未获|未经)官方支持|(?<!not |never |un)officially supported/iu;
 
 describe('AI provider experimental channel docs (ADR 0047 §1a)', () => {
-  it.each(['docs/ai/providers.md', 'packages/im/ai/README.md'])('%s carries the §1a risk notice', (relativePath) => {
+  it.each([
+    'docs/ai/providers.md',
+    'packages/im/ai/README.md',
+    'README.md',
+    'README.zh-CN.md',
+    'docs/wiki/cubic/ai-providers.md',
+    'docs/en/wiki/cubic/ai-providers.md',
+  ])('%s carries the §1a risk notice', (relativePath) => {
     expect(read(relativePath)).toContain(RISK_NOTICE);
+  });
+
+  it.each(['README.md', 'README.zh-CN.md'])('%s links to docs/ai/providers.md', (relativePath) => {
+    expect(read(relativePath)).toContain('](./docs/ai/providers.md)');
   });
 
   it('docs never pair Claude subscription / Antigravity with an official-support claim', () => {
