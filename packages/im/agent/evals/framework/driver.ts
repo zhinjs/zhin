@@ -14,6 +14,8 @@ import { dirname, join } from 'node:path';
 import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { defineAgentPromptSection, type PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { ToolIndex, type ToolAvailabilityContext } from '@zhin.js/tool';
+import { collaborationIdle, closeCollaborations } from '../../src/collaboration/registry.js';
+import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import { AgentCore } from '../../src/core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
 import { isTurnTerminalEvent, type TurnEvent, type TurnTerminalEvent } from '../../src/event/turn-event.js';
@@ -41,7 +43,7 @@ import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-tr
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalSelfChangeStatus, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import type { EvalAgentFixture, EvalApprovalBehaviour, EvalCase, EvalSelfChangeStatus, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { resolvePerceptionConfig } from '../../src/media/perception.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
@@ -70,8 +72,12 @@ export interface EvalRunRecord {
   readonly terminals: readonly TurnTerminalEvent[];
   readonly modelRequests: readonly ScriptedModelRequest[];
   readonly unusedScriptSteps: number;
+  /** Unconsumed script steps per actor (only actors with any left); entry steps are under `zhin`. */
+  readonly unusedActorSteps: Readonly<Record<string, number>>;
   /** Model requests made after the script ran out. */
   readonly extraModelRequests: number;
+  /** Requests after an actor's own queue ran out, per actor. */
+  readonly extraActorRequests: Readonly<Record<string, number>>;
   /** Scripted tool calls naming a tool the harness did not offer on that request. */
   readonly unofferedToolCalls: readonly string[];
   /** Script steps pinned to a model id that went to a different model. */
@@ -218,7 +224,7 @@ async function runInWorkspace(
           owner: rootPluginId(),
           tools: turnTools,
           skills: evalSkills(definition),
-          agents: [],
+          agents: evalAgents(definition),
           mcp: [],
           promptSections: promptSections(definition),
         },
@@ -240,6 +246,8 @@ async function runInWorkspace(
           events.push(event);
           if (isTurnTerminalEvent(event)) terminals.push(event);
         }));
+        // Delegated work outlives the entry turn; wait for it (and the result turns it wakes) before observing.
+        await collaborationIdle();
       } finally {
         await models.release(); lease.release();
         releaseTrace();
@@ -269,13 +277,16 @@ async function runInWorkspace(
       terminals,
       modelRequests: model.requests,
       unusedScriptSteps: model.remainingSteps(),
+      unusedActorSteps: model.remainingStepsByActor(),
       extraModelRequests: model.exhaustedRequests(),
+      extraActorRequests: model.exhaustedRequestsByActor(),
       unofferedToolCalls: model.unofferedToolCalls,
       modelMismatches: model.modelMismatches,
       unexpectedlyOfferedToolCalls: model.unexpectedlyOfferedToolCalls,
       traces,
     };
   } finally {
+    await closeCollaborations('eval case finished');
     selfChange?.approvals.dispose();
     selfChange?.queue.dispose();
     await agent.dispose(); await inference.runtime.dispose(); await inference.snapshots.close();
@@ -384,6 +395,35 @@ function evalSkills(definition: EvalCase): SkillDescriptor[] {
     ...(skill.keywords ? { keywords: Object.freeze([...skill.keywords]) } : {}),
     source: `eval:skills/${skill.name}/SKILL.md`,
   }));
+}
+
+/**
+ * ADR 0048 peer Agents as the descriptors `agents/<name>/` packages would produce, owned by the driver's root plugin.
+ * `collaboration` (contacts / acceptsFrom) is the §2 policy; the shared descriptor type does not carry it yet, so it
+ * rides along as an extra field for the engine's directory to read.
+ */
+function evalAgents(definition: EvalCase): AgentDescriptor[] {
+  return (definition.agents ?? []).map((agent: EvalAgentFixture) => Object.freeze({
+    $feature: 'zhin.agent/1' as const,
+    name: agent.name,
+    displayName: agent.name,
+    version: '1.0.0',
+    description: agent.description,
+    triggerRules: Object.freeze({ filePatterns: Object.freeze([]), keywords: Object.freeze([]) }),
+    entryPoints: Object.freeze(['system.md']),
+    instructions: `You are ${agent.name}. ${agent.description} Do the work you are given with your own tools and answer concisely.`,
+    workflows: Object.freeze([]),
+    knowledge: Object.freeze([]),
+    toolNames: Object.freeze([...agent.tools]),
+    collaboration: Object.freeze({
+      contacts: Object.freeze([...(agent.collaboration?.contacts ?? [])]),
+      // Omitted acceptsFrom means "anyone in scope", so it stays absent rather than becoming an empty list.
+      ...(agent.collaboration?.acceptsFrom ? { acceptsFrom: Object.freeze([...agent.collaboration.acceptsFrom]) } : {}),
+    }),
+    owner: rootPluginId(),
+    qualifiedName: agent.name,
+    source: `eval:agents/${agent.name}/agent.json`,
+  } as AgentDescriptor));
 }
 
 /** Third-party plugin prompt sections, owned by a child plugin so the engine treats them as external_content. */

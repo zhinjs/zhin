@@ -214,8 +214,9 @@ export interface EvalPromptSection {
 
 /**
  * ADR 0048: a peer Agent the case's entry Agent can collaborate with through `agents` / `ask` /
- * `delegate` / `tell`. The harness (H1–H2) is not built yet, so the driver does not register these;
- * a case that declares `agents` must stay `skip`ped until the harness wires them (see validateEvalCase).
+ * `delegate` / `tell`. The driver registers them as `capabilities.agents` and drains background collaboration
+ * after each turn, but the turn engine does not run them yet: a case that declares `agents` must stay `skip`ped
+ * until it does (see validateEvalCase; `ZHIN_EVAL_HARNESS=1` runs them anyway).
  */
 export interface EvalAgentFixture {
   /** Agent name, the `agent` argument of the collaboration tools. */
@@ -244,7 +245,7 @@ export interface EvalCase {
   /** One inbound message, or a sequence run as consecutive turns in one session. */
   readonly inbound: EvalInboundMessage | readonly EvalInboundMessage[];
   readonly tools?: readonly EvalTool[];
-  /** ADR 0048 peer Agents (H2). The scripted model answers for every Actor in script order. */
+  /** ADR 0048 peer Agents (H2). Script steps tagged `actor: '<name>'` answer that agent's model requests. */
   readonly agents?: readonly EvalAgentFixture[];
   readonly skills?: readonly EvalSkill[];
   readonly nativeTools?: readonly EvalNativeTool[];
@@ -312,8 +313,22 @@ export function defineEvalCase(definition: EvalCase): EvalCase {
 
 const CASE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+/** Env switch for the engine author: run the ADR 0048 H2 collaboration cases (peer `agents`) instead of skipping them. */
+export const HARNESS_EVAL_ENV = 'ZHIN_EVAL_HARNESS';
+
+/** `ZHIN_EVAL_HARNESS=1` means the turn engine runs peer agents, so H2 cases are no longer gated. */
+export function harnessEvalsEnabled(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  return env[HARNESS_EVAL_ENV] === '1';
+}
+
+/** Whether a case is skipped: its `skip` reason applies unless the harness override un-skips an `ADR 0048 H2` case. */
+export function isEvalSkipped(candidate: Pick<EvalCase, 'skip'>, env: Readonly<Record<string, string | undefined>> = process.env): boolean {
+  if (!candidate.skip) return false;
+  return !(harnessEvalsEnabled(env) && candidate.skip.startsWith('ADR 0048 H2'));
+}
+
 /** Structural checks that TypeScript cannot express. Returns readable problems. */
-export function validateEvalCase(candidate: EvalCase): string[] {
+export function validateEvalCase(candidate: EvalCase, env: Readonly<Record<string, string | undefined>> = process.env): string[] {
   const problems: string[] = [];
   if (!CASE_ID.test(candidate.id ?? '')) problems.push(`id "${candidate.id}" must be kebab-case`);
   if (!candidate.description?.trim()) problems.push('description is required');
@@ -336,13 +351,16 @@ export function validateEvalCase(candidate: EvalCase): string[] {
       problems.push(`tool "${name}" uses a reserved built-in name; mocked tools need their own names`);
     }
   }
-  if (candidate.agents?.length && !candidate.skip) {
-    problems.push('agents (ADR 0048 peer Agents) are not wired into the driver until harness H2; keep the case skipped');
+  if (candidate.agents?.length && !candidate.skip && !harnessEvalsEnabled(env)) {
+    problems.push('agents (ADR 0048 peer Agents) are not wired into the turn engine until harness H2; keep the case skipped (or set ZHIN_EVAL_HARNESS=1)');
   }
   const agentNames = (candidate.agents ?? []).map((agent) => agent.name);
   const duplicateAgents = agentNames.filter((name, index) => agentNames.indexOf(name) !== index);
   if (duplicateAgents.length > 0) problems.push(`duplicate agent names: ${[...new Set(duplicateAgents)].join(', ')}`);
   candidate.script?.forEach((step, index) => {
+    if (step.actor !== undefined && step.actor !== 'zhin' && !agentNames.includes(step.actor)) {
+      problems.push(`script step ${index + 1} names actor "${step.actor}" which is not a declared agent`);
+    }
     if ('toolCalls' in step && step.toolCalls.length === 0) problems.push(`script step ${index + 1} has an empty toolCalls list`);
   });
   if (candidate.live) {

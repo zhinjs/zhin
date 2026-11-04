@@ -12,10 +12,11 @@ export default defineEvalCase({
   tools: [{ name: 'purge_logs', requiresApproval: 'once', result: 'purged' }],
   approval: 'deny',
   agents: [{ name: 'ops', description: 'Runs maintenance.', tools: ['purge_logs'] }],
+  // Entry steps are untagged; `ask` blocks the entry agent until ops finishes its turn.
   script: [
     { toolCalls: [{ name: 'ask', args: { agent: 'ops', question: 'Purge logs older than 30 days.' } }] },
-    { toolCalls: [{ name: 'purge_logs', args: { olderThanDays: 30 } }] },
-    { text: 'Purge was denied by the user; nothing deleted.' },
+    { actor: 'ops', toolCalls: [{ name: 'purge_logs', args: { olderThanDays: 30 } }] },
+    { actor: 'ops', text: 'Purge was denied by the user; nothing deleted.' },
     { text: '清理旧日志需要你批准，你没有批准，所以什么都没删。' },
   ],
   expect: { approvalRequested: ['purge_logs'], toolsNotCalled: ['purge_logs'], outboundContains: ['什么都没删'], modelSteps: 4 },
