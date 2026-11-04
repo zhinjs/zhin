@@ -189,6 +189,11 @@ const checks = [
     description: '检查平台适配器文档是否与 plugins/adapters README 同步',
   },
   {
+    name: 'Publishing Manifest',
+    command: 'pnpm check:publishing-manifest',
+    description: 'docs/contributing/publishing.md 包清单覆盖全部非 private 包（可信发布者）',
+  },
+  {
     name: 'Operability Docs',
     command: 'pnpm check:operability-docs',
     description: '检查适配器、Console 与插件交付文档是否形成可验收闭环',

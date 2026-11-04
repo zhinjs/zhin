@@ -28,7 +28,7 @@ if (mode === 'build') {
   // matrix run in Full validation and the explicit release batch.
   const checks = ['check:architecture', 'check:dependency-policy', 'check:release-plan', 'check:harness-paths',
     'check:no-removed-plugin-api', 'check:api-surface', 'check:plugin-runtime-api', 'check:feature-peers', 'check:doc-links',
-    'check:runtime-config-boundaries', 'check:plugin-runtime-migration-readiness'];
+    'check:runtime-config-boundaries', 'check:plugin-runtime-migration-readiness', 'check:publishing-manifest'];
   await Promise.all(checks.map(command => new Promise((resolve, reject) => {
     import('node:child_process').then(({ spawn }) => {
       const child = spawn('pnpm', [command], { stdio: 'inherit', env: { ...process.env, NPM_TOKEN: '' } });
