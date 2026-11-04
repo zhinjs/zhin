@@ -1,0 +1,58 @@
+packages/im/agent/evals/agent.eval.ts
+  s_178aad69aa64a5::t_e24d82e5eef405 16,24-26
+packages/im/agent/evals/README.md
+  s_178aad69aa64a5::t_c2718068b6f5cd 103
+  s_178aad69aa64a5::t_4382226050f6ca 90-102,104-118
+packages/im/agent/evals/cases/harness-delegate-attenuates-authority.case.ts
+  s_178aad69aa64a5::t_4fe57b0e089ecc 15-16,19-21,24
+packages/im/agent/evals/framework/live-model.ts
+  s_178aad69aa64a5::t_88780b4f082bef 83-84
+packages/im/agent/evals/framework/fixture.ts
+  s_178aad69aa64a5::t_e24d82e5eef405 217-219,248,316-329,331,354-355,361-363
+packages/im/agent/evals/cases/harness-agent-result-is-data.case.ts
+  s_178aad69aa64a5::t_2f6b1fb18730ba 18,21-22
+packages/im/agent/evals/cases/harness-contacts-enforced.case.ts
+  s_178aad69aa64a5::t_4fe57b0e089ecc 20,23-24
+packages/im/agent/evals/cases/harness-approval-routed-to-principal.case.ts
+  s_178aad69aa64a5::t_4fe57b0e089ecc 15,18-19
+packages/im/agent/evals/framework/framework.test.ts
+  s_178aad69aa64a5::t_c12f51b2bcfe07 11,13,15,215,218-220,309-369
+  s_178aad69aa64a5::t_59cb97371bbb01 370
+packages/im/agent/evals/framework/index.ts
+  s_178aad69aa64a5::t_e24d82e5eef405 1,5
+packages/im/agent/evals/framework/driver.ts
+  s_178aad69aa64a5::t_13574b653823e3 420-421
+  s_178aad69aa64a5::t_82729c03ca8972 17-18,46,75-76,79-80,227,249-250,280,282,289,400-419,422-426
+  s_178aad69aa64a5::t_e98d4f535e97b3 427-428
+packages/im/agent/evals/framework/assertions.ts
+  s_178aad69aa64a5::t_41f4668dd3e0d1 206
+  s_178aad69aa64a5::t_13574b653823e3 168-170,173-181
+packages/im/agent/evals/cases/harness-delegation-budget-enforced.case.ts
+  s_178aad69aa64a5::t_4fe57b0e089ecc 14-15,18-19
+packages/im/agent/evals/cases/harness-delegate-result-wakes-delegator.case.ts
+  s_178aad69aa64a5::t_4fe57b0e089ecc 14-15,17-20,23
+packages/im/agent/evals/framework/scripted-model.ts
+  s_178aad69aa64a5::t_88780b4f082bef 62-79,82,110-111,135-138,142-143,213-222,224,226,228-230,232,243,248-249,251-252,263-264,284,286,313-317
+  s_178aad69aa64a5::t_91a71d911d5959 81
+  s_178aad69aa64a5::t_c2718068b6f5cd 80
+packages/im/agent/evals/cases/harness-ping-pong-escalates.case.ts
+  s_178aad69aa64a5::t_4fe57b0e089ecc 16-17,20-23,27
+packages/im/agent/evals/cases/harness-delegatee-ceiling-not-widened.case.ts
+  s_178aad69aa64a5::t_4fe57b0e089ecc 16,19-21,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8f461d86d37c8e91e5d5284ec0c395b34096209c",
+  "prompts": {},
+  "sessions": {
+    "s_178aad69aa64a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0eca046-2ac8-49e0-a6a9-b7766f7049bb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
