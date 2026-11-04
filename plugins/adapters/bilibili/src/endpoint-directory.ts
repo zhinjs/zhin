@@ -5,7 +5,7 @@ import type { BilibiliEndpoint } from './endpoint.js';
 
 /** Closed review/login view; no cookie, config, fetch or mutable account directory. */
 export type BilibiliEndpointView = Pick<BilibiliEndpoint,
-  'localId' | 'login' | 'qrLogin' | 'persistent' | 'videos' | 'sendMode' | 'circuitBreaker'
+  'localId' | 'login' | 'qrLogin' | 'persistent' | 'videos' | 'resources' | 'sendMode' | 'circuitBreaker'
   | 'approveDraft' | 'editDraft' | 'discardDraft' | 'startQrLogin' | 'cancelQrLogin' | 'logout'> & {
     readonly drafts: Pick<BilibiliEndpoint['drafts'], 'get' | 'list' | 'size'>;
   };
@@ -48,7 +48,8 @@ export function bilibiliEndpoints(context: BilibiliDirectoryContext): BilibiliEn
     const view = Object.freeze<BilibiliEndpointView>({
       get localId() { return read().localId; }, get login() { return read().login; },
       get qrLogin() { return read().qrLogin; }, get persistent() { return read().persistent; },
-      get videos() { return read().videos; }, get sendMode() { return read().sendMode; },
+      get videos() { return read().videos; }, get resources() { return read().resources; },
+      get sendMode() { return read().sendMode; },
       get circuitBreaker() { return read().circuitBreaker; },
       drafts: Object.freeze<BilibiliEndpointView['drafts']>({
         get: id => read().drafts.get(id), list: () => read().drafts.list(), get size() { return read().drafts.size; },
