@@ -6,6 +6,8 @@ sidebar: false
 
 状态：Accepted（2026-11-04）——Clover 按 Fin 授权勾选：尽量支持官方订阅，风险由使用者自担、README 明示；实现切片按 E2 开 S1。
 
+> 合入后澄清（2026-11-04，为 S1）：§1a 与 S1 验收行措辞已与 Fin 2026-11-04 决定（见「勾选记录 · 合入影响」）对齐——实验 Driver 可保留默认注册，但须带实验标识与风险声明。勾选结果与产品选择（A1–A4 等）不变。
+
 关联：2026-11-04 交接 BRIEF（AI Provider 订阅 / OAuth 接入收束，非 Calendar OAuth）；调研稿 `docs/plans/provider-subscriptions-and-decision-models.md`（2026-11-03，尚未入 main）；领域模型以 `feat/ai-provider-main-integration` 分支为准。
 
 ## 背景
@@ -80,13 +82,13 @@ sidebar: false
 | OpenCode Go | 订阅产品，但推理 API 使用 API Key；Zen / Go / Free 条件不同 | **正式产品**（API Key 认证；不引入 OAuth；Zen 单独列） |
 | Antigravity | 官方 FAQ 限制第三方登录使用与把 headless CLI 包进第三方应用 | **明确不做**（AI Studio / Gemini API Key 不得称为 Antigravity 支持） |
 
-#### 1a. 实验通道（默认不开）
+#### 1a. 实验通道（须 Fin 勾选）
 
-Claude.ai 订阅与 Antigravity 只有在 Fin 于本 ADR 明确勾选「自担 ToS 风险的实验通道」时才可注册，且必须：
+Claude.ai 订阅与 Antigravity 只有在 Fin 于本 ADR 明确勾选「自担 ToS 风险的实验通道」时才可注册。勾选后，本节对默认注册的规定优先于上表「协议接缝」一行，且：
 
-- 不进默认 `builtinAiProviders`，需部署者显式启用；
-- Console / **README** / 文档统一标「实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担」；
-- 不计入「支持的订阅」列表，不写入 changelog 的新功能段。
+- **可以**保留在默认 `builtinAiProviders` / 默认注册集中（按 Fin 2026-11-04 决定）；
+- 必须带实验支持标识（如 experimental support flag 或等价字段），Console / **README** / 文档统一标「实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担」；
+- 不得写成「官方支持」：不计入「支持的订阅」宣传列表，不以正式功能写入 changelog 的新功能段。
 
 Codex 若选「正式产品」，Fin 同时确认：接受以 Codex 客户端 OAuth 合同接入、Console 文案注明「未经 OpenAI 对第三方客户端的明确授权」。
 
@@ -150,7 +152,7 @@ S0 之后的切片均对齐 `feat/ai-provider-main-integration`：大部分代�
 | 切片 | 内容 | 验收标准 |
 | --- | --- | --- |
 | S0 ADR（本文） | 四项服务态度、Host-only 首阶段、决策多配置合同、技术硬约束 | Fin 勾完清单 A / B / C；状态转 Accepted |
-| S1 认证端口 | Host 私有订阅账号服务（AccountRuntime）+ 动态凭据句柄接入 ExecutionBinding / Driver；按清单 A 调整默认 Driver 注册 | 单测：同账号 token 轮换后下一请求用新凭据且不重建 Session；全仓无假 apiKey / 强转；并发刷新单飞、取消一个 waiter 不影响其他；迟到旧 401 不误伤新凭据；未勾「正式」的订阅 Driver 不在默认注册集 |
+| S1 认证端口 | Host 私有订阅账号服务（AccountRuntime）+ 动态凭据句柄接入 ExecutionBinding / Driver；按清单 A 调整默认 Driver 注册 | 单测：同账号 token 轮换后下一请求用新凭据且不重建 Session；全仓无假 apiKey / 强转；并发刷新单飞、取消一个 waiter 不影响其他；迟到旧 401 不误伤新凭据；未勾「正式」的订阅 Driver 若按 §1a 保留默认注册，必须带 experimental 标识与 README / Console 风险声明，不得写成官方支持；验收含标识与文案单测 / 文档检查 |
 | S2 Codex 路径（仅当 A1 选正式） | Responses + 账号头 + SSE；历史 / opaque 状态绑定 Account incarnation | 本地 HTTP fixture 合同测试：多轮工具续轮、encrypted reasoning 往返、重启恢复、跨账号 / 跨模型剥除 opaque；部分流后认证失败不重放整任务；显式不支持参数 0 HTTP |
 | S3 多决策配置 | 用途 → 明确 Decision Profile；验证期报错；off 静默；旧单 provider 一次性迁移 | 配置校验单测：未定义 / 不可见 Profile 保存即报错；off 用途 0 次 evaluate；批次不漂移；旧写法迁移预览不猜模型 |
 | S4 Console | 登录 / 断开 / 刷新目录 / 付费探测分按钮；保存不打网；实验通道标识 | 管理权 ≠ 使用权的文案与 DTO；DTO / 日志无 token；保存与页面加载 0 次供应商请求；本地断开不显示为「已撤销上游授权」 |
