@@ -1,0 +1,653 @@
+examples/single-file-bot/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+plugins/adapters/juejin/pages/index/messages.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-59
+plugins/adapters/juejin/src/adapter.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-45
+plugins/adapters/juejin/src/endpoint.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-504
+plugins/adapters/juejin/tests/juejin-page.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-33
+plugins/adapters/juejin/commands/juejin-draft/list/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-12
+examples/minimal-bot/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+basic/cli/tests/plugin-runtime/start/options.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 19,34-54,65,78
+packages/toolkit/create-zhin/tests/stable-yes.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 117
+plugins/adapters/juejin/src/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-50
+basic/cli/src/plugin-runtime/console/self-changes.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-8,27-30,40-78,114-118,159-209,270-355
+  s_9622fd28aba994::t_b1dc973ece3d55 356
+packages/im/plugin-runtime/tests/kernel.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 12,69-86
+packages/host/http/tests/console-config-project-patch-rpc.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-71
+packages/im/agent/src/self-change/store.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8,108-111
+docs/plans/adapter-profile-config-audit.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-42
+basic/cli/src/plugin-runtime/console/module.ts
+  s_9622fd28aba994::t_9a41eafbae7680 5-9
+packages/im/agent/tests/core/structured-reply-stream-baseline.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-200
+packages/im/runtime/tests/runtime-input-hmr.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8,18-21,35-116,180,200-201,203,271,284,295-302
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_9622fd28aba994::t_9a41eafbae7680 38-62
+docs/en/concepts/generation-lifecycle.md
+  s_9622fd28aba994::t_edb2177db87089 132,134-136,138
+  s_9622fd28aba994::t_9a41eafbae7680 130-131,133,137,139
+plugins/adapters/bilibili/README.md
+  s_9622fd28aba994::t_9a41eafbae7680 7,13,21,23,31,33-35,39,67-70,92,108,111-122,132-134,174,178-179,188-191
+packages/im/agent/src/self-change/detail-diff.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-546
+packages/im/runtime/src/config-composer.ts
+  s_9622fd28aba994::t_9a41eafbae7680 23-27
+packages/im/runtime/src/topology-generation-preparer.ts
+  s_9622fd28aba994::t_9a41eafbae7680 37,85,96,130,179-181,378,382
+plugins/adapters/juejin/src/client.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-247
+plugins/adapters/juejin/commands/juejin-login/status/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-12
+examples/qq-games-bot/tests/runtime-contract.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 14
+plugins/adapters/telegram/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8
+basic/cli/tests/config-command.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-297
+examples/test-bot/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+plugins/adapters/douyin-live/tests/douyin-live-endpoint.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-210
+plugins/adapters/icqq/tests/group-moderation.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 5,15,33-84
+packages/im/config-file/tests/yaml-config-document.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 176,203-204,210-214
+packages/im/runtime/src/runtime-input-planner.ts
+  s_9622fd28aba994::t_9a41eafbae7680 37-42,44,46,52-53,58,60
+plugins/adapters/juejin/tests/juejin-endpoint.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-246
+basic/cli/tests/plugin-runtime/console/configuration-project-patch.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-318
+basic/cli/src/plugin-runtime/agent/tool-approval-im-channel.ts
+  s_9622fd28aba994::t_9a41eafbae7680 2-6,219-223,239,241,250-289
+  s_9622fd28aba994::t_eb1b5cb9db6166 1,290
+examples/self-delivery-bot/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+plugins/adapters/douyin-live/README.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-117
+basic/cli/src/plugin-runtime/console/configuration-patch.ts
+  s_9622fd28aba994::t_9a41eafbae7680 5,47,66
+docs/adapters/icqq.md
+  s_9622fd28aba994::t_9a41eafbae7680 186
+docs/en/adapters/bilibili.md
+  s_9622fd28aba994::t_9a41eafbae7680 17,23,31,33,41,43-45,49,77-80,102,118,121-132,142-144,184,188-189,198-201
+plugins/adapters/bilibili/pages/index/rpc.ts
+  s_9622fd28aba994::t_9a41eafbae7680 7,9,38-46
+plugins/adapters/milky/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6
+plugins/adapters/onebot12/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6
+plugins/adapters/juejin/src/login-text.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-28
+docs/en/configuration/generated.md
+  s_9622fd28aba994::t_9a41eafbae7680 552-553,561-562,571-572,576-577,767-811,990-1044
+  s_9622fd28aba994::t_ba442d953f774f 1045
+packages/im/agent/tests/core/structured-reply-stream.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-10
+plugins/adapters/douyin-live/tsconfig.json
+  s_9622fd28aba994::t_9a41eafbae7680 1-12
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_9622fd28aba994::t_9a41eafbae7680 31,33,37-38,40-42
+packages/im/runtime/src/slot-generation-preparer.ts
+  s_9622fd28aba994::t_9a41eafbae7680 16,30,67-68,75
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 70
+packages/toolkit/create-zhin/src/workspace.ts
+  s_9622fd28aba994::t_9a41eafbae7680 140
+docs/adapters/index.md
+  s_9622fd28aba994::t_9a41eafbae7680 70-71
+plugins/adapters/kook/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8
+basic/cli/tests/plugin-runtime/console/ai-config-validation.test.ts
+  s_9622fd28aba994::t_1bd07aecb95656 64
+  s_9622fd28aba994::t_691f17ce3399e8 33
+basic/cli/tests/plugin-runtime/configuration-host-installer.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-491
+plugins/adapters/douyin-live/tests/douyin-live-protocol.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-130
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/SKILL.md
+  s_9622fd28aba994::t_9a41eafbae7680 14-15,20,41
+  s_9622fd28aba994::t_b42aa8efda86ca 42
+basic/cli/tests/plugin-runtime/sender-enrichment-configuration.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-140
+.changeset/p6-pause-handler-no-model-wait.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-4
+packages/im/agent/tests/self-change/policy.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 18,240-244
+  s_9622fd28aba994::t_ed977aef4a4850 245-246
+basic/cli/tests/plugin-runtime/agent/configuration-update.test.ts
+  s_9622fd28aba994::t_63b49f32744c9d 1-30,32-36
+  s_9622fd28aba994::t_9a41eafbae7680 31,37
+docs/adapters/douyin-live.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-129
+packages/im/runtime/tests/configuration-paths.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-10
+docs/en/adapters/index.md
+  s_9622fd28aba994::t_9a41eafbae7680 75-76
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 119
+docs/en/configuration/index.md
+  s_9622fd28aba994::t_9a41eafbae7680 23,71-88,90-92,94,96-126,128,191
+  s_9622fd28aba994::t_849681d6b1eb47 89,93,95,127,313,315,317,319,321,325,327,330,335-337,339,405
+basic/cli/src/plugin-runtime/console/configuration-redaction.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-110
+packages/im/agent/tests/core/reply-stream-candidate-lifecycle.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-66
+plugins/adapters/napcat/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 7
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_9622fd28aba994::t_9a41eafbae7680 3-5,13,20-24,32-81,90-94,103-105,113-115,124-125,130-131,152,157,161,164,169,177-179,183,191-193,203-212,214-245,248-254,256-263,266-267,270,272-295,318-336,338,341-342,346,349-353,355-395,399-529,561,567,632-637,645-646,648-651,653-657
+  s_9622fd28aba994::t_00c5ab211f4941 647,652,658
+basic/cli/tests/plugin-runtime/console/configuration-cli-live-host.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-200
+packages/im/agent/src/self-change/preview.ts
+  s_9622fd28aba994::t_9a41eafbae7680 199,206
+plugins/adapters/douyin-live/src/endpoint.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-269
+plugins/adapters/icqq/agents/icqq/messages.ts
+  s_9622fd28aba994::t_9a41eafbae7680 88-107
+packages/im/runtime/src/root-runtime.ts
+  s_9622fd28aba994::t_9a41eafbae7680 4-5,14,37,46,114-116,137-138,143-147,153,175-177,197,201,213-220,223-237,266,281-323,362-363,374-377,379-392,397-402,413-420,449-457,530,538,583,590,597,599,609-610,612,617-618,622-625,635-636,641-642,644-645,647-650,653-671,683-684,686,692,696-847,851-889,968-970,975-976,1014,1063-1115,1117,1144,1158,1174-1190
+plugins/adapters/juejin/commands/juejin-draft/send/[id]/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-13
+docs/en/authoring/console-pages.md
+  s_9622fd28aba994::t_9a41eafbae7680 425-435
+plugins/adapters/satori/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6
+docs/en/cli/index.md
+  s_9622fd28aba994::t_9a41eafbae7680 25,44,51-52,65,107,110-114,118-136
+  s_9622fd28aba994::t_d93ecb8a99a469 137
+plugins/adapters/wecom/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8
+basic/cli/tests/plugin-runtime/console/configuration-chat-tuple.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-134
+plugins/adapters/bilibili/tests/bilibili-endpoint.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 62
+packages/im/runtime/tests/config-patch-runtime.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 7,32-305,413,437-438,444-448,541,575-578,587-589
+basic/cli/src/plugin-runtime/console/tool-approvals.ts
+  s_9622fd28aba994::t_9a41eafbae7680 125-134,142
+examples/qq-games-bot/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+plugins/adapters/bilibili/src/client.ts
+  s_9622fd28aba994::t_9a41eafbae7680 3-4,11,35,154-158,160-161,169-182,196-203,209
+plugins/adapters/douyin-live/schema.json
+  s_9622fd28aba994::t_9a41eafbae7680 1-372
+examples/life-assistant-bot/tests/config-contract.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 29
+basic/cli/tests/plugin-runtime/agent/tool-approval-im-channel.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 11,394-470
+packages/im/adapter/tests/configuration-live-update.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-160
+docs/cli/index.md
+  s_9622fd28aba994::t_9a41eafbae7680 25,44,51-52,65,107,110-114,118-136
+  s_9622fd28aba994::t_de1929614090d3 137
+basic/cli/tests/cli-write-side.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 64-66,71,73-74
+packages/im/agent/tests/self-change/approval.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 58,78-80,87-109,234-235
+basic/cli/src/plugin-management/console-client.ts
+  s_9622fd28aba994::t_9a41eafbae7680 3-60,66,75,78-109
+basic/cli/tests/plugin-runtime/agent/self-change-configuration-application.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-254
+basic/cli/tests/plugin-runtime/console/self-changes.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1,86-258
+packages/im/agent/src/self-change/apply.ts
+  s_9622fd28aba994::t_9a41eafbae7680 57-62,69-70,72-73,105,108-110,199,256,261,270-272,274-283,285,288,295,307,313-320,330-331,346,349,351-354,356,361,377,394,396,398-402,404,413,421-422,436-437,457-479,488,539-553,560-573
+packages/im/agent/src/outbound/structured-reply-stream.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6,9-11,16-18,20-55,57-73,75-85,87-90
+docs/adr/0040-controlled-self-change.md
+  s_9622fd28aba994::t_9a41eafbae7680 9,148,176,179,181,192
+plugins/adapters/juejin/tsconfig.json
+  s_9622fd28aba994::t_9a41eafbae7680 1-12
+basic/cli/tests/plugin-runtime/runtime-model-policy/configuration-live-host.test.ts
+  s_9622fd28aba994::t_63b49f32744c9d 1-2,4-15,17,19-21,23-28,30-41
+  s_9622fd28aba994::t_9a41eafbae7680 3,16,18
+  s_9622fd28aba994::t_21861c0f4c09d4 22,29
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 90,92-94,140-142
+packages/toolkit/create-zhin/README.md
+  s_9622fd28aba994::t_9a41eafbae7680 217
+scripts/adapter-meta.mjs
+  s_9622fd28aba994::t_9a41eafbae7680 53-54
+packages/im/runtime/tests/topology-runtime.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 27-58
+basic/cli/tests/config-offline-no-agent.test.ts
+  s_9622fd28aba994::t_0e8422b6f9b530 1-32
+  s_9622fd28aba994::t_5cc049f9673f74 33-57
+plugins/adapters/onebot11/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 7
+basic/cli/tests/plugin-runtime/console/configuration-chat.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-381
+packages/im/adapter/src/endpoint-profile.ts
+  s_9622fd28aba994::t_9a41eafbae7680 15,68-79,161-174,185-188,191
+plugins/adapters/icqq/tests/agent-discovery.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 61-62,70-73,80
+docs/configuration/generated.md
+  s_9622fd28aba994::t_9a41eafbae7680 552-553,561-562,571-572,576-577,767-811,990-1044
+  s_9622fd28aba994::t_74b184e98edde6 1045
+packages/im/runtime/tests/application-runtime.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 146-147
+packages/im/runtime/tests/config-retained-adapter.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 111-114
+plugins/adapters/bilibili/src/protocol.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6-10,16-56,76-79,93-96,135-138,184-208,251-252,300,303-310,314-317,323,325-326,331,333,338-339,343-388,405,407,416-418,429-454,456-457,459-462,464,466-468,471-472,475-486,490-514
+  s_9622fd28aba994::t_e8d16d4f6a7981 515
+plugins/adapters/douyin-live/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 1-105
+basic/cli/src/commands/config.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-6,8-13,15-81,83,85,89-96,98-167,172-175,177-184,187-205,207-210,212-237,239-248,250-299
+plugins/adapters/juejin/schema.json
+  s_9622fd28aba994::t_9a41eafbae7680 1-485
+.changeset/self-change-1146-followup.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-6
+packages/im/runtime/src/configuration-paths.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-31
+docs/en/ai/default-behavior.md
+  s_9622fd28aba994::t_9a41eafbae7680 58,60,62,70
+basic/cli/tests/config-offline.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-97
+.changeset/icqq-set-group-admin.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+docs/adapters/juejin.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-158
+basic/cli/tests/plugin-runtime/root-host-watch.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-85
+basic/cli/tests/utils/host-http.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 2,54-60
+  s_9622fd28aba994::t_bf635f0c817e30 61-62
+packages/im/runtime/src/subtree-generation-preparer.ts
+  s_9622fd28aba994::t_9a41eafbae7680 55-58,86,141
+plugins/adapters/juejin/src/protocol.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-377
+scripts/check-api-docs-surface.mjs
+  s_9622fd28aba994::t_9a41eafbae7680 40,132,134
+plugins/adapters/dingtalk/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 260-261,512-528
+basic/cli/tests/plugin-runtime/configuration-cross-entry.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-373
+plugins/adapters/bilibili/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 16
+plugins/adapters/juejin/src/endpoint-directory.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-64
+plugins/adapters/qq/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 10
+packages/im/agent/src/core/reply-stream-run.ts
+  s_9622fd28aba994::t_9a41eafbae7680 9-10,26,41,56,66,88,92
+plugins/adapters/douyin-live/src/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-17
+examples/full-bot/tests/full-bot-l4-contract.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 27
+docs/cli/runtime.md
+  s_9622fd28aba994::t_9a41eafbae7680 8,40-41,85-87
+plugins/adapters/bilibili/tests/bilibili-resources.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-350
+.changeset/self-change-f3-visibility.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-6
+.changeset/configuration-boundary-regressions.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+docs/plans/configuration-live-update.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-10,13-426,428-431
+  s_9622fd28aba994::t_60b482285de7b4 11-12,427
+.changeset/configuration-chat-field-policy.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+tests/snapshots/api-surface.json
+  s_9622fd28aba994::t_9a41eafbae7680 75,92
+basic/cli/src/plugin-runtime/console/configuration-schema-safety.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-19
+plugins/adapters/juejin/pages/index/rpc.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-72
+plugins/adapters/weixin-ilink/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6
+examples/multi-agent-room/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+plugins/adapters/icqq/README.md
+  s_9622fd28aba994::t_9a41eafbae7680 174
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_9622fd28aba994::t_9a41eafbae7680 11,35,216,260,298
+packages/im/adapter/src/adapter-index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 48-49,112-113,127-131,133,136-145,229-230,242-278,321,323,328,406,506-524,595
+plugins/adapters/bilibili/src/drafts.ts
+  s_9622fd28aba994::t_9a41eafbae7680 16,18-19,21-22,52,58-59
+.changeset/971-b1-bilibili-dynamic-article.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+docs/concepts/generation-lifecycle.md
+  s_9622fd28aba994::t_9a41eafbae7680 128-129,131,135
+  s_9622fd28aba994::t_edb2177db87089 130,132-134,136
+  s_9622fd28aba994::t_8b4356f1b6502d 137
+packages/im/agent/src/self-change/approval.ts
+  s_9622fd28aba994::t_9a41eafbae7680 5-6,24-30,48-55,163-164,184-185,225-236,243,307-311,319-321,333-335
+packages/im/agent/tests/plugin-runtime/ai-completion.test.ts
+  s_9622fd28aba994::t_6d6000ad8060f7 12,57-82
+packages/im/config-file/README.md
+  s_9622fd28aba994::t_9a41eafbae7680 37
+examples/full-bot/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+packages/im/plugin-runtime/src/config-update-declaration.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-18
+plugins/adapters/bilibili/src/adapter.ts
+  s_9622fd28aba994::t_9a41eafbae7680 15
+plugins/adapters/wechat-mp/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6
+packages/console/protocol/src/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 475-479,515-567,572,574-575,642,702,704
+basic/cli/tests/plugin-runtime/inference/configuration-fixture.ts
+  s_9622fd28aba994::t_edb2177db87089 32
+  s_9622fd28aba994::t_c43bba9925895c 1-21,23,25-31,33-48,50-67,70-76
+  s_9622fd28aba994::t_58679e25bccf47 49
+  s_9622fd28aba994::t_611c8a2ddd4be4 68-69
+  s_9622fd28aba994::t_d4b84fd4adf228 22,24
+plugins/adapters/juejin/tests/juejin-fake.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-79
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_9622fd28aba994::t_9a41eafbae7680 71-73
+tsconfig.typecheck.json
+  s_9622fd28aba994::t_9a41eafbae7680 23-25,29-31
+basic/cli/src/plugin-runtime/sender-enrichment.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-3,6-7,16-48,54-57,60-67,69,77,83,90,92-93,103,113-155
+plugins/adapters/juejin/src/juejin-runtime-state.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-11
+packages/im/feature-kit/src/provider.ts
+  s_9622fd28aba994::t_9a41eafbae7680 86-94,98-99,135-136
+  s_9622fd28aba994::t_eb2c4d6f637d78 137
+basic/cli/src/plugin-runtime/self-change-apply.ts
+  s_9622fd28aba994::t_9a41eafbae7680 10-13,19,31,113,195,198,230-231,249-250,253-266,269-284,289-308
+  s_9622fd28aba994::t_8328e699be3f35 309
+docs/.vitepress/config.ts
+  s_9622fd28aba994::t_9a41eafbae7680 88-89,257-258
+plugins/adapters/lark/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8
+packages/host/http/tests/console-rpc.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 410-449
+packages/im/agent/tests/benchmarks/reply-parser.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-64
+packages/im/runtime/src/hmr-coordinator.ts
+  s_9622fd28aba994::t_9a41eafbae7680 22-23,56
+plugins/adapters/douyin-live/src/client.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-275
+packages/im/runtime/src/configuration-application.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-74
+plugins/adapters/juejin/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-32
+plugins/adapters/juejin/tests/juejin-commands.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-50
+basic/cli/src/utils/config-offline.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-2,4,6-10,12-35,48-51,53-74
+  s_9622fd28aba994::t_5d2ea90a15468f 3,5,11,36-38,42-47,52
+  s_9622fd28aba994::t_59e025b93e02cc 39-41
+examples/life-assistant-bot/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+plugins/adapters/juejin/tests/fixtures/comment-list.json
+  s_9622fd28aba994::t_9a41eafbae7680 1-113
+plugins/adapters/sandbox/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 5
+plugins/adapters/juejin/README.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-146
+plugins/adapters/douyin-live/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-14
+plugins/adapters/juejin/tests/juejin-protocol.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-115
+docs/plans/provider-main-integration.md
+  s_9622fd28aba994::t_c99f2edfd7ad35 26,39-48
+  s_9622fd28aba994::t_35c49eb5313da3 1-25,27-38
+basic/cli/tests/plugin-runtime/console/configuration-chat-shape.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-44
+plugins/adapters/juejin/src/self-profile.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-20
+.changeset/adr-0038-phase2a-f-douyin-live.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_9a41eafbae7680 306
+packages/im/feature-kit/tests/feature-kit.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 215-225
+packages/im/runtime/src/runtime-generation.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6,29-30,37-40
+  s_9622fd28aba994::t_a409176671d981 41-42
+docs/en/cli/runtime.md
+  s_9622fd28aba994::t_9a41eafbae7680 8,40-41,85-87
+packages/im/agent/tests/self-change/detail-diff.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-367
+plugins/adapters/douyin-live/tests/fixtures.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-67
+packages/im/agent/README.md
+  s_9622fd28aba994::t_9a41eafbae7680 72-86
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-35
+packages/im/adapter/tests/endpoint-profile.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 447-464
+packages/im/agent/tests/plugin-runtime/native-image-tool.test.ts
+  s_9622fd28aba994::t_eda835264441b9 77-99
+packages/im/plugin-runtime/src/snapshot.ts
+  s_9622fd28aba994::t_9a41eafbae7680 17,31,335-337
+basic/cli/src/plugin-runtime/root-host.ts
+  s_9622fd28aba994::t_9a41eafbae7680 11-12,21,31-32,34,60,74-76,79,91-92,115,144-145
+docs/en/adapters/douyin-live.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-127
+basic/cli/tests/plugin-runtime/inference/configuration.test.ts
+  s_9622fd28aba994::t_14a6d2aaab49e7 1,3-5,7-20,22-26,28-32,34-39,41-48,50-59,61-64
+  s_9622fd28aba994::t_9a41eafbae7680 2,6,27,40,49,65
+  s_9622fd28aba994::t_5dd74df13359aa 21,60
+  s_9622fd28aba994::t_f1bdf679211f77 33
+docs/authoring/console-pages.md
+  s_9622fd28aba994::t_9a41eafbae7680 425-435
+packages/im/runtime/src/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 5
+tests/docs/adapter-console-pages.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8-11,18,31-38,61
+plugins/adapters/bilibili-live/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 11
+plugins/adapters/line/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6
+basic/cli/tests/plugin-runtime/console/configuration-application.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-147
+basic/cli/src/plugin-runtime/console/configuration-path.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-33
+basic/cli/src/plugin-runtime/configuration-host-installer.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-173
+docs/ai/default-behavior.md
+  s_9622fd28aba994::t_9a41eafbae7680 58,60,62,70
+packages/im/agent/src/decision-events.ts
+  s_9622fd28aba994::t_9a41eafbae7680 186-188,333-349
+.changeset/config-cross-entry-p4.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+basic/cli/tests/plugin-runtime/agent/model-consumers-configuration.test.ts
+  s_9622fd28aba994::t_1310bffbd6225f 185,188-192,195
+  s_9622fd28aba994::t_89438da463c628 1,3,12,17,19,21,23-29,31,33-39,41,43-50,52-53,56-64,68-77,79,81-86,90,93-100,105,108-109,111,115-116,118-122,125,128-130,132-135,139,145,149,151,155,157-159,161-165,170,172-174,176-184,186-187,193-194,196,199,202-205
+  s_9622fd28aba994::t_9a41eafbae7680 2,9-11,13-16,18,20,22,30,32,40,42,51,54-55,65,78,87-89,91-92,101-104,106-107,110,112-114,117,123-124,126-127,131,136-138,144,146-148,150,152-154,156,160,166-169,171,175,197-198,200-201,206-207
+  s_9622fd28aba994::t_01df7ddf62a45c 6-8,208-279
+  s_9622fd28aba994::t_bbc30d9a55e2d2 4-5,66-67,80,140-143
+packages/im/agent/tests/decision-events.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 164
+docs/en/ai/self-change.md
+  s_9622fd28aba994::t_9a41eafbae7680 22,36,44-49,62-63,73-76
+  s_9622fd28aba994::t_c21fd9c0c2dceb 77
+.changeset/971-b3-juejin.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+.changeset/config-cli-online-offline-p1.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-9
+.changeset/incremental-reply-parser.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+packages/im/config-file/tests/json-config-document.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6,127,157-162,166,168-171
+examples/capabilities-bot/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 8
+plugins/adapters/bilibili/src/endpoint.ts
+  s_9622fd28aba994::t_9a41eafbae7680 2,4,28,30,32,35,38,40,42,77-89,154-157,229-252,277-280,282-291,301-303,306-344,607,609,611,613,616,618,625,629,637-638,643,656-660,663,672-680,700,710-711,724-728,745,756,762,775,785,789,791,853
+.changeset/configuration-live-update.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-38
+basic/cli/src/plugin-runtime/start/module.ts
+  s_9622fd28aba994::t_9a41eafbae7680 2
+plugins/adapters/juejin/commands/juejin-draft/show/[id]/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-13
+plugins/adapters/douyin-live/src/protocol.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-379
+docs/snippets/platform-tiers.md
+  s_9622fd28aba994::t_9a41eafbae7680 22,25
+plugins/adapters/juejin/adapters/juejin/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-22
+packages/im/agent/tests/core/incremental-reply-parser-performance.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-57
+docs/ai/self-change.md
+  s_9622fd28aba994::t_9a41eafbae7680 22,36,44-48,61-62,72-75
+  s_9622fd28aba994::t_abfe2f582de839 76
+plugins/adapters/bilibili/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 4
+plugins/adapters/juejin/commands/juejin-draft/edit/[id]/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-15
+.changeset/config-cross-entry-p4-test-followup.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-4
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1,60,200-202,216,232-233,252
+basic/cli/tests/plugin-runtime/agent/self-change-apply.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 223-241
+plugins/adapters/github/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 26
+packages/im/runtime/tests/hmr-coordinator.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 16-50
+packages/im/agent/src/self-change/policy.ts
+  s_9622fd28aba994::t_9a41eafbae7680 111-112
+basic/cli/src/plugin-runtime/console/configuration-path-segment.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-6
+plugins/adapters/juejin/package.json
+  s_9622fd28aba994::t_9a41eafbae7680 1-126
+plugins/adapters/juejin/pages/index/index.tsx
+  s_9622fd28aba994::t_9a41eafbae7680 1-18
+docs/configuration/index.md
+  s_9622fd28aba994::t_9a41eafbae7680 23,71-88,90-92,94,96-126,128,190
+  s_9622fd28aba994::t_849681d6b1eb47 89,93,95,127,309,311,313,315,317,321,323,326,331,335,401
+plugins/adapters/douyin-live/src/adapter.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-20
+plugins/adapters/juejin/commands/juejin-draft/drop/[id]/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-13
+basic/cli/tests/plugin-runtime/console/configuration-chat-field-policy.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-173
+docs/adr/0035-comment-reply-adapter-contract.md
+  s_9622fd28aba994::t_9a41eafbae7680 62,64
+plugins/adapters/douyin-live/adapters/douyin-live/index.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-22
+packages/im/runtime/tests/root-runtime.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 503-504,508-583
+  s_9622fd28aba994::t_edb2177db87089 505-507
+plugins/adapters/bilibili/src/console.ts
+  s_9622fd28aba994::t_9a41eafbae7680 4,6,12,87-93,98-99,141
+plugins/adapters/juejin/pages/index/CommentReview.tsx
+  s_9622fd28aba994::t_9a41eafbae7680 1-264
+plugins/adapters/juejin/src/console.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-161
+basic/cli/src/plugin-runtime/start/options.ts
+  s_9622fd28aba994::t_9a41eafbae7680 3-4,8,30-31,43-45,52,64-73,97,102-103
+docs/adapters/bilibili.md
+  s_9622fd28aba994::t_9a41eafbae7680 11,19,25,33,35,43,45-47,51,79-82,104,120,123-134,144-146,186,190-191,200-203
+plugins/adapters/juejin/tests/juejin-harness.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-45
+packages/host/http/src/console-rpc.ts
+  s_9622fd28aba994::t_9a41eafbae7680 4,9,197,202,208-212,288-312,462-477,501,512-530,533,535-538,551-556,560,562,567-576,583,585,621,623,1154-1168
+  s_9622fd28aba994::t_e2187238a5f3c7 1169
+packages/im/agent/tests/core/incremental-reply-parser-edges.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-80
+.changeset/chat-tuple-scalar-proof.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-5
+plugins/adapters/bilibili/pages/index/messages.ts
+  s_9622fd28aba994::t_9a41eafbae7680 33-35
+basic/cli/tests/runtime-start-help.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 16
+plugins/adapters/bilibili/schema.json
+  s_9622fd28aba994::t_9a41eafbae7680 57,60,71,74,165-194,288-317,365,368,379,382
+.changeset/self-change-f3-review-followup.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-8
+packages/host/http/tests/console-config-project-read-rpc.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-59
+docs/contributing/publishing.md
+  s_9622fd28aba994::t_9a41eafbae7680 211
+basic/cli/README.md
+  s_9622fd28aba994::t_9a41eafbae7680 25
+packages/im/plugin-runtime/src/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 10-12,73-74,111
+packages/im/plugin-runtime/src/token.ts
+  s_9622fd28aba994::t_9a41eafbae7680 23-25
+basic/cli/src/plugin-runtime/console/configuration-chat-policy.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-346
+plugins/adapters/icqq/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 7
+plugins/adapters/juejin/src/drafts.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-180
+examples/minimal-bot/tests/stable-path.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 271-273
+packages/im/agent/tests/core/incremental-reply-parser.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-89
+plugins/adapters/discord/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8
+.changeset/config-project-patch-p0.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-7
+docs/plans/configuration-update-research.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-139
+packages/im/agent/src/outbound/reply-json-candidate.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-248
+plugins/adapters/juejin/src/storage.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-52
+plugins/adapters/icqq/PERMITS.md
+  s_9622fd28aba994::t_9a41eafbae7680 15
+plugins/adapters/slack/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8
+plugins/adapters/juejin/src/review.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-149
+plugins/adapters/bilibili/src/review.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6,67-73,80-81,85,144
+docs/authoring/adapters.md
+  s_9622fd28aba994::t_9a41eafbae7680 123-145
+plugins/adapters/bilibili/pages/index/CommentReview.tsx
+  s_9622fd28aba994::t_9a41eafbae7680 160,244-258
+docs/en/authoring/adapters.md
+  s_9622fd28aba994::t_9a41eafbae7680 124-146
+docs/en/adapters/juejin.md
+  s_9622fd28aba994::t_9a41eafbae7680 1-158
+packages/im/adapter/src/adapter.ts
+  s_9622fd28aba994::t_9a41eafbae7680 5,296-297,305,309,392-394
+  s_9622fd28aba994::t_bdcf0b78dfc8ca 395-396
+plugins/adapters/bilibili/src/endpoint-directory.ts
+  s_9622fd28aba994::t_9a41eafbae7680 8,51-52
+basic/cli/src/utils/host-http.ts
+  s_9622fd28aba994::t_9a41eafbae7680 46-56,65
+plugins/adapters/email/plugin.ts
+  s_9622fd28aba994::t_9a41eafbae7680 6
+packages/im/runtime/tests/config-profile-first-party.test.ts
+  s_9622fd28aba994::t_9a41eafbae7680 1-155
+packages/im/adapter/src/provider.ts
+  s_9622fd28aba994::t_9a41eafbae7680 26-28
+basic/cli/src/utils/ai-config-loader.ts
+  s_9622fd28aba994::t_5a92409a971e62 7
+pnpm-lock.yaml
+  s_9622fd28aba994::t_af7e7c824616ac 2373-2409,2599-2650
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fe678c74824f6bc5bf7408ebf7b9fcc2b2bbf82c",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
