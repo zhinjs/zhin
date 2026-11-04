@@ -55,7 +55,7 @@ describe('Prompt discipline block', () => {
     expect(prompt).toContain('# Orchestration');
     // 工具选择已改为按必要性；“可用就调用”的旧期待不再代表批准的行为合同。
     expect(prompt).toContain('Check existing context first; use tools only for required access, requested actions or materially better accuracy, not mere availability.');
-    expect(prompt).toContain('`delegate` for background work');
+    expect(prompt).not.toContain('spawn_task');
     expect(prompt).toContain('# Style');
     expect(prompt).not.toContain('# Deferred Tools');
   });

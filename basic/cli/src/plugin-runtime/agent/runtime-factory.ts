@@ -64,9 +64,7 @@ export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
   const agent = new ZhinAgent({ config: {
     ...(service.getAgentConfig() ?? {}), contextHistory: service.getContextHistoryConfig(),
   }, events });
-  const composed = composeZhinAgentRuntime({ agent, proactiveOutbound: createRuntimeProactiveOutbound(
-    im, () => agent.getControlPlane(), () => agent.getDecisionEvents(), service.imageAssets,
-  ) });
+  const composed = composeZhinAgentRuntime({ agent });
   composed.host.approvalPort = approvalPort;
   const resourceHub = new AgentResourceHub();
   agent.configure({
@@ -81,7 +79,6 @@ export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
     imageAssets: service.imageAssets,
     localAssets,
     activeBinding: binding,
-    deferredResultSender: composed.deliverOutbound,
   });
 
   // Persistence readiness is latched by the Workroom persistence coordinator

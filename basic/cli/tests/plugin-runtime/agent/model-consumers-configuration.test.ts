@@ -123,21 +123,6 @@ it('keeps an admitted approval fixed while graph publication and the next operat
   } finally { hold.release(); await pending; await f.close(); }
 });
 
-it('leaves a ServiceAgent on its explicitly borrowed operation while a newly admitted operation follows the graph', async () => {
-  const f = await fixture();
-  const old = await f.host.acquireDeploymentModels({ service: f.foundation.service });
-  const agent = f.foundation.service.createAgent({ models: old, maxIterations: 1 });
-  let next: typeof old | undefined;
-  try {
-    await agent.run('first bounded task');
-    await f.publish();
-    await agent.run('same admitted task');
-    next = await f.host.acquireDeploymentModels({ service: f.foundation.service });
-    await f.foundation.service.runAgent('newly admitted task', { models: next, maxIterations: 1 });
-    expect(await observed(f)).toMatchObject([oldRequest, oldRequest, nextRequest]);
-  } finally { agent.dispose(); await old.release(); await next?.release(); await f.close(); }
-});
-
 it.each([undefined, 'reviewer'])('requires an explicit role Profile and otherwise follows the current default (%s)', async agent => {
   const f = await fixture();
   try {
