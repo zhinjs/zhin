@@ -33,7 +33,7 @@ function fixture() {
 it('starts the Agent service and facade without a model graph, credentials, or fake Provider', async () => {
   const service = new AIService();
   expect(service.isReady()).toBe(false);
-  expect(service.getBindingRegistry().requireZhinBinding()).toEqual({ name: 'zhin', mcpServers: [], nickname: undefined, permission: undefined });
+  expect(service.getBindingRegistry().requireZhinBinding()).toEqual({ name: 'zhin', mcpServers: [], nickname: undefined });
   const agent = new ZhinAgent();
   expect(() => agent.getTurnExecution()).toThrow('not configured');
   await agent.dispose(); await service.dispose();
@@ -106,7 +106,7 @@ it('leaves undeclared native context capacity unknown and honors Profile output 
   expect(invocationModel(binding)).toMatchObject({ contextWindow: 0, maxTokens: 20 });
 });
 
-it('runs real agentLoop through Inference and the SDK using the selected Profile output limit', async () => {
+it('runs the main Agent turn through Inference and the SDK using the selected Profile output limit', async () => {
   const { createInferenceRuntime } = await import('@zhin.js/ai/provider');
   const { openAiProvider } = await import('@zhin.js/ai/providers');
   const { chatReply } = await import('../../../ai/tests/providers/fixtures.js');
@@ -130,18 +130,20 @@ it('runs real agentLoop through Inference and the SDK using the selected Profile
   const scope = await runtime.openScope({ context });
   const binding = await scope.resolve({ kind: 'language', purpose: 'chat' });
   const chat = { binding, model: invocationModel(binding), completion: createInvocationCompletion({ binding, client: scope.client, purpose: 'chat' }) };
-  const models = { chat, graph, context, inference: scope.client, resolve: scope.resolve,
+  const models = { chat, summary: chat, graph, context, inference: scope.client, resolve: scope.resolve,
     summarySource: 'deployment-chat' as const, policyRevision: 1, release: () => scope.close() };
-  const service = new AIService();
-  expect((await service.runAgent('Synthetic input', { models, maxIterations: 1 })).content).toBe('answer');
+  const { mockCommMessage } = await import('../helpers/mock-comm-message.js');
+  const agent = new ZhinAgent({ config: { outputSchema: false } });
+  await agent.processTurn({ content: 'Synthetic input', message: mockCommMessage(), configuration: { models } });
   expect(requests).toHaveLength(1);
   const body = await requests[0].json();
   expect(body).toMatchObject({ model: 'selected-model', max_tokens: 37 });
   expect(JSON.stringify(body)).not.toContain('synthetic-key');
-  await scope.close(); runtime.retire(); await service.dispose();
+  await agent.dispose();
+  await scope.close(); runtime.retire();
 });
 
-it('imports the wizard-confirmed capabilities and sends real tool schemas through AgentLoop and the SDK', async () => {
+it('imports the wizard-confirmed capabilities and sends real tool schemas through the main Agent and the SDK', async () => {
   const { materializeAIPlan } = await import('../../../../toolkit/scaffold-wizard/src/ai.js');
   const { reviewProviderPlan, createEmptyProviderGraph, createInferenceRuntime } = await import('@zhin.js/ai/provider');
   const { openAiProvider } = await import('@zhin.js/ai/providers');
@@ -162,15 +164,8 @@ it('imports the wizard-confirmed capabilities and sends real tool schemas throug
     fetch: () => async (url, init) => { requests.push(new Request(url, init)); return chatReply('answer'); } });
   const scope = await runtime.openScope({ context }), binding = await scope.resolve({ kind: 'language', purpose: 'chat' });
   const chat = { binding, model: invocationModel(binding), completion: createInvocationCompletion({ binding, client: scope.client, purpose: 'chat' }) };
-  const service = new AIService();
-  const result = await service.runAgent('Synthetic question', { maxIterations: 1, models: { chat, summary: chat, graph: scope.graph, context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
-    summarySource: 'deployment-chat', policyRevision: 1, retainDelegation: () => { throw new Error('No delegation expected'); }, release: () => scope.close() },
-    tools: [{ name: 'lookup_fact', description: 'Read a synthetic fact', parameters: { type: 'object', properties: {} }, execute: async () => 'fact' }] });
-  expect(result.content).toBe('answer'); expect(requests).toHaveLength(1);
-  expect(await requests[0].json()).toMatchObject({ model: 'explicit-model', tools: [{ type: 'function', function: { name: 'lookup_fact' } }] });
   const { mockCommMessage } = await import('../helpers/mock-comm-message.js');
   const mainAgent = new ZhinAgent({ config: { outputSchema: false, deferredTools: { alwaysLoadedTools: ['lookup_fact'] } } });
-  requests.length = 0;
   await mainAgent.processTurn({ content: 'Synthetic question', message: mockCommMessage(),
     configuration: { models: { chat, summary: chat, graph: scope.graph, context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
       summarySource: 'deployment-chat', policyRevision: 1, retainDelegation: () => { throw new Error('No delegation expected'); }, release: () => scope.close() } },
@@ -180,7 +175,7 @@ it('imports the wizard-confirmed capabilities and sends real tool schemas throug
   expect(mainRequest.model).toBe('explicit-model');
   expect(mainRequest.tools).toEqual(expect.arrayContaining([expect.objectContaining({ function: expect.objectContaining({ name: 'lookup_fact' }) })]));
   await mainAgent.dispose();
-  await scope.close(); runtime.retire(); await service.dispose();
+  await scope.close(); runtime.retire();
 });
 
 it('lets a durable personal Session follow the same Profile to a new native model next turn while isolating old opaque history', async () => {

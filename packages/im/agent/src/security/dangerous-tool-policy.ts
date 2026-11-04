@@ -90,7 +90,7 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
   }
 
   if (!hasIdentity) {
-    // 无 IM 上下文（直接工具调用、subagent）→ 全权
+    // 无 IM 上下文（直接工具调用）→ 全权
     return { allowed: true, role: 'master' };
   }
 

@@ -15,7 +15,7 @@ import type { MemoryEntryUpsertInput } from '@zhin.js/ai';
 import type { ToolInputJsonObjectSchema } from '@zhin.js/tool';
 import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
 
-export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota' | 'multimodal' | 'collaboration';
+export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'quota' | 'multimodal' | 'collaboration';
 
 export interface EvalInboundMessage {
   readonly text: string;

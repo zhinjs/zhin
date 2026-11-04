@@ -14,7 +14,6 @@ export type {
   TurnTraceModelCall,
   TurnTraceToolCall,
   TurnTraceBudgetExtension,
-  TurnTraceSubagentTask,
   TurnTraceTimelineEntry,
   TurnTraceTermination,
 } from './turn-trace.js';

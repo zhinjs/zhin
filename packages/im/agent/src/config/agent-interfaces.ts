@@ -8,7 +8,6 @@ import type { AgentOutputElement } from '../outbound/agent-output.js';
 
 import type { AgentMessage, AgentEvent, MediaContentBlock } from '@zhin.js/ai';
 import type { Message, Tool } from '../resource-hub/types.js';
-import type { SubagentSystem } from '../subagent/index.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';
 import type { OnChunkCallback } from './zhin-agent-config.js';
@@ -54,10 +53,9 @@ export interface IAgentSessionManager {
 }
 
 /**
- * 诊断与内省 —— 子 agent、事件发射器、内部状态
+ * 诊断与内省 —— 事件发射器、内部状态
  */
 export interface IAgentDiagnostics {
-  getSubagentSystem(): SubagentSystem | null;
   getEventEmitter(): ZhinAgentEventEmitter;
   getLastTurnMetrics(): ZhinAgentTurnMetrics | null;
 }

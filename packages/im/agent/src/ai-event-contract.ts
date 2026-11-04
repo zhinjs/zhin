@@ -16,11 +16,6 @@ export type AIEventName =
   | 'ai.typing.stop'
   | 'ai.activity.queued.start'
   | 'ai.activity.queued.clear'
-  | 'ai.subagent.spawn'
-  | 'ai.subagent.start'
-  | 'ai.subagent.finish'
-  | 'ai.deferred.start'
-  | 'ai.deferred.finish'
   | 'ai.mcp.connect.start'
   | 'ai.mcp.connect.finish'
   | 'ai.mcp.connect.error'
@@ -31,7 +26,7 @@ export type AIEventName =
   | 'schedule.finish'
   | 'schedule.error';
 
-export type AIEventSource = 'zhin-agent' | 'subagent' | 'ai-hook' | 'orchestrator-hook';
+export type AIEventSource = 'zhin-agent' | 'ai-hook' | 'orchestrator-hook';
 export type AIEventMode = 'text' | 'multimodal';
 export type AIEventPath = 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limited';
 
@@ -60,8 +55,6 @@ export interface AIEventPayload extends ActivityFeedbackSourceCarrier {
   /** Framework progress is formatted by the display consumer, after its locale fallback resolves. */
   iterationProgress?: Readonly<{ current: number; total: number }>;
   reason?: string;
-  taskId?: string;
-  label?: string;
   status?: 'ok' | 'partial' | 'error';
   serverName?: string;
   loadedToolNames?: string[];
@@ -69,7 +62,6 @@ export interface AIEventPayload extends ActivityFeedbackSourceCarrier {
   hookAction?: string;
   hookContext?: Record<string, unknown>;
   messages?: string[];
-  agentId?: string;
   compactedCount?: number;
   savedTokens?: number;
   totalTokensBefore?: number;

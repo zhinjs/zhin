@@ -1,8 +1,6 @@
 import {
   toActivityFeedbackEventContext,
   isActivityFeedbackEnabled,
-  applySubagentActivityPrefixToConfig,
-  withSubagentActivityPrefix,
   activityFeedbackSource,
   type AIEventPayload,
   type ActivityFeedbackPhase,
@@ -61,9 +59,8 @@ export class ActivityFeedbackOrchestrator {
         return;
       }
 
-      const config = applySubagentActivityPrefixToConfig(resolution.config, payload);
       this.log.debug(`[ActivityFeedback] start ${phase} (${reason}) session=${ctx.sessionId}`);
-      await this.executor.start(ctx, phase, config);
+      await this.executor.start(ctx, phase, resolution.config);
       this.active.set(this.phaseKey(ctx, phase), { ctx, phase });
     } catch (error) {
       this.log.error(`[ActivityFeedback] start ${phase} failed (${reason}):`, error);
@@ -98,7 +95,7 @@ export class ActivityFeedbackOrchestrator {
     if (!ctx || !text) return;
 
     try {
-      await this.executor.updateText(ctx, phase, withSubagentActivityPrefix(text, payload));
+      await this.executor.updateText(ctx, phase, text);
     } catch (error) {
       this.log.error(`[ActivityFeedback] ${phase} update failed:`, error);
     }

@@ -11,8 +11,8 @@ it('prepares only Host execution ports without reading a graph or constructing a
   await service.dispose();
 });
 
-it('retains role nickname, MCP and permissions outside model resource configuration', async () => {
-  const authority = { nickname: 'Z', mcpServers: ['readonly'], permission: { task: { '*': 'deny' } } };
+it('retains role nickname and MCP outside model resource configuration', async () => {
+  const authority = { nickname: 'Z', mcpServers: ['readonly'] };
   const service = new AIService({ agents: { zhin: authority, reviewer: { nickname: 'Reviewer' } } });
   expect(service.getBindingRegistry().requireZhinBinding()).toMatchObject(authority);
   expect(service.getBindingRegistry().requireZhinBinding()).not.toHaveProperty('model');
@@ -53,12 +53,11 @@ it('does not abort or release an already borrowed operation when the Agent servi
   await scope.release(); lease.release();
 });
 
-it('standalone agents use only their explicit borrowed scope and leave its cleanup to the caller', async () => {
-  const service = new AIService(), f = modelRuntimeFixture(), scope = await f.acquire();
-  const release = vi.spyOn(scope, 'release');
-  const agent = service.createAgent({ models: scope, maxIterations: 1 });
-  await agent.run('synthetic task'); agent.dispose();
-  expect(release).not.toHaveBeenCalled();
-  await scope.release(); expect(release).toHaveBeenCalledOnce();
-  await service.dispose();
+it.each([
+  ['subagentTurnMode', { agent: { subagentTurnMode: 'sync' } }, 'ai.agent.subagentTurnMode'],
+  ['maxParallelSubagents', { agent: { maxParallelSubagents: 2 } }, 'ai.agent.maxParallelSubagents'],
+  ['deferredAutoContinue', { agent: { deferredAutoContinue: true } }, 'ai.agent.deferredAutoContinue'],
+  ['permission.task', { agents: { zhin: { permission: { task: { '*': 'deny' } } } } }, 'ai.agents.zhin.permission.task'],
+] as const)('fails startup on the removed sub-agent switch %s with a collaboration migration hint', (_key, config, field) => {
+  expect(() => new AIService(config as never)).toThrow(new RegExp(`${field.replaceAll('.', '\\.')} removed;.*agent\\.json`));
 });

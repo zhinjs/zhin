@@ -21,7 +21,6 @@ export interface AgentRoleConfig {
   blockedTools: string[];
   /** 是否允许发送消息给用户 */
   canSendMessage: boolean;
-  /** 是否允许 spawn 子 Agent */
   /** 是否允许访问主 Agent 历史 */
   canAccessMainHistory: boolean;
   /** 是否允许执行写操作 */
@@ -151,9 +150,7 @@ export const AGENT_ROLE_CONFIGS: Record<AgentRole, AgentRoleConfig> = {
   planner: {
     role: 'planner',
     description: '规划 Agent，全局总控 + 动态路由（ADR 0024 director）',
-    allowedTools: [
-      'ask_user',
-    ],
+    allowedTools: ['ask_user'],
     blockedTools: ['write_file', 'edit_file', 'bash', 'web_search', 'web_fetch', 'generate_image'],
     canSendMessage: true,
     canAccessMainHistory: true,

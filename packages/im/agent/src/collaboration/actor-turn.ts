@@ -48,9 +48,6 @@ import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
 import type { ActorModelSelection, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
 
-/** The legacy delegation tool; collaboration replaces it inside actor turns. */
-const SPAWN_TASK_TOOL_NAME = 'spawn_task';
-
 export interface ActorTurnRunnerOptions {
   readonly host: ZhinAgentPrivate;
   readonly core: AgentCore;
@@ -121,8 +118,7 @@ async function runActorTurn(
   const shellAllowed = turnPolicyAllowsShell(policy);
   const selfProfile = rootTurn.ports.selfProfile;
   const projected = options.capabilities.tools.filter(tool =>
-    tool.name !== SPAWN_TASK_TOOL_NAME
-    && canCall(authority, tool.name)
+    canCall(authority, tool.name)
     && (shellAllowed || tool.name !== BASH_TOOL_NAME)
     && (authority.egress.network || !NETWORK_TOOL_NAMES.has(tool.name))
     && (selfProfile || (tool.name !== 'get_self_profile' && tool.name !== 'set_self_profile'))

@@ -39,15 +39,6 @@ export {
   unwrapJsonStringLayers,
 } from './text-sanitize.js';
 
-export {
-  runAgentLoopStandaloneTurn,
-} from './agent-loop-standalone.js';
-export type {
-  AgentLoopStandaloneCallbacks,
-  AgentLoopStandaloneInput,
-  AgentLoopStandaloneResult,
-} from './agent-loop-standalone.js';
-
 // Host-integration seam for external host packages.
 export { collectAgentLoopTurnRun } from './agent-core-run.js';
 /** @internal Host-integration only (used by @zhin.js/workroom); not a stable API. */

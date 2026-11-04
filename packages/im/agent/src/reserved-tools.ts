@@ -23,7 +23,6 @@ export const RESERVED_TOOL_NAMES = [
   'load_skill',
   'ask_user',
   'user_profile',
-  'spawn_task',
   // ADR 0048 collaboration tools (collaboration/contracts.ts).
   'agents',
   'ask',

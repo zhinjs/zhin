@@ -73,14 +73,6 @@ export interface TurnTraceBudgetExtension {
   readonly at_ms: number;
 }
 
-export interface TurnTraceSubagentTask {
-  readonly task_id: string;
-  readonly agent_name?: string;
-  readonly description: string;
-  readonly status: 'running' | 'ok' | 'error';
-  readonly result_summary?: string;
-}
-
 export interface TurnTraceTimelineEntry {
   readonly at_ms: number;
   readonly kind: string;
@@ -110,7 +102,6 @@ export interface TurnTrace {
   readonly context_budget?: ContextBudgetReport;
   readonly tool_calls: readonly TurnTraceToolCall[];
   readonly budget: Readonly<{ extensions: readonly TurnTraceBudgetExtension[]; continuations: number }>;
-  readonly subagent_tasks: readonly TurnTraceSubagentTask[];
   /** Nested actor turns (`<root>:actor:<actor>:<mail>`). */
   readonly subagents: readonly TurnTrace[];
   readonly timeline: readonly TurnTraceTimelineEntry[];
@@ -175,7 +166,6 @@ export class TurnTraceCollector {
   readonly #extensions: TurnTraceBudgetExtension[] = [];
   #continuations = 0;
   #contextBudget: ContextBudgetReport | undefined;
-  readonly #subagentTasks = new Map<string, TurnTraceSubagentTask>();
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
   #dropped = 0;
@@ -347,30 +337,6 @@ export class TurnTraceCollector {
         this.#addTimeline('tool_cancelled', `${event.toolName}: ${tool.error}`);
         return;
       }
-      case 'subagent_start':
-        this.#subagentTasks.set(event.taskId, Object.freeze({
-          task_id: event.taskId,
-          ...(event.agentName ? { agent_name: event.agentName } : {}),
-          description: summarizeText(event.description),
-          status: 'running',
-        }));
-        this.#addTimeline('subagent_start', `${event.taskId} ${summarizeText(event.description, 80)}`);
-        return;
-      case 'subagent_progress':
-        this.#addTimeline('subagent_progress', `${event.taskId} ${summarizeText(event.summary, 80)}`);
-        return;
-      case 'subagent_end': {
-        const task = this.#subagentTasks.get(event.taskId);
-        this.#subagentTasks.set(event.taskId, Object.freeze({
-          task_id: event.taskId,
-          ...(task?.agent_name ? { agent_name: task.agent_name } : {}),
-          description: task?.description ?? '',
-          status: event.status,
-          ...(event.result ? { result_summary: summarizeText(event.result) } : {}),
-        }));
-        this.#addTimeline('subagent_end', `${event.taskId} ${event.status}`);
-        return;
-      }
       case 'turn_end':
         this.#finish({ status: 'completed' });
         return;
@@ -427,7 +393,6 @@ export class TurnTraceCollector {
         extensions: Object.freeze([...this.#extensions]),
         continuations: this.#continuations,
       }),
-      subagent_tasks: Object.freeze([...this.#subagentTasks.values()]),
       subagents: Object.freeze([...this.#children.values()].map(child => child.snapshot())),
       timeline: Object.freeze([...this.#timeline]),
       termination: Object.freeze({ ...this.#termination }),

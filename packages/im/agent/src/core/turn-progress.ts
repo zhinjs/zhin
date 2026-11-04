@@ -23,7 +23,7 @@ export interface ToolBudgetSettings {
   readonly progressWindow: number;
   /** Hard cap on steps per Turn segment (base + extensions). */
   readonly maxTotalIterations: number;
-  /** Hard cap on steps for one in-turn sub-agent. */
+  /** Hard cap on steps for one collaboration Actor turn. */
   readonly maxSubagentTotalIterations: number;
   /** Wall-clock cap for the whole Turn, including continuations. 0 disables. */
   readonly maxWallClockMs: number;
@@ -118,7 +118,6 @@ export function autoContinueAllowed(mode: ToolBudgetAutoContinue, turn: TurnCont
 
 export type ToolProgressKind =
   | 'mutation'
-  | 'subagent'
   | 'new_result'
   | 'exploration'
   | 'repeat'
@@ -135,7 +134,7 @@ const MUTATING_TOOLS = new Set(['write_file', 'edit_file', 'multi_edit', 'apply_
 const MUTATING_NAME = /(?:^|_)(?:create|schedule|add|update|delete|remove|send|set|write|edit|move|rename|commit)(?:_|$)/;
 
 export function isProgress(kind: ToolProgressKind): boolean {
-  return kind === 'mutation' || kind === 'subagent' || kind === 'new_result';
+  return kind === 'mutation' || kind === 'new_result';
 }
 
 /** Classifies tool calls in one Turn into progress and non-progress events. */
@@ -196,9 +195,6 @@ export class TurnProgressTracker {
     const signature = `${call.toolName}:${stableStringify(call.args)}:${resultKey}`;
     if (this.#signatures.has(signature)) return 'repeat';
     this.#signatures.add(signature);
-    if (call.toolName === 'spawn_task') {
-      return call.output?.includes('已完成') ? 'subagent' : 'exploration';
-    }
     if (call.toolName === 'bash') {
       const command = (call.args as { command?: unknown } | undefined)?.command;
       return typeof command === 'string' && !classifyBashCommand(command).isReadOnly

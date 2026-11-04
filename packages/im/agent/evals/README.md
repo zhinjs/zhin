@@ -18,9 +18,9 @@ this gate. Request-hash record/replay is intentionally not used.
 1. `framework/scripted-model.ts` registers a fake provider. **Every model
    request consumes the next script step, in order**, across the whole case.
    That includes requests the harness makes on its own, such as the
-   exhausted-budget summary or progress updates. A synchronous sub-agent runs
-   inside the parent's `spawn_task` call, so its requests come between the
-   parent's in script order.
+   exhausted-budget summary or progress updates. A collaboration actor turn
+   (`ask` / `delegate`) runs inside the delegator's tool call, so its requests
+   come between the delegator's in script order.
 2. `framework/driver.ts` builds a real `ZhinAgent` host (with `AgentCore` and
    the session and context systems) around that model. It then creates one
    canonical `TurnIngress` per inbound message and runs it through
@@ -76,7 +76,7 @@ fallback is separate and remains covered by `multimodal-perception-fallback`.
 | `inbound` | One message, or an array run as consecutive turns in the same session. Each message has `text`, an optional `scope` (`private` or `group`), an optional `sender` (`id`, `name`, `roles`), optional `backgroundEvents` (rendered as untrusted conversation events), optional `images` (`{ base64, mimeType, name? }`, see `fixtures/images.ts`), and an optional `policy` override. |
 | `tools` | Mocked tools: `name`, `description`, `parameters` (JSON Schema of the arguments, sent to the model), `result` (a value or `(args) => value`), `error`, and `requiresApproval`. Cases with `live` checks must declare every argument their script passes, or a real model has nothing to fill in. Built-in reserved names such as `read_file` or `bash` are rejected, so give mocks their own names. |
 | `approval` | How the fake approval channel answers: `approve` (the default), `deny`, or `unavailable` (no channel). |
-| `agentConfig` | Partial `ZhinAgentConfig`, for example `maxIterations`, `toolBudget`, or `subagentTurnMode: 'sync'`. |
+| `agentConfig` | Partial `ZhinAgentConfig`, for example `maxIterations` or `toolBudget`. |
 | `promptSections` | Prompt sections from a third-party plugin (`{ plugin, title, content }`). They are owned by a child plugin, so the engine labels them `external_content`. |
 | `source` | Required. The issue, PR or QQ incident the case guards against. |
 | `skip` | Skip with an actionable reason (a known gap or an unmerged dependency). |
@@ -381,7 +381,7 @@ requests to Gemini send no temperature, since Gemini 3.6+ ignores it and warns.
   internals.
 - Tags: `long-task` (budgets, continuation, exhaustion), `context` (what reaches
   the model), `memory` (cross-turn recall), `injection` (untrusted input and
-  trust tiers), `tool-use`, `approval`, and `subagent`.
+  trust tiers), `tool-use`, `approval`, `quota`, `multimodal`, and `collaboration`.
 - Every case names its `source`. When a case documents a known gap, keep it
   with `skip` and a linked issue rather than deleting it.
 

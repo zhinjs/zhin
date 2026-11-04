@@ -5,25 +5,16 @@ import type { AgentStartupConfig } from './config/agent-startup.js';
  */
 
 import { type AITriggerConfig, type AIAccessConfig } from '@zhin.js/core';
-import { type AgentTool, type Usage, type ContextConfig} from '@zhin.js/ai';
-import type { AgentRunInput } from './media/media-types.js';
+import type { ContextConfig } from '@zhin.js/ai';
 import { R2ImageAssetPublisher } from './media/r2-image-assets.js';
 import type { ImageAssetPublisher, R2ImageStorageConfig } from './media/image-assets.js';
-import { validateModelRuntimeConfig, DEFAULT_CONFIG, findDeprecatedAgentBindingKeys, findDeprecatedAgentConfigKeys } from './config/index.js';
+import { validateModelRuntimeConfig, findDeprecatedAgentBindingKeys, findDeprecatedAgentConfigKeys } from './config/index.js';
 import { getLogger } from '@zhin.js/logger';
-import { runWithAgentTurnConfiguration } from './turn/agent-turn-context.js';
 import { ModelRuntimeService } from './model-runtime/service.js';
-import type { ModelRuntimeConfig, ModelRuntimeServiceOptions, ModelExecutionScope } from './model-runtime/types.js';
+import type { ModelRuntimeConfig, ModelRuntimeServiceOptions } from './model-runtime/types.js';
 import { AgentBindingRegistry } from './config/agent-binding-registry.js';
 import { resolvePerceptionSettings, type PerceptionSettings } from './config/perception-config.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
-import {
-  runAgentLoopStandaloneTurn,
-  type AgentLoopStandaloneCallbacks,
-  type AgentLoopStandaloneResult,
-} from './core/agent-loop-standalone.js';
-import type { ToolCallRecord } from './core/tool-calls-user-format.js';
-import { StandaloneToolCatalog } from './standalone/standalone-tool-catalog.js';
 import {
   PluginAILoopHookRegistry,
   type PluginAfterToolCallHandler,
@@ -37,41 +28,6 @@ export interface AIServiceConfig extends ModelRuntimeConfig {
   /** Administrator-authored Console principal bindings; never inferred from a request body. */
   personalPrincipals?: Readonly<Record<string, readonly import('./personal-session/types.js').PersonalSessionOwner[]>>;
 }
-/** AIService 程序化 Agent 句柄（agentLoop 隔离上下文，非 legacy `Agent` 类） */
-export interface ServiceAgent {
-  run(userInput: AgentRunInput): Promise<ServiceAgentResult>;
-  dispose(): void;
-}
-
-export interface ServiceAgentResult {
-  content: string;
-  toolCalls: ToolCallRecord[];
-  usage: Usage;
-  iterations: number;
-  model: string;
-  /** Last actual model response; callers must not infer success from content alone. */
-  terminal?: AgentLoopStandaloneResult['terminal'];
-}
-
-export interface CreateServiceAgentOptions {
-  /** Borrowed operation scope; its caller owns release and the actual generation lease. */
-  models: ModelExecutionScope;
-  systemPrompt?: string;
-  tools?: readonly AgentTool[];
-  /**
-   * Include tools registered on this service via `registerTool()`. Default
-   * `false`: a standalone Agent starts with no tools unless they are passed
-   * explicitly. For plain text work use `aiCompletionToken` instead.
-   */
-  includeRegisteredTools?: boolean;
-  maxIterations?: number;
-  contextWindow?: number;
-  /** Cancels provider I/O and releases the caller even for a non-cooperative provider. */
-  signal?: AbortSignal;
-  /** Receives observed partial results before the original run error is rejected. */
-  onInterrupted?: AgentLoopStandaloneCallbacks['onInterrupted'];
-}
-
 export class AIService {
   readonly imageAssets?: ImageAssetPublisher;
   private readonly sourceConfig: AIServiceConfig;
@@ -85,7 +41,6 @@ export class AIService {
   private accessConfig: AIAccessConfig;
   private agentConfig: AgentStartupConfig['agent'];
   private perceptionConfig?: PerceptionSettings;
-  private readonly standaloneTools = new StandaloneToolCatalog();
   readonly loopHooks = new PluginAILoopHookRegistry();
 
   constructor(config: AIServiceConfig = {}) {
@@ -142,10 +97,6 @@ export class AIService {
     return !this.closing && this.modelRuntime !== null;
   }
 
-  registerTool(tool: AgentTool): () => void {
-    return this.standaloneTools.register(tool);
-  }
-
   /** ADR 0010 — bridge plugin beforeToolCall hooks to agentLoop. */
   onBeforeToolCall(handler: PluginBeforeToolCallHandler): () => void {
     return this.loopHooks.onBeforeToolCall(handler);
@@ -160,11 +111,6 @@ export class AIService {
     return this.loopHooks.onTransformContext(handler);
   }
 
-  /** Snapshot the tools explicitly registered for standalone service agents. */
-  listRegisteredTools(): readonly AgentTool[] {
-    return this.standaloneTools.snapshot();
-  }
-
   getContextConfig(): ContextConfig { return this.contextConfig; }
   getTriggerConfig(): AITriggerConfig { return this.triggerConfig; }
   getAccessConfig(): AIAccessConfig { return this.accessConfig; }
@@ -176,41 +122,6 @@ export class AIService {
     return { tokens: this.contextConfig.historyTokens, maxMessages: this.contextConfig.maxRecentMessages };
   }
 
-
-  private resolveServiceAgentTools(options: CreateServiceAgentOptions): AgentTool[] {
-    return this.standaloneTools.resolve({
-      includeRegisteredTools: options.includeRegisteredTools === true,
-      explicitTools: options.tools ?? [],
-    });
-  }
-
-  createAgent(options: CreateServiceAgentOptions): ServiceAgent {
-    if (this.closing) throw new Error('AI service is disposed');
-    const tools = this.resolveServiceAgentTools(options);
-    const models = options.models;
-    return {
-      run: userInput => runWithAgentTurnConfiguration({ models }, () => runAgentLoopStandaloneTurn({
-        execution: models.chat, imageAssets: this.imageAssets,
-        systemPrompt: options.systemPrompt ?? '', tools, userInput,
-        maxIterations: options.maxIterations ?? DEFAULT_CONFIG.maxIterations,
-        signal: options.signal,
-        callbacks: { onInterrupted: options.onInterrupted },
-      })).then(toServiceAgentResult),
-      dispose: () => undefined,
-    };
-  }
-
-  async runAgent(
-    task: AgentRunInput,
-    options: CreateServiceAgentOptions,
-  ): Promise<ServiceAgentResult> {
-    const agent = this.createAgent(options);
-    try {
-      return await agent.run(task);
-    } finally {
-      agent.dispose();
-    }
-  }
 
   dispose(): Promise<void> {
     if (this.disposal) return this.disposal;
@@ -226,13 +137,3 @@ export class AIService {
 
 }
 
-function toServiceAgentResult(result: AgentLoopStandaloneResult): ServiceAgentResult {
-  return {
-    content: result.content,
-    toolCalls: result.toolCalls,
-    usage: result.usage,
-    iterations: result.iterations,
-    model: result.model,
-    ...(result.terminal ? { terminal: result.terminal } : {}),
-  };
-}

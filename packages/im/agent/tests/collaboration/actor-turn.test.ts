@@ -87,7 +87,7 @@ function setup(options: {
     },
   };
   const host = {
-    config: { deferredTools: {}, maxSubagentIterations: 7, maxParallelSubagents: 2 },
+    config: { deferredTools: {}, maxSubagentIterations: 7 },
     rateLimiter: { check: () => ({ allowed: true }) },
     usageQuota: new UsageQuota(),
     promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
@@ -178,9 +178,9 @@ describe('renderMailBatch', () => {
 
 describe('actor turn runner', () => {
   it('runs an ask through the harness: rendered input, authority-filtered tools, collaboration tools, charge', async () => {
-    const tools = [capability('lookup'), capability('secret'), capability('bash'), capability('spawn_task'), capability('web_fetch')];
+    const tools = [capability('lookup'), capability('secret'), capability('bash'), capability('web_fetch')];
     const ctx = setup({
-      agents: [agentDef('zhin', ALL), agentDef('researcher', only(['lookup', 'bash', 'spawn_task', 'web_fetch']))],
+      agents: [agentDef('zhin', ALL), agentDef('researcher', only(['lookup', 'bash', 'web_fetch']))],
       tools,
       script: reply('  October  ', 2, 10),
     });
@@ -202,7 +202,6 @@ describe('actor turn runner', () => {
     expect(offered).toContain('lookup');
     expect(offered).toContain('bash');
     expect(offered).not.toContain('secret');
-    expect(offered).not.toContain('spawn_task');
     expect(offered).not.toContain('web_fetch');
     expect(offered).toEqual(expect.arrayContaining(['ask', 'tell']));
     expect(names(input.allTools)).not.toContain('secret');

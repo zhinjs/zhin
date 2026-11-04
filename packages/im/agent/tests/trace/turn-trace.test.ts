@@ -148,15 +148,6 @@ describe('sub-agent nesting', () => {
     expect(child.snapshot().principal?.trust_level).toBe('group_member');
     expect(formatTurnTrace(snapshot)).toContain('信任级别: group_member');
   });
-
-  it('records subagent task lifecycle events', () => {
-    const trace = collector();
-    trace.record({ type: 'subagent_start', taskId: 'task-1', agentName: 'coder', description: 'fix bug' });
-    trace.record({ type: 'subagent_end', taskId: 'task-1', status: 'error', result: 'timed out' });
-    expect(trace.snapshot().subagent_tasks).toEqual([
-      { task_id: 'task-1', agent_name: 'coder', description: 'fix bug', status: 'error', result_summary: 'timed out' },
-    ]);
-  });
 });
 
 describe('redaction', () => {

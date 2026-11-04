@@ -10,8 +10,6 @@ import { buildTurnUserMessages, appendTurnContextBlocks } from '../../src/contex
 import { getGitStatusLine } from '../../src/prompt/git-context.js';
 import { runEvalCase } from '../../evals/framework/index.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
-import { buildSubagentAutoContinueUserMessage, buildSubagentAutoContinueRetryMessage } from '../../src/turn/subagent-auto-continue.js';
-import { buildDeferredAutoContinueUserMessage } from '../../src/turn/deferred-auto-continue.js';
 import { turnContextViewFromMessage } from '../../src/context/im-turn-context-adapter.js';
 
 vi.mock('../../src/context/agents-instruction.js', () => ({ buildAgentsEnvelopeContext: vi.fn() }));
@@ -204,33 +202,4 @@ it('reassembles an owned message without rewriting its recorded identity from th
   expect(body).toContain('role:master');
   expect((result.userMessages[0] as UserMessage).actor).toEqual(user.actor);
   expect(user).toEqual(original);
-});
-
-
-it.each([
-  ['subagent', () => buildSubagentAutoContinueUserMessage('task', 'work', 'ok')],
-  ['subagent retry', () => buildSubagentAutoContinueRetryMessage('task', 'work', 'ok')],
-  ['deferred', () => buildDeferredAutoContinueUserMessage('task', 'work', 'ok')],
-] as const)('does not attribute a synthetic %s continuation to the original human input', async (_kind, buildMessage) => {
-  const host = {
-    config: { persona: 'p', toneAwareness: false }, userProfiles: { buildProfileSummary: async () => '' },
-    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'openai', models: ['m'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({ model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) }).model(((() => ({ name: 'openai', models: ['m'] }))()).name, ((() => ({ name: 'openai', models: ['m'] }))()).models?.[0]) }, completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) } }),
-    buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
-    completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
-  } as any;
-  const commMessage = { ...mockCommMessage({ senderId: 'owner', isMaster: true }), id: 'old-native' };
-  const turn = turnContextViewFromMessage(commMessage);
-  const continuation = buildMessage();
-  const result = await new ContextSystem().buildTextTurnContext({ host, turn, content: '',
-    turnUser: { rawContent: '', promptMessages: [createUserMessage('')] }, prebuiltMessages: [continuation],
-  });
-  const current = result.userMessages[0] as UserMessage;
-  expect(current.actor).toBeUndefined();
-  expect(current.messageId).toBeUndefined();
-  const body = (projectPromptContext([current])[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
-  expect(body).not.toContain('user_id:');
-  expect(body).toContain(continuation.content[0]!.text);
-  expect(agentMessageRowToLlm(serializeAgentMessage(current))).toEqual({ ...current, content: current.content.filter(block => !block.perTurn) });
-  expect(turn.principal.roles).toEqual(['master']);
-  expect(turn.origin).toMatchObject({ messageId: 'old-native' });
 });

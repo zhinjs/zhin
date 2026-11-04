@@ -8,7 +8,6 @@ export type ProactiveSendSource =
   | 'scheduled'
   | 'notification'
   | 'ask_user'
-  | 'subagent'
   | 'host';
 
 export interface ProactiveSendContext {
