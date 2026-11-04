@@ -1,0 +1,31 @@
+.changeset/z2-comment-review-bilibili.md
+  s_9477e63ef5cee5::t_1855fbaa25835b 1-5
+.changeset/z2-comment-review-client.md
+  s_9477e63ef5cee5::t_79abd3dc993fa9 1-5
+.changeset/z2-comment-review-juejin.md
+  s_9477e63ef5cee5::t_3b1c6eeb016996 1-5
+docs/authoring/console-pages.md
+  s_9477e63ef5cee5::t_08085b4116642c 473-476
+docs/en/authoring/console-pages.md
+  s_9477e63ef5cee5::t_87c9df3b59c197 473-476
+packages/console/client/README.md
+  s_9477e63ef5cee5::t_8f055e769b94c7 98-121
+packages/console/client/client/adapter-console/styles.ts
+  s_9477e63ef5cee5::t_88cbd4fea6aa27 4-5,19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "22bd14a7433a4e61b7d265bb996543786462e8a3",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
