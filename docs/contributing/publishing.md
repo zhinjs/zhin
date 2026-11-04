@@ -135,7 +135,7 @@ done < names.txt
 
 ## 包清单
 
-以下 103 个非 private 包都需要配置可信发布者（由各 `package.json` 生成；新增包后同步更新本清单）。
+以下 107 个非 private 包都需要配置可信发布者（由 `pnpm sync:publishing-manifest` 从各 `package.json` 生成；CI 以 `pnpm check:publishing-manifest` 校验，新增或转为 public 的包须先同步本清单）。
 
 ### `basic/`（5）
 
@@ -166,9 +166,10 @@ done < names.txt
 - [ ] `@zhin.js/host-http-contract` — `packages/host/http-contract`
 - [ ] `@zhin.js/mcp` — `packages/host/mcp`
 
-### `packages/im/`（25）
+### `packages/im/`（27）
 
 - [ ] `@zhin.js/adapter` — `packages/im/adapter`
+- [ ] `@zhin.js/adapter-onebot-events` — `packages/im/adapter-onebot-events`
 - [ ] `@zhin.js/agent` — `packages/im/agent`
 - [ ] `@zhin.js/agent-feature` — `packages/im/agent-feature`
 - [ ] `@zhin.js/ai` — `packages/im/ai`
@@ -192,28 +193,30 @@ done < names.txt
 - [ ] `@zhin.js/schedule-feature` — `packages/im/schedule-feature`
 - [ ] `@zhin.js/skill` — `packages/im/skill`
 - [ ] `@zhin.js/tool` — `packages/im/tool`
+- [ ] `@zhin.js/workroom` — `packages/im/workroom`
 - [ ] `zhin.js` — `packages/im/zhin`
 
-### `packages/toolkit/`（7）
+### `packages/toolkit/`（8）
 
 - [ ] `@zhin.js/components` — `packages/toolkit/components`
 - [ ] `create-zhin-app` — `packages/toolkit/create-zhin`
 - [ ] `@zhin.js/html-renderer` — `packages/toolkit/html-renderer`
-- [ ] `@zhin.js/testing` — `packages/toolkit/testing`
 - [ ] `@zhin.js/scaffold-wizard` — `packages/toolkit/scaffold-wizard`
 - [ ] `@zhin.js/speech` — `packages/toolkit/speech`
 - [ ] `@zhin.js/tailwind` — `packages/toolkit/tailwind`
+- [ ] `@zhin.js/testing` — `packages/toolkit/testing`
+- [ ] `zhin` — `packages/toolkit/zhin-shim`
 
-### `plugins/adapters/`（22）
+### `plugins/adapters/`（23）
 
 - [ ] `@zhin.js/adapter-bilibili` — `plugins/adapters/bilibili`
 - [ ] `@zhin.js/adapter-bilibili-live` — `plugins/adapters/bilibili-live`
-- [ ] `@zhin.js/adapter-juejin` — `plugins/adapters/juejin`
 - [ ] `@zhin.js/adapter-dingtalk` — `plugins/adapters/dingtalk`
 - [ ] `@zhin.js/adapter-discord` — `plugins/adapters/discord`
 - [ ] `@zhin.js/adapter-email` — `plugins/adapters/email`
 - [ ] `@zhin.js/adapter-github` — `plugins/adapters/github`
 - [ ] `@zhin.js/adapter-icqq` — `plugins/adapters/icqq`
+- [ ] `@zhin.js/adapter-juejin` — `plugins/adapters/juejin`
 - [ ] `@zhin.js/adapter-kook` — `plugins/adapters/kook`
 - [ ] `@zhin.js/adapter-lark` — `plugins/adapters/lark`
 - [ ] `@zhin.js/adapter-line` — `plugins/adapters/line`
