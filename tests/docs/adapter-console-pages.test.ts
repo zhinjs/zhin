@@ -7,6 +7,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
 /** Experimental adapters whose Console page is explicitly deferred (douyin-live: #1135 Accept, Console UI later). */
 const consoleDeferred = new Set(['douyin-live']);
+/** ADR 0035 comment-reply adapters ship a custom review page (drafts / approve) instead of the shared endpoint page. */
+const customCommentReviewPages = new Set(['bilibili', 'juejin']);
 
 function adapterDirectories(): string[] {
   return fs.readdirSync(adaptersRoot, { withFileTypes: true })
@@ -56,7 +58,7 @@ describe('adapter Console pages', () => {
 
   it('shared adapter pages are permission-gated and use the shared component', () => {
     for (const directory of adapterDirectories()) {
-      if (directory === 'bilibili' || directory === 'sandbox') continue;
+      if (customCommentReviewPages.has(directory) || directory === 'sandbox') continue;
       const source = pageSource(directory) ?? '';
       expect(source, directory).toContain('createAdapterConsolePage');
       expect(source, directory).toMatch(/requiredPermissions:\s*\[\s*['"][a-z0-9-]+:read['"]\s*\]/u);
