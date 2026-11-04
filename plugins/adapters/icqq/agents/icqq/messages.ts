@@ -85,6 +85,26 @@ export const messages = createMessages({
     "zh-CN": "当前权限或成员状态不允许踢出",
     "en": "Current permissions or member status do not allow removal"
   },
+  "adminSet": {
+    "zh-CN": "已将 {p0} 设为管理员",
+    "en": "Member {p0} is now an administrator"
+  },
+  "adminUnset": {
+    "zh-CN": "已取消 {p0} 的管理员",
+    "en": "Administrator role removed from {p0}"
+  },
+  "adminUnconfirmed": {
+    "zh-CN": "平台未确认管理员变更成功，请勿自动重试",
+    "en": "The platform did not confirm the administrator change; do not retry automatically"
+  },
+  "adminForbidden": {
+    "zh-CN": "机器人不是群主，无法设置或取消管理员",
+    "en": "The bot must be the group owner to set or remove administrators"
+  },
+  "adminTargetInvalid": {
+    "zh-CN": "目标成员身份不允许本次变更：设为管理员需是普通成员，取消管理员需是现任管理员",
+    "en": "The member's role does not allow this change: promotion requires a regular member, removal requires a current administrator"
+  },
   "anonymousDisabled": {
     "zh-CN": "已关闭匿名聊天",
     "en": "Anonymous chat disabled"
