@@ -1,0 +1,35 @@
+.changeset/prerelease-removed-agent-exports.md
+  s_9477e63ef5cee5::t_1ad5cc794516c1 1-5
+docs/contributing/publishing.md
+  s_9477e63ef5cee5::t_10dd0094bc7b64 138,169,172,196,199,207-208,210,219
+package.json
+  s_9477e63ef5cee5::t_956ccb3d096a1e 77,80
+scripts/check-all-harness.mjs
+  s_9477e63ef5cee5::t_59dc1f54b7519b 191-195
+scripts/check-unpublished-packages.mjs
+  s_9477e63ef5cee5::t_95e9b4ecd9558d 105-107,110
+scripts/ci/run-pr-check.mjs
+  s_9477e63ef5cee5::t_0e405069e902a0 31
+scripts/ci/scope-transport.test.ts
+  s_9477e63ef5cee5::t_7083dbaed12f49 93,105
+scripts/sync-publishing-manifest.mjs
+  s_9477e63ef5cee5::t_281faf338f4003 1-101
+scripts/sync-publishing-manifest.test.ts
+  s_9477e63ef5cee5::t_3e0c72aa063404 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e4d9538c49e84adbb92db6d3d0a30f5dbb02b876",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
