@@ -1,0 +1,59 @@
+docs/plans/agent-workroom-orchestration-decision-map.md
+  s_178aad69aa64a5::t_fe21f836b3fa91 7-8
+docs/plans/agent-harness-h0-inventory.md
+  s_178aad69aa64a5::t_1f75d337e4f4e0 104
+  s_178aad69aa64a5::t_79878f77655c42 103
+  s_178aad69aa64a5::t_4baae6823a7cf2 1-102,105-119
+docs/plans/workroom-group-collaboration-redesign.md
+  s_178aad69aa64a5::t_fe21f836b3fa91 7-8
+docs/plans/agent-workroom-production-ledger.md
+  s_178aad69aa64a5::t_fe21f836b3fa91 7-8
+docs/adr/0048-agent-harness.md
+  s_178aad69aa64a5::t_fe21f836b3fa91 1-200
+docs/plans/governed-delivery-workflow.md
+  s_178aad69aa64a5::t_fe21f836b3fa91 7-8
+packages/im/agent/evals/README.md
+  s_178aad69aa64a5::t_c51c62397d2b56 83,202-209
+packages/im/agent/evals/framework/index.ts
+  s_178aad69aa64a5::t_06b5daa8571c2d 7
+packages/im/agent/evals/framework/framework.test.ts
+  s_178aad69aa64a5::t_ccb23f1e7a729d 206-215
+packages/im/agent/evals/framework/fixture.ts
+  s_178aad69aa64a5::t_763f84fb483879 18,215-235,247-248,339-344
+docs/plans/workroom-group-collaboration-progress.md
+  s_178aad69aa64a5::t_fe21f836b3fa91 7-8
+.changeset/adr-0048-agent-harness-h0.md
+  s_178aad69aa64a5::t_f904eef3d460bd 1-4
+packages/im/agent/evals/cases/harness-agent-result-is-data.case.ts
+  s_178aad69aa64a5::t_7e4cf8ef47a3c2 1-26
+packages/im/agent/evals/cases/harness-approval-routed-to-principal.case.ts
+  s_178aad69aa64a5::t_09e370a59647db 1-22
+packages/im/agent/evals/cases/harness-contacts-enforced.case.ts
+  s_178aad69aa64a5::t_905c0a7a19ee39 1-27
+packages/im/agent/evals/cases/harness-delegate-attenuates-authority.case.ts
+  s_178aad69aa64a5::t_5dd82b3be10665 1-22
+packages/im/agent/evals/cases/harness-delegate-result-wakes-delegator.case.ts
+  s_178aad69aa64a5::t_0540a8af0eb3e4 1-21
+packages/im/agent/evals/cases/harness-delegatee-ceiling-not-widened.case.ts
+  s_178aad69aa64a5::t_805072d55ce36b 1-23
+packages/im/agent/evals/cases/harness-delegation-budget-enforced.case.ts
+  s_178aad69aa64a5::t_094d22a13cce22 1-22
+packages/im/agent/evals/cases/harness-ping-pong-escalates.case.ts
+  s_178aad69aa64a5::t_4c8e113a4a7e69 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2ed1f2e81afafc8f78ea8d0914bd65065a9dfc7b",
+  "prompts": {},
+  "sessions": {
+    "s_178aad69aa64a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0eca046-2ac8-49e0-a6a9-b7766f7049bb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
