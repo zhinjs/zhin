@@ -1,0 +1,19 @@
+packages/im/harness/src/contracts.ts
+  s_178aad69aa64a5::t_277db7b4742c0a 161-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "72de1710c1d641daedc24ca4a78356e5f95ce00a",
+  "prompts": {},
+  "sessions": {
+    "s_178aad69aa64a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0eca046-2ac8-49e0-a6a9-b7766f7049bb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
