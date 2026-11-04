@@ -1,0 +1,31 @@
+plugins/adapters/juejin/tests/fixtures/comment-list.json
+  s_9622fd28aba994::t_c232279b784c88 1-113
+plugins/adapters/juejin/tests/juejin-commands.test.ts
+  s_9622fd28aba994::t_c44bd847918a02 1-50
+plugins/adapters/juejin/tests/juejin-endpoint.test.ts
+  s_9622fd28aba994::t_aabe7c1560c623 1-246
+plugins/adapters/juejin/tests/juejin-fake.ts
+  s_9622fd28aba994::t_abe5b7662bad94 1-79
+plugins/adapters/juejin/tests/juejin-harness.ts
+  s_9622fd28aba994::t_a23e72929d6726 1-45
+plugins/adapters/juejin/tests/juejin-page.test.ts
+  s_9622fd28aba994::t_31be0043758620 1-33
+plugins/adapters/juejin/tests/juejin-protocol.test.ts
+  s_9622fd28aba994::t_590ac7d0cd492f 1-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4529bf08c3c6558cddf706ed8336adae05138b50",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
