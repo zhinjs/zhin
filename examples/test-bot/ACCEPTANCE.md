@@ -34,7 +34,7 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 
 ### Agent（minimal 配置：无 toolSearch、无 MCP）
 
-- [x] **spawn_task**：`packages/im/agent/tests/spawn/spawn-task-tool.test.ts`（含于 `pnpm check:stable`）
+- [x] **协作工具**：`packages/im/agent/tests/collaboration/tools.test.ts`（`agents` / `ask` / `delegate` / `tell` / `cancel_delegation` / `escalate`）
 - [x] **Bootstrap**：工作区 `SOUL.md` / `TOOLS.md` / `AGENTS.md`（本目录；手测 / 启动日志）
 - [x] **exec allowlist**：`packages/agent/tests/exec-policy.test.ts`（含于 `pnpm check:stable`）
 - [x] **minimal-bot 配置契约**：`examples/minimal-bot/tests/stable-path.test.ts`（含于 `pnpm check:stable`）
@@ -60,7 +60,7 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
   - [x] Typing indicator（`sendTyping`）长任务期间可见
   - [x] 文档边界：**仅私聊、无群**（见 [weixin-ilink README](../../plugins/adapters/weixin-ilink/README.md)）
   - 实机回归：`L4_SKIP_PLATFORM=0` + 配置 `weixin-ilink` 段后跑 `pnpm check:l4`（可选）
-- [x] **按需能力 + Worker**：主编排通过 `discover` / `load_tool` 按需加载能力，通过 `spawn_task` 委派 Worker；prompt token &lt; 20k — `advanced-acceptance.test.ts`
+- [x] **按需能力 + Worker**：主编排通过 `discover` / `load_tool` 按需加载能力，通过协作工具（`ask` / `delegate`）委派其他 Agent；prompt token &lt; 20k — `advanced-acceptance.test.ts`
 - [x] **平台 Prompt**：ICQQ/GitHub 指令是按 `platforms` 过滤的 generation-owned Prompt Section；通用 `buildRichSystemPrompt` 无平台硬编码 — `prompt-section.test.ts`、`agent-runtime.test.ts`、`prompt-discipline.test.ts`
 
 ### Assistant / Home（实机）
@@ -72,11 +72,11 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 
 ### Agent
 
-- [x] **多 Agent 配置契约**：`examples/test-bot/tests/multi-agent-entry-contract.test.ts`（Agent bindings / spawn_task）
+- [x] **多 Agent 配置契约**：`examples/test-bot/tests/multi-agent-entry-contract.test.ts`（Agent bindings / `collaboration` 联系名单）
 - [x] **cron_add** 端到端：`PersistentCronEngine` 持久化 + 调度触发 runner — `packages/agent/tests/cron-engine.test.ts`（手测：`AI: 用 cron_add 创建 1 分钟后 echo acceptance`）
 - [x] **记忆 MCP**：默认关；`ai.memoryMcp: true` 才注册 `server-memory`
 - [ ] **ADR 0010 Harness**（手测，见 [TOOLS.md](./TOOLS.md)）：`/compact` 压缩长对话；`/tree` + `/tree N` 分支跳转；`/reset` epoch 归档；`/cmd` `/bindings` `/mcp` 内省
-- [ ] **Sub-agent 增量对齐**（手测，见 [TOOLS.md § Sub-agent](./TOOLS.md#sub-agent-编排)）：`spawn_task({ agent: "reviewer", wait: true })` 无 write/bash；fork 子任务能引用主会话最近意图；fresh reviewer system 不含主会话 tool 链；超长结果写入 `data/artifacts/subagent/{taskId}.md`
+- [ ] **多 Agent 协作**（手测）：`ai: 请 reviewer 审查这段代码` → 入口 Agent 调 `ask`，reviewer 的回合只有只读工具；reviewer 的权限不超过发起人；委派结果以新一轮回合回到入口 Agent 再回复用户
 
 ### MCP Client
 

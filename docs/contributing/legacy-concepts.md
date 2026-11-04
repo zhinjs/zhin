@@ -70,7 +70,7 @@ export default defineAdapter<MyConfig>({
 | 旧表面 | 迁移方式 |
 | --- | --- |
 | `zhin.js/agent` 的 `runPipeline` / `runParallel` / `route` | 普通一次性模型调用改用 `AIService.runAgent`（需要并行时由调用方显式组合 Promise）；需要 durable 多 Agent 协作时提交 Workroom Inbox/Plan proposal。未来的 workflow builder 只构造 Plan，不直接执行 Agent。 |
-| `spawn_task(run_id, task_id, ...)` | 普通 chat 只保留不带 Workroom identity 的临时 `spawn_task`；Project 工作必须由 Workroom Kernel 创建 Task/Assignment，不能把 subtask id 当 Task id。 |
+| `spawn_task(run_id, task_id, ...)` | `spawn_task` 已删除，Agent 之间的协作改用 `ask` / `delegate` 等协作工具（见 [AI Agent · 多 Agent 协作](../ai/agent.md#多-agent-协作)）；Project 工作必须由 Workroom Kernel 创建 Task/Assignment，不能把 subtask id 当 Task id。 |
 | `OrchestrationService` / `OrchestrationKernel` / repositories / `AgentDispatcher` | 无兼容替代对象。状态读取转向 Workroom Journal replay/projection；写入必须使用受 principal/role 约束的 Workroom command port。 |
 | `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持。Remote A2A 已作为标准 `AssignmentExecutorPort` transport 接入，复用 local Assignment 的 lease/fence/report/acceptance，并且只接受持久 Catalog 与 generation-owned authority；不得用旧配置模拟或绕过 Grant。 |
 | `/api/agent/orchestration/runs` / `/console/orchestration` | 改为 Project-scoped `/api/agent/workroom/runs?projectId=...` 与 Workroom Console 页面；它们都是只读 projection。 |

@@ -1,18 +1,11 @@
 import { Scope, DisposeStack, rootPluginId } from '@zhin.js/plugin-runtime';
 import { ImRuntime } from '@zhin.js/core/runtime';
-import { ZhinAgent, aiCompletionToken, type AgentRuntime } from '@zhin.js/agent/runtime';
-import { SubagentRuntime, type SubagentSyncResult, type TurnRequest } from '@zhin.js/agent';
+import { aiCompletionToken, type AgentRuntime } from '@zhin.js/agent/runtime';
 import type { ApprovalJudgment } from '@zhin.js/agent/session';
-import { createUserMessage } from '@zhin.js/ai';
-import { runWithAgentTurnConfiguration } from '@zhin.js/agent/turn';
-import { personalSessionIdentity, personalSessionOwnerId } from '@zhin.js/agent/personal-session';
 import { AgentRuntimeFoundation } from '../../../src/plugin-runtime/agent/runtime-foundation.js';
 import { publishAgentToolFeatures } from '../../../src/plugin-runtime/agent/tool-feature-publisher.js';
 import { AgentTurnIngressRoute } from '../../../src/plugin-runtime/agent/turn/ingress-route.js';
 import { configurationFixture } from '../inference/configuration-fixture.js';
-
-const subagentOrigin = { message: { conversation: { endpoint: { id: 'account', adapter: 'fixture' }, kind: 'private', id: 'user' },
-  endpointId: 'account', sender: { id: 'user' }, content: 'one subtask' } };
 
 /** Actual Host graph, credentials, SDK and consumers; file configuration is a separate authority. */
 async function fixture() {
@@ -29,18 +22,16 @@ async function fixture() {
       choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }] });
   });
   const lifecycle = new DisposeStack(), resources = new Scope(rootPluginId());
-  const subagents = vi.spyOn(ZhinAgent.prototype, 'initSubagentSystem');
   const foundation = await AgentRuntimeFoundation.create({
     config: { sessions: { useDatabase: false }, agents: { zhin: {}, reviewer: {}, manifest: {} } },
     modelRuntime: f.host.modelRuntimeOptions(),
     acquireDeploymentModels: input => f.host.acquireDeploymentModels(input),
     projectRoot: f.directory, im: new ImRuntime(), processRuntime: {} as AgentRuntime, resources, lifecycle,
   });
-  const subagentTools = subagents.mock.calls.at(-1)![0];
   const definitions = new Map<string, { execute(input: Record<string, unknown>, context: unknown): Promise<unknown> }>();
   publishAgentToolFeatures({ service: foundation.service, projectRoot: f.directory,
     addFeature: (_feature, name, definition) => definitions.set(name, definition as never), mcpServers: [], runtimeTools: [] });
-  return { ...f, foundation, subagentTools, definitions, completion: resources.use(aiCompletionToken),
+  return { ...f, foundation, definitions, completion: resources.use(aiCompletionToken),
     withModels: <T>(operation: () => Promise<T>) => f.host.withDeploymentModels({ service: foundation.service }, operation),
     holdNext() {
       let entered!: () => void, release!: () => void;
@@ -73,15 +64,12 @@ it('uses the current Host graph for the actual approval reviewer, independently 
   } finally { await f.close(); }
 });
 
-it.each(['main', 'subagent'] as const)('uses the current image purpose in the actual %s native suite', async path => {
+it('uses the current image purpose in the actual native suite', async () => {
   const f = await fixture();
   try {
     await f.publish();
     const input = { prompt: 'a tree' }, context = { signal: new AbortController().signal, sessionId: 'session', toolCallId: 'image-call', toolName: 'generate_image' };
-    await f.withModels(async () => {
-      if (path === 'main') await f.definitions.get('generate_image')!.execute(input, context);
-      else await f.subagentTools().find(tool => tool.name === 'generate_image')!.execute(input, undefined, context);
-    });
+    await f.withModels(async () => { await f.definitions.get('generate_image')!.execute(input, context); });
     expect(await observed(f)).toMatchObject([{ url: 'https://next.example/v1/images/generations', key: 'Bearer synthetic-next-key', body: { model: 'image', prompt: 'a tree' } }]);
     expect(f.requests).toHaveLength(1);
   } finally { await f.close(); }
@@ -122,27 +110,10 @@ it.each([false, true])('uses the independently selected ambient Profile in the a
   } finally { lease.release(); route.dispose(); await f.close(); }
 });
 
-it('uses each newly admitted Host graph for real subagents and preserves their structured terminal result', async () => {
-  const f = await fixture();
-  const binding = f.foundation.service.getBindingRegistry().requireZhinBinding();
-  const run = () => f.withModels(() => f.foundation.agent.getSubagentSystem()!.spawnSync({
-    task: 'one bounded subtask', binding, origin: subagentOrigin as never, contextMode: 'fresh',
-  }));
-  try {
-    await expect(run()).resolves.toMatchObject({ status: 'ok', terminal: { stopReason: 'stop' } });
-    await f.publish();
-    await expect(run()).resolves.toMatchObject({ status: 'ok', terminal: { stopReason: 'stop' } });
-    expect(await observed(f)).toMatchObject([oldRequest, nextRequest]);
-  } finally { await f.close(); }
-});
-
-it.each(['approval', 'subagent'] as const)('keeps an admitted %s fixed while graph publication and the next operation complete', async path => {
+it('keeps an admitted approval fixed while graph publication and the next operation complete', async () => {
   const f = await fixture(), hold = f.holdNext(), signal = new AbortController().signal;
-  const run = () => f.withModels<ApprovalJudgment | SubagentSyncResult>(() => path === 'approval'
-    ? f.foundation.approvalJudgment.judge({ request: { requestId: 'bounded', toolName: 'bounded', question: 'one bounded operation', signal },
-      priorDecisions: [], signal })
-    : f.foundation.agent.getSubagentSystem()!.spawnSync({ task: 'bounded subtask', contextMode: 'fresh', origin: subagentOrigin as never,
-      binding: f.foundation.service.getBindingRegistry().requireZhinBinding() }));
+  const run = () => f.withModels<ApprovalJudgment>(() => f.foundation.approvalJudgment.judge({
+    request: { requestId: 'bounded', toolName: 'bounded', question: 'one bounded operation', signal }, priorDecisions: [], signal }));
   const pending = run();
   try {
     await Promise.race([hold.entered, pending.then(() => { throw new Error('operation ended before entering the fake transport'); })]);
@@ -150,21 +121,6 @@ it.each(['approval', 'subagent'] as const)('keeps an admitted %s fixed while gra
     await run();
     expect(await observed(f)).toMatchObject([oldRequest, nextRequest]);
   } finally { hold.release(); await pending; await f.close(); }
-});
-
-it('uses the configured child role Profile without taking model ownership from manifest metadata', async () => {
-  const f = await fixture();
-  f.foundation.agent.getSubagentSystem()!.configureRouting({ resolveAgentMeta: async () => ({
-    provider: 'unavailable', model: 'unavailable', systemPrompt: 'One bounded task', name: 'manifest', toolNames: [], filePath: '/synthetic/agent.json',
-  }) as never });
-  try {
-    await f.publish({ purposes: { defaults: { chat: 'next', image: 'next-image' }, agents: { manifest: 'old' } } });
-    await expect(f.withModels(() => f.foundation.agent.getSubagentSystem()!.spawnSync({
-      task: 'one bounded task', agent: 'manifest', contextMode: 'fresh', origin: subagentOrigin as never,
-    }))).resolves.toMatchObject({ status: 'ok' });
-    expect(await observed(f)).toMatchObject([oldRequest]);
-    expect(f.requests).toHaveLength(1);
-  } finally { await f.close(); }
 });
 
 it('leaves a ServiceAgent on its explicitly borrowed operation while a newly admitted operation follows the graph', async () => {
@@ -205,75 +161,3 @@ it('rejects a native model override before scope, secret or transport acquisitio
     expect(f.requests).toHaveLength(0); expect(f.resolveSource).not.toHaveBeenCalled();
   } finally { await f.close(); }
 });
-
-it.each(['complete', 'cancel'] as const)(
-  'retains the personal principal and exact Host lease for a queued child across real config and graph publication (%s)', async outcome => {
-    const f = await fixture();
-    const views: { delegated: boolean; generation: number; revision: number; owner: string }[] = [];
-    const createInference = f.host.createInference.bind(f.host);
-    vi.spyOn(f.host, 'createInference').mockImplementation(held => {
-      const runtime = createInference(held);
-      return { ...runtime,
-        openScope: async input => {
-          const scope = await runtime.openScope(input);
-          views.push({ delegated: false, generation: held.value.generation, revision: scope.graph.revision, owner: scope.context.ownerId });
-          return scope;
-        },
-        openDelegatedScope: async input => {
-          const scope = await runtime.openDelegatedScope(input);
-          views.push({ delegated: true, generation: held.value.generation, revision: scope.graph.revision, owner: scope.context.ownerId });
-          return scope;
-        },
-      };
-    });
-    const conversation = { endpoint: { id: 'account', adapter: 'fixture' }, kind: 'private' as const, id: 'user' };
-    const address = { rootId: f.host.rootId, platform: 'fixture', endpoint: 'account', subjectId: 'alice', conversation };
-    const personal = personalSessionIdentity(address), owner = personalSessionOwnerId(personal.owner);
-    const request: TurnRequest = { identity: { traceId: 'trusted-personal', turnId: 'parent' },
-      origin: { kind: 'im', platform: 'fixture', endpoint: 'account', scope: 'private', sceneId: 'user', conversation },
-      principal: { subjectId: 'alice', roles: ['user'] }, intent: { kind: 'new' }, input: { text: 'one bounded task' },
-      session: { key: personal.key, personal: address }, policy: { permissions: ['user'], unattended: false },
-      signal: new AbortController().signal, ports: {} };
-    const lease = await f.runtime.control(async control => control.retain());
-    const parent = await f.foundation.service.getModelRuntime().acquireForTurn({ request,
-      binding: f.foundation.service.getBindingRegistry().requireZhinBinding(), lease, snapshots: f.runtime.snapshots });
-    let metadataReady!: (value: null) => void;
-    const metadata = new Promise<null>(resolve => { metadataReady = resolve; });
-    let taskId: string | undefined;
-    const manager = new SubagentRuntime({ workspace: f.directory, createTools: () => [], maxIterations: 1,
-      resolveAgentMeta: () => metadata, onEvent: event => { if (event.phase === 'start') taskId = event.taskId; } });
-    const hold = f.holdNext();
-    const pending = runWithAgentTurnConfiguration({ models: parent }, () => manager.spawnSync({ task: 'one bounded child',
-      agent: 'zhin', contextMode: 'fresh', origin: { message: { ...subagentOrigin.message, sender: { id: 'alice' } } } as never }));
-    try {
-      const generation = lease.value.generation;
-      expect(parent.context.ownerId).toBe(owner);
-      await parent.release(); lease.release();
-      await f.runtime.patchConfig([{ op: 'set', path: ['menuKeyword'], value: 'next' }]);
-      await f.publish();
-      await f.foundation.service.dispose();
-      expect(f.runtime.snapshot.generation).toBeGreaterThan(generation);
-      expect(f.requests).toHaveLength(0);
-      metadataReady(null);
-      await Promise.race([hold.entered, pending.then(() => { throw new Error('child ended before its held transport'); })]);
-      expect(views.find(view => view.delegated)).toEqual({ delegated: true, generation, revision: 1, owner });
-      if (outcome === 'cancel') { expect(taskId).toBeDefined(); expect(manager.cancel(taskId!)).toBe(true); }
-      hold.release();
-      const result = await pending;
-      expect(result.status).toBe(outcome === 'complete' ? 'ok' : 'error');
-      if (outcome === 'cancel') expect(f.requests[0].signal.aborted).toBe(true);
-      const nextLease = f.runtime.snapshots.acquire();
-      const next = await f.service.getModelRuntime().acquireForTurn({ request: { ...request, identity: { ...request.identity, turnId: 'next' } },
-        binding: f.service.getBindingRegistry().requireZhinBinding(), lease: nextLease, snapshots: f.runtime.snapshots });
-      try {
-        expect(next.context.ownerId).toBe(owner); expect(next.graph.revision).toBe(2);
-        await next.chat.completion.complete(next.chat.model, { systemPrompt: '', messages: [createUserMessage('next operation')] });
-      } finally { await next.release(); nextLease.release(); }
-      expect(await observed(f)).toMatchObject([oldRequest, nextRequest]);
-      expect(views.at(-1)).toMatchObject({ delegated: false, generation: f.runtime.snapshot.generation, revision: 2, owner });
-    } finally {
-      metadataReady(null); hold.release(); await pending.catch(() => undefined);
-      await parent.release(); lease.release(); await manager.dispose(); await f.close();
-    }
-  },
-);

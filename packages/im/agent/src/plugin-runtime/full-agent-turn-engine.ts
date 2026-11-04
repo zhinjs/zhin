@@ -156,7 +156,7 @@ async function* runInteractiveTurn(
     ? createInteractiveRun(host.usageQuota, quotaSubject, resolveToolBudget(host.config.toolBudget).maxTotalTokens)
     : undefined;
   const snapshot = await host.contextRepository.getDeferredToolSnapshot(prep.sessionId);
-  const subagentModel: { current?: ActorModelSelection } = {};
+  const actorModel: { current?: ActorModelSelection } = {};
   // ADR 0048: the live turn is the root actor of an engagement whenever other agents exist.
   const collaboration = await startTurnCollaboration({
     host,
@@ -164,7 +164,7 @@ async function* runInteractiveTurn(
     turn: context.turn,
     capabilities: { ...context.capabilities, tools: context.toolCapabilities },
     entry: context.selection.binding.name,
-    resolveModel: () => subagentModel.current,
+    resolveModel: () => actorModel.current,
     loopHooks: options.loopHooks,
     bootstrapContext: options.bootstrapContext,
     contextFiles: options.contextFiles,
@@ -247,7 +247,7 @@ async function* runInteractiveTurn(
     background ? [background, ...prompt.userMessages] : prompt.userMessages,
     media,
   );
-  subagentModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
+  actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   const provenance = new TurnProvenance();
   if (background) provenance.record({ kind: 'conversation_context' });
   // Perception descriptions are generated from user media (text in an image is an injection path).

@@ -28,7 +28,7 @@ describe('role ACL', () => {
     expect(isToolAllowedForRole('write_file', 'planner')).toBe(false);
     expect(isToolAllowedForRole('workroom_create_run', 'planner')).toBe(false);
     expect(isToolAllowedForRole('workroom_transition', 'planner')).toBe(false);
-    expect(isToolAllowedForRole('spawn_task', 'planner')).toBe(true);
+    expect(isToolAllowedForRole('ask_user', 'planner')).toBe(true);
     expect(isToolAllowedForRole('group_delegate', 'planner')).toBe(false);
   });
 
