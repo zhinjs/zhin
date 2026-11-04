@@ -4,15 +4,14 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export type AiConfigUtils = {
-  /** Canonical model catalog/policy validation; no execution or credential IO. */
+  /** Startup AI consumer validation and retired-authority rejection; no execution or credential IO. */
   validateModelRuntimeConfig?: (ai: unknown, hostOwnerId: string) => string[];
-  normalizeAiRoutingConfig: (ai: unknown) => Record<string, unknown>;
-  validateAiRoutingConfig: (cfg: unknown) => string[];
   applyAiConfigFixes: (
     ai: unknown,
   ) => { ai: Record<string, unknown> | undefined; fixes: string[] };
   /** Retired `ai.agent.*` switches (#735); absent on older agent packages. */
   findDeprecatedAgentConfigKeys?: (agent: unknown) => Array<{ key: string; reason: string }>;
+  findDeprecatedAgentBindingKeys?: (agents: unknown) => Array<{ agent: string; key: string; reason: string }>;
   /** `ai.multimodal.perception` validation; absent on older agent packages. */
   resolvePerceptionConfig?: (raw: unknown, providerAliases?: readonly string[]) => unknown;
 };

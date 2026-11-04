@@ -1,6 +1,6 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import type { AgentTool, ModelRegistry, AIProvider, LlmApiRuntime } from '@zhin.js/ai';
+import type { AgentTool } from '@zhin.js/ai';
 import { getActiveTurnTracker } from '../internal/turn-context.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentConfig } from '../config/index.js';
@@ -9,10 +9,7 @@ import type { SubagentCompletePayload } from './subagent-runtime.js';
 const logger = getLogger('ZhinAgent');
 
 export interface SubagentSystemInitOptions {
-  provider: AIProvider;
-  llmRuntime: LlmApiRuntime;
   config: Required<ZhinAgentConfig>;
-  modelRegistry: ModelRegistry | null;
   emitter: ZhinAgentEventEmitter;
   createTools: () => AgentTool[];
   onSubagentComplete: (payload: SubagentCompletePayload) => Promise<void>;
@@ -21,15 +18,12 @@ export interface SubagentSystemInitOptions {
 export function createSubagentSystem(opts: SubagentSystemInitOptions): SubagentSystem {
   const system = new SubagentSystem();
   system.attachRuntime({
-    provider: opts.provider,
-    llmRuntime: opts.llmRuntime,
     workspace: process.cwd(),
     createTools: opts.createTools,
     subagentTools: opts.config.subagentTools,
     maxIterations: opts.config.maxSubagentIterations,
     maxParallelSubagents: opts.config.maxParallelSubagents,
     execPolicyConfig: opts.config,
-    modelRegistry: opts.modelRegistry,
     onSubagentUsage: (usage) => getActiveTurnTracker()?.addSubagentUsage(usage),
     registerSubagentTask: (done) => getActiveTurnTracker()?.trackSubagent(done),
     eventEmitter: opts.emitter,
@@ -47,6 +41,10 @@ export function createSubagentSystem(opts: SubagentSystemInitOptions): SubagentS
         agentId: event.agent,
         hookContext: {
           subagentAgent: event.agent,
+          ...(event.decisionObservations?.length ? {
+            decisionTurnId: `subagent:${event.taskId}`,
+            decisionObservations: event.decisionObservations,
+          } : {}),
         },
       });
       if (event.phase === 'spawn') {

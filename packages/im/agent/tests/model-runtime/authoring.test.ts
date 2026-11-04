@@ -1,120 +1,59 @@
-import { createModelCatalog, ModelCatalogError, normalizeModelCatalogConfig } from '@zhin.js/ai/model-catalog';
-import { normalizeHostModelCatalog } from '../../src/model-runtime/authoring.js';
-import { ModelRuntimeService } from '../../src/model-runtime/service.js';
-import { compileModelRuntimeConfig } from '../../src/model-runtime/compiler.js';
+import { normalizeProviderGraph, createEmptyProviderGraph, reviewProviderPlan } from '@zhin.js/ai/provider';
+import { graphFixture } from '../../../ai/tests/provider/fixtures.js';
+import { AIService } from '../../src/service.js';
 
-const host = 'host:/authoring-test';
-function shorthand() {
-  return {
-    connections: { main: { revision: 3, sdk: 'openai-compatible' as const, baseUrl: 'https://model.test/v1', secretRef: 'vault:host-ref' } },
-    models: { chat: { connectionId: 'main', model: 'selected-model', capabilities: { input: ['text' as const], toolCalling: true } } },
-    presets: { chosen: { modelId: 'chat' } },
-  };
-}
-function complete() {
-  const value = shorthand();
-  return {
-    connections: { main: { ...value.connections.main, id: 'main', ownerId: host } },
-    models: { chat: { ...value.models.chat, id: 'chat' } },
-    presets: { chosen: { ...value.presets.chosen, id: 'chosen' } },
-  };
-}
-
-it('compiles Host shorthand to the same strict catalog as the complete form', () => {
-  const policy = { defaults: { chat: 'chosen' } };
-  const simplified = compileModelRuntimeConfig({ modelCatalog: shorthand(), modelPolicy: policy }, host);
-  const full = compileModelRuntimeConfig({ modelCatalog: complete(), modelPolicy: policy }, host);
-  expect(simplified.catalogConfig).toEqual(full.catalogConfig);
-  expect(simplified.catalogConfig).toEqual(normalizeModelCatalogConfig(complete()));
+it('completes plan aliases only through explicit Host review, allocating real IDs and owner once', async () => {
+  let sequence = 0;
+  const plan = { version: 1, services: { main: { driver: 'fixture', models: graphFixture().services.service.models } }, accounts: { bot: { service: 'main', auth: { method: 'none' } } }, profiles: { chosen: { account: 'bot', model: 'text' } }, purposes: { chat: { profile: 'chosen' } } };
+  const output = await reviewProviderPlan({ input: plan, graph: createEmptyProviderGraph('root'), ownerId: 'host', hostOwnerId: 'host', createId: kind => `${kind}:${++sequence}`,
+    resolveService: input => ({ driver: { id: 'fixture', owner: 'root/providers', contractVersion: '1' }, options: input.options, models: input.models }) });
+  expect(output.graph.profiles[output.bindings.profiles.chosen].ownerId).toBe('host');
+  expect(output.graph.profiles[output.bindings.profiles.chosen].id).not.toBe('chosen');
+  expect(plan.profiles.chosen).toEqual({ account: 'bot', model: 'text' });
 });
 
-it('does not relax the generic personal catalog contract', () => {
-  expect(() => normalizeModelCatalogConfig(shorthand())).toThrow(ModelCatalogError);
-  const personal = complete();
-  personal.connections.main.ownerId = 'im-owner:alice';
-  const catalog = createModelCatalog(personal);
-  expect(catalog.resolve('chosen', { ownerId: 'im-owner:alice', hostOwnerId: host }).connection.ownerId).toBe('im-owner:alice');
-  expect(() => catalog.resolve('chosen', { ownerId: 'im-owner:bob', hostOwnerId: host })).toThrow('connection-forbidden');
+it('does not accept authored IDs, owners, secrets, permissions or factory payloads as plan resource overrides', async () => {
+  for (const key of ['id', 'ownerId', 'apiKey', 'headers', 'hostFactoryData', 'permission']) {
+    await expect(reviewProviderPlan({ input: { version: 1, services: { main: { driver: 'fixture', [key]: 'synthetic-private-value' } } }, graph: createEmptyProviderGraph('root'), ownerId: 'host', hostOwnerId: 'host', createId: () => 'new',
+      resolveService: () => { throw new Error('Invalid public input must not reach a Driver'); } })).rejects.toThrow('invalid-plan');
+  }
 });
 
-it.each(['connections', 'models', 'presets'] as const)('rejects a conflicting explicit %s id', collection => {
-  const value = complete();
-  const entry = Object.values(value[collection])[0]!;
-  entry.id = 'different-id';
-  expect(() => normalizeHostModelCatalog(value, host)).toThrow('invalid-config');
+it('retains generic graph identity validation without implicitly replacing a declared owner', () => {
+  const graph = graphFixture();
+  expect(() => normalizeProviderGraph({ ...graph, services: { service: { ...graph.services.service, id: 'different-id' } } })).toThrow('invalid-graph');
+  expect(() => normalizeProviderGraph({ ...graph, accounts: { account: { ...graph.accounts.account, rootId: 'other' } } })).toThrow('invalid-graph');
+  expect(graph.services.service.ownerId).toBe('host:test');
 });
 
-it('rejects an explicit external owner instead of reassigning it to the Host', () => {
-  const value = complete(); value.connections.main.ownerId = 'im-owner:alice';
-  expect(() => normalizeHostModelCatalog(value, host)).toThrow('deployment-owner-mismatch');
-  expect(value.connections.main.ownerId).toBe('im-owner:alice');
-});
-
-it('keeps revision mandatory and preserves strict unknown-field and capability validation', () => {
-  const value = shorthand();
-  const { revision, ...withoutRevision } = value.connections.main;
-  expect(revision).toBe(3);
-  expect(() => normalizeHostModelCatalog({ ...value, connections: { main: withoutRevision } }, host)).toThrow('invalid-config');
+it('preserves strict unknown-field and nonpositive capability metadata rejection', () => {
+  const graph = graphFixture();
   for (const invalid of [
-    { ...value, apiKey: 'synthetic-forbidden-key' },
-    { ...value, connections: { main: { ...value.connections.main, apiKey: 'synthetic-forbidden-key' } } },
-    { ...value, models: { chat: { ...value.models.chat, capabilities: { extraCapability: true } } } },
-    { ...value, presets: { chosen: { ...value.presets.chosen, hostFactoryData: { apiKey: 'synthetic-forbidden-key' } } } },
+    { ...graph, apiKey: 'synthetic-private-key' },
+    { ...graph, profiles: { ...graph.profiles, text: { ...graph.profiles.text, factory: {} } } },
+    { ...graph, services: { service: { ...graph.services.service, models: { ...graph.services.service.models, text: { ...graph.services.service.models.text, contextWindow: -1 } } } } },
+    { ...graph, services: { service: { ...graph.services.service, models: { ...graph.services.service.models, text: { ...graph.services.service.models.text, madeUpCapability: true } } } } },
   ]) {
-    try { normalizeHostModelCatalog(invalid, host); throw new Error('Accepted invalid catalog'); }
-    catch (error) { expect(error).toBeInstanceOf(ModelCatalogError); expect(String(error)).not.toContain('synthetic-forbidden-key'); }
+    try { normalizeProviderGraph(invalid); throw new Error('Accepted invalid graph'); }
+    catch (error) { expect(String(error)).toContain('invalid-graph'); expect(String(error)).not.toContain('synthetic-private-key'); }
   }
 });
 
-it('returns detached frozen catalog data without mutating the authored input', () => {
-  const input = shorthand(); const before = structuredClone(input);
-  const output = normalizeHostModelCatalog(input, host);
+it('returns detached frozen resource data without mutating the submitted graph', () => {
+  const input = structuredClone(graphFixture()), before = structuredClone(input), output = normalizeProviderGraph(input);
   expect(input).toEqual(before);
-  input.connections.main.baseUrl = 'https://changed.test/v1';
-  input.models.chat.capabilities.input.push('text');
-  expect(output.connections.main.baseUrl).toBe('https://model.test/v1');
-  expect(output.models.chat.capabilities.input).toEqual(['text']);
-  expect(Object.isFrozen(output)).toBe(true);
-  expect(Object.isFrozen(output.connections.main)).toBe(true);
-  expect(Object.isFrozen(output.models.chat.capabilities.input)).toBe(true);
+  input.profiles.text.parameters = { temperature: 0.7 };
+  expect(output.profiles.text.parameters).toEqual({});
+  expect(Object.isFrozen(output)).toBe(true); expect(Object.isFrozen(output.services.service.models.text.input)).toBe(true);
 });
 
-it('keeps legacy secrets and execution factory data out of the completed catalog', () => {
-  const compiled = compileModelRuntimeConfig({ modelCatalog: shorthand(), modelPolicy: { defaults: { chat: 'chosen' } },
-    providers: { main: { sdk: 'openai-compatible', models: ['selected-model'], apiKey: 'synthetic-private-key', headers: { 'X-Private': 'synthetic-private-header' } } },
-  }, host);
-  const serialized = JSON.stringify(compiled.catalogConfig);
-  expect(serialized).not.toMatch(/synthetic-private-key|synthetic-private-header|apiKey|hostFactoryData|headers/);
-  expect(compiled.hostFactoryData.get('main')).toMatchObject({ origin: 'explicit', config: { apiKey: 'synthetic-private-key' } });
-});
-
-it('completes only the Host catalog and preserves separately loaded personal identities', async () => {
-  const personal = {
-    connections: { privateConnection: { id: 'privateConnection', ownerId: 'im-owner:alice', revision: 1, sdk: 'ollama' as const, baseUrl: 'https://personal.test' } },
-    models: { privateModel: { id: 'privateModel', connectionId: 'privateConnection', model: 'personal-model', capabilities: { input: ['text' as const] } } },
-    presets: { privateChat: { id: 'privateChat', modelId: 'privateModel' } },
-  };
-  const before = structuredClone(personal);
-  const runtime = new ModelRuntimeService({ hostOwnerId: host,
-    config: { modelCatalog: shorthand(), modelPolicy: { defaults: { chat: 'chosen' } } },
-    personalCatalogSnapshot: async owner => owner === 'im-owner:alice' ? personal : undefined,
-  });
-  try {
-    const invocation = await runtime.resolvePreset('privateChat', { ownerId: 'im-owner:alice' });
-    expect(invocation.connection.ownerId).toBe('im-owner:alice');
-    expect(invocation.model.id).toBe('privateModel');
-    expect(runtime.getCatalogConfig().connections.main.ownerId).toBe(host);
-    expect(runtime.getCatalogConfig().connections.privateConnection).toBeUndefined();
-    expect(personal).toEqual(before);
-  } finally { await runtime.dispose(); }
-});
-
-it('preserves strict rejection of nonenumerable and symbolic unknown fields during identity completion', () => {
-  for (const placement of ['root', 'connection'] as const) {
-    for (const key of ['apiKey', Symbol('private-factory-data')]) {
-      const value = shorthand();
-      Object.defineProperty(placement === 'root' ? value : value.connections.main, key, { value: 'synthetic-hidden-key', enumerable: false });
-      expect(() => normalizeHostModelCatalog(value, host)).toThrow('invalid-config');
-    }
+it('rejects nonenumerable and symbol fields instead of dropping hidden authority data', () => {
+  for (const key of ['apiKey', Symbol('private-factory')]) {
+    const graph = structuredClone(graphFixture()); Object.defineProperty(graph, key, { value: 'synthetic-hidden-key', enumerable: false });
+    expect(() => normalizeProviderGraph(graph)).toThrow('invalid-graph');
   }
+});
+
+it('requires offline review for old shorthand instead of adding an implicit runtime compiler', () => {
+  expect(() => new AIService({ modelCatalog: { connections: {}, models: {}, presets: {} } })).toThrow('migration required');
 });

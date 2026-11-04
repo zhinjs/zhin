@@ -12,11 +12,9 @@ import {
   selectRootConfigFile,
   type RootConfigFormat,
 } from '@zhin.js/plugin-runtime';
-import { providerSdkFor } from './ai.js';
 
 const CONSOLE_URL = 'https://console.zhin.dev';
 const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
-const LEGACY_AI_PROVIDER_FIELDS = ['driver', 'api', 'preset', 'spec'] as const;
 
 /** 由插件包名推导默认 instanceKey（@zhin.js/adapter-telegram → telegram） */
 export function packageToInstanceKey(packageName: string): string {
@@ -51,7 +49,6 @@ export interface ProjectConfigPlanOptions {
   ensureConsole?: boolean;
   ensureSandbox?: boolean;
   ensureHttp?: boolean;
-  migrateAiLegacy?: boolean;
 }
 
 export interface ProjectConfigPlan {
@@ -204,98 +201,6 @@ function ensureHttp(config: Record<string, unknown>, mutations: string[]): void 
   }
 }
 
-function sdkFromLegacyProvider(alias: string, provider: Record<string, unknown>): string {
-  const candidates = LEGACY_AI_PROVIDER_FIELDS
-    .map((field) => provider[field])
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .map((value) => value.trim().toLowerCase());
-  const joined = candidates.join(' ');
-  if (joined.includes('ollama')) return 'ollama';
-  if (joined.includes('anthropic') || joined.includes('claude')) return 'anthropic';
-  if (joined.includes('google') || joined.includes('gemini')) return 'google';
-  if (joined.includes('deepseek')) return 'deepseek';
-  if (joined.includes('moonshot') || joined.includes('zhipu') || joined.includes('compatible')) {
-    return 'openai-compatible';
-  }
-  return providerSdkFor(alias);
-}
-
-export function migrateAiLegacyConfig(ai: Record<string, unknown>): {
-  ai: Record<string, unknown>;
-  fixes: string[];
-} {
-  const next = cloneConfig(ai);
-  const fixes: string[] = [];
-  const defaultProvider = typeof next.defaultProvider === 'string' && next.defaultProvider.trim()
-    ? next.defaultProvider.trim()
-    : undefined;
-
-  const providers = next.providers && typeof next.providers === 'object' && !Array.isArray(next.providers)
-    ? { ...(next.providers as Record<string, unknown>) }
-    : {};
-  let providersChanged = false;
-
-  for (const [alias, rawProvider] of Object.entries(providers)) {
-    if (!rawProvider || typeof rawProvider !== 'object' || Array.isArray(rawProvider)) continue;
-    const provider = { ...(rawProvider as Record<string, unknown>) };
-    const hasLegacyField = LEGACY_AI_PROVIDER_FIELDS.some((field) => field in provider);
-    if (!provider.sdk && hasLegacyField) {
-      provider.sdk = sdkFromLegacyProvider(alias, provider);
-      fixes.push(`migrated ai.providers.${alias}.driver/api to sdk`);
-      providersChanged = true;
-    }
-    for (const field of LEGACY_AI_PROVIDER_FIELDS) {
-      if (field in provider) {
-        delete provider[field];
-        providersChanged = true;
-      }
-    }
-    providers[alias] = provider;
-  }
-
-  if (providersChanged) {
-    next.providers = providers;
-  }
-
-  if (defaultProvider) {
-    const agents = next.agents && typeof next.agents === 'object' && !Array.isArray(next.agents)
-      ? { ...(next.agents as Record<string, unknown>) }
-      : {};
-    const zhin = agents.zhin && typeof agents.zhin === 'object' && !Array.isArray(agents.zhin)
-      ? { ...(agents.zhin as Record<string, unknown>) }
-      : {};
-    if (!zhin.provider) {
-      zhin.provider = defaultProvider;
-      fixes.push('migrated ai.defaultProvider to ai.agents.zhin.provider');
-    }
-    const legacyAgent = next.agent && typeof next.agent === 'object' && !Array.isArray(next.agent)
-      ? next.agent as Record<string, unknown>
-      : {};
-    const legacyModel = typeof legacyAgent.chatModel === 'string'
-      ? legacyAgent.chatModel
-      : typeof legacyAgent.visionModel === 'string'
-        ? legacyAgent.visionModel
-        : undefined;
-    if (legacyModel && !zhin.model) {
-      zhin.model = legacyModel;
-      fixes.push('migrated ai.agent.chatModel to ai.agents.zhin.model');
-    }
-    agents.zhin = zhin;
-    next.agents = agents;
-    delete next.defaultProvider;
-  }
-
-  return { ai: next, fixes };
-}
-
-function applyAiLegacyMigration(config: Record<string, unknown>, mutations: string[]): void {
-  if (!config.ai || typeof config.ai !== 'object' || Array.isArray(config.ai)) return;
-  const { ai, fixes } = migrateAiLegacyConfig(config.ai as Record<string, unknown>);
-  if (fixes.length === 0) return;
-  config.ai = ai;
-  mutations.push(...fixes);
-}
-
 export function createProjectConfigPlan(options: ProjectConfigPlanOptions, locale: 'zh-CN' | 'en' = 'zh-CN'): ProjectConfigPlan {
   const cwd = options.cwd ?? options.loaded?.cwd ?? process.cwd();
   const configuredFormat = options.format
@@ -329,9 +234,6 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions, local
     if (options.ensureConsole || options.ensureHttp) {
       // 新形态下 Console Host 由 CLI composition root 装配；Console 可达只需 http.token + corsOrigins
       ensureHttp(after, mutations);
-    }
-    if (options.migrateAiLegacy) {
-      applyAiLegacyMigration(after, mutations);
     }
   }
 
@@ -418,7 +320,6 @@ export function applyConsoleConfigFixes(config: Record<string, unknown>, locale:
     ensureConsole: true,
     ensureSandbox: true,
     ensureHttp: true,
-    migrateAiLegacy: true,
   }, locale);
   Object.keys(config).forEach((key) => delete config[key]);
   Object.assign(config, plan.after);

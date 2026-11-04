@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import { defaultAgentCore } from '../../src/core/agent-core.js';
@@ -24,7 +25,7 @@ it.each(['captured', 'absent', 'empty'] as const)('keeps the delegated role and 
     activeBinding: { nickname: 'Main chat persona', providerAlias: 'mock', model: 'm' },
     bootstrapContext: '## TOOLS.md\nLatest unrelated Host workspace.',
     globalContext: '# Platform rules\nUse the current ICQQ endpoint; never guess a recipient.',
-    getTurnProvider: () => llm.provider, llmRuntime: llm.runtime,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(llm.runtime).model((llm.provider).name, (llm.provider).models?.[0]) }, completion: llm.runtime }), completion: llm.runtime,
     skillRegistry: null, skillsSummaryXML: '', getTurnActiveSkills: () => '',
     contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async () => {} },
     getActiveTurnTracker: () => undefined, promptTraceConfig: {}, phaseConfig: {},

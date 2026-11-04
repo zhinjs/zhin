@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { anthropicMessages, createProviderHarness, geminiGenerate, openaiChat } from '../helpers/provider-harness/index.js';
-import { generateTextViaAiSdk } from '../../src/llm/bridge/ai-sdk-stream.js';
 import type { LlmRequestInput, LlmRequestObservation } from '../../src/llm/llm-api-runtime.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
 
@@ -19,7 +18,7 @@ describe('semantic request observation at the installed SDK boundary', () => {
       { name: 'lookup', description: 'Look up a member', parameters: z.object({ name: z.string() }) },
     ] };
     if (stream) await h.complete(input, { onRequest });
-    else await generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, h.context(input), { onRequest });
+    else await h.runtime.generate(h.model, h.context(input), { onRequest });
     expect(onRequest).toHaveBeenCalledTimes(1);
     const snapshot = captured(onRequest.mock.calls[0]?.[0]);
     const wire = h.lastRequest().body as Record<string, any>;
@@ -37,7 +36,7 @@ describe('semantic request observation at the installed SDK boundary', () => {
     const schema = { type: 'object', properties: { answer: { type: 'string' } } };
     const onRequest = vi.fn();
     if (stream) await h.complete({ system: 'Base rules', user: 'hello' }, { onRequest, outputSchema: schema });
-    else await generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, h.context({ system: 'Base rules', user: 'hello' }), { onRequest, outputSchema: schema });
+    else await h.runtime.generate(h.model, h.context({ system: 'Base rules', user: 'hello' }), { onRequest, outputSchema: schema });
     const snapshot = captured(onRequest.mock.calls[0]?.[0]);
     expect(snapshot.system).toContain(JSON.stringify(schema));
     expect(snapshot).not.toHaveProperty('output_schema');
@@ -66,7 +65,7 @@ describe('semantic request observation at the installed SDK boundary', () => {
       throw new Error('diagnostic failed');
     };
     const message = stream ? await h.complete({ system: 'keep', user: 'hello' }, { onRequest })
-      : await generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, h.context({ system: 'keep', user: 'hello' }), { onRequest });
+      : await h.runtime.generate(h.model, h.context({ system: 'keep', user: 'hello' }), { onRequest });
     expect(message.content).toContainEqual({ type: 'text', text: 'ok' });
     expect(JSON.stringify(h.lastRequest().body)).toContain('hello');
   });

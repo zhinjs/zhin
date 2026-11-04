@@ -10,13 +10,12 @@ import {
   diagnoseZhinStackDependencies,
   formatZhinStackFixCommand,
   packagesNeedingZhinStackFix,
-  migrateAiLegacyConfig,
   validateDatabaseConfig,
 } from '@zhin.js/scaffold-wizard';
 import { expandEnvironmentValue, readApplicationPluginDeclaration } from '@zhin.js/runtime';
 import { findConfigFile, readConfig, saveConfig } from './config-file.js';
 import { detectLegacyConfig, formatLegacyConfigHint } from './legacy-config.js';
-import { hostModelOwnerId } from '../plugin-runtime/personal-models/host-identity.js';
+import { hostModelOwnerId } from '../plugin-runtime/inference/host-identity.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
 
 export type ConfigIssueSeverity = 'error' | 'warn' | 'info';
@@ -220,184 +219,39 @@ function checkAiDependencies(
 }
 
 function checkAi(
-  config: Record<string, unknown>,
-  issues: ConfigIssue[],
-  aiUtils: AiConfigUtils | null,
-  hostOwnerId: string,
+  config: Record<string, unknown>, issues: ConfigIssue[], aiUtils: AiConfigUtils | null, hostOwnerId: string,
 ): void {
   const ai = config.ai;
   if (!ai || typeof ai !== 'object' || Array.isArray(ai)) return;
-
-  const legacy = ai as Record<string, unknown> & {
-    routes?: unknown;
-    defaultProvider?: unknown;
-    agent?: Record<string, unknown>;
+  const raw = ai as Record<string, unknown>;
+  const deprecated = (code: string, keyPath: string, reason: string): void => {
+    pushIssue(issues, { severity: 'warn', code, path: keyPath,
+      message: `${keyPath} 已弃用：${reason}`, fixable: true, fixHint: 'zhin config check --fix' });
   };
-
-  if (legacy.defaultProvider != null) {
-    pushIssue(issues, {
-      severity: 'warn',
-      code: 'ai.default_provider_deprecated',
-      path: 'ai.defaultProvider',
-      message: 'ai.defaultProvider 已废弃，应使用 ai.agents.zhin.provider',
-      fixable: true,
-      fixHint: 'zhin config check --fix',
-    });
+  for (const { key, reason } of aiUtils?.findDeprecatedAgentConfigKeys?.(raw.agent) ?? []) {
+    deprecated(`ai.agent_${key}_deprecated`, `ai.agent.${key}`, reason);
   }
-  if (legacy.agent?.chatModel != null || legacy.agent?.visionModel != null) {
-    pushIssue(issues, {
-      severity: 'warn',
-      code: 'ai.agent_chat_model_deprecated',
-      path: 'ai.agent',
-      message: 'ai.agent.chatModel / visionModel 已废弃，应使用 ai.agents.zhin.model',
-      fixable: true,
-      fixHint: 'zhin config check --fix',
-    });
+  for (const { agent, key, reason } of aiUtils?.findDeprecatedAgentBindingKeys?.(raw.agents) ?? []) {
+    deprecated('ai.agent_routing_deprecated', `ai.agents.${agent}.${key}`, reason);
   }
-  if (legacy.routes != null) {
-    pushIssue(issues, {
-      severity: 'warn',
-      code: 'ai.routes_deprecated',
-      path: 'ai.routes',
-      message: 'ai.routes 已废弃：入站路由从未生效，IM 消息总是交给 ai.agents.zhin',
-      fixable: true,
-      fixHint: 'zhin config check --fix',
-    });
+  for (const key of ['allowedTools', 'disabledTools', 'toolSearch', 'memoryMcp']) {
+    if (Object.hasOwn(raw, key)) deprecated(`ai.${key}_deprecated`, `ai.${key}`, '已废弃或不再生效');
   }
-  const agents = legacy.agents;
-  if (agents && typeof agents === 'object' && !Array.isArray(agents)) {
-    for (const [name, binding] of Object.entries(agents as Record<string, unknown>)) {
-      if (!binding || typeof binding !== 'object' || Array.isArray(binding)) continue;
-      for (const key of ['priority', 'match'] as const) {
-        if (!(key in binding)) continue;
-        pushIssue(issues, {
-          severity: 'warn',
-          code: 'ai.agent_routing_deprecated',
-          path: `ai.agents.${name}.${key}`,
-          message: `ai.agents.${name}.${key} 已弃用：入站路由从未生效，IM 消息总是交给 ai.agents.zhin`,
-          fixable: true,
-          fixHint: 'zhin config check --fix',
-        });
-      }
-    }
-  }
-  for (const { key, reason } of aiUtils?.findDeprecatedAgentConfigKeys?.(legacy.agent) ?? []) {
-    pushIssue(issues, {
-      severity: 'warn',
-      code: `ai.agent_${key}_deprecated`,
-      path: `ai.agent.${key}`,
-      message: `ai.agent.${key} 已弃用：${reason}`,
-      fixable: true,
-      fixHint: 'zhin config check --fix',
-    });
-  }
-  for (const key of ['allowedTools', 'disabledTools', 'toolSearch', 'memoryMcp'] as const) {
-    if (key in legacy) {
-      pushIssue(issues, {
-        severity: 'warn',
-        code: `ai.${key}_deprecated`,
-        path: `ai.${key}`,
-        message: `ai.${key} 已废弃或不再生效`,
-        fixable: true,
-        fixHint: 'zhin config check --fix',
-      });
-    }
-  }
-
-  const providers = legacy.providers;
-  if (providers && typeof providers === 'object' && !Array.isArray(providers)) {
-    for (const [alias, prov] of Object.entries(providers)) {
-      const provider = prov as Record<string, unknown>;
-      const legacyField = prov && typeof prov === 'object'
-        ? ['driver', 'api', 'preset', 'spec'].find((key) => key in provider)
-        : undefined;
-      if (legacyField) {
-        pushIssue(issues, {
-          severity: 'warn',
-          code: 'ai.provider_driver_deprecated',
-          path: `ai.providers.${alias}.${legacyField}`,
-          message: `ai.providers.${alias}.${legacyField} 应迁移为 sdk`,
-          fixable: true,
-          fixHint: 'zhin config check --fix',
-        });
-      }
-    }
-  }
-
-  if (!aiUtils) {
-    if (isAiEnabledInConfig({ ai: legacy })) {
-      pushIssue(issues, {
-        severity: 'error',
-        code: 'ai.agent_missing',
-        path: 'ai',
-        message: '配置已启用 AI，但未安装 @zhin.js/agent（zhin.js 1.1.x 需单独安装 AI 栈）',
-        fixHint: 'zhin setup --ai 或 pnpm add @zhin.js/agent@latest zod@latest ai@latest',
-      });
-    } else {
-      pushIssue(issues, {
-        severity: 'info',
-        code: 'ai.check_skipped',
-        path: 'ai',
-        message: '未解析到 @zhin.js/agent，跳过 AI 路由深度校验',
-      });
-    }
+  const legacy = ['providers', 'modelCatalog', 'modelPolicy', 'defaultProvider', 'decisions']
+    .filter(key => Object.hasOwn(ai, key));
+  if (legacy.length) {
+    pushIssue(issues, { severity: 'error', code: 'ai.inference_migration_required', path: 'ai',
+      message: `AI 模型配置需要显式迁移：${legacy.join(', ')}`,
+      fixHint: '预览并确认 AI 运行时迁移；config check --fix 不会迁移账号或凭据' });
     return;
   }
-
-  try {
-    const validationAi = migrateAiLegacyConfig(legacy).ai;
-    const canonical = validationAi.modelCatalog !== undefined || validationAi.modelPolicy !== undefined
-      || Object.values((validationAi.agents ?? {}) as Record<string, { preset?: unknown }>).some(binding => binding?.preset !== undefined);
-    if (canonical) {
-      if (!aiUtils.validateModelRuntimeConfig) throw new Error('Installed @zhin.js/agent does not support modelCatalog/modelPolicy; update the AI stack');
-      for (const message of aiUtils.validateModelRuntimeConfig(validationAi, hostOwnerId)) {
-        pushIssue(issues, { severity: 'error', code: 'ai.model_config_invalid', path: 'ai', message, fixHint: 'Check modelCatalog/modelPolicy references and Host ownership' });
-      }
-      return;
-    }
-    const normalized = aiUtils.normalizeAiRoutingConfig(validationAi);
-    for (const err of aiUtils.validateAiRoutingConfig(normalized)) {
-      pushIssue(issues, {
-        severity: 'error',
-        code: 'ai.routing_invalid',
-        path: 'ai',
-        message: err,
-        fixHint: 'zhin setup --ai',
-      });
-    }
-    checkPerception(aiUtils, validationAi, normalized, issues);
-  } catch (error) {
-    pushIssue(issues, {
-      severity: 'error',
-      code: 'ai.routing_invalid',
-      path: 'ai',
-      message: error instanceof Error ? error.message : String(error),
-      fixHint: 'zhin setup --ai',
-    });
+  if (!aiUtils?.validateModelRuntimeConfig) {
+    pushIssue(issues, { severity: 'error', code: 'ai.agent_missing', path: 'ai',
+      message: 'AI 运行时所需的 @zhin.js/agent 未安装或版本不支持', fixHint: '更新 AI 栈后重试' });
+    return;
   }
-}
-
-function checkPerception(
-  aiUtils: AiConfigUtils,
-  ai: unknown,
-  normalized: Record<string, unknown>,
-  issues: ConfigIssue[],
-): void {
-  if (!aiUtils.resolvePerceptionConfig) return;
-  const multimodal = (ai as { multimodal?: { perception?: unknown } } | undefined)?.multimodal;
-  if (multimodal?.perception === undefined) return;
-  const providers = normalized.providers;
-  const aliases = providers && typeof providers === 'object' ? Object.keys(providers) : undefined;
-  try {
-    aiUtils.resolvePerceptionConfig(multimodal.perception, aliases);
-  } catch (error) {
-    pushIssue(issues, {
-      severity: 'error',
-      code: 'ai.multimodal_perception_invalid',
-      path: 'ai.multimodal.perception',
-      message: error instanceof Error ? error.message : String(error),
-      fixHint: 'ai.multimodal.perception: { provider: <ai.providers 别名>, model: <支持图片输入的模型> }',
-    });
+  for (const message of aiUtils.validateModelRuntimeConfig(ai, hostOwnerId)) {
+    pushIssue(issues, { severity: 'error', code: 'ai.model_config_invalid', path: 'ai', message });
   }
 }
 
@@ -477,7 +331,6 @@ export function applyConfigFixes(
   const fixes: string[] = [];
   const next: Record<string, unknown> = { ...config };
   const aiUtils = loadAiConfigUtils(cwd);
-
   if (next.database && typeof next.database === 'object' && !Array.isArray(next.database)) {
     const database = { ...(next.database as Record<string, unknown>) };
     if (database.dialect === 'postgres') {
@@ -487,20 +340,12 @@ export function applyConfigFixes(
     }
   }
 
-  if (next.ai && typeof next.ai === 'object' && !Array.isArray(next.ai)) {
-    const { ai, fixes: aiMigrationFixes } = migrateAiLegacyConfig(next.ai as Record<string, unknown>);
-    if (aiMigrationFixes.length > 0) {
-      next.ai = ai;
-      fixes.push(...aiMigrationFixes);
-    }
-  }
-
+  // Only retired nonfunctional switches are fixed here. Model/account migration stays explicit.
   if (next.ai && aiUtils) {
-    const { ai, fixes: aiFixes } = aiUtils.applyAiConfigFixes(next.ai as Record<string, unknown>);
+    const { ai, fixes: aiFixes } = aiUtils.applyAiConfigFixes(next.ai);
     if (ai) next.ai = ai;
     fixes.push(...aiFixes);
   }
-
   if ('log_level' in next && isValidLogLevelInput(next.log_level)) {
     const normalized = toLogLevelName(next.log_level as LogLevelInput);
     if (next.log_level !== normalized) {

@@ -11,9 +11,8 @@ import { createHash } from 'node:crypto';
 import {
   assistantAnswerText,
   createResilientCompletionPort,
-  resolveProviderConfigResilience,
   resolveProviderResilienceConfig,
-  type LlmApiRuntime,
+  type LlmCompletionPort, type Model,
   type MediaContentBlock,
   type ProviderResilienceConfig,
   type ProviderResilienceEvent,
@@ -74,7 +73,10 @@ export interface LlmMediaPerceptionOptions {
   /** Host-owned bounded cache shared only with explicitly separated namespaces. */
   readonly cache?: Map<string, PerceptionCacheEntry>;
   readonly cacheNamespace?: string;
-  readonly runtime: LlmApiRuntime;
+  readonly runtime: LlmCompletionPort & {
+    model(alias: string, model: string): Model;
+    resilience?(accountId: string): Readonly<{ requestTimeoutMs?: number; maxRetries?: number }> | undefined;
+  };
   readonly config: ResolvedPerceptionConfig;
   /** `ai.providerResilience` (global layer); the provider's own timeout/maxRetries and `timeoutMs` apply on top. */
   readonly resilience?: ProviderResilienceConfig;
@@ -203,7 +205,7 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
           }
           const resilience = resolveProviderResilienceConfig(
             options.resilience,
-            resolveProviderConfigResilience(runtime.providerConfig?.(candidate.provider)),
+            runtime.resilience?.(candidate.provider),
             { requestTimeoutMs: config.timeoutMs, maxRetries: Math.min(options.resilience?.maxRetries ?? 1, 1) },
           );
           const port = createResilientCompletionPort(runtime, {

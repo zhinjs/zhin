@@ -86,13 +86,13 @@ npx zhin runtime start --mode production      # Neither
 | Change | Application boundary |
 | --- | --- |
 | Only the configured `nickname` / `profile` fallback of an adapter declaring in-place profile updates | New profile reads use the new fallback while retaining the connection. No platform profile write is made; an observed platform nickname still takes precedence |
-| Model selection, or new and compatible provider/model definitions | New operations through standard Host model entry points acquire the new version. In-flight operations retain their captured model and leases throughout their tool loop |
+| Profile or purpose selection in model management | A separate domain transaction persists the graph. New operations read it; in-flight operations retain their graph, model and leases. This is not a file-application group |
 | HTTP listeners, database connections, `.env` inputs, YAML account roles, and other startup dependencies | Parts without a safe replacement path remain pending a process restart and keep their old effective values |
 | Other plugin configuration | Uses the owning plugin's existing local reload path; an undeclared update capability does not imply an in-place update |
 
-A save can apply partially. For example, an account nickname fallback and default model may apply while an HTTP port change waits for restart. A model change depending on a pending environment-variable change also stays pending. If the complete candidate fails validation, the current runtime is retained. Failure, an unconfirmed outcome, and supersession by a newer revision are distinct; refresh read-only to verify an unconfirmed outcome rather than submitting it again.
+A file save can apply partially. For example, an account nickname fallback may apply while an HTTP port change waits for restart. Model graph changes have separate domain revisions and mutation receipts; file save/apply does not mutate that graph, credentials or personal bindings. If the complete candidate fails validation, the current runtime is retained. Failure, an unconfirmed outcome, and supersession by a newer revision are distinct; refresh read-only to verify an unconfirmed outcome rather than submitting it again.
 
-Deleting or renaming model definitions, changing Agent binding topology, and breaking capability contracts are not hot-updated; they remain pending a process restart. Third-party code that retains its own SDK/provider reference does not receive a replacement automatically; acquire it through the framework again for a new operation.
+Agent installation, role permissions and other startup dependencies without declared replacement support remain pending restart. Profile model/parameter edits apply to the next turn; deleting and recreating a resource does not transfer its old account identity. Plugins use the operation-bound InferenceClient instead of retaining SDK/provider instances.
 
 ### Manage configuration in chat
 
@@ -124,7 +124,7 @@ Saving follows the complete candidate validation and selective application descr
 
 ### Files and database records have separate ownership
 
-`zhin.config.yml` remains the deployment declaration, and Console configuration forms still write that file. The entire configuration is not moved into a database. Managed Endpoint desired records, personal models and session choices, and runtime model-policy overrides keep their existing databases and APIs. File updates do not overwrite explicit domain records or clear personal choices. YAML account seeds do not rewrite existing managed accounts; adapter profile defaults can still update accounts that inherit them.
+`zhin.config.yml` remains the deployment declaration, and Console configuration forms still write that file. The entire configuration is not moved into a database. Managed Endpoint desired records, model Services/Accounts/Profiles/purposes, and personal Session choices retain their own domain databases and APIs. File updates do not overwrite explicit domain records or clear personal choices. YAML account seeds do not rewrite existing managed accounts; adapter profile defaults can still update accounts that inherit them.
 
 ## Environment Variable Expansion
 
@@ -310,66 +310,33 @@ Both sections are mounted on the HTTP Host and enabled as needed; when not confi
 
 ## ai
 
-The `ai` section is consumed by the Agent Host. Whenever `ai` / `assistant` is configured in any section, the startup graph loads the Agent stack; providers missing credentials are soft-pruned and do not block startup.
+`ai` stores Agent startup behavior and tool permissions. Models are managed through the Console or explicit plan imports and persisted in the inference database. An empty graph still permits management startup; inference reports a missing Profile when its purpose is not configured.
 
-### providers: Named Model Providers
+### providers: Runtime model resources
 
-```yaml
-ai:
-  providers:
-    deepseek:
-      sdk: deepseek                  # Required
-      apiKey: ${DEEP_SEEK_API_KEY}
-    openrouter:
-      sdk: openai-compatible
-      baseUrl: ${OPENROUTER_BASE_URL}
-      apiKey: ${OPENROUTER_API_KEY}
-      contextWindow: 32768
-      models:                        # Allowed model whitelist
-        - "openrouter/free"
-    ollama-local:
-      sdk: ollama
-      host: http://127.0.0.1:11434   # ollama uses host instead of baseUrl
-    cloudflare:
-      sdk: openai-compatible
-      apiKey: ${CLOUDFLARE_API_TOKEN}
-      accountId: ${CLOUDFLARE_ACCOUNT_ID}
-```
+Startup configuration no longer accepts `ai.providers`, `modelCatalog`, `modelPolicy`, `decisions`, or an Agent's `provider/model/preset` selectors. A Service describes its protocol, an Account owns authentication and private credential references, and a Profile selects a model and parameters. Chat, summary, ambient, image, perception and decision purposes select Profiles. Personal Sessions can select an authorized language Profile.
 
-| Field | Description |
-| --- | --- |
-| `sdk` | Required, one of seven: `openai`, `anthropic`, `google`, `deepseek`, `minimax`, `ollama`, `openai-compatible` |
-| `apiKey` / `baseUrl` / `host` | Credentials and endpoint; `ollama` uses `host`, Cloudflare also requires `accountId` |
-| `models` | Explicit model list |
-| `defaultModel`, `contextWindow`, `timeout`, `maxRetries`, `firstChunkTimeoutMs`, `chunkTimeoutMs`, `headers` | Behavior tuning (see the [AI docs](../ai/index.md)) |
-| `authScheme` | Authorization scheme; unset uses the SDK default, `''` sends the bare key, `Bearer` / `Token` send `<scheme> <key>` |
-| `imageGeneration` | Text-to-image defaults (for drivers that support this capability, e.g., `defaultModel`, `defaultSize`, `watermarkEnabled`, `promptSuffix`) |
+`ai.plan.yml` is explicit review/apply/export input, not a startup seed or an `ai.plan` property in `zhin.config.yml`. See the [model interface upgrade](../../ai/provider-upgrade.md) for migration, backup and recovery boundaries.
 
-Provider aliases can be named arbitrarily; when `sdk` is not explicitly specified, it is inferred from the alias prefix (e.g., `deepseek-main` -> `deepseek`); if inference fails, it falls back to `openai-compatible`. The corresponding `@ai-sdk/*` packages are optional peers and should be installed based on which SDK is used.
-
-### agents: Bind Models and Roles
+### agents: Roles and tool permissions
 
 ```yaml
 ai:
+  enabled: true
   agents:
-    zhin:                            # Main Agent, default entry point
-      provider: openrouter           # References the provider alias
-      model: openrouter/free
+    zhin:
       mcpServers: [icqq]             # References names in ai.mcpServers
     researcher:
-      provider: openrouter
-      model: openrouter/free
-      nickname: 'Researcher'         # Agent self-reference and UI display name
+      nickname: 'Researcher'         # Task role name; IM identity comes from the Endpoint
 ```
 
 | Field | Description |
 | --- | --- |
-| `provider` / `model` | Required, the bound provider alias and model |
-| `nickname` | Agent self-reference and UI display name |
-| `mcpServers` | List of MCP Server names visible to this Agent |
-| `permission.task` | `spawn_task` visible child Agent types (glob -> `allow` / `deny`) |
+| `nickname` | Task role display name; the Endpoint supplies the current account profile |
+| `mcpServers` | MCP Server names visible to this Agent |
+| `permission.task` | Visible `spawn_task` child roles (glob → `allow` / `deny`) |
 
-IM messages always go to `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` deletes them. See [ai.agents](../ai/index.md#ai-agents).
+Model role bindings belong to runtime purpose configuration. IM messages always enter `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` removes them.
 
 ### mcpServers: External MCP Servers
 
@@ -435,7 +402,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` governs multimodal input and output. When the main model cannot see images, `ai.multimodal.perception` lets another model describe them first; see [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception). `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
+`ai.multimodal` governs multimodal input and output. When the main model cannot see images, the perception purpose in model management selects a Profile to describe them first; see [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception). `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
 
 Remote Agents no longer attach through `ai.remoteAgents`. An optional A2A Executor enters through the persistent Workroom Catalog and generation-owned authority, under Assignment lease/fence and Journal contracts.
 

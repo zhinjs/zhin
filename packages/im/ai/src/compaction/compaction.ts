@@ -9,7 +9,7 @@
  */
 
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import type { AIProvider, ChatMessage } from '../types.js';
+import type { TextCompletionPort, ChatMessage } from '../types.js';
 import { microCompactMessages, type MicroCompactOptions } from './micro-compact.js';
 
 import { estimateTokens, estimateMessagesTokens } from './token-counter.js';
@@ -198,14 +198,17 @@ export function evaluateContextWindowGuard(
 /**
  * 通过 LLM 对消息进行摘要
  */
-async function generateSummary(
-  provider: AIProvider,
-  messages: ChatMessage[],
-  maxChunkTokens: number,
-  previousSummary?: string,
-  customInstructions?: string,
-  signal?: AbortSignal,
-): Promise<string> {
+/** All summary options are data; invocation and credential ownership stays with the caller. */
+interface GenerateSummaryOptions {
+  readonly provider: TextCompletionPort;
+  readonly messages: ChatMessage[];
+  readonly maxChunkTokens: number;
+  readonly previousSummary?: string;
+  readonly customInstructions?: string;
+  readonly signal?: AbortSignal;
+}
+async function generateSummary(options: GenerateSummaryOptions): Promise<string> {
+  const { provider, messages, maxChunkTokens, previousSummary, customInstructions, signal } = options;
   const conversation = messages.map(m => {
     const role = m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System';
     const content = m.content;
@@ -249,7 +252,7 @@ Keep your summary brief but informative so later turns can quickly recover conte
  * 对消息分块摘要，支持降级
  */
 async function summarizeChunks(params: {
-  provider: AIProvider;
+  provider: TextCompletionPort;
   messages: ChatMessage[];
   maxChunkTokens: number;
   previousSummary?: string;
@@ -264,14 +267,9 @@ async function summarizeChunks(params: {
   let summary = params.previousSummary;
 
   for (const chunk of chunks) {
-    summary = await generateSummary(
-      params.provider,
-      chunk,
-      params.maxChunkTokens,
-      summary,
-      params.customInstructions,
-      params.signal,
-    );
+    summary = await generateSummary({ provider: params.provider, messages: chunk,
+      maxChunkTokens: params.maxChunkTokens, previousSummary: summary,
+      customInstructions: params.customInstructions, signal: params.signal });
   }
 
   return summary ?? DEFAULT_SUMMARY_FALLBACK;
@@ -283,7 +281,7 @@ async function summarizeChunks(params: {
  * 完整摘要失败时，尝试排除超大消息再摘要；全部失败时抛错（由上层熔断并保留原文）
  */
 export async function summarizeWithFallback(params: {
-  provider: AIProvider;
+  provider: TextCompletionPort;
   messages: ChatMessage[];
   maxChunkTokens: number;
   contextWindow: number;
@@ -340,7 +338,7 @@ export async function summarizeWithFallback(params: {
  * 分阶段摘要 — 先将消息拆为多段分别摘要，再合并
  */
 export async function summarizeInStages(params: {
-  provider: AIProvider;
+  provider: TextCompletionPort;
   messages: ChatMessage[];
   maxChunkTokens: number;
   contextWindow: number;
@@ -469,7 +467,7 @@ export function pruneHistoryForContext(params: {
  * 对给定消息列表执行一次就地压缩，返回压缩后的摘要和保留消息
  */
 export async function compactSession(params: {
-  provider: AIProvider;
+  provider: TextCompletionPort;
   messages: ChatMessage[];
   contextWindow?: number;
   keepRecentCount?: number;
@@ -594,7 +592,7 @@ export function shouldAutoCompact(
  *
  */
 export async function autoCompactIfNeeded(params: {
-  provider: AIProvider;
+  provider: TextCompletionPort;
   messages: ChatMessage[];
   contextWindow?: number;
   tracking?: AutoCompactTrackingState;

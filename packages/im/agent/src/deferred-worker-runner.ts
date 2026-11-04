@@ -1,13 +1,15 @@
+import type { ModelExecutionBundle } from './model-runtime/types.js';
 /**
  * DeferredWorkerRunner — 同步 Worker 子 Agent，在隔离上下文中执行 deferred 工具任务。
  */
 import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import { getLogger, formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
-import { type AIProvider, type AgentTool, isOmittedToolSummary, sanitizeToolResult, stripHallucinatedToolCalls, createLlmApiRuntime, sdkEntryFromProvider, type ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
+import { type AgentTool, type Usage, isOmittedToolSummary, sanitizeToolResult, stripHallucinatedToolCalls } from '@zhin.js/ai';
 import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
 import type { ToolInvocationPolicy } from '@zhin.js/tool';
 import { stripThinkBlocks } from './core/text-sanitize.js';
-import { runAgentLoopStandaloneTurn } from './core/agent-loop-standalone.js';
+import { runAgentLoopStandaloneTurn, type AgentLoopStandaloneResult } from './core/agent-loop-standalone.js';
+import { formatTaskFailure } from './core/agent-run-shared.js';
 import type { ToolCallRecord } from './core/tool-calls-user-format.js';
 import { selectDeferredToolsForWorker } from './deferred-worker-tool-load.js';
 import { resolveWorkerSlowToolTimeout, isPromptTraceEnabled, isPromptTraceVerbose, isPhaseTraceEnabled, buildAgentPromptCacheStreamOptions, type ZhinAgentConfig, type ExecApprovalMode, DEFAULT_ALWAYS_LOADED_TOOLS } from './config/index.js';
@@ -33,9 +35,7 @@ export interface DeferredWorkerRunOptions {
   maxIterations?: number;
   execPolicyConfig?: Required<ZhinAgentConfig>;
   execApprovalMode?: ExecApprovalMode;
-  modelRegistry?: ModelRegistry | null;
-  provider: AIProvider;
-  llmRuntime?: LlmApiRuntime;
+  execution: ModelExecutionBundle;
   summaryMaxChars?: number;
   onEvent?: (event: DeferredWorkerLifecycleEvent) => void | Promise<void>;
   /**
@@ -63,6 +63,9 @@ export interface DeferredWorkerResult {
   iterations: number;
   status: 'ok' | 'partial' | 'error';
   toolCalls?: ToolCallRecord[];
+  /** Observed model/perception usage, when execution started. */
+  usage?: Usage;
+  terminal?: AgentLoopStandaloneResult['terminal'];
 }
 
 export class DeferredWorkerRunner {
@@ -75,10 +78,9 @@ export class DeferredWorkerRunner {
       allToolsByName,
       origin,
       maxToolResults,
-      provider,
+      execution,
       execPolicyConfig,
       execApprovalMode,
-      modelRegistry,
       summaryMaxChars = DEFAULT_WORKER_SUMMARY_MAX_CHARS,
       onEvent,
     } = options;
@@ -137,14 +139,10 @@ export class DeferredWorkerRunner {
       }));
     }
 
-    const model = provider.models[0];
-    const llmRuntime = options.llmRuntime ?? createLlmApiRuntime(
-      [sdkEntryFromProvider(provider)],
-      (alias) => alias === provider.name ? provider.models : [],
-    );
-    const llmModel = llmRuntime.model(provider.name, model);
+    const llmModel = execution.model;
+    const model = llmModel.id;
 
-    const workerBody = resolveWorkspacePrompt('deferred-worker', llmModel.sdk);
+    const workerBody = resolveWorkspacePrompt('deferred-worker', llmModel.promptFamily);
 
     const systemPrompt = [CRITICAL_RULES, REQUEST_SECURITY_BOUNDARY, workerBody.trim()].join('\n\n');
 
@@ -162,6 +160,7 @@ export class DeferredWorkerRunner {
       loadedToolNames,
     });
 
+    let observedResult: AgentLoopStandaloneResult | undefined;
     try {
       if (execPolicyConfig && isPromptTraceEnabled(execPolicyConfig)) {
         logPromptComposition({
@@ -178,20 +177,20 @@ export class DeferredWorkerRunner {
         });
       }
       const result = await runAgentLoopStandaloneTurn({
-        provider,
-        llmRuntime,
-        model,
+        execution,
         systemPrompt,
         tools,
         userInput: goal,
         maxIterations,
+        callbacks: { onInterrupted: snapshot => { observedResult = snapshot; } },
         commMessage: origin,
         // Deferred workers can outlive the turn that started them, so they never
         // borrow its live authority: only an explicit frozen policy grants shell.
         turnPolicy: options.turnPolicy ?? DEFERRED_WORKER_NO_SHELL_POLICY,
         ...buildAgentPromptCacheStreamOptions(execPolicyConfig ?? {}, {
-          modelSdk: llmModel.sdk,
-          provider: provider.name,
+          modelSdk: llmModel.promptFamily,
+          promptCacheRouting: llmModel.promptCacheRouting,
+          provider: execution.binding.account.id,
           modelId: model,
           label: 'deferred_worker',
         }),
@@ -206,12 +205,17 @@ export class DeferredWorkerRunner {
             }
           : undefined,
       });
+      observedResult = result;
       const hitMaxIter = result.iterations >= maxIterations;
-      const summary = buildWorkerSummary(result, summaryMaxChars, hitMaxIter);
+      const status = result.terminal?.stopReason === 'error' || result.terminal?.stopReason === 'aborted'
+        ? 'error' : hitMaxIter ? 'partial' : 'ok';
+      const summary = buildWorkerSummary({ content: status === 'error'
+        ? formatTaskFailure({ content: result.content, errorMessage: result.terminal?.errorMessage }) : result.content,
+        toolCalls: result.toolCalls }, summaryMaxChars, status === 'partial');
       logger.info(formatCompact({
         op: 'worker_done',
         iter: result.iterations,
-        partial: hitMaxIter || undefined,
+        partial: status === 'partial' || undefined,
         usage: formatCompactUsage(result.usage),
       }));
       await onEvent?.({
@@ -220,19 +224,22 @@ export class DeferredWorkerRunner {
         toolQuery,
         loadedToolNames,
         iterations: result.iterations,
-        status: hitMaxIter ? 'partial' : 'ok',
+        status,
+        ...(status === 'error' ? { error: result.terminal?.errorMessage ?? result.content } : {}),
       });
       return {
         summary: JSON.stringify({
-          status: hitMaxIter ? 'partial' : 'ok',
+          status,
           loaded_tools: loadedToolNames,
           iterations: result.iterations,
           summary,
         }),
         loadedToolNames,
         iterations: result.iterations,
-        status: hitMaxIter ? 'partial' : 'ok',
+        status,
         toolCalls: result.toolCalls,
+        usage: result.usage,
+        ...(result.terminal ? { terminal: result.terminal } : {}),
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -252,11 +259,14 @@ export class DeferredWorkerRunner {
         summary: JSON.stringify({
           status: 'error',
           loaded_tools: loadedToolNames,
-          error: errorMsg,
+          error: formatTaskFailure({ content: observedResult?.content ?? '', errorMessage: errorMsg }),
+          ...(observedResult?.content ? { summary: observedResult.content } : {}),
         }),
         loadedToolNames,
-        iterations: 0,
+        iterations: observedResult?.iterations ?? 0,
         status: 'error',
+        ...(observedResult ? { toolCalls: observedResult.toolCalls } : {}),
+        ...(observedResult ? { usage: observedResult.usage, terminal: observedResult.terminal } : {}),
       };
     }
   }

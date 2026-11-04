@@ -117,18 +117,37 @@ describe('jsonSchemaToConsoleSchema', () => {
 
 
 describe('validation-only branches', () => {
-  it('shows actual typesafe static controls once and leaves the condition authoritative to Host', async () => {
+  it('keeps TypeSafe startup empty and projects its real runtime Service/Profile contracts', async () => {
     const { readFile } = await import('node:fs/promises');
     const schema = JSON.parse(await readFile(new URL('../../../../../plugins/services/typesafe/schema.json', import.meta.url), 'utf8'));
     const projection = jsonSchemaToConsoleSchema(schema);
-    expect(projection).toMatchObject({ type: 'intersect', list: [
-      { type: 'intersect', list: [{ type: 'constraint', reason: 'host-validation' }] },
-      { type: 'object', object: { enabled: { type: 'boolean' }, apiKey: { type: 'string', secret: true }, model: { type: 'string' } } },
-    ] });
+    expect(projection).toMatchObject({ type: 'object', object: {}, additional: false });
     expect(JSON.stringify(projection)).not.toContain('unsupported-construct');
+    expect(parsePluginConfigSchema(schema, {}).errors).toEqual([]);
+    expect(parsePluginConfigSchema(schema, { enabled: false }).errors.length).toBeGreaterThan(0);
+    expect(parsePluginConfigSchema(schema, { enabled: true }).errors.length).toBeGreaterThan(0);
+    expect(parsePluginConfigSchema(schema, { enabled: true, apiKey: 'synthetic-test-key' }).errors.length).toBeGreaterThan(0);
+    const { typeSafeProvider } = await import('../../../../../plugins/services/typesafe/src/provider.js');
+    expect(jsonSchemaToConsoleSchema(typeSafeProvider.serviceSchema.inputSchema)).toMatchObject({ type: 'object', object: { baseUrl: { type: 'string' } } });
+    const model = { id: 'explicit-decision-model', protocol: 'typesafe-system-one', kinds: ['decision'] as const };
+    const service = { id: 'service', rootId: 'root', ownerId: 'host', revision: 1,
+      driver: { id: 'typesafe', owner: 'root/typesafe', contractVersion: '1' }, options: typeSafeProvider.serviceSchema.parse({}), models: { [model.id]: model } };
+    const profile = typeSafeProvider.profileSchema({ service, model });
+    expect(jsonSchemaToConsoleSchema(profile.inputSchema)).toMatchObject({ type: 'object', object: { timeoutMs: { type: 'number', integer: true }, maxRetries: { type: 'number', integer: true } } });
+    expect(() => profile.parse({ timeoutMs: 0 })).toThrow();
+    expect(profile.parse({ timeoutMs: 1000, maxRetries: 0 })).toEqual({ timeoutMs: 1000, maxRetries: 0 });
+    expect(typeSafeProvider.authentication.methods).toEqual(['api-key']);
+  });
+  it('projects conditional static controls once and leaves validation authoritative to Host', () => {
+    const schema = { type: 'object', properties: { enabled: { type: 'boolean' }, apiKey: { type: 'string', writeOnly: true } },
+      allOf: [{ if: { properties: { enabled: { const: true } }, required: ['enabled'] }, then: { properties: { apiKey: { type: 'string' } }, required: ['apiKey'] } }] };
+    expect(jsonSchemaToConsoleSchema(schema)).toMatchObject({ type: 'intersect', list: [
+      { type: 'intersect', list: [{ type: 'constraint', reason: 'host-validation' }] },
+      { type: 'object', object: { enabled: { type: 'boolean' }, apiKey: { type: 'string', secret: true } } },
+    ] });
     expect(parsePluginConfigSchema(schema, { enabled: false }).errors).toEqual([]);
     expect(parsePluginConfigSchema(schema, { enabled: true }).errors.length).toBeGreaterThan(0);
-    expect(parsePluginConfigSchema(schema, { enabled: true, apiKey: 'synthetic-test-key' }).errors).toEqual([]);
+    expect(parsePluginConfigSchema(schema, { enabled: true, apiKey: 'synthetic' }).errors).toEqual([]);
   });
   it('does not hide conditional properties that are not in the static form or inject their defaults', () => {
     const projection = jsonSchemaToConsoleSchema({ type: 'object', properties: { enabled: { type: 'boolean' } }, allOf: [{

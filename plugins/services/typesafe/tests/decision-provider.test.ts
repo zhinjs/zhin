@@ -2,6 +2,8 @@ import { expectTypeOf, vi } from 'vitest';
 import type { DecisionRequest } from '@zhin.js/ai';
 import { TypeSafeDecisionProvider } from '../src/decision-provider.js';
 import { TypeSafeDecisionError } from '../src/response-validator.js';
+import { ProviderAdmissionError } from '@zhin.js/ai/provider';
+import { TypeSafeClient } from '@typesafe-ai/sdk';
 
 const questions = {
   route: { type: 'choice', instructions: 'Choose a route', criteria: { billing: null, other: null } },
@@ -18,6 +20,50 @@ function response() {
     },
   };
 }
+
+it('keeps pre-submit rejection local to one concurrent call while preserving another call', async () => {
+  const denied = new ProviderAdmissionError('synthetic admission denial');
+  const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    if (body.state === 'denied') throw denied;
+    return Response.json(response());
+  });
+  const provider = new TypeSafeDecisionProvider({ apiKey: 'synthetic-key', maxRetries: 2 }, { fetch });
+  const deniedCall = provider.evaluate({ ...request, state: 'denied' }, options());
+  const permitted = provider.evaluate({ ...request, state: 'permitted' }, options());
+  await expect(deniedCall).rejects.toBe(denied);
+  await expect(permitted).resolves.toMatchObject({ model: 'jev-pinned-2026' });
+  expect(fetch).toHaveBeenCalledTimes(2); provider.dispose();
+});
+
+it('retains configured SDK connection retries and sanitizes exhausted transport failures', async () => {
+  const fetch = vi.fn().mockRejectedValueOnce(new Error('synthetic private connection cause')).mockResolvedValueOnce(Response.json(response()));
+  const provider = new TypeSafeDecisionProvider({ apiKey: 'synthetic-key', maxRetries: 1 }, { fetch });
+  await expect(provider.evaluate(request, options())).resolves.toMatchObject({ usage: { inputTokens: 30, outputTokens: 10 } });
+  expect(fetch).toHaveBeenCalledTimes(2); provider.dispose();
+  const failed = new TypeSafeDecisionProvider({ apiKey: 'synthetic-key', maxRetries: 0 }, { fetch: async () => { throw new Error('synthetic private connection cause'); } });
+  await expect(failed.evaluate(request, options())).rejects.toMatchObject({ code: 'request-failed', message: 'TypeSafe decision request-failed' });
+  failed.dispose();
+});
+
+it('preserves a real SDK result that wins the terminal race before a same-microtask caller abort', async () => {
+  const controller = new AbortController(), original = TypeSafeClient.prototype.systemOne;
+  // Observe the installed SDK's parsed APIPromise without replacing its network,
+  // JSON parsing or result. Complete the race's fulfillment callback first, then
+  // abort before the awaiting consumer's next microtask.
+  const spy = vi.spyOn(TypeSafeClient.prototype, 'systemOne').mockImplementation(function (input, settings) {
+    const pending = original.call(this, input, settings), then = pending.then.bind(pending);
+    pending.then = ((fulfilled, rejected) => then(value => {
+      const result = fulfilled?.(value); queueMicrotask(() => controller.abort(new Error('after SDK result'))); return result;
+    }, rejected)) as typeof pending.then;
+    return pending;
+  });
+  const provider = new TypeSafeDecisionProvider({ apiKey: 'synthetic-key', maxRetries: 0 }, { fetch: async () => Response.json(response()) });
+  try {
+    await expect(provider.evaluate(request, { signal: controller.signal })).resolves.toMatchObject({ model: 'jev-pinned-2026', usage: { inputTokens: 30 } });
+    expect(controller.signal.aborted).toBe(true);
+  } finally { spy.mockRestore(); provider.dispose(); }
+});
 const request = { state: { intent: 'help' }, questions };
 const options = () => ({ signal: new AbortController().signal });
 

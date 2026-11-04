@@ -1,3 +1,5 @@
+import { assistantTextReply } from '../../../../../../packages/im/agent/tests/helpers/mock-llm-api.js';
+import { ingressInferenceFixture } from './inference-fixture.js';
 import { RuntimeMessage } from '../../../../../../packages/im/core/src/plugin-runtime/im/contracts.js';
 import { MessageDispatcher } from '../../../../../../packages/im/core/src/plugin-runtime/im/message-dispatcher.js';
 import { RuntimeInteractionCoordinator } from '../../../../../../packages/im/core/src/plugin-runtime/im/interaction-runtime.js';
@@ -43,16 +45,18 @@ describe('AgentTurnIngressRoute', () => {
       { generation: 1, reply: reply },
     );
     const snapshots = new SnapshotStore(snapshot);
+    const inference = ingressInferenceFixture();
     const route = new AgentTurnIngressRoute({
+      withInferenceScope: inference.withInferenceScope,
       projectRoot: process.cwd(), runtime: { executeLeased } as never,
       im: { createInteraction: () => ({ ask: vi.fn() }) } as never,
       ingress: { read } as never,
       agent: { service: {
-        getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+        getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
         getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({}),
       }, agent: {} } as never,
     });
-    return { read, executeLeased, inspectGroupMember, snapshots, reply,
+    return { read, executeLeased, inspectGroupMember, snapshots, reply, inference,
       run: async () => {
         const lease = snapshots.acquire();
         try { return await route.route(message, lease, rootPluginId(), undefined); }
@@ -71,11 +75,13 @@ describe('AgentTurnIngressRoute', () => {
     await running;
 
     expect(f.read).toHaveBeenCalledOnce();
-    const access = f.read.mock.calls[0]![3] as TurnRequest;
+    const access = (f.read.mock.calls[0]![0] as { turn: TurnRequest }).turn;
     const request = f.executeLeased.mock.calls[0]![2] as TurnRequest;
     expect(access.input.contextState).toEqual({ bot: { id: '8596238', platformRole: 'admin' } });
     expect(request.input.contextState).toBe(access.input.contextState);
     expect(f.inspectGroupMember).toHaveBeenCalledOnce();
+    expect(f.inference.closed).toBe(1);
+    expect(f.inference.generations).toEqual([(f.read.mock.calls[0]![0] as { snapshot: RuntimeSnapshot }).snapshot]);
   });
 
   it('continues the admitted turn on its leased snapshot after an unrelated HMR commit', async () => {
@@ -98,6 +104,7 @@ describe('AgentTurnIngressRoute', () => {
 
     expect(f.read).not.toHaveBeenCalled();
     expect(f.executeLeased).not.toHaveBeenCalled();
+    expect(f.inference.generations).toEqual([]);
     await stopping;
   });
 
@@ -139,8 +146,9 @@ describe('AgentTurnIngressRoute', () => {
       } } }]]),
     } as unknown as RuntimeSnapshot;
     const executeLeased = vi.fn().mockResolvedValue({ status: 'completed', output: [] });
-    const binding = { name: 'zhin', providerAlias: 'test', model: 'test' };
+    const binding = { name: 'zhin', mcpServers: [] };
     const route = new AgentTurnIngressRoute({
+      withInferenceScope: ingressInferenceFixture().withInferenceScope,
       projectRoot: process.cwd(),
       runtime: { executeLeased } as never,
       im: { createInteraction: () => ({ ask: vi.fn() }) } as never,
@@ -211,7 +219,7 @@ describe('AgentTurnIngressRoute', () => {
       answers: { candidate_0: { type: 'score', score: 0.95, confidence: 0.99, legend: { 0: 'irrelevant', 1: 'relevant' }, probabilities: { 0: 0.05, 1: 0.95 } } },
     });
     const decisionRuntime: AgentDecisionRuntime = {
-      provider, config: { provider: '/typesafe', agents: { mode: 'active' } },
+      forTask: task => task === 'agents' ? provider : undefined, config: { agents: { profile: 'decision', mode: 'active' } },
     };
     const selection = await selectDecisionAgentRoute({
       routed: { userText: 'Remind me tomorrow' }, capabilities: { agents: [specialist] },
@@ -228,7 +236,7 @@ describe('AgentTurnIngressRoute', () => {
       : { userText: kind === 'explicit' ? '@zhin request' : 'request' };
     await expect(selectDecisionAgentRoute({
       routed, capabilities: { agents: [specialist] },
-      decisionRuntime: { provider, config: { provider: '/typesafe', agents: { mode: 'active' } } },
+      decisionRuntime: { forTask: task => task === 'agents' ? provider : undefined, config: { agents: { profile: 'decision', mode: 'active' } } },
       workroomTurn: kind === 'workroom', signal: new AbortController().signal,
     })).resolves.toBe(routed);
     expect(evaluate).not.toHaveBeenCalled();
@@ -243,7 +251,7 @@ describe('AgentTurnIngressRoute', () => {
     const routed = { userText: 'hello' };
     await expect(selectDecisionAgentRoute({
       routed, capabilities: { agents: [agent('reminders')] },
-      decisionRuntime: { provider, config: { provider: '/typesafe', agents: { mode: 'active' } } },
+      decisionRuntime: { forTask: task => task === 'agents' ? provider : undefined, config: { agents: { profile: 'decision', mode: 'active' } } },
       workroomTurn: false, signal: new AbortController().signal,
     })).resolves.toBe(routed);
   });
@@ -277,11 +285,12 @@ function progressiveIngress(options: {
     catch (error) { executionError = error; throw error; }
   });
   const route = new AgentTurnIngressRoute({
+    withInferenceScope: ingressInferenceFixture().withInferenceScope,
     projectRoot: '/synthetic/allowed-workspace', runtime: { executeLeased } as never,
     im: { createInteraction: () => ({ ask: vi.fn() }), endpoints: { captureOperation: flow.captureOperation } } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
-      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
       getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({ inboundQueue: { merge: { enabled: false } } }),
       imageAssets: { ownsUrl: flow.ownsUrl },
     }, agent: { getControlPlane: () => flow.control } } as never,
@@ -452,20 +461,21 @@ function localizedIngress(options: { prefix?: string; locale?: 'zh-CN' | 'en'; t
       },
     },
   );
-  const listModels = vi.fn(async () => [{ provider: 'fixture', models: ['fixture-model'] }]);
+  const inference = ingressInferenceFixture();
   const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) =>
     options.execute ? options.execute(request) : { status: 'completed', output: [] });
   const route = new AgentTurnIngressRoute({
+    withInferenceScope: inference.withInferenceScope,
     projectRoot: process.cwd(), runtime: { executeLeased } as never, resolveEndpointOwner: () => 'user',
     im: { createInteraction: (source: Message) => coordinator.create(source) } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
-    agent: { service: { listModels,
-      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+    agent: { service: {
+      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
       getTriggerConfig: () => ({ enabled: options.enabled ?? false, masters: ['user'], errorTemplate: options.errorTemplate }),
       getAgentConfig: () => ({ execApprovalMode: 'ask' }),
     }, agent: {} } as never,
   });
-  return { run: () => route.route(message, { value: snapshot, active: true } as never, rootPluginId(), undefined), reply, listModels, executeLeased };
+  return { run: () => route.route(message, { value: snapshot, active: true } as never, rootPluginId(), undefined), reply, inference, executeLeased };
 }
 
 it.each(['!', '', '/'])('reads the real dispatcher prefix %j at the Agent management ingress', async prefix => {
@@ -475,15 +485,17 @@ it.each(['!', '', '/'])('reads the real dispatcher prefix %j at the Agent manage
   expect(en.reply).toHaveBeenCalledWith(expect.stringContaining('Available models'));
   expect(zh.reply).toHaveBeenCalledWith(expect.stringContaining('可用模型'));
   expect(en.executeLeased).not.toHaveBeenCalled();
+  expect(en.inference.generations).toHaveLength(1);
+  expect(en.inference.closed).toBe(1);
   const namespaced = localizedIngress({ prefix, locale: 'en', text: `${prefix}plugin/models` });
   expect(await namespaced.run()).toBe(false);
-  expect(namespaced.listModels).not.toHaveBeenCalled();
+  expect(namespaced.inference.generations).toEqual([]);
 });
 
 it('does not invent a prefix for an API message with no command environment', async () => {
   const api = localizedIngress({ locale: 'en', text: '/models' });
   expect(await api.run()).toBe(false);
-  expect(api.listModels).not.toHaveBeenCalled();
+  expect(api.inference.generations).toEqual([]);
 });
 
 it('passes captured ingress locale into a real pending human approval', async () => {
@@ -556,7 +568,7 @@ describe('personal Session IM ingress', () => {
   const endpoint = { id: 'root\0zhin.adapter\0icqq', adapter: 'icqq' };
   const conversation: ConversationRef = { endpoint, kind: 'group', id: 'shared-room' };
 
-  function fixture(options: { merge?: boolean; quietMs?: number; masters?: string[]; log?: DecisionEventLog; hold?: boolean; live?: boolean; ambient?: boolean; events?: MemoryConversationEventStore } = {}) {
+  function fixture(options: { merge?: boolean; quietMs?: number; masters?: string[]; log?: DecisionEventLog; hold?: boolean; live?: boolean; ambient?: boolean; events?: MemoryConversationEventStore; execute?: (request: TurnRequest) => Promise<void> } = {}) {
     const requests: TurnRequest[] = [];
     const complete: Array<() => void> = [];
     let released = false;
@@ -564,6 +576,7 @@ describe('personal Session IM ingress', () => {
       root: rootPluginId(), resources: new Map(), tree: new Map(), projections: new Map(),
       capabilities: new Map(options.live ? [[endpoint.id, { definition: { capabilities: ['inbound', 'liveDanmaku'] } }]] : []),
     } as unknown as RuntimeSnapshot;
+    const snapshots = new SnapshotStore(snapshot);
     const archiveSession = vi.fn(async () => true);
     const appendSessionEvents = vi.fn(async (_sessionKey: string, _events: unknown, _options: unknown) => true);
     const readConversationContext = vi.fn(async (_conversation: ConversationRef, _consumer: string) => ({
@@ -572,24 +585,22 @@ describe('personal Session IM ingress', () => {
     const commitConversationContext = vi.fn(async (_conversation: ConversationRef, _consumer: string, _cursor: number) => undefined);
     const executeLeased = vi.fn(async (_lease: unknown, _requester: unknown, request: TurnRequest) => {
       requests.push(request);
+      await options.execute?.(request);
       if (options.hold && !released) await new Promise<void>(resolve => complete.push(resolve));
       return { status: 'completed', output: [] };
     });
     const route = new AgentTurnIngressRoute({
+      withInferenceScope: ingressInferenceFixture({ respond: () => assistantTextReply('{"engage":true,"confidence":0.9,"reason":"unanswered"}') }).withInferenceScope,
       projectRoot: '/host-a', runtime: { executeLeased } as never,
       im: { createInteraction: () => ({ ask: vi.fn() }), readConversationContext, commitConversationContext, conversationEventReader: options.events } as never,
       ingress: { read: async () => ({ agents: [], tools: [], skills: [] }) } as never,
       agent: {
         service: {
-          getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+          getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
           getTriggerConfig: () => ({ enabled: true,
             ...(options.masters ? { masters: options.masters } : {}),
             ...(options.events ? { sceneEvents: { conversations: ['*'] } } : {}),
             ...(options.ambient ? { ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } } : {}),
-          }),
-          getLlmRuntime: () => ({
-            model: () => ({}),
-            completeSimple: async () => ({ role: 'assistant', content: [{ type: 'text', text: '{"engage":true,"confidence":0.9,"reason":"unanswered"}' }] }),
           }),
           getAgentConfig: () => ({ inboundQueue: { merge: { enabled: options.merge ?? false, quietMs: options.quietMs ?? 0, maxWaitMs: (options.quietMs ?? 0) * 4 },
             ...(options.live ? { live: { windowMs: 50, minIntervalMs: 0 } } : {}) } }),
@@ -597,16 +608,18 @@ describe('personal Session IM ingress', () => {
         agent: { archiveSession, appendSessionEvents, ...(options.log ? { getDecisionEvents: () => options.log } : {}) },
       } as never,
     });
-    const run = (subjectId: string, text = '#hello', target = conversation, account = 'account-a', extra: Partial<Message> = {}) => {
+    const run = async (subjectId: string, text = '#hello', target = conversation, account = 'account-a', extra: Partial<Message> = {}) => {
       const message = {
         ...extra,
         conversation: target, content: text, endpointId: account, sender: { id: subjectId },
         message: { conversation: target, id: `message-${subjectId}` },
         $reply: vi.fn(async () => ({ status: 'sent' })),
       } as unknown as Message;
-      return route.route(message, { value: snapshot, active: true } as never, rootPluginId(), 5);
+      const lease = snapshots.acquire();
+      try { return await route.route(message, lease, rootPluginId(), 5); }
+      finally { lease.release(); }
     };
-    return { route, run, requests, release: () => { released = true; complete.splice(0).forEach(resolve => resolve()); }, executeLeased, archiveSession, appendSessionEvents, readConversationContext, commitConversationContext };
+    return { route, run, requests, async close() { route.dispose(); await snapshots.close(); }, release: () => { released = true; complete.splice(0).forEach(resolve => resolve()); }, executeLeased, archiveSession, appendSessionEvents, readConversationContext, commitConversationContext };
   }
 
   /** An `@bot` plain-text group message: mergeable under ADR 0038 §1. */
@@ -637,7 +650,7 @@ describe('personal Session IM ingress', () => {
       expect(rows.filter(row => row.reasonCode === 'merge_window_flushed')).toEqual([
         { reasonCode: 'merge_window_flushed', userId: 'alice', payload: expect.objectContaining({ source: 'message', senders: ['alice', 'bob'], waitedMs: 100 }) },
       ]);
-    } finally { f.route.dispose(); vi.useRealTimers(); }
+    } finally { await f.close(); vi.useRealTimers(); }
   });
 
   it('keeps each sender in their personal Session when group merging is disabled', async () => {
@@ -655,7 +668,7 @@ describe('personal Session IM ingress', () => {
     } finally {
       f.release();
       await Promise.all([alice, bob]);
-      f.route.dispose();
+      await f.close();
     }
   });
 
@@ -677,7 +690,7 @@ describe('personal Session IM ingress', () => {
       expect(merged.input.mergedSenders?.map(sender => sender.subjectId)).toEqual(['alice', 'bob']);
       await vi.waitFor(() => expect(mergeRows(log).map(row => row.reasonCode)).toContain('merge_window_flushed'));
       expect(mergeRows(log).filter(row => row.userId === 'boss')).toEqual([]);
-    } finally { f.route.dispose(); vi.useRealTimers(); }
+    } finally { await f.close(); vi.useRealTimers(); }
   });
 
   it('keeps non-mergeable @ messages (media, quote) in personal Sessions with merging enabled', async () => {
@@ -696,7 +709,7 @@ describe('personal Session IM ingress', () => {
     } finally {
       f.release();
       await Promise.all([image, quote]);
-      f.route.dispose();
+      await f.close();
     }
   });
 
@@ -714,7 +727,7 @@ describe('personal Session IM ingress', () => {
       expect(merged.signal.aborted).toBe(true);
       f.release();
       await Promise.all([alice, bob]);
-    } finally { f.release(); f.route.dispose(); vi.useRealTimers(); }
+    } finally { f.release(); await f.close(); vi.useRealTimers(); }
   });
 
   it('keeps prefix-triggered turns of two people in their personal Sessions even with group merging enabled', async () => {
@@ -731,7 +744,7 @@ describe('personal Session IM ingress', () => {
     } finally {
       f.release();
       await Promise.all([alice, bob]);
-      f.route.dispose();
+      await f.close();
     }
   });
 
@@ -750,7 +763,7 @@ describe('personal Session IM ingress', () => {
       expect(request.input.liveDanmaku?.senders.map(sender => sender.subjectId).sort()).toEqual(['alice', 'bob']);
       expect(request.policy.permissions).toEqual(['user']);
       expect(request.policy.filesystem?.access).toBe('read-only');
-    } finally { f.route.dispose(); vi.useRealTimers(); }
+    } finally { await f.close(); vi.useRealTimers(); }
   });
 
   it('uses a shared system Session for ambient participation without a personal owner', async () => {
@@ -765,11 +778,17 @@ describe('personal Session IM ingress', () => {
       // The judge reads public events as its own non-committing consumer.
       expect(f.readConversationContext.mock.calls.map(call => call[1])).toEqual(['zhin.ambient-engagement', 'zhin.ambient-engagement']);
       expect(f.commitConversationContext).not.toHaveBeenCalled();
-    } finally { f.route.dispose(); }
+    } finally { await f.close(); }
   });
 
   it('keeps public conversation consumers independent for each personal Session', async () => {
-    const f = fixture();
+    const read = new Set<string>();
+    const f = fixture({ execute: async request => {
+      if (read.has(request.session.key)) return;
+      read.add(request.session.key);
+      await request.ports.conversationContext!.readPending(request.signal);
+      if (read.size === 1) await request.ports.conversationContext!.commit(5);
+    } });
     try {
       await f.run('alice');
       await f.run('bob');
@@ -777,14 +796,12 @@ describe('personal Session IM ingress', () => {
       const [alice, bob, again] = f.requests;
       expect(alice.session.key).toBe(again.session.key);
       expect(alice.session.key).not.toBe(bob.session.key);
-      await alice.ports.conversationContext!.readPending(alice.signal);
-      await bob.ports.conversationContext!.readPending(bob.signal);
-      await alice.ports.conversationContext!.commit(5);
       expect(f.readConversationContext.mock.calls.map(call => call[1])).toEqual([
         `agent-session:${alice.session.key}`, `agent-session:${bob.session.key}`,
       ]);
       expect(f.commitConversationContext).toHaveBeenCalledExactlyOnceWith(conversation, `agent-session:${alice.session.key}`, 5);
-    } finally { f.route.dispose(); }
+      await expect(alice.ports.conversationContext!.readPending(alice.signal)).rejects.toThrow('generation lease expired');
+    } finally { await f.close(); }
   });
 
   it('passes shared card/title changes to each personal turn even though they are stored only in the scene-task history', async () => {
@@ -811,7 +828,7 @@ describe('personal Session IM ingress', () => {
       expect(f.appendSessionEvents).toHaveBeenCalledTimes(2);
       expect(new Set(f.appendSessionEvents.mock.calls.map(([key]) => key)).size).toBe(1);
       expect(f.requests.every(request => f.appendSessionEvents.mock.calls.every(([key]) => key !== request.session.key))).toBe(true);
-    } finally { f.route.dispose(); }
+    } finally { await f.close(); }
   });
 
   it('isolates actual account instances, parents and threads through the real request path', async () => {
@@ -822,7 +839,7 @@ describe('personal Session IM ingress', () => {
       await f.run('alice', '#parent', { ...conversation, parent: { kind: 'group', id: 'guild' } });
       await f.run('alice', '#thread', { ...conversation, threadId: 'thread' });
       expect(new Set(f.requests.map(request => request.session.key)).size).toBe(4);
-    } finally { f.route.dispose(); }
+    } finally { await f.close(); }
   });
 
   it('clears only the caller Session and cancels only that caller active turn', async () => {
@@ -843,7 +860,7 @@ describe('personal Session IM ingress', () => {
     } finally {
       f.release();
       await Promise.all([alice, bob]);
-      f.route.dispose();
+      await f.close();
     }
   });
 });

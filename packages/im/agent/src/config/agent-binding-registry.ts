@@ -9,7 +9,7 @@ export class AgentBindingRegistry {
     agents: Record<string, AgentBindingConfig>,
     fileMetas: AgentMeta[] = [],
   ) {
-    this.agents = agents;
+    this.agents = { ...Object.fromEntries(fileMetas.map(meta => [meta.name, {}])), ...agents };
     this.fileNames = new Set(fileMetas.map(m => m.name));
   }
 

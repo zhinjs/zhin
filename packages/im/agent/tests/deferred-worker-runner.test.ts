@@ -1,5 +1,7 @@
+import type { FixtureTextProvider } from '../../ai/tests/helpers/text-provider-fixture.js';
+import { executionBundle } from './helpers/execution-bundle.js';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { type AgentTool, type AIProvider } from '@zhin.js/ai';
+import {type AgentTool} from '@zhin.js/ai';
 
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from './helpers/mock-llm-api.js';
 import { DeferredWorkerRunner } from '../src/deferred-worker-runner.js';
@@ -20,7 +22,7 @@ describe('DeferredWorkerRunner', () => {
       models: ['test-model'],
       responder: () => assistantTextReply('Star count is 64'),
     });
-    const provider = llm.provider as unknown as AIProvider;
+    const provider = llm.provider as unknown as FixtureTextProvider;
 
     const deferredCatalog = [makeTool('github_star', 'star repo')];
     const allByName = new Map<string, AgentTool>([
@@ -38,8 +40,7 @@ describe('DeferredWorkerRunner', () => {
       allToolsByName: allByName,
       origin: { platform: 'qq', senderId: 'u1' },
       maxToolResults: 5,
-      provider,
-      llmRuntime: llm.runtime,
+      execution: executionBundle({ model: llm.runtime.model(llm.provider.name, llm.provider.models[0]), completion: llm.runtime }),
       maxIterations: 3,
     });
 
@@ -51,7 +52,7 @@ describe('DeferredWorkerRunner', () => {
 
   it('returns error when no tools match query', async () => {
     const llm = wireMockLlmApi({ models: ['test-model'] });
-    const provider = llm.provider as unknown as AIProvider;
+    const provider = llm.provider as unknown as FixtureTextProvider;
 
     const runner = new DeferredWorkerRunner();
     const result = await runner.runSync({
@@ -62,8 +63,7 @@ describe('DeferredWorkerRunner', () => {
       allToolsByName: new Map(),
       origin: {},
       maxToolResults: 5,
-      provider,
-      llmRuntime: llm.runtime,
+      execution: executionBundle({ model: llm.runtime.model(llm.provider.name, llm.provider.models[0]), completion: llm.runtime }),
     });
 
     expect(result.status).toBe('error');
@@ -81,7 +81,7 @@ describe('DeferredWorkerRunner', () => {
         'Final finding: source site blocks scraping, switch to web_search results.',
       ].join('\n')),
     });
-    const provider = llm.provider as unknown as AIProvider;
+    const provider = llm.provider as unknown as FixtureTextProvider;
 
     const deferredCatalog = [makeTool('web_search', 'search web')];
     const allByName = new Map<string, AgentTool>([
@@ -99,8 +99,7 @@ describe('DeferredWorkerRunner', () => {
       allToolsByName: allByName,
       origin: { platform: 'qq', senderId: 'u1' },
       maxToolResults: 5,
-      provider,
-      llmRuntime: llm.runtime,
+      execution: executionBundle({ model: llm.runtime.model(llm.provider.name, llm.provider.models[0]), completion: llm.runtime }),
       maxIterations: 3,
     });
 
@@ -121,7 +120,7 @@ describe('DeferredWorkerRunner', () => {
           : assistantTextReply('<tool_call>read_file</tool_call>');
       },
     });
-    const provider = llm.provider as unknown as AIProvider;
+    const provider = llm.provider as unknown as FixtureTextProvider;
 
     const bash = makeTool('bash');
     const readFile = makeTool('read_file');
@@ -138,8 +137,7 @@ describe('DeferredWorkerRunner', () => {
       allToolsByName: allByName,
       origin: {},
       maxToolResults: 5,
-      provider,
-      llmRuntime: llm.runtime,
+      execution: executionBundle({ model: llm.runtime.model(llm.provider.name, llm.provider.models[0]), completion: llm.runtime }),
       maxIterations: 5,
       // bash needs an explicit frozen shell policy snapshot.
       turnPolicy: {
@@ -158,7 +156,7 @@ describe('DeferredWorkerRunner', () => {
       models: ['test-model'],
       responder: () => assistantTextReply('Deferred done'),
     });
-    const provider = llm.provider as unknown as AIProvider;
+    const provider = llm.provider as unknown as FixtureTextProvider;
 
     const deferredCatalog = [makeTool('github_star', 'star repo')];
     const allByName = new Map<string, AgentTool>([
@@ -176,8 +174,7 @@ describe('DeferredWorkerRunner', () => {
       allToolsByName: allByName,
       origin: { platform: 'qq', senderId: 'u1' },
       maxToolResults: 5,
-      provider,
-      llmRuntime: llm.runtime,
+      execution: executionBundle({ model: llm.runtime.model(llm.provider.name, llm.provider.models[0]), completion: llm.runtime }),
       maxIterations: 3,
       onEvent,
     });
@@ -209,7 +206,7 @@ describe('DeferredWorkerRunner', () => {
 
     it('offers no bash when no policy snapshot is given', async () => {
       const llm = wireMockLlmApi({ models: ['test-model'], responder: () => assistantTextReply('ok') });
-      await new DeferredWorkerRunner().runSync({ ...base(), provider: llm.provider as unknown as AIProvider, llmRuntime: llm.runtime } as never);
+      await new DeferredWorkerRunner().runSync({ ...base(), execution: executionBundle({ model: llm.runtime.model(llm.provider.name, llm.provider.models[0]), completion: llm.runtime }) } as never);
       expect(offeredTools(llm)).not.toContain('bash');
       expect(offeredTools(llm)).toContain('github_star');
     });
@@ -220,7 +217,7 @@ describe('DeferredWorkerRunner', () => {
         filesystem: Object.freeze({ workspaceRoot: '/ws', workingDirectory: '/ws', access: 'workspace-write' as const }),
       });
       const llm = wireMockLlmApi({ models: ['test-model'], responder: () => assistantTextReply('ok') });
-      await new DeferredWorkerRunner().runSync({ ...base(), provider: llm.provider as unknown as AIProvider, llmRuntime: llm.runtime, turnPolicy: snapshot } as never);
+      await new DeferredWorkerRunner().runSync({ ...base(), execution: executionBundle({ model: llm.runtime.model(llm.provider.name, llm.provider.models[0]), completion: llm.runtime }), turnPolicy: snapshot } as never);
       expect(offeredTools(llm)).toContain('bash');
     });
   });

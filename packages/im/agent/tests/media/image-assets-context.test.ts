@@ -1,4 +1,4 @@
-import type { AIProvider } from '@zhin.js/ai';
+import type { InferenceClient } from '@zhin.js/ai/provider';
 import type { ToolExecutionContext } from '@zhin.js/tool';
 import { runEvalCase } from '../../evals/framework/driver.js';
 import { createNativeImageToolFeature } from '../../src/plugin-runtime/native-image-tool.js';
@@ -13,17 +13,17 @@ function fixture(status = 200) {
   const assets = new R2ImageAssetPublisher({ accountId: 'a'.repeat(32), bucket: 'fixture', prefix: 'images/',
     accessKeyId: 'test', secretAccessKey: 'test', publicBaseUrl: 'https://images.example.test' }, upload);
   const generateImage = vi.fn(async () => ({ base64, mimeType: 'image/gif', model: 'fixture' }));
-  const resolveProvider = () => ({ generateImage }) as unknown as AIProvider;
-  return { assets, upload, generateImage, resolveProvider };
+  const resolveInference = () => ({ generateImage }) as unknown as InferenceClient;
+  return { assets, upload, generateImage, resolveInference };
 }
 
 it('keeps generated image bytes out of the tool journal, next completion and later-turn history', async () => {
-  const { assets, generateImage, upload, resolveProvider } = fixture();
-  const native = createNativeImageToolFeature(resolveProvider, undefined, assets);
+  const { assets, generateImage, upload, resolveInference } = fixture();
+  const native = createNativeImageToolFeature({ resolveInference, imageAssets: assets });
   const result = await runEvalCase({
     id: 'r2-image-tool-context', description: 'Real native image tool through the full engine', source: 'Image base64 context regression',
     inbound: [{ text: '画一张图片' }, { text: '刚才图片的地址' }],
-    tools: [{ name: 'generate_image', result: () => native.definition.execute({ provider_alias: 'fixture', prompt: 'cat' }, context) }],
+    tools: [{ name: 'generate_image', result: () => native.definition.execute({ prompt: 'cat' }, context) }],
     script: [
       { toolCalls: [{ name: 'generate_image' }] },
       { text: '图片已生成。' },
@@ -61,16 +61,16 @@ it('normalizes model-authored inline stickers before the terminal and later comp
 });
 
 it('does not fall back to bytes or regenerate after an R2 failure', async () => {
-  const { assets, upload, generateImage, resolveProvider } = fixture(503);
-  const native = createNativeImageToolFeature(resolveProvider, undefined, assets);
-  await expect(native.definition.execute({ provider_alias: 'fixture', prompt: 'cat' }, context)).rejects.toThrow('Do not regenerate automatically');
+  const { assets, upload, generateImage, resolveInference } = fixture(503);
+  const native = createNativeImageToolFeature({ resolveInference, imageAssets: assets });
+  await expect(native.definition.execute({ prompt: 'cat' }, context)).rejects.toThrow('Do not regenerate automatically');
   expect(upload).toHaveBeenCalledTimes(1);
   expect(generateImage).toHaveBeenCalledTimes(1);
 });
 
 it('keeps upload unavailable without R2, and preserves publish approval in the shared suite', () => {
-  const { assets, resolveProvider } = fixture();
-  expect(createNativeAgentToolSuite({ resolveProvider }).some(tool => tool.name === 'upload_image')).toBe(false);
-  const tool = createNativeAgentToolSuite({ resolveProvider, imageAssets: assets }).find(tool => tool.name === 'upload_image');
+  const { assets, resolveInference } = fixture();
+  expect(createNativeAgentToolSuite({ resolveInference }).some(tool => tool.name === 'upload_image')).toBe(false);
+  const tool = createNativeAgentToolSuite({ resolveInference, imageAssets: assets }).find(tool => tool.name === 'upload_image');
   expect(tool?.definition).toMatchObject({ risk: 'dangerous', riskCategory: 'publish', requiresApproval: 'human' });
 });

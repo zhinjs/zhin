@@ -1,9 +1,10 @@
+import type { FixtureTextProvider } from '../../../ai/tests/helpers/text-provider-fixture.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ToolExecutionContext } from '@zhin.js/tool'
-import type { AIProvider } from '@zhin.js/ai'
+
 import {
   createNativeKnowledgeToolFeature,
   MarkdownKnowledgeIndex,
@@ -90,10 +91,10 @@ afterEach(async () => {
 
 describe('native knowledge_search Tool Feature', () => {
   it('is published by the canonical native suite only when an index is configured', () => {
-    const resolver = () => ({}) as AIProvider
-    const withoutKnowledge = createNativeAgentToolSuite({ resolveProvider: resolver })
+    const resolver = (): never => { throw new Error('No image operation in this test') }
+    const withoutKnowledge = createNativeAgentToolSuite({ resolveInference: resolver })
     const index = new MarkdownKnowledgeIndex(join(tempDir, 'knowledge'))
-    const withKnowledge = createNativeAgentToolSuite({ resolveProvider: resolver, knowledgeIndex: index })
+    const withKnowledge = createNativeAgentToolSuite({ resolveInference: resolver, knowledgeIndex: index })
 
     expect(withoutKnowledge.map((tool) => tool.name)).not.toContain('knowledge_search')
     expect(withKnowledge.map((tool) => tool.name).filter((name) => name === 'knowledge_search'))

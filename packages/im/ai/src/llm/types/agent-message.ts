@@ -113,7 +113,19 @@ export interface UserMessage extends AgentMessageBase {
   aliasParts?: readonly (string | null)[];
 }
 
+/** Private provenance for provider-opaque history; never an instruction or public trace field. */
+export interface ProviderStateScope {
+  readonly serviceId: string;
+  readonly accountId: string;
+  readonly accountIncarnation: string;
+  readonly model: string;
+  readonly protocol: string;
+  readonly sessionKey?: string;
+  readonly epoch?: string;
+}
+
 export interface AssistantMessage extends AgentMessageBase {
+  providerStateScope?: ProviderStateScope;
   role: 'assistant';
   /** @deprecated Legacy rows only; see {@link UserMessage.name}. */
   name?: string;

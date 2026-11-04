@@ -39,9 +39,9 @@ export function isLocalEndpoint(baseUrl: string | undefined): boolean {
  * (rendered as a `user_id:system` user message).
  */
 export function resolveMidConversationSystem(
-  model: Pick<Model, 'sdk' | 'id' | 'baseUrl' | 'compat'>,
+  model: Pick<Model, 'sdk' | 'id' | 'baseUrl' | 'compat' | 'midConversationSystem'>,
 ): MidConversationSystem {
-  const explicit = model.compat?.midConversationSystem;
+  const explicit = model.midConversationSystem ?? model.compat?.midConversationSystem;
   if (isMidConversationSystem(explicit)) return explicit;
   switch (model.sdk) {
     case 'openai':

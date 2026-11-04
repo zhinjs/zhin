@@ -243,7 +243,7 @@ it('construction context contains only owner-lifetime resources while operations
   const invalid = context as unknown as { project(feature: unknown): unknown };
   expect(() => invalid.project(feature)).toThrow(TypeError);
   expect(() => invalid.project(feature)).toThrow(/project/);
-  expect(createCapabilityContext(snapshot, owner).project(feature)).toBe('operation');
+  expect(createCapabilityContext({ snapshot: snapshot, ownerId: owner }).project(feature)).toBe('operation');
 });
 
 it('has() reports optional resources without throwing, matching use() (#877)', () => {
@@ -256,7 +256,7 @@ it('has() reports optional resources without throwing, matching use() (#877)', (
     resources: new Map([[owner, new Map([[present.id, 'value']])]]),
     capabilities: new Map(), projections: new Map(),
   });
-  for (const context of [createConstructionContext(snapshot, owner), createCapabilityContext(snapshot, owner)]) {
+  for (const context of [createConstructionContext(snapshot, owner), createCapabilityContext({ snapshot: snapshot, ownerId: owner })]) {
     expect(context.has?.(present)).toBe(true);
     expect(context.has?.(absent)).toBe(false);
     expect(() => context.use(absent)).toThrow(/Missing resource fixture\.absent/);

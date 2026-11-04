@@ -86,6 +86,17 @@ export function resolvePerceptionConfig(
       }
     }
   }
+  return Object.freeze({ provider, model,
+    ...(fallbacks.length ? { fallbacks: Object.freeze(fallbacks) } : {}),
+    ...resolvePerceptionSettings(raw),
+  });
+}
+
+/** Startup media handling only; native model selection belongs to runtime purposes. */
+export type PerceptionSettings = Omit<ResolvedPerceptionConfig, 'provider' | 'model' | 'fallbacks'>;
+export type PerceptionSettingsInput = Pick<PerceptionConfigInput, 'kinds' | 'maxChars' | 'timeoutMs' | 'maxItemsPerTurn'>;
+export function resolvePerceptionSettings(raw: PerceptionSettingsInput): PerceptionSettings {
+  const base = 'ai.multimodal.perception';
   let kinds = DEFAULT_PERCEPTION_SETTINGS.kinds;
   if (raw.kinds !== undefined) {
     if (!Array.isArray(raw.kinds) || raw.kinds.length === 0) {
@@ -98,9 +109,6 @@ export function resolvePerceptionConfig(
     kinds = Object.freeze([...new Set(raw.kinds as PerceptionMediaKind[])]);
   }
   return Object.freeze({
-    provider,
-    model,
-    ...(fallbacks.length ? { fallbacks: Object.freeze(fallbacks) } : {}),
     kinds,
     maxChars: positiveInteger(raw.maxChars, `${base}.maxChars`, DEFAULT_PERCEPTION_SETTINGS.maxChars),
     timeoutMs: positiveInteger(raw.timeoutMs, `${base}.timeoutMs`, DEFAULT_PERCEPTION_SETTINGS.timeoutMs),

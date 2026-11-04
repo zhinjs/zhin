@@ -1,5 +1,22 @@
 # @zhin.js/tool
 
+## 1.1.15
+
+### Patch Changes
+
+- 299863a: ADR 0044 C3: runtime consumers read capabilities instead of platform names. Scene facts (group info, member profile) are queried where the profile declares `scene.groupInfo` / `scene.memberProfile`; activity feedback (reaction, typing, status message, refresh interval, quote-only delivery) follows `feedback`, `actions.reaction` and `delivery.proactive` and the per-platform table is gone; large inline media is spooled only where `delivery.spool` is declared; the sandbox ingress and its console shell follow a new additive `runtime.sandbox` capability. `defineAgentTool` and Skill frontmatter accept `requiresCapabilities` (for example `actions.mute`), evaluated against the per-turn `TurnCapabilities`, so moderation tools disappear when the Bot is not an administrator and return when it is; the icqq/qq keyword boost in tool selection is removed and the icqq group-admin tools are tagged. The `icqq` command-line special case in the exec policy is now a generic `registerSensitiveExecCommand` rule registered by the icqq plugin. `EndpointCapabilities` gains a serializable per-kind `kinds` view. Adapters without a profile keep their previous behaviour (their derived profile also reads the management ports they implement).
+- 0315ba0: 用统一的 Service／Account／Profile 运行时替换旧 Provider／Catalog 选型入口；支持 Host 订阅账号、固定模型、结构化决策多用途与动态持久选择。命令、工具及委派任务绑定真实 operation／generation，权限、配额与取消不通过全局最新对象传递。
+
+  新增显式导入与恢复 journal、只读预览及旧 Session 完整身份绑定；向导单独生成 ai.plan.yml。旧插件接口需要与本次配套 patch 一起迁移，最低版本／旧支持上限与恢复流程见 docs/ai/provider-upgrade.md。本声明不表示版本已经发布，不执行版本提升、登录、真实模型调用、迁移用户数据或部署。
+
+- 00be764: `ToolAvailabilityContext` now carries the optional turn `principal` (`subjectId` + `roles`), so `isAvailable` can hide a tool from requesters who may never call it (#1051 F4: `change_draft` is shown only to the bot owner and IM approvers).
+- Updated dependencies [299863a]
+- Updated dependencies [4fe49b5]
+- Updated dependencies [0315ba0]
+  - @zhin.js/im-contract@1.1.11
+  - @zhin.js/plugin-runtime@1.1.20
+  - @zhin.js/feature-kit@1.1.12
+
 ## 1.1.14
 
 ### Patch Changes

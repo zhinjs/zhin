@@ -1,3 +1,5 @@
+import { ingressInferenceFixture } from './inference-fixture.js';
+import { assistantTextReply } from '../../../../../../packages/im/agent/tests/helpers/mock-llm-api.js';
 import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec, type Endpoint, type EndpointProfile } from '@zhin.js/adapter';
 import { ImRuntime, ingressRouteToken } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore } from '@zhin.js/im-contract';
@@ -15,14 +17,14 @@ it('identifies an unaddressed group participant from the original native account
   class NativeAdapter extends Adapter<NativeEndpoint> { protected createEndpoint() { return new NativeEndpoint(); } }
   const root = rootPluginId(), im = new ImRuntime({ conversationEvents: new MemoryConversationEventStore() });
   const adapter = new NativeAdapter();
-  const completeSimple = vi.fn(async (_model: unknown, _context: unknown) => ({ role: 'assistant', content: [{ type: 'text', text: '{"engage":false,"confidence":0.9,"reason":"not addressed"}' }] }));
+  const inference = ingressInferenceFixture({ respond: () => assistantTextReply('{"engage":false,"confidence":0.9,"reason":"not addressed"}') });
   const executeLeased = vi.fn();
-  const route = new AgentTurnIngressRoute({ projectRoot: '/host', im, runtime: { executeLeased } as never,
+  const route = new AgentTurnIngressRoute({ withInferenceScope: inference.withInferenceScope, projectRoot: '/host', im, runtime: { executeLeased } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
-      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', nickname: 'Configured AI nickname', providerAlias: 'fixture', model: 'fixture' }) }),
+      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', nickname: 'Configured AI nickname', mcpServers: [] }) }),
       getTriggerConfig: () => ({ enabled: true, ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } }),
-      getAgentConfig: () => ({}), getLlmRuntime: () => ({ model: () => ({}), completeSimple }),
+      getAgentConfig: () => ({}),
     }, agent: {} } as never,
   });
   const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'native-profile', source: '/fixture/adapter.ts',
@@ -41,8 +43,10 @@ it('identifies an unaddressed group participant from the original native account
     await endpoint[endpointSpec].events.message({ conversation: { endpoint: { id: 'normalizer', adapter: 'normalizer' }, kind: 'group', id: 'group' },
       content: 'An unanswered question', endpointId: 'account', sender: { id: 'member' }, event: {},
       message: { conversation: { endpoint: { id: 'normalizer', adapter: 'normalizer' }, kind: 'group', id: 'group' }, id: 'native-message' } });
-    expect(completeSimple).toHaveBeenCalledTimes(1);
-    const context = completeSimple.mock.calls[0]?.[1];
+    expect(inference.requests).toHaveLength(1);
+    expect(inference.closed).toBe(1);
+    expect(inference.generations).toEqual([store.current]);
+    const context = inference.requests[0]?.context;
     expect(JSON.stringify(context)).toContain('Native account name');
     expect(JSON.stringify(context)).not.toContain('Configured AI nickname');
     expect(read).not.toHaveBeenCalled();

@@ -1,4 +1,3 @@
-import { wizardText } from '@zhin.js/scaffold-wizard';
 import { Command } from 'commander';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
@@ -12,6 +11,7 @@ import { globalZhinHome } from '../utils/zhin-home.js';
 import { logger } from '../utils/logger.js';
 import { findConfigFile, prepareConfigSave, readConfig } from '../utils/config-file.js';
 import {
+  wizardText,
   configureDatabaseOptions,
   configureAdapters,
   configureAI,
@@ -20,7 +20,7 @@ import {
   saveTypeSafeSetupDependencies,
   getAdapterSetupNotes,
   applyWizardOptionsToConfig,
-  appendWizardEnvVars,
+  appendWizardEnvVars, readAIPlanProposal, saveAIPlanProposal, materializeAIPlan, mergeAIPlanProposals,
   collectWizardDependencies,
   collectWizardFeatures,
   mergeDependenciesIntoPackageJson,
@@ -148,16 +148,19 @@ export const setupCommand = new Command('setup')
       finalizeWizardOptions(wizardOptions);
       applyWizardOptionsToConfig(config, wizardOptions, locale);
 
+      let decisionPlan: Record<string, unknown> | undefined;
       let decisions: Awaited<ReturnType<typeof configureTypeSafeDecisions>> | undefined;
       if (options.decisions) {
-        decisions = await configureTypeSafeDecisions(config, locale);
-        applyTypeSafeDecisionsToConfig(config, decisions);
+        const existingPlan = wizardOptions.ai?.enabled ? mergeAIPlanProposals(await readAIPlanProposal(cwd), materializeAIPlan(wizardOptions.ai)) : await readAIPlanProposal(cwd);
+        decisions = await configureTypeSafeDecisions(config, locale, existingPlan);
+        decisionPlan = applyTypeSafeDecisionsToConfig({ config, setup: decisions, plan: existingPlan });
       }
 
       // Candidate validation and the original source revision precede env/dependency writes.
       const configTransaction = await prepareConfigSave(configPath, config);
       await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai, wizardOptions.database, locale);
       if (decisions) {
+        await saveAIPlanProposal(cwd, decisionPlan!);
         await saveTypeSafeSetupDependencies(cwd, decisions);
         console.log(chalk.gray(options.global
           ? wizardText(locale, "  ✓ 已配置 TypeSafe 决策服务；稍后自动安装全局实例依赖。")

@@ -63,7 +63,7 @@ describe('Agent Feature slot HMR', () => {
 
     const snapshot = await runtime.start();
     await expect(projection(snapshot, toolFeatureId, ToolIndex)
-      .execute(rootPluginId(), 'host-clock', {}, toolInvocation())).resolves.toBe('generation:1');
+      .execute({ requester: rootPluginId(), name: 'host-clock', input: {}, invocation: toolInvocation(), snapshot })).resolves.toBe('generation:1');
 
     await runtime.stop();
   });
@@ -197,7 +197,7 @@ function projection<T>(
 
 function executeTool(snapshot: RuntimeSnapshot): Promise<unknown> {
   return projection(snapshot, toolFeatureId, ToolIndex)
-    .execute(rootPluginId(), 'lookup', { value: 'value' }, toolInvocation());
+    .execute({ requester: rootPluginId(), name: 'lookup', input: { value: 'value' }, invocation: toolInvocation(), snapshot });
 }
 
 function toolInvocation() {

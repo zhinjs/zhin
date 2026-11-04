@@ -9,18 +9,15 @@ import { randomUUID } from 'node:crypto';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 import {
-  type AIProvider,
   type AgentTool,
   type AgentMessage,
   type MediaContentBlock,
   type Usage,
   type AgentEvent,
-  type ModelRegistry,
   type AgentSessionRepository,
   type ContextRepository,
   createMemoryContextRepository,
   RateLimiter,
-  type LlmApiRuntime,
 } from '@zhin.js/ai';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
@@ -97,7 +94,7 @@ import {
   type TurnContextRunOptions,
 } from '../turn/turn-context-bridge.js';
 import { emitSessionCompactEvent, emitSessionNewEvent, type SessionCompactInfo } from '../event/session-events.js';
-import { applyZhinAgentConfigure, wireZhinAgentLlmApiLayer } from '../init/configure-zhin-agent.js';
+import { applyZhinAgentConfigure } from '../init/configure-zhin-agent.js';
 import { disposeZhinAgentResources } from '../init/dispose-zhin-agent.js';
 import type { PhaseTraceConfig } from '../internal/phase-trace.js';
 import type { ApprovalPort } from '../session/approval-port.js';
@@ -153,14 +150,12 @@ export interface AgentTurnRequest {
 }
 
 export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAgentDiagnostics, IAgentConfigurator {
-  private provider: AIProvider;
-  providerResolver: ((alias: string) => AIProvider) | null = null;
   private configuredActiveBinding: ResolvedAgentBinding | null = null;
   private configuredConfig!: Required<ZhinAgentConfig>;
 
   get config(): Required<ZhinAgentConfig> {
-    const model = getAgentTurnConfiguration()?.models?.chat.invocation.model;
-    return model ? { ...this.configuredConfig, chatModel: model.model } : this.configuredConfig;
+    const model = getAgentTurnConfiguration()?.models?.chat.model;
+    return model ? { ...this.configuredConfig, chatModel: model.id } : this.configuredConfig;
   }
 
   set config(value: Required<ZhinAgentConfig>) { this.configuredConfig = value; }
@@ -189,14 +184,13 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   private configuredGlobalContext: string = '';
   alwaysSkillsBaseline: string = '';
   skillsSummaryXML: string = '';
-  modelRegistry: ModelRegistry | null = null;
-  private configuredLlmRuntime!: LlmApiRuntime;
-
-  get llmRuntime(): LlmApiRuntime {
-    return getAgentTurnConfiguration()?.models?.chat.llmRuntime ?? this.configuredLlmRuntime;
+  /** Requires the real operation model; construction remains usable before AI is configured. */
+  get completion(): import('@zhin.js/ai').LlmCompletionPort { return this.getTurnExecution().completion; }
+  getTurnExecution(): import('../model-runtime/types.js').ModelExecutionBundle {
+    const execution = getAgentTurnConfiguration()?.models?.chat;
+    if (!execution) throw new Error('AI inference operation is not configured');
+    return execution;
   }
-
-  set llmRuntime(value: LlmApiRuntime) { this.configuredLlmRuntime = value; }
   audioTranscriber?: AudioTranscriptionPort;
   private configuredMediaPerception?: MediaPerceptionPort;
 
@@ -277,13 +271,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return { promptTraceEnabled: isPromptTraceEnabled(this.config), promptTraceVerbose: isPromptTraceVerbose(this.config) };
   }
 
-  constructor(
-    provider: AIProvider,
-    config?: ZhinAgentConfig,
-    events = new AgentEventBus(),
-    llmRuntime?: LlmApiRuntime,
-  ) {
-    this.provider = provider;
+  constructor(options: Readonly<{ config?: ZhinAgentConfig; events?: AgentEventBus }> = {}) {
+    const { config, events = new AgentEventBus() } = options;
     this.emitter = new ZhinAgentEventEmitter(events);
     const merged = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
     this.config = merged;
@@ -308,8 +297,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
     this.agentSessionStore = memoryStack.sessionStore;
     this.contextRepository = memoryStack.repository;
-    this.llmRuntime = llmRuntime
-      ?? wireZhinAgentLlmApiLayer(this.provider, this.providerResolver);
     this.turnContextState.alwaysSkillsBaseline = this.alwaysSkillsBaseline;
     this.runtimeModules = createZhinAgentRuntimeModules(asPrivate(this));
     bindModuleProperties(this, this.runtimeModules);
@@ -337,14 +324,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   getActiveBinding(): ResolvedAgentBinding | null {
     return this.activeBinding;
-  }
-
-  getTurnProvider(): AIProvider {
-    const models = getAgentTurnConfiguration()?.models;
-    if (models) return models.chat.provider;
-    const alias = this.activeBinding?.providerAlias;
-    if (alias && this.providerResolver) return this.providerResolver(alias);
-    return this.provider;
   }
 
   async waitForMemoryPersistence(): Promise<void> {
@@ -376,10 +355,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   initSubagentSystem(createTools: () => AgentTool[]): void {
     this.subagentSystem = createSubagentSystem({
-      provider: this.provider,
-      llmRuntime: this.llmRuntime,
       config: this.config,
-      modelRegistry: this.modelRegistry,
       emitter: this.emitter,
       createTools,
       onSubagentComplete: (payload) => this.continueAfterSubagent(payload),
@@ -655,8 +631,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       this.compactionRuntime.clear();
       this.toldLedger.clear();
 
-      this.provider = null!;
-      this.providerResolver = null;
       clearZhinAgentRuntimeModules(this.runtimeModules);
     })();
     return this.disposal;

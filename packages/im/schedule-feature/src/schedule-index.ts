@@ -43,7 +43,7 @@ export class ScheduleIndex {
           id: slot.localName,
           cron: slot.definition.cron,
           description: slot.definition.description,
-          execute: () => slot.definition.execute(createCapabilityContext(this.snapshot, slot.owner, this.#admission)),
+          execute: () => slot.definition.execute(createCapabilityContext({ snapshot: this.snapshot, ownerId: slot.owner, admission: this.#admission })),
         }));
       }
     } catch (error) {

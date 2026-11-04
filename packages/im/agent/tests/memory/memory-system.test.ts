@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { describe, expect, it, vi } from 'vitest';
 import { AiCompactionStrategy } from '../../src/memory/ai-compaction-strategy.js';
 import { createMemorySystemForHost, defaultMemorySystem } from '../../src/memory/memory-system.js';
@@ -57,22 +58,29 @@ describe('MemorySystem', () => {
     expect(typeof defaultMemorySystem.compactSession).toBe('function');
   });
 
-  it('createMemorySystemForHost uses AiCompactionStrategy', () => {
+  it('createMemorySystemForHost resolves compaction lazily from the current operation', () => {
     const host = {
-      getTurnProvider: () => ({ name: 'mock', models: ['m1'] }),
+      getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'mock', models: ['m1'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({
+        ...transport,
+        model: () => ({ id: 'm1', contextWindow: 128_000 }),
+      }).model(((() => ({ name: 'mock', models: ['m1'] }))()).name, ((() => ({ name: 'mock', models: ['m1'] }))()).models?.[0]) }, completion: {
+        ...transport,
+        model: () => ({ id: 'm1', contextWindow: 128_000 }),
+      } }),
       config: {
         chatModel: 'm1',
         contextTokens: 128_000,
         compaction: { enabled: true, auto: true, keepRecentTokens: 20_000, minKeepCount: 2 },
       },
       contextRepository: {} as any,
-      llmRuntime: {
+      completion: {
         ...transport,
         model: () => ({ id: 'm1', contextWindow: 128_000 }),
       },
     } as any;
     const system = createMemorySystemForHost(host);
     const strategy = (system as any)._config.compactionStrategy;
-    expect(strategy).toBeInstanceOf(AiCompactionStrategy);
+    expect(typeof strategy.compact).toBe('function');
+    expect(strategy.shouldCompact({ messages: [] })).toBe(false);
   });
 });

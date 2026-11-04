@@ -1,7 +1,6 @@
 import { Dialect, Database } from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
 
-import {Registry} from "../registry.js";
 import { getLogger } from '@zhin.js/logger';
 import type { ClientConfig, PoolConfig as PgPoolConfig } from 'pg';
 import {Column, Transaction, TransactionOptions, PoolConfig, type Definition} from "../types.js";
@@ -356,4 +355,12 @@ export class PG<S extends Record<string, object> = Record<string, object>> exten
     super(new PostgreSQLDialect<S>(config), definitions);
   }
 }
-Registry.register('pg', PG);
+
+declare module '../registry.js' {
+  interface Databases<S extends Record<string, object> = Record<string, object>> {
+    pg: PG<S>;
+  }
+  namespace Registry {
+    interface Config { pg: PostgreSQLDialectConfig; }
+  }
+}

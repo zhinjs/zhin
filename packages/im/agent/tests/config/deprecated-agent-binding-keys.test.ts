@@ -34,13 +34,12 @@ describe('findDeprecatedAgentBindingKeys', () => {
     try {
       const { AIService } = await import('../../src/service.js');
       const service = new AIService({
-        providers: { p: { sdk: 'openai', apiKey: 'k', models: ['m'] } },
         agents: {
-          zhin: { provider: 'p', model: 'm', priority: 1 },
-          vision: { provider: 'p', model: 'm', match: { hasMedia: ['image'] } },
+          zhin: { priority: 1 },
+          vision: { match: { hasMedia: ['image'] } },
         },
       } as never);
-      expect(service.getRoutingConfig().agents.vision).toEqual({ provider: 'p', model: 'm' });
+      expect(service.getBindingRegistry().getBinding('vision')).toMatchObject({ name: 'vision', mcpServers: [] });
       const messages = warn.mock.calls.map((call) => String(call[0]));
       expect(messages.some((m) => m.startsWith('ai.agents.zhin.priority 已弃用'))).toBe(true);
       expect(messages.some((m) => m.startsWith('ai.agents.vision.match 已弃用'))).toBe(true);

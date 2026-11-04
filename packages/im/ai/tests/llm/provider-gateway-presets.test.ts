@@ -1,50 +1,22 @@
-import { describe, it, expect } from 'vitest';
-import {
-  applyProviderGatewayPreset,
-  inferModelReasoning,
-  resolveTransportContextWindow,
-  validateProviderGatewayConfig,
-} from '../../src/llm/provider-gateway-presets.js';
+import { normalizeProviderGraph } from '../../src/provider/index.js';
 
-describe('provider-gateway-presets', () => {
-  it('coerces OpenCode Zen to openai-compatible', () => {
-    const out = applyProviderGatewayPreset('opencode', {
-      sdk: 'openai',
-      baseUrl: 'https://opencode.ai/zen/v1',
-      apiKey: 'k',
-    });
-    expect(out.sdk).toBe('openai-compatible');
-    expect(out.contextWindow).toBe(32_768);
-    // compat.supportsReasoningContent was a dead flag; presets no longer set it.
-    expect(out.compat).toBeUndefined();
+it('keeps declared model facts without SDK, alias or model-name inference', () => {
+  const graph = normalizeProviderGraph({ rootId: 'r', revision: 1,
+    services: { s: { id: 's', rootId: 'r', ownerId: 'h', revision: 1,
+      driver: { id: 'openai-compatible', owner: 'root', contractVersion: '1' }, options: { baseUrl: 'https://gateway.example/v1' },
+      models: { 'gemini-looking-128k-thinking': { id: 'gemini-looking-128k-thinking', protocol: 'openai-chat', kinds: ['language'] } } } },
+    accounts: {}, profiles: {}, purposes: { defaults: {} },
   });
-
-  it('preserves explicit contextWindow on gateway preset', () => {
-    const out = applyProviderGatewayPreset('opencode', {
-      sdk: 'openai-compatible',
-      baseUrl: 'https://opencode.ai/zen/v1',
-      contextWindow: 16_384,
-    });
-    expect(out.contextWindow).toBe(16_384);
+  expect(graph.services.s.models['gemini-looking-128k-thinking']).toEqual({
+    id: 'gemini-looking-128k-thinking', protocol: 'openai-chat', kinds: ['language'],
   });
-
-  it('warns when OpenCode uses sdk openai', () => {
-    const warnings = validateProviderGatewayConfig('opencode', {
-      sdk: 'openai',
-      baseUrl: 'https://opencode.ai/zen/v1',
-    });
-    expect(warnings.some((w) => w.includes('openai-compatible'))).toBe(true);
+});
+it('retains an explicitly declared context window instead of a gateway preset', () => {
+  const graph = normalizeProviderGraph({ rootId: 'r', revision: 1,
+    services: { s: { id: 's', rootId: 'r', ownerId: 'h', revision: 1,
+      driver: { id: 'openai-compatible', owner: 'root', contractVersion: '1' }, options: { baseUrl: 'https://opencode.ai/zen/v1' },
+      models: { native: { id: 'native', protocol: 'openai-chat', kinds: ['language'], contextWindow: 16384 } } } },
+    accounts: {}, profiles: {}, purposes: { defaults: {} },
   });
-
-  it('infers reasoning models', () => {
-    expect(inferModelReasoning('mimo-v2.5-free')).toBe(true);
-    expect(inferModelReasoning('deepseek-v4-flash-free')).toBe(true);
-    expect(inferModelReasoning('gpt-4.1-mini')).toBe(false);
-  });
-
-  it('resolveTransportContextWindow uses provider then model heuristics', () => {
-    expect(resolveTransportContextWindow({ sdk: 'openai-compatible', contextWindow: 20_000 }, 'any')).toBe(20_000);
-    expect(resolveTransportContextWindow({ sdk: 'openai-compatible', baseUrl: 'https://opencode.ai/zen/v1' }, 'mimo-v2.5-free')).toBe(32_768);
-    expect(resolveTransportContextWindow({ sdk: 'openai' }, 'foo-8k')).toBe(8_192);
-  });
+  expect(graph.services.s.models.native.contextWindow).toBe(16384);
 });

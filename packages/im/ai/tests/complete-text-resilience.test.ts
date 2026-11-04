@@ -10,7 +10,7 @@ vi.mock('../src/llm/bridge/ai-sdk-stream.js', async (importOriginal) => ({
   generateTextViaAiSdk: generateMock,
 }));
 
-import { createSdkProviderAdapter } from '../src/sdk-provider-adapter.js';
+import { fixedProfileClient } from './helpers/fixed-profile-client.js';
 import { CompletionFailureError } from '../src/llm/convert/openai-bridge.js';
 import { ProviderRequestError } from '../src/llm/provider-resilience.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../src/llm/types/agent-message.js';
@@ -38,7 +38,7 @@ function httpError(status: number, message = `HTTP ${status}`): Error {
 }
 
 function adapter(extra: Record<string, unknown> = {}) {
-  const p = createSdkProviderAdapter('p', {
+  const p = fixedProfileClient({
     sdk: 'openai',
     apiKey: 'test-key',
     models: ['primary', 'backup'],
@@ -55,7 +55,7 @@ beforeEach(() => {
   generateMock.mockReset();
 });
 
-describe('SdkProviderAdapter.completeText resilience', () => {
+describe('fixed Profile plain-completion resilience', () => {
   it('retries a retryable error and disables SDK-level retries', async () => {
     generateMock
       .mockRejectedValueOnce(httpError(503))
@@ -70,18 +70,16 @@ describe('SdkProviderAdapter.completeText resilience', () => {
     }
   });
 
-  it('falls back to the next model after retries are exhausted', async () => {
+  it('never changes the selected model after retries are exhausted', async () => {
     generateMock.mockImplementation(async (_lm: unknown, model: Model) => {
       if (model.id === 'primary') throw httpError(500);
       return reply([{ type: 'text', text: 'from backup' }]);
     });
 
-    const text = await adapter().completeText('sys', 'user', {
+    await expect(adapter().completeText('sys', 'user', {
       resilience: { ...FAST, maxRetries: 1 },
-      fallbackModels: ['backup'],
-    });
-    expect(text).toBe('from backup');
-    expect(calls().map(([, m]) => m.id)).toEqual(['primary', 'primary', 'backup']);
+    })).rejects.toThrow();
+    expect(calls().map(([, m]) => m.id)).toEqual(['primary', 'primary']);
   });
 
   it('does not retry or fall back on a non-retryable auth error', async () => {
@@ -89,7 +87,6 @@ describe('SdkProviderAdapter.completeText resilience', () => {
 
     await expect(adapter().completeText('sys', 'user', {
       resilience: FAST,
-      fallbackModels: ['backup'],
     })).rejects.toThrow('Unauthorized');
     expect(calls()).toHaveLength(1);
   });
@@ -104,7 +101,6 @@ describe('SdkProviderAdapter.completeText resilience', () => {
     await expect(adapter().completeText('sys', 'user', {
       signal: controller.signal,
       resilience: FAST,
-      fallbackModels: ['backup'],
     })).rejects.toThrow('caller cancelled');
     expect(calls()).toHaveLength(1);
   });
@@ -137,7 +133,7 @@ describe('SdkProviderAdapter.completeText resilience', () => {
   });
 });
 
-describe('SdkProviderAdapter.completeText output', () => {
+describe('fixed Profile answer-only consumer output', () => {
   it('never returns thinking as the summary', async () => {
     generateMock.mockResolvedValue(reply([{ type: 'thinking', thinking: '内部推理' }]));
     await expect(adapter().completeText('sys', 'user')).resolves.toBe('');

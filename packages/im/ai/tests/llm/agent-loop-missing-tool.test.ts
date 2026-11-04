@@ -1,6 +1,6 @@
+import { SyntheticCompletionRuntime } from '../helpers/synthetic-completion-runtime.js';
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  LlmApiRuntime,
   agentLoop,
   createAssistantMessageEventStream,
   createUserMessage,
@@ -43,12 +43,12 @@ function okResult(call: ParsedToolCall): AgentMessage {
 }
 
 describe("agentLoop resolveMissingTool", () => {
-  let runtime: LlmApiRuntime;
+  let runtime: SyntheticCompletionRuntime;
   let contexts: Context[];
 
   beforeEach(() => {
     contexts = [];
-    runtime = new LlmApiRuntime();
+    runtime = new SyntheticCompletionRuntime();
     runtime.registerProvider("test", { sdk: "openai" }, ["mock"]);
     runtime.registerApiProvider({
       api: "ai-sdk",

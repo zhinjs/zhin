@@ -2,7 +2,7 @@ import type { CapturedEndpointOperation } from './captured-endpoint-operation.js
 import type { JSXElement } from '@zhin.js/jsx';
 import { commandFeatureId, isCommandIndex, type CommandMenuPage } from '@zhin.js/command';
 import { resolveLocale, type PluginId, type RuntimeSnapshot, type Locale } from '@zhin.js/plugin-runtime';
-import { operationInputBinding, operationInputSignal, operationSession, type OperationSession } from '@zhin.js/feature-kit';
+import { operationInputBinding, operationInputSignal, operationInputResources, operationSession, type OperationSession, type OperationResourceView, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MessageOrigin } from './inbound-origin.js';
 import type { OperationEndpointSource } from './operation-endpoint.js';
@@ -235,6 +235,7 @@ export interface RuntimeMessageOperation {
   readonly signal?: AbortSignal;
   readonly captureInteraction?: (owner: PluginId) => CapturedEndpointOperation;
   readonly session?: RuntimeMessageSessionBinding;
+  readonly createOperationResources?: (input: Readonly<{ message: RuntimeMessage; owner: PluginId; signal: AbortSignal }>) => OperationResourceView | undefined;
   readonly registerOperationView?: (view: object, owner: PluginId) => void;
   readonly presentation?: RuntimeMessagePresentation;
 }
@@ -351,6 +352,24 @@ export class RuntimeMessage implements MessageBase {
           : {}),
       },
     });
+  }
+
+  /** @internal Metadata fields cannot replace this actual leased operation factory. */
+  [operationInputResources](snapshot: RuntimeSnapshot): CapabilityOperationFactory | undefined {
+    this.#operation.assertActive?.();
+    if (snapshot !== this.#operation.snapshot || snapshot.generation !== this.generation) {
+      throw new Error('Message resources belong to another generation operation');
+    }
+    if (!this.#operation.createOperationResources) return undefined;
+    const signal = this.#operation.signal ?? new AbortController().signal;
+    return Object.freeze({ signal, create: (input: Parameters<CapabilityOperationFactory['create']>[0]) => {
+      this.#operation.assertActive?.();
+      if (!snapshot.tree.has(input.owner)) throw new Error(`Unknown operation owner: ${input.owner}`);
+      const actualSignal = input.signal === signal ? signal : AbortSignal.any([signal, input.signal]);
+      return Object.freeze({ signal: actualSignal, resources: this.#operation.createOperationResources?.({
+        message: this, owner: input.owner, signal: actualSignal,
+      }) });
+    } });
   }
 
   /** @internal Explicit operation cancellation; replacement alone does not end accepted work. */

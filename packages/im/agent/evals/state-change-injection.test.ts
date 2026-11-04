@@ -1,3 +1,4 @@
+import { agentMessagesToAiSdk } from '../../ai/src/llm/bridge/ai-sdk-messages.js';
 /**
  * ADR 0041 acceptance 4/5/6: a member renaming themselves to an injection string reaches the model
  * only as a quoted value in a fixed-template `[state change]` line (system message where the provider
@@ -8,7 +9,6 @@ import { describe, expect, it } from 'vitest';
 import {
   EMPTY_TOKEN_USAGE,
   agentLoop,
-  agentMessagesToAiSdk,
   createLlmMessageProjection,
   createMemberChangedEvent,
   createMemberPresenceEvent,

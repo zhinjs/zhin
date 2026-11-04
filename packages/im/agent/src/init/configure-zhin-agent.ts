@@ -1,5 +1,4 @@
 import { getLogger } from '@zhin.js/logger';
-import { createLlmApiRuntime, sdkEntryFromProvider, AIProvider, ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
 import { createSkillSystem, SkillSystem } from '../skill/skill-system.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
@@ -8,7 +7,6 @@ import type { MemorySystem } from '../memory/memory-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
-import { bindingToModelConfig } from '../routing/runtime-binding.js';
 import type { ZhinAgentDependencies } from '../config/index.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { TurnContextBridgeState } from '../turn/turn-context-bridge.js';
@@ -20,8 +18,7 @@ export type ConfigureZhinAgentTarget = Pick<
   | 'config' | 'skillRegistry' | 'skillSystem' | 'resourceHub' | 'agentCore' | 'toolSystem'
   | 'contextSystem' | 'sessionSystem'
   | 'agentSessionStore' | 'contextRepository' | 'semanticMemory'
-  | 'modelRegistry' | 'subagentSystem' | 'activeBinding'
-  | 'llmRuntime'
+  | 'subagentSystem' | 'activeBinding'
   | 'audioTranscriber'
   | 'mediaPerception'
   | 'imageAssets'
@@ -31,7 +28,6 @@ export type ConfigureZhinAgentTarget = Pick<
   /** 接口外的运行时模块（declare 在类上，不经 ZhinAgentPrivate 暴露） */
   memorySystem: MemorySystem | null;
   eventSystem: EventSystem | null;
-  providerResolver: ((alias: string) => AIProvider) | null;
   alwaysSkillsBaseline: string;
   turnContextState: TurnContextBridgeState;
 };
@@ -40,8 +36,8 @@ export function applyZhinAgentConfigure(
   target: ConfigureZhinAgentTarget,
   deps: Partial<ZhinAgentDependencies>,
 ): void {
-  if (deps.providerResolver !== undefined && deps.llmRuntime === undefined) {
-    throw new Error('providerResolver requires an owner-scoped llmRuntime');
+  if ('providerResolver' in deps || 'llmRuntime' in deps) {
+    throw new Error('Provider injection was replaced by operation-bound inference');
   }
   if (deps.skillRegistry !== undefined) {
     target.skillRegistry = deps.skillRegistry;
@@ -61,24 +57,12 @@ export function applyZhinAgentConfigure(
   if (deps.agentSessionStore !== undefined) target.agentSessionStore = deps.agentSessionStore;
   if (deps.contextRepository !== undefined) target.contextRepository = deps.contextRepository;
   if (deps.semanticMemory !== undefined) target.semanticMemory = deps.semanticMemory;
-  if (deps.modelRegistry !== undefined) {
-    target.modelRegistry = deps.modelRegistry;
-    target.subagentSystem?.setModelRegistry(deps.modelRegistry);
-  }
-  if (deps.providerResolver !== undefined) {
-    target.providerResolver = deps.providerResolver;
-  }
-  if (deps.llmRuntime !== undefined) target.llmRuntime = deps.llmRuntime;
   if (deps.audioTranscriber !== undefined) target.audioTranscriber = deps.audioTranscriber;
   if (deps.mediaPerception !== undefined) target.mediaPerception = deps.mediaPerception;
   if (deps.imageAssets !== undefined) target.imageAssets = deps.imageAssets;
   if (deps.localAssets !== undefined) target.localAssets = deps.localAssets;
   if (deps.activeBinding !== undefined) {
     target.activeBinding = deps.activeBinding;
-    if (deps.activeBinding) {
-      const patch = bindingToModelConfig(deps.activeBinding);
-      target.config = { ...target.config, ...patch };
-    }
   }
   if (deps.subagentSender !== undefined) {
     target.subagentSystem?.setSender(deps.subagentSender);
@@ -97,17 +81,4 @@ export function applyZhinAgentConfigure(
     target.turnContextState.alwaysSkillsBaseline = target.alwaysSkillsBaseline;
   }
   if (deps.skillsSummaryXML !== undefined) target.skillsSummaryXML = deps.skillsSummaryXML || '';
-}
-
-export function wireZhinAgentLlmApiLayer(
-  provider: AIProvider,
-  providerResolver: ((alias: string) => AIProvider) | null,
-): LlmApiRuntime {
-  return createLlmApiRuntime(
-    [sdkEntryFromProvider(provider)],
-    (alias) => {
-      const p = alias === provider.name ? provider : providerResolver?.(alias);
-      return p?.models ?? [];
-    },
-  );
 }

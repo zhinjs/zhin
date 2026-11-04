@@ -31,7 +31,6 @@ export interface AgentEventBus {
 }
 
 export interface AgentCoreDependencies {
-  provider: import('@zhin.js/ai').AIProvider;
   toolExecutor: ToolExecutor;
   contextManager: ContextManager;
   eventBus: AgentEventBus;

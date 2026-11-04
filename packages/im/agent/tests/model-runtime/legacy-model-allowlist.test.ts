@@ -1,53 +1,32 @@
-import { AIService } from '../../src/service.js';
-import { createSdkProviderAdapter } from '@zhin.js/ai';
+import { compileLegacyInferenceMigration, type LegacyInferenceMigrationOptions } from '../../src/migration/provider-plan.js';
 
-const hostOwnerId = 'host:/legacy-model-allowlist';
+const resolveService: LegacyInferenceMigrationOptions['resolveService'] = input => ({ driver: { id: 'fixture', owner: 'root/providers', contractVersion: '1' }, authentication: 'none', options: input.options,
+  models: Object.fromEntries(input.models.map(model => [model.id, { id: model.id, kinds: ['language'], protocol: 'fixture', input: ['text'] }])) });
+const source = { id: 'config', revision: 'metadata-v1', rootId: 'root' }, target = { rootId: 'root', hostOwnerId: 'host' };
+const compile = (config: unknown) => compileLegacyInferenceMigration({ source, target, config, resolveService });
 
-it.each(['binding', 'perception', 'perception-fallback'] as const)('preserves the configured model allowlist across preparation for %s', async target => {
-  const service = new AIService({
-    providers: { main: { sdk: 'ollama', baseUrl: 'https://models.test', models: ['allowed'] } },
-    agents: { zhin: { provider: 'main', model: target === 'binding' ? 'blocked' : 'allowed' } },
-    ...(target === 'binding' ? {} : { multimodal: { perception: { provider: 'main', model: target === 'perception' ? 'blocked' : 'allowed',
-      ...(target === 'perception-fallback' ? { fallbacks: [{ provider: 'main', model: 'blocked' }] } : {}) } } }),
-  });
-  try {
-    expect(() => service.getLlmRuntime().model('main', 'blocked')).toThrow('not registered');
-    await expect(service.prepareModelRuntime({ hostOwnerId })).rejects.toMatchObject({ code: 'invalid-config' });
-    expect(() => service.getLlmRuntime().model('main', 'blocked')).toThrow('not registered');
-  } finally { await service.dispose(); }
+it.each(['binding', 'perception', 'perception-fallback'])('rejects %s outside the explicit allowlist in offline review', route => {
+  const config = { providers: { main: { sdk: 'fixture', models: ['allowed'] } }, agents: { zhin: { provider: 'main', model: route === 'binding' ? 'other' : 'allowed' } },
+    ...(route === 'binding' ? {} : { multimodal: { perception: { provider: 'main', model: route === 'perception' ? 'other' : 'allowed', ...(route === 'perception-fallback' ? { fallbacks: [{ provider: 'main', model: 'other' }] } : {}) } } }) };
+  const result = compile(config); expect(result.blocked.some(item => item.code === 'model-outside-allowlist')).toBe(true);
+  const serialized = JSON.stringify(result.plan.profiles); expect(serialized).not.toContain('"model":"other"');
 });
 
-it.each([undefined, []])('preserves explicit binding selection when the provider has no nonempty model allowlist (%j)', async models => {
-  const service = new AIService({ providers: { main: { sdk: 'ollama', baseUrl: 'https://models.test', ...(models ? { models } : {}) } },
-    agents: { zhin: { provider: 'main', model: 'explicit-model' } } });
-  try {
-    expect(service.getLlmRuntime().model('main', 'explicit-model').id).toBe('explicit-model');
-    await service.prepareModelRuntime({ hostOwnerId });
-    expect(service.getLlmRuntime().model('main', 'explicit-model').id).toBe('explicit-model');
-  } finally { await service.dispose(); }
+it.each([undefined, []])('preserves explicit model selection when no nonempty allowlist exists (%j)', models => {
+  const config = { providers: { main: { sdk: 'fixture', ...(models ? { models } : {}) } }, agents: { zhin: { provider: 'main', model: 'explicit-model' } } };
+  const result = compile(config); expect(result.blocked).toEqual([]);
+  expect(result.plan.profiles).toMatchObject({ 'profile:legacy%3Aagent%3Azhin': { model: 'explicit-model' } });
 });
 
-it('uses the admitted SDK configuration allowlist rather than stale source configuration', async () => {
-  const service = new AIService({ providers: { main: { sdk: 'ollama', baseUrl: 'https://models.test', models: ['stale-model'] } },
-    agents: { zhin: { provider: 'main', model: 'current-model' } } });
-  const incoming = createSdkProviderAdapter('main', { sdk: 'ollama', baseUrl: 'https://models.test', models: ['current-model'] })!;
-  await service.registerProvider(incoming);
-  try {
-    expect(service.getLlmRuntime().model('main', 'current-model').id).toBe('current-model');
-    expect(() => service.getLlmRuntime().model('main', 'stale-model')).toThrow('not registered');
-    await service.prepareModelRuntime({ hostOwnerId });
-    expect(service.getLlmRuntime().model('main', 'current-model').id).toBe('current-model');
-    expect(() => service.getLlmRuntime().model('main', 'stale-model')).toThrow('not registered');
-  } finally { await service.dispose(); }
+it('uses only the selected source snapshot and never consults a registered SDK instance or ambient directory', () => {
+  const sourceConfig = { providers: { main: { sdk: 'fixture', models: ['one'] } }, agents: { zhin: { provider: 'main', model: 'one' } } };
+  const result = compile(sourceConfig); sourceConfig.providers.main.models.push('two');
+  expect(JSON.stringify(result.plan)).not.toContain('two'); expect(Object.isFrozen(result.plan)).toBe(true);
 });
 
-it('matches the SDK normalization of explicit model ids without discovering extra models', async () => {
-  const service = new AIService({ providers: { main: { sdk: 'ollama', baseUrl: 'https://models.test', models: [' allowed ', ''] } },
-    agents: { zhin: { provider: 'main', model: 'allowed' } } });
-  try {
-    expect(service.getLlmRuntime().model('main', 'allowed').id).toBe('allowed');
-    await service.prepareModelRuntime({ hostOwnerId });
-    expect(service.getLlmRuntime().model('main', 'allowed').id).toBe('allowed');
-    expect(() => service.getLlmRuntime().model('main', 'blocked')).toThrow('not registered');
-  } finally { await service.dispose(); }
+it('preserves the legacy SDK whitespace normalization without discovering other model IDs', () => {
+  const result = compile({ providers: { main: { sdk: 'fixture', models: [' allowed ', ''] } }, agents: { zhin: { provider: 'main', model: ' allowed ' } } });
+  expect(result.blocked).toEqual([]);
+  expect(result.plan.profiles).toMatchObject({ 'profile:legacy%3Aagent%3Azhin': { model: 'allowed' } });
+  expect(JSON.stringify(result.plan.services)).not.toContain(' allowed ');
 });

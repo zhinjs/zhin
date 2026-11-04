@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { UsageQuota } from '../../src/security/usage-quota.js';
 import { createUserMessage } from '@zhin.js/ai';
@@ -239,7 +240,7 @@ describe('FullAgentTurnEngine', () => {
     const buildPrompt = (runtime: PromptRuntimeOverrides) => buildAgentPathSystemPrompt({
       ...host, config: DEFAULT_CONFIG, skillRegistry: null, skillsSummaryXML: '', globalContext: '',
       getTurnActiveSkills: () => '',
-      llmRuntime: { model: () => ({ contextWindow: 128_000 }) },
+      getTurnExecution: () => executionBundle({ model: { id: 'model', provider: 'provider', api: 'fixture', promptFamily: 'google', input: ['text'], contextWindow: 128_000, maxTokens: 8192 }, completion: { complete: async () => { throw new Error('No completion expected'); } } }),
     } as never, {
       profile: { kind: 'interactive' }, turn, content: 'hello', sessionId: 'session-id',
       personaEnhanced: 'persona', runtime,

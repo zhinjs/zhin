@@ -1,3 +1,5 @@
+import { executionBundle, executionScope } from '../../../agent/tests/helpers/execution-bundle.js';
+import { assistantTextReply } from '../../../agent/tests/helpers/mock-llm-api.js';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AgentCapabilities, ToolCapability } from '@zhin.js/agent/runtime';
 import {
@@ -5,9 +7,7 @@ import {
 } from '../../src/workroom-runtime/workroom-capability-realization.js';
 import { createAgentCoreWorkroomLocalTurnPort } from '../../src/workroom-runtime/workroom-local-agent-core-adapter.js';
 import { DurableReportLocalModelExecutionPort } from '../../src/workroom-runtime/workroom-local-agent-loop.js';
-import type { AgentCore } from '@zhin.js/agent/core';
-import type { AgentLoopTurnInput } from '@zhin.js/agent/core';
-import type { ZhinAgentPrivate } from '@zhin.js/agent/core';
+import type { AgentCore, AgentLoopTurnInput, ZhinAgentPrivate } from '@zhin.js/agent/core';
 import {
   createAssignmentExecutionEnvelope,
   type AssignmentExecutionEnvelopeInput,
@@ -58,9 +58,13 @@ describe('Host to local Workroom Agent execution', () => {
       host: {} as ZhinAgentPrivate,
       core,
       generation: 7,
+      withModels: async (_input, run) => {
+        const models = await executionScope({ chat: executionBundle({ model: { id: 'model', api: 'fixture', provider: 'account', input: ['text'], contextWindow: 8192, maxTokens: 100 }, completion: { complete: async () => assistantTextReply('unused') } }) });
+        try { return await run(models); } finally { await models.release(); }
+      },
       resolveBinding: id => id === 'agent-definition:developer:1'
         ? {
-            name: 'developer', providerAlias: 'provider', model: 'model',
+            name: 'developer',
             mcpServers: [], nickname: 'Developer',
           }
         : undefined,

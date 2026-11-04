@@ -1,10 +1,11 @@
-import type { AIConfig, DecisionProvider, DecisionTaskConfig } from '@zhin.js/ai';
+import type { DecisionProvider } from '@zhin.js/ai';
+import type { DecisionPurposePolicy } from '@zhin.js/ai/provider';
 
 export type DecisionTask = 'skills' | 'tools' | 'memory' | 'agents' | 'approval' | 'ambient';
 export type DecisionMode = 'off' | 'shadow' | 'active';
 
-export type DecisionTaskPolicy = DecisionTaskConfig;
-export type AgentDecisionConfig = NonNullable<AIConfig['decisions']>;
+export type DecisionTaskPolicy = DecisionPurposePolicy;
+export type AgentDecisionConfig = Readonly<Partial<Record<DecisionTask, DecisionTaskPolicy>>>;
 
 /** Observations contain no message, candidate name, parameter, or private text. */
 export interface DecisionObservation {
@@ -20,7 +21,8 @@ export interface DecisionObservation {
 }
 
 export interface AgentDecisionRuntime {
-  readonly provider: DecisionProvider;
+  /** A task's selected Profile is bound to the same operation graph and credentials. */
+  forTask(task: DecisionTask): DecisionProvider | undefined;
   readonly config: AgentDecisionConfig;
   readonly observe?: (observation: DecisionObservation) => void;
 }

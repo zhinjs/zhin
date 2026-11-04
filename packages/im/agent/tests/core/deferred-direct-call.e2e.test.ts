@@ -1,3 +1,5 @@
+import type { FixtureTextProvider } from '../../../ai/tests/helpers/text-provider-fixture.js';
+import { createTestZhinAgent } from '../helpers/scoped-agent.js';
 /**
  * Auto-loading deferred tools must not widen what a turn can call: names that
  * are not in the turn's catalog are still rejected as unknown. (The auto-load
@@ -6,7 +8,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
-import type { AIProvider, Tool } from '@zhin.js/core';
+import type {Tool} from '@zhin.js/core';
 import {
   assistantTextReply,
   assistantToolCallReply,
@@ -27,8 +29,8 @@ function deferredTool(name: string): Tool & { execute: ReturnType<typeof vi.fn> 
 function createAgent(llm: MockLlmApi): ZhinAgent {
   const provider = Object.assign(llm.provider, {
     listModels: vi.fn(async () => ['mock-model']),
-  }) as unknown as AIProvider;
-  return new ZhinAgent(provider, { persona: '测试助手', maxIterations: 5 }, undefined, llm.runtime);
+  }) as unknown as FixtureTextProvider;
+  return createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: { persona: '测试助手', maxIterations: 5 }, events: undefined });
 }
 
 const message = () => mockCommMessage({ adapter: 'test', endpoint: 'bot1', senderId: 'u1', scope: 'private', sceneId: 's1' });

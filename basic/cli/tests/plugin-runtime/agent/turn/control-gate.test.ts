@@ -1,3 +1,4 @@
+import { ingressInferenceFixture } from './inference-fixture.js';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { RuntimeMessage } from '../../../../../../packages/im/core/src/plugin-runtime/im/contracts.js';
@@ -72,12 +73,13 @@ function ingressHarness(options: { plane: AiControlPlane; log: DecisionEventLog;
     options.execute ? options.execute(request) : { status: 'completed', output: [] });
   const observeInbound = vi.fn(async () => ({ blocked: null }));
   const route = new AgentTurnIngressRoute({
+    withInferenceScope: ingressInferenceFixture().withInferenceScope,
     projectRoot: process.cwd(), runtime: { executeLeased } as never,
     im: { createInteraction: () => ({ ask: vi.fn() }) } as never,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: {
       service: {
-        getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+        getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
         getTriggerConfig: () => ({ enabled: true }),
         getAgentConfig: () => ({}),
       },

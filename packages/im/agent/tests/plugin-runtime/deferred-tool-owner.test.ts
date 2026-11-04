@@ -40,11 +40,11 @@ function fixture(): RuntimeSnapshot {
 
 it('folds real ToolIndex entry paths by their canonical owner after ingress and deferred projection', async () => {
   const snapshot = fixture();
-  const capabilities = await new CapabilityIngress().read(snapshot, snapshot.root, () => true, {
+  const capabilities = await new CapabilityIngress().read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: {
     origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'group' },
     principal: { subjectId: 'user', roles: ['user'] },
     policy: { permissions: [], unattended: false },
-  });
+  } });
   expect(capabilities.tools).toHaveLength(16);
   const plan = createDeferredCapabilityPlan({
     capabilities,

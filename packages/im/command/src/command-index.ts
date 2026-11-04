@@ -13,7 +13,7 @@ import {
   type Locale,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/interaction';
-import { bindOperationInput } from '@zhin.js/feature-kit';
+import { bindOperationInput, type CapabilityOperationFactory } from '@zhin.js/feature-kit';
 import {
   permissionHostToken,
   type PermissionHost,
@@ -65,6 +65,7 @@ export interface CommandDispatchRequest {
   readonly interactionFactory?: UserInteractionFactory;
   readonly commandPrefix?: string;
   readonly snapshot?: RuntimeSnapshot;
+  readonly operation?: CapabilityOperationFactory;
   readonly locale?: Locale;
 }
 /** Presentation and generation shared across one menu lookup/render operation. */
@@ -351,7 +352,7 @@ export class CommandIndex {
   }
 
   async dispatch({ input, source, interactionFactory, commandPrefix, snapshot: operationSnapshot = this.snapshot,
-    locale: localeOverride }: CommandDispatchRequest): Promise<CommandDispatchResult> {
+    locale: localeOverride, operation: operationFactory }: CommandDispatchRequest): Promise<CommandDispatchResult> {
     const locale = localeOverride ?? commandLocale(source, operationSnapshot);
     const prefix = commandPrefix ?? '';
     if (this.#menu) {
@@ -395,13 +396,19 @@ export class CommandIndex {
       owner: match.command.slot.owner, issues: parsed.issues, help });
     const limit = admitCommandExecution(authorSource, match.command.slot.id, match.command.slot.owner, match.command.execution, operationSnapshot);
     if (limit) return Object.freeze({ matched: true, status: 'limited', command: match.command.name, owner: match.command.slot.owner, limit });
-    const value = await definition.execute(createCommandContext({
-      snapshot: operationSnapshot, ownerId: match.command.slot.owner, input: authorSource,
-      interaction: interactionFactory?.(authorSource), adapter: definition.adapter,
-      presentation: { locale, formatCommand: (localPath, owner = match.command.owner) => this.formatCommand(owner, localPath,
-        source && typeof source === 'object' && 'conversation' in source ? commandPrefix : undefined, locale) },
-    }, { args: textArgs(parsed.remaining), params: parsed.params, segments: parsed.remaining, options: parsed.options }));
-    return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
+    const operation = operationFactory?.create({ owner: match.command.slot.owner, signal: operationFactory.signal });
+    try {
+      const value = await definition.execute(createCommandContext({
+        snapshot: operationSnapshot, ownerId: match.command.slot.owner, input: authorSource,
+        operation,
+        interaction: interactionFactory?.(authorSource), adapter: definition.adapter,
+        presentation: { locale, formatCommand: (localPath, owner = match.command.owner) => this.formatCommand(owner, localPath,
+          source && typeof source === 'object' && 'conversation' in source ? commandPrefix : undefined, locale) },
+      }, { args: textArgs(parsed.remaining), params: parsed.params, segments: parsed.remaining, options: parsed.options }));
+      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
+    } finally {
+      try { await operation?.resources?.close(); } catch { /* Cleanup never replaces the command's actual outcome. */ }
+    }
   }
 
   #denied(record: CommandRecord): CommandDispatchResult {

@@ -15,12 +15,12 @@
  * quota (#727).
  */
 import type { ModelExecutionScope } from '../model-runtime/types.js';
-import type { AIProvider, ProviderResilienceConfig, TextCompleteResult } from '@zhin.js/ai';
+import { assistantText, createUserMessage, createResilientCompletionPort, resolveProviderResilienceConfig, type ProviderResilienceConfig, type TextCompleteResult } from '@zhin.js/ai';
 import type { AiCompletion, AiCompletionInput, AiCompletionResult, UsageSubject } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AIService } from '../service.js';
 import { renderExternalContent } from '../security/trust-level.js';
-import type { UsageQuota } from '../security/usage-quota.js';
+import { beginQuotaUsage, type UsageQuotaPort } from '../security/usage-accounting.js';
 import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 
 /**
@@ -39,32 +39,14 @@ export type {
 
 const logger = getLogger('agent');
 
-/** Thrown when the `onBehalfOf` user or group is over its usage quota; `message` is user-facing. Recognise it with `isAiCompletionQuotaError`. */
-export class AiCompletionQuotaError extends Error {
-  override readonly name = 'AiCompletionQuotaError' as const;
-  readonly scope: 'user' | 'group';
-  readonly retryAfterSeconds: number;
-  readonly deniedUserIds?: readonly string[];
-
-  constructor(message: string, scope: 'user' | 'group', retryAfterSeconds: number, deniedUserIds?: readonly string[]) {
-    super(message);
-    this.scope = scope;
-    this.retryAfterSeconds = retryAfterSeconds;
-    this.deniedUserIds = deniedUserIds;
-  }
-}
+export { AiCompletionQuotaError } from '../security/usage-accounting.js';
 
 export interface AiCompletionOptions {
-  readonly service: Pick<AIService, 'getBindingRegistry' | 'getProvider' | 'getAgentConfig'>
-    & Partial<Pick<AIService, 'getModelRegistry'>>;
-  readonly usageQuota?: Pick<UsageQuota, 'check' | 'record'> & Partial<Pick<UsageQuota, 'checkBatch'>>;
+  readonly service: Pick<AIService, 'getBindingRegistry' | 'getAgentConfig'>;
+  readonly usageQuota?: UsageQuotaPort;
   readonly now?: () => number;
   /** A default Host operation leases one complete runtime policy snapshot; explicit calls stay fixed. */
-  readonly acquireDefaultModel?: (signal?: AbortSignal) => Promise<ModelExecutionScope>;
-  /** Explicit binding/model input keeps its semantics while leasing the current Host connection. */
-  readonly acquireExplicitModel?: (bindingName: string, model: string | undefined, signal?: AbortSignal) => Promise<{
-    readonly provider: AIProvider; readonly model: string; release(): Promise<void>;
-  }>;
+  readonly acquireDefaultModel: (signal?: AbortSignal, agentName?: string) => Promise<ModelExecutionScope>;
 }
 
 export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
@@ -78,75 +60,51 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       const registry = options.service.getBindingRegistry();
       const binding = input.agent ? registry.getBinding(input.agent) : registry.requireZhinBinding();
       if (!binding) throw new Error(`AI completion: agent binding "${input.agent}" not found`);
-      let provider: AIProvider = options.service.getProvider(binding.providerAlias);
-      let model = input.model?.trim() || binding.model || provider.models[0] || '';
+      if (input.model?.trim()) throw new Error('AI completion: select a configured Profile instead of overriding its native model');
+      let model = '';
+      let provider = '';
 
       input.signal?.throwIfAborted();
-      if (shares.length && options.usageQuota) {
-        if (input.usageShares && !options.usageQuota.checkBatch) throw new Error('AI completion: quota does not support shared attribution');
-        const decision = input.usageShares
-          ? options.usageQuota.checkBatch!(shares.map(share => share.subject))
-          : options.usageQuota.check(shares[0]!.subject);
-        if (!decision.allowed) {
-          throw new AiCompletionQuotaError(decision.message, decision.scope, decision.retryAfterSeconds,
-            'deniedUserIds' in decision ? decision.deniedUserIds as readonly string[] : undefined);
-        }
-      }
-
       const user = [
         prompt,
         ...(input.untrusted ?? []).map(item => renderExternalContent(sourceLabel(item.source), neutralizeBlockMarkers(String(item.text ?? '')))),
       ].join('\n\n');
-      const opts = {
-        model,
-        temperature: input.temperature,
-        maxTokens: input.maxTokens,
-        timeoutMs: input.timeoutMs,
-        signal: input.signal,
-        resilience: options.service.getAgentConfig()?.providerResilience as ProviderResilienceConfig | undefined,
-      };
       // Reserve the prompt estimate before the call: concurrent calls then see each other's
       // spend at `check`, and a call that fails after reaching the provider is still billed.
-      const reserved = shares.length && options.usageQuota ? estimatePromptTokens(`${input.system ?? ''}\n${user}`) : 0;
-      let billed = shares.map(() => 0);
-      const record = (tokens: number) => {
-        if (!options.usageQuota || tokens <= 0) return;
-        const allocated = allocateTokens(tokens, shares.map(share => share.weight));
-        shares.forEach((share, index) => {
-          options.usageQuota!.record(share.subject, allocated[index]! - billed[index]!);
-        });
-        billed = allocated;
-      };
+      const accounting = beginQuotaUsage({ quota: options.usageQuota, shares, shared: Boolean(input.usageShares),
+        promptTokens: shares.length && options.usageQuota ? estimatePromptTokens(`${input.system ?? ''}\n${user}`) : 0,
+        onSettlementError: () => { try { logger.warn('AI completion quota settlement failed'); } catch { /* diagnostic only */ } },
+      });
       const started = now();
       let result: TextCompleteResult;
-      let scope: { release(): Promise<void> } | undefined;
-      let executingProvider: string | undefined;
+      let scope: ModelExecutionScope | undefined;
       try {
-        if (!input.agent && !input.model?.trim() && options.acquireDefaultModel) {
-          const models = await options.acquireDefaultModel(input.signal);
-          scope = models;
-          provider = models.chat.provider; model = models.chat.invocation.model.model; opts.model = model;
-        } else if (options.acquireExplicitModel) {
-          const selected = await options.acquireExplicitModel(input.agent ?? 'zhin', input.model?.trim() || undefined, input.signal);
-          scope = selected;
-          provider = selected.provider; model = selected.model; opts.model = model;
-        }
-        record(reserved);
-        executingProvider = provider.name;
-        result = provider.completeTextResult
-          ? await provider.completeTextResult(input.system ?? '', user, opts)
-          : { text: await provider.completeText(input.system ?? '', user, opts), model };
+        scope = await options.acquireDefaultModel(input.signal, input.agent);
+        model = scope.chat.model.id;
+        provider = scope.chat.binding.account.id;
+        accounting.submitted();
+        const completion = createResilientCompletionPort(scope.chat.completion, {
+          config: resolveProviderResilienceConfig(options.service.getAgentConfig()?.providerResilience as ProviderResilienceConfig | undefined,
+            scope.chat.model.executionPolicy,
+            { requestTimeoutMs: input.timeoutMs }),
+        });
+        const answer = await completion.complete(scope.chat.model,
+          { systemPrompt: input.system ?? '', messages: [createUserMessage(user)], tools: [] },
+          { temperature: input.temperature, maxTokens: input.maxTokens, signal: input.signal });
+        const reported = answer.usage?.reported;
+        const knownUsage = answer.usage && (!reported || Object.values(reported).some(Boolean));
+        result = { text: assistantText(answer), model, ...(knownUsage ? { usage: answer.usage } : {}) };
       } catch (error) {
-        logger.warn(formatCompact({
+        accounting.close();
+        try { logger.warn(formatCompact({
           op: 'ai_completion',
           purpose,
-          bindingProvider: binding.providerAlias,
-          provider: executingProvider,
+          provider,
           model,
           outcome: 'error',
           durationMs: now() - started,
           error: error instanceof Error ? error.message : String(error),
-        }));
+        })); } catch { /* Diagnostics do not replace the actual failure. */ }
         throw error;
       } finally {
         try { await scope?.release(); }
@@ -154,23 +112,19 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       }
       const durationMs = now() - started;
       const reportedTokens = result.usage?.totalTokens;
-      const totalTokens = reportedTokens || undefined;
-      if (shares.length && options.usageQuota) {
-        // Reported usage settles the reservation; without it, estimate the answer on top of the prompt.
-        const settled = totalTokens ?? reserved + estimatePromptTokens(result.text);
-        if (settled > reserved) record(settled);
-      }
-      logger.info(formatCompact({
+      const totalTokens = reportedTokens;
+      accounting.finish({ ...(totalTokens !== undefined ? { totalTokens } : {}), text: result.text });
+      accounting.close();
+      try { logger.info(formatCompact({
         op: 'ai_completion',
         purpose,
-        bindingProvider: binding.providerAlias,
-        provider: executingProvider,
+        provider,
         model: result.model,
         outcome: 'ok',
         durationMs,
         ...(totalTokens ? { tokens: totalTokens } : {}),
         untrusted: input.untrusted?.length ?? 0,
-      }));
+      })); } catch { /* A completed inference remains successful when diagnostics fail. */ }
       return Object.freeze({
         text: result.text,
         model: result.model,
@@ -195,22 +149,6 @@ function usageShares(input: AiCompletionInput): readonly { subject: UsageSubject
   }
   if (!Number.isFinite([...shares.values()].reduce((sum, share) => sum + share.weight, 0))) throw new TypeError('AI completion: invalid total weight');
   return [...shares.values()];
-}
-
-/** Highest-averages rounding is monotone: settling a larger total never needs to refund a user. */
-function allocateTokens(tokens: number, weights: readonly number[]): number[] {
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-  const allocated = weights.map(weight => Math.floor(tokens * (weight / total)));
-  let remaining = tokens - allocated.reduce((sum, value) => sum + value, 0);
-  while (remaining > 0 && weights.length) {
-    let next = 0;
-    for (let index = 1; index < weights.length; index++) {
-      if (weights[index]! / (allocated[index]! + 1) > weights[next]! / (allocated[next]! + 1)) next = index;
-    }
-    const amount = Math.min(1, remaining);
-    allocated[next]! += amount; remaining -= amount;
-  }
-  return allocated;
 }
 
 function requiredText(value: unknown, name: string): string {

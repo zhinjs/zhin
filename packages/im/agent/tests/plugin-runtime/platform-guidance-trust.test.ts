@@ -41,12 +41,12 @@ describe('ADR 0044 trusted official adapters', () => {
   };
 
   it('does not label an official adapter plugin owned by another plugin', async () => {
-    const caps = await new CapabilityIngress().read(snapshotWith('@zhin.js/adapter-icqq'), owner, () => true, turn as never);
+    const caps = await new CapabilityIngress().read({ snapshot: snapshotWith('@zhin.js/adapter-icqq'), owner, isActive: () => true, turn: turn as never });
     expect(caps.platformGuidanceExternal).toBe(false);
   });
 
   it('keeps the external_content label for third-party adapter packages', async () => {
-    const caps = await new CapabilityIngress().read(snapshotWith('some-community-adapter'), owner, () => true, turn as never);
+    const caps = await new CapabilityIngress().read({ snapshot: snapshotWith('some-community-adapter'), owner, isActive: () => true, turn: turn as never });
     expect(caps.platformGuidanceExternal).toBe(true);
   });
 });

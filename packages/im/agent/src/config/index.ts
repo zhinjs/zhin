@@ -1,9 +1,4 @@
-export {
-  normalizeAiRoutingConfig,
-  normalizeProviderEntry,
-  type NormalizedAiRoutingConfig,
-} from './normalize-ai-config.js';
-export { validateAiRoutingConfig } from './validate-ai-config.js';
+export type { AgentStartupConfig } from './agent-startup.js';
 export { resolvePerceptionConfig } from './perception-config.js';
 export type { PerceptionConfigInput, PerceptionMediaKind, ResolvedPerceptionConfig } from './perception-config.js';
 export { applyAiConfigFixes } from './fix-ai-config.js';
@@ -93,4 +88,4 @@ export {
   resolveModelHarness,
 } from './model-harness-runtime.js';
 
-export { validateModelRuntimeConfig } from '../model-runtime/validation.js';
+export { validateModelRuntimeConfig, validateAgentMcpBindings } from '../model-runtime/validation.js';

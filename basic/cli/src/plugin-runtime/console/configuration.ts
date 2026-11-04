@@ -16,6 +16,7 @@ import { readPluginPackageMap } from './plugin-package-map.js';
 import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
+import { hostModelOwnerId } from '../inference/host-identity.js';
 import {
   assertChatConfigurationAccess, assertChatConfigurationScope, assertChatValueHasNoEnvironmentReference, assertChatOptionalLeaf, chatConfigurationLeaves, chatHostRoots, chatLeafTypes,
   ConfigChatAccessError, type ChatConfigurationScope,
@@ -557,6 +558,17 @@ export class ConsoleConfigurationStore {
     const errors: Array<{ path: string; message: string }> = [];
     const missingEnv = new Set<string>();
     const candidate = schema ? parsePluginConfigSchema(schema, data) : { value: data, errors: [] };
+    if (pluginName === 'ai') {
+      // Startup composition deliberately retains legacy data for explicit
+      // migration. A normal structured save must still pass its real consumer.
+      const { loadAiConfigUtils } = await import('../../utils/ai-config-loader.js');
+      const validate = loadAiConfigUtils(this.#projectRoot)?.validateModelRuntimeConfig;
+      const messages = validate
+        ? validate(candidate.errors.length === 0 ? candidate.value : data, hostModelOwnerId(this.#projectRoot))
+        : ['AI configuration validation requires the installed Agent package'];
+      if (messages.length) return Object.freeze({ schemaAvailable: schema !== null, valid: false,
+        errors: Object.freeze(messages.map(message => ({ path: '$', message }))), missingEnv: Object.freeze([]) });
+    }
     const environmentName = this.#environmentName();
     const environment = this.#environmentForPlugin?.(pluginName) ?? createEnvStore(rootPluginId(),
       { name: environmentName, mode: environmentName === 'production' ? 'production' : 'development', platform: 'node' },
@@ -632,13 +644,12 @@ export class ConsoleConfigurationStore {
 
 /** Project patches may write Host and declared Plugin business config, never declarations. */
 function projectDeclarationErrors(document: RuntimeConfigDocument, paths: readonly (readonly string[])[]): Array<{ path: string; message: string }> {
-  const plugins = document.plugins && typeof document.plugins === 'object' && !Array.isArray(document.plugins)
-    ? document.plugins as Record<string, unknown> : {};
+  const declared = new Set(readApplicationPluginDeclaration(document).instances.map(instance => instance.instanceKey));
   const errors: Array<{ path: string; message: string }> = [];
   for (const section of new Set(paths.map(path => path[0]!))) {
     if (PROJECT_PATCH_DECLARATION_KEYS.has(section)) {
       errors.push({ path: `$.${section}`, message: '插件声明与根插件配置请在配置源码或插件管理中修改' });
-    } else if (!HOST_CONFIG_KEYS.includes(section) && !Object.hasOwn(plugins, section)) {
+    } else if (!HOST_CONFIG_KEYS.includes(section) && !declared.has(section)) {
       errors.push({ path: `$.${section}`, message: '未声明的插件实例；请先在 plugins 中声明' });
     }
   }
