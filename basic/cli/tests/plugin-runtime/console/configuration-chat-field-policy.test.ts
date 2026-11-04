@@ -5,7 +5,7 @@ import { createConfigDocument } from '@zhin.js/config-file';
 import { HOST_CONFIG_PATCH_PATHS } from '@zhin.js/console-protocol';
 import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 import {
-  assertChatConfigurationScope, assertChatOptionalLeaf, chatLeafTypes, ConfigChatAccessError, isChatPermissionSegment,
+  assertChatConfigurationScope, assertChatOptionalLeaf, chatLeafTypes, chatConfigurationLeaves, ConfigChatAccessError, isChatPermissionSegment,
 } from '../../../src/plugin-runtime/console/configuration-chat-policy.js';
 
 const roots: string[] = [];
@@ -43,6 +43,32 @@ async function fixture() {
 }
 
 describe('chat field policy units', () => {
+  it('finds exact declared fields beyond the display limit without opening dynamic or array paths', () => {
+    const wide = { type: 'object', properties: Object.fromEntries(Array.from({ length: 257 }, (_, i) => [`field${String(i).padStart(3, '0')}`, { type: 'string' }])) };
+    expect(chatConfigurationLeaves(wide, [])).toHaveLength(256);
+    expect(chatConfigurationLeaves(wide, ['field256'])).toEqual([['field256']]);
+    expect(chatConfigurationLeaves(schema, ['tags', '0'])).toEqual([]);
+    expect(chatConfigurationLeaves(schema, ['rows', '0', 'label'])).toEqual([]);
+    const dynamic = { type: 'object', properties: { fixed: { type: 'string' } },
+      patternProperties: { '^pattern': { type: 'string' } }, additionalProperties: { type: 'string' } };
+    expect(chatConfigurationLeaves(dynamic, ['patternName'])).toEqual([]);
+    expect(chatConfigurationLeaves(dynamic, ['dynamicName'])).toEqual([]);
+    expect(chatConfigurationLeaves(dynamic, ['fixed'])).toEqual([['fixed']]);
+  });
+  it('retains the discovery depth boundary and resolves declared ancestors through local references', () => {
+    const within = Array.from({ length: 12 }, (_, i) => `level${i}`);
+    const nested = (path: readonly string[]) => {
+      let result: Record<string, unknown> = { type: 'string' };
+      for (const key of [...path].reverse()) result = { type: 'object', properties: { [key]: result } };
+      return result;
+    };
+    expect(chatConfigurationLeaves(nested(within), within)).toEqual([within]);
+    const beyond = [...within, 'last'];
+    expect(chatConfigurationLeaves(nested(beyond), beyond)).toEqual([]);
+    const referenced = { type: 'object', $defs: { profile: { type: 'object', properties: { label: { type: 'string' } } } },
+      properties: { profile: { $ref: '#/$defs/profile' } } };
+    expect(chatConfigurationLeaves(referenced, ['profile', 'label'])).toEqual([['profile', 'label']]);
+  });
   it.each(['master', 'masters', 'trusted', 'toolHardGate', 'tool_hard_gate', 'Admins', 'approvers', 'permissions', 'owner',
     'adminIds', 'ownerId', 'masterId', 'trustedUsers', 'superUsers', 'super_users', 'whitelist', 'allowlist', 'allowList', 'blacklist',
     'denylist', 'blockedUsers', 'bypassMasters', 'sudoers', 'operators', 'moderators', 'roles', 'userRoles', 'acl', 'allowedUserIds',

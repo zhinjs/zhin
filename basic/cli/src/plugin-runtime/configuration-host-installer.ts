@@ -4,7 +4,7 @@ import type { ConsoleConfigApplicationStatus } from '@zhin.js/console-protocol';
 import { readOperationSession } from '@zhin.js/feature-kit';
 import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { ConfigChatAccessError, ConfigChatRequestRejectedError, parseConfigurationPath, type ConsoleConfigurationStore } from './console/module.js';
+import { ConfigChatAccessError, ConfigChatRequestRejectedError, parseConfigurationPath, formatConfigurationPath, type ConsoleConfigurationStore } from './console/module.js';
 import type { ConfigurationChatAuthorizer } from './sender-enrichment.js';
 
 const messages = createMessages({
@@ -129,7 +129,13 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
       if (!path) return messages(command.locale, 'path');
       const { fields = [] } = await options.store.readChat(path, 'fields');
       if (!fields.length) return messages(command.locale, 'noFields');
-      return fields.map(field => `${field.path.join('.')}: ${field.type.join(' | ')}`).join('\n');
+      const lines = fields.flatMap(field => {
+        const path = formatConfigurationPath(field.path);
+        if (path === undefined) return [];
+        const token = /^-|[\s"'\\]/u.test(path) ? JSON.stringify(path) : path;
+        return [`${token}: ${field.type.join(' | ')}`];
+      });
+      return lines.length ? lines.join('\n') : messages(command.locale, 'noFields');
     });
     register('get', { path: { type: 'string' } }, async command => {
       const path = pathOf(command);
@@ -146,11 +152,8 @@ export function installConfigurationHost(options: Readonly<{ store: Store; autho
       const leaf = await options.store.readChat(path, 'fields');
       const field = leaf.fields?.find(same);
       if (!field) return messages(command.locale, 'leaf');
-      // M2: a write may only target a path `config fields <root>` would show, so array
-      // items such as `endpoints.0.id` that the listing never enumerates are refused.
-      const listed = await options.store.readChat(path.slice(0, 1), 'fields');
-      if (listed.revision !== leaf.revision) return messages(command.locale, 'conflict');
-      if (!listed.fields?.some(same)) return messages(command.locale, 'leaf');
+      // Exact fields discovery proves properties-only ancestry independently of
+      // the display limit. The Store rechecks scope/schema and this revision at CAS.
       let value: unknown;
       if (action === 'set') {
         const parsed = parseChatConfigurationValue(String(command.params.value ?? ''), field.type);
