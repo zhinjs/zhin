@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import {
   assertDeclaredProfileActions,
+  endpointKindCapabilities,
   defineAdapter,
   resolveTurnCapabilities,
   type AdapterDefinition,
 } from 'zhin.js/adapter';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
+import { resolveActivityFeedbackPhaseConfig } from '../../../packages/im/agent/src/activity-feedback/config-resolver.js';
 import { bindTestEndpoint } from '../test-utils/endpoint.js';
 
 import bilibili from '../bilibili/adapters/bilibili/index.js';
@@ -153,5 +155,39 @@ describe('declared actions find their ports on real endpoints (assembly check)',
   it('qq official (websocket)', () => {
     const config = resolveQqConfig({ id: 'qq-t', appid: 'a', secret: 's', mode: 'websocket' }) as never;
     check(qq, [bindTestEndpoint(new QqWebsocketEndpoint({ id, config, createBot: (() => ({})) as never }), gateway, undefined)]);
+  });
+});
+
+/**
+ * Pre-0044 `media-publisher` spooled large inline media for every platform EXCEPT icqq (its daemon is
+ * often on another host, so a local path is unreadable). `delivery.spool` must reproduce that exactly.
+ */
+describe('delivery.spool matches the pre-0044 media rule', () => {
+  const PRE_0044_NO_SPOOL = new Set(['icqq']);
+  it.each(Object.entries(definitions))('%s', (name, definition) => {
+    const profile = definition.profile!;
+    for (const kind of ['private', 'group', 'channel'] as const) {
+      const caps = resolveTurnCapabilities({ profile, conversation: conv(name, kind) });
+      expect(caps.has('delivery.spool'), `${name}/${kind}`).toBe(!PRE_0044_NO_SPOOL.has(name));
+    }
+  });
+});
+
+describe('discord activity feedback keeps working (reaction lives in operations)', () => {
+  const kinds = (operations: Parameters<typeof endpointKindCapabilities>[1]) =>
+    endpointKindCapabilities(discord.profile!, operations);
+
+  it('gateway: reaction is available and chosen for queued / active', () => {
+    const group = kinds(['recall', 'reaction']).group!;
+    expect(group.reaction).toBe(true);
+    expect(resolveActivityFeedbackPhaseConfig(group, undefined, 'queued', 'group').type).toBe('reaction');
+    expect(resolveActivityFeedbackPhaseConfig(group, undefined, 'active', 'group').type).toBe('reaction');
+  });
+
+  it('interactions transport has no reaction and degrades to a status message', () => {
+    const group = kinds(['recall']).group!;
+    expect(group.reaction).toBe(false);
+    expect(resolveActivityFeedbackPhaseConfig(group, undefined, 'queued', 'group').type).toBe('message');
+    expect(resolveActivityFeedbackPhaseConfig(group, undefined, 'active', 'group').type).toBe('message');
   });
 });

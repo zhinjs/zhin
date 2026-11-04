@@ -37,7 +37,7 @@ export default defineAdapter<GithubEndpointConfig>({
           interactive: 'text',
         },
       },
-      delivery: { send: true },
+      delivery: { send: true, spool: true },
     },
   },
   create(context) {

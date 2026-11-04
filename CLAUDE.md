@@ -38,6 +38,7 @@ Custom lint checks:
 - `pnpm check:no-koa` — 检测插件是否直接 import koa（应使用 RouterContext）
 - `pnpm check:prod` — 检查生产环境配置（无 console.log/debugger/TODO/FIXME）
 - `pnpm check:plugin` — 检查插件是否符合标准规范（入口文件、测试、README）
+- `pnpm check:no-platform-branches` — 检测运行时代码是否出现平台名分支（应读适配器能力画像，ADR 0044；白名单 `scripts/no-platform-branches-allowlist.json`）
 - `pnpm check:no-removed-plugin-api` — 检测是否重新调用已从 public surface 删除的 Plugin lookup API
 - `pnpm check:plugin-agent-publish` — 带 agent/ 的插件发布清单（files、prepublishOnly）
 - `pnpm check:all` — 运行所有 harness 检查（含 type-check / lint / test）

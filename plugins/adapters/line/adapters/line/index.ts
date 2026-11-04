@@ -24,7 +24,7 @@ export default defineAdapter<LineEndpointConfig>({
           interactive: 'text',
         },
       },
-      delivery: { send: true },
+      delivery: { send: true, spool: true },
     },
   },
   create(context) {

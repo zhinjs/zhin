@@ -23,7 +23,7 @@ export default defineAdapter<BilibiliLiveEndpointConfig>({
         },
         maxLength: 20,
       },
-      delivery: { send: true },
+      delivery: { send: true, spool: true },
     },
   },
   create(context) {

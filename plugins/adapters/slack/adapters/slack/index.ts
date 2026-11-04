@@ -37,7 +37,7 @@ export default defineAdapter<SlackEndpointConfig>({
           params: { cancellable: true },
         },
       },
-      delivery: { send: true, proactive: true },
+      delivery: { send: true, proactive: true, spool: true },
     },
   },
   create(context) {

@@ -35,7 +35,7 @@ export default defineAdapter<TelegramEndpointConfig>({
         },
         quoteReply: { scopes: ['private', 'group', 'channel'] },
       },
-      delivery: { send: true, proactive: true },
+      delivery: { send: true, proactive: true, spool: true },
     },
   },
   create(context) {

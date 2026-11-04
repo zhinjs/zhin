@@ -30,7 +30,7 @@ export default defineAdapter<BilibiliEndpointConfig>({
         },
         maxLength: 1000,
       },
-      delivery: { send: true },
+      delivery: { send: true, spool: true },
     },
   },
   create(context) {

@@ -48,7 +48,7 @@ export default defineAdapter<NapCatEndpointConfig>({
         quoteReply: { scopes: ['private', 'group'] },
         announce: { scopes: ['group'], requiresRole: 'admin' },
       },
-      delivery: { send: true, proactive: true },
+      delivery: { send: true, proactive: true, spool: true },
     },
   },
   create(context) {

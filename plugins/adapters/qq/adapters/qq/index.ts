@@ -49,7 +49,7 @@ export default defineAdapter<QqEndpointConfig>({
         recall: { scopes: ['private', 'group', 'channel'] },
         quoteReply: { scopes: ['private', 'group', 'channel'] },
       },
-      delivery: { send: true, requiresMessageSeq: true },
+      delivery: { send: true, requiresMessageSeq: true, spool: true },
     },
     private: {
       delivery: { passiveWindow: { seconds: 3600, maxMessages: 4 } },

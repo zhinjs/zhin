@@ -240,7 +240,7 @@ export class AdapterIndex {
     const record = this.#records.get(id);
     if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
     const base = endpointCapabilitiesOf(record, record.operations);
-    return Object.freeze({ ...base, kinds: endpointKindCapabilities(record.profile) });
+    return Object.freeze({ ...base, kinds: endpointKindCapabilities(record.profile, record.operations) });
   }
 
   /** Returns the control port only when the concrete Endpoint declared the operation and is active. */
@@ -522,6 +522,7 @@ const KIND_VIEWS = ['private', 'group', 'channel'] as const;
 /** The serializable per-kind consumer view of a capability profile (see `EndpointCapabilities.kinds`). */
 export function endpointKindCapabilities(
   profile: AdapterCapabilityProfile,
+  operations: readonly AdapterOperation[] = [],
 ): NonNullable<EndpointCapabilities['kinds']> {
   const kinds: Partial<Record<(typeof KIND_VIEWS)[number], EndpointKindCapabilities>> = {};
   for (const kind of KIND_VIEWS) {
@@ -536,9 +537,11 @@ export function endpointKindCapabilities(
           ...(feedback.refreshSeconds ? { refreshSeconds: feedback.refreshSeconds } : {}),
         }),
       } : {}),
-      reaction: Boolean(section.actions?.reaction),
-      edit: section.messaging?.edit === true,
-      recall: Boolean(section.actions?.recall || section.messaging?.recall),
+      // `operations` may add what a static profile cannot say (e.g. Discord reactions exist only on the
+      // gateway transport, so they live in the Adapter's per-Endpoint `operations`).
+      reaction: Boolean(section.actions?.reaction) || operations.includes('reaction'),
+      edit: section.messaging?.edit === true || operations.includes('edit'),
+      recall: Boolean(section.actions?.recall || section.messaging?.recall) || operations.includes('recall'),
       spool: section.delivery?.spool === true,
       needsReply: section.delivery?.proactive === false,
       groupInfo: section.scene?.groupInfo === true,

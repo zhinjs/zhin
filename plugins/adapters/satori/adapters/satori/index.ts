@@ -34,7 +34,7 @@ export default defineAdapter<SatoriEndpointConfig>({
       actions: {
         recall: { scopes: ['private', 'group', 'channel'] },
       },
-      delivery: { send: true },
+      delivery: { send: true, spool: true },
     },
   },
   create(context) {

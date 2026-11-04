@@ -28,6 +28,7 @@ export default defineAdapter<WeChatMpEndpointConfig>({
       },
       delivery: {
         send: true,
+        spool: true,
         passiveWindow: { seconds: 172800 },
       },
     },

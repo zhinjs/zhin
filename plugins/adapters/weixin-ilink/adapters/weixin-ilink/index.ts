@@ -31,7 +31,7 @@ export default defineAdapter<WeixinIlinkEndpointConfig>({
         },
       },
       feedback: { mode: 'typing' },
-      delivery: { send: true },
+      delivery: { send: true, spool: true },
     },
   },
   create(context) {

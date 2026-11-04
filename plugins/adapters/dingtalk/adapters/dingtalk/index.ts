@@ -26,7 +26,7 @@ export default defineAdapter<DingTalkEndpointConfig>({
           markdown: 'native',
         },
       },
-      delivery: { send: true },
+      delivery: { send: true, spool: true },
     },
   },
   create(context) {

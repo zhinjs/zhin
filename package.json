@@ -98,6 +98,7 @@
     "check:workroom-ssot": "node scripts/check-workroom-ssot.mjs",
     "check:a2a-mesh": "node scripts/check-a2a-mesh.mjs",
     "check:feature-peers": "node scripts/check-feature-peers.mjs",
+    "check:no-platform-branches": "node scripts/check-no-platform-branches.mjs",
     "check:no-removed-plugin-api": "node scripts/check-no-removed-plugin-api.mjs",
     "check:plugin-runtime-migration-readiness": "node scripts/check-plugin-runtime-migration-readiness.mjs",
     "check:plugin-runtime-migration-verify": "pnpm exec vitest run basic/cli/tests/plugin-runtime/migration-verify.test.ts",

@@ -109,6 +109,7 @@ Sandbox 验收同时用已安装的 CLI 在工作区子包预演和执行 `migra
 | --- | --- |
 | IM Send Path（`pnpm check:harness-paths`） | 不得绕过 Adapter.sendMessage 统一链路 |
 | IM Session SSOT（`pnpm check:im-session-ssot`） | IM 场景/session 身份解析走 core SSOT |
+| No Platform Branches（`pnpm check:no-platform-branches`） | core / agent / ai / adapter `src` 与 `basic/cli/src/plugin-runtime` 禁止平台名字面量与平台名表键（`icqq`、`discord`…），差异须读适配器能力画像（ADR 0044）；例外登记在 `scripts/no-platform-branches-allowlist.json` 并写明理由 |
 | Removed Plugin API（`pnpm check:no-removed-plugin-api`） | 禁止在生产源码中重新引入已删除的 Plugin lookup API |
 | Workroom SSOT（`pnpm check:workroom-ssot`） | Workroom 状态只经 Journal + CAS Kernel；禁止恢复并行可变权威 |
 

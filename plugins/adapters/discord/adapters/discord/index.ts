@@ -46,7 +46,9 @@ export default defineAdapter<DiscordEndpointConfig>({
         recall: { scopes: ['private', 'group', 'channel'] },
         quoteReply: { scopes: ['private', 'group', 'channel'] },
       },
-      delivery: { send: true, proactive: true },
+      // Activity feedback prefers a reaction; the interactions transport has none, so it degrades to a status message.
+      feedback: { mode: 'reaction' },
+      delivery: { send: true, proactive: true, spool: true },
     },
   },
   create(context) {

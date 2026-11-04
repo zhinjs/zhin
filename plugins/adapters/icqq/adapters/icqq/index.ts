@@ -2,7 +2,7 @@ import { projectLocaleToken } from 'zhin.js/i18n';
 /**
  * Convention entry: discover `adapters/icqq/index.ts` → defineAdapter.
  */
-import { defineAdapter } from 'zhin.js/adapter';
+import { defineAdapter, resolvePlatformRole } from 'zhin.js/adapter';
 import { loginAssistToken } from '@zhin.js/core/runtime';
 import { IcqqEndpoint } from '../../src/endpoint.js';
 import { icqqRuntimeStateToken } from '../../src/icqq-runtime-state.js';
@@ -64,7 +64,7 @@ export default defineAdapter<IcqqEndpointConfig>({
         forward: { scopes: ['private', 'group'] },
         poke: { scopes: ['private', 'group'] },
       },
-      delivery: { send: true, proactive: true, spool: true },
+      delivery: { send: true, proactive: true, spool: false },
     },
     private: {
       // A private chat has no reactions, so feedback is a short status message.
@@ -81,6 +81,8 @@ export default defineAdapter<IcqqEndpointConfig>({
         mute: { durationSeconds: ICQQ_MUTE_SECONDS, all: true },
       },
       actions: {
+        // Own messages need no role; recalling others' needs an admin (narrowed in resolveCapabilities).
+        recall: { scopes: ['private', 'group'], params: { timeLimitSeconds: 120, others: true } },
         reaction: { scopes: ['group'], params: { emojis: ICQQ_REACTIONS.map((item) => item.value), own: true, others: true, cancellable: true } },
         mute: { scopes: ['group'], requiresRole: 'admin', params: { durationSeconds: ICQQ_MUTE_SECONDS } },
         unmute: { scopes: ['group'], requiresRole: 'admin' },
@@ -109,6 +111,13 @@ export default defineAdapter<IcqqEndpointConfig>({
       },
       feedback: { mode: 'none' },
     },
+  },
+  resolveCapabilities({ capabilities, facts }) {
+    if (!capabilities.actions?.recall) return undefined;
+    const role = resolvePlatformRole(capabilities.scene, facts.bot?.platformRole);
+    // Unknown role fails closed, like every other role-gated action.
+    if (role === 'owner' || role === 'admin') return undefined;
+    return { actions: { recall: { params: { others: false } } } };
   },
   create(context) {
     const config = resolveIcqqConfig(context.config);

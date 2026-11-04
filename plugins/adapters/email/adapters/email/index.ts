@@ -32,7 +32,7 @@ export default defineAdapter<EmailEndpointConfig>({
           interactive: 'text',
         },
       },
-      delivery: { send: true, proactive: true },
+      delivery: { send: true, proactive: true, spool: true },
     },
   },
   create(context) {

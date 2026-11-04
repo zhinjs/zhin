@@ -44,7 +44,7 @@ export default defineAdapter<OneBot12EndpointConfig>({
         recall: { scopes: ['private', 'group'] },
         quoteReply: { scopes: ['private', 'group'] },
       },
-      delivery: { send: true, proactive: true },
+      delivery: { send: true, proactive: true, spool: true },
     },
   },
   create(context) {

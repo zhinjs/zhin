@@ -138,12 +138,24 @@ export class CapabilityIngress {
   }
 }
 
+/**
+ * ADR 0044 trust decision (single place, easy to revert): an adapter package published under the
+ * `@zhin.js/` scope is an official, trusted adapter; its custom `profile.prompt.text` is not labelled
+ * `external_content`. Every other adapter package keeps the label.
+ */
+const TRUSTED_ADAPTER_SCOPE = '@zhin.js/';
+export function isTrustedOfficialAdapterPackage(packageName: string | undefined): boolean {
+  return typeof packageName === 'string' && packageName.startsWith(TRUSTED_ADAPTER_SCOPE);
+}
+
 function adapterIsExternal(snapshot: RuntimeSnapshot, owner: PluginId, turn?: TurnAccessContext): boolean {
   const endpoint = turn?.origin.kind === 'im' ? turn.origin.conversation?.endpoint.id : undefined;
   const adapters = snapshot.projections.get(adapterFeatureId);
   if (!endpoint || !isAdapterIndex(adapters)) return false;
   try {
-    return adapters.owner(endpoint as CapabilityId) !== owner;
+    const adapterOwner = adapters.owner(endpoint as CapabilityId);
+    if (adapterOwner === owner) return false;
+    return !isTrustedOfficialAdapterPackage(snapshot.tree.get(adapterOwner)?.packageName);
   } catch {
     return false;
   }

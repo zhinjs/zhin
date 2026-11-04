@@ -77,6 +77,16 @@ describe('icqq capability profile', () => {
     }
   });
 
+  it('recall: own messages need no role, recalling others needs an admin or owner', () => {
+    for (const role of ['admin', 'owner']) expect(resolve('group', role).has('actions.recall.others'), role).toBe(true);
+    for (const role of ['member', undefined]) {
+      const caps = resolve('group', role);
+      expect(caps.has('actions.recall'), String(role)).toBe(true);
+      expect(caps.has('actions.recall.others'), String(role)).toBe(false);
+    }
+    expect(resolve('private', 'admin').has('actions.recall.others')).toBe(false);
+  });
+
   it('group, role unknown fails closed for role-gated actions', () => {
     const caps = resolve('group');
     expect(caps.has('actions.mute')).toBe(false);
@@ -111,7 +121,8 @@ describe('icqq capability profile', () => {
     expect(caps.get('scene.groupInfo')).toBe(true);
     expect(caps.get('scene.memberProfile')).toBe(true);
     expect(caps.get('scene.title')).toBe(true);
-    expect(caps.get('delivery.spool')).toBe(true);
+    // icqq daemons are often on another host: local paths are unreadable, so it keeps inline base64.
+    expect(caps.has('delivery.spool')).toBe(false);
     expect((caps.get<string>('prompt.text') ?? '').length).toBeLessThanOrEqual(600);
   });
 

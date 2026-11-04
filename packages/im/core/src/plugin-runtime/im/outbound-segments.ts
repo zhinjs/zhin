@@ -128,18 +128,8 @@ export function isOutboundSegment(value: unknown): value is OutboundSegment {
 }
 
 /**
- * 平台名 → 出站 interactive 策略（adapter 未声明 `segments.interactive` 时
- * 的内置来源）：telegram / discord 端点自行把 keyboard 编码为原生按钮；
- * 其余平台默认 'text'（编号文本降级）。
- */
-const OUTBOUND_INTERACTIVE_POLICY_BY_ADAPTER: Record<string, InteractivePolicy> = {
-  telegram: 'native',
-  discord: 'native',
-};
-
-/**
  * 解析端点的出站 interactive 策略：优先读 adapter definition 上声明的
- * `segments.interactive`，否则按平台名查内置表，未知平台回退 'text'。
+ * `segments.interactive`（ADR 0044：原生按钮由 adapter 自己声明，core 不认平台名），否则回退 'text'。
  */
 export function resolveOutboundInteractivePolicy(
   adapter: CapabilityId,
@@ -149,10 +139,7 @@ export function resolveOutboundInteractivePolicy(
     ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
   const declared = readDeclaredInteractivePolicy(slot?.definition);
   if (declared) return declared;
-  const packageName = slot ? snapshot.tree.get(slot.owner)?.packageName : undefined;
-  const adapterType = adapterTypeName(packageName);
-  return (adapterType ? OUTBOUND_INTERACTIVE_POLICY_BY_ADAPTER[adapterType] : undefined)
-    ?? DEFAULT_INTERACTIVE_POLICY;
+  return DEFAULT_INTERACTIVE_POLICY;
 }
 
 /** Read declared support from this operation's snapshot without requiring live admission. */
@@ -286,12 +273,6 @@ export function applyOutboundInteractivePolicy(
 function baseSlotCapabilityId(adapter: CapabilityId): CapabilityId {
   const tilde = adapter.indexOf('~');
   return (tilde === -1 ? adapter : adapter.slice(0, tilde)) as CapabilityId;
-}
-
-/** `@zhin.js/adapter-icqq` → `icqq`；非 adapter 包名原样返回。 */
-function adapterTypeName(packageName: string | undefined): string | undefined {
-  if (!packageName) return undefined;
-  return packageName.replace(/^@[^/]+\/adapter-/, '');
 }
 
 /**

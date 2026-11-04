@@ -30,7 +30,7 @@ export default defineAdapter<WecomEndpointConfig>({
       actions: {
         recall: { scopes: ['private', 'group'] },
       },
-      delivery: { send: true, proactive: true },
+      delivery: { send: true, proactive: true, spool: true },
     },
   },
   create(context) {

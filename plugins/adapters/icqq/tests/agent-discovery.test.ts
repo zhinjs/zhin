@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { resolveTurnCapabilities, type AdapterCapabilityProfile } from '@zhin.js/adapter';
+import { resolveTurnCapabilities } from '@zhin.js/adapter';
 import { FeatureDiscovery } from '@zhin.js/feature-kit';
 import toolFeature, { ToolIndex, toolFeatureId } from '@zhin.js/tool';
 import skillFeature, { SkillIndex, skillFeatureId } from '@zhin.js/skill';
@@ -9,27 +9,16 @@ import { NodeDiscoveryHost } from '../../../../packages/im/runtime/src/node-disc
 import { CapabilityIngress } from '../../../../packages/im/agent/src/plugin-runtime/capability-ingress.js';
 import { createDeferredCapabilityPlan } from '../../../../packages/im/agent/src/plugin-runtime/deferred-capability-plan.js';
 
-/** A declared fixture profile (ADR 0044): moderation needs a Bot admin; `recall.others` is narrowed by the adapter. */
-const moderationProfile: AdapterCapabilityProfile = {
-  default: { delivery: { send: true } },
-  group: {
-    actions: {
-      mute: { scopes: ['group'], requiresRole: 'admin' },
-      kick: { scopes: ['group'], requiresRole: 'admin' },
-      essence: { scopes: ['group'], requiresRole: 'admin' },
-      announce: { scopes: ['group'], requiresRole: 'admin' },
-      setTitle: { scopes: ['group'], requiresRole: 'admin' },
-      recall: { scopes: ['group'], params: { others: true } },
-    },
-  },
-};
+vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
+
+import definition from '../adapters/icqq/index.js';
+
+// The REAL icqq profile and resolver (ADR 0044): no fixtures.
 const capsFor = (role: string | undefined) => resolveTurnCapabilities({
-  profile: moderationProfile,
+  profile: definition.profile!,
   conversation: { endpoint: { id: '7', adapter: 'icqq' }, kind: 'group', id: '100' },
   facts: role ? { bot: { platformRole: role } } : {},
-  narrow: ({ facts }) => facts.bot?.platformRole === 'admin' || facts.bot?.platformRole === 'owner'
-    ? undefined
-    : { actions: { recall: { params: { others: false } } } },
+  ...(definition.resolveCapabilities ? { narrow: definition.resolveCapabilities } : {}),
 });
 
 it('discovers real ICQQ skills, gates member tools by requester, and loads own recall on demand', async () => {
@@ -103,7 +92,13 @@ it('discovers real ICQQ skills, gates member tools by requester, and loads own r
   turn.input.contextState.bot.platformRole = 'admin';
   turn.input.platformCapabilities = capsFor('admin');
   const restored = await ingress.read(snapshot, root, () => true, turn, 'icqq');
-  for (const name of ['group_kick', 'set_mute', 'essence', 'announce', 'set_title', 'recall_member_message']) {
+  for (const name of ['group_kick', 'set_mute', 'essence', 'announce', 'recall_member_message']) {
     expect(restored.tools.some(tool => tool.name.endsWith(`__${name}`)), name).toBe(true);
   }
+  // The real profile makes titles owner-only: an admin Bot does not get set_title, an owner Bot does.
+  expect(restored.tools.some(tool => tool.name.endsWith('__set_title'))).toBe(false);
+  turn.input.contextState.bot.platformRole = 'owner';
+  turn.input.platformCapabilities = capsFor('owner');
+  const ownerAgain = await ingress.read(snapshot, root, () => true, turn, 'icqq');
+  expect(ownerAgain.tools.some(tool => tool.name.endsWith('__set_title'))).toBe(true);
 });

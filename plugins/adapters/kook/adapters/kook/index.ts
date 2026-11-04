@@ -43,7 +43,7 @@ export default defineAdapter<KookEndpointConfig>({
         recall: { scopes: ['private', 'group', 'channel'] },
         quoteReply: { scopes: ['private', 'group', 'channel'] },
       },
-      delivery: { send: true, proactive: true },
+      delivery: { send: true, proactive: true, spool: true },
     },
   },
   create(context) {
