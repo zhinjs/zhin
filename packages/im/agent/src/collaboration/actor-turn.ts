@@ -141,7 +141,9 @@ async function runActorTurn(
   const persona = actorPersona(agent.displayName || agent.name, agent.instructions, agent.name === options.directory.entry.name);
   const turnId = `${rootTurn.identity.turnId}:actor:${actor}:${mail.id}`;
   const sessionKey = `${rootTurn.session.key}#actor:${actor}`;
-  const turnSignal = AbortSignal.any([signal, rootTurn.signal]);
+  // Budget is enforced per model request, not only by the iteration cap (invariant 2).
+  const budgetStop = new AbortController();
+  const turnSignal = AbortSignal.any([signal, rootTurn.signal, budgetStop.signal]);
   const turn = createTurnIngress({
     identity: Object.freeze({ ...rootTurn.identity, turnId }),
     origin: rootTurn.origin,
@@ -178,10 +180,22 @@ async function runActorTurn(
 
   let modelRequests = 0;
   let usageTokens = 0;
+  const allowance = harness.remaining(mail);
+  const exhausted = (): boolean => Boolean(allowance && (
+    modelRequests >= allowance.modelCalls || (allowance.tokens > 0 && usageTokens >= allowance.tokens)
+  ));
   const onEvent = (event: TurnEvent): void => {
+    if (event.type === 'iteration_start') {
+      // The next model request would overspend the grant: stop before it is made.
+      if (modelRequests > 0 && exhausted() && !budgetStop.signal.aborted) budgetStop.abort(BUDGET_EXHAUSTED);
+      return;
+    }
     if (event.type !== 'usage') return;
     modelRequests += 1;
     usageTokens += event.usage.totalTokens;
+    if (allowance && (modelRequests > allowance.modelCalls || (allowance.tokens > 0 && usageTokens > allowance.tokens)) && !budgetStop.signal.aborted) {
+      budgetStop.abort(BUDGET_EXHAUSTED);
+    }
   };
 
   let outcome: ActorTurnResult;
@@ -225,11 +239,15 @@ async function runActorTurn(
     }), onEvent);
     reportedTokens = result.usage?.total_tokens;
     reportedIterations = result.iterations ?? 0;
-    outcome = turnSignal.aborted
-      ? { status: 'cancelled', content: abortReason(turnSignal) }
-      : { status: 'completed', content: result.reply.trim() || EMPTY_REPLY_NOTE };
+    outcome = budgetStop.signal.aborted
+      ? { status: 'budget_exceeded', content: budgetNote(result.reply, modelRequests) }
+      : turnSignal.aborted
+        ? { status: 'cancelled', content: abortReason(turnSignal) }
+        : { status: 'completed', content: result.reply.trim() || EMPTY_REPLY_NOTE };
   } catch (error) {
-    outcome = turnSignal.aborted
+    outcome = budgetStop.signal.aborted
+      ? { status: 'budget_exceeded', content: budgetNote('', modelRequests) }
+      : turnSignal.aborted
       ? { status: 'cancelled', content: abortReason(turnSignal) }
       : { status: 'failed', content: error instanceof Error ? error.message : String(error) };
   }
@@ -242,6 +260,14 @@ async function runActorTurn(
     if (!charged.ok && charged.code === 'budget_exceeded') return { status: 'budget_exceeded', content: outcome.content };
   }
   return outcome;
+}
+
+const BUDGET_EXHAUSTED = 'budget exhausted';
+
+function budgetNote(reply: string, calls: number): string {
+  const partial = reply.trim();
+  const note = `Stopped: the budget granted for this work ran out after ${calls} model call(s).`;
+  return partial ? `${partial}\n\n${note}` : note;
 }
 
 function stricterTrust(a: InitiatorTrustLevel, b: InitiatorTrustLevel): InitiatorTrustLevel {

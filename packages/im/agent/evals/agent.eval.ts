@@ -13,7 +13,7 @@
 import { writeFileSync } from 'node:fs';
 import { afterAll, describe, it } from 'vitest';
 import type { ContextBudgetReport } from '../src/trace/context-budget.js';
-import { evaluateExpectations, formatEvalReport, isEvalSkipped, loadEvalCases, persistEvalTraces, runEvalCase, type EvalCase } from './framework/index.js';
+import { evaluateExpectations, formatEvalReport, loadEvalCases, persistEvalTraces, runEvalCase, type EvalCase } from './framework/index.js';
 
 const cases = loadEvalCases(import.meta.glob<{ default: EvalCase }>('./cases/*.case.ts', { eager: true }));
 const contextReportFile = process.env.ZHIN_EVAL_CONTEXT_REPORT;
@@ -21,7 +21,7 @@ const contextReport: Array<{ id: string; passed: boolean; context_budget?: Conte
 
 describe('agent evals (scripted model)', () => {
   for (const definition of cases) {
-    const skipped = isEvalSkipped(definition);
+    const skipped = Boolean(definition.skip);
     const test = skipped ? it.skip : it;
     const title = skipped ? `${definition.id} — SKIPPED: ${definition.skip}` : `${definition.id} — ${definition.description}`;
     test(title, async () => {

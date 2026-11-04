@@ -2,7 +2,7 @@ export { createScriptedModel, actorOfSession, ENTRY_ACTOR, ScriptExhaustedError,
 export type { ScriptStep, ScriptFault, ScriptedToolCall, ScriptedModel, ScriptedModelOptions, ScriptedModelRequest } from './scripted-model.js';
 export { createFakeClock } from './fake-clock.js';
 export type { EvalClock } from './fake-clock.js';
-export { defineEvalCase, validateEvalCase, loadEvalCases, harnessEvalsEnabled, isEvalSkipped, HARNESS_EVAL_ENV } from './fixture.js';
+export { defineEvalCase, validateEvalCase, loadEvalCases } from './fixture.js';
 export type {
   EvalCase, EvalAgentFixture, EvalExpectations, EvalInboundMessage, EvalImage, EvalTool, EvalTag, EvalTermination, EvalApprovalBehaviour, EvalNativeTool, EvalLiveMode, EvalMemoryEntry,
   EvalSelfChangeFixture, EvalSelfChangeFile, EvalSelfChangeStatus,

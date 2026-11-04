@@ -261,3 +261,32 @@ describe('harness: attached root turn', () => {
     await attached.detach({ status: 'completed' });
   });
 });
+
+describe('harness: escalation freezes the engagement', () => {
+  it('notifies once, cancels branches in flight and refuses later sends', async () => {
+    const outcomes: unknown[] = [];
+    const { harness, escalations } = setup([ceiling('zhin', ALL), ceiling('alice', ALL), ceiling('bob', ALL)], {
+      alice: async (mail, h) => {
+        const outcome = await h.send('alice', mail, { kind: 'ask', to: 'bob', text: 'yours?' });
+        return { status: 'completed', content: outcome.ok ? outcome.reply?.content : outcome.code };
+      },
+      bob: async (mail, h) => {
+        outcomes.push(await h.send('bob', mail, { kind: 'ask', to: 'alice', text: 'yours?' }));
+        outcomes.push(await h.send('bob', mail, { kind: 'tell', to: 'zhin', text: 'still here' }));
+        return { status: 'completed', content: 'no' };
+      },
+    });
+    const attached = await harness.attach({ principal: master, entry: 'zhin', body: humanBody('who?'), budget: BUDGET });
+    if (!attached.ok) throw new Error('attach failed');
+    const asked = await harness.send('zhin', attached.root, { kind: 'ask', to: 'alice', text: 'who owns this?' });
+    expect(asked).toMatchObject({ ok: true, reply: { status: 'cancelled' } });
+    expect(outcomes).toEqual([
+      expect.objectContaining({ ok: false, code: 'wait_cycle', escalated: true }),
+      expect.objectContaining({ ok: false, code: 'frozen' }),
+    ]);
+    expect(escalations).toHaveLength(1);
+    expect(await harness.send('zhin', attached.root, { kind: 'ask', to: 'bob', text: 'again' })).toMatchObject({ ok: false, code: 'frozen' });
+    await attached.detach({ status: 'completed' });
+    await harness.idle();
+  });
+});

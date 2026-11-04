@@ -6,7 +6,6 @@ export default defineEvalCase({
   id: 'harness-delegate-result-wakes-delegator',
   description: 'An async delegation acknowledges first, then the result mail wakes the delegator to answer with it.',
   source: 'ADR 0048 §3.3 (delegate + result mail)',
-  skip: 'ADR 0048 H2：协作工具（agents/ask/delegate）与 Guard Kernel 尚未实现，实现后去掉 skip',
   tags: ['collaboration', 'long-task'],
   inbound: { text: '让 researcher 查一下 Node 24 什么时候进入 LTS', sender: { id: 'master', roles: ['master'] } },
   tools: [{ name: 'lookup_docs', result: 'Node.js 24 entered Active LTS in October 2025.' }],

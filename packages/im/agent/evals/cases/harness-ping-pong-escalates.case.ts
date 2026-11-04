@@ -6,7 +6,6 @@ export default defineEvalCase({
   id: 'harness-ping-pong-escalates',
   description: 'Two agents asking each other the same thing are stopped within the round-trip limit; the loop never runs out the script.',
   source: 'ADR 0048 §3.4 invariant 5 (loop convergence)',
-  skip: 'ADR 0048 H2：协作工具（agents/ask/delegate）与 Guard Kernel 尚未实现，实现后去掉 skip',
   tags: ['collaboration', 'long-task'],
   inbound: { text: '这个需求该谁做？', sender: { id: 'master', roles: ['master'] } },
   agents: [
@@ -24,5 +23,7 @@ export default defineEvalCase({
     { text: 'alice 和 bob 互相推了几轮没定下来，这个需要你来决定由谁负责。' },
   ],
   allowUnusedSteps: true,
-  expect: { maxModelSteps: 10 },
+  // Contacts shrink along the chain, so bob can never ask alice back; alice repeating herself trips the
+  // duplicate limit, which freezes the engagement and tells the human once.
+  expect: { maxModelSteps: 12, outboundContains: ['需要你来决定'] },
 });

@@ -215,8 +215,7 @@ export interface EvalPromptSection {
 /**
  * ADR 0048: a peer Agent the case's entry Agent can collaborate with through `agents` / `ask` /
  * `delegate` / `tell`. The driver registers them as `capabilities.agents` and drains background collaboration
- * after each turn, but the turn engine does not run them yet: a case that declares `agents` must stay `skip`ped
- * until it does (see validateEvalCase; `ZHIN_EVAL_HARNESS=1` runs them anyway).
+ * after each turn.
  */
 export interface EvalAgentFixture {
   /** Agent name, the `agent` argument of the collaboration tools. */
@@ -313,22 +312,9 @@ export function defineEvalCase(definition: EvalCase): EvalCase {
 
 const CASE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-/** Env switch for the engine author: run the ADR 0048 H2 collaboration cases (peer `agents`) instead of skipping them. */
-export const HARNESS_EVAL_ENV = 'ZHIN_EVAL_HARNESS';
-
-/** `ZHIN_EVAL_HARNESS=1` means the turn engine runs peer agents, so H2 cases are no longer gated. */
-export function harnessEvalsEnabled(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
-  return env[HARNESS_EVAL_ENV] === '1';
-}
-
-/** Whether a case is skipped: its `skip` reason applies unless the harness override un-skips an `ADR 0048 H2` case. */
-export function isEvalSkipped(candidate: Pick<EvalCase, 'skip'>, env: Readonly<Record<string, string | undefined>> = process.env): boolean {
-  if (!candidate.skip) return false;
-  return !(harnessEvalsEnabled(env) && candidate.skip.startsWith('ADR 0048 H2'));
-}
 
 /** Structural checks that TypeScript cannot express. Returns readable problems. */
-export function validateEvalCase(candidate: EvalCase, env: Readonly<Record<string, string | undefined>> = process.env): string[] {
+export function validateEvalCase(candidate: EvalCase): string[] {
   const problems: string[] = [];
   if (!CASE_ID.test(candidate.id ?? '')) problems.push(`id "${candidate.id}" must be kebab-case`);
   if (!candidate.description?.trim()) problems.push('description is required');
@@ -350,9 +336,6 @@ export function validateEvalCase(candidate: EvalCase, env: Readonly<Record<strin
     if (RESERVED_TOOL_NAMES.includes(name) || RESERVED_TOOL_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) {
       problems.push(`tool "${name}" uses a reserved built-in name; mocked tools need their own names`);
     }
-  }
-  if (candidate.agents?.length && !candidate.skip && !harnessEvalsEnabled(env)) {
-    problems.push('agents (ADR 0048 peer Agents) are not wired into the turn engine until harness H2; keep the case skipped (or set ZHIN_EVAL_HARNESS=1)');
   }
   const agentNames = (candidate.agents ?? []).map((agent) => agent.name);
   const duplicateAgents = agentNames.filter((name, index) => agentNames.indexOf(name) !== index);

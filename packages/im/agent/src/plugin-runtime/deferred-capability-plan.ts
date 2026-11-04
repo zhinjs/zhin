@@ -7,6 +7,7 @@ import {
   type TextContentBlock,
   type DeferredToolSessionSnapshot,
 } from '@zhin.js/ai';
+import { COLLABORATION_TOOL_SOURCE } from '../collaboration/tools.js';
 import {
   toolInputSchemaToParameters,
   type ToolInvocationContext,
@@ -182,6 +183,8 @@ export function createDeferredCapabilityPlan(
   // Keep them in the model tool list so QQ/social actions are not hidden behind discover.
   for (const tool of publicCapabilities) {
     if (tool.platforms?.length) alwaysLoaded.add(tool.name);
+    // ADR 0048: collaboration tools are only projected when other agents exist; keep them resident.
+    if (tool.source === COLLABORATION_TOOL_SOURCE) alwaysLoaded.add(tool.name);
   }
   // Plugin authors may opt a tool into the resident set (#857 P1-10).
   for (const name of declaredResidentToolNames(publicCapabilities, options.config)) {

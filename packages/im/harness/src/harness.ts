@@ -16,8 +16,10 @@
  * - `tell` expects nothing back.
  * - An `ask` whose target is (transitively) waiting on the asker would
  *   deadlock the serial mailbox; it is denied as `wait_cycle` and escalated.
- * - A branch denied with `escalate: true` freezes: an `escalated` event is
- *   journaled and `onEscalate` is called so the host can ask the principal.
+ * - A denial with `escalate: true` freezes the whole engagement: an
+ *   `escalated` event is journaled, `onEscalate` is called once so the host
+ *   can ask the principal, every outstanding ask / delegate is cancelled
+ *   (askers get a `cancelled` reply), and later sends are denied as `frozen`.
  * - An engagement closes when it has no running or queued turns and no
  *   outstanding ask / delegate; its root grant is closed then.
  */
@@ -54,7 +56,7 @@ import {
 } from './contracts.js';
 import { agentOf } from './authority.js';
 
-export type HarnessDenyCode = GuardDenyCode | 'unknown_agent' | 'wait_cycle' | 'budget_exceeded' | 'queue_full' | 'closed';
+export type HarnessDenyCode = GuardDenyCode | 'unknown_agent' | 'wait_cycle' | 'budget_exceeded' | 'queue_full' | 'closed' | 'frozen';
 
 export type SendOutcome =
   | { readonly ok: true; readonly mail: Mail; readonly reply?: { readonly status: ActorTurnResult['status']; readonly content: string } }
@@ -158,6 +160,8 @@ interface EngagementState {
   /** ask / delegate mails without a reply yet. */
   readonly outstanding: Set<MailId>;
   closed: boolean;
+  /** Set by the first escalation; the engagement accepts no new collaboration after it. */
+  frozen?: { readonly code: HarnessDenyCode; readonly reason: string };
   /** Root actor running outside the mailbox, and results held for it until detach. */
   attached?: { readonly actor: ActorId; readonly held: Mail[] };
 }
@@ -245,7 +249,20 @@ export function createHarness(options: HarnessOptions): Harness {
   }
 
   async function escalate(state: EngagementState, mail: Mail, code: HarnessDenyCode, reason: string): Promise<void> {
+    if (state.frozen) return;
+    state.frozen = { code, reason };
     await record(state.engagement.id, 'escalated', { ...mailSummary(mail), code, reason });
+    // Stop every branch still in flight; their askers receive a cancelled reply.
+    for (const id of [...state.outstanding]) {
+      if (!mailbox.cancel(id, `engagement frozen: ${reason}`)) {
+        const waiter = askWaiters.get(id);
+        if (waiter) {
+          askWaiters.delete(id);
+          state.outstanding.delete(id);
+          waiter.resolve({ status: 'cancelled', content: `engagement frozen: ${reason}` });
+        }
+      }
+    }
     try {
       await options.onEscalate?.({ engagement: state.engagement, mail, code, reason });
     } catch (error) {
@@ -442,6 +459,7 @@ export function createHarness(options: HarnessOptions): Harness {
       };
       if (closed) return deny('closed', 'harness is closed');
       if (!state || state.closed) return deny('unknown_engagement', `engagement ${current.engagementId} is not open`);
+      if (state.frozen) return { ok: false, code: 'frozen', reason: `collaboration is paused for the human to decide: ${state.frozen.reason}`, escalated: true };
       if (current.to !== from || !state.byId.has(current.id)) {
         return deny('authority_not_attenuated', `${from} is not processing mail ${current.id}`);
       }

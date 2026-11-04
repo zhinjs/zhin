@@ -12,7 +12,6 @@ import {
   createLiveModel,
   createScriptedModel,
   defineEvalCase,
-  isEvalSkipped,
   evaluateExpectations,
   formatEvalReport,
   loadEvalCases,
@@ -210,15 +209,11 @@ describe('eval framework', () => {
       { name: 'reviewer', description: 'Reviews changes.', tools: [] },
       { name: 'reviewer', description: 'Duplicate.', tools: [] },
     ];
-    const unwiredAgents = defineEvalCase({ ...approvalCase('approve'), id: 'peer-agents', agents: peers });
-    expect(validateEvalCase(unwiredAgents)).toEqual([
-      'agents (ADR 0048 peer Agents) are not wired into the turn engine until harness H2; keep the case skipped (or set ZHIN_EVAL_HARNESS=1)',
-      'duplicate agent names: reviewer',
-    ]);
-    expect(validateEvalCase(unwiredAgents, { ZHIN_EVAL_HARNESS: '1' })).toEqual(['duplicate agent names: reviewer']);
-    expect(validateEvalCase({ ...unwiredAgents, agents: peers.slice(0, 1), script: [{ text: 'x', actor: 'ghost' }] }, { ZHIN_EVAL_HARNESS: '1' }))
+    const withAgents = defineEvalCase({ ...approvalCase('approve'), id: 'peer-agents', agents: peers });
+    expect(validateEvalCase(withAgents)).toEqual(['duplicate agent names: reviewer']);
+    expect(validateEvalCase({ ...withAgents, agents: peers.slice(0, 1), script: [{ text: 'x', actor: 'ghost' }] }))
       .toEqual(['script step 1 names actor "ghost" which is not a declared agent']);
-    expect(validateEvalCase({ ...unwiredAgents, skip: 'ADR 0048 H2', agents: peers.slice(0, 1) })).toEqual([]);
+    expect(validateEvalCase({ ...withAgents, agents: peers.slice(0, 1) })).toEqual([]);
     const valid = approvalCase('approve');
     expect(() => loadEvalCases({ 'a.case.ts': { default: valid }, 'b.case.ts': { default: valid } }))
       .toThrow('b.case.ts: id "approval-gate" already used by a.case.ts');
@@ -361,10 +356,4 @@ describe('eval framework: per-actor scripted model', () => {
     expect(model.remainingSteps()).toBe(0);
   });
 
-  it('un-skips ADR 0048 H2 cases only under ZHIN_EVAL_HARNESS=1', () => {
-    expect(isEvalSkipped({ skip: 'ADR 0048 H2: waiting for the engine' }, {})).toBe(true);
-    expect(isEvalSkipped({ skip: 'ADR 0048 H2: waiting for the engine' }, { ZHIN_EVAL_HARNESS: '1' })).toBe(false);
-    expect(isEvalSkipped({ skip: 'known gap #1' }, { ZHIN_EVAL_HARNESS: '1' })).toBe(true);
-    expect(isEvalSkipped({}, {})).toBe(false);
-  });
 });
