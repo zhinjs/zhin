@@ -14,7 +14,6 @@ export type { TurnEnvelopeParts } from './envelope-parts.js';
 export type { TextTurnContextInput, TextTurnContextOutput } from './context-system.js';
 export type { TurnContextEnvelopeInput, TurnContextView } from './turn-envelope.js';
 export type { AgentsInstructionEntry } from './agents-instruction.js';
-export type { ModelResolverConfig } from './model-resolver.js';
 
 export {
   ContextSystem,
@@ -47,7 +46,6 @@ export {
   collectAgentsInstructionChain,
 } from './agents-instruction.js';
 
-export { resolveModel, resolveModelCandidates } from './model-resolver.js';
 
 export {
   DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT,

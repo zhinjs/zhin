@@ -1,5 +1,6 @@
+import { SyntheticCompletionRuntime } from '../helpers/synthetic-completion-runtime.js';
 import { describe, expect, it, vi } from 'vitest';
-import { createAssistantMessageEventStream, LlmApiRuntime, type AssistantStreamEvent } from '../../src/llm/llm-api-runtime.js';
+import { createAssistantMessageEventStream, type AssistantStreamEvent } from '../../src/llm/llm-api-runtime.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 import type { Model } from '../../src/llm/types/model.js';
 import { createResilientCompletionPort, ProviderRequestError, type ProviderResilienceEvent } from '../../src/llm/provider-resilience.js';
@@ -11,7 +12,7 @@ const message: AssistantMessage = { role: 'assistant', api: 'ai-sdk', provider: 
 
 describe('completion deltas', () => {
   it.each(['complete', 'completeSimple'] as const)('cancels the %s provider when its functional delta consumer fails', async method => {
-    const runtime = new LlmApiRuntime(), original = new Error('reply delivery stopped');
+    const runtime = new SyntheticCompletionRuntime(), original = new Error('reply delivery stopped');
     const caller = new AbortController();
     let providerSignal: AbortSignal | undefined, producerStopped = false;
     let release!: () => void;
@@ -41,7 +42,7 @@ describe('completion deltas', () => {
       const complete = vi.fn(async () => { throw error; });
       const events: ProviderResilienceEvent[] = [];
       const port = createResilientCompletionPort({ complete, completeSimple: complete }, {
-        config: { maxRetries: 2, requestTimeoutMs: 0 }, fallbackModels: [{ ...model, id: 'fallback', provider: 'other' }],
+        config: { maxRetries: 2, requestTimeoutMs: 0 },
         onEvent: event => { events.push(event); },
       });
       const rejected = await port.complete(model, { systemPrompt: '', messages: [] }, { retryAllowed: () => false }).catch(error => error);
@@ -64,7 +65,7 @@ describe('completion deltas', () => {
     expect(complete).toHaveBeenCalledOnce();
   });
   it('observes genuine provider deltas before the completion has resolved', async () => {
-    const runtime = new LlmApiRuntime();
+    const runtime = new SyntheticCompletionRuntime();
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     runtime.registerApiProvider({ api: 'ai-sdk', stream: () => ({

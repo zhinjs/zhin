@@ -25,7 +25,9 @@ describe('complete Console configuration projection through real authorities', (
       menuKeyword: { type: 'union', mode: 'anyOf', list: [{ type: 'string' }, { type: 'const', value: false }] },
       log_level: { type: 'union', list: [{ type: 'string' }, { type: 'number' }] },
       http: { additional: { type: 'any' } },
-      ai: { object: { decisions: { object: { skills: { type: 'object', object: { mode: { type: 'string' }, timeoutMs: { type: 'number', integer: true } } } } } } },
+      ai: { object: { personalPrincipals: { type: 'dict', inner: { type: 'list', inner: {
+        object: { subjectId: { type: 'string', required: true }, rootId: { type: 'string', required: true } },
+      } } } } },
     } });
   });
 
@@ -39,7 +41,11 @@ describe('complete Console configuration projection through real authorities', (
     const replies = await dispatchRuntimeConsoleRpc({ type: 'schema:get', requestId: 1, pluginName: 'ai' }, {
       authScope: 'full', listPages: async () => [], getSchema: name => store.readSchema(name),
     });
-    expect(replies).toContainEqual(expect.objectContaining({ requestId: 1, data: expect.objectContaining({ object: expect.objectContaining({ decisions: expect.objectContaining({ object: expect.objectContaining({ skills: expect.objectContaining({ type: 'object' }) }) }) }) }) }));
+    expect(replies).toContainEqual(expect.objectContaining({ requestId: 1, data: expect.objectContaining({ object: expect.objectContaining({
+      personalPrincipals: expect.objectContaining({ type: 'dict', inner: expect.objectContaining({ type: 'list' }) }),
+    }) }) }));
+    const ai = await store.readSchema('ai') as { object: Record<string, unknown> };
+    for (const retired of ['decisions', 'providers', 'modelCatalog', 'modelPolicy', 'plan']) expect(ai.object).not.toHaveProperty(retired);
     expect(await store.readSchema('log_level')).toMatchObject({ type: 'union' });
   });
 

@@ -6,118 +6,68 @@
 
 ## 核心模块
 
-### Provider（LLM 提供者）
+### Provider 与推理
 
-Provider 实例经 **`createSdkProviderAdapter`**（ADR 0018 AI SDK 传输）创建，统一暴露 `AIProvider` 接口（`chat` / `chatStream` / `listModels` / `generateImage`）：
+Provider Driver 声明协议和认证能力；Host 统一管理 **Service → Account → Profile**，分别表示部署／产品、真实账号和模型用途。模型能力来自明确目录，SDK 是 Driver 内部实现，不再由业务插件自行拼接 Key 和 SDK 名称。
 
-```typescript
-import { createSdkProviderAdapter } from '@zhin.js/ai'
-
-const provider = createSdkProviderAdapter('main', {
-  sdk: 'openai',
-  apiKey: 'sk-...',
-  baseUrl: 'https://api.openai.com/v1',
-  contextWindow: 128000,
-  // models 可省略 — ModelRegistry 自动发现
-  capabilities: { input: ['text', 'image'], streaming: true, toolCalling: true },
-})
-
-const response = await provider.chat({
-  model: 'gpt-4o',
-  messages: [{ role: 'user', content: '你好' }],
-})
-```
-
-支持的 `sdk` 见 `SDK_IDS`（openai / anthropic / deepseek / moonshot / zhipu / google / ollama / cloudflare / openai-compatible 等，ADR 0018）。
-
-文生图（Provider 方法，由 `@zhin.js/agent` 的 `generate_image` 工具调用，duck-type `hasGenerateImage` 探测）：
+插件使用当前操作已授权的 `InferenceClient`（Zhin 中由 `@zhin.js/ai-provider` 的 `aiInferenceClientToken` 提供）：
 
 ```typescript
-import { createSdkProviderAdapter, hasGenerateImage } from '@zhin.js/ai'
+import { assistantText } from '@zhin.js/ai'
+import type { InferenceClient } from '@zhin.js/ai/provider'
 
-const zhipu = createSdkProviderAdapter('zhipu', { sdk: 'zhipu', apiKey: '...' })
-if (hasGenerateImage(zhipu)) {
-  const { base64, mimeType, model } = await zhipu.generateImage({
-    prompt: 'a cat on a windowsill',
-    watermarkEnabled: false, // 智谱：须在开放平台签署去水印声明后生效
+async function reply(client: InferenceClient) {
+  const response = await client.generate({
+    request: {
+      context: {
+        systemPrompt: '你是一个助手',
+        messages: [{ role: 'user', timestamp: Date.now(), content: [{ type: 'text', text: '你好' }] }],
+      },
+    },
   })
+  return assistantText(response)
 }
 ```
 
-`zhin.config.yml` 可在 `ai.imageGeneration` 或 `ai.providers.<alias>.imageGeneration` 配置默认项（`watermarkEnabled`、`defaultModel`、`defaultSize`；Cloudflare 另有 `numSteps`）。
+`client.list({ kind: 'language' })` 返回当前主体可用的 Profile 引用；需要显式选择时将其 `reference` 传给 `generate`。`stream` 返回有明确生命周期的单消费者 run，消费结束、提前 break 或关闭时释放；Command / Tool 执行上下文负责关闭其 client，不能让它逃逸到下一次操作。
 
-### agentLoop（推荐 — LLM 统一入口）
-
-IM 栈与 `@zhin.js/agent` 的生产路径均经 **`agentLoop`**（ADR 0009）。Provider 须配置 **`sdk`**（见 [ADR 0018](../../../docs/adr/0018-ai-sdk-transport-layer.md)）。每个宿主创建并持有独立的 `LlmApiRuntime`，其中封装 AI SDK transport、Provider 目录、模型白名单和模型缓存。
+文生图使用同一个已授权 client 的独立模型用途：
 
 ```typescript
-import {
-  agentLoop,
-  agentContextFrom,
-  createUserMessage,
-  agentToolsToLlmTools,
-  createLlmApiRuntime,
-  sdkEntryFromProvider,
-} from '@zhin.js/ai'
-
-const runtime = createLlmApiRuntime(
-  [sdkEntryFromProvider(provider)],
-  (alias) => provider.models,
-)
-
-const model = runtime.model(provider.name, 'gpt-4o')
-const context = agentContextFrom({
-  systemPrompt: '你是一个助手',
-  messages: [],
-  tools: agentToolsToLlmTools([weatherTool]),
-})
-
-for await (const event of agentLoop(
-  [createUserMessage('今天北京天气怎么样？')],
-  context,
-  { model, transport: runtime, maxIterations: 5, executeTool: async (tc) => { /* ... */ } },
-)) {
-  if (event.type === 'agent_end') console.log(event.messages)
+async function makeImage(client: InferenceClient) {
+  return client.generateImage({ request: { prompt: 'a cat on a windowsill' } })
 }
 ```
 
-业务插件通常不直接调用 `agentLoop`，而是通过 **`ZhinAgent`**、**`AIService.runAgent`** 或 **`@zhin.js/agent` 的 turn runner**。
+默认 image Profile 和生成参数在 Host 管理界面配置。Driver 不支持的显式参数明确报错，不静默跨模型降级。API Key、OAuth token 和 client secret 不进入 Service / Profile，也不进入模型上下文。
 
-### Agent（已移除 — 改用 `agentLoop`）
+内置产品声明从 `@zhin.js/ai/providers` 导入；自定义 Driver 统一通过 `@zhin.js/ai/provider` 的 `defineProvider` 编写。插件在 setup 一次调用 `provideAiProviders(resources, definitions)` 注册，类型只增补唯一的 `@zhin.js/ai/provider` 接口。完整合同、账户配置和升级见 [Provider 文档](../../../docs/ai/providers.md) 与 [升级说明](../../../docs/ai/provider-upgrade.md)。
 
-::: danger 已删除
-`createAgent` / `Agent` 类已从 `@zhin.js/ai` 中删除。如需直接调用 LLM，请使用 **`agentLoop`** 或 **`@zhin.js/agent`** 的封装。参见上方的 **`agentLoop`（推荐）** 章节。
-:::
+### 订阅集成与支持信息
 
-### ModelRegistry 与 LlmApiRuntime（模型发现 + agentLoop 白名单）
+Claude 订阅与 Antigravity：实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担。Codex：未经 OpenAI 对第三方客户端的明确授权。OpenCode Go 与 OpenCode Zen 分别使用各产品的 API Key；套餐、模型和适用场景应按各自产品条款核对，不能套用 Free 产品的条件。Anthropic API Key 与 Claude 订阅、Gemini API Key 与 Antigravity 是独立服务及认证身份。
 
-**两层协作**（IM 主路径由 `@zhin.js/agent` 的 `AIService` / `createZhinAgent` 接线）：
+Driver 可通过 `support?: ProviderSupportMetadata` 声明 `status: 'standard' | 'experimental'` 和可选纯文本 `notice`。Host 按已持有声明的 owner、id、contractVersion 精确投影到管理视图；缺少声明不推断为常规或官方支持。Console 只为实验集成显示短标识，必要提示放在选中详情或登录流程。支持信息不决定账号就绪、权限、注册或请求行为，也不进入模型图和请求上下文。
 
-| 层 | 职责 |
-|----|------|
-| **ModelRegistry** | 启动时 `discover()` → `provider.listModels()`；缓存到 `data/model-registry-cache.json`；Tier 评分与 `selectModel` |
-| **LlmApiRuntime**（`runtime.model`） | 在单一宿主边界内校验模型是否可用并执行补全；**未配置 yaml `models` 时**白名单来自发现后的 `provider.models`，而非 Provider 类内硬编码默认列表 |
+### agentLoop（回合引擎）
+
+`agentLoop` 继续负责唯一的工具执行循环。它消费一个已绑定模型的 `LlmCompletionPort` 与模型元数据，既不读取 Host 凭据，也不重新解析 Provider 目录。Zhin 主回合、子任务与定时任务通过当前操作的 ModelExecutionScope 提供这两项。
 
 ```typescript
-import { ModelRegistry } from '@zhin.js/ai'
+import { agentLoop, agentContextFrom, createUserMessage } from '@zhin.js/ai'
+import type { LlmCompletionPort, Model } from '@zhin.js/ai'
 
-const registry = new ModelRegistry() // 默认 data/model-registry-cache.json
-
-registry.loadCache() // 二次启动可先灌入 provider.models
-
-const models = await registry.discover(provider) // 写回 provider.models 并 saveCache
-
-const best = registry.selectModel(provider.name, 'chat')
-const candidates = registry.selectModels(provider.name, 'chat', 5)
+async function runTurn(transport: LlmCompletionPort, model: Model) {
+  const context = agentContextFrom({ systemPrompt: '你是一个助手', messages: [], tools: [] })
+  for await (const event of agentLoop(
+    createUserMessage('你好'), context, { model, transport, maxIterations: 5 },
+  )) {
+    if (event.type === 'agent_end') console.log(event.messages)
+  }
+}
 ```
 
-发现来源：
-
-- **Ollama**：`/api/tags`；详情 `/api/show`（参数量、量化）
-- **OpenAI 兼容**（含中转/聚合）：`GET {baseUrl}/models`；名称启发式推断能力
-- **显式 yaml `models`**：跳过自动发现，直接作为 ApiRegistry 白名单（如 Cloudflare Workers AI）
-
-冷启动：发现完成前若 runtime 白名单为空，`runtime.model` 不拦截；发现完成后按 `provider.models` 校验。
+模型目录刷新是显式管理操作，只产生 ID / label 观测；它不自动启用模型，不根据名称推断输入、工具或思考能力，也不在页面加载或启动时隐式请求供应商。
 
 ### 持久化与上下文（ADR 0009）
 
@@ -268,15 +218,16 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 
 ## 配置类型
 
-框架无关的配置形状定义在 [`src/types.ts`](./src/types.ts)：
+Provider 领域契约从 `@zhin.js/ai/provider` 导入；纯引擎配置保留在根入口。IM 启动策略由 `@zhin.js/agent` 定义：
 
 | 类型 | 用途 |
 |------|------|
-| `ProviderConfig` / `OllamaProviderConfig` | 各 LLM Provider 连接与能力 |
+| `ProviderService` / `ProviderAccount` / `ModelProfile` | 服务、认证主体与选定的模型参数；能力由显式 `ModelDefinition` 声明 |
+| `InferenceClient` | 当前 operation 授权后的统一 generate / stream / evaluate / generateImage 消费端口 |
 | `AgentLoopConfig` | `agentLoop`：模型、工具列表、超时、回调等（替代已删除的 `createAgent`） |
 | `SessionConfig` | 会话 `maxHistory`、`expireMs` |
 | `ContextConfig` | `ContextManager` 总结阈值与 token 预算 |
-| `AIConfig` | 应用级 YAML `ai:` 块的 TypeScript 形状（Provider、sessions、context、trigger、`agent.modelHarness` 等） |
+| `AIPlan` | 声明服务、账号、Profiles 和用途选择；不包含 Host 凭据材料 |
 
 完整 AI 模块文档：[zhin.js.org/advanced/ai](https://zhin.js.org/advanced/ai)
 
@@ -284,11 +235,12 @@ const tools = cache.filter('天气查询', allTools, { maxTools: 10 })
 
 | 导出 | 说明 |
 |------|------|
-| `agentLoop` / `agentContextFrom` / `LlmApiRuntime` | LLM 统一回合引擎与 owner-scoped transport（推荐） |
+| `agentLoop` / `agentContextFrom` / `LlmCompletionPort` | 统一回合引擎与已绑定模型的传输合同 |
 | `agentToolsToLlmTools` | Plugin/AgentTool → LlmTool 桥接（agentLoop transport） |
-| `createLlmApiRuntime` / `ModelRegistry` | 独立 transport runtime + `/v1/models` 发现与白名单 |
+| `@zhin.js/ai/provider` | Provider Driver、Service / Account / Profile、InferenceClient 和唯一类型注册入口 |
 | `ContextRepository` / `AgentSessionStore` | Agent 会话持久化原语 |
-| `createSdkProviderAdapter` / `AIProvider` | LLM 提供者（AI SDK 传输，ADR 0018） |
+| `@zhin.js/ai/providers` | 内置产品 Driver 声明；原生 SDK 按需安装 |
+| `TextCompletionPort` | 压缩模块接收的已绑定纯文字回调；不负责账号或模型选择 |
 | `ContextManager` | 场景摘要实验（辅助，不接入 ZhinAgent 生产回合） |
 | `compactSession` / `pruneHistoryForContext` / `microCompactMessages` | 上下文压缩库 API；IM 生产路径经 `@zhin.js/agent` 的 `transformContext`（ADR 0010） |
 | `CostTracker` | Token 用量与成本追踪 |
@@ -310,3 +262,7 @@ pnpm add @zhin.js/ai
 ## 许可证
 
 MIT License
+
+通用 SDK 的有效输出预算仍按显式请求、Profile、已声明的 native model 上限、既有 `8192` 依次解析。未填写 Profile 上限时不把默认值物化存入配置，因此原位切换 native model 后仍动态采用其声明值。Codex 的协议不支持这个字段；其 Profile schema 和实际请求均不添加该 cap。框架摘要、审批、旁听取消的是各自的隐式覆盖，本次没有全局取消预算默认。
+
+The AI SDK peer minimum is `ai ^7.0.35`: `timeout.firstChunkMs` is absent from 7.0.34 and earlier published declarations. The scaffold derives this range from the package manifest. Other Provider SDK minimums are unchanged; current synthetic tests do not claim every version in each declared range was executed.

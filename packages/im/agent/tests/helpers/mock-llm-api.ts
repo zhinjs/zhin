@@ -1,3 +1,4 @@
+import { SyntheticCompletionRuntime } from '../../../ai/tests/helpers/synthetic-completion-runtime.js';
 /**
  * Test helper — ai-sdk 原生面 mock：直接注册 `ai-sdk` ApiProvider，把应答器
  * 产出的 AssistantMessage 经 createAssistantMessageEventStream 回流给 agentLoop，
@@ -6,9 +7,7 @@
  */
 import {
   createAssistantMessageEventStream,
-  LlmApiRuntime,
   EMPTY_TOKEN_USAGE,
-  SdkProviderAdapter,
   type AssistantMessage,
   type Context,
   type Model,
@@ -22,9 +21,9 @@ export interface MockLlmCall {
 export type MockLlmResponder = (context: Context) => AssistantMessage | Promise<AssistantMessage>;
 
 export interface MockLlmApi {
-  readonly provider: SdkProviderAdapter;
+  readonly provider: { readonly name: string; readonly models: string[] };
   readonly calls: MockLlmCall[];
-  readonly runtime: LlmApiRuntime;
+  readonly runtime: SyntheticCompletionRuntime;
   respondWith(next: MockLlmResponder): void;
   respondText(text: string): void;
   /** 永不返回（模拟挂起的长任务）。 */
@@ -71,8 +70,8 @@ export function wireMockLlmApi(options: {
 } = {}): MockLlmApi {
   const name = options.name ?? 'mock';
   const models = [...(options.models ?? ['mock-model'])];
-  const provider = new SdkProviderAdapter(name, 'openai', { sdk: 'openai', apiKey: 'test-key' }, models);
-  const runtime = new LlmApiRuntime((alias) => (alias === name ? [...models] : []));
+  const provider = { name, models };
+  const runtime = new SyntheticCompletionRuntime((alias) => (alias === name ? [...models] : []));
   runtime.registerProvider(name, { sdk: 'openai', apiKey: 'test-key' }, models);
 
   const calls: MockLlmCall[] = [];

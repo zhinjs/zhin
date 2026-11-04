@@ -16,13 +16,6 @@ export const DEFAULT_AGENT_CORE_CONFIG: AgentCoreConfig = {
 
 const NO_OP_EVENT_BUS: AgentCoreDependencies['eventBus'] = { emit: async () => {} };
 
-/** 占位 provider；`defaultAgentCore` fallback 不发起 LLM 调用。 */
-const NO_OP_PROVIDER = {
-  name: 'no-op',
-  models: [],
-  completeText: async () => '',
-} as unknown as AgentCoreDependencies['provider'];
-
 /** 占位工具执行器；生产路径经 `agent-core-run` + host，此处返回空结果。 */
 const NO_OP_TOOL_EXECUTOR: AgentCoreDependencies['toolExecutor'] = {
   executeAll: async () => [],
@@ -34,7 +27,7 @@ const NO_OP_CONTEXT_MANAGER: AgentCoreDependencies['contextManager'] = {
 };
 
 function createStubAgentCoreDeps(
-  overrides: Pick<AgentCoreDependencies, 'provider' | 'eventBus'>,
+  overrides: Pick<AgentCoreDependencies, 'eventBus'>,
 ): AgentCoreDependencies {
   return {
     toolExecutor: NO_OP_TOOL_EXECUTOR,
@@ -44,12 +37,11 @@ function createStubAgentCoreDeps(
 }
 
 export function createAgentCoreDepsForCompose(
-  provider: AgentCoreDependencies['provider'],
   eventSystem: EventSystem,
 ): AgentCoreDependencies {
-  return createStubAgentCoreDeps({ provider, eventBus: eventSystem });
+  return createStubAgentCoreDeps({ eventBus: eventSystem });
 }
 
 export function createDefaultAgentCoreDeps(): AgentCoreDependencies {
-  return createStubAgentCoreDeps({ provider: NO_OP_PROVIDER, eventBus: NO_OP_EVENT_BUS });
+  return createStubAgentCoreDeps({ eventBus: NO_OP_EVENT_BUS });
 }

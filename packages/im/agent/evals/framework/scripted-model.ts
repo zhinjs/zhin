@@ -1,3 +1,4 @@
+import { SyntheticCompletionRuntime } from '../../../ai/tests/helpers/synthetic-completion-runtime.js';
 import type { Segment } from '@zhin.js/im-contract';
 import { aiOutboundJsonSchema } from '@zhin.js/core';
 /**
@@ -11,8 +12,6 @@ import { aiOutboundJsonSchema } from '@zhin.js/core';
 import {
   createAssistantMessageEventStream,
   EMPTY_TOKEN_USAGE,
-  LlmApiRuntime,
-  SdkProviderAdapter,
   resolveFinish,
   type AssistantMessage,
   type Context,
@@ -95,8 +94,8 @@ export interface ScriptedModelRequest {
 export interface ScriptedModel {
   readonly providerAlias: string;
   readonly modelId: string;
-  readonly provider: SdkProviderAdapter;
-  readonly runtime: LlmApiRuntime;
+  readonly modelIds: readonly string[];
+  readonly runtime: SyntheticCompletionRuntime;
   readonly requests: readonly ScriptedModelRequest[];
   /**
    * Scripted tool calls the harness did not offer on that request. A real
@@ -148,8 +147,8 @@ export class ScriptedHangError extends Error {
   }
 }
 
-/** LlmApiRuntime whose model descriptors can declare per-model input modalities. */
-class ScriptedRuntime extends LlmApiRuntime {
+/** SyntheticCompletionRuntime whose model descriptors can declare per-model input modalities. */
+class ScriptedRuntime extends SyntheticCompletionRuntime {
   constructor(
     resolveModels: (alias: string) => string[],
     private readonly modelInputs: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>,
@@ -166,21 +165,18 @@ class ScriptedRuntime extends LlmApiRuntime {
 
 export function createScriptedModel(script: readonly ScriptStep[], options: ScriptedModelOptions = {}): ScriptedModel {
   const models = [MODEL_ID, ...(options.extraModels ?? []).filter((id) => id !== MODEL_ID)];
-  const provider = new SdkProviderAdapter(PROVIDER_ALIAS, 'openai', { sdk: 'openai', apiKey: 'eval' }, models);
   const runtime = new ScriptedRuntime((alias) => (
     alias === PROVIDER_ALIAS ? models : alias === PERCEPTION_PROVIDER_ALIAS ? [PERCEPTION_MODEL_ID] : []
   ), options.modelInputs ?? {});
   runtime.registerProvider(PROVIDER_ALIAS, {
     sdk: 'openai',
-    apiKey: 'eval',
     ...(options.contextWindow ? { contextWindow: options.contextWindow } : {}),
     ...(options.input?.length ? { input: [...options.input] } : {}),
   }, models);
   if (options.perception) {
     runtime.registerProvider(PERCEPTION_PROVIDER_ALIAS, {
       sdk: 'openai',
-      apiKey: 'eval',
-      input: ['text', 'image', 'video', 'file'],
+        input: ['text', 'image', 'video', 'file'],
     }, [PERCEPTION_MODEL_ID]);
   }
   const modelMismatches: string[] = [];
@@ -266,7 +262,7 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
   return {
     providerAlias: PROVIDER_ALIAS,
     modelId: MODEL_ID,
-    provider,
+    modelIds: models,
     runtime,
     requests,
     unofferedToolCalls,

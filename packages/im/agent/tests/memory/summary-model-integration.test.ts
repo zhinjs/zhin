@@ -1,3 +1,4 @@
+import { executionBundle, executionScope } from '../helpers/execution-bundle.js';
 import { describe, expect, it, vi } from 'vitest';
 import { createMemoryContextRepository, createUserMessage, type AgentMessage } from '@zhin.js/ai';
 import { TurnTraceCollector } from '../../src/trace/turn-trace.js';
@@ -21,8 +22,7 @@ vi.mock('../../src/prompt/assembly.js', async importOriginal => ({
 const { runAgentLoopTextTurnRun, collectAgentLoopTurnRun } = await import('../../src/core/agent-core-run.js');
 
 function bundle(llm: ReturnType<typeof wireMockLlmApi>, model: string): ModelExecutionBundle {
-  return { provider: llm.provider, llmRuntime: llm.runtime,
-    invocation: { model: { model } } as ModelExecutionBundle['invocation'] };
+  return executionBundle({ model: llm.runtime.model(llm.provider.name, model), completion: llm.runtime });
 }
 async function fixture() {
   const chat = wireMockLlmApi({ name: 'personal-chat', models: ['chat'], responder: () => ({
@@ -35,15 +35,14 @@ async function fixture() {
     usage: { ...assistantTextReply('').usage, input: 30, output: 5, totalTokens: 35 },
   }) });
   summary.runtime.registerProvider('deployment-summary', { sdk: 'openai', contextWindow: 128000 }, ['summary']);
-  const models = { chat: bundle(chat, 'chat'), summary: bundle(summary, 'summary'),
-    policy: { refs: {}, sources: {} }, release: async () => {} } satisfies ModelExecutionScope;
+  const models = await executionScope({ chat: bundle(chat, 'chat'), summary: bundle(summary, 'summary') });
   const { repository, sessionStore } = createMemoryContextRepository();
   const { session_id: sessionId } = await sessionStore.getOrCreateActive({ session_key: 'personal-session' });
   const messages = [createUserMessage('Old conversation detail. '.repeat(2000)),
     createUserMessage('Another old conversation detail. '.repeat(1000)), createUserMessage('Recent message')];
   await repository.appendMessages(sessionId, messages);
   const host = {
-    getTurnProvider: () => chat.provider, llmRuntime: chat.runtime,
+    getTurnExecution: () => models.chat, completion: chat.runtime,
     config: { chatModel: 'chat', contextTokens: 8192, compaction: { keepRecentTokens: 100, minKeepCount: 1 },
       maxIterations: 1, toolExecution: 'sequential', outputSchema: false,
       toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 },

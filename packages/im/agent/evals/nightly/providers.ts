@@ -1,9 +1,10 @@
+import type { ProviderFixtureConfig } from '../../../ai/tests/helpers/provider-fixture-config.js';
 /**
  * Which real provider the nightly tier runs against. Gemini is the default
  * (zhin's primary model since #770); MiniMax stays available for comparison
  * runs via `NIGHTLY_PROVIDER=minimax`.
  */
-import type { ProviderInstanceConfig } from '@zhin.js/ai';
+
 
 export type NightlyProviderId = 'gemini' | 'minimax';
 
@@ -15,7 +16,7 @@ export interface NightlyProvider {
   readonly defaultModels: readonly string[];
   /** Matrix sampling temperature; undefined sends none. */
   readonly temperature?: number;
-  readonly config: ProviderInstanceConfig;
+  readonly config: ProviderFixtureConfig;
 }
 
 export const DEFAULT_NIGHTLY_PROVIDER: NightlyProviderId = 'gemini';

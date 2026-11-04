@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   namespaceAuthoringName,
   slotNameFromFile,
+  bridgeAuthoringHook,
+  defineHook,
 } from '../src/authoring/index.js';
 import {
   discoverPluginAgentSurface,
@@ -10,6 +12,17 @@ import {
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import type { AIHook, AIHookEvent } from '../src/resource-hub/types.js';
+
+it('bridges authored hooks through the actual orchestrator hook contract without changing the handler', async () => {
+  const seen: AIHookEvent[] = [];
+  const definition = defineHook({ event: 'turn.end', handler: event => { seen.push(event); } });
+  const hook: AIHook = bridgeAuthoringHook({ runtimeName: 'fixture_audit', definition });
+  const event: AIHookEvent = { type: 'turn', action: 'end', context: {}, timestamp: new Date(0), messages: [] };
+  expect(hook).toEqual({ name: 'fixture_audit', event: 'turn.end', handler: definition.handler });
+  await hook.handler(event);
+  expect(seen).toEqual([event]);
+});
 
 describe('namespaceAuthoringName', () => {
   it('prefixes plugin slot names', () => {

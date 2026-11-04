@@ -90,16 +90,12 @@ describe('Agent Host Workroom configuration', () => {
       loggingMode: 'metadata_only' as const, maximumRetentionSeconds: 60,
       allowsRedisclosure: false, supportsDeletion: true,
     };
-    const resolution = resolveWorkroomDisclosureBootstrap({
-      name: 'Zhin', members: [{ agent: 'planner', role: 'orchestrator' }],
-      conversation: {
-        adapter: 'sandbox', endpoint: 'main', kind: 'channel', id: 'zhin', agent: 'planner',
-      },
-    }, agentId => agentId === 'planner' ? 'openrouter' : undefined, {
-      workroom: { disclosure: { modelProviders: { openrouter: contract } } },
-    });
-    expect(resolution).toEqual({ modelProviderAlias: 'openrouter', contract });
-    expect(resolveWorkroomDisclosureBootstrap(undefined, () => 'openrouter', {})).toEqual({});
+    const ai = { workroom: { disclosure: { modelServices: { 'service:contracted': contract } } } };
+    const resolution = resolveWorkroomDisclosureBootstrap({ serviceId: 'service:contracted', ai });
+    expect(resolution).toEqual({ modelServiceId: 'service:contracted', contract });
+    expect(resolveWorkroomDisclosureBootstrap({ ai })).toEqual({});
+    expect(resolveWorkroomDisclosureBootstrap({ serviceId: 'service:unmapped', ai }))
+      .toEqual({ modelServiceId: 'service:unmapped' });
   });
 
   it('reports each fail-closed disclosure setup prerequisite', () => {
@@ -109,20 +105,20 @@ describe('Agent Host Workroom configuration', () => {
       disclosureReady: false,
       disclosureConfigReady: false,
       diagnostics: [
-        'orchestrator 尚未绑定模型 Provider',
+        'orchestrator 尚未绑定模型服务',
         '尚未发布 Project Data Governance 披露 authority',
         'Root-private Data Governance 签发能力不可用',
       ],
     });
     expect(assessWorkroomDisclosureSetup({
-      resolution: { modelProviderAlias: 'openrouter' },
+      resolution: { modelServiceId: 'openrouter' },
       authorityPublished: false,
       authorityCurrent: false,
       localIssuerAvailable: true,
-    }).diagnostics).toContain('尚未配置 ai.workroom.disclosure.modelProviders.openrouter');
+    }).diagnostics).toContain('尚未配置 ai.workroom.disclosure.modelServices.openrouter');
     expect(assessWorkroomDisclosureSetup({
       resolution: {
-        modelProviderAlias: 'external',
+        modelServiceId: 'external',
         contract: {
           endpoint: 'https://models.example/v1', processingRegions: ['global'],
           maxConfidentiality: 'project_internal', external: true, noTraining: false,
@@ -136,11 +132,11 @@ describe('Agent Host Workroom configuration', () => {
     })).toMatchObject({
       disclosureReady: true,
       disclosureConfigReady: false,
-      diagnostics: ['外部模型 Provider external 必须显式禁止训练'],
+      diagnostics: ['外部模型服务 external 必须显式禁止训练'],
     });
     expect(assessWorkroomDisclosureSetup({
       resolution: {
-        modelProviderAlias: 'public-only',
+        modelServiceId: 'public-only',
         contract: {
           endpoint: 'https://models.example/v1', processingRegions: ['local'],
           maxConfidentiality: 'public', external: false, noTraining: true,
@@ -151,7 +147,7 @@ describe('Agent Host Workroom configuration', () => {
       authorityPublished: false,
       authorityCurrent: false,
       localIssuerAvailable: true,
-    }).diagnostics).toContain('模型 Provider public-only 至少需要 project_internal 披露等级');
+    }).diagnostics).toContain('模型服务 public-only 至少需要 project_internal 披露等级');
   });
 
   it('advances a stale disclosure authority through its CAS chain', () => {

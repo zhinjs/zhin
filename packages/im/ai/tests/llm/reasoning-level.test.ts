@@ -1,15 +1,17 @@
+import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
+import { profileModel } from '../helpers/profile-runtime.js';
 /**
  * S8 / S20: the agent's thinking level and the provider's `maxOutputTokens` reach the
  * request. Request bodies come from the shared provider harness (`h.capture`).
  */
 import { describe, expect, it } from 'vitest';
-import { createLlmTransportModel, DEFAULT_MAX_OUTPUT_TOKENS } from '../../src/llm/llm-api-runtime.js';
+import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../src/llm/llm-api-runtime.js';
 import { resolveReasoningOption } from '../../src/llm/bridge/ai-sdk-stream.js';
 import type { ThinkingLevel } from '../../src/llm/types/agent-event.js';
-import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+
 import { createProviderHarness } from '../helpers/provider-harness/index.js';
 
-async function requestBody({ sdk, ...config }: ProviderInstanceConfig, modelId: string, thinkingLevel?: ThinkingLevel) {
+async function requestBody({ sdk, ...config }: ProviderFixtureConfig, modelId: string, thinkingLevel?: ThinkingLevel) {
   const h = createProviderHarness({ sdk, model: modelId, config });
   const { body } = await h.capture({ system: 's', user: 'hi' }, { thinkingLevel });
   return body;
@@ -28,13 +30,13 @@ describe('reasoning level (S8)', () => {
     expect(body.generationConfig.thinkingConfig).toMatchObject({ thinkingLevel: 'low' });
   });
 
-  it('providerOptions thinkingConfig wins over thinkingLevel', async () => {
+  it('a validated explicit request thinking level overrides the selected Profile value', async () => {
     const body = await requestBody(
-      { sdk: 'google', apiKey: 'k', thinkingLevel: 'high', providerOptions: { google: { thinkingConfig: { thinkingLevel: 'low' } } } },
+      { sdk: 'google', apiKey: 'k', thinkingLevel: 'low' },
       'gemini-3.8-flash',
       'high',
     );
-    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'high' });
   });
 
   it('Claude: thinkingLevel enables thinking', async () => {
@@ -64,7 +66,7 @@ describe('reasoning level (S8)', () => {
 
 describe('maxOutputTokens (S20)', () => {
   it('defaults to 8192 and follows the provider config', async () => {
-    expect(createLlmTransportModel('p', { sdk: 'google' }, 'gemini-3.8-flash').maxTokens).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+    expect(profileModel('p', { sdk: 'google' }, 'gemini-3.8-flash').maxTokens).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
     const body = await requestBody({ sdk: 'google', apiKey: 'k', maxOutputTokens: 32_768 }, 'gemini-3.8-flash');
     expect(body.generationConfig.maxOutputTokens).toBe(32_768);
   });

@@ -51,7 +51,6 @@ export type {
   ModelInputModality,
   ModelCostRates,
   OpenAiCompatFlags,
-  ProviderInstanceConfig,
 } from './types/model.js';
 
 export type { Context } from './types/context.js';
@@ -70,20 +69,10 @@ export type { QueueMode } from './types/queue-mode.js';
 export { DEFAULT_STEERING_MODE, DEFAULT_FOLLOW_UP_MODE } from './types/queue-mode.js';
 
 export {
-  LlmApiRuntime,
-  createLlmTransportModel,
-  defaultModelInput,
   resolveProviderConfigResilience,
+  resolveEffectiveOutputTokens,
   createAssistantMessageEventStream,
 } from './llm-api-runtime.js';
-export {
-  applyProviderGatewayPreset,
-  validateProviderGatewayConfig,
-  inferModelReasoning,
-  resolveTransportContextWindow,
-  PROVIDER_GATEWAY_PRESETS,
-} from './provider-gateway-presets.js';
-export type { ProviderGatewayPreset } from './provider-gateway-presets.js';
 export type {
   LlmRequestInput,
   LlmRequestObservation,
@@ -93,7 +82,6 @@ export type {
   ApiProviderRegistration,
   AssistantStreamEvent,
   AssistantMessageEventStream,
-  RegisteredProvider,
   LlmCompletionPort,
 } from './llm-api-runtime.js';
 
@@ -140,10 +128,6 @@ export type {
 
 export { assistantText, assistantAnswerText, CompletionFailureError } from './convert/openai-bridge.js';
 
-export {
-  createLlmApiRuntime,
-} from './llm-runtime-factory.js';
-export type { SdkProviderEntry } from './llm-runtime-factory.js';
 
 export {
   agentToolToLlmTool,
@@ -155,8 +139,6 @@ export { formatRedactedJson, redactValueForLog } from './redact-request-body.js'
 export {
   SDK_IDS,
   isSdkId,
-  createLanguageModel,
-  sdkSupportsImageGeneration,
 } from './sdk-registry.js';
 export type { SdkId } from './sdk-registry.js';
 export {
@@ -166,25 +148,8 @@ export {
   type AiHttpTransportOptions,
 } from './http-transport.js';
 
-export {
-  SDK_DEFAULT_MODELS,
-  ANYROUTER_ANTHROPIC_MODELS,
-  SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
-  resolveSdkProviderModels,
-  sdkHasStaticModelPreset,
-} from './sdk-default-models.js';
 
-export { createSdkProviderAdapter, SdkProviderAdapter, sdkEntryFromProvider } from '../sdk-provider-adapter.js';
 
-export {
-  agentMessagesToAiSdk,
-  contextToAiSdkPrompt,
-  llmToolsToAiSdk,
-  shouldEnsureToolCallReasoning,
-  TOOL_CALL_REASONING_PLACEHOLDER,
-} from './bridge/ai-sdk-messages.js';
-
-export { createAiSdkStreamFn, generateTextViaAiSdk } from './bridge/ai-sdk-stream.js';
 export { parseLenientJsonObject } from './bridge/lenient-json.js';
 export { registerStructuredOutputPromptText } from './bridge/prompt-structured-output.js';
 export {
@@ -192,5 +157,4 @@ export {
   supportsPromptCacheSdk,
   isStreamPromptCacheEnabled,
   type PromptCacheRetention,
-} from './bridge/ai-sdk-prompt-cache.js';
-export { generateImageViaAiSdk } from './bridge/ai-sdk-image.js';
+} from './prompt-cache.js';

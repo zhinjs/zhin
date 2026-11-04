@@ -132,7 +132,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
       ]);
       if (resolved.a2a.enabled !== false) {
         if (!resources.has(agentHostToken)) {
-          throw new Error('a2a.enabled requires a ready Agent Host (configure ai.providers and ai.agents.zhin)');
+          throw new Error('a2a.enabled requires a ready Agent Host (enable AI Host and select a chat Profile in Console)');
         }
         lifecycle.add(installRuntimeA2a({
           http,

@@ -1,3 +1,4 @@
+import { agentOperationResourcesToken, createAgentOperationFactory } from './operation-resources.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import { hostProtectedPathsToken, type HostProtectedPaths } from '../security/host-config-paths.js';
 import { AgentUsageCollector, agentUsageStoreToken, type AgentUsageStore } from '../usage/usage-store.js';
@@ -31,7 +32,7 @@ import type { ModelExecutionScope } from '../model-runtime/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
 import { createConversationReferenceCapability } from '../tool/conversation-reference-tool.js';
-import { drainAgentTurnDecisionObservations, runWithAgentDecisionTurn } from './decision-runtime.js';
+import { drainAgentTurnDecisionObservations, getAgentTurnInferenceSnapshot, runWithAgentDecisionTurn } from './decision-runtime.js';
 import type { AgentDecisionRuntime } from '../decision/types.js';
 
 abstract class SnapshotAttachedRuntime {
@@ -71,7 +72,9 @@ export class ToolIngressRuntime extends SnapshotAttachedRuntime {
     const lease = this.requireSnapshots().acquire();
     let active = true;
     try {
-      const capabilities = await this.#ingress.read(lease.value, owner, () => active, request);
+      const capabilities = await this.#ingress.read({ snapshot: lease.value, owner, isActive: () => active, turn: request,
+        operation: createAgentOperationFactory({ lease, snapshots: this.requireSnapshots(), request, signal: request.signal,
+          port: readLeasedRootResource(this.requireSnapshots(), lease, agentOperationResourcesToken), isActive: () => active }) });
       let invocationSequence = 0;
       const tools = Object.freeze(capabilities.tools
         .filter((tool) => !tool.hidden)
@@ -312,7 +315,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     let models: ModelExecutionScope | undefined;
     let mediaPerception: import('../media/perception.js').MediaPerceptionPort | undefined;
     const usageStore = lease.value.resources.get(lease.value.root)?.get(agentUsageStoreToken.id) as AgentUsageStore | undefined;
-    const selected = { provider: selection.binding.providerAlias, model: selection.binding.model };
+    const selected = { provider: '', model: '' };
     const usage = usageStore ? new AgentUsageCollector(String(owner), request, selected) : undefined;
     let usageStatus = 'failed';
     let activeTrace: TurnTraceCollector | undefined;
@@ -321,25 +324,24 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     const logContext: UsageLogContext = {
       traceId: request.identity.traceId,
       scene: request.origin.kind === 'im' ? `${request.origin.platform}/${request.origin.scope}` : request.origin.kind,
-      selectedModel: `${selection.binding.providerAlias}/${selection.binding.model}`,
+      selectedModel: undefined,
     };
     try {
       if (!active) throw new Error('Agent generation operation is not active');
       const modelPort = readLeasedRootResource(this.requireSnapshots(), lease, turnModelPortToken);
-      models = await modelPort?.acquire(request, selection.binding);
+      models = await modelPort?.acquire({ request, binding: selection.binding, lease, snapshots: this.requireSnapshots(), inferenceSnapshot: getAgentTurnInferenceSnapshot() });
       if (models) {
         mediaPerception = modelPort?.createPerception?.(models, request);
-        selected.provider = models.chat.provider.name;
-        selected.model = models.chat.invocation.model.model;
-        logContext.selectedModel = `${models.chat.provider.name}/${models.chat.invocation.model.model}`;
+        selected.provider = models.chat.binding.account.id;
+        selected.model = models.chat.model.id;
+        logContext.selectedModel = `${models.chat.binding.account.id}/${models.chat.model.id}`;
       }
-      const discovered = await this.#ingress.read(
-        lease.value,
-        owner,
-        () => active && lease.active,
-        request,
-        selection.agent,
-      );
+      const discovered = await this.#ingress.read({ snapshot: lease.value, owner, isActive: () => active && lease.active,
+        turn: request, selectedAgent: selection.agent,
+        operation: createAgentOperationFactory({ lease, snapshots: this.requireSnapshots(), request, signal: request.signal,
+          inferenceSnapshot: models?.inferenceSnapshot,
+          port: readLeasedRootResource(this.requireSnapshots(), lease, agentOperationResourcesToken), isActive: () => active }),
+      });
       const referenceCapability = createConversationReferenceCapability(owner, request);
       // #726: the initiator's trust level caps the turn (group members: no shell, writes or outbound).
       const allTools = [
@@ -375,7 +377,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       const engine = resolveTurnEngine(lease.value);
       const disabled = Boolean(request.session.key.startsWith('workroom:') || request.input.metadata?.workroom
         || request.principal.roles.includes('workroom_assignment') || request.execution?.kind === 'schedule');
-      outcome = await runWithAgentDecisionTurn(lease.value, request.identity.turnId, decision => runWithAgentTurnConfiguration(
+      outcome = await runWithAgentDecisionTurn({ snapshot: lease.value, turnId: request.identity.turnId, models, disabled, inferenceSnapshot: getAgentTurnInferenceSnapshot() }, decision => runWithAgentTurnConfiguration(
         { activeBinding: selection.binding, models, mediaPerception },
         () => executeAgentTurn(turn, async function* () {
           const stream = engine.run({
@@ -406,7 +408,7 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
             await stream.return(undefined);
           }
         }, observe),
-      ), { disabled });
+      ));
       usageStatus = outcome.status;
       return outcome;
     } catch (error) {

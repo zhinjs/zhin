@@ -133,7 +133,7 @@ async function processTextTurnInner(
     });
     logPhase(host.phaseConfig, 'turn.start', sessionId, {
       mode: 'text',
-      provider: host.getTurnProvider().name,
+      provider: host.getTurnExecution().binding.account.id,
     });
 
     if (!extras?.deferredAutoContinue) {
@@ -167,7 +167,7 @@ async function processTextTurnInner(
       externalTools,
       sessionId,
       userId,
-      mcpServerNames,
+      mcpServerNames: [...mcpServerNames],
     });
     const {
       contextForTools,

@@ -21,6 +21,7 @@ export type {
   RoomRouteDecision,
 } from './inbound-origin.js';
 export * from './im-runtime.js';
+export * from './operation-resources.js';
 export * from './login-assist-host.js';
 export * from './group-rule-violation.js';
 export * from './member-welcome.js';

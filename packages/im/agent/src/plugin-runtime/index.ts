@@ -1,5 +1,9 @@
 export * from './agent-runtime.js';
+export * from './operation-resources.js';
 export * from './ai-completion.js';
+export { createInferenceUsageAccounting } from '../security/usage-accounting.js';
+export type { UsageQuotaPort } from '../security/usage-accounting.js';
+export { usageSubjectFromTurn } from '../security/usage-subject.js';
 export * from './decision-runtime.js';
 export * from '../decision/index.js';
 export { normalizeAgentDecisionConfig } from '../decision/config.js';

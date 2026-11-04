@@ -236,8 +236,7 @@ describe('discover loads schemas without duplicating them in results', () => {
     // The tool list for the next model call includes them.
     const next = planFor({ tier: 'chat', descriptions, snapshot: saved.at(-1) });
     expect(resolvedNames(next)).toContain('group_kick');
-    const definitions = buildLlmToolsForProvider(sdk, [...next.catalog], next.resolvedTools,
-      residentToolNames(next.catalog, DEFERRED_META_TOOL_NAMES), next.controller.loadedToolNames());
+    const definitions = buildLlmToolsForProvider({ nativeDeferredTools: sdk === 'anthropic', catalog: [...next.catalog], apiTools: next.resolvedTools, alwaysLoaded: residentToolNames(next.catalog, DEFERRED_META_TOOL_NAMES), sessionLoadedNames: next.controller.loadedToolNames() });
     const loaded = definitions.filter(entry => entry.name === 'group_kick');
     expect(loaded).toHaveLength(1);
     expect(loaded[0].inputJsonSchema).toEqual(tool('group_kick').inputSchema);

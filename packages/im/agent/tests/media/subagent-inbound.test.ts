@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import type { AIProvider } from '@zhin.js/ai';
 import { buildSubagentInboundTask } from '../../src/media/subagent-inbound.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../../src/media/media-types.js';
 
@@ -33,21 +32,13 @@ describe('buildSubagentInboundTask', () => {
   });
 
   it('vision provider 应注入 multimodal runInput', async () => {
-    const provider = {
-      name: 'mock-vision',
-      models: ['m'],
-      capabilities: { input: ['text', 'image'] },
-      chat: async () => {
-        throw new Error('not used');
-      },
-    } as unknown as AIProvider;
     const refs: SegmentMediaRef[] = [
       {
         type: 'image',
         media: { kind: 'base64', value: 'iVBORw0KGgo=', mime_type: 'image/png' },
       },
     ];
-    const inbound = await buildSubagentInboundTask('hi', refs, { provider });
+    const inbound = await buildSubagentInboundTask('hi', refs, { model: { input: ['text', 'image'] } });
     expect(inbound.useNativeVision).toBe(true);
     expect(Array.isArray(inbound.runInput)).toBe(true);
     expect(inbound.visionPartCount).toBe(1);

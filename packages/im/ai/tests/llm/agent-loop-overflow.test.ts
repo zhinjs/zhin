@@ -1,11 +1,11 @@
+import { SyntheticCompletionRuntime } from '../helpers/synthetic-completion-runtime.js';
 import { describe, expect, it, vi } from 'vitest';
 import { agentLoop, type AgentLoopConfig } from '../../src/llm/agent-loop.js';
-import { LlmApiRuntime } from '../../src/llm/llm-api-runtime.js';
 import { createUserMessage, EMPTY_TOKEN_USAGE, type AgentMessage, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 import type { AgentEvent } from '../../src/llm/types/agent-event.js';
 
 function fixture() {
-  const runtime = new LlmApiRuntime();
+  const runtime = new SyntheticCompletionRuntime();
   runtime.registerProvider('test', { sdk: 'openai' }, ['mock']);
   const model = runtime.model('test', 'mock');
   const overflow = new Error('context_length_exceeded');

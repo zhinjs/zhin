@@ -1,5 +1,6 @@
 import type { LanguageModelCallStartEvent } from 'ai';
 import type { LlmRequestObservation, StreamOptions } from '../llm-api-runtime.js';
+import { projectProviderDiagnostics } from '../provider-diagnostics.js';
 
 /** Observe SDK-prepared tools without re-evaluating a tool's schema or cloning media bytes. */
 export function observeModelRequest(
@@ -17,7 +18,7 @@ export function observeModelRequest(
     }));
     observation = { status: 'captured', input: {
       ...(request.instructions === undefined ? {} : { system: textSnapshot(request.instructions) }),
-      messages: request.messages.map(textSnapshot),
+      messages: request.messages.map(message => textSnapshot(projectProviderDiagnostics(message))),
       tools,
       ...(outputSchema === undefined ? {} : { output_schema: textSnapshot(outputSchema) }),
     } };

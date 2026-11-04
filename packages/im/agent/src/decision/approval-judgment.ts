@@ -74,7 +74,7 @@ export class LlmApprovalJudgment implements ApprovalJudgmentPort {
         proposedOperation: input.request.question,
         priorDecisions: input.priorDecisions,
       }))]),
-      { signal: input.signal, temperature: 0, maxTokens: 160, outputSchema: REVIEW_SCHEMA },
+      { signal: input.signal, outputSchema: REVIEW_SCHEMA },
     );
     input.signal.throwIfAborted();
     const value: unknown = JSON.parse(assistantText(response));

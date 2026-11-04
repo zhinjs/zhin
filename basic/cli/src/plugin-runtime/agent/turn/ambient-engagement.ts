@@ -1,3 +1,4 @@
+import type { DecisionPurposePolicy } from '@zhin.js/ai/provider';
 import {
   assistantText,
   createContext,
@@ -7,7 +8,6 @@ import {
   type ChoiceAnswer,
   type DecisionProvider,
   type DecisionResult,
-  type DecisionTaskConfig,
   type LlmCompletionPort,
   type Model,
 } from '@zhin.js/ai';
@@ -76,8 +76,7 @@ export class LlmEngagementJudge implements EngagementJudge {
         ...(input.minutesSinceBotSpoke === undefined ? {} : { minutesSinceBotSpoke: input.minutesSinceBotSpoke }),
         recentMessages: input.recent.map(line => line.length > MAX_LINE_CHARS ? `${line.slice(0, MAX_LINE_CHARS)}…` : line),
       }))]),
-      // Reasoning judges (gpt-oss, GLM flash) spend most of the budget thinking before the JSON.
-      { signal: input.signal, temperature: 0, maxTokens: 1024, outputSchema: JUDGMENT_SCHEMA },
+      { signal: input.signal, outputSchema: JUDGMENT_SCHEMA },
     );
     if (response.errorMessage) throw new Error(response.errorMessage);
     return parseJudgment(assistantText(response));
@@ -132,14 +131,14 @@ const DEFAULT_DECISION_TIMEOUT_MS = 3_000;
 
 export interface DecisionEngagementJudgeOptions {
   readonly provider: DecisionProvider;
-  /** `ai.decisions.ambient`; `minConfidence`, when set, also gates engagement inside this judge. */
-  readonly policy: DecisionTaskConfig;
+  /** `purposes.decisions.ambient`; `minConfidence`, when set, also gates engagement inside this judge. */
+  readonly policy: DecisionPurposePolicy;
   /** Metadata only: never the chat lines or the judgment reason. */
   readonly observe?: (observation: DecisionObservation) => void;
 }
 
 /**
- * Structured-decision judge (`ai.decisions.ambient`, e.g. TypeSafe Jev): one binary choice over the
+ * Structured-decision judge (`purposes.decisions.ambient`, e.g. TypeSafe Jev): one binary choice over the
  * same evidence the chat-model judge sees. Throws on provider failure, timeout or an invalid answer
  * so a {@link FallbackEngagementJudge} can hand the turn to the chat-model judges.
  */
@@ -249,22 +248,22 @@ export class ShadowEngagementJudge implements EngagementJudge {
 
 export interface AmbientDecisionJudgeOptions extends DecisionEngagementJudgeOptions {
   /** The configured chat-model judge(s) of `ai.trigger.ambient.judge`. */
-  readonly base: EngagementJudge;
+  readonly base?: EngagementJudge;
   /** Shadow mode only: the decision judgment (undefined when it failed) next to the deciding one. */
   readonly reportShadow?: (decision: EngagementJudgment | undefined, judge: EngagementJudgment | undefined) => void;
 }
 
 /**
- * Applies `ai.decisions.ambient.mode` to the ambient judge. `active`: the DecisionProvider decides and
- * the chat-model judges take over when it fails or times out. `shadow`: the chat-model judges decide
+ * Applies `purposes.decisions.ambient.mode` to the ambient judge. `active`: the DecisionProvider decides and
+ * a failed decision remains a failed judgment. `shadow`: the chat-model judge decides
  * and the decision is reported only. `off`: undefined, meaning the configured judges as before.
  */
 export function createAmbientDecisionJudge(options: AmbientDecisionJudgeOptions): EngagementJudge | undefined {
   if (options.policy.mode === 'off') return undefined;
   const decision = new DecisionEngagementJudge(options);
-  return options.policy.mode === 'active'
-    ? new FallbackEngagementJudge([decision, options.base])
-    : new ShadowEngagementJudge(options.base, decision, options.reportShadow ?? (() => undefined));
+  if (options.policy.mode === 'active') return decision;
+  if (!options.base) throw new Error('Shadow engagement requires its primary judgment');
+  return new ShadowEngagementJudge(options.base, decision, options.reportShadow ?? (() => undefined));
 }
 
 export function parseJudgment(text: string): EngagementJudgment {
@@ -281,7 +280,7 @@ export function parseJudgment(text: string): EngagementJudgment {
 
 export interface AmbientEngagementOptions {
   readonly config: AmbientEngagementConfig;
-  readonly judge: EngagementJudge;
+  readonly judge?: EngagementJudge;
   readonly now?: () => number;
   readonly sleep?: (ms: number) => Promise<void>;
 }
@@ -305,7 +304,7 @@ const MAX_CONVERSATION_REPLIES_PER_HOUR = 30;
 export class AmbientEngagement {
   readonly #config: Required<Omit<AmbientEngagementConfig, 'judge' | 'conversations'>> & { conversations: readonly string[] };
   readonly #lastJudged = new Map<string, number>();
-  readonly #judge: EngagementJudge;
+  readonly #judge?: EngagementJudge;
   readonly #now: () => number;
   readonly #sleep: (ms: number) => Promise<void>;
   readonly #latest = new Map<string, number>();
@@ -344,7 +343,7 @@ export class AmbientEngagement {
     readonly key: string;
     readonly botName: string;
     readonly readRecent: () => Promise<readonly string[]>;
-    /** Judge for this call only (e.g. the generation's `ai.decisions.ambient` route); default: the configured judge. */
+    /** Judge for this call only (e.g. the generation's `purposes.decisions.ambient` route); default: the configured judge. */
     readonly judge?: EngagementJudge;
   }): Promise<AmbientDecision> {
     const ticket = (this.#latest.get(input.key) ?? 0) + 1;
@@ -385,7 +384,9 @@ export class AmbientEngagement {
     let judgment: EngagementJudgment;
     this.#lastJudged.set(input.key, now);
     try {
-      judgment = await (input.judge ?? this.#judge).judge({
+      const judge = input.judge ?? this.#judge;
+      if (!judge) throw new Error('No engagement judgment is bound to this operation');
+      judgment = await judge.judge({
         botName: input.botName,
         recent,
         inConversation,

@@ -54,14 +54,12 @@ export class MemorySystem {
     locale?: Locale,
   ): Promise<{ ok: boolean; message: string }> {
     const { sessionId } = await beginTurnSession(deps, sessionKey);
-    const provider = host.getTurnProvider();
-    const modelId = host.config.chatModel || provider.models[0] || '';
-    const llmModel = host.llmRuntime.model(provider.name, modelId);
-    const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
+    const llmModel = host.getTurnExecution().model;
+    const contextWindow = llmModel.contextWindow || host.config.contextTokens;
     return host.compactionRuntime.compactSession(host.contextRepository, {
       host,
       sessionId,
-      ...resolveTurnSummaryExecution({ transport: host.llmRuntime, model: llmModel }),
+      ...resolveTurnSummaryExecution({ transport: host.completion, model: llmModel }),
       compactionConfig: host.config.compaction,
       contextWindow,
       mode: 'text',
@@ -71,14 +69,15 @@ export class MemorySystem {
 }
 
 export function createMemorySystemForHost(host: ZhinAgentPrivate): MemorySystem {
-  const provider = host.getTurnProvider();
-  const modelId = host.config.chatModel || provider.models[0] || '';
-  const llmModel = host.llmRuntime.model(provider.name, modelId);
-  const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
-  const system = new MemorySystem({
-    compactionStrategy: new AiCompactionStrategy(host.llmRuntime, llmModel, host.config.compaction),
-  });
-  system.registerContextRepository('default', host.contextRepository, contextWindow);
+  // Construction must not require an authorized/configured model. Resolve the current
+  // operation only when compaction actually runs; the persistent store is model agnostic.
+  const system = new MemorySystem({ compactionStrategy: {
+    shouldCompact: context => context.messages.length > 0 && new AiCompactionStrategy(
+      host.completion, host.getTurnExecution().model, host.config.compaction).shouldCompact(context),
+    compact: context => new AiCompactionStrategy(host.completion, host.getTurnExecution().model,
+      host.config.compaction).compact(context),
+  } });
+  system.registerContextRepository('default', host.contextRepository, host.config.contextTokens);
   return system;
 }
 

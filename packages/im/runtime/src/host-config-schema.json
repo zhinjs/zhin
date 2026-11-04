@@ -731,46 +731,6 @@
       "description": "Providers, Agents, sessions, memory, tools, and execution security.",
       "x-descriptionZh": "Provider、Agent、会话、记忆、工具与执行安全策略。",
       "properties": {
-        "decisions": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "provider"
-          ],
-          "description": "Optional structured-decision service. Missing tasks are off; use shadow before active.",
-          "x-descriptionZh": "可选的结构化决策服务。未配置的任务关闭；建议先用 shadow 验证。",
-          "properties": {
-            "provider": {
-              "type": "string",
-              "pattern": "^root(/[a-z0-9][a-z0-9-]*)+$",
-              "description": "Exact enabled DecisionProvider Plugin owner, such as root/typesafe.",
-              "x-descriptionZh": "提供已启用 DecisionProvider 的精确插件身份，例如 root/typesafe。"
-            },
-            "skills": {
-              "$ref": "#/$defs/decisionTask"
-            },
-            "tools": {
-              "$ref": "#/$defs/decisionTask"
-            },
-            "memory": {
-              "$ref": "#/$defs/decisionTask"
-            },
-            "agents": {
-              "$ref": "#/$defs/decisionTask"
-            },
-            "approval": {
-              "$ref": "#/$defs/decisionTask",
-              "x-zhin-config": {
-                "security": true
-              }
-            },
-            "ambient": {
-              "$ref": "#/$defs/decisionTask",
-              "description": "Unprompted group engagement (ai.trigger.ambient). active: the provider decides whether to speak up and the ambient judge models are the fallback; shadow: logged only.",
-              "x-descriptionZh": "群聊旁听（ai.trigger.ambient）是否接话。active：由决策服务判断，ambient.judge 模型列表作为兜底；shadow：只记录。"
-            }
-          }
-        },
         "workroom": {
           "type": "object",
           "additionalProperties": true,
@@ -800,7 +760,7 @@
                   "type": "string",
                   "minLength": 1
                 },
-                "modelProviders": {
+                "modelServices": {
                   "type": "object",
                   "additionalProperties": {
                     "type": "object",
@@ -872,7 +832,8 @@
                         "type": "boolean"
                       }
                     }
-                  }
+                  },
+                  "description": "Explicit processor contract keyed by the selected runtime Service id, never a legacy Provider alias."
                 }
               },
               "x-zhin-config": {
@@ -1562,123 +1523,128 @@
             },
             "modelHarness": {
               "type": "object",
-              "additionalProperties": true,
+              "additionalProperties": false,
               "properties": {
-                "models": {
+                "services": {
                   "type": "object",
+                  "description": "Exact runtime Service id; native-model entries override that Service default.",
                   "additionalProperties": {
                     "type": "object",
-                    "additionalProperties": true,
+                    "additionalProperties": false,
                     "properties": {
-                      "maxIterations": {
-                        "type": [
-                          "number",
-                          "string"
-                        ]
+                      "defaults": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "maxIterations": {
+                            "type": [
+                              "number",
+                              "string"
+                            ]
+                          },
+                          "explorationBudget": {
+                            "type": [
+                              "number",
+                              "string"
+                            ],
+                            "description": "连续只读探索调用达到该次数时注入提示；0 关闭"
+                          },
+                          "explorationGuidance": {
+                            "type": [
+                              "boolean",
+                              "string"
+                            ],
+                            "description": "在系统提示中加入\"先规划、限定目标文件\"的探索纪律"
+                          },
+                          "iterationExtension": {
+                            "type": [
+                              "number",
+                              "string"
+                            ],
+                            "description": "每次有进展时延长的步数（覆盖 toolBudget.extendBy）"
+                          },
+                          "maxTotalIterations": {
+                            "type": [
+                              "number",
+                              "string"
+                            ],
+                            "description": "单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations）"
+                          },
+                          "emptyReplyRetries": {
+                            "type": [
+                              "number",
+                              "string"
+                            ],
+                            "description": "空回复（无文本且无工具调用）时额外重试次数；默认 0"
+                          },
+                          "requestTimeoutMs": {
+                            "type": [
+                              "number",
+                              "string"
+                            ],
+                            "description": "单次模型请求超时（毫秒）；0 关闭"
+                          }
+                        }
                       },
-                      "explorationBudget": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "连续只读探索调用达到该次数时注入提示；0 关闭"
-                      },
-                      "explorationGuidance": {
-                        "type": [
-                          "boolean",
-                          "string"
-                        ],
-                        "description": "在系统提示中加入\"先规划、限定目标文件\"的探索纪律"
-                      },
-                      "iterationExtension": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "每次有进展时延长的步数（覆盖 toolBudget.extendBy）"
-                      },
-                      "maxTotalIterations": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations）"
-                      },
-                      "emptyReplyRetries": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "空回复（无文本且无工具调用）时额外重试次数；默认 0"
-                      },
-                      "requestTimeoutMs": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "单次模型请求超时（毫秒）；0 关闭"
+                      "models": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "object",
+                          "additionalProperties": true,
+                          "properties": {
+                            "maxIterations": {
+                              "type": [
+                                "number",
+                                "string"
+                              ]
+                            },
+                            "explorationBudget": {
+                              "type": [
+                                "number",
+                                "string"
+                              ],
+                              "description": "连续只读探索调用达到该次数时注入提示；0 关闭"
+                            },
+                            "explorationGuidance": {
+                              "type": [
+                                "boolean",
+                                "string"
+                              ],
+                              "description": "在系统提示中加入\"先规划、限定目标文件\"的探索纪律"
+                            },
+                            "iterationExtension": {
+                              "type": [
+                                "number",
+                                "string"
+                              ],
+                              "description": "每次有进展时延长的步数（覆盖 toolBudget.extendBy）"
+                            },
+                            "maxTotalIterations": {
+                              "type": [
+                                "number",
+                                "string"
+                              ],
+                              "description": "单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations）"
+                            },
+                            "emptyReplyRetries": {
+                              "type": [
+                                "number",
+                                "string"
+                              ],
+                              "description": "空回复（无文本且无工具调用）时额外重试次数；默认 0"
+                            },
+                            "requestTimeoutMs": {
+                              "type": [
+                                "number",
+                                "string"
+                              ],
+                              "description": "单次模型请求超时（毫秒）；0 关闭"
+                            }
+                          }
+                        }
                       }
                     }
-                  },
-                  "description": "模型级覆盖：支持 \"gpt-4o\" 或 \"openai:gpt-4o\""
-                },
-                "providerPatterns": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "object",
-                    "additionalProperties": true,
-                    "properties": {
-                      "maxIterations": {
-                        "type": [
-                          "number",
-                          "string"
-                        ]
-                      },
-                      "explorationBudget": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "连续只读探索调用达到该次数时注入提示；0 关闭"
-                      },
-                      "explorationGuidance": {
-                        "type": [
-                          "boolean",
-                          "string"
-                        ],
-                        "description": "在系统提示中加入\"先规划、限定目标文件\"的探索纪律"
-                      },
-                      "iterationExtension": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "每次有进展时延长的步数（覆盖 toolBudget.extendBy）"
-                      },
-                      "maxTotalIterations": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations）"
-                      },
-                      "emptyReplyRetries": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "空回复（无文本且无工具调用）时额外重试次数；默认 0"
-                      },
-                      "requestTimeoutMs": {
-                        "type": [
-                          "number",
-                          "string"
-                        ],
-                        "description": "单次模型请求超时（毫秒）；0 关闭"
-                      }
-                    }
-                  },
-                  "description": "provider 模式覆盖（支持 * 通配符）"
+                  }
                 }
               },
               "description": "按模型 / provider 模式覆盖 model harness"
@@ -1713,7 +1679,7 @@
                     "number",
                     "string"
                   ],
-                  "description": "A `Retry-After` longer than this skips retry and goes to fallback. Default 30000."
+                  "description": "A `Retry-After` longer than this stops retry. Default 30000."
                 },
                 "requestTimeoutMs": {
                   "type": [
@@ -1728,16 +1694,9 @@
                     "string"
                   ],
                   "description": "Extra attempts when the model returns neither text nor tool calls (or a tool call\nwithout a name). Default 0: the reply is passed through unchanged. Quirk presets\n(see model harness) raise this for models known to emit spurious empty replies."
-                },
-                "fallback": {
-                  "type": [
-                    "boolean",
-                    "string"
-                  ],
-                  "description": "Try the next entry of `modelCandidates` after retries are exhausted. Default true."
                 }
               },
-              "description": "Provider 韧性：重试 / 退避 / 超时 / fallback（见 ProviderResilienceConfig，默认保守）"
+              "description": "固定模型韧性：重试 / 退避 / 超时（见 ProviderResilienceConfig）"
             },
             "deferredTools": {
               "type": "object",
@@ -2044,414 +2003,6 @@
             "string"
           ]
         },
-        "providers": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": true,
-            "properties": {
-              "sdk": {
-                "type": "string",
-                "x-zhin-config": {
-                  "options": [
-                    {
-                      "label": "openai",
-                      "value": "openai"
-                    },
-                    {
-                      "label": "anthropic",
-                      "value": "anthropic"
-                    },
-                    {
-                      "label": "google",
-                      "value": "google"
-                    },
-                    {
-                      "label": "deepseek",
-                      "value": "deepseek"
-                    },
-                    {
-                      "label": "minimax",
-                      "value": "minimax"
-                    },
-                    {
-                      "label": "ollama",
-                      "value": "ollama"
-                    },
-                    {
-                      "label": "openai-compatible",
-                      "value": "openai-compatible"
-                    }
-                  ]
-                }
-              },
-              "apiKey": {
-                "type": "string",
-                "writeOnly": true,
-                "x-zhin-config": {
-                  "secret": true
-                }
-              },
-              "authScheme": {
-                "type": "string",
-                "description": "Authorization 头方案。不写时用各 SDK 默认（OpenAI 系 `Bearer`，Anthropic `x-api-key`，Google `x-goog-api-key`）；\n设为 `''` 时 `Authorization: <key>`；设为 `'Bearer'` / `'Token'` 等时 `Authorization: <scheme> <key>`（结尾空格可有可无）。"
-              },
-              "baseUrl": {
-                "type": "string"
-              },
-              "defaultModel": {
-                "type": "string"
-              },
-              "models": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "timeout": {
-                "type": [
-                  "number",
-                  "string"
-                ],
-                "description": "单次请求超时（ms），覆盖 `ai.providerResilience.requestTimeoutMs`；模型 harness 的 `requestTimeoutMs` 优先。0 关闭。"
-              },
-              "maxRetries": {
-                "type": [
-                  "number",
-                  "string"
-                ],
-                "description": "每个模型的重试次数，覆盖 `ai.providerResilience.maxRetries`。"
-              },
-              "firstChunkTimeoutMs": {
-                "type": [
-                  "number",
-                  "string"
-                ],
-                "description": "流式请求首个 chunk 超时（ms，含等待响应头），默认关闭；超时按 timeout 重试 / 切换备用模型。"
-              },
-              "chunkTimeoutMs": {
-                "type": [
-                  "number",
-                  "string"
-                ],
-                "description": "流式请求两个 chunk 之间的静默超时（ms），默认关闭。"
-              },
-              "headers": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string",
-                  "writeOnly": true,
-                  "x-zhin-config": {
-                    "secret": true
-                  }
-                }
-              },
-              "contextWindow": {
-                "type": [
-                  "number",
-                  "string"
-                ],
-                "description": "上下文窗口大小（token 数），各 Provider 映射到自身参数"
-              },
-              "maxOutputTokens": {
-                "type": [
-                  "number",
-                  "string"
-                ],
-                "description": "每次请求的输出 token 上限，默认 8192；Gemini/Claude 的思考 token 也计入"
-              },
-              "thinkingLevel": {
-                "type": "string",
-                "x-zhin-config": {
-                  "options": [
-                    {
-                      "label": "off",
-                      "value": "off"
-                    },
-                    {
-                      "label": "low",
-                      "value": "low"
-                    },
-                    {
-                      "label": "medium",
-                      "value": "medium"
-                    },
-                    {
-                      "label": "high",
-                      "value": "high"
-                    }
-                  ]
-                },
-                "description": "思考深度：`off` | `low` | `medium` | `high`；不填用 provider 默认；`providerOptions` 里的思考设置优先"
-              },
-              "capabilities": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "input": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "x-zhin-config": {
-                        "options": [
-                          {
-                            "label": "text",
-                            "value": "text"
-                          },
-                          {
-                            "label": "image",
-                            "value": "image"
-                          },
-                          {
-                            "label": "audio",
-                            "value": "audio"
-                          },
-                          {
-                            "label": "video",
-                            "value": "video"
-                          },
-                          {
-                            "label": "file",
-                            "value": "file"
-                          }
-                        ]
-                      }
-                    },
-                    "description": "Explicit model input modalities. Absence is text-only (fail closed), except Gemini chat models on `sdk: google` (see `defaultModelInput`)."
-                  },
-                  "streaming": {
-                    "type": [
-                      "boolean",
-                      "string"
-                    ]
-                  },
-                  "toolCalling": {
-                    "type": [
-                      "boolean",
-                      "string"
-                    ]
-                  },
-                  "thinking": {
-                    "type": [
-                      "boolean",
-                      "string"
-                    ]
-                  }
-                },
-                "description": "Provider 能力声明"
-              },
-              "input": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "x-zhin-config": {
-                    "options": [
-                      {
-                        "label": "text",
-                        "value": "text"
-                      },
-                      {
-                        "label": "image",
-                        "value": "image"
-                      },
-                      {
-                        "label": "audio",
-                        "value": "audio"
-                      },
-                      {
-                        "label": "video",
-                        "value": "video"
-                      },
-                      {
-                        "label": "file",
-                        "value": "file"
-                      }
-                    ]
-                  }
-                },
-                "description": "Explicit model input modalities. Prefer this over inferred provider identity."
-              },
-              "providerOptions": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "null"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": [
-                          "number",
-                          "string"
-                        ]
-                      },
-                      {
-                        "type": [
-                          "boolean",
-                          "string"
-                        ]
-                      },
-                      {
-                        "type": [
-                          "boolean",
-                          "string"
-                        ]
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": {
-                          "anyOf": [
-                            {
-                              "type": "null"
-                            },
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": [
-                                "number",
-                                "string"
-                              ]
-                            },
-                            {
-                              "type": [
-                                "boolean",
-                                "string"
-                              ]
-                            },
-                            {
-                              "type": [
-                                "boolean",
-                                "string"
-                              ]
-                            },
-                            {
-                              "description": "任意 JSON 值；由对应服务解释。"
-                            },
-                            {
-                              "type": "array",
-                              "items": {
-                                "description": "任意 JSON 值；由对应服务解释。"
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "description": "任意 JSON 值；由对应服务解释。"
-                        }
-                      }
-                    ]
-                  }
-                },
-                "description": "Extra AI SDK `providerOptions`, merged into every request of this provider,\nkeyed by SDK provider id. For Gemini: `{ google: { safetySettings: [...],\nthinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings."
-              },
-              "contextCache": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "mode": {
-                    "type": "string",
-                    "x-zhin-config": {
-                      "options": [
-                        {
-                          "label": "implicit",
-                          "value": "implicit"
-                        },
-                        {
-                          "label": "explicit",
-                          "value": "explicit"
-                        }
-                      ]
-                    },
-                    "description": "`implicit` (default) leaves requests untouched. `explicit` creates cachedContents."
-                  },
-                  "ttlSeconds": {
-                    "type": [
-                      "number",
-                      "string"
-                    ],
-                    "description": "Lifetime of each created cache. Default 600."
-                  },
-                  "minPrefixChars": {
-                    "type": [
-                      "number",
-                      "string"
-                    ],
-                    "description": "Prefixes shorter than this (characters of JSON) are not worth a cache. Default 8000 (~2k tokens)."
-                  }
-                },
-                "description": "Gemini context caching (`sdk: google`): `{ mode: 'explicit', ttlSeconds }`. Default implicit."
-              },
-              "imageGeneration": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "watermarkEnabled": {
-                    "type": [
-                      "boolean",
-                      "string"
-                    ],
-                    "description": "智谱 API `watermark_enabled`；默认 true"
-                  },
-                  "defaultModel": {
-                    "type": "string"
-                  },
-                  "defaultSize": {
-                    "type": "string",
-                    "description": "智谱：如 1024x1024、1280x1280"
-                  },
-                  "numSteps": {
-                    "type": [
-                      "number",
-                      "string"
-                    ],
-                    "description": "Cloudflare Flux：推理步数，默认 4"
-                  },
-                  "quality": {
-                    "type": "string",
-                    "description": "OpenAI GPT Image：low | medium | high | auto"
-                  },
-                  "aspectRatio": {
-                    "type": "string",
-                    "description": "Gemini：如 1:1、16:9"
-                  },
-                  "imageSize": {
-                    "type": "string",
-                    "description": "Gemini：如 1K、2K、4K"
-                  },
-                  "promptSuffix": {
-                    "type": "string",
-                    "description": "追加到 agent/用户 prompt 末尾的风格约束（如写实摄影）。\n需要动漫风时不要配置，或在工具 prompt 里写明即可。"
-                  }
-                },
-                "description": "文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver）"
-              },
-              "host": {
-                "type": "string"
-              },
-              "num_ctx": {
-                "type": [
-                  "number",
-                  "string"
-                ]
-              }
-            }
-          },
-          "description": "命名 provider 实例"
-        },
         "agents": {
           "type": [
             "object",
@@ -2461,12 +2012,6 @@
             "type": "object",
             "additionalProperties": true,
             "properties": {
-              "provider": {
-                "type": "string"
-              },
-              "model": {
-                "type": "string"
-              },
               "mcpServers": {
                 "type": [
                   "array",
@@ -2478,16 +2023,11 @@
               },
               "nickname": {
                 "type": "string",
-                "description": "Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。"
-              },
-              "preset": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Invocation preset reference; do not combine with legacy provider/model. MCP and permission fields remain Agent authority."
+                "description": "Fallback nickname when the Endpoint does not provide account profile data."
               }
             }
           },
-          "description": "per-agent 绑定（协作角色如 researcher 亦用 agents.<role>）；IM 入站总是交给 zhin"
+          "description": "Agent authority and display metadata. Model selection belongs to runtime Profile purposes."
         },
         "sessions": {
           "type": [
@@ -2620,53 +2160,6 @@
             }
           }
         },
-        "imageGeneration": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true,
-          "properties": {
-            "watermarkEnabled": {
-              "type": [
-                "boolean",
-                "string"
-              ],
-              "description": "智谱 API `watermark_enabled`；默认 true"
-            },
-            "defaultModel": {
-              "type": "string"
-            },
-            "defaultSize": {
-              "type": "string",
-              "description": "智谱：如 1024x1024、1280x1280"
-            },
-            "numSteps": {
-              "type": [
-                "number",
-                "string"
-              ],
-              "description": "Cloudflare Flux：推理步数，默认 4"
-            },
-            "quality": {
-              "type": "string",
-              "description": "OpenAI GPT Image：low | medium | high | auto"
-            },
-            "aspectRatio": {
-              "type": "string",
-              "description": "Gemini：如 1:1、16:9"
-            },
-            "imageSize": {
-              "type": "string",
-              "description": "Gemini：如 1K、2K、4K"
-            },
-            "promptSuffix": {
-              "type": "string",
-              "description": "追加到 agent/用户 prompt 末尾的风格约束（如写实摄影）。\n需要动漫风时不要配置，或在工具 prompt 里写明即可。"
-            }
-          },
-          "description": "文生图全局默认（可被 `providers.<alias>.imageGeneration` 覆盖）。\n智谱：`watermarkEnabled: false` 需先在智谱开放平台签署去水印免责声明。"
-        },
         "multimodal": {
           "type": [
             "object",
@@ -2797,13 +2290,6 @@
               ],
               "additionalProperties": true,
               "properties": {
-                "provider": {
-                  "type": "string",
-                  "description": "`ai.providers` alias of the perception model."
-                },
-                "model": {
-                  "type": "string"
-                },
                 "kinds": {
                   "type": "array",
                   "items": {
@@ -2847,27 +2333,6 @@
                     "string"
                   ],
                   "description": "Media described per turn; the rest keep the placeholder. Default 4."
-                },
-                "fallbacks": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "provider": {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      "model": {
-                        "type": "string",
-                        "minLength": 1
-                      }
-                    },
-                    "required": [
-                      "provider",
-                      "model"
-                    ]
-                  }
                 }
               },
               "description": "Perception pre-pass: when the turn's model cannot take an image / video / PDF,\nthis media-capable model describes it and the description is injected as\nuntrusted text (`[图片描述] …`). Unset = off (placeholders as before)."
@@ -3202,16 +2667,6 @@
                   },
                   "description": "开启旁听的群，格式 platform:groupId；* 表示所有群。默认为空（关闭）"
                 },
-                "judge": {
-                  "type": [
-                    "string",
-                    "array"
-                  ],
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "判断模型 providerAlias/model；也可以写成列表，前一个失败或限流时按顺序换下一个（免费额度通常按模型分别计算）。默认用主 Agent 的模型。ai.decisions.ambient 为 active 时由决策服务先判断，这里的模型作为兜底"
-                },
                 "quietMs": {
                   "type": [
                     "number",
@@ -3389,141 +2844,6 @@
               "description": "Object directory ending in /; must be covered by the bucket lifecycle."
             }
           }
-        },
-        "modelCatalog": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "connections": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/$defs/modelConnection"
-              }
-            },
-            "models": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/$defs/catalogModel"
-              }
-            },
-            "presets": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "#/$defs/modelPreset"
-              }
-            }
-          },
-          "required": [
-            "connections",
-            "models",
-            "presets"
-          ],
-          "description": "Closed Host connection/model/preset catalog. Dictionary keys supply omitted ids; this Host supplies omitted connection owners. Explicit identities must match; references are checked by the model compiler."
-        },
-        "modelPolicy": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "defaults": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "chat": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "perception": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "summary": {
-                  "type": "string",
-                  "minLength": 1,
-                  "description": "When omitted, compilation selects deployment defaults.chat. Personal/Adapter/Endpoint/Scene chat overrides do not change summary."
-                }
-              },
-              "required": [
-                "chat"
-              ]
-            },
-            "adapters": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "chat": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "perception": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                }
-              }
-            },
-            "endpoints": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "address": {
-                    "$ref": "#/$defs/modelPolicyEndpointAddress"
-                  },
-                  "models": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "chat": {
-                        "type": "string",
-                        "minLength": 1
-                      },
-                      "perception": {
-                        "type": "string",
-                        "minLength": 1
-                      }
-                    }
-                  }
-                },
-                "required": [
-                  "address",
-                  "models"
-                ]
-              }
-            },
-            "scenes": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "properties": {
-                  "address": {
-                    "$ref": "#/$defs/modelPolicySceneAddress"
-                  },
-                  "models": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "chat": {
-                        "type": "string",
-                        "minLength": 1
-                      }
-                    }
-                  }
-                },
-                "required": [
-                  "address",
-                  "models"
-                ]
-              }
-            }
-          },
-          "required": [
-            "defaults"
-          ],
-          "description": "Purpose references only. Adapter/Endpoint may select chat/perception; Scene may select chat. Session chat selection is stored separately."
         },
         "personalPrincipals": {
           "type": "object",
@@ -4780,297 +4100,5 @@
       }
     }
   },
-  "$defs": {
-    "decisionTask": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "mode"
-      ],
-      "properties": {
-        "mode": {
-          "type": "string",
-          "enum": [
-            "off",
-            "shadow",
-            "active"
-          ]
-        },
-        "timeoutMs": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 2147483647
-        },
-        "minConfidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "topK": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        },
-        "maxCandidates": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        },
-        "maxSelections": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        }
-      }
-    },
-    "modelCapabilities": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "input": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "enum": [
-              "text",
-              "image",
-              "audio",
-              "video",
-              "file"
-            ]
-          }
-        },
-        "streaming": {
-          "type": "boolean"
-        },
-        "toolCalling": {
-          "type": "boolean"
-        },
-        "thinking": {
-          "type": "boolean"
-        }
-      }
-    },
-    "modelConnection": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Defaults to the dictionary key; an explicit id must match that key."
-        },
-        "ownerId": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Defaults to this Host owner; an explicit owner must match this Host."
-        },
-        "revision": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "sdk": {
-          "type": "string",
-          "enum": [
-            "openai",
-            "anthropic",
-            "google",
-            "deepseek",
-            "minimax",
-            "ollama",
-            "openai-compatible"
-          ]
-        },
-        "baseUrl": {
-          "type": "string",
-          "minLength": 1
-        },
-        "secretRef": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Opaque credential reference; plaintext credentials are resolved only by the execution factory."
-        }
-      },
-      "required": [
-        "revision",
-        "sdk"
-      ]
-    },
-    "catalogModel": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Defaults to the dictionary key; an explicit id must match that key."
-        },
-        "connectionId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "model": {
-          "type": "string",
-          "minLength": 1
-        },
-        "capabilities": {
-          "$ref": "#/$defs/modelCapabilities"
-        },
-        "contextWindow": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "maxOutputTokens": {
-          "type": "integer",
-          "minimum": 1
-        }
-      },
-      "required": [
-        "connectionId",
-        "model",
-        "capabilities"
-      ]
-    },
-    "modelPreset": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Defaults to the dictionary key; an explicit id must match that key."
-        },
-        "modelId": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "modelId"
-      ]
-    },
-    "modelPolicyEndpointAddress": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "rootId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "platform": {
-          "type": "string",
-          "minLength": 1
-        },
-        "endpoint": {
-          "type": "string",
-          "minLength": 1
-        },
-        "adapterId": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "required": [
-        "rootId",
-        "platform",
-        "endpoint",
-        "adapterId"
-      ]
-    },
-    "modelPolicySceneAddress": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "rootId": {
-          "type": "string",
-          "minLength": 1
-        },
-        "platform": {
-          "type": "string",
-          "minLength": 1
-        },
-        "endpoint": {
-          "type": "string",
-          "minLength": 1
-        },
-        "conversation": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "endpoint": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "adapter": {
-                  "type": "string",
-                  "minLength": 1
-                },
-                "id": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              },
-              "required": [
-                "adapter",
-                "id"
-              ]
-            },
-            "kind": {
-              "type": "string",
-              "enum": [
-                "private",
-                "group",
-                "channel"
-              ]
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "parent": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "private",
-                    "group",
-                    "channel"
-                  ]
-                },
-                "id": {
-                  "type": "string",
-                  "minLength": 1
-                }
-              },
-              "required": [
-                "kind",
-                "id"
-              ]
-            },
-            "threadId": {
-              "type": "string",
-              "minLength": 1
-            },
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "endpoint",
-            "kind",
-            "id"
-          ]
-        }
-      },
-      "required": [
-        "rootId",
-        "platform",
-        "endpoint",
-        "conversation"
-      ]
-    }
-  }
+  "$defs": {}
 }

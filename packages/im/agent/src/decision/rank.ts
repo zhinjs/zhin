@@ -28,7 +28,8 @@ export async function rankDecisionCandidates(
 ): Promise<DecisionRanking> {
   signal.throwIfAborted();
   const policy = runtime?.config[task];
-  if (!runtime || !policy || policy.mode === 'off') return result('off', false, []);
+  const provider = runtime?.forTask(task);
+  if (!runtime || !policy || policy.mode === 'off' || !provider) return result('off', false, []);
   const started = Date.now();
   const mode = policy.mode;
   const timeoutMs = positiveInteger(policy.timeoutMs, 3_000);
@@ -55,7 +56,7 @@ export async function rankDecisionCandidates(
           criteria: ['Irrelevant or unnecessary for this request', 'Relevant and useful for this request'],
         };
       }
-      const response = await withCancellation(runtime.provider.evaluate({
+      const response = await withCancellation(provider.evaluate({
         state: {
           task,
           intent,

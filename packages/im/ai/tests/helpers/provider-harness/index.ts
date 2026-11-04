@@ -1,5 +1,7 @@
+import type { ProviderFixtureConfig } from '../provider-fixture-config.js';
+import { createProfileRuntime } from '../profile-runtime.js';
 /**
- * Provider test harness: run the real zhin transport (`LlmApiRuntime` →
+ * Provider test harness: run the real zhin transport (fixed Profiles →
  * `streamText` → `@ai-sdk/*`) against a mocked HTTP endpoint.
  *
  * ```ts
@@ -11,19 +13,19 @@
  *
  * See README.md next to this file for the full API.
  */
-import { createLlmApiRuntime } from '../../../src/llm/llm-runtime-factory.js';
-import type { AssistantStreamEvent, LlmApiRuntime, StreamOptions } from '../../../src/llm/llm-api-runtime.js';
+
+import type { AssistantStreamEvent, StreamOptions } from '../../../src/llm/llm-api-runtime.js';
 import { createUserMessage, type AgentMessage, type AssistantMessage } from '../../../src/llm/types/agent-message.js';
 import type { Context } from '../../../src/llm/types/context.js';
-import type { Model, ProviderInstanceConfig } from '../../../src/llm/types/model.js';
+import type {Model} from '../../../src/llm/types/model.js';
 import type { LlmTool } from '../../../src/llm/types/tool.js';
 import type { SdkId } from '../../../src/llm/sdk-registry.js';
 import {
   createResilientCompletionPort,
   type ResilientCompletionOptions,
 } from '../../../src/llm/provider-resilience.js';
-import { AiHttpTransport } from '../../../src/llm/http-transport.js';
-import { SdkProviderAdapter } from '../../../src/sdk-provider-adapter.js';
+import { fixedProfileClient } from '../fixed-profile-client.js';
+import { openAiProvider, openAiCompatibleProvider, googleProvider, anthropicProvider } from '../../../src/providers/api-key.js';
 import { createMockFetch, type MockFetch, type MockResponse, type RecordedRequest, type Responder } from './mock-fetch.js';
 import { anthropicMessages, geminiGenerate, openaiChat } from './protocols.js';
 
@@ -34,7 +36,7 @@ export * from './protocols.js';
 export const TEST_API_KEY = 'test-key';
 
 /** Default model id and config per sdk; override with `model` / `config`. */
-export const PROVIDER_DEFAULTS: Readonly<Record<SdkId, { model: string; config: Omit<ProviderInstanceConfig, 'sdk'> }>> = {
+export const PROVIDER_DEFAULTS: Readonly<Record<SdkId, { model: string; config: Omit<ProviderFixtureConfig, 'sdk'> }>> = {
   openai: { model: 'gpt-5.4-mini', config: { apiKey: TEST_API_KEY } },
   anthropic: { model: 'claude-haiku-4-5-20251001', config: { apiKey: TEST_API_KEY } },
   google: { model: 'gemini-3.8-flash', config: { apiKey: TEST_API_KEY } },
@@ -60,7 +62,7 @@ export interface ProviderHarnessOptions {
   /** Model id. Defaults to {@link PROVIDER_DEFAULTS}. */
   readonly model?: string;
   /** Merged over the sdk default config (`sdk` is always `options.sdk`). */
-  readonly config?: Partial<ProviderInstanceConfig>;
+  readonly config?: Partial<ProviderFixtureConfig>;
   /** Provider alias. Default `'mock'`. */
   readonly alias?: string;
   /** Initial response queue. More can be added with `reply()`. */
@@ -82,10 +84,10 @@ export interface ProviderHarness {
   readonly sdk: SdkId;
   readonly alias: string;
   readonly modelId: string;
-  readonly config: ProviderInstanceConfig;
+  readonly config: ProviderFixtureConfig;
   /** Transport model descriptor (`input`, `contextWindow`, `providerOptions`, ...). */
   readonly model: Model;
-  readonly runtime: LlmApiRuntime;
+  readonly runtime: ReturnType<typeof createProfileRuntime>;
   readonly server: MockFetch;
   /** Shortcut for `server.requests`. */
   readonly requests: RecordedRequest[];
@@ -93,7 +95,7 @@ export interface ProviderHarness {
   lastRequest(): RecordedRequest;
   /** Queue responders (protocol replies, literal responses or functions). */
   reply(...responders: Responder[]): ProviderHarness;
-  /** One completion through `LlmApiRuntime.complete` (the agent path, streamed). */
+  /** One completion through `InferenceClient.stream` (the agent path, streamed). */
   complete(input: HarnessInput, options?: StreamOptions): Promise<AssistantMessage>;
   /** Same request, collecting every stream event (`text_delta`, `toolcall_delta`, `done`, `error`, ...). */
   events(input: HarnessInput, options?: StreamOptions): Promise<AssistantStreamEvent[]>;
@@ -101,8 +103,8 @@ export interface ProviderHarness {
   resilient(options?: ResilientCompletionOptions): {
     complete(input: HarnessInput, options?: StreamOptions): Promise<AssistantMessage>;
   };
-  /** An `SdkProviderAdapter` on the same mocked fetch (`completeText`, `listModels`, non-streamed). */
-  adapter(): SdkProviderAdapter;
+  /** Actual fixed-Profile Driver consumption and explicit discovery on the same synthetic fetch. */
+  adapter(): ReturnType<typeof fixedProfileClient> & { readonly name: string; readonly models: string[]; listModels(): Promise<string[]> };
   /** Build the `Context` that `complete()` would send. */
   context(input: HarnessInput): Context;
   /**
@@ -129,9 +131,9 @@ export function createProviderHarness(options: ProviderHarnessOptions): Provider
   const defaults = PROVIDER_DEFAULTS[options.sdk];
   const alias = options.alias ?? 'mock';
   const modelId = options.model ?? defaults.model;
-  const config: ProviderInstanceConfig = { ...defaults.config, ...options.config, sdk: options.sdk };
+  const config: ProviderFixtureConfig = { ...defaults.config, ...options.config, sdk: options.sdk };
   const server = createMockFetch(options.responses ?? []);
-  const runtime = createLlmApiRuntime([{ alias, config, models: [modelId], fetch: server.fetch }], () => [modelId]);
+  const runtime = createProfileRuntime({ alias, config, models: [modelId], fetch: server.fetch });
   const model = runtime.model(alias, modelId);
 
   const context = (input: HarnessInput): Context => {
@@ -170,10 +172,23 @@ export function createProviderHarness(options: ProviderHarnessOptions): Provider
       return events;
     },
     resilient(resilienceOptions) {
-      const port = createResilientCompletionPort(runtime, resilienceOptions);
+      const selected = [modelId];
+      const fixed = createProfileRuntime({ alias, config, models: selected, fetch: server.fetch });
+      const port = createResilientCompletionPort(fixed, resilienceOptions);
       return { complete: (input, streamOptions) => port.complete(model, context(input), streamOptions) };
     },
-    adapter: () => new SdkProviderAdapter(alias, options.sdk, config, [modelId], new AiHttpTransport({ fetch: server.fetch })),
+    adapter: () => {
+      const client = fixedProfileClient({ ...config, models: [modelId] }, server.fetch);
+      return { ...client, name: alias, models: [modelId], async listModels() {
+        const definition = options.sdk === 'google' ? googleProvider : options.sdk === 'anthropic' ? anthropicProvider
+          : options.sdk === 'openai-compatible' ? openAiCompatibleProvider : openAiProvider;
+        const service = { id: 'service', rootId: 'root', ownerId: 'host', revision: 1, driver: { id: definition.id, owner: 'root', contractVersion: '1' },
+          options: definition.serviceSchema.parse({ ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}), ...(config.headers ? { headers: config.headers } : {}),
+            ...(config.authScheme !== undefined ? { authScheme: config.authScheme } : {}) }), models: {} };
+        return (await definition.discover!({ service, credentials: { bindRequest: (input: { request: Request }) => input.request, authorize: async () => ({ token: TEST_API_KEY, headers: {}, revision: '1' }) }, fetch: server.fetch,
+          signal: new AbortController().signal })).map(item => item.id);
+      } };
+    },
     context,
     async capture(input, streamOptions) {
       const before = server.requests.length;

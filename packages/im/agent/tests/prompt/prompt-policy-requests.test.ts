@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createUserMessage, type AgentMessage, type AgentTool } from '@zhin.js/ai';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
@@ -53,7 +54,7 @@ it.each(CASES)('captures actual %s requests with immutable evidence and disjoint
     globalContext: '# Platform rules\nUse the current endpoint and confirmed message references.',
     skillRegistry: null, skillsSummaryXML: '', getTurnActiveSkills: () => '',
     userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => llm.provider, modelRegistry: null, llmRuntime: llm.runtime,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(llm.runtime).model((llm.provider).name, (llm.provider).models?.[0]) }, completion: llm.runtime }), completion: llm.runtime,
     contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async () => {} },
     compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },
     getActiveTurnTracker: () => undefined, promptTraceConfig: {}, phaseConfig: {},
@@ -152,7 +153,7 @@ it('captures the actual standalone deferred-worker purpose without chat assembly
     goal: 'Read one synthetic record and report verified facts.', toolQuery: 'record lookup',
     deferredCatalog: [tool], workerBaseTools: [], allToolsByName: new Map([[tool.name, tool]]),
     origin: mockCommMessage({ adapter: 'icqq', endpoint: 'synthetic-account', senderId: 'synthetic-member' }),
-    maxToolResults: 1, maxIterations: 2, provider: llm.provider, llmRuntime: llm.runtime,
+    maxToolResults: 1, maxIterations: 2, execution: executionBundle({ model: llm.runtime.model(llm.provider.name, llm.provider.models[0]), completion: llm.runtime }),
   });
   expect(result.status).toBe('ok');
   expect(llm.requests).toHaveLength(1);

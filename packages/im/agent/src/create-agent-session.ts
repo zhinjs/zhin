@@ -1,17 +1,16 @@
 /**
  * Programmatic SDK entry for standalone harness (ADR 0010 D6).
  */
-import type { AIConfig } from '@zhin.js/ai';
-import { AIService, type CreateServiceAgentOptions, type ServiceAgentResult } from './service.js';
+import { AIService, type CreateServiceAgentOptions, type ServiceAgentResult, type AIServiceConfig } from './service.js';
 
 export interface CreateAgentSessionOptions {
-  config?: AIConfig;
+  config?: AIServiceConfig;
   cwd?: string;
 }
 
 export interface AgentSessionHandle {
   service: AIService;
-  prompt(text: string, options?: CreateServiceAgentOptions): Promise<ServiceAgentResult>;
+  prompt(text: string, options: CreateServiceAgentOptions): Promise<ServiceAgentResult>;
   dispose(): Promise<void>;
 }
 

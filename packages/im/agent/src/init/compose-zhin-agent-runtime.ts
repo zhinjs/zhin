@@ -1,7 +1,6 @@
 /**
  * 组合层 — 对齐理想蓝图模块装配（单包 import，阶段 3）。
  */
-import type { AIProvider } from '@zhin.js/ai';
 import { AgentCore } from '../core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createAgentCoreDepsForCompose } from '../core/compose-deps.js';
 import { createToolSystem, type ToolSystem } from '../tool/tool-system.js';
@@ -32,11 +31,8 @@ export interface ComposedZhinAgentRuntime {
   deliverOutbound: SubagentResultSender;
 }
 
-export function composeZhinAgentRuntime(
-  agent: ZhinAgent,
-  provider: AIProvider,
-  proactiveOutbound: ProactiveOutboundService,
-): ComposedZhinAgentRuntime {
+export function composeZhinAgentRuntime(input: Readonly<{ agent: ZhinAgent; proactiveOutbound: ProactiveOutboundService }>): ComposedZhinAgentRuntime {
+  const { agent, proactiveOutbound } = input;
   const priv = asPrivate(agent);
   const eventSystem = createEventSystem();
   const toolSystem = createToolSystem();
@@ -53,7 +49,7 @@ export function composeZhinAgentRuntime(
 
   const agentCore = new AgentCore(
     DEFAULT_AGENT_CORE_CONFIG,
-    createAgentCoreDepsForCompose(provider, eventSystem),
+    createAgentCoreDepsForCompose(eventSystem),
   );
 
   return {

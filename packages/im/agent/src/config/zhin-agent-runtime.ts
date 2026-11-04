@@ -70,6 +70,7 @@ export function buildAgentPromptCacheStreamOptions(
   config: Pick<ZhinAgentConfig, 'promptCache' | 'promptCacheRetention' | 'promptCacheKeyPrefix'>,
   parts: {
     modelSdk: string | undefined;
+    promptCacheRouting?: 'driver';
     provider: string;
     modelId: string;
     label: string;
@@ -82,6 +83,7 @@ export function buildAgentPromptCacheStreamOptions(
 } {
   const promptCache = isPromptCacheEnabled(config, parts.modelSdk, env);
   if (!promptCache) return { promptCache: false };
+  if (parts.promptCacheRouting === 'driver') return { promptCache: true };
   return {
     promptCache: true,
     promptCacheKey: buildPromptCacheKey({

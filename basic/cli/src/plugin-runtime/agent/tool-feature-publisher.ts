@@ -1,3 +1,4 @@
+import { currentAgentInference } from '../inference/current-operation.js';
 import { join } from 'node:path';
 import type { AIService, AiAnnouncements, AiGroupRules, AiSessionEvents, McpServerEntry, LocalImageAssetStore } from '@zhin.js/agent';
 import {
@@ -19,7 +20,6 @@ import {
   type SemanticMemoryRuntime,
 } from '@zhin.js/agent/runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import type { ModelConfigurationAccess } from '../personal-models/configuration.js';
 
 type AddFeature = Parameters<RootResourceInstaller>[0]['addFeature'];
 
@@ -48,7 +48,6 @@ interface RuntimeToolFeature {
 }
 
 export interface PublishAgentToolFeaturesOptions {
-  readonly modelConfiguration?: ModelConfigurationAccess;
   readonly addFeature: AddFeature;
   readonly projectRoot: string;
   readonly service: AIService;
@@ -99,9 +98,7 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
     options.addFeature(toolFeatureId, tool.name, tool.definition);
   }
   for (const tool of createNativeAgentToolSuite({
-    resolveProvider: (alias) => options.service.getProvider(alias),
-    resolveImageDefaults: (alias) => options.service.getImageGenerationDefaults(alias),
-    acquireImageProvider: options.modelConfiguration ? (alias, signal) => options.modelConfiguration!.acquireHostProvider(alias, signal) : undefined,
+    resolveInference: currentAgentInference,
     imageAssets: options.service.imageAssets,
     localAssets: options.localAssets,
     knowledgeIndex: options.knowledgeIndex,

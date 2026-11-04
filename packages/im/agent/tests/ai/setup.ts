@@ -4,7 +4,8 @@
  * 通用 AI mocks 从 @zhin.js/ai 测试 setup 导入
  */
 import { vi } from 'vitest';
-import { segmentsToPlainText, type Message, type MessageElement, type Tool, type AIConfig } from '@zhin.js/core';
+import type { AgentStartupConfig } from '../../src/config/agent-startup.js';
+import { segmentsToPlainText, type Message, type MessageElement, type Tool } from '@zhin.js/core';
 
 // Import and re-export generic AI mocks from ai package tests
 import {
@@ -152,8 +153,7 @@ export const createMockCommMessage = (options: {
   return mockCommMessage(options);
 };
 
-export const createMockAIConfig = (overrides: Partial<AIConfig> = {}): AIConfig => ({
-  defaultProvider: 'mock',
+export const createMockAIConfig = (overrides: Partial<AgentStartupConfig> = {}): AgentStartupConfig => ({
   sessions: {
     maxHistory: 10,
     expireMs: 300000,

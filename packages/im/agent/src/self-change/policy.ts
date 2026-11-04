@@ -243,8 +243,7 @@ export const SELF_CHANGE_SECURITY_CONFIG_KEYS: readonly string[] = Object.freeze
   'ai.agent.injectionGuard',
   'ai.agent.usageQuota.exemptOwner',
   'ai.agent.schedule.security',
-  // 决策审批与工作室信任
-  'ai.decisions.approval',
+  // 工作室信任；模型用途与决策审批配置由认证 Host runtime API 管理。
   'ai.workroom.trustedPackPublishers',
   'ai.workroom.disclosure',
   // 访问令牌

@@ -101,11 +101,6 @@
       "development": "./src/plugin-runtime/index.ts",
       "import": "./lib/plugin-runtime/index.js"
     },
-    "./model-policy": {
-      "types": "./lib/model-policy/index.d.ts",
-      "development": "./src/model-policy/index.ts",
-      "import": "./lib/model-policy/index.js"
-    },
     "./personal-session": {
       "types": "./lib/personal-session/index.d.ts",
       "development": "./src/personal-session/index.ts",
@@ -115,6 +110,11 @@
       "types": "./lib/model-runtime/index.d.ts",
       "development": "./src/model-runtime/index.ts",
       "import": "./lib/model-runtime/index.js"
+    },
+    "./migration": {
+      "types": "./lib/migration/index.d.ts",
+      "development": "./src/migration/index.ts",
+      "import": "./lib/migration/index.js"
     }
   },
   "files": [
@@ -143,7 +143,9 @@
     "ajv": "^8.18.0",
     "aws4fetch": "^1.0.20",
     "he": "^1.2.0",
-    "js-yaml": "^5.4.1"
+    "js-yaml": "^5.4.1",
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/ai-provider": "workspace:*"
   },
   "peerDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -248,10 +250,6 @@
         "types": "./lib/plugin-runtime/index.d.ts",
         "import": "./lib/plugin-runtime/index.js"
       },
-      "./model-policy": {
-        "types": "./lib/model-policy/index.d.ts",
-        "import": "./lib/model-policy/index.js"
-      },
       "./personal-session": {
         "types": "./lib/personal-session/index.d.ts",
         "import": "./lib/personal-session/index.js"
@@ -259,6 +257,10 @@
       "./model-runtime": {
         "types": "./lib/model-runtime/index.d.ts",
         "import": "./lib/model-runtime/index.js"
+      },
+      "./migration": {
+        "types": "./lib/migration/index.d.ts",
+        "import": "./lib/migration/index.js"
       }
     }
   },

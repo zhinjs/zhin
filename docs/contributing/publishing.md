@@ -135,7 +135,7 @@ done < names.txt
 
 ## 包清单
 
-以下 108 个非 private 包都需要配置可信发布者（由 `pnpm sync:publishing-manifest` 从各 `package.json` 生成；CI 以 `pnpm check:publishing-manifest` 校验，新增或转为 public 的包须先同步本清单）。
+以下 109 个非 private 包都需要配置可信发布者（由 `pnpm sync:publishing-manifest` 从各 `package.json` 生成；CI 以 `pnpm check:publishing-manifest` 校验，新增或转为 public 的包须先同步本清单）。
 
 ### `basic/`（5）
 
@@ -166,13 +166,14 @@ done < names.txt
 - [ ] `@zhin.js/host-http-contract` — `packages/host/http-contract`
 - [ ] `@zhin.js/mcp` — `packages/host/mcp`
 
-### `packages/im/`（27）
+### `packages/im/`（28）
 
 - [ ] `@zhin.js/adapter` — `packages/im/adapter`
 - [ ] `@zhin.js/adapter-onebot-events` — `packages/im/adapter-onebot-events`
 - [ ] `@zhin.js/agent` — `packages/im/agent`
 - [ ] `@zhin.js/agent-feature` — `packages/im/agent-feature`
 - [ ] `@zhin.js/ai` — `packages/im/ai`
+- [ ] `@zhin.js/ai-provider` — `packages/im/ai-provider`
 - [ ] `@zhin.js/command` — `packages/im/command`
 - [ ] `@zhin.js/component` — `packages/im/component`
 - [ ] `@zhin.js/config-file` — `packages/im/config-file`

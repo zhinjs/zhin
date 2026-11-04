@@ -201,8 +201,10 @@ describe('create-zhin config', () => {
         expect(raw).toContain('sessions:')
         expect(raw).toContain('context:')
         expect(raw).toContain('agent:')
-        expect(raw).toContain('sdk: ollama')
-        expect(raw).toContain('provider: ollama')
+        expect(raw).not.toContain('plan:')
+        const proposal = await fs.readFile(path.join(root, 'ai.plan.yml'), 'utf8')
+        expect(proposal).toContain('driver: ollama')
+        expect(proposal).toContain('service: ollama')
         expect(raw).toContain('memoryMcp: false')
         expect(raw).not.toContain('defaultProvider')
       } finally {

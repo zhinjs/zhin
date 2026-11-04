@@ -1,13 +1,11 @@
+import { currentAgentInference } from '../inference/current-operation.js';
 import { randomUUID } from 'node:crypto';
-import { isDeepStrictEqual } from 'node:util';
-import { createScopedMediaPerceptionPort } from '@zhin.js/agent/model-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import {
   AIService,
   AgentEventBus,
   AgentResourceHub,
-  createLlmMediaPerceptionPort,
   discoverWorkspaceAgents,
   publishOutboundElements,
   resolveOutboundCapabilities,
@@ -32,9 +30,9 @@ import {
   type AgentTraceRecorder,
 } from '@zhin.js/agent/runtime';
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
+import { createScopedPerceptionFactory, ModelRuntimeError } from '@zhin.js/agent/model-runtime';
 import { auditControlOutbound, checkControlAtOutbound, logControlBlocked } from './turn/control-gate.js';
 import { auditOutbound, createDecisionAudit, decisionScopeOf } from './turn/decision-audit.js';
-import type { ModelConfigurationAccess } from '../personal-models/configuration.js';
 
 const logger = getLogger('agent');
 
@@ -54,36 +52,31 @@ export function observeAgentTurnTrace(
   };
 }
 
-export function createRuntimeZhinAgent(
-  service: AIService,
-  im: ImRuntime,
-  projectRoot: string,
-  approvalPort?: ApprovalPort,
-  audioTranscriber?: AudioTranscriptionPort,
-  knowledgeIndex?: KnowledgeIndex,
-  localAssets?: LocalImageAssetStore,
-  modelConfiguration?: ModelConfigurationAccess,
-): {
+export interface RuntimeZhinAgentOptions {
+  readonly service: AIService;
+  readonly im: ImRuntime;
+  readonly projectRoot: string;
+  readonly approvalPort?: ApprovalPort;
+  readonly audioTranscriber?: AudioTranscriptionPort;
+  readonly knowledgeIndex?: KnowledgeIndex;
+  readonly localAssets?: LocalImageAssetStore;
+}
+
+export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
   agent: ZhinAgent;
   events: AgentEventBus;
   runtime: ReturnType<typeof composeZhinAgentRuntime>;
   seedPresets: () => Promise<number>;
 } {
+  const { service, im, projectRoot, approvalPort, audioTranscriber, knowledgeIndex, localAssets } = options;
   const binding = service.getBindingRegistry().requireZhinBinding();
-  const provider = service.getProvider(binding.providerAlias);
   const events = new AgentEventBus();
-  const agent = new ZhinAgent(provider, {
-    ...(service.getAgentConfig() ?? {}),
-    contextHistory: service.getContextHistoryConfig(),
-    chatModel: binding.model,
-  }, events, service.getLlmRuntime());
-  const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(
-    im,
-    () => agent.getControlPlane(),
-    () => agent.getDecisionEvents(),
-    service.imageAssets,
-  ));
-  const mediaPerception = createRuntimeMediaPerception(service);
+  const agent = new ZhinAgent({ config: {
+    ...(service.getAgentConfig() ?? {}), contextHistory: service.getContextHistoryConfig(),
+  }, events });
+  const composed = composeZhinAgentRuntime({ agent, proactiveOutbound: createRuntimeProactiveOutbound(
+    im, () => agent.getControlPlane(), () => agent.getDecisionEvents(), service.imageAssets,
+  ) });
   composed.host.approvalPort = approvalPort;
   const resourceHub = new AgentResourceHub();
   agent.configure({
@@ -94,39 +87,28 @@ export function createRuntimeZhinAgent(
     sessionSystem: composed.sessionSystem,
     eventSystem: composed.eventSystem,
     resourceHub,
-    providerResolver: (alias) => service.getProvider(alias),
-    llmRuntime: service.getLlmRuntime(),
     audioTranscriber,
     imageAssets: service.imageAssets,
     localAssets,
-    ...(mediaPerception ? { mediaPerception } : {}),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,
     subagentSender: composed.deliverOutbound,
   });
 
-  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, knowledgeIndex, modelConfiguration));
+  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, knowledgeIndex));
+  const createPerception = createScopedPerceptionFactory();
   agent.getSubagentSystem()?.configureRouting({
-    acquireModel: modelConfiguration ? async input => {
-      const scope = await modelConfiguration.acquireHostScope(runtime => {
-        if (!input.binding) return { providerAlias: input.providerAlias, model: input.model };
-        const binding = runtime.getCompatibilityRouting().agents[input.binding.name];
-        if (!binding || !isDeepStrictEqual(binding.permission, input.binding.permission)
-          || !isDeepStrictEqual(binding.mcpServers ?? [], input.binding.mcpServers)) {
-          throw new Error('Model configuration is incompatible with the admitted Agent binding');
-        }
-        return { bindingName: input.binding.name };
-      }, input.signal);
-      try {
-        return { provider: scope.chat.provider, llmRuntime: scope.chat.llmRuntime, model: scope.chat.invocation.model.model,
-          mediaPerception: createScopedMediaPerceptionPort({ scope, settings: service.getPerceptionConfig(),
-            resilience: service.getAgentConfig()?.providerResilience }), release: () => scope.release() };
-      } catch (error) { await scope.release(); throw error; }
-    } : undefined,
     imageAssets: service.imageAssets,
     localAssets,
-    mediaPerception,
-    getProvider: (alias) => service.getProvider(alias),
+    createPerception: (scope) => {
+      if (!scope.context.sessionKey) throw new ModelRuntimeError('invalid-context');
+      return createPerception({
+        scope,
+        sessionKey: scope.context.sessionKey,
+        settings: service.getPerceptionConfig(),
+        resilience: service.getAgentConfig()?.providerResilience,
+      });
+    },
     resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
     getMcpRegistry: () => null,
     resolveAgentMeta: async (name) => {
@@ -148,30 +130,6 @@ export function createRuntimeZhinAgent(
 }
 
 /**
- * `ai.multimodal.perception` → perception port on the service-owned LLM runtime
- * (same transport and resilience layer as turns). Unset → undefined (no pre-pass).
- */
-function createRuntimeMediaPerception(service: AIService) {
-  const config = service.getPerceptionConfig();
-  if (!config) return undefined;
-  logger.info(formatCompact({
-    op: 'media_perception_enabled',
-    provider: config.provider,
-    model: config.model,
-    kinds: config.kinds.join(','),
-  }));
-  return createLlmMediaPerceptionPort({
-    runtime: service.getLlmRuntime(),
-    config,
-    resilience: service.getAgentConfig()?.providerResilience,
-    onEvent: (event) => {
-      const { type, ...fields } = event;
-      logger.warn(formatCompact({ op: `media_perception_${type}`, ...fields }));
-    },
-  });
-}
-
-/**
  * Subagent tool pool — derived from the same generation projection as the
  * main turn so the ToolIndex is the single source of truth. Native builtin
  * tools are projected from the same native ToolFeature definitions used by the main turn.
@@ -179,12 +137,9 @@ function createRuntimeMediaPerception(service: AIService) {
 function buildRuntimeSubagentAgentTools(
   service: AIService,
   knowledgeIndex?: KnowledgeIndex,
-  modelConfiguration?: ModelConfigurationAccess,
 ): AgentTool[] {
   const nativeTools = createNativeAgentToolSuite({
-    resolveProvider: (alias) => service.getProvider(alias),
-    resolveImageDefaults: (alias) => service.getImageGenerationDefaults(alias),
-    acquireImageProvider: modelConfiguration ? (alias, signal) => modelConfiguration.acquireHostProvider(alias, signal) : undefined,
+    resolveInference: currentAgentInference,
     imageAssets: service.imageAssets,
     knowledgeIndex,
     resolveDecision: getAgentTurnDecisionRuntime,

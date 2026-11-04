@@ -67,11 +67,13 @@
     "export * from './native-todo-tools.js';",
     "export * from './native-tool-suite.js';",
     "export * from './native-web-tools.js';",
+    "export * from './operation-resources.js';",
     "export * from './turn-intent-resolver.js';",
     "export type{AgentTurnConfiguration,AgentTurnRequest}from '../zhin-agent/index.js';",
     "export type{AiDatabaseModelDefiner}from '../init/define-ai-database-models.js';",
     "export type{AssistantRuntimeHandle}from '../assistant/runtime-contract.js';",
     "export type{ComposedZhinAgentRuntime}from '../init/compose-zhin-agent-runtime.js';",
+    "export type{UsageQuotaPort}from '../security/usage-accounting.js';",
     "export{AI_DECISION_EVENTS_TABLE,DEFAULT_DECISION_AUDIT_RETENTION_DAYS}from '../decision-events.js';",
     "export{AI_SCENE_MEMBERS_TABLE}from '../scene-facts.js';",
     "export{DEFAULT_GROUP_RULE_RETENTION_DAYS}from '../group-rules.js';",
@@ -81,10 +83,12 @@
     "export{activateAiDatabaseStorage}from '../init/activate-ai-database-storage.js';",
     "export{capabilityToTool,toolInvocationFromTurn,toolsFromCapabilities,type GenerationStampedTool,}from './capability-tools.js';",
     "export{composeZhinAgentRuntime}from '../init/compose-zhin-agent-runtime.js';",
+    "export{createInferenceUsageAccounting}from '../security/usage-accounting.js';",
     "export{createSessionTreeRuntimeFromAgent,type SessionTreeRuntimeHandle,}from '../session-tree-runtime.js';",
     "export{defineAiDatabaseModels}from '../init/define-ai-database-models.js';",
     "export{ensureMcpConnections,ensureMcpConnectionsForBinding,getMcpToolsForBinding,}from '../resource-hub/mcp-lifecycle.js';",
-    "export{normalizeAgentDecisionConfig}from '../decision/config.js';"
+    "export{normalizeAgentDecisionConfig}from '../decision/config.js';",
+    "export{usageSubjectFromTurn}from '../security/usage-subject.js';"
   ],
   "cli/runtime": [
     "export * from './migrate/index.js';",
@@ -144,6 +148,7 @@
     "export * from './member-welcome.js';",
     "export * from './message-bus.js';",
     "export * from './message-dispatcher.js';",
+    "export * from './operation-resources.js';",
     "export * from './outbound-renderer.js';",
     "export * from './outbound-segments.js';",
     "export type{CaptureEndpointOperationInput,CapturedEndpointOperation,EndpointRuntimeDetail,EndpointRuntimeSummary,RuntimeEndpointEditInput,RuntimeEndpointMessageInput,RuntimeEndpointReactionInput,RuntimeEndpointRemoveReactionInput,RuntimeEndpointSendInput,RuntimeEndpointTypingInput,}from './endpoint-runtime.js';",
@@ -161,6 +166,7 @@
     "export * from './directory-module-convention.js';",
     "export * from './discovery.js';",
     "export * from './operation-input.js';",
+    "export * from './operation-resources.js';",
     "export * from './operation-session.js';",
     "export * from './owner-capability-index.js';",
     "export * from './provider.js';"

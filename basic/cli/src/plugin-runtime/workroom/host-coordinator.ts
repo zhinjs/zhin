@@ -155,6 +155,7 @@ export class WorkroomHostCoordinator implements AgentWorkroomPort {
       signal,
       snapshots: profiles.snapshots,
       service: agent.service,
+      withModelSelection: agent.withModelSelection,
       runtime: foundation,
       profiles,
       governance,

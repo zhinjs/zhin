@@ -6,7 +6,7 @@ export default defineEvalCase({
   source: '#724 provider resilience (empty reply, model-harness quirk preset)',
   tags: ['long-task'],
   inbound: { text: '帮我写一句早安问候' },
-  agentConfig: { modelHarness: { models: { 'scripted-model': { emptyReplyRetries: 1 } } } },
+  agentConfig: { modelHarness: { services: { 'eval-scripted': { models: { 'scripted-model': { emptyReplyRetries: 1 } } } } } },
   script: [
     { fault: { kind: 'empty' } },
     { text: '早上好，祝你今天顺利！' },

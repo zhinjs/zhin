@@ -1,8 +1,4 @@
-import {
-  hasGenerateImage,
-  type AIProvider,
-  type ImageGenerationDefaults,
-} from '@zhin.js/ai';
+import type { InferenceClient } from '@zhin.js/ai/provider';
 import {
   defineAgentTool,
   toolFeatureId,
@@ -14,17 +10,12 @@ import {
 import type { ImageAssetPublisher } from '../media/image-assets.js';
 import { decodeBase64 } from '../media/media-normalize.js';
 import { DEFAULT_MULTIMODAL_CONFIG } from '../media/media-types.js';
-import { formatCompact, getLogger } from '@zhin.js/logger';
-import { ModelLeaseError } from '@zhin.js/ai/model-catalog';
 
-export type ImageProviderResolver = (alias: string) => AIProvider;
-export type ImageGenerationDefaultsResolver = (alias: string) => ImageGenerationDefaults;
-export interface NativeImageProviderLease {
-  readonly provider: AIProvider;
-  readonly defaults: Readonly<ImageGenerationDefaults>;
-  release(): Promise<void>;
+export interface NativeImageToolOptions {
+  /** Resolve only the current operation's authorized client. No global provider registry. */
+  readonly resolveInference: () => InferenceClient;
+  readonly imageAssets?: ImageAssetPublisher;
 }
-export type NativeImageProviderAcquirer = (alias: string, signal: AbortSignal) => Promise<NativeImageProviderLease>;
 
 export interface NativeImageToolFeature {
   readonly feature: typeof toolFeatureId;
@@ -32,81 +23,45 @@ export interface NativeImageToolFeature {
   readonly definition: Readonly<AgentToolDefinition<Record<string, unknown>, string>>;
 }
 
-/** Generation-owned image Tool. Provider lookup remains with the Host-owned AIService. */
-export function createNativeImageToolFeature(
-  resolveProvider: ImageProviderResolver,
-  resolveDefaults: ImageGenerationDefaultsResolver = () => ({}),
-  imageAssets?: ImageAssetPublisher,
-  acquireProvider?: NativeImageProviderAcquirer,
-): NativeImageToolFeature {
+/** Generation-owned declaration; execution and image defaults belong to the selected Profile. */
+export function createNativeImageToolFeature(options: NativeImageToolOptions): NativeImageToolFeature {
   return Object.freeze({
     feature: toolFeatureId,
     name: 'generate_image',
     definition: defineAgentTool<Record<string, unknown>, string>({
-      description: 'Generate an image with a configured image-capable AI provider.',
+      description: 'Generate an image using the configured image purpose or an available image Profile.',
       inputSchema: objectSchema({
-        provider_alias: { type: 'string', description: 'Configured AI provider alias' },
+        profile_id: { type: 'string', description: 'Optional available image Profile ID; omit to use the image purpose' },
         prompt: { type: 'string', description: 'Concrete image description' },
-        model: { type: 'string' },
         size: { type: 'string' },
         quality: { type: 'string' },
         aspect_ratio: { type: 'string' },
         image_size: { type: 'string' },
         num_steps: { type: 'number' },
         watermark_enabled: { type: 'boolean' },
-      }, ['provider_alias', 'prompt']),
+      }, ['prompt']),
       requiresApproval: 'never',
-      execute: (input, context) => generateImage(input, context, resolveProvider, resolveDefaults, imageAssets, acquireProvider),
+      execute: (input, context) => generateImage({ input, context, options }),
     }),
   });
 }
 
-async function generateImage(
-  input: Record<string, unknown>,
-  context: ToolExecutionContext,
-  resolveProvider: ImageProviderResolver,
-  resolveDefaults: ImageGenerationDefaultsResolver,
-  imageAssets?: ImageAssetPublisher,
-  acquireProvider?: NativeImageProviderAcquirer,
-): Promise<string> {
-  const alias = requiredString(input.provider_alias, 'provider_alias');
+async function generateImage(args: Readonly<{
+  input: Record<string, unknown>; context: ToolExecutionContext; options: NativeImageToolOptions;
+}>): Promise<string> {
+  const { input, context, options } = args;
+  const imageAssets = options.imageAssets;
   const prompt = requiredString(input.prompt, 'prompt');
   context.signal.throwIfAborted();
-  const lease = await acquireProvider?.(alias, context.signal);
-  try {
-    return await generateWithProvider(input, context, alias, prompt, lease?.provider ?? resolveProvider(alias),
-      lease?.defaults ?? resolveDefaults(alias), imageAssets);
-  } finally {
-    try { await lease?.release(); }
-    catch (error) {
-      try { getLogger('agent').warn(formatCompact({ op: 'image_provider_release', outcome: 'failed',
-        cause: error instanceof ModelLeaseError ? error.code : 'unclassified' })); }
-      catch { /* Diagnostic only; never expose arbitrary disposer error text. */ }
-    }
-  }
-}
-
-async function generateWithProvider(
-  input: Record<string, unknown>, context: ToolExecutionContext, alias: string, prompt: string,
-  provider: AIProvider, defaults: Readonly<ImageGenerationDefaults>, imageAssets?: ImageAssetPublisher,
-): Promise<string> {
-  if (!hasGenerateImage(provider)) {
-    throw new Error(`AI provider "${alias}" does not support image generation`);
-  }
-
-  const suffix = optionalString(defaults.promptSuffix);
-  const finalPrompt = suffix ? `${prompt} ${suffix}` : prompt;
-  context.signal.throwIfAborted();
-  const result = await provider.generateImage({
-    prompt: finalPrompt,
-    model: optionalString(input.model) ?? defaults.defaultModel,
-    size: optionalString(input.size) ?? defaults.defaultSize,
-    numSteps: optionalNumber(input.num_steps) ?? defaults.numSteps,
-    watermarkEnabled: optionalBoolean(input.watermark_enabled) ?? defaults.watermarkEnabled,
-    quality: optionalString(input.quality) ?? defaults.quality,
-    aspectRatio: optionalString(input.aspect_ratio) ?? defaults.aspectRatio,
-    imageSize: optionalString(input.image_size) ?? defaults.imageSize,
-  });
+  const client = options.resolveInference();
+  const id = optionalString(input.profile_id);
+  const profile = id ? (await client.list({ kind: 'image' })).find(profile => profile.reference.id === id)?.reference : undefined;
+  if (id && !profile) throw new Error('Image Profile is unavailable in this operation');
+  const result = await client.generateImage({ ...(profile ? { profile } : {}), signal: context.signal, request: {
+    prompt, size: optionalString(input.size), numSteps: optionalNumber(input.num_steps),
+    watermarkEnabled: optionalBoolean(input.watermark_enabled), quality: optionalString(input.quality),
+    aspectRatio: optionalString(input.aspect_ratio), imageSize: optionalString(input.image_size),
+  } });
   context.signal.throwIfAborted();
   const bytes = imageAssets ? decodeBase64(result.base64, DEFAULT_MULTIMODAL_CONFIG.maxFileBytes) : undefined;
   if (imageAssets && !bytes) throw new Error('Generated image is invalid or exceeds 25 MiB; do not regenerate automatically');
@@ -119,7 +74,7 @@ async function generateWithProvider(
   return JSON.stringify({
     ...image,
     model: result.model,
-    provider: alias,
+    ...(id ? { profile_id: id } : {}),
     revised_prompt: result.revisedPrompt,
   });
 }

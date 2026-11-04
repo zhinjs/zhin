@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { projectProviderDiagnostics } from '@zhin.js/ai';
 import type { TurnEvent } from '../event/turn-event.js';
 
 export interface AgentTraceEvent {
@@ -136,12 +137,12 @@ export function createAgentTraceRuntime(options: Readonly<{
  * are truncated and nesting is bounded. Used by Console trace and TurnTrace.
  */
 export function redactTraceValue(value: unknown): unknown {
-  return sanitizeValue(value, 0);
+  return sanitizeValue(projectProviderDiagnostics(value), 0);
 }
 
 function sanitizeEvent(event: TurnEvent): Readonly<Record<string, unknown>> {
   const { type: _type, ...data } = event;
-  return Object.freeze(sanitizeRecord(data, 0));
+  return Object.freeze(sanitizeRecord(projectProviderDiagnostics(data), 0));
 }
 
 function sanitizeRecord(value: Record<string, unknown>, depth: number): Record<string, unknown> {

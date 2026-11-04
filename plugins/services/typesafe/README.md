@@ -1,30 +1,12 @@
-# TypeSafe AI decisions
+# TypeSafe Decision Provider
 
-`@zhin.js/service-typesafe` is an optional, generation-owned [TypeSafe AI Jev](https://docs.typesafe.ai/sdk/javascript) decision provider. It evaluates named Choice, Score and Noul questions; it does not generate chat replies or grant tool permissions. The default IM installation does not include the SDK.
-
-## Install and configure
+Publishes the real TypeSafe Choice, Score and Noul protocol for Zhin's operation-bound inference runtime. It does not turn chat JSON into a decision model.
 
 ```sh
 pnpm add @zhin.js/service-typesafe
 ```
 
-Keep the API key in `.env`:
-
-```dotenv
-TYPESAFE_API_KEY=your-key
-```
-
-Run the optional wizard after configuring your chat Agent:
-
-```sh
-zhin setup --decisions
-pnpm install
-zhin doctor
-```
-
-The wizard keeps your chat model, writes the key to `.env`, installs the plugin manifest entry and starts Skill / Tool recommendations in `shadow` mode. On first setup, Agent selection, memory reranking and automatic approval start `off`. Reconfiguration preserves existing task settings and thresholds. Separate instances use separate key environment variables; an existing explicit key reference is preserved.
-
-For manual configuration, declare the plugin in `zhin.config.yml`:
+Register the plugin normally:
 
 ```yaml
 configVersion: 2
@@ -32,79 +14,72 @@ plugins:
   typesafe: '@zhin.js/service-typesafe'
 ```
 
-Add its instance settings and exact binding in `zhin.config.yml`, alongside the existing AI configuration:
+The plugin has no account or model settings. Add its Service, Account and Profiles through Host inference management; keep the API key in the Account credential store or an `env://TYPESAFE_API_KEY` source reference. A reviewed plan can declare multiple models and select a Profile separately for each task:
 
 ```yaml
-configVersion: 2
-plugins:
-  typesafe: "@zhin.js/service-typesafe"
-ai:
-  # Keep existing agents/providers and other AI settings.
+version: 1
+services:
+  decision:
+    driver: typesafe
+    models:
+      jev-pinned:
+        id: jev-pinned
+        kinds: [decision]
+        protocol: typesafe-system-one
+accounts:
+  deployment:
+    service: decision
+    auth:
+      method: api-key
+      source: env://TYPESAFE_API_KEY
+profiles:
+  routing:
+    account: deployment
+    model: jev-pinned
+    parameters:
+      timeoutMs: 10000
+      maxRetries: 2
+purposes:
   decisions:
-    provider: root/typesafe
     skills:
+      profile: routing
       mode: shadow
     tools:
+      profile: routing
       mode: shadow
-typesafe:
-  apiKey: ${TYPESAFE_API_KEY}
-  model: jev-latest
-  timeoutMs: 10000
-  maxRetries: 2
 ```
 
-The instance registers its client through `provideAgentDecisionProvider` from `@zhin.js/agent/runtime` in its own plugin scope. The registration binds the resource to its owning instance, so an inherited ancestor provider cannot satisfy a different configured instance. Agent configuration must explicitly bind the instance through the runtime decision configuration; merely installing a provider does not authorize decisions or change existing routing. Independent instances have independent clients and lifecycle cleanup.
+Import previews resolve the Driver's exact Plugin owner and contract version. Applying a plan does not execute a model request. The former `typesafe.apiKey`, `model`, `enabled` and `ai.decisions.provider` configuration is removed; migrate it explicitly rather than running parallel clients. The old `zhin setup --decisions` format is not the target management path.
 
-`schema.json` is the configuration contract. `timeoutMs` covers the whole call, including HTTP attempts and retry delays. A caller can supply its own total budget. `enabled: false` skips client creation and does not require a key. `baseUrl` defaults to `https://api.typesafe.ai`; custom roots cannot contain credentials, query strings or fragments.
+A normal plugin receives `aiInferenceClientToken` from its actual operation context and calls `evaluate` with an eligible Decision Profile reference. `evaluate` returns the supplier's typed answers, actual model and usage; task policies apply their own `off`, `shadow` or `active` behavior. Merely installing this plugin does not enable any decision policy.
 
-Invalid configuration for an enabled instance stops plugin startup with a sanitized error instead of silently disabling the configured decision or approval provider. Resolve the environment reference or configuration error before restarting; use `enabled: false` to explicitly disable the instance.
+- Choice retains the selected label, complete probability distribution and confidence.
+- Score retains the rubric index, rubric legend, distribution and confidence. Its range follows the supplied rubric.
+- Noul is a probability of true and has no separate confidence value.
+- Deterministic identity, permission and approval checks remain authoritative.
 
-## Use the decision interface
-
-```ts
-import { TypeSafeDecisionProvider } from '@zhin.js/service-typesafe';
-
-const provider = new TypeSafeDecisionProvider({
-  apiKey: process.env.TYPESAFE_API_KEY!,
-  model: 'jev-latest',
-});
-try {
-  const result = await provider.evaluate({
-    state: { intent: 'Mute a group member' },
-    questions: {
-      skill: {
-        type: 'choice',
-        instructions: 'Choose the relevant permitted skill, or none.',
-        criteria: { moderation: 'Group moderation', none: 'No relevant skill' },
-      },
-    },
-  }, { signal: new AbortController().signal });
-  console.log(result.answers.skill.choice); // inferred: 'moderation' | 'none'
-} finally {
-  provider.dispose();
-}
-```
-
-Use the plugin-managed resource in normal Zhin operation; direct construction is useful for standalone consumers and tests. Do not create clients for each message.
-
-## Result semantics and safety
-
-- Choice preserves the selected label, its complete probability distribution and reported confidence.
-- Score preserves the expected rubric index, rubric legend, probability distribution and confidence. A two-level rubric has a score in `[0, 1]`; a five-level rubric has a score in `[0, 4]`.
-- Noul is the probability of true in `[0, 1]`. It has no separate confidence field.
-- Every result includes the actual model name and token usage. Policy versioning and decision thresholds belong to the caller, not this transport.
-
-The native API's top-level state, instructions and criterion descriptions accept strings, arrays, objects and null. Numeric and boolean data can appear inside objects or arrays. Non-finite numbers, cycles and unsupported entry types are rejected before dispatch. Responses are validated against the submitted question names, types, alternatives and score rubric. Missing answers, malformed distributions and invalid usage are rejected.
-
-SDK logging is disabled, including when `TYPESAFE_LOG_LEVEL` is set. Errors expose only a local code and, when available, an HTTP status. Remote bodies, prompts, credentials and upstream causes are not attached to errors. Caller cancellation, total timeout and plugin disposal also cancel pending SDK retries.
-
-Jev's decisions are advisory. Zhin's deterministic identity, permission and approval rules remain authoritative. Pin a model version before calibrating a production policy, and evaluate Chinese requests on representative scenarios; the SDK's `jev-latest` alias can change over time.
-
-## Validation
+`timeoutMs` bounds the whole SDK operation, including body consumption and configured retries. Every actual HTTP attempt obtains a current Account grant. Errors contain safe local codes and optional status, without provider bodies or credentials. Operation cancellation closes the ephemeral SDK client; retiring a Plugin generation does not itself cancel a retained operation.
 
 ```sh
 pnpm --filter @zhin.js/service-typesafe test
 pnpm --filter @zhin.js/service-typesafe build
 ```
 
-Tests use the real SDK with injected HTTP fetch and make no paid API calls. Real-account accuracy, latency and cost must be measured separately before enabling production policy.
+Tests run the installed official SDK against synthetic HTTP fixtures. They do not establish real-account accuracy, latency, availability, provider permission or production cost.
+
+
+The target interface requires the coordinated Provider release: `@zhin.js/ai >=1.1.51` and `@zhin.js/ai-provider >=1.0.0` (planned, not published by this change). Upgrade the Host and plugin together; the [migration guide](../../../docs/ai/provider-upgrade.md) lists the full version boundary. The root exports `typeSafeProvider` and safe decision errors; the old API-key constructor and its configuration type are no longer public author APIs.
+
+
+## Migrating the former plugin configuration
+
+The general headless importer does not execute plugin JavaScript to discover private configuration. A blocked TypeSafe entry requires this explicit migration, not a second legacy client:
+
+1. Stop the old Host for the migration window. Keep a protected backup of its configuration, package versions, database and matching credential master key. Record the effective TypeSafe endpoint, exact native model ID, timeout/retry values and each decision task's existing policy; do not copy key material into a plan, log or issue. If the effective old model cannot be established, select an exact native ID before proceeding.
+2. Replace the old configured plugin with the normal pure plugin declaration shown above. Remove the former plugin fields (`apiKey`, `model`, `enabled`, `baseUrl`, `timeoutMs`, `maxRetries`); even `enabled: false` is not the new plugin schema. Keep the old source in the protected backup. Keep an existing environment secret available privately if the new Account will refer to it.
+3. Start the coordinated new Host and open its model management page in Console. Add a Service using the registered `typesafe` Driver and the old explicit endpoint. Declare the exact native model with `kinds: [decision]` and `protocol: typesafe-system-one`. This is a manual declaration, not a claim that a catalogue probe verified the model.
+4. Add its Host Account with authentication `api-key`: either use the existing Host source reference, such as `env://TYPESAFE_API_KEY`, or submit the key through the authenticated private Account form. Create a Profile selecting that Account and native model; copy the old `timeoutMs` and `maxRetries` into Profile parameters. The plugin itself stores neither credentials nor a selected model.
+5. Bind the Profile separately to the six decision purposes: `skills`, `tools`, `memory`, `agents`, `approval`, and `ambient`. Copy each task's original `mode`, `timeoutMs`, `minConfidence`, `topK`, `maxCandidates` and `maxSelections` where configured. Do not enable previously disabled tasks, invent new thresholds, or copy one task's policy over the others. Remove the obsolete `ai.decisions.provider` and old startup task routes only as part of this explicit cutover; the new runtime does not dual-read them.
+6. Save through the normal management transaction and inspect the selected Service, Account, Profile and purpose bindings. Saving does not perform model inference. Real model acceptance and billing require a separately authorized test; offline validation is not that evidence. If a save outcome is unknown, query its original mutation receipt before retrying.
+
+To restore the old release, stop the new Host and restore the old package/configuration set together with its matching database and credential-key backup. Do not point the old client at the new Provider graph or re-enable a legacy client alongside the new one.

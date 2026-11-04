@@ -3,9 +3,6 @@ import type {
   AssistantConfig,
   McpServerEntry,
 } from '@zhin.js/agent';
-import type {
-  WorkroomDefinition,
-} from '@zhin.js/workroom';
 import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
@@ -17,11 +14,11 @@ export type WorkroomStorageMode = 'database' | 'file';
 type McpServerConfig = NonNullable<AgentHostAIConfig['mcpServers']>[number];
 
 type WorkroomModelProcessingContract = NonNullable<
-  NonNullable<NonNullable<AgentHostAIConfig['workroom']>['disclosure']>['modelProviders']
+  NonNullable<NonNullable<AgentHostAIConfig['workroom']>['disclosure']>['modelServices']
 >[string];
 
 export interface WorkroomDisclosureBootstrapResolution {
-  readonly modelProviderAlias?: string;
+  readonly modelServiceId?: string;
   readonly contract?: WorkroomModelProcessingContract;
 }
 
@@ -104,22 +101,12 @@ export function resolveAgentHostKnowledgeDirectory(
   return directory;
 }
 
-export function resolveWorkroomDisclosureBootstrap(
-  definition: WorkroomDefinition | undefined,
-  providerAliasForAgent: (agentId: string) => string | undefined,
-  ai: AgentHostAIConfig,
-): WorkroomDisclosureBootstrapResolution {
-  const orchestratorAgent = definition?.conversation?.agent;
-  const modelProviderAlias = orchestratorAgent
-    ? providerAliasForAgent(orchestratorAgent)
-    : undefined;
-  const contract = modelProviderAlias
-    ? ai.workroom?.disclosure?.modelProviders?.[modelProviderAlias]
-    : undefined;
-  return Object.freeze({
-    ...(modelProviderAlias ? { modelProviderAlias } : {}),
-    ...(contract ? { contract } : {}),
-  });
+export function resolveWorkroomDisclosureBootstrap(input: Readonly<{
+  serviceId?: string;
+  ai: AgentHostAIConfig;
+}>): WorkroomDisclosureBootstrapResolution {
+  const contract = input.serviceId ? input.ai.workroom?.disclosure?.modelServices?.[input.serviceId] : undefined;
+  return Object.freeze({ ...(input.serviceId ? { modelServiceId: input.serviceId } : {}), ...(contract ? { contract } : {}) });
 }
 
 export function assessWorkroomDisclosureSetup(input: Readonly<{
@@ -132,18 +119,18 @@ export function assessWorkroomDisclosureSetup(input: Readonly<{
   disclosureConfigReady: boolean;
   diagnostics: readonly string[];
 }> {
-  const { modelProviderAlias, contract } = input.resolution;
+  const { modelServiceId, contract } = input.resolution;
   const diagnostics: string[] = [];
   const disclosureConfigReady = contract !== undefined
     && contract.maxConfidentiality !== 'public'
     && (!contract.external || contract.noTraining);
-  if (!modelProviderAlias) diagnostics.push('orchestrator 尚未绑定模型 Provider');
+  if (!modelServiceId) diagnostics.push('orchestrator 尚未绑定模型服务');
   else if (!contract) {
-    diagnostics.push(`尚未配置 ai.workroom.disclosure.modelProviders.${modelProviderAlias}`);
+    diagnostics.push(`尚未配置 ai.workroom.disclosure.modelServices.${modelServiceId}`);
   } else if (contract.external && !contract.noTraining) {
-    diagnostics.push(`外部模型 Provider ${modelProviderAlias} 必须显式禁止训练`);
+    diagnostics.push(`外部模型服务 ${modelServiceId} 必须显式禁止训练`);
   } else if (contract.maxConfidentiality === 'public') {
-    diagnostics.push(`模型 Provider ${modelProviderAlias} 至少需要 project_internal 披露等级`);
+    diagnostics.push(`模型服务 ${modelServiceId} 至少需要 project_internal 披露等级`);
   }
   if (!input.authorityPublished) diagnostics.push('尚未发布 Project Data Governance 披露 authority');
   else if (!input.authorityCurrent) {

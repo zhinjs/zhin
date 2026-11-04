@@ -3,6 +3,7 @@ import type { ResolvedAgentBinding } from '@zhin.js/agent/config';
 import { collectAgentLoopTurnRun, type AgentCore, type ZhinAgentPrivate } from '@zhin.js/agent/core';
 import type { TurnEvent } from '@zhin.js/agent/event';
 import type { PluginAILoopHookRegistry } from '@zhin.js/agent';
+import type { ModelExecutionScope } from '@zhin.js/agent/model-runtime';
 import { TurnToolRuntime, TurnToolExecutionAuthority } from '@zhin.js/agent/tool';
 import { createTurnIngress, runWithAgentTurnConfiguration } from '@zhin.js/agent/turn';
 import type {
@@ -16,6 +17,8 @@ export interface AgentCoreWorkroomLocalTurnPortOptions {
   readonly core: AgentCore;
   readonly resolveBinding: (agentDefinitionId: string | undefined) => ResolvedAgentBinding | undefined;
   readonly generation: number;
+  /** Host owns principal validation, quotas and the exact operation generation lease. */
+  readonly withModels: <T>(input: Readonly<{ turnId: string; sessionKey: string; principalId: string; bindingName: string; signal: AbortSignal }>, run: (models: ModelExecutionScope) => Promise<T>) => Promise<T>;
   readonly loopHooks?: PluginAILoopHookRegistry;
   readonly onTurnEvent?: (
     attribution: WorkroomLocalTurnJournalAttribution,
@@ -42,91 +45,94 @@ async function runAgentCoreLocalTurn(
   if (!binding) {
     throw new Error(`Local Assignment Agent binding is unavailable: ${input.agentDefinitionId ?? 'unbound'}`);
   }
-  const publish = async (event: TurnEvent): Promise<void> => {
-    await options.onTurnEvent?.(input.journalAttribution, event);
-  };
-  const plan = input.capabilityPlan;
-  const turn = createTurnIngress({
-    identity: Object.freeze({
-      rootId: 'workroom-local-assignment',
+  return options.withModels({ turnId: input.turnId, sessionKey: input.sessionId, principalId: input.principalId, bindingName: binding.name, signal }, async models => {
+    signal.throwIfAborted();
+    const publish = async (event: TurnEvent): Promise<void> => {
+      await options.onTurnEvent?.(input.journalAttribution, event);
+    };
+    const plan = input.capabilityPlan;
+    const turn = createTurnIngress({
+      identity: Object.freeze({
+        rootId: models.context.rootId,
+        generation: options.generation,
+        traceId: input.turnId,
+        turnId: input.turnId,
+      }),
+      origin: Object.freeze({ kind: 'http' as const, sessionId: input.sessionId }),
+      principal: Object.freeze({
+        subjectId: input.principalId,
+        roles: Object.freeze(['workroom_assignment']),
+      }),
+      intent: Object.freeze({ kind: 'new' as const }),
+      input: Object.freeze({
+        text: input.prompt,
+        metadata: Object.freeze({ ...input.journalAttribution }),
+      }),
+      session: Object.freeze({ key: input.sessionId }),
+      policy: Object.freeze({
+        permissions: Object.freeze([]),
+        unattended: true,
+        shell: Object.freeze({
+          security: 'allowlist' as const,
+          execPreset: 'development' as const,
+          approvalMode: 'auto' as const,
+          isolation: 'required' as const,
+        }),
+        filesystem: Object.freeze({
+          workspaceRoot: input.workspaceRoot,
+          workingDirectory: input.workspaceRoot,
+          access: 'workspace-write' as const,
+        }),
+      }),
+      capabilities: Object.freeze({
+        tools: Object.freeze(plan.capabilities.map(capability => capability.name)),
+        skills: Object.freeze([]),
+      }),
+      signal,
+      hostProtectedPaths: options.host.hostProtectedPaths,
+      ports: Object.freeze({ journal: Object.freeze({ append: publish }) }),
+    });
+    const runtime = new TurnToolRuntime(turn, plan.capabilities);
+    const activeSkillsContext = plan.controller.loadedSkillInstructions().join('\n\n');
+    const run = () => collectAgentLoopTurnRun(options.core.runText({
+      host: options.host,
+      sessionId: input.sessionId,
+      rawContent: input.prompt,
+      promptProfile: { kind: 'interactive' },
+      turnContext: turn,
+      allTools: [...plan.allTools],
+      resolvedTools: [...plan.resolvedTools],
+      toolExecution: new TurnToolExecutionAuthority(runtime),
+      toolEventSource: 'authority',
+      loopHooks: options.loopHooks,
+      promptRuntime: {
+        activeSkillsContext,
+        agentNickname: binding.nickname,
+        modelId: models.chat.model.id,
+        providerAlias: models.chat.binding.account.id,
+      },
+      personaEnhanced: [
+        'You are executing one exact Workroom Assignment.',
+        'Use only the supplied Deferred Capability Plan and workspace authority.',
+        'Return the requested structured Task Report JSON; never mutate Workroom Task status.',
+        activeSkillsContext,
+      ].filter(Boolean).join('\n\n'),
+      modelId: models.chat.model.id,
+      modelCandidates: [models.chat.model.id],
+      initialMessages: [createUserMessage(input.prompt)],
+      signal,
+      deferredStats: plan.deferredStats,
+      deferredController: plan.controller,
+      toolCatalog: plan.catalog,
+      toolLoading: 'deferred',
+      conversationPersistence: 'none',
       generation: options.generation,
-      traceId: input.turnId,
-      turnId: input.turnId,
-    }),
-    origin: Object.freeze({ kind: 'http' as const, sessionId: input.sessionId }),
-    principal: Object.freeze({
-      subjectId: input.principalId,
-      roles: Object.freeze(['workroom_assignment']),
-    }),
-    intent: Object.freeze({ kind: 'new' as const }),
-    input: Object.freeze({
-      text: input.prompt,
-      metadata: Object.freeze({ ...input.journalAttribution }),
-    }),
-    session: Object.freeze({ key: input.sessionId }),
-    policy: Object.freeze({
-      permissions: Object.freeze([]),
-      unattended: true,
-      shell: Object.freeze({
-        security: 'allowlist' as const,
-        execPreset: 'development' as const,
-        approvalMode: 'auto' as const,
-        isolation: 'required' as const,
-      }),
-      filesystem: Object.freeze({
-        workspaceRoot: input.workspaceRoot,
-        workingDirectory: input.workspaceRoot,
-        access: 'workspace-write' as const,
-      }),
-    }),
-    capabilities: Object.freeze({
-      tools: Object.freeze(plan.capabilities.map(capability => capability.name)),
-      skills: Object.freeze([]),
-    }),
-    signal,
-    hostProtectedPaths: options.host.hostProtectedPaths,
-    ports: Object.freeze({ journal: Object.freeze({ append: publish }) }),
+      onTurnEvent: event => { void publish(event); },
+    }));
+    const result = await runWithAgentTurnConfiguration(
+      { activeBinding: binding, models },
+      run,
+    );
+    return Object.freeze({ output: result.reply });
   });
-  const runtime = new TurnToolRuntime(turn, plan.capabilities);
-  const activeSkillsContext = plan.controller.loadedSkillInstructions().join('\n\n');
-  const run = () => collectAgentLoopTurnRun(options.core.runText({
-    host: options.host,
-    sessionId: input.sessionId,
-    rawContent: input.prompt,
-    promptProfile: { kind: 'interactive' },
-    turnContext: turn,
-    allTools: [...plan.allTools],
-    resolvedTools: [...plan.resolvedTools],
-    toolExecution: new TurnToolExecutionAuthority(runtime),
-    toolEventSource: 'authority',
-    loopHooks: options.loopHooks,
-    promptRuntime: {
-      activeSkillsContext,
-      agentNickname: binding.nickname,
-      modelId: binding.model,
-      providerAlias: binding.providerAlias,
-    },
-    personaEnhanced: [
-      'You are executing one exact Workroom Assignment.',
-      'Use only the supplied Deferred Capability Plan and workspace authority.',
-      'Return the requested structured Task Report JSON; never mutate Workroom Task status.',
-      activeSkillsContext,
-    ].filter(Boolean).join('\n\n'),
-    modelId: binding.model,
-    modelCandidates: [binding.model],
-    initialMessages: [createUserMessage(input.prompt)],
-    signal,
-    deferredStats: plan.deferredStats,
-    deferredController: plan.controller,
-    toolCatalog: plan.catalog,
-    toolLoading: 'deferred',
-    conversationPersistence: 'none',
-    generation: options.generation,
-    onTurnEvent: event => { void publish(event); },
-  }));
-  const result = await runWithAgentTurnConfiguration(
-    { activeBinding: binding },
-    run,
-  );
-  return Object.freeze({ output: result.reply });
 }

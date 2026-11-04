@@ -109,7 +109,7 @@ export async function judgeReply(input: {
     const response = await input.completion.completeSimple(
       input.model,
       createContext(JUDGE_PROMPT, [createUserMessage(judgeInput(input.scenario, input.persona, input.result))]),
-      { temperature: 0, maxTokens: 2048, outputSchema: JUDGMENT_SCHEMA, maxRetries: 0, signal: AbortSignal.timeout(120_000) },
+      { outputSchema: JUDGMENT_SCHEMA, maxRetries: 0, signal: AbortSignal.timeout(120_000) },
     ).catch((error: unknown) => ({ errorMessage: error instanceof Error ? error.message : String(error) }) as Awaited<ReturnType<LlmCompletionPort['completeSimple']>>);
     const delay = response.errorMessage ? rateLimitDelayMs(response.errorMessage) : undefined;
     if (delay !== undefined && attempt < 8) {

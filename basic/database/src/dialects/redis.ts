@@ -1,6 +1,5 @@
 import { Dialect, Database } from '../base/index.js';
 import {KeyValueDatabase} from "../type/keyvalue/database.js";
-import {Registry} from "../registry.js";
 import { getLogger } from '@zhin.js/logger';
 
 import type { RedisClientOptions } from 'redis';
@@ -601,4 +600,12 @@ export class Redis<S extends Record<string, object> = Record<string, object>> ex
     super(new RedisDialect<S>(config), definitions);
   }
 }
-Registry.register('redis', Redis);
+
+declare module '../registry.js' {
+  interface Databases<S extends Record<string, object> = Record<string, object>> {
+    redis: Redis<S>;
+  }
+  namespace Registry {
+    interface Config { redis: RedisDialectConfig; }
+  }
+}

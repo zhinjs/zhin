@@ -36,7 +36,7 @@ const generate = (fetch: typeof globalThis.fetch, scene = SCENE) => fetch(GENERA
 describe('Gemini explicit cache request', () => {
   it('creates POST {root}/cachedContents caching only the stable system part and tools', async () => {
     const { calls, fetch } = recorder(() => Response.json({ name: 'cachedContents/c1' }));
-    await generate(createGeminiCachingFetch({ mode: 'explicit' }, fetch));
+    await generate(createGeminiCachingFetch({ config: { mode: 'explicit' }, fetch }));
     const [create, send] = calls;
     expect(create!.url).toBe(`${ROOT}/cachedContents`);
     expect(create!.method).toBe('POST');
@@ -56,7 +56,7 @@ describe('Gemini explicit cache request', () => {
 
   it('reuses one cache across scenes (scene tail does not change the key)', async () => {
     const { calls, fetch } = recorder(() => Response.json({ name: 'cachedContents/c1' }));
-    const caching = createGeminiCachingFetch({ mode: 'explicit' }, fetch);
+    const caching = createGeminiCachingFetch({ config: { mode: 'explicit' }, fetch });
     await generate(caching, { text: 'scene A' });
     await generate(caching, { text: 'scene B' });
     expect(calls.filter(c => c.url.endsWith('/cachedContents'))).toHaveLength(1);
@@ -69,7 +69,7 @@ describe('Gemini explicit cache request', () => {
       { error: { code: 404, message: 'models/gemini-3.8-flash is not found for API version v1beta, or is not supported for createCachedContent.', status: 'NOT_FOUND' } },
       { status: 404 },
     ));
-    const caching = createGeminiCachingFetch({ mode: 'explicit' }, fetch);
+    const caching = createGeminiCachingFetch({ config: { mode: 'explicit' }, fetch });
     await generate(caching);
     await generate(caching, { text: 'other scene' });
     expect(calls.filter(c => c.url.endsWith('/cachedContents'))).toHaveLength(1);

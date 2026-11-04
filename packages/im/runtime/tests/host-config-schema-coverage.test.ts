@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import hostSchema from '../src/host-config-schema.json' with { type: 'json' };
+import planSchema from '../../ai/provider-plan.schema.json' with { type: 'json' };
 import { parsePluginConfigSchema } from '../src/config-composer.js';
 
 type Schema = Record<string, unknown>;
@@ -60,8 +61,7 @@ describe('Host configuration field coverage', () => {
 
   it('declares the public AI service inputs and nested Agent policies', () => {
     expect(Object.keys(field(['ai']).properties as object)).toEqual(expect.arrayContaining([
-      'enabled', 'decisions', 'workroom', 'providers', 'agents', 'sessions', 'context',
-      'imageGeneration', 'multimodal', 'memory', 'knowledge', 'githubMcp', 'mcpServers',
+      'enabled', 'workroom', 'agents', 'sessions', 'context', 'multimodal', 'memory', 'knowledge', 'githubMcp', 'mcpServers',
       'agent', 'access', 'trigger',
     ]));
     for (const path of [
@@ -71,20 +71,17 @@ describe('Host configuration field coverage', () => {
       ['ai', 'agent', 'schedule'], ['ai', 'agent', 'thinkingPreviewMaxLength'],
       ['ai', 'agent', 'recordRequestBodies'],
     ]) expect(field(path)).toBeTypeOf('object');
-    const providers = field(['ai', 'providers']).additionalProperties as Schema;
-    expect(providers).toMatchObject({ properties: {
-      sdk: { type: 'string' }, apiKey: { writeOnly: true },
-      maxOutputTokens: { type: ['number', 'string'] },
-      headers: { type: 'object' }, providerOptions: { type: 'object' },
-    } });
+    expect(field(['ai']).properties).not.toHaveProperty('providers');
+    expect(field(['ai']).properties).not.toHaveProperty('modelCatalog');
+    expect(field(['ai']).properties).not.toHaveProperty('modelPolicy');
+    expect(field(['ai']).properties).not.toHaveProperty('decisions');
+    expect(field(['ai']).properties).not.toHaveProperty('imageGeneration');
+    expect(field(['ai']).properties).not.toHaveProperty('plan');
+    expect(planSchema).toMatchObject({ required: ['version'], additionalProperties: false });
     expect(check({ ai: { agent: { recordRequestBodies: false } } })).toMatchObject({ ai: { agent: { recordRequestBodies: false } } });
     // The runtime option is boolean; accepting "false" would silently leave recording enabled.
     expect(parsePluginConfigSchema(hostSchema, { ai: { agent: { recordRequestBodies: 'false' } } }).errors).not.toEqual([]);
-    expect((providers.properties as Record<string, Schema>).maxOutputTokens).not.toHaveProperty('writeOnly');
-    check({ ai: { enabled: '${AI_ENABLED}', providers: { test: {
-      sdk: 'openai', apiKey: '${AI_KEY}', models: ['fixture'], contextWindow: '${WINDOW}',
-      providerOptions: { test: { arbitrary: { nested: [true, null, 'value'] } } },
-    } }, agents: { helper: { provider: 'test', model: 'fixture' } },
+    check({ ai: { enabled: '${AI_ENABLED}', agents: { helper: { nickname: 'Helper', mcpServers: [] } },
     sessions: { maxHistory: 20 }, multimodal: { enabled: true, perception: { kinds: ['image'], timeoutMs: 1000 } },
     memory: { enabled: true, semantic: { recall: { topK: 3 } } },
     mcpServers: [{ name: 'fixture', transport: 'stdio', command: 'node', args: ['fixture.mjs'], env: { FIXTURE_KEY: '${KEY}' } }],
@@ -113,7 +110,7 @@ describe('Host configuration field coverage', () => {
   it('does not insert optional Hosts or new defaults, and preserves extension options', () => {
     expect(check({})).toEqual({});
     const input = { database: { dialect: 'memory', extension: { driverOption: 1 } },
-      ai: { providers: { fixture: { sdk: 'future-provider', extension: [1, 2] } } },
+      ai: { extension: { futureOption: [1, 2] } },
       speech: { tts: { extension: true } }, assistant: { extension: 'kept' } };
     expect(check(input)).toEqual(input);
     const schema = hostSchema as unknown as Schema;
@@ -129,8 +126,8 @@ describe('Host configuration field coverage', () => {
 
   it.each([
     { ai: { mcpServers: null } },
-    { ai: { providers: { unused: null }, agents: { fixture: { provider: 'fixture', mcpServers: null } } } },
-    { ai: { providers: null, agents: null, sessions: null, context: null, imageGeneration: null, access: null, trigger: null } },
+    { ai: { agents: { fixture: { mcpServers: null } } } },
+    { ai: { agents: null, sessions: null, context: null, access: null, trigger: null } },
     { ai: { multimodal: null, memory: null } },
     { ai: { multimodal: { perception: null }, memory: { semantic: null } } },
     { ai: { memory: { semantic: { recall: null } } } },
@@ -156,4 +153,16 @@ describe('Host configuration field coverage', () => {
       { ai: { multimodal: { perception: { maxChars: null } } } },
     ]) expect(parsePluginConfigSchema(hostSchema, input).errors.length).toBeGreaterThan(0);
   });
+});
+
+
+it('declares only non-secret import inputs and validates actual target model contracts', () => {
+  const valid = { version: 1, accounts: { subscription: { service: 'host-service', auth: { method: 'oauth' } } } };
+  expect(parsePluginConfigSchema(planSchema, valid)).toEqual({ value: valid, errors: [] });
+  for (const plan of [
+    { version: 1, accounts: { bad: { service: 'host-service', auth: { method: 'api-key', source: 'literal-secret' } } } },
+    { version: 1, accounts: { bad: { service: 'host-service', auth: { method: 'oauth', source: 'env://KEY' } } } },
+    { version: 1, profiles: { bad: { account: 'account', model: 'model', apiKey: 'literal-secret' } } },
+    { version: 1, purposes: { scenes: { scene: { ambient: { profile: 'wrong-scope' } } } } },
+  ]) expect(parsePluginConfigSchema(planSchema, plan).errors.length).toBeGreaterThan(0);
 });

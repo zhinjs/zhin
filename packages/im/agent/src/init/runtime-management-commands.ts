@@ -6,6 +6,7 @@
 import { managementMessages as t } from './management-messages.js';
 import { managementCommandText, managementCommandReference, type AgentCommandPresentation } from './command-presentation.js';
 import type { AIService } from '../service.js';
+import type { InferenceClient } from '@zhin.js/ai/provider';
 import { asPrivate } from '../internal/as-private.js';
 import {
   jumpSessionTree,
@@ -21,6 +22,8 @@ export type RuntimeManagementSenderRoles = {
 
 export type RuntimeManagementDeps = AgentCommandPresentation & {
   readonly service: AIService;
+  /** Trusted operation-bound directory; listing does not require a selected chat model. */
+  readonly inference?: Pick<InferenceClient, 'list'>;
   /** Host resolves deployment-only summary authority lazily for model-using commands. */
   readonly withModelScope?: <T>(operation: () => Promise<T>) => Promise<T>;
   readonly zhinAgent: ZhinAgent;
@@ -61,12 +64,9 @@ export async function handleRuntimeManagementCommand(
 
   if (/^models\s*$/iu.test(text ?? '')) {
     if (!isOperator) return t(locale, 'denied');
-    const models = await deps.service.listModels();
-    let r = t(locale, 'models') + '\n';
-    for (const { provider, models: ml } of models) {
-      r += `\n【${provider}】\n` + ml.slice(0, 5).map((m) => `  • ${m}`).join('\n');
-      if (ml.length > 5) r += '\n' + t(locale, 'more', { count: ml.length - 5 });
-    }
+    if (!deps.inference) throw new Error('Inference operation is not configured');
+    const profiles = await deps.inference.list({ kind: 'language' });
+    const r = [t(locale, 'models'), ...profiles.map(profile => `  • ${profile.label ?? profile.reference.id} (${profile.model})`)].join('\n');
     return r;
   }
 
@@ -113,10 +113,10 @@ export async function handleRuntimeManagementCommand(
 
   if (bareHealth) {
     if (!isOperator) return t(locale, 'denied');
-    const health = await deps.service.healthCheck();
-    return [t(locale, 'health')].concat(
-      Object.entries(health).map(([p, ok]) => `  ${ok ? '✅' : '❌'} ${p}`),
-    ).join('\n');
+    if (!deps.inference) throw new Error('Inference operation is not configured');
+    const profiles = await deps.inference.list({ kind: 'language' });
+    return `${t(locale, 'health')}\n${profiles.length} configured language profiles`;
+
   }
 
   return null;

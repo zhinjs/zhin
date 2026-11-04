@@ -1,3 +1,4 @@
+import type { ProviderFixtureConfig } from '../helpers/provider-fixture-config.js';
 /**
  * S5: tool JSON Schemas reach the provider as written (enum, anyOf, nullable,
  * integer, format, bounds), and tool-call arguments are validated against the
@@ -6,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { agentToolToLlmTool, jsonSchemaToZod } from '../../src/llm/tool-bridge.js';
 import { validateToolCall } from '../../src/llm/validate-tool-call.js';
-import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+
 import type { AgentTool, JsonSchema } from '../../src/types.js';
 import { createProviderHarness } from '../helpers/provider-harness/index.js';
 
@@ -29,7 +30,7 @@ const PARAMS: JsonSchema = {
 
 const agentTool: AgentTool = { name: 'forecast', description: 'Forecast', parameters: PARAMS, execute: async () => 'ok' };
 
-async function requestBody(sdk: ProviderInstanceConfig['sdk'], modelId: string) {
+async function requestBody(sdk: ProviderFixtureConfig['sdk'], modelId: string) {
   const h = createProviderHarness({ sdk, model: modelId });
   const { body } = await h.capture({ system: 'sys', user: 'hi', tools: [agentToolToLlmTool(agentTool)] });
   return body;
