@@ -1,0 +1,108 @@
+packages/im/agent/src/init/compose-zhin-agent-runtime.ts
+  s_178aad69aa64a5::t_f61232e3f59b46 28-29
+packages/im/agent/tests/model-runtime/purpose-parameters.test.ts
+  s_178aad69aa64a5::t_02f793afc738a9 1,19-24,45,61
+packages/im/agent/tests/ai/integration.test.ts
+  s_178aad69aa64a5::t_c2f48daa734dd1 44
+packages/im/agent/tests/model-runtime/target-runtime.test.ts
+  s_178aad69aa64a5::t_cce27ceed20177 36,109,135-137,142-143,146,178
+packages/im/agent/src/core/agent-run-shared.ts
+  s_178aad69aa64a5::t_310ee2aa8eb1dd 1
+packages/im/agent/src/resource-hub/types.ts
+  s_178aad69aa64a5::t_0a979b92c6b31d 190
+packages/im/agent/src/session/session-system.ts
+  s_178aad69aa64a5::t_a03315b37f1eab 116
+packages/im/agent/src/turn/turn-tracker.ts
+  s_178aad69aa64a5::t_5d122e6b967a34 2,8,12,14,20
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_178aad69aa64a5::t_c4760574604aca 122
+packages/im/agent/src/config/deprecated-agent-binding-keys.ts
+  s_178aad69aa64a5::t_22de43382e6582 9,12
+packages/im/agent/src/init/dispose-zhin-agent.ts
+  s_178aad69aa64a5::t_e4f244fe52a034 8
+packages/im/agent/src/zhin-agent/index.ts
+  s_178aad69aa64a5::t_3b82f6f54e6b82 442
+packages/im/agent/src/assistant/types.ts
+  s_178aad69aa64a5::t_0ced0eff93a2f0 61
+packages/im/agent/src/internal/host-types.ts
+  s_178aad69aa64a5::t_3b82f6f54e6b82 109
+packages/im/agent/src/turn/deferred-turn-state.ts
+  s_178aad69aa64a5::t_e4f244fe52a034 2
+packages/im/agent/src/init/configure-zhin-agent.ts
+  s_178aad69aa64a5::t_e4f244fe52a034 21
+packages/im/agent/src/core/turn-progress.ts
+  s_178aad69aa64a5::t_d50bfb59c986b7 137
+  s_178aad69aa64a5::t_812698f3e7e469 26
+packages/im/agent/src/model-runtime/validation.ts
+  s_178aad69aa64a5::t_5333ea876ea630 1-14,52-62
+packages/im/agent/tests/model-runtime/runtime-policy.test.ts
+  s_178aad69aa64a5::t_49397c45ea0b1c 59-60,64,66
+packages/im/agent/src/turn/stale-reply.ts
+  s_178aad69aa64a5::t_f85a1edf14fe42 6
+packages/im/agent/src/tool/tool-system.ts
+  s_178aad69aa64a5::t_58eff42a155a4f 22,72
+packages/im/agent/tests/model-runtime/ai-service.test.ts
+  s_178aad69aa64a5::t_49397c45ea0b1c 14-15,56-62
+packages/im/agent/tests/orchestration/five-agent-contract.test.ts
+  s_178aad69aa64a5::t_315ec556a46736 3,31
+packages/im/agent/tests/collaboration/actor-turn.test.ts
+  s_178aad69aa64a5::t_5061222f93c51d 90,181,183
+packages/im/agent/src/internal/turn-context.ts
+  s_178aad69aa64a5::t_0ced0eff93a2f0 10
+packages/im/agent/src/turn/turn-context-bridge.ts
+  s_178aad69aa64a5::t_3b82f6f54e6b82 26
+packages/im/agent/src/security/dangerous-tool-policy.ts
+  s_178aad69aa64a5::t_0ced0eff93a2f0 93
+packages/im/agent/src/config/agent-interfaces.ts
+  s_178aad69aa64a5::t_f61232e3f59b46 56
+packages/im/agent/src/config/deprecated-agent-keys.ts
+  s_178aad69aa64a5::t_22de43382e6582 13
+packages/im/agent/src/security/provenance.ts
+  s_178aad69aa64a5::t_0f8638a6541739 79
+packages/im/agent/tests/media/local-image-inspection.test.ts
+  s_178aad69aa64a5::t_024b82513b6993 7
+packages/im/agent/src/turn/turn-metrics.ts
+  s_178aad69aa64a5::t_3b82f6f54e6b82 75
+packages/im/agent/src/resource-hub/role-configs.ts
+  s_178aad69aa64a5::t_95ce0c8625bf45 154
+packages/im/agent/src/activity-feedback/event-context.ts
+  s_178aad69aa64a5::t_7cf6954aae9999 74
+plugins/services/activity-feedback/src/orchestrator.ts
+  s_178aad69aa64a5::t_6e5787bed89d24 63,98
+packages/im/agent/src/internal/agent-host.ts
+  s_178aad69aa64a5::t_3b82f6f54e6b82 93
+  s_178aad69aa64a5::t_269d233d5b0803 125
+packages/im/agent/tests/init/compose-zhin-agent-runtime.test.ts
+  s_178aad69aa64a5::t_597516f0a08f48 7,10-11,26,42-43,49
+packages/im/agent/src/collaboration/actor-turn.ts
+  s_178aad69aa64a5::t_0f8638a6541739 121
+packages/im/agent/src/service.ts
+  s_178aad69aa64a5::t_8e8f645e234b03 8,11,14
+packages/im/agent/src/turn/turn-pipeline.ts
+  s_178aad69aa64a5::t_a03315b37f1eab 135-145
+  s_178aad69aa64a5::t_deff38f2952d55 110
+packages/im/agent/src/ai-event-contract.ts
+  s_178aad69aa64a5::t_4c642aae800800 29
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_178aad69aa64a5::t_0f8638a6541739 286
+packages/im/agent/tests/ai/zhin-agent.test.ts
+  s_178aad69aa64a5::t_597516f0a08f48 331-332
+packages/im/agent/src/core/agent-core-run.ts
+  s_178aad69aa64a5::t_fead64e6f0a531 884,900-901,1307,1380,1416-1418,1447,1457
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "95840dbdeae37d1bca991dd6ee4ef6cb1728b328",
+  "prompts": {},
+  "sessions": {
+    "s_178aad69aa64a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0eca046-2ac8-49e0-a6a9-b7766f7049bb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
