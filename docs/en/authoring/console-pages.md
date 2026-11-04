@@ -433,6 +433,10 @@ Controlled self-changes drafted by the bot (see [Letting the bot change itself](
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve` (action) |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve` (action; a `failed` change was dealt with) |
 
+## Page UI kit
+
+Use `@zhin.js/client/ui` instead of hand-rolled styles: buttons, badges, notices, empty/loading/error states, inline confirmation, form fields, and `usePluginRpc`, which reports loading / empty / error / stale. It reads the Console theme variables (light/dark follow automatically) and does not rely on Tailwind, because remote pages are not scanned by the Console's Tailwind. See the [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) for usage and the export list.
+
 ## Adapter Console pages
 
 Every built-in platform adapter (`plugins/adapters/*`) ships a `pages/index/index.ts`. Pages use `createAdapterConsolePage(adapterKey)` from `@zhin.js/client`; the server side uses `createAdapterConsoleRpc(spec)` from `@zhin.js/adapter`:
