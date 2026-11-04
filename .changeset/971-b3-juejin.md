@@ -1,5 +1,0 @@
----
-'@zhin.js/adapter-juejin': patch
----
-
-#971 B3: new Experimental Juejin (掘金) comment-reply adapter implementing the ADR 0035 contract. Polls the public `interact_api/v1/comment/list` for an explicit whitelist of your own articles (blank = no polling; first poll is a baseline, comments deduped by id, own comments filtered by login uid or the author flag). Each comment thread is a `channel` conversation `article:<articleId>:<rootCommentId>` with parent `article:<articleId>`. `sendMode` is `review` (default) or `off` — no `auto`; `send` only queues drafts (`approval_pending`, `not_sent`) and only replies to existing comments, never top-level. Approval (Console page, `juejin-draft send`, or `approveDraft`) posts `interact_api/v1/reply/publish` with a minimum send interval; HTTP 403/429, non-JSON responses and rate-limit/captcha/risk messages trip a circuit breaker, and an unparseable write result keeps the draft flagged as possibly posted instead of retrying. The cookie is env-injected only and never persisted; drafts live in `data/juejin/<id>/drafts.json` at mode 600. The plain-HTTP write path is not yet verified live — see the README checklist.

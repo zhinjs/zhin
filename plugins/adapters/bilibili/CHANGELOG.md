@@ -1,5 +1,31 @@
 # @zhin.js/adapter-bilibili
 
+## 0.1.5
+
+### Patch Changes
+
+- c89bd93: #971 B1: Experimental Bilibili adapter now polls and drafts replies for whitelisted 动态 and 专栏 comments, in addition to videos. New `dynamics` (dynamic ids, quoted strings) and `articles` (cv ids) whitelists; a blank list polls nothing of that kind. Each dynamic is resolved once at start through `x/polymer/web-dynamic/v1/detail`, trusting the platform-declared `basic.comment_type` / `basic.comment_id_str` (image posts → `album:<相簿id>` type 11, text/forward posts → `dynamic:<dynamic id>` type 17); video/article dynamics and unsupported or deleted ones are skipped with a log instead of guessing an oid. Articles map to `article:<cvid>` type 12. Conversation ids stay `<resource>:<oid>:<rootRpid>` with parent `<resource>:<oid>`, so the prefix alone fixes the reply type. `x/msgfeed/reply|at` notifications accept business 11/17 and 12 only when the matching whitelist is configured (still filtered by `notificationScope`); 19-digit dynamic ids lost by JSON numbers are recovered from the notification link and cross-checked, otherwise dropped. Drafts carry the comment type; `send` still only queues (`review` / `off`, no `auto`), approval posts `x/v2/reply/add` with the draft's type. Risk-code circuit breaking now also covers dynamic detail lookups.
+- 4fe49b5: 支持配置按需生效：分离保存与有效版本，独立变更先应用，账号资料更新保留连接，模型按回合使用确定版本；Console 返回结构化应用结果。监听改为仅显式 --watch 启用，开发模板显式选择源码和配置监听。
+
+  自变更消费配置应用回执，避免已处理配置被二次重载；持久化本次写入修订和应用结果，未知结果或修订冲突时停止自动续作并保留现场，恢复不会覆盖未经本次变更确认的配置。
+
+- cce07db: Refresh adapter Console pages with lightweight black/white/gray surfaces, clearer account and login workflows, responsive layouts, accessible focus states, and self-contained light/dark styling. Apply the shared visual language to Sandbox conversations and Bilibili comment review while preserving runtime authority and platform send paths.
+- Updated dependencies [b249e5e]
+- Updated dependencies [57661f6]
+- Updated dependencies [cbd3f14]
+- Updated dependencies [299863a]
+- Updated dependencies [aaa93d7]
+- Updated dependencies [4fe49b5]
+- Updated dependencies [cce07db]
+- Updated dependencies [b652db3]
+- Updated dependencies [0315ba0]
+  - @zhin.js/core@1.1.56
+  - @zhin.js/adapter@1.1.28
+  - @zhin.js/im-contract@1.1.11
+  - @zhin.js/feature-kit@1.1.12
+  - @zhin.js/client@1.1.24
+  - @zhin.js/page@1.1.14
+
 ## 0.1.4
 
 ### Patch Changes

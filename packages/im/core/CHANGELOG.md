@@ -1,5 +1,39 @@
 # @zhin.js/core
 
+## 1.1.56
+
+### Patch Changes
+
+- b249e5e: ADR 0044 C4：事件映射迁出 core。新增 `@zhin.js/adapter-onebot-events`，承载 OneBot v11 / NapCat / icqq 的原始通知与请求 → 标准事件映射（`receiveOneBotLikeSideEvent`、`mapNoticeParts`、`mapRequestParts`、`resolveSideEventDedupeKey` 及 OneBot 映射表，icqq 差异用覆盖表表达）；KOOK、Slack 的映射迁入各自适配器；`@zhin.js/core` 只保留标准事件名、类型与 `buildNotice` / `buildRequest` / `buildSystem` / `senderFromId`，不再含任何平台名。core 不再导出上述映射函数与 `ONEBOT_/KOOK_/SLACK_NOTICE_PARTS_MAP`、`SideEventPlatform`、`OneBotLike*` 类型，适配器改从共享包导入。
+- 57661f6: core 转出 ADR 0044 能力类型（`TurnCapabilities` 等）与 `adapterFeatureId` / `isAdapterIndex`，agent 层经 core 读取，遵守依赖分层（agent 不直接依赖 adapter）。
+- cbd3f14: ADR 0044 integration and C6 guard. `delivery.spool` now reproduces the pre-0044 media rule (icqq `false`, every other official adapter `true`). icqq narrows `actions.recall.others` unless the Bot is admin or owner, and declares recall for groups. Endpoint kind capabilities merge the Endpoint's `operations` (Discord reactions keep working; Discord declares reaction feedback). Adapters in the `@zhin.js/` scope are trusted: their custom prompt text is not labelled `external_content`. Core no longer keeps a telegram/discord interactive-policy table (adapters declare `segments.interactive`). New `pnpm check:no-platform-branches` blocks platform-name branches in runtime code.
+- b652db3: Keep default Database, Core and Agent declarations independent of unselected external database drivers. Memory and SQLite remain available from the root; native MySQL, PostgreSQL, MongoDB and Redis classes/configuration move to their precise `@zhin.js/database/dialects/*` entries. TypeScript `Registry.create()` callers select the corresponding dialect types, and third-party dialects augment the single `@zhin.js/database/registry` contract.
+
+  This updates author imports: plugins using these new entries need `@zhin.js/database >=1.1.6` (pending this patch release). Built-in registration, synchronous creation, connection-time driver loading and existing Host database configuration remain unchanged. No drivers, type peers, data migration or version bump are added by this change.
+
+- 0315ba0: 用统一的 Service／Account／Profile 运行时替换旧 Provider／Catalog 选型入口；支持 Host 订阅账号、固定模型、结构化决策多用途与动态持久选择。命令、工具及委派任务绑定真实 operation／generation，权限、配额与取消不通过全局最新对象传递。
+
+  新增显式导入与恢复 journal、只读预览及旧 Session 完整身份绑定；向导单独生成 ai.plan.yml。旧插件接口需要与本次配套 patch 一起迁移，最低版本／旧支持上限与恢复流程见 docs/ai/provider-upgrade.md。本声明不表示版本已经发布，不执行版本提升、登录、真实模型调用、迁移用户数据或部署。
+
+- Updated dependencies [cbd3f14]
+- Updated dependencies [299863a]
+- Updated dependencies [aaa93d7]
+- Updated dependencies [4fe49b5]
+- Updated dependencies [b652db3]
+- Updated dependencies [0315ba0]
+  - @zhin.js/adapter@1.1.28
+  - @zhin.js/im-contract@1.1.11
+  - @zhin.js/plugin-runtime@1.1.20
+  - @zhin.js/feature-kit@1.1.12
+  - @zhin.js/database@1.1.6
+  - @zhin.js/command@1.1.14
+  - @zhin.js/component@1.1.13
+  - @zhin.js/handler@1.1.12
+  - @zhin.js/middleware@1.1.13
+  - @zhin.js/schedule-feature@1.1.12
+  - @zhin.js/jsx@1.1.10
+  - @zhin.js/permission@1.1.12
+
 ## 1.1.55
 
 ### Patch Changes

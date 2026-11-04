@@ -1,5 +1,29 @@
 # @zhin.js/adapter-bilibili-live
 
+## 0.1.5
+
+### Patch Changes
+
+- 4fe49b5: 支持配置按需生效：分离保存与有效版本，独立变更先应用，账号资料更新保留连接，模型按回合使用确定版本；Console 返回结构化应用结果。监听改为仅显式 --watch 启用，开发模板显式选择源码和配置监听。
+
+  自变更消费配置应用回执，避免已处理配置被二次重载；持久化本次写入修订和应用结果，未知结果或修订冲突时停止自动续作并保留现场，恢复不会覆盖未经本次变更确认的配置。
+
+- Updated dependencies [b249e5e]
+- Updated dependencies [57661f6]
+- Updated dependencies [cbd3f14]
+- Updated dependencies [299863a]
+- Updated dependencies [aaa93d7]
+- Updated dependencies [4fe49b5]
+- Updated dependencies [cce07db]
+- Updated dependencies [b652db3]
+- Updated dependencies [0315ba0]
+  - @zhin.js/core@1.1.56
+  - @zhin.js/adapter@1.1.28
+  - @zhin.js/im-contract@1.1.11
+  - @zhin.js/feature-kit@1.1.12
+  - @zhin.js/client@1.1.24
+  - @zhin.js/page@1.1.14
+
 ## 0.1.4
 
 ### Patch Changes

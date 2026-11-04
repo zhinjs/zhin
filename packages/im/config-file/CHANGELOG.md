@@ -1,5 +1,13 @@
 # @zhin.js/config-file
 
+## 1.1.12
+
+### Patch Changes
+
+- Updated dependencies [299863a]
+- Updated dependencies [4fe49b5]
+  - @zhin.js/plugin-runtime@1.1.20
+
 ## 1.1.11
 
 ### Patch Changes
