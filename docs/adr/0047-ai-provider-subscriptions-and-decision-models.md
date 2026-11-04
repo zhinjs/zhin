@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0047：AI Provider 订阅接入与多决策模型
 
-状态：Proposed（2026-11-04，S0）——等待 Fin 勾选文末「Fin 勾选清单」后转 Accepted；勾选前不开实现切片。
+状态：Accepted（2026-11-04）——Clover 按 Fin 授权勾选：尽量支持官方订阅，风险由使用者自担、README 明示；实现切片按 E2 开 S1。
 
 关联：2026-11-04 交接 BRIEF（AI Provider 订阅 / OAuth 接入收束，非 Calendar OAuth）；调研稿 `docs/plans/provider-subscriptions-and-decision-models.md`（2026-11-03，尚未入 main）；领域模型以 `feat/ai-provider-main-integration` 分支为准。
 
@@ -50,7 +50,7 @@ sidebar: false
 
 `feat/ai-provider-main-integration`（tip `33fcfec2b`）上已有本地 / 合成 HTTP 级实现：Codex、Claude 订阅、OpenCode Go / Zen、Antigravity 五个 Driver；AccountRuntime 刷新单飞与 CAS；每次请求取当前凭据；六类决策按 Profile 选型；Console 候选。台账明确**未做**实号登录、订阅许可确认、真实推理与计费。
 
-需要 Fin 注意的一点：该分支的 `builtinAiProviders` 默认注册了 `claudeSubscriptionProvider` 与 `antigravityProvider`。若 Fin 对这两项选择「接缝」或「不做」，该分支合入前必须按 §2 调整，否则就构成本文禁止的「包装成已支持」。
+需要 Fin 注意的一点：该分支的 `builtinAiProviders` 默认注册了 `claudeSubscriptionProvider` 与 `antigravityProvider`。Fin 已勾选 Claude / Antigravity 的 §1a 实验通道：分支可保留默认注册，但合入前必须按 §1a 挂实验标识与 README 风险声明，不得包装成官方支持。
 
 ## 决策（Proposed）
 
@@ -85,7 +85,7 @@ sidebar: false
 Claude.ai 订阅与 Antigravity 只有在 Fin 于本 ADR 明确勾选「自担 ToS 风险的实验通道」时才可注册，且必须：
 
 - 不进默认 `builtinAiProviders`，需部署者显式启用；
-- Console / 文档统一标「实验 · 不受官方支持 · 可能违反供应商条款」；
+- Console / **README** / 文档统一标「实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担」；
 - 不计入「支持的订阅」列表，不写入 changelog 的新功能段。
 
 Codex 若选「正式产品」，Fin 同时确认：接受以 Codex 客户端 OAuth 合同接入、Console 文案注明「未经 OpenAI 对第三方客户端的明确授权」。
@@ -163,12 +163,12 @@ S1 → S2 依赖；S3 可与 S1 并行；S4 依赖 S1（及 S2 若开）。真�
 - 代价：Claude / Antigravity 若选接缝或不做，分支上已写的代码要么移出默认注册、要么删除；Codex 正式支持仍处于「未实号验收」状态，文案须如实标注。
 - 风险：供应商条款变化可能使「正式产品」转为不可用；Host-owned 订阅被多人使用可能超出个人套餐条款（Go / ChatGPT 个人套餐），由清单 B3 控制。
 
-## 待 Fin 回答的开放问题
+## 开放问题结论（2026-11-04，Clover 代 Fin：完整开发 + 推荐做法）
 
-1. Codex OAuth 回调注册方式（远程 Host 无 localhost 回调，用户粘贴最终回调地址）是否可接受为正式流程？
-2. OpenCode Zen 是否与 Go 同轮列为正式产品，还是仅 Go？
-3. 订阅 Profile 用于 IM 成员回合时，是否需要额外的使用场景声明（例如仅私聊 / 仅主人群）？本文不新增 ACL，只能通过「是否发布该 Profile」控制。
-4. 实号验收（真实登录 + 一次推理）何时、由谁、用哪个账号授权执行？
+1. **Codex OAuth 回调**：接受「用户粘贴最终回调地址」为远程 Host 的正式流程；Console 文案须注明未经 OpenAI 对第三方客户端的明确授权。
+2. **OpenCode Zen**：与 Go **同轮**列为正式产品（API Key 认证）。
+3. **成员回合场景 ACL**：本轮**不新增** ACL；仅用 B3「默认不发布订阅 Profile」控制。若日后要按私聊 / 主人群细分，另开 ADR。
+4. **实号验收**：S1/S2 fixture 绿后，由 Fin 另行指定账号与时机授权真实登录 + 一次推理；自动化 / Agent 不得自行登录或扣费。
 
 ## Fin 勾选清单
 
@@ -178,53 +178,61 @@ S1 → S2 依赖；S3 可与 S1 并行；S4 依赖 S1（及 S2 若开）。真�
 
 **A1 Codex**
 
-- [ ] 正式产品（提案）——并确认 §1a 的 Codex 文案与 OAuth 合同风险
+- [x] 正式产品（提案）——并确认 §1a 的 Codex 文案与 OAuth 合同风险
 - [ ] 协议接缝 + API Key 路径（走 OpenAI API Key Driver）
 - [ ] 明确不做
 
 **A2 Claude.ai 订阅**
 
-- [ ] 协议接缝 + API Key 路径（提案；Anthropic API Key 正式保留，订阅 Driver 移出默认注册）
+- [x] 协议接缝 + API Key 路径（提案；Anthropic API Key 正式保留，订阅 Driver 移出默认注册）
 - [ ] 明确不做（订阅 Driver 从官方集删除）
-- [ ] 另加：开启「自担 ToS 风险的实验通道」（§1a；默认不勾）
+- [x] 另加：开启「自担 ToS 风险的实验通道」（§1a；默认不勾）
 
 **A3 OpenCode Go**
 
-- [ ] 正式产品，API Key 认证（提案）
+- [x] 正式产品，API Key 认证（提案）
 - [ ] 协议接缝 + API Key 路径（仅保留 OpenAI-compatible 通用路径，不列 Go 产品）
 - [ ] 明确不做
-- [ ] 另加：OpenCode Zen 同轮列为正式产品
+- [x] 另加：OpenCode Zen 同轮列为正式产品
 
 **A4 Antigravity**
 
 - [ ] 明确不做（提案；Driver 从官方集删除）
-- [ ] 协议接缝 + API Key 路径（订阅 Driver 移出默认注册；Gemini API Key 单列，不称 Antigravity）
-- [ ] 另加：开启「自担 ToS 风险的实验通道」（§1a；默认不勾）
+- [x] 协议接缝 + API Key 路径（订阅 Driver 移出默认注册；Gemini API Key 单列，不称 Antigravity）
+- [x] 另加：开启「自担 ToS 风险的实验通道」（§1a；默认不勾）
 
 ### B. 账号归属与使用
 
-- [ ] B1 首阶段仅 Host-owned 订阅 Account + 既有模型使用权（提案）
-- [ ] B2 个人自备 OAuth 登录 UI 本轮**不做**（提案；若要同轮做，改勾下一项）
+- [x] B1 首阶段仅 Host-owned 订阅 Account + 既有模型使用权（提案）
+- [x] B2 个人自备 OAuth 登录 UI 本轮**不做**（提案；若要同轮做，改勾下一项）
 - [ ] B2′ 个人自备 OAuth 登录 UI 本轮同做（需另补个人范围设计）
-- [ ] B3 订阅 Profile 默认**不**发布给普通成员，仅部署用途与主人回合使用（提案）
+- [x] B3 订阅 Profile 默认**不**发布给普通成员，仅部署用途与主人回合使用（提案）
 - [ ] B3′ 订阅 Profile 按既有模型使用政策对成员开放（Fin 自担套餐条款风险）
 
 ### C. 决策模型多配置
 
-- [ ] C1 保留 Choice / Score / Noul 真实合同；LanguageModel 不冒充 DecisionModel
-- [ ] C2 启用的用途必须解析到明确 Decision Profile；未定义 / 不可见在验证期报错
-- [ ] C3 `off` 用途不发请求；无默认、无继承、无跨模型降级
-- [ ] C4 旧 `ai.decisions.provider` 仅一次性迁移，不猜默认模型，不保留双路径
+- [x] C1 保留 Choice / Score / Noul 真实合同；LanguageModel 不冒充 DecisionModel
+- [x] C2 启用的用途必须解析到明确 Decision Profile；未定义 / 不可见在验证期报错
+- [x] C3 `off` 用途不发请求；无默认、无继承、无跨模型降级
+- [x] C4 旧 `ai.decisions.provider` 仅一次性迁移，不猜默认模型，不保留双路径
 
 ### D. 技术硬约束（确认即进入 S1 验收标准）
 
-- [ ] D1 动态凭据句柄：每次请求取当前凭据，不在 Session / lease 创建时冻结 secret
-- [ ] D2 不伪造 apiKey、不强转适配器实例
-- [ ] D3 部分流 / 工具输出后不整段重放 Agent 任务；401 重提只按协议阶段
-- [ ] D4 订阅 Service 显式 catalog 为权威，禁止隐式 `/v1/models` 探测
-- [ ] D5 订阅账号服务挂在现有 Service / Account 图上，不建平行栈
+- [x] D1 动态凭据句柄：每次请求取当前凭据，不在 Session / lease 创建时冻结 secret
+- [x] D2 不伪造 apiKey、不强转适配器实例
+- [x] D3 部分流 / 工具输出后不整段重放 Agent 任务；401 重提只按协议阶段
+- [x] D4 订阅 Service 显式 catalog 为权威，禁止隐式 `/v1/models` 探测
+- [x] D5 订阅账号服务挂在现有 Service / Account 图上，不建平行栈
 
 ### E. 范围
 
-- [ ] E1 §8 非目标清单全部同意
-- [ ] E2 同意下一切片按「S1 认证端口」开工（S3 可并行）
+- [x] E1 §8 非目标清单全部同意
+- [x] E2 同意下一切片按「S1 认证端口」开工（S3 可并行）
+
+### 勾选记录
+
+- 2026-11-04 Asia/Manila：Fin 授权 Clover 代勾；后续补充：**尽量都支持官方订阅，风险由使用者自行承担，README 告知风险即可**。
+- **产品面**：Codex 正式；OpenCode Go + Zen 正式；Claude.ai 订阅 / Antigravity 开 §1a **实验通道**（Console/README 标「实验 · 不受官方支持 · 可能违反供应商条款 · 风险自担」）。
+- **账号**：B1 Host-owned；B2 本轮无个人 OAuth UI；B3 订阅 Profile 默认不发布给普通成员。
+- **C/D/E**：全勾；下一切片 S1。
+- **合入影响**：`feat/ai-provider-main-integration` 可保留 `claudeSubscriptionProvider` / `antigravityProvider` 默认注册，但必须挂实验标识与 README 风险声明，不得写成「官方支持」。
