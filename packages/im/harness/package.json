@@ -22,6 +22,7 @@
     "test": "vitest run --root ../../.. packages/im/harness/tests"
   },
   "devDependencies": {
+    "@zhin.js/database": "workspace:*",
     "@types/node": "^26.1.2",
     "typescript": "^6.0.3"
   },
