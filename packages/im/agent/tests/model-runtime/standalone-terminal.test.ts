@@ -184,9 +184,9 @@ it.each(["stop", "length", "toolCalls"] as const)(
   }
 );
 
-it("keeps the necessary error reason and partial text within the existing Worker summary limit", async () => {
+it.each([false, true])("keeps the error reason within the Worker summary limit when it already appears at the tail: %s", async (reasonAtTail) => {
   const response = assistantTextReply(
-    "Observed partial output " + ".".repeat(200)
+    "Observed partial output " + ".".repeat(200) + (reasonAtTail ? ' Necessary failure reason' : '')
   );
   response.stopReason = "error";
   response.errorMessage = "Necessary failure reason";

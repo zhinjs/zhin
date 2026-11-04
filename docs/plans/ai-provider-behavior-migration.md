@@ -95,7 +95,7 @@ sidebar: false
 - **继续保持的边界**：Subagent 既有两种状态的 auto-continue 规则不变；Worker 原 error 不自动续聊的规则不变。不改工具审批、配额、重试、安全策略与模型选择。未知副作用内容保持原样；验证均使用合成 Driver／本地 SDK transport，不含真实供应商调用。
 - **部分正文与同步工具**：最终 error／aborted 没有正文时，保留本次运行最后一次已观测的非空正文，错误原因独立在 terminal 中；不拼接全部历史。用户明确确认同步接口统一结构化返回，Runtime／System 的 spawnSync 返回同一次执行的窄 `SubagentSyncResult`，不保留第二个兼容方法。公开同步边界实际投影 status／result／toolCalls／terminal，剔除任务／Origin／Message 等路由数据。spawn_task 保持可读字符串和同步标记，依据 typed status 显示成功或失败，不从正文前缀猜状态，不把工具 args 整包塞回模型。新接口属于计划中的 Agent 1.1.47 配套 patch（未发布）；旧字符串接口支持上限为 1.1.46。
 - **真实主路径相邻影响**：原共享 loop 吞掉延迟补全失败，使主 Agent 误认为段尾仍是成功的 toolCalls。实际 runAgentLoopTextTurnRun 对照中，write_file 有真实进展、段上限 1、extendBy 0、autoContinue on：固定 Provider 基线发出 4 次请求（工具、失败补全、checkpoint、续段）；新错误事件使既有 gate 在第 2 次请求后停止续段，并沿既有友好错误回复。未修改 Main 的续段政策／阈值，不能声称所有上层调用次数都不变；共享 loop 自身未耗尽时的原定下一轮仍照常执行并可成功覆盖终态。
-- **文本消费者**：任务 owner 使用同一纯格式化函数把必要错误原因合入既有结果正文，原非空正文继续保留。错误原因放在已有 Worker 摘要／artifact 预览可能截断的正文之前，不增加上限；已有正文已含同一原因时不重复追加。同步工具不再次拼接原因。真实 async Subagent → 父会话 persist／ResultSink 测试同时断言部分正文、失败原因与 failed 状态；不会把原工具 args、整个 Error 或 opaque 状态写入这些文本。
+- **文本消费者**：任务 owner 使用同一纯格式化函数把必要错误原因合入既有结果正文，原非空正文继续保留。错误原因放在已有 Worker 摘要／artifact 预览可能截断的正文之前，不增加上限；只有原因已在正文开头（原文或 Error 前缀）时才省略前置原因，不能因尾部也出现同一原因而让它被截掉。同步工具不再次拼接原因。真实 async Subagent → 父会话 persist／ResultSink 测试同时断言部分正文、失败原因与 failed 状态；不会把原工具 args、整个 Error 或 opaque 状态写入这些文本。
 
 | 验收 | 预期与实际证据 | 结论与未覆盖 |
 | --- | --- | --- |
@@ -105,7 +105,8 @@ sidebar: false
 | 共享补全与 Main | loop 末次补全失败有 error 证据，原定下一轮仍可成功；安装的 SDK mock wire 保留配对工具历史；Main 原代码 4 请求／新代码 2 请求，工具均一次 | 保持两层证据独立，不把 mock 当模型行为或供应商实测 |
 | Workroom | error／aborted 正文即使是合法 JSON 也在解析前被拒绝；stop／length 原解析行为保留 | 没有更改规划策略、预算或自动重试 |
 
-- **实现者最终本地检查**：AI／Agent 全目录加本次 Workroom 入口共 449 文件：447 通过、2 跳过；4,297 测试通过、10 跳过。Groq 实号 opt-in 明确关闭，未调用真实供应商。CLI 真实依赖图构建 44／44、根 type-check、改动范围 ESLint、doc-links、doc-orphans、diff-check 均通过。完整仓库固定候选门禁和未参与实现者的最终增量审查由 Root 另行验证，不用这组局部检查替代。
+- **首个固定候选 8be6 的实现者本地检查**：AI／Agent 全目录加本次 Workroom 入口共 449 文件：447 通过、2 跳过；4,297 测试通过、10 跳过。Groq 实号 opt-in 明确关闭，未调用真实供应商。CLI 真实依赖图构建 44／44、根 type-check、改动范围 ESLint、doc-links、doc-orphans、diff-check 均通过。完整仓库固定候选门禁和未参与实现者的最终增量审查由 Root 另行验证，不用这组局部检查替代。
+- **二审限定修正**：原去重条件只检查正文任意位置包含原因，实际 Worker 80 字摘要和 Subagent 默认 artifact 预览均能截掉尾部原因，已先复现两个红例。改为仅在原因已经位于开头时去重；保留整个原正文、不增加摘要或 artifact 上限。聚焦该边界与既有终态路径共 8 文件／46 测试通过，根 type-check 与改动范围 ESLint 通过；原 reviewer 的 Worker 探针仍仅 1 次请求且摘要可见原因。未重跑全目录以冒充集成验收，最终合并 DB 独立分支后的完整门禁另行验证。
 - **环境与证据保留**：首轮受限 sandbox 的 SDK 生命周期三例有超时／loopback listen EPERM，保留原失败记录；原 10 秒门禁、相同断言在允许本地 loopback 后两文件 16／16 通过，最终上述全目录亦通过。没有为此修改 Provider、超时或断言。全部证据仍是本地合成 transport／已安装 SDK，不是 CI、发布、部署或真实模型行为验收。
 
 ### Agent 归档作者声明检查

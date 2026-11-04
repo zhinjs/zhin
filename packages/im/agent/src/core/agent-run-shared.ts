@@ -12,7 +12,8 @@ export function tokenUsageToLegacy(usage: TokenUsage): Usage {
 /** Preserve observed text and the failure reason for task consumers that only read text. */
 export function formatTaskFailure(input: { content: string; errorMessage?: string }): string {
   const reason = input.errorMessage;
-  if (!reason?.trim() || input.content.includes(reason)) return input.content;
+  if (!reason?.trim()) return input.content;
+  if (input.content.startsWith(reason) || input.content.startsWith(`Error: ${reason}`)) return input.content;
   // Existing task summaries/artifact previews truncate the tail, so keep the cause visible first.
   return input.content ? `Error: ${reason}\n\n${input.content}` : `Error: ${reason}`;
 }
