@@ -20,13 +20,25 @@ export type { KookClientTransport } from '../../src/ws.js';
 
 export default defineAdapter<KookEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  operations: ['recall'],
   // KOOK 图片上传后以原生卡片保留图文混排；KMarkdown 原生消费；
   // 原生卡片按钮经 return-val 事件进入 canonical action 链路。
-  segments: {
-    outboundMedia: ['url', 'upload'],
-    interactive: 'native',
-    markdown: 'native',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'upload'],
+          interactive: 'native',
+          markdown: 'native',
+        },
+        quote: true,
+        recall: {},
+      },
+      actions: {
+        recall: { scopes: ['private', 'group', 'channel'] },
+        quoteReply: { scopes: ['private', 'group', 'channel'] },
+      },
+      delivery: { send: true, proactive: true, spool: true },
+    },
   },
   createAdapter: context => new KookAdapter(context),
 });

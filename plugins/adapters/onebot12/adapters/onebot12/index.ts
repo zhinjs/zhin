@@ -17,12 +17,24 @@ export type { OneBot12WsSocket, OneBot12WsCreateOptions } from '../../src/ws-typ
 
 export default defineAdapter<OneBot12EndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  operations: ['recall'],
   // 媒体段经 upload_file 物化为 file_id（spec 正式投递）；上传失败降级扩展字段透传。
   // 无卡片交互面，交互段降级纯文本。
-  segments: {
-    outboundMedia: ['url', 'path', 'base64', 'upload'],
-    interactive: 'text',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'path', 'base64', 'upload'],
+          interactive: 'text',
+        },
+        quote: true,
+        recall: {},
+      },
+      actions: {
+        recall: { scopes: ['private', 'group'] },
+        quoteReply: { scopes: ['private', 'group'] },
+      },
+      delivery: { send: true, proactive: true, spool: true },
+    },
   },
   createAdapter: context => new Onebot12Adapter(context),
 });

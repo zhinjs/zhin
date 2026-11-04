@@ -1,4 +1,4 @@
-import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, resolveStaticCapabilities } from '@zhin.js/adapter';
 import type { RuntimeSnapshot, SnapshotReader } from '@zhin.js/plugin-runtime';
 
 export interface SandboxWorkspaceScope {
@@ -27,13 +27,15 @@ export async function withSandboxWorkspaceScope<T>(
     const index = lease.value.projections.get(adapterFeatureId);
     if (!isAdapterIndex(index)) throw new SandboxWorkspaceBindingError();
     for (const row of index.describe()) {
-      if (!row.admitted || index.clientAdapter(row.id) !== 'sandbox') continue;
+      // ADR 0044: the Endpoint declares `runtime.sandbox`; no platform name is compared here.
+      const profile = index.capabilityProfile(row.id);
+      if (!row.admitted || !profile || resolveStaticCapabilities(profile, []).runtime?.sandbox !== true) continue;
       const client = index.clientById<{
         connectionById?: (id: string) => { target: string; owner: string; placeholder: boolean; socket: { readyState: number } } | undefined;
       }>(row.id);
       const connection = client.connectionById?.(connectionId);
       if (!connection || connection.placeholder || connection.socket.readyState !== 1) continue;
-      return await operation({ endpoint: { adapter: 'sandbox', id: String(row.id) }, endpointKey: connection.target,
+      return await operation({ endpoint: { adapter: index.clientAdapter(row.id), id: String(row.id) }, endpointKey: connection.target,
         ownerId: connection.owner, connectionId }, lease.value);
     }
     throw new SandboxWorkspaceBindingError();

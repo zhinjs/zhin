@@ -4,9 +4,12 @@ import {
   MessageTypingIndicator, NativeTypingIndicator, NoneTypingIndicator, ReactionTypingIndicator,
   type TypingIndicatorAdapter, type TypingIndicatorType,
 } from '../typing-indicator/index.js';
-import { buildTypingSendContent } from '../typing-indicator/adapter-integration.js';
+import {
+  buildTypingSendContent,
+  type ActivityFeedbackKindCapabilities,
+} from '../typing-indicator/adapter-integration.js';
 
-export { PLATFORM_FEATURES, buildTypingSendContent, type PlatformFeatures } from '../typing-indicator/adapter-integration.js';
+export { buildTypingSendContent, type ActivityFeedbackKindCapabilities } from '../typing-indicator/adapter-integration.js';
 
 /** Operations have already captured one concrete account incarnation and full scene. */
 export type ActivityFeedbackIO = Omit<CapturedOutboundOperation, 'signal' | 'release'>;
@@ -15,8 +18,10 @@ export type ActivityFeedbackIO = Omit<CapturedOutboundOperation, 'signal' | 'rel
 export function createActivityFeedbackAdapter(input: Readonly<{
   platform: string;
   io: ActivityFeedbackIO;
+  /** What the Endpoint's capability profile declares for this conversation kind (ADR 0044). */
+  kind?: ActivityFeedbackKindCapabilities;
 }>): TypingIndicatorAdapter {
-  const { platform, io } = input;
+  const { platform, io, kind } = input;
   const messages = new Map<string, MessageRef>();
   const ref = (id: string): MessageRef => ({ conversation: io.target, id });
   const supportedTypes: TypingIndicatorType[] = [];
@@ -39,7 +44,7 @@ export function createActivityFeedbackAdapter(input: Readonly<{
       }
       if (config.type === 'message' && io.recall) {
         return new MessageTypingIndicator(options, config, async (current, text) => {
-          const content = buildTypingSendContent(platform, current, text);
+          const content = buildTypingSendContent(kind, current, text);
           if (!content) return null;
           const id = await io.send(content, { locale: current.locale });
           if (id) messages.set(id, ref(id));

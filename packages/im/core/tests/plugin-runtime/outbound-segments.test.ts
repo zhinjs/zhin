@@ -380,10 +380,9 @@ describe('resolveOutboundInteractivePolicy', () => {
     expect(resolveOutboundInteractivePolicy('adapter:test' as never, snapshot)).toBe('text');
   });
 
-  it('未声明时按平台名查内置表（telegram / discord 原生按钮）', () => {
+  it('未声明时不按平台名猜测，回退 text（ADR 0044）', () => {
     for (const packageName of ['@zhin.js/adapter-telegram', '@zhin.js/adapter-discord']) {
-      const snapshot = mockSnapshot({ packageName });
-      expect(resolveOutboundInteractivePolicy('adapter:test' as never, snapshot)).toBe('native');
+      expect(resolveOutboundInteractivePolicy('adapter:test' as never, mockSnapshot({ packageName }))).toBe('text');
     }
   });
 
@@ -394,7 +393,7 @@ describe('resolveOutboundInteractivePolicy', () => {
         packageName: '@zhin.js/adapter-telegram',
         definition: { segments: { interactive: 'fancy' } },
       }),
-    )).toBe('native');
+    )).toBe('text');
     expect(resolveOutboundInteractivePolicy(
       'adapter:test' as never,
       mockSnapshot({ packageName: '@acme/adapter-unknown' }),

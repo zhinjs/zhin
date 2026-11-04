@@ -12,11 +12,19 @@ export type { BilibiliEndpointOptions } from '../../src/endpoint.js';
 export default defineAdapter<BilibiliEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   // 评论只支持纯文本：Markdown 去格式、交互段降级纯文本，其余段 unsupported。
-  segments: {
-    supported: ['text', 'mention'],
-    html: 'text',
-    markdown: 'text',
-    interactive: 'text',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          supported: ['text', 'mention'],
+          html: 'text',
+          markdown: 'text',
+          interactive: 'text',
+        },
+        maxLength: 1000,
+      },
+      delivery: { send: true, spool: true },
+    },
   },
   createAdapter: context => new BilibiliAdapter(context),
 });

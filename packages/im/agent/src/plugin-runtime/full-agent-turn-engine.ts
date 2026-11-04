@@ -305,6 +305,7 @@ async function* runInteractiveTurn(
     modelSdk: prompt.modelSdk,
     registry: promptRegistry,
     segments: context.capabilities.promptSegments,
+    platformGuidanceExternal: context.capabilities.platformGuidanceExternal,
   });
 
   let replyStream: CoreReplyStream | undefined;

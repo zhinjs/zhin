@@ -279,6 +279,11 @@ const checks = [
     description: '配置文档与 DEFAULT_CONFIG 关键字段对齐',
   },
   {
+    name: 'No Platform Branches',
+    command: 'pnpm check:no-platform-branches',
+    description: 'core/agent/ai/adapter/cli 运行时不得出现平台名分支，只读适配器能力（ADR 0044）',
+  },
+  {
     name: 'Removed Plugin API',
     command: 'pnpm check:no-removed-plugin-api',
     description: '生产源码不得调用已删除的 Plugin lookup 或 latest-generation store API',

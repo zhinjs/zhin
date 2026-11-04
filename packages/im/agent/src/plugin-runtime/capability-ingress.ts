@@ -1,4 +1,5 @@
-import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/core';
+import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
 import {
@@ -67,6 +68,8 @@ export interface AgentCapabilities {
   readonly promptSections: readonly PromptSectionDescriptor[];
   /** ADR 0041 segments provided on plugin Scopes via `promptSegmentToken`, of this generation. */
   readonly promptSegments?: readonly PromptSegment[];
+  /** ADR 0044 §4: the turn's adapter plugin is not the agent owner, so its prompt text is external content. */
+  readonly platformGuidanceExternal?: boolean;
 }
 
 export class CapabilityIngress {
@@ -127,12 +130,36 @@ export class CapabilityIngress {
       agents: featureAgents,
       mcp: bindMcp(mcp, owner, isActive, snapshot.resources.get(snapshot.root)?.get(localImageAssetsToken.id) as LocalImageAssetStore | undefined),
       promptSegments: collectPromptSegments(snapshot, owner),
+      platformGuidanceExternal: adapterIsExternal(snapshot, owner, turn),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
         .filter((section) => !section.platforms
           || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))
         .filter((section) => !section.scopes
           || (turn?.origin.kind === 'im' && section.scopes.includes(turn.origin.scope)))),
     });
+  }
+}
+
+/**
+ * ADR 0044 trust decision (single place, easy to revert): an adapter package published under the
+ * `@zhin.js/` scope is an official, trusted adapter; its custom `profile.prompt.text` is not labelled
+ * `external_content`. Every other adapter package keeps the label.
+ */
+const TRUSTED_ADAPTER_SCOPE = '@zhin.js/';
+export function isTrustedOfficialAdapterPackage(packageName: string | undefined): boolean {
+  return typeof packageName === 'string' && packageName.startsWith(TRUSTED_ADAPTER_SCOPE);
+}
+
+function adapterIsExternal(snapshot: RuntimeSnapshot, owner: PluginId, turn?: TurnAccessContext): boolean {
+  const endpoint = turn?.origin.kind === 'im' ? turn.origin.conversation?.endpoint.id : undefined;
+  const adapters = snapshot.projections.get(adapterFeatureId);
+  if (!endpoint || !isAdapterIndex(adapters)) return false;
+  try {
+    const adapterOwner = adapters.owner(endpoint as CapabilityId);
+    if (adapterOwner === owner) return false;
+    return !isTrustedOfficialAdapterPackage(snapshot.tree.get(adapterOwner)?.packageName);
+  } catch {
+    return false;
   }
 }
 
@@ -332,7 +359,9 @@ function isSelectedAgentTool(
 }
 
 async function canAccessDescriptor(
-  descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions' | 'currentConversationBotRoles'>,
+  descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions' | 'currentConversationBotRoles'> & {
+    readonly requiresCapabilities?: readonly string[];
+  },
   turn: TurnAccessContext | undefined,
   host?: PermissionHost,
 ): Promise<boolean> {
@@ -343,6 +372,14 @@ async function canAccessDescriptor(
   }
   if (descriptor.scopes?.length) {
     if (turn?.origin.kind !== 'im' || !descriptor.scopes.includes(turn.origin.scope)) {
+      return false;
+    }
+  }
+  // ADR 0044: the per-turn platform capabilities (static profile narrowed by Bot role, mute, adapter
+  // resolver) decide visibility. Missing capabilities fail closed, so no platform name or keyword is read.
+  if (descriptor.requiresCapabilities?.length) {
+    const platformCapabilities = turn?.input?.platformCapabilities;
+    if (!platformCapabilities || !descriptor.requiresCapabilities.every((path) => platformCapabilities.has(path))) {
       return false;
     }
   }

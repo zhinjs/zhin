@@ -25,6 +25,7 @@ export class PersistentTurnJournal implements TurnJournalPort {
     run: AgentRunIdentity,
     store: JournalStore,
     principal?: Readonly<{ subjectId: string; displayName?: string; roles: readonly string[] }>,
+    /** Supplied only for turns whose Endpoint declares `runtime.sandbox` (ADR 0044): recovery identity and result resources apply there. */
     private readonly recoveryOrigin?: () => TurnOrigin,
   ) {
     this.#run = Object.freeze({ ...run });
@@ -61,7 +62,7 @@ export class PersistentTurnJournal implements TurnJournalPort {
     const origin = this.recoveryOrigin?.();
     for (const input of mapped) {
       const resources = event.type === 'turn_end' && input.type === 'message.completed'
-        && origin?.kind === 'im' && origin.conversation?.endpoint.adapter === 'sandbox'
+        && origin?.kind === 'im'
         ? resultResources(event.output) : undefined;
       const persisted: AgentRunEvent = Object.freeze({
         ...input,
@@ -103,7 +104,7 @@ export class PersistentTurnJournal implements TurnJournalPort {
     this.#sequence = last?.sequence ?? 0;
     this.#terminal = last?.terminal ? last : undefined;
     const origin = this.recoveryOrigin?.();
-    if (!this.#terminal && this.#principal && origin?.kind === 'im' && origin.conversation?.endpoint.adapter === 'sandbox'
+    if (!this.#terminal && this.#principal && origin?.kind === 'im'
       && typeof (this.#store as Partial<TurnDeliveryStore>).recordRecoveryIdentity === 'function') {
       try {
         await (this.#store as TurnDeliveryStore).recordRecoveryIdentity({ run: this.#run, subjectId: this.#principal.subjectId, origin });

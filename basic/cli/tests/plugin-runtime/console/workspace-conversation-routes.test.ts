@@ -41,7 +41,7 @@ async function fixture(options: { filename?: string; unavailable?: boolean } = {
   }
   const root = rootPluginId(), owners = [childPluginId(root, 'sandbox-one'), childPluginId(root, 'sandbox-two')];
   const slots = owners.map((owner, index) => createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'sandbox', source: '/sandbox/adapters/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(index === 0 ? connections : secondConnections); } }() }) }));
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], profile: { default: { delivery: { send: true }, runtime: { sandbox: true } } }, createAdapter: () => new class extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(index === 0 ? connections : secondConnections); } }() }) }));
   const base: SnapshotState = { root, tree: new Map<PluginId, PluginNodeSnapshot>([
     [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: directory, children: owners }],
     ...owners.map(owner => [owner, { id: owner, instanceKey: String(owner), packageName: '@zhin.js/adapter-sandbox', packageRoot: directory, parent: root, children: [] }] as const),

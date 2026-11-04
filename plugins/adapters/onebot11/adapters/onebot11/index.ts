@@ -15,11 +15,23 @@ export type { OneBot11WsSocket, OneBot11WsCreateOptions } from '../../src/ws-typ
 
 export default defineAdapter<OneBot11EndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  operations: ['recall'],
   // OneBot file 参数原生消费 url / base64:// 媒体；无卡片交互面，交互段降级纯文本。
-  segments: {
-    outboundMedia: ['url', 'base64'],
-    interactive: 'text',
+  profile: {
+    default: {
+      messaging: {
+        segments: {
+          outboundMedia: ['url', 'base64'],
+          interactive: 'text',
+        },
+        quote: true,
+        recall: {},
+      },
+      actions: {
+        recall: { scopes: ['private', 'group'] },
+        quoteReply: { scopes: ['private', 'group'] },
+      },
+      delivery: { send: true, proactive: true, spool: true },
+    },
   },
   createAdapter: context => new Onebot11Adapter(context),
 });

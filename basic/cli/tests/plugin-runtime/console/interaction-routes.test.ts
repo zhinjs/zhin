@@ -13,7 +13,7 @@ async function start(target = 'bot', sceneId = 'room') {
   const connection = { target, owner: 'configured-owner', placeholder: false, socket: { readyState: 1 } };
   const index = { $projection: 'zhin.adapter-index/1',
     describe: () => [{ id: 'canonical-endpoint', name: 'sandbox-slot', admitted: true }],
-    clientAdapter: () => 'sandbox', clientById: () => ({ connectionById: (id: string) => id === 'live-connection' ? connection : undefined }) };
+    clientAdapter: () => 'sandbox', capabilityProfile: () => ({ default: { runtime: { sandbox: true } } }), clientById: () => ({ connectionById: (id: string) => id === 'live-connection' ? connection : undefined }) };
   const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/test', children: [] }]]),
     config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map([[adapterFeatureId, index]]) };
   const snapshots = new SnapshotStore(state), im = new ImRuntime();

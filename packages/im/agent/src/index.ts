@@ -101,6 +101,10 @@ export {
   type ExecPolicyResult,
 } from './security/exec-policy.js';
 export {
+  registerSensitiveExecCommand,
+  type SensitiveExecCommandRule,
+} from './security/sensitive-exec-commands.js';
+export {
   OWNER_APPROVE_ALWAYS_TOOL,
   OwnerApprovalRuntime,
 } from './security/owner-approval-runtime.js';
@@ -891,11 +895,10 @@ export type {
 
 // ── Activity Feedback 平台能力 ──
 export {
-  PLATFORM_FEATURES,
   buildTypingSendContent,
 } from './typing-indicator/adapter-integration.js';
 export type {
-  PlatformFeatures,
+  ActivityFeedbackKindCapabilities,
 } from './typing-indicator/adapter-integration.js';
 
 // ── MCP Client ──

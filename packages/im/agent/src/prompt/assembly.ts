@@ -157,6 +157,7 @@ function agentPathPromptContext(
     registry: options.runtime?.registry,
     segments: options.runtime?.segments,
     sceneText: options.runtime?.sceneText,
+    platformGuidanceExternal: options.runtime?.platformGuidanceExternal,
     activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
     bootstrapContext: options.runtime?.bootstrapContext
       ?? (options.runtime?.contextFiles === undefined ? agent.bootstrapContext : ''),
@@ -220,6 +221,8 @@ export interface PromptRuntimeOverrides {
   readonly segments?: readonly PromptSegment[];
   /** ADR 0041 `scene` line; rendered after the cache breakpoint. */
   readonly sceneText?: string;
+  /** ADR 0044 §4: the adapter is third-party relative to the agent owner. */
+  readonly platformGuidanceExternal?: boolean;
   /**
    * Sender-/selection-dependent capability catalog. Not part of the system prompt: the core run
    * puts it in the current message's runtime-context tail.

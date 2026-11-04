@@ -69,6 +69,7 @@ Fin 2026-10-29 拍板：
 | `muteAll` | 全员禁言 / 解除 | 需 `admin` / `owner` |
 | `kick` | 踢出成员 | 需 `admin` / `owner`；能否同时拉黑 |
 | `setCard` / `setTitle` | 改群名片 / 头衔 | 头衔常需 `owner`；长度上限 |
+| `setAdmin` | 设置 / 取消管理员 | 通常需 `owner` |
 | `recall` | 撤回消息 | 自己的消息时限；撤回他人需 `admin` |
 | `essence` | 设 / 取消精华 | 需 `admin` |
 | `announce` | 发群公告 | 需 `admin`；长度上限 |

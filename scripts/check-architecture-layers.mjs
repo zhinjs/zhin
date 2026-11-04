@@ -85,6 +85,8 @@ const layers = {
   // agent; the domain directories (workroom/, portfolio/, data-governance/) stay framework-free (see below).
   'packages/im/workroom': { level: 5, allowedImports: workroomAllowedLayers },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
+  // ADR 0044 §3: shared OneBot-family raw event → canonical side event mapping; adapters depend on it, core never does.
+  'packages/im/adapter-onebot-events': { level: 4, allowedImports: ['basic', 'packages/im/core', 'packages/im/adapter', 'packages/im/im-contract'] },
   'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
   // depend on the concrete HTTP Host implementation.
@@ -111,6 +113,7 @@ const packageNameToPath = {
   '@zhin.js/ai': 'packages/im/ai',
   '@zhin.js/core': 'packages/im/core',
   '@zhin.js/agent': 'packages/im/agent',
+  '@zhin.js/adapter-onebot-events': 'packages/im/adapter-onebot-events',
   'zhin.js': 'packages/im/zhin',
   '@zhin.js/host-http': 'packages/host/http',
   '@zhin.js/host-http-contract': 'packages/host/http-contract',

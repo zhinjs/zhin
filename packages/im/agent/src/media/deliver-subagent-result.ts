@@ -11,6 +11,8 @@ import { mergeToolOutboundElements } from './media-tool-bridge.js';
 import { publishOutboundElements } from './media-publisher.js';
 import { NO_MEDIA_AUTHORITY } from './media-normalize.js';
 import type { ImageAssetPublisher } from './image-assets.js';
+import { resolveOutboundCapabilities } from './media-capabilities.js';
+import type { OutboundMediaCapabilities } from './media-types.js';
 
 export interface SubagentOutboundDelivery {
   /** 面向用户的说明文本（含任务摘要时由调用方组装） */
@@ -25,6 +27,8 @@ export interface DeliverSubagentResultParams {
   delivery: SubagentOutboundDelivery;
   send: (options: SendOptions) => Promise<string>;
   imageAssets?: ImageAssetPublisher;
+  /** Media limits of the target Endpoint (`delivery.spool`, ADR 0044). */
+  mediaCapabilities?: OutboundMediaCapabilities;
 }
 
 export async function deliverSubagentResult(params: DeliverSubagentResultParams): Promise<void> {
@@ -50,7 +54,7 @@ export async function deliverSubagentResult(params: DeliverSubagentResultParams)
   const segments = await publishOutboundElements(
     elements,
     String(message.clientAdapter ?? message.conversation.endpoint.adapter),
-    undefined,
+    params.mediaCapabilities ?? resolveOutboundCapabilities(),
     { ...NO_MEDIA_AUTHORITY, imageAssets: params.imageAssets },
   );
   if (!segments.length) {

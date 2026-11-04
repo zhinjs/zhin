@@ -14,6 +14,7 @@ import {
   routeTaskInterjection,
   type DetachedTaskRunner,
   publishOutboundElements,
+  resolveOutboundCapabilities,
   REACTION_SEGMENT_TYPE,
   type AgentOutputElement,
   type ApprovalPort,
@@ -107,6 +108,7 @@ import {
   resolveOwnerForRuntimeMessage,
   resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
+  resolveRuntimeTurnCapabilities,
   resolveRuntimeTurnContextState,
   resolveSnapshotTurnIntentResolver,
   resolveTrustedForRuntimeMessage,
@@ -506,7 +508,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
           // 没有原消息可回应：表情回应类输出直接视为不发。
           if (reactionOf(messageOutput) !== undefined) return { status: 'suppressed' as const };
           const adapter = capabilityLocalName(String(conversation.endpoint.id));
-          const content = await publishOutboundElements([...messageOutput], adapter || undefined, undefined, {
+          const content = await publishOutboundElements([...messageOutput], adapter || undefined, resolveOutboundCapabilities(adapter, {
+            capabilities: options.im.endpoints.capabilities({ adapter, endpointKey: adapter }),
+            kind: conversation.kind as 'private' | 'group' | 'channel',
+          }), {
             filesystem: readOnlyFilesystem,
             imageAssets: options.agent.service.imageAssets,
           });
@@ -1215,8 +1220,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
             factServices: { store: options.agent.agent.getUserProfiles?.()?.scenes, refresher: this.#sceneFactRefresher },
           });
           signal.throwIfAborted();
+          // ADR 0044: platform capabilities, resolved once from the facts just read.
+          const platformCapabilities = resolveRuntimeTurnCapabilities(snapshot, message.conversation, contextState);
           // Capabilities are read with the resolved conversation facts (bot role, mute) on the access.
-          const contextAccess = createRuntimeTurnAccess(message, senderRoles, contextState);
+          const contextAccess = createRuntimeTurnAccess(message, senderRoles, contextState, platformCapabilities);
           // ADR 0038 §5: a danmaku turn answers its window as an anonymous viewer, read-only.
           const liveWindow = admission?.facts.liveWindow;
           const liveDanmaku: TurnLiveDanmaku | undefined = liveWindow && admission
@@ -1295,7 +1302,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 })
               : undefined;
             const turnPolicy = resolveSandboxTurnPolicy({
-              platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
+              runtimeSandbox: turnAccess.origin.kind === 'im' && platformCapabilities?.has('runtime.sandbox') === true,
               isMaster: senderRoles.isMaster,
               scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : undefined,
               masterShell: service.getAgentConfig()?.masterShell,
@@ -1344,6 +1351,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               ...(!workroomAgentTurn && !liveRoom && !ambient && !sceneMerge
                 ? { personalSession: runtimePersonalSessionAddress(turnAccess, options.projectRoot) } : {}),
               contextState,
+              ...(platformCapabilities ? { platformCapabilities } : {}),
               ...(sceneEvents.length ? { sceneEvents } : {}),
               ...(mergedSenders ? { mergedSenders } : {}),
               ...(liveDanmaku ? { liveDanmaku } : {}),
@@ -1489,7 +1497,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                           return { status: 'sent' as const };
                         }
                         // Model output may name local files or URLs: hold them to this Turn's own authority.
-                        const content = await publishOutboundElements([...messageOutput], effectiveAdapter || undefined, undefined, {
+                        const content = await publishOutboundElements([...messageOutput], effectiveAdapter || undefined, resolveOutboundCapabilities(effectiveAdapter, platformCapabilities), {
                           filesystem: turnPolicy.filesystem,
                           imageAssets: options.agent.service.imageAssets,
                           ...(turnPolicy.network ? { network: turnPolicy.network } : {}),

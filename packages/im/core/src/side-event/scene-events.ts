@@ -46,7 +46,7 @@ export function isSceneEvent(event: ConversationEvent): event is SceneConversati
   return (SCENE_EVENT_TYPES as readonly string[]).includes(event.type);
 }
 
-/** OneBot 等平台以 user_id 0 表示「全员」。 */
+/** 部分平台以 user_id 0 表示「全员」。 */
 const WHOLE_SCENE_IDS = new Set(['0', 'all']);
 
 /**

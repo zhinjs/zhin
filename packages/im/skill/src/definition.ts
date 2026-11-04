@@ -18,6 +18,8 @@ export interface SkillDefinition {
   readonly instructions: string;
   readonly toolNames?: readonly string[];
   readonly platforms?: readonly string[];
+  /** ADR 0044: capability paths (e.g. `actions.mute`) the turn must have for this Skill to be offered. */
+  readonly requiresCapabilities?: readonly string[];
   readonly scopes?: readonly SkillScope[];
   readonly permissions?: readonly string[];
   readonly keywords?: readonly string[];
@@ -66,6 +68,7 @@ export function parseSkillMarkdown(value: unknown, context: ValidationContext): 
     instructions: parsed.instructions,
     toolNames: toolNames.length ? Object.freeze(toolNames) : undefined,
     platforms: optionalStringList(parsed.metadata.platforms, 'platforms'),
+    requiresCapabilities: optionalStringList(parsed.metadata.requiresCapabilities, 'requiresCapabilities'),
     scopes: optionalScopes(parsed.metadata.scopes),
     permissions: optionalStringList(parsed.metadata.permissions, 'permissions'),
     keywords: optionalStringList(parsed.metadata.keywords, 'keywords'),

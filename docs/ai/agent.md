@@ -473,7 +473,7 @@ Markdown 文件记忆（`MEMORY.md`）仍按原有字符预算整体注入，本
 | `member.card_changed` / `title_changed` / `remark_changed` | 低 | 名片 / 头衔 / 备注 |
 | `conversation.poked`（人与人） | 低 | 可合并 |
 
-每条事件只保留平台、场景、发起人、目标、短摘要和时间，**不会把平台原始 JSON 交给模型**。各适配器经统一的 `receiveOneBotLikeSideEvent` 归一化：icqq 的戳一戳、表情回应、管理员变更、禁言、入群申请；OneBot11 / NapCat / QQ 的 `group_card`（名片）、`notify.title`（头衔）等。icqq SDK 目前没有名片和公告事件，平台提供时才会出现。
+每条事件只保留平台、场景、发起人、目标、短摘要和时间，**不会把平台原始 JSON 交给模型**。各适配器经共享包 `@zhin.js/adapter-onebot-events` 的 `receiveOneBotLikeSideEvent` 归一化（KOOK、Slack 的映射在各自适配器内）：icqq 的戳一戳、表情回应、管理员变更、禁言、入群申请；OneBot11 / NapCat / QQ 的 `group_card`（名片）、`notify.title`（头衔）等。icqq SDK 目前没有名片和公告事件，平台提供时才会出现。
 
 **唤醒规则**
 

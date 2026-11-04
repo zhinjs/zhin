@@ -14,7 +14,7 @@ async function fixture(target = 'bot', sceneId = 'room') {
   cleanups.push(() => rm(directory, { recursive: true, force: true }));
   const root = rootPluginId(), connection = { target, owner: 'configured-owner', placeholder: false, socket: { readyState: 1 } };
   const index = { $projection: 'zhin.adapter-index/1', describe: () => [{ id: 'canonical', name: 'bot', admitted: true }],
-    clientAdapter: () => 'sandbox', clientById: () => ({ connectionById: (id: string) => id === 'live' ? connection : undefined }) };
+    clientAdapter: () => 'sandbox', capabilityProfile: () => ({ default: { runtime: { sandbox: true } } }), clientById: () => ({ connectionById: (id: string) => id === 'live' ? connection : undefined }) };
   const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: directory, children: [] }]]),
     config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map([[adapterFeatureId, index]]) };
   const snapshots = new SnapshotStore(state);

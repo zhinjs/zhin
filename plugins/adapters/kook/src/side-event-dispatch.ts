@@ -1,7 +1,8 @@
-import { composeSideEventName, buildNotice, mapNoticeParts, senderFromId, KOOK_NOTICE_PARTS_MAP } from '@zhin.js/core';
+import { composeSideEventName, buildNotice, senderFromId } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import type { KookWebhookEventData } from './protocol.js';
+import { mapKookNoticeParts } from './side-event-map.js';
 
 function extractKookNoticeType(raw: unknown): string | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -22,9 +23,9 @@ export function receiveKookSideEvent(
 ): boolean {
   const noticeType = extractKookNoticeType(raw);
   if (!noticeType) return false;
-  if (!Object.prototype.hasOwnProperty.call(KOOK_NOTICE_PARTS_MAP, noticeType)) return false;
+  const parts = mapKookNoticeParts(noticeType);
+  if (!parts) return false;
   const event = raw as KookWebhookEventData;
-  const parts = mapNoticeParts('kook', noticeType);
   const body = event.extra?.body;
   const guildId = event.extra?.guild_id
     ?? (event.channel_type === 'GROUP' && event.type === 255 ? event.target_id : undefined);

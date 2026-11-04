@@ -1,13 +1,16 @@
-import { composeSideEventName, sideEventConversation } from './base.js';
-import type { EndpointEventEmitter } from '@zhin.js/adapter';
 import {
   buildNotice,
   buildRequest,
   buildSystem,
+  composeSideEventName,
+  senderFromId,
+  sideEventConversation,
+} from '@zhin.js/core';
+import type { EndpointEventEmitter } from '@zhin.js/adapter';
+import {
   mapNoticeParts,
   mapRequestParts,
   resolveSideEventDedupeKey,
-  senderFromId,
   type OneBotLikeRawEvent,
   type SideEventPlatform,
 } from './normalize.js';

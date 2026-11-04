@@ -34,6 +34,7 @@ export interface ToolDescriptor {
   readonly riskCategory?: ToolRiskCategory;
   readonly adapter?: string;
   readonly platforms?: readonly string[];
+  readonly requiresCapabilities?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly currentConversationBotRoles?: readonly string[];
   readonly permissions?: readonly string[];
@@ -167,6 +168,7 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     ...(definition.riskCategory ? { riskCategory: definition.riskCategory } : {}),
     ...(definition.adapter ? { adapter: definition.adapter } : {}),
     platforms: definition.platforms,
+    ...(definition.requiresCapabilities?.length ? { requiresCapabilities: definition.requiresCapabilities } : {}),
     scopes: definition.scopes,
     currentConversationBotRoles: definition.currentConversationBotRoles,
     permissions: definition.permissions,

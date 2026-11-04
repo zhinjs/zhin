@@ -1,9 +1,11 @@
 import {
   ActivityFeedbackManager, activityFeedbackSource, createActivityFeedbackAdapter,
-  type ActivityFeedbackEventContext, type ActivityFeedbackIO, type ActivityFeedbackPhase,
+  type ActivityFeedbackEventContext, type ActivityFeedbackKindCapabilities, type ActivityFeedbackIO, type ActivityFeedbackPhase,
   type ResolvedActivityFeedbackPhaseConfig,
 } from '@zhin.js/agent';
 import { conversationRefKey, type OutboundHost } from 'zhin.js';
+
+type EndpointKindView = ActivityFeedbackKindCapabilities;
 
 export interface CapturedFeedbackOperation extends ActivityFeedbackIO {
   readonly signal: AbortSignal;
@@ -13,6 +15,8 @@ export interface CapturedFeedbackOperation extends ActivityFeedbackIO {
 /** One source capture, never a directory lookup by an alias at execution time. */
 export interface ActivityFeedbackEndpointAccess {
   capture(context: ActivityFeedbackEventContext): CapturedFeedbackOperation | undefined;
+  /** The Endpoint's declared capabilities for the scene of this event (ADR 0044). */
+  kinds?(context: ActivityFeedbackEventContext): EndpointKindView | undefined;
 }
 export function createNoopEndpointAccess(): ActivityFeedbackEndpointAccess {
   return { capture: () => undefined };
@@ -23,6 +27,10 @@ export function createOutboundEndpointAccess(
   logger?: { debug: (message: string, ...args: unknown[]) => void },
 ): ActivityFeedbackEndpointAccess {
   return {
+    kinds(context) {
+      return outbound.capabilities?.({ adapter: context.platform, endpointKey: context.endpointKey })
+        ?.kinds?.[context.sceneType];
+    },
     capture(context) {
       const source = context[activityFeedbackSource];
       if (!source || source.signal.aborted || !outbound.captureOperation) return undefined;
@@ -50,6 +58,10 @@ export class ActivityFeedbackExecutor {
   readonly #entries = new Map<string, Entry>();
   constructor(private readonly access: ActivityFeedbackEndpointAccess) {}
 
+  kindCapabilities(context: ActivityFeedbackEventContext): EndpointKindView | undefined {
+    return this.access.kinds?.(context);
+  }
+
   async start(context: ActivityFeedbackEventContext, phase: ActivityFeedbackPhase,
     config: ResolvedActivityFeedbackPhaseConfig): Promise<void> {
     const source = context[activityFeedbackSource];
@@ -64,7 +76,7 @@ export class ActivityFeedbackExecutor {
       const operation = this.access.capture(context);
       if (!operation) return;
       const manager = new ActivityFeedbackManager();
-      manager.registerAdapter(createActivityFeedbackAdapter({ platform: context.platform, io: operation }));
+      manager.registerAdapter(createActivityFeedbackAdapter({ platform: context.platform, io: operation, kind: this.kindCapabilities(context) }));
       const cancel = () => { void this.#close(created).catch(() => undefined); };
       const created: Entry = { key, sourceClient: source.client, operation, manager, phases: new Set(),
         detach: () => operation.signal.removeEventListener('abort', cancel) };
@@ -124,4 +136,4 @@ export class ActivityFeedbackExecutor {
 
 /** Policy orchestration needs behavior, not the concrete executor's private state. */
 export type ActivityFeedbackExecution = Pick<ActivityFeedbackExecutor,
-  'start' | 'stop' | 'updateText' | 'updateThinkingText' | 'dispose'>;
+  'kindCapabilities' | 'start' | 'stop' | 'updateText' | 'updateThinkingText' | 'dispose'>;

@@ -1,3 +1,14 @@
+import {
+  assertDeclaredProfileActions,
+  deriveLegacyProfile,
+  operationsImpliedByProfile,
+  resolveStaticCapabilities,
+  resolveTurnCapabilities,
+  type AdapterCapabilityProfile,
+  type AdapterCapabilityResolver,
+  type ResolveTurnCapabilitiesInput,
+  type TurnCapabilities,
+} from './capability-profile.js';
 import { scopeEndpointControl, scopeEndpointManagement, type EndpointPortInvoker } from './scoped-endpoint-ports.js';
 import {
   DisposeStack,
@@ -40,6 +51,7 @@ import {
   type ConversationReference,
   type ConversationResolution,
   type EndpointCapabilities,
+  type EndpointKindCapabilities,
 } from '@zhin.js/im-contract';
 
 import type { AdapterInstance } from './adapter.js';
@@ -91,6 +103,9 @@ interface AdapterRecord extends AdapterDescriptor {
   readonly adapterName: string;
   readonly endpoint?: AnyEndpoint;
   readonly segments?: AdapterSegmentPolicy;
+  /** Declared profile, or the conservative one derived from legacy declarations. */
+  readonly profile: AdapterCapabilityProfile;
+  readonly capabilityResolver?: AdapterCapabilityResolver;
   readonly started: boolean;
   readonly open: boolean;
   readonly stopped: boolean;
@@ -204,18 +219,28 @@ export class AdapterIndex {
         const adapter = definition.createAdapter(baseContext);
         await adapter.initialize({
           descriptor: { id: slot.id, owner: slot.owner, name: slot.localName, source: slot.source,
-            capabilities: definition.capabilities, segments: definition.segments }, initial,
+            capabilities: definition.capabilities, segments: definition.segments,
+            ...(definition.profile ? { profile: definition.profile } : {}),
+            ...(definition.resolveCapabilities ? { resolveCapabilities: definition.resolveCapabilities } : {}) }, initial,
           ...persistence,
           creationDefaults,
           bind: (endpoint, record, childSignal) => {
             const context = makeContext(record, childSignal);
-            const operations = resolveAdapterOperations(definition, context);
+            // A declared profile implies its operations, so they are not declared a second time.
+            const operations = Object.freeze([...new Set([
+              ...resolveAdapterOperations(definition, context),
+              ...(definition.profile ? operationsImpliedByProfile(definition.profile) : []),
+            ])]);
             const runtime = endpointRuntimeOf(endpoint);
             if (definition.capabilities.includes('outbound') && typeof runtime.send !== 'function') {
               throw new TypeError(`Adapter Endpoint ${record.canonicalId} declares outbound but send() is missing`);
             }
             bindPlatformEndpoint(endpoint, context, admission);
             assertDeclaredEndpointOperations(runtime, operations, String(record.canonicalId));
+            if (definition.profile) {
+              assertDeclaredProfileActions(runtime, definition.profile, String(record.canonicalId),
+                definition.capabilities.includes('outbound'));
+            }
             return operations;
           },
         }, signal);
@@ -280,6 +305,7 @@ export class AdapterIndex {
     return this.#order.map(({ endpoint: _endpoint,
       started: _started, open: _open, stopped: _stopped,
       startAttempted: _startAttempted, segments: _segments, adapterName: _adapterName,
+      profile: _profile, capabilityResolver: _resolver,
       ...descriptor }) => Object.freeze(descriptor));
   }
 
@@ -382,7 +408,8 @@ export class AdapterIndex {
   capabilities(id: CapabilityId): EndpointCapabilities {
     const record = this.#record(id);
     if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
-    return endpointCapabilitiesOf(record, record.operations);
+    return Object.freeze({ ...endpointCapabilitiesOf(record, record.operations),
+      kinds: endpointKindCapabilities(record.profile, record.operations) });
   }
 
   /** Returns the control port only when the concrete Endpoint declared the operation and is active. */
@@ -440,6 +467,28 @@ export class AdapterIndex {
    */
   segmentPolicy(id: CapabilityId): AdapterSegmentPolicy | undefined {
     return this.#record(id)?.segments;
+  }
+
+  /** Effective capability profile of an Endpoint: declared, or derived from its legacy declarations. */
+  capabilityProfile(id: CapabilityId): AdapterCapabilityProfile | undefined {
+    return this.#record(id)?.profile;
+  }
+
+  /**
+   * Resolve the capabilities of one turn for an Endpoint (ADR 0044 §2): static profile + generic
+   * narrowing + the Adapter's narrow-only `resolveCapabilities`. Unknown ids resolve to `undefined`.
+   */
+  turnCapabilities(
+    id: CapabilityId,
+    input: Omit<ResolveTurnCapabilitiesInput, 'profile' | 'narrow'>,
+  ): TurnCapabilities | undefined {
+    const record = this.#record(id);
+    if (!record) return undefined;
+    return resolveTurnCapabilities({
+      ...input,
+      profile: record.profile,
+      ...(record.capabilityResolver ? { narrow: record.capabilityResolver } : {}),
+    });
   }
 
   async start(signal: AbortSignal = new AbortController().signal): Promise<void> {
@@ -522,8 +571,73 @@ function profileConfigurationOnly(previous: Readonly<Record<string, unknown>>, n
   });
 }
 
+const KIND_VIEWS = ['private', 'group', 'channel'] as const;
+
+/** The serializable per-kind consumer view of a capability profile (see `EndpointCapabilities.kinds`). */
+export function endpointKindCapabilities(
+  profile: AdapterCapabilityProfile,
+  operations: readonly AdapterOperation[] = [],
+): NonNullable<EndpointCapabilities['kinds']> {
+  const kinds: Partial<Record<(typeof KIND_VIEWS)[number], EndpointKindCapabilities>> = {};
+  for (const kind of KIND_VIEWS) {
+    const section = resolveStaticCapabilities(profile, [kind]);
+    const feedback = section.feedback;
+    kinds[kind] = Object.freeze({
+      ...(feedback?.mode ? {
+        feedback: Object.freeze({
+          mode: feedback.mode,
+          ...(feedback.emoji ? { emoji: feedback.emoji } : {}),
+          ...(feedback.text ? { text: feedback.text } : {}),
+          ...(feedback.refreshSeconds ? { refreshSeconds: feedback.refreshSeconds } : {}),
+        }),
+      } : {}),
+      // `operations` may add what a static profile cannot say (e.g. Discord reactions exist only on the
+      // gateway transport, so they live in the Adapter's per-Endpoint `operations`).
+      reaction: Boolean(section.actions?.reaction) || operations.includes('reaction'),
+      edit: section.messaging?.edit === true || operations.includes('edit'),
+      recall: Boolean(section.actions?.recall || section.messaging?.recall) || operations.includes('recall'),
+      spool: section.delivery?.spool === true,
+      needsReply: section.delivery?.proactive === false,
+      groupInfo: section.scene?.groupInfo === true,
+      memberProfile: section.scene?.memberProfile === true,
+    });
+  }
+  return Object.freeze(kinds);
+}
+
+/**
+ * Adapters without a declared profile get `scene.groupInfo` / `scene.memberProfile` from the lookup
+ * ports their Endpoint actually implements (a port that exists is a capability that is usable).
+ */
+function withPortDerivedScene(profile: AdapterCapabilityProfile, endpoint: AnyEndpoint | undefined): AdapterCapabilityProfile {
+  const management = endpoint ? endpointRuntimeOf(endpoint).management : undefined;
+  const groupInfo = typeof management?.inspectGroupScene === 'function';
+  const memberProfile = typeof management?.inspectGroupMemberProfile === 'function'
+    || typeof management?.inspectGroupMember === 'function';
+  if (!groupInfo && !memberProfile) return profile;
+  return Object.freeze({
+    ...profile,
+    group: Object.freeze({
+      ...profile.group,
+      scene: Object.freeze({
+        ...profile.group?.scene,
+        ...(groupInfo ? { groupInfo: true } : {}),
+        ...(memberProfile ? { memberProfile: true } : {}),
+      }),
+    }),
+  });
+}
+
 function projectRecord(adapter: AdapterInstance, child: EndpointChildView): AdapterRecord {
+  const declared = adapter.descriptor.profile;
+  const profile = declared ?? withPortDerivedScene(deriveLegacyProfile({
+    capabilities: adapter.descriptor.capabilities,
+    operations: child.operations,
+    ...(adapter.descriptor.segments ? { segments: adapter.descriptor.segments } : {}),
+  }), child.endpoint);
   return {
+    profile,
+    ...(adapter.descriptor.resolveCapabilities ? { capabilityResolver: adapter.descriptor.resolveCapabilities } : {}),
     id: child.desired.canonicalId, owner: adapter.descriptor.owner, name: child.desired.endpointId,
     adapterName: adapter.descriptor.name, source: adapter.descriptor.source,
     capabilities: adapter.descriptor.capabilities, operations: child.operations,

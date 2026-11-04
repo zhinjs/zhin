@@ -1,0 +1,12 @@
+[
+  {
+    "file": "packages/im/agent/src/security/ops-cooldown.ts",
+    "name": "qq",
+    "reason": "'qq' is a request-field name in TARGET_FIELDS (a tool argument that carries a QQ number), not a platform comparison."
+  },
+  {
+    "file": "packages/im/adapter/src/capability-profile.ts",
+    "name": "sandbox",
+    "reason": "`runtime.sandbox` is the ADR 0044 capability FIELD an adapter declares (types and validator schema), not a platform comparison."
+  }
+]

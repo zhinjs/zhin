@@ -1,6 +1,8 @@
 import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
 import { permissionHostToken, createSceneRolePlatformChecker } from '@zhin.js/permission';
+import { registerSensitiveExecCommand } from '@zhin.js/agent';
 import { createIcqqConsoleRpc } from './src/console.js';
+import { icqqSensitiveExecRule } from './src/sensitive-commands.js';
 
 export default definePlugin({
   name: 'icqq',
@@ -16,6 +18,10 @@ export default definePlugin({
         createSceneRolePlatformChecker(),
       )
       : undefined;
-    return disposePlatform;
+    const disposeExecRule = registerSensitiveExecCommand(icqqSensitiveExecRule);
+    return () => {
+      disposeExecRule();
+      disposePlatform?.();
+    };
   },
 });
