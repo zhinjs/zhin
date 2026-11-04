@@ -189,13 +189,14 @@ it('parses split CRLF and UTF-8 Antigravity SSE and replays signed tool calls on
 });
 
 it('keeps Antigravity streaming pull-bound and aborts the submitted transport on consumer break', async () => {
+  const requests: Request[] = [];
   let pulls = 0, cancelled = 0, submitted = 0;
   let transportSignal: AbortSignal | undefined;
   const totalFrames = 1000;
   const fixture = driverFixture({ definition: antigravityProvider,
     model: { id: 'gemini-local', kinds: ['language'], protocol: 'antigravity-generate-content', streaming: true }, parameters: { maxRetries: 0 },
     grant: { token: 'synthetic', headers: {}, revision: '1', metadata: { projectId: 'project' } }, fetch: async (_url, init) => {
-      submitted++; transportSignal = new Request(_url, init).signal;
+      submitted++; const request = new Request(_url, init); requests.push(request); transportSignal = request.signal;
       let abort: (() => void) | undefined;
       return new Response(new ReadableStream({ start(controller) {
         // Native fetch aborts the response body when its request signal is aborted.
@@ -214,6 +215,7 @@ it('keeps Antigravity streaming pull-bound and aborts the submitted transport on
   for await (const event of run) if (event.type === 'text_delta') break;
   await vi.waitFor(() => expect(cancelled).toBe(1));
   expect(submitted).toBe(1); expect(pulls).toBeLessThan(totalFrames); expect(transportSignal?.aborted).toBe(true);
+  expect(requests).toHaveLength(1); expect(requests[0].signal).toBe(transportSignal);
   await run.close(); await client.close(); expect(cancelled).toBe(1);
 });
 

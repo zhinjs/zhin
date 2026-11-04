@@ -59,12 +59,14 @@ describe('real installed SDK Provider requests (offline transport)', () => {
   });
 
   it('bounds pending response headers with the configured first-chunk budget and propagates the abort without replay', async () => {
-    let requests = 0, aborted = 0;
+    const requests: Request[] = [];
+    let aborted = 0;
     const fixture = driverFixture({ definition: openAiCompatibleProvider, options: { baseUrl: 'https://gateway.example/v1' },
       model: { id: 'configured-model', kinds: ['language'], protocol: 'openai-chat', streaming: true },
       parameters: { maxRetries: 0, firstChunkTimeoutMs: 15 }, fetch: async (_url, init) => {
-        requests++;
-        const signal = new Request(_url, init).signal;
+        const request = new Request(_url, init);
+        requests.push(request);
+        const signal = request.signal;
         return new Promise<Response>((_resolve, reject) => {
           signal.addEventListener('abort', () => { aborted++; reject(signal.reason); }, { once: true });
         });
@@ -72,7 +74,8 @@ describe('real installed SDK Provider requests (offline transport)', () => {
     });
     const client = await fixture.runtime.openOperation({ context: callContext });
     await expect(client.generate({ request: { context: prompt } })).rejects.toMatchObject({ name: 'TimeoutError' });
-    expect(requests).toBe(1); expect(aborted).toBe(1);
+    expect(requests).toHaveLength(1); expect(aborted).toBe(1);
+    expect(requests[0].signal.aborted).toBe(true); expect(requests[0].signal.reason).toMatchObject({ name: 'TimeoutError' });
     await client.close();
   });
 
@@ -148,15 +151,17 @@ describe('real installed SDK Provider requests (offline transport)', () => {
 });
 
 it('keeps the caller cancellation of a bound native REST image Request while response headers have a separate budget', async () => {
+  const requests: Request[] = [];
   let submitted = 0, aborted = 0;
   const fixture = driverFixture({ definition: miniMaxProvider,
     model: { id: 'image-01', kinds: ['image'], protocol: 'minimax-images' }, parameters: { maxRetries: 0, firstChunkTimeoutMs: 1000 },
-    fetch: async (input, init) => { submitted++; const signal = new Request(input, init).signal;
-      return new Promise<Response>((_resolve, reject) => signal.addEventListener('abort', () => { aborted++; reject(signal.reason); }, { once: true })); } });
+    fetch: async (input, init) => { submitted++; const request = new Request(input, init); requests.push(request);
+      return new Promise<Response>((_resolve, reject) => request.signal.addEventListener('abort', () => { aborted++; reject(request.signal.reason); }, { once: true })); } });
   const client = await fixture.runtime.openOperation({ context: callContext }), controller = new AbortController(), reason = new Error('caller stopped synthetic image');
   const result = client.generateImage({ request: { prompt: 'synthetic image' }, signal: controller.signal });
   await vi.waitFor(() => expect(submitted).toBe(1)); controller.abort(reason);
   await expect(result).rejects.toBe(reason); expect(submitted).toBe(1); expect(aborted).toBe(1);
+  expect(requests).toHaveLength(1); expect(requests[0].signal.aborted).toBe(true); expect(requests[0].signal.reason).toBe(reason);
   await client.close();
 });
 
