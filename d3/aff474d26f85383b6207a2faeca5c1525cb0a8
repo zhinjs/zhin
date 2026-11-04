@@ -1,0 +1,32 @@
+plugins/adapters/icqq/adapters/icqq/index.ts
+  s_9477e63ef5cee5::t_c9d6765da86aa4 81,91
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.ts
+  s_9477e63ef5cee5::t_c9d6765da86aa4 15
+packages/im/adapter/src/capability-profile.ts
+  s_9477e63ef5cee5::t_a3de6e49adcc2c 51,76,269,311
+plugins/adapters/icqq/tests/profile.test.ts
+  s_9477e63ef5cee5::t_c9d6765da86aa4 62,67,69,74
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_9477e63ef5cee5::t_a6fe7907c5321e 213,215-216
+  s_9477e63ef5cee5::t_a428518692682e 77,100
+docs/adr/0044-adapter-capability-profile.md
+  s_9477e63ef5cee5::t_9c2d6ba2e7f93c 72
+packages/im/adapter/src/endpoint-management.ts
+  s_9477e63ef5cee5::t_4bf7dfe76d6fd5 84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d3aff474d26f85383b6207a2faeca5c1525cb0a8",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
