@@ -1,0 +1,384 @@
+packages/im/agent/tests/exec-policy.test.ts
+  s_9622fd28aba994::t_d236f25d176072 14,37-50,402-418
+docs/en/authoring/adapters.md
+  s_9622fd28aba994::t_d236f25d176072 162-247
+plugins/services/activity-feedback/tests/index.test.ts
+  s_9622fd28aba994::t_d236f25d176072 70,112,170,208,240,286
+plugins/adapters/slack/src/side-event-map.ts
+  s_9622fd28aba994::t_d236f25d176072 1-24
+plugins/adapters/github/adapters/github/index.ts
+  s_9622fd28aba994::t_d236f25d176072 18-27
+docs/ai/agent.md
+  s_9622fd28aba994::t_d236f25d176072 476
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_d236f25d176072 305
+plugins/adapters/napcat/package.json
+  s_9622fd28aba994::t_d236f25d176072 56
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_title/index.ts
+  s_9622fd28aba994::t_d236f25d176072 14-15
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_9622fd28aba994::t_d236f25d176072 18-20,30,137
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1368-1369
+plugins/adapters/icqq/adapters/icqq/index.ts
+  s_9622fd28aba994::t_d236f25d176072 4-6,11-24,27-60,62-91,94-109
+plugins/services/activity-feedback/src/executor.ts
+  s_9622fd28aba994::t_d236f25d176072 3,8-9,18-19,30-33,61-64,79,139
+docs/adr/0047-ai-provider-subscriptions-and-decision-models.md
+  s_9622fd28aba994::t_d236f25d176072 1-238
+packages/im/adapter-onebot-events/package.json
+  s_9622fd28aba994::t_d236f25d176072 1-51
+packages/im/agent/src/index.ts
+  s_9622fd28aba994::t_d236f25d176072 104-106,902
+  s_9622fd28aba994::t_cf759425c4e8f6 103
+plugins/adapters/line/adapters/line/index.ts
+  s_9622fd28aba994::t_d236f25d176072 16-25
+plugins/adapters/douyin-live/package.json
+  s_9622fd28aba994::t_870eee60890ec4 93
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_mute/index.ts
+  s_9622fd28aba994::t_d236f25d176072 13-14
+tsconfig.typecheck.json
+  s_9622fd28aba994::t_d236f25d176072 17-19,402
+docs/plans/provider-main-integration.md
+  s_9622fd28aba994::t_67ac30c850680f 62-78
+  s_9622fd28aba994::t_bb34d18cfac8b0 79-85
+scripts/check-all-harness.mjs
+  s_9622fd28aba994::t_d236f25d176072 191-195,286-290
+plugins/adapters/napcat/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_d236f25d176072 1
+plugins/adapters/onebot11/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_d236f25d176072 1
+packages/im/adapter-onebot-events/tests/dispatch.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-117
+docs/adr/0044-adapter-capability-profile.md
+  s_9622fd28aba994::t_d236f25d176072 72
+packages/im/agent/src/outbound/send-proactive.ts
+  s_9622fd28aba994::t_d236f25d176072 26-27
+packages/im/tool/src/definition.ts
+  s_9622fd28aba994::t_d236f25d176072 188-194,321,344,391
+plugins/adapters/icqq/tests/agent-discovery.test.ts
+  s_9622fd28aba994::t_d236f25d176072 2,12-23,44,53-58,72,82,91,96-97,99-100,102-108,110
+  s_9622fd28aba994::t_870eee60890ec4 101,109
+packages/im/adapter-onebot-events/src/normalize.ts
+  s_9622fd28aba994::t_d236f25d176072 1-138
+packages/im/adapter/src/index.ts
+  s_9622fd28aba994::t_d236f25d176072 10-11
+scripts/check-no-platform-branches.mjs
+  s_9622fd28aba994::t_d236f25d176072 1-140
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_9622fd28aba994::t_d236f25d176072 11,231-234,257,261
+packages/im/agent/src/media/deliver-subagent-result.ts
+  s_9622fd28aba994::t_d236f25d176072 14-15,30-31,57
+basic/cli/tests/plugin-runtime/console/page-shell-sandbox.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-18
+docs/en/ai/agent.md
+  s_9622fd28aba994::t_d236f25d176072 402
+basic/cli/src/plugin-runtime/console/host.ts
+  s_9622fd28aba994::t_d236f25d176072 60-61,123-125
+plugins/adapters/icqq/src/endpoint.ts
+  s_9622fd28aba994::t_d236f25d176072 36-37,81,194
+plugins/adapters/slack/adapters/slack/index.ts
+  s_9622fd28aba994::t_d236f25d176072 18-38
+plugins/adapters/dingtalk/adapters/dingtalk/index.ts
+  s_9622fd28aba994::t_d236f25d176072 17-27
+plugins/adapters/kook/src/side-event-map.ts
+  s_9622fd28aba994::t_d236f25d176072 1-18
+docs/contributing/publishing.md
+  s_9622fd28aba994::t_d236f25d176072 172,197,200,208-209,211,217,221
+  s_9622fd28aba994::t_f35cda09068676 138,169,176
+packages/im/agent/tests/media/media-publisher.test.ts
+  s_9622fd28aba994::t_d236f25d176072 6,49,73,77,82,90,95,118-127
+  s_9622fd28aba994::t_29afa437e41986 128-129
+packages/im/agent/tests/activity-feedback/config-resolver.test.ts
+  s_9622fd28aba994::t_d236f25d176072 3,5-17,19-20,24-27,31-33,36-38,42-47,49-60,62-84
+plugins/adapters/bilibili-live/adapters/bilibili-live/index.ts
+  s_9622fd28aba994::t_d236f25d176072 15-27
+packages/im/core/src/side-event/scene-events.ts
+  s_9622fd28aba994::t_d236f25d176072 49
+plugins/adapters/tests/adapter-profiles.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-195
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_9622fd28aba994::t_870eee60890ec4 188,209,229,231
+  s_9622fd28aba994::t_d236f25d176072 5,64-104,106,111-114,174-175,183,185,205-208,210-228,230,232-233
+basic/cli/tests/plugin-runtime/agent/turn/sandbox-policy.test.ts
+  s_9622fd28aba994::t_d236f25d176072 7,29,41,45,47,52
+packages/im/core/tests/side-event-no-platform.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-15
+plugins/adapters/kook/tests/side-event-map.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-15
+plugins/adapters/napcat/adapters/napcat/index.ts
+  s_9622fd28aba994::t_d236f25d176072 26-42
+.changeset/0044-c4-onebot-events.md
+  s_9622fd28aba994::t_d236f25d176072 1-13
+plugins/adapters/onebot12/adapters/onebot12/index.ts
+  s_9622fd28aba994::t_d236f25d176072 22-37
+.changeset/adapter-capability-consumers.md
+  s_9622fd28aba994::t_d236f25d176072 1-15
+packages/im/agent/src/security/exec-policy.ts
+  s_9622fd28aba994::t_d236f25d176072 15,454,500-502,504,507,517,523,534-535
+plugins/adapters/wecom/adapters/wecom/index.ts
+  s_9622fd28aba994::t_d236f25d176072 18-31
+packages/im/agent/tests/plugin-runtime/platform-guidance-trust.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-43,45-48,50-52
+  s_9622fd28aba994::t_4320db8ca5d29d 44,49
+plugins/services/activity-feedback/src/policy.ts
+  s_9622fd28aba994::t_d236f25d176072 3,32-33,50
+tests/snapshots/plugin-runtime-api.json
+  s_9622fd28aba994::t_d236f25d176072 8
+.changeset/0044-integration.md
+  s_9622fd28aba994::t_d236f25d176072 1-26
+.changeset/prerelease-removed-agent-exports.md
+  s_9622fd28aba994::t_d236f25d176072 1-5
+packages/im/adapter/src/adapter-index.ts
+  s_9622fd28aba994::t_d236f25d176072 1-11,54,106-108,222-224,229-233,240-243,308,411-412,472-493,574-630,632-637,639-640
+plugins/adapters/onebot12/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_d236f25d176072 1
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9622fd28aba994::t_d236f25d176072 31,113-114,596-616,630
+packages/im/agent/src/subagent/im-result-sink.ts
+  s_9622fd28aba994::t_d236f25d176072 48
+packages/im/tool/tests/requires-capabilities.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-19
+plugins/adapters/bilibili/adapters/bilibili/index.ts
+  s_9622fd28aba994::t_d236f25d176072 15-27
+packages/im/agent/src/media/media-capabilities.ts
+  s_9622fd28aba994::t_d236f25d176072 1,7-24
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/essence/index.ts
+  s_9622fd28aba994::t_d236f25d176072 11-12
+scripts/no-platform-branches-allowlist.json
+  s_9622fd28aba994::t_d236f25d176072 1-12
+basic/cli/tests/plugin-runtime/sandbox-owners.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-26
+packages/im/core/tests/plugin-runtime/outbound-segments.test.ts
+  s_9622fd28aba994::t_d236f25d176072 383,385,396
+plugins/adapters/qq/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_d236f25d176072 1
+.changeset/adapter-capability-profile-spec.md
+  s_9622fd28aba994::t_d236f25d176072 1-7
+basic/cli/src/plugin-runtime/outbound-host-installer.ts
+  s_9622fd28aba994::t_d236f25d176072 78,84
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9622fd28aba994::t_d236f25d176072 13,360,717-727
+  s_9622fd28aba994::t_65401496bf4d6b 728-729
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9622fd28aba994::t_d236f25d176072 7,18,39-41,241,253,264,276-306,312,322-325,329,340
+basic/cli/tests/plugin-runtime/agent/turn/scene-facts.test.ts
+  s_9622fd28aba994::t_d236f25d176072 10-12,15-16,113-139
+packages/im/adapter-onebot-events/src/dispatch.ts
+  s_9622fd28aba994::t_d236f25d176072 1-209
+packages/im/agent/src/media/media-types.ts
+  s_9622fd28aba994::t_d236f25d176072 62-63
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_9622fd28aba994::t_d236f25d176072 2138
+plugins/adapters/onebot11/adapters/onebot11/index.ts
+  s_9622fd28aba994::t_d236f25d176072 19-34
+.changeset/0044-c2-platform-prompt.md
+  s_9622fd28aba994::t_d236f25d176072 1-5
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_9622fd28aba994::t_d236f25d176072 13,16,19-20,47,259-280,315-323,329,340,378,389,492-493,509,627,994,1010-1015
+packages/im/agent/src/journal/persistent-turn-journal.ts
+  s_9622fd28aba994::t_d236f25d176072 28,65,107
+plugins/adapters/weixin-ilink/adapters/weixin-ilink/index.ts
+  s_9622fd28aba994::t_d236f25d176072 23-33
+scripts/check-architecture-layers.mjs
+  s_9622fd28aba994::t_d236f25d176072 89-90,118
+packages/im/agent/src/prompt/assembly.ts
+  s_9622fd28aba994::t_d236f25d176072 157,221-222
+scripts/check-unpublished-packages.mjs
+  s_9622fd28aba994::t_d236f25d176072 105-107,110
+tests/snapshots/api-surface.json
+  s_9622fd28aba994::t_d236f25d176072 20,128,162,206,210
+plugins/adapters/onebot11/package.json
+  s_9622fd28aba994::t_d236f25d176072 55
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/announce/index.ts
+  s_9622fd28aba994::t_d236f25d176072 11-12
+plugins/adapters/icqq/src/sensitive-commands.ts
+  s_9622fd28aba994::t_d236f25d176072 1-19
+packages/im/agent/tests/typing-indicator/adapter-integration.test.ts
+  s_9622fd28aba994::t_d236f25d176072 2,4-11,13-15,21-23,26-29
+scripts/check-no-platform-branches.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-28
+basic/cli/src/plugin-runtime/console/page-renderer.ts
+  s_9622fd28aba994::t_d236f25d176072 32-36
+packages/im/adapter-onebot-events/src/index.ts
+  s_9622fd28aba994::t_d236f25d176072 1-3
+packages/im/agent/src/security/sensitive-exec-commands.ts
+  s_9622fd28aba994::t_d236f25d176072 1-43
+packages/im/agent/src/typing-indicator/adapter-integration.ts
+  s_9622fd28aba994::t_d236f25d176072 2-5,11-30,32,36
+package.json
+  s_9622fd28aba994::t_d236f25d176072 77,80,103
+packages/im/agent/tests/prompt/platform-guidance.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-234
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_9622fd28aba994::t_d236f25d176072 132,142
+basic/cli/src/plugin-runtime/console/sandbox-workspace-scope.ts
+  s_9622fd28aba994::t_d236f25d176072 1,30-32,38
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/group_kick/index.ts
+  s_9622fd28aba994::t_d236f25d176072 12-13
+plugins/adapters/icqq/src/group-actions.ts
+  s_9622fd28aba994::t_d236f25d176072 1-105
+docs/authoring/adapters.md
+  s_9622fd28aba994::t_d236f25d176072 161-245
+plugins/adapters/satori/adapters/satori/index.ts
+  s_9622fd28aba994::t_d236f25d176072 22-35
+basic/cli/tests/plugin-runtime/agent/turn/scene-fact-cache.test.ts
+  s_9622fd28aba994::t_d236f25d176072 10-12,19
+scripts/ci/run-pr-check.mjs
+  s_9622fd28aba994::t_d236f25d176072 30-31
+plugins/adapters/juejin/adapters/juejin/index.ts
+  s_9622fd28aba994::t_d236f25d176072 15-26
+packages/im/tool/src/tool-index.ts
+  s_9622fd28aba994::t_d236f25d176072 32,175
+plugins/adapters/email/adapters/email/index.ts
+  s_9622fd28aba994::t_d236f25d176072 24-35
+plugins/adapters/milky/adapters/milky/index.ts
+  s_9622fd28aba994::t_d236f25d176072 29-44
+packages/im/agent/src/activity-feedback/config-resolver.ts
+  s_9622fd28aba994::t_d236f25d176072 1,13,17-22,24,28-36,39-44,50,53-54,56-57,67-68,70-71,73-74,76,80,91,98-99,101
+plugins/adapters/telegram/adapters/telegram/index.ts
+  s_9622fd28aba994::t_d236f25d176072 17-36
+scripts/sync-publishing-manifest.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-43
+plugins/adapters/discord/adapters/discord/index.ts
+  s_9622fd28aba994::t_d236f25d176072 25,27-45
+basic/cli/tests/plugin-runtime/console/workspace-history.test.ts
+  s_9622fd28aba994::t_d236f25d176072 27
+packages/im/adapter-onebot-events/tsconfig.json
+  s_9622fd28aba994::t_d236f25d176072 1-12
+docs/contributing/development.md
+  s_9622fd28aba994::t_d236f25d176072 112
+packages/im/adapter/src/adapter-types.ts
+  s_9622fd28aba994::t_d236f25d176072 5,68-70
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_9622fd28aba994::t_d236f25d176072 525-526,530,553
+basic/cli/tests/plugin-runtime/console/conversation-result-routes.test.ts
+  s_9622fd28aba994::t_d236f25d176072 17
+packages/im/agent/src/turn/turn-ingress.ts
+  s_9622fd28aba994::t_d236f25d176072 136-141,346
+  s_9622fd28aba994::t_c66c67fbcfee0c 135
+packages/im/adapter/tests/capability-profile.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-231
+.changeset/0044-c5-adapter-profiles.md
+  s_9622fd28aba994::t_d236f25d176072 1-24
+packages/im/core/src/index.ts
+  s_9622fd28aba994::t_d236f25d176072 77-80
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/recall_member_message/index.ts
+  s_9622fd28aba994::t_d236f25d176072 9-10
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.ts
+  s_9622fd28aba994::t_d236f25d176072 15
+plugins/adapters/icqq/package.json
+  s_9622fd28aba994::t_d236f25d176072 46,63,74-76,93
+packages/im/adapter/src/endpoint-management.ts
+  s_9622fd28aba994::t_d236f25d176072 55-60,84,89-107
+plugins/adapters/icqq/tests/scene-facts.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-51
+plugins/adapters/qq/adapters/qq/index.ts
+  s_9622fd28aba994::t_d236f25d176072 26-52
+plugins/adapters/sandbox/adapters/sandbox/index.ts
+  s_9622fd28aba994::t_d236f25d176072 15-30
+packages/im/agent/src/media/media-publisher.ts
+  s_9622fd28aba994::t_d236f25d176072 156-157
+plugins/adapters/onebot12/package.json
+  s_9622fd28aba994::t_d236f25d176072 52
+packages/im/adapter-onebot-events/tests/equivalence.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-87
+scripts/sync-publishing-manifest.mjs
+  s_9622fd28aba994::t_d236f25d176072 1-101
+.changeset/0044-core-reexports.md
+  s_9622fd28aba994::t_d236f25d176072 1-6
+plugins/adapters/icqq/tests/profile.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-227
+packages/im/agent/src/activity-feedback/index.ts
+  s_9622fd28aba994::t_d236f25d176072 42
+packages/im/agent/src/security/index.ts
+  s_9622fd28aba994::t_d236f25d176072 17
+packages/im/skill/src/definition.ts
+  s_9622fd28aba994::t_d236f25d176072 21-22,71
+plugins/adapters/douyin-live/adapters/douyin-live/index.ts
+  s_9622fd28aba994::t_d236f25d176072 15-26
+basic/cli/tests/plugin-runtime/console/interaction-routes.test.ts
+  s_9622fd28aba994::t_d236f25d176072 16
+packages/im/core/tests/scene-events.test.ts
+  s_9622fd28aba994::t_d236f25d176072 3-4,14-15,17,23-45,49-65,67,72-73,79-80,83,87-88,93-94,98-99,102,107,115,120,126-128,136-139
+plugins/adapters/kook/adapters/kook/index.ts
+  s_9622fd28aba994::t_d236f25d176072 25-41
+plugins/adapters/kook/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_d236f25d176072 1,5,26-27
+plugins/adapters/slack/tests/side-event-map.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-16
+packages/im/skill/tests/skill.test.ts
+  s_9622fd28aba994::t_d236f25d176072 176-188
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_d236f25d176072 16,111,507-510,1154-1155,1157,1255,1304,1450
+packages/im/adapter-onebot-events/tests/normalize.test.ts
+  s_9622fd28aba994::t_d236f25d176072 1-84
+packages/im/plugin-runtime/src/outbound-host.ts
+  s_9622fd28aba994::t_d236f25d176072 60-80,83
+packages/im/im-contract/src/endpoint.ts
+  s_9622fd28aba994::t_d236f25d176072 13-45
+CLAUDE.md
+  s_9622fd28aba994::t_d236f25d176072 41
+packages/im/adapter/src/capability-profile.ts
+  s_9622fd28aba994::t_d236f25d176072 1-1025
+packages/im/agent/src/prompt/platform-guidance.ts
+  s_9622fd28aba994::t_d236f25d176072 1-240
+packages/im/adapter/src/definition.ts
+  s_9622fd28aba994::t_d236f25d176072 12-16,151-159,198-225,235,400-405
+basic/cli/src/plugin-runtime/agent/turn/sandbox-policy.ts
+  s_9622fd28aba994::t_d236f25d176072 5-6,41
+plugins/adapters/icqq/plugin.ts
+  s_9622fd28aba994::t_d236f25d176072 3,5,21-25
+plugins/adapters/lark/adapters/lark/index.ts
+  s_9622fd28aba994::t_d236f25d176072 19-35
+plugins/adapters/qq/package.json
+  s_9622fd28aba994::t_d236f25d176072 45
+basic/cli/tests/plugin-runtime/agent/turn/self-profile.test.ts
+  s_9622fd28aba994::t_d236f25d176072 9
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_9622fd28aba994::t_d236f25d176072 2-3,72-73,130,140-162,362-364,377-382
+  s_9622fd28aba994::t_d270ef4cdf4f49 383-384
+plugins/services/activity-feedback/src/orchestrator.ts
+  s_9622fd28aba994::t_d236f25d176072 55,115
+packages/im/adapter/tests/adapter.test.ts
+  s_9622fd28aba994::t_d236f25d176072 37,275,280,285-287,1266-1381
+  s_9622fd28aba994::t_1424986c7eb3b9 1382-1383
+scripts/ci/scope-transport.test.ts
+  s_9622fd28aba994::t_d236f25d176072 93,105
+scripts/check-runtime-config-boundaries.mjs
+  s_9622fd28aba994::t_d236f25d176072 31-32
+packages/im/agent/src/activity-feedback/adapter-integration.ts
+  s_9622fd28aba994::t_d236f25d176072 7-10,12,21-22,24,47
+basic/cli/tests/plugin-runtime/console/workspace-conversation-routes.test.ts
+  s_9622fd28aba994::t_d236f25d176072 44
+packages/im/adapter-onebot-events/src/maps.ts
+  s_9622fd28aba994::t_d236f25d176072 1-51
+plugins/adapters/slack/src/side-event-dispatch.ts
+  s_9622fd28aba994::t_d236f25d176072 1,5,16-17
+plugins/adapters/wechat-mp/adapters/wechat-mp/index.ts
+  s_9622fd28aba994::t_d236f25d176072 18-31
+docs/ai/provider-upgrade.md
+  s_9622fd28aba994::t_91f9c8ebc37e11 67,117
+docs/plans/ai-provider-target-architecture.md
+  s_9622fd28aba994::t_06977b000a5060 237,239
+docs/plans/database-optional-dialect-types.md
+  s_9622fd28aba994::t_ea5ecb33db0371 14
+pnpm-lock.yaml
+  s_9622fd28aba994::t_b76555ac6be1e6 1288-1303,2556-2558,2602-2604,2934-2936,3007-3009,3083-3085,3144-3146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c9b3540c273d4d173a91ab95ea86cf60f2ea9672",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
