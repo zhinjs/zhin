@@ -19,6 +19,7 @@ import { resolvePerceptionSettings, type PerceptionSettings } from './config/per
 import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
 import {
   runAgentLoopStandaloneTurn,
+  type AgentLoopStandaloneCallbacks,
   type AgentLoopStandaloneResult,
 } from './core/agent-loop-standalone.js';
 import type { ToolCallRecord } from './core/tool-calls-user-format.js';
@@ -48,6 +49,8 @@ export interface ServiceAgentResult {
   usage: Usage;
   iterations: number;
   model: string;
+  /** Last actual model response; callers must not infer success from content alone. */
+  terminal?: AgentLoopStandaloneResult['terminal'];
 }
 
 export interface CreateServiceAgentOptions {
@@ -65,6 +68,8 @@ export interface CreateServiceAgentOptions {
   contextWindow?: number;
   /** Cancels provider I/O and releases the caller even for a non-cooperative provider. */
   signal?: AbortSignal;
+  /** Receives observed partial results before the original run error is rejected. */
+  onInterrupted?: AgentLoopStandaloneCallbacks['onInterrupted'];
 }
 
 export class AIService {
@@ -189,6 +194,7 @@ export class AIService {
         systemPrompt: options.systemPrompt ?? '', tools, userInput,
         maxIterations: options.maxIterations ?? DEFAULT_CONFIG.maxIterations,
         signal: options.signal,
+        callbacks: { onInterrupted: options.onInterrupted },
       })).then(toServiceAgentResult),
       dispose: () => undefined,
     };
@@ -227,5 +233,6 @@ function toServiceAgentResult(result: AgentLoopStandaloneResult): ServiceAgentRe
     usage: result.usage,
     iterations: result.iterations,
     model: result.model,
+    ...(result.terminal ? { terminal: result.terminal } : {}),
   };
 }

@@ -82,19 +82,37 @@ sidebar: false
 - 类型负例保留 `@ts-expect-error`，用 `void evidence.applied` 正确消费不允许的字段访问；未禁用 lint 规则或删除负断言。完整固定候选门禁由 Root 另行重跑。
 - CI 同次指出的迁移新增 duplicate／unused imports 已做纯 import 合并与移除未使用类型；聚焦 ESLint 为零错误／警告。保留逐条退役负类型 import 的 duplicate 警告，以免一个错误掩盖另一个意外恢复的 export。eval:chat 的旧 non-null／any、Command 的旧 escape 和 Workroom 的旧未用 helper 均可在 `d8532ddbf` 找到，不借本次修复改其行为或放宽规则。
 
-### 单独待定：standalone 错误终态的状态投影
+### standalone 错误终态：独立批准的修复
 
-- **基线证据**：`git show d8532ddbf:packages/im/ai/src/llm/agent-loop.ts` 的既有 catch 已把 transport throw 转成 `AssistantMessage.stopReason = 'error'`／`errorMessage` 并继续发出 `message_end`；同基线 `core/agent-loop-standalone.ts` 在 `errorMessage` 存在时生成错误文本，但返回值不包含终态；同基线 `subagent/subagent-runtime.ts` 对 runner 的正常返回统一发 `status: 'ok'`。当前源码仍是这条链，本次 Provider 端口替换没有创建这个错误转成功的分支。
-- **当前本地证据**：真实子任务 Driver 在已完成两个工具后普通 throw，语言层记录错误文本，子任务 finish 仍为 ok；这是结果分类缺口，不能称模型／任务成功。为保持本次修复边界，永久取消回归使用真实 `manager.cancel()` 覆盖 catch 与已完成观测保留，没有把上述错误路径改成成功断言。
+- **基线证据**：`git show d8532ddbf:packages/im/ai/src/llm/agent-loop.ts` 的既有 catch 已把 transport throw 转成 `AssistantMessage.stopReason = 'error'`／`errorMessage` 并继续发出 `message_end`；同基线 `core/agent-loop-standalone.ts` 在 `errorMessage` 存在时生成错误文本，但返回值不包含终态；同基线 `subagent/subagent-runtime.ts` 对 runner 的正常返回统一发 `status: 'ok'`。固定 Provider 候选仍是这条链，Provider 端口替换没有创建这个错误转成功的分支。
+- **原代码本地红例**：真实 Subagent → standalone → agentLoop 在已完成两个合成工具后模型普通 throw，语言层记录错误文本，子任务 finish／delivery 仍为 ok，已报告的 8／3／11 用量被错误响应零值覆盖。AIService 丢失终态，Worker 返回 ok，Workroom 接受带 error 终态的合法 JSON，均有独立入口红例。这是结果分类缺口，不能称模型／任务成功。
 - **消费者与风险**：`SubagentSystem.composeSender()` 将 ok 投影成 ResultSink 的 completed；`buildSubagentUserDelivery()` 会显示“完成”；`persistSubagentResultToContext()` 把该状态存入父会话，auto-continue 两种状态都会唤醒主 Agent，并把状态提供给它决定下一步。activity-feedback 的 finish 仅结束进度；Trace 的 subagent_end 仅保存上游给定状态。未找到按此状态自动重放原 Subagent 的确定性队列逻辑，但主模型看到状态后可以再次编排工具／spawn，因此错误分类修复不能同时新增自动重试。
 - **相邻边界**：deferred-worker 同样消费 standalone 返回值并按迭代数判 ok／partial；`AIService.runAgent()` 公开结果亦未携带终态，Workroom planning 再解析 JSON。它们是共享 runner 的既有受影响路径，需要一并核验，不能只改 Console 展示或只让 Subagent catch 抛错而丢失已完成工具和用量。
-- **最小候选方案（未实施）**：从已存在的最后 `AssistantMessage.stopReason`／`errorMessage` 投影窄终态到 standalone 结果，保留 content、usage、toolCalls 与原错误含义；由各既有任务 owner 映射现有 error／cancelled 状态，不增加新重试／降级／触发策略。对完成副作用后模型失败、取消、合法空答和迭代上限分别验证；已执行工具不重放，未知副作用不得误报未执行。该方案待另行确认，不属于本次 child ALS 修复。
+- **批准范围与实现**：用户另行确认后，在固定 Provider 候选 `7ece79fbd16ee7519d9a309a801eb912cd76b535` 上建立独立 `feat/agent-terminal-outcomes` 分支。共享 runner 返回可选 `terminal: { stopReason, errorMessage? }`；仅从实际观测的最后模型响应投影，不把运行取消或迭代用尽伪装成模型 aborted。Subagent 把 error／aborted 映射到已有 error，Worker 保留已有 ok／partial／error 枚举和原轮次上限策略；合法空 stop／length 的原展示策略不变。AIService 透传窄终态，Workroom 在 JSON.parse 前拒绝 error／aborted，即使正文为合法 JSON。
+- **取消与副作用**：取消仍原样 reject 调用方 reason（包括 DOMException、非 Error 对象），不包装异常、不修改 reason。既有 callbacks 增加同步 `onInterrupted(snapshot)`，由 task owner 保留已观测结果；数组／记录／usage 被复制，晚到 I/O 不修改已交付快照。快照正文仅包含已经观测到的响应，不承诺尚未返回的流增量。`toolCalls` 只表示已观测结算结果；记录缺失不能证明未执行，不新增 pending 状态、不重放工具。Subagent 错误／取消回传保留已观测正文与工具结果，沿既有 finish 的 result 字段提供结果摘要，不创建事件、表或保留规则。
+- **用量**：只相加每条 message_end 中已有的归一化 usage 与已有识图 usage，错误响应的零值不再覆盖先前已报告用量；不新增 Trace、UsageEvents 或账本，也不推算未报告费用。Subagent owner 每 task 至多汇总一次，包括取消路径；观测失败不替换业务终态或触发重跑。
+- **延迟补全**：另发现原 agentLoop 的 re-completion catch 吞掉 transport 失败。限定修复只为实际 complete 失败发送同主路径合同的 error／aborted 消息并保留最终 emitted 证据；工具／上下文组装错误不会伪装模型失败。失败合成消息不加入下一次 wire context，原工具消息与结果保留；下一轮仍按原次数执行，未增加 retry／break／fallback。
+- **继续保持的边界**：Subagent 既有两种状态的 auto-continue 规则不变；Worker 原 error 不自动续聊的规则不变。不改工具审批、配额、重试、安全策略与模型选择。未知副作用内容保持原样；验证均使用合成 Driver／本地 SDK transport，不含真实供应商调用。
+- **部分正文与同步工具**：最终 error／aborted 没有正文时，保留本次运行最后一次已观测的非空正文，错误原因独立在 terminal 中；不拼接全部历史。用户明确确认同步接口统一结构化返回，Runtime／System 的 spawnSync 返回同一次执行的窄 `SubagentSyncResult`，不保留第二个兼容方法。公开同步边界实际投影 status／result／toolCalls／terminal，剔除任务／Origin／Message 等路由数据。spawn_task 保持可读字符串和同步标记，依据 typed status 显示成功或失败，不从正文前缀猜状态，不把工具 args 整包塞回模型。新接口属于计划中的 Agent 1.1.47 配套 patch（未发布）；旧字符串接口支持上限为 1.1.46。
+- **真实主路径相邻影响**：原共享 loop 吞掉延迟补全失败，使主 Agent 误认为段尾仍是成功的 toolCalls。实际 runAgentLoopTextTurnRun 对照中，write_file 有真实进展、段上限 1、extendBy 0、autoContinue on：固定 Provider 基线发出 4 次请求（工具、失败补全、checkpoint、续段）；新错误事件使既有 gate 在第 2 次请求后停止续段，并沿既有友好错误回复。未修改 Main 的续段政策／阈值，不能声称所有上层调用次数都不变；共享 loop 自身未耗尽时的原定下一轮仍照常执行并可成功覆盖终态。
+- **文本消费者**：任务 owner 使用同一纯格式化函数把必要错误原因合入既有结果正文，原非空正文继续保留。错误原因放在已有 Worker 摘要／artifact 预览可能截断的正文之前，不增加上限；已有正文已含同一原因时不重复追加。同步工具不再次拼接原因。真实 async Subagent → 父会话 persist／ResultSink 测试同时断言部分正文、失败原因与 failed 状态；不会把原工具 args、整个 Error 或 opaque 状态写入这些文本。
+
+| 验收 | 预期与实际证据 | 结论与未覆盖 |
+| --- | --- | --- |
+| 已执行副作用后的模型错误 | Subagent、Worker 各真实执行工具后模拟模型 throw；错误状态、unknown 原文、已报告用量保留；工具不重放 | 本地合成链路通过，不代表真实供应商副作用或计费验证 |
+| 取消 | 原 DOMException／对象 reason identity 不变；已观测正文与结算记录快照不被晚到响应修改；同步／异步 observer 失败不替换结果 | 不承诺 SDK 从未返回的增量；缺少工具结果不证明未执行 |
+| 同步公开接口 | 实际 System → Runtime → runner → spawn_task；结构化结果只含四个允许字段，JSON 不含 Origin marker；失败不再宣称完成 | 用户批准的接口变更，最低版本是未发布计划号；未提供兼容入口 |
+| 共享补全与 Main | loop 末次补全失败有 error 证据，原定下一轮仍可成功；安装的 SDK mock wire 保留配对工具历史；Main 原代码 4 请求／新代码 2 请求，工具均一次 | 保持两层证据独立，不把 mock 当模型行为或供应商实测 |
+| Workroom | error／aborted 正文即使是合法 JSON 也在解析前被拒绝；stop／length 原解析行为保留 | 没有更改规划策略、预算或自动重试 |
+
+- **实现者最终本地检查**：AI／Agent 全目录加本次 Workroom 入口共 449 文件：447 通过、2 跳过；4,297 测试通过、10 跳过。Groq 实号 opt-in 明确关闭，未调用真实供应商。CLI 真实依赖图构建 44／44、根 type-check、改动范围 ESLint、doc-links、doc-orphans、diff-check 均通过。完整仓库固定候选门禁和未参与实现者的最终增量审查由 Root 另行验证，不用这组局部检查替代。
+- **环境与证据保留**：首轮受限 sandbox 的 SDK 生命周期三例有超时／loopback listen EPERM，保留原失败记录；原 10 秒门禁、相同断言在允许本地 loopback 后两文件 16／16 通过，最终上述全目录亦通过。没有为此修改 Provider、超时或断言。全部证据仍是本地合成 transport／已安装 SDK，不是 CI、发布、部署或真实模型行为验收。
 
 ### Agent 归档作者声明检查
 
 - 真实 26 包 tarball 闭包的 strict 作者检查发现：`bridgeAuthoringHook()` 的推断返回类型把 handler 参数发射成不存在的根 `AIHookEvent`，而根实际公开名为 `OrchestratorHookEvent`。函数返回结构与已有 resource-hub `AIHook` 完全一致，因此只显式标注该真实返回类型；没有添加根 alias，也没有改变 handler、返回对象或运行行为。原作者发现测试与桥接合同测试共 7 项通过；单包构建后的 `.d.ts` 直接引用 `../resource-hub/types.js` 的 `AIHook`。
 - 该 Agent 宽入口归档检查同时发现 Database 的 `mongodb`、`mysql2/promise`、`pg`、`redis` 可选方言声明需要对应外部类型。四处静态类型依赖在基线 `d8532ddbf` 已存在；未补装四库、添加 shim 或使用 skipLibCheck 来称全入口闭包通过。纯推理入口已经验证的 strict 闭包与这个更宽 Agent 作者入口是不同证据层。
-- **独立候选方案（未实施）**：盘点 Database 公共类型的方言依赖边界，将中性合同与可选方言作者入口分离，设计后单独确认；不能仅删除合法类型、改变数据库运行 API，或要求所有 SQLite 用户默认安装四个驱动来掩盖声明问题。
+- **独立方案（已批准，实施中）**：用户已确认 Database 方案 B，由另一位实现者在独立 worktree `zhin-database-type-isolation` 调整中性合同与可选方言作者入口；不与本分支混改。不能仅删除合法类型、改变数据库运行 API，或要求所有 SQLite 用户默认安装四个驱动来掩盖声明问题。此处只记录授权与进行状态，不代表四处归档类型问题已验证关闭；集成后需重新验证实际 Agent 宽入口归档。
 
 ### 全量回归后的配置与脚手架收敛
 

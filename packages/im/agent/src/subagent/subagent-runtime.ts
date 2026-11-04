@@ -25,7 +25,8 @@ import {
   getMcpToolsForBinding,
 } from '../resource-hub/mcp-lifecycle.js';
 import type { McpRegistry } from '../resource-hub/mcp-registry.js';
-import { runAgentLoopStandaloneTurn } from '../core/agent-loop-standalone.js';
+import { runAgentLoopStandaloneTurn, type AgentLoopStandaloneResult } from '../core/agent-loop-standalone.js';
+import { formatTaskFailure } from '../core/agent-run-shared.js';
 import { DEFAULT_CONFIG, type ZhinAgentConfig } from '../config/index.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { resolveSubagentAgentTools } from '../resource-hub/resolve-subagent-tools.js';
@@ -130,8 +131,12 @@ export interface SubagentCompletePayload {
   status: 'ok' | 'error';
   result: string;
   toolCalls: ToolCallRecord[];
+  terminal?: AgentLoopStandaloneResult['terminal'];
   agent?: string;
 }
+
+/** Same task outcome as async delivery, without its routing metadata. */
+export type SubagentSyncResult = Pick<SubagentCompletePayload, 'status' | 'result' | 'toolCalls' | 'terminal'>;
 
 export interface SubagentResultDelivery {
   text: string;
@@ -306,17 +311,17 @@ export class SubagentRuntime {
     };
   }
 
-  /** 同步执行子 agent（入站 route 用）；返回最终文本，不经过 resultSender */
-  spawnSync(options: SpawnOptions): Promise<string> {
+  /** Execute once and return its outcome; synchronous runs do not use resultSender. */
+  spawnSync(options: SpawnOptions): Promise<SubagentSyncResult> {
     const delegation = getAgentTurnConfiguration()?.models?.retainDelegation();
     if (!delegation) return Promise.reject(new Error('Subagent inference scope is not configured'));
     return this.spawnSyncInner(options, delegation, isAgentTurnDecisionDisabled()).finally(() => delegation.release());
   }
 
-  private async spawnSyncInner(options: SpawnOptions, delegation: ModelDelegationAuthority, decisionDisabled: boolean): Promise<string> {
+  private async spawnSyncInner(options: SpawnOptions, delegation: ModelDelegationAuthority, decisionDisabled: boolean): Promise<SubagentSyncResult> {
     if (this.disposed) throw new Error('SubagentRuntime has been disposed');
     const capError = this.parallelCapacityError();
-    if (capError) return capError;
+    if (capError) return { status: 'error', result: capError, toolCalls: [] };
 
     const enriched = await this.enrichSpawnOptions(options);
     this.assertActive();
@@ -354,7 +359,8 @@ export class SubagentRuntime {
           signal,
         } }));
       const result = await running;
-      return result ?? '任务已完成，但未生成最终响应。';
+      return { status: result.status, result: result.result, toolCalls: result.toolCalls,
+        ...(result.terminal ? { terminal: result.terminal } : {}) };
     } finally {
       this.releaseRunningTask(taskId);
     }
@@ -520,7 +526,7 @@ export class SubagentRuntime {
 
   // ── 内部方法 ──────────────────────────────────────────────────────
 
-  private async runSubagent(input: SubagentTaskRun): Promise<string | void> {
+  private async runSubagent(input: SubagentTaskRun): Promise<SubagentSyncResult> {
     const { taskId, task, label, origin, role = 'subtask', context, options: opts } = input;
     const startedAt = Date.now();
     const agentUserInput = opts?.runInput ?? task;
@@ -562,6 +568,15 @@ export class SubagentRuntime {
 
     const binding = opts?.binding ?? null;
     let models: ModelExecutionScope | undefined;
+    let observedResult: AgentLoopStandaloneResult | undefined;
+    let usageReported = false;
+    const reportUsage = (): void => {
+      if (!observedResult || usageReported) return;
+      usageReported = true;
+      const failed = (): void => { logger.warn('Subagent usage observer failed'); };
+      try { void Promise.resolve(this.onSubagentUsage?.(observedResult.usage)).catch(failed); }
+      catch { failed(); }
+    };
     const decisionObservations: DecisionObservation[] = [];
     try {
       let allTools = this.createTools();
@@ -632,22 +647,33 @@ export class SubagentRuntime {
               userInput: agentUserInput,
               maxIterations: effortIterations ?? opts.agentMeta?.maxIterations ?? this.maxIterations,
               commMessage: bashCommMessage,
-              callbacks: aiEvents?.createAgentLoopCallbacks(model),
+              callbacks: { ...aiEvents?.createAgentLoopCallbacks(model),
+                onInterrupted: snapshot => { observedResult = snapshot; } },
               signal: opts.signal,
             }));
         } finally {
           decisionObservations.push(...drainAgentTurnDecisionObservations());
         }
       });
-      this.onSubagentUsage?.(result.usage);
-      const rawResult = result.content || '任务已完成，但未生成最终响应。';
-      const packaged = packageSubagentResult(rawResult, taskId);
+      observedResult = result;
+      reportUsage();
+      const status = result.terminal?.stopReason === 'error' || result.terminal?.stopReason === 'aborted' ? 'error' : 'ok';
+      const rawResult = result.content || (status === 'error'
+        ? result.terminal?.errorMessage || '子任务未能完成，模型未返回最终响应。'
+        : '任务已完成，但未生成最终响应。');
+      const packaged = packageSubagentResult(status === 'error'
+        ? formatTaskFailure({ content: rawResult, errorMessage: result.terminal?.errorMessage }) : rawResult, taskId);
       const finalResult = packaged.text;
-      await aiEvents?.agentFinish(result.model ?? model, result.iterations);
-      await aiEvents?.response(finalResult, result.model ?? model, result.iterations);
+      if (status === 'ok') {
+        await aiEvents?.agentFinish(result.model ?? model, result.iterations);
+        await aiEvents?.response(finalResult, result.model ?? model, result.iterations);
+      } else {
+        await aiEvents?.processingError(result.terminal?.errorMessage ?? finalResult);
+      }
 
       logger.info(formatCompact({
         subagent: 'done',
+        ok: status === 'error' ? false : undefined,
         task_id: taskId,
         label,
         agent: resolveSubagentAgentLabel(opts?.presetName),
@@ -665,29 +691,37 @@ export class SubagentRuntime {
         origin,
         role,
         agent: opts?.presetName,
-        status: 'ok',
+        status,
         result: finalResult,
+        ...(status === 'error' ? { error: result.terminal?.errorMessage ?? finalResult } : {}),
         ...(decisionObservations.length ? { decisionObservations } : {}),
       });
-      await aiEvents?.processingFinish(finalResult, {
-        model: result.model ?? model,
-        iterations: result.iterations,
-        status: 'ok',
-      });
-      if (opts?.sync) return finalResult;
-      await this.deliverAsyncResult({
+      if (status === 'ok') {
+        await aiEvents?.processingFinish(finalResult, {
+          model: result.model ?? model,
+          iterations: result.iterations,
+          status,
+        });
+      }
+      const outcome: SubagentCompletePayload = {
         taskId,
         label,
         task,
         origin,
-        status: 'ok',
+        status,
         result: finalResult,
         toolCalls: result.toolCalls,
+        ...(result.terminal ? { terminal: result.terminal } : {}),
         agent: opts?.presetName,
-      });
-      return;
+      };
+      if (!opts?.sync) await this.deliverAsyncResult(outcome);
+      return outcome;
     } catch (error) {
-      const errorMsg = `Error: ${error instanceof Error ? error.message : String(error)}`;
+      reportUsage();
+      const reason = error instanceof Error ? error.message : String(error);
+      const errorMsg = `Error: ${reason}`;
+      const partialContent = observedResult?.content;
+      const resultText = formatTaskFailure({ content: partialContent ?? '', errorMessage: reason }) || errorMsg;
       await aiEvents?.processingError(errorMsg);
       logger.error({ taskId, error }, 'Subagent failed');
       logger.info(formatCompact({
@@ -708,24 +742,26 @@ export class SubagentRuntime {
         agent: opts?.presetName,
         status: 'error',
         error: errorMsg,
+        ...(partialContent ? { result: resultText } : {}),
         ...(decisionObservations.length ? { decisionObservations } : {}),
       });
-      if (opts?.sync) return errorMsg;
-      await this.deliverAsyncResult({
+      const outcome: SubagentCompletePayload = {
         taskId,
         label,
         task,
         origin,
         status: 'error',
-        result: errorMsg,
-        toolCalls: [],
+        result: resultText,
+        toolCalls: observedResult?.toolCalls ?? [],
+        ...(observedResult?.terminal ? { terminal: observedResult.terminal } : {}),
         agent: opts?.presetName,
-      });
+      };
+      if (!opts?.sync) await this.deliverAsyncResult(outcome);
+      return outcome;
     } finally {
       try { await models?.release(); }
       catch { logger.warn('Subagent inference cleanup failed'); }
     }
-    return;
   }
 
   private async deliverAsyncResult(payload: SubagentCompletePayload): Promise<void> {

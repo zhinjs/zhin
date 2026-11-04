@@ -634,3 +634,21 @@ it('honors an explicit zero progress-update limit during a continuous task', asy
     expect(vi.getTimerCount()).toBe(0);
   } finally { vi.useRealTimers(); }
 });
+
+it('does not treat failed deferred re-completion as a successful tool tail eligible for segment continuation', async () => {
+  let calls = 0;
+  const llm = wireMockLlmApi({ models: ['m'], responder: context => {
+    calls++;
+    if (!context.tools?.length) return assistantTextReply('Checkpoint summary');
+    if (calls === 1) return assistantToolCallReply([{ id: 'write', name: 'write_file', arguments: {} }]);
+    if (calls === 2) throw new Error('Deferred re-completion failed');
+    return assistantTextReply('Originally continued after a hidden error');
+  } });
+  const { result, appended, executed } = await run({ llm, tools: [tool('write_file', () => 'Written\n__zhin_tools_mutated__')], maxIterations: 1,
+    toolBudget: { extendBy: 0, autoContinue: 'on', maxContinuations: 1, progressMaxUpdates: 0 } });
+  expect(executed).toEqual(['write_file']);
+  expect(calls).toBe(2);
+  expect(result.reply).not.toContain('Originally continued after a hidden error');
+  expect(appended).toContainEqual(expect.objectContaining({ role: 'assistant', stopReason: 'error', errorMessage: 'Deferred re-completion failed' }));
+  expect(appended.filter(message => message.role === 'user' && JSON.stringify(message).includes('Automatic continuation'))).toHaveLength(0);
+});

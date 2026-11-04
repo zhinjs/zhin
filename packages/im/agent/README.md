@@ -208,6 +208,12 @@ CLI 装配 Agent Host；Service、Account、Profile 和用途在 Console 管理�
 
 `AIService.createAgent({ models, systemPrompt, tools })` 和 `runAgent(input, { models, ... })` 显式借用 `ModelExecutionScope`；由 Host 从真实 operation/generation lease 与可信身份创建。创建方负责释放 scope，Agent 不接收 Provider／模型别名，也不自建认证目录。未配置模型时可以构造服务；真正推理明确返回未配置。
 
+独立任务结果的 `terminal` 保留最后一次实际模型响应的 `stopReason`／`errorMessage`；有正文或可解析 JSON 不代表执行成功，调用方应先检查 `error`／`aborted`。`usage` 累计本次运行已观测的各次模型响应及识图用量，未返回的用量不作推算。取消仍以原始 `signal.reason` 拒绝；可通过 `onInterrupted(snapshot)` 同步取得当时已观测的正文、用量和工具结果。快照不会被晚到结果追加；`toolCalls` 只表示已观测的结算结果，缺少记录不表示工具未执行，不应据此自动重放。
+
+`SubagentRuntime`／`SubagentSystem.spawnSync()` 统一返回 `SubagentSyncResult`（`status`、`result`、`toolCalls`、可选 `terminal`），不再返回字符串；先判断 `status`，再读取 `result`。这个结果不包含 Origin、Message 或路由元数据。`spawn_task wait=true` 根据真实状态显示完成或失败，保留部分正文和错误原因。新调用方最低版本是本批计划中的 `@zhin.js/agent@1.1.47`，尚未发布；`1.1.46` 及以前仍是旧字符串合同，升级时应使用同批配套版本，不提供双入口兼容层。
+
+工具加载后的补全失败现在能被主回合现有错误 gate 识别并停止续段；不会新增重试，但此前错误被隐藏时继续执行的请求可能不再发生。共享 loop 在预算内原定的下一轮仍按原规则运行。
+
 ## 核心导出
 
 | 类别 | 导出 |

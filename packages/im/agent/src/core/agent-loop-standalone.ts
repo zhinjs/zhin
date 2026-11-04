@@ -9,7 +9,8 @@ import {
   turnPolicyAllowsShell,
   withoutForbiddenShell,
 } from '../plugin-runtime/native-bash-tool.js';
-import { type AgentTool, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
+import { type AgentTool, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
+import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../resource-hub/types.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
@@ -71,6 +72,8 @@ function buildUserMessages(input: AgentRunInput): AgentMessage[] {
 export interface AgentLoopStandaloneCallbacks {
   onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
   onToolResult?: (toolName: string, result: unknown) => void;
+  /** Observed results at interruption; does not replace the original rejection reason. */
+  onInterrupted?: (snapshot: AgentLoopStandaloneResult) => void;
 }
 
 export interface AgentLoopStandaloneInput {
@@ -109,7 +112,10 @@ export interface AgentLoopStandaloneResult {
   usage: Usage;
   iterations: number;
   model: string;
+  /** Only settled, observed tool results. A missing record does not prove no side effect occurred. */
   toolCalls: ToolCallRecord[];
+  /** Last observed model response/error event, not a synthetic run/cancellation status. */
+  terminal?: Pick<AssistantMessage, 'stopReason' | 'errorMessage'>;
 }
 
 export async function runAgentLoopStandaloneTurn(
@@ -174,7 +180,18 @@ export async function runAgentLoopStandaloneTurn(
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
-  let lastUsage: TokenUsage | undefined;
+  let lastObservedText = '';
+  const modelUsage: Usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+  let terminal: AgentLoopStandaloneResult['terminal'];
+  const snapshot = (content: string): AgentLoopStandaloneResult => ({
+    content,
+    usage: { prompt_tokens: modelUsage.prompt_tokens + inspectionUsage.prompt_tokens,
+      completion_tokens: modelUsage.completion_tokens + inspectionUsage.completion_tokens,
+      total_tokens: modelUsage.total_tokens + inspectionUsage.total_tokens },
+    iterations, model,
+    toolCalls: toolCalls.map(call => ({ ...call })),
+    ...(terminal ? { terminal: { ...terminal } } : {}),
+  });
 
   const toolRuntime = new ToolRuntime({
     localAssets: input.localAssets,
@@ -288,11 +305,19 @@ export async function runAgentLoopStandaloneTurn(
           block.text = unwrapJsonStringLayers(block.text);
         }
       }
-      lastAssistantText = assistantText(assistant);
+      const observedText = assistantText(assistant);
+      if (observedText.trim()) lastObservedText = observedText;
+      lastAssistantText = !observedText.trim() && (assistant.stopReason === 'error' || assistant.stopReason === 'aborted')
+        ? lastObservedText : observedText;
       if (!lastAssistantText.trim() && assistant.errorMessage) {
         lastAssistantText = `Something went wrong: ${assistant.errorMessage}. Please try again or rephrase your request.`;
       }
-      lastUsage = assistant.usage;
+      const usage = tokenUsageToLegacy(assistant.usage);
+      modelUsage.prompt_tokens += usage.prompt_tokens;
+      modelUsage.completion_tokens += usage.completion_tokens;
+      modelUsage.total_tokens += usage.total_tokens;
+      terminal = { stopReason: assistant.stopReason,
+        ...(assistant.errorMessage !== undefined ? { errorMessage: assistant.errorMessage } : {}) };
       const trace = input.iterationTrace;
       if (trace) {
         const toolNames = assistant.content
@@ -320,11 +345,15 @@ export async function runAgentLoopStandaloneTurn(
   const pending = childDeferred
     ? runWithDeferredTurnController(childDeferred, drive)
     : drive();
-  await (signal ? raceAbort(pending, signal) : pending);
-
-  const content = sanitizeAssistantReply(lastAssistantText, {
-    toolSummary: formatToolCallsForUser(toolCalls),
-  });
+  try {
+    await (signal ? raceAbort(pending, signal) : pending);
+  } catch (error) {
+    // A non-cooperative tool/provider may settle later. Publish a copied snapshot
+    // now, and keep the caller's exact cancellation/error object authoritative.
+    try { void Promise.resolve(callbacks?.onInterrupted?.(snapshot(lastAssistantText))).catch(() => undefined); }
+    catch { /* An observer cannot replace the original run error. */ }
+    throw error;
+  }
 
   logger.debug(formatCompact({
     mode: 'standalone',
@@ -333,15 +362,7 @@ export async function runAgentLoopStandaloneTurn(
     tool_calls: toolCalls.length,
   }));
 
-  return {
-    content,
-    usage: { prompt_tokens: (lastUsage?.input ?? 0) + inspectionUsage.prompt_tokens,
-      completion_tokens: (lastUsage?.output ?? 0) + inspectionUsage.completion_tokens,
-      total_tokens: (lastUsage?.totalTokens ?? 0) + inspectionUsage.total_tokens },
-    iterations,
-    model,
-    toolCalls,
-  };
+  return snapshot(sanitizeAssistantReply(lastAssistantText, { toolSummary: formatToolCallsForUser(toolCalls) }));
 }
 
 async function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {

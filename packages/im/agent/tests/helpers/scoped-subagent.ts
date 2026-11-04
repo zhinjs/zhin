@@ -10,11 +10,13 @@ export function createTestSubagentRuntime(input: Readonly<{
 }>): SubagentRuntime {
   const manager = new SubagentRuntime(input.options);
   const methods = { spawn: manager.spawn.bind(manager), spawnSync: manager.spawnSync.bind(manager) };
-  for (const method of ['spawn', 'spawnSync'] as const) manager[method] = async options => {
+  const scoped = async <T>(run: () => Promise<T>): Promise<T> => {
     const chat = executionBundle({ model: input.runtime.model(input.alias, input.model), completion: input.runtime });
     const models = await executionScope({ chat, summary: chat });
-    try { return await runWithAgentTurnConfiguration({ models }, () => methods[method](options)); }
+    try { return await runWithAgentTurnConfiguration({ models }, run); }
     finally { await models.release(); }
   };
+  manager.spawn = options => scoped(() => methods.spawn(options));
+  manager.spawnSync = options => scoped(() => methods.spawnSync(options));
   return manager;
 }
