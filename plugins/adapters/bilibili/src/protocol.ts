@@ -3,13 +3,57 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  * Bilibili 评论协议辅助（Experimental，非官方 Web 接口）。
  *
  * 契约见 docs/adr/0035-comment-reply-adapter-contract.md：
- * - 一条评论楼 = 一个 conversation：`video:<aid>:<rootRpid>`，parent = `video:<aid>`
- * - 只做视频评论（type=1）
+ * - 一条评论楼 = 一个 conversation：`<resource>:<oid>:<rootRpid>`，parent = `<resource>:<oid>`
+ * - 评论区（`x/v2/reply?type=&oid=`）：视频 `video`（type=1，oid=aid）、图文动态 `album`（type=11，oid=相簿 id）、
+ *   专栏 `article`（type=12，oid=cvid）、纯文字 / 转发动态 `dynamic`（type=17，oid=动态 id）。
+ * - 动态 id 不能直接当评论区 oid：必须先用动态详情（`x/polymer/web-dynamic/v1/detail`）的
+ *   `basic.comment_type` / `basic.comment_id_str` 解析出 (type, oid)，见 {@link resolveDynamicCommentArea}。
  */
 import type { ConversationRef } from '@zhin.js/im-contract';
 
 /** 视频评论区 type（x/v2/reply?type=1）。 */
 export const BILIBILI_VIDEO_COMMENT_TYPE = 1;
+/** 图文（带图）动态评论区 type：oid 是相簿 id（不是动态 id）。 */
+export const BILIBILI_ALBUM_COMMENT_TYPE = 11;
+/** 专栏评论区 type：oid 是 cvid。 */
+export const BILIBILI_ARTICLE_COMMENT_TYPE = 12;
+/** 纯文字 / 转发动态评论区 type：oid 是动态 id 本身。 */
+export const BILIBILI_DYNAMIC_COMMENT_TYPE = 17;
+
+/** 评论区资源种类 = conversation id 前缀；每个前缀只对应一种评论区 type，不靠运行时查表。 */
+export type BilibiliResourceKind = 'video' | 'album' | 'article' | 'dynamic';
+
+const COMMENT_TYPE_OF: Readonly<Record<BilibiliResourceKind, number>> = Object.freeze({
+  video: BILIBILI_VIDEO_COMMENT_TYPE,
+  album: BILIBILI_ALBUM_COMMENT_TYPE,
+  article: BILIBILI_ARTICLE_COMMENT_TYPE,
+  dynamic: BILIBILI_DYNAMIC_COMMENT_TYPE,
+});
+
+export function commentTypeOf(kind: BilibiliResourceKind): number {
+  return COMMENT_TYPE_OF[kind];
+}
+
+/** 评论区 type → 资源种类；不支持的 type 返回 undefined。 */
+export function resourceKindOfCommentType(type: number): BilibiliResourceKind | undefined {
+  switch (type) {
+    case BILIBILI_VIDEO_COMMENT_TYPE: return 'video';
+    case BILIBILI_ALBUM_COMMENT_TYPE: return 'album';
+    case BILIBILI_ARTICLE_COMMENT_TYPE: return 'article';
+    case BILIBILI_DYNAMIC_COMMENT_TYPE: return 'dynamic';
+    default: return undefined;
+  }
+}
+
+/** 一个已解析的评论区：`x/v2/reply` / `x/v2/reply/add` 用的 (type, oid)。 */
+export interface BilibiliCommentArea {
+  readonly kind: BilibiliResourceKind;
+  readonly type: number;
+  /** 评论区 oid（十进制字符串；动态 id 超过 2^53，绝不能转成 number）。 */
+  readonly oid: string;
+  /** 来自动态白名单时的原始动态 id（用于链接与展示）。 */
+  readonly dynamicId?: string;
+}
 /** B 站评论长度上限。 */
 export const BILIBILI_COMMENT_MAX_LENGTH = 1000;
 /** 默认轮询间隔下限（秒）。 */
@@ -29,7 +73,10 @@ export const BILIBILI_MIN_SEND_INTERVAL_SEC = 10;
 
 /** 「回复我的 / @我的」通知源。 */
 export type BilibiliNotificationKind = 'reply' | 'at';
-/** 通知入站范围：`whitelist` 只收白名单视频下的通知（默认）；`all` 收所有视频评论通知。 */
+/**
+ * 通知入站范围：`whitelist` 只收白名单评论区（视频 / 动态 / 专栏）下的通知（默认）；
+ * `all` 收所有视频评论通知，以及已配置 `dynamics` / `articles` 时对应种类的全部评论通知。
+ */
 export type BilibiliNotificationScope = 'whitelist' | 'all';
 
 /** One endpoint config after AdapterIndex expands `<instanceKey>.endpoints`. */
@@ -43,6 +90,10 @@ export interface BilibiliEndpointConfig extends EndpointProfileConfiguration {
   readonly biliJct?: string;
   /** 白名单视频：BV 号或 av 号（`BV1xx...` / `av123` / `123`）。 */
   readonly videos?: readonly (string | number)[];
+  /** 白名单动态：动态 id（`t.bilibili.com/<id>` / `bilibili.com/opus/<id>` 里的数字）。请写成字符串。 */
+  readonly dynamics?: readonly (string | number)[];
+  /** 白名单专栏：cv 号（`cv123` / `123`）。 */
+  readonly articles?: readonly (string | number)[];
   /** 轮询间隔秒数，最小 60。 */
   readonly pollIntervalSec?: number;
   /** 出站模式：`review`（默认，进草稿队列）/ `off`（禁止出站）。 */
@@ -81,6 +132,10 @@ export interface ResolvedBilibiliConfig {
   readonly sessdata?: string;
   readonly biliJct?: string;
   readonly videos: readonly BilibiliVideoRef[];
+  /** 白名单动态 id（十进制字符串）。 */
+  readonly dynamics: readonly string[];
+  /** 白名单专栏 cvid（十进制字符串）。 */
+  readonly articles: readonly string[];
   readonly pollIntervalMs: number;
   readonly sendMode: BilibiliSendMode;
   readonly minSendIntervalMs: number;
@@ -126,6 +181,31 @@ export function parseVideoRef(value: string | number): BilibiliVideoRef {
   throw new TypeError(`Bilibili video must be a BV id or av number, got "${raw}"`);
 }
 
+/**
+ * 动态 id：只收纯数字。动态 id 是 18–19 位、超过 Number.MAX_SAFE_INTEGER，
+ * YAML 里不加引号会被解析成有精度损失的 number，这里直接拒绝，避免回复到错误的评论区。
+ */
+export function parseDynamicRef(value: string | number): string {
+  if (typeof value === 'number' && !Number.isSafeInteger(value)) {
+    throw new TypeError(`Bilibili dynamic id ${String(value)} lost precision; quote it as a string in the config`);
+  }
+  const raw = String(value).trim();
+  if (/^[1-9]\d{0,19}$/.test(raw)) return raw;
+  throw new TypeError(`Bilibili dynamic must be a numeric dynamic id, got "${raw}"`);
+}
+
+/** 专栏：`cv123` / `123`。 */
+export function parseArticleRef(value: string | number): string {
+  const raw = String(value).trim();
+  const cv = /^(?:cv)?([1-9]\d*)$/i.exec(raw);
+  if (cv && Number.isSafeInteger(Number(cv[1]))) return cv[1]!;
+  throw new TypeError(`Bilibili article must be a cv id or number, got "${raw}"`);
+}
+
+function uniqueRefs(values: readonly (string | number)[] | undefined, parse: (value: string | number) => string): string[] {
+  return [...new Set((values ?? []).map(parse))];
+}
+
 function trimTrailingSlashes(value: string): string {
   let end = value.length;
   while (end > 0 && value.charCodeAt(end - 1) === 47 /* '/' */) end -= 1;
@@ -168,6 +248,8 @@ export function resolveBilibiliConfig(config: BilibiliEndpointConfig): ResolvedB
     ...(sessdata ? { sessdata } : {}),
     ...(biliJct ? { biliJct } : {}),
     videos: (config.videos ?? []).map(parseVideoRef),
+    dynamics: Object.freeze(uniqueRefs(config.dynamics, parseDynamicRef)),
+    articles: Object.freeze(uniqueRefs(config.articles, parseArticleRef)),
     pollIntervalMs: interval * 1000,
     sendMode,
     minSendIntervalMs: sendInterval * 1000,
@@ -215,36 +297,93 @@ export function threadRootOf(reply: Pick<BilibiliReply, 'rpid' | 'root'>): strin
 }
 
 export function videoResourceId(aid: string | number): string {
-  return `video:${aid}`;
+  return resourceId('video', aid);
 }
 
-export function threadConversationId(aid: string | number, rootRpid: string | number): string {
-  return `${videoResourceId(aid)}:${rootRpid}`;
+/** 评论区资源会话 id（评论楼的 parent）：`<kind>:<oid>`。 */
+export function resourceId(kind: BilibiliResourceKind, oid: string | number): string {
+  return `${kind}:${oid}`;
+}
+
+/** 评论楼会话 id：`<kind>:<oid>:<rootRpid>`；kind 省略时为 `video`（兼容 v1）。 */
+export function threadConversationId(oid: string | number, rootRpid: string | number, kind: BilibiliResourceKind = 'video'): string {
+  return `${resourceId(kind, oid)}:${rootRpid}`;
 }
 
 export interface ParsedThreadId {
-  readonly type: 'video';
+  /** 资源种类（conversation id 前缀）。 */
+  readonly type: BilibiliResourceKind;
+  /** 评论区 type（1 / 11 / 12 / 17）。 */
+  readonly commentType: number;
   readonly oid: string;
   readonly root: string;
 }
 
 export function parseThreadConversationId(id: string): ParsedThreadId | undefined {
-  const match = /^video:(\d+):(\d+)$/.exec(id);
+  const match = /^(video|album|article|dynamic):([1-9]\d{0,19}):([1-9]\d{0,19})$/.exec(id);
   if (!match) return undefined;
-  return { type: 'video', oid: match[1]!, root: match[2]! };
+  const kind = match[1] as BilibiliResourceKind;
+  return { type: kind, commentType: commentTypeOf(kind), oid: match[2]!, root: match[3]! };
 }
 
 export function bilibiliThreadConversation(
   endpointKey: string,
-  aid: string | number,
+  oid: string | number,
   rootRpid: string | number,
+  kind: BilibiliResourceKind = 'video',
 ): ConversationRef {
   return {
     endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
     kind: 'channel',
-    id: threadConversationId(aid, rootRpid),
-    parent: { kind: 'channel', id: videoResourceId(aid) },
+    id: threadConversationId(oid, rootRpid, kind),
+    parent: { kind: 'channel', id: resourceId(kind, oid) },
   };
+}
+
+/** `x/polymer/web-dynamic/v1/detail` 里我们用到的字段。 */
+export interface BilibiliDynamicDetail {
+  readonly item?: {
+    readonly id_str?: string;
+    readonly type?: string;
+    readonly basic?: {
+      readonly comment_type?: number;
+      readonly comment_id_str?: string;
+      readonly rid_str?: string;
+    };
+  } | null;
+}
+
+export type BilibiliDynamicResolution =
+  | { readonly ok: true; readonly area: BilibiliCommentArea }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * 动态 id → 评论区 (type, oid)。只信平台在 `basic.comment_type` / `basic.comment_id_str` 里声明的评论区：
+ * - 17（纯文字 / 转发 / 直播开播等）：oid 一般就是动态 id
+ * - 11（带图动态）：oid 是相簿 id，**不是**动态 id
+ * 视频动态（1）、专栏动态（12）等不在 `dynamics` 里处理（请分别填到 `videos` / `articles`），其它形状一律拒绝。
+ */
+export function resolveDynamicCommentArea(dynamicId: string, detail: BilibiliDynamicDetail | null | undefined): BilibiliDynamicResolution {
+  const item = detail?.item;
+  if (!item) return { ok: false, reason: 'dynamic detail has no item' };
+  if (item.id_str !== undefined && item.id_str !== dynamicId) {
+    return { ok: false, reason: `dynamic detail id ${String(item.id_str)} does not match ${dynamicId}` };
+  }
+  const type = Number(item.basic?.comment_type);
+  const oid = String(item.basic?.comment_id_str ?? '').trim();
+  if (!/^[1-9]\d{0,19}$/.test(oid)) return { ok: false, reason: `dynamic ${dynamicId} has no commentable id (${item.type ?? 'unknown type'})` };
+  switch (type) {
+    case BILIBILI_DYNAMIC_COMMENT_TYPE:
+      return { ok: true, area: Object.freeze({ kind: 'dynamic' as const, type, oid, dynamicId }) };
+    case BILIBILI_ALBUM_COMMENT_TYPE:
+      return { ok: true, area: Object.freeze({ kind: 'album' as const, type, oid, dynamicId }) };
+    case BILIBILI_VIDEO_COMMENT_TYPE:
+      return { ok: false, reason: `dynamic ${dynamicId} is a video post (av${oid}); add it to videos instead` };
+    case BILIBILI_ARTICLE_COMMENT_TYPE:
+      return { ok: false, reason: `dynamic ${dynamicId} is an article post (cv${oid}); add it to articles instead` };
+    default:
+      return { ok: false, reason: `dynamic ${dynamicId} uses unsupported comment type ${Number.isFinite(type) ? type : 'unknown'} (${item.type ?? 'unknown type'})` };
+  }
 }
 
 /** Flatten a page: top-level replies plus their inline preview sub-replies. */
@@ -263,9 +402,9 @@ export interface BilibiliNotificationItem {
   readonly user?: { readonly mid?: number; readonly nickname?: string };
   readonly item?: {
     readonly type?: string;
-    /** 1 = 视频评论；其余（动态 11/17 等）v1 忽略。 */
+    /** 评论区 type：1 视频、11 图文动态、12 专栏、17 文字动态；其余忽略。 */
     readonly business_id?: number;
-    /** 评论区 oid（视频即 aid）。 */
+    /** 评论区 oid（视频即 aid）。文字动态是 19 位动态 id，JSON 解析后可能丢精度。 */
     readonly subject_id?: number;
     /** 根评论 rpid；0 表示通知里的评论本身是一级评论。 */
     readonly root_id?: number;
@@ -274,6 +413,9 @@ export interface BilibiliNotificationItem {
     /** 被回复的评论 rpid（@ 通知里通常为 0）。 */
     readonly target_id?: number;
     readonly source_content?: string;
+    /** Web 跳转链接，如 `https://www.bilibili.com/opus/<动态id>#reply<rpid>`。 */
+    readonly uri?: string;
+    readonly native_uri?: string;
   };
   readonly reply_time?: number;
   readonly at_time?: number;
@@ -284,29 +426,91 @@ export interface BilibiliNotificationPage {
   readonly cursor?: { readonly is_end?: boolean; readonly id?: number; readonly time?: number };
 }
 
+/** 从通知跳转链接里取动态 id 原文（避免 19 位数字经 JSON number 丢精度）。 */
+function dynamicIdFromUri(item: NonNullable<BilibiliNotificationItem['item']>): string | undefined {
+  for (const uri of [item.uri, item.native_uri]) {
+    if (typeof uri !== 'string') continue;
+    const match = /(?:bilibili\.com\/opus\/|t\.bilibili\.com\/|opus\/detail\/|bilibili\.com\/dynamic\/)(\d{1,20})(?!\d)/.exec(uri);
+    if (match) return match[1];
+  }
+  return undefined;
+}
+
+/** 通知里评论区 oid 的精确十进制字符串；无法确定时返回 undefined（宁可丢弃，也不回错楼）。 */
+function notificationOid(type: number, item: NonNullable<BilibiliNotificationItem['item']>): string | undefined {
+  const subject = Number(item.subject_id);
+  if (!Number.isFinite(subject) || subject <= 0) return undefined;
+  if (Number.isSafeInteger(subject)) return String(subject);
+  if (type !== BILIBILI_DYNAMIC_COMMENT_TYPE) return undefined;
+  const fromUri = dynamicIdFromUri(item);
+  // 链接里的 id 必须和（已丢精度的）subject_id 是同一个数，才认。
+  return fromUri !== undefined && Number(fromUri) === subject ? fromUri : undefined;
+}
+
+export interface BilibiliNotificationReply {
+  readonly area: BilibiliCommentArea;
+  readonly reply: BilibiliReply;
+}
+
 /**
- * 把一条视频评论通知还原成评论结构；非视频评论 / 缺字段时返回 undefined。
+ * 把一条评论通知还原成 (评论区, 评论)。`kinds` 限定接受的评论区种类（默认只收视频，兼容 v1）；
+ * 不支持的业务 / 缺字段 / oid 无法精确还原时返回 undefined。
  */
-export function notificationToReply(entry: BilibiliNotificationItem): BilibiliReply | undefined {
+export function notificationToComment(
+  entry: BilibiliNotificationItem,
+  kinds: ReadonlySet<BilibiliResourceKind> = new Set(['video']),
+): BilibiliNotificationReply | undefined {
   const item = entry.item;
-  if (!item || item.business_id !== BILIBILI_VIDEO_COMMENT_TYPE) return undefined;
+  if (!item) return undefined;
   if (item.type !== undefined && item.type !== 'reply') return undefined;
+  const type = Number(item.business_id);
+  const kind = resourceKindOfCommentType(type);
+  if (!kind || !kinds.has(kind)) return undefined;
   const rpid = Number(item.source_id);
-  const oid = Number(item.subject_id);
   const mid = Number(entry.user?.mid);
-  if (!rpid || !oid || !mid) return undefined;
+  const oid = notificationOid(type, item);
+  if (!rpid || !Number.isSafeInteger(rpid) || !oid || !mid) return undefined;
   const root = Number(item.root_id) || 0;
   return {
-    rpid,
-    oid,
-    type: BILIBILI_VIDEO_COMMENT_TYPE,
-    mid,
-    root,
-    parent: Number(item.target_id) || root,
-    ctime: Number(entry.reply_time ?? entry.at_time ?? 0),
-    member: { mid: String(mid), ...(entry.user?.nickname ? { uname: entry.user.nickname } : {}) },
-    content: { message: item.source_content ?? '' },
+    area: Object.freeze({ kind, type, oid }),
+    reply: {
+      rpid,
+      oid: Number(oid),
+      type,
+      mid,
+      root,
+      parent: Number(item.target_id) || root,
+      ctime: Number(entry.reply_time ?? entry.at_time ?? 0),
+      member: { mid: String(mid), ...(entry.user?.nickname ? { uname: entry.user.nickname } : {}) },
+      content: { message: item.source_content ?? '' },
+    },
   };
+}
+
+/** 把一条视频评论通知还原成评论结构；非视频评论 / 缺字段时返回 undefined（v1 兼容入口）。 */
+export function notificationToReply(entry: BilibiliNotificationItem): BilibiliReply | undefined {
+  return notificationToComment(entry)?.reply;
+}
+
+/** 评论区上某条评论的网页链接。图文动态优先用动态 id，未知时退回相簿页。 */
+export function commentAreaUrl(area: { readonly type?: number; readonly oid: string; readonly dynamicId?: string }, rpid: string): string {
+  switch (area.type ?? BILIBILI_VIDEO_COMMENT_TYPE) {
+    case BILIBILI_ARTICLE_COMMENT_TYPE: return `https://www.bilibili.com/read/cv${area.oid}#reply${rpid}`;
+    case BILIBILI_DYNAMIC_COMMENT_TYPE: return `https://t.bilibili.com/${area.dynamicId ?? area.oid}#reply${rpid}`;
+    case BILIBILI_ALBUM_COMMENT_TYPE:
+      return area.dynamicId ? `https://t.bilibili.com/${area.dynamicId}#reply${rpid}` : `https://h.bilibili.com/${area.oid}#reply${rpid}`;
+    default: return `https://www.bilibili.com/video/av${area.oid}#reply${rpid}`;
+  }
+}
+
+/** 评论区的简短标签（Console / 草稿展示）。 */
+export function commentAreaLabel(area: { readonly type?: number; readonly oid: string; readonly dynamicId?: string }): string {
+  switch (area.type ?? BILIBILI_VIDEO_COMMENT_TYPE) {
+    case BILIBILI_ARTICLE_COMMENT_TYPE: return `cv${area.oid}`;
+    case BILIBILI_DYNAMIC_COMMENT_TYPE: return `dynamic ${area.dynamicId ?? area.oid}`;
+    case BILIBILI_ALBUM_COMMENT_TYPE: return area.dynamicId ? `dynamic ${area.dynamicId}` : `album ${area.oid}`;
+    default: return `av${area.oid}`;
+  }
 }
 
 /** 出站 payload 里 `reply` 段指向的评论 rpid（纯数字才认）。 */
