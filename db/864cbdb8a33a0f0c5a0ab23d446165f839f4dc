@@ -1,0 +1,28 @@
+docs/plans/provider-main-integration.md
+  s_9622fd28aba994::t_a270f011f507ba 86-101
+basic/cli/tests/fixtures/inference-native-lifetime.mjs
+  s_9622fd28aba994::t_50b448306b8c74 32-33,44-45,274,289
+basic/cli/tests/plugin-runtime/inference/account-runtime.test.ts
+  s_9622fd28aba994::t_7bc716379c767b 446-448,451-452,454,456-461,465,533,536,544,546-547
+  s_9622fd28aba994::t_a5a0add0759b52 26,28,468-532,534-535,537-543,545,548-556
+  s_9622fd28aba994::t_295cebdd9b0499 5,9,27,394-445,449-450,453,455,462-464,466-467
+  s_9622fd28aba994::t_ed095257b86243 32
+basic/cli/src/plugin-runtime/inference/account-runtime.ts
+  s_9622fd28aba994::t_50b448306b8c74 144-154,730,739-742,751-752,802,807,810-812,1094,1100-1103,1109-1110,1112,1129,1134,1137-1139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "db864cbdb8a33a0f0c5a0ab23d446165f839f4dc",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
