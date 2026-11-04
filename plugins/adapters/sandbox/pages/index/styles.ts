@@ -468,9 +468,11 @@ export const sandboxStyles = `
   .zhin-sandbox .agent-playground-sessions.show { display: flex; }
   .zhin-sandbox .channel-overlay { display: block; position: absolute; inset: 0; z-index: 35; background: var(--sb-overlay); }
   .zhin-sandbox .agent-playground-runbar { flex-direction: column; align-items: flex-start; gap: 10px; min-height: 0; padding: 12px; }
+  /* In a column the 14rem flex-basis would become the identity row height. */
+  .zhin-sandbox .agent-playground-run-identity { flex: 0 0 auto; width: 100%; }
   .zhin-sandbox .agent-playground-run-actions { flex-wrap: nowrap; justify-content: flex-start; margin-left: 0; overflow-x: auto; max-width: 100%; }
   .zhin-sandbox .agent-playground-run-actions > button[aria-controls="sandbox-run-inspector"] { display: none; }
-  .zhin-sandbox .agent-playground-run-actions > a, .zhin-sandbox .agent-playground-run-actions > button { flex-shrink: 0; }
+  .zhin-sandbox .agent-playground-run-actions > a, .zhin-sandbox .agent-playground-run-actions > button { flex-shrink: 0; white-space: nowrap; width: auto; font-size: 13px; }
   .zhin-sandbox .agent-playground-run-title span { display: none; }
   .zhin-sandbox .agent-playground-message-scroll { padding: 16px 10px; }
   .zhin-sandbox .agent-playground-message-main { max-width: calc(100% - 40px); }
