@@ -1,0 +1,117 @@
+packages/im/agent/src/prompt/system-prompt.ts
+  s_178aad69aa64a5::t_97136bd4ecbb18 324
+  s_178aad69aa64a5::t_5677d9a9ec8359 323
+packages/im/agent/tests/security/policy-narrowing.test.ts
+  s_178aad69aa64a5::t_d7ac6a5f921d32 1-29
+packages/im/agent/src/plugin-runtime/schedule-capability-plan.ts
+  s_178aad69aa64a5::t_97136bd4ecbb18 8
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_178aad69aa64a5::t_6155e3fbbd82c6 21
+  s_178aad69aa64a5::t_a9dff2eb643a7e 24-25,33-35,143,161,359,362-363
+examples/test-bot/agents/home/system.md
+  s_178aad69aa64a5::t_e861263956a7c1 17
+examples/test-bot/tests/multi-agent-entry-contract.test.ts
+  s_178aad69aa64a5::t_e861263956a7c1 11,14-19
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_178aad69aa64a5::t_5677d9a9ec8359 159,167,250
+examples/test-bot/agents/planner/boundaries.md
+  s_178aad69aa64a5::t_e861263956a7c1 3
+basic/cli/src/plugin-runtime/agent/runtime-foundation.ts
+  s_178aad69aa64a5::t_f2cd250bba6417 158,160
+packages/im/agent/tests/plugin-runtime/tool-tiers.test.ts
+  s_178aad69aa64a5::t_5677d9a9ec8359 122,126-127,132-133
+packages/im/agent/tests/orchestration/five-agent-contract.test.ts
+  s_178aad69aa64a5::t_5677d9a9ec8359 31
+packages/im/agent/src/prompt/prompts/orchestrator.openai-compatible.md
+  s_178aad69aa64a5::t_97136bd4ecbb18 3
+packages/im/agent/tests/prompt/fixed-prompt-cost.test.ts
+  s_178aad69aa64a5::t_5677d9a9ec8359 28
+  s_178aad69aa64a5::t_97136bd4ecbb18 30
+basic/cli/tests/plugin-runtime/agent/model-consumers-configuration.test.ts
+  s_178aad69aa64a5::t_f8da0470655c44 3,34,67,72,113,115-116
+examples/test-bot/ACCEPTANCE.md
+  s_178aad69aa64a5::t_e861263956a7c1 37,63,75,79
+docs/wiki/cubic/tools-caps.md
+  s_178aad69aa64a5::t_bae0fccaa9e434 131
+examples/test-bot/fixtures/multi-agent-contract.zhin.config.yml
+  s_178aad69aa64a5::t_e861263956a7c1 1
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_178aad69aa64a5::t_0927273d47847a 233-235
+examples/test-bot/agents/vision/system.md
+  s_178aad69aa64a5::t_e861263956a7c1 5,11
+packages/im/agent/src/prompt/prompts/orchestrator.anthropic.md
+  s_178aad69aa64a5::t_97136bd4ecbb18 3
+packages/im/agent/tests/tool-catalog/deferred-tool-catalog.test.ts
+  s_178aad69aa64a5::t_5677d9a9ec8359 58,60
+  s_178aad69aa64a5::t_f60b93da931269 51,65,67
+examples/test-bot/agents/planner/agent.json
+  s_178aad69aa64a5::t_e861263956a7c1 20-28
+packages/im/agent/tests/prompt/prompt-policy-requests.test.ts
+  s_178aad69aa64a5::t_f60b93da931269 81,92
+examples/test-bot/README.md
+  s_178aad69aa64a5::t_e861263956a7c1 19,54
+packages/im/agent/src/prompt/prompts/orchestrator.md
+  s_178aad69aa64a5::t_5677d9a9ec8359 5
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_178aad69aa64a5::t_78161acef35cde 90
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_178aad69aa64a5::t_78161acef35cde 1151,1479-1480
+packages/im/agent/tests/ai/prompt-discipline.test.ts
+  s_178aad69aa64a5::t_5677d9a9ec8359 58
+packages/im/agent/tests/trace/turn-trace.test.ts
+  s_178aad69aa64a5::t_5677d9a9ec8359 106,111,113,126,143
+packages/im/agent/src/trace/turn-trace-registry.ts
+  s_178aad69aa64a5::t_17a26bc528e8c2 69,74
+examples/online.config.yml
+  s_178aad69aa64a5::t_e861263956a7c1 31
+examples/test-bot/agents/planner/system.md
+  s_178aad69aa64a5::t_e861263956a7c1 7
+packages/im/agent/src/tool-catalog/types.ts
+  s_178aad69aa64a5::t_97136bd4ecbb18 83
+examples/full-bot/ACCEPTANCE.md
+  s_178aad69aa64a5::t_e861263956a7c1 25-27,43
+examples/test-bot/agents/reviewer/system.md
+  s_178aad69aa64a5::t_e861263956a7c1 7,9
+packages/im/agent/tests/zhin-agent/workspace-prompt.test.ts
+  s_178aad69aa64a5::t_5677d9a9ec8359 21
+docs/contributing/legacy-concepts.md
+  s_178aad69aa64a5::t_bae0fccaa9e434 73
+packages/im/agent/src/plugin-runtime/native-tool-suite.ts
+  s_178aad69aa64a5::t_f60b93da931269 28
+docs/ai/agent.md
+  s_178aad69aa64a5::t_17466f02dc5c95 3,23,43,66,83-84,88,125-128,167,169,171,173-191,194-195,198-206,293,297,523-524,658,665
+  s_178aad69aa64a5::t_4738da5b7681e8 196,793
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_178aad69aa64a5::t_f2cd250bba6417 61
+docs/authoring/agent-tools.md
+  s_178aad69aa64a5::t_17466f02dc5c95 3,13,178,303,305,309,314-323
+  s_178aad69aa64a5::t_ab849cbaf47bff 324
+packages/im/agent/src/prompt/prompt-builder.ts
+  s_178aad69aa64a5::t_97136bd4ecbb18 192
+packages/im/agent/tests/plugin-runtime/deferred-capability-plan.test.ts
+  s_178aad69aa64a5::t_f60b93da931269 501,513,517
+packages/im/agent/src/resource-hub/role-configs.ts
+  s_178aad69aa64a5::t_df92b16fd7bc5a 49,68,85,103,124,140,155
+packages/im/agent/src/trace/turn-trace.ts
+  s_178aad69aa64a5::t_17a26bc528e8c2 114
+examples/test-bot/prompts/orchestrator.md
+  s_178aad69aa64a5::t_e861263956a7c1 7-8
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_178aad69aa64a5::t_3f5d4819cf32ce 154,158
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e06b9ff365e0b4bc3a8121bbde7e4421efe0a931",
+  "prompts": {},
+  "sessions": {
+    "s_178aad69aa64a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0eca046-2ac8-49e0-a6a9-b7766f7049bb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
