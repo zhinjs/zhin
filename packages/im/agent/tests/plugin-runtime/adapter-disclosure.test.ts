@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { createCapabilitySlot, rootPluginId, type FeatureId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { parseSkillMarkdown, SkillIndex, skillFeatureId } from '@zhin.js/skill';
 import { ToolIndex, toolFeatureId, parseAgentToolDefinition } from '@zhin.js/tool';
 import { permissionHostToken } from '@zhin.js/permission';
@@ -54,7 +54,7 @@ async function loadAdapter(platform: string): Promise<RuntimeSnapshot> {
     capabilities: new Map(slots.map(slot => [slot.id, slot])),
     projections: new Map(),
   };
-  return { ...snapshot, projections: new Map([
+  return { ...snapshot, projections: new Map<FeatureId, ToolIndex | SkillIndex>([
     [toolFeatureId, new ToolIndex(toolSlots, snapshot)],
     [skillFeatureId, new SkillIndex(skillSlots, snapshot)],
   ]) };
@@ -137,7 +137,7 @@ describe('adapter-owned scene disclosure (#949)', () => {
       .toEqual(admin.tools.filter(tool => !roleDependent.includes(tool.name)).map(tool => tool.name));
     expect(unknown.skills.map(skill => skill.qualifiedName)).toEqual(admin.skills.map(skill => skill.qualifiedName));
     expect(unknown.tools.some(tool => tool.name.endsWith('__recall_own_message'))).toBe(true);
-    const owner = await ingress.read(snapshot, snapshot.root, () => true, turn('icqq', 'group', 'owner'), 'icqq');
+    const owner = await ingress.read({ snapshot, owner: snapshot.root, isActive: () => true, turn: turn('icqq', 'group', 'owner'), selectedAgent: 'icqq' });
     expect(owner.tools.some(tool => tool.name === 'agent__icqq__skill__icqq-group-admin__set_group_admin')).toBe(true);
     expect([...admin.tools, ...unknown.tools].some(tool => tool.name.endsWith('__set_group_admin'))).toBe(false);
     const plan = createDeferredCapabilityPlan({

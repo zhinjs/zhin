@@ -46,3 +46,16 @@ sidebar: false
 - CLI 整目录首次采样发生在 Agent consumer 测试迁移中，其旧 import 造成 0 测试收集，不计产品行为失败。另三项失败由新 worktree 缺少 components/client/Adapter 构建产物导致；按原包构建补齐，原两文件 11 项断言原样通过，未修改超时或预算。首次日志 `/tmp/zhin-main-sync-cli-all-tests.log`，复验 `/tmp/zhin-main-sync-fixture-prerequisites-rerun.log`。不把首次整目录宣称为全绿。
 - 一次配置跨入口复验在沙箱中出现 loopback `EPERM`；同代码、预算和断言在允许 loopback 后 3 文件 / 49 项通过，日志 `/tmp/zhin-main-sync-canonical-project-patch-escalated.log`。没有用更长超时或生产 guard 掩盖它。
 - 五处新增消费者的测试类型红，分别为审批 request 缺取消信号、工具 context 缺身份字段与返回值联合泛型；已补真实字段及正确联合类型，未用 cast/any 代替。这项红绿独立于确定性运行通过。
+
+## 固定候选 fe678 的完整门禁后修正
+
+Root 对 `fe678c74824f6bc5bf7408ebf7b9fcc2b2bbf82c` 的完整 `check:all` 退出 1，发现三项失败；日志 `/tmp/zhin-main-fe678c-check-all.log`。以下为限定配套修正，不把原全量结果记为通过，新固定候选仍须完整复验。
+
+| 预期／根因 | 实际修正和红绿证据 | 结论／未覆盖 |
+| --- | --- | --- |
+| ICQQ 派生文档应匹配包 README 与 metadata；main 增量未刷新摘要 | `pnpm sync:adapter-docs` 仅生成 `docs/adapters/icqq.md` 的一行 SHA 变化；正式 `check:adapter-docs` 原失败、修后通过（24 个 Adapter）；`/tmp/zhin-main-followup-docs-red.log` / `docs-green.log` | 未手改生成正文，未改变平台合同 |
+| private Plugin Runtime 包须声明现存 TS 入口；固定 main 已将 Douyin 声明为 private 却仍指向 JS | 仅 `zhin.entry` 改为已有 `./plugin.ts`；正式 readiness 原失败、修后通过（68 包）；`/tmp/zhin-main-followup-entry-red.log` / `entry-green.log`。现有 builder 在临时复制包仍生成已列入 files 的 `plugin.js`；`/tmp/zhin-douyin-private-entry-fixture.log` | private、发布策略、平台代码与门禁不变，无需追加 pack 字段；未实际打包或连接平台 |
+| 新 owner 披露用例须使用既有对象参数合同 | 仅旧五位置参数调用迁为 `CapabilityIngressInput`，owner/admin/unknown 与历史加载断言保留。完整 AdapterDisclosure、ICQQ discovery/group moderation、Permission 共 4 文件 45 测试通过；`/tmp/zhin-main-followup-disclosure-red.log` / `focused-final.log` | 不新增生产兼容分支，不改权限或审批 |
+| 新测试还应经 TypeScript 检查 | 额外 include 整个 AdapterDisclosure 测试后发现夹具异构 Map 推断错误；补精确 `Map<FeatureId, ToolIndex \| SkillIndex>`，无 cast。复用根原 include/ambient 与此前六个新测试的额外 tsc 通过；`/tmp/zhin-main-followup-test-types.log` / `test-types-green.log`；脚本 `/tmp/zhin-main-sync-test-typecheck.py` | 类型红绿独立于运行通过；未扩大或放宽正式类型门禁 |
+
+同轮正式 `check:plugin-capability-publish`、`check:doc-links`、变更测试 ESLint 与 `git diff --check` 通过。新固定候选由 Root 执行完整构建／门禁；本轮没有改生产调用逻辑、执行真实供应商或读写用户配置。
