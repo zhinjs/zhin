@@ -13,8 +13,7 @@ describe('sync-publishing-manifest', () => {
     expect(new Set(names).size).toBe(names.length);
     expect(names).toContain('@zhin.js/adapter-onebot-events');
     expect(names).toContain('@zhin.js/adapter-juejin');
-    // Private until their first npm publish (#1135), so no trusted publisher yet.
-    expect(names).not.toContain('@zhin.js/adapter-douyin-live');
+    expect(names).toContain('@zhin.js/adapter-douyin-live');
   });
 
   it('keeps docs/contributing/publishing.md in sync with the workspace', () => {
