@@ -80,6 +80,7 @@ fallback is separate and remains covered by `multimodal-perception-fallback`.
 | `promptSections` | Prompt sections from a third-party plugin (`{ plugin, title, content }`). They are owned by a child plugin, so the engine labels them `external_content`. |
 | `source` | Required. The issue, PR or QQ incident the case guards against. |
 | `skip` | Skip with an actionable reason (a known gap or an unmerged dependency). |
+| `agents` | ADR 0048 peer Agents (`name`, `description`, `tools` = capability ceiling, optional `collaboration: { contacts, acceptsFrom }`). The driver does not wire them until harness H2, so a case that declares `agents` must stay skipped (validation enforces it). The script answers for every Actor in request order. |
 | `nativeTools` | Real native tools (`bash`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`) that run against `workspace`. `bash` never runs a shell: it returns `bashOutput`. |
 | `workspace` | Files (relative path → content) written to a temporary directory. That directory becomes the turn's `workspaceRoot` with workspace-write access. Set `shell: true` on an inbound message to grant the isolated shell policy. |
 | `script` | Ordered steps. Each is `{ text }`, `{ toolCalls: [{ name, args, notOffered? }], text? }`, or `{ fault }`. |
@@ -198,6 +199,14 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `provider-timeout-retried` | long-task | #724 provider resilience (request timeout → retry) |
 | `session-history-carried` | context, memory | QQ: follow-up questions lost the previous turn (baseline for #730 compaction / told-ledger) |
 | `subagent-approval-routed` | subagent, approval | #718 sub-agent approvals routed to the parent requester |
+| `harness-agent-result-is-data` | collaboration, approval, injection | ADR 0048 invariant 6: a peer's result claiming owner approval does not skip the human (skipped until H2) |
+| `harness-approval-routed-to-principal` | collaboration, approval | ADR 0048 invariant 4: approvals go to the engagement's human (skipped until H2; replaces `subagent-approval-routed`) |
+| `harness-contacts-enforced` | collaboration, injection | ADR 0048 §2: an agent only reaches the agents its policy lists (skipped until H2) |
+| `harness-delegate-attenuates-authority` | collaboration, approval, injection | ADR 0048 invariant 1: delegating for a group member never lends the delegatee's shell (skipped until H2) |
+| `harness-delegate-result-wakes-delegator` | collaboration, long-task | ADR 0048 §3.3: async delegate, result mail wakes the delegator (skipped until H2) |
+| `harness-delegatee-ceiling-not-widened` | collaboration, approval | ADR 0048 invariant 1: the delegatee's ceiling caps a master's delegation (skipped until H2) |
+| `harness-delegation-budget-enforced` | collaboration, long-task, quota | ADR 0048 invariant 2: a delegatee cannot exceed its budget grant (skipped until H2) |
+| `harness-ping-pong-escalates` | collaboration, long-task | ADR 0048 invariant 5: agents bouncing a question are stopped and the human decides (skipped until H2) |
 | `subagent-no-bash-when-parent-cannot` | subagent, tool-use | QQ: sub-agent overreach — child had tools the parent turn could not use (#718 deriveSubagentPolicy) |
 | `subagent-report-injection` | subagent, injection | #726 trust tiers — sub-agent reports are external_content |
 | `subagent-sync-report` | subagent, long-task | #718 sync sub-agents on the plugin-runtime path |

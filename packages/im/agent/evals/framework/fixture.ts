@@ -15,7 +15,7 @@ import type { MemoryEntryUpsertInput } from '@zhin.js/ai';
 import type { ToolInputJsonObjectSchema } from '@zhin.js/tool';
 import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
 
-export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota' | 'multimodal';
+export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota' | 'multimodal' | 'collaboration';
 
 export interface EvalInboundMessage {
   readonly text: string;
@@ -212,6 +212,27 @@ export interface EvalPromptSection {
   readonly content: string;
 }
 
+/**
+ * ADR 0048: a peer Agent the case's entry Agent can collaborate with through `agents` / `ask` /
+ * `delegate` / `tell`. The harness (H1–H2) is not built yet, so the driver does not register these;
+ * a case that declares `agents` must stay `skip`ped until the harness wires them (see validateEvalCase).
+ */
+export interface EvalAgentFixture {
+  /** Agent name, the `agent` argument of the collaboration tools. */
+  readonly name: string;
+  /** One-line capability summary shown by the `agents` directory tool. */
+  readonly description: string;
+  /** Capability ceiling: the only tools this Agent may ever use, whoever delegates to it. */
+  readonly tools: readonly string[];
+  /** ADR 0048 §2 collaboration policy. Omitted means: contacts nobody, accepts work from anyone in scope. */
+  readonly collaboration?: Readonly<{
+    /** Agents it may contact (`ask` / `delegate` / `tell`). */
+    contacts?: readonly string[];
+    /** Agents (or `human`) it accepts delegated work from. */
+    acceptsFrom?: readonly string[];
+  }>;
+}
+
 export interface EvalCase {
   readonly id: string;
   readonly description: string;
@@ -223,6 +244,8 @@ export interface EvalCase {
   /** One inbound message, or a sequence run as consecutive turns in one session. */
   readonly inbound: EvalInboundMessage | readonly EvalInboundMessage[];
   readonly tools?: readonly EvalTool[];
+  /** ADR 0048 peer Agents (H2). The scripted model answers for every Actor in script order. */
+  readonly agents?: readonly EvalAgentFixture[];
   readonly skills?: readonly EvalSkill[];
   readonly nativeTools?: readonly EvalNativeTool[];
   /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
@@ -313,6 +336,12 @@ export function validateEvalCase(candidate: EvalCase): string[] {
       problems.push(`tool "${name}" uses a reserved built-in name; mocked tools need their own names`);
     }
   }
+  if (candidate.agents?.length && !candidate.skip) {
+    problems.push('agents (ADR 0048 peer Agents) are not wired into the driver until harness H2; keep the case skipped');
+  }
+  const agentNames = (candidate.agents ?? []).map((agent) => agent.name);
+  const duplicateAgents = agentNames.filter((name, index) => agentNames.indexOf(name) !== index);
+  if (duplicateAgents.length > 0) problems.push(`duplicate agent names: ${[...new Set(duplicateAgents)].join(', ')}`);
   candidate.script?.forEach((step, index) => {
     if ('toolCalls' in step && step.toolCalls.length === 0) problems.push(`script step ${index + 1} has an empty toolCalls list`);
   });

@@ -203,6 +203,16 @@ describe('eval framework', () => {
       live: { checks: () => [] },
     });
     expect(validateEvalCase(liveWithoutSchema)).toEqual(['live case: tool "get_weather" must declare parameters for city']);
+    const peers = [
+      { name: 'reviewer', description: 'Reviews changes.', tools: [] },
+      { name: 'reviewer', description: 'Duplicate.', tools: [] },
+    ];
+    const unwiredAgents = defineEvalCase({ ...approvalCase('approve'), id: 'peer-agents', agents: peers });
+    expect(validateEvalCase(unwiredAgents)).toEqual([
+      'agents (ADR 0048 peer Agents) are not wired into the driver until harness H2; keep the case skipped',
+      'duplicate agent names: reviewer',
+    ]);
+    expect(validateEvalCase({ ...unwiredAgents, skip: 'ADR 0048 H2', agents: peers.slice(0, 1) })).toEqual([]);
     const valid = approvalCase('approve');
     expect(() => loadEvalCases({ 'a.case.ts': { default: valid }, 'b.case.ts': { default: valid } }))
       .toThrow('b.case.ts: id "approval-gate" already used by a.case.ts');
