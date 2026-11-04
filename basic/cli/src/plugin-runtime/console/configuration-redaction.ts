@@ -9,6 +9,8 @@ type Schema = Readonly<Record<string, unknown>>;
 
 export const REDACTED_CONFIG_VALUE = '[redacted]';
 const MAX_DEPTH = 32;
+// Retain uncertainty without changing the non-strict masker's best-effort behavior.
+const unresolvedSchema: Schema = Object.freeze({});
 
 function record(value: unknown): value is Schema {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -27,7 +29,7 @@ function sensitiveSchema(schema: Schema): boolean {
 
 /** Expands local `$ref` and every combinator branch; any branch's annotation applies. */
 function expand(node: unknown, root: Schema, seen: ReadonlySet<unknown> = new Set()): Schema[] {
-  if (!record(node) || seen.has(node) || seen.size > MAX_DEPTH) return [];
+  if (!record(node) || seen.has(node) || seen.size > MAX_DEPTH) return [unresolvedSchema];
   const nextSeen = new Set([...seen, node]);
   const nodes: Schema[] = [node];
   if (typeof node.$ref === 'string' && node.$ref.startsWith('#/')) {
@@ -86,7 +88,7 @@ function maskTree(value: unknown, nodes: readonly Schema[], root: Schema, depth:
 /**
  * Masks `value`, stored at `path` (first segment is the section) under `sectionSchema`.
  * A missing schema still applies key and environment-reference masking.
- * `unknownSchema: 'redact'` (conflict evidence) also replaces any value under a schema
+ * `unknownSchema: 'redact'` (project reads and conflict evidence) also replaces any value under a schema
  * boundary this masker cannot prove (`if`/`not`/`contains`/…, nested `$id`, non-local
  * `$ref`; the chat policy's {@link isUnknownConfigurationSchemaBoundary}), since a secret
  * annotation could hide behind it.
@@ -95,7 +97,7 @@ export function maskConfigValue(sectionSchema: Schema | null | undefined, path: 
   options: Readonly<{ unknownSchema?: 'redact' }> = {}): unknown {
   const root: Schema = record(sectionSchema) ? sectionSchema : {};
   const hidden: Hidden = options.unknownSchema === 'redact'
-    ? node => sensitiveSchema(node) || isUnknownConfigurationSchemaBoundary(node, root) : sensitiveSchema;
+    ? node => node === unresolvedSchema || sensitiveSchema(node) || isUnknownConfigurationSchemaBoundary(node, root) : sensitiveSchema;
   let nodes = record(sectionSchema) ? expand(sectionSchema, root) : [];
   if (path.length > 0 && sensitiveConfigKey(path[0]!)) return REDACTED_CONFIG_VALUE;
   if (nodes.some(hidden)) return REDACTED_CONFIG_VALUE;

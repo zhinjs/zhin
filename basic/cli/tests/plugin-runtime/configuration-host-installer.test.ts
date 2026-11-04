@@ -28,7 +28,8 @@ class Modules implements ModuleRuntime {
   invalidate() {} async close() {}
 }
 type Store = Pick<ConsoleConfigurationStore, 'readChat' | 'patchChat'>;
-async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; globalMasters?: readonly string[]; secondEndpoint?: boolean; store?: (real: ConsoleConfigurationStore) => Store } = {}) {
+async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; globalMasters?: readonly string[]; secondEndpoint?: boolean;
+  extraFields?: Readonly<Record<string, string | number>>; endpointNickname?: string; store?: (real: ConsoleConfigurationStore) => Store } = {}) {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-config-chat-')));
   const modules = new Modules();
   const setups = { root: 0 };
@@ -36,8 +37,8 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   const document: RuntimeConfigDocument = { configVersion: 2, locale: options.locale ?? 'en',
     ...(options.globalMasters ? { ai: { trigger: { masters: options.globalMasters } } } : {}),
     plugins: { bot: '@test/bot', other: '@test/bot' },
-    bot: { master: 'alice', commandPrefix: '!!', nickname: 'Before', count: 1, tags: ['a'], token: 'DO_NOT_DISCLOSE',
-      endpoints: [{ id: 'same' }, ...(options.secondEndpoint ? [{ id: 'second', master: 'carol' }] : [])] },
+    bot: { ...options.extraFields, master: 'alice', commandPrefix: '!!', nickname: 'Before', count: 1, tags: ['a'], token: 'DO_NOT_DISCLOSE',
+      endpoints: [{ id: 'same', ...(options.endpointNickname ? { nickname: options.endpointNickname } : {}) }, ...(options.secondEndpoint ? [{ id: 'second', master: 'carol' }] : [])] },
     other: { master: 'bob', commandPrefix: '#', nickname: 'Other', endpoints: [{ id: 'same' }] } };
   await put(join(project, 'package.json'), { name: '@test/root', dependencies: { '@test/command': 'workspace:*', '@test/bot': 'workspace:*' },
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: options.commands === false ? [] : [{ package: '@test/command' }] } });
@@ -46,8 +47,9 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
   await put(join(project, 'plugins/bot/package.json'), { name: '@test/bot', dependencies: { '@test/adapter': 'workspace:*', '@test/command': 'workspace:*' },
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/adapter' }, ...(options.commands === false ? [{ package: '@test/command' }] : [])] } });
   await put(join(project, 'plugins/bot/schema.json'), { type: 'object', additionalProperties: false, required: ['commandPrefix'], properties: {
+    ...Object.fromEntries(Object.entries(options.extraFields ?? {}).map(([key, value]) => [key, { type: typeof value }])),
     master: { type: 'string' }, commandPrefix: { type: 'string' }, nickname: { type: 'string' }, count: { type: 'integer' }, tags: { type: 'array', items: { type: 'string' } },
-    token: { type: 'string', writeOnly: true }, endpoints: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' } } } },
+    token: { type: 'string', writeOnly: true }, endpoints: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, nickname: { type: 'string' } } } },
   } });
   await put(join(project, 'plugins/bot/plugin.ts'), {});
   modules.values.set(join(project, 'plugins/bot/plugin.ts'), { default: definePlugin({ name: 'bot', configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] } }) });
@@ -89,6 +91,85 @@ async function fixture(options: { locale?: 'zh-CN' | 'en'; commands?: boolean; g
     close: async () => { await runtime.stop(); await rm(project, { recursive: true, force: true }); } };
 }
 function lastReply(client: Client): string { return String(client.sendNative.mock.calls.at(-1)?.[0].payload); }
+
+it('allows an exact declared safe leaf after the first 256 displayed fields', async () => {
+  const f = await fixture({ extraFields: Object.fromEntries(Array.from({ length: 257 }, (_, i) => [`field${String(i).padStart(3, '0')}`, 1])) });
+  try {
+    const listed = await f.realStore.readChat(['bot'], 'fields');
+    expect(listed.fields).toHaveLength(256);
+    expect(listed.fields?.some(field => field.path.at(-1) === 'field256')).toBe(false);
+    const exact = await f.realStore.readChat(['bot', 'field256'], 'fields');
+    expect(exact.fields?.map(field => field.path)).toEqual([['bot', 'field256']]);
+    await f.receive('!!config set bot.field256 -- 2');
+    expect(lastReply(f.client)).toContain('Configuration saved.');
+    expect((await f.document.read()).document.bot).toMatchObject({ field256: 2 });
+  } finally { await f.close(); }
+});
+
+it('prints a literal-dot field path that can be copied into the real get command', async () => {
+  const f = await fixture({ extraFields: { 'label.with.dot': 'Before' } });
+  try {
+    await f.receive('!!config fields bot');
+    const line = lastReply(f.client).split('\n').find(line => line.includes('label.with.dot'))!;
+    const path = line.slice(0, -': string'.length);
+    await f.receive(`!!config get ${path}`);
+    expect(lastReply(f.client)).toContain('"Before"');
+    expect(path).toBe('/bot/label.with.dot');
+  } finally { await f.close(); }
+});
+
+it.each(['x'.repeat(129), 'unaddressable\u0001key'])('keeps ordinary fields usable when a schema contains an unaddressable key: %j', async key => {
+  const f = await fixture({ extraFields: { [key]: 'Before' } });
+  try {
+    await f.receive('!!config fields bot');
+    const listed = lastReply(f.client);
+    expect(listed.split('\n')).toContain('bot.nickname: string');
+    expect(listed).not.toContain(key);
+    expect(listed).not.toMatch(/unconfirmed|unknown/);
+    await f.receive('!!config get bot.nickname');
+    expect(lastReply(f.client)).toContain('"Before"');
+  } finally { await f.close(); }
+});
+
+it.each([
+  ['label/with/slash', '/bot/label~1with~1slash', false],
+  ['label~tilde', '/bot/label~0tilde', false],
+  ['label with space', '/bot/label with space', true],
+  ['显示名称', '/bot/显示名称', false],
+  ['label"quoted', '/bot/label"quoted', true],
+  ['label\\backslash', '/bot/label\\backslash', true],
+  ["label'quoted", "/bot/label'quoted", true],
+] as const)('copies the displayed special-key path through real get and set: %s', async (key, pointer, quoted) => {
+  const f = await fixture({ extraFields: { [key]: 'Before' } });
+  try {
+    const token = quoted ? JSON.stringify(pointer) : pointer;
+    await f.receive('!!config fields bot');
+    expect(lastReply(f.client).split('\n')).toContain(`${token}: string`);
+    await f.receive(`!!config get ${token}`);
+    expect(lastReply(f.client)).toContain('"Before"');
+    await f.receive(`!!config set ${token} -- After`);
+    expect(lastReply(f.client)).toContain('Configuration saved.');
+    expect((await f.document.read()).document.bot).toHaveProperty([key], 'After');
+  } finally { await f.close(); }
+});
+
+it('keeps object-array and scalar-array item writes outside the properties-only chat scope', async () => {
+  const f = await fixture({ endpointNickname: 'Account nickname' });
+  const patch = vi.spyOn(f.realStore, 'patchChat');
+  const prepare = vi.spyOn(f.document, 'prepare');
+  try {
+    const before = await f.document.readSource();
+    await f.receive('!!config get bot.endpoints.0.nickname');
+    expect(lastReply(f.client)).toContain('Account nickname');
+    for (const path of ['bot.endpoints.0.nickname', 'bot.tags.0']) {
+      await f.receive(`!!config set ${path} -- Changed`);
+      expect(lastReply(f.client)).toContain('single field');
+    }
+    expect(patch).not.toHaveBeenCalled();
+    expect(prepare).not.toHaveBeenCalled();
+    expect(await f.document.readSource()).toEqual(before);
+  } finally { patch.mockRestore(); prepare.mockRestore(); await f.close(); }
+});
 
 it('applies a safe nickname through real IM dispatch, store and Root without waiting for its own operation lease', async () => {
   const f = await fixture();
