@@ -170,6 +170,9 @@ export class WorkroomAssignmentCoordinator {
                 messages: [createUserMessage(JSON.stringify(modelInput.prompt))],
                 tools: [],
               }, { signal: operationSignal });
+              if (answer.stopReason === 'error' || answer.stopReason === 'aborted') {
+                throw new WorkroomPlanningClarificationError('planning_unavailable');
+              }
               return assistantText(answer);
             }).catch((error: unknown) => {
               if (operationSignal.aborted) throw error;
