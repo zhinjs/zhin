@@ -171,6 +171,9 @@ export class WorkroomAssignmentCoordinator {
               signal: operationSignal,
             }));
             operationSignal.throwIfAborted();
+            if (result.terminal?.stopReason === 'error' || result.terminal?.stopReason === 'aborted') {
+              throw new WorkroomPlanningClarificationError('planning_unavailable');
+            }
             try {
               return JSON.parse(result.content) as unknown;
             } catch (error) {

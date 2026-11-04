@@ -272,7 +272,9 @@ onSubagentComplete: onComplete } });
       await vi.waitFor(() => expect(onSubagentComplete).toHaveBeenCalled(), { timeout: 2000 });
 
       const payload = onSubagentComplete.mock.calls[0]![0];
-      expect(payload.status).toBe('ok');
+      expect(payload.status).toBe('error');
+      expect(onSubagentComplete).toHaveBeenCalledTimes(1);
+      expect(llm.calls).toHaveLength(1);
       expect(payload.result).toContain('API 调用失败');
     });
 
@@ -565,7 +567,8 @@ onSubagentComplete: vi.fn().mockResolvedValue(undefined) } });
       void capped.spawn({ task: 'bg task', origin: baseOrigin });
       await vi.waitFor(() => expect(capped.getRunningCount()).toBe(1));
       const rejected = await capped.spawnSync({ task: 'sync task', origin: baseOrigin });
-      expect(rejected).toContain('并行子代理已达上限');
+      expect(rejected.status).toBe('error');
+      expect(rejected.result).toContain('并行子代理已达上限');
       capped.dispose();
     });
   });

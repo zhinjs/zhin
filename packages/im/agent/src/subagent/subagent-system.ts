@@ -7,6 +7,7 @@ import {
   SubagentRuntime,
   type SpawnOptions,
   type SubagentCompletePayload,
+  type SubagentSyncResult,
   type SubagentLifecycleEvent,
   type SubagentOrigin,
   type SubagentResultDelivery,
@@ -92,7 +93,7 @@ export class SubagentSystem {
     return this.runtime.spawn(options);
   }
 
-  async spawnSync(options: SpawnOptions): Promise<string> {
+  async spawnSync(options: SpawnOptions): Promise<SubagentSyncResult> {
     if (!this.runtime) throw new Error('SubagentSystem: runtime not attached');
     return this.runtime.spawnSync(options);
   }
@@ -123,6 +124,7 @@ export const defaultSubagentSystem = new SubagentSystem({});
 export type {
   SpawnOptions,
   SubagentCompletePayload,
+  SubagentSyncResult,
   SubagentLifecycleEvent,
   SubagentOrigin,
   SubagentResultDelivery,
