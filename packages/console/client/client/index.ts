@@ -118,6 +118,16 @@ export {
   createAdapterConsolePage,
   type AdapterConsolePageProps,
 } from "./adapter-console/AdapterConsolePage.js";
+export {
+  createCommentReviewPage,
+  ReviewResourceList,
+  type CommentReviewSpec,
+  type ReviewContext,
+  type ReviewDraftBase,
+  type ReviewEndpointBase,
+  type ReviewStatus,
+} from './review-console/index.js';
+
 export type {
   AdapterConsoleActionResult,
   AdapterConsoleActionView,
