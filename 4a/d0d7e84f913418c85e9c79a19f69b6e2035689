@@ -1,0 +1,22 @@
+docs/ai/provider-upgrade.md
+  s_9622fd28aba994::t_1f950a653764c4 115
+  s_9622fd28aba994::t_f9e811728c7fd6 116-117
+docs/plans/ai-provider-runtime-implementation.md
+  s_9622fd28aba994::t_f9e811728c7fd6 40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4ad0d7e84f913418c85e9c79a19f69b6e2035689",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
