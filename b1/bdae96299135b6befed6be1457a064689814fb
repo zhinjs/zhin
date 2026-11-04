@@ -1,0 +1,31 @@
+docs/contributing/publishing.md
+  s_49afbe4d754667::t_f996692b0184af 138,210,216
+plugins/adapters/douyin-live/package.json
+  s_9477e63ef5cee5::t_905b7c9f1c60e3 93
+scripts/sync-publishing-manifest.test.ts
+  s_49afbe4d754667::t_e4b5b07656b863 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b1bdae96299135b6befed6be1457a064689814fb",
+  "prompts": {},
+  "sessions": {
+    "s_49afbe4d754667": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a489-1552-7102-a11a-f890659f60cf",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
