@@ -11,6 +11,7 @@ import {
 } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/index.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
+import { resolveTurnSummaryExecution } from '../memory/summary-model.js';
 
 export interface BranchSummarizationOptions {
   compactionConfig?: CompactionConfig;
@@ -43,11 +44,11 @@ export async function summarizeAbandonedBranchIfNeeded(
   const llmModel = host.llmRuntime.model(provider.name, modelId);
   const contextWindow = options.contextWindow ?? llmModel.contextWindow ?? host.config.contextTokens;
 
+  const summary = resolveTurnSummaryExecution({ transport: host.llmRuntime, model: llmModel });
   let result: Awaited<ReturnType<typeof compactAgentMessages>>;
   try {
     result = await compactAgentMessages({
-      transport: host.llmRuntime,
-      model: llmModel,
+      ...summary,
       messages,
       contextWindow,
       keepRecentTokens: Math.min(keepRecentTokens, Math.max(500, Math.floor(messages.length * 200))),

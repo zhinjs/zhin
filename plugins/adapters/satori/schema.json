@@ -48,7 +48,7 @@
     "endpoints": {
       "type": "array",
       "minItems": 1,
-      "description": "多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值",
+      "description": "多账号：每项明确选择 platform/userId，id/baseUrl 必填，其余字段覆盖实例默认值",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -109,16 +109,49 @@
           "id": {
             "type": "string",
             "description": "Satori bot name"
+          },
+          "platform": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Selected Satori login platform"
+          },
+          "userId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Selected Satori login user ID"
+          },
+          "nickname": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "账号昵称兜底",
+            "x-i18n": {
+              "en": {
+                "description": "Fallback account nickname"
+              }
+            }
+          },
+          "profile": {
+            "$ref": "#/$defs/selfProfileFallback",
+            "description": "账号资料兜底",
+            "x-i18n": {
+              "en": {
+                "description": "Fallback account profile"
+              }
+            }
           }
         },
         "required": [
           "id",
-          "baseUrl"
+          "baseUrl",
+          "platform",
+          "userId"
         ]
       },
       "x-i18n": {
         "en": {
-          "description": "Multiple accounts: each entry defines an endpoint. id and baseUrl are required; other fields override instance defaults."
+          "description": "Multiple accounts: each entry selects an explicit platform and userId. id and baseUrl are required; remaining fields override instance defaults."
         }
       }
     },
@@ -131,9 +164,93 @@
           "description": "Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it."
         }
       }
+    },
+    "nickname": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "账号昵称兜底",
+      "x-i18n": {
+        "en": {
+          "description": "Fallback account nickname"
+        }
+      }
+    },
+    "profile": {
+      "$ref": "#/$defs/selfProfileFallback",
+      "description": "账号资料兜底",
+      "x-i18n": {
+        "en": {
+          "description": "Fallback account profile"
+        }
+      }
     }
   },
   "required": [
     "endpoints"
-  ]
+  ],
+  "$defs": {
+    "selfProfileFallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gender": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "male",
+            "female",
+            "other",
+            "unknown",
+            null
+          ]
+        },
+        "age": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "birthday": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$"
+        },
+        "signature": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "avatar": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(https?://[^\\s/?#]+(?:[/?#].*)?|)$"
+        },
+        "interests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "bio": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
 }

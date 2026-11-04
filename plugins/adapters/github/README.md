@@ -5,7 +5,7 @@ GitHub Plugin Runtime 适配器 — Issue/PR 评论区即聊天通道，GitHub A
 ## 功能特性
 
 - **聊天通道**：Issue/PR 评论区映射为群聊，支持收发消息
-- **Webhook 入站**：HMAC-SHA256 验签 → `Endpoint.emit(...)`
+- **Webhook 入站**：HMAC-SHA256 验签 → `endpointSpec.events`
 - **出站**：`send({ conversation, payload })` → Issue/PR comment（`conversation.id` 为 channel ID）
 - **GitHub App 认证**：JWT → Installation Token
 - **Agent 工具**：按账号、订阅和仓库操作拆分在 `agents/github/skills/github-*/tools/`，只激活当前任务所需的一组
@@ -94,8 +94,16 @@ github:
 | `src/protocol.ts` | 协议纯函数（channel / payload） |
 | `src/gh-client.ts` | GitHub API 客户端 |
 
-- 入站：`httpHostToken` POST → `Endpoint.emit(...)`
+- 入站：`httpHostToken` POST → `endpointSpec.events`
 - 出站：`send({ conversation, payload })`
+
+## Console 页面
+
+在所属插件的 Console 页面管理账号：查看配置与运行状态，添加、编辑、启动、停止、替换或删除账号。首次修改启动账号前，管理员需确认迁移清单；保留原身份与历史。此后保存到 Host 运行时存储，不改启动配置或 `.env`，无需重启进程。
+
+新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
+
+读取需要 `github:read`，写入需要 `github:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
 ## 故障排查
 

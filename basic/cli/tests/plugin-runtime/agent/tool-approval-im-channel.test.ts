@@ -8,6 +8,7 @@ import {
 import {
   ImToolApprovalChannel,
   formatImApprovalCard,
+  formatSelfChangeCard,
   imApprovalOperatorId,
   type ImApprovalCommandInput,
   type ImApprovalDeliveryTarget,
@@ -251,8 +252,7 @@ describe('ImToolApprovalChannel commands', () => {
 describe('IM × Console on the same queue (G6-c)', () => {
   it('Console first: the IM answer sees the card as decided', () => {
     const { queue, channel } = setup();
-    const approvals = new HostToolApprovals();
-    approvals.bind(queue);
+    const approvals = new HostToolApprovals(queue);
     const card = queue.enqueue(DANGEROUS_CALL);
 
     expect(approvals.resolve({ id: card.id, decision: 'deny' })).toMatchObject({ status: 'denied', channel: 'console', decidedBy: 'console' });
@@ -262,8 +262,7 @@ describe('IM × Console on the same queue (G6-c)', () => {
 
   it('IM first: the Console answer is a conflict', () => {
     const { queue, channel } = setup();
-    const approvals = new HostToolApprovals();
-    approvals.bind(queue);
+    const approvals = new HostToolApprovals(queue);
     const card = queue.enqueue(DANGEROUS_CALL);
 
     channel.handleCommand(command(`approve ${card.id}`));
@@ -391,5 +390,82 @@ describe('ImToolApprovalChannel self-change cards (ADR 0040 §4)', () => {
     const queue = new ToolApprovalQueue();
     const card = queue.enqueue(SELF_CHANGE);
     expect(formatImApprovalCard(card, 'dm')).toContain('【变更审批】');
+  });
+
+  it('shows the diff excerpt, the skipped check names and the blind-approval warning (#1142 F3)', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue({
+      ...SELF_CHANGE,
+      args: {
+        ...SELF_CHANGE.args,
+        trial: 'passed (1 skipped)',
+        skippedChecks: ['sandbox_load commands/ping.ts'],
+        diffExcerpt: ['# create commands/ping.ts', '@@ -0,0 +1,1 @@', '+export default 1;'],
+        diffExcerptTruncated: false,
+      },
+    });
+    const text = formatImApprovalCard(card, 'dm');
+    expect(text).toContain('差异摘录：\n# create commands/ping.ts\n@@ -0,0 +1,1 @@\n+export default 1;\n（以上为全部改动）');
+    expect(text).toContain('试跑：通过 (1 skipped)；跳过：sandbox_load commands/ping.ts');
+    expect(text).toContain('未看完整正文请去 Console');
+  });
+
+  it('says how many skipped checks were left off the card', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue({
+      ...SELF_CHANGE,
+      args: { ...SELF_CHANGE.args, trial: 'passed (21 skipped)', skippedChecks: ['syntax a.tsx'], skippedChecksOmitted: 20 },
+    });
+    expect(formatSelfChangeCard(card)).toContain('跳过：syntax a.tsx，…另 20 项（见 Console）');
+  });
+
+  it('caps a stored excerpt at exactly 40 short lines', () => {
+    const queue = new ToolApprovalQueue();
+    const shortLines = Array.from({ length: 45 }, (_, index) => `+l${index}`);
+    const card = queue.enqueue({
+      ...SELF_CHANGE,
+      args: { ...SELF_CHANGE.args, diffExcerpt: shortLines, diffExcerptTruncated: false },
+    });
+    const text = formatSelfChangeCard(card);
+    const shown = text.split('\n').filter(line => /^\+l\d+$/u.test(line));
+    expect(shown).toHaveLength(40);
+    expect(shown.at(-1)).toBe('+l39');
+    expect(text).toContain('…（摘录已截断）完整内容见 Console。');
+  });
+
+  it('says there are no body changes for an empty excerpt (config-only change)', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue({
+      ...SELF_CHANGE,
+      args: { ...SELF_CHANGE.args, files: [], configPaths: ['set ping.greeting'], diffExcerpt: [] },
+    });
+    const text = formatSelfChangeCard(card);
+    expect(text).toContain('差异摘录：无文件正文改动。');
+    expect(text).toContain('配置：set ping.greeting');
+    expect(text).not.toContain('不可用');
+  });
+
+  it('caps a stored excerpt at 2 KB and points to the Console', () => {
+    const queue = new ToolApprovalQueue();
+    const longLines = Array.from({ length: 45 }, (_, index) => `+line ${index} ${'z'.repeat(150)}`);
+    const card = queue.enqueue({
+      ...SELF_CHANGE,
+      args: { ...SELF_CHANGE.args, diffExcerpt: longLines, diffExcerptTruncated: false },
+    });
+    const text = formatSelfChangeCard(card);
+    const shown = text.split('\n').filter(line => line.startsWith('+line '));
+    expect(shown.length).toBeLessThan(40);
+    expect(Buffer.byteLength(shown.join('\n'), 'utf8')).toBeLessThanOrEqual(2 * 1024);
+    expect(text).toContain('…（摘录已截断）完整内容见 Console。');
+  });
+
+  it('still warns when the card has no excerpt (older or failed excerpt)', () => {
+    const queue = new ToolApprovalQueue();
+    const card = queue.enqueue(SELF_CHANGE);
+    const text = formatSelfChangeCard(card);
+    expect(text).toContain('差异摘录：不可用，完整内容见 Console。');
+    expect(text).toContain('未看完整正文请去 Console');
+    expect(text).toContain('试跑：通过');
+    expect(text).not.toContain('跳过：');
   });
 });

@@ -20,6 +20,7 @@ description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、A
 | 设置 master、命令前缀 | [适配器实例](#适配器实例-master-trusted-commandprefix) |
 | 配置 AI 模型 | [ai](#ai)，或直接看 [AI 总览](../ai/index.md) |
 | 引用 `.env` 里的密钥 | [环境变量展开](#环境变量展开) |
+| 修改配置后按需生效 | [修改后如何生效](#修改后如何生效) |
 | 看一份完整的最小配置 | [最小配置](#最小配置) |
 
 ## 配置文件的位置
@@ -66,6 +67,64 @@ flowchart LR
 配置文件会经过 JSON Schema 校验，**顶层只允许下文列出的键**。键名写错会在启动时报 `Invalid Plugin config in zhin.config.yml`。
 
 Host 键由 CLI 装配层消费；每个插件只收到顶层同名块的业务值，不会收到其他实例的配置。
+
+## 修改后如何生效
+
+`zhin runtime start` **只有显式传入 `--watch` 才监听变化**。不传时，编辑文件不会自动应用；已有开发脚本若需要热更新，应显式选择范围：
+
+```bash
+npx zhin runtime start --watch source config  # 源码与配置
+npx zhin runtime start --watch config         # 仅配置
+npx zhin runtime start --watch source         # 仅源码
+npx zhin runtime start --mode production      # 均不监听
+```
+
+`--no-watch` 保留为均不监听的兼容入口，不能与 `--watch` 同用。源码监听不代替配置监听；源码重载也不会顺带应用尚待重启的配置。
+
+**保存成功不等于全部生效。** Console 配置表单保存后会请求应用，并分别显示文件修订与各项生效结果。关闭监听时，仍可在新版 Console 的运行生效状态面板点击“应用已保存配置”：它只应用当前已保存版本，不保存未提交的表单草稿，也不重启进程。旧 Host 未提供生效明细时，Console 会明确提示无法确认。
+
+| 修改内容 | 生效边界 |
+| --- | --- |
+| 仅修改已声明资料原地更新能力的适配器的 `nickname` / `profile` 配置兜底 | 新资料读取使用新兜底，保留连接；不调用平台资料写入。已观察到的平台昵称仍优先 |
+| 修改模型选择，或新增、兼容修订 provider/model 定义 | 标准 Host 模型入口的新操作取得新版本；在途操作继续使用已取得的模型与租约，不在工具循环中切换 |
+| HTTP 监听、数据库连接、`.env` 输入、YAML 中的账号角色等启动依赖 | 未支持安全替换的部分显示待进程重启，当前继续使用旧值 |
+| 其他插件配置 | 沿所属插件的现有局部重载；未声明更新能力不视为原地更新 |
+
+同次保存可以部分生效。例如同时修改账号兜底昵称、默认模型和 HTTP 端口，前两项在满足条件时生效，端口仍待重启；依赖待重启环境变量的模型修改也不会提前启用。完整候选配置校验失败时保留当前运行。失败、结果未确认和被较新修订替代分别显示；结果未确认时先只读刷新核对，不重复提交。
+
+模型目录项删除、重命名、Agent 绑定拓扑或能力契约的破坏性修改不支持热更新，保留为待进程重启。第三方代码若长期保存自己取得的 SDK/provider 引用，也不会自动换成新对象，应在新操作时通过框架入口重新取得。
+
+### 在聊天中管理配置
+
+安装根 Command Feature 后，Bot 主人可以在与 Bot 的**私聊**中使用 `config`（中文别名 `配置`）查看用法。子命令只有四个：
+
+- `config fields [范围]`：列出聊天可管理的字段路径和类型，不含值；
+- `config get <路径>`：读取一个字段的当前保存值；
+- `config set <路径> <值>`：修改一个字段；
+- `config unset <路径>`：删除一个可选字段。
+
+提示会自动带上当前账号的实际命令前缀和 namespace，无需 AI Agent。
+
+**谁能用**：只有接收这条私聊的同一适配器（同一平台实例）下，任一已配置账号（端点）的 `master`（账号级 `master`，未设置时继承插件级 `master`）才能使用；这样主人身份与消息始终来自同一适配器/平台。其他适配器（包括同一适配器包的另一个插件实例）的主人不能使用。`ai.trigger.masters` 不带平台信息，首版不作为聊天配置的授权依据。群聊、频道和伪造的 metadata 都不能进入保存流程。
+
+**入口按适配器，字段范围按项目**：授权（入口）只看接收消息的同一适配器实例上的主人；一旦通过，可管理的字段范围是**整个项目**中所有聊天安全的叶子字段加上 Host 白名单 `HOST_CONFIG_PATCH_PATHS`，并不局限于授权适配器所属的插件——即任一合法主人可管理全局的聊天安全字段（包括其他插件的字段）。若不希望某个主人改动其他插件，请勿在聊天中授予其主人身份，或改用 CLI/Console 管理。
+
+**能改什么**：
+
+- Host 段只开放与 Console 普通页面相同的白名单（`HOST_CONFIG_PATCH_PATHS`，目前只有 `ai.trigger.ambient` 下的字段）；`locale`、`http`、`database` 等其余 Host 配置请用 CLI 或 Console。
+- 插件段需要 Schema 能证明安全：密钥、token、密码等敏感字段、缺少 Schema 或无法判断范围的字段一律拒绝。
+- 主人、信任名单、审批与工具门槛等权限字段（如 `master`、`trusted`、`endpoints[*].master`、`ai.trigger.masters`、`toolHardGate.*`）不能通过聊天读写。按包含/前后缀匹配，复合名同样拒绝，例如 `adminIds`、`ownerId`、`masterId`、`trustedUsers`、`superUsers`、`whitelist`/`allowlist`/`blacklist`、`bypassMasters`（如 content-moderation 的 `inbound.whitelist.userIds`、`inbound.bypassMasters`）；该规则偏保守，名称中含这些词的普通字段（如 `masterVolume`）也请用 CLI 修改。
+- `endpoints[*].id` / `endpoints[*].name` 用于绑定账号级主人与信任名单，属于间接的权限变更，不能通过聊天修改；`set`/`unset` 只能作用于 `config fields <根>` 列出的字段。
+- `set` 的新值不能包含 `${…}` 或 `env://` 环境变量引用（无论变量名是否像密钥），以免之后读取或回显时泄露环境值；已有引用不受其他操作影响。
+- 只能读写**单个叶子字段**（标量或标量数组），不能整体覆盖或删除对象；必填字段不能 `unset`。`configVersion`、`plugins`、`disable_plugins`、根 `plugin` 和未声明实例同样不能修改。
+
+路径可写 `mybot.nickname`，也可写 JSON Pointer，例如 `/mybot/dot.key`（`~1` 表示 `/`，`~0` 表示 `~`）。值按字段类型解析：数字、布尔和数组用 JSON 写法；字符串字段可以直接写文本，例如 `config set mybot.nickname -- 小智`（这里省略实际前缀）。不接受对象值。
+
+保存沿用上文的完整候选校验和按组应用。保存前失败会明确提示未保存；提交确认丢失时提示结果未确认，请勿重复发送，先用 `get` 核对，指令层不会自动重试或回滚。拒绝回执只给原因，不回显任何值、默认值或原始异常。
+
+### 文件与数据库记录各管什么
+
+`zhin.config.yml` 继续保存部署声明，Console 配置表单仍写回该文件，不会把整份配置迁入数据库。受管账号 desired 记录、个人模型与会话选择、模型运行策略覆写继续由各自现有数据库/API 管理；文件热更新不覆盖显式领域记录，也不清空个人选择。YAML 中的账号种子不会改写已经存在的受管账号记录；适配器资料默认值仍能作用于继承它的账号。
 
 ## 环境变量展开
 
@@ -128,7 +187,7 @@ npx zhin config check
 
 `setup` 会把非敏感结构写入 `zhin.config.yml`，把实际连接值写入项目根目录 `.env`。Runtime
 先读取 `.env`，再用所选环境的 `.env.<environment>` 覆盖同名变量；例如生产启动使用
-`zhin runtime start --mode production --no-watch` 默认读取 `.env.production`；显式传入
+`zhin runtime start --mode production` 默认读取 `.env.production`；显式传入
 `--environment <name>` 可选择其他环境覆盖层。
 
 ### SQLite
@@ -421,16 +480,16 @@ plugins:
 icqq:
   master: "${ICQQ_MASTER}" # 顶层共享：所有 endpoint 生效
   endpoints:
-    # 逐项：name 必填，其余字段与顶层合并（逐项优先）
-    - name: "${ICQQ_ACCOUNT_1}"
-    - name: "${ICQQ_ACCOUNT_2}"
+    # 逐项：id 必填，其余字段与顶层合并（逐项优先）
+    - id: "${ICQQ_ACCOUNT_1}"
+    - id: "${ICQQ_ACCOUNT_2}"
 ```
 
 展开规则（`@zhin.js/adapter` 的 `expandEndpointConfigs`）：
 
-- 每个 endpoint 的最终配置 = 实例配置（去掉 `endpoints` 键）与该项的浅合并，**逐项字段覆盖顶层**。
-- `name` 必填且为非空字符串；不含 `~`；重名只保留首个并告警。
-- `endpoints` 为空或全部非法时，退回单 Endpoint（名为 instanceKey）。
+- 连接字段浅合并，逐项覆盖顶层；资料兜底单独按字段合并。
+- 每项必须提供非空 `id`；包含保留分隔符（`~` 和 NUL）、重复 ID 或非法条目时明确报错。
+- 未提供 `endpoints` 或数组为空时，创建一个 Endpoint，使用顶层 `id`，未提供时使用 instanceKey。
 
 真实示例（QQ 官方 bot，主账号走代理网关 + 沙箱账号并存）：
 
@@ -441,14 +500,14 @@ plugins:
   slack: "@zhin.js/adapter-slack"
 qq:
   endpoints:
-    - name: zhin
+    - id: zhin
       appid: "${QQ_APPID}"
       secret: "${QQ_SECRET}"
       mode: websocket
       sandbox: false
       gatewayUrl: "https://bots.example.com/gateway/102005927"
       intents: [ GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES ]
-    - name: "102069707"
+    - id: "102069707"
       appid: "${QQ_SANDBOX_APPID}"
       secret: "${QQ_SANDBOX_SECRET}"
       mode: websocket
@@ -456,7 +515,7 @@ qq:
       intents: [ GUILDS, GROUP_AND_C2C_EVENT ]
 slack:
   endpoints:
-    - name: zhin
+    - id: zhin
       token: "${SLACK_TOKEN}"
       appToken: "${SLACK_APP_TOKEN}"
       signingSecret: "${SLACK_SIGNING_SECRET}"
@@ -479,3 +538,33 @@ plugins: {}
 ```
 
 启动后按 `zhin setup` 向导逐步补齐 database / 适配器 / AI（见 [CLI 参考](../cli/index.md)）；运行方式见 [zhin runtime start 详解](../cli/runtime.md)。
+
+## 账号自身资料
+
+Agent 优先使用当前 Endpoint 的平台资料。适配器顶层的 `nickname` 和 `profile` 是缺失字段
+的默认值；`endpoints[]` 可逐项覆盖，`profile` 按字段合并。这些值不会自动修改平台资料。
+
+```yaml
+icqq:
+  master: "你的 QQ 号"
+  nickname: 小知
+  profile:
+    gender: unknown
+    interests: [音乐, 摄影]
+    bio: 喜欢交流的生活助手
+  endpoints:
+    - id: "机器人 QQ 号"
+      nickname: 小知同学
+      profile:
+        interests: [音乐, 读书]
+```
+
+例如平台能读到昵称，就使用平台昵称；读不到兴趣，才使用此账号覆盖后的兴趣。平台明确
+返回空签名或空兴趣时，不会恢复配置中的旧值。群名片单独保留。已有 AI 配置的昵称仍是
+最终兜底，内部子 Agent 的角色名称保持独立。
+
+`profile` 支持 `gender`、`age`、`birthday`（`YYYY-MM-DD`）、`signature`、`avatar`（图片 URL）、
+`interests`（字符串数组）和 `bio`。没有配置或平台证据的信息保持未知。普通回合复用本次
+账号实例已读取的资料；需要重新查询时使用 `get_self_profile`。修改实际账号资料使用
+`set_self_profile`，它只开放适配器确实支持的字段，并沿用身份类操作审批。配置表单编辑
+的是兜底值，和平台资料修改是不同操作。

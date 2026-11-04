@@ -1,19 +1,24 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /** QQ Official Bot protocol helpers. Canonicalization is owned by Core. */
 
 import { EndpointDeliveryError, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveQqIntents } from './qq-intents.js';
+import { resolveAdapterNotifyTarget, type AdapterNotifyTarget, type ResolvedAdapterNotifyTarget } from 'zhin.js/adapter';
 
 const logger = getLogger('qq');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface QqEndpointConfig {
+export interface QqEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly appid: string;
   readonly secret: string;
   /** Default `websocket`. `webhook` / `middleware` use httpHostToken POST. */
   readonly mode?: 'websocket' | 'webhook' | 'middleware';
   readonly sandbox?: boolean;
+  /** Publish supported C2C replies while generated; false keeps complete delivery. */
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
   /** Explicit intents; when omitted, derived from `botKind` (default public). */
   readonly intents?: readonly string[];
   /** public | private — drives default intents when `intents` omitted. */
@@ -22,6 +27,8 @@ export interface QqEndpointConfig {
   readonly gatewayUrl?: string;
   readonly streamProxy?: import('./stream-proxy.js').QqStreamProxy;
   readonly webhookPath?: string;
+  /** Optional out-of-band outage notification target (usually an ICQQ instance). */
+  readonly notify?: AdapterNotifyTarget;
 }
 
 export interface ResolvedQqWebsocketConfig {
@@ -31,10 +38,13 @@ export interface ResolvedQqWebsocketConfig {
   readonly appid: string;
   readonly secret: string;
   readonly sandbox: boolean;
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
   readonly intents?: readonly string[];
   readonly accessTokenUrl?: string;
   readonly gatewayUrl?: string;
   readonly streamProxy?: import('./stream-proxy.js').QqStreamProxy;
+  readonly notify?: ResolvedAdapterNotifyTarget;
 }
 
 export interface ResolvedQqHttpConfig {
@@ -45,6 +55,9 @@ export interface ResolvedQqHttpConfig {
   readonly secret: string;
   readonly webhookPath: string;
   readonly sandbox: boolean;
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
+  readonly notify?: ResolvedAdapterNotifyTarget;
 }
 
 export type ResolvedQqConfig = ResolvedQqWebsocketConfig | ResolvedQqHttpConfig;
@@ -52,6 +65,8 @@ export type ResolvedQqConfig = ResolvedQqWebsocketConfig | ResolvedQqHttpConfig;
 export type QqChannelKind = 'private' | 'group' | 'channel' | 'direct';
 
 export interface QqInboundMessage {
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly id: string;
   readonly content: string;
   readonly channelKind: QqChannelKind;
@@ -83,6 +98,9 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
   const appid = requiredEndpointField(config.appid, 'appid');
   const secret = requiredEndpointField(config.secret, 'secret');
   const mode = config.mode ?? 'websocket';
+  const streamingIntervalMs = config.streamingIntervalMs ?? 500;
+  if (!Number.isFinite(streamingIntervalMs) || streamingIntervalMs < 0) throw new TypeError('streamingIntervalMs must be a non-negative finite number');
+  const notify = resolveAdapterNotifyTarget(config.notify);
 
   if (mode === 'webhook' || mode === 'middleware') {
     const webhookPathRaw = config.webhookPath ?? '/qq/webhook';
@@ -95,6 +113,9 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
       secret,
       webhookPath,
       sandbox: config.sandbox === true,
+      streaming: config.streaming !== false,
+      streamingIntervalMs,
+      ...(notify ? { notify } : {}),
     };
   }
 
@@ -107,6 +128,8 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
     appid,
     secret,
     sandbox: config.sandbox === true,
+    streaming: config.streaming !== false,
+    streamingIntervalMs,
     intents: resolveQqIntents({
       intents: config.intents,
       botKind: config.botKind,
@@ -114,6 +137,7 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
     accessTokenUrl: config.accessTokenUrl,
     gatewayUrl: config.gatewayUrl,
     ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
+    ...(notify ? { notify } : {}),
   };
 }
 

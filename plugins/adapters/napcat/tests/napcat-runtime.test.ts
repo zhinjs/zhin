@@ -1,9 +1,7 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { napcatRuntimeStateToken } from '../src/napcat-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineNapCatAdapter from '../adapters/napcat/index.js';
 import {
@@ -303,19 +301,18 @@ describe('napcat plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway,
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), gateway, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
 
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'private',
       message_id: 42,
@@ -342,17 +339,16 @@ describe('napcat plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
-    endpoint.admit({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'private',
       message_id: 1,
@@ -366,18 +362,17 @@ describe('napcat plugin runtime adapter', () => {
   it('filters self messages', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'private',
       message_id: 2,
@@ -392,18 +387,17 @@ describe('napcat plugin runtime adapter', () => {
   it('marks mentioned when group message @s the bot uin (self_id)', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 101,
@@ -429,18 +423,17 @@ describe('napcat plugin runtime adapter', () => {
   it('does not mark mentioned when @ targets someone else', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 102,
@@ -461,18 +454,17 @@ describe('napcat plugin runtime adapter', () => {
   it("does not mark mentioned for qq='all'", async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.admit({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 103,
@@ -492,21 +484,17 @@ describe('napcat plugin runtime adapter', () => {
 
   it('sends outbound payloads via WS send_private_msg action', async () => {
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), {
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined) });
     await endpoint.start();
     endpoint.open();
 
@@ -541,15 +529,14 @@ describe('napcat plugin runtime adapter', () => {
   it('admits inbound events received over the socket when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
     ws.emitMessage(JSON.stringify({
@@ -572,58 +559,20 @@ describe('napcat plugin runtime adapter', () => {
   it('creates wss endpoint when httpHostToken provided', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = defineNapCatAdapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      name: 'napcat',
-      config: { connection: 'wss', id: 'rev', path: '/napcat/ws' },
-      use: (token: unknown) => {
-        if (token === httpHostToken) return http;
-        if (token === outboundMessageToken) {
-          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-        }
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === napcatRuntimeStateToken) return createEndpointRuntimeState();
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
-    expect(endpoint).toBeInstanceOf(NapCatWssEndpoint);
+    const endpoint = await createAdapterHarness(defineNapCatAdapter, { connection: 'wss', id: 'rev', path: '/napcat/ws' }, { name: 'napcat', resources: new Map([[httpHostToken.id, http]]) });
+    expect(endpoint.endpoint).toBeInstanceOf(NapCatWssEndpoint);
   });
 
   it('creates http endpoint when httpHostToken provided', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = defineNapCatAdapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      name: 'napcat',
-      config: {
+    const endpoint = await createAdapterHarness(defineNapCatAdapter, {
         connection: 'http',
         id: 'http-bot',
         http_url: 'http://127.0.0.1:3000',
         post_path: '/napcat/post',
-      },
-      use: (token: unknown) => {
-        if (token === httpHostToken) return http;
-        if (token === outboundMessageToken) {
-          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-        }
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === napcatRuntimeStateToken) return createEndpointRuntimeState();
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
-    expect(endpoint).toBeInstanceOf(NapCatHttpEndpoint);
+      }, { name: 'napcat', resources: new Map([[httpHostToken.id, http]]) });
+    expect(endpoint.endpoint).toBeInstanceOf(NapCatHttpEndpoint);
   });
 
   it('handles HTTP POST and routes events through OutboundMessageService', async () => {
@@ -636,9 +585,8 @@ describe('napcat plugin runtime adapter', () => {
       retcode: 0,
       data: { message_id: 99 },
     }));
-    const endpoint = bindTestEndpoint(new NapCatHttpEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatHttpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway,
       http,
       config: resolveNapCatConfig({
         connection: 'http',
@@ -647,7 +595,7 @@ describe('napcat plugin runtime adapter', () => {
         post_path: '/napcat/post',
       }) as ReturnType<typeof resolveNapCatConfig> & { connection: 'http' },
       callHttpAction,
-    }), gateway, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
 
     await endpoint.start();
     const { port } = await http.listen();
@@ -690,9 +638,8 @@ describe('napcat ws lifecycle', () => {
 
   it('does not arm reconnect when the initial connect closes before open', async () => {
     let creates = 0;
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig, // reconnect_interval: 50
       createWebSocket: () => {
         creates += 1;
@@ -700,7 +647,7 @@ describe('napcat ws lifecycle', () => {
         queueMicrotask(() => ws.emitClose(1006, 'refused'));
         return ws;
       },
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
 
     await expect(endpoint.start()).rejects.toThrow('NapCat WS closed');
     // 等超过一个 reconnect_interval，不应有重连（僵尸连接）发生
@@ -710,9 +657,8 @@ describe('napcat ws lifecycle', () => {
 
   it('reconnects only after an established connection closes', async () => {
     const sockets: ReturnType<typeof createMockWs>[] = [];
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         const ws = createMockWs();
@@ -722,7 +668,7 @@ describe('napcat ws lifecycle', () => {
         });
         return ws;
       },
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
 
     await endpoint.start();
     sockets[0]!.emitClose(1006, 'lost');
@@ -732,9 +678,8 @@ describe('napcat ws lifecycle', () => {
 
   it('clears the heartbeat interval when the socket closes', async () => {
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: resolveNapCatConfig({
         connection: 'ws',
         id: 'hb-napcat',
@@ -747,7 +692,7 @@ describe('napcat ws lifecycle', () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
 
     await endpoint.start();
     await new Promise((resolve) => setTimeout(resolve, 70));
@@ -776,9 +721,8 @@ describe('napcat reverse ws lifecycle', () => {
       })),
     };
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new NapCatWssEndpoint({
+    const endpoint = await createEndpointHarness(() => new NapCatWssEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       http: http as never,
       config: resolveNapCatConfig({
         connection: 'wss',
@@ -786,7 +730,7 @@ describe('napcat reverse ws lifecycle', () => {
         path: '/napcat/ws',
         heartbeat_interval: 20,
       }) as NapCatWssConfig,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'napcat', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
 
     await endpoint.start();
     endpoint.open();

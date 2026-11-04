@@ -1,4 +1,3 @@
-import type { OneBot12ActionResponse } from './protocol.js';
 
 /** Minimal WS surface used by the endpoint (real `ws` or test mock). */
 export interface OneBot12WsSocket {
@@ -13,9 +12,3 @@ export interface OneBot12WsCreateOptions {
 }
 
 export const WS_OPEN = 1;
-
-export interface OneBot12PendingAction {
-  resolve: (value: OneBot12ActionResponse) => void;
-  reject: (err: Error) => void;
-  timeout: NodeJS.Timeout;
-}

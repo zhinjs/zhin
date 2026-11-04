@@ -1,3 +1,4 @@
+import { decodeTaskTarget } from 'zhin.js/plugin-runtime';
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { rssMessages as t } from './i18n.js';
 /**
@@ -47,7 +48,13 @@ export interface CheckResult {
   readonly pushed: number;
 }
 
-async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, feedTitle: string, items: FeedItem[]): Promise<number> {
+interface RssFeedPushRequest {
+  readonly runtime: RssRuntime;
+  /** A single fetched feed, shared by this poll's subscribers without re-fetching. */
+  readonly feed: Readonly<{ url: string; title: string; items: FeedItem[] }>;
+}
+async function pushToSubscribers(input: RssFeedPushRequest): Promise<number> {
+  const { runtime, feed: { url: feedUrl, title: feedTitle, items } } = input;
   const push = runtime.outbound;
   const Subs = getRssSubs(runtime.db);
   if (!push || !Subs) return 0;
@@ -63,7 +70,10 @@ async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, feedTitle
       || typeof endpointKey !== 'string' || !endpointKey.trim()
       || (channelType !== 'private' && channelType !== 'group' && channelType !== 'channel')) continue;
     try {
+      const target = sub.target_json == null ? undefined
+        : decodeTaskTarget(JSON.parse(String(sub.target_json)) as Record<string, unknown>);
       await push({
+        ...(target ? { target } : {}),
         adapterName,
         endpointKey,
         channelType,
@@ -72,8 +82,8 @@ async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, feedTitle
         content: formatNewItems(feedTitle, items, runtime.config.maxItems, resolveLocale(sub.locale)),
       });
       pushed += 1;
-    } catch {
-      // OutboundHost already logs; continue other subscribers.
+    } catch (error) {
+      console.warn('[rss] subscription delivery failed:', error instanceof Error ? error.message : String(error));
     }
   }
   return pushed;
@@ -112,7 +122,7 @@ export async function checkSubscriptions(runtime: RssRuntime, options: {
       totalNew += newItems.length;
       const body = formatNewItems(title || url, newItems, runtime.config.maxItems, locale);
       parts.push(body);
-      pushed += await pushToSubscribers(runtime, url, title || url, newItems);
+      pushed += await pushToSubscribers({ runtime, feed: { url, title: title || url, items: newItems } });
     } catch (e) {
       parts.push(t(locale, 'checkFailed', { url, error: (e as Error).message }));
     }

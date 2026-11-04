@@ -4,7 +4,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { milkyRuntimeStateToken } from '../../../src/milky-runtime-state.js';
 
 export const milkyEndpointCommands = createEndpointCommands({
   adapterKey: 'milky',
@@ -14,6 +13,5 @@ export const milkyEndpointCommands = createEndpointCommands({
     { key: 'path', description: 'webhook / reverse-wss 路径', descriptionI18n: { en: "Webhook / reverse-wss path" } },
     { key: 'access_token', env: true, description: 'Milky access token' },
   ],
-  running: (use) => use(milkyRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `baseUrl: ${String(entry.baseUrl)}`,
 }, defineCommand);

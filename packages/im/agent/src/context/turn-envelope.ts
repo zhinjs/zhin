@@ -6,6 +6,7 @@ import { isLocale } from '@zhin.js/plugin-runtime';
 import { SCENE_WAKE_METADATA_KEY } from '../scene-events.js';
 import { formatMergedTurnBlock } from '../turn/merged-turn-context.js';
 import { formatLiveDanmakuBlock } from '../turn/live-turn-context.js';
+import { SELF_PROFILE_FIELDS, type SelfProfileSnapshot } from '@zhin.js/im-contract';
 
 export const TURN_CONTEXT_BEGIN = '[Turn context]';
 export const TURN_CONTEXT_END = '[/Turn context]';
@@ -26,6 +27,8 @@ export interface TurnContextEnvelopeInput {
   turn?: TurnContextView;
   observedAt?: number;
   profileSummary?: string;
+  /** Last-resort configured display name; never overwrites an observed account field. */
+  fallbackNickname?: string;
   sessionSummary?: string;
   /** 状态感知 `[Scene events]` 段（#996），与会话画像同块、ephemeral。 */
   sceneEvents?: string;
@@ -38,6 +41,7 @@ export interface TurnContextEnvelopeInput {
   agentsContext?: string;
   /** Rendered "already told the user" ledger (#730). */
   toldLedger?: string;
+  toldLedgerBlocks?: readonly TextContentBlock[];
   /** BM25-recalled semantic memory for this message (#734). */
   relevantMemory?: string;
 }
@@ -61,17 +65,22 @@ export function formatSenderContextLine(turn: TurnContextView): string {
     : `Sender: id=${principal.subjectId} roles=${roles}`;
 }
 
+function stableSet(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 type SceneFields = Readonly<Record<string, string | number | boolean | null | readonly string[]>>;
 
 /** ADR 0041 §6 scene facts; `null` = unknown (omitted from the rendered line). */
-function sceneFields(origin: Extract<TurnContextView['origin'], { kind: 'im' }>, state: TurnContextState | undefined): SceneFields {
+function sceneFields(origin: Extract<TurnContextView['origin'], { kind: 'im' }>, state: TurnContextState | undefined) {
   const address = origin.conversation;
   return {
     scene_id: address?.id ?? origin.sceneId,
     scene_type: address?.kind ?? origin.scope,
     scene_name: state?.conversation?.name ?? address?.name ?? null,
     owner_id: state?.conversation?.ownerId ?? null,
-    admins: state?.conversation?.adminIds?.length ? [...state.conversation.adminIds] : null,
+    // Set-valued: deduplicated and sorted so a platform's member-list order never changes the bytes.
+    admins: state?.conversation?.adminIds?.length ? stableSet(state.conversation.adminIds) : null,
     member_count: state?.conversation?.memberCount ?? null,
     global_mute: state?.conversation?.muteAll ?? null,
     assistant_role: state?.bot?.platformRole ?? null,
@@ -84,16 +93,43 @@ export function formatSceneLine(fields: SceneFields): string {
 }
 
 /**
- * ADR 0041 §5: the scene line is the last part of the system prompt (after a cache breakpoint),
- * so a scene change only invalidates the tail. Undefined outside IM turns.
+ * Full observed scene line. Model prompts use scenePromptPartsForTurn to separate the bound
+ * identity from mutable state. Undefined outside IM turns.
  */
 export function sceneLineForTurn(turn: TurnContextView | undefined): string | undefined {
   if (turn?.origin.kind !== 'im') return undefined;
   return formatSceneLine(sceneFields(turn.origin, turn.input?.contextState));
 }
 
+/** Only conversation identity is session-stable; observed state always belongs to this turn. */
+export function scenePromptPartsForTurn(
+  turn: TurnContextView | undefined,
+): Readonly<{ identity: string; state?: string }> | undefined {
+  if (turn?.origin.kind !== 'im') return undefined;
+  const { scene_id, scene_type, ...state } = sceneFields(turn.origin, turn.input?.contextState);
+  const text = formatSceneLine(state);
+  return {
+    identity: formatSceneLine({ scene_id, scene_type }),
+    ...(text === '[;]' ? {} : { state: text }),
+  };
+}
+
 export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): string | null {
   return buildTurnContextBlocks(input).map(block => block.text).join('\n');
+}
+
+/** Keep field provenance concise without treating an omitted source as a platform observation. */
+function accountProfileData(profile: SelfProfileSnapshot, readError?: 'lookup_failed'): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  for (const source of ['platform', 'configured', undefined] as const) {
+    const fields = Object.fromEntries(SELF_PROFILE_FIELDS
+      .filter(field => profile.values[field] !== undefined && profile.sources[field] === source)
+      .map(field => [field, profile.values[field]]));
+    if (Object.keys(fields).length) data[source ?? 'unattributed'] = fields;
+  }
+  if (profile.writableFields.length) data.can_edit = profile.writableFields;
+  data.read = readError ?? profile.platformStatus;
+  return data;
 }
 
 export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextContentBlock[] {
@@ -120,6 +156,16 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
       blocks.push(createPromptContextBlock('session-identity', formatSessionContextLine(input.turn)));
     }
     if (isLocale(display?.locale)) current.push(`Reply language fallback: ${display.locale}.`);
+    const self = display?.contextState?.bot;
+    if (origin.kind === 'im' && (self?.profile || self?.name?.trim() || input.fallbackNickname?.trim() || self?.profileError)) {
+      const profile: SelfProfileSnapshot = self?.profile ?? { values: {}, sources: {}, writableFields: [], platformStatus: 'unsupported' };
+      const nickname = self?.name?.trim() || input.fallbackNickname?.trim();
+      const account: SelfProfileSnapshot = profile.values.nickname !== undefined || !nickname ? profile : {
+        ...profile, values: { ...profile.values, nickname },
+        sources: { ...profile.sources, nickname: self?.name?.trim() ? 'platform' : 'configured' },
+      };
+      current.push(`Your account data: ${JSON.stringify(accountProfileData(account, self?.profileError))}`);
+    }
     if (typeof display?.commandPrefix === 'string') {
       stable.push(`Chat command prefix: ${JSON.stringify(display.commandPrefix)}. Include it exactly once when showing a known command; do not infer it from history or invent command names.`);
       if (display.commandMenu) stable.push(`Command menu invocation: ${JSON.stringify(display.commandMenu)}.`);
@@ -163,7 +209,8 @@ export function buildTurnContextBlocks(input: TurnContextEnvelopeInput): TextCon
   if (input.deferredStats?.trim()) blocks.push(createPromptContextBlock('deferred-catalog-summary', `Deferred catalog: ${input.deferredStats.trim()}`));
   if (input.quoteSystemHint?.trim()) blocks.push(createPromptContextBlock('quote-guidance', input.quoteSystemHint.trim()));
   if (input.toneHint?.trim()) current.push(`[Tone hint] ${input.toneHint.trim()}`);
-  if (input.toldLedger?.trim()) current.push(input.toldLedger.trim());
+  if (input.toldLedgerBlocks) blocks.push(...input.toldLedgerBlocks);
+  else if (input.toldLedger?.trim()) current.push(input.toldLedger.trim());
   if (input.relevantMemory?.trim()) current.push(input.relevantMemory.trim());
   if (current.length) blocks.push({ type: 'text', text: [TURN_CONTEXT_BEGIN, ...current, TURN_CONTEXT_END].join('\n') });
   const people = [input.profileSummary?.trim(), input.sessionSummary?.trim(), input.sceneEvents?.trim()].filter(Boolean);

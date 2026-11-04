@@ -7,6 +7,8 @@ export interface ToolCatalogItem {
   brief: string;
   fullTool: AgentTool;
   source: ToolCatalogSource;
+  /** Canonical owning plugin; `fullTool.source` remains the diagnostic entry path. */
+  owner?: string;
   mcpServer?: string;
   deferDefault: boolean;
 }

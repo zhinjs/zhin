@@ -43,20 +43,15 @@ class TestSessionService extends BaseSessionService<TestSessionRow> {
 
   start(overrides: Partial<TestSessionRow> = {}): Promise<TestSessionRow> {
     const now = Date.now();
-    return this.createRow({
+    return this.createRow({ target: { endpoint: { adapter: 'sandbox', id: 'canonical-test' }, kind: 'group', id: 'room' }, fields: {
       id: overrides.id ?? `${this.gameId}-${now}`,
-      adapter: 'sandbox',
-      endpoint: 'default',
-      channel_type: 'group',
-      channel_id: 'room',
-      channel_key: 'sandbox-default-group:room',
       player_id: 'alice',
       status: 'active',
       turn: 'alice',
       updated_at: now,
       created_at: now,
       ...overrides,
-    });
+    } });
   }
 }
 
@@ -196,7 +191,7 @@ describe('BaseSessionService', () => {
             },
           };
         }
-        if (token === outboundHostToken) return { send };
+        if (token === outboundHostToken) return { sendTarget: send };
         throw new Error('missing resource');
       },
     };
@@ -216,13 +211,8 @@ describe('BaseSessionService', () => {
     });
     await scheduled?.execute();
 
-    expect(send).toHaveBeenCalledWith({
-      adapter: 'sandbox',
-      endpointKey: 'default',
-      conversation: { kind: 'group', id: 'room' },
-      content: 'Alpha timed out',
-      locale: 'zh-CN',
-    });
+    expect(send).toHaveBeenCalledExactlyOnceWith({ endpoint: { adapter: 'sandbox', id: 'canonical-test' },
+      kind: 'group', id: 'room' }, 'Alpha timed out', { locale: 'zh-CN' });
     await lifecycle.dispose();
   });
 });

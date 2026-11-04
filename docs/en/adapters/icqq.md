@@ -5,7 +5,7 @@ tier: Advanced
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=d2fc8a756013bf56 -->
@@ -17,7 +17,7 @@ ICQQ Plugin Runtime adapter — runs an [@icqqjs/icqq](https://github.com/icqqjs
 ## Features
 
 - Group chat / private chat / temporary group session / QQ channel messages
-- Inbound native Client events enter Zhin through the single `Endpoint.emit(...)` gateway and normalize media to canonical `Segment` + `MediaRef` values
+- Inbound native Client events enter Zhin through the single `endpoint[endpointSpec].events.emit(...)` gateway and normalize media to canonical `Segment` + `MediaRef` values
 - Outbound canonical segments project to native ICQQ `Sendable` values and use `sendGroupMsg`, `sendPrivateMsg`, and the matching conversation operation
 - Group reactions use `control.addReaction` and `control.removeReaction`
 - Agent tools live under `tools/<name>/index.ts`
@@ -79,11 +79,11 @@ icqq:
 ## Architecture
 
 - `plugin.ts` + `adapters/icqq/index.ts`: Plugin Runtime entry and `defineAdapter` declaration
-- `src/endpoint.ts`: owns the native Client and coordinates transport, Zhin lifecycle, and capability ports
+- `src/endpoint.ts`: extends the actual native Client and registers framework hooks and capability ports through `endpointSpec`
 - `src/content-resolver.ts`: stores observed messages and expands forwarded messages within explicit limits
 - `src/icqq-inbound.ts`: normalizes native ICQQ events into Zhin inbound messages
 - `src/protocol.ts`: resolves one expanded endpoint configuration and maps conversations and outbound targets
-- `src/client.ts`: registers the public ICQQ Client and event types for feature authors
+- `src/client.ts`: derives native SDK event types and registers the actual `IcqqAdapter` in the single `AdapterRegistry`
 
 Start with `src/endpoint.ts` when reading the implementation, then follow the capability it composes. External code imports only from `@zhin.js/adapter-icqq` and the public Zhin entry points.
 
@@ -96,6 +96,49 @@ Start with `src/endpoint.ts` when reading the implementation, then follow the ca
 - **Console social/group management RPC is now wired**: the endpoint within the Adapter normalizes ICQQ's `get_friend_list` / `get_group_list` / `get_group_member_list`, request approval, and group management operations into frozen `EndpointManagement` objects. The Host only consumes this semantic port and no longer probes for method aliases or reads `friends` / `groups` SDK caches.
 - Friend and group requests enter the unified Endpoint event gateway and expose approval through `Request` and `EndpointManagement`.
 - Login QR, slider, device, and auth challenges persist as Console login tasks and can also continue through terminal input.
+
+## Console page
+
+Open the Console **ICQQ** page (route `/icqq`) to:
+
+- view running connections and test connectivity;
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
+- complete LoginAssist tasks (QR code, slider, SMS or device confirmation) without returning to the terminal;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
+
+Reading requires `icqq:read`; writes require `icqq:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `icqq endpoint add` command.
+
+First-login QR codes, slider challenges and device confirmations appear under **Pending logins**, so you do not need to return to the terminal.
+
+## Outage notifications and re-login
+
+With `notify` configured, ICQQ sends an out-of-band notice through another adapter instance when the account is kicked offline, login fails, or startup fails. For example, notify via a QQ official bot:
+
+```yaml
+qq:
+  # ... a configured QQ official bot
+icqq:
+  master: 123456
+  autoReconnect: true   # default true: retry login after a kickoff
+  notify:
+    adapter: qq
+    endpoint: bot-1
+    kind: private
+    id: "${QQ_MASTER_OPENID}"   # master openid on the QQ official bot
+```
+
+With `autoReconnect: true`, the endpoint retries login automatically. When a QR code, slider or device confirmation is ready, the notice tells you what to send. Reply in QQ to finish login:
+
+| Command | Purpose |
+|---------|---------|
+| `icqq login qr` | send the ICQQ login QR code to the current conversation (when images are supported) |
+| `icqq login confirm` | confirm after scanning the QR code |
+| `icqq login code <value>` | submit a slider ticket, SMS code or device-confirmation value |
+| `icqq login status` | show online state and pending login tasks |
+| `icqq login retry` | trigger another login attempt |
+
+Only the master (top-level or `endpoints[i].master`) or the `notify.id` account may run these commands; when neither is configured, use the Console ICQQ page. Without `notify`, outages are only logged and shown as pending logins on the Console ICQQ page.
 
 ## Troubleshooting
 

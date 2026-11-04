@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/runtime",
-  "version": "1.1.14",
+  "version": "1.1.17",
   "description": "Static Plugin graph, generation transaction and HMR Root runtime for Zhin.js",
   "type": "module",
   "main": "./lib/index.js",
@@ -16,7 +16,7 @@
     "lib"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/compact-schema.mjs",
     "clean": "rimraf lib",
     "test": "vitest run --root ../../.. packages/im/runtime/tests",
     "check:size": "node ../../../scripts/check-plugin-runtime-install-size.mjs @zhin.js/runtime"

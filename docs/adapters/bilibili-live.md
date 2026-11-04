@@ -8,11 +8,15 @@ tier: Experimental
 本页由 [`plugins/adapters/bilibili-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili-live/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=60c6f7fc5d44a397 -->
+<!-- sync-adapter-docs:sha256=0cbd5b0c0de6eda5 -->
 
 # @zhin.js/adapter-bilibili-live
 
 > **Experimental** — 基于 B 站直播 **非官方 Web 接口**（弹幕 WebSocket、`msg/send`），随时可能因平台改版失效；不进 stable smoke，接口与配置可能不兼容变更。
+
+账号由 `BilibiliLiveAdapter` 管理。Endpoint 直接继承实际 `BilibiliLiveClient`，保留原生方法与事件；框架生命周期、规范入站与发送经 `endpointSpec` 和 AdapterIndex 接入，不占用 Client 的原生 `start` / `stop` / `send` 方法。
+
+`Session.event` 使用 Client 已公开的 `LiveDanmaku`（`uid`、`uname`、`text`、`timestamp`、可选 `id`）事件对象，与 `danmaku` 事件保持同一引用。网络帧经既有解码器解析，未作为公开事件 DTO。
 
 Zhin.js Bilibili 直播弹幕适配器（Plugin Runtime）：让 Bot 像主播一样在**你自己的直播间**里看弹幕、挑一条回。设计见 [ADR 0038：连续输入合流——高热群与弹幕](https://github.com/zhinjs/zhin/blob/main/docs/adr/0038-continuous-input-merge.md) §5，讨论见 [#1049](https://github.com/zhinjs/zhin/issues/1049)。
 
@@ -102,6 +106,17 @@ ai:
 
 - 未登录时平台给的 uid 是 0、昵称打码，同名打码观众会被当成同一个人。
 - 平台接口随时可能改版（例如 WBI 签名、`getDanmuInfo` 风控），失效时连接会反复失败并退避重连，请关注日志。
+
+## Console 页面
+
+启动后打开 Console 的「Bilibili 直播弹幕」页（地址 `/bilibili-live`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
+
+扫码登录仍复用 B 站评论适配器页面；这里只管理直播弹幕连接与 endpoint。
+
+读取需要 `bilibili-live:read`，写操作需要 `bilibili-live:write`；管理员 full token 不受限。
 
 ## 故障排查
 

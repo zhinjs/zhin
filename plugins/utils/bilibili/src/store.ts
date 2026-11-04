@@ -34,6 +34,7 @@ export const BILI_STATE_TABLE = 'bilibili_watch_state';
 export const BILI_TABLE_DEFINITIONS: Readonly<Record<string, Record<string, unknown>>> = Object.freeze({
   [BILI_SUBS_TABLE]: {
     uid: { type: 'text', nullable: false },
+    target_json: { type: 'text', nullable: true },
     uname: { type: 'text', default: '' },
     /** `all` | `live` | `dynamic` */
     kinds: { type: 'text', default: 'all' },
@@ -58,7 +59,7 @@ export const BILI_TABLE_DEFINITIONS: Readonly<Record<string, Record<string, unkn
 });
 
 export function defineBiliTables(db: { define: (name: string, schema: Record<string, unknown>, options?: {addColumns: readonly string[]}) => void }): void {
-  for (const [name, definition] of Object.entries(BILI_TABLE_DEFINITIONS)) db.define(name, definition, name === BILI_SUBS_TABLE ? { addColumns: ['locale'] } : undefined);
+  for (const [name, definition] of Object.entries(BILI_TABLE_DEFINITIONS)) db.define(name, definition, name === BILI_SUBS_TABLE ? { addColumns: ['locale', 'target_json'] } : undefined);
 }
 
 function createMemoryModel(): BiliModel {

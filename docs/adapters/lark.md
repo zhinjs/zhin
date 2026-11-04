@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2bc360afe2130da6 -->
+<!-- sync-adapter-docs:sha256=3099bca2766dc469 -->
 
 # @zhin.js/adapter-lark
 
@@ -23,6 +23,18 @@ Zhin.js 飞书 / Lark 适配器（Plugin Runtime），通过 Runtime Host HTTP W
 - canonical `markdown` 段编码为 `interactive` JSON 2.0 卡片中的 `markdown`
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 
+## 渐进式回复
+
+`streaming` 默认 `true`，可在插件或单个 endpoint 配置中设为 `false`，恢复普通完整发送。正文和 Markdown 使用 CardKit JSON 2.0 流式卡片：先创建实体并发送卡片引用，随后以累计正文更新同一组件，结束时关闭 `streaming_mode`。内容更新与收尾共用严格递增的 `sequence`。
+
+需要应用具有 CardKit 创建与更新卡片及当前会话发送权限。引用目标和 @ 前缀保持不变；资源创建成功不等于聊天消息已经送达，消息发送或更新结果未知时不重新创建或发布。媒体和按钮继续经统一发送链按原始顺序处理。
+
+`streamingIntervalMs` 默认 `1000` 毫秒，用于后续回复更新间隔；首段立即发送，中间更新由统一回复控制器合并。
+
+平台明确拒绝已有卡片的更新并报告流式超时或容量超限时，纯文字回复保留已确认正文，再用新卡片继续未发送部分。首条内容自身超限时明确报错，不重复创建或截断原文。卡片流式模式在开启 10 分钟后自动关闭，详见[流式更新卡片](https://open.feishu.cn/document/cardkit-v1/streaming-updates-openapi-overview)。
+
+纯文字可以在已确认的容量或时限边界续条。Markdown 保留单容器内的流式发送；已确认的 Markdown 卡片需要续容器时，无法恢复其渲染状态，会停止并保留已确认部分，不降级为纯文本。关闭流式模式失败时，正文的确认记录会保留，关闭结果仍明确记录为失败或未知。
+
 ## 安装
 
 ```bash
@@ -31,13 +43,16 @@ pnpm add @zhin.js/adapter-lark
 
 ## Plugin Runtime
 
+`LarkEndpoint` 继承真实飞书 SDK `Client`；长连接组合 SDK `WSClient`。SDK 原生 API 与事件接口不被框架覆盖，框架生命周期与事件入口放在 `endpointSpec`。所属 `Adapter` 是账号期望状态与运行实例的唯一管理者，目录按实际内部身份路由。
+
 - `@zhin.js/adapter` — 约定式 `adapters/lark/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
-入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message: { conversation, id }, content: text, sender, metadata })`
+
 出站：`send({ conversation, payload })` → `im/v1/messages`
 
 入站 `metadata.mentioned`：**未接线**。消息事件的 `mentions[]` 元素含 `id.open_id`，但本适配器拿不到 bot 自身的 open_id——配置（`appId` / `appSecret` / `id` 等）不含 bot open_id，代码也未调用 `bot/v3/info` 获取应用信息，故无可靠判据比对 mentions。
@@ -104,6 +119,14 @@ lark:
 pnpm --filter @zhin.js/adapter-lark build
 pnpm --filter @zhin.js/adapter-lark test
 ```
+
+## Console 页面
+
+在所属插件的 Console 页面管理账号：查看配置与运行状态，添加、编辑、启动、停止、替换或删除账号。首次修改启动账号前，管理员需确认迁移清单；保留原身份与历史。此后保存到 Host 运行时存储，不改启动配置或 `.env`，无需重启进程。
+
+新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
+
+读取需要 `lark:read`，写入需要 `lark:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
 
 ## 故障排查
 

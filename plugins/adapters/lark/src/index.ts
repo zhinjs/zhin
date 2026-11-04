@@ -20,7 +20,7 @@ export {
   type ResolvedLarkConfig,
 } from './protocol.js';
 
-export { larkClient, type LarkClientEventMap } from './client.js';
+export { type LarkClientEventMap } from './client.js';
 
 export {
   checkLarkPlatformPermit,
@@ -30,9 +30,7 @@ export {
 } from './platform-permit.js';
 
 export {
-  LarkClient,
   LarkEndpoint,
-  type LarkClientApi,
   type LarkEndpointOptions,
   type LarkFetch,
 } from './endpoint.js';
@@ -56,3 +54,6 @@ export {
   type LarkLongConnectionFactory,
   type LarkLongConnectionOptions,
 } from './long-connection.js';
+
+export { LarkClient, type LarkClientApi } from './client.js';
+export { LarkAdapter } from './adapter.js';

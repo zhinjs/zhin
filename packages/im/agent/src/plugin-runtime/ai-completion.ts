@@ -14,7 +14,7 @@
  * call made on behalf of an IM user counts against that user's / group's usage
  * quota (#727).
  */
-import { resolveModelCandidates } from '../context/model-resolver.js';
+import type { ModelExecutionScope } from '../model-runtime/types.js';
 import type { AIProvider, ProviderResilienceConfig, TextCompleteResult } from '@zhin.js/ai';
 import type { AiCompletion, AiCompletionInput, AiCompletionResult, UsageSubject } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -59,6 +59,12 @@ export interface AiCompletionOptions {
     & Partial<Pick<AIService, 'getModelRegistry'>>;
   readonly usageQuota?: Pick<UsageQuota, 'check' | 'record'> & Partial<Pick<UsageQuota, 'checkBatch'>>;
   readonly now?: () => number;
+  /** A default Host operation leases one complete runtime policy snapshot; explicit calls stay fixed. */
+  readonly acquireDefaultModel?: (signal?: AbortSignal) => Promise<ModelExecutionScope>;
+  /** Explicit binding/model input keeps its semantics while leasing the current Host connection. */
+  readonly acquireExplicitModel?: (bindingName: string, model: string | undefined, signal?: AbortSignal) => Promise<{
+    readonly provider: AIProvider; readonly model: string; release(): Promise<void>;
+  }>;
 }
 
 export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
@@ -72,8 +78,8 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       const registry = options.service.getBindingRegistry();
       const binding = input.agent ? registry.getBinding(input.agent) : registry.requireZhinBinding();
       if (!binding) throw new Error(`AI completion: agent binding "${input.agent}" not found`);
-      const provider: AIProvider = options.service.getProvider(binding.providerAlias);
-      const model = input.model?.trim() || binding.model || provider.models[0] || '';
+      let provider: AIProvider = options.service.getProvider(binding.providerAlias);
+      let model = input.model?.trim() || binding.model || provider.models[0] || '';
 
       input.signal?.throwIfAborted();
       if (shares.length && options.usageQuota) {
@@ -97,16 +103,6 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         maxTokens: input.maxTokens,
         timeoutMs: input.timeoutMs,
         signal: input.signal,
-        // Same candidates as the conversation path (bound model, registry picks, then the
-        // provider's models); whether they are tried is up to `providerResilience.fallback`.
-        fallbackModels: resolveModelCandidates(
-          provider.models,
-          options.service.getModelRegistry?.() ?? null,
-          binding.providerAlias,
-          { chatModel: binding.model },
-          'chat',
-          model,
-        ).filter(id => id && id !== model),
         resilience: options.service.getAgentConfig()?.providerResilience as ProviderResilienceConfig | undefined,
       };
       // Reserve the prompt estimate before the call: concurrent calls then see each other's
@@ -121,10 +117,22 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         });
         billed = allocated;
       };
-      record(reserved);
       const started = now();
       let result: TextCompleteResult;
+      let scope: { release(): Promise<void> } | undefined;
+      let executingProvider: string | undefined;
       try {
+        if (!input.agent && !input.model?.trim() && options.acquireDefaultModel) {
+          const models = await options.acquireDefaultModel(input.signal);
+          scope = models;
+          provider = models.chat.provider; model = models.chat.invocation.model.model; opts.model = model;
+        } else if (options.acquireExplicitModel) {
+          const selected = await options.acquireExplicitModel(input.agent ?? 'zhin', input.model?.trim() || undefined, input.signal);
+          scope = selected;
+          provider = selected.provider; model = selected.model; opts.model = model;
+        }
+        record(reserved);
+        executingProvider = provider.name;
         result = provider.completeTextResult
           ? await provider.completeTextResult(input.system ?? '', user, opts)
           : { text: await provider.completeText(input.system ?? '', user, opts), model };
@@ -132,13 +140,17 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
         logger.warn(formatCompact({
           op: 'ai_completion',
           purpose,
-          provider: binding.providerAlias,
+          bindingProvider: binding.providerAlias,
+          provider: executingProvider,
           model,
           outcome: 'error',
           durationMs: now() - started,
           error: error instanceof Error ? error.message : String(error),
         }));
         throw error;
+      } finally {
+        try { await scope?.release(); }
+        catch { try { logger.warn('AI completion model lease cleanup failed'); } catch { /* Cleanup does not replace the primary outcome. */ } }
       }
       const durationMs = now() - started;
       const reportedTokens = result.usage?.totalTokens;
@@ -151,7 +163,8 @@ export function createAiCompletion(options: AiCompletionOptions): AiCompletion {
       logger.info(formatCompact({
         op: 'ai_completion',
         purpose,
-        provider: binding.providerAlias,
+        bindingProvider: binding.providerAlias,
+        provider: executingProvider,
         model: result.model,
         outcome: 'ok',
         durationMs,

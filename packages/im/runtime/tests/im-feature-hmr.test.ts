@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { definePlugin, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import adapterFeature, {
   AdapterIndex,
-  Endpoint,
+  Adapter, endpointSpec, createEndpointSpecification, type Endpoint,
   adapterFeatureId,
   defineAdapter,
   endpointEventGatewayToken,
@@ -59,16 +59,16 @@ describe('IM Feature slot HMR', () => {
       const first = await runtime.start();
       lease = runtime.snapshots.acquire();
       const commands = first.projections.get(commandFeatureId) as CommandIndex;
-      await expect(commands.dispatch('帮助')).resolves.toMatchObject({ matched: true, status: 'executed' });
-      await expect(commands.dispatch('菜单')).resolves.toMatchObject({ matched: false });
+      await expect(commands.dispatch({ input: '帮助' })).resolves.toMatchObject({ matched: true, status: 'executed' });
+      await expect(commands.dispatch({ input: '菜单' })).resolves.toMatchObject({ matched: false });
       expect(first.config.get(first.root)).toMatchObject({ menuStyle });
       for (const value of [false, '']) {
         await runtime.patchConfig([{ op: 'set', path: ['menuKeyword'], value }]);
         const current = runtime.snapshot.projections.get(commandFeatureId) as CommandIndex;
-        await expect(current.dispatch('帮助')).resolves.toMatchObject({ matched: false });
-        await expect(current.dispatch('菜单')).resolves.toMatchObject({ matched: false });
+        await expect(current.dispatch({ input: '帮助' })).resolves.toMatchObject({ matched: false });
+        await expect(current.dispatch({ input: '菜单' })).resolves.toMatchObject({ matched: false });
         await expect(current.execute('ping')).resolves.toBe('pong');
-        await expect(commands.dispatch('帮助')).resolves.toMatchObject({ matched: true });
+        await expect(commands.dispatch({ input: '帮助' })).resolves.toMatchObject({ matched: true });
       }
     } finally {
       lease?.release();
@@ -191,20 +191,16 @@ function testAdapter(counters: {
   closes: number;
   stops: number;
 }) {
-  class TestEndpoint extends Endpoint<Record<string, never>> {
-    readonly client = Object.freeze({});
-    start(): void { counters.starts += 1; }
-    open(): void { counters.opens += 1; }
-    close(): void { counters.closes += 1; }
-    stop(): void { counters.stops += 1; }
+  class TestClient {}
+  class TestEndpoint extends TestClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, {
+      start: () => { counters.starts += 1; }, open: () => { counters.opens += 1; },
+      close: () => { counters.closes += 1; }, stop: () => { counters.stops += 1; },
+    });
   }
-  return defineAdapter({
-    capabilities: ['inbound'],
-    create() {
-      counters.creates += 1;
-      return new TestEndpoint();
-    },
-  });
+  return defineAdapter({ capabilities: ['inbound'], createAdapter: () => new class extends Adapter<TestEndpoint> {
+    protected createEndpoint() { counters.creates += 1; return new TestEndpoint(); }
+  }() });
 }
 
 function pingCommand(version: string) {

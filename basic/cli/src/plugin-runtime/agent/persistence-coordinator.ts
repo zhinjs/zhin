@@ -5,11 +5,19 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { AGENT_MESSAGE_QUERY_MODEL, AGENT_SESSION_SOURCE_MODEL, agentMessageQueryFields, parseAgentMessageRow } from '@zhin.js/ai';
 import { defineAiDatabaseModels, activateAiDatabaseStorage, AGENT_USAGE_TURN_MODEL, AGENT_USAGE_CALL_MODEL,
   DatabaseAgentUsageStore, agentUsageStoreToken, DatabaseScheduleJobStorage, SCHEDULE_JOB_MODEL, SCHEDULE_JOB_MIGRATION_MODEL,
+  DatabaseScheduleHistoryRepository, SCHEDULE_RUN_MODEL, SCHEDULE_ATTEMPT_MODEL,
   AI_DECISION_EVENTS_TABLE, AI_SCENE_MEMBERS_TABLE, DEFAULT_DECISION_AUDIT_RETENTION_DAYS, DEFAULT_GROUP_RULE_RETENTION_DAYS } from '@zhin.js/agent/runtime';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';
 import type { AgentHostAIConfig } from './config.js';
 
 type Context = Parameters<RootResourceInstaller>[0];
+
+/** MySQL TEXT needs (128); VARCHAR(64) id/run_id must stay unprefixed (ER_WRONG_SUB_KEY). */
+export async function ensureScheduleHistoryIndexes(database: StructuredDatabase): Promise<void> {
+  await ensureDatabaseIndex(database, 'agent_schedule_runs', 'agent_schedule_runs_job_time', [{ name: 'job_id', text: true }, { name: 'queued_at' }, { name: 'id' }]);
+  await ensureDatabaseIndex(database, 'agent_schedule_runs', 'agent_schedule_runs_time', [{ name: 'queued_at' }, { name: 'id' }]);
+  await ensureDatabaseIndex(database, 'agent_schedule_attempts', 'agent_schedule_attempts_run', [{ name: 'run_id' }, { name: 'number' }]);
+}
 
 /** Agent owns its storage with or without the optional Workroom package. */
 export function installAgentPersistence(context: Pick<Context, 'resources' | 'handoff' | 'lifecycle' | 'admission'>,
@@ -44,6 +52,8 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
   if (sql) {
     database.define('agent_schedule_jobs', SCHEDULE_JOB_MODEL, { addColumns: ['locale'] });
     database.define('agent_schedule_migration', SCHEDULE_JOB_MIGRATION_MODEL);
+    database.define('agent_schedule_runs', SCHEDULE_RUN_MODEL);
+    database.define('agent_schedule_attempts', SCHEDULE_ATTEMPT_MODEL);
     database.define('agent_usage_turns', AGENT_USAGE_TURN_MODEL);
     database.define('agent_usage_calls', AGENT_USAGE_CALL_MODEL);
     usage = new DatabaseAgentUsageStore(database, Number(config.usage?.retentionDays ?? 30));
@@ -80,6 +90,10 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       foundation.agent.markMemoryPersistenceReady();
     }
     if (sql) await foundation.schedule.store.activateDatabase(new DatabaseScheduleJobStorage(database));
+    if (sql) foundation.schedule.history.activateRepository(new DatabaseScheduleHistoryRepository(database));
+    if (sql && raw) {
+      await ensureScheduleHistoryIndexes(raw);
+    }
     if (sql && raw && decisions()) {
       await ensureDatabaseIndex(raw, AI_DECISION_EVENTS_TABLE, 'ai_decision_events_ts', [{ name: 'ts' }]);
       await ensureDatabaseIndex(raw, AI_DECISION_EVENTS_TABLE, 'ai_decision_events_turn', [{ name: 'turn_id', text: true }, { name: 'ts' }]);
@@ -107,11 +121,15 @@ export function installAgentPersistence(context: Pick<Context, 'resources' | 'ha
       pendingStart = foundation.schedule.start().catch(() => {
         getLogger('agent').warn('op=schedule_start status=failed; 定时任务启动失败');
       });
+      // The history owner coalesces cleanup and owns its errors; driver IO cannot gate publication or shutdown.
+      foundation.schedule.history.housekeeping();
       // Diagnostic storage must not delay generation publication or Agent admission.
       pendingPrune = pruneTraceArchive().finally(() => { pendingPrune = undefined; });
-      if (usage || decisions() || pruneTraces || foundation.agent.getGroupRules?.()?.persistent) {
+      if (usage || decisions() || pruneTraces || foundation.agent.getGroupRules?.()?.persistent || foundation.schedule.history) {
         timer = setInterval(() => {
-          if (stopped || pendingPrune) return;
+          if (stopped) return;
+          foundation.schedule.history.housekeeping();
+          if (pendingPrune) return;
           pendingPrune = Promise.all([
             usage?.prune().catch(() => {
               getLogger('agent').warn('op=usage_prune status=failed; 用量保留期清理失败');
@@ -142,6 +160,12 @@ async function migrateAgentQueryColumns(database: StructuredDatabase): Promise<v
     }
   }
   await ensureDatabaseIndex(database, 'agent_sessions', 'agent_sessions_key_status_time', [{ name: 'session_key', text: true }, { name: 'status', text: true }, { name: 'updated_at' }]);
+  // Prefix sizes stay below MySQL's composite-key byte limit. Remaining owner
+  // dimensions are still enforced by the SQL predicate before LIMIT/OFFSET.
+  await ensureDatabaseIndex(database, 'agent_sessions', 'agent_sessions_personal_current', [
+    { name: 'source_root', text: true }, { name: 'source_instance', text: true }, { name: 'source_subject', text: true },
+    { name: 'status', text: true }, { name: 'updated_at' }, { name: 'session_id', text: true },
+  ]);
   await ensureDatabaseIndex(database, 'agent_messages', 'agent_messages_session_time', [{ name: 'session_id', text: true }, { name: 'timestamp' }]);
   await ensureDatabaseIndex(database, 'agent_messages', 'agent_messages_actor_time', [{ name: 'actor_id', text: true }, { name: 'timestamp' }]);
 }

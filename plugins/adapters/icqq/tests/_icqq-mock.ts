@@ -1,9 +1,9 @@
 import { vi } from 'vitest';
 import { LoginAssist } from '@zhin.js/core';
-import type { SideEventGateway } from '@zhin.js/core/runtime';
+import type { createTestEventGateway } from '../../test-utils/endpoint.js';
 
 export function createIcqqTestPorts(): {
-  readonly sideEvents: SideEventGateway;
+  readonly sideEvents: NonNullable<Parameters<typeof createTestEventGateway>[1]>;
   readonly loginAssist: LoginAssist;
 } {
   return {
@@ -17,13 +17,13 @@ export function createIcqqTestPorts(): {
 }
 
 /**
- * Mock @icqqjs/icqq module for testing the Client composed by IcqqEndpoint.
+ * Mock @icqqjs/icqq module for testing the Client inherited by IcqqEndpoint.
  *
  * Usage:
  *   vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
  *
- * Call endpoint.client.emit() to simulate icqq events, and inspect
- * endpoint.client methods to assert direct SDK calls.
+ * Call fixture.endpoint.emit() to simulate icqq events, and inspect
+ * fixture.endpoint native methods to assert direct SDK calls.
  */
 export class Client {
   static readonly activeClients = new Map<number, Set<Client>>();

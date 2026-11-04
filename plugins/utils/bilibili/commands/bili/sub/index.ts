@@ -1,3 +1,4 @@
+import { subscriptionMigrationScope } from '../../../src/target-migration.js';
 import { messages, kindText, commandHint } from '../../../src/i18n.js';
 import { canManageConversation, defineCommand } from 'zhin.js/command';
 import { BiliApiError, parseUid } from '../../../src/api.js';
@@ -25,42 +26,46 @@ export default defineCommand<BilibiliConfig>({
 
     const channel = extractChannelInfo(input);
     if (!channel) return channelSourceError(input, locale);
-    if (!canManageConversation({ adapter, scene, sender })) return messages(locale, 'denied');
-    const scope = subscriptionScope(channel);
+    const run = async () => {
+      if (!canManageConversation({ adapter, scene, sender })) return messages(locale, 'denied');
+      const scope = subscriptionScope(channel);
 
-    const existing = await Subs.select().where({ uid, ...scope });
-    if (existing.length > 0) {
-      if (existing[0]!.kinds === kinds) return messages(locale, 'exists');
-      await Subs.update({ kinds }).where({ uid, ...scope });
-      return messages(locale, 'changed', { name: String(existing[0]!.uname || uid), kind: kindText(kinds, locale) });
-    }
-    const current = await Subs.select().where(scope);
-    if (current.length >= runtime.config.maxPerChannel) {
-      return messages(locale, 'limit', { limit: runtime.config.maxPerChannel });
-    }
+      const existing = await Subs.select().where({ uid, ...scope });
+      if (existing.length > 0) {
+        if (existing[0]!.kinds === kinds) return messages(locale, 'exists');
+        await Subs.update({ kinds }).where({ uid, ...scope });
+        return messages(locale, 'changed', { name: String(existing[0]!.uname || uid), kind: kindText(kinds, locale) });
+      }
+      const current = await Subs.select().where(scope);
+      if (current.length >= runtime.config.maxPerChannel) {
+        return messages(locale, 'limit', { limit: runtime.config.maxPerChannel });
+      }
 
-    let uname = '';
-    try {
-      uname = (await runtime.client.getUserCard(uid)).name;
-    } catch (error) {
-      if (error instanceof BiliApiError && error.kind === 'not_found') return messages(locale, 'missingUser', { uid });
-      // Lookup is cosmetic; subscribe anyway and let the watcher fill gaps.
-    }
+      let uname = '';
+      try {
+        uname = (await runtime.client.getUserCard(uid)).name;
+      } catch (error) {
+        if (error instanceof BiliApiError && error.kind === 'not_found') return messages(locale, 'missingUser', { uid });
+        // Lookup is cosmetic; subscribe anyway and let the watcher fill gaps.
+      }
 
-    await Subs.insert({
-      uid,
-      uname,
-      kinds,
-      ...scope,
-      creator_id: channel.senderId,
-      locale,
-      created_at: new Date().toISOString(),
-    });
-    await runtime.watcher.baseline(uid).catch(() => undefined);
+      await Subs.insert({
+        uid,
+        uname,
+        kinds,
+        ...scope,
+        creator_id: channel.senderId,
+        locale,
+        created_at: new Date().toISOString(),
+      });
+      await runtime.watcher.baseline(uid).catch(() => undefined);
 
-    const notes: string[] = [];
-    if (!runtime.outbound) notes.push(messages(locale, 'noOutbound'));
-    if (!runtime.persistent) notes.push(messages(locale, 'volatile'));
-    return [messages(locale, 'subscribed', { name: uname || uid, uid, kind: kindText(kinds, locale) }), ...notes].join('\n');
+      const notes: string[] = [];
+      if (!runtime.outbound) notes.push(messages(locale, 'noOutbound'));
+      if (!runtime.persistent) notes.push(messages(locale, 'volatile'));
+      return [messages(locale, 'subscribed', { name: uname || uid, uid, kind: kindText(kinds, locale) }), ...notes].join('\n');
+    };
+    return runtime.migrationScopes ? runtime.migrationScopes.run({ scope: subscriptionMigrationScope({ target: channel.target,
+      adapterName: channel.adapterName, endpointKey: channel.endpointKey, channelType: channel.channelType, channelId: channel.channelId }), run }) : run();
   },
 });

@@ -1,8 +1,8 @@
 import { Client, GatewayIntentBits } from 'discord.js';
-import { defaultCreateClient, normalizeDiscordMessage } from '../src/gateway.js';
+import { discordClientOptions, normalizeDiscordMessage } from '../src/gateway.js';
 
 it('emits and normalizes the first DM before its channel has been cached', async () => {
-  const client = defaultCreateClient([GatewayIntentBits.DirectMessages]) as unknown as Client;
+  const client = new Client(discordClientOptions([GatewayIntentBits.DirectMessages]));
   const received = vi.fn();
   client.on('messageCreate', received);
   try {

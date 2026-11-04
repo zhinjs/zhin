@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=92b66088ffc50b44 -->
+<!-- sync-adapter-docs:sha256=a9b3ab5ff384fe96 -->
 
 # @zhin.js/adapter-weixin-ilink
 
@@ -21,7 +21,7 @@ tier: Experimental
 | 项 | weixin-ilink | wechat-mp |
 |---|---|---|
 | 账号类型 | 个人微信（ClawBot） | 微信公众号 |
-| 入站 | 长轮询 `getupdates` → `Endpoint.emit(...)` | Webhook（`httpHostToken`） |
+| 入站 | 长轮询 `getupdates` → `endpointSpec.events` | Webhook（`httpHostToken`） |
 | 登录 | 扫码 / 侧车凭证 / `botToken` | AppId/Secret/Token |
 | 群聊 | 不支持（仅私聊） | 支持 |
 
@@ -71,12 +71,22 @@ data/weixin-ilink/<id>/credentials.json
 
 回复必须携带入站时缓存的 `context_token`（按 `endpointId + peerUserId`）。若用户久未发消息导致 token 缺失，出站会拒绝并打 warn。
 
-出站经 Runtime：`OutboundMessageService` → `endpoint.send({ conversation, payload })`（`conversation` 为入站归一化出的 `ConversationRef`，kind 恒为 `private`，`id` 即对端 user_id）。
+出站经 Runtime：`OutboundMessageService` → `createEndpointSpecification` 注册的 send 钩子（`conversation` 为入站归一化出的 `ConversationRef`，kind 恒为 `private`，`id` 即对端 user_id）。
 
 **图文限制**：微信单条消息不支持图文混排。适配器会自动：
 
 - **出站**：先单独发文本，再发纯媒体（不带 caption）
 - **入站**：文字与媒体路径写入同一条 gateway `content` 文本
+
+## Console 页面
+
+在所属插件的 Console 页面管理账号：查看配置与运行状态，添加、编辑、启动、停止、替换或删除账号。首次修改启动账号前，管理员需确认迁移清单；保留原身份与历史。此后保存到 Host 运行时存储，不改启动配置或 `.env`，无需重启进程。
+
+新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
+
+读取需要 `weixin-ilink:read`，写入需要 `weixin-ilink:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
+
+未提供 `botToken` 时，启动沿既有凭据文件或日志二维码登录流程；本平台当前没有 Console 二维码待办。新账号的状态目录按内部实例身份隔离。
 
 ## 故障排查
 

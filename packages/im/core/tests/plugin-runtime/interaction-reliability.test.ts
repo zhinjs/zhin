@@ -13,7 +13,16 @@ function deferred<T>() {
   return { promise, resolve };
 }
 function message(content: string, generation = 1, sender = 'alice', segments?: readonly Segment[]) {
-  return new RuntimeMessage(conversation, content, generation, async () => ({ status: 'sent' }), { id: sender }, {}, segments);
+  return new RuntimeMessage(
+    {
+      conversation: conversation,
+      content: content,
+      sender: { id: sender },
+      metadata: {},
+      segments: segments,
+    },
+    { generation: generation, reply: async () => ({ status: 'sent' }) },
+  );
 }
 function actionToken(content: SendContent, index = 0): string {
   const keyboard = (content as Segment[]).find(segment => segment.type === 'keyboard')!;
@@ -132,21 +141,25 @@ describe('UserInteraction claim reliability', () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it('cancels on the exact owner facade gate without waiting for lease disposal', async () => {
+  it('keeps question cancellation explicit without reopening the retired owner facade', async () => {
     const coordinator = new RuntimeInteractionCoordinator();
     const root = rootPluginId();
     const gate = createGenerationAdmissionGate();
     const host = new PluginOutboundHost(root, { send: async () => null }, gate);
+    const caller = new AbortController();
     const state: SnapshotState = { root, tree: new Map(), config: new Map(),
       resources: new Map([[root, new Map([[outboundHostToken.id, host]])]]), capabilities: new Map(), projections: new Map() };
     const store = new SnapshotStore(state);
     const lease = store.acquire();
     const reply = vi.fn(async () => ({ status: 'sent' as const }));
     const answer = coordinator.create({ conversation, generation: 0, sender: { id: 'alice' }, $reply: reply }, undefined,
-      { snapshot: lease.value, owner: root }).ask({ type: 'text', title: '姓名', default: 'must not use default' }).catch(error => error);
+      { snapshot: lease.value, owner: root }).ask({ type: 'text', title: '姓名', default: 'must not use default', signal: caller.signal }).catch(error => error);
     await Promise.resolve();
     store.commit(0, { snapshot: { ...state, resources: new Map() }, dispose() {} });
-    await expect(answer).resolves.toMatchObject({ message: 'User interaction owner retired' });
+    expect(coordinator.hasPendingAnswer(conversation, 'alice', 0)).toBe(true);
+    await expect(host.send({ adapter: 'test', endpointKey: 'main', conversation, content: 'inactive' })).rejects.toThrow('inactive generation');
+    caller.abort();
+    await expect(answer).resolves.toMatchObject({ name: 'AbortError' });
     expect(lease.active).toBe(true);
     expect(reply).toHaveBeenCalledTimes(1);
     expect(coordinator.resolveClaim(message('old input', 0))).toBe(false);
@@ -173,8 +186,16 @@ describe('UserInteraction claim reliability', () => {
     expect(coordinator.resolveClaim(callback(oldToken))).toBe(false);
     expect(coordinator.resolveClaim(callback(token, 2))).toBe(false);
     expect(coordinator.resolveClaim(callback(token, 1, 'bob'))).toBe(false);
-    expect(coordinator.resolveClaim(new RuntimeMessage({ ...conversation, threadId: 'other' }, '', 1,
-      async () => ({ status: 'sent' }), { id: 'alice' }, {}, [{ type: 'action', data: { payload: token } }]))).toBe(false);
+    expect(coordinator.resolveClaim(new RuntimeMessage(
+      {
+        conversation: { ...conversation, threadId: 'other' },
+        content: '',
+        sender: { id: 'alice' },
+        metadata: {},
+        segments: [{ type: 'action', data: { payload: token } }],
+      },
+      { generation: 1, reply: async () => ({ status: 'sent' }) },
+    ))).toBe(false);
     expect(coordinator.hasPendingAnswer(conversation, 'alice', 1, { content: '', segments: callback(oldToken).segments })).toBe(false);
     expect(coordinator.resolveClaim(callback(token))).toBe(true);
     await expect(first).resolves.toMatchObject({ name: 'UserInteractionSupersededError' });
@@ -183,7 +204,7 @@ describe('UserInteraction claim reliability', () => {
     expect(prompts).toHaveLength(2);
   });
 
-  it('does not reactivate a retired claim when its in-flight send completes', async () => {
+  it('does not reactivate a stopped Root claim when its in-flight send completes', async () => {
     const coordinator = new RuntimeInteractionCoordinator();
     const root = rootPluginId();
     const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test',
@@ -191,17 +212,23 @@ describe('UserInteraction claim reliability', () => {
     const store = new SnapshotStore(state);
     const lease = store.acquire();
     const sending = deferred<DeliveryReceipt>();
-    const source = new RuntimeMessage(conversation, 'start', 0, () => sending.promise, { id: 'alice' }, {}, undefined,
-      undefined, undefined, undefined, undefined, undefined, undefined,
-      { snapshot: lease.value, retirementSignal: lease.retirementSignal });
+    const source = new RuntimeMessage(
+      { conversation: conversation, content: 'start', sender: { id: 'alice' }, metadata: {} },
+      {
+        generation: 0,
+        reply: () => sending.promise,
+        snapshot: lease.value,
+        signal: lease.stopSignal,
+      },
+    );
     const answer = coordinator.createForMessage(source)!.ask({ type: 'text', title: '姓名', default: 'no' }).catch(error => error);
-    store.commit(0, { snapshot: state, dispose() {} });
+    const closing = store.close();
     expect(coordinator.hasPendingAnswer(conversation, 'alice', 0)).toBe(false);
     expect(coordinator.resolveClaim(message('old input', 0))).toBe(false);
     sending.resolve({ status: 'sent' });
     await expect(answer).resolves.toMatchObject({ name: 'AbortError' });
     expect(coordinator.hasPendingAnswer(conversation, 'alice', 0)).toBe(false);
     lease.release();
-    await store.close();
+    await closing;
   });
 });

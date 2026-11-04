@@ -1,5 +1,95 @@
 # @zhin.js/service-activity-feedback
 
+## 1.1.23
+
+### Patch Changes
+
+- Updated dependencies [b88e988]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [af8f803]
+- Updated dependencies [032dc96]
+  - @zhin.js/agent@1.1.46
+
+## 1.1.22
+
+### Patch Changes
+
+- a9f4e48: PATCH COMPATIBILITY CUTOVER: this batch intentionally changes plugin APIs. The maintainer explicitly chose patch releases with declared version boundaries. Upgrade the complete tested dependency set; patch numbering does not promise compatibility with the removed interfaces.
+
+  The first planned floors are zhin.js 1.1.19, Core 1.1.54, Adapter 1.1.26, FeatureKit 1.1.10, Plugin Runtime 1.1.18, Runtime/Isolate 1.1.16 and Agent 1.1.45. Keep old-interface plugins with the earlier locked stack until they are migrated. Adapter's independent Feature API changes from 1.0.0 to 2.0.0; official consumers declare ^2.0.0. Existing Feature API admission rejects explicitly incompatible ranges; omitted API metadata keeps its existing behavior and does not certify compatibility. Runtime engine and patch-only release gates remain unchanged.
+
+  Use the native-Client Adapter target contract, canonical FeatureKit AdapterRegistry augmentation and named Endpoint control/management requests. Route message controls from canonical message/conversation refs; retain exact source authority and propagate caller/account/explicit-Root-stop cancellation. Replace removed Agent activity feedback exports with source-bound feedback. HMR pause/resume belongs to concrete plugin instances; plugins choose accepted-work policy without changing Controller commit/rollback authority. Cooperative worker/process control cancellation does not kill an isolate or reopen retired business admission.
+
+  Provide authenticated historical-data preview, exact selected binding, transactional application, authoritative inspection and explicit resumption, including active games. Preserve before-images and journals; never replay an unconfirmed effect, infer an account from an alias, or reuse historical permission grants. Owner V2 approvals remain inactive legacy data, while new writes use V3. Rollback requires matching software, lockfile and verified data; installing old code alone cannot read a new V3 approval file. Conflicting after-images are never overwritten.
+
+  See docs/plans/adapter-operation-version-boundaries.md and the Chinese/English upgrade guide for the complete version inventory, custom-plugin changes, acceptance and recovery sequence. These code and metadata changes do not authorize merging, publication, deployment, login, production migration or removal of installed workspace patches.
+
+- Updated dependencies [a9f4e48]
+- Updated dependencies [6749002]
+- Updated dependencies [fc33495]
+- Updated dependencies [2c3610a]
+- Updated dependencies [4949b90]
+- Updated dependencies [4c05a4e]
+- Updated dependencies [4042a72]
+- Updated dependencies [f8505b0]
+- Updated dependencies [f1d4d66]
+  - @zhin.js/agent@1.1.45
+
+## 1.1.21
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/agent@1.1.44
+
+## 1.1.20
+
+### Patch Changes
+
+- Updated dependencies [e0f991c]
+- Updated dependencies [8846d5d]
+- Updated dependencies [8c85a2b]
+- Updated dependencies [2cc80df]
+- Updated dependencies [97bf337]
+- Updated dependencies [43560d0]
+- Updated dependencies [1bf0253]
+- Updated dependencies [ee9d38a]
+- Updated dependencies [eb306e1]
+- Updated dependencies [b76317d]
+- Updated dependencies [c9775fb]
+- Updated dependencies [5efb4e9]
+- Updated dependencies [b5071e7]
+- Updated dependencies [e23cabc]
+- Updated dependencies [3c4178d]
+- Updated dependencies [3fd758c]
+- Updated dependencies [16896fe]
+- Updated dependencies [825e4dc]
+- Updated dependencies [f1eb75c]
+- Updated dependencies [5621f75]
+- Updated dependencies [88c82d0]
+- Updated dependencies [e37f30f]
+- Updated dependencies [2b8b408]
+- Updated dependencies [4d728c0]
+- Updated dependencies [eb8feeb]
+- Updated dependencies [f0e1df7]
+- Updated dependencies [7f34293]
+- Updated dependencies [d9672ec]
+- Updated dependencies [42e630d]
+- Updated dependencies [1096173]
+- Updated dependencies [24a2b71]
+- Updated dependencies [119e9e6]
+- Updated dependencies [8ce6cd2]
+- Updated dependencies [f2bbab5]
+- Updated dependencies [44eb3f8]
+- Updated dependencies [ab2263a]
+- Updated dependencies [dfa14b5]
+- Updated dependencies [b223a51]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [1ca669a]
+  - @zhin.js/agent@1.1.43
+
 ## 1.1.19
 
 ### Patch Changes

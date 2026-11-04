@@ -1,5 +1,5 @@
 import type { Client } from '@icqqjs/icqq';
-import type { GroupMemberProfile, GroupSceneFacts } from 'zhin.js/adapter';
+import { createEndpointOperation, type EndpointGroupInspectionRequest, type EndpointMemberInspectionRequest, type GroupMemberProfile, type GroupSceneFacts } from 'zhin.js/adapter';
 
 /** Listing a very large roster only to find admins is not worth the packet; adminIds stay unknown. */
 export const ADMIN_SCAN_MAX_MEMBERS = 1000;
@@ -19,10 +19,10 @@ function numericId(value: string): number {
  * ADR 0041 scene facts: one uncached group-info read, plus (small groups only) one roster read for
  * admins. A roster failure leaves adminIds unknown instead of failing the other facts.
  */
-export async function inspectGroupScene(client: Client, groupId: string, signal: AbortSignal): Promise<GroupSceneFacts> {
-  signal.throwIfAborted();
+export async function inspectGroupScene(client: Client, { groupId, signal }: EndpointGroupInspectionRequest): Promise<GroupSceneFacts> {
+  const operation = createEndpointOperation({ signal });
   const group = numericId(groupId);
-  const info = await client.getGroupInfo(group, true);
+  const info = await operation.run(() => client.getGroupInfo(group, true));
   signal.throwIfAborted();
   if (info.group_id !== group) return {};
   const memberCount = Number.isSafeInteger(info.member_count) && info.member_count > 0 ? info.member_count : undefined;
@@ -30,7 +30,7 @@ export async function inspectGroupScene(client: Client, groupId: string, signal:
   let adminIds: string[] | undefined;
   if (memberCount === undefined || memberCount <= ADMIN_SCAN_MAX_MEMBERS) {
     try {
-      const roster = await client.getGroupMemberList(group);
+      const roster = await operation.run(() => client.getGroupMemberList(group));
       signal.throwIfAborted();
       adminIds = [...roster.values()]
         .filter(member => member.role === 'admin' && member.group_id === group)
@@ -55,12 +55,12 @@ export async function inspectGroupScene(client: Client, groupId: string, signal:
 
 /** ADR 0041 member facts from one uncached lookup (same rationale as the agent `freshMember` helper). */
 export async function inspectGroupMemberProfile(
-  client: Client, groupId: string, userId: string, signal: AbortSignal,
+  client: Client, { groupId, userId, signal }: EndpointMemberInspectionRequest,
 ): Promise<GroupMemberProfile> {
-  signal.throwIfAborted();
+  const operation = createEndpointOperation({ signal });
   const group = numericId(groupId);
   const user = numericId(userId);
-  const member = await client.getGroupMemberInfo(group, user, true);
+  const member = await operation.run(() => client.getGroupMemberInfo(group, user, true));
   signal.throwIfAborted();
   if (member.user_id !== user || member.group_id !== group) return {};
   const card = typeof member.card === 'string' && member.card.trim() ? member.card.trim() : undefined;

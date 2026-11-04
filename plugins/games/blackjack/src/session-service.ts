@@ -1,9 +1,8 @@
 import type { Database, Models } from '@zhin.js/core';
 import {
   BaseSessionService,
-  channelKey,
   generateSessionId,
-  type GameMessageLike,
+  type GamePlayer,
   type GameSessionDatabase,
 } from '@zhin.js/game-kit';
 import type { BjSessionRow } from './models.js';
@@ -31,21 +30,16 @@ export class SessionService extends BaseSessionService<BjSessionRow> {
     });
   }
 
-  async createSession(message: GameMessageLike): Promise<BjSessionRow> {
+  async createSession(message: GamePlayer): Promise<BjSessionRow> {
     const deck = freshDeck();
     const playerCards = [deck.pop()!, deck.pop()!];
     const dealerCards = [deck.pop()!, deck.pop()!];
     const now = Date.now();
-    const row: BjSessionRow = {
+    const row: Omit<BjSessionRow, 'channel_key' | 'adapter' | 'endpoint' | 'channel_type' | 'channel_id'> = {
       id: generateSessionId(),
       locale: message.locale ?? 'zh-CN',
-      adapter: String(message.$adapter),
-      endpoint: message.$endpoint,
-      channel_type: message.$channel.type,
-      channel_id: message.$channel.id,
-      channel_key: channelKey(message),
-      player_id: message.$sender.id,
-      player_name: String(message.$sender.name ?? message.$sender.id),
+      player_id: message.sender.id,
+      player_name: String(message.sender.name ?? message.sender.id),
       deck_json: JSON.stringify(deck),
       player_cards_json: JSON.stringify(playerCards),
       dealer_cards_json: JSON.stringify(dealerCards),
@@ -53,7 +47,7 @@ export class SessionService extends BaseSessionService<BjSessionRow> {
       updated_at: now,
       created_at: now,
     };
-    return this.createRow(row);
+    return this.createRow({ target: message.target, fields: row });
   }
 }
 

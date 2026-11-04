@@ -76,14 +76,11 @@ export async function renderGenerationComponent(
 ): Promise<unknown> {
   const index = snapshot?.projections.get(componentFeatureId);
   if (!snapshot || !isComponentIndex(index)) throw new Error('Component Runtime 未就绪');
-  return new OutboundRenderer().render(
-    component(input.name, input.props),
-    input.requester as PluginId,
-    snapshot,
-    undefined,
-    undefined,
-    { signal: input.signal },
-  );
+  return new OutboundRenderer().render(component(input.name, input.props), {
+    requester: input.requester as PluginId,
+    snapshot: snapshot,
+    ...{ signal: input.signal },
+  });
 }
 
 export async function previewGenerationComponentDelivery(
@@ -92,8 +89,12 @@ export async function previewGenerationComponentDelivery(
 ) {
   if (!snapshot) throw new Error('Component Runtime 未就绪');
   const target = normalizeDeliveryTarget(input.target);
-  const result = await new OutboundRenderer().preview(component(input.name, input.props), input.requester as PluginId,
-    snapshot, target, { signal: input.signal });
+  const result = await new OutboundRenderer().preview(component(input.name, input.props), {
+    requester: input.requester as PluginId,
+    snapshot: snapshot,
+    conversation: target,
+    ...{ signal: input.signal },
+  });
   return { output: result.payload, rendering: result.rendering, generation: snapshot.generation,
     note: 'Endpoint projection only; preview does not run outbound middleware, send messages or activate buttons.' };
 }

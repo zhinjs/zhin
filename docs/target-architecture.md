@@ -175,7 +175,7 @@ flowchart LR
   Command & Agent --> Outbound["ReplyPort / DeliveryPort"]
   Outbound --> Render["components + canonical segments"]
   Render --> OutboundMW["outbound middleware"]
-  OutboundMW --> Adapter["AdapterIndex -> Endpoint.send"]
+  OutboundMW --> Adapter["AdapterIndex -> registered send hook"]
 ```
 
 `Segment` and `MediaRef` are the only cross-platform media representation.

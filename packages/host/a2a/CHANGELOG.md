@@ -1,5 +1,47 @@
 # @zhin.js/a2a
 
+## 1.1.22
+
+### Patch Changes
+
+- Updated dependencies [b0c02a2]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [032dc96]
+  - @zhin.js/core@1.1.55
+  - @zhin.js/workroom@0.0.15
+
+## 1.1.21
+
+### Patch Changes
+
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [f8505b0]
+  - @zhin.js/core@1.1.54
+  - @zhin.js/workroom@0.0.14
+
+## 1.1.20
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/core@1.1.53
+  - @zhin.js/workroom@0.0.13
+
+## 1.1.19
+
+### Patch Changes
+
+- Updated dependencies [f67883e]
+- Updated dependencies [4d728c0]
+- Updated dependencies [24a2b71]
+- Updated dependencies [3771f7a]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/core@1.1.52
+  - @zhin.js/workroom@0.0.12
+
 ## 1.1.18
 
 ### Patch Changes

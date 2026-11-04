@@ -5,6 +5,6 @@
     "rootDir": ".",
     "types": ["node"]
   },
-  "include": ["tests/client-context.types.ts"],
+  "include": ["tests/client-context.types.ts", "tests/session-registration.d.ts", "tests/session-command.types.ts"],
   "exclude": ["lib", "node_modules"]
 }

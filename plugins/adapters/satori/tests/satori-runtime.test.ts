@@ -1,10 +1,9 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { SatoriV1Client } from '@imhelper/satori-v1';
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState, listEndpointManagementCapabilities } from 'zhin.js/adapter';
-import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
+import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
+import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import defineSatoriAdapter from '../adapters/satori/index.js';
 import {
@@ -21,13 +20,14 @@ import {
   isMessageEvent,
   resolveSatoriConfig,
   type SatoriEventBody,
+  type SatoriApiRequest,
 } from '../src/protocol.js';
 import { verifySatoriToken } from '../src/webhook.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
 
-const baseConfig = resolveSatoriConfig({
+const baseConfig = resolveSatoriConfig({ platform: 'test', userId: 'bot-1',
   id: 'test-satori',
   connection: 'ws',
   baseUrl: 'http://127.0.0.1:5140',
@@ -75,7 +75,7 @@ afterEach(async () => {
 
 describe('satori protocol helpers', () => {
   it('resolves ws config from plugin config', () => {
-    const resolved = resolveSatoriConfig({
+    const resolved = resolveSatoriConfig({ platform: 'test', userId: 'bot-1',
       id: 'bot',
       baseUrl: 'http://sdk.local',
       token: 't',
@@ -91,7 +91,7 @@ describe('satori protocol helpers', () => {
   });
 
   it('resolves webhook config from plugin config', () => {
-    const resolved = resolveSatoriConfig({
+    const resolved = resolveSatoriConfig({ platform: 'test', userId: 'bot-1',
       id: 'hook',
       connection: 'webhook',
       baseUrl: 'http://sdk.local',
@@ -112,7 +112,7 @@ describe('satori protocol helpers', () => {
 
   it('detects message events', () => {
     expect(isMessageEvent({
-      type: 'message-created',
+      type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
       message: { id: 'm1', content: 'hi' },
     })).toBe(true);
     expect(isMessageEvent({ type: 'guild-added' })).toBe(false);
@@ -120,7 +120,7 @@ describe('satori protocol helpers', () => {
 
   it('formats inbound content', () => {
     expect(formatInboundContent({
-      type: 'message-created',
+      type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
       message: { id: '1', content: 'hello' },
     })).toBe('hello');
   });
@@ -158,17 +158,16 @@ describe('satori protocol helpers', () => {
 });
 
 describe('satori plugin runtime adapter', () => {
-  it('projects non-message requests through the Client public event map', () => {
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+  it('projects non-message requests through the Client public event map', async () => {
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: createWsFactory(createMockSocket()),
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
     const request = vi.fn();
-    endpoint.client.on('request.group', request);
+    endpoint.endpoint.on('request.group', request);
 
-    endpoint.client.ingest({
+    endpoint.endpoint.ingest({
       id: 'request-7',
       type: 'guild-request',
       platform: 'test',
@@ -191,24 +190,23 @@ describe('satori plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const socket = createMockSocket();
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway,
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), gateway, undefined);
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
 
     await endpoint.start();
     endpoint.open();
-    expect(endpoint.client).toBeInstanceOf(SatoriV1Client);
+    expect(endpoint.endpoint).toBeInstanceOf(SatoriV1Client);
 
     const body: SatoriEventBody = {
-      type: 'message-created',
+      type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
       message: { id: 'msg-1', content: '你好' },
       channel: { id: 'ch-1', type: 0 },
       user: { id: 'u-1', name: 'alice' },
     };
-    endpoint.client.ingest(body);
+    endpoint.endpoint.ingest(body);
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
@@ -225,15 +223,14 @@ describe('satori plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const socket = createMockSocket();
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway,
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), gateway, undefined);
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
-    endpoint.client.ingest({
-      type: 'message-created',
+    endpoint.endpoint.ingest({
+      type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
       message: { id: '1', content: 'nope' },
       channel: { id: 'ch' },
       user: { id: 'u' },
@@ -246,18 +243,17 @@ describe('satori plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const socket = createMockSocket();
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway,
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), gateway, undefined);
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.client.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
+    endpoint.endpoint.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
 
-    endpoint.client.ingest({
-      type: 'message-created',
+    endpoint.endpoint.ingest({
+      type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
       message: { id: 'm-at', content: '<at id="bot-1"/> 在吗' },
       channel: { id: 'ch-1', type: 0 },
       user: { id: 'u-1', name: 'alice' },
@@ -276,18 +272,17 @@ describe('satori plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const socket = createMockSocket();
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway,
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), gateway, undefined);
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.client.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
+    endpoint.endpoint.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
 
-    endpoint.client.ingest({
-      type: 'message-created',
+    endpoint.endpoint.ingest({
+      type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
       message: { id: 'm-other', content: '<at id="user-2"/> 在吗' },
       channel: { id: 'ch-1', type: 0 },
       user: { id: 'u-1', name: 'alice' },
@@ -301,18 +296,14 @@ describe('satori plugin runtime adapter', () => {
 
   it('sends IDENTIFY on ws open', async () => {
     const socket = createMockSocket();
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), {
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined) });
     await endpoint.start();
     await vi.waitFor(() => expect(socket.sent.length).toBeGreaterThan(0));
     const identify = JSON.parse(socket.sent[0]!) as { op: number; body: { token?: string } };
@@ -324,18 +315,17 @@ describe('satori plugin runtime adapter', () => {
   it('admits EVENT signals from the websocket', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const socket = createMockSocket();
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
     socket.emit('message', JSON.stringify({
       op: SatoriOpcode.EVENT,
       body: {
-        type: 'message-created',
+        type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
         sn: 3,
         message: { id: 'm2', content: 'from-ws' },
         channel: { id: 'channel-a', type: 1 },
@@ -354,22 +344,18 @@ describe('satori plugin runtime adapter', () => {
   it('sends outbound payloads via Satori API', async () => {
     const callApi = vi.fn(async () => [{ id: 'out-1' }]);
     const socket = createMockSocket();
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
       createWebSocket: createWsFactory(socket),
       callApi,
-    }), {
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.client.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
+    endpoint.endpoint.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
     const messageId = await endpoint.send({
       conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
@@ -380,77 +366,48 @@ describe('satori plugin runtime adapter', () => {
     });
     expect(messageId).toBe('ch-9:out-1');
     expect(callApi).toHaveBeenCalledWith(
-      expect.objectContaining({ platform: 'test', userId: 'bot-1' }),
-      'message',
-      'create',
-      { channel_id: 'ch-9', content: 'pong' },
+      expect.objectContaining({ platform: 'test', userId: 'bot-1', resource: 'message', method: 'create', params: { channel_id: 'ch-9', content: 'pong' } }),
     );
     await endpoint.stop();
   });
 
   it('maps canonical recall control to Satori message.delete', async () => {
     const callApi = vi.fn(async () => undefined);
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
       createWebSocket: createWsFactory(createMockSocket()),
       callApi,
-    }), {
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
-    endpoint.open();
-    endpoint.client.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
+      }, undefined) });
+    await endpoint.start(); endpoint.open();
+    endpoint.endpoint.ingest({ type: 'login-updated', login: { platform: 'test', user: { id: 'bot-1' } } });
     const conversation = {
       endpoint: { id: 'test-endpoint', adapter: 'satori' },
       kind: 'group' as const,
       id: 'ch-9',
     };
 
-    await endpoint.control.recall?.({ conversation, id: 'inbound-1' });
+    await endpoint.index.control(endpoint.canonicalId, 'recall')!.recall?.({ message: { conversation, id: 'inbound-1' } });
 
     expect(callApi).toHaveBeenCalledWith(
-      expect.objectContaining({ platform: 'test', userId: 'bot-1' }),
-      'message',
-      'delete',
-      { channel_id: 'ch-9', message_id: 'inbound-1' },
+      expect.objectContaining({ platform: 'test', userId: 'bot-1', resource: 'message', method: 'delete', params: { channel_id: 'ch-9', message_id: 'inbound-1' } }),
     );
   });
 
   it('creates webhook endpoint when httpHostToken provided', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = defineSatoriAdapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      name: 'satori',
-      config: {
+    const endpoint = await createAdapterHarness(defineSatoriAdapter, { platform: 'test', userId: 'bot-1',
         id: 'satori',
         connection: 'webhook',
         baseUrl: 'http://127.0.0.1:5140',
         path: '/satori/webhook',
         token: 'secret',
-      },
-      use: (token: unknown) => {
-        if (token === httpHostToken) return http;
-        if (token === outboundMessageToken) {
-          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-        }
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === satoriRuntimeStateToken) return createEndpointRuntimeState();
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
-    expect(endpoint).toBeInstanceOf(SatoriWebhookEndpoint);
+      }, { name: 'satori', resources: new Map([[httpHostToken.id, http]]) });
+    expect(endpoint.endpoint).toBeInstanceOf(SatoriWebhookEndpoint);
   });
 
   it('handles webhook EVENT and routes messages through OutboundMessageService', async () => {
@@ -458,11 +415,10 @@ describe('satori plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new SatoriWebhookEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWebhookEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway,
       http,
-      config: resolveSatoriConfig({
+      config: resolveSatoriConfig({ platform: 'test', userId: 'bot-1',
         connection: 'webhook',
         id: 'hook',
         baseUrl: 'http://127.0.0.1:5140',
@@ -470,7 +426,7 @@ describe('satori plugin runtime adapter', () => {
         token: 'secret',
       }) as ReturnType<typeof resolveSatoriConfig> & { connection: 'webhook' },
       callApi: vi.fn(async () => [{ id: 'out-1' }]),
-    }), gateway, undefined);
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
 
     await endpoint.start();
     const { port } = await http.listen();
@@ -484,11 +440,10 @@ describe('satori plugin runtime adapter', () => {
         'Satori-Opcode': String(SatoriOpcode.EVENT),
       },
       body: JSON.stringify({
-        type: 'message-created',
+        type: 'message-created', login: { platform: 'test', user: { id: 'bot-1' } },
         message: { id: 'msg-1', content: 'from-webhook' },
         channel: { id: 'ch-1', type: 0 },
         user: { id: 'u-1', name: 'alice' },
-        login: { platform: 'test', user: { id: 'bot-1' } },
       }),
     });
     expect(res.status).toBe(200);
@@ -531,18 +486,14 @@ describe('satori webhook auth', () => {
 
 describe('satori ws heartbeat', () => {
   it('settles start() silently when stop() races the initial connect', async () => {
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
       createWebSocket: () => createMockSocket(), // 永不 open，模拟连接挂起
-    }), {
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined) });
 
     const startPromise = endpoint.start();
     await endpoint.stop();
@@ -555,13 +506,9 @@ describe('satori ws heartbeat', () => {
     const socket = createMockSocket();
     const closeSpy = vi.fn(() => socket.emit('close', 1000, 'heartbeat timeout'));
     socket.close = closeSpy;
-    const endpoint = bindTestEndpoint(new SatoriWsEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
-      config: resolveSatoriConfig({
+      config: resolveSatoriConfig({ platform: 'test', userId: 'bot-1',
         id: 'test-satori',
         connection: 'ws',
         baseUrl: 'http://127.0.0.1:5140',
@@ -569,10 +516,10 @@ describe('satori ws heartbeat', () => {
         heartbeat_interval: 1_000,
       }),
       createWebSocket: createWsFactory(socket),
-    }), {
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined) });
     await endpoint.start();
 
     // 第 1 轮：发出 PING，未超时
@@ -600,10 +547,7 @@ describe('satori ws heartbeat', () => {
 describe('satori endpoint management', () => {
   function createManagementCallApi() {
     return vi.fn(async (
-      _options: unknown,
-      resource: string,
-      method: string,
-      params: Record<string, unknown>,
+      { resource, method, params = {} }: SatoriApiRequest,
     ): Promise<unknown> => {
       if (resource === 'guild' && method === 'list') {
         if (params.next === 'p2') return { data: [{ id: 'guild-2' }] };
@@ -630,18 +574,18 @@ describe('satori endpoint management', () => {
     });
   }
 
-  function createManagementEndpoint(callApi: ReturnType<typeof createManagementCallApi>) {
-    return bindTestEndpoint(new SatoriWsEndpoint({
+  async function createManagementEndpoint(callApi: ReturnType<typeof createManagementCallApi>) {
+    return await createEndpointHarness(() => new SatoriWsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
-      callApi,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+      callApi, createWebSocket: createWsFactory(createMockSocket()),
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
   }
 
-  it('advertises only implemented management capabilities', () => {
-    const endpoint = createManagementEndpoint(createManagementCallApi());
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+  it('advertises only implemented management capabilities', async () => {
+    const endpoint = await createManagementEndpoint(createManagementCallApi());
+    await endpoint.start(); endpoint.open();
+    expect(listEndpointManagementCapabilities(endpoint.endpoint)).toEqual([
       'listGroups',
       'listChannels',
       'listGroupMembers',
@@ -650,20 +594,22 @@ describe('satori endpoint management', () => {
 
   it('lists guilds across pages without losing id precision', async () => {
     const callApi = createManagementCallApi();
-    const endpoint = createManagementEndpoint(callApi);
+    const endpoint = await createManagementEndpoint(callApi);
+    await endpoint.start(); endpoint.open();
     // id 超 Number.MAX_SAFE_INTEGER，保留原始字符串
-    await expect(endpoint.management.listGroups?.()).resolves.toEqual([
+    await expect(endpoint.index.management(endpoint.canonicalId)!.listGroups?.()).resolves.toEqual([
       { group_id: '1234567890123456789', name: 'Guild' },
       { group_id: 'guild-2', name: 'guild-2' },
     ]);
     expect(callApi).toHaveBeenCalledWith(
-      expect.anything(), 'guild', 'list', { next: 'p2' },
+      expect.objectContaining({ resource: 'guild', method: 'list', params: { next: 'p2' } }),
     );
   });
 
   it('lists only text channels with guild parent', async () => {
-    const endpoint = createManagementEndpoint(createManagementCallApi());
-    await expect(endpoint.management.listChannels?.()).resolves.toEqual([
+    const endpoint = await createManagementEndpoint(createManagementCallApi());
+    await endpoint.start(); endpoint.open();
+    await expect(endpoint.index.management(endpoint.canonicalId)!.listChannels?.()).resolves.toEqual([
       {
         id: 'ch-text',
         name: 'general',
@@ -674,23 +620,23 @@ describe('satori endpoint management', () => {
 
   it('lists guild members in platform shape', async () => {
     const callApi = createManagementCallApi();
-    const endpoint = createManagementEndpoint(callApi);
-    await expect(endpoint.management.listGroupMembers?.('guild-1')).resolves.toEqual([
+    const endpoint = await createManagementEndpoint(callApi);
+    await endpoint.start(); endpoint.open();
+    await expect(endpoint.index.management(endpoint.canonicalId)!.listGroupMembers?.({ groupId: 'guild-1' })).resolves.toEqual([
       { user: { id: 'user-1', name: 'alice' }, nick: 'Alice', roles: ['role-1'] },
     ]);
     expect(callApi).toHaveBeenCalledWith(
-      expect.anything(), 'guild-member', 'list', { guild_id: 'guild-1' },
+      expect.objectContaining({ resource: 'guild-member', method: 'list', params: { guild_id: 'guild-1' } }),
     );
   });
 
-  it('exposes management on the webhook endpoint too', () => {
+  it('exposes management on the webhook endpoint too', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new SatoriWebhookEndpoint({
+    const endpoint = await createEndpointHarness(() => new SatoriWebhookEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       http,
-      config: resolveSatoriConfig({
+      config: resolveSatoriConfig({ platform: 'test', userId: 'bot-1',
         connection: 'webhook',
         id: 'hook',
         baseUrl: 'http://127.0.0.1:5140',
@@ -698,8 +644,8 @@ describe('satori endpoint management', () => {
         token: 'secret',
       }) as ReturnType<typeof resolveSatoriConfig> & { connection: 'webhook' },
       callApi: createManagementCallApi(),
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+    }), { name: 'satori', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
+    expect(listEndpointManagementCapabilities(endpoint.endpoint)).toEqual([
       'listGroups',
       'listChannels',
       'listGroupMembers',

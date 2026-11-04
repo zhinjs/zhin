@@ -35,6 +35,31 @@ export class PluginSchemaCatalog {
     return (await this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), await this.#declarations?.(), true, document)) as Readonly<Record<string, unknown>> | null;
   }
 
+  /**
+   * Raw JSON schemas for several keys sharing one resolver and one declaration read.
+   * A key whose schema cannot be read maps to its `Error`, so callers can fail closed per key.
+   */
+  async readJsonMany(keys: Iterable<string>, document?: RuntimeConfigDocument)
+    : Promise<ReadonlyMap<string, Readonly<Record<string, unknown>> | null | Error>> {
+    const list = [...keys];
+    let declarations: ReadonlyMap<string, Readonly<Record<string, unknown>>> | undefined;
+    try { declarations = await this.#declarations?.(); }
+    catch (error) {
+      const failure = error instanceof Error ? error : new Error(String(error));
+      return new Map(list.map(key => [key, failure]));
+    }
+    let resolver: Promise<NodePackageResolver> | undefined;
+    type Entry = readonly [string, Readonly<Record<string, unknown>> | null | Error];
+    return new Map(await Promise.all(list.map(async (key): Promise<Entry> => {
+      try {
+        const schema = await this.#read(key, () => resolver ??= NodePackageResolver.create(this.#projectRoot), declarations, true, document);
+        return [key, schema as Readonly<Record<string, unknown>> | null];
+      } catch (error) {
+        return [key, error instanceof Error ? error : new Error(String(error))];
+      }
+    })));
+  }
+
   async readAll(keys: Iterable<string>, document?: RuntimeConfigDocument): Promise<Record<string, unknown>> {
     let resolver: Promise<NodePackageResolver> | undefined;
     const declarations = await this.#declarations?.();

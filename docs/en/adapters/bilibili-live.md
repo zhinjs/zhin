@@ -5,7 +5,7 @@ tier: Experimental
 ---
 
 ::: info Documentation Sync
-This page mirrors [`plugins/adapters/bilibili-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili-live/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/bilibili-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili-live/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 # @zhin.js/adapter-bilibili-live
@@ -84,6 +84,20 @@ The adapter writes nothing to disk. The dedupe table (the latest 500 danmaku ids
 
 - Without login the platform reports uid 0 and masked nicknames, so anonymous viewers with the same masked nickname count as one person.
 - The platform may change its APIs at any time (for example WBI signing or risk control on `getDanmuInfo`). The connection then keeps failing and backing off; watch the logs.
+
+## Console page
+
+Open the Console **Bilibili Live** page (route `/bilibili-live`) to:
+
+- view running connections and test connectivity;
+- add, edit, start, stop, replace, or remove accounts through Host runtime storage; startup configuration and `.env` remain unchanged;
+- complete LoginAssist tasks (QR code, slider or device confirmation) when the adapter asks for a login;
+
+An administrator must review and confirm the existing account list before its first migration; identity and history are retained. New or replaced accounts are saved disabled and must be started explicitly. A connection update reconnects only that account; replacement uses a new internal identity and does not inherit Sessions or settings. If a commit outcome is unknown, refresh to verify it before taking another action.
+
+Reading requires `bilibili-live:read`; writes require `bilibili-live:write`. A full admin token is unrestricted. "Add endpoint" is equivalent to the old `bilibili-live endpoint add` command.
+
+QR login still lives on the Bilibili comment adapter page; this page manages live-danmaku connections and endpoints.
 
 ## Troubleshooting
 

@@ -1,17 +1,18 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Milky protocol helpers (no legacy Adapter/Endpoint / segment-mapper).
  * Canonicalization is owned by gateway/core before endpoint.send.
  * Spec: https://milky.ntqqrev.org/
  */
 
-import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('milky');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface MilkyEndpointConfig {
+export interface MilkyEndpointConfig extends EndpointProfileConfiguration {
   readonly connection?: 'ws' | 'sse' | 'webhook' | 'wss';
   readonly id: string;
   readonly baseUrl: string;
@@ -104,6 +105,7 @@ export interface MilkyOutgoingSegment {
 export interface MilkyApiClientOptions {
   readonly baseUrl: string;
   readonly access_token?: string;
+  readonly signal?: AbortSignal;
 }
 
 function normalizeConnection(connection: string | undefined): 'ws' | 'sse' | 'webhook' | 'wss' {
@@ -191,24 +193,29 @@ function authQuery(access_token?: string): string {
  * 调用协议端 API：POST {baseUrl}/api/{apiName}，Body JSON，鉴权。
  * HTTP 层错误抛出；协议响应原样返回，由 Client 公开 call() 保留完整语义。
  */
+export interface MilkyApiRequest extends MilkyApiClientOptions {
+  readonly action: string;
+  readonly params?: Record<string, unknown>;
+}
 export async function callApi<T = unknown>(
-  options: MilkyApiClientOptions,
-  apiName: string,
-  params: Record<string, unknown> = {},
+  { action: apiName, params = {}, ...options }: MilkyApiRequest,
 ): Promise<MilkyApiResponse<T>> {
   const { baseUrl, access_token } = options;
   const url = new URL(`/api/${apiName}`, baseUrl.replace(/\/$/, ''));
   const q = authQuery(access_token);
   if (q) url.search = (url.search ? `${url.search}&` : '') + q;
 
-  const res = await fetch(url.toString(), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(access_token),
-    },
-    body: JSON.stringify(Object.keys(params).length ? params : {}),
-  });
+  if (options.signal?.aborted) throw new EndpointDeliveryError('endpoint_inactive', 'Milky request ended before submission', 'not_sent', { cause: options.signal.reason });
+  const payload = JSON.stringify(Object.keys(params).length ? params : {});
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(access_token) },
+      body: payload, signal: options.signal,
+    });
+  } catch (cause) {
+    throw new EndpointDeliveryError('delivery_unconfirmed', 'Milky HTTP request outcome is unknown', 'unknown', { cause });
+  }
 
   const text = await res.text();
   let body: MilkyApiResponse<T>;

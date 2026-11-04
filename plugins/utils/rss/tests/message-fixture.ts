@@ -1,4 +1,4 @@
-/** Runtime Message shape; the capability identity is deliberately not a routing address. */
+/** Runtime Message shape; the canonical identity is deliberately distinct from the reusable display name. */
 export function rssMessage(
   endpointId = '8596238',
   kind: 'private' | 'group' | 'channel' = 'private',
@@ -6,7 +6,7 @@ export function rssMessage(
 ) {
   return {
     conversation: {
-      endpoint: { id: `root/icqq\0zhin.adapter\0icqq~${endpointId}`, adapter: 'root/icqq' },
+      endpoint: { id: `root/icqq\0zhin.adapter\0icqq~${endpointId}`, adapter: 'icqq' },
       kind,
       id,
     },
@@ -21,7 +21,7 @@ export function rssMessage(
 
 export const RSS_TEST_CHANNEL = {
   adapterName: 'icqq',
-  endpointKey: '8596238',
+  endpointKey: rssMessage().conversation.endpoint.id,
   channelType: 'private',
   channelId: '1659488338',
 } as const;

@@ -14,17 +14,14 @@ let nextCalls = 0;
 const replies: unknown[] = [];
 
 function makeInput(content: string) {
-  return {
-    $adapter: 'sandbox',
-    $endpoint: 'default',
-    $channel: { type: 'group', id: 'room' },
-    $sender: { id: 'alice', name: 'Alice' },
-    content,
-    async $reply(reply: unknown) {
+  const target = { endpoint: { adapter: 'sandbox', id: 'default' }, kind: 'group' as const, id: 'room' };
+  return { target, conversation: target,
+sender: { id: 'alice', name: 'Alice' },
+content,
+async $reply(reply: unknown) {
       replies.push(reply);
       return 'message-1';
-    },
-  };
+    } };
 }
 
 describe('dungeon choice middleware', () => {

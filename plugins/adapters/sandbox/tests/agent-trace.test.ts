@@ -1,4 +1,5 @@
 import {
+  agentSessionsPath,
   buildSandboxSessionKey,
   buildAgentRunReport,
   deriveAgentRunSteps,
@@ -31,6 +32,13 @@ class MemoryTraceStorage implements AgentTraceStorage {
 }
 
 describe('sandbox agent trace helpers', () => {
+  it.each(['sandbox:bot:private:user', 'sandbox:bot:group:用户 %2F +&?#'])('opens the real conversation details without changing session identity: %s', (sessionKey) => {
+    const url = new URL(agentSessionsPath(sessionKey), 'https://console.invalid');
+    expect(url.pathname).toBe('/agent/sessions');
+    expect([...url.searchParams]).toEqual([['sessionKey', sessionKey]]);
+    expect(url.hash).toBe('');
+  });
+
   it('builds the canonical IM session key', () => {
     expect(buildSandboxSessionKey('sandbox-bot', 'group', 'planning-room')).toBe('sandbox:sandbox-bot:group:planning-room');
   });
@@ -74,6 +82,31 @@ describe('sandbox agent trace helpers', () => {
   it('summarizes operational metrics and presents tool events', () => {
     expect(summarizeTrace(snapshot)).toEqual({ eventCount: 3, toolCount: 1, tokenCount: 218, problemCount: 0, activeTurns: 1 });
     expect(presentTraceEvent(snapshot.events[1])).toMatchObject({ title: '调用 lookup', tone: 'tool' });
+  });
+
+  it('caches trace content and file evidence without persisting current-Host project links', () => {
+    const storage = new MemoryTraceStorage();
+    const data = { toolName: 'write_file', output: 'created file', fileChange: { path: '/workspace/src/app.ts' }, projectFile: { path: 'src/app.ts' } };
+    const live = { ...snapshot, events: [{ ...snapshot.events[1], type: 'tool_result', data }] };
+    const original = structuredClone(live);
+    expect(saveCachedAgentTrace(live, storage)).toBe(true);
+    expect(live).toEqual(original);
+    const saved = JSON.parse([...storage.values.values()][0]!);
+    expect(saved.events[0].data).toEqual({ toolName: 'write_file', output: 'created file', fileChange: { path: '/workspace/src/app.ts' } });
+    expect(loadCachedAgentTrace(live.sessionKey, storage)?.events[0]?.data).toEqual(saved.events[0].data);
+    expect(live.events[0]?.data.projectFile).toEqual({ path: 'src/app.ts' });
+  });
+
+  it('does not restore project links from an already populated Hostless trace cache', () => {
+    const storage = new MemoryTraceStorage();
+    saveCachedAgentTrace(snapshot, storage);
+    const key = [...storage.values.keys()][0]!;
+    const data = { output: 'created file', fileChange: { path: '/old-host/src/app.ts' }, projectFile: { path: 'src/app.ts' } };
+    storage.setItem(key, JSON.stringify({ ...snapshot, events: [{ ...snapshot.events[1], type: 'tool_result', data }] }));
+    expect(loadCachedAgentTrace(snapshot.sessionKey, storage)?.events[0]?.data).toEqual({
+      output: 'created file', fileChange: { path: '/old-host/src/app.ts' },
+    });
+    expect(JSON.parse(storage.getItem(key)!).events[0].data.projectFile).toEqual({ path: 'src/app.ts' });
   });
 
   it('derives stable task lifecycle states from trace terminals', () => {
@@ -132,6 +165,28 @@ describe('sandbox agent trace helpers', () => {
     expect(file?.diff).toContain('- const draft = true');
     expect(file?.diff).toContain('+ const draft = false');
     expect(test).toMatchObject({ status: 'completed', title: 'pnpm test', detail: '12 tests passed' });
+  });
+
+  it('uses settled file identity and only exposes project links supplied by the Host', () => {
+    const call = { sequence: 1, recordedAt: 1, sessionKey: snapshot.sessionKey, turnId: 'file-turn', type: 'tool_call', data: {
+      toolName: 'write_file', toolUseId: 'write-1', args: { file_path: 'same-name.ts', content: 'fixture' },
+    } };
+    const result = { ...call, sequence: 2, type: 'tool_result', data: {
+      toolName: 'write_file', toolUseId: 'write-1', output: 'Wrote fixture',
+      fileChange: { path: '/actual/workspace/src/same-name.ts' },
+      projectFile: { path: 'src/same-name.ts' },
+    } };
+    const derive = (terminal: AgentTraceSnapshot['events'][number]) => deriveWorkbenchArtifacts({
+      ...snapshot, activeTurnIds: [], events: [call, terminal],
+    })[0];
+    expect(derive(result)).toMatchObject({ path: '/actual/workspace/src/same-name.ts', projectFilePath: 'src/same-name.ts' });
+    const { projectFile: _projectFile, ...unmapped } = result.data;
+    expect(derive({ ...result, data: unmapped })).not.toHaveProperty('projectFilePath');
+    expect(derive({ ...result, type: 'tool_failed' })).not.toHaveProperty('projectFilePath');
+    expect(derive({ ...result, data: { toolName: 'write_file', toolUseId: 'write-1', output: 'legacy success' } }))
+      .toMatchObject({ path: 'same-name.ts' });
+    expect(derive({ ...result, data: { toolName: 'write_file', toolUseId: 'write-1', output: 'legacy success' } }))
+      .not.toHaveProperty('projectFilePath');
   });
 
   it('does not cross-wire reused tool ids across turns or runtime generations', () => {

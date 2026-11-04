@@ -9,7 +9,7 @@ import {
 } from '@zhin.js/ai';
 import * as memoryLayers from '../../src/memory-layers.js';
 import { buildTurnContextBlocks, type TurnContextView } from '../../src/context/turn-envelope.js';
-import { prependTurnContextBlocks } from '../../src/context/turn-user-message.js';
+import { appendTurnContextBlocks } from '../../src/context/turn-user-message.js';
 
 const snapshot = ('## Session\nFILE-MEMORY-FACT: ' + 'Use the agreed publishing process. '.repeat(80)).trim();
 
@@ -26,7 +26,7 @@ function turn(): TurnContextView {
 }
 
 function message(context = turn(), extra: Parameters<typeof buildTurnContextBlocks>[0] = {}): AgentMessage {
-  return prependTurnContextBlocks([createUserMessage('continue', undefined, 1, {
+  return appendTurnContextBlocks([createUserMessage('continue', undefined, 1, {
     subjectId: context.principal.subjectId, roles: context.principal.roles, authorizationRoles: context.principal.roles, scope: 'group',
   })], buildTurnContextBlocks({ turn: context, ...extra }))[0]!;
 }

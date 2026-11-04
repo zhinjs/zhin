@@ -1,16 +1,8 @@
-import { defineEndpointClient } from 'zhin.js/adapter';
-import type { QqInboundMessage } from './protocol.js';
-import type { QqBotTransport } from './ws.js';
+import type { EventMap } from 'qq-official-bot';
+import type { QqAdapter } from './adapter.js';
 
-export type QqClientEventMap = Record<string, QqInboundMessage | unknown>;
+export type QqClientEventMap = { readonly [K in keyof EventMap]: EventMap[K] extends (event: infer E, ...args: never[]) => unknown ? E : never };
 
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly qq: {
-      readonly client: QqBotTransport;
-      readonly events: QqClientEventMap;
-    };
-  }
+  interface AdapterRegistry { readonly qq: QqAdapter; }
 }
-
-export const qqClient = defineEndpointClient<QqBotTransport, QqClientEventMap>('qq');

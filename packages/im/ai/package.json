@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/ai",
-  "version": "1.1.46",
+  "version": "1.1.50",
   "description": "Framework-agnostic AI engine: providers, agent loop, sessions, memory, compaction",
   "type": "module",
   "main": "./lib/index.js",
@@ -45,6 +45,11 @@
       "types": "./lib/journal-store.d.ts",
       "development": "./src/journal-store.ts",
       "import": "./lib/journal-store.js"
+    },
+    "./model-catalog": {
+      "types": "./lib/model-catalog/index.d.ts",
+      "development": "./src/model-catalog/index.ts",
+      "import": "./lib/model-catalog/index.js"
     }
   },
   "files": [
@@ -143,6 +148,10 @@
       "./journal-store": {
         "types": "./lib/journal-store.d.ts",
         "import": "./lib/journal-store.js"
+      },
+      "./model-catalog": {
+        "types": "./lib/model-catalog/index.d.ts",
+        "import": "./lib/model-catalog/index.js"
       }
     }
   },

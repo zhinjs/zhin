@@ -16,6 +16,18 @@ const job: ScheduleJob = {
 };
 
 describe('ScheduleExecutionDomain', () => {
+  it('labels an accepted budget-limited result as partial without changing the existing acceptance rule', async () => {
+    const domain = new ScheduleExecutionDomainImpl({ config: DEFAULT_CONFIG, auditLogger: { write: async () => {} },
+      turn: { execute: async request => {
+        request.onTurnEvent({ type: 'tool_call', toolName: 'read_one', args: {}, toolUseId: '1' });
+        request.onTurnEvent({ type: 'tool_call', toolName: 'read_two', args: {}, toolUseId: '2' });
+        return { status: 'completed', output: [{ type: 'text', content: 'Useful partial output' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } };
+      } } });
+    const result = await domain.execute({ ...job, budget: { maxToolCalls: 1 } });
+    expect(result).toMatchObject({ success: true, status: 'budget_partial', audit: { budgetTerminated: 'tool_limit' } });
+    expect(result.output).toContain('Useful partial output');
+  });
   it('runs a schedule turn with budget telemetry, output validation, and audit', async () => {
     const write = vi.fn(async () => {});
     const execute = vi.fn(async (request: any) => {

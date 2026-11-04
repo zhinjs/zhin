@@ -197,13 +197,12 @@ describe('@zhin.js/plugin-bilibili setup', () => {
       lifecycle: { add: (dispose: unknown) => disposers.push(dispose) },
     });
     expect(plugin.name).toBe('bilibili');
-    expect(defined).toEqual([BILI_SUBS_TABLE, BILI_STATE_TABLE]);
+    expect(defined).toEqual([BILI_SUBS_TABLE, BILI_STATE_TABLE, 'target_migration_journal']);
     expect(provided?.persistent).toBe(true);
     expect(provided?.outbound).toBeTypeOf('function');
-    await provided!.outbound!({ adapterName: 'sandbox', endpointKey: 'bot1', channelType: 'group',
-      channelId: 'room', content: 'Already formatted notification', locale: 'en' });
-    expect(send).toHaveBeenCalledWith({ adapter: 'sandbox', endpointKey: 'bot1',
-      conversation: { kind: 'group', id: 'room' }, content: 'Already formatted notification', locale: 'en' });
+    await expect(provided!.outbound!({ adapterName: 'sandbox', endpointKey: 'bot1', channelType: 'group',
+      channelId: 'room', content: 'Already formatted notification', locale: 'en' })).rejects.toMatchObject({ code: 'unavailable' });
+    expect(send).not.toHaveBeenCalled();
     expect(jobs).toMatchObject([{ id: 'bilibili/watch', cron: '*/90 * * * * *' }]);
     expect(disposers).toHaveLength(1);
   });

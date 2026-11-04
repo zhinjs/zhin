@@ -13,29 +13,26 @@ describe('canonical Message contract', () => {
     const reply = vi.fn(async () => ({ status: 'sent' as const }));
     const message: Message = new RuntimeMessage(
       {
-        endpoint: { id: 'root/icqq\0zhin.adapter\0icqq~8596238', adapter: 'root/icqq' },
-        kind: 'private',
-        id: '1659488338',
-      },
-      'kfc',
-      4,
-      reply,
-      { id: '1659488338', name: '归雨', roles: ['master'] },
-      { channelType: 'private', nickname: '归雨' },
-      [{ type: 'text', data: { text: 'kfc' } }],
-      {
         conversation: {
           endpoint: { id: 'root/icqq\0zhin.adapter\0icqq~8596238', adapter: 'root/icqq' },
           kind: 'private',
           id: '1659488338',
         },
-        id: 'native-message-id',
+        content: 'kfc',
+        sender: { id: '1659488338', name: '归雨', roles: ['master'] },
+        metadata: { channelType: 'private', nickname: '归雨' },
+        segments: [{ type: 'text', data: { text: 'kfc' } }],
+        message: {
+          conversation: {
+            endpoint: { id: 'root/icqq\0zhin.adapter\0icqq~8596238', adapter: 'root/icqq' },
+            kind: 'private',
+            id: '1659488338',
+          },
+          id: 'native-message-id',
+        },
+        endpointId: '8596238',
       },
-      '8596238',
-      undefined,
-      undefined,
-      () => ({ uin: 8596238 }),
-      'icqq',
+      { generation: 4, reply: reply, client: () => ({ uin: 8596238 }), clientAdapter: 'icqq' },
     );
 
     expect(message).toMatchObject({

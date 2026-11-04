@@ -20,6 +20,8 @@ export interface LocalImageReference {
 }
 interface StoredImage extends LocalImageReference {
   readonly scope: string;
+  /** Version 1 omitted canonical containers and cannot prove ownership of an IM asset. */
+  readonly scopeVersion?: 2;
   readonly source: string;
 }
 export type LocalImageScope = Pick<ToolInvocationContext, 'origin' | 'principal' | 'sessionKey'>;
@@ -27,13 +29,29 @@ export type LocalImageScope = Pick<ToolInvocationContext, 'origin' | 'principal'
 export function localImageScopeFromMessage(message: Message | undefined, sessionKey: string): LocalImageScope | undefined {
   if (!message?.conversation || !message.sender?.id) return undefined;
   const conversation = message.conversation;
-  return { sessionKey, origin: { kind: 'im', platform: conversation.endpoint.adapter, endpoint: conversation.endpoint.id,
-    scope: conversation.kind, sceneId: conversation.id, threadId: conversation.threadId },
+  return { sessionKey, origin: { kind: 'im', platform: conversation.endpoint.adapter, endpoint: message.endpointId ?? conversation.endpoint.id,
+    scope: conversation.kind, sceneId: conversation.id, threadId: conversation.threadId, conversation },
   principal: { subjectId: message.sender.id, roles: message.sender.roles ?? [] } };
 }
 
 /** The directory is owned by one Host; identities survive generation changes and restarts. */
 function scopeKey(context: LocalImageScope): string {
+  const origin = context.origin;
+  if (origin.kind !== 'im') return legacyScopeKey(context);
+  const address = origin.conversation;
+  // The runtime appends exactly one canonical child index to an authorized subagent session.
+  // Arbitrary suffixes and malformed/leading-zero indices confer no parent authority.
+  const sessionKey = context.sessionKey.replace(/#subagent:(?:0|[1-9]\d*)$/u, '');
+  return createHash('sha256').update(JSON.stringify([
+    'im-scope-v2', origin.platform, origin.endpoint, origin.scope, origin.sceneId, origin.threadId ?? '',
+    address?.endpoint.adapter ?? null, address?.endpoint.id ?? null, address?.kind ?? null, address?.id ?? null,
+    address?.parent?.kind ?? null, address?.parent?.id ?? null, address?.threadId ?? null,
+    sessionKey, context.principal.subjectId,
+  ])).digest('hex');
+}
+
+/** Kept solely to verify older non-IM records whose original tuple was already complete. */
+function legacyScopeKey(context: LocalImageScope): string {
   const origin = context.origin;
   const address = origin.kind === 'im'
     ? [origin.kind, origin.platform, origin.endpoint, origin.scope, origin.sceneId, origin.threadId ?? '']
@@ -42,6 +60,13 @@ function scopeKey(context: LocalImageScope): string {
         : origin.kind === 'schedule' ? [origin.kind, origin.jobId]
           : [origin.kind, context.sessionKey];
   return createHash('sha256').update(JSON.stringify([...address, context.principal.subjectId])).digest('hex');
+}
+
+export class LegacyLocalImageScopeError extends Error {
+  constructor() {
+    super('This older private image has no complete conversation identity; capture it again to use it');
+    this.name = 'LegacyLocalImageScopeError';
+  }
 }
 
 /** Host-owned private store; only metadata stays resident, never image bytes. */
@@ -107,7 +132,7 @@ export class LocalImageAssetStore {
       if ((await lstat(this.directory)).isSymbolicLink()) throw new Error('Local image directory cannot be a symbolic link');
       const id = randomUUID();
       const record: StoredImage = { asset_id: id, mime: detected.mimeType, size: bytes.length,
-        expires_at: this.now() + this.limits.retentionMs, scope: scopeKey(scope), source };
+        expires_at: this.now() + this.limits.retentionMs, scope: scopeKey(scope), scopeVersion: 2, source };
       const temporary = join(this.directory, `.tmp-${id}`);
       await mkdir(temporary, { mode: 0o700 });
       try {
@@ -156,6 +181,7 @@ export class LocalImageAssetStore {
   async #authorized(id: string, scope: LocalImageScope): Promise<StoredImage> {
     if (!ASSET_ID.test(id)) throw new Error('Local image is unavailable');
     const record = await this.#metadata(id);
+    if (record.scopeVersion === undefined && scope.origin.kind === 'im') throw new LegacyLocalImageScopeError();
     if (record.scope !== scopeKey(scope) || record.expires_at <= this.now()) throw new Error('Local image is unavailable');
     return record;
   }
@@ -166,7 +192,8 @@ export class LocalImageAssetStore {
     const record = JSON.parse((await this.#read(join(dir, 'metadata.json'), 16_384)).toString('utf8')) as StoredImage;
     if (record.asset_id !== id || !Number.isSafeInteger(record.size) || record.size < 1
       || record.size > DEFAULT_MULTIMODAL_CONFIG.maxFileBytes || !Number.isFinite(record.expires_at)
-      || typeof record.scope !== 'string' || !IMAGE_TYPES.has(record.mime)) throw new Error('Invalid local image metadata');
+      || typeof record.scope !== 'string' || (record.scopeVersion !== undefined && record.scopeVersion !== 2)
+      || !IMAGE_TYPES.has(record.mime)) throw new Error('Invalid local image metadata');
     return record;
   }
 

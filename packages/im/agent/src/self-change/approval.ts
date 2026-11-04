@@ -2,12 +2,13 @@
  * 受控自我进化：审批（ADR 0040 §4，切片 D）。
  *
  * - 试跑通过（`ready`）的变更由宿主提交：`ready → pending`，同时在 G6 {@link ToolApprovalQueue} 建一张
- *   类别 `self` 的审批卡，参数只含 `changeId` / `contentHash` / 预览摘要（不含文件正文）。卡片与硬闸卡
- *   同一队列：IM 私聊 / 审批群与 Console 任一渠道先结算算数。
+ *   类别 `self` 的审批卡，参数含 `changeId` / `contentHash` / 预览摘要、有界 diff 摘录（≤40 行 / 2KB，#1142 F3）
+ *   与 skipped 检查名；不含完整正文与配置值。卡片与硬闸卡同一队列：IM 私聊 / 审批群与 Console 任一渠道先结算算数。
  * - **永远是新鲜人批**：只认带人工渠道（`console` / `im_dm` / `im_approver_group`）的批准；回合内审批端口、
  *   bypass、自动审核都不会结算这张卡（它不是任何工具调用，硬闸的同参数消费也对不上）。没有渠道的「批准」按驳回处理。
  * - 批准绑定 `content_hash`：结算时变更内容与卡片上的摘要不一致 → `rejected`（`change_hash_mismatch`）。
- * - 同一发起会话同时最多 1 个 `pending`；默认 24 小时超时 → `expired`。
+ * - 同一发起会话同时最多 1 个 `pending`，全实例同时最多 {@link DEFAULT_MAX_PENDING_CHANGES} 个（#1051 F4）；
+ *   默认 24 小时超时 → `expired`。
  * - 队列只在内存里：每次启动 {@link SelfChangeApprovals.restore} 为磁盘上仍 `pending` 的变更按剩余时限重建卡片。
  *
  * 批准后停在 `approved`，经 `onApproved` 交给生效（快照、写入、热重载 / 重启、回报，见 `apply.ts`）。
@@ -20,7 +21,14 @@ import {
   type ToolApprovalOrigin,
   type ToolApprovalQueue,
 } from '../security/tool-approval-queue.js';
-import { DEFAULT_CHANGE_IDLE_TTL_MS } from './policy.js';
+import {
+  MAX_CARD_SKIPPED_CHECKS,
+  buildSelfChangeDetailDiff,
+  selfChangeDiffExcerpt,
+  skippedTrialChecks,
+  type SelfChangeDiffExcerpt,
+} from './detail-diff.js';
+import { DEFAULT_CHANGE_IDLE_TTL_MS, DEFAULT_MAX_PENDING_CHANGES } from './policy.js';
 import type { SelfChangePreview } from './preview.js';
 import { SelfChangeNotFoundError, SelfChangeStateError, type SelfChangeOrigin, type SelfChangeRecord, type SelfChangeStore } from './store.js';
 
@@ -37,6 +45,14 @@ export interface SelfChangeApprovalArgs {
   readonly impact: string;
   readonly impactDetail: readonly string[];
   readonly trial: string;
+  /** 试跑里 `skipped` 的检查（`<check> <path>`，#1142 F3），最多 {@link MAX_CARD_SKIPPED_CHECKS} 项。 */
+  readonly skippedChecks?: readonly string[];
+  /** 超出上限未列出的 skipped 检查数。 */
+  readonly skippedChecksOmitted?: number;
+  /** 有界 diff 摘录（#1142 F3）；生成失败时缺省。 */
+  readonly diffExcerpt?: readonly string[];
+  /** 摘录没有覆盖全部改动。 */
+  readonly diffExcerptTruncated?: boolean;
 }
 
 export class SelfChangePendingLimitError extends Error {
@@ -49,11 +65,25 @@ export class SelfChangePendingLimitError extends Error {
   }
 }
 
+/** 全实例待审变更已到上限（#1051 F4）。 */
+export class SelfChangePendingCapError extends Error {
+  readonly pending: number;
+  readonly limit: number;
+  constructor(pending: number, limit: number) {
+    super(`${pending} changes are already waiting for approval (limit ${limit})`);
+    this.pending = pending;
+    this.limit = limit;
+    this.name = 'SelfChangePendingCapError';
+  }
+}
+
 export interface SelfChangeApprovalsOptions {
   readonly store: SelfChangeStore;
   readonly queue: ToolApprovalQueue;
   /** 审批时限；默认 24 小时（与 `pending` 闲置清理同一时限）。 */
   readonly ttlMs?: number;
+  /** 全实例同时待审上限；默认 {@link DEFAULT_MAX_PENDING_CHANGES}。 */
+  readonly maxPending?: number;
   readonly now?: () => number;
   readonly onError?: (error: unknown) => void;
   /** 结算为 `approved` 后调用（切片 E：交给 {@link import('./apply.js').SelfChangeApplier} 生效）。出错只上报。 */
@@ -73,6 +103,8 @@ export class SelfChangeApprovals {
   readonly #store: SelfChangeStore;
   readonly #queue: ToolApprovalQueue;
   readonly #ttlMs: number;
+  /** 全实例同时待审上限。 */
+  readonly maxPending: number;
   readonly #now: () => number;
   readonly #onError: (error: unknown) => void;
   readonly #onApproved?: (record: SelfChangeRecord) => void | Promise<void>;
@@ -87,6 +119,10 @@ export class SelfChangeApprovals {
     this.#store = options.store;
     this.#queue = options.queue;
     this.#ttlMs = options.ttlMs ?? DEFAULT_CHANGE_IDLE_TTL_MS;
+    const maxPending = options.maxPending;
+    this.maxPending = typeof maxPending === 'number' && Number.isInteger(maxPending) && maxPending > 0
+      ? maxPending
+      : DEFAULT_MAX_PENDING_CHANGES;
     this.#now = options.now ?? Date.now;
     this.#onError = options.onError ?? (() => undefined);
     this.#onApproved = options.onApproved;
@@ -100,8 +136,14 @@ export class SelfChangeApprovals {
     return null;
   }
 
+  /** 全实例当前等待审批的变更数。 */
+  async pendingCount(): Promise<number> {
+    return (await this.#store.list()).filter(record => record.status === 'pending').length;
+  }
+
   /**
-   * 把 `ready` 的变更提交审批。同会话已有 `pending` 时抛 {@link SelfChangePendingLimitError}，变更保持 `ready`
+   * 把 `ready` 的变更提交审批。同会话已有 `pending` 时抛 {@link SelfChangePendingLimitError}；全实例待审已到
+   * {@link maxPending} 时抛 {@link SelfChangePendingCapError}。两种情况变更都保持 `ready`
    * （24 小时未提交按 §6a 过期清理）。
    */
   submit(id: string, options: SelfChangeSubmitOptions = {}): Promise<SelfChangeDecisionResult> {
@@ -111,12 +153,15 @@ export class SelfChangeApprovals {
       if (current.status !== 'ready') throw new SelfChangeStateError(current.status, 'be submitted');
       const pending = await this.pendingFor(current.origin);
       if (pending) throw new SelfChangePendingLimitError(pending.id);
+      const waiting = await this.pendingCount();
+      if (waiting >= this.maxPending) throw new SelfChangePendingCapError(waiting, this.maxPending);
       const record = await this.#store.transition(id, 'pending', {
         actor: 'policy',
         actorId: current.origin.userId,
         ...(options.turnId ? { turnId: options.turnId } : {}),
       });
-      const card = this.#enqueue(record, this.#ttlMs, options.turnId);
+      const excerpt = await this.#diffExcerpt(record);
+      const card = this.#enqueue(record, this.#ttlMs, excerpt, options.turnId);
       return { record, approvalId: card.id };
     });
   }
@@ -136,7 +181,8 @@ export class SelfChangeApprovals {
             await this.#store.transition(record.id, 'expired', { actor: 'policy', error: 'approval timed out' });
             continue;
           }
-          this.#enqueue(record, remaining);
+          const excerpt = await this.#diffExcerpt(record);
+          this.#enqueue(record, remaining, excerpt);
           restored += 1;
         } catch (error) {
           this.#onError(error);
@@ -176,14 +222,25 @@ export class SelfChangeApprovals {
     this.#cards.clear();
   }
 
-  #enqueue(record: SelfChangeRecord, ttlMs: number, turnId?: string): ToolApprovalEntry {
+  /** 卡片 diff 摘录；读不到时返回 null（卡片照常发出，提示去 Console 看完整内容）。 */
+  async #diffExcerpt(record: SelfChangeRecord): Promise<SelfChangeDiffExcerpt | null> {
+    try {
+      const detail = await buildSelfChangeDetailDiff({ store: this.#store, record, projectRoot: this.#store.projectRoot });
+      return selfChangeDiffExcerpt(detail);
+    } catch (error) {
+      this.#onError(error);
+      return null;
+    }
+  }
+
+  #enqueue(record: SelfChangeRecord, ttlMs: number, excerpt: SelfChangeDiffExcerpt | null, turnId?: string): ToolApprovalEntry {
     const entry = this.#queue.enqueue({
       toolName: SELF_CHANGE_APPROVAL_TOOL,
       category: 'self',
       sessionKey: `self-change:${record.origin.platform}:${record.origin.sceneId}`,
       requesterId: record.origin.userId,
       turnId: turnId ?? `self-change:${record.id}`,
-      args: selfChangeApprovalArgs(record) as unknown as Record<string, unknown>,
+      args: selfChangeApprovalArgs(record, excerpt) as unknown as Record<string, unknown>,
       ttlMs,
       origin: approvalOrigin(record.origin),
     });
@@ -247,8 +304,11 @@ export class SelfChangeApprovals {
   }
 }
 
-/** 卡片参数：预览摘要与试跑结论，不含文件正文与配置值。 */
-export function selfChangeApprovalArgs(record: SelfChangeRecord): SelfChangeApprovalArgs {
+/**
+ * 卡片参数：预览摘要、试跑结论与（给出时）有界 diff 摘录；不含完整文件正文与配置值。
+ * 摘录按行存成数组，入队时逐行经 `redactDecisionPayload` 打码。
+ */
+export function selfChangeApprovalArgs(record: SelfChangeRecord, excerpt: SelfChangeDiffExcerpt | null = null): SelfChangeApprovalArgs {
   const preview = isPreview(record.plan) ? record.plan : null;
   const files = preview
     ? preview.files.map(file => ({ path: file.path, kind: file.kind, added: file.added, removed: file.removed }))
@@ -256,6 +316,9 @@ export function selfChangeApprovalArgs(record: SelfChangeRecord): SelfChangeAppr
   const impact = preview?.impact;
   const trial = record.trial as { passed?: unknown; checks?: readonly { status?: unknown }[] } | null;
   const skipped = Array.isArray(trial?.checks) ? trial.checks.filter(check => check?.status === 'skipped').length : 0;
+  const allSkippedChecks = skippedTrialChecks(record.trial);
+  const skippedChecks = allSkippedChecks.slice(0, MAX_CARD_SKIPPED_CHECKS);
+  const skippedChecksOmitted = allSkippedChecks.length - skippedChecks.length;
   return Object.freeze({
     changeId: record.id,
     contentHash: record.contentHash,
@@ -267,6 +330,9 @@ export function selfChangeApprovalArgs(record: SelfChangeRecord): SelfChangeAppr
       ? [...impact.subtrees.map(subtree => `reload ${subtree}`), ...(impact.kind === 'process' ? impact.reasons : [])].slice(0, 10)
       : []),
     trial: trial?.passed === true ? `passed${skipped ? ` (${skipped} skipped)` : ''}` : 'unknown',
+    ...(skippedChecks.length > 0 ? { skippedChecks: Object.freeze(skippedChecks) } : {}),
+    ...(skippedChecksOmitted > 0 ? { skippedChecksOmitted } : {}),
+    ...(excerpt ? { diffExcerpt: excerpt.lines, diffExcerptTruncated: excerpt.truncated } : {}),
   });
 }
 

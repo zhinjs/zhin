@@ -19,7 +19,7 @@ export default defineAgentTool<{ channel_id: string; name: string; content: stri
     const client = requireDiscordGatewayClient(context.$client);
     const tagList = tags ? tags.split(',').map((t: string) => t.trim()) : undefined;
     const channel = await client.channels.fetch(channel_id);
-    if (!channel?.threads || channel.type !== ChannelType.GuildForum) {
+    if (!channel || channel.type !== ChannelType.GuildForum) {
       throw new Error(t(context.locale, 'notForumChannel', { p0: channel_id }));
     }
     const tagIds = tagList?.length

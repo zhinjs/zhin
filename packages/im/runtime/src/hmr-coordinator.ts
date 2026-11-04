@@ -19,6 +19,8 @@ export interface HmrCoordinatorOptions {
   readonly modules: ModuleRuntime;
   readonly ownership: () => SourceOwnershipIndex;
   readonly runtime: HmrReloadPort;
+  /** Filters automatic watch events only. Explicit enqueue requests always retain their meaning. */
+  readonly acceptWatchedSource?: (source: string) => boolean;
   onRestartRequired(plan: ProcessInvalidationPlan): void | Promise<void>;
   onError(error: unknown): void | Promise<void>;
   onPlan?(plan: InvalidationPlan): void | Promise<void>;
@@ -51,6 +53,7 @@ export class HmrCoordinator {
     this.#unwatch = this.options.modules.watch((source) => {
       // Any ModuleRuntime watcher may report editor temp/backup files; they never reload (#857).
       if (isEditorTempFile(source)) return;
+      if (this.options.acceptWatchedSource && !this.options.acceptWatchedSource(source)) return;
       void this.enqueue(source).catch(() => undefined);
     });
     return () => this.stop();

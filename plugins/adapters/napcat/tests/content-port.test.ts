@@ -3,7 +3,7 @@ import { createNapCatContentPort } from '../src/onebot-get-msg.js';
 
 describe('NapCat EndpointContentPort', () => {
   it('resolves message and merged-forward content without model roles', async () => {
-    const call = vi.fn(async (action: string) => action === 'get_msg'
+    const call = vi.fn(async ({ action }: { action: string }) => action === 'get_msg'
       ? { time: 10, sender: { user_id: 7, nickname: 'Alice' }, message: [{ type: 'text', data: { text: 'quoted' } }] }
       : { messages: [{ time: 11, sender: { user_id: 8, nickname: 'Bob' }, content: [{ type: 'text', data: { text: 'forwarded' } }] }] });
     const port = createNapCatContentPort(call);

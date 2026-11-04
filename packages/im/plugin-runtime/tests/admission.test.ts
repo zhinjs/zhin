@@ -26,6 +26,47 @@ function state(gate?: GenerationAdmissionGate): SnapshotState {
 }
 
 describe('generation admission', () => {
+  it('binds the exact Root stop fact before activation and keeps it across reused and retired gates', async () => {
+    const retained = createGenerationAdmissionGate(), replacement = createGenerationAdmissionGate();
+    expect(retained.stopSignal).toBeUndefined(); expect(replacement.stopSignal).toBeUndefined();
+    const store = new SnapshotStore(state(retained));
+    const lease = store.acquire(); const stop = lease.stopSignal;
+    const activations: AbortSignal[] = [];
+    replacement.onActivate(() => { if (replacement.stopSignal) activations.push(replacement.stopSignal); });
+    try {
+      expect(retained.stopSignal).toBe(stop);
+      store.commit(0, { snapshot: state(retained), dispose() {} });
+      expect(retained.stopSignal).toBe(stop); expect(stop.aborted).toBe(false);
+      store.commit(1, { snapshot: state(replacement), dispose() {} });
+      expect(retained.active).toBe(false); expect(retained.stopSignal).toBe(stop);
+      expect(replacement.stopSignal).toBe(stop); expect(activations).toEqual([stop]);
+      expect(stop.aborted).toBe(false);
+      const stopObserved = vi.fn(() => {
+        expect(retained.active).toBe(false); expect(replacement.active).toBe(false);
+        expect(replacement.enter(() => 'fresh work')).toBeUndefined();
+      });
+      stop.addEventListener('abort', stopObserved, { once: true });
+      const closing = store.close();
+      expect(retained.stopSignal?.aborted).toBe(true); expect(replacement.stopSignal?.aborted).toBe(true);
+      expect(stopObserved).toHaveBeenCalledOnce();
+      lease.release(); await closing;
+    } finally { lease.release(); await store.close(); }
+  });
+
+  it('can release a transport-held lease on explicit Root stop without closing it on HMR', async () => {
+    const gate = createGenerationAdmissionGate(); const store = new SnapshotStore(state(gate));
+    const release = gate.acquire(); expect(release).toBeTypeOf('function');
+    let closed = false;
+    try {
+      const stop = gate.stopSignal;
+      expect(stop).toBeDefined();
+      stop?.addEventListener('abort', () => { closed = true; release?.(); }, { once: true });
+      store.commit(0, { snapshot: state(), dispose() {} });
+      expect(gate.active).toBe(false); expect(closed).toBe(false);
+      const closing = store.close(); expect(closed).toBe(true); await closing;
+    } finally { release?.(); await store.close(); }
+  });
+
   it('keeps candidate ingress invisible until the generation is committed', async () => {
     const candidate = createGenerationAdmissionGate();
     const root = new RootController(state());

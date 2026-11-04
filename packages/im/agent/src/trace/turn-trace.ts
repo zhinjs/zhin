@@ -284,7 +284,8 @@ export class TurnTraceCollector {
       case 'thinking':
         return;
       case 'iteration_start':
-        this.#addTimeline('iteration', `${event.iteration}/${event.maxIterations}`);
+        this.#addTimeline('iteration', event.maxIterations === undefined
+          ? `${event.iteration}` : `${event.iteration}/${event.maxIterations}`);
         return;
       case 'usage': {
         const call = Object.freeze({

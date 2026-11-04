@@ -1,4 +1,4 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { slackFixture } from './fixture.js';
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
@@ -62,14 +62,12 @@ function gateway(): OutboundMessageService {
   return { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
 }
 
-async function startedEndpoint(client: SlackWebClientLike): Promise<SlackEndpoint> {
-  const endpoint = bindTestEndpoint(new SlackEndpoint({
+async function startedEndpoint(client: SlackWebClientLike) {
+  const endpoint = await slackFixture({
     id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-    gateway: gateway(),
     config: socketConfig,
-    createClient: () => client,
-    createSocket: () => mockSocket(),
-  }), gateway(), undefined);
+    createSocket: () => mockSocket()
+  }, () => client, gateway(), undefined);
   await endpoint.start();
   return endpoint;
 }
@@ -77,7 +75,7 @@ async function startedEndpoint(client: SlackWebClientLike): Promise<SlackEndpoin
 describe('slack endpoint management', () => {
   it('只暴露已实现的能力（listFriends/listGroups/listGroupMembers）', async () => {
     const endpoint = await startedEndpoint(mockClient());
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual([
+    expect(endpoint.index.describe()[0]?.managementCapabilities).toEqual([
       'listFriends',
       'listGroups',
       'listGroupMembers',
@@ -135,7 +133,7 @@ describe('slack endpoint management', () => {
     const members = vi.fn(async () => ({ members: ['U1', 'U2'] }));
     const endpoint = await startedEndpoint(mockClient({ conversationsMembers: members }));
 
-    const result = await endpoint.management.listGroupMembers!('C1');
+    const result = await endpoint.management.listGroupMembers!({ groupId: 'C1' });
 
     expect(result).toEqual(['U1', 'U2']);
     expect(members).toHaveBeenCalledWith({ channel: 'C1' });
@@ -143,13 +141,29 @@ describe('slack endpoint management', () => {
   });
 
   it('未连接时抛错而不是静默返回空', async () => {
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: gateway(),
-      config: socketConfig,
-      createClient: () => mockClient(),
-      createSocket: () => mockSocket(),
-    }), gateway(), undefined);
-    await expect(endpoint.management.listGroups!()).rejects.toThrow(/not connected/);
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    config: socketConfig,
+    createSocket: () => mockSocket()
+  }, () => mockClient(), gateway(), undefined);
+    await expect(endpoint.management.listGroups!()).rejects.toMatchObject({ code: 'endpoint_inactive', disposition: 'not_sent' });
+    await endpoint.stop();
   });
+});
+
+it('cancels a native SDK page wait and never requests the next page when the late result arrives', async () => {
+  let finish!: (value: { channels: { id: string }[]; response_metadata: { next_cursor: string } }) => void;
+  const page = new Promise<{ channels: { id: string }[]; response_metadata: { next_cursor: string } }>(resolve => { finish = resolve; });
+  const list = vi.fn().mockReturnValueOnce(page).mockResolvedValue({ channels: [], response_metadata: { next_cursor: '' } });
+  const endpoint = await startedEndpoint(mockClient({ conversationsList: list }));
+  const caller = new AbortController();
+  const listing = endpoint.management.listGroups!({ signal: caller.signal }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(1)); caller.abort();
+    await expect(listing).resolves.toMatchObject({ error: { disposition: 'unknown' } });
+    finish({ channels: [{ id: 'late' }], response_metadata: { next_cursor: 'not-admitted' } });
+    await Promise.resolve(); await Promise.resolve(); expect(list).toHaveBeenCalledTimes(1);
+    await expect(endpoint.management.listGroups!()).resolves.toEqual([]);
+    expect(list).toHaveBeenCalledTimes(2); expect(list.mock.calls[1]?.[0]?.cursor).toBeUndefined();
+  } finally { await endpoint.stop(); await listing; }
 });

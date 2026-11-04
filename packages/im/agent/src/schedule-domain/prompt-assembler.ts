@@ -1,4 +1,6 @@
 import type { ScheduleJobCreator } from '../assistant/types.js';
+import { CRITICAL_RULES } from '../prompt/rules/critical-rules.js';
+import { REQUEST_SECURITY_BOUNDARY } from '../prompt/rules/security.js';
 
 export interface SchedulePromptAssemblerInput {
   jobId: string;
@@ -58,6 +60,7 @@ export function assembleSchedulePrompt(input: SchedulePromptAssemblerInput): Sch
   const execPreset = input.security?.execPreset ?? 'readonly';
   const safety = [
     '# 安全约束',
+    REQUEST_SECURITY_BOUNDARY,
     '- 文件访问仅限 workspace。',
     `- Shell 仅允许 ${execPreset} preset；无人值守审批一律拒绝。`,
     '- 网络访问仅允许 HTTPS 且必须通过既有域名白名单。',
@@ -69,6 +72,7 @@ export function assembleSchedulePrompt(input: SchedulePromptAssemblerInput): Sch
 
   return {
     systemPrompt: [
+      CRITICAL_RULES,
       identity,
       section('Runtime', input.runtimeContext),
       runtime,
@@ -76,7 +80,7 @@ export function assembleSchedulePrompt(input: SchedulePromptAssemblerInput): Sch
       safety,
       section('技能指令', input.skillContext),
       section('记忆', input.memoryContext),
-      section('Workspace 指令', input.bootstrapContext),
+      input.bootstrapContext?.trim(),
       output,
     ].filter((value): value is string => Boolean(value)).join('\n\n'),
     userPrompt: input.prompt.trim(),

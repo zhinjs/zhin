@@ -8,33 +8,31 @@ import type {
   EndpointCapabilities,
   EndpointOperation,
 } from '@zhin.js/im-contract';
-import type { Endpoint } from './endpoint.js';
-import type { EndpointImplementation } from './endpoint-contract.js';
+import type { AdapterInstance } from './adapter.js';
 import {
   normalizeCapabilityProfile,
   type AdapterCapabilityProfile,
   type AdapterCapabilityResolver,
 } from './capability-profile.js';
+export type { AdapterRegistry } from '@zhin.js/feature-kit';
 
-export { Endpoint } from './endpoint.js';
+export type { Endpoint } from './endpoint-specification.js';
 export type {
-  EndpointActivationContext,
-  EndpointCleanup,
-  EndpointConnectionContext,
+  EndpointProfile, EndpointProfileConfiguration,
+  SelfProfile, SelfProfileField, SelfProfileChange, SelfProfileReadRequest,
+  SelfProfileWriteRequest, SelfProfileWriteResult, SelfProfileSnapshot, SelfProfilePort,
+} from './endpoint-profile.js';
+export type {
   EndpointConversation,
   EndpointEvent,
   EndpointEventSink,
   EndpointIdentity,
-  EndpointImplementation,
   EndpointIncomingMessage,
   EndpointSendRequest,
+  EndpointSendPart,
+  EndpointSendResult,
   PlatformEvent,
 } from './endpoint-contract.js';
-export { defineEndpointClient } from './endpoint-client.js';
-export type {
-  EndpointClientContext,
-  EndpointClientToken,
-} from './endpoint-client.js';
 
 const adapterBrand = 'zhin.adapter/1' as const;
 
@@ -66,7 +64,7 @@ export type AdapterMarkdownMode = 'native' | 'text';
  */
 export interface AdapterContext<TConfig = unknown> extends ConstructionContext<TConfig> {
   readonly id: CapabilityId;
-  /** Human-facing Endpoint id from `endpoints[].id`, or the Adapter local name. */
+  /** Declared `endpoints[].id` or singleton `config.id`; falls back to Adapter local name when absent. Canonical id stays separate. */
   readonly endpointId: string;
   /** Adapter module local name, stable across expanded Endpoint entries. */
   readonly name: string;
@@ -138,7 +136,7 @@ const OUTBOUND_MEDIA_FORMS: readonly AdapterOutboundMedia[] = [
 
 const ADAPTER_OPERATIONS: readonly AdapterOperation[] = ['recall', 'edit', 'reaction', 'typing'];
 
-export interface AdapterDefinition<TConfig = unknown, TClient = unknown> {
+export interface AdapterDefinition<TConfig = unknown> {
   /** @internal Runtime feature brand. */
   readonly $feature: typeof adapterBrand;
   readonly capabilities: readonly AdapterCapability[];
@@ -159,10 +157,7 @@ export interface AdapterDefinition<TConfig = unknown, TClient = unknown> {
   readonly profile?: AdapterCapabilityProfile;
   /** ADR 0044: per-turn narrow-only refinement of the profile from trusted facts. */
   readonly resolveCapabilities?: AdapterCapabilityResolver;
-  create(
-    context: AdapterContext<TConfig>,
-  ): Endpoint<TClient> | EndpointImplementation<TClient>
-    | Promise<Endpoint<TClient> | EndpointImplementation<TClient>>;
+  createAdapter(context: AdapterContext<TConfig>): AdapterInstance;
 }
 
 declare module '@zhin.js/plugin-runtime' {
@@ -181,26 +176,14 @@ declare module '@zhin.js/plugin-runtime' {
  * Endpoint is created, so Runtime admission can fail closed.
  *
  * @public
- * @example
- * ```ts
- * import { defineAdapter } from 'zhin.js/adapter';
- *
- * export default defineAdapter({
- *   capabilities: ['inbound', 'outbound'],
- *   create: () => ({
- *     client: myPlatformClient,
- *     connect: ({ events }) => myPlatformClient.onMessage((message) => events.message(message)),
- *     send: ({ conversation, payload }) => myPlatformClient.send(conversation.id, payload),
- *   }),
- * });
- * ```
+ * The Adapter owns its native Client Endpoints. A complete implementation is
+ * available in examples/minimal-bot/adapters/terminal/index.ts.
  */
-export function defineAdapter<TConfig = unknown, TClient = unknown>(
-  definition: Omit<AdapterDefinition<TConfig, TClient>, '$feature'>,
-): Readonly<AdapterDefinition<TConfig, TClient>> {
-  if (typeof definition.create !== 'function') {
-    throw new TypeError('Adapter create must be a function');
-  }
+export function defineAdapter<TConfig = unknown>(
+  definition: Omit<AdapterDefinition<TConfig>, '$feature'>,
+): Readonly<AdapterDefinition<TConfig>> {
+  if (Object.hasOwn(definition, 'create')) throw new TypeError('Adapter create was removed; use createAdapter');
+  if (typeof definition.createAdapter !== 'function') throw new TypeError('Adapter createAdapter must be a function');
   const capabilities = [...new Set(definition.capabilities)];
   if (
     capabilities.length === 0
@@ -220,7 +203,8 @@ export function defineAdapter<TConfig = unknown, TClient = unknown>(
   if (definition.profile !== undefined) {
     profile = normalizeCapabilityProfile(definition.profile, normalizeSegmentPolicy);
     const profileSegments = profile.default?.messaging?.segments;
-    if (segments && profileSegments) {
+    // Re-defining an already normalized definition carries the alias too; only a different second declaration is an error.
+    if (segments && profileSegments && JSON.stringify(segments) !== JSON.stringify(profileSegments)) {
       throw new TypeError(
         'Adapter declares segments twice: use segments or profile.default.messaging.segments, not both',
       );
@@ -256,8 +240,8 @@ export function defineAdapter<TConfig = unknown, TClient = unknown>(
  * Converts the definition's compact authoring form into the Runtime contract.
  * @internal Adapter projection helper.
  */
-export function endpointCapabilitiesOf(
-  definition: Pick<AdapterDefinition, 'capabilities' | 'operations'>,
+export function endpointCapabilitiesOf<TConfig>(
+  definition: Pick<AdapterDefinition<TConfig>, 'capabilities' | 'operations'>,
   resolvedOperations?: readonly AdapterOperation[],
 ): EndpointCapabilities {
   if (typeof definition.operations === 'function' && resolvedOperations === undefined) {
@@ -402,7 +386,8 @@ export function parseAdapterDefinition(value: unknown): AdapterDefinition {
   const definition = value as Partial<AdapterDefinition>;
   if (
     definition.$feature !== adapterBrand
-    || typeof definition.create !== 'function'
+    || Object.hasOwn(definition, 'create')
+    || typeof definition.createAdapter !== 'function'
     || !Array.isArray(definition.capabilities)
     || definition.capabilities.length === 0
     || definition.capabilities.some(
@@ -416,7 +401,7 @@ export function parseAdapterDefinition(value: unknown): AdapterDefinition {
     normalizeCapabilityProfile(definition.profile, normalizeSegmentPolicy);
   }
   if (definition.resolveCapabilities !== undefined && typeof definition.resolveCapabilities !== 'function') {
-    throw invalidAdapter();
+    throw new TypeError('Adapter resolveCapabilities must be a function');
   }
   if (typeof definition.operations !== 'function') {
     normalizeOperations(definition.operations);

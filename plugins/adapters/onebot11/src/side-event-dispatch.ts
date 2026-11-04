@@ -7,13 +7,15 @@ export interface OneBot11SideEventCaller {
   callApi(action: string, params?: Record<string, unknown>): Promise<unknown>;
 }
 
-export function receiveOneBot11SideEvent(
-  emit: EndpointEventEmitter,
-  endpointKey: string,
-  caller: OneBot11SideEventCaller,
-  raw: OneBot11Event,
-  logger: ReturnType<typeof getAdapterLogger>,
-): void {
+/** Exact instance-owned dependencies for one canonical side-event projection. */
+export interface OneBot11SideEventContext {
+  readonly emit: EndpointEventEmitter;
+  readonly endpointKey: string;
+  readonly caller: OneBot11SideEventCaller;
+  readonly logger: ReturnType<typeof getAdapterLogger>;
+}
+export function receiveOneBot11SideEvent(raw: OneBot11Event, context: OneBot11SideEventContext): void {
+  const { emit, endpointKey, caller, logger } = context;
   if (!emit) return;
   const record = raw as Record<string, unknown>;
   const postType = String(record.post_type ?? '');

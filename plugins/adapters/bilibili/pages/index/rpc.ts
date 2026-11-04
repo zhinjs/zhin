@@ -4,7 +4,9 @@ import { apiFetch, pluginRpc } from '@zhin.js/client';
 export interface ReviewDraft {
   readonly id: string;
   readonly url: string;
+  /** 评论区标签（兼容旧字段名）：`av123` / `cv456` / `dynamic 789`。 */
   readonly video: string;
+  readonly resource?: string;
   readonly message: string;
   readonly status: 'pending' | 'sending';
   readonly interrupted: boolean;
@@ -33,6 +35,15 @@ export interface ReviewEndpoint {
     readonly error?: string;
   };
   readonly videos: readonly { readonly ref: string; readonly url: string; readonly aid?: string }[];
+  /** 白名单动态 / 专栏；动态解析失败时带 `error`。 */
+  readonly resources?: readonly {
+    readonly kind: 'dynamic' | 'article';
+    readonly ref: string;
+    readonly url: string;
+    readonly commentType?: number;
+    readonly oid?: string;
+    readonly error?: string;
+  }[];
   readonly pendingCount: number;
   readonly drafts: readonly ReviewDraft[];
 }

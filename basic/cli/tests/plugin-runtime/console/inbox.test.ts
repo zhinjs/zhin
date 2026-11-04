@@ -87,7 +87,7 @@ function inboundEvent(overrides: Partial<RuntimeMessageEvent> = {}): RuntimeMess
   return {
     direction: 'inbound',
     conversation: {
-      endpoint: { id: capabilityId, adapter: 'root' },
+      endpoint: { id: capabilityId, adapter: 'icqq' },
       kind: 'group',
       id: '888',
     },
@@ -102,23 +102,23 @@ function inboundEvent(overrides: Partial<RuntimeMessageEvent> = {}): RuntimeMess
 describe('conversationToInboxChannel', () => {
   it('maps group / private kinds and group/guild parents', () => {
     expect(conversationToInboxChannel({
-      endpoint: { id: capabilityId, adapter: 'root' }, kind: 'group', id: '888',
+      endpoint: { id: capabilityId, adapter: 'icqq' }, kind: 'group', id: '888',
     })).toEqual({
       channelType: 'group', channelId: '888', parentType: null, parentId: null,
     });
     expect(conversationToInboxChannel({
-      endpoint: { id: capabilityId, adapter: 'root' }, kind: 'private', id: '10001',
+      endpoint: { id: capabilityId, adapter: 'icqq' }, kind: 'private', id: '10001',
     })).toEqual({
       channelType: 'private', channelId: '10001', parentType: null, parentId: null,
     });
     expect(conversationToInboxChannel({
-      endpoint: { id: capabilityId, adapter: 'root' }, kind: 'private', id: '2',
+      endpoint: { id: capabilityId, adapter: 'icqq' }, kind: 'private', id: '2',
       parent: { kind: 'group', id: '100' },
     })).toEqual({
       channelType: 'private', channelId: '2', parentType: 'group', parentId: '100',
     });
     expect(conversationToInboxChannel({
-      endpoint: { id: capabilityId, adapter: 'root' }, kind: 'channel', id: 'c-1',
+      endpoint: { id: capabilityId, adapter: 'icqq' }, kind: 'channel', id: 'c-1',
       parent: { kind: 'channel', id: 'g-1' },
     })).toEqual({
       channelType: 'channel', channelId: 'c-1', parentType: 'guild', parentId: 'g-1',
@@ -132,7 +132,7 @@ describe('buildInboxMessageRow', () => {
   it('maps inbound events: sender is the platform user', () => {
     const row = buildInboxMessageRow(inboundEvent(), resolveEndpoint);
     expect(row).toEqual({
-      direction: 'inbound', endpoint_adapter_id: 'k1:root',
+      direction: 'inbound', endpoint_adapter_id: 'k1:icqq',
       endpoint_capability_id: 'k1:root%00zhin.adapter%00icqq', thread_id: null, query_version: 1,
       adapter: 'icqq',
       endpoint_id: '1234',
@@ -162,10 +162,10 @@ describe('buildInboxMessageRow', () => {
     expect(JSON.parse(String(row.raw))).toMatchObject({ direction: 'outbound', rendering });
   });
 
-  it('stores the routable adapter slot for an expanded slot~endpoint capability', () => {
+  it('stores the canonical platform independently of expanded capability encoding', () => {
     const row = buildInboxMessageRow(inboundEvent({
       conversation: {
-        endpoint: {id: 'root\0zhin.adapter\0sandbox~local-console', adapter: 'root'},
+        endpoint: {id: 'root\0zhin.adapter\0sandbox~local-console', adapter: 'sandbox'},
         kind: 'private', id: 'local-user',
       },
     }), () => 'local-console');
@@ -176,7 +176,7 @@ describe('buildInboxMessageRow', () => {
     const row = buildInboxMessageRow(
       inboundEvent({
         conversation: {
-          endpoint: { id: capabilityId, adapter: 'root' },
+          endpoint: { id: capabilityId, adapter: 'icqq' },
           kind: 'private',
           id: '2',
           parent: { kind: 'group', id: '100' },
@@ -209,7 +209,7 @@ describe('InboxMessageRecorder', () => {
     expect(table[1]).toMatchObject({ sender_id: '1234' });
   });
 
-  it('does not cache the localName fallback while the endpoint is not ready', async () => {
+  it('does not cache an unresolved display name and retries canonical lookup', async () => {
     const { host, rows } = fakeDatabaseHost([INBOX_TABLE_MESSAGE]);
     let endpointId: string | null = null;
     let getEndpointCalls = 0;
@@ -223,7 +223,7 @@ describe('InboxMessageRecorder', () => {
     } satisfies InboxRuntimePort;
     const recorder = new InboxMessageRecorder(im, host);
 
-    // 启动早期 endpoint 未就绪：回退 localName，但不写缓存。
+    // 启动早期名称未解析：留空，不把内部 ID 当展示名称缓存。
     recorder.record(inboundEvent({ timestamp: 1_700_000_000_000 }));
     // endpoint 上线后：应解析出 live 名而不是被固化的回退值。
     endpointId = '8596238';
@@ -234,7 +234,7 @@ describe('InboxMessageRecorder', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const table = rows.get(INBOX_TABLE_MESSAGE)!;
-    expect(table.map((row) => row.endpoint_id)).toEqual(['icqq', '8596238', '8596238']);
+    expect(table.map((row) => row.endpoint_id)).toEqual(['', '8596238', '8596238']);
     expect(getEndpointCalls).toBe(2);
   });
 
@@ -307,4 +307,44 @@ describe('InboxMessageRecorder', () => {
     expect(consumed).toEqual({ data: { success: true, updated: 1 } });
     expect(rows.get(INBOX_TABLE_REQUEST)![0]).toMatchObject({ consumed: 1 });
   });
+});
+
+it('records a runtime-added account display name while preserving its complete canonical scene identity', async () => {
+  const { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec, endpointEventGatewayToken } = await import('@zhin.js/adapter');
+  const { ImRuntime } = await import('@zhin.js/core/runtime');
+  const { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId } = await import('@zhin.js/plugin-runtime');
+  const { MemoryDesiredRepository } = await import('../../../../../plugins/adapters/test-utils/desired-repository.js');
+  const root = rootPluginId(), im = new ImRuntime();
+  class TestEndpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: () => 'sent' });
+  }
+  class TestAdapter extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(); } }
+  const adapter = new TestAdapter();
+  const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'icqq', source: '/fixture/adapters/icqq/index.ts',
+    definition: defineAdapter({ capabilities: ['outbound'], createAdapter: () => adapter }) });
+  const state = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@zhin.js/adapter-icqq', packageRoot: '/fixture', children: [] }]]),
+    config: new Map(), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+    resources: new Map([[root, new Map([[endpointEventGatewayToken.id, im.endpointEvents]])]]) };
+  const index = await AdapterIndex.create([slot], createSnapshotView(0, state), new AbortController().signal,
+    { repository: new MemoryDesiredRepository() });
+  const snapshots = new SnapshotStore({ ...state, projections: new Map([[adapterFeatureId, index]]) });
+  im.attach(snapshots);
+  try {
+    await index.start(new AbortController().signal);
+    await adapter.add(adapter.revision, { endpointId: '8596238', config: { id: '8596238' } });
+    const account = adapter.list()[0]!;
+    expect(account.canonicalId).toContain(account.instanceId);
+    expect(account.instanceId).not.toBe('8596238');
+    const { host, rows } = fakeDatabaseHost([INBOX_TABLE_MESSAGE]);
+    const recorder = new InboxMessageRecorder(im, host);
+    recorder.record(inboundEvent({ direction: 'outbound', conversation: {
+      endpoint: { adapter: 'icqq', id: account.canonicalId }, kind: 'channel', id: 'room',
+      parent: { kind: 'channel', id: 'guild' }, threadId: 'topic',
+    } }));
+    await vi.waitFor(() => expect(rows.get(INBOX_TABLE_MESSAGE)).toHaveLength(1));
+    expect(rows.get(INBOX_TABLE_MESSAGE)![0]).toMatchObject({ adapter: 'icqq', endpoint_id: '8596238', sender_id: '8596238',
+      endpoint_capability_id: `k1:${encodeURIComponent(account.canonicalId)}`, endpoint_adapter_id: 'k1:icqq',
+      channel_parent_id: 'guild', thread_id: 'k1:topic' });
+    expect(adapter.list()[0]!.started).toBe(false);
+  } finally { await index.stop(); await snapshots.close(); }
 });

@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import type { Locale } from 'zhin.js/i18n';
 import { validateLarkWebApiProxy } from './web-api-proxy.js';
 /**
@@ -15,7 +16,10 @@ import { formatLarkCard } from './cards.js';
 const logger = getLogger('lark');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface LarkEndpointConfig {
+export interface LarkEndpointConfig extends EndpointProfileConfiguration {
+  /** Native streaming cards are enabled unless explicitly disabled. */
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
   readonly webApiProxy?: import('./web-api-proxy.js').LarkWebApiProxy;
   readonly streamProxy?: import('./stream-proxy.js').LarkStreamProxy;
   readonly id: string;
@@ -30,6 +34,8 @@ export interface LarkEndpointConfig {
 }
 
 export interface ResolvedLarkConfig {
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
   readonly webApiProxy?: import('./web-api-proxy.js').LarkWebApiProxy;
   readonly streamProxy?: import('./stream-proxy.js').LarkStreamProxy;
   readonly context: 'lark';
@@ -116,6 +122,8 @@ export interface LarkSendBody {
 }
 
 export function resolveLarkConfig(config: LarkEndpointConfig): ResolvedLarkConfig {
+  if (config.streaming !== undefined && typeof config.streaming !== 'boolean') throw new TypeError('Lark streaming must be a boolean');
+  if (config.streamingIntervalMs !== undefined && (!Number.isSafeInteger(config.streamingIntervalMs) || config.streamingIntervalMs < 0)) throw new TypeError('Lark streamingIntervalMs must be a non-negative integer');
   if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
     || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName))) throw new TypeError('Invalid Lark streamProxy port/serverName');
   if (config.webApiProxy) validateLarkWebApiProxy(config.webApiProxy);
@@ -139,6 +147,8 @@ export function resolveLarkConfig(config: LarkEndpointConfig): ResolvedLarkConfi
     ...(config.webApiProxy ? { webApiProxy: config.webApiProxy } : {}),
     ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
     context: 'lark',
+    streaming: config.streaming !== false,
+    streamingIntervalMs: config.streamingIntervalMs ?? 1000,
     mode,
     id,
     appId,
@@ -186,10 +196,10 @@ export function larkInboundConversation(endpointKey: string, msg: LarkMessage): 
   };
 }
 
-export function resolveSender(msg: LarkMessage): string {
+export function resolveSender(msg: LarkMessage): string | undefined {
   return msg.sender?.sender_id?.open_id
     || msg.sender?.sender_id?.user_id
-    || 'unknown';
+    || undefined;
 }
 
 export function generateMessageId(msg: LarkMessage): string {

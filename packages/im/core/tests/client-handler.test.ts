@@ -1,4 +1,4 @@
-import { defineEndpointClient, type EndpointEvent, type PlatformEvent } from '@zhin.js/adapter';
+import { type EndpointEvent, type PlatformEvent } from '@zhin.js/adapter';
 import { defineHandler, type HandlerContext } from '../src/feature/handler.js';
 
 interface TestClient {
@@ -10,15 +10,12 @@ interface TestClientEvents {
   readonly 'group.join': { readonly groupId: number; readonly userId: string };
 }
 
-const testClient = defineEndpointClient<TestClient, TestClientEvents>('typed');
-
+declare class RegisteredTestAdapter {
+  readonly adapterEvents: TestClientEvents;
+  getEndpoint(instanceId: string): TestClient | undefined;
+}
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly typed: {
-      readonly client: TestClient;
-      readonly events: TestClientEvents;
-    };
-  }
+  interface AdapterRegistry { readonly 'typed': RegisteredTestAdapter; }
 }
 
 describe('defineHandler native events', () => {

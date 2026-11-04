@@ -3,7 +3,6 @@ import {
   channelKey,
   createMemoryGameServices,
   plainTextFromSendContent,
-  smokeGameMessage,
 } from '@zhin.js/game-kit';
 import { handleChoice, processIdiomText, startGame } from '../src/game-flow.js';
 import { createServices, type SessionService } from '../src/session-service.js';
@@ -31,7 +30,7 @@ describe('idiom-chain game-flow (plugin=null)', () => {
     const message = smokeGameMessage();
     await startGame(services, message as never);
     const ch = channelKey(message as never);
-    const before = (await services.getActiveForUser(ch, message.$sender.id))!;
+    const before = (await services.getActiveForUser(ch, message.sender.id))!;
 
     const reply = await processIdiomText(services, message as never, '好的');
 
@@ -45,7 +44,7 @@ describe('idiom-chain game-flow (plugin=null)', () => {
     const message = smokeGameMessage();
     await startGame(services, message as never);
     const ch = channelKey(message as never);
-    const before = (await services.getActiveForUser(ch, message.$sender.id))!;
+    const before = (await services.getActiveForUser(ch, message.sender.id))!;
 
     await processIdiomText(services, message as never, '不是成语');
 
@@ -57,7 +56,7 @@ describe('idiom-chain game-flow (plugin=null)', () => {
     const message = smokeGameMessage();
     await startGame(services, message as never);
     const ch = channelKey(message as never);
-    const before = (await services.getActiveForUser(ch, message.$sender.id))!;
+    const before = (await services.getActiveForUser(ch, message.sender.id))!;
     const prevScore = before.player_score;
     // last_idiom 不在词库中 → pickHintIdiom 必为 null
     await services.updateSession(before.id, { last_idiom: '龘龘龘龘' });
@@ -71,3 +70,5 @@ describe('idiom-chain game-flow (plugin=null)', () => {
     expect(after.player_score).toBe(prevScore + 1);
   });
 });
+
+function smokeGameMessage() { return { locale: 'zh-CN' as const, target: { endpoint: { adapter: 'synthetic', id: 'canonical-test' }, kind: 'private' as const, id: 'alice' }, sender: { id: 'alice', name: 'Alice' } }; }

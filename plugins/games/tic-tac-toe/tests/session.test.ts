@@ -1,3 +1,4 @@
+import { channelKey } from '@zhin.js/game-kit';
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   QUEUE_TTL_MS,
@@ -55,12 +56,8 @@ function createMockDb(): TttDatabase {
 }
 
 function mockMessage(channelId = 'c1', userId = 'u1') {
-  return {
-    $adapter: 'sandbox',
-    $endpoint: 'default',
-    $channel: { type: 'group', id: channelId },
-    $sender: { id: userId },
-  } as any;
+  return { target: { endpoint: { adapter: 'sandbox', id: 'default' }, kind: 'group', id: channelId },
+sender: { id: userId } } as any;
 }
 
 describe('QueueService', () => {
@@ -125,7 +122,7 @@ describe('SessionService', () => {
       playerO: 'bob',
       boardJson: JSON.stringify(emptyBoard()),
     });
-    const active = await session.getActiveForUser('sandbox-default-group:c1', 'alice');
+    const active = await session.getActiveForUser(channelKey({ target: { endpoint: { adapter: 'sandbox', id: 'default' }, kind: 'group', id: 'c1' } }), 'alice');
     expect(active?.id).toBe(row.id);
     expect(active?.player_x).toBe('alice');
   });

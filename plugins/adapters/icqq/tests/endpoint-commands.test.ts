@@ -1,105 +1,60 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { rootPluginId } from 'zhin.js';
 import { parseCommandDefinition } from 'zhin.js/command';
-import {
-  createEndpointRuntimeState,
-  endpointConfigurationStoreToken,
-} from 'zhin.js/adapter';
+import { createAdapterHarness } from '../../test-utils/endpoint.js';
+import { MemoryDesiredRepository } from '../../test-utils/desired-repository.js';
+import definition from '../adapters/icqq/index.js';
 import listCommand from '../commands/icqq/endpoint/list/index.js';
 import addCommand from '../commands/icqq/endpoint/add/[[id]]/index.js';
 import removeCommand from '../commands/icqq/endpoint/remove/[id]/index.js';
-import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
-import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 
-/**
- * commands/ 下的命令定义冒烟 + add（bindFlow 引导式登记）/ remove 基本行为
- * （通用套件逻辑见 packages/im/adapter/tests/endpoint-commands.test.ts）。
- */
-
-let store: MemoryEndpointConfigurationStore;
-
-beforeEach(() => {
-  store = new MemoryEndpointConfigurationStore();
-});
-
-function fakeContext(overrides: Record<string, unknown> = {}) {
-  const state = createEndpointRuntimeState();
-  return {
-    state,
-    use: (token: unknown) => {
-      if (token === icqqRuntimeStateToken) return state;
-      if (token === endpointConfigurationStoreToken) return store;
-      throw new Error(`unexpected token: ${String(token)}`);
-    },
-    formatCommand: (path: string) => `!bots ${path}`,
-    params: Object.freeze({}),
-    args: Object.freeze([]),
-    input: undefined,
-    config: undefined,
-    ...overrides,
-  } as never;
+const fixtures: Awaited<ReturnType<typeof createAdapterHarness>>[] = [];
+afterEach(async () => { await Promise.all(fixtures.splice(0).map(fixture => fixture.stop())); });
+async function fixture(config: Record<string, unknown> = {}) {
+  const repository = new MemoryDesiredRepository();
+  const runtime = await createAdapterHarness(definition, config, { name: 'icqq', repository });
+  fixtures.push(runtime); await runtime.start(); runtime.open();
+  const use = vi.fn(() => { throw new Error('No file/env port belongs to account management'); });
+  function context(overrides: Record<string, unknown> = {}) {
+    return { owner: rootPluginId(), generation: 1, project: () => runtime.index,
+      use, config, input: undefined, params: {}, args: [], ...overrides } as never;
+  }
+  return { adapter: runtime.adapter, index: runtime.index, repository, use, context };
 }
 
-describe('icqq endpoint command definitions', () => {
-  it('三个命令模块均为合法 defineCommand', () => {
-    for (const definition of [listCommand, addCommand, removeCommand]) {
-      expect(() => parseCommandDefinition(definition)).not.toThrow();
-    }
+describe('ICQQ commands use the owning runtime account authority', () => {
+  it('retains the three actual command definitions', () => {
+    for (const command of [listCommand, addCommand, removeCommand]) expect(() => parseCommandDefinition(command)).not.toThrow();
   });
-
-  it('add 无 id 时回复用法', async () => {
-    const text = await addCommand.execute(fakeContext()) as string;
-    expect(text).toContain('用法：!bots icqq endpoint add <uin>');
+  it('saves a new inactive account through one CAS without constructing a Client, env write, or restart', async () => {
+    const runtime = await fixture();
+    const text = await addCommand.execute(runtime.context({ params: { id: '8596238' }, args: [] })) as string;
+    expect(text).toContain('配置已保存，尚未启动'); expect(text).toContain('无需重启进程');
+    expect(runtime.repository.writes).toHaveLength(1);
+    expect(runtime.repository.snapshot?.endpoints[0]).toMatchObject({ endpointId: '8596238', desiredEnabled: false, config: { id: '8596238' } });
+    expect(runtime.adapter.getEndpoint(runtime.adapter.list()[0]!.instanceId)).toBeUndefined();
+    expect(runtime.use).not.toHaveBeenCalled();
+    const listed = await listCommand.execute(runtime.context()) as string;
+    expect(listed).toContain('8596238'); expect(listed).toContain('直连');
   });
-
-  it('add 非数字 id 拒绝', async () => {
-    expect(await addCommand.execute(fakeContext({ params: { id: 'my-bot' } })))
-      .toContain('纯数字');
+  it('rejects an invalid QQ account identity without writing', async () => {
+    const runtime = await fixture();
+    expect(await addCommand.execute(runtime.context({ params: { id: 'invalid-account' } }))).not.toContain('配置已保存');
+    expect(runtime.repository.writes).toHaveLength(0);
   });
-
-  it('add 合法 uin：写入 { id } 配置项并引导重启', async () => {
-    const text = await addCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
-
-    expect(text).toContain('✅');
-    expect(text).toContain('重启');
-    await expect(store.list('icqq')).resolves.toEqual([{ id: '8596238' }]);
+  it('removes the exact owned saved account without touching startup files', async () => {
+    const runtime = await fixture();
+    await addCommand.execute(runtime.context({ params: { id: '8596238' }, args: [] }));
+    const result = await removeCommand.execute(runtime.context({ params: { id: '8596238' } })) as string;
+    expect(result).toContain('删除配置已保存'); expect(result).not.toContain('重启');
+    expect(runtime.adapter.list()).toHaveLength(0); expect(runtime.repository.writes).toHaveLength(2);
+    expect(runtime.use).not.toHaveBeenCalled();
   });
-
-  it('add 重名时报添加失败', async () => {
-    await addCommand.execute(fakeContext({ params: { id: '8596238' } }));
-    expect(await addCommand.execute(fakeContext({ params: { id: '8596238' } })))
-      .toContain('已存在');
-  });
-
-  it('list 显示运行中 + 配置中的 endpoints', async () => {
-    const context = fakeContext();
-    (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
-      .endpoints.set('8596238', { id: '8596238', mode: 'direct' });
-    await addCommand.execute(fakeContext({ params: { id: '10001' } }));
-
-    const text = await listCommand.execute(context) as string;
-
-    expect(text).toContain('8596238（direct）');
-    expect(text).toContain('10001（direct（直连 @icqqjs/icqq））');
-  });
-
-  it('remove 从配置移除并提示重启', async () => {
-    await addCommand.execute(fakeContext({ params: { id: '8596238' } }));
-
-    const text = await removeCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
-
-    expect(text).toContain('移除');
-    expect(text).toContain('重启');
-    await expect(store.list('icqq')).resolves.toEqual([]);
-  });
-
-  it('配置 master 后非 master 拒绝 add/remove', async () => {
-    const denied = fakeContext({
-      config: { master: 'alice' },
-      input: { sender: { id: 'bob' } },
-      params: { id: '8596238' },
-    });
-
-    await expect(addCommand.execute(denied)).resolves.toBe('仅 master 可执行 ICQQ endpoint 管理命令');
-    await expect(removeCommand.execute(denied)).resolves.toBe('仅 master 可执行 ICQQ endpoint 管理命令');
+  it('preserves the existing master authorization before account admission', async () => {
+    const runtime = await fixture({ master: 'alice' });
+    const denied = runtime.context({ input: { sender: { id: 'bob' } }, params: { id: '8596238' }, args: [] });
+    expect(await addCommand.execute(denied)).toBe('仅 master 可执行 ICQQ endpoint 管理命令');
+    expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 ICQQ endpoint 管理命令');
+    expect(runtime.repository.writes).toHaveLength(0);
   });
 });

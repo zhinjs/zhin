@@ -43,6 +43,17 @@ function resolveEnvRef(value: string, env: Record<string, string>): string {
   return value;
 }
 
+/**
+ * A wildcard bind address (`0.0.0.0`, `::`) is where the Host listens, not where a client can
+ * connect: map it to the matching loopback so the derived URL stays local. IPv6 literals are bracketed.
+ */
+export function connectableHost(host: string): string {
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+  if (bare === '0.0.0.0') return '127.0.0.1';
+  if (bare === '::' || bare === '::0') return '[::1]';
+  return bare.includes(':') ? `[${bare}]` : bare;
+}
+
 /** 从项目目录解析 Host API baseUrl 与 Bearer token */
 export async function loadHostHttpConfig(cwd = process.cwd()): Promise<HostHttpConfig | null> {
   const configFile = findConfigFile(cwd);
@@ -51,7 +62,7 @@ export async function loadHostHttpConfig(cwd = process.cwd()): Promise<HostHttpC
   const config = await readConfig(path.join(cwd, configFile));
   const http = (config?.http ?? {}) as Record<string, unknown>;
   const port = (http.port as number | undefined) ?? 8086;
-  const host = String(http.host ?? '127.0.0.1');
+  const host = connectableHost(String(http.host ?? '127.0.0.1'));
   const base = String(http.base ?? '/api').replace(/^\/+|\/+$/g, '') || 'api';
   const baseUrl = `http://${host}:${port}/${base}`;
 

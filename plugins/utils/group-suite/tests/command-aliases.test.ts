@@ -90,14 +90,14 @@ describe('group-suite checkin aliases', () => {
     ['rank', 'rank'],
     ['checkin rank', 'rank'],
   ])('routes %s to %s', async (input, expected) => {
-    await expect(groupSuiteIndex().dispatch(input)).resolves.toMatchObject({ status: 'executed', value: expected });
+    await expect(groupSuiteIndex().dispatch({ input })).resolves.toMatchObject({ status: 'executed', value: expected });
   });
 
   it('keeps aliases under the instance commandNamespace', async () => {
     const index = groupSuiteIndex({ commandNamespace: 'suite' });
-    await expect(index.dispatch('suite 签到')).resolves.toMatchObject({ value: 'checkin' });
-    await expect(index.dispatch('suite checkin rank')).resolves.toMatchObject({ value: 'rank' });
-    await expect(index.dispatch('suite checkin streak')).resolves.toMatchObject({ value: 'mypoints' });
+    await expect(index.dispatch({ input: 'suite 签到' })).resolves.toMatchObject({ value: 'checkin' });
+    await expect(index.dispatch({ input: 'suite checkin rank' })).resolves.toMatchObject({ value: 'rank' });
+    await expect(index.dispatch({ input: 'suite checkin streak' })).resolves.toMatchObject({ value: 'mypoints' });
     expect(index.has('签到')).toBe(false);
   });
 

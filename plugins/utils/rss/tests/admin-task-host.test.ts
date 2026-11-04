@@ -1,8 +1,9 @@
+import { createTestEventGateway } from '../../../adapters/test-utils/endpoint.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { adapterFeatureId, AdapterIndex, defineAdapter, Endpoint, endpointEventGatewayToken } from '../../../../packages/im/adapter/src/index.js';
+import { Adapter, adapterFeatureId, AdapterIndex, createEndpointSpecification, defineAdapter, endpointSpec, endpointEventGatewayToken } from '../../../../packages/im/adapter/src/index.js';
 import { createHttpHost } from '../../../../packages/host/http/src/index.js';
 import { childPluginId, createCapabilitySlot, createSnapshotView, PluginStateStore, pluginTaskProviderToken, rootPluginId,
   SnapshotStore, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
@@ -23,18 +24,22 @@ async function fixture() {
   const load = vi.fn().mockResolvedValue({ title: 'Source', items: [] });
   const stateStore = new PluginStateStore(owner, database.state!);
   const provider = new AdministratorRssTasks(stateStore, { send, sendTarget: send }, resolveRssConfig({}), load);
-  class TestEndpoint extends Endpoint<object> {
-    readonly client = {};
-    start() {} open() {} close() {} stop() {}
+  class TestClient {
     send() { throw new Error('Reading/creating a task must not send platform probes'); }
   }
+  class TestEndpoint extends TestClient {
+    readonly [endpointSpec] = createEndpointSpecification(this, {
+      start() {}, open() {}, close() {}, stop() {}, send: () => this.send(),
+    });
+  }
+  class TestAdapter extends Adapter<TestEndpoint> { protected createEndpoint() { return new TestEndpoint(); } }
   const adapter = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'sandbox', source: '/adapters/sandbox/index.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => new TestEndpoint() }) });
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new TestAdapter() }) });
   const state: SnapshotState = { root, tree: new Map([
     [root, { id: root, instanceKey: 'root', packageName: '@test/app', packageRoot: directory, children: [owner] }],
     [owner, { id: owner, instanceKey: 'rss', packageName: '@zhin.js/plugin-rss', packageRoot: directory, parent: root, children: [] }],
   ]), config: new Map(), resources: new Map([
-    [root, new Map([[endpointEventGatewayToken.id, { receive: async () => undefined }]])],
+    [root, new Map([[endpointEventGatewayToken.id, createTestEventGateway()]])],
     [owner, new Map([[pluginTaskProviderToken.id, provider]])],
   ]), capabilities: new Map([[adapter.id, adapter]]), projections: new Map() };
   const adapters = await AdapterIndex.create([adapter], createSnapshotView(0, state), new AbortController().signal);

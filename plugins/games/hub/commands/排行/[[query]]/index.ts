@@ -3,7 +3,7 @@ import { defineCommand } from 'zhin.js/command';
 import {
   channelKey,
   gameFeatureId,
-  messageFromCommandInput,
+  gamePlayerFromInput,
   type LeaderboardEntry,
   type GameIndex,
 } from '@zhin.js/game-kit';
@@ -46,7 +46,7 @@ export default defineCommand({
       }
       gameId = hit.id;
     }
-    const message = messageFromCommandInput(input, { locale, formatCommand });
+    const message = gamePlayerFromInput(input, { locale, formatCommand });
     const board = await index.getLeaderboard(gameId, channelKey(message));
     return formatLeaderboard(index, gameId, board, locale, formatCommand?.('games'));
   },

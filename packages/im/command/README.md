@@ -117,7 +117,7 @@ export default defineCommand({
 后面的内容作为参数。未知/重复选项拒绝。`remind --help` 从同一声明生成帮助，包含
 Endpoint 前缀及显式插件命名空间，不执行命令；同一权限声明仍约束帮助读取。
 
-`dispatch()` 返回 `status`：`unmatched`（继续普通消息处理）、`invalid`（`issues` +
+`dispatch({ input, source, snapshot })` 返回 `status`：`unmatched`（继续普通消息处理）、`invalid`（`issues` +
 `help`）、`denied`（权限拒绝）、`limited`（执行预算拒绝）、`executed`。后四者 `matched: true`，只有 `executed`
 包含业务结果。可靠静态路径匹配后才提示错误；纯动态路由的模糊聊天保持未匹配。
 受限命令没有可鉴权主体时拒绝，Host 可通过 `dispatch` 提供真实 `PermissionSubject`；

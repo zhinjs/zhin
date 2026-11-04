@@ -21,6 +21,18 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
   const executed = run.executedTools.map((tool) => tool.name);
   const outboundText = run.outbound.join('\n');
 
+  if (expect.selfChangeStatuses) {
+    const statuses = (run.selfChanges ?? []).map((change) => change.status);
+    if (JSON.stringify(statuses) !== JSON.stringify(expect.selfChangeStatuses)) {
+      fail('selfChangeStatuses', `expected self-changes [${list(expect.selfChangeStatuses)}]; store has [${list(statuses)}]`);
+    }
+  }
+  for (const [file, content] of Object.entries(expect.workspaceFiles ?? {})) {
+    const actual = run.workspaceFiles?.[file] ?? null;
+    if (actual !== content) {
+      fail('workspaceFiles', content === null ? `${file} must not exist, but it does` : `${file} is ${actual === null ? 'missing' : JSON.stringify(actual.slice(0, 120))}; expected ${JSON.stringify(content.slice(0, 120))}${actual === null ? '' : ` (first difference at offset ${firstDiff(actual, content)})`}`);
+    }
+  }
   for (const name of expect.toolsCalled ?? []) {
     if (!executed.includes(name)) fail('toolsCalled', `expected tool "${name}" to run; ran [${list(executed)}]`);
   }
@@ -207,4 +219,10 @@ function list(values: readonly string[]): string {
 function quote(text: string, max = 160): string {
   const flat = text.replace(/\s+/g, ' ').trim();
   return JSON.stringify(flat.length > max ? `${flat.slice(0, max)}…` : flat);
+}
+
+function firstDiff(left: string, right: string): number {
+  let index = 0;
+  while (index < left.length && index < right.length && left[index] === right[index]) index += 1;
+  return index;
 }

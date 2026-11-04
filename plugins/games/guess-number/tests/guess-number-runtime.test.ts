@@ -1,3 +1,4 @@
+import { invokeGameCommand } from '../../../../packages/game-kit/tests/command-operation-fixture.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { DisposeStack, scheduleHostToken } from 'zhin.js';
@@ -19,7 +20,7 @@ const emptyCtx = {
   use: () => services,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
-  input: undefined as never,
+  input: { conversation: { endpoint: { adapter: 'synthetic', id: 'test-account' }, kind: 'private', id: 'alice' }, sender: { id: 'alice', name: 'Alice' }, content: '' } as never,
 };
 
 function mockSetupContext(options?: { schedule?: boolean }) {
@@ -53,7 +54,7 @@ describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
   });
 
   it('help action returns help text', async () => {
-    const result = await gameCommand.execute({
+    const result = await invokeGameCommand(gameCommand, {
       ...emptyCtx,
       params: {},
     });
@@ -61,7 +62,7 @@ describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
   });
 
   it('start action works with in-memory db', async () => {
-    const result = await gameCommand.execute({
+    const result = await invokeGameCommand(gameCommand, {
       ...emptyCtx,
       params: { action: 'start' },
     });
@@ -73,12 +74,12 @@ describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
 
   it('uses the operation language and the verified invocation in help', async () => {
     const formatCommand = vi.fn((path: string) => path === 'guess' ? '!!play guess' : undefined);
-    const result = await gameCommand.execute({ ...emptyCtx, locale: 'en', formatCommand, params: { action: 'help' } });
+    const result = await invokeGameCommand(gameCommand, { ...emptyCtx, locale: 'en', formatCommand, params: { action: 'help' } });
     expect(result).toContain('Guess the Number');
     expect(result).toContain('!!play guess start');
     expect(result).not.toContain('猜数');
     expect(formatCommand).toHaveBeenCalledWith('guess');
-    const withoutEnvironment = await gameCommand.execute({ ...emptyCtx, locale: 'en', formatCommand: () => undefined });
+    const withoutEnvironment = await invokeGameCommand(gameCommand, { ...emptyCtx, locale: 'en', formatCommand: () => undefined });
     expect(withoutEnvironment).not.toContain('/guess');
   });
 

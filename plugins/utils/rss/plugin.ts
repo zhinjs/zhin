@@ -1,3 +1,5 @@
+import { DataMigrationError, pluginDataMigrationProviderToken, TargetMigrationScopes, pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
+import { createSubscriptionTargetMigration, subscriptionMigrationScope } from './src/target-migration.js';
 import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
 import {
   definePlugin,
@@ -6,7 +8,6 @@ import {
   outboundHostToken,
   scheduleHostToken,
 } from 'zhin.js';
-import { pluginTaskProviderToken } from 'zhin.js/plugin-runtime';
 import { createAdministratorRssState } from './src/storage.js';
 import { AdministratorRssTasks } from './src/admin-tasks.js';
 import { resolveRssConfig, type RssConfig } from './src/feed.js';
@@ -21,6 +22,7 @@ import { rssRuntimeToken, type RssOutboundPush } from './src/runtime.js';
 function defineRssTables(db: { define: (name: string, schema: Record<string, unknown>, options?: { addColumns: readonly string[] }) => void }): void {
   db.define(RSS_SUBS_TABLE, {
     url: { type: 'text', nullable: false },
+    target_json: { type: 'text', nullable: true },
     feed_title: { type: 'text', default: '' },
     adapter_name: { type: 'text', nullable: false },
     endpoint_id: { type: 'text', default: '' },
@@ -30,7 +32,7 @@ function defineRssTables(db: { define: (name: string, schema: Record<string, unk
     creator_name: { type: 'text', default: '' },
     created_at: { type: 'text', default: '' },
     locale: { type: 'text', length: 16, default: 'zh-CN' },
-  }, { addColumns: ['locale'] });
+  }, { addColumns: ['locale', 'target_json'] });
   db.define(RSS_SEEN_TABLE, {
     feed_url: { type: 'text', nullable: false },
     item_guid: { type: 'text', nullable: false },
@@ -60,24 +62,24 @@ export default definePlugin<RssConfig>({
       return host;
     })() : createInMemoryRssDb();
 
+    const migrationScopes = database ? new TargetMigrationScopes({ pending: scope => scope.startsWith('historical:') }) : undefined;
+    if (database && migrationScopes) context.resources.provide(pluginDataMigrationProviderToken,
+      createSubscriptionTargetMigration({ database, scopes: migrationScopes }));
+
     const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
     let outboundPush: RssOutboundPush | null = null;
     if (outbound) {
       outboundPush = async (input) => {
-        await outbound.send({
-          adapter: input.adapterName,
-          endpointKey: input.endpointKey,
-          conversation: {
-            kind: input.channelType,
-            id: input.channelId,
-          },
-          content: input.content,
-          locale: input.locale,
-        });
+        if (!input.target) throw new DataMigrationError('unavailable', 'Historical RSS subscription awaits exact-target binding');
+        if (!outbound.sendTarget) throw new Error('Canonical subscription delivery requires an exact-target Outbound Host');
+        const run = async () => { await outbound.sendTarget!(input.target!, input.content, { locale: input.locale }); };
+        if (migrationScopes) await migrationScopes.run({ scope: subscriptionMigrationScope(input), run });
+        else await run();
       };
     }
     const runtime = Object.freeze({
       db,
+      migrationScopes,
       locale: resolveLocale(context.resources.use(projectLocaleToken)),
       config: Object.freeze({ ...config }),
       outbound: outboundPush,

@@ -4,7 +4,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { lineRuntimeStateToken } from '../../../src/line-runtime-state.js';
 
 export const lineEndpointCommands = createEndpointCommands({
   adapterKey: 'line',
@@ -13,6 +12,5 @@ export const lineEndpointCommands = createEndpointCommands({
     { key: 'channelSecret', required: true, env: true, description: 'LINE channel secret' },
     { key: 'channelAccessToken', required: true, env: true, description: 'LINE channel access token' },
   ],
-  running: (use) => use(lineRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `channelAccessToken: ${String(entry.channelAccessToken)}`,
 }, defineCommand);

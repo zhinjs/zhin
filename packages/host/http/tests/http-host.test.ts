@@ -115,7 +115,7 @@ describe('HttpHost', () => {
     await store.close();
   });
 
-  it('pins HTTP responses and retires WebSockets when their generation is replaced', async () => {
+  it('pins accepted HTTP and WebSocket work until their owner completes it after replacement', async () => {
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
     const previous = createGenerationAdmissionGate();
@@ -130,7 +130,11 @@ describe('HttpHost', () => {
       await httpGate;
       response.end('done');
     });
-    previousHost.ws('/slow').onConnection(() => undefined);
+    let ownedSocket!: WebSocket;
+    previousHost.ws('/slow').onConnection(({ socket }) => {
+      ownedSocket = socket;
+      socket.on('message', () => socket.send('previous-owner'));
+    });
     const store = new SnapshotStore(admissionState(previous));
     let disposed = false;
     store.commit(0, {
@@ -149,13 +153,44 @@ describe('HttpHost', () => {
     store.commit(1, { snapshot: admissionState(next), dispose: () => undefined });
     expect(disposed).toBe(false);
 
-    await new Promise<void>((resolve) => ws.once('close', () => resolve()));
+    const retained = new Promise<string>(resolve => {
+      ws.once('message', data => resolve(String(data)));
+      ws.once('close', () => resolve('closed-before-owner-finished'));
+    });
+    ws.send('continue accepted work');
+    expect(await retained).toBe('previous-owner');
     expect(disposed).toBe(false);
+    const closed = new Promise<void>(resolve => ws.once('close', () => resolve()));
+    ownedSocket.close();
+    await closed;
 
     releaseHttp();
     expect(await (await http).text()).toBe('done');
     await vi.waitFor(() => expect(disposed).toBe(true));
     await store.close();
+  });
+
+  it('closes accepted WebSockets on explicit Root stop before waiting for their lease disposal', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(host);
+    const previous = createGenerationAdmissionGate(), next = createGenerationAdmissionGate();
+    const owned = bindGenerationAdmission<HttpHost>(host, previous);
+    owned.ws('/root-stop').onConnection(() => undefined);
+    const store = new SnapshotStore(admissionState(previous));
+    let disposed = false;
+    store.commit(0, { snapshot: admissionState(previous), dispose: () => { disposed = true; } });
+    const { port } = await host.listen();
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/root-stop`);
+    await new Promise<void>((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+    store.commit(1, { snapshot: admissionState(next), dispose() {} });
+    expect(socket.readyState).toBe(WebSocket.OPEN);
+    expect(disposed).toBe(false);
+    const closed = new Promise<number>(resolve => socket.once('close', code => resolve(code)));
+    const stopping = store.close();
+    try {
+      await expect(closed).resolves.toBe(1012);
+      await stopping;
+      expect(disposed).toBe(true);
+    } finally { await host.close(); await stopping; }
   });
 
   it('keeps a generation leased until a streaming response closes', async () => {

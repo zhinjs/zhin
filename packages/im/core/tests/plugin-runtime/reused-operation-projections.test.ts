@@ -24,7 +24,7 @@ it.each(['command', 'command-dispatch', 'component'] as const)('reused %s binds 
   const index = kind !== 'component' ? new CommandIndex([command], old) : new ComponentIndex([component], old);
   const run = (snapshot: RuntimeSnapshot, delayed: boolean) => index instanceof CommandIndex
     ? kind === 'command-dispatch'
-      ? index.dispatch(delayed ? 'probe wait' : 'probe', undefined, undefined, '', snapshot).then((result) => result.value)
+      ? index.dispatch({ input: delayed ? 'probe wait' : 'probe', commandPrefix: '', snapshot: snapshot }).then((result) => result.value)
       : index.execute('probe', delayed ? ['wait'] : [], snapshot)
     : index.render(owner, 'probe', { delayed }, { snapshot });
   const draining = run(old, true);

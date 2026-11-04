@@ -6,7 +6,14 @@ import {
 } from '@zhin.js/feature-kit';
 import type { LayoutDefinition } from './definition.js';
 
+export const layoutIndexProjection = 'zhin.layout-index/1' as const;
+
 export class LayoutIndex {
+  /**
+   * Structural brand. Runtime generation imports can load this module more than once,
+   * so consumers must not rely on `instanceof` / prototype identity.
+   */
+  readonly $projection = layoutIndexProjection;
   readonly #index: OwnerCapabilityIndex<LayoutDefinition>;
 
   constructor(
@@ -50,4 +57,10 @@ function toManifest(entry: OwnerCapabilityEntry<LayoutDefinition>): Readonly<Lay
     module: definition.module,
     hash: definition.hash,
   });
+}
+
+/** True for a {@link LayoutIndex} from any module instance (HMR generation imports included). */
+export function isLayoutIndex(value: unknown): value is LayoutIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === layoutIndexProjection;
 }

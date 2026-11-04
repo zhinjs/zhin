@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-github",
-  "version": "1.1.16",
+  "version": "1.1.21",
   "description": "Zhin.js GitHub adapter for Plugin Runtime (App auth + webhook)",
   "type": "module",
   "main": "./lib/index.js",
@@ -51,11 +51,14 @@
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
@@ -98,6 +101,7 @@
   "files": [
     "adapters",
     "commands",
+    "pages",
     "plugin.js",
     "schema.json",
     "src",
@@ -134,7 +138,7 @@
     "features": [
       {
         "package": "@zhin.js/adapter",
-        "api": "^1.0.0"
+        "api": "^2.1.0"
       },
       {
         "package": "@zhin.js/command",
@@ -142,7 +146,7 @@
       },
       {
         "package": "@zhin.js/tool",
-        "api": "^1.0.0"
+        "api": "^1.1.0"
       },
       {
         "package": "@zhin.js/skill",
@@ -150,6 +154,10 @@
       },
       {
         "package": "@zhin.js/agent-feature",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

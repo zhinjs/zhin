@@ -280,7 +280,7 @@ describe('collectWizardDependencies / collectWizardFeatures', () => {
     expect(deps['@zhin.js/prompt-section']).toBe(scaffoldDependencyRange('@zhin.js/prompt-section'));
     expect(deps['@zhin.js/prompt-section']).not.toBe('latest');
     expect(collectWizardFeatures({ ai })).toEqual([
-      { package: '@zhin.js/tool', api: '^1.0.0' },
+      { package: '@zhin.js/tool', api: '^1.1.0' },
       { package: '@zhin.js/prompt-section', api: '^1.0.0' },
     ]);
   });

@@ -30,7 +30,7 @@ describe('ICQQ checked moderation port', () => {
   });
   it('reads uncached roles and actual platform join time', async () => {
     const f = fixture();
-    await expect(inspectGroupMember(f.client, '129043431', '123', f.abort.signal))
+    await expect(inspectGroupMember(f.client, { groupId: '129043431', userId: '123', signal: f.abort.signal }))
       .resolves.toEqual({ canModerate: true, platformRole: 'member', joinedAt: f.joinedAt });
     expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 8596238, true);
     expect(f.native.getGroupMemberInfo).toHaveBeenCalledWith(129043431, 123, true);
@@ -38,7 +38,7 @@ describe('ICQQ checked moderation port', () => {
 
   it.each(['owner', 'admin', 'member'] as const)('reads the Bot %s role once without inferring it from moderation permission', async role => {
     const f = fixture(); f.self.role = role;
-    await expect(inspectGroupMember(f.client, '129043431', '8596238', f.abort.signal))
+    await expect(inspectGroupMember(f.client, { groupId: '129043431', userId: '8596238', signal: f.abort.signal }))
       .resolves.toEqual({ canModerate: false, platformRole: role });
     expect(f.native.getGroupMemberInfo).toHaveBeenCalledExactlyOnceWith(129043431, 8596238, true);
     expect(f.native.setGroupBan).not.toHaveBeenCalled();
@@ -47,32 +47,32 @@ describe('ICQQ checked moderation port', () => {
 
   it.each(['user_id', 'group_id'] as const)('does not attach a role when the returned %s does not match', async field => {
     const f = fixture(); f.self[field] = 999;
-    await expect(inspectGroupMember(f.client, '129043431', '8596238', f.abort.signal))
+    await expect(inspectGroupMember(f.client, { groupId: '129043431', userId: '8596238', signal: f.abort.signal }))
       .resolves.toEqual({ canModerate: false });
   });
 
   it('preserves platform errors and rejects results arriving after cancellation', async () => {
     const f = fixture(); const error = new Error('platform member lookup failed');
     f.native.getGroupMemberInfo.mockRejectedValueOnce(error);
-    await expect(inspectGroupMember(f.client, '129043431', '8596238', f.abort.signal)).rejects.toBe(error);
+    await expect(inspectGroupMember(f.client, { groupId: '129043431', userId: '8596238', signal: f.abort.signal })).rejects.toBe(error);
     f.native.getGroupMemberInfo.mockImplementation(async () => {
       f.abort.abort(new Error('turn retired'));
       return f.self;
     });
-    await expect(inspectGroupMember(f.client, '129043431', '8596238', f.abort.signal)).rejects.toThrow('turn retired');
+    await expect(inspectGroupMember(f.client, { groupId: '129043431', userId: '8596238', signal: f.abort.signal })).rejects.toMatchObject({ disposition: 'unknown', cause: f.abort.signal.reason });
   });
 
   it.each(['owner', 'admin'])('refuses to moderate a %s', async (role) => {
     const f = fixture(); f.member.role = role as MemberInfo['role'];
-    await expect(moderateGroupMember(f.client, '129043431', '123', { type: 'mute', durationSeconds: 600 }, f.abort.signal, () => true)).rejects.toThrow('permission');
+    await expect(moderateGroupMember({ client: f.client, isActive: () => true }, { groupId: '129043431', userId: '123', action: { type: 'mute', durationSeconds: 600 }, signal: f.abort.signal })).rejects.toThrow('permission');
     expect(f.native.setGroupBan).not.toHaveBeenCalled();
   });
 
   it('refuses a permission loss between review and action', async () => {
     const f = fixture();
-    await inspectGroupMember(f.client, '129043431', '123', f.abort.signal);
+    await inspectGroupMember(f.client, { groupId: '129043431', userId: '123', signal: f.abort.signal });
     f.self.role = 'member';
-    await expect(moderateGroupMember(f.client, '129043431', '123', { type: 'mute', durationSeconds: 600 }, f.abort.signal, () => true)).rejects.toThrow('permission');
+    await expect(moderateGroupMember({ client: f.client, isActive: () => true }, { groupId: '129043431', userId: '123', action: { type: 'mute', durationSeconds: 600 }, signal: f.abort.signal })).rejects.toThrow('permission');
   });
 
   it.each(['rejoined', 'expired', 'missing'])('refuses newcomer kicks with %s join facts', async (mode) => {
@@ -81,22 +81,20 @@ describe('ICQQ checked moderation port', () => {
     if (mode === 'expired') vi.spyOn(Date, 'now').mockReturnValue(approved + 600_001);
     if (mode === 'missing') f.member.join_time = 0;
     try {
-      await expect(moderateGroupMember(f.client, '129043431', '123',
-        { type: 'kick', joinedAt: approved, maxMembershipAgeMs: 600_000 }, f.abort.signal, () => true)).rejects.toThrow('membership');
+      await expect(moderateGroupMember({ client: f.client, isActive: () => true }, { groupId: '129043431', userId: '123', action: { type: 'kick', joinedAt: approved, maxMembershipAgeMs: 600_000 }, signal: f.abort.signal })).rejects.toThrow('membership');
       expect(f.native.setGroupKick).not.toHaveBeenCalled();
     } finally { vi.restoreAllMocks(); }
   });
 
   it('rejects stale generations after the awaited platform reads', async () => {
     const f = fixture();
-    await expect(moderateGroupMember(f.client, '129043431', '123', { type: 'mute', durationSeconds: 600 }, f.abort.signal, () => false)).rejects.toThrow('permission');
+    await expect(moderateGroupMember({ client: f.client, isActive: () => false }, { groupId: '129043431', userId: '123', action: { type: 'mute', durationSeconds: 600 }, signal: f.abort.signal })).rejects.toThrow('permission');
     expect(f.native.setGroupBan).not.toHaveBeenCalled();
   });
 
   it('does not report a false SDK result as successful or retry it', async () => {
     const f = fixture(); f.native.setGroupKick.mockResolvedValue(false);
-    await expect(moderateGroupMember(f.client, '129043431', '123',
-      { type: 'kick', joinedAt: f.joinedAt, maxMembershipAgeMs: 600_000 }, f.abort.signal, () => true)).rejects.toThrow('confirm');
+    await expect(moderateGroupMember({ client: f.client, isActive: () => true }, { groupId: '129043431', userId: '123', action: { type: 'kick', joinedAt: f.joinedAt, maxMembershipAgeMs: 600_000 }, signal: f.abort.signal })).rejects.toThrow('confirm');
     expect(f.native.setGroupKick).toHaveBeenCalledTimes(1);
   });
 });

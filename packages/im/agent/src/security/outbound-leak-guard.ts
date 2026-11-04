@@ -17,7 +17,8 @@ import type { AgentOutputElement } from '../outbound/agent-output.js';
  *                         during this turn.
  */
 
-import type { DeliveryOutcome, ReplyPort } from '../turn/turn-ingress.js';
+import type { DeliveryOutcome, ReplyAnswerContext, ReplyPort } from '../turn/turn-ingress.js';
+import type { ReplyStreamSnapshot } from '@zhin.js/core/runtime';
 
 export type LeakKind = 'system_prompt' | 'secret' | 'other_session_memory';
 
@@ -123,6 +124,44 @@ export class OutboundLeakInspector {
     return Object.freeze({ text: result, findings: Object.freeze(findings) });
   }
 
+  /** Cumulative source for one string; uncertain suffixes stay private until their boundary. */
+  inspectPrefix(text: string, complete = false): LeakInspection {
+    if (complete) return this.inspect(text);
+    const literals = [...this.#secretValues, ...this.#promptLines, ...this.#memoryLines];
+    let end = text.length;
+    for (const literal of literals) end = Math.min(end, pendingLiteralStart(text, literal));
+    for (const marker of SECRET_MARKERS) {
+      const candidate = marker.insensitive ? text.replace(/[A-Z]/g, character => character.toLowerCase()) : text;
+      const start = pendingLiteralStart(candidate, marker.text);
+      if (start < text.length && (!marker.word || start === 0 || !/\w/.test(text[start - 1]!))) end = Math.min(end, start);
+    }
+    for (const pattern of PENDING_SECRET_TAILS) {
+      const match = pattern.exec(text);
+      if (match) end = Math.min(end, match.index);
+    }
+    for (const header of text.matchAll(/-----BEGIN [A-Z ]*PRIVATE KEY-----/g)) {
+      if (!/-----END [A-Z ]*PRIVATE KEY-----/.test(text.slice(header.index + header[0].length))) {
+        end = Math.min(end, header.index);
+      }
+    }
+    // Cutting inside an already recognised secret would expose an unmasked fragment.
+    let previous: number;
+    do {
+      previous = end;
+      for (const literal of literals) {
+        const start = text.lastIndexOf(literal, end - 1);
+        if (start >= 0 && start < end && start + literal.length > end) end = start;
+      }
+      for (const pattern of SECRET_PATTERNS) {
+        for (const match of text.matchAll(new RegExp(pattern.source, pattern.flags))) {
+          if (match.index >= end) break;
+          if (match.index + match[0].length > end) end = match.index;
+        }
+      }
+    } while (end < previous);
+    return this.inspect(text.slice(0, end));
+  }
+
   /** Inspects the text elements of an outbound message. */
   inspectOutput(output: readonly AgentOutputElement[]): Readonly<{ output: readonly AgentOutputElement[]; findings: readonly LeakFinding[] }> {
     const findings: LeakFinding[] = [];
@@ -182,11 +221,45 @@ export function guardReplyPort(
   inspector: OutboundLeakInspector,
   onFindings?: (findings: readonly LeakFinding[]) => void,
 ): ReplyPort {
+  const inspectSnapshot = (snapshot: ReplyStreamSnapshot): ReplyStreamSnapshot => ({
+    ...snapshot,
+    messages: snapshot.messages.map(message => ({
+      ...message,
+      segments: message.segments.map(part => {
+        const value = part.value;
+        if (value.type === 'text' || value.type === 'markdown') {
+          const key = value.type === 'text' ? 'text' : 'content';
+          const data: Readonly<Record<string, unknown>> = value.data;
+          const inspected = inspector.inspectPrefix(String(data[key] ?? ''), part.complete);
+          if (inspected.findings.length) onFindings?.(inspected.findings);
+          return { ...part, value: { ...value, data: { ...value.data, [key]: inspected.text } } };
+        }
+        if (!part.complete) return part;
+        const inspected = inspector.inspectOutput([{ type: 'message', segments: [value] }]);
+        if (inspected.findings.length) onFindings?.(inspected.findings);
+        const element = inspected.output[0];
+        return element?.type === 'message' ? { ...part, value: element.segments[0]! } : part;
+      }),
+    })),
+  });
   return Object.freeze({
-    async send(output: readonly AgentOutputElement[]): Promise<DeliveryOutcome> {
+    segments: port.segments,
+    ...(port.openStream ? { openStream: (context?: Pick<ReplyAnswerContext, 'phaseId'>) => {
+      const stream = context ? port.openStream!(context) : port.openStream!();
+      if (!stream) return undefined;
+      return Object.freeze({
+        get receipt() { return stream.receipt; },
+        get confirmed() { return stream.confirmed; },
+        get minIntervalMs() { return stream.minIntervalMs; },
+        update: (snapshot: ReplyStreamSnapshot) => stream.update(inspectSnapshot(snapshot)),
+        finish: (snapshot: ReplyStreamSnapshot) => stream.finish(inspectSnapshot(snapshot)),
+        cancel: () => stream.cancel(),
+      });
+    } } : {}),
+    async send(output: readonly AgentOutputElement[], context?: ReplyAnswerContext): Promise<DeliveryOutcome> {
       const inspected = inspector.inspectOutput(output);
       if (inspected.findings.length > 0) onFindings?.(inspected.findings);
-      return port.send(inspected.output);
+      return context ? port.send(inspected.output, context) : port.send(inspected.output);
     },
   });
 }
@@ -213,4 +286,39 @@ function replaceLiteral(text: string, needle: string, replacement: string, count
   if (!needle || !text.includes(needle)) return [text, count];
   const parts = text.split(needle);
   return [parts.join(replacement), count + parts.length - 1];
+}
+
+const SECRET_MARKERS = [
+  ...['sk-', 'pk-', 'rk-', 'ghp_', 'gho_', 'ghs_', 'ghu_', 'github_pat_', 'xoxa-', 'xoxb-', 'xoxp-', 'xoxr-', 'AKIA', 'AIza']
+    .map(text => ({ text, word: true, insensitive: false })),
+  { text: 'bearer', word: true, insensitive: true },
+  { text: '-----BEGIN ', word: false, insensitive: false },
+];
+
+const PENDING_SECRET_TAILS = [
+  /\b(?:sk|pk|rk)-[A-Za-z0-9_-]*$/,
+  /\b(?:ghp|gho|ghs|ghu|github_pat)_[A-Za-z0-9_]*$/,
+  /\bxox[abpr]-[A-Za-z0-9-]*$/,
+  /\bAKIA[0-9A-Z]{0,16}$/,
+  /\bAIza[0-9A-Za-z_-]{0,35}$/,
+  /\bbearer(?:\s+[A-Za-z0-9._~+/=-]*)?$/i,
+  /-----BEGIN [A-Z ]*$/,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-{0,4}$/,
+];
+
+/** Linear-time longest suffix that can still grow into a protected literal. */
+function pendingLiteralStart(text: string, literal: string): number {
+  if (!literal) return text.length;
+  const fallback = new Uint32Array(literal.length);
+  for (let i = 1, matched = 0; i < literal.length; i++) {
+    while (matched > 0 && literal[i] !== literal[matched]) matched = fallback[matched - 1]!;
+    if (literal[i] === literal[matched]) matched++;
+    fallback[i] = matched;
+  }
+  let matched = 0;
+  for (let i = Math.max(0, text.length - literal.length + 1); i < text.length; i++) {
+    while (matched > 0 && text[i] !== literal[matched]) matched = fallback[matched - 1]!;
+    if (text[i] === literal[matched]) matched++;
+  }
+  return text.length - matched;
 }

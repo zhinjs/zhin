@@ -26,7 +26,7 @@ function harness(failures: Array<Error | undefined> = []) {
     calls, ledger, activeGate, logs,
     advance: (ms: number) => { now += ms; },
     send: (conversation: never, ...messages: unknown[]) =>
-      sendQqMessages({ bot, ledger, activeGate, log: fields => logs.push(fields) }, conversation, messages as never),
+      sendQqMessages({ bot, ledger, activeGate, log: fields => logs.push(fields) }, { conversation: conversation, messages: messages as never }),
   };
 }
 

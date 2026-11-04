@@ -1,15 +1,15 @@
-/**
- * 游戏棋盘会话键工具。
- *
- * Plugin Runtime 下游戏逻辑操作的是 game-kit 自有的 `GameMessageLike`
- * （由 `messageFromCommandInput` 从 CommandContext.input 桥接而来），
- * 不再依赖 `@zhin.js/core` 的 Message 类型或 Adapter.editMessage 交互路径。
- */
-import type { GameMessageLike } from './command-message.js';
+import { createDeliveryTarget, encodeTaskTarget, decodeTaskTarget, type DeliveryTarget } from '@zhin.js/plugin-runtime';
+import type { GamePlayer } from './command-message.js';
 
-/**
- * 构建频道唯一键（用于会话查找）
- */
-export function channelKey(message: GameMessageLike): string {
-  return `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
+const SCOPE_VERSION = 'game-target-v1:';
+
+/** One reversible scope codec for sessions, records and delayed notifications. */
+export function channelKey(player: Pick<GamePlayer, 'target'>): string {
+  return SCOPE_VERSION + JSON.stringify(encodeTaskTarget(createDeliveryTarget({ conversation: player.target })));
+}
+
+/** Historical alias-only keys cannot prove a destination; callers must not guess an account. */
+export function gameTargetFromKey(key: string): DeliveryTarget | undefined {
+  if (!key.startsWith(SCOPE_VERSION)) return undefined;
+  return decodeTaskTarget(JSON.parse(key.slice(SCOPE_VERSION.length)) as Record<string, unknown>);
 }

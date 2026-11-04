@@ -1,9 +1,9 @@
 /** Draft review presentation; endpoint methods remain the approval and delivery authority. */
 import { createMessages, type Locale } from 'zhin.js/i18n';
 import type { BilibiliReplyDraft } from './drafts.js';
-import { BilibiliReviewError, type BilibiliEndpoint, type BilibiliNotice } from './endpoint.js';
-import type { BilibiliEndpointRegistry } from './bilibili-runtime-state.js';
-import { BILIBILI_COMMENT_MAX_LENGTH } from './protocol.js';
+import { BilibiliReviewError, type BilibiliNotice } from './endpoint.js';
+import type { BilibiliEndpointDirectory, BilibiliEndpointView } from './endpoint-directory.js';
+import { BILIBILI_COMMENT_MAX_LENGTH, commentAreaLabel, commentAreaUrl } from './protocol.js';
 
 const LIST_LIMIT = 10;
 const t = createMessages({
@@ -64,25 +64,30 @@ export function formatNotice(notice: BilibiliNotice, presentation: DraftPresenta
 }
 
 /** 给 Console 用的草稿链接。 */
-export function draftCommentUrl(draft: Pick<BilibiliReplyDraft, 'oid' | 'parent'>): string {
-  return commentUrl(draft.oid, draft.parent);
+export function draftCommentUrl(draft: Pick<BilibiliReplyDraft, 'oid' | 'parent' | 'type' | 'dynamicId'>): string {
+  return commentAreaUrl(draft, draft.parent);
+}
+
+/** 草稿所在评论区的简短标签（`av123` / `cv456` / `dynamic 789`）。 */
+export function draftResourceLabel(draft: Pick<BilibiliReplyDraft, 'oid' | 'type' | 'dynamicId'>): string {
+  return commentAreaLabel(draft);
 }
 
 function excerpt(text: string, max = 60): string {
   const chars = [...text.replace(/\s+/g, ' ').trim()];
   return chars.length > max ? `${chars.slice(0, max).join('')}…` : chars.join('');
 }
-function commentUrl(oid: string, rpid: string): string {
-  return `https://www.bilibili.com/video/av${oid}#reply${rpid}`;
+function commentUrl(draft: Pick<BilibiliReplyDraft, 'oid' | 'type' | 'dynamicId'>, rpid: string): string {
+  return commentAreaUrl(draft, rpid);
 }
 export function formatDraft(draft: BilibiliReplyDraft, options: { readonly full?: boolean; readonly locale?: Locale } = {}): string {
   const { locale } = options;
-  const lines = [`[${draft.id}] ${commentUrl(draft.oid, draft.parent)}${draft.status === 'sending' ? t(locale, 'sending') : ''}${draft.interrupted ? t(locale, 'interrupted') : ''}`];
+  const lines = [`[${draft.id}] ${commentUrl(draft, draft.parent)}${draft.status === 'sending' ? t(locale, 'sending') : ''}${draft.interrupted ? t(locale, 'interrupted') : ''}`];
   if (draft.context) lines.push(t(locale, 'original', { author: draft.context.author, text: options.full ? draft.context.text : excerpt(draft.context.text) }));
   lines.push(t(locale, 'reply', { text: options.full ? draft.message : excerpt(draft.message) }));
   return lines.join('\n');
 }
-export function findDraft(registry: BilibiliEndpointRegistry, id: string): { endpoint: BilibiliEndpoint; draft: BilibiliReplyDraft } | undefined {
+export function findDraft(registry: BilibiliEndpointDirectory, id: string): { endpoint: BilibiliEndpointView; draft: BilibiliReplyDraft } | undefined {
   for (const endpoint of registry.values()) {
     const draft = endpoint.drafts.get(id);
     if (draft) return { endpoint, draft };
@@ -95,7 +100,7 @@ export function draftEditUsage(presentation: DraftPresentation = {}): string {
   return command === undefined ? t(presentation.locale, 'editRequired')
     : t(presentation.locale, 'editUsage', { command, content: t(presentation.locale, 'content') });
 }
-export function listDraftsText(registry: BilibiliEndpointRegistry, presentation: DraftPresentation = {}): string {
+export function listDraftsText(registry: BilibiliEndpointDirectory, presentation: DraftPresentation = {}): string {
   const { locale, formatCommand } = presentation;
   const drafts = [...registry.values()].flatMap(endpoint => endpoint.drafts.list());
   if (drafts.length === 0) return t(locale, 'empty');
@@ -110,11 +115,11 @@ export function listDraftsText(registry: BilibiliEndpointRegistry, presentation:
   if (hints.length) lines.push('', hints.join('\n'));
   return lines.join('\n');
 }
-export function showDraftText(registry: BilibiliEndpointRegistry, id: string, presentation: DraftPresentation = {}): string {
+export function showDraftText(registry: BilibiliEndpointDirectory, id: string, presentation: DraftPresentation = {}): string {
   const found = findDraft(registry, id);
   return found ? formatDraft(found.draft, { full: true, locale: presentation.locale }) : t(presentation.locale, 'missing', { id });
 }
-export function editDraftText(registry: BilibiliEndpointRegistry, id: string, message: string, presentation: DraftPresentation = {}): string {
+export function editDraftText(registry: BilibiliEndpointDirectory, id: string, message: string, presentation: DraftPresentation = {}): string {
   const { locale, formatCommand } = presentation;
   const found = findDraft(registry, id);
   if (!found) return t(locale, 'missing', { id });
@@ -125,18 +130,18 @@ export function editDraftText(registry: BilibiliEndpointRegistry, id: string, me
       ...(command === undefined ? [] : [t(locale, 'approveHint', { command: `${command} ${id}` })])].join('\n');
   } catch (error) { return reviewErrorText(id, error, locale); }
 }
-export function discardDraftText(registry: BilibiliEndpointRegistry, id: string, presentation: DraftPresentation = {}): string {
+export function discardDraftText(registry: BilibiliEndpointDirectory, id: string, presentation: DraftPresentation = {}): string {
   const found = findDraft(registry, id);
   if (!found) return t(presentation.locale, 'missing', { id });
   try { return t(presentation.locale, found.endpoint.discardDraft(id) ? 'dropped' : 'missing', { id }); }
   catch (error) { return reviewErrorText(id, error, presentation.locale); }
 }
-export async function approveDraftText(registry: BilibiliEndpointRegistry, id: string, presentation: DraftPresentation = {}): Promise<string> {
+export async function approveDraftText(registry: BilibiliEndpointDirectory, id: string, presentation: DraftPresentation = {}): Promise<string> {
   const found = findDraft(registry, id);
   if (!found) return t(presentation.locale, 'missing', { id });
   try {
     const { draft, rpid } = await found.endpoint.approveDraft(id);
-    return `${t(presentation.locale, 'sent', { url: commentUrl(draft.oid, rpid) })}\n${excerpt(draft.message, 120)}`;
+    return `${t(presentation.locale, 'sent', { url: commentUrl(draft, rpid) })}\n${excerpt(draft.message, 120)}`;
   } catch (error) { return reviewErrorText(id, error, presentation.locale); }
 }
 export function reviewErrorText(id: string, error: unknown, locale?: Locale): string {

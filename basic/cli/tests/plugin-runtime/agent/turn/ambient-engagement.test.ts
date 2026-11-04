@@ -15,17 +15,19 @@ import {
 function harness(judgment: EngagementJudgment | Error, config: ConstructorParameters<typeof AmbientEngagement>[0]['config'] = {}) {
   let now = 1_000_000;
   const releases: Array<() => void> = [];
-  const judge = { judge: vi.fn(async () => { if (judgment instanceof Error) throw judgment; return judgment; }) } satisfies EngagementJudge;
+  const sleeps: number[] = [];
+  const judgedAt: number[] = [];
+  const judge = { judge: vi.fn(async () => { judgedAt.push(now); if (judgment instanceof Error) throw judgment; return judgment; }) } satisfies EngagementJudge;
   const engagement = new AmbientEngagement({
     config: { conversations: ['icqq:1048877509'], ...config },
     judge,
     now: () => now,
     // Each wait resolves only when the test releases it, so bursts can overlap deterministically.
-    sleep: () => new Promise<void>(resolve => releases.push(resolve)),
+    sleep: ms => { sleeps.push(ms); return new Promise<void>(resolve => releases.push(resolve)); },
   });
   const consider = () => engagement.consider({ key: 'icqq:1048877509', botName: '小知', readRecent: async () => ['小林 (1): 有人知道怎么配代理吗'] });
   return {
-    engagement, judge, consider,
+    engagement, judge, consider, sleeps, judgedAt,
     release: async () => { releases.splice(0).forEach(release => release()); await new Promise(resolve => setImmediate(resolve)); },
     advance: (ms: number) => { now += ms; },
   };
@@ -126,20 +128,59 @@ describe('AmbientEngagement', () => {
     expect(kinds.at(-1)).toBe('skipped');
   });
 
-  it('judges an idle group at most once per judge interval', async () => {
+  it('judges an idle group at most once per judge interval, deferring a burst instead of dropping it', async () => {
+    const h = harness({ ...yes, engage: false }, { judgeIntervalMs: 30_000, conversationWindowMs: 0 });
+    const first = h.consider();
+    await h.release();
+    await expect(first).resolves.toMatchObject({ kind: 'declined' });
+    const firstJudgedAt = h.judgedAt[0]!;
+    h.advance(10_000);
+    // No further messages arrive: the burst must still be judged once the window ends.
+    const soon = h.consider();
+    await h.release();
+    expect(h.judge.judge).toHaveBeenCalledTimes(1);
+    expect(h.sleeps.at(-1)).toBe(20_000);
+    h.advance(20_000);
+    await h.release();
+    await expect(soon).resolves.toMatchObject({ kind: 'declined' });
+    expect(h.judge.judge).toHaveBeenCalledTimes(2);
+    expect(h.judgedAt[1]).toBe(firstJudgedAt + 30_000);
+  });
+
+  it('lets a newer message supersede a deferred burst and judges only the newest one', async () => {
     const h = harness({ ...yes, engage: false }, { judgeIntervalMs: 30_000, conversationWindowMs: 0 });
     const first = h.consider();
     await h.release();
     await expect(first).resolves.toMatchObject({ kind: 'declined' });
     h.advance(10_000);
-    const soon = h.consider();
+    const deferred = h.consider();
     await h.release();
-    await expect(soon).resolves.toEqual({ kind: 'skipped', reason: 'judge_interval' });
-    h.advance(21_000);
-    const later = h.consider();
+    h.advance(5_000);
+    const newer = h.consider();
+    // Wakes the deferred burst (now superseded) and the newer message's quiet wait.
     await h.release();
-    await expect(later).resolves.toMatchObject({ kind: 'declined' });
+    await expect(deferred).resolves.toEqual({ kind: 'skipped', reason: 'superseded' });
+    expect(h.sleeps.at(-1)).toBe(15_000);
+    h.advance(15_000);
+    await h.release();
+    await expect(newer).resolves.toMatchObject({ kind: 'declined' });
     expect(h.judge.judge).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-checks the conversation state after deferring', async () => {
+    const idle = harness({ ...yes, engage: false }, { judgeIntervalMs: 30_000, conversationWindowMs: 180_000 });
+    const first = idle.consider();
+    await idle.release();
+    await expect(first).resolves.toMatchObject({ kind: 'declined' });
+    idle.advance(10_000);
+    const deferred = idle.consider();
+    await idle.release();
+    // The bot answers an addressed message while the burst waits.
+    idle.engagement.noteSpoke('icqq:1048877509');
+    idle.advance(20_000);
+    await idle.release();
+    await expect(deferred).resolves.toMatchObject({ kind: 'declined' });
+    expect(idle.judge.judge.mock.calls[1]![0]).toMatchObject({ inConversation: true });
   });
 
   it('logs only in shadow mode and does not start a cooldown', async () => {

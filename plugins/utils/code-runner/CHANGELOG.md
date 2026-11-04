@@ -1,5 +1,37 @@
 # @zhin.js/plugin-code-runner
 
+## 1.1.14
+
+### Patch Changes
+
+- Updated dependencies [af8f803]
+- Updated dependencies [032dc96]
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/skill@1.1.12
+
+## 1.1.13
+
+### Patch Changes
+
+- @zhin.js/skill@1.1.11
+- @zhin.js/tool@1.1.13
+
+## 1.1.12
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/tool@1.1.12
+
+## 1.1.11
+
+### Patch Changes
+
+- Updated dependencies [eb8feeb]
+- Updated dependencies [24a2b71]
+- Updated dependencies [d0e1fac]
+  - @zhin.js/tool@1.1.11
+
 ## 1.1.10
 
 ### Patch Changes

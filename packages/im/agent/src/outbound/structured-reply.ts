@@ -105,7 +105,7 @@ export function structuredReplyInstruction(profile: AiOutboundSegmentProfile = D
     return hint ? [`- ${type} on this platform: ${hint}`] : [];
   });
   return [
-    'Final reply: JSON matching the supplied schema, {"messages":[{"segments":[...]}]}, no fence/prose. Each item is one chat message; preserve message and segment order. Usually one message; split into 2–3 only where natural.',
+    'Final reply follows the supplied schema. Each messages item is one chat message; preserve message and segment order. Usually one message; split into 2–3 only where natural.',
     `Segment types available on this platform: ${types.join(', ')}.`,
     ...SEGMENT_GUIDE.flatMap(([covers, line]) => {
       const offered = covers.filter(type => types.includes(type));

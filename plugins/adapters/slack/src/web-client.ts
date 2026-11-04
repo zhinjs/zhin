@@ -3,7 +3,11 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
 
 /** A non-idempotent outbound API call gets exactly one transport attempt. */
 export function createSlackWebClient(token: string, options: WebClientOptions = {}): WebClient {
-  return new WebClient(token, { ...options, retryConfig: { retries: 0 }, rejectRateLimitedCalls: true });
+  return new WebClient(token, slackWebClientOptions(options));
+}
+
+export function slackWebClientOptions(options: WebClientOptions = {}): WebClientOptions {
+  return { ...options, retryConfig: { retries: 0 }, rejectRateLimitedCalls: true };
 }
 
 export function slackDeliveryError(error: unknown): EndpointDeliveryError {

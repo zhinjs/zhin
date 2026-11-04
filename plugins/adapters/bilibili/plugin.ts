@@ -1,10 +1,6 @@
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
 import { definePlugin, outboundHostToken, pluginConsoleRpcToken } from 'zhin.js';
 import {
-  bilibiliEndpointRegistryToken,
   bilibiliNotifierToken,
-  bilibiliRuntimeStateToken,
-  type BilibiliEndpointRegistry,
   type BilibiliNotifier,
 } from './src/bilibili-runtime-state.js';
 import { createBilibiliConsoleRpc } from './src/console.js';
@@ -17,13 +13,11 @@ import { createBilibiliConsoleRpc } from './src/console.js';
  */
 export default definePlugin({
   name: 'bilibili',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'Bilibili Comment Adapter (Experimental)',
   },
   setup(context) {
-    const registry: BilibiliEndpointRegistry = new Map();
-    context.resources.provide(bilibiliRuntimeStateToken, createEndpointRuntimeState());
-    context.resources.provide(bilibiliEndpointRegistryToken, registry);
     const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
     const notifier: BilibiliNotifier = async (target, text) => {
       if (!outbound) return false;
@@ -36,6 +30,6 @@ export default definePlugin({
       return true;
     };
     context.resources.provide(bilibiliNotifierToken, notifier);
-    context.resources.provide(pluginConsoleRpcToken, createBilibiliConsoleRpc(registry));
+    context.resources.provide(pluginConsoleRpcToken, createBilibiliConsoleRpc());
   },
 });

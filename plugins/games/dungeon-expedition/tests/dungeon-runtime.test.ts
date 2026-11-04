@@ -1,3 +1,4 @@
+import { invokeGameCommand } from '../../../../packages/game-kit/tests/command-operation-fixture.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import {
@@ -21,7 +22,7 @@ const context = {
   use: () => service,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
-  input: undefined as never,
+  input: { conversation: { endpoint: { adapter: 'synthetic', id: 'test-account' }, kind: 'private', id: 'alice' }, sender: { id: 'alice', name: 'Alice' }, content: '' } as never,
 };
 
 describe('@zhin.js/plugin-dungeon-expedition runtime', () => {
@@ -38,7 +39,7 @@ describe('@zhin.js/plugin-dungeon-expedition runtime', () => {
   });
 
   it('creates a structured expedition from the command', async () => {
-    const reply = await dungeonCommand.execute({
+    const reply = await invokeGameCommand(dungeonCommand, {
       ...context,
       params: { action: '开始' },
     });
@@ -59,7 +60,7 @@ it('keeps the opening language for the actual dungeon inactivity job', async () 
   const send = vi.fn();
   let execute: (() => Promise<void>) | undefined;
   const values = new Map<string, unknown>([
-    [outboundHostToken.id, { send }],
+    [outboundHostToken.id, { sendTarget: send }],
     [scheduleHostToken.id, { register(job: { execute: () => Promise<void> }) { execute = job.execute; return () => {}; } }],
   ]);
   const lifecycle = new DisposeStack();
@@ -71,12 +72,13 @@ it('keeps the opening language for the actual dungeon inactivity job', async () 
   try {
     const sessions = values.get(gameServicesToken.id) as SessionService;
     for (const locale of ['en', 'zh-CN'] as const) {
-      await sessions.createSession({ locale, $adapter: 'root/test', $endpoint: 'bot',
-        $channel: { type: 'group', id: locale }, $sender: { id: locale, name: locale } });
+      await sessions.createSession({ target: { endpoint: { adapter: 'root/test', id: 'bot' }, kind: 'group', id: locale },
+locale,
+sender: { id: locale, name: locale } });
     }
     timestamp += 31 * 60_000;
     await execute?.();
-    expect(send.mock.calls.map(call => call[0])).toEqual([
+    expect(send.mock.calls.map(call => ({ content: call[1], locale: call[2]?.locale, target: call[0] }))).toEqual([
       expect.objectContaining({ locale: 'en', content: 'Dungeon Expedition ended after 30 minutes of inactivity.' }),
       expect.objectContaining({ locale: 'zh-CN', content: '地牢远征因 30 分钟无人操作，已自动结束。' }),
     ]);

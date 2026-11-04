@@ -1,6 +1,9 @@
 import { featureId } from '@zhin.js/plugin-runtime';
 import { capture, captured, defineFeatureProvider, directoryModules } from '@zhin.js/feature-kit';
 import { AdapterIndex } from './adapter-index.js';
+// Native Feature entries have generation URLs. Host tokens must retain the
+// canonical package identity rather than following that revisioned closure.
+import { endpointDesiredRepositoryToken, endpointSecretResolverToken } from '@zhin.js/adapter';
 import { parseAdapterDefinition } from './definition.js';
 
 export const adapterFeatureId = featureId('zhin.adapter');
@@ -20,8 +23,14 @@ const adapterFeature = defineFeatureProvider({
     // Bound transport callbacks enter the current Host gateway; unrelated owner
     // updates need not reconnect accounts whose scopes and definitions are unchanged.
     retain: 'when-owner-unchanged',
+    prepareConfigUpdate(previous: AdapterIndex, context, changedOwners) {
+      return previous.prepareConfigUpdate(context.snapshot, changedOwners);
+    },
     async project(slots, context) {
-      const index = await AdapterIndex.create(slots, context.snapshot, context.signal);
+      const index = await AdapterIndex.create(slots, context.snapshot, context.signal, {
+        repository: context.featureResource?.(endpointDesiredRepositoryToken),
+        secrets: context.featureResource?.(endpointSecretResolverToken),
+      });
       return {
         value: index,
         dispose: () => index.stop(),

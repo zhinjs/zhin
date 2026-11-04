@@ -2,13 +2,15 @@
 
 Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 适配器（Plugin Runtime，OneBot 11 + NapCat 扩展）。默认 **正向 WebSocket 客户端**（`connection: ws`）；亦支持 **反向 WS** 与 **HTTP POST 上报**（经 `httpHostToken`）。
 
+账号由 `NapcatAdapter` 管理。Endpoint 直接继承实际 `NapcatClient`，保留原生方法与事件；框架生命周期、规范入站与发送经 `endpointSpec` 和 AdapterIndex 接入，不占用 Client 的原生 `start` / `stop` / `send` 方法。
+
 ## 功能特性
 
 - OneBot 11 + go-cqhttp 扩展 + NapCat 独有 API
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - **正向 WebSocket**（`connection: ws`）：应用连 NapCat WS
 - `access_token` 鉴权（Bearer + query）
-- 入站经 `Endpoint.emit(...)`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
+- 入站经 `endpointSpec.events`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
 - 41 个 AI 工具（`tools/`）
 
 ## 安装
@@ -20,11 +22,12 @@ pnpm add @zhin.js/adapter-napcat
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/napcat/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 
-入站：`gateway.receive({ conversation, message: { conversation, id }, content, sender, metadata })`（`conversation` 为 ConversationRef：私聊 `kind: 'private'`、群聊 `kind: 'group'`，临时会话群容器进 `parent`）  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message: { conversation, id }, content, sender, metadata })`（`conversation` 为 ConversationRef：私聊 `kind: 'private'`、群聊 `kind: 'group'`，临时会话群容器进 `parent`）
+
 出站：`send({ conversation, payload })` → WS `send_private_msg` / `send_group_msg`
 
 ## 前置条件
@@ -78,7 +81,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 
 ## 迁移说明（Plugin Runtime）
 
-- **notice / request / meta 侧事件**：经 the unified `Endpoint.emit(...)` ingress 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
+- **notice / request / meta 侧事件**：经统一 `endpointSpec.events` 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `tools/` 仅覆盖 NapCat 扩展 API，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
 - **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('napcat', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 
@@ -86,6 +89,16 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 
 - [NapCatQQ](https://github.com/NapNeko/NapCatQQ)
 - [适配器概览](https://zhin.js.org/essentials/adapters)
+
+## Console 页面
+
+启动后打开 Console 的「NapCat」页（地址 `/napcat`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 经所属 Adapter 增删持久化账号、启停单个 Endpoint；凭据由 Host 加密仓储保存，不改启动 YAML 或 `.env`，不重启进程；
+- 如果适配器要求登录，页面会显示 LoginAssist 的扫码 / 滑块 / 设备确认待办；
+
+读取需要 `napcat:read`，写操作需要 `napcat:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `napcat endpoint add`。
 
 ## 故障排查
 
@@ -103,3 +116,14 @@ MIT License
 ### 高阶消息支持边界
 
 NapCat 官方消息兼容表标明 share 仅接收，不支持发送；Markdown 仅可在双层合并转发内发送，不支持直接消息。Canonical `markdown`、`share`、`keyboard` 直接出站明确返回 `unsupported_operation / not_sent`，不会将占位段或原始协议猜测报告成功。当前未实现合并转发 Markdown，亦无原生按钮回调闭环。参考：[官方兼容表](https://napneko.github.io/develop/msg)。
+
+## 当前账号资料
+
+三个传输模式（WS、反向 WS、HTTP）共用当前账号资料端口。读取通过 `get_login_info` 定位真实账号，再取该账号的 `get_stranger_info`；写入只作用于当前登录账号，沿用 Agent 身份类审批。
+
+- 可读：昵称、性别、年龄、个性签名。
+- 可写：昵称、性别、签名、头像。年龄、生日、兴趣和独立个人简介没有接到已验证的写接口。
+- `set_qq_profile.personal_note` 是签名，不冒充个人简介；性别变更按上游要求携带当前昵称，其他资料由 NapCat 自身保留。平台接口不提供跨外部客户端的 CAS，因此同时在 QQ 客户端改名可能与此类读后写操作竞争。
+- `set_qq_profile` 内层 `result` 非零同样视为拒绝。头像修改只报告平台已确认成功，不查询或返回修改后的头像 URL，也不把上传源链接或 base64 当成平台头像。
+
+`nickname` / `profile` 配置仅补足缺失字段，Endpoint 项可覆盖适配器默认值，配置不写回 QQ。接口语义依据 [NapCat 的资料设置实现](https://github.com/NapNeko/NapCatQQ/blob/main/packages/napcat-onebot/action/go-cqhttp/SetQQProfile.ts) 与 [账号信息实现](https://github.com/NapNeko/NapCatQQ/blob/main/packages/napcat-onebot/action/go-cqhttp/GetStrangerInfo.ts)。

@@ -1,5 +1,53 @@
 # @zhin.js/client
 
+## 1.1.23
+
+### Patch Changes
+
+- f78eb84: fix(client): resolve adapter Console pages from npm `adapter-{key}/pages/` sources as well as workspace `adapters/{key}/pages/`, so qq/icqq/github pages stop showing "找不到页面所属插件" after install from registry.
+  - @zhin.js/contract@1.1.18
+
+## 1.1.22
+
+### Patch Changes
+
+- 2c3610a: Move account lifecycle ownership into the generic Adapter base and let native Endpoints retain their SDK Client inheritance. Infer platform-specific operation Sessions from a single adapter registry while preserving command parameter, option, configuration and factory inference.
+
+  Bind message replies, management ports, login challenges and Agent cancellation to the captured account incarnation. Persist runtime account intent with encrypted, revision-checked Host storage; keep account management independent of Root process restarts. Require explicit operator confirmation before importing existing accounts, and give replacement accounts a new identity without inheriting previous Sessions.
+
+  Expose account save, start, stop, update and replacement through the existing adapter Console, with exact account ownership, truthful pending/unknown outcomes and no startup configuration or environment-file rewrites.
+
+  Complete the target migration across every adapter, the public authoring API, generators, examples and Console. This intentionally removes the old create factory, inheritable Endpoint/ClientEndpoint classes, Client descriptors and file-rewrite account management; plugin authors must use createAdapter, native Client inheritance and the single AdapterRegistry. Satori and OneBot12 require explicit platform/userId selection, and WeCom requires a separate agentId.
+
+  Verify opaque credential changes before the same configuration snapshot is committed. Drain admitted native callbacks across close/rollback, cancel target work on stop, and keep raw transport parsing, platform ACK timing and SDK native methods under their existing owners. Account metadata conceals credentials carried in URLs.
+
+  - @zhin.js/contract@1.1.17
+
+## 1.1.21
+
+### Patch Changes
+
+- 6345a38: feat(adapters): add per-adapter Console pages
+
+  Every platform adapter now ships a `pages/index` Console page backed by a shared
+  `createAdapterConsolePage` component and `createAdapterConsoleRpc` server helper:
+
+  - See running endpoints, test connectivity, and manage
+    `plugins.<adapter>.endpoints` (add/remove writes `.env` references) from the
+    Console instead of chat commands.
+  - Surface LoginAssist pending tasks (QR / slider / SMS / device) so ICQQ login no
+    longer requires the terminal.
+  - QQ moves its QR binding flow (`qq endpoint add`) into Console actions with
+    public/private selection.
+  - Pages are permission-gated by `<adapter>:read`; writes need `<adapter>:write`.
+  - @zhin.js/contract@1.1.16
+
+## 1.1.20
+
+### Patch Changes
+
+- @zhin.js/contract@1.1.15
+
 ## 1.1.19
 
 ### Patch Changes

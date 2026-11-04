@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /**
  * Slack protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -19,7 +20,10 @@ const SLACK_SIG_VERSION = 'v0';
 const MAX_TIMESTAMP_DRIFT_SECONDS = 300;
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface SlackEndpointConfig {
+export interface SlackEndpointConfig extends EndpointProfileConfiguration {
+  /** Native reply streaming is enabled unless explicitly disabled. */
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
   readonly webApiProxy?: import('./web-api-proxy.js').SlackWebApiProxy;
   readonly streamProxy?: import('./stream-proxy.js').SlackStreamProxy;
   readonly id: string;
@@ -33,6 +37,8 @@ export interface SlackEndpointConfig {
 }
 
 export interface ResolvedSlackConfig {
+  readonly streaming?: boolean;
+  readonly streamingIntervalMs?: number;
   readonly webApiProxy?: import('./web-api-proxy.js').SlackWebApiProxy;
   readonly streamProxy?: import('./stream-proxy.js').SlackStreamProxy;
   readonly context: 'slack';
@@ -121,7 +127,12 @@ export interface SlackWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
+/** Every block emitted by the encoder has Slack's required native block discriminator. */
+export interface SlackBlock { readonly type: string; readonly block_id?: string; readonly [key: string]: unknown }
+
 export function resolveSlackConfig(config: SlackEndpointConfig): ResolvedSlackConfig {
+  if (config.streaming !== undefined && typeof config.streaming !== 'boolean') throw new TypeError('Slack streaming must be a boolean');
+  if (config.streamingIntervalMs !== undefined && (!Number.isSafeInteger(config.streamingIntervalMs) || config.streamingIntervalMs < 0)) throw new TypeError('Slack streamingIntervalMs must be a non-negative integer');
   if (config.webApiProxy && (!Number.isInteger(config.webApiProxy.port) || config.webApiProxy.port < 1 || config.webApiProxy.port > 65535)) throw new TypeError('Invalid Slack webApiProxy port');
   if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
     || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName) || config.streamProxy.serverName === 'slack.com')) throw new TypeError('Invalid Slack streamProxy port/serverName');
@@ -142,6 +153,8 @@ export function resolveSlackConfig(config: SlackEndpointConfig): ResolvedSlackCo
     ...(config.webApiProxy ? { webApiProxy: config.webApiProxy } : {}),
     ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
     context: 'slack',
+    streaming: config.streaming !== false,
+    streamingIntervalMs: config.streamingIntervalMs ?? 1000,
     id,
     token,
     mode,
@@ -225,7 +238,7 @@ export function formatSlashContent(cmd: SlackSlashCommand): string {
 export function formatOutboundWire(payload: unknown): {
   replyTo?: string;
   text: string;
-  blocks: Record<string, unknown>[];
+  blocks: SlackBlock[];
   attachments: Record<string, unknown>[];
   files: Array<{ buffer?: Buffer; url?: string; path?: string; name?: string }>;
 } {
@@ -249,7 +262,7 @@ export function formatOutboundWire(payload: unknown): {
   }
 
   let text = '';
-  const blocks: Record<string, unknown>[] = [];
+  const blocks: SlackBlock[] = [];
   const attachments: Record<string, unknown>[] = [];
   const files: Array<{ buffer?: Buffer; url?: string; path?: string; name?: string }> = [];
   let replyTo: string | undefined;
@@ -328,11 +341,11 @@ export function formatOutboundWire(payload: unknown): {
   return { text, blocks, attachments, files, ...(replyTo ? { replyTo } : {}) };
 }
 
-export function keyboardToBlockKitBlocks(data: Record<string, unknown>): Record<string, unknown>[] {
+export function keyboardToBlockKitBlocks(data: Record<string, unknown>): SlackBlock[] {
   const rows = data.rows as Array<Array<Record<string, unknown>>> | undefined;
   if (!rows?.length) return [];
 
-  const blocks: Record<string, unknown>[] = [];
+  const blocks: SlackBlock[] = [];
   for (const row of rows) {
     const elements = row.slice(0, 5).map((btn, index) => ({
       type: 'button',

@@ -28,7 +28,18 @@ export interface PlaygroundMessage {
   readonly senderName: string;
   readonly content: MessageSegment[];
   readonly timestamp: number;
+  /** Legacy field name: the choice was submitted; this never reports policy acceptance. */
   readonly interactionResolved?: boolean;
+  /** Stored controls are display data; only the live pending authority may accept their answers. */
+  readonly interactionReadOnly?: boolean;
+  readonly historySequence?: number;
+  readonly historyCreatedSequence?: number;
+  /** Origin of the selected historical body; a live wire revision clears this provenance. */
+  readonly historyEvent?: Readonly<{ type: 'message.created' | 'message.updated'; sequence: number }>;
+  readonly recalled?: boolean;
+  readonly recalledMessageId?: string;
+  readonly revision?: number;
+  readonly streaming?: boolean;
 }
 
 export interface PlaygroundState {
@@ -81,7 +92,7 @@ export function loadPlaygroundState(
     const sessionKeys = new Set(sessions.map(sessionIdentity));
     const messages = Array.isArray(parsed.messages)
       ? parsed.messages.map(parseMessage).filter((item): item is PlaygroundMessage => (
-          Boolean(item) && sessionKeys.has(sessionIdentity({ id: item.channelId, type: item.channelType }))
+          item !== undefined && sessionKeys.has(sessionIdentity({ id: item.channelId, type: item.channelType }))
         ))
       : [];
     const requestedActive = typeof parsed.activeSessionId === 'string'
@@ -149,6 +160,8 @@ function parseMessage(value: unknown): PlaygroundMessage | undefined {
   if (typeof item.id !== 'string' || typeof item.channelId !== 'string' || !Array.isArray(item.content)) return undefined;
   if (item.type !== 'sent' && item.type !== 'received') return undefined;
   if (item.channelType !== 'private' && item.channelType !== 'group' && item.channelType !== 'channel') return undefined;
+  const historyEvent = item.historyEvent && typeof item.historyEvent === 'object' && !Array.isArray(item.historyEvent)
+    ? item.historyEvent as Record<string, unknown> : undefined;
   return {
     id: item.id.slice(0, 256),
     type: item.type,
@@ -160,7 +173,56 @@ function parseMessage(value: unknown): PlaygroundMessage | undefined {
     content: item.content as MessageSegment[],
     timestamp: Number.isFinite(item.timestamp) ? Number(item.timestamp) : Date.now(),
     ...(item.interactionResolved === true ? { interactionResolved: true } : {}),
+    ...(hasPlaygroundKeyboard(item.content as MessageSegment[]) ? { interactionReadOnly: true } : {}),
+    ...(Number.isSafeInteger(item.historySequence) && Number(item.historySequence) > 0 ? { historySequence: Number(item.historySequence) } : {}),
+    ...(Number.isSafeInteger(item.historyCreatedSequence) && Number(item.historyCreatedSequence) > 0
+      ? { historyCreatedSequence: Number(item.historyCreatedSequence) } : {}),
+    ...((historyEvent?.type === 'message.created' || historyEvent?.type === 'message.updated')
+      && Number.isSafeInteger(historyEvent.sequence) && Number(historyEvent.sequence) > 0
+      ? { historyEvent: { type: historyEvent.type, sequence: Number(historyEvent.sequence) } } : {}),
+    ...(item.recalled === true ? { recalled: true } : {}),
+    ...(typeof item.recalledMessageId === 'string' ? { recalledMessageId: item.recalledMessageId } : {}),
+    ...(Number.isSafeInteger(item.revision) && Number(item.revision) > 0 ? { revision: Number(item.revision) } : {}),
+    ...(typeof item.streaming === 'boolean' ? { streaming: item.streaming } : {}),
   };
+}
+
+export function hasPlaygroundKeyboard(content: readonly MessageSegment[]): boolean {
+  return content.some(segment => segment?.type === 'keyboard' || (segment?.type === 'forward'
+    && Array.isArray(segment.data?.entries) && segment.data.entries.some((entry: { segments?: MessageSegment[] }) =>
+      Array.isArray(entry?.segments) && hasPlaygroundKeyboard(entry.segments))));
+}
+
+/** Retire only controls previously issued by the current authoritative prompt reader. */
+export function retirePlaygroundInteractions(
+  current: readonly PlaygroundMessage[],
+  scene: Pick<PlaygroundSession, 'id' | 'type'>,
+  retiredSegments: readonly MessageSegment[],
+): PlaygroundMessage[] {
+  const retired = new Set(keyboardPayloads(retiredSegments));
+  return current.map(message => message.type === 'received' && message.channelType === scene.type && message.channelId === scene.id
+    && message.interactionReadOnly !== true && keyboardPayloads(message.content).some(payload => retired.has(payload))
+    ? { ...message, interactionReadOnly: true } : message);
+}
+
+function keyboardPayloads(segments: readonly MessageSegment[]): string[] {
+  const payloads: string[] = [];
+  for (const segment of segments) {
+    if (segment?.type === 'keyboard' && Array.isArray(segment.data?.rows)) {
+      for (const row of segment.data.rows) {
+        if (!Array.isArray(row)) continue;
+        for (const button of row) if (typeof button?.payload === 'string') payloads.push(button.payload);
+      }
+    } else if (segment?.type === 'forward') {
+      if (Array.isArray(segment.data?.entries)) {
+        for (const entry of segment.data.entries) if (Array.isArray(entry?.segments)) payloads.push(...keyboardPayloads(entry.segments));
+      }
+      if (Array.isArray(segment.data?.messages)) {
+        for (const batch of segment.data.messages) if (Array.isArray(batch)) payloads.push(...keyboardPayloads(batch));
+      }
+    }
+  }
+  return payloads;
 }
 
 function browserStorage(): PlaygroundStorage | undefined {
@@ -169,4 +231,23 @@ function browserStorage(): PlaygroundStorage | undefined {
 
 function sessionIdentity(value: Pick<PlaygroundSession, 'id' | 'type'>): string {
   return `${value.type}\0${value.id}`;
+}
+
+/** Socket echoes replace their local optimistic row, without crossing scenes or authors. */
+export function mergePlaygroundMessage(
+  messages: readonly PlaygroundMessage[],
+  incoming: PlaygroundMessage,
+): PlaygroundMessage[] {
+  if (messages.some(message => message.recalledMessageId === incoming.id
+    && message.channelType === incoming.channelType && message.channelId === incoming.channelId)) return [...messages];
+  const index = messages.findIndex(message => message.id === incoming.id
+    && message.channelType === incoming.channelType && message.channelId === incoming.channelId
+    && message.type === incoming.type);
+  if (index < 0) return [...messages, incoming];
+  const existing = messages[index]!;
+  if (existing.recalled || existing.revision !== undefined && (incoming.revision ?? 0) <= existing.revision) return [...messages];
+  return messages.map((message, offset) => offset === index ? { ...message, ...incoming,
+    historyEvent: incoming.historyEvent,
+    ...(incoming.revision === undefined ? {} : { timestamp: message.timestamp }),
+  } : message);
 }

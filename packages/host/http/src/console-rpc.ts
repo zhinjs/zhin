@@ -1,10 +1,12 @@
 import type { AuthScope } from './token-registry.js';
 import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
+  CONFIG_PATCH_LIMITS,
   CONFIG_RPC,
   ENDPOINT_RPC,
   type ConsoleConfigPatchRequest,
   type ConsoleConfigPatchResult,
+  type ConsoleConfigProjectPatchResult,
   type ConsoleConfigSource,
   type ConsoleConfigExplanation,
   type ConsoleEndpointSummary,
@@ -192,17 +194,22 @@ export type RuntimeConsoleRpcContext = {
   replaceConfigSource?(
     source: string,
     expectedRevision: string,
-  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }>;
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   /**
    * Full-scope write: set `document[pluginName] = data` and persist.
    * Returns whether a process restart is required.
    */
-  setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
+  setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   /**
    * Full-scope, path-allowlisted and revision-checked write (`config:patch`).
    * Scope and schema checks belong to the implementation; scope violations throw.
    */
   patchConfig?(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult>;
+  /** Full-scope, revision-checked project administration, distinct from page allowlists. */
+  patchProjectConfig?(request: Omit<ConsoleConfigPatchRequest, 'instanceKey'>): Promise<ConsoleConfigProjectPatchResult>;
+  /** Full-scope project read (`config:get-project`); masked unless `reveal`. */
+  readProjectConfig?(request: import('@zhin.js/console-protocol').ConsoleConfigProjectReadRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigProjectRead>;
+  applyConfig?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
   setPluginEnabled?(
     instanceKey: string,
@@ -276,6 +283,31 @@ export function pickRpcReply(
     ?? payloads[payloads.length - 1]
     ?? null
   );
+}
+
+const FORBIDDEN_PATCH_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Structural check for `config:patch-project` operations at the RPC boundary, so no project
+ * port implementation receives a malformed request. The store repeats the full validation.
+ */
+function invalidProjectPatchOperations(patches: readonly unknown[]): string | undefined {
+  if (patches.length === 0) return 'patches 必须是非空数组';
+  if (patches.length > CONFIG_PATCH_LIMITS.maxOperations) return `一次最多 ${CONFIG_PATCH_LIMITS.maxOperations} 个 patch`;
+  for (const [index, item] of patches.entries()) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return `patches[${index}] 必须是对象`;
+    const operation = item as Record<string, unknown>;
+    const path = operation.path;
+    if (!Array.isArray(path) || path.length === 0 || path.length > CONFIG_PATCH_LIMITS.maxPathDepth
+      || path.some(segment => typeof segment !== 'string' || !segment
+        || segment.length > CONFIG_PATCH_LIMITS.maxSegmentLength || FORBIDDEN_PATCH_SEGMENTS.has(segment))) {
+      return `patches[${index}].path 必须是 1–${CONFIG_PATCH_LIMITS.maxPathDepth} 段的有效字符串数组`;
+    }
+    if (operation.op === 'set') {
+      if (!Object.hasOwn(operation, 'value') || operation.value === undefined) return `patches[${index}] 的 set 需要 value`;
+    } else if (operation.op !== 'remove') return `patches[${index}].op 只能是 set 或 remove`;
+  }
+  return undefined;
 }
 
 export async function dispatchRuntimeConsoleRpc(
@@ -427,6 +459,22 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
+    case CONFIG_RPC.APPLY: {
+      if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full Console scope is required' }); return payloads; }
+      if (typeof message.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(message.expectedRevision)) {
+        emit({ requestId, error: 'expectedRevision is required' }); return payloads;
+      }
+      if (!ctx.applyConfig) { emit({ requestId, error: 'Config application is not configured' }); return payloads; }
+      try {
+        const result = await ctx.applyConfig(message.expectedRevision);
+        emit({ requestId, data: result });
+      } catch {
+        // Source reads can fail before an operation is admitted. Do not echo a
+        // YAML parser's source excerpt or turn unavailable evidence into success.
+        emit({ requestId, error: 'Configuration application is unavailable; read the source and runtime status before retrying' });
+      }
+      return payloads;
+    }
     case CONFIG_RPC.REPLACE_SOURCE: {
       try {
         const source = message.source;
@@ -450,9 +498,7 @@ export async function dispatchRuntimeConsoleRpc(
           data: {
             success: true,
             ...result,
-            message: result.restartRequired
-              ? '配置已保存，需重启进程才能生效'
-              : '配置已保存',
+            message: configurationSaveMessage(result),
           },
         });
       } catch (error) {
@@ -463,9 +509,33 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
+    case CONFIG_RPC.GET_PROJECT: {
+      if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full scope required' }); return payloads; }
+      const { path, reveal } = message;
+      if (path !== undefined && (!Array.isArray(path) || path.length > CONFIG_PATCH_LIMITS.maxPathDepth
+        || path.some(segment => typeof segment !== 'string' || !segment || segment.length > CONFIG_PATCH_LIMITS.maxSegmentLength))) {
+        emit({ requestId, error: 'path 必须是非空字符串数组' });
+        return payloads;
+      }
+      if (reveal !== undefined && typeof reveal !== 'boolean') { emit({ requestId, error: 'reveal 必须是布尔值' }); return payloads; }
+      if (!ctx.readProjectConfig) { emit({ requestId, error: 'Config project read is not configured' }); return payloads; }
+      try {
+        emit({ requestId, data: await ctx.readProjectConfig({ path: (path ?? []) as string[], reveal: reveal === true }) });
+      } catch {
+        // Parser/IO messages can quote document source (and therefore secrets): never echo them.
+        emit({ requestId, error: 'Configuration read is unavailable; read the project file locally to diagnose it' });
+      }
+      return payloads;
+    }
+    case CONFIG_RPC.PATCH_PROJECT:
     case CONFIG_RPC.PATCH: {
       if (ctx.authScope !== 'full') { emit({ requestId, error: 'Full scope required' }); return payloads; }
+      const projectPatch = message.type === CONFIG_RPC.PATCH_PROJECT;
       const { instanceKey, expectedRevision, patches } = message;
+      if (projectPatch && instanceKey !== undefined) {
+        emit({ requestId, error: 'Project patches must not specify instanceKey' });
+        return payloads;
+      }
       if (instanceKey !== undefined && (typeof instanceKey !== 'string' || !instanceKey || instanceKey.length > 128)) {
         emit({ requestId, error: 'instanceKey 必须是插件实例名，或省略以使用 Host 白名单' });
         return payloads;
@@ -478,31 +548,41 @@ export async function dispatchRuntimeConsoleRpc(
         emit({ requestId, error: 'patches 必须是数组' });
         return payloads;
       }
-      if (!ctx.patchConfig) {
+      if (projectPatch) {
+        const invalid = invalidProjectPatchOperations(patches);
+        if (invalid) { emit({ requestId, error: invalid }); return payloads; }
+      }
+      const patch = projectPatch ? ctx.patchProjectConfig : ctx.patchConfig;
+      if (!patch) {
         emit({ requestId, error: 'Config patch is not configured' });
         return payloads;
       }
+      let result: Awaited<ReturnType<typeof patch>>;
       try {
-        const result = await ctx.patchConfig({
+        result = await patch.call(ctx, {
           ...(instanceKey === undefined ? {} : { instanceKey }),
           expectedRevision,
           patches,
         });
-        if (result.status === 'saved') {
+      } catch (error) {
+        emit({
+          requestId,
+          error: `Failed to patch config: ${error instanceof Error ? error.message : String(error)}`,
+        });
+        return payloads;
+      }
+      if (result.status === 'saved') {
+        // The write has committed: a notification failure must not turn the receipt into a rejection.
+        try {
           ctx.publishEvent?.('config:updated', {
             pluginName: instanceKey ?? null,
             keys: [...new Set(result.paths.map(path => path[0]))],
             paths: result.paths,
             revision: result.revision,
           });
-        }
-        emit({ requestId, data: result });
-      } catch (error) {
-        emit({
-          requestId,
-          error: `Failed to patch config: ${error instanceof Error ? error.message : String(error)}`,
-        });
+        } catch { /* subscribers resynchronise from the next read */ }
       }
+      emit({ requestId, data: result });
       return payloads;
     }
     case CONFIG_RPC.SET: {
@@ -538,10 +618,9 @@ export async function dispatchRuntimeConsoleRpc(
           requestId,
           data: {
             success: true,
+            ...result,
             reloaded: false,
-            message: result.restartRequired
-              ? '配置已保存，需重启进程才能生效'
-              : '配置已保存',
+            message: configurationSaveMessage(result),
           },
         });
       } catch (error) {
@@ -1056,6 +1135,10 @@ function errorReply(
 export function isDemoHttpAllowed(method: string, pathname: string, apiBase: string): boolean {
   const normalizedBase = apiBase.replace(/\/$/u, '') || '/api';
   const m = method.toUpperCase();
+  // These handlers require an authenticated principal and verify its bound personal owner.
+  if ((m === 'GET' || m === 'PUT') && (pathname === `${normalizedBase}/agent/personal-models`
+    || pathname === `${normalizedBase}/agent/personal-session`)) return true;
+  if (m === 'GET' && pathname === `${normalizedBase}/agent/personal-sessions`) return true;
   if (m === 'GET' && pathname === `${normalizedBase}/events`) return true;
   if (m === 'GET' && pathname === `${normalizedBase}/events/history`) return true;
   if (m === 'GET' && DEMO_INTROSPECTION_PATHS.has(pathname.slice(normalizedBase.length))) return true;
@@ -1066,6 +1149,22 @@ export function isDemoHttpAllowed(method: string, pathname: string, apiBase: str
   if (m === 'GET' && (pathname === `${normalizedBase}/plugins`
     || pathname.startsWith(`${normalizedBase}/plugins/`))) return true;
   return false;
+}
+
+function configurationSaveMessage(result: { restartRequired: boolean; revision?: string }
+  & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus): string {
+  if (result.applicationError === 'superseded') return '配置已保存，但该次生效申请已被替代';
+  if (result.applicationError === 'invalid') return '配置已保存，但配置校验失败，未生效';
+  if (result.applicationError) return '配置已保存，生效结果未确认';
+  if (result.application) {
+    if (result.revision && result.application.sourceRevision !== result.revision) return '配置已保存，但已被较新修订替代';
+    if (result.application.groups.some(group => group.status === 'unknown')) return '配置已保存，生效结果未确认';
+    if (result.application.groups.some(group => group.status === 'superseded')) return '配置已保存，但该次生效申请已被替代';
+    if (result.application.groups.some(group => ['failed', 'blocked'].includes(group.status))) return '配置已保存，部分配置未生效';
+    if (result.restartRequired) return '配置已保存，部分配置待重启生效';
+    return '配置已保存并已生效';
+  }
+  return result.restartRequired ? '配置已保存，需重启进程才能生效' : '配置已保存';
 }
 
 const DEMO_INTROSPECTION_PATHS: ReadonlySet<string> = new Set([

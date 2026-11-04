@@ -27,6 +27,8 @@ describe('sandbox playground persistence', () => {
         channelName: sessions[0]!.name, senderId: 'owner', senderName: 'Owner',
         content: [{ type: 'text', data: { text: 'hello' } }], timestamp: 42,
         interactionResolved: true,
+        revision: 2, historySequence: 1, historyCreatedSequence: 1,
+        historyEvent: { type: 'message.updated', sequence: 5 },
       }],
     }, storage)).toBe(true);
 
@@ -35,7 +37,9 @@ describe('sandbox playground persistence', () => {
     expect(restored.sessions[0]?.runConfig).toMatchObject({
       workingDirectory: '/workspace/zhin', safetyMode: 'read-only', networkAccess: true,
     });
-    expect(restored.messages[0]).toMatchObject({ id: 'm1', channelId: 'sandbox-user', interactionResolved: true });
+    expect(restored.messages[0]).toMatchObject({ id: 'm1', channelId: 'sandbox-user', interactionResolved: true,
+      revision: 2, historySequence: 1, historyCreatedSequence: 1, historyEvent: { type: 'message.updated', sequence: 5 },
+    });
   });
 
   it('fails closed to defaults for malformed storage', () => {

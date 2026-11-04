@@ -302,70 +302,61 @@ export interface FormatOutboundMessagesOptions {
   readonly imageSizes?: ReadonlyMap<string, QqImageSize>;
 }
 
-function isElemOf(types: Set<string>) {
-  return (part: string | QqOutboundElem): part is QqOutboundElem => typeof part !== 'string' && types.has(part.type);
+function requireKeyboardMarkdown(messages: QqOutboundMessage[]): QqOutboundMessage[] {
+  if (!messages.length) throw new EndpointDeliveryError('unsupported_operation', 'QQ payload has no sendable content', 'not_sent');
+  for (const message of messages) {
+    const parts: readonly (string | QqOutboundElem)[] = Array.isArray(message) ? message : [message as string | QqOutboundElem];
+    if (parts.some(part => typeof part !== 'string' && (part.type === 'keyboard' || part.type === 'button'))
+      && !parts.some(part => typeof part !== 'string' && part.type === 'markdown')) {
+      throw new EndpointDeliveryError('unsupported_operation', 'QQ keyboard requires Markdown in the same physical message', 'not_sent');
+    }
+  }
+  return messages;
 }
 
 /**
- * 渲染后 payload → 按序发送的 QQ Sendable 列表。
- *
- * QQ 单条消息的 msg_type 只能是一种：富媒体（7，media.file_info）与 markdown/按钮（2）
- * 互斥，SDK 后处理的段会覆盖 msg_type，导致图片被静默丢弃。处理顺序：
- * 1. 公网 URL 图片且已知尺寸：按 QQ markdown 语法 `![图片 #宽px #高px](url)` 嵌入同一
- *    markdown 段（开放平台会下载转存），仍为一条消息；
- * 2. 其余媒体（base64 / 本地渲染图：v2 /files 上传只返回 file_info，拿不到 URL；或尺寸
- *    未知、模板 markdown 无法拼接）降级为独立富媒体消息先发，markdown + 按钮作为最后一条
- *    （返回其消息 ID）。reply 段随每条消息携带，保持被动回复。
- * 不含媒体与 markdown/按钮冲突时与 formatOutbound 一致（单条）。
+ * Preserve the original segment order before formatOutbound merges Markdown.
+ * Public images with known dimensions become inline Markdown at their original
+ * position. Other media form physical-message barriers; reply routing is copied
+ * to every resulting message, without moving text across a media barrier.
  */
 export function formatOutboundMessages(payload: unknown, options: FormatOutboundMessagesOptions = {}): QqOutboundMessage[] {
-  const body = formatOutbound(payload);
-  if (!Array.isArray(body)) return [body as QqOutboundMessage];
-  const elems = body as ReadonlyArray<string | QqOutboundElem>;
-  const isMedia = isElemOf(SPLIT_MEDIA_TYPES);
-  if (!elems.some(isMedia) || !elems.some(isElemOf(MARKDOWN_MESSAGE_TYPES))) return [body];
+  const items = toSegmentList(payload);
+  const rich = items.some(item => typeof item !== 'string' && MARKDOWN_MESSAGE_TYPES.has(item.type));
+  const media = items.some(item => typeof item !== 'string' && SPLIT_MEDIA_TYPES.has(item.type));
+  if (!rich || !media) return requireKeyboardMarkdown([formatOutbound(payload)]);
 
-  const markdownIndex = elems.findIndex(isElemOf(new Set(['markdown'])));
-  const markdownElem = markdownIndex >= 0 ? elems[markdownIndex] as QqOutboundElem : undefined;
-  const markdownContent = markdownElem ? markdownElem.data.content : '';
-  const embedded = new Set<QqOutboundElem>();
-  let merged: QqOutboundElem | undefined;
-  if (typeof markdownContent === 'string') {
-    const before: string[] = [];
-    const after: string[] = [];
-    elems.forEach((part, index) => {
-      if (!isMedia(part) || part.type !== 'image' || typeof part.data.url !== 'string') return;
-      const size = options.imageSizes?.get(part.data.url);
-      if (!size) return;
-      (markdownIndex < 0 || index < markdownIndex ? before : after)
-        .push(`![图片 #${size.width}px #${size.height}px](${part.data.url})`);
-      embedded.add(part);
-    });
-    if (embedded.size > 0) {
-      merged = { type: 'markdown', data: { content: [...before, markdownContent, ...after].filter((piece) => piece.trim()).join('\n\n') } };
-    }
-  }
-
-  const replies = elems.filter(isElemOf(new Set(['reply'])));
-  const separate: QqOutboundElem[] = [];
-  const rest: Array<string | QqOutboundElem> = [];
-  let mergedPlaced = false;
-  for (const part of elems) {
-    if (merged && (part === markdownElem || (!markdownElem && embedded.has(part as QqOutboundElem)))) {
-      if (!mergedPlaced) rest.push(merged);
-      mergedPlaced = true;
-    } else if (embedded.has(part as QqOutboundElem)) {
-      continue;
-    } else if (isMedia(part)) {
-      separate.push(part);
+  const replies = items.filter(item => typeof item !== 'string' && item.type === 'reply');
+  const templates = items.some(item => typeof item !== 'string' && item.type === 'markdown' && markdownTemplateId(item.data ?? {}));
+  const messages: QqOutboundMessage[] = [];
+  let pending: Array<string | QqWireSegment> = [];
+  const append = (items: Array<string | QqWireSegment>): void => {
+    const message = formatOutbound(items);
+    const parts = Array.isArray(message) ? message : [message];
+    if (parts.some(part => typeof part === 'string' ? part.length > 0 : part.type !== 'reply')) messages.push(message);
+  };
+  const flush = (): void => {
+    if (!pending.length) return;
+    append([...replies, ...pending]);
+    pending = [];
+  };
+  for (const item of items) {
+    if (typeof item !== 'string' && item.type === 'reply') continue;
+    if (typeof item !== 'string' && SPLIT_MEDIA_TYPES.has(item.type)) {
+      const source = item.type === 'image' && isMediaRef(item.data?.media) ? item.data.media : undefined;
+      const size = !templates && source?.kind === 'url' ? options.imageSizes?.get(source.value) : undefined;
+      if (source?.kind === 'url' && size) {
+        pending.push({ type: 'markdown', data: { content: `![图片 #${size.width}px #${size.height}px](${source.value})` } });
+      } else {
+        flush();
+        append([...replies, item]);
+      }
     } else {
-      rest.push(part);
+      pending.push(item);
     }
   }
-  return [
-    ...separate.map((item): QqOutboundMessage => (replies.length ? [...replies, item] : item)),
-    rest.length === 1 ? rest[0]! : rest,
-  ];
+  flush();
+  return requireKeyboardMarkdown(messages);
 }
 
 /**
@@ -374,7 +365,7 @@ export function formatOutboundMessages(payload: unknown, options: FormatOutbound
  */
 export async function collectOutboundImageSizes(
   payload: unknown,
-  probe: (url: string) => Promise<QqImageSize | undefined> = (url) => probeImageSize(url),
+  { probe, signal }: { readonly probe?: (url: string) => Promise<QqImageSize | undefined>; readonly signal?: AbortSignal } = {},
 ): Promise<Map<string, QqImageSize>> {
   const sizes = new Map<string, QqImageSize>();
   const segments = toSegmentList(payload).filter((item): item is QqWireSegment => typeof item !== 'string');
@@ -385,7 +376,8 @@ export async function collectOutboundImageSizes(
     if (isMediaRef(media) && media.kind === 'url' && /^https?:\/\//i.test(media.value)) urls.add(media.value);
   }
   await Promise.all([...urls].map(async (url) => {
-    const size = await probe(url);
+    signal?.throwIfAborted();
+    const size = await (probe ? probe(url) : probeImageSize(url, { signal }));
     if (size) sizes.set(url, size);
   }));
   return sizes;

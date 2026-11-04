@@ -1,3 +1,4 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import { validateDiscordGatewayFaultProxy } from './gateway-fault-proxy.js';
 /** Discord Gateway protocol helpers. Canonicalization is owned by Core. */
 
@@ -15,7 +16,7 @@ export interface DiscordActivity {
 }
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface DiscordEndpointConfig {
+export interface DiscordEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly token: string;
   /** Default `gateway`. `interactions` uses httpHostToken POST + Ed25519 verify. */
@@ -72,6 +73,8 @@ export interface DiscordInboundAttachment {
 }
 
 export interface DiscordInboundMessage {
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly id: string;
   readonly content: string;
   readonly channelId: string;
@@ -92,6 +95,8 @@ export interface DiscordInboundMessage {
 }
 
 export interface DiscordButtonInbound {
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly guildId?: string;
   readonly id: string;
   readonly customId: string;
@@ -491,6 +496,7 @@ export function interactionToInboundMessage(interaction: Record<string, unknown>
   const user = (interaction.member as { user?: Record<string, unknown> } | undefined)?.user
     ?? (interaction.user as Record<string, unknown> | undefined);
   return {
+    event: interaction,
     id: String(interaction.id),
     content: formatSlashCommandContent(interaction),
     channelId: String(interaction.channel_id ?? ''),

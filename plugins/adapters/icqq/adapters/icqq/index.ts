@@ -1,24 +1,12 @@
-import { projectLocaleToken } from 'zhin.js/i18n';
 /**
  * Convention entry: discover `adapters/icqq/index.ts` → defineAdapter.
  */
 import { defineAdapter, resolvePlatformRole } from 'zhin.js/adapter';
-import { loginAssistToken } from '@zhin.js/core/runtime';
-import { IcqqEndpoint } from '../../src/endpoint.js';
-import { icqqRuntimeStateToken } from '../../src/icqq-runtime-state.js';
-import {
-  resolveIcqqConfig,
-  type IcqqEndpointConfig,
-} from '../../src/protocol.js';
+import { IcqqAdapter } from '../../src/adapter.js';
+import type { IcqqEndpointConfig } from '../../src/protocol.js';
 
 export { IcqqEndpoint } from '../../src/endpoint.js';
 export type { IcqqEndpointOptions } from '../../src/endpoint.js';
-
-declare module '@zhin.js/core' {
-  interface AdapterEndpoints {
-    icqq: import('../../src/endpoint.js').IcqqEndpoint;
-  }
-}
 
 /** Group reactions take QQ system face ids. Private chats have none. */
 const ICQQ_REACTIONS = [
@@ -119,18 +107,5 @@ export default defineAdapter<IcqqEndpointConfig>({
     if (role === 'owner' || role === 'admin') return undefined;
     return { actions: { recall: { params: { others: false } } } };
   },
-  create(context) {
-    const config = resolveIcqqConfig(context.config);
-    // 注册到插件运行时状态（icqq endpoint list 的"运行中"数据源）
-    context.use(icqqRuntimeStateToken).endpoints.set(config.id, {
-      id: config.id,
-      mode: 'direct',
-    });
-    return new IcqqEndpoint({
-      id: context.id,
-      loginAssist: context.use(loginAssistToken),
-      locale: context.use(projectLocaleToken),
-      config,
-    });
-  },
+  createAdapter: context => new IcqqAdapter(context),
 });

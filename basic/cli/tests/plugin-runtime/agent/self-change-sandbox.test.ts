@@ -170,7 +170,7 @@ describe.skipIf(!canRunReal)('self-change trial runtime (built runner, minimal-b
       writes: [{ path: 'commands/ping/index.ts', content: "import { defineCommand } from 'zhin.js/command';\nexport default defineCommand({ description: 'ping', execute: () => 'pong' });\n" }],
       deletes: [],
     });
-    expect(ok.status).toBe('passed');
+    expect(ok.status, JSON.stringify(ok)).toBe('passed');
     expect(ok.capabilities).toEqual(expect.arrayContaining([expect.objectContaining({ localName: 'ping', source: 'commands/ping/index.ts' })]));
 
     const broken = await load({

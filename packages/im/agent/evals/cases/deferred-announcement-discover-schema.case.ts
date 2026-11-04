@@ -2,9 +2,10 @@ import { defineEvalCase } from '../framework/index.js';
 
 export default defineEvalCase({
   id: 'deferred-announcement-discover-schema',
-  description: 'discover returns the best match with its schema and loads it, so the next model call can use the tool without load_tool.',
-  source: 'ADR 0042 §3: discover attaches schemas (was discover -> load_tool -> call -> reply, 4 model calls)',
+  description: 'discover loads the best match without echoing its schema into history; the next request can call it without load_tool.',
+  source: '#1102: deduplicate discover results while preserving ADR 0042 discover -> call -> reply (3 model calls)',
   tags: ['tool-use'],
+  workspace: {},
   inbound: { text: '发一条群公告：周五放假', scope: 'group', sender: { id: 'owner', roles: ['master'] } },
   tools: [{
     name: 'group_announcement',
@@ -24,7 +25,7 @@ export default defineEvalCase({
   ],
   expect: {
     toolsCalled: ['group_announcement'],
-    modelInputContains: ['ANNOUNCEMENT-SCHEMA-MARKER'],
+    modelInputNotContains: ['ANNOUNCEMENT-SCHEMA-MARKER'],
     outboundContains: ['群公告已发布'],
     modelSteps: 3,
   },

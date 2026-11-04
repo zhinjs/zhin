@@ -1,14 +1,16 @@
+import { createConfigurationChatAuthorizer, createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from './sender-enrichment.js';
+export { createEndpointRoleResolver } from './sender-enrichment.js';
 import { migrateConversationColumns, migrateInboxColumns } from './conversation-migration.js';
 import type { StructuredDatabase } from '@zhin.js/database';
 import { assertNoPendingInstanceMigration } from './migrate/instance-declarations.js';
 import { assertNotLegacyConfig } from '../utils/legacy-config.js';
 import { access, readFile } from 'node:fs/promises';
 import { PluginManagementActivity } from '../plugin-management/activity.js';
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
 import { createConfigDocument, type ConfigFileDocument } from '@zhin.js/config-file';
-import { adapterFeatureId, isAdapterIndex, endpointConfigurationStoreToken, resolveStaticCapabilities } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, endpointDesiredRepositoryToken, resolveStaticCapabilities } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_CURSOR_MODEL,
@@ -47,21 +49,23 @@ import {
   SystemLogStore,
   resolveSystemLogConfig,
   AssistantStatus,
-  HostToolApprovals,
+  createHostToolApprovalConsoleRpc,
   HostSelfChanges,
   composeHostConsoleRpc,
+  defineWorkspaceConversationTable,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
 import { installLocaleHost } from './locale-host-installer.js';
+import { installConfigurationHost } from './configuration-host-installer.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installComponentHost } from './component-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
-import { ProjectEndpointConfigurationStore } from './endpoint-configuration-store.js';
 import { RootHost } from './root-host.js';
+import { PersistentEndpointRepository } from './runtime-endpoints/state.js';
 import { HostSelfChangeApply } from './self-change-apply.js';
 import { registerReadinessRoutes, type ReadinessSource } from './readiness.js';
 import {
@@ -75,6 +79,7 @@ import {
   ProjectEnvironmentFileSource,
   parseStartOptions,
   processRestartExitCode,
+  processRestartSupported,
   startSupervisorWatchdog,
 } from './start/module.js';
 
@@ -162,11 +167,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const senderEnricher = await createSenderEnricher(hostConfig, endpointRoles);
   const im = new ImRuntime({ enrichSender: senderEnricher });
   const databaseHost = createDatabaseHost(databaseConfig);
+  const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
+    directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
   databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
   databaseHost.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
   // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
   // 必须在 installResources（host.start）之前 define，写入订阅由 Console API 挂载。
   defineInboxTables(databaseHost);
+  defineWorkspaceConversationTable(databaseHost);
   // console logs 页数据源（SystemLog 表 + 根 logger transport）；
   // 表必须在 installResources（host.start）之前 define，写入在 host started 后才生效。
   const systemLogStore = new SystemLogStore(
@@ -179,18 +187,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const consoleEventHub = createConsoleEventHub();
   // 群聊插话 / 技能助手 Console status (#970): process-owned, survives HMR generations.
   const assistantStatus = new AssistantStatus();
-  // 危险工具硬闸审批卡片（ADR 0036）：进程持有，绑定当前 generation 的 Agent 队列。
-  const toolApprovals = new HostToolApprovals();
   // 受控自我进化审批（ADR 0040 §4）：进程持有，绑定当前 generation 的变更暂存区与审批。
   const selfChanges = new HostSelfChanges();
-  const endpointConfigurationStore = new ProjectEndpointConfigurationStore({
-    projectRoot: options.root,
-    configFile,
-    document: config,
-  });
   const consoleConfigurationStore = new ConsoleConfigurationStore({
     projectRoot: options.root,
     document: config,
+    validateConfiguration: document => host.runtime.validateConfiguration(document),
+    applyConfiguration: revision => host.runtime.applyConfiguration(revision),
+    readApplication: () => host.runtime.configurationApplication,
     environmentName: runtimeEnvironment.name,
     environmentForPlugin: instanceKey => {
       const lease = host.runtime.snapshots.acquire();
@@ -204,6 +208,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       return host.runtime.configurationSchemas;
     },
   });
+  const authorizeConfigurationChat = createConfigurationChatAuthorizer(hostConfig, endpointRoles);
   // 受控自我进化生效（ADR 0040 §5 / §6）：进程持有热重载 / exit 75 / 健康检查 / 配置补丁；最新 generation 绑定生效器。
   const selfChangeApply = new HostSelfChangeApply({
     projectRoot: options.root,
@@ -213,12 +218,15 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     ownership: () => host.runtime.sourceOwnership,
     configuration: consoleConfigurationStore,
     configFile,
+    restartSupported: processRestartSupported(parsed.once),
   });
   const host = new RootHost({
     projectRoot: options.root,
     config,
     modules: consoleHost.modules,
-    watch: !parsed.once && !parsed.noWatch,
+    watch: parsed.once ? [] : parsed.watch,
+    configUpdates: agentHost?.configUpdates,
+    pluginConfigurationSelection: createEndpointRoleConfigurationSelection(hostConfig, endpointRoles),
     onGenerationCommit: (generation) => {
       consoleEventHub.publish('hmr:reload', { generation });
     },
@@ -228,11 +236,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     disabledPluginInstanceKeys: [],
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
-      context.resources.provide(endpointConfigurationStoreToken, endpointConfigurationStore);
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
+      // Match DatabaseHost's atomic-state capability. Unsupported dialects keep
+      // static accounts; a failed read on a supported database still fails startup.
+      if (['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect)) {
+        context.resources.provide(endpointDesiredRepositoryToken, endpointRepository);
+      }
       installLocaleHost(databaseHost)(context);
+      installConfigurationHost({ store: consoleConfigurationStore, authorize: authorizeConfigurationChat })(context);
       context.handoff.add({
         activateNext: async (signal) => {
           signal.throwIfAborted();
@@ -259,12 +272,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       // and dispose hooks are registered before generation commit.
       if (agentHost) {
         await agentHost.install({
+          configurationControl: (operation, context) => host.runtime.control(operation, context),
           im,
           assistantStatus,
-          toolApprovals,
           selfChanges,
           selfChangeApply,
           projectRoot: options.root,
+          resolveModelSecret: reference => {
+            const match = /^env:\/\/([A-Z_][A-Z0-9_]*)$/u.exec(reference);
+            return match ? hostEnvironment.get(match[1]!) : undefined;
+          },
           resolveEndpointOwner: endpointRoles.resolveOwner,
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
           resolveConfiguredEndpointKeys: () => {
@@ -343,6 +360,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     projectRoot: options.root,
     isSandboxPage: (page) => runtimeSandboxOwners(host.runtime.snapshot).has(page.owner),
   });
+  agentHost?.registerHttp(httpHost, httpConfig.apiBase ?? '/api');
   const disposeConsoleControlPlane = startConsoleControlPlane({
     http: httpHost,
     console: consoleHost.console,
@@ -352,7 +370,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     databaseHost,
     scheduleHost,
     eventHub: consoleEventHub,
-    hostConsoleRpc: composeHostConsoleRpc(assistantStatus.consoleRpc, toolApprovals.consoleRpc, selfChanges.consoleRpc),
+    hostConsoleRpc: lease => composeHostConsoleRpc(assistantStatus.consoleRpc,
+      createHostToolApprovalConsoleRpc({ snapshots: host.runtime.snapshots, lease }),
+      selfChanges.consoleRpc),
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration: consoleConfigurationStore,
@@ -512,14 +532,18 @@ function reportSelfChangeRecoverError(error: unknown): void {
 }
 
 interface ConfiguredAgentHost {
+  readonly configUpdates: readonly import('@zhin.js/runtime').RootConfigUpdateHandler[];
+  registerHttp(http: import('@zhin.js/host-http').HttpHost, base: string): void;
   readonly bindings: NonNullable<ReadinessSource['agentBindings']>;
   attach(
     snapshots: import('@zhin.js/plugin-runtime').SnapshotReader,
     sourceOwnership?: () => import('@zhin.js/runtime').SourceOwnershipIndex,
   ): void;
   install(options: {
+    readonly configurationControl: import('@zhin.js/runtime').RootRuntime['control'];
     readonly im: ImRuntime;
     readonly projectRoot: string;
+    readonly resolveModelSecret?: (reference: string) => string | undefined | Promise<string | undefined>;
     readonly resolveEndpointOwner: (adapter: string, endpoint: string) => string | undefined;
     readonly resolveEndpointTrusted: (adapter: string, endpoint: string) => readonly string[];
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
@@ -527,7 +551,6 @@ interface ConfiguredAgentHost {
     readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
     readonly assistantStatus?: AssistantStatus;
-    readonly toolApprovals?: HostToolApprovals;
     readonly selfChanges?: HostSelfChanges;
     readonly selfChangeApply?: HostSelfChangeApply;
   }): RootResourceInstaller;
@@ -562,6 +585,11 @@ async function loadConfiguredAgentHost(
     NonNullable<typeof workroom>['createLocalWorkroomDataGovernanceAuthority']
   > | undefined;
   const configured: ConfiguredAgentHost = {
+    configUpdates: initialAi ? [agentHost.createModelConfigurationUpdateHandler(initialAi, projectRoot)] : [],
+    registerHttp(http, base) {
+      if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
+      agentHost.registerPersonalModelHttp({ http, base, snapshots: snapshotReader });
+    },
     bindings: (snapshot) => {
       const port = snapshot.resources.get(snapshot.root)?.get(agentHostToken.id) as
         import('@zhin.js/agent/runtime').AgentHostPort | undefined;
@@ -587,6 +615,7 @@ async function loadConfiguredAgentHost(
         workroomTrustedPackPublishers: agentHost.resolveWorkroomTrustedPackPublishers(initialAi),
         workroomLocalDataGovernance: localWorkroomDataGovernance,
         selfChangeImpact: agentHost.createSelfChangeImpactPort(sourceOwnership),
+        selfChangePluginRoots: agentHost.createSelfChangePluginRoots(options.projectRoot, sourceOwnership),
         extraTools: options.extraTools as Parameters<typeof agentHost.installAgentHost>[0]['extraTools'],
       });
     },
@@ -657,68 +686,6 @@ function openBrowser(url: string): void {
   });
 }
 
-/**
- * Endpoint master / trusted 解析器。
- * master 来源：plugins.<key>.master、plugins.<key>.endpoints[].master（+ name 别名键）。
- * trusted 来源：plugins.<key>.trusted、plugins.<key>.endpoints[].trusted（数组或空白/逗号分隔字符串）。
- * 不读 owner/admin：那是群/频道平台身份，不是框架 master。
- */
-export async function createEndpointRoleResolver(
-  config: RuntimeConfigDocument | ConfigDocumentPort,
-): Promise<{
-  resolveOwner: (adapterLocalName: string, endpointKey: string) => string | undefined;
-  resolveTrusted: (adapterLocalName: string, endpointKey: string) => readonly string[];
-}> {
-  const document = await readConfigDocumentValue(config);
-  const map = new Map<string, string>();
-  const trustedMap = new Map<string, string[]>();
-  if (!document || typeof document !== 'object') {
-    return { resolveOwner: () => undefined, resolveTrusted: () => [] };
-  }
-  const plugins = readPluginConfigurationMap(document as Record<string, unknown>);
-  const addMaster = (key: string, raw: unknown) => {
-    if (raw == null || String(raw).trim() === '') return;
-    map.set(key, String(raw));
-  };
-  const addTrusted = (key: string, raw: unknown) => {
-    const ids = normalizeTrustedIdList(raw);
-    if (ids.length === 0) return;
-    trustedMap.set(key, [...new Set([...(trustedMap.get(key) ?? []), ...ids])]);
-  };
-  const expanded = expandEnvironmentValue(plugins, (key) => process.env[key]) as Record<string, unknown>;
-  for (const [pluginKey, raw] of Object.entries(expanded)) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
-    const cfg = raw as Record<string, unknown>;
-    const nameKey = cfg.name != null && String(cfg.name).trim() !== '' ? String(cfg.name) : undefined;
-    addMaster(pluginKey, cfg.master);
-    if (nameKey) addMaster(nameKey, cfg.master);
-    addTrusted(pluginKey, cfg.trusted);
-    if (nameKey) addTrusted(nameKey, cfg.trusted);
-    if (Array.isArray(cfg.endpoints)) {
-      for (const entry of cfg.endpoints) {
-        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
-        const ep = entry as Record<string, unknown>;
-        const epName = ep.name != null && String(ep.name).trim() !== '' ? String(ep.name) : undefined;
-        // 仅挂到 endpoint 名，避免多账号时互相污染插件键
-        if (epName) {
-          addMaster(epName, ep.master);
-          addTrusted(epName, ep.trusted);
-        }
-      }
-    }
-  }
-  return {
-    resolveOwner: (adapterLocalName, endpointKey) =>
-      map.get(endpointKey) ?? map.get(adapterLocalName),
-    resolveTrusted: (adapterLocalName, endpointKey) => [
-      ...new Set([
-        ...(trustedMap.get(endpointKey) ?? []),
-        ...(trustedMap.get(adapterLocalName) ?? []),
-      ]),
-    ],
-  };
-}
-
 /** Plugins owning an Endpoint whose profile declares `runtime.sandbox` (ADR 0044). */
 export function runtimeSandboxOwners(snapshot: RuntimeSnapshot | undefined): ReadonlySet<string> {
   const owners = new Set<string>();
@@ -774,51 +741,6 @@ export async function readConfiguredEndpointKeys(
     }
   }
   return keys;
-}
-
-/** trusted id 归一：数组逐项、字符串按空白/逗号拆分（对齐 legacy normalizeEndpointIdList）。 */
-function normalizeTrustedIdList(input: unknown): string[] {
-  if (Array.isArray(input)) return input.map((v) => String(v).trim()).filter(Boolean);
-  if (typeof input === 'string') {
-    return input.split(/[\s,]+/).map((v) => v.trim()).filter(Boolean);
-  }
-  return [];
-}
-
-async function createSenderEnricher(
-  config: RuntimeConfigDocument | ConfigDocumentPort,
-  endpointRoles: Awaited<ReturnType<typeof createEndpointRoleResolver>>,
-): Promise<NonNullable<ConstructorParameters<typeof ImRuntime>[0]>['enrichSender']> {
-  const document = await readConfigDocumentValue(config);
-  const ai = (document as Record<string, unknown> | undefined)?.ai as
-    | { trigger?: { masters?: unknown; trusted?: unknown } }
-    | undefined;
-  const globalMasters = normalizeTrustedIdList(ai?.trigger?.masters);
-  const globalTrusted = normalizeTrustedIdList(ai?.trigger?.trusted);
-
-  return (sender, conversation) => {
-    if (!sender?.id) return sender;
-    const senderId = sender.id;
-    const capId = String(conversation.endpoint.id);
-    const parts = capId.split('\0');
-    const adapterLocalName = (parts.length >= 3 ? parts[2]! : capId).split('~')[0]!;
-    const endpointKey = sender.name ?? adapterLocalName;
-
-    const endpointMaster = endpointRoles.resolveOwner(adapterLocalName, endpointKey);
-    const endpointTrustedIds = endpointRoles.resolveTrusted(adapterLocalName, endpointKey);
-
-    const isMaster = globalMasters.includes(senderId)
-      || (endpointMaster != null && senderId === endpointMaster);
-    const isTrusted = !isMaster
-      && (globalTrusted.includes(senderId) || endpointTrustedIds.includes(senderId));
-
-    if (!isMaster && !isTrusted) return sender;
-
-    const role = isMaster ? 'master' : 'trusted';
-    const existing = sender.roles ?? [];
-    if (existing.includes(role)) return sender;
-    return { ...sender, roles: [role, ...existing] };
-  };
 }
 
 /** @internal Exported for tests. */

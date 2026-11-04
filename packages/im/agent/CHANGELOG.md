@@ -1,5 +1,211 @@
 # @zhin.js/agent
 
+## 1.1.46
+
+### Patch Changes
+
+- b88e988: Preserve account-profile write acknowledgements already observed before cancellation, distinguish native Discord REST rejection from unknown outcomes, and retain the last valid profile when a newer concurrent read fails. Keep scene-scoped SOUL presence consistent with the actual prompt and allow discovered URLs to pass through the existing network authorization policy.
+- af8f803: Use the current Endpoint's platform profile for Agent account identity, with per-field configured fallbacks and scoped, identity-approved profile tools. Keep SOUL first-person and independent of account names. Profile ports preserve the source Client, cancellation, truthful update outcomes and private image authority.
+
+  Adapter Feature API 2.1 and Tool Feature API 1.1 describe the additive profile requirements; new Core, official adapters and generated plugins declare the corresponding floors. Existing compatible API-2.0/API-1.0 plugins remain accepted by the newer providers. npm releases remain patch.
+
+  Private IM assets now bind to the full canonical conversation and principal. Existing IM asset records that contain only the earlier lossy hash remain on disk until their original expiry, but cannot be safely rebound; recapture them. No automatic file deletion, platform profile mutation or workspace SOUL rewrite occurs during upgrade.
+
+- 26fda97: Deliver validated final answers progressively through configured QQ C2C, Telegram drafts, Slack streams, Lark cards and Sandbox updates. Keep complete-message delivery for unsupported scenes, disabled adapters and outbound middleware that does not explicitly support revisions. Discord retains complete-message delivery.
+
+  Preserve source-account leases, media order and confirmed delivery facts across cancellation, capacity rollover and follow-up answer phases. Preview drafts and uncertain outcomes do not become sent history. Bound each reply's semantic snapshot to 1 MiB, retain confirmed prefixes on failure and avoid replaying published answers.
+
+  Project the latest confirmed message revision into paginated conversation history and synchronize Sandbox message updates across connections. Existing adapter implementations and complete-send callers remain compatible.
+
+- 976886c: Preserve confirmed progressive reply content, routing and delivery evidence across cancellation, rollover and closing failures without replaying published text. Keep error dispositions and actual message references, and abort the owning provider request when its functional text consumer fails.
+
+  Enable native Sandbox Markdown through the real Core projection so Console updates retain formatting in one message. Preserve instance-level streaming opt-outs, recall tombstones and multi-page synchronization. The first safe content is immediate; later updates retain the configured pacing, including large valid intervals.
+
+  Keep Slack and Lark Markdown streaming within the current physical message. When continuation formatting cannot be verified, stop and retain confirmed content instead of replaying or silently changing it to plain text. Plain-text continuations retain their original reply route.
+
+  Use rebuildable revision metadata and indexes in the existing conversation event table for bounded SQL history reads. Original event JSON and retention remain unchanged; older writers and models keep their compatible read path. Supported adapter streaming remains enabled by default, with complete-message fallback for disabled settings or outbound middleware without incremental: true.
+
+- af8f803: Consolidate prompt rules at the existing assembly seams: explicit authority and evidence boundaries,
+  task-appropriate reply detail, conditional tool use, and memory as context rather than permission.
+  Preserve the distinct delegated, scheduled, recovery and auxiliary-model contracts. Apply existing
+  bootstrap scene scoping to scheduled requests using their actual turn context.
+
+  Keep runtime permissions, approval, provider-cache mechanisms and retry configuration unchanged.
+  Whole-job scheduled replay safety is documented separately and is not resolved by prompt wording.
+  No existing workspace prompt files are automatically rewritten.
+
+- 032dc96: Only replay a failed scheduled task when its actual tool calls can be proven safe to repeat. Preserve committed or unknown effects, original attempt results and canonical delivery receipts instead of retrying the whole task after an observation or notification failure.
+
+  Add generation-owned execution history for run times, attempts, basic progress, final output and separate delivery outcomes. Use the configured file or SQL backend, retain a UTC calendar month, and expose full-scope Console read and expired-history cleanup endpoints. Deleted task definitions do not delete their execution history; unfinished records are shown as unsettled or interrupted without automatic recovery.
+
+  Keep observation writes independent of business execution. Coalesce snapshots through one bounded owner, including audit and optional activity projections. At most 128 completed runs / 16 MiB of unpersisted terminal snapshots are retained, including an in-flight snapshot; oversized or overloaded records produce visible recording gaps and never replay work. Shutdown does not wait indefinitely for an unabortable observation write.
+
+  The optional internal Tool effect reporter grants no authority and does not require a plugin API floor change. Existing tools continue to work without it; undeclared effect safety is not inferred from their names or returned text. The Console execution-history UI requires the corresponding new Host endpoints; this changeset does not publish or deploy either application.
+
+- Updated dependencies [b88e988]
+- Updated dependencies [c15cef9]
+- Updated dependencies [b0c02a2]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [3c1912f]
+- Updated dependencies [032dc96]
+  - @zhin.js/adapter@1.1.27
+  - @zhin.js/im-contract@1.1.10
+  - @zhin.js/core@1.1.55
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/ai@1.1.50
+  - @zhin.js/plugin-runtime@1.1.19
+  - @zhin.js/agent-feature@1.1.12
+  - @zhin.js/mcp-feature@1.1.12
+  - @zhin.js/permission@1.1.11
+  - @zhin.js/prompt-section@1.1.11
+  - @zhin.js/skill@1.1.12
+
+## 1.1.45
+
+### Patch Changes
+
+- a9f4e48: PATCH COMPATIBILITY CUTOVER: this batch intentionally changes plugin APIs. The maintainer explicitly chose patch releases with declared version boundaries. Upgrade the complete tested dependency set; patch numbering does not promise compatibility with the removed interfaces.
+
+  The first planned floors are zhin.js 1.1.19, Core 1.1.54, Adapter 1.1.26, FeatureKit 1.1.10, Plugin Runtime 1.1.18, Runtime/Isolate 1.1.16 and Agent 1.1.45. Keep old-interface plugins with the earlier locked stack until they are migrated. Adapter's independent Feature API changes from 1.0.0 to 2.0.0; official consumers declare ^2.0.0. Existing Feature API admission rejects explicitly incompatible ranges; omitted API metadata keeps its existing behavior and does not certify compatibility. Runtime engine and patch-only release gates remain unchanged.
+
+  Use the native-Client Adapter target contract, canonical FeatureKit AdapterRegistry augmentation and named Endpoint control/management requests. Route message controls from canonical message/conversation refs; retain exact source authority and propagate caller/account/explicit-Root-stop cancellation. Replace removed Agent activity feedback exports with source-bound feedback. HMR pause/resume belongs to concrete plugin instances; plugins choose accepted-work policy without changing Controller commit/rollback authority. Cooperative worker/process control cancellation does not kill an isolate or reopen retired business admission.
+
+  Provide authenticated historical-data preview, exact selected binding, transactional application, authoritative inspection and explicit resumption, including active games. Preserve before-images and journals; never replay an unconfirmed effect, infer an account from an alias, or reuse historical permission grants. Owner V2 approvals remain inactive legacy data, while new writes use V3. Rollback requires matching software, lockfile and verified data; installing old code alone cannot read a new V3 approval file. Conflicting after-images are never overwritten.
+
+  See docs/plans/adapter-operation-version-boundaries.md and the Chinese/English upgrade guide for the complete version inventory, custom-plugin changes, acceptance and recovery sequence. These code and metadata changes do not authorize merging, publication, deployment, login, production migration or removal of installed workspace patches.
+
+- 6749002: Keep interactive runtime turns and their synchronous children running without fixed iteration or total wall-clock caps. Share configured token quotas across the live turn, retain cancellation and authorization, compact child context independently, and report periodic progress without additional model calls or blocking final delivery. Scheduled, unattended, independent background and legacy API budgets remain unchanged.
+
+  Stabilize prompt prefixes by keeping conversation identity in the session-stable system tail and fresh scene state after the current message. Shorten and escape the host-context boundary, preserve permission-filtered tool disclosure, and omit fixed iteration ceilings from continuous-run traces.
+
+  Project repeated inspections of the same private image only once per model request, preserving resource access checks, transient lifetime, and the existing inspection limit.
+
+- fc33495: master 私聊审批改为先问人：`masterShell: isolated` 不再把审批强制成 `auto`，新增 `ai.agent.masterShellApprovalMode`（默认 `ask`，可选 `auto` / `inherit` 沿用 `execApprovalMode`）；master 私聊中自动审核拒绝会转问 master；群管冷却不再作用于私聊；拒绝提示与安全提示词要求在 master 私聊里请求批准而不是放弃。
+- 2c3610a: Add owner-scoped personal AI Sessions and a closed model policy hierarchy. Compile legacy providers and bindings into immutable, revision-leased connection/model/preset invocations while keeping Agent tool authority separate.
+
+  Provide authenticated personal model management, encrypted Host-private credentials, public HTTPS transport with DNS pinning and same-origin redirects, and persistent per-Session model selection. Deployment tasks and summaries retain deployment model authority. Preserve legacy history and configured perception fallback chains. Keep every chat turn on its selected model, including legacy configuration, while retaining same-model retries.
+
+  Extend trusted Host generation leases to resolve Root-private resources without publishing them in snapshots or child Plugin Scopes.
+
+- 4949b90: Preserve participant text and media boundaries when appending runtime context, anchor Anthropic caching before transient media, escape quoted host markers, and keep specialist selection out of the stable capability prefix.
+- 4c05a4e: 提高跨轮提示词缓存命中率：当前消息的运行时上下文（会话规则、记忆、技能、场景行、延迟工具索引、Turn context 等）移到正文之后，正文与日后的历史逐字节一致；系统稳定前缀不再随发送者角色变化；场景行 admins 排序稳定（ADR 0045）。
+- 4042a72: 去除 discover 工具结果正文中重复的完整参数 schema，减少后续模型请求携带的重复历史。保留匹配工具的自动加载、权限、加载上限与稳定顺序，完整定义仍通过下一次请求的 tools 字段提供，无需增加 load_tool 调用。
+- f8505b0: Recover completed Sandbox output from the existing journal with separate scoped delivery facts. Preserve confirmed, partial and unknown delivery, including interrupted final projection, without resending output or changing journal retention. Read results in pages of fifty; media recovery stores authorized URL references rather than bytes.
+- f1d4d66: Record the authorized target of successful file writes and edits in their tool settlements. Project file links through the current Host's existing file-manager policy, so Console can open the actual file without inferring its identity from raw model arguments or tool output text.
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [6749002]
+- Updated dependencies [c7944a5]
+- Updated dependencies [f8505b0]
+- Updated dependencies [fc33495]
+- Updated dependencies [2c3610a]
+- Updated dependencies [4949b90]
+- Updated dependencies [4c05a4e]
+  - @zhin.js/adapter@1.1.26
+  - @zhin.js/core@1.1.54
+  - @zhin.js/plugin-runtime@1.1.18
+  - @zhin.js/ai@1.1.49
+  - @zhin.js/agent-feature@1.1.11
+  - @zhin.js/mcp-feature@1.1.11
+  - @zhin.js/prompt-section@1.1.10
+  - @zhin.js/skill@1.1.11
+  - @zhin.js/tool@1.1.13
+  - @zhin.js/permission@1.1.10
+
+## 1.1.44
+
+### Patch Changes
+
+- c58c589: Group deferred tools by their canonical plugin or MCP server instead of installation paths. Omit already represented delivered text and ledger facts only from the current model projection, preserving full history and restoring facts when their covering reply leaves the active context. Allow tools to declare a synchronous, read-only availability predicate before turn disclosure, with execution-time checks remaining authoritative.
+
+  Preserve every confirmed platform message identity across Agent replies and ICQQ split sends. Give each bubble its own stable single-message alias while retaining the reply's ordered association; preserve confirmed prefixes on partial delivery without retrying or inventing unknown message IDs.
+
+- Updated dependencies [6345a38]
+- Updated dependencies [ff3efe7]
+- Updated dependencies [c58c589]
+  - @zhin.js/adapter@1.1.25
+  - @zhin.js/ai@1.1.48
+  - @zhin.js/core@1.1.53
+  - @zhin.js/im-contract@1.1.9
+  - @zhin.js/tool@1.1.12
+
+## 1.1.43
+
+### Patch Changes
+
+- e0f991c: ADR 0039 slice A: add the `ai_group_rules` table and `AiGroupRules` store for dynamic group-ops rules — `draft → pending → active` with `rejected` / `expired` / `disabled` side states, optimistic `revision`, a canonical `content_hash` (any edit returns to draft), at most one active rule per group and trigger (approving a new one supersedes the old), and 24 h approval expiry. Adds audit kinds `group_rule` / `rule_enforcement` and the `rule_*` reason codes. Storage is bounded: per-field limits, at most 20 open drafts per group, terminal rows lose their summary immediately and are deleted after 30 days or beyond 50 per group (on startup and hourly). No behaviour change yet: drafting tools, approval cards and the executor land in later slices.
+- 8846d5d: ADR 0039 slice B: group owners and admins can now set group moderation rules. A new `rule_draft` tool (`risk: safe`, group chats only) turns "remind advertisers first, then mute for 10 minutes" into a rule and submits it for approval; it refuses anyone who is not the group owner or an admin (by the live platform role on the message) and records `rule_draft_forbidden`. Each submitted rule posts a preview card to its group (trigger, ladder, durations, cool-down, exemptions and a short `content_hash` code), gated by the control plane. In the group, the owner/admins (plus `toolHardGate.imApproval.approverIds`) answer with `/rule approve <code>` / `/rule reject <code>` / `/rule disable <code|trigger>`, and anyone can list rules with `/rules`; the code changes whenever the rule changes, so an old card can't approve new content. The Console gets `plugin.root.group-rules` / `group-rule` (read, `control:read`), `group-rule-create` / `group-rule-disable` (`control:write`) and `group-rule-approve` / `group-rule-reject` (`ops:approve`). `AiGroupRules` gains `onTransition` listeners and `recordDraftForbidden`. No new disk state: rules use the existing bounded `ai_group_rules` table. Rules are not enforced yet; the executor lands in slice C.
+- 8c85a2b: ADR 0039 slice C: approved group rules are now enforced. A new host-side `GroupRuleEnforcer` (reached through `AgentTurnIngressRoute.enforceGroupRule`) takes a reported violation and runs the current stage of the group's active rule for that trigger: `remind` / `warn` send a template reminder that @-mentions the member (control plane + session profile gated, optional recall of the original message); `mute` runs automatically with **no approval card**, using the rule's approval as the hard-gate approval (`ToolHardGate.checkPreApproved` now accepts `source: 'rule'`, reports `rule_hash_mismatch` for a tampered rule, and passes `ops_cooldown` when the gate has one), still stopped by `emergency_stop` / `read_only`; `suggest_kick` never kicks by itself — it raises a fresh `member` hard-gate card (deduplicated by `ops_cooldown`) and kicks only after a human approves. Owners/admins and whitelisted members are skipped (`rule_hit_exempt`); when the bot cannot moderate, it records `rule_hit_bot_not_admin` and tells the group once a day. Every hit writes one `kind=rule_enforcement` audit row that shares its `turn_id` with the hard-gate and outbound rows. Ladder progress is in memory only, capped and pruned after the quiet window; nothing new is written to disk. No detector calls the enforcer yet: `flood` (slice D) and the content-moderation migration (slice E) come next.
+- 2cc80df: ADR 0040 slice A: self-change staging area `.zhin/changes/` — change object, forward-only state machine, `content_hash`, writable-target whitelist and forbidden config keys, `self_change` audit kind and `change_*` reason codes. Disk use is bounded (terminal states drop staged files, 14-day metadata retention, 24-hour idle expiry, 5 MB / 50 files per change, 50 MB total) with pruning at start-up and every 6 hours.
+- 97bf337: ADR 0040 切片 B：`change_draft` 工具起草受控自我变更（只进暂存区，不生效），宿主生成预览——文件 diff 摘要、`InvalidationPlanner` 影响面、配置补丁重载级别（宿主段需重启、插件段热重载）。
+- 43560d0: ADR 0040 切片 C1：`change_draft` 起草后宿主自动试跑静态检查（语法 / 约定默认导出 / harness 禁止导入 / SKILL.md 与 agent.json），通过进 `ready`，失败进 `trial_failed` 并把错误交回 Agent；`.tsx` 用 esbuild 检查，全程内存、不落临时文件。
+- 1bf0253: ADR 0040 切片 C2：试跑沙箱加载（§3.3）——静态检查通过后把草稿所在插件根拷到系统临时目录、在一次性子进程的试跑运行时（只装 IM 运行时，无端点、无模型、无令牌，60 秒超时杀进程组）里装配，校验 `sandbox_load` 与 `capability_discovered`；拷贝用完即删，崩溃残留 1 小时后清理。同时补上 `stripComments` 的线性扫描（CodeQL js/polynomial-redos，#1064 合入时漏掉），指令目录里的非 `index.*` 辅助模块不再要求默认导出 `defineCommand`。
+- ee9d38a: ADR 0040 slice C3: the self-change trial runs the drafted plugin's own tests in an isolated, offline container (read-only dependencies, writable throwaway copy) after the sandbox load; skipped without Docker, without tests, or when the tests fail even without the draft.
+- eb306e1: ADR 0040 slice D: a self-change that passes its trial is submitted for approval as a `self` card in the hard-gate approval queue — always delivered to the owner's private chat (never settled in a business group), human-only, bound to the content hash, one pending change per conversation, 24-hour timeout, re-issued after restart; Console lists, approves and rejects changes.
+- b76317d: ADR 0040 slice E1: add `SelfChangeApplier`, the apply / verify / rollback core for approved self-changes. It re-checks the approved `content_hash` (re-hashing every staged file) and the config `expectedRevision` before touching anything (mismatch → `failed`, no files written), writes the rollback snapshot and persists `applying` + report target before writing production files, then applies by impact — `none`, hot reload, or a controlled restart after persisting `verifying`. A 60 s health check decides `applied` ("已生效"); otherwise it rolls back once and reports "失败，已回滚", and if still unhealthy goes `failed` with `emergency_stop` and an owner-only report — at most two restarts per change. `recover()` resumes `applying` / `verifying` changes at start-up. `SelfChangeStore` gains `writeSnapshot` / `readSnapshot` / `setApplyState` / `audit`, and `SelfChangeApprovals` an `onApproved` hook. Host wiring (reload, exit 75, health, reporting, start-up recover) follows in slice E2.
+- c9775fb: ADR 0041 slice D: system prompt assembly now runs on a `PromptSegmentRegistry`. Built-in sections map onto text segment kinds (`system` → `environment` → `role_rules` → `platform` → `scene`, descending weight within a kind), so the persona/style rules now follow the security rules instead of leading the prompt, and the volatile git status moves into `scene`. Plugins contribute segments through `promptSegmentToken` (released with their generation); `mergeMessageSegments` is the pure chronological merge for message segments (tie order, tool pairing, event relocation, append-only). `PromptAssemblyRegistry` is a deprecated adapter over text segments. `describePromptSectionsForDebug`, the context-budget report and `zhin trace` list each segment's id / kind / weight / chars / trimmed. `buildRichSystemPromptParts` exposes the stable prefix and `scene` split (cache breakpoint offset).
+- 5efb4e9: ADR 0041 §6: two-level cache for group info and member profiles. Level 1 stays the in-memory 60 s cache; level 2 is the database. Facts are read L1 → L2 → platform and every platform result (and every side event) is written to both levels; the bot's own role is still read fresh each turn and only written through. A level-2 row older than 24 h is served and refreshed once in the background (de-duplicated, bounded concurrency, cancelled with the generation). Group facts extend `ai_session_profiles` with `owner_id`, `member_count` and `facts_updated_at` (additive migration); member facts live in the new `ai_scene_members` table. Storage is bounded: a member row is deleted on leave or kick, rows untouched for 90 days are pruned, each scene keeps at most 2000 rows (oldest `updated_at` evicted), pruning runs at startup and every 6 hours, and stored text is cleaned and capped at 128 characters.
+- b5071e7: ADR 0041 slice A: participant headers. The trusted host stores the full `[id:…;user_id:…;name:…;role:…;group_nickname:…;group_title:…;mute_time:…;time:…;]` header in `UserMessage.name` / `AssistantMessage.name` (built from the conversation actor and the turn's bot facts, never from model output). At the LLM boundary `projectPromptContext` now sends the full header on a `user_id`'s first appearance in the visible window, the short `[id;user_id;time]` form afterwards, and synthesizes a `member_changed` event before a message whose sender facts changed without a recorded event; the header is the first line of the text and stored history is never mutated. Replaces the `[User]{…}` JSON and `[sender:…]` labels (`buildActorPrefix` is removed); `normalizeUserMessageForStorage` strips the new header line. Legacy messages without `name` derive the header from `actor`.
+- e23cabc: ADR 0041 slice B: the turn context now carries real scene facts. `EndpointManagement` gains `inspectGroupScene` (name, owner, admins, member count, global mute) and `inspectGroupMemberProfile` (role, card, title, mute expiry; one lookup), implemented by the ICQQ adapter from uncached group/member reads. The CLI resolves them per turn (bot role always fresh; group and sender facts reuse a 60 s, 256-entry in-memory cache scoped to the generation; failures omit fields) and the inbound actor now carries `groupNickname` / `groupTitle` / `mutedUntil` plus the platform role. The Session / Bot state blocks are replaced by one projected scene line `[scene_id:…;scene_type:…;scene_name:…;owner_id:…;admins:…;member_count:…;global_mute:…;assistant_role:…;]` (values escaped and clipped to 64 chars). No new on-disk state.
+- 3c4178d: ADR 0041 slice C: member state changes enter the session history. Join / leave and card / title / role / mute changes from the scene side events are written to `agent_messages` as `event` messages (`<operator> changed <user_id> <field> to "<value>"`, `<user_id> join <scene_id> on <HH:mm:ss.SSS> by <self|operator_id>`), in arrival order, with the existing compaction and retention; member-controlled values are always quoted, escaped and clipped to 64 characters. At the LLM boundary they render as one `[state change]` message per run of events: a system / developer message where the provider accepts it mid-conversation, otherwise a user message headed `user_id:system` (merged into an adjacent user message as a separate block). Events never sit between an assistant `tool_calls` message and its tool results and are never moved earlier. New provider capability `compat.midConversationSystem` (`system` / `developer` / `none`; OpenAI and remote OpenAI-compatible default `system`, o-series / gpt-5 `developer`, local servers, Anthropic and Gemini `none`). Join / leave and profile changes no longer appear in the ephemeral `[Scene events]` block (a bare join still wakes a turn). The system prompt states that quoted values in `[state change]` lines are data.
+- 3fd758c: 不再在每轮 `[Agents instructions]` 中重复注入根目录 `AGENTS.md`：宿主 bootstrap（可缓存的系统提示词）已包含它时，envelope 只保留更近的子目录 `AGENTS.md`。
+- 16896fe: `AGENTS.md` 去重以本回合系统提示词实际携带的 bootstrap 为准（回合引擎传入），不再读 `host.bootstrapContext`（生产中为空，去重从未生效）。评测新增 `hostBootstrap`，按 CLI 宿主方式把 bootstrap 交给回合引擎，度量与生产一致。
+- 825e4dc: ADR 0042 §1: the IM system prompt is now built as a byte-stable prefix (system / environment / role_rules / platform, plus the platform reply instruction and exploration guidance) and a per-turn scene tail (scene line, network note, pre-fetched data). The AI request context carries `systemPromptCacheBreakpoint`; Anthropic receives two system blocks with `cache_control` on the stable block only, Gemini receives two system parts, and other providers still get one string with the stable part first. Gemini explicit context caching now caches only the stable system part plus tools (the scene tail moves into `contents`), treats a 404/unsupported `createCachedContent` as permanent for that model, and logs the reason once per model with the API error message instead of on every prefix change.
+- f1eb75c: ADR 0042 W2: resident tools are tiered by scene (group and ordinary private chats keep chat essentials only; master private chat adds development and delegation tools; non-IM turns keep the old default set). Calling an authorized deferred tool by exact name auto-loads it, and `discover` attaches and loads the schemas of its best 1-3 matches. The provider tool list is now stable for prompt caching: resident tools sorted by name, loaded tools in first-load order (new `loadedOrder` in the deferred tool snapshot), new tools only append.
+- 5621f75: ADR 0042 W3: fold the resident catalogs. The deferred tool index is one line per domain (MCP server, else owning plugin / builtin area) with up to 6 sorted tool names and the total count, e.g. `calendar: calendar_add, calendar_list (2)`; details come from `discover`. The skill catalog keeps the skill name plus one trigger sentence of at most 40 characters (full description at `load_skill` / `discover`) and is sorted by name so the block is byte-stable. Providers that use prompt-mode structured output (DeepSeek, `compat.structuredOutput: 'prompt'`) now get a compact shape (one example plus one data-shape line per offered segment type, derived from the schema) instead of the full JSON Schema text; native providers still receive the schema as an API parameter and `decodeStructuredReply` still validates with it. `@zhin.js/ai` exports `registerStructuredOutputPromptText`.
+- 88c82d0: ADR 0042 W4: bootstrap section scopes. A section of `AGENTS.md` / `SOUL.md` / `TOOLS.md` can carry `<!-- scope: group -->` (also `private`, `channel`, `master`, `master-private`, comma lists) on the line under its heading; the host injects only the sections matching the turn's scene (conversation type + master or not), byte-stable per scene kind. Unannotated sections apply everywhere. `zhin trace` lists skipped section titles (`bootstrap_skipped`).
+- e37f30f: ADR 0042 §7/§8 (fewer rounds, measurement). Default `maxIterations` now depends on the scene: group chat 6, private chat 10, master private chat 15 (a `modelHarness` override or a customised `ai.agent.maxIterations` still wins; built-in per-model limits are never raised). When one iteration remains, the tool result tells the model to reply with what it has. A one-time hint fires when the same tool family is called 3 times in a row without new information (identical results, searches that match nothing, the same file re-read), recorded as `spin_hint` / `last_iteration_nudge` entries on the turn trace. The orchestration rule merges "send independent queries as parallel tool calls in one message" into the existing parallel `spawn_task` bullet (net size unchanged). Adds `pnpm eval:budget`: a deterministic offline first-turn token measurement (group first turn, group 6th turn, master private tool turn) with a committed baseline.
+- 2b8b408: ADR 0043 §1 (H1): history stores conversation only. Per-turn context blocks (`[Turn context]` with time, told ledger, recalled memory, tone hint, merged-turn and danmaku lines; `deferred-tools`, `workspace-rules`, `skill:*`, `file-memory:*`, `session-rules:*`, `session-guidance`, `session-identity`, `active-skills`, `deferred-catalog-summary`, `quote-guidance`) are now marked `perTurn` when built and dropped by `normalizeUserMessageForStorage`; the current message sent to the model is unchanged. `projectPromptContext` also strips them (identified by flag, contextRef key or legacy text prefix) from every earlier user message, so rows stored before this change stop replaying them; stored data is never rewritten.
+- 4d728c0: ADR 0043 §4 + §5 (H4) and the ADR 0041 actor-only amendment. Participant headers are no longer stored: user messages keep only `actor`, assistant messages keep `assistantActor` (plus the delivered `messageId`), and the header is rendered at the LLM boundary; legacy rows that still carry `name` are read as before. Headers now use session message aliases `id:m<n>` (an ordinal over the stored active path, so already-sent prefixes never change), `time:HH:mm` shown only when a minute has passed since the last shown time (the first message and the first message of a day also carry `date`), and `reply_to:m<n>` when the message replies to one inside the visible window. A reply to a message outside the window gets one `[quote id:…;user_id:…;time:…;] <first 120 chars>` line (media as placeholders, a forward expanded one level) so the model no longer needs `inspect_conversation_reference` for ordinary quotes; the quote is resolved by the ingress through the reference port (3 s timeout) and stored as structured `UserMessage.quote`. Tool arguments named `message_id` / `message_ids` / `*_message_id` / `reference` and `reply` segments accept the alias as well as the platform id; `inspect_conversation_reference` also accepts the quoted message id.
+- eb8feeb: Isolated shell (docker, workspace-write) now mounts host self-configuration paths (#1030 list A+B: AGENTS.md, skills, .git, package.json, lockfiles, node_modules, root config, ...) read-only on top of the writable workspace, so shell tricks cannot rewrite them. Protected paths are carried on the Tool invocation policy.
+- f0e1df7: Group merge window (ADR 0038 slice A): with `ai.agent.inboundQueue.merge.enabled`, plain-text mentions from several group members within a short window (`quietMs` 1500 / `maxWaitMs` 6000, up to `maxSenders` 5) are answered by one turn instead of one reply each. Off by default until merged turns narrow permissions per sender. The master, private chats, commands, stop words and messages with media, quotes or forwards keep their own turns. New audit codes `merge_window_joined` / `merge_window_flushed` (plus the other ADR 0038 codes reserved for later slices).
+- 7f34293: Merged turns narrow permissions to every sender (ADR 0038 slice B1): when a group merge window answers several members in one turn, the tools, skills and sub-agents the model sees are the intersection of what each member sees on their own, and the turn's roles and permissions are intersected as well. Merging can only narrow what a turn may do, never widen it. `ai.agent.inboundQueue.merge.enabled` stays off by default until slice B2 (`onBehalfOf` review and approval-card limits).
+- d9672ec: ADR 0038 切片 B2：合并回合里有副作用的工具调用按 `onBehalfOf` 指向的发送者复核（缺省按权限最低者），不通过写 `merge_on_behalf_denied`；合并回合最多 1 张新审批卡；新增 `ai.agent.toolHardGate.maxPendingPerScene`（默认 3），每群待审卡超限 fail closed（`hard_gate_scene_pending_cap`）；群聊合流 `inboundQueue.merge.enabled` 默认改为开启。
+- 42e630d: ADR 0038 slice C: a merged group turn now tells the model who it is answering. The turn context carries a `[Merged turn]` list (sender id, name, message ids, text) and asks for one reply that @-mentions each sender it answers and skips nobody by pretending; the outbound audit records how many senders were merged and how many the reply answered.
+- 1096173: ADR 0038 slice D: before sending, a turn whose sender followed up into a merge window drops its stale reply (audit `merge_reply_stale_discarded`) and the next merged turn answers old and new messages together; replies of turns that called a tool or hit the hard gate, and a sender chain already dropped once, are sent anyway (`merge_reply_stale_sent`).
+- 24a2b71: Danmaku mode (ADR 0038 slice E1): adapters can declare the `liveDanmaku` capability. In their conversations every danmaku is a candidate; the Agent collects them in one window (`ai.agent.inboundQueue.live`: `windowMs` 10000, at least `minIntervalMs` 15000 after the previous danmaku reply, newest 100 kept) and replies once — `mode: pick-one` (default) picks one danmaku and `@`s its viewer, `summary` answers the window as a whole. Danmaku turns run as an anonymous viewer with only tools that declare the new `readOnly: true` flag (native file reads, web search / fetch, knowledge and memory search are marked), no skills, sub-agents, MCP or shell, and never an approval card. Replies are audited as `danmaku_window_picked` with the candidate count and the viewers picked.
+- 119e9e6: ADR 0043 §2/§3: the history sent to the model is bounded by a token budget (`ai.context.historyTokens`: group 8000, ordinary private 12000, master private 24000, a number for all scenes or per-scene overrides, `0` = off; `ai.context.maxRecentMessages` stays as a message-count upper bound). The budget is measured after projection, the window starts on a turn boundary, and it only moves — in one block leaving 25% headroom — when the budget is exceeded, so the prompt-cache prefix stays stable. Tool results of finished turns (and very long call arguments) reach the model as their first 200 characters plus `…(已省略 N 字)`; the current turn and stored history are unchanged.
+- 8ce6cd2: Project repeated file-memory snapshots through scoped context references while preserving full stored snapshots, neutral versions when no snapshot is supplied, and recovery after compaction or branch loads.
+- f2bbab5: Stop the bot from reacting with an emoji on every turn. The structured-reply instruction now says reactions are occasional (`""` is the default), and the host paces reactions per session: at most one per `ai.agent.reactions.cooldownMs` (default 10 min) and only with `probability` (default 0.35; 0 disables). Paced-out reactions are not sent, count as handled, and are audited as `{ reaction: true, applied: false, paced: true }`. Memory only, bounded to 1024 sessions.
+- 44eb3f8: Align the host self-configuration hard gate with the final #1030 P0 spec. `node_modules/**` (any depth), package-manager lockfiles and the plugin lifecycle file are now denied outright for every role, with no approval card. The `self` hard gate is anchored to the project root (symlink-, `..`- and case-safe) and covers the root config files, `package.json`, `schema.json`, the root plugin entry, `AGENTS.md`, the skills directories, `.git/`, `.pnpmfile.cjs` and `assistant.profile.yml`; nested files such as `plugins/x/package.json` are no longer gated, and `pnpm-workspace.yaml` / `tsconfig*.json` are not managed. The host provides the project root and extras per generation through `hostProtectedPathsToken` (carried on each Turn); without it the gate fails closed to name matching at any depth.
+- ab2263a: Gate writes to the host's own configuration with the dangerous-tool hard gate (#1030 P0). A file-tool call that writes `zhin.config.*`, `.env*`, `package.json`, lockfiles, `pnpm-workspace.yaml`, `.npmrc`, `.pnpmfile.cjs`, `assistant.profile.yml`, `node_modules/` or `.git/`, and a `bash` command that writes one of them or changes dependencies, is now a dangerous `self` call: it needs a fresh human approval every time, and bypass, the auto reviewer, owner exemption and remembered approvals never grant it.
+- dfa14b5: 修复 CodeQL js/polynomial-redos：`ai.context.historyTokens` 字符串解析先去掉空白、限制长度，再用无重叠量词的正则匹配。
+- b223a51: Record redacted model inputs per request for local conversation traces, with reported usage kept separate from context estimates. Preserve trusted conversation and source-message identity, expose details through full-scope read-only Console APIs, and enforce bounded trace retention. Request-body recording is enabled by default and can be disabled with `ai.agent.recordRequestBodies: false`.
+- d0e1fac: Keep stable prompt instructions ahead of turn-specific capabilities, project unchanged context without placeholder text, and retain scoped state snapshots with readable updates and compaction recovery. Preserve native conversation/tool chronology and separate participant identity from runtime guidance.
+
+  Resolve the ICQQ bot account and current-group role before capability discovery, and support explicitly declared current-conversation bot-role requirements without changing existing requester permissions or approvals. Keep role lookup failures unknown and preserve execution-time platform checks.
+
+- 1ca669a: Read complete retained user-message text on demand through the existing session-tree runtime and `GET /api/agent/sessions/:key/message`. Bind each read to the tree's session ID, reject cross-session/non-user messages, and return text without image payloads. Keep tree previews unchanged and report older runtimes without message reading as unsupported.
+- Updated dependencies [f67883e]
+- Updated dependencies [b5071e7]
+- Updated dependencies [e23cabc]
+- Updated dependencies [3c4178d]
+- Updated dependencies [825e4dc]
+- Updated dependencies [f1eb75c]
+- Updated dependencies [5621f75]
+- Updated dependencies [2b8b408]
+- Updated dependencies [4d728c0]
+- Updated dependencies [eb8feeb]
+- Updated dependencies [f0e1df7]
+- Updated dependencies [d9672ec]
+- Updated dependencies [24a2b71]
+- Updated dependencies [119e9e6]
+- Updated dependencies [f2bbab5]
+- Updated dependencies [1bdbc08]
+- Updated dependencies [df6442c]
+- Updated dependencies [b223a51]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [3771f7a]
+- Updated dependencies [945303c]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/core@1.1.52
+  - @zhin.js/ai@1.1.47
+  - @zhin.js/adapter@1.1.24
+  - @zhin.js/tool@1.1.11
+  - @zhin.js/im-contract@1.1.8
+
 ## 1.1.42
 
 ### Patch Changes

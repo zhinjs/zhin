@@ -1,5 +1,5 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
-import { describe, expect, it, vi } from 'vitest';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
@@ -7,6 +7,9 @@ import { createHttpHost } from '@zhin.js/host-http';
 import { WeChatMpEndpoint } from '../src/endpoint.js';
 import type { WeChatMpFetch } from '../src/client.js';
 import { resolveWeChatMpConfig } from '../src/protocol.js';
+
+const harnesses: Awaited<ReturnType<typeof createEndpointHarness>>[] = [];
+afterEach(async () => { await Promise.all(harnesses.splice(0).map(harness => harness.stop())); });
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -25,18 +28,19 @@ function config() {
 }
 
 describe('wechat-mp endpoint management', () => {
-  it('只暴露 listFriends（公众号无群/频道概念）', () => {
+  it('只暴露 listFriends（公众号无群/频道概念）', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: gateway(),
       http,
       config: config(),
-      fetch: vi.fn(async () => ({ data: {} })) as unknown as WeChatMpFetch,
-    }), gateway(), undefined);
-    expect(listEndpointManagementCapabilities(endpoint)).toEqual(['listFriends']);
-    expect(endpoint.management.listGroups).toBeUndefined();
-    expect(endpoint.management.listGroupMembers).toBeUndefined();
+      fetch: vi.fn(async () => ({ data: { access_token: 'synthetic-token', expires_in: 7200 } })) as unknown as WeChatMpFetch,
+    }), { gateway: createTestEventGateway(gateway(), undefined), capabilities: ['inbound', 'outbound'] });
+    await endpoint.start(); endpoint.open(); harnesses.push(endpoint);
+    expect(listEndpointManagementCapabilities({ management: endpoint.index.management(endpoint.canonicalId) })).toEqual(['listFriends']);
+    expect(endpoint.index.management(endpoint.canonicalId).listGroups).toBeUndefined();
+    expect(endpoint.index.management(endpoint.canonicalId).listGroupMembers).toBeUndefined();
     return http.close();
   });
 
@@ -52,15 +56,16 @@ describe('wechat-mp endpoint management', () => {
       };
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: gateway(),
       http,
       config: config(),
       fetch: fetchFn as unknown as WeChatMpFetch,
-    }), gateway(), undefined);
+    }), { gateway: createTestEventGateway(gateway(), undefined), capabilities: ['inbound', 'outbound'] });
+    await endpoint.start(); endpoint.open(); harnesses.push(endpoint);
 
-    const friends = await endpoint.management.listFriends!();
+    const friends = await endpoint.index.management(endpoint.canonicalId).listFriends!();
 
     expect(friends).toEqual([
       { user_id: 'oA', nickname: 'oA', remark: '' },
@@ -83,15 +88,16 @@ describe('wechat-mp endpoint management', () => {
       return { data: { errcode: 48001, errmsg: 'api unauthorized' } };
     });
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = bindTestEndpoint(new WeChatMpEndpoint({
+    const endpoint = await createEndpointHarness(() => new WeChatMpEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'wechat-mp'),
       gateway: gateway(),
       http,
       config: config(),
       fetch: fetchFn as unknown as WeChatMpFetch,
-    }), gateway(), undefined);
+    }), { gateway: createTestEventGateway(gateway(), undefined), capabilities: ['inbound', 'outbound'] });
+    await endpoint.start(); endpoint.open(); harnesses.push(endpoint);
 
-    await expect(endpoint.management.listFriends!()).rejects.toThrow(/48001/);
+    await expect(endpoint.index.management(endpoint.canonicalId).listFriends!()).rejects.toThrow(/48001/);
     await http.close();
   });
 });

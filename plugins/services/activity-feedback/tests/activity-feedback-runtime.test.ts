@@ -357,7 +357,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     await candidateDispose();
   });
 
-  it('starts full state cleanup in the retiring generation view', async () => {
+  it('finishes an accepted handler after admission closes and cleans captured state without re-entering a retired view', async () => {
     const admission = mutableAdmission(true);
     let currentView = 'old';
     const enteredViews: string[] = [];
@@ -388,12 +388,13 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
 
     admission.setActive(false);
     currentView = 'new';
-    expect(enteredViews).toEqual(['old', 'old']);
+    expect(enteredViews).toEqual(['old']);
     expect(orchestrator.dispose).not.toHaveBeenCalled();
 
     releaseHandler();
     await dispatch;
     await dispose();
     expect(orchestrator.dispose).toHaveBeenCalledOnce();
+    expect(enteredViews).toEqual(['old']);
   });
 });

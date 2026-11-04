@@ -6,8 +6,6 @@
  * `load_skill` (or intent priming), and specialist instructions only when the
  * agent is selected, so the resident prompt stays small as plugins add skills.
  */
-import { SKILL_DISCLOSURE_PROMPT_HINT } from './progressive-disclosure.js';
-
 /** Headings the context budget report uses to attribute catalog tokens. */
 export const SKILL_CATALOG_HEADING = '## Available skills';
 export const AGENT_CATALOG_HEADING = '## Available specialist agents';
@@ -74,24 +72,27 @@ function renderEntries(
  * Domain of a catalog tool: its MCP server, else its owner (plugin id, or the `builtin:` area),
  * else ungrouped. Skill membership is not a tool property, so the owner is the grouping data.
  */
-export function toolIndexGroup(item: { readonly mcpServer?: string; readonly fullTool: { readonly source?: string } }): string {
+export function toolIndexGroup(item: { readonly owner?: string; readonly mcpServer?: string; readonly fullTool: { readonly source?: string } }): string {
   if (item.mcpServer) return `mcp:${item.mcpServer}`;
+  if (item.owner) return item.owner;
+  // Legacy catalogs carry semantic sources; entry paths are diagnostics, never domains.
   const source = item.fullTool.source?.trim();
-  return source ? source.replace(/^plugin:/, '') : TOOL_INDEX_UNGROUPED;
+  if (source?.startsWith('plugin:')) return source.slice('plugin:'.length) || TOOL_INDEX_UNGROUPED;
+  if (source?.startsWith('builtin:') || source?.startsWith('mcp:')) return source;
+  return TOOL_INDEX_UNGROUPED;
 }
 
 const byName = (a: CatalogEntry, b: CatalogEntry): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 
 /**
- * Skill catalog block: name and one trigger sentence (<= 40 chars) per skill, plus the load_skill
- * hint. Sorted by name so the block is byte-stable across turns; the full description arrives with
+ * Skill catalog block: name and one trigger sentence (<= 40 chars) per skill.
+ * Sorted by name so the block is byte-stable across turns; the full description arrives with
  * load_skill / discover.
  */
 export function renderSkillCatalog(skills: readonly CatalogEntry[]): string | undefined {
   if (skills.length === 0) return undefined;
   return [
     SKILL_CATALOG_HEADING,
-    SKILL_DISCLOSURE_PROMPT_HINT,
     ...renderEntries([...skills].sort(byName), 'use discover(kind=skill) to search them.', (text) => triggerSentence(text)),
   ].join('\n');
 }

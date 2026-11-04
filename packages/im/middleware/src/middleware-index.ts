@@ -4,6 +4,7 @@ import {
   bindOperationInput,
   operationClientAdapter,
   readOperationClient,
+  readOperationSession,
 } from '@zhin.js/feature-kit';
 import type {
   MiddlewareContext,
@@ -35,6 +36,7 @@ export interface MiddlewareDescriptor {
   readonly target: MiddlewareTarget;
   readonly order: number;
   readonly adapter?: string;
+  readonly incremental?: true;
 }
 
 interface MiddlewareRecord extends MiddlewareDescriptor {
@@ -59,6 +61,7 @@ export class MiddlewareIndex {
       target: slot.definition.target,
       order: slot.definition.order,
       ...(slot.definition.adapter ? { adapter: slot.definition.adapter } : {}),
+      ...(slot.definition.target === 'outbound' && slot.definition.incremental === true ? { incremental: true as const } : {}),
       slot,
     })).sort((left, right) => compareMiddleware(left, right, topology)));
   }
@@ -93,9 +96,12 @@ export class MiddlewareIndex {
       if (!record) return terminal();
       const authorInput = bindOperationInput(input, record.owner, operationSnapshot);
       const context = {
-        ...createCapabilityContext(operationSnapshot, record.owner),
+        ...createCapabilityContext(operationSnapshot, record.owner, undefined, readOperationSession(authorInput, record.adapter)?.signal),
         input: authorInput,
       } as MiddlewareContext<TInput>;
+      Object.defineProperty(context, 'session', {
+        enumerable: true, get: () => readOperationSession(authorInput, record.adapter),
+      });
       Object.defineProperty(context, '$client', {
         enumerable: true,
         get: () => readOperationClient(authorInput, record.adapter),
@@ -126,8 +132,11 @@ export class MiddlewareIndex {
       if (definition.target !== 'inbound') throw new Error('Invalid inbound Middleware');
       const authorInput = bindOperationInput(input, record.owner, operationSnapshot);
       const context = {
-        ...createCapabilityContext(operationSnapshot, record.owner), input: authorInput,
+        ...createCapabilityContext(operationSnapshot, record.owner, undefined, readOperationSession(authorInput, record.adapter)?.signal), input: authorInput,
       } as MiddlewareContext<TInput>;
+      Object.defineProperty(context, 'session', {
+        enumerable: true, get: () => readOperationSession(authorInput, record.adapter),
+      });
       Object.defineProperty(context, '$client', {
         enumerable: true, get: () => readOperationClient(authorInput, record.adapter),
       });

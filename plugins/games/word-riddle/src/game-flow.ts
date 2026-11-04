@@ -1,5 +1,5 @@
 import { createMessages, resolveLocale } from 'zhin.js/i18n';
-import type { GameMessageLike, GameReply } from '@zhin.js/game-kit';
+import { channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import {
   answersFor,
   checkAnswer,
@@ -23,11 +23,11 @@ import { buildRiddleView, MAX_WRONG } from './view.js';
  * and the text middleware return fresh text each turn.
  */
 function renderView(
-  message: GameMessageLike,
+  message: GamePlayer,
   session: RiddleSessionRow,
   eventLines: string[] = [],
 ): GameReply {
-  return buildRiddleView(session, eventLines, message.$channel.type);
+  return buildRiddleView(session, eventLines, message.target.kind);
 }
 
 async function advanceQuestion(
@@ -46,138 +46,146 @@ async function advanceQuestion(
 
 export async function startGame(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   mode: RiddleType,
 ): Promise<GameReply | undefined> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const active = await services.getActiveByChannel(ch);
-  const locale = resolveLocale(active ? active.locale : message.locale);
-  if (active) {
-    if (active.player_id === message.$sender.id) {
-      return messages(locale, 'text1', { p0: typeLabel(active.mode as RiddleType, locale) });
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const active = await services.getActiveByChannel(ch);
+    const locale = resolveLocale(active ? active.locale : message.locale);
+    if (active) {
+      if (active.player_id === message.sender.id) {
+        return messages(locale, 'text1', { p0: typeLabel(active.mode as RiddleType, locale) });
+      }
+      return messages(locale, 'text2', { p0: active.player_name });
     }
-    return messages(locale, 'text2', { p0: active.player_name });
-  }
 
-  const session = await services.createSession(message, mode);
-  return renderView(message, session);
+    const session = await services.createSession(message, mode);
+    return renderView(message, session);
+  } });
 }
 
 export async function continueGame(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<GameReply> {
-  const session = await services.getActiveForUser(
-    `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`,
-    message.$sender.id,
-  );
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text3');
-  return renderView(message, session);
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.getActiveForUser(
+      channelKey(message),
+      message.sender.id,
+    );
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text3');
+    return renderView(message, session);
+  } });
 }
 
 export async function processAnswerText(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   raw: string,
 ): Promise<GameReply | null> {
-  const ch = `${message.$adapter}-${message.$endpoint}-${message.$channel.type}:${message.$channel.id}`;
-  const session = await services.getActiveForUser(ch, message.$sender.id);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session || session.status !== 'active') return null;
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const session = await services.getActiveForUser(ch, message.sender.id);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session || session.status !== 'active') return null;
 
-  const riddleId = currentRiddleId(session);
-  const entry = riddleId ? getRiddleById(riddleId) : undefined;
-  if (!entry) return null;
+    const riddleId = currentRiddleId(session);
+    const entry = riddleId ? getRiddleById(riddleId) : undefined;
+    if (!entry) return null;
 
-  // 格式不合规（字数与答案不符）只提示、不扣失误：避免闲聊（「好的」「谢谢」）被累计判负
-  const normalized = normalizeAnswer(raw);
-  if (!answersFor(entry).some((a) => a.length === normalized.length)) {
-    return messages(locale, 'text4', { p0: entry.answer.length });
-  }
+    // 格式不合规（字数与答案不符）只提示、不扣失误：避免闲聊（「好的」「谢谢」）被累计判负
+    const normalized = normalizeAnswer(raw);
+    if (!answersFor(entry).some((a) => a.length === normalized.length)) {
+      return messages(locale, 'text4', { p0: entry.answer.length });
+    }
 
-  if (checkAnswer(entry, raw)) {
-    const streak = session.streak + 1;
-    const best = Math.max(session.best_streak, streak);
-    await services.updateSession(session.id, {
-      score: session.score + 10 + Math.min(streak, 5),
-      streak,
-      best_streak: best,
-      wrong_count: 0,
-    });
-    const after = await advanceQuestion(services, (await services.getById(session.id))!);
-    const explain = entry.explanation ? `\n📖 ${entry.explanation}` : '';
-    return renderView(message, after, [
-      messages(locale, 'text5', { p0: entry.answer, p1: explain }),
-      messages(locale, 'text6', { p0: 10 + Math.min(streak, 5) }),
-    ]);
-  }
+    if (checkAnswer(entry, raw)) {
+      const streak = session.streak + 1;
+      const best = Math.max(session.best_streak, streak);
+      await services.updateSession(session.id, {
+        score: session.score + 10 + Math.min(streak, 5),
+        streak,
+        best_streak: best,
+        wrong_count: 0,
+      });
+      const after = await advanceQuestion(services, (await services.getById(session.id))!);
+      const explain = entry.explanation ? `\n📖 ${entry.explanation}` : '';
+      return renderView(message, after, [
+        messages(locale, 'text5', { p0: entry.answer, p1: explain }),
+        messages(locale, 'text6', { p0: 10 + Math.min(streak, 5) }),
+      ]);
+    }
 
-  const wrong = session.wrong_count + 1;
-  if (wrong >= MAX_WRONG) {
+    const wrong = session.wrong_count + 1;
+    if (wrong >= MAX_WRONG) {
+      await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
+      const after = await advanceQuestion(services, (await services.getById(session.id))!);
+      return renderView(message, after, [
+        messages(locale, 'text7', { p0: entry.answer }),
+        messages(locale, 'text8'),
+      ]);
+    }
+
     await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
-    const after = await advanceQuestion(services, (await services.getById(session.id))!);
-    return renderView(message, after, [
-      messages(locale, 'text7', { p0: entry.answer }),
-      messages(locale, 'text8'),
-    ]);
-  }
-
-  await services.updateSession(session.id, { wrong_count: wrong, streak: 0 });
-  const updated = (await services.getById(session.id))!;
-  return renderView(message, updated, [messages(locale, 'text9')]);
+    const updated = (await services.getById(session.id))!;
+    return renderView(message, updated, [messages(locale, 'text9')]);
+  } });
 }
 
 export async function handleChoice(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   sessionId: string,
   choiceId: string,
 ): Promise<GameReply | null> {
-  const session = await services.getById(sessionId);
-  const locale = resolveLocale(session ? session.locale : message.locale);
-  if (!session) return messages(locale, 'text10');
-  if (session.player_id !== message.$sender.id) return messages(locale, 'text11');
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const session = await services.getById(sessionId);
+    const locale = resolveLocale(session ? session.locale : message.locale);
+    if (!session) return messages(locale, 'text10');
+    if (session.player_id !== message.sender.id) return messages(locale, 'text11');
 
-  if (choiceId === 'restart_char') {
-    await services.updateSession(session.id, { status: 'aborted' });
-    return (await startGame(services, message, 'char')) ?? null;
-  }
-  if (choiceId === 'restart_idiom') {
-    await services.updateSession(session.id, { status: 'aborted' });
-    return (await startGame(services, message, 'idiom')) ?? null;
-  }
+    if (choiceId === 'restart_char') {
+      await services.updateSession(session.id, { status: 'aborted' });
+      return (await startGame(services, message, 'char')) ?? null;
+    }
+    if (choiceId === 'restart_idiom') {
+      await services.updateSession(session.id, { status: 'aborted' });
+      return (await startGame(services, message, 'idiom')) ?? null;
+    }
 
-  if (session.status !== 'active') return messages(locale, 'text12');
+    if (session.status !== 'active') return messages(locale, 'text12');
 
-  const riddleId = currentRiddleId(session);
-  const entry = riddleId ? getRiddleById(riddleId) : undefined;
-  if (!entry) return messages(locale, 'text13');
+    const riddleId = currentRiddleId(session);
+    const entry = riddleId ? getRiddleById(riddleId) : undefined;
+    if (!entry) return messages(locale, 'text13');
 
-  if (choiceId === 'hint') {
-    const hint = entry.hint ?? messages(locale, 'text14', { p0: entry.answer.length });
-    await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });
-    const updated = (await services.getById(session.id))!;
-    return renderView(message, updated, [
-      messages(locale, 'text15', { p0: hint }),
-      messages(locale, 'text16'),
-    ]);
-  }
+    if (choiceId === 'hint') {
+      const hint = entry.hint ?? messages(locale, 'text14', { p0: entry.answer.length });
+      await services.updateSession(session.id, { hints_used: session.hints_used + 1, streak: 0 });
+      const updated = (await services.getById(session.id))!;
+      return renderView(message, updated, [
+        messages(locale, 'text15', { p0: hint }),
+        messages(locale, 'text16'),
+      ]);
+    }
 
-  if (choiceId === 'skip') {
-    await services.updateSession(session.id, { streak: 0 });
-    const after = await advanceQuestion(services, session);
-    return renderView(message, after, [
-      messages(locale, 'text17', { p0: entry.answer }),
-    ]);
-  }
+    if (choiceId === 'skip') {
+      await services.updateSession(session.id, { streak: 0 });
+      const after = await advanceQuestion(services, session);
+      return renderView(message, after, [
+        messages(locale, 'text17', { p0: entry.answer }),
+      ]);
+    }
 
-  if (choiceId === 'quit') {
-    await services.updateSession(session.id, { status: 'aborted' });
-    return messages(locale, 'text18');
-  }
+    if (choiceId === 'quit') {
+      await services.updateSession(session.id, { status: 'aborted' });
+      return messages(locale, 'text18');
+    }
 
-  return messages(locale, 'text19');
+    return messages(locale, 'text19');
+  } });
 }
 
 export { RIDDLE_PREFIX };

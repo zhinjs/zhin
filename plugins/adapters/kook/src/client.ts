@@ -1,15 +1,8 @@
-import { defineEndpointClient } from 'zhin.js/adapter';
-import type { KookClientTransport } from './ws.js';
+import type { EventMap } from 'kook-client';
+import type { KookAdapter } from './adapter.js';
 
-export type KookClientEventMap = Record<string, unknown>;
+export type KookClientEventMap = { readonly [K in keyof EventMap]: EventMap[K] extends (event: infer E, ...args: never[]) => unknown ? E : never };
 
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly kook: {
-      readonly client: KookClientTransport;
-      readonly events: KookClientEventMap;
-    };
-  }
+  interface AdapterRegistry { readonly kook: KookAdapter; }
 }
-
-export const kookClient = defineEndpointClient<KookClientTransport, KookClientEventMap>('kook');

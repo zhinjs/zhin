@@ -172,7 +172,7 @@ export class GroupModerator {
       }
       messageClaimed = true;
       signal.throwIfAborted();
-      const member = await management.inspectGroupMember(input.group, input.sender, signal);
+      const member = await management.inspectGroupMember({ groupId: input.group, userId: input.sender, signal });
       if (!member.canModerate) return;
       signal.throwIfAborted();
       const result = classify ? await classify(signal) : await input.completion.completeText({

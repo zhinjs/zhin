@@ -1,15 +1,24 @@
-import { AdapterIndex, Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
+import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken } from '@zhin.js/adapter';
 import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { ImRuntime } from '@zhin.js/core/runtime';
-import { createHttpHost, type HttpHost } from '@zhin.js/host-http';
+import { createHttpHost } from '@zhin.js/host-http';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { SnapshotStore, childPluginId, createCapabilitySlot, createSnapshotView, rootPluginId, type FeatureId, type SnapshotState } from '@zhin.js/plugin-runtime';
+import { SnapshotStore, childPluginId, createCapabilitySlot, createSnapshotView, rootPluginId, type FeatureId, type PluginId, type TokenId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { registerPermissionExplanationRoutes } from '../../../src/plugin-runtime/console/permission-explanation-routes.js';
 
+class PermissionClient {
+  constructor(readonly transmit: () => string, readonly connect: () => void) {}
+  send() { return this.transmit(); }
+}
+class PermissionEndpoint extends PermissionClient implements Endpoint {
+  readonly [endpointSpec] = createEndpointSpecification(this, { start: () => this.connect(), open() {}, close() {}, stop() {}, send: () => this.send() });
+}
+class PermissionTestAdapter extends Adapter<PermissionEndpoint> {
+  constructor(private readonly transmit: () => string, private readonly connect: () => void) { super(); }
+  protected createEndpoint() { return new PermissionEndpoint(this.transmit, this.connect); }
+}
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly 'permission-test': { readonly client: object; readonly events: Record<string, unknown> };
-  }
+  interface AdapterRegistry { readonly 'permission-test': PermissionTestAdapter; }
 }
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -20,14 +29,9 @@ async function fixture(options: { host?: 'missing' | 'unverified'; empty?: boole
   const root = rootPluginId(), owner = childPluginId(root, 'adapter-owner');
   const execute = vi.fn(), factory = vi.fn(() => 'private-value'), validate = vi.fn(() => true), checker = vi.fn(() => { throw new Error('CHECKER-SECRET'); });
   const host = new PermissionHost(); host.registerPlatform('permission-test', checker); host.register(/^custom\./, checker);
-  const send = vi.fn(() => 'platform-id'), connect = vi.fn(), clientGetter = vi.fn(() => ({}));
-  class TestEndpoint extends Endpoint<object> {
-    get client() { return clientGetter(); }
-    start() { connect(); } open() {} close() {} stop() {}
-    send() { return send(); }
-  }
+  const send = vi.fn(() => 'platform-id'), connect = vi.fn();
   const adapter = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'permission-test', source: '/private/adapter.ts',
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], create: () => new TestEndpoint() }) });
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], createAdapter: () => new PermissionTestAdapter(send, connect) }) });
   const definitions = [
     ['admin', defineCommand({ adapter: 'permission-test', description: '仅群聊管理员', descriptionI18n: { en: 'Group administrators only' }, permit: ['group()', 'role(admin)'],
       params: { text: { type: 'string', default: factory, validate } }, execute })],
@@ -43,12 +47,14 @@ async function fixture(options: { host?: 'missing' | 'unverified'; empty?: boole
   const base: SnapshotState = { root, tree: new Map([
     [root, { id: root, instanceKey: 'root', packageName: 'app', packageRoot: '/private', children: [owner] }],
     [owner, { id: owner, instanceKey: 'adapter-owner', packageName: 'adapter-package', packageRoot: '/private/adapter', parent: root, children: [] }],
-  ]), config: new Map(), resources: new Map([
+  ]), config: new Map(), resources: new Map<PluginId, ReadonlyMap<TokenId, unknown>>([
     [root, new Map(permissionValue === undefined ? [] : [[permissionHostToken.id, permissionValue]])],
     [owner, new Map([[endpointEventGatewayToken.id, gateway]])],
   ]), capabilities: new Map([adapter, ...commands].map(slot => [slot.id, slot])), projections: new Map() };
   const snapshot = createSnapshotView(0, base);
   const adapters = await AdapterIndex.create([adapter], snapshot, new AbortController().signal);
+  // Permission simulation must not resolve a native Client, connect it, or execute its APIs.
+  const clientGetter = vi.spyOn(adapters, 'clientById');
   const index = new CommandIndex(commands, snapshot);
   const projections = new Map<FeatureId, unknown>([[adapterFeatureId, adapters], [commandFeatureId, index]]);
   const store = new SnapshotStore({ ...base, projections }); const im = new ImRuntime(); im.attach(store);
@@ -162,7 +168,7 @@ it('requires explicit authenticated full scope, even when the Host otherwise def
     // HttpHost can reject credentials/scopes before the route executes.
     expect((await f.request('/explain', {}, token)).status).toBe(token === 'demo' ? 403 : 401);
   }
-  const http: HttpHost = createHttpHost({ host: '127.0.0.1', port: 0 }); registerPermissionExplanationRoutes({ http, base: '/api', snapshots: f.store });
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 }); registerPermissionExplanationRoutes({ http, base: '/api', snapshots: f.store });
   const { port } = await http.listen(); cleanups.push(() => http.close());
   expect((await fetch(`http://127.0.0.1:${port}/api/commands/permissions`)).status).toBe(401);
   expect((await fetch(`http://127.0.0.1:${port}/api/commands/permissions/explain`, { method: 'POST', body: '{}' })).status).toBe(401);

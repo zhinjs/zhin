@@ -143,7 +143,8 @@ describe('flat application Runtime', () => {
     await expect(runtime.patchConfig([{ op: 'set', path: ['plugins'], value: { absent: '@test/missing' } }])).rejects.toThrow('@test/missing');
     expect(runtime.snapshot.generation).toBe(1);
     expect(f.document.document).toEqual({ configVersion: 2 });
-    expect(f.document.rollbacks).toBe(1);
+    // Complete graph validation now precedes even an inert document prepare.
+    expect(f.document.rollbacks).toBe(0);
   });
 
   it('uses committed schema declarations to compare inputs without importing an owner being disabled', async () => {
@@ -274,7 +275,7 @@ describe('flat application Runtime', () => {
     await f.childManifest({ runtime: 'isolated', metadata: { displayName: 'Isolated' } });
     let disposed = false;
     const runtime = new RootRuntime({ projectRoot: f.root, config: f.document, environment, modules: f.modules,
-      isolation: { async prepare() { return { descriptor: { name: 'isolated', metadata: { displayName: 'Isolated' } }, dispose() { disposed = true; } }; } } });
+      isolation: { async prepare() { return { descriptor: { name: 'isolated', metadata: { displayName: 'Isolated' } }, async controlEvent() {}, dispose() { disposed = true; } }; } } });
     running.push(runtime);
     await expect(runtime.start()).rejects.toThrow('metadata.displayName in both');
     expect(f.loads).not.toContain(join(f.root, 'plugins/child/plugin.ts'));

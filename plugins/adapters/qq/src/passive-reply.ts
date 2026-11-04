@@ -72,6 +72,18 @@ export class QqPassiveReplyLedger {
    * newest usable source in the conversation. Undefined when only an active message is possible.
    */
   acquire(kind: QqOutboundKind, conversationId: string, preferred?: QqReplySource): PassiveReplyGrant | undefined {
+    const entry = this.#usableSource(kind, conversationId, preferred);
+    if (!entry) return undefined;
+    entry.replies += 1;
+    return { source: entry.source, msgSeq: entry.replies };
+  }
+
+  /** Local stream preflight must not reserve a reply before any content exists. */
+  hasUsableSource(kind: QqOutboundKind, conversationId: string, preferred?: QqReplySource): boolean {
+    return this.#usableSource(kind, conversationId, preferred) !== undefined;
+  }
+
+  #usableSource(kind: QqOutboundKind, conversationId: string, preferred?: QqReplySource): SourceEntry | undefined {
     const limit = QQ_PASSIVE_LIMITS[kind];
     const now = this.now();
     const entries = this.#conversations.get(`${kind}:${conversationId}`) ?? [];
@@ -79,11 +91,8 @@ export class QqPassiveReplyLedger {
       && entry.replies < limit.maxReplies
       && now - entry.receivedAt < limit.windowMs - SAFETY_MARGIN_MS;
     const preferredKey = preferred ? sourceKey(preferred) : undefined;
-    const entry = (preferredKey ? entries.find(item => sourceKey(item.source) === preferredKey && usable(item)) : undefined)
+    return (preferredKey ? entries.find(item => sourceKey(item.source) === preferredKey && usable(item)) : undefined)
       ?? [...entries].reverse().find(usable);
-    if (!entry) return undefined;
-    entry.replies += 1;
-    return { source: entry.source, msgSeq: entry.replies };
   }
 
   /** The platform said this source can no longer be replied to (expired, over the limit, invalid id). */

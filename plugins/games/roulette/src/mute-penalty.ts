@@ -1,4 +1,4 @@
-import { adapterFeatureId, resolveEndpointManagement } from 'zhin.js/adapter';
+import { adapterFeatureId, type AdapterIndex, type EndpointMuteRequest } from 'zhin.js/adapter';
 
 /**
  * Where a game was played: the exact Endpoint identity from `message.conversation.endpoint`
@@ -33,11 +33,9 @@ export interface AdapterProjectionContext {
   project<T>(feature: typeof adapterFeatureId): T;
 }
 
-type MuteGroupMember = (groupId: string, userId: string, durationSeconds: number) => Promise<void>;
+type MuteGroupMember = (request: EndpointMuteRequest) => Promise<void>;
 
-interface EndpointLookup {
-  connection(adapter: string, endpointKey: string): unknown;
-}
+type EndpointLookup = Pick<AdapterIndex, 'resolve' | 'management'>;
 
 export function resolveMutePenalty(context: AdapterProjectionContext): MutePenaltyPort {
   return {
@@ -50,12 +48,12 @@ export function resolveMutePenalty(context: AdapterProjectionContext): MutePenal
       if (!muteGroupMember) {
         throw new Error('This Endpoint cannot mute group members');
       }
-      await muteGroupMember(conversation.id, userId, durationSeconds);
+      await muteGroupMember({ groupId: conversation.id, userId, durationSeconds });
     },
   };
 }
 
-/** project(adapterFeatureId) → connection(adapter, endpointId) → resolveEndpointManagement → muteGroupMember. */
+/** Resolve canonical identity, then capture its guarded management port from the same Index. */
 function findMuteGroupMember(
   context: AdapterProjectionContext,
   conversation: PenaltyConversation,
@@ -63,13 +61,13 @@ function findMuteGroupMember(
   const adapters = readAdapterProjection(context);
   if (!adapters) return undefined;
   if (!conversation.endpointAdapter || !conversation.endpointId) return undefined;
-  let endpoint: unknown;
+  let management: ReturnType<EndpointLookup['management']>;
   try {
-    endpoint = adapters.connection(conversation.endpointAdapter, conversation.endpointId);
+    const id = adapters.resolve(conversation.endpointAdapter, conversation.endpointId);
+    management = id ? adapters.management(id) : undefined;
   } catch {
     return undefined;
   }
-  const management = resolveEndpointManagement(endpoint);
   const muteGroupMember = management?.muteGroupMember;
   if (typeof muteGroupMember !== 'function') return undefined;
   return muteGroupMember.bind(management);
@@ -85,6 +83,6 @@ function readAdapterProjection(context: AdapterProjectionContext): EndpointLooku
   }
   if (!projection || typeof projection !== 'object') return undefined;
   const lookup = projection as Partial<EndpointLookup>;
-  if (typeof lookup.connection !== 'function') return undefined;
+  if (typeof lookup.resolve !== 'function' || typeof lookup.management !== 'function') return undefined;
   return lookup as EndpointLookup;
 }

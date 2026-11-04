@@ -16,7 +16,7 @@ export default defineAgentTool<{ guild_id: string; name: string; color?: number 
   permissions: [platformPermission('qq', 'guild_owner')],
   async execute({ guild_id, name, color  }: { guild_id: string; name: string; color?: number }, context) {
     const client = context.$client;
-    const role = await client.createGuildRole(guild_id, name, color);
+    const role = await client.guildService.createRole(guild_id, { name, color: color || 0, hoist: 0 });
     return { success: !!role, role, message: role ? t(context.locale, 'namedRoleCreated', { p0: name }) : t(context.locale, 'createFailed') };
   },
 });

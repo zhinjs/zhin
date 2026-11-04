@@ -1,6 +1,7 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 /** Satori protocol helpers. Spec: https://satori.chat/zh-CN/protocol/overview.html */
 
-import { isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('satori');
@@ -69,6 +70,7 @@ export interface SatoriApiOptions {
   readonly platform: string;
   readonly userId: string;
   readonly token?: string;
+  readonly signal?: AbortSignal;
 }
 
 export interface SatoriWireSegment {
@@ -77,8 +79,11 @@ export interface SatoriWireSegment {
 }
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
-export interface SatoriEndpointConfig {
+export interface SatoriEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
+  /** Exact remote login selected by this configured Endpoint. */
+  readonly platform: string;
+  readonly userId: string;
   readonly connection?: 'ws' | 'webhook';
   readonly baseUrl: string;
   readonly token?: string;
@@ -91,6 +96,8 @@ export interface ResolvedSatoriWsConfig {
   readonly context: 'satori';
   readonly connection: 'ws';
   readonly id: string;
+  readonly platform: string;
+  readonly userId: string;
   readonly baseUrl: string;
   readonly token?: string;
   readonly heartbeat_interval: number;
@@ -100,6 +107,8 @@ export interface ResolvedSatoriWebhookConfig {
   readonly context: 'satori';
   readonly connection: 'webhook';
   readonly id: string;
+  readonly platform: string;
+  readonly userId: string;
   readonly baseUrl: string;
   readonly token?: string;
   readonly path: string;
@@ -110,6 +119,8 @@ export type ResolvedSatoriConfig = ResolvedSatoriWsConfig | ResolvedSatoriWebhoo
 export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSatoriConfig {
   const connection = config.connection ?? 'ws';
   const id = requiredEndpointField(config.id, 'id');
+  const platform = requiredEndpointField(config.platform, 'platform');
+  const userId = requiredEndpointField(config.userId, 'userId');
   const baseUrl = requiredEndpointField(config.baseUrl, 'baseUrl');
   const token = typeof config.token === 'string' && config.token.trim()
     ? config.token.trim()
@@ -121,6 +132,8 @@ export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSator
       context: 'satori',
       connection: 'webhook',
       id,
+      platform,
+      userId,
       baseUrl,
       token,
       path,
@@ -132,6 +145,8 @@ export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSator
     context: 'satori',
     connection: 'ws',
     id,
+    platform,
+    userId,
     baseUrl,
     token,
     heartbeat_interval: heartbeat,
@@ -140,7 +155,7 @@ export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSator
 
 function requiredEndpointField(
   value: unknown,
-  field: 'id' | 'baseUrl' | 'path',
+  field: 'id' | 'baseUrl' | 'path' | 'platform' | 'userId',
 ): string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new TypeError(`Satori endpoint requires a non-empty ${field}`);
@@ -170,11 +185,14 @@ export function buildWsUrl(baseUrl: string, token?: string): string {
  * Call Satori HTTP API: POST {baseUrl}/v1/{resource}.{method}
  * @see https://satori.chat/en-US/protocol/api.html
  */
+export interface SatoriApiRequest extends SatoriApiOptions {
+  readonly resource: string;
+  readonly method: string;
+  readonly params?: Record<string, unknown>;
+}
+
 export async function callSatoriApi<T = unknown>(
-  options: SatoriApiOptions,
-  resource: string,
-  method: string,
-  params: Record<string, unknown> = {},
+  { resource, method, params = {}, ...options }: SatoriApiRequest,
 ): Promise<T> {
   const { baseUrl, platform, userId, token } = options;
   const url = `${baseUrl.replace(/\/$/, '')}/v1/${resource}.${method}`;
@@ -185,11 +203,14 @@ export async function callSatoriApi<T = unknown>(
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(params),
-  });
+  if (options.signal?.aborted) throw new EndpointDeliveryError('endpoint_inactive', 'Satori request ended before submission', 'not_sent', { cause: options.signal.reason });
+  const body = JSON.stringify(params);
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'POST', headers, body, signal: options.signal });
+  } catch (cause) {
+    throw new EndpointDeliveryError('delivery_unconfirmed', 'Satori HTTP request outcome is unknown', 'unknown', { cause });
+  }
 
   const text = await res.text();
   if (res.status === 401) throw new Error(`Satori API 认证失败: ${text}`);

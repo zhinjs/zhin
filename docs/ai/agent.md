@@ -84,7 +84,7 @@ sequenceDiagram
   - **弹幕模式**（`live`，ADR 0038 §5）：只作用于声明了 `liveDanmaku` 能力的适配器（直播弹幕平台）的会话。直播间里每条弹幕都是候选，不需要 `@` Bot；弹幕收进一个窗口，从第一条起 `windowMs`（默认 10000ms）后发车，且距上一次弹幕回合结束不少于 `minIntervalMs`（默认 15000ms）。窗口不受 `maxSenders` 限制，只保留最新 100 条交给模型（更早的只计数）；在跑回合期间到达的弹幕进下一个窗口。一个窗口只回一次：`mode: pick-one`（默认）由模型挑一条最值得回的（点名 Bot、真问题、新观众、不重复），只 `@` 那一位；`mode: summary` 概括整个窗口后回一次。回合上下文里是一段 `[Danmaku window]`（观众 id、昵称、弹幕，每人最多 120 字，视为数据而非指令）。弹幕回合按匿名普通观众的权限跑，**只开放声明了 `readOnly: true` 的工具**，不开放技能、子 Agent、MCP 与 shell，文件只读，也不会出任何审批卡。主人在直播间发言照旧单独成回合。发出后写审计 `danmaku_window_picked`（`mode`、`candidates` 候选数、`listed_senders`、`picked` 被 `@` 的观众）。弹幕回合不做过时检查。
   - 只合并纯文字消息；带图片、文件、引用或转发的消息总是单独成一个回合。排队等待、合并和替换都会记录在 `zhin trace` 的时间线里（`admission`）。
   - 工作室回合，以及 Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
-- **模型失败会自动切换**：首选模型失败时，按候选链切换到同一 provider 的其他可用模型。
+- **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理，不切换模型。显式配置的媒体感知备用链继续生效。
 - **行为一致**：主 Agent、子 Agent、后台 worker、`AIService.runAgent` 走的是同一条 agentLoop。
 
 一个回合可用的工具 = 插件注册的工具 + `ai.mcpServers` 连接的工具 + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
@@ -129,7 +129,7 @@ ai:
 
 配置 `alwaysLoadedTools` 会在当前档的基础上**追加**；设置 `alwaysLoadedMode: replace` 则完全由 `alwaysLoadedTools` 决定。
 
-**直接调用即加载。** 模型按**确切名字**调用一个在本回合已授权目录里、但还没加载的工具时，运行时自动加载并执行，之后在本会话保持已加载（受 `maxLoadedPerSession` 限制，超出时淘汰最久未用的）。不在授权目录里的名字照旧返回"未知工具"，不泄露其是否存在；审批、硬闸和权限检查对自动加载的调用照常生效。`discover` 的结果会附带最匹配的至多 3 个工具的完整参数定义并同时加载它们，模型可以立刻调用。
+**直接调用即加载。** 模型按**确切名字**调用一个在本回合已授权目录里、但还没加载的工具时，运行时自动加载并执行，之后在本会话保持已加载（受 `maxLoadedPerSession` 限制，超出时淘汰最久未用的）。不在授权目录里的名字照旧返回"未知工具"，不泄露其是否存在；审批、硬闸和权限检查对自动加载的调用照常生效。`discover` 会自动加载最匹配的至多 3 个工具；结果正文只保留检索摘要和已加载名称，完整参数定义通过下一次模型请求的 `tools` 字段提供，不重复写入消息历史。模型可以直接调用，无需再请求 `load_tool`。
 
 **工具列表保持稳定。** 发给模型服务的工具列表顺序固定：常驻工具按名称排序，已加载工具按首次加载顺序排在后面；新加载的工具只会追加到末尾，已加载的工具在会话内保持不动。这样提示词缓存前缀不会因为加载新工具而失效（超出 `maxLoadedPerSession` 淘汰旧工具时会产生一次缓存未命中）。
 
@@ -537,14 +537,18 @@ assistant:
     notifyOnFailure: false
 ```
 
-工作区的引导文件（`SOUL.md`、`AGENTS.md`、`TOOLS.md`）可以写 `{{nickname}}` 插槽，拼提示词时替换成当前 Agent 的
-`ai.agents.<名字>.nickname`；未配置时为 `Zhin`。这样同一份 SOUL 可以给多个昵称不同的机器人共用：
+`SOUL.md` 用第一人称描述性格、价值观和表达方式，不再使用昵称占位符。当前账号的昵称、
+性别、年龄等资料由 Endpoint 单独提供；配置仅补充平台无法提供的字段。这样同一份人设
+可以供多个账号使用，改名也不需要修改 SOUL 或重建共享提示词缓存。
 
 ```md
 # 我是谁
 
-我是 {{nickname}}，混在这几个群里的老成员。
+我是一个温和、直接、略带幽默的群聊伙伴。
+我喜欢自然地交流，不确定时会坦诚说明。
 ```
+
+旧文件中的昵称占位内容请改为第一人称描述；升级不会自动改写工作区文件。
 
 ### 按场景注入小节（scope 标注）
 
@@ -606,31 +610,32 @@ ai:
 
 ## Provider 韧性
 
-主回合的每次模型请求都经过统一的重试 / 超时 / 降级层（`createResilientCompletionPort`）：
+主回合的每次模型请求都经过统一的重试 / 超时层（`createResilientCompletionPort`）。聊天（包括旧配置）固定本轮选定模型，不进行跨模型降级：
 
 - **错误分类**：429 限流、超时、5xx、网络错误可重试；鉴权失败、上下文超长、调用方取消不重试，原样上抛（上下文超长仍走压缩重试）。
-- **退避**：指数退避加抖动；服务端给出 `Retry-After` 时按其等待（OpenAI 的 `retry-after-ms` 精度更高，优先采用），超过上限则直接降级。重试由这一层统一负责，AI SDK 自带重试被关闭，避免叠加。
-- **fallback**：同一模型重试耗尽后，按 `modelCandidates` 顺序切换到下一个模型；每次重试 / 切换 / 放弃都会写一条 `provider_retry` / `provider_fallback` / `provider_give_up` 日志。
+- **退避**：指数退避加抖动；服务端给出 `Retry-After` 时按其等待（OpenAI 的 `retry-after-ms` 精度更高，优先采用），超过上限则停止本次请求的重试并反馈错误。重试由这一层统一负责，AI SDK 自带重试被关闭，避免叠加。
+- **重试耗尽**：反馈当前模型的错误，不切换模型；重试和放弃会写入 `provider_retry` / `provider_give_up` 日志。
 - **用户反馈**：全部失败时回复中文说明（如"模型服务当前限流…请稍后再试"），不暴露原始报错。
-- **流内错误**：HTTP 200 的流中途出现的错误（Anthropic `overloaded_error`、OpenAI `server_error`、Responses API `rate_limit_exceeded`）保留 message / type / code，并推断出对应的 HTTP 状态（如 `overloaded_error` → 529），与同类 HTTP 错误一样重试或降级。DeepSeek 以 finishReason `insufficient_system_resource` 结束时按 5xx 退避重试，不再误报为"无法解析的工具调用"。
+- **流内错误**：HTTP 200 的流中途出现的错误（Anthropic `overloaded_error`、OpenAI `server_error`、Responses API `rate_limit_exceeded`）保留 message / type / code，并推断出对应的 HTTP 状态（如 `overloaded_error` → 529），与同类 HTTP 错误一样按分类决定是否在同一模型上重试。DeepSeek 以 finishReason `insufficient_system_resource` 结束时按 5xx 退避重试，不再误报为"无法解析的工具调用"。
 - **上下文超长**：重试层与压缩共用同一个判定（`llm/context-overflow.ts`），覆盖 OpenAI、Anthropic "prompt is too long"、Gemini "input token count (N) exceeds the maximum number of tokens allowed" 与 Vertex "input token count is N but model only supports up to M"；超长不重试、不降级，交给压缩后重问一次。
-- **Groq**：每分钟限额（RPM / TPM）的 429 按 `retry-after` 重试；429 消息里写明是按天的限额（`requests per day (RPD)` / `tokens per day (TPD)`）时归为 `quota_exhausted`，不重试，直接切换到下一个候选模型（限额按模型计算）。
-- **余额不足**：402、OpenAI `insufficient_quota`、Anthropic "credit balance is too low"、DeepSeek "Insufficient Balance"、OpenRouter "Insufficient credits" 归为 `billing`：**不重试**，降级时**跳过同一 provider 别名下的所有候选**——同一别名共用一个 API key，也就是同一个账户，换模型只会重复失败、白白增加延迟；其他别名（各自的 key）仍会尝试。没有可用候选时提示"模型服务账户余额不足或额度已用完，请联系管理员充值或检查账单"，而不是"请稍后再试"。不同别名配置了同一个 key 的情况无法识别，代价只是多一次失败请求。
+- **Groq**：每分钟限额（RPM / TPM）的 429 按 `retry-after` 重试；429 消息里写明是按天的限额（`requests per day (RPD)` / `tokens per day (TPD)`）时归为 `quota_exhausted`，不重试，提示今天的调用额度已用完，不切换模型。
+- **余额不足**：402、OpenAI `insufficient_quota`、Anthropic "credit balance is too low"、DeepSeek "Insufficient Balance"、OpenRouter "Insufficient credits" 归为 `billing`：**不重试、不切换模型或 provider**，提示"模型服务账户余额不足或额度已用完，请联系管理员充值或检查账单"。
 - **工具参数解析失败**：模型给出的参数不是合法 JSON 对象时，保留原文与解析错误（`inputError`），工具结果把原文（最多 500 字符）回给模型，让它重发正确的调用，而不是对着 `{}` 报"缺少字段"。
-- **Gemini**：429 `RESOURCE_EXHAUSTED` 按 `RetryInfo.retryDelay` 重试；按天的配额（`QuotaFailure` 的 `quotaId` 含 `PerDay`）当天重试也没用，直接切换到下一个候选模型（配额按项目和模型分别计算），没有候选时提示"今天的调用额度已用完"。503 `UNAVAILABLE` 退避重试后降级；504 `DEADLINE_EXCEEDED` 按超时处理。安全拦截（finishReason `SAFETY` / `PROHIBITED_CONTENT` / `BLOCKLIST` / `SPII` / `IMAGE_SAFETY` / `RECITATION`，或提示词的 `blockReason`）**不重试、不降级**，直接给用户一句礼貌的拒答，并记一条 `provider_refused` 日志：同样的内容再问一次结果相同，换模型绕过拒答等于绕过运营方配置的 `safetySettings`，还会把被拦截的内容发给更多模型。
+- **Gemini**：429 `RESOURCE_EXHAUSTED` 按 `RetryInfo.retryDelay` 重试；按天的配额（`QuotaFailure` 的 `quotaId` 含 `PerDay`）当天重试也没用，不重试，提示"今天的调用额度已用完"，不切换模型。503 `UNAVAILABLE` 在同一模型上退避重试，用尽后反馈错误；504 `DEADLINE_EXCEEDED` 按超时处理。安全拦截（finishReason `SAFETY` / `PROHIBITED_CONTENT` / `BLOCKLIST` / `SPII` / `IMAGE_SAFETY` / `RECITATION`，或提示词的 `blockReason`）**不重试、不降级**，直接给用户一句礼貌的拒答，并记一条 `provider_refused` 日志：同样的内容再问一次结果相同，换模型绕过拒答等于绕过运营方配置的 `safetySettings`，还会把被拦截的内容发给更多模型。
 
 ```yaml
 ai:
   agent:
     providerResilience:
-      maxRetries: 2            # 每个模型首次之后的重试次数；0 关闭重试
+      maxRetries: 2            # 所选模型首次之后的重试次数；0 关闭重试
       baseDelayMs: 1000        # 首次退避，之后翻倍
       maxDelayMs: 10000        # 单次退避上限
-      maxRetryAfterMs: 30000   # Retry-After 超过该值时跳过重试，直接 fallback
+      maxRetryAfterMs: 30000   # Retry-After 超过该值时跳过重试，反馈错误
       requestTimeoutMs: 180000 # 单次请求（整段流式输出）超时；0 关闭
       emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
-      fallback: true           # 重试耗尽后是否切换到下一个候选模型
 ```
+
+`providerResilience.fallback` 不会开启聊天跨模型降级，也不控制媒体感知的外层备用链。感知仅按显式配置的 `ai.multimodal.perception.fallbacks` 顺序尝试备用模型；不配置则只用感知主模型。
 
 按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 

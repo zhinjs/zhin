@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { WeChatMpClient } from '../src/client.js';
+import { WeChatMpApiClient } from '../src/api-client.js';
 
-const config = { appId: 'app', appSecret: 's&ecret' } as unknown as ConstructorParameters<typeof WeChatMpClient>[0];
+const config = { appId: 'app', appSecret: 's&ecret' } as unknown as ConstructorParameters<typeof WeChatMpApiClient>[0];
 
-describe('WeChatMpClient access token', () => {
+describe('WeChatMpApiClient access token', () => {
   it('shares one in-flight refresh between concurrent callers', async () => {
     let resolve!: (v: { data: unknown }) => void;
     const fetch = vi.fn(() => new Promise<{ data: unknown }>((r) => { resolve = r; }));
-    const client = new WeChatMpClient(config, fetch);
+    const client = new WeChatMpApiClient(config, fetch);
     const a = client.refreshAccessToken();
     const b = client.refreshAccessToken();
     resolve({ data: { access_token: 'T', expires_in: 7200 } });
@@ -19,7 +19,7 @@ describe('WeChatMpClient access token', () => {
   it('treats a token without expires_in as expiring instead of never expiring', async () => {
     vi.useFakeTimers();
     const fetch = vi.fn(async () => ({ data: { access_token: 'T' } }));
-    const client = new WeChatMpClient(config, fetch);
+    const client = new WeChatMpApiClient(config, fetch);
     await client.refreshAccessToken();
     expect(client.tokenExpired).toBe(false);
     vi.advanceTimersByTime(7200 * 1000);
@@ -29,7 +29,7 @@ describe('WeChatMpClient access token', () => {
 
   it('caps absurd expires_in so the token still expires', async () => {
     vi.useFakeTimers();
-    const client = new WeChatMpClient(config, vi.fn(async () => ({ data: { access_token: 'T', expires_in: 1e308 } })));
+    const client = new WeChatMpApiClient(config, vi.fn(async () => ({ data: { access_token: 'T', expires_in: 1e308 } })));
     await client.refreshAccessToken();
     vi.advanceTimersByTime(7200 * 1000);
     expect(client.tokenExpired).toBe(true);
@@ -45,7 +45,7 @@ describe('WeChatMpClient access token', () => {
         ? new Promise<{ data: unknown }>(() => {})
         : Promise.resolve({ data: { access_token: 'T2', expires_in: 7200 } });
     });
-    const client = new WeChatMpClient(config, fetch);
+    const client = new WeChatMpApiClient(config, fetch);
     const first = expect(client.refreshAccessToken()).rejects.toThrow('timed out');
     await vi.advanceTimersByTimeAsync(15_000);
     await first;
@@ -70,7 +70,7 @@ describe('WeChatMpClient access token', () => {
       }
       return { data: { errcode: 0 } };
     });
-    const client = new WeChatMpClient(config, fetch);
+    const client = new WeChatMpApiClient(config, fetch);
     await client.refreshAccessToken();
     const pending = client.sendCustomerService({});
     await Promise.resolve();

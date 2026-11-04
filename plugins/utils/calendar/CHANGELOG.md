@@ -1,5 +1,51 @@
 # @zhin.js/plugin-calendar
 
+## 0.1.11
+
+### Patch Changes
+
+- Updated dependencies [c15cef9]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [032dc96]
+  - @zhin.js/im-contract@1.1.10
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/host-http@1.1.13
+  - @zhin.js/skill@1.1.12
+
+## 0.1.10
+
+### Patch Changes
+
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [2c3610a]
+  - @zhin.js/host-http@1.1.12
+  - @zhin.js/skill@1.1.11
+  - @zhin.js/tool@1.1.13
+
+## 0.1.9
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/im-contract@1.1.9
+  - @zhin.js/tool@1.1.12
+
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [eb8feeb]
+- Updated dependencies [24a2b71]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [1ca669a]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/tool@1.1.11
+  - @zhin.js/host-http@1.1.11
+  - @zhin.js/im-contract@1.1.8
+
 ## 0.1.7
 
 ### Patch Changes

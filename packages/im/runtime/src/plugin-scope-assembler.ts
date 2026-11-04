@@ -7,6 +7,8 @@ import {
   capabilityId,
   createGenerationAdmissionGate,
   createToken,
+  createPluginEventChannel,
+  freezePluginConfigUpdate,
   projectLocaleToken,
   resolveLocale,
   PluginDatabaseHost,
@@ -30,14 +32,17 @@ import {
   type RuntimeSnapshot,
   type RuntimeConfigDocument,
   type PluginDefinition,
+  type PluginConfigUpdateDeclaration,
   type PluginId,
   type PluginInstanceView,
   type PluginNodeSnapshot,
   type PluginSetupContext,
+  type PluginEventSubscriptions,
   type SetupCapabilityRegistration,
   type TokenId,
 } from '@zhin.js/plugin-runtime';
 import { runtimeEnvironmentToken, type RuntimeEnvironment } from './environment.js';
+import { pluginEventsToken } from './plugin-events.js';
 import {
   EnvStoreFactory,
   envStoreToken,
@@ -62,6 +67,7 @@ export interface PluginConfigResolver {
 }
 
 export interface RootResourceContext {
+  readonly events: PluginEventSubscriptions;
   /** Whether this generation has loaded a provider for the requested Feature. */
   readonly hasFeature?: (feature: FeatureId | string) => boolean;
   /** Exact shadow generation being assembled; never inferred from a latest snapshot. */
@@ -156,6 +162,9 @@ export class PluginScopeAssembler {
     const parentScope = node.parent ? this.scopes.get(node.parent) : undefined;
     if (node.parent && !parentScope) throw new Error(`Missing parent scope for ${node.id}`);
     const scope = new Scope(node.id, parentScope);
+    const eventChannel = createPluginEventChannel();
+    scope.provide(pluginEventsToken, Object.freeze({ owner: node.id, creationGeneration: this.generation, channel: eventChannel }));
+    scope.disposers.add(() => eventChannel.dispose());
     this.scopes.set(node.id, scope);
     this.#created.push(node.id);
     // Every owner shadows the inherited EnvStore with its exact overlay view.
@@ -176,6 +185,7 @@ export class PluginScopeAssembler {
       scope.provide(rootGenerationAdmissionToken, this.#admission);
       const config = this.#primaryConfig;
       await this.installResources?.({
+        events: eventChannel.events,
         hasFeature: (feature) => this.#setupFeatureRoots.get(featureId(String(feature)))?.some(root => root.owner === node.id) ?? false,
         generation: this.generation,
         readCandidateSnapshot: () => {
@@ -203,6 +213,7 @@ export class PluginScopeAssembler {
       role: node.parent ? 'child' : 'root',
     });
     let metadata: PluginDefinition['metadata'];
+    let configUpdate: PluginConfigUpdateDeclaration | undefined;
     // Schema composition is Host-owned even when Plugin execution is isolated.
     // Commit the validated JSON declaration with both kinds of Plugin snapshot.
     const configSchema = this.configResolver.schema?.(node);
@@ -226,6 +237,8 @@ export class PluginScopeAssembler {
       // Ownership transfers to the shadow Scope immediately. Every later
       // validation or binding failure is then covered by normal rollback.
       scope.disposers.add(prepared.dispose);
+      eventChannel.events.on('hmr.pause', event => prepared.controlEvent('hmr.pause', event));
+      eventChannel.events.on('hmr.resume', event => prepared.controlEvent('hmr.resume', event));
       if (!prepared.descriptor.name) {
         throw new TypeError(`Isolated Plugin ${node.package.name} returned an invalid descriptor`);
       }
@@ -244,12 +257,14 @@ export class PluginScopeAssembler {
         throw new TypeError(`${node.package.name} does not default-export a Plugin definition`);
       }
       metadata = mergePluginMetadata(manifest, definition.metadata, node.id);
+      if (definition.configUpdate !== undefined) configUpdate = freezePluginConfigUpdate(definition.configUpdate);
       for (const token of definition.requires ?? []) {
         if (!scope.has(token)) {
           throw new Error(`Missing resource ${token.id} for Plugin ${node.id}`);
         }
       }
       const setupContext: Record<string, unknown> = {
+        events: eventChannel.events,
         signal,
         plugin,
         config: view,
@@ -280,6 +295,7 @@ export class PluginScopeAssembler {
       children: Object.freeze(node.children.map((child) => child.id)),
       metadata,
       ...(configSchema ? { configSchema } : {}),
+      ...(configUpdate ? { configUpdate } : {}),
     }));
     this.config.set(node.id, config);
     this.resources.set(node.id, scope.snapshot());

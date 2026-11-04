@@ -1,6 +1,8 @@
 export * from './contracts.js';
 export { EndpointRuntime } from './endpoint-runtime.js';
 export type {
+  CaptureEndpointOperationInput,
+  CapturedEndpointOperation,
   EndpointRuntimeDetail,
   EndpointRuntimeSummary,
   RuntimeEndpointEditInput,
@@ -40,6 +42,7 @@ export type {
 } from './message-events.js';
 export * from './outbound-renderer.js';
 export * from './outbound-segments.js';
+export type { CoreReplyStream, OpenReplyStreamOptions, ReplyStreamSnapshot, ConfirmedReplyContent } from './progressive-reply.js';
 
 export * from '../../notice.js';
 export * from '../../request.js';

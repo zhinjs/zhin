@@ -1,3 +1,5 @@
+import { DataMigrationError, pluginDataMigrationProviderToken, TargetMigrationScopes, type PluginStateStore } from 'zhin.js/plugin-runtime';
+import { createEarthquakeTargetMigration } from './src/target-migration.js';
 import { resolveLocale } from 'zhin.js/i18n';
 import {
   databaseHostToken,
@@ -13,7 +15,7 @@ import {
 } from './src/config.js';
 import { earthquakeServiceToken } from './src/runtime.js';
 import { EarthquakeService, type PushSender } from './src/service.js';
-import { createMemoryState, SubscriptionStore, type KeyValueState } from './src/subscriptions.js';
+import { createMemoryState, SubscriptionStore, subscriptionKey, type KeyValueState } from './src/subscriptions.js';
 
 /**
  * Plugin Runtime:
@@ -32,9 +34,12 @@ export default definePlugin<EarthquakeConfig>({
     assertEarthquakeTimezone(config.timezone);
 
     let state: KeyValueState | undefined;
-    if (context.resources.has(databaseHostToken)) {
+    let durableState: PluginStateStore | undefined;
+    const database = context.resources.has(databaseHostToken) ? context.resources.use(databaseHostToken) : undefined;
+    if (database) {
       try {
-        state = context.resources.use(databaseHostToken).state;
+        durableState = database.state;
+        state = durableState;
       } catch {
         // No persistent state port: fall back to memory below.
       }
@@ -43,20 +48,24 @@ export default definePlugin<EarthquakeConfig>({
       maxSubscriptions: config.maxSubscriptions,
     });
 
+    const migrationScopes = database && durableState ? new TargetMigrationScopes({ pending: scope => !scope.startsWith('canonical:') }) : undefined;
+    if (database && durableState && migrationScopes) {
+      store.bindMigrationScopes(migrationScopes);
+      context.resources.provide(pluginDataMigrationProviderToken, createEarthquakeTargetMigration({ database,
+        state: durableState, scopes: migrationScopes }));
+    }
+
     let push: PushSender | undefined;
     if (context.resources.has(outboundHostToken)) {
       const outbound = context.resources.use(outboundHostToken);
       push = async (subscription, content) => {
-        await outbound.send({
-          adapter: subscription.adapter,
-          endpointKey: subscription.endpointKey,
-          conversation: {
-            kind: subscription.conversationKind,
-            id: subscription.conversationId,
-          },
-          content,
-          locale: resolveLocale(subscription.locale),
-        });
+        const target = subscription.target;
+        if (!target) throw new DataMigrationError('unavailable', 'Historical earthquake subscription awaits exact-target binding');
+        const send = outbound.sendTarget;
+        if (!send) throw new Error('Canonical subscription delivery requires an exact-target Outbound Host');
+        const run = async () => { await send(target, content, { locale: resolveLocale(subscription.locale) }); };
+        if (migrationScopes) await migrationScopes.run({ scope: subscriptionKey(subscription), run });
+        else await run();
       };
     }
 

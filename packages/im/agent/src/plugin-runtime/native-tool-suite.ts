@@ -2,7 +2,7 @@ import type { AIProvider, ImageGenerationDefaults } from '@zhin.js/ai';
 import type { AgentToolDefinition } from '@zhin.js/tool';
 import { NativeBashToolFeature } from './native-bash-tool.js';
 import { createNativeFileToolFeatures } from './native-file-tools.js';
-import { createNativeImageToolFeature } from './native-image-tool.js';
+import { createNativeImageToolFeature, type NativeImageProviderAcquirer } from './native-image-tool.js';
 import { createNativeImageUploadToolFeature } from './native-image-upload-tool.js';
 import type { ImageAssetPublisher } from '../media/image-assets.js';
 import type { LocalImageAssetStore } from '../media/local-image-assets.js';
@@ -10,6 +10,7 @@ import { createNativeLocalAssetsToolFeature } from './native-local-assets-tool.j
 import { createNativeKnowledgeToolFeature, type KnowledgeIndex } from './native-knowledge-tool.js';
 import { createNativeWebToolFeatures } from './native-web-tools.js';
 import type { NativeSearchDecisionResolver } from '../decision/retrieval.js';
+import { createNativeSelfProfileToolFeatures } from './native-self-profile-tools.js';
 
 export interface NativeAgentToolFeature {
   readonly name: string;
@@ -19,6 +20,7 @@ export interface NativeAgentToolFeature {
 export interface NativeAgentToolSuiteOptions {
   readonly resolveProvider: (alias: string) => AIProvider;
   readonly resolveImageDefaults?: (alias: string) => ImageGenerationDefaults;
+  readonly acquireImageProvider?: NativeImageProviderAcquirer;
   readonly imageAssets?: ImageAssetPublisher;
   readonly localAssets?: LocalImageAssetStore;
   readonly knowledgeIndex?: KnowledgeIndex;
@@ -33,7 +35,8 @@ export function createNativeAgentToolSuite(
     new NativeBashToolFeature(),
     ...createNativeFileToolFeatures(),
     ...createNativeWebToolFeatures(),
-    createNativeImageToolFeature(options.resolveProvider, options.resolveImageDefaults, options.imageAssets),
+    ...createNativeSelfProfileToolFeatures({ imageAssets: options.imageAssets, localAssets: options.localAssets }),
+    createNativeImageToolFeature(options.resolveProvider, options.resolveImageDefaults, options.imageAssets, options.acquireImageProvider),
     ...(options.imageAssets ? [createNativeImageUploadToolFeature(options.imageAssets)] : []),
     ...(options.localAssets ? [createNativeLocalAssetsToolFeature(options.localAssets)] : []),
     ...(options.knowledgeIndex

@@ -15,8 +15,8 @@ export { default as logger, formatCompact, formatCompactLog, formatCompactUsage,
 
 declare module 'zhin.js' {
   interface Models {
-    unified_inbox_message?: object;
-    unified_inbox_request?: object;
-    unified_inbox_notice?: object;
+    unified_inbox_message: object;
+    unified_inbox_request: object;
+    unified_inbox_notice: object;
   }
 }

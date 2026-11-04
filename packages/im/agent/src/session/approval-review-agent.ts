@@ -115,10 +115,20 @@ export class ApprovalReviewAgent {
   }
 }
 
+export interface AutoApprovalPortOptions {
+  /**
+   * Escalate a reviewer rejection to `ask` instead of denying outright. Used for the
+   * master's own private chat: the person who owns the bot is right there, so a
+   * reviewer "no" becomes a question rather than a silent refusal.
+   */
+  readonly escalateRejections?: boolean;
+}
+
 export function createAutoApprovalPort(
   reviewer: ApprovalReviewAgent,
   ask?: ApprovalPort,
   judgment?: ApprovalJudgmentPort,
+  options: AutoApprovalPortOptions = {},
 ): ApprovalOutcomePort {
   const port: ApprovalOutcomePort = {
     available: true,
@@ -143,7 +153,7 @@ export function createAutoApprovalPort(
           reviewer.remember(input, 'approve-once', 'reviewer');
           return { status: 'approved', decision: 'approve-once' };
         }
-        if (decision === 'ask') {
+        if (decision === 'ask' || (options.escalateRejections && isApprovalPortAvailable(ask))) {
           if (!isApprovalPortAvailable(ask)) {
             return { status: 'unavailable', reason: 'the reviewer escalated to a human, but nobody can be asked here' };
           }

@@ -34,6 +34,7 @@ import {
 import {
   DEFAULT_TOOL_APPROVAL_TTL_MS,
   ToolApprovalQueue,
+  ToolApprovalQueueClosedError,
   type ToolApprovalChannel,
   type ToolApprovalEntry,
   type ToolApprovalOrigin,
@@ -88,7 +89,7 @@ export const CORE_DANGEROUS_TOOLS: ReadonlyMap<string, DangerousToolCategory> = 
   ...(['send_red_packet', 'red_packet', 'send_hongbao', 'transfer', 'transfer_money', 'pay', 'payment',
     'send_payment'] as const).map((name) => [name, 'funds'] as const),
   // 身份：改 Bot 资料、头像、签名、昵称、解绑账号
-  ...(['set_profile', 'set_avatar', 'set_signature', 'set_self_nickname', 'set_bot_nickname', 'set_online_status',
+  ...(['set_profile', 'set_self_profile', 'set_avatar', 'set_signature', 'set_self_nickname', 'set_bot_nickname', 'set_online_status',
     'set_group_portrait', 'unbind'] as const).map((name) => [name, 'identity'] as const),
 ]);
 
@@ -487,6 +488,10 @@ export class ToolHardGate {
     }
 
     const queue = this.#context.queue;
+    if (queue?.closed) {
+      return this.#deny(name, category, 'tool_dangerous_no_approval', payload,
+        'the owning Agent approval queue is closed', '当前没有可用的人工审批渠道');
+    }
     const preApproved = queue?.consumeApproved(this.#context.sessionKey, name, input);
     if (preApproved) {
       const channel = preApproved.channel ?? 'console';
@@ -508,16 +513,27 @@ export class ToolHardGate {
       this.#cardsIssued += 1;
     }
 
-    const entry = queue?.enqueue({
-      toolName: name,
-      category,
-      sessionKey: this.#context.sessionKey,
-      requesterId: requesterId ?? null,
-      turnId: this.#context.turnId,
-      args: input,
-      ttlMs: this.#settings.approvalTimeoutMs,
-      ...(this.#context.origin ? { origin: this.#context.origin } : {}),
-    });
+    let entry: ToolApprovalEntry | undefined;
+    try {
+      entry = queue?.enqueue({
+        toolName: name,
+        category,
+        sessionKey: this.#context.sessionKey,
+        requesterId: requesterId ?? null,
+        turnId: this.#context.turnId,
+        args: input,
+        ttlMs: this.#settings.approvalTimeoutMs,
+        ...(this.#context.origin ? { origin: this.#context.origin } : {}),
+      });
+    } catch (error) {
+      if (!(error instanceof ToolApprovalQueueClosedError)) throw error;
+      return this.#deny(name, category, 'tool_dangerous_no_approval', payload,
+        'the owning Agent approval queue closed during admission', '当前没有可用的人工审批渠道');
+    }
+    if (queue?.closed) {
+      return this.#deny(name, category, 'tool_dangerous_no_approval', payload,
+        'the owning Agent approval queue closed during admission', '当前没有可用的人工审批渠道');
+    }
     const imDeliverable = entry ? isImApprovalDeliverable(this.#settings.imApproval, entry.origin) : false;
     const requested = { ...payload, ...(entry ? { approvalId: entry.id, imApproval: imDeliverable } : {}) };
     this.#audit('tool_approval', 'defer', 'tool_approval_requested', requested);
@@ -549,7 +565,7 @@ export class ToolHardGate {
     }
     if (settled.kind === 'unavailable') {
       return this.#deny(name, category, 'tool_dangerous_no_approval', withId, settled.detail,
-        entry ? `审批提示无法送达，${pendingCardHint(imDeliverable)}` : '当前没有可用的人工审批渠道');
+        entry && !queue?.closed ? `审批提示无法送达，${pendingCardHint(imDeliverable)}` : '当前没有可用的人工审批渠道');
     }
     this.#audit('tool_approval', 'deny', 'tool_approval_denied', withId, settled.decidedBy);
     return this.#deny(name, category, 'tool_approval_denied', withId, 'approval denied', '审批人拒绝了此操作');
@@ -647,6 +663,8 @@ export class ToolHardGate {
   ): ToolHardGateResult | null {
     const cooldown = this.#context.opsCooldown;
     if (!cooldown) return null;
+    // 冷却只为群管防刷卡：私聊（含 master 私聊改配置）与自我变更（category=self）不冷却。
+    if (category === 'self' || isPrivateHardGateScene(this.#context)) return null;
     const { platform, sceneId } = this.#context.location;
     const action = toolLocalName(name);
     const target = opsCooldownTarget(input);
@@ -732,6 +750,7 @@ export class ToolHardGate {
         if (entry) queue?.resolve(entry.id, false, 'turn_cancelled');
         return { kind: 'cancelled' };
       }
+      if (queue?.closed) return { kind: 'unavailable', via: 'queue', detail: 'the owning Agent approval queue is closed' };
       if (first.source === 'timer') {
         if (entry) queue?.resolve(entry.id, false, 'timeout');
         return { kind: 'timed_out', via: 'timeout' };
@@ -889,6 +908,11 @@ export function formatHardGateDenial(toolName: string, why: string): string {
 }
 
 /** 冷却命中时给模型的说明：冷却中、剩余毫秒、没有生成新审批卡，明确不要重试 / 改参数 / 换工具。 */
+function isPrivateHardGateScene(context: Pick<ToolHardGateContext, 'conversationScope' | 'location'>): boolean {
+  if (context.conversationScope) return context.conversationScope === 'private';
+  return context.location.sceneId.startsWith('private:');
+}
+
 export function formatOpsCooldownDenial(toolName: string, action: string, cooldownMs: number, remainingMs: number): string {
   const seconds = Math.max(1, Math.round(cooldownMs / 1000));
   return `危险工具「${toolName}」冷却中：本会话的「${action}」${seconds} 秒内只能发起一次审批，还需等待约 ${remainingMs} 毫秒。`

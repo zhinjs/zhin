@@ -20,7 +20,7 @@
 | Agent 编排、工具安全与 MCP | `@zhin.js/agent` |
 | 进程装配 | `@zhin.js/cli` |
 
-Core 不提供第二套 Adapter 基类、Endpoint 类型或进程级注册表。平台插件统一从 `zhin.js/adapter` 导入 `defineAdapter` 与 `Endpoint<TClient>`。
+Core 不提供第二套 Adapter 基类、Endpoint 类型或进程级注册表。平台插件统一从 `zhin.js/adapter` 导入 `Adapter`、`defineAdapter`、结构 `Endpoint` 与 `endpointSpec`。
 
 ## Plugin Runtime
 
@@ -56,37 +56,24 @@ export default defineCommand({
 
 ## Adapter 与 Endpoint
 
-Adapter 定义选择并创建 Endpoint；Endpoint 独占账号连接、平台 Client 和 IO。当前 generation 的 `AdapterIndex` 持有实例并提供发送、控制与 Client 查询。
+Adapter 是账号配置、CAS 与连接 incarnation 的唯一 owner。Endpoint 继承真实 SDK 或实质协议 Client，并通过 `endpointSpec` / `createEndpointSpecification` 附加框架钩子；不覆盖 SDK 原生事件和 API。当前 generation 的 `AdapterIndex` 提供目录、租约路由和只读 connection 数据，不向普通查询暴露内部生命周期对象。
 
 ```typescript
-// adapters/example/index.ts
-import { Endpoint, defineAdapter } from 'zhin.js/adapter'
+// adapters/napcat/index.ts
+import { defineAdapter } from 'zhin.js/adapter'
+import { NapcatAdapter } from '../../src/adapter.js'
+import type { NapCatEndpointConfig } from '../../src/protocol.js'
 
-class ExampleEndpoint extends Endpoint<ExampleClient> {
-  readonly client = new ExampleClient()
-
-  async start(signal: AbortSignal) {
-    // connect transport; bind cancellation to signal
-  }
-
-  async stop() {
-    // idempotent cleanup
-  }
-
-  async send(request) {
-    return this.client.send(request.conversation.id, request.payload)
-  }
-}
-
-export default defineAdapter({
+export default defineAdapter<NapCatEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  create() {
-    return new ExampleEndpoint()
-  },
+  operations: ['recall'],
+  createAdapter: context => new NapcatAdapter(context),
 })
 ```
 
-平台管理、撤回、编辑、reaction 与 typing 通过 Endpoint 的显式 capability/control 端口暴露。Agent 和业务层读取当前 generation 的能力投影，不扫描实例方法，也不维护自己的 Endpoint 目录。
+`createAdapter` 是唯一工厂。公开 `Endpoint` 没有可继承基类，实际 Native Client 规范示例见 [适配器开发](../../../docs/authoring/adapters.md)。同一个公开 `AdapterRegistry` 推断 Command、Handler、Middleware 和 Tool 的实际 Client 与事件类型，不另建 Client token 或目录。
+
+平台管理、撤回、编辑、reaction 与 typing 通过 specification 的显式 capability/control 端口暴露。调用者通过 `AdapterIndex.management/control` 获取捕获真实 incarnation 的受租约保护端口，不能从只读 connection 数据取未受保护的操作。普通业务消息继续走统一出站链路。
 
 ## 消息链路
 
@@ -100,7 +87,7 @@ Message.$reply / OutboundMessageService
   → canonical segment normalization
   → before.sendMessage middleware
   → AdapterIndex.send
-  → Endpoint.send
+  → Endpoint specification send hook
 ```
 
 任何平台发送都必须经过这条链路。

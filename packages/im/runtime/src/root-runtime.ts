@@ -1,5 +1,8 @@
+import { pluginEventInstances, type PluginEventInstance } from './plugin-events.js';
 import { normalizeSourcePath } from './source-path.js';
 import { resolve } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
   DisposeStack,
@@ -8,6 +11,7 @@ import {
   applyConfigPatches,
   ConfigDocumentDivergenceError,
   createSnapshotView,
+  isRootPrivateToken,
   rootPluginId,
   type CapabilityId,
   type CapabilitySlot,
@@ -20,11 +24,17 @@ import {
   type GenerationCommitListener,
   type PluginId,
   type PreparedGeneration,
-  type PreparedConfigDocument,
   type RuntimeConfigDocument,
   type RuntimeSnapshot,
   type SnapshotReader,
   type SnapshotState,
+  type SnapshotLease,
+  type PrepareTransaction,
+  type HmrReloadScope,
+  type HmrOutcome,
+  type HmrEventDetails,
+  type HmrResumeDetails,
+  type Token,
 } from '@zhin.js/plugin-runtime';
 import {
   FeatureCatalog,
@@ -33,10 +43,9 @@ import {
   type FeatureProvider,
 } from '@zhin.js/feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
-import { ConfigComposer, HOST_CONFIG_KEYS, type JsonSchema } from './config-composer.js';
+import { ConfigComposer, ConfigValidationError, HOST_RESOURCE_CONFIG_KEYS, type ComposedConfig, type JsonSchema } from './config-composer.js';
 import { createPrimaryConfig, primaryConfigToken, type PrimaryConfig } from './primary-config.js';
 import { immutableConfigSchema } from './plugin-config-schema.js';
-import { ConfigPatchPlanner, type ConfigPatchPlan } from './config-patch-planner.js';
 import { defineRuntimeEnvironment, type RuntimeEnvironment } from './environment.js';
 import {
   createEnvStore,
@@ -102,6 +111,9 @@ import { TopologyGenerationPreparer } from './topology-generation-preparer.js';
 import { RestartBoundaryPlanner } from './restart-boundary.js';
 import { RuntimeInputPlanner } from './runtime-input-planner.js';
 import { TopologyTransactionPlanner } from './topology-transaction.js';
+import type { ConfigApplicationResult, ConfigApplicationGroup, RootConfigUpdateHandler, RootPluginConfigurationSelection, RuntimeControlContext } from './configuration-application.js';
+import { changedConfigurationPaths, copyConfigurationPaths, readConfigurationPath } from './configuration-paths.js';
+import { APPLICATION_PLUGIN_RESERVED_KEYS } from './application-plugin-declaration.js';
 
 export type {
   PluginConfigResolver,
@@ -122,15 +134,33 @@ export interface RootRuntimeOptions {
   readonly isolation?: IsolatedPluginRuntimePort;
   readonly onControlError?: ControlErrorHandler;
   readonly disabledPluginInstanceKeys?: readonly string[];
+  readonly configUpdates?: readonly RootConfigUpdateHandler[];
+  readonly pluginConfigurationSelection?: RootPluginConfigurationSelection;
 }
 
 export type RootHmrOptions = Omit<HmrCoordinatorOptions, 'modules' | 'ownership' | 'runtime'>;
+
+export class ConfigurationSupersededError extends Error {
+  readonly code = 'configuration_superseded';
+  constructor() { super('Configuration source changed during application'); this.name = 'ConfigurationSupersededError'; }
+}
 
 interface InspectedProject {
   readonly graph: ProjectGraph;
   readonly configResolver: PluginConfigResolver;
   readonly primaryConfigDocument: RuntimeConfigDocument;
   readonly environmentLayers: Readonly<EnvironmentLayers>;
+  readonly composed?: ComposedConfig;
+}
+
+/** Facts for one existing Controller transaction; does not own commit or rollback. */
+interface ReloadEventRequest {
+  readonly target: PluginId | string;
+  readonly trigger: HmrEventDetails['trigger'];
+  readonly changed: readonly string[];
+  readonly planned: HmrReloadScope;
+  readonly prepare: PrepareTransaction<RuntimeGenerationState>;
+  readonly restartRequired?: () => boolean;
 }
 
 interface RuntimeInputCandidate {
@@ -142,6 +172,9 @@ interface RuntimeInputCandidate {
   readonly inspected: InspectedProject;
   readonly topologyChanged: boolean;
   readonly primaryConfigChanged: boolean;
+  readonly applicationGroups?: readonly ConfigApplicationGroup[];
+  readonly rootResources?: ReadonlyMap<Token<unknown>, unknown>;
+  readonly configUpdates?: Readonly<{ config: ReadonlyMap<PluginId, unknown>; projections: ReadonlyMap<FeatureId, unknown> }>;
 }
 
 interface RuntimeInputState {
@@ -161,9 +194,11 @@ export class RootRuntime {
   readonly #configPort?: ConfigDocumentPort;
   #configSnapshot?: ConfigDocumentSnapshot;
   #configDocument?: RuntimeConfigDocument;
+  #desiredDocument?: RuntimeConfigDocument;
   readonly #installResources?: RootResourceInstaller;
   readonly #isolation?: IsolatedPluginRuntimePort;
   #controlTail: Promise<unknown> = Promise.resolve();
+  readonly #controlExecution = new AsyncLocalStorage<{ active: boolean }>();
   #stopResult?: Promise<void>;
   #initialConfigSchemas: ReadonlyMap<string, JsonSchema> = new Map();
   #resolveConfigurationReady!: () => void;
@@ -174,8 +209,33 @@ export class RootRuntime {
   });
   readonly #controller: RootController<RuntimeGenerationState>;
   readonly #disabledPluginInstanceKeys: readonly string[];
+  readonly #onControlError: ControlErrorHandler;
+  readonly #configUpdates: readonly RootConfigUpdateHandler[];
+  readonly #pluginConfigurationSelection?: RootPluginConfigurationSelection;
+  readonly #controlContexts = new WeakSet<RuntimeControlContext>();
+  #applicationRevision = 0;
+  #operationSequence = 0;
+  readonly #operationNamespace = randomUUID();
+  #configurationApplication: ConfigApplicationResult = Object.freeze({ operationId: `config:${this.#operationNamespace}:0`, sourceRevision: '', saved: false,
+    generation: 0, applicationRevision: 0, groups: Object.freeze([]) });
 
   constructor(options: RootRuntimeOptions) {
+    this.#pluginConfigurationSelection = options.pluginConfigurationSelection;
+    this.#configUpdates = Object.freeze([...(options.configUpdates ?? [])]);
+    const ownedPaths: Array<readonly string[]> = [];
+    const handlerIds = new Set<string>();
+    for (const handler of this.#configUpdates) {
+      if (!handler.id || handlerIds.has(handler.id)) throw new TypeError('Configuration update handler ids must be unique');
+      handlerIds.add(handler.id);
+      for (const path of handler.paths) {
+        if (!path.length || !HOST_RESOURCE_CONFIG_KEYS.includes(path[0]!) || path.some(part => !part || ['__proto__', 'constructor', 'prototype'].includes(part))) {
+          throw new TypeError('Configuration update paths must name safe Host fields');
+        }
+        if (ownedPaths.some(previous => isPathWithin(path, previous) || isPathWithin(previous, path))) throw new TypeError('Configuration update paths overlap');
+        ownedPaths.push(path);
+      }
+    }
+    this.#onControlError = options.onControlError ?? (() => undefined);
     void this.#configurationReady.catch(() => undefined);
     this.#projectRoot = normalizeSourcePath(options.projectRoot);
     this.#modules = options.modules;
@@ -198,10 +258,15 @@ export class RootRuntime {
     this.#installResources = options.installResources;
     this.#isolation = options.isolation;
     this.#disabledPluginInstanceKeys = Object.freeze([...(options.disabledPluginInstanceKeys ?? [])]);
-    this.#controller = new RootController(
+    this.#controller = new RootController<RuntimeGenerationState>(
       emptyState(),
       options.onControlError,
       Object.freeze({ ownership: SourceOwnershipIndex.empty() }),
+      (state, root, token) => {
+        if (state.rootResources?.has(token)) return state.rootResources.get(token);
+        const scope = state.model?.scopes.get(root);
+        return scope?.has(token) ? scope.use(token) : undefined;
+      },
     );
   }
 
@@ -211,6 +276,49 @@ export class RootRuntime {
 
   get snapshots(): SnapshotReader {
     return this.#controller.snapshots;
+  }
+
+  get configurationApplication(): ConfigApplicationResult { return this.#configurationApplication; }
+
+  isConfigurationSource(source: string): boolean { return this.#runtimeInputSources.has(normalizeSourcePath(source)); }
+
+  applyConfiguration(expectedSourceRevision?: string): Promise<ConfigApplicationResult> {
+    return this.#enqueueControl(async () => { await this.#applyConfigPatches([], expectedSourceRevision); return this.#configurationApplication; });
+  }
+
+  validateConfiguration(document: RuntimeConfigDocument): Promise<void> {
+    const candidate = structuredClone(document);
+    return this.#enqueueControl(async () => {
+      const environment = this.#environmentSource
+        ? defineEnvironmentLayers(await this.#environmentSource.read()) : this.#environmentLayers;
+      const inspected = await this.#inspectProject(candidate, environment);
+      await this.#validateConfigurationHandlers(inspected.primaryConfigDocument, new AbortController().signal, environment);
+    });
+  }
+
+  /** Trusted composition-root control phase; never await external SDK/model work here. */
+  control<T>(operation: (context: RuntimeControlContext) => Promise<T>, existing?: RuntimeControlContext): Promise<T> {
+    if (existing) {
+      if (!this.#controlContexts.has(existing)) return Promise.reject(new Error('Foreign or expired Runtime control context'));
+      return operation(existing);
+    }
+    return this.#enqueueControl(async () => {
+      const lease = this.snapshots.acquire();
+      const assertActive = () => {
+        if (!this.#controlContexts.has(context) || !lease.active) throw new Error('Runtime control context is no longer active');
+      };
+      const context: RuntimeControlContext = Object.freeze({ lease,
+        readRootResource: <V>(token: Token<V>): V | undefined => { assertActive(); return this.snapshots.rootResource?.(lease, token); },
+        retain: () => {
+          assertActive();
+          if (!this.snapshots.retain) throw new Error('Runtime snapshot reader cannot retain the exact configuration lease');
+          return this.snapshots.retain(lease);
+        },
+      });
+      this.#controlContexts.add(context);
+      try { return await operation(context); }
+      finally { this.#controlContexts.delete(context); lease.release(); }
+    });
   }
 
   /** Committed metadata, or validated startup declarations while first login is pending. */
@@ -251,6 +359,8 @@ export class RootRuntime {
       const snapshot = await this.#controller.start(async (current, signal) => {
         return (await this.#prepare(current, signal)).generation;
       });
+      this.#desiredDocument = this.#configSnapshot?.document ?? this.#configDocument;
+      this.#recordApplication([], true, 0);
       return snapshot;
     } catch (error) {
       this.#rejectConfigurationReady(error);
@@ -261,12 +371,35 @@ export class RootRuntime {
   async reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
     return this.#enqueueControl(async () => {
       const previousInputs = this.#runtimeInputState();
-      return this.#controller.reload(target, async (current, signal) => {
-        return (await this.#prepare(current, signal)).generation;
+      let effectiveDocument = this.#configDocument;
+      let selectionGroups: readonly ConfigApplicationGroup[] = [];
+      const previousGeneration = this.snapshot.generation;
+      const result = await this.#reloadWithEvents({ target, trigger: 'manual', changed: [],
+        planned: { fullRoot: true, plugins: [rootPluginId()], capabilities: [] },
+        prepare: async (current, signal) => {
+          const source = this.#configPort ? await this.#configPort.read() : this.#configSnapshot;
+          const desired = source?.document ?? this.#desiredDocument ?? this.#configDocument!;
+          await this.#inspectProject(desired, this.#environmentLayers, source?.pluginOrder);
+          // A manual full Root reload may adopt plugin edits, but it must not
+          // transfer the old Root owner's versioned resources or pending Host values.
+          const selected = this.#selectPluginConfiguration(desired);
+          selectionGroups = selected.groups;
+          const effective = this.#installResources ? copyConfigurationPaths(selected.document, this.#configDocument!, HOST_RESOURCE_CONFIG_KEYS.map(key => [key])) : selected.document;
+          effectiveDocument = effective;
+          const prepared = await this.#prepare(current, signal, effective);
+          if (source) this.#configSnapshot = source;
+          return prepared.generation;
+        },
       }).catch(error => {
         this.#restoreRuntimeInputs(previousInputs);
         throw error;
       });
+      this.#configDocument = effectiveDocument;
+      if (selectionGroups.length) this.#recordApplication([
+        ...this.#configurationApplication.groups.filter(group => group.id !== 'plugins' && !group.id.startsWith('plugin-host:')),
+        ...selectionGroups,
+      ], true, previousGeneration);
+      return result;
     });
   }
 
@@ -277,9 +410,77 @@ export class RootRuntime {
 
   /** Serializes source reads and input adoption around the Controller's generation transaction. */
   #enqueueControl<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.#controlTail.then(operation, operation);
+    if (this.#controlExecution.getStore()?.active) return Promise.reject(new Error('Recursive Runtime control requires its explicit trusted control context'));
+    const execute = () => {
+      const ticket = { active: true };
+      return this.#controlExecution.run(ticket, async () => {
+        try { return await operation(); } finally { ticket.active = false; }
+      });
+    };
+    const result = this.#controlTail.then(execute, execute);
     this.#controlTail = result.catch(() => undefined);
     return result;
+  }
+
+  /** Hold real old/current instances through notification; the Controller alone publishes candidates. */
+  async #reloadWithEvents(request: ReloadEventRequest): Promise<RuntimeSnapshot> {
+    const previous = this.snapshots.acquire();
+    const oldInstances = pluginEventInstances(this.#model?.scopes);
+    const attempted = new Set<PluginEventInstance>();
+    let active: SnapshotLease | undefined;
+    let outcome: HmrOutcome = 'rejected';
+    const facts = (instance: PluginEventInstance, currentInstances: ReadonlySet<PluginEventInstance>, generation: number): HmrEventDetails => Object.freeze({
+      trigger: request.trigger, changed: Object.freeze([...request.changed]),
+      planned: Object.freeze({ ...request.planned, plugins: Object.freeze([...request.planned.plugins]), capabilities: Object.freeze([...request.planned.capabilities]) }),
+      previousGeneration: previous.value.generation, activeGeneration: generation,
+      receiver: Object.freeze({ owner: instance.owner, creationGeneration: instance.creationGeneration,
+        state: currentInstances.has(instance) ? 'current' : 'replaced' }),
+    });
+    try {
+      const snapshot = await this.#controller.reload(request.target, async (current, signal) => {
+        const currentInstances = new Set(oldInstances);
+        const results = await Promise.allSettled(oldInstances.map(instance => {
+          attempted.add(instance);
+          return instance.channel.dispatch('hmr.pause', Object.freeze({ signal, details: facts(instance, currentInstances, current.generation) }));
+        }));
+        const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason] : []);
+        if (errors.length) throw new AggregateError(errors, 'Plugin pause handlers rejected reload');
+        signal.throwIfAborted();
+        const prepared = await request.prepare(current, signal);
+        if (!prepared) return undefined;
+        const root = current.root;
+        const currentState = this.#controller.committed.state;
+        const sameOwner = currentState.model?.scopes.get(root) === prepared.state.model?.scopes.get(root);
+        return sameOwner && currentState.rootResources?.size
+          ? { ...prepared, state: { ...prepared.state,
+            rootResources: new Map([...currentState.rootResources, ...(prepared.state.rootResources ?? [])]) } }
+          : prepared;
+      });
+      outcome = request.restartRequired?.() ? 'restart-required'
+        : snapshot.generation === previous.value.generation ? 'unchanged' : 'committed';
+      return snapshot;
+    } catch (error) {
+      outcome = this.#stopResult ? 'cancelled' : 'rejected';
+      throw error;
+    } finally {
+      // Acquire before another await: retirement may proceed, but these instances must survive notification.
+      try { active = this.snapshots.acquire(); } catch { if (this.#stopResult) outcome = 'cancelled'; }
+      const current = new Set(pluginEventInstances(this.#model?.scopes));
+      const recipients = new Set([...attempted, ...(active ? current : [])]);
+      const replaced = Object.freeze(oldInstances.filter(instance => !current.has(instance)).map(instance => instance.owner));
+      const results = await Promise.allSettled([...recipients].map(instance => {
+        const details: HmrResumeDetails = Object.freeze({
+          ...facts(instance, current, active?.value.generation ?? this.snapshot.generation),
+          outcome, replaced, ...(!active && this.#stopResult ? { reason: 'root-stopping' as const } : {}),
+        });
+        return instance.channel.dispatch('hmr.resume', Object.freeze({ signal: previous.stopSignal, details }));
+      }));
+      for (const result of results) if (result.status === 'rejected') {
+        try { this.#onControlError(result.reason); } catch { /* Diagnostics cannot reverse a committed transaction. */ }
+      }
+      active?.release();
+      previous.release();
+    }
   }
 
   createHmrCoordinator(options: RootHmrOptions): HmrCoordinator {
@@ -324,22 +525,26 @@ export class RootRuntime {
   async #reloadPlanInQueue(
     plan: GenerationInvalidationPlan,
   ): Promise<RuntimeSnapshot | ProcessInvalidationPlan> {
-    const inputs = await this.#planRuntimeInputs(plan.changed);
-    if (inputs && 'kind' in inputs) return inputs;
+    let inputs: RuntimeInputCandidate | undefined;
     const previousInputs = this.#runtimeInputState();
-    const effectiveInputPlan = inputs
-      ? Object.freeze({
-          ...plan,
-          subtrees: collapseInvalidationSubtrees([...plan.subtrees, ...inputs.roots]),
-          fallbacks: Object.freeze(plan.fallbacks.filter(
-            (fallback) => !inputs.inputSources.has(normalizeSourcePath(fallback.source)),
-          )),
-        })
-      : plan;
+    const previousGeneration = this.snapshot.generation;
     let restart: ProcessInvalidationPlan | undefined;
-    const snapshot = await this.#controller.reload(
-      effectiveInputPlan.subtrees[0] ?? effectiveInputPlan.slots[0] ?? rootPluginId(),
-      async (current, signal) => {
+    const snapshot = await this.#reloadWithEvents({
+      target: plan.subtrees[0] ?? plan.slots[0] ?? rootPluginId(),
+      trigger: 'source', changed: plan.changed,
+      planned: { fullRoot: plan.subtrees.includes(rootPluginId()), plugins: plan.subtrees, capabilities: plan.slots },
+      restartRequired: () => restart !== undefined,
+      prepare: async (current, signal) => {
+        const candidate = await this.#planRuntimeInputs(plan.changed, signal);
+        if (candidate && 'kind' in candidate) { restart = candidate; return undefined; }
+        inputs = candidate;
+        const plannedInputs = inputs;
+        const effectiveInputPlan = plannedInputs
+          ? Object.freeze({ ...plan,
+              subtrees: collapseInvalidationSubtrees([...plan.subtrees, ...plannedInputs.roots]),
+              fallbacks: Object.freeze(plan.fallbacks.filter(fallback => !plannedInputs.inputSources.has(normalizeSourcePath(fallback.source)))),
+            })
+          : plan;
         let prepared: PreparedRuntimeGeneration | undefined;
         const resolved = await this.#resolveCapabilityDelta(current, effectiveInputPlan);
         const effective = resolved.plan;
@@ -375,22 +580,23 @@ export class RootRuntime {
               this.#installResources,
               inspected.environmentLayers,
               this.#isolation,
+              inputs?.configUpdates,
             ).prepare(current, signal, { ...effective, capabilities: resolved.capabilities });
         } else if (effective.subtrees.length === 0 && resolved.capabilities.size > 0 && this.#model) {
           prepared = await new SlotGenerationPreparer(this.#modules, this.#model,
             inputs?.primaryConfigChanged
               ? createPrimaryConfig(inputs.inspected.primaryConfigDocument,
                 createEnvStore(rootPluginId(), this.#environment, inputs.environmentLayers), inputs.inspected.configResolver.compositionMode)
-              : undefined)
+              : undefined, inputs?.configUpdates)
             .prepare(current, resolved.capabilities, signal);
         } else if (this.#model && this.#canPrepareSubtrees(effective)) {
           const inspected = inputs?.inspected ?? await this.#inspectProject(
             inputs?.document,
             inputs?.environmentLayers,
           );
-          prepared = await this.#prepareSubtrees(current, inspected, effective.subtrees, signal);
+          prepared = await this.#prepareSubtrees(current, inspected, effective.subtrees, signal, inputs?.configUpdates);
         } else if (this.#model && inputs?.primaryConfigChanged && effective.subtrees.length === 0 && resolved.capabilities.size === 0) {
-          prepared = await this.#prepareSubtrees(current, inputs.inspected, [], signal);
+          prepared = await this.#prepareSubtrees(current, inputs.inspected, [], signal, inputs.configUpdates);
         } else {
           prepared = await this.#prepare(
             current,
@@ -400,20 +606,23 @@ export class RootRuntime {
           );
         }
         if (!prepared) return undefined;
-        return inputs && previousInputs
-          ? withRuntimeInputHandoff(
-              prepared.generation,
-              () => this.#adoptRuntimeInputs(inputs),
-              () => this.#restoreRuntimeInputs(previousInputs),
-            )
+        if (inputs) inputs = { ...inputs, applicationGroups: this.#preparedConfigurationGroups(
+          inputs.applicationGroups ?? [], inputs.configUpdates, prepared.generation) };
+        const adoptedInputs = inputs;
+        return adoptedInputs ? this.#guardConfigurationSource(await this.#bindConfigurationResources(prepared.generation, adoptedInputs.rootResources), adoptedInputs.configSnapshot)
           : prepared.generation;
       },
-    ).catch(error => {
+    }).catch(error => {
       this.#restoreRuntimeInputs(previousInputs);
+      if (inputs) this.#recordApplication(this.#rejectedApplicationGroups(inputs.applicationGroups ?? [], error), true,
+        previousGeneration, inputs.configSnapshot?.revision);
       throw error;
     });
     if (restart) return restart;
-    if (inputs) this.#adoptRuntimeInputs(inputs);
+    if (inputs) {
+      this.#adoptRuntimeInputs(inputs);
+      this.#recordApplication(inputs.applicationGroups ?? [], true, previousGeneration);
+    }
     return snapshot;
   }
 
@@ -423,23 +632,43 @@ export class RootRuntime {
 
   async #planRuntimeInputs(
     changed: readonly string[],
+    signal: AbortSignal,
+    explicit?: Readonly<{ document: RuntimeConfigDocument; snapshot?: ConfigDocumentSnapshot; pluginOrder?: readonly string[]; inspection?: InspectedProject }>,
   ): Promise<RuntimeInputCandidate | ProcessInvalidationPlan | undefined> {
     const inputSources = new Set(
       changed.map((source) => normalizeSourcePath(source)).filter((source) => this.#runtimeInputSources.has(source)),
     );
-    if (inputSources.size === 0 || !this.#model) return undefined;
-    const configChanged = this.#configPort?.sources?.some(
+    if ((!explicit && inputSources.size === 0) || !this.#model) return undefined;
+    const configChanged = !!explicit || (this.#configPort?.sources?.some(
       (source) => inputSources.has(normalizeSourcePath(source)),
-    ) ?? false;
-    const environmentChanged = this.#environmentSource?.sources.some(
+    ) ?? false);
+    const environmentChanged = !!this.#environmentSource && (configChanged || (this.#environmentSource.sources.some(
       (source) => inputSources.has(normalizeSourcePath(source)),
-    ) ?? false;
-    const configSnapshot = configChanged ? await this.#configPort?.read() : undefined;
-    const document = configSnapshot?.document ?? requireConfigDocument(this.#configDocument);
-    const environmentLayers = environmentChanged && this.#environmentSource
+    )));
+    const configSnapshot = explicit?.snapshot ?? (configChanged ? await this.#configPort?.read() : undefined);
+    const desired = explicit?.document ?? configSnapshot?.document ?? this.#configSnapshot?.document ?? this.#desiredDocument ?? requireConfigDocument(this.#configDocument);
+    let environmentLayers = environmentChanged && this.#environmentSource
       ? defineEnvironmentLayers(await this.#environmentSource.read())
       : this.#environmentLayers;
-    const inspected = await this.#inspectProject(document, environmentLayers, configSnapshot?.pluginOrder ?? this.#configSnapshot?.pluginOrder);
+    const pluginOrder = explicit?.pluginOrder ?? configSnapshot?.pluginOrder ?? this.#configSnapshot?.pluginOrder;
+    const validated = explicit?.inspection && isDeepStrictEqual(explicit.inspection.environmentLayers, environmentLayers)
+      ? explicit.inspection : undefined;
+    const desiredInspection = validated ?? await this.#inspectProject(desired, environmentLayers, pluginOrder);
+    if (!validated) await this.#validateConfigurationHandlers(desiredInspection.primaryConfigDocument, signal, environmentLayers);
+    const selected = await this.#selectConfiguration(desiredInspection.primaryConfigDocument, signal, desired, environmentLayers);
+    const document = selected.document;
+    const environmentGroups: ConfigApplicationGroup[] = [];
+    // Host installers capture expanded startup values. Until an environment
+    // update is proved safe for every Host consumer, preserve its effective layer.
+    if (environmentChanged && this.#installResources && !isDeepStrictEqual(this.#environmentLayers, environmentLayers)) {
+      environmentLayers = this.#environmentLayers;
+      environmentGroups.push(configGroup('environment', [], 'restart-process', 'restart-pending', 'environment-host-consumers'));
+    }
+    const unchangedDesired = isDeepStrictEqual(document, desired) && isDeepStrictEqual(environmentLayers, desiredInspection.environmentLayers);
+    const inspected = unchangedDesired ? desiredInspection : await this.#inspectProject(document, environmentLayers, effectivePluginOrder(document, pluginOrder));
+    // The mixed effective projection is a distinct candidate: a valid desired
+    // document alone cannot prove that retained Host settings satisfy new refs.
+    if (!unchangedDesired) await this.#validateConfigurationHandlers(inspected.primaryConfigDocument, signal, environmentLayers);
     const inputPlan = await new RuntimeInputPlanner(
       new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
       this.#committedConfigComposer(),
@@ -451,26 +680,211 @@ export class RootRuntime {
       nextDocument: document,
       previousEnvironment: this.#environmentLayers,
       nextEnvironment: environmentLayers,
+      ...(inspected.composed && this.#committedPrimaryConfig() ? { composed: inspected.composed,
+        committed: { expandedDocument: this.#committedPrimaryConfig()!.expanded, expandedViews: this.snapshot.config } } : {}),
     });
-    if (inputPlan.hostKeys.length > 0) {
-      return Object.freeze({
-        kind: 'process',
-        changed: Object.freeze([...changed].map((source) => normalizeSourcePath(source))),
-        reasons: Object.freeze(inputPlan.hostKeys.map(
-          (key) => `Host configuration changed: ${key}`,
-        )),
-      });
-    }
+    const updates = await this.#preparePureConfigViews(inspected, inputPlan.roots, signal);
     return Object.freeze({
       document,
       configSnapshot,
       environmentLayers,
       inputSources,
-      roots: inputPlan.roots,
+      roots: updates.roots,
       inspected,
       topologyChanged: new TopologyTransactionPlanner().plan(this.#model.graph, inspected.graph).changed,
       primaryConfigChanged: this.#primaryConfigChanged(inspected.primaryConfigDocument),
+      applicationGroups: [...selected.groups, ...environmentGroups,
+        ...(!isDeepStrictEqual(this.#configDocument, document) && inputPlan.roots.length ? [configGroup('plugins', changedConfigurationPaths(this.#configDocument, document)
+          .filter(path => !HOST_RESOURCE_CONFIG_KEYS.includes(path[0]!)), updates.roots.length ? 'reload-plugin' : 'in-place', 'applied')] : []),
+      ], rootResources: selected.rootResources,
+      configUpdates: updates,
     });
+  }
+
+  async #selectConfiguration(desired: RuntimeConfigDocument, signal: AbortSignal, rawDesired: RuntimeConfigDocument,
+    desiredEnvironment: EnvironmentLayers): Promise<Readonly<{
+    document: RuntimeConfigDocument; groups: readonly ConfigApplicationGroup[]; rootResources: ReadonlyMap<Token<unknown>, unknown>;
+  }>> {
+    const previous = this.#committedPrimaryConfig()?.document ?? requireConfigDocument(this.#configDocument);
+    const pluginSelection = this.#selectPluginConfiguration(rawDesired);
+    let rawDocument = pluginSelection.document;
+    const groups: ConfigApplicationGroup[] = [...pluginSelection.groups];
+    const rootResources = new Map<Token<unknown>, unknown>();
+    const changed = HOST_RESOURCE_CONFIG_KEYS.flatMap(key => changedConfigurationPaths(previous[key], desired[key], [key]));
+    if (!this.#installResources) {
+      if (changed.length) groups.push(configGroup('host-document', changed, 'in-place', 'applied'));
+      return { document: rawDocument, groups, rootResources };
+    }
+    let document = copyConfigurationPaths(desired, previous, HOST_RESOURCE_CONFIG_KEYS.map(key => [key]));
+    rawDocument = copyConfigurationPaths(rawDocument, this.#configDocument ?? {}, HOST_RESOURCE_CONFIG_KEYS.map(key => [key]));
+    const accepted: Array<readonly string[]> = [];
+    for (const handler of this.#configUpdates) {
+      if (!handler.paths.some(path => !isDeepStrictEqual(readConfigurationPath(previous, path), readConfigurationPath(desired, path)))) continue;
+      const candidate = copyConfigurationPaths(document, desired, handler.paths);
+      const lease = this.snapshots.acquire();
+      try {
+        const environment = createEnvStore(rootPluginId(), this.#environment, this.#environmentLayers);
+        const effectiveEnv = createEnvStore(rootPluginId(), this.#environment, this.#environmentLayers);
+        const desiredEnv = createEnvStore(rootPluginId(), this.#environment, desiredEnvironment);
+        const prepared = await handler.prepare({ current: lease.value, previous: document, next: candidate, desired, signal,
+          environmentValueIsCurrent: name => (effectiveEnv.get(name) || undefined) === (desiredEnv.get(name) || undefined),
+          expand: <T>(value: T): T => environment.expandMissingAsEmpty(value),
+          hasEnvironmentValue: name => { const value = environment.get(name); return typeof value === 'string' && value.length > 0; },
+          readRootResource: <T>(token: Token<T>) => this.snapshots.rootResource?.(lease, token) });
+        if (!prepared || prepared.effect === 'restart-process') {
+          groups.push(configGroup(handler.id, handler.paths, 'restart-process', 'restart-pending', prepared?.reasonCode ?? 'unsupported-update'));
+          accepted.push(...handler.paths);
+          continue;
+        }
+        for (const [token, value] of prepared.rootResources) {
+          if (!isRootPrivateToken(token)) throw new TypeError('Configuration bindings must use genuine Root-private tokens');
+          rootResources.set(token, value);
+        }
+        document = candidate;
+        rawDocument = copyConfigurationPaths(rawDocument, rawDesired, handler.paths);
+        accepted.push(...handler.paths);
+        groups.push(configGroup(handler.id, handler.paths, prepared.effect, 'applied'));
+      } catch (error) {
+        // Preparation may throw SDK errors containing credentials or config.
+        // Report only a bounded classification through the existing diagnostic
+        // sink, whose own failure must not change the application outcome.
+        try { void Promise.resolve(this.#onControlError(Object.assign(new Error('Host configuration preparation failed'), {
+          code: 'configuration_preparation_failed', handler: handler.id,
+          errorKind: error instanceof ConfigValidationError ? 'validation' : error instanceof TypeError ? 'type'
+            : error instanceof RangeError ? 'range' : 'unknown',
+        }))).catch(() => undefined); } catch { /* Diagnostics cannot reverse a configuration outcome. */ }
+        accepted.push(...handler.paths);
+        groups.push(configGroup(handler.id, handler.paths, 'replace-resource', 'failed', 'preparation-failed'));
+      } finally { lease.release(); }
+    }
+    for (const path of changed.filter(path => !accepted.some(owned => isPathWithin(path, owned)))) {
+      groups.push(configGroup(`host:${path.join('/')}`, [path], 'restart-process', 'restart-pending', 'host-update-unavailable'));
+    }
+    return { document: rawDocument, groups, rootResources };
+  }
+
+  #selectPluginConfiguration(desired: RuntimeConfigDocument): Readonly<{ document: RuntimeConfigDocument; groups: readonly ConfigApplicationGroup[] }> {
+    const selector = this.#pluginConfigurationSelection;
+    if (!selector) return { document: desired, groups: [] };
+    const previous = requireConfigDocument(this.#configDocument);
+    const environment = createEnvStore(rootPluginId(), this.#environment, this.#environmentLayers);
+    const selected = selector.select({ previous, next: desired, expand: <T>(value: T): T => environment.expandMissingAsEmpty(value) });
+    let document = desired;
+    const groups: ConfigApplicationGroup[] = [];
+    const seen = new Set<string>();
+    for (const { instanceKey, reasonCode } of selected) {
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(instanceKey) || APPLICATION_PLUGIN_RESERVED_KEYS.includes(instanceKey)
+        || !reasonCode || seen.has(instanceKey)) throw new TypeError('Host Plugin selection must name unique safe instance aliases and reasons');
+      seen.add(instanceKey);
+      const paths = [[instanceKey], ['plugins', instanceKey]];
+      document = copyConfigurationPaths(document, previous, paths);
+      // Disabling an existing account is independent and takes effect now. Only
+      // remove a disabled alias when masking a new declaration made it absent.
+      if (readConfigurationPath(document, ['plugins', instanceKey]) === undefined && Array.isArray(document.disable_plugins)) {
+        document = applyConfigPatches(document, [{ op: 'set', path: ['disable_plugins'], value: document.disable_plugins.filter(key => key !== instanceKey) }]);
+      }
+      if (paths.some(path => !isDeepStrictEqual(readConfigurationPath(previous, path), readConfigurationPath(desired, path)))) {
+        groups.push(configGroup(`plugin-host:${instanceKey}`, paths, 'restart-process', 'restart-pending', reasonCode));
+      }
+    }
+    return { document, groups };
+  }
+
+  async #validateConfigurationHandlers(desired: RuntimeConfigDocument, signal: AbortSignal, environment: EnvironmentLayers = this.#environmentLayers): Promise<void> {
+    const lease = this.snapshot.generation ? this.snapshots.acquire() : undefined;
+    const store = createEnvStore(rootPluginId(), this.#environment, environment);
+    try {
+      for (const handler of this.#configUpdates) await handler.validate?.({ current: this.snapshot,
+        previous: this.#committedPrimaryConfig()?.document ?? this.#configDocument ?? {}, next: desired, signal,
+        expand: <T>(value: T): T => store.expandMissingAsEmpty(value),
+        hasEnvironmentValue: name => { const value = store.get(name); return typeof value === 'string' && value.length > 0; },
+        readRootResource: <T>(token: Token<T>) => lease ? this.snapshots.rootResource?.(lease, token) : undefined,
+      });
+    } finally { lease?.release(); }
+  }
+
+  async #preparePureConfigViews(inspected: InspectedProject, roots: readonly PluginId[], signal: AbortSignal) {
+    const config = new Map<PluginId, unknown>();
+    const projections = new Map<FeatureId, unknown>();
+    const retained = new Set<PluginId>();
+    if (!this.#model) return { config, projections, roots };
+    for (const node of graphNodes(inspected.graph.root)) {
+      if (!roots.includes(node.id) || roots.some(root => root !== node.id && isWithinInvalidationRoot(node.id, root))) continue;
+      const declaration = this.snapshot.tree.get(node.id)?.configUpdate;
+      const view = inspected.configResolver(node);
+      if (!declaration || changedConfigurationPaths(this.snapshot.config.get(node.id), view)
+        .some(path => !declaration.featurePaths.some(owned => isPathWithin(path, owned)))) continue;
+      const features = new Set([...this.snapshot.capabilities.values()].filter(slot => slot.owner === node.id).map(slot => slot.feature));
+      const retainedFeatures = [...features].filter(id => this.#model!.providers.get(id)?.runtime.retain === 'when-owner-unchanged');
+      if (!retainedFeatures.length || retainedFeatures.some(id => !this.#model!.providers.get(id)?.runtime.prepareConfigUpdate)) continue;
+      const nextConfig = new Map([...this.snapshot.config, ...config, [node.id, inspected.configResolver(node)] as const]);
+      const prepared = new Map<FeatureId, unknown>();
+      for (const id of retainedFeatures) {
+        const provider = this.#model.providers.get(id)!;
+        const value = await provider.runtime.prepareConfigUpdate!(projections.get(id) ?? this.snapshot.projections.get(id), {
+          snapshot: createSnapshotView(this.snapshot.generation + 1, { ...this.snapshot, config: nextConfig }), signal,
+        }, [node.id]);
+        if (value === undefined) break;
+        prepared.set(id, value);
+      }
+      if (prepared.size !== retainedFeatures.length) continue;
+      retained.add(node.id); config.set(node.id, nextConfig.get(node.id));
+      for (const [feature, value] of prepared) projections.set(feature, value);
+    }
+    return { config, projections, roots: roots.filter(root => !retained.has(root)) };
+  }
+
+  #recordApplication(groups: readonly ConfigApplicationGroup[], saved: boolean, previousGeneration: number,
+    sourceRevision = this.#configSnapshot?.revision ?? ''): void {
+    if (this.snapshot.generation !== previousGeneration) this.#applicationRevision += 1;
+    this.#configurationApplication = Object.freeze({ operationId: `config:${this.#operationNamespace}:${++this.#operationSequence}`, sourceRevision,
+      saved, generation: this.snapshot.generation, applicationRevision: this.#applicationRevision, groups: Object.freeze([...groups]) });
+  }
+
+  #rejectedApplicationGroups(groups: readonly ConfigApplicationGroup[], error: unknown): readonly ConfigApplicationGroup[] {
+    return groups.map(group => group.status !== 'applied' ? group : { ...group,
+      status: this.#controller.state === 'failed' ? 'unknown' : error instanceof ConfigurationSupersededError ? 'superseded' : 'failed',
+      reasonCode: this.#controller.state === 'failed' ? 'generation-integrity-failed' : error instanceof ConfigurationSupersededError ? 'source-revision-changed' : 'activation-failed',
+    });
+  }
+
+  #preparedConfigurationGroups(groups: readonly ConfigApplicationGroup[], updates: RuntimeInputCandidate['configUpdates'],
+    prepared: PreparedGeneration<RuntimeGenerationState>): readonly ConfigApplicationGroup[] {
+    if (!updates?.config.size) return groups;
+    const replacedOwner = [...updates.config.keys()].some(owner => this.#model?.scopes.get(owner) !== prepared.state.model?.scopes.get(owner));
+    const replacedFeature = [...updates.projections].some(([feature, value]) => prepared.snapshot.projections.get(feature) !== value);
+    if (!replacedOwner && !replacedFeature) return groups;
+    // Source/manifest changes can legitimately replace a Feature or ancestor in
+    // the same transaction. The config-only facade is only a retained seed,
+    // never a promise that can override the real prepared projection/lifetime.
+    return groups.map(group => group.id === 'plugins' && group.effect === 'in-place' ? { ...group,
+      effect: replacedOwner ? 'reload-plugin' : 'replace-resource', reasonCode: 'concurrent-runtime-replacement' } : group);
+  }
+
+  #guardConfigurationSource(generation: PreparedGeneration<RuntimeGenerationState>, source?: ConfigDocumentSnapshot): PreparedGeneration<RuntimeGenerationState> {
+    if (!source || !this.#configPort) return generation;
+    const handoffs = new GenerationHandoffStack();
+    if (generation.handoff) handoffs.add(generation.handoff);
+    handoffs.add({ activateNext: async signal => {
+      signal.throwIfAborted();
+      if ((await this.#configPort!.read()).revision !== source.revision) throw new ConfigurationSupersededError();
+    } });
+    return { ...generation, handoff: handoffs.seal() };
+  }
+
+  async #bindConfigurationResources(generation: PreparedGeneration<RuntimeGenerationState>, resources?: ReadonlyMap<Token<unknown>, unknown>): Promise<PreparedGeneration<RuntimeGenerationState>> {
+    const previousScope = this.#model?.scopes.get(this.snapshot.root);
+    const nextScope = generation.state.model?.scopes.get(this.snapshot.root);
+    if (previousScope !== nextScope) {
+      // A new Root owns a new resource pool. Its installer must seed bindings
+      // from the effective candidate; a prepared old-owner version cannot move.
+      if ([...(resources?.keys() ?? [])].some(token => !nextScope?.has(token))) {
+        await generation.dispose();
+        throw new Error('A replaced Root owner did not provide its versioned configuration binding');
+      }
+      return { ...generation, state: { ...generation.state, rootResources: undefined } };
+    }
+    return { ...generation, state: { ...generation.state, rootResources: resources } };
   }
 
   #adoptRuntimeInputs(candidate: RuntimeInputCandidate): void {
@@ -551,12 +965,15 @@ export class RootRuntime {
     environmentLayers: Readonly<EnvironmentLayers> = this.#environmentLayers,
     pluginOrder?: readonly string[],
   ): Promise<InspectedProject> {
-    if (document === undefined) await this.#refreshConfigDocument();
+    // Source reloads use the effective document. A saved pending Host change
+    // must never be pulled in implicitly while rebuilding unrelated code.
+    if (document === undefined && this.snapshot.generation === 0) await this.#refreshConfigDocument();
     const activeDocument = document ?? this.#configDocument;
     const resolver = await NodePackageResolver.create(this.#projectRoot);
     const graph = await new ProjectGraphService(resolver, {
       disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
-    }).inspect(this.#projectRoot, activeDocument, pluginOrder ?? this.#configSnapshot?.pluginOrder);
+    }).inspect(this.#projectRoot, activeDocument, pluginOrder ?? (this.snapshot.generation > 0 && activeDocument
+      ? effectivePluginOrder(activeDocument, this.#configSnapshot?.pluginOrder) : this.#configSnapshot?.pluginOrder));
     if (this.#configResolver) {
       const customResolver = this.#configResolver;
       const schemas = new Map(graphNodes(graph.root).flatMap(node => {
@@ -594,6 +1011,7 @@ export class RootRuntime {
       configResolver: this.#configViewResolver(composed.views, environmentLayers, composed.ownSchemas),
       primaryConfigDocument: composed.document,
       environmentLayers,
+      composed,
     };
   }
 
@@ -642,106 +1060,61 @@ export class RootRuntime {
     return !isDeepStrictEqual(this.#committedPrimaryConfig()?.document, document);
   }
 
-  async #applyConfigPatches(patches: readonly ConfigPatch[]): Promise<RuntimeSnapshot> {
-    if (this.#configResolver || !this.#configDocument) {
-      throw new Error('Config patches require a document-backed RootRuntime config');
-    }
-    // Adopt any external edit before planning so the port's revision check
-    // cannot conflict and the patch applies on top of the on-disk document.
-    const previousInputs = this.#runtimeInputState();
-    const previousDocument = this.#configDocument;
-    await this.#refreshConfigDocument();
-    const currentDocument = requireConfigDocument(this.#configDocument);
-    let plan: ConfigPatchPlan | undefined;
-    let documentTransaction: PreparedConfigDocument | undefined;
-    let committedDocument: ConfigDocumentSnapshot | undefined;
-    const snapshot = await this.#controller.reload(rootPluginId(), async (current, signal) => {
-      let prepared: PreparedRuntimeGeneration | undefined;
-      signal.throwIfAborted();
-      try {
-        const candidate = applyConfigPatches(currentDocument, patches);
-        const editsDeclarations = patches.some(patch => patch.path.length === 0 || patch.path[0] === 'plugins');
-        if (this.#configPort && (!isDeepStrictEqual(currentDocument, candidate) || editsDeclarations)) {
-          const currentSnapshot = requireConfigDocumentSnapshot(this.#configSnapshot);
-          // Port preparation must remain inert; validation and shadow setup can
-          // still reject this candidate without touching the backing document.
-          documentTransaction = await this.#configPort.prepare(currentSnapshot, patches);
-          if (!isDeepStrictEqual(documentTransaction.document, candidate)) {
-            throw new ConfigDocumentDivergenceError();
-          }
-        }
-        const resolver = await NodePackageResolver.create(this.#projectRoot);
-        const graphService = new ProjectGraphService(resolver, {
-          disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
-        });
-        const previousGraph = this.#model?.graph ?? await graphService.inspect(this.#projectRoot, previousDocument);
-        const pluginOrder = documentTransaction?.pluginOrder
-          ?? patchedPluginOrder(this.#configSnapshot?.pluginOrder, candidate, patches);
-        const graph = await graphService.inspect(this.#projectRoot, candidate, pluginOrder);
-        const planned = await new ConfigPatchPlanner(
-          new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
-          this.#committedConfigComposer(),
-        ).plan(previousGraph, currentDocument, patches, graph, previousDocument);
-        plan = planned;
-        const topologyChanged = this.#model
-          ? new TopologyTransactionPlanner().plan(this.#model.graph, graph).changed : false;
-        const orderChanged = !isDeepStrictEqual(this.#configSnapshot?.pluginOrder, pluginOrder);
-        if (!planned.documentChanged && !topologyChanged && !orderChanged && isDeepStrictEqual(previousDocument, candidate)) {
-          if (documentTransaction) await documentTransaction.rollback();
-          return undefined;
-        }
-        const inspected: InspectedProject = {
-          graph,
-          configResolver: this.#configViewResolver(planned.views, this.#environmentLayers, planned.ownSchemas),
-          primaryConfigDocument: planned.document,
-          environmentLayers: this.#environmentLayers,
-        };
-        if (!this.#primaryConfigChanged(planned.document) && planned.roots.length === 0 && !topologyChanged) {
-          if (documentTransaction) committedDocument = await documentTransaction.commit();
-          return undefined;
-        }
-        const previousPrimary = this.#committedPrimaryConfig()?.document;
-        const hostChanged = HOST_CONFIG_KEYS.some(key => !isDeepStrictEqual(previousPrimary?.[key], planned.document[key]));
-        const retainRoot = !this.#installResources || !hostChanged;
-        // Host sections require resource reinstallation. Other edits publish a
-        // current PrimaryConfig projection while retaining Root lifetimes.
-        if (this.#model && retainRoot && topologyChanged && !planned.roots.includes(rootPluginId())) {
-          prepared = await new TopologyGenerationPreparer(
-            this.#modules, this.#model, graph, inspected.configResolver,
-            inspected.primaryConfigDocument, this.#environment, this.#installResources,
-            this.#environmentLayers, this.#isolation,
-          ).prepare(current, signal);
-        } else if (this.#model && retainRoot && !planned.roots.includes(rootPluginId())) {
-          prepared = await this.#prepareSubtrees(current, inspected, planned.roots, signal);
-        } else {
-          prepared = await this.#prepareInspected(current, inspected, signal);
-        }
-        if (!prepared) {
-          if (documentTransaction) committedDocument = await documentTransaction.commit();
-          return undefined;
-        }
-        return documentTransaction
-          ? withConfigDocumentHandoff(
-              prepared.generation,
-              documentTransaction,
-              (committed) => { committedDocument = committed; },
-            )
-          : prepared.generation;
-      } catch (error) {
-        // A prepared document transaction is inert until handoff; roll it back
-        // before any shadow-phase failure escapes so the port never leaks a
-        // pending write.
-        if (documentTransaction) await documentTransaction.rollback().catch(() => undefined);
-        throw error;
-      }
-    }).catch(error => {
-      this.#restoreRuntimeInputs(previousInputs);
+  async #applyConfigPatches(patches: readonly ConfigPatch[], expectedSourceRevision?: string): Promise<RuntimeSnapshot> {
+    if (this.#configResolver || !this.#configDocument) throw new Error('Config patches require a document-backed RootRuntime config');
+    const previousGeneration = this.snapshot.generation;
+    const currentSource = this.#configPort ? await this.#configPort.read() : this.#configSnapshot;
+    if (expectedSourceRevision !== undefined && expectedSourceRevision !== (currentSource?.revision ?? '')) throw new ConfigurationSupersededError();
+    const sourceDocument = currentSource?.document ?? this.#desiredDocument ?? this.#configDocument;
+    const candidate = applyConfigPatches(sourceDocument, patches);
+    const pluginOrder = patchedPluginOrder(currentSource?.pluginOrder, candidate, patches);
+    // Reject the complete invalid candidate before saving anything. Preparation
+    // of SDK resources is deliberately separate from this structural preflight.
+    const desiredEnvironment = this.#environmentSource ? defineEnvironmentLayers(await this.#environmentSource.read()) : this.#environmentLayers;
+    const desiredInspection = await this.#inspectProject(candidate, desiredEnvironment, pluginOrder);
+    await this.#validateConfigurationHandlers(desiredInspection.primaryConfigDocument, new AbortController().signal, desiredEnvironment);
+    if (this.#configPort && patches.length && (!isDeepStrictEqual(sourceDocument, candidate) || patches.some(patch => patch.path[0] === 'plugins'))) {
+      const transaction = await this.#configPort.prepare(requireConfigDocumentSnapshot(currentSource), patches);
+      if (!isDeepStrictEqual(transaction.document, candidate)) { await transaction.rollback(); throw new ConfigDocumentDivergenceError(); }
+      // A committed source is never automatically restored after an application
+      // failure: direct external edits already have these save/apply semantics.
+      this.#configSnapshot = await transaction.commit();
+    } else if (currentSource) this.#configSnapshot = currentSource;
+    this.#desiredDocument = structuredClone(candidate);
+    let groups: readonly ConfigApplicationGroup[] = [];
+    let appliedInputs: RuntimeInputCandidate | undefined;
+    try {
+      const snapshot = await this.#reloadWithEvents({ target: rootPluginId(), trigger: 'manual', changed: [],
+        planned: { fullRoot: false, plugins: [], capabilities: [] },
+        prepare: async (current, signal) => {
+          const planned = await this.#planRuntimeInputs([...this.#runtimeInputSources], signal,
+            { document: candidate, snapshot: this.#configSnapshot, pluginOrder, inspection: desiredInspection });
+          if (!planned || 'kind' in planned) throw new Error('Configuration application did not produce a candidate');
+          appliedInputs = planned;
+          groups = planned.applicationGroups ?? [];
+          const inspected = planned.inspected;
+          const updates = { roots: planned.roots, ...(planned.configUpdates ?? { config: new Map<PluginId, unknown>(), projections: new Map<FeatureId, unknown>() }) };
+          const topologyChanged = planned.topologyChanged;
+          if (!planned.primaryConfigChanged && !topologyChanged && !planned.roots.length) return undefined;
+          let prepared: PreparedRuntimeGeneration | undefined;
+          if (topologyChanged && !updates.roots.includes(rootPluginId())) {
+            prepared = await new TopologyGenerationPreparer(this.#modules, this.#model!, inspected.graph, inspected.configResolver,
+              inspected.primaryConfigDocument, this.#environment, this.#installResources, inspected.environmentLayers, this.#isolation, planned.configUpdates).prepare(current, signal);
+          } else if (!updates.roots.includes(rootPluginId())) {
+            prepared = await this.#prepareSubtrees(current, inspected, updates.roots, signal, updates);
+          } else prepared = await this.#prepareInspected(current, inspected, signal);
+          if (!prepared) return undefined;
+          groups = this.#preparedConfigurationGroups(groups, planned.configUpdates, prepared.generation);
+          return this.#guardConfigurationSource(await this.#bindConfigurationResources(prepared.generation, planned.rootResources), planned.configSnapshot);
+        },
+      });
+      if (appliedInputs) this.#adoptRuntimeInputs(appliedInputs);
+      this.#recordApplication(groups, true, previousGeneration);
+      return snapshot;
+    } catch (error) {
+      this.#recordApplication(this.#rejectedApplicationGroups(groups, error), true, previousGeneration);
       throw error;
-    });
-    const completed = requireConfigPatchPlan(plan);
-    this.#configDocument = completed.candidate;
-    if (committedDocument) this.#configSnapshot = committedDocument;
-    return snapshot;
+    }
   }
 
   #prepareInspected(
@@ -768,6 +1141,7 @@ export class RootRuntime {
     inspected: InspectedProject,
     roots: readonly PluginId[],
     signal: AbortSignal,
+    configUpdates?: Readonly<{ config: ReadonlyMap<PluginId, unknown>; projections: ReadonlyMap<FeatureId, unknown> }>,
   ): Promise<PreparedRuntimeGeneration> {
     if (!this.#model) return this.#prepareInspected(current, inspected, signal);
     try {
@@ -781,6 +1155,7 @@ export class RootRuntime {
         this.#installResources,
         inspected.environmentLayers,
         this.#isolation,
+        configUpdates,
       ).prepare(current, roots, signal);
     } catch (error) {
       if (!(error instanceof SubtreeTopologyChangedError)) throw error;
@@ -794,6 +1169,23 @@ function collapseInvalidationSubtrees(values: readonly PluginId[]): readonly Plu
   return Object.freeze(sorted.filter((candidate, index) =>
     !sorted.slice(0, index).some((root) => isWithinInvalidationRoot(candidate, root)),
   ));
+}
+
+function isPathWithin(path: readonly string[], parent: readonly string[]): boolean {
+  return parent.length <= path.length && parent.every((part, index) => path[index] === part);
+}
+
+function configGroup(id: string, paths: readonly (readonly string[])[], effect: ConfigApplicationGroup['effect'],
+  status: ConfigApplicationGroup['status'], reasonCode?: string): ConfigApplicationGroup {
+  return Object.freeze({ id, paths: Object.freeze(paths.map(path => Object.freeze([...path]))), effect, status,
+    ...(reasonCode ? { reasonCode } : {}), dependsOn: Object.freeze([]) });
+}
+
+/** Project validated source ordering onto the independently selected effective declarations. */
+function effectivePluginOrder(document: RuntimeConfigDocument, source: readonly string[] | undefined): readonly string[] | undefined {
+  if (!source) return undefined;
+  const keys = Object.keys(document.plugins ?? {});
+  return Object.freeze([...source.filter(key => keys.includes(key)), ...keys.filter(key => !source.includes(key))]);
 }
 
 /** Preserve known source ordering when a structural port omits optional write metadata. */
@@ -824,37 +1216,6 @@ function isWithinInvalidationRoot(plugin: PluginId, root: PluginId): boolean {
   return plugin === root || plugin.startsWith(`${root}/`);
 }
 
-function withConfigDocumentHandoff<TState>(
-  generation: PreparedGeneration<TState>,
-  document: PreparedConfigDocument,
-  committed: (snapshot: ConfigDocumentSnapshot) => void,
-): PreparedGeneration<TState> {
-  const handoffs = new GenerationHandoffStack();
-  if (generation.handoff) handoffs.add(generation.handoff);
-  // File commit follows Resource activation, so reverse compensation restores
-  // the document before it deactivates the shadow generation.
-  handoffs.add({
-    async activateNext(signal) {
-      signal.throwIfAborted();
-      committed(await document.commit());
-      signal.throwIfAborted();
-    },
-    deactivateNext: () => document.rollback(),
-  });
-  return { ...generation, handoff: handoffs.seal() };
-}
-
-function withRuntimeInputHandoff<TState>(
-  generation: PreparedGeneration<TState>,
-  activate: () => void,
-  deactivate: () => void,
-): PreparedGeneration<TState> {
-  const handoffs = new GenerationHandoffStack();
-  if (generation.handoff) handoffs.add(generation.handoff);
-  handoffs.add({ activateNext: activate, deactivateNext: deactivate });
-  return { ...generation, handoff: handoffs.seal() };
-}
-
 function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<ConfigDocumentPort>;
@@ -883,10 +1244,6 @@ function cloneConfigPatches(patches: readonly ConfigPatch[]): readonly ConfigPat
   )));
 }
 
-function requireConfigPatchPlan(plan: ConfigPatchPlan | undefined): ConfigPatchPlan {
-  if (!plan) throw new Error('RootController completed without a Config patch plan');
-  return plan;
-}
 
 class GenerationAssembler {
   readonly #capabilities = new Map<CapabilityId, CapabilitySlot>();
@@ -931,7 +1288,7 @@ class GenerationAssembler {
       this.#plugins.installSetupFeatureAliases(featureSetupAliases(this.#catalog.values()), this.#rootsByFeature);
       await this.#plugins.setupTree(this.graph.root, signal);
       await this.#discover(signal);
-      const projected = await new FeatureProjector(this.#catalog.values())
+      const projected = await new FeatureProjector(this.#catalog.values(), this.#plugins.scopes.get(this.graph.root.id))
         .project(this.generation, this.#projectionState(), signal);
       for (const [feature, dispose] of projected.disposers) {
         this.#projectionDisposers.set(feature, dispose);

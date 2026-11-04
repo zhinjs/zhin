@@ -15,3 +15,7 @@ export {
   type WorkroomHostModule,
 } from './workroom-loader.js';
 export { createSelfChangeImpactPort } from './self-change-impact.js';
+export { createSelfChangePluginRoots } from './self-change-plugin-roots.js';
+export { createModelConfigurationUpdateHandler } from './configuration-update.js';
+
+export { registerPersonalModelHttp } from '../personal-models/register-http.js';

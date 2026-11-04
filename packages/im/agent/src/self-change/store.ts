@@ -5,7 +5,7 @@
  * - 状态只前进（见 `policy.ts`），每次迁移先原子落盘 `change.json`，再写一行 `kind=self_change` 审计；
  *   审计写失败不影响迁移。
  * - 磁盘有界（§6a）：
- *   - 进入终态立即删 `files/` 与 `snapshot/`，只留 `change.json`；`failed`（已急停）保留现场直到人标记已处理。
+ *   - 进入终态立即删 `files/` 与 `snapshot/`，只留 `change.json`；`failed`（人工核验或急停）保留现场直到人标记已处理。
  *   - 终态 `change.json` 保留 14 天后删除整个目录；`draft` / `ready` / `pending` 闲置 24 小时 → `expired`。
  *   - 单变更 ≤ 5 MB / 50 文件，总量 ≤ 50 MB；超限在写入**之前**拒绝（`change_quota_exceeded`）。
  *   - 清理在 {@link SelfChangeStore.startPruning} 启动时扫一次、之后每 6 小时一次；只删暂存区内、
@@ -37,9 +37,11 @@ import {
   normalizeChangeTarget,
   selfChangeContentHash,
   selfChangeOutcome,
+  selfChangePluginRootsProvider,
   sha256Hex,
   type SelfChangeConfigPatch,
   type SelfChangeFileEntry,
+  type SelfChangePluginRootsSource,
   type SelfChangeStatus,
 } from './policy.js';
 
@@ -103,6 +105,10 @@ export interface SelfChangeApplyState {
   readonly restarts: number;
   /** 正向生效失败的原因（回滚后回报用）。 */
   readonly failure: string | null;
+  /** Exact last revision acknowledged to this change; absent on older/interrupted records. */
+  readonly configRevision?: string;
+  /** Durable Host outcome, so recover cannot turn an unknown handoff into a rollback/retry. */
+  readonly configApplication?: 'applied' | 'restart-pending' | 'unconfirmed' | 'superseded' | 'invalid' | 'failed' | 'blocked';
 }
 
 /** 回滚快照里的一个文件：`content: null` 表示原本不存在。 */
@@ -160,8 +166,8 @@ export interface SelfChangeStoreOptions {
   readonly root: string;
   readonly projectRoot: string;
   readonly protectedPaths?: HostProtectedPaths;
-  /** 额外的本地插件根（相对项目根）。 */
-  readonly pluginRoots?: readonly string[];
+  /** 额外的本地插件根（相对项目根）；宿主传 provider，每次起草时重读当前 generation 的插件根。 */
+  readonly pluginRoots?: SelfChangePluginRootsSource;
   readonly audit?: () => SelfChangeAuditSink | undefined;
   readonly now?: () => number;
   readonly retentionMs?: number;
@@ -215,7 +221,7 @@ export class SelfChangeStore {
   readonly root: string;
   readonly #projectRoot: string;
   readonly #protectedPaths?: HostProtectedPaths;
-  readonly #pluginRoots: readonly string[];
+  readonly #pluginRoots: () => readonly string[];
   readonly #audit: () => SelfChangeAuditSink | undefined;
   readonly #now: () => number;
   readonly #retentionMs: number;
@@ -230,7 +236,7 @@ export class SelfChangeStore {
     this.root = path.resolve(options.root);
     this.#projectRoot = path.resolve(options.projectRoot);
     this.#protectedPaths = options.protectedPaths;
-    this.#pluginRoots = Object.freeze([...(options.pluginRoots ?? [])]);
+    this.#pluginRoots = selfChangePluginRootsProvider(options.pluginRoots);
     this.#audit = options.audit ?? (() => undefined);
     this.#now = options.now ?? Date.now;
     this.#retentionMs = options.retentionMs ?? DEFAULT_CHANGE_RETENTION_MS;
@@ -265,10 +271,11 @@ export class SelfChangeStore {
       }
       const staged: { entry: SelfChangeFileEntry; content: string | null }[] = [];
       const seen = new Set<string>();
+      const pluginRoots = this.#pluginRoots();
       for (const file of rawFiles) {
         let target: string;
         try {
-          target = normalizeChangeTarget(file?.path, { projectRoot: this.#projectRoot, protectedPaths: this.#protectedPaths, pluginRoots: this.#pluginRoots });
+          target = normalizeChangeTarget(file?.path, { projectRoot: this.#projectRoot, protectedPaths: this.#protectedPaths, pluginRoots });
         } catch (error) {
           if (error instanceof SelfChangePathError) reject('change_path_forbidden', error, { path: String(file?.path ?? '').slice(0, 200) });
           throw error;
@@ -500,6 +507,27 @@ export class SelfChangeStore {
   /** 写一行 `self_change` 审计（迁移之外的事件，例如回报已送达 / 改投）。 */
   audit(record: SelfChangeRecord, code: DecisionReasonCode, actor: DecisionActor, payload: Readonly<Record<string, unknown>>, detail?: string): void {
     this.#emit({ origin: record.origin, changeId: record.id, code, actor, payload: { ...payload }, ...(detail ? { detail } : {}) });
+  }
+
+  /**
+   * 写一行不属于任何变更的 `self_change` 审计：起草前就被拒的请求（#1051 F4：起草权限、全实例待审上限）。
+   */
+  auditRequest(
+    origin: SelfChangeOrigin,
+    code: DecisionReasonCode,
+    payload: Readonly<Record<string, unknown>> = {},
+    options: { readonly turnId?: string; readonly detail?: string } = {},
+  ): void {
+    this.#emit({
+      origin,
+      changeId: null,
+      code,
+      actor: 'policy',
+      actorId: origin.userId,
+      payload: { ...payload },
+      ...(options.turnId ? { turnId: options.turnId } : {}),
+      ...(options.detail ? { detail: options.detail } : {}),
+    });
   }
 
   /** 暂存区当前占用（字节，不跟随符号链接）。 */

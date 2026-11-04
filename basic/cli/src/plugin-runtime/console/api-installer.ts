@@ -1,4 +1,4 @@
-import type { PluginConsoleRpc } from '@zhin.js/plugin-runtime';
+import type { HostConsoleRpcFactory } from './plugin-console-rpc.js';
 import {
   consoleEventHubToken,
   createConsoleEventHub,
@@ -39,8 +39,8 @@ export interface ConsoleControlPlaneOptions {
   readonly pluginLifecycleStore: PluginLifecycleStore;
   readonly eventHub?: ConsoleEventHub;
   readonly configuration: ConsoleConfigurationStore;
-  /** Host-owned read-only Console RPC answered as `plugin.root.<name>`. */
-  readonly hostConsoleRpc?: PluginConsoleRpc;
+  /** Host-owned Console methods resolved from each request's captured Root lease. */
+  readonly hostConsoleRpc?: HostConsoleRpcFactory;
 }
 
 export interface StartConsoleControlPlaneOptions extends ConsoleControlPlaneOptions {

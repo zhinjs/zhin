@@ -28,7 +28,7 @@
 
 | 章节 | 说明 |
 |------|------|
-| **前置条件** | 平台账号、Token、公网/HTTPS、`host-router` 等依赖 |
+| **前置条件** | 平台账号、Token、公网/HTTPS、`httpHostToken` 等依赖 |
 | **最小配置** | 可运行的 `zhin.config.yml` 片段 |
 | **故障排查** | 连接失败、鉴权、收不到消息等常见问题 |
 | **文档链接** | 文末链接至 `https://zhin.js.org/adapters/{slug}` |

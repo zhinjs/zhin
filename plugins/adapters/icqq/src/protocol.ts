@@ -1,5 +1,7 @@
+import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
 import type { MessageElem, Sendable, ShareElem } from '@icqqjs/icqq';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { resolveAdapterNotifyTarget, type AdapterNotifyTarget, type ResolvedAdapterNotifyTarget } from 'zhin.js/adapter';
 import type { MessageSegment, SendContent } from "zhin.js";
 import { resolveIcqqMediaFile } from "./cq-message.js";
 
@@ -231,7 +233,7 @@ export const Actions = {
 } as const;
 
 /** One expanded ICQQ endpoint configuration produced by AdapterIndex. */
-export interface IcqqEndpointConfig {
+export interface IcqqEndpointConfig extends EndpointProfileConfiguration {
   readonly id: string;
   readonly autoReconnect?: boolean;
   readonly outboundMedia?: 'file' | 'base64';
@@ -246,6 +248,8 @@ export interface IcqqEndpointConfig {
   readonly autoServer?: boolean;
   readonly qqnt?: boolean;
   readonly ntLogin?: boolean;
+  /** Optional out-of-band outage notification target (usually a QQ adapter instance). */
+  readonly notify?: AdapterNotifyTarget;
 }
 
 export interface ResolvedIcqqConfig {
@@ -264,6 +268,7 @@ export interface ResolvedIcqqConfig {
   readonly autoServer?: boolean;
   readonly qqnt?: boolean;
   readonly ntLogin?: boolean;
+  readonly notify?: ResolvedAdapterNotifyTarget;
 }
 
 export interface IcqqWireSegment {
@@ -273,6 +278,9 @@ export interface IcqqWireSegment {
 }
 
 export interface IcqqInboundMessage {
+  /** Exact SDK callback object, operation-local and never a persisted projection. */
+  readonly event?: unknown;
+  readonly platformSentAt?: number;
   readonly id: string;
   readonly conversation: ConversationRef;
   readonly content: string;
@@ -311,6 +319,7 @@ export function resolveIcqqConfig(config: IcqqEndpointConfig): ResolvedIcqqConfi
   const autoServer = config.autoServer ?? true;
   const qqnt = config.qqnt;
   const ntLogin = config.ntLogin;
+  const notify = resolveAdapterNotifyTarget(config.notify);
   return {
     context: 'icqq',
     id,
@@ -327,6 +336,7 @@ export function resolveIcqqConfig(config: IcqqEndpointConfig): ResolvedIcqqConfi
     ...(autoServer != null ? { autoServer } : {}),
     ...(qqnt != null ? { qqnt } : {}),
     ...(ntLogin != null ? { ntLogin } : {}),
+    ...(notify ? { notify } : {}),
   };
 }
 
@@ -456,19 +466,37 @@ export function formatOutboundBody(payload: unknown): Sendable {
  * quote or whitespace are dropped: a standalone element cannot carry the quote.
  */
 export function formatOutboundMessages(payload: unknown): Sendable[] {
+  return formatOutboundMessageParts(payload).map(part => part.message);
+}
+
+/** Native bubble and the exact source segment positions which produced it. */
+export interface IcqqOutboundMessagePart {
+  readonly message: Sendable;
+  readonly sourceIndices?: readonly number[];
+}
+
+export function formatOutboundMessageParts(payload: unknown): IcqqOutboundMessagePart[] {
   if (!Array.isArray(payload)) {
-    return isWireSegment(payload) ? formatOutboundMessages([payload]) : [formatOutboundBody(payload)];
+    if (isWireSegment(payload)) return formatOutboundMessageParts([payload]);
+    const message = formatOutboundBody(payload);
+    return [{ message, ...(typeof payload === 'string' && message !== payload ? {} : { sourceIndices: [0] }) }];
   }
-  const groups: (string | MessageElem)[][] = [[]];
-  for (const element of formatOutboundElements(payload)) {
-    if (isStandaloneElement(element)) groups.push([element], []);
-    else groups.at(-1)!.push(element);
+  const groups: { element: string | MessageElem; sourceIndex: number }[][] = [[]];
+  for (const [sourceIndex, source] of payload.entries()) {
+    for (const element of formatOutboundElements([source])) {
+      const item = { element, sourceIndex };
+      if (isStandaloneElement(element)) groups.push([item], []);
+      else groups.at(-1)!.push(item);
+    }
   }
-  const messages = groups.filter(group => group.some(element => typeof element === 'string'
+  const messages = groups.filter(group => group.some(({ element }) => typeof element === 'string'
     ? element.trim() !== ''
     : element.type !== 'reply' && element.type !== 'quote'));
-  if (messages.length === 0) return ['\u200b'];
-  return messages.map(group => group.length === 1 ? group[0]! : group);
+  if (messages.length === 0) return [{ message: '\u200b', sourceIndices: [] }];
+  return messages.map(group => ({
+    message: group.length === 1 ? group[0]!.element : group.map(item => item.element),
+    sourceIndices: [...new Set(group.map(item => item.sourceIndex))],
+  }));
 }
 
 function isStandaloneElement(element: string | MessageElem): element is MessageElem {

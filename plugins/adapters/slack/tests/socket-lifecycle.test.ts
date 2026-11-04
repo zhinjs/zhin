@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { slackFixture } from './fixture.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { SlackEndpoint, type SlackSocketLike, type SlackWebClientLike } from '../src/endpoint.js';
 import { resolveSlackConfig } from '../src/protocol.js';
@@ -13,12 +13,11 @@ it('shared lifecycle recreates SDK sockets, blocks stale callbacks and cancels r
     sockets.push(socket); return socket as unknown as SlackSocketLike;
   });
   const receive = vi.fn(async () => {});
-  const endpoint = bindTestEndpoint(new SlackEndpoint({
+  const endpoint = await slackFixture({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'slack'),
     config: resolveSlackConfig({ id: 'fixture', token: 'xoxb-fixture', appToken: 'xapp-fixture' }),
-    createClient: () => ({ auth: { test: async () => ({ user_id: 'BOT' }) } }) as SlackWebClientLike,
-    createSocket: factory,
-  }), { receive, send: vi.fn(async () => 'fixture') }, undefined);
+    createSocket: factory
+  }, () => ({ auth: { test: async () => ({ user_id: 'BOT' }) } }) as SlackWebClientLike, { receive, send: vi.fn(async () => 'fixture') }, undefined);
   try {
     await endpoint.start(); endpoint.open();
     expect(endpoint.transportState).toBe('open');
@@ -42,16 +41,17 @@ it('shared lifecycle recreates SDK sockets, blocks stale callbacks and cancels r
 it('normalizes an undefined SDK startup rejection, cleans resources and permits a clean restart', async () => {
   const disconnect = vi.fn(async () => {});
   const socket = Object.assign(new EventEmitter(), { start: vi.fn().mockRejectedValueOnce(undefined).mockResolvedValue(undefined), disconnect });
-  const endpoint = bindTestEndpoint(new SlackEndpoint({
+  const create = () => slackFixture({
     id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'slack'),
     config: resolveSlackConfig({ id: 'fixture', token: 'xoxb-fixture', appToken: 'xapp-fixture' }),
-    createClient: () => ({ auth: { test: async () => ({ user_id: 'BOT' }) } }) as SlackWebClientLike,
-    createSocket: () => socket as unknown as SlackSocketLike,
-  }), { receive: vi.fn(async () => {}), send: vi.fn(async () => 'fixture') }, undefined);
+    createSocket: () => socket as unknown as SlackSocketLike
+  }, () => ({ auth: { test: async () => ({ user_id: 'BOT' }) } }) as SlackWebClientLike, { receive: vi.fn(async () => {}), send: vi.fn(async () => 'fixture') }, undefined);
+  let endpoint = await create();
   try {
     await expect(endpoint.start()).rejects.toThrow('SDK did not confirm a connection');
     expect(endpoint.transportState).toBe('stopped');
     expect(disconnect).toHaveBeenCalledTimes(1);
+    endpoint = await create();
     await endpoint.start();
     expect(endpoint.transportState).toBe('open');
   } finally { await endpoint.stop(); }

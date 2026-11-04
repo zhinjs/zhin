@@ -1,10 +1,8 @@
-import { bindTestEndpoint } from '../../test-utils/endpoint.js';
+import { createAdapterHarness, createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { ProtocolError } from '@imhelper/onebot-v11';
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { onebot11RuntimeStateToken } from '../src/onebot11-runtime-state.js';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
+import { type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 import { OneBot11WssEndpoint } from '../src/wss-endpoint.js';
@@ -31,6 +29,7 @@ const endpointRef = {
   id: String(endpointCapabilityId),
   adapter: String(endpointCapabilityId).split('\0')[0],
 };
+const canonicalEndpointRef = { id: String(endpointCapabilityId), adapter: 'onebot11' };
 
 const baseConfig: OneBot11WsConfig = resolveOneBot11Config({
   connection: 'ws',
@@ -299,19 +298,18 @@ describe('onebot11 plugin runtime adapter', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway,
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), gateway, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway(gateway, undefined) });
 
     await endpoint.start();
     endpoint.open();
-    endpoint.client.ingest({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'private',
       message_id: 42,
@@ -324,8 +322,8 @@ describe('onebot11 plugin runtime adapter', () => {
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      conversation: { endpoint: endpointRef, kind: 'private', id: '10001' },
-      message: { conversation: { endpoint: endpointRef, kind: 'private', id: '10001' }, id: '42' },
+      conversation: { endpoint: canonicalEndpointRef, kind: 'private', id: '10001' },
+      message: { conversation: { endpoint: canonicalEndpointRef, kind: 'private', id: '10001' }, id: '42' },
       content: '你好',
       sender: expect.objectContaining({ id: '10001' }),
       metadata: expect.objectContaining({ nickname: 'Alice' }),
@@ -338,18 +336,17 @@ describe('onebot11 plugin runtime adapter', () => {
   it('marks mentioned when a group message @s the bot self_id', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.client.ingest({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 100,
@@ -366,7 +363,7 @@ describe('onebot11 plugin runtime adapter', () => {
     });
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      conversation: { endpoint: endpointRef, kind: 'group', id: '200' },
+      conversation: { endpoint: canonicalEndpointRef, kind: 'group', id: '200' },
       sender: expect.objectContaining({ id: '9' }),
       mentioned: true, metadata: expect.objectContaining({ nickname: 'bob' }),
     }));
@@ -376,19 +373,18 @@ describe('onebot11 plugin runtime adapter', () => {
   it('does not mark mentioned when @ targets someone else or @all', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
 
-    endpoint.client.ingest({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 101,
@@ -404,7 +400,7 @@ describe('onebot11 plugin runtime adapter', () => {
     let metadata = receive.mock.calls[0]?.[0]?.metadata as Record<string, unknown>;
     expect(receive.mock.calls[receive.mock.calls.length - 1]?.[0]?.mentioned).toBeFalsy();
 
-    endpoint.client.ingest({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 102,
@@ -425,18 +421,17 @@ describe('onebot11 plugin runtime adapter', () => {
   it('forwards reply segment id as replyTo', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
-    endpoint.client.ingest({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'group',
       message_id: 103,
@@ -459,17 +454,16 @@ describe('onebot11 plugin runtime adapter', () => {
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
-    endpoint.client.ingest({
+    endpoint.endpoint.ingest({
       post_type: 'message',
       message_type: 'private',
       message_id: 1,
@@ -482,21 +476,17 @@ describe('onebot11 plugin runtime adapter', () => {
 
   it('sends outbound payloads via WS send_private_msg action', async () => {
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), {
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined) });
     await endpoint.start();
     endpoint.open();
 
@@ -530,18 +520,17 @@ describe('onebot11 plugin runtime adapter', () => {
 
   it('exposes failed status, data and echo through ProtocolError', async () => {
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
 
-    const call = endpoint.client.call('get_status');
+    const call = endpoint.endpoint.call('get_status');
     await vi.waitFor(() => expect(ws.sent).toHaveLength(1));
     const request = JSON.parse(ws.sent[0]!) as { echo: string };
     const response = {
@@ -565,17 +554,16 @@ describe('onebot11 plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('projects non-message requests through the Client public event map', () => {
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+  it('projects non-message requests through the Client public event map', async () => {
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => createMockWs(),
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
     const request = vi.fn();
-    endpoint.client.on('request.group', request);
+    endpoint.endpoint.on('request.group', request);
 
-    endpoint.client.ingest({
+    endpoint.endpoint.ingest({
       time: 1,
       self_id: 1,
       post_type: 'request',
@@ -598,15 +586,14 @@ describe('onebot11 plugin runtime adapter', () => {
   it('admits inbound events received over the socket when open', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const ws = createMockWs();
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         queueMicrotask(() => ws.emitOpen());
         return ws;
       },
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined) });
     await endpoint.start();
     endpoint.open();
     ws.emitMessage(JSON.stringify({
@@ -620,7 +607,7 @@ describe('onebot11 plugin runtime adapter', () => {
     }));
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     expect(receive).toHaveBeenCalledWith(expect.objectContaining({
-      conversation: { endpoint: endpointRef, kind: 'group', id: '200' },
+      conversation: { endpoint: canonicalEndpointRef, kind: 'group', id: '200' },
       content: 'from-ws',
     }));
     await endpoint.stop();
@@ -629,36 +616,22 @@ describe('onebot11 plugin runtime adapter', () => {
   it('creates reverse-wss endpoint when httpHostToken provided', async () => {
     const { default: adapter } = await import('../adapters/onebot11/index.js');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
-    const endpoint = adapter.create({
-      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      name: 'onebot11',
-      config: { connection: 'wss', id: 'rev', path: '/onebot/ws' },
-      use: (token: unknown) => {
-        if (token === httpHostToken) return http;
-        if (token === outboundMessageToken) {
-          return { receive: vi.fn(), send: vi.fn(async () => 'sent') };
-        }
-        if (token === sideEventGatewayToken) {
-          return {
-            receiveNotice: vi.fn(async () => {}),
-            receiveRequest: vi.fn(async () => {}),
-            receiveSystem: vi.fn(async () => {}),
-          };
-        }
-        if (token === onebot11RuntimeStateToken) return createEndpointRuntimeState();
-        throw new Error(`unexpected token: ${String(token)}`);
-      },
-    } as never);
-    expect(endpoint).toBeDefined();
+    const harness = await createAdapterHarness(adapter,
+      { connection: 'wss', id: 'rev', path: '/onebot/ws' },
+      { name: 'onebot11', resources: new Map([[httpHostToken.id, http]]) });
+    try {
+      expect(harness.endpoint).toBeInstanceOf(OneBot11WssEndpoint);
+      await harness.start(); harness.open();
+      expect(harness.index.describe()[0]?.admitted).toBe(true);
+    } finally { await harness.stop(); await http.close(); }
   });
 });
 
 describe('onebot11 ws lifecycle', () => {
   it('does not arm reconnect when the initial connect closes before open', async () => {
     let creates = 0;
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig, // reconnect_interval: 50
       createWebSocket: () => {
         creates += 1;
@@ -666,7 +639,7 @@ describe('onebot11 ws lifecycle', () => {
         queueMicrotask(() => ws.emitClose(1006, 'refused'));
         return ws;
       },
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
 
     await expect(endpoint.start()).rejects.toThrow('OneBot11 WS 关闭');
     // 等超过一个 reconnect_interval，不应有幽灵重连发生
@@ -675,12 +648,11 @@ describe('onebot11 ws lifecycle', () => {
   });
 
   it('settles start() silently when stop() races the initial connect', async () => {
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => createMockWs(), // 永不 open，模拟连接挂起
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
 
     const startPromise = endpoint.start();
     await endpoint.stop();
@@ -690,9 +662,8 @@ describe('onebot11 ws lifecycle', () => {
 
   it('reconnects only after an established connection closes', async () => {
     const sockets: Array<ReturnType<typeof createMockWs>> = [];
-    const endpoint = bindTestEndpoint(new OneBot11WsEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WsEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       config: baseConfig,
       createWebSocket: () => {
         const ws = createMockWs();
@@ -702,7 +673,7 @@ describe('onebot11 ws lifecycle', () => {
         });
         return ws;
       },
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
 
     await endpoint.start();
     sockets[0]!.emitClose(1006, 'lost');
@@ -715,16 +686,15 @@ describe('onebot11 ws lifecycle', () => {
     const warnSpy = vi.spyOn(getAdapterLogger('onebot11', 'wss-noauth'), 'warn');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     try {
-      const endpoint = bindTestEndpoint(new OneBot11WssEndpoint({
+      const endpoint = await createEndpointHarness(() => new OneBot11WssEndpoint({
         id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-        gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
         http,
         config: resolveOneBot11Config({
           connection: 'wss',
           id: 'wss-noauth',
           path: '/ob11/ws',
         }) as import('../src/protocol.js').OneBot11WssConfig,
-      }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+      }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
       await endpoint.start();
       expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('missing access_token'));
       await endpoint.stop();
@@ -736,7 +706,7 @@ describe('onebot11 ws lifecycle', () => {
 });
 
 describe('onebot11 reverse ws lifecycle', () => {
-  function createReverseEndpoint(heartbeatInterval = 20) {
+  async function createReverseEndpoint(heartbeatInterval = 20) {
     let acceptConnection: ((connection: unknown) => void) | undefined;
     const releaseRoute = vi.fn();
     const http = {
@@ -748,9 +718,8 @@ describe('onebot11 reverse ws lifecycle', () => {
         close: vi.fn(),
       })),
     };
-    const endpoint = bindTestEndpoint(new OneBot11WssEndpoint({
+    const endpoint = await createEndpointHarness(() => new OneBot11WssEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
-      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
       http: http as never,
       config: resolveOneBot11Config({
         connection: 'wss',
@@ -759,7 +728,7 @@ describe('onebot11 reverse ws lifecycle', () => {
         access_token: 'secret',
         heartbeat_interval: heartbeatInterval,
       }) as never,
-    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    }), { name: 'onebot11', capabilities: ['inbound', 'outbound'], operations: ['recall'], gateway: createTestEventGateway({ receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined) });
     return { endpoint, releaseRoute, get acceptConnection() { return acceptConnection; } };
   }
 
@@ -776,7 +745,7 @@ describe('onebot11 reverse ws lifecycle', () => {
   }
 
   it('owns the accepted connection heartbeat and closes it on stop', async () => {
-    const harness = createReverseEndpoint();
+    const harness = await createReverseEndpoint();
     const ws = createMockWs();
 
     await harness.endpoint.start();
@@ -793,8 +762,8 @@ describe('onebot11 reverse ws lifecycle', () => {
   });
 
   it('rejects messages from a replaced reverse socket', async () => {
-    const harness = createReverseEndpoint();
-    const ingest = vi.spyOn(harness.endpoint.client, 'ingest');
+    const harness = await createReverseEndpoint();
+    const ingest = vi.spyOn(harness.endpoint.endpoint, 'ingest');
     const first = createMockWs();
     const second = createMockWs();
     const event = JSON.stringify({

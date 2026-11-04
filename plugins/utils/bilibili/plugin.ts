@@ -1,3 +1,5 @@
+import { DataMigrationError, pluginDataMigrationProviderToken, TargetMigrationScopes } from 'zhin.js/plugin-runtime';
+import { createSubscriptionTargetMigration, subscriptionMigrationScope } from './src/target-migration.js';
 import {
   definePlugin,
   databaseHostToken,
@@ -33,16 +35,18 @@ export default definePlugin<BilibiliConfig>({
       db = createInMemoryBiliDb();
     }
 
+    const migrationScopes = database ? new TargetMigrationScopes({ pending: scope => scope.startsWith('historical:') }) : undefined;
+    if (database && migrationScopes) context.resources.provide(pluginDataMigrationProviderToken,
+      createSubscriptionTargetMigration({ database, scopes: migrationScopes }));
+
     const outbound = context.resources.has(outboundHostToken) ? context.resources.use(outboundHostToken) : undefined;
     const push: BiliOutboundPush | null = outbound
       ? async (input) => {
-        await outbound.send({
-          adapter: input.adapterName,
-          endpointKey: input.endpointKey,
-          conversation: { kind: input.channelType, id: input.channelId },
-          content: input.content,
-          locale: input.locale,
-        });
+        if (!input.target) throw new DataMigrationError('unavailable', 'Historical Bilibili subscription awaits exact-target binding');
+        if (!outbound.sendTarget) throw new Error('Canonical subscription delivery requires an exact-target Outbound Host');
+        const run = async () => { await outbound.sendTarget!(input.target!, input.content, { locale: input.locale }); };
+        if (migrationScopes) await migrationScopes.run({ scope: subscriptionMigrationScope(input), run });
+        else await run();
       }
       : null;
 
@@ -50,6 +54,7 @@ export default definePlugin<BilibiliConfig>({
     const watcher = new BilibiliWatcher({ db, config, client, outbound: push, signal: context.signal });
     context.resources.provide(bilibiliRuntimeToken, Object.freeze({
       db,
+      migrationScopes,
       config,
       client,
       outbound: push,

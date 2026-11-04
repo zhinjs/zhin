@@ -147,7 +147,7 @@
 | Core `ProcessAdapter` / process runtime IO | `removed` | 未被生产装配的经典内置适配器与 stdin 辅助已删除 | 本地交互由 Sandbox Adapter 与 CLI Host 提供，不再占用经典 Adapter 注册表 |
 | `Adapter.Registry` / `Adapter.register` / `Adapter.Factory` | `removed` | 进程级工厂注册表及其唯一自证测试已删除 | Adapter 定义与实例只由 generation-owned `AdapterIndex` 发现和持有 |
 | `Plugin.adapters` / `Plugin.injectAdapter` | `removed` | 经典 Plugin 的重复 Adapter 目录与 service-locator helper 已删除 | 当前 Endpoint 目录只能从 generation-owned `AdapterIndex` 查询 |
-| classic Core `Adapter` / `Endpoint` runtime | `removed` | 类、类型、capability WeakMap、连接与生命周期 helper 及专属测试已删除 | 唯一实现是 `zhin.js/adapter` 的 `defineAdapter`、`Endpoint<TClient>` 与 generation-owned `AdapterIndex` |
+| classic Core `Adapter` / `Endpoint` runtime | `removed` | 类、类型、capability WeakMap、连接与生命周期 helper 及专属测试已删除 | 唯一实现是 `zhin.js/adapter` 的 `defineAdapter({ createAdapter })`、`Adapter`、结构接口 `Endpoint` / `endpointSpec` 与 generation-owned `AdapterIndex` |
 | classic Core `Plugin` runtime | `removed` | Plugin 类、Context ALS、重复 Dispatcher 与入站管线均已删除 | 插件生命周期由 `@zhin.js/plugin-runtime` 的 generation snapshot 管理；IM 分发只走 `ImRuntime` |
 | Kernel `PluginBase` / mutable `Feature` registry | `removed` | Plugin tree、字符串 DI、prototype extension registry 与自证测试已删除 | 生命周期统一属于 `@zhin.js/plugin-runtime`；能力发现和投影统一属于 `@zhin.js/feature-kit` |
 | Kernel global Schedule getters/setters | `removed` | `get/setScheduleEngine` 与 `get/setScheduler` 已删除 | 每个 `ScheduleJobEngine` 私有持有并销毁自己的调度引擎，Host 调度走 generation-owned token |

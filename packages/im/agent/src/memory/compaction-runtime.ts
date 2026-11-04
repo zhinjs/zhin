@@ -23,6 +23,8 @@ export interface CompactionRuntimeOptions {
   /** Rendered "already told" ledger; the summary must keep these facts. */
   toldLedger?: string;
   force?: boolean;
+  /** Isolated child turns compact in memory without writing conversational state. */
+  persistSummary?: boolean;
   loopHooks?: PluginAILoopHookRegistry | null;
 }
 
@@ -138,7 +140,7 @@ export class AgentCompactionRuntime {
     });
 
     if (signal?.aborted) return messages;
-    if (result.summary?.trim() && result.compactedCount) {
+    if (options.persistSummary !== false && result.summary?.trim() && result.compactedCount) {
       // Use the actual summarized prefix before micro-compaction replaces objects.
       // Current-turn messages are persisted later; never infer their row boundary
       // by independently applying the retention budget to stored history.

@@ -1,8 +1,6 @@
 import { defineMiddleware, type MiddlewareContext } from '@zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 
-type AliasReply = Parameters<Message['$reply']>[0];
-
 /**
  * 游戏 legacy 命令别名路由。
  *
@@ -16,19 +14,20 @@ export interface GameCommandAliasRoute {
   readonly aliases: readonly string[];
   /**
    * 与 `commands/<cmd>/[[action]].ts` 的 execute 逻辑保持一致：
-   * action 为别名后剩余文本（无参数时为 ''）；返回回复文本，null/undefined 表示放行。
+   * action 为别名后剩余文本（无参数时为 ''）；完成回复后返回 true，未处理时返回 false。
    */
   run(
     action: string,
     input: unknown,
     context: MiddlewareContext<Message>,
-  ): Promise<AliasReply | null | undefined>;
+  ): Promise<boolean>;
 }
 
 export function defineGameCommandAliasMiddleware(route: GameCommandAliasRoute) {
   return defineMiddleware<Message>({
     target: 'inbound',
     async handle(context, next) {
+      if (!context.input.sender?.id) { await next(); return; }
       const raw = context.input.content?.trim() ?? '';
       const text = raw.startsWith('/') ? raw.slice(1) : raw;
       const [head, ...rest] = text.split(/\s+/).filter(Boolean);
@@ -36,11 +35,7 @@ export function defineGameCommandAliasMiddleware(route: GameCommandAliasRoute) {
         await next();
         return;
       }
-      const reply = await route.run(rest.join(' '), context.input, context);
-      if (reply) {
-        await context.input.$reply(reply);
-        return;
-      }
+      if (await route.run(rest.join(' '), context.input, context)) return;
       await next();
     },
   });

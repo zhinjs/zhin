@@ -8,19 +8,21 @@ tier: Experimental
 本页由 [`plugins/adapters/bilibili/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=32059f4d2d816477 -->
+<!-- sync-adapter-docs:sha256=b67fe0b6bc509d45 -->
 
 # @zhin.js/adapter-bilibili
 
 > **Experimental** — 基于 B 站 **非官方 Web 接口**（含扫码登录接口），随时可能因平台改版失效；不进 stable smoke，接口与配置可能不兼容变更。
 
-Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你自己视频**下的评论。契约见 [ADR 0035：评论型平台适配器契约](https://github.com/zhinjs/zhin/blob/main/docs/adr/0035-comment-reply-adapter-contract.md)，讨论见 [#971](https://github.com/zhinjs/zhin/issues/971)。
+账号由 `BilibiliAdapter` 管理。Endpoint 直接继承实际 `BilibiliClient`，保留原生方法与事件；框架生命周期、规范入站与发送经 `endpointSpec` 和 AdapterIndex 接入，不占用 Client 的原生 `start` / `stop` / `send` 方法。
+
+Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你自己的视频、动态、专栏**下的评论。契约见 [ADR 0035：评论型平台适配器契约](https://github.com/zhinjs/zhin/blob/main/docs/adr/0035-comment-reply-adapter-contract.md)，讨论见 [#971](https://github.com/zhinjs/zhin/issues/971)。
 
 ## 先读这几条
 
 - **以你的账号身份操作**：B 站开放平台没有评论读写权限，本适配器使用你的登录 Cookie（`SESSDATA` + `bili_jct`）。推荐在 Console「评论审批」页**扫码登录**，凭据只存在运行机器人那台机器的数据目录里（`data/bilibili/<账号>/credentials.json`，权限 600）。也可以用环境变量注入。Cookie 等同于账号密码：**不要写进 `zhin.config.yml` 明文，不要提交到仓库，不要贴进日志或 issue**。
 - **默认先审再发**：`sendMode` 默认 `review`，AI 写好的回复只进入草稿队列，**不会自动发到 B 站**；只有你在 Console「评论审批」页点「发送」，或 master 执行 `bili-draft send <id>` 后才真正发出。不提供自动直发。
-- **只管白名单视频**：只轮询 `videos` 里列出的视频（建议只填自己的稿件）。不做全站搜索、不去别人的评论区刷评论；请遵守 B 站用户协议，禁止用于营销、引流、刷屏。
+- **只管白名单内容**：只轮询 `videos` / `dynamics` / `articles` 里列出的视频、动态、专栏（建议只填自己的）；哪一项留空就不轮询那一类。不做全站搜索、不去别人的评论区刷评论；请遵守 B 站用户协议，禁止用于营销、引流、刷屏。
 - **风控即熔断**：遇到频繁 / 验证码 / 风控拦截 / 重复评论等错误码，endpoint 立即停止轮询并记录错误，不自动重试；人工确认账号状态后重启。
 
 ## 当前能力
@@ -28,9 +30,9 @@ Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你�
 | 能力 | 状态 |
 |---|---|
 | BV 号 → aid 解析 | ✅ 已实现 |
-| 轮询白名单视频最新评论（`x/v2/reply`，仅视频 `type=1`） | ✅ 已实现（只读） |
+| 轮询白名单视频最新评论（`x/v2/reply`，视频 `type=1`） | ✅ 已实现（只读） |
 | Cookie 登录态识别自身 uid、过滤自己的评论 | ✅ 已实现 |
-| 一条评论楼 = 一个会话（`video:<aid>:<根评论rpid>`） | ✅ 已实现 |
+| 一条评论楼 = 一个会话（`<资源>:<oid>:<根评论rpid>`，如 `video:<aid>:<rpid>`） | ✅ 已实现 |
 | 首轮只建基线，不把历史评论灌给 AI | ✅ 已实现 |
 | AI 回复进入草稿队列（`review`） | ✅ 已实现 |
 | 草稿持久化（重启不丢，发送中断会提示先确认） | ✅ 已实现（`data/bilibili/<账号>/drafts.json`） |
@@ -38,14 +40,15 @@ Zhin.js Bilibili 评论适配器（Plugin Runtime）：让 AI 辅助回复**你�
 | 审批前改写 / 丢弃草稿（`bili-draft edit` / `drop`） | ✅ 已实现 |
 | 扫码登录 / Cookie 持久化（Console 页或 `bili-login start`） | ✅ 已实现（环境变量注入仍可用且优先） |
 | Cookie 失效识别：清除失效凭据、提醒重新扫码 | ✅ 已实现 |
-| Console「评论审批」页：登录状态、白名单视频、待审草稿的发送 / 改写 / 丢弃 | ✅ 已实现 |
+| Console「评论审批」页：登录状态、白名单视频 / 动态 / 专栏、待审草稿的发送 / 改写 / 丢弃 | ✅ 已实现 |
 | 新草稿 / 登录失效主动推送给你（`notify`） | ✅ 已实现（可选，经统一出站链路发到你指定的聊天会话） |
-| 「回复我的 / @我的」通知（`x/msgfeed/reply`、`x/msgfeed/at`） | ✅ 已实现（需登录，默认关闭，只收视频评论） |
-| 动态 / 专栏评论 | 🚧 v1.1 |
+| 「回复我的 / @我的」通知（`x/msgfeed/reply`、`x/msgfeed/at`） | ✅ 已实现（需登录，默认关闭；视频评论，配置了 `dynamics` / `articles` 时也收动态 / 专栏评论） |
+| 动态评论（`dynamics`：动态 id → 动态详情解析评论区；图文动态 `type=11`、文字 / 转发动态 `type=17`） | ✅ 已实现（Experimental） |
+| 专栏评论（`articles`：cv 号，`type=12`） | ✅ 已实现（Experimental） |
 
 ## 前置条件
 
-1. 一个你自己的 B 站账号，以及要管理的视频 BV 号（建议只填自己的稿件）
+1. 一个你自己的 B 站账号，以及要管理的视频 BV 号 / 动态 id / 专栏 cv 号（建议只填自己的）
 2. 登录方式二选一：
    - **扫码登录（推荐）**：启动后打开 Console「评论审批」页，点「扫码登录 B 站」，用 B 站 App 扫码确认；或私聊机器人发 `bili-login start`（只在私聊发二维码）
    - **环境变量**：浏览器登录 bilibili.com 后，从开发者工具 → Application → Cookies 取 `SESSDATA` 与 `bili_jct`，放进 `.env`（已被 gitignore）：`BILIBILI_SESSDATA`、`BILIBILI_BILI_JCT`
@@ -73,6 +76,10 @@ bilibili:
     - id: my-bilibili
       videos:
         - BV1xx411c7mD       # 只填你自己的视频
+      dynamics:              # 可选：动态 id（t.bilibili.com/<id> 或 bilibili.com/opus/<id> 里的数字）
+        - "1073543151725051921"  # 一定加引号：动态 id 超过 JS 安全整数，不加引号会丢精度并被拒绝
+      articles:              # 可选：专栏 cv 号
+        - cv40000001
       # 不扫码而用环境变量时再加：
       # sessdata: ${BILIBILI_SESSDATA}
       # biliJct: ${BILIBILI_BILI_JCT}
@@ -94,7 +101,7 @@ bilibili:
 
 - 看登录状态、扫码登录 / 重新扫码 / 退出登录
 - 看待审回复：被回复的原评论、AI 拟的回复，点「发送」「修改」「丢弃」
-- 看正在管理的视频（只读，增删请改配置）
+- 看正在管理的视频 / 动态 / 专栏（只读，增删请改配置）；无法解析的动态会标出「无法解析，已跳过」
 
 页面每 10 秒自动刷新（扫码时 2 秒），新草稿会自动出现。
 
@@ -110,10 +117,21 @@ bilibili:
 
 ## 会话与消息
 
-- `conversation.kind = 'channel'`，`id = video:<aid>:<根评论rpid>`，`parent = video:<aid>`
+- `conversation.kind = 'channel'`，`id = <资源>:<oid>:<根评论rpid>`，`parent = <资源>:<oid>`
 - `message.id` = 评论 `rpid`
 - `sender` = 评论作者 uid / 昵称
-- `metadata`：`resource`、`rootId`、`parentId`、`via`（`video` / `reply` / `at`）、`createdAt`、`likeCount`、`isUploader`
+- `metadata`：`resource`（`type` / `oid` / `commentType` / `dynamicId?` / `url`）、`rootId`、`parentId`、`via`（`video` / `album` / `dynamic` / `article` / `reply` / `at`）、`createdAt`、`likeCount`、`isUploader`
+
+资源前缀与 B 站评论区一一对应（会话 id 本身就决定回复发到哪个评论区，不靠运行时查表）：
+
+| 前缀 | 评论区 `type` | `oid` | 来源 |
+|---|---|---|---|
+| `video` | 1 | 视频 aid | `videos` |
+| `album` | 11 | 相簿 id（**不是**动态 id） | `dynamics` 里的带图动态 |
+| `dynamic` | 17 | 动态 id 本身 | `dynamics` 里的纯文字 / 转发等动态 |
+| `article` | 12 | 专栏 cvid | `articles` |
+
+`dynamics` 里的每个动态在启动时调用动态详情（`x/polymer/web-dynamic/v1/detail`），按平台返回的 `basic.comment_type` / `basic.comment_id_str` 确定评论区，不自己猜 oid。视频动态（`type=1`）请填到 `videos`，专栏动态（`type=12`）请填到 `articles`；这些、已删除 / 不可见的动态和其它不支持的动态都会跳过（日志 `bilibili_dynamic_unsupported` / `bilibili_dynamic_unresolved`），不影响其它资源。
 - 来自「回复我的 / @我的」的评论带 `mentioned: true`，楼中楼回复带 `replyTo`
 
 群聊式触发规则同样适用：评论楼是共享会话，默认需 @ / 前缀才触发 AI；「回复我的 / @我的」按 @ 机器人处理。
@@ -123,8 +141,9 @@ bilibili:
 配置 `notifications: [reply, at]` 后，每轮轮询额外读一页 `x/msgfeed/reply` / `x/msgfeed/at`：
 
 - 首轮只建基线；之后只收新通知
-- 只收视频评论（动态 / 专栏通知忽略）
-- 默认 `notificationScope: whitelist`，只收 `videos` 白名单视频下的通知；`all` 则收所有视频评论通知（例如你在别人视频下的评论被回复）
+- 收视频评论（`business_id=1`）；配置了 `dynamics` 时也收动态评论（11 / 17），配置了 `articles` 时也收专栏评论（12）；其它业务忽略
+- 默认 `notificationScope: whitelist`，只收白名单视频 / 动态 / 专栏下的通知；`all` 则收所有视频评论通知，以及已开启种类的全部动态 / 专栏评论通知（例如你在别人视频下的评论被回复）
+- 文字动态的 oid（动态 id）超过 JS 安全整数，通知里的数字会丢精度：适配器从通知跳转链接里取回原 id，并核对与通知数字一致才收；取不回就丢弃，不会回到错误的楼
 - 同一条评论被视频轮询和通知各看到一次时只入站一次
 
 ## 出站
@@ -145,7 +164,7 @@ bilibili:
 | `bili-login start [账号]` | 扫码登录（只在私聊里发二维码） |
 | `bili-login status` | 查看登录状态与待审数量 |
 
-草稿存在 `data/bilibili/<账号>/drafts.json`，重启后自动恢复（最多保留最新 200 条）。发送过程中进程退出的草稿会标记「上次发送中断，可能已经发出」，请先到 B 站确认再决定是否重发。
+已有配置的草稿保留原 `data/bilibili/<账号>/drafts.json` 路径；动态新增或替换身份使用独立实例目录，旧目录不会自动迁移或删除。草稿重启后自动恢复（最多保留最新 200 条）。发送过程中进程退出的草稿会标记「上次发送中断，可能已经发出」，请先到 B 站确认再决定是否重发。
 
 发送保护：`sendMode: off`、已熔断、未登录或登录失效、距上次发送不足 `minSendIntervalSec` 时直接拒绝（草稿保留，不排队、不自动重试）；发送时遇到风控错误码会熔断整个 endpoint。
 
@@ -164,11 +183,12 @@ bilibili:
 ## 已知限制
 
 - 非官方接口，B 站改签名 / 字段 / 扫码流程后可能直接失效
-- 只轮询每个视频评论第一页（按时间倒序 20 条）；高峰期两次轮询间超过 20 条新评论会漏
+- 只轮询每个评论区第一页（按时间倒序 20 条）；高峰期两次轮询间超过 20 条新评论会漏
 - 已见评论 id 与通知基线只在内存里，重启后重新建基线（不会把重启期间的旧评论再交给 AI）
 - 不做 Cookie 自动续期；过期后需要重新扫码
 - 「回复我的 / @我的」每轮只读第一页通知
-- 只支持视频评论（`type=1`）
+- 只支持视频（`type=1`）、图文动态（`type=11`）、专栏（`type=12`）、文字 / 转发动态（`type=17`）评论；动态到评论区的映射依赖动态详情接口，平台改版后可能解析失败（会跳过而不是猜）
+- 动态白名单在 endpoint 启动时解析（与 `videos` 的 BV 号解析一样），运行中不会重新解析
 
 ## 故障排查
 
@@ -177,7 +197,10 @@ bilibili:
 | 日志 `bilibili_circuit_open` | 触发了风控（频繁 / 验证码 / 拦截 / 重复评论）。轮询已停止：去网页端确认账号状态、必要时完成验证，调大 `pollIntervalSec` 后重启 |
 | 日志 `bilibili_login_invalid` / 页面「登录已失效」 | Cookie 失效。扫码登录的直接重新扫码；环境变量注入的更新环境变量，或去掉后扫码 |
 | 扫码提示「B 站风控拦截」 | 扫码接口被限流，稍等几分钟再试 |
-| 日志 `bilibili_no_videos` | 没配 `videos`，适配器不会轮询任何内容 |
+| 日志 `bilibili_no_videos` | 没配 `videos` / `dynamics` / `articles`（或动态都无法解析），适配器不会轮询任何内容 |
+| 日志 `bilibili_dynamic_unsupported` | 这个动态的评论区类型不支持（如视频动态请填 `videos`、专栏动态请填 `articles`），已跳过 |
+| 日志 `bilibili_dynamic_unresolved` | 动态详情返回错误（动态已删除 / 不可见），已跳过 |
+| 启动报 `lost precision` | `dynamics` 里的动态 id 没加引号，改成字符串 |
 | AI 回复没出现在 B 站 | 预期行为：只生成草稿（`bilibili_draft_queued`），需要在 Console 页点「发送」或 `bili-draft send <id>` |
 | Console 里没有「评论审批」 | 确认装了 Console（`@zhin.js/page`），并且令牌有 `bilibili:read` 权限 |
 | 页面按钮提示「没有操作权限」 | 令牌缺少 `bilibili:review` / `bilibili:login` |
@@ -190,3 +213,5 @@ bilibili:
 ## 参考
 
 扫码登录与整体流程参考了以下开源项目的做法（只借鉴流程，未复制代码，也不依赖它们）：[renmu123/biliAPI](https://github.com/renmu123/biliAPI)（WebQrcodeLogin）、[WittF/bilibili-qr-login](https://github.com/WittF/bilibili-qr-login)、[Ninzore/bilibili-captain](https://github.com/Ninzore/bilibili-captain)（Login.loginQR）、[Janson20/BiliCommentBot](https://github.com/Janson20/BiliCommentBot)。社区接口文档 SocialSisterYi/bilibili-API-collect 已归档，本适配器不依赖它；接口随时可能变化，见顶部 Experimental 说明。
+
+扫码凭据先由只读账号接口核验，再由所属 Adapter 原子保存。同一真实账号保留内部身份；换到其他账号时保存为新的停用实例，原草稿和历史不随账号转移。已有凭据但无法核验原账号时，需要明确替换，不能按首次绑定处理。

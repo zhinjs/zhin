@@ -19,6 +19,13 @@ export const MAX_CHANGES_TOTAL_BYTES = 50 * 1024 * 1024;
 export const DEFAULT_CHANGE_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 /** `draft` / `ready` 未提交、`pending` 未审批的时限：24 小时。 */
 export const DEFAULT_CHANGE_IDLE_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * 批准后到生效的时限（#1051 Q2=B）：进程在批准与生效之间结束，重启时只自动生效 1 小时内批准的残留 `approved`；
+ * 更早的转 `expired` 并私聊主人重新起草（批准时的上下文可能已经过时）。
+ */
+export const DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS = 60 * 60 * 1000;
+/** 全实例同时等待审批的变更上限（#1051 F4）：挡住多会话刷卡。 */
+export const DEFAULT_MAX_PENDING_CHANGES = 3;
 /** 定期清理间隔：6 小时（启动时另扫一次）。 */
 export const DEFAULT_CHANGE_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /** `error` 上限（字符）。 */
@@ -43,7 +50,7 @@ const TRANSITIONS: Readonly<Record<SelfChangeStatus, readonly SelfChangeStatus[]
   trialing: ['ready', 'trial_failed'],
   ready: ['pending', 'expired'],
   pending: ['approved', 'rejected', 'expired'],
-  approved: ['applying', 'failed'],
+  approved: ['applying', 'failed', 'expired'],
   applying: ['verifying', 'applied', 'rolled_back', 'failed'],
   verifying: ['applied', 'rolled_back', 'failed'],
   applied: [],
@@ -92,12 +99,17 @@ export function selfChangeOutcome(code: DecisionReasonCode): DecisionOutcome {
     case 'change_config_key_forbidden':
     case 'change_rejected':
     case 'change_hash_mismatch':
+    case 'change_restart_unavailable':
+    case 'change_draft_forbidden':
+    case 'change_pending_cap_reached':
       return 'deny';
     case 'change_expired':
     case 'change_pruned':
       return 'skip';
     case 'change_submitted':
     case 'change_restart_requested':
+    case 'change_config_unconfirmed':
+    case 'change_config_superseded':
       return 'defer';
     case 'change_trial_failed':
     case 'change_rolled_back':
@@ -131,6 +143,22 @@ export interface ChangePathPolicyInput {
   readonly protectedPaths?: HostProtectedPaths;
   /** 额外的本地插件根，相对项目根（例如 `plugins/weather`）；项目根本身总是插件根。 */
   readonly pluginRoots?: readonly string[];
+}
+
+/**
+ * Local plugin roots (relative to the project root) as a fixed list or a provider the host re-reads on every
+ * use: the host derives them from the committed generation's source ownership, which is still empty while the
+ * first generation is being assembled and changes with every HMR generation.
+ */
+export type SelfChangePluginRootsSource = readonly string[] | (() => readonly string[]);
+
+/** Turns a {@link SelfChangePluginRootsSource} into a provider of a frozen list. */
+export function selfChangePluginRootsProvider(source: SelfChangePluginRootsSource | undefined): () => readonly string[] {
+  if (typeof source === 'function') {
+    return () => Object.freeze([...source()]);
+  }
+  const fixedRoots = Object.freeze([...(source ?? [])]);
+  return () => fixedRoots;
 }
 
 function posixRelative(value: string): string {
@@ -193,12 +221,50 @@ export interface SelfChangeConfigPatch {
   readonly patches: readonly SelfChangeConfigOperation[];
 }
 
-/** 放松安全的配置键：补丁触及（含整体覆盖其祖先）即拒绝，不进审批（「模型不能自解禁」）。 */
-export const FORBIDDEN_CHANGE_CONFIG_KEYS: readonly (readonly string[])[] = Object.freeze([
-  Object.freeze(['ai', 'agent', 'toolHardGate']),
-  Object.freeze(['ai', 'agent', 'execApprovalMode']),
-  Object.freeze(['ai', 'agent', 'masterShell']),
+/**
+ * 放松安全或扩大工具面的 Host 配置键（点分路径，ADR 0040 §1，#1051 F2）。
+ *
+ * 补丁写到这些键本身、其子键，或整体覆盖 / 删除其祖先，都直接拒绝，不进审批（「模型不能自解禁」）。
+ * `packages/im/runtime/src/host-config-schema.json` 中对应字段必须标 `"x-zhin-config": { "security": true }`，
+ * 守卫测试断言两边一一对应：新增安全开关时只在 schema 标记而忘记登记（或反之）会直接失败。
+ */
+export const SELF_CHANGE_SECURITY_CONFIG_KEYS: readonly string[] = Object.freeze([
+  // 硬闸与执行审批
+  'ai.agent.toolHardGate',
+  'ai.agent.execApprovalMode',
+  'ai.agent.subagentExecApprovalMode',
+  'ai.agent.workerExecApprovalMode',
+  'ai.agent.execSecurity',
+  'ai.agent.execPreset',
+  'ai.agent.execAllowlist',
+  'ai.agent.masterShell',
+  'ai.agent.masterShellApprovalMode',
+  'ai.agent.toolExecution',
+  'ai.agent.injectionGuard',
+  'ai.agent.usageQuota.exemptOwner',
+  'ai.agent.schedule.security',
+  // 决策审批与工作室信任
+  'ai.decisions.approval',
+  'ai.workroom.trustedPackPublishers',
+  'ai.workroom.disclosure',
+  // 访问令牌
+  'http.token',
+  'http.tokens',
+  // 跨实例执行与回调
+  'a2a.workroomRemoteExecutors',
+  'a2a.workroomCallbacks',
+  // 主人私域策略
+  'assistant.home.policy',
+  // MCP：对外暴露工具 / 接入新的工具面
+  'mcp',
+  'ai.mcpServers',
+  'ai.githubMcp',
 ]);
+
+/** {@link SELF_CHANGE_SECURITY_CONFIG_KEYS} 的分段形式。 */
+export const FORBIDDEN_CHANGE_CONFIG_KEYS: readonly (readonly string[])[] = Object.freeze(
+  SELF_CHANGE_SECURITY_CONFIG_KEYS.map(key => Object.freeze(key.split('.'))),
+);
 
 /** 同 Console `CONFIG_PATCH_LIMITS`。 */
 const MAX_CONFIG_OPERATIONS = 32;
@@ -225,6 +291,35 @@ function isPrefix(prefix: readonly string[], of: readonly string[]): boolean {
   return prefix.length <= of.length && prefix.every((segment, index) => segment === of[index]);
 }
 
+/**
+ * 返回补丁路径会改到的第一个禁改键；不触及时返回 `null`。
+ * 写禁止键本身或其子键，或整体覆盖 / 删除其祖先（`ai.agent = {...}`、`remove ai`）都算改到它。
+ */
+export function findForbiddenConfigKey(segments: readonly string[]): readonly string[] | null {
+  for (const forbidden of FORBIDDEN_CHANGE_CONFIG_KEYS) {
+    const writesInsideForbidden = isPrefix(forbidden, segments);
+    const overwritesAncestor = isPrefix(segments, forbidden);
+    if (writesInsideForbidden || overwritesAncestor) return forbidden;
+  }
+  return null;
+}
+
+function assertConfigPathAllowed(segments: readonly string[]): void {
+  const forbidden = findForbiddenConfigKey(segments);
+  if (!forbidden) return;
+  throw new SelfChangeConfigKeyError(segments.join('.'), `touches ${forbidden.join('.')}`);
+}
+
+/**
+ * 生效前复核（§5.1）：按当前禁改名单重查已规范化的补丁。
+ * 名单扩充前起草并批准的旧变更在这里被拦下，触及禁改键抛 {@link SelfChangeConfigKeyError}。
+ */
+export function assertConfigPatchAllowed(patch: SelfChangeConfigPatch): void {
+  for (const operation of patch.patches) {
+    assertConfigPathAllowed(operation.path);
+  }
+}
+
 /** 校验并冻结配置补丁；触及禁止键抛 {@link SelfChangeConfigKeyError}，形状不对抛 {@link SelfChangeValidationError}。 */
 export function normalizeChangeConfigPatch(input: unknown): SelfChangeConfigPatch {
   if (!input || typeof input !== 'object') throw new SelfChangeValidationError('configPatch must be an object');
@@ -243,13 +338,7 @@ export function normalizeChangeConfigPatch(input: unknown): SelfChangeConfigPatc
       || !segments.every(s => typeof s === 'string' && s.length > 0 && s.length <= MAX_CONFIG_SEGMENT_CHARS)) {
       throw new SelfChangeValidationError('configPatch path must be 1-16 non-empty string segments');
     }
-    const key = (segments as string[]).join('.');
-    for (const forbidden of FORBIDDEN_CHANGE_CONFIG_KEYS) {
-      // 写禁止键本身或其子键，或整体覆盖 / 删除其祖先（`ai.agent = {...}`）都会改到它。
-      if (isPrefix(forbidden, segments as string[]) || isPrefix(segments as string[], forbidden)) {
-        throw new SelfChangeConfigKeyError(key, `touches ${forbidden.join('.')}`);
-      }
-    }
+    assertConfigPathAllowed(segments as string[]);
     const pathCopy = Object.freeze([...(segments as string[])]);
     out.push(op === 'set'
       ? Object.freeze({ op, path: pathCopy, value: (raw as { value?: unknown }).value })

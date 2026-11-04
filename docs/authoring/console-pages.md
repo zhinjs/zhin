@@ -84,7 +84,7 @@ Sandbox 适配器（`plugins/adapters/sandbox`）同时提供了一个适配器�
     "entry": "./plugin.ts",
     "runtime": "trusted",
     "features": [
-      { "package": "@zhin.js/adapter", "api": "^1.0.0" },
+      { "package": "@zhin.js/adapter", "api": "^2.0.0" },
       { "package": "@zhin.js/page", "api": "^1.0.0" }
     ]
   }
@@ -276,6 +276,14 @@ interface SkillsStatus {
 
 默认保留 14 天，用 `ai.audit.retentionDays` 修改；启动时和之后每小时清理一次过期行。开关控制见下面的控制面。
 
+### 内置查询：用量统计
+
+`plugin.root.usage-stats`（`pluginRpc('root', 'usage-stats', { ... })`，权限 `control:read`）只读，给用量图表用。数据来自 `data/agent-traces/*.jsonl`，和 `zhin usage report` 用同一套聚合。
+
+- 参数（都可选）：`since`、`until`（毫秒时间戳，默认 `until` = 现在、`since` = `until` 往前 7 天）、`bucket`（`'hour'` 或 `'day'`，范围超过 2 天默认 `day`，否则 `hour`）、`session`（会话键子串，或带 `*` 的通配）。范围最多 31 天，超过返回 `invalid_input`。
+- 返回：`range`（含主机时区 `timeZone`）、`totals`、`byModel`（按输入 token 降序）、`bySession`（前 50）、`series`（范围内每个时间桶一项，缺的补 0，按时间升序）、`segments`（历史 / 固定 / 用户的上下文估算之和）、`filesRead`、`malformedLines`。`totals`、`byModel`、`bySession`、`series` 里都带 `cacheReadTokens`、`cacheWriteTokens` 和 `cacheShare`（0 到 1）；`totals.cacheShareByCall` 是单次调用缓存命中率的 p50 / p90。
+- 只返回计数、会话键和 provider / model 名，不返回消息文本。结果在内存里缓存 60 秒（最多 32 条），换代时清空。
+
 ### 内置操作：控制面
 
 「机器人状态」页的控制面（ADR 0036 切片 D）也由 Host 提供，是让机器人立刻安静的统一止损开关。
@@ -413,6 +421,50 @@ interface SkillsStatus {
 | --- | --- | --- |
 | `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` 或 `ops:approve` |
 | `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` 或 `tool_approvals:resolve`（动作；管理员令牌总可调用） |
+
+### 内置操作：自我变更审批（ADR 0040）
+
+Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)）。列表只含元数据；文件正文与配置值只在详情里给审批人。
+
+| 方法 | 调用 | 需要的权限 |
+| --- | --- | --- |
+| `plugin.root.self-changes` | `pluginRpc('root', 'self-changes')` | `tool_approvals:read` 或 `ops:approve`（待审 / 最近变更与暂存区占用 `usageBytes`，不含正文） |
+| `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | **仅** `ops:approve`（逐文件 unified diff，全部文件合计 ≤ 64 KB，按行截断；配置补丁值按审计口径脱敏；完整试跑检查与 `skippedChecks`；已瘦身时 `bodiesAvailable: false`） |
+| `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve`（动作） |
+| `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve`（动作；`failed` 现场已处理） |
+
+## 适配器 Console 页面
+
+内置平台适配器（`plugins/adapters/*`）各自带一个 `pages/index/index.ts`，统一用 `@zhin.js/client` 的 `createAdapterConsolePage(adapterKey)` 渲染，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec)` 提供数据：
+
+```ts
+// pages/index/index.ts
+import { definePage } from '@zhin.js/console-contract';
+import { createAdapterConsolePage } from '@zhin.js/client';
+
+export const meta = definePage({
+  title: 'Telegram',
+  icon: 'Send',
+  order: 74,
+  requiredPermissions: ['telegram:read'],
+});
+
+export default createAdapterConsolePage('telegram');
+```
+
+页面里能做的事：
+
+- 查看 Host `endpoint.list` 里该适配器的运行中连接，点「测试连接」调用 `endpoint.test`；
+- 读取 `plugin.<pluginId>.status` 的所属 Adapter 账号清单与运行状态；敏感配置一律遮蔽；
+- 调 `endpoint-add` / `endpoint-update` / `endpoint-start` / `endpoint-stop` / `endpoint-remove` / `endpoint-replace` 管理账号；经 Host 持久化 CAS 保存，不改启动文件或 `.env`；
+- 显示 LoginAssist 的 `login.list` 待办，并用 `login.submit` / `login.cancel` 完成扫码、滑块、短信或设备确认；
+- 渲染适配器自定义动作（`status.actions`），例如 QQ 的扫码绑定、公域 / 私域选择。
+
+权限按适配器分开：页面读取需要 `<adapterKey>:read`，写操作（账号变更、自定义动作）需要 `<adapterKey>:write`；管理员 full token 不受限。首次修改启动账号需管理员核对清单并确认迁移；缺少持久化管理端口时，`runtime.canManage` 为 `false` 或请求明确不可用，不回退写配置文件。
+
+每次变更提交清单中的 `expectedGeneration` 与 `expectedRevision`，目标使用 `instanceId`；首次迁移经用户确认附 `confirmMigration: true`。新增与替换只保存为未启动状态；普通配置更新只重连目标账号。冲突或提交结果未知时先刷新核实，不自动重试；持久化保存成功与异步启动、关闭完成是不同状态。
+
+`createAdapterConsoleRpc` 的 `spec` 只放可公开的字段元数据：`env: true` 或 `secret: true` 的字段按敏感内容遮蔽，前者不再授予写 `.env` 的能力。编辑仅提交平台声明的可更新字段，空白或遮蔽的 secret 保留原值；替换账号需完整填写新配置。`extraStatus` 只返回少量状态（如 `bindState`、`scanUrl`），不要放日志、聊天原文或密钥。
 
 ## 在页面里保存设置 (config:patch)
 

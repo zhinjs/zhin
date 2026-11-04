@@ -1,5 +1,150 @@
 # @zhin.js/adapter-icqq
 
+## 1.1.21
+
+### Patch Changes
+
+- af8f803: Use the current Endpoint's platform profile for Agent account identity, with per-field configured fallbacks and scoped, identity-approved profile tools. Keep SOUL first-person and independent of account names. Profile ports preserve the source Client, cancellation, truthful update outcomes and private image authority.
+
+  Adapter Feature API 2.1 and Tool Feature API 1.1 describe the additive profile requirements; new Core, official adapters and generated plugins declare the corresponding floors. Existing compatible API-2.0/API-1.0 plugins remain accepted by the newer providers. npm releases remain patch.
+
+  Private IM assets now bind to the full canonical conversation and principal. Existing IM asset records that contain only the earlier lossy hash remain on disk until their original expiry, but cannot be safely rebound; recapture them. No automatic file deletion, platform profile mutation or workspace SOUL rewrite occurs during upgrade.
+
+- Updated dependencies [b88e988]
+- Updated dependencies [f78eb84]
+- Updated dependencies [c15cef9]
+- Updated dependencies [b0c02a2]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [032dc96]
+  - @zhin.js/adapter@1.1.27
+  - @zhin.js/client@1.1.23
+  - @zhin.js/im-contract@1.1.10
+  - @zhin.js/core@1.1.55
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/page@1.1.13
+  - @zhin.js/agent-feature@1.1.12
+  - @zhin.js/feature-kit@1.1.11
+  - @zhin.js/permission@1.1.11
+  - @zhin.js/skill@1.1.12
+
+## 1.1.20
+
+### Patch Changes
+
+- Updated dependencies [5e878ba]
+  - @zhin.js/page@1.1.12
+
+## 1.1.19
+
+### Patch Changes
+
+- 2c3610a: Move account lifecycle ownership into the generic Adapter base and let native Endpoints retain their SDK Client inheritance. Infer platform-specific operation Sessions from a single adapter registry while preserving command parameter, option, configuration and factory inference.
+
+  Bind message replies, management ports, login challenges and Agent cancellation to the captured account incarnation. Persist runtime account intent with encrypted, revision-checked Host storage; keep account management independent of Root process restarts. Require explicit operator confirmation before importing existing accounts, and give replacement accounts a new identity without inheriting previous Sessions.
+
+  Expose account save, start, stop, update and replacement through the existing adapter Console, with exact account ownership, truthful pending/unknown outcomes and no startup configuration or environment-file rewrites.
+
+  Complete the target migration across every adapter, the public authoring API, generators, examples and Console. This intentionally removes the old create factory, inheritable Endpoint/ClientEndpoint classes, Client descriptors and file-rewrite account management; plugin authors must use createAdapter, native Client inheritance and the single AdapterRegistry. Satori and OneBot12 require explicit platform/userId selection, and WeCom requires a separate agentId.
+
+  Verify opaque credential changes before the same configuration snapshot is committed. Drain admitted native callbacks across close/rollback, cancel target work on stop, and keep raw transport parsing, platform ACK timing and SDK native methods under their existing owners. Account metadata conceals credentials carried in URLs.
+
+- a9f4e48: PATCH COMPATIBILITY CUTOVER: this batch intentionally changes plugin APIs. The maintainer explicitly chose patch releases with declared version boundaries. Upgrade the complete tested dependency set; patch numbering does not promise compatibility with the removed interfaces.
+
+  The first planned floors are zhin.js 1.1.19, Core 1.1.54, Adapter 1.1.26, FeatureKit 1.1.10, Plugin Runtime 1.1.18, Runtime/Isolate 1.1.16 and Agent 1.1.45. Keep old-interface plugins with the earlier locked stack until they are migrated. Adapter's independent Feature API changes from 1.0.0 to 2.0.0; official consumers declare ^2.0.0. Existing Feature API admission rejects explicitly incompatible ranges; omitted API metadata keeps its existing behavior and does not certify compatibility. Runtime engine and patch-only release gates remain unchanged.
+
+  Use the native-Client Adapter target contract, canonical FeatureKit AdapterRegistry augmentation and named Endpoint control/management requests. Route message controls from canonical message/conversation refs; retain exact source authority and propagate caller/account/explicit-Root-stop cancellation. Replace removed Agent activity feedback exports with source-bound feedback. HMR pause/resume belongs to concrete plugin instances; plugins choose accepted-work policy without changing Controller commit/rollback authority. Cooperative worker/process control cancellation does not kill an isolate or reopen retired business admission.
+
+  Provide authenticated historical-data preview, exact selected binding, transactional application, authoritative inspection and explicit resumption, including active games. Preserve before-images and journals; never replay an unconfirmed effect, infer an account from an alias, or reuse historical permission grants. Owner V2 approvals remain inactive legacy data, while new writes use V3. Rollback requires matching software, lockfile and verified data; installing old code alone cannot read a new V3 approval file. Conflicting after-images are never overwritten.
+
+  See docs/plans/adapter-operation-version-boundaries.md and the Chinese/English upgrade guide for the complete version inventory, custom-plugin changes, acceptance and recovery sequence. These code and metadata changes do not authorize merging, publication, deployment, login, production migration or removal of installed workspace patches.
+
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [f8505b0]
+  - @zhin.js/adapter@1.1.26
+  - @zhin.js/feature-kit@1.1.10
+  - @zhin.js/core@1.1.54
+  - @zhin.js/client@1.1.22
+  - @zhin.js/page@1.1.11
+  - @zhin.js/agent-feature@1.1.11
+  - @zhin.js/skill@1.1.11
+  - @zhin.js/tool@1.1.13
+  - @zhin.js/permission@1.1.10
+
+## 1.1.18
+
+### Patch Changes
+
+- 6345a38: feat(adapters): add per-adapter Console pages
+
+  Every platform adapter now ships a `pages/index` Console page backed by a shared
+  `createAdapterConsolePage` component and `createAdapterConsoleRpc` server helper:
+
+  - See running endpoints, test connectivity, and manage
+    `plugins.<adapter>.endpoints` (add/remove writes `.env` references) from the
+    Console instead of chat commands.
+  - Surface LoginAssist pending tasks (QR / slider / SMS / device) so ICQQ login no
+    longer requires the terminal.
+  - QQ moves its QR binding flow (`qq endpoint add`) into Console actions with
+    public/private selection.
+  - Pages are permission-gated by `<adapter>:read`; writes need `<adapter>:write`.
+
+- ff3efe7: feat(adapters): notify masters when ICQQ or QQ goes offline and support ICQQ re-login
+
+  - Add an explicit `notify` target to ICQQ and QQ endpoint config: when the
+    transport goes offline or login fails, send a short notice through another
+    adapter instance's Endpoint via `OutboundHost`.
+  - ICQQ automatically retries login after `system.offline.kickoff` when
+    `autoReconnect` is enabled, and exposes pending QR/slider/device challenges.
+  - Add `icqq login status|qr|confirm|code|retry` recovery commands. They can be
+    invoked from the QQ conversation that received the notice; `qr` returns the
+    login QR code as an image when the notifying platform supports it.
+  - `notify.id` also counts as the master identity for the related endpoint
+    management commands, so recovery can happen from the notified conversation.
+  - Document the new config and commands in the ICQQ/QQ READMEs and generated
+    configuration reference.
+
+- c58c589: Group deferred tools by their canonical plugin or MCP server instead of installation paths. Omit already represented delivered text and ledger facts only from the current model projection, preserving full history and restoring facts when their covering reply leaves the active context. Allow tools to declare a synchronous, read-only availability predicate before turn disclosure, with execution-time checks remaining authoritative.
+
+  Preserve every confirmed platform message identity across Agent replies and ICQQ split sends. Give each bubble its own stable single-message alias while retaining the reply's ordered association; preserve confirmed prefixes on partial delivery without retrying or inventing unknown message IDs.
+
+- Updated dependencies [6345a38]
+- Updated dependencies [ff3efe7]
+- Updated dependencies [c58c589]
+  - @zhin.js/adapter@1.1.25
+  - @zhin.js/client@1.1.21
+  - @zhin.js/core@1.1.53
+  - @zhin.js/im-contract@1.1.9
+  - @zhin.js/tool@1.1.12
+
+## 1.1.17
+
+### Patch Changes
+
+- e23cabc: ADR 0041 slice B: the turn context now carries real scene facts. `EndpointManagement` gains `inspectGroupScene` (name, owner, admins, member count, global mute) and `inspectGroupMemberProfile` (role, card, title, mute expiry; one lookup), implemented by the ICQQ adapter from uncached group/member reads. The CLI resolves them per turn (bot role always fresh; group and sender facts reuse a 60 s, 256-entry in-memory cache scoped to the generation; failures omit fields) and the inbound actor now carries `groupNickname` / `groupTitle` / `mutedUntil` plus the platform role. The Session / Bot state blocks are replaced by one projected scene line `[scene_id:…;scene_type:…;scene_name:…;owner_id:…;admins:…;member_count:…;global_mute:…;assistant_role:…;]` (values escaped and clipped to 64 chars). No new on-disk state.
+- 4d728c0: ADR 0043 §4 + §5 (H4) and the ADR 0041 actor-only amendment. Participant headers are no longer stored: user messages keep only `actor`, assistant messages keep `assistantActor` (plus the delivered `messageId`), and the header is rendered at the LLM boundary; legacy rows that still carry `name` are read as before. Headers now use session message aliases `id:m<n>` (an ordinal over the stored active path, so already-sent prefixes never change), `time:HH:mm` shown only when a minute has passed since the last shown time (the first message and the first message of a day also carry `date`), and `reply_to:m<n>` when the message replies to one inside the visible window. A reply to a message outside the window gets one `[quote id:…;user_id:…;time:…;] <first 120 chars>` line (media as placeholders, a forward expanded one level) so the model no longer needs `inspect_conversation_reference` for ordinary quotes; the quote is resolved by the ingress through the reference port (3 s timeout) and stored as structured `UserMessage.quote`. Tool arguments named `message_id` / `message_ids` / `*_message_id` / `reference` and `reply` segments accept the alias as well as the platform id; `inspect_conversation_reference` also accepts the quoted message id.
+- 51f1328: 修复 icqq 群成员相关 Agent 工具：`group_member_info` 返回空对象（模型据此误判成员不在群里）、`group_invite` 永远判定"已在群里"、`set_mute` / `set_title` / `set_anonymous` 读旧缓存误判 Bot 不是管理员。统一改为实时查询群成员。
+- d0e1fac: Keep stable prompt instructions ahead of turn-specific capabilities, project unchanged context without placeholder text, and retain scoped state snapshots with readable updates and compaction recovery. Preserve native conversation/tool chronology and separate participant identity from runtime guidance.
+
+  Resolve the ICQQ bot account and current-group role before capability discovery, and support explicitly declared current-conversation bot-role requirements without changing existing requester permissions or approvals. Keep role lookup failures unknown and preserve execution-time platform checks.
+
+- 3771f7a: 修复同一群先后两人入群时后一次入群被当重复事件丢掉：side event 去重键（core 与 icqq）加入成员与操作人。
+- 4f96ad5: Fix member-join welcome display: icqq now sends the mention's display name as the `at` element text, the joining member's nickname from the notice is threaded into `target.name`, and icqq group messages populate `conversation.name` from `group_name` so `{group}` renders the group name instead of the group number.
+- Updated dependencies [f67883e]
+- Updated dependencies [e23cabc]
+- Updated dependencies [4d728c0]
+- Updated dependencies [eb8feeb]
+- Updated dependencies [24a2b71]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [3771f7a]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/core@1.1.52
+  - @zhin.js/adapter@1.1.24
+  - @zhin.js/tool@1.1.11
+  - @zhin.js/im-contract@1.1.8
+
 ## 1.1.16
 
 ### Patch Changes

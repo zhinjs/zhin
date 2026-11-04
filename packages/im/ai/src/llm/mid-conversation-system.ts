@@ -34,8 +34,9 @@ export function isLocalEndpoint(baseUrl: string | undefined): boolean {
 /**
  * Per-model resolution. An explicit `compat.midConversationSystem` always wins; otherwise:
  * OpenAI → `system` (reasoning models `developer`, `system` when `supportsDeveloperRole === false`);
- * DeepSeek and remote OpenAI-compatible → `system`; local (Ollama, vLLM, private hosts),
- * Anthropic, Gemini, MiniMax and anything unknown → `none`.
+ * remote OpenAI-compatible → `system`; DeepSeek (rejects / drops multiple system segments in
+ * context), local (Ollama, vLLM, private hosts), Anthropic, Gemini, MiniMax and anything unknown → `none`
+ * (rendered as a `user_id:system` user message).
  */
 export function resolveMidConversationSystem(
   model: Pick<Model, 'sdk' | 'id' | 'baseUrl' | 'compat'>,
@@ -45,8 +46,6 @@ export function resolveMidConversationSystem(
   switch (model.sdk) {
     case 'openai':
       return isOpenAiReasoningModel(model.id) && model.compat?.supportsDeveloperRole !== false ? 'developer' : 'system';
-    case 'deepseek':
-      return 'system';
     case 'openai-compatible':
       return isLocalEndpoint(model.baseUrl) ? 'none' : 'system';
     default:

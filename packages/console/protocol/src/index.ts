@@ -472,6 +472,11 @@ export const CONFIG_RPC = Object.freeze({
   REPLACE_SOURCE: 'config:replace-source',
   SET: 'config:set',
   PATCH: 'config:patch',
+  /** Trusted project administration; ordinary page patches retain their allowlist. */
+  PATCH_PROJECT: 'config:patch-project',
+  /** Trusted project read (full scope): one path or the whole document, masked unless `reveal`. */
+  GET_PROJECT: 'config:get-project',
+  APPLY: 'config:apply',
 } as const);
 
 /**
@@ -507,12 +512,67 @@ export interface ConsoleConfigPatchRequest {
   readonly patches: readonly ConsoleConfigPatchOperation[];
 }
 
+/** Transport-only metadata. No configuration values, expanded environment or private resources. */
+export interface ConsoleConfigApplication {
+  readonly operationId: string;
+  readonly sourceRevision: string;
+  readonly saved: boolean;
+  readonly generation: number;
+  readonly applicationRevision: number;
+  readonly groups: readonly Readonly<{
+    id: string;
+    paths: readonly (readonly string[])[];
+    effect: 'in-place' | 'replace-resource' | 'reconnect-endpoint' | 'reload-plugin' | 'restart-process';
+    status: 'applied' | 'restart-pending' | 'blocked' | 'failed' | 'superseded' | 'unknown';
+    reasonCode?: string;
+    dependsOn: readonly string[];
+  }>[];
+}
+
+export interface ConsoleConfigApplicationStatus {
+  readonly application?: ConsoleConfigApplication;
+  /** The file was saved; application was unconfirmed, superseded or rejected. Never a save failure. */
+  readonly applicationError?: 'unconfirmed' | 'superseded' | 'invalid';
+}
+
+export type ConsoleConfigApplyResult =
+  | Readonly<{ status: 'applied'; application: ConsoleConfigApplication }>
+  | Readonly<{ status: 'conflict'; revision: string; message: string }>
+  | Readonly<{ status: 'invalid'; message: string }>
+  | Readonly<{ status: 'unconfirmed'; message: string }>;
+
+/** A trusted project write may reach storage without obtaining its acknowledgement. */
+/** `config:get-project` request: omit `path` (or pass `[]`) to read the whole document. */
+export interface ConsoleConfigProjectReadRequest {
+  readonly path?: readonly string[];
+  /** Return stored values verbatim; otherwise schema/secret/env-reference values are masked. */
+  readonly reveal?: boolean;
+}
+
+/** `config:get-project` result. `value` is absent when `exists` is false. */
+export type ConsoleConfigProjectRead = Readonly<{
+  revision: string;
+  path: readonly string[];
+  exists: boolean;
+  value?: unknown;
+  /** True when values were masked (default); false only for an explicit `reveal`. */
+  redacted: boolean;
+}>;
+
+export type ConsoleConfigProjectPatchResult = ConsoleConfigPatchResult | Readonly<{
+  status: 'unconfirmed';
+  expectedRevision: string;
+  message: string;
+}>;
+
 export type ConsoleConfigPatchResult =
   | Readonly<{
     status: 'saved';
     revision: string;
-    /** True when a Host section changed: the file is saved but takes effect after restart. */
+    /** Current pending restart groups; older Hosts infer it from changed Host sections. */
     restartRequired: boolean;
+    application?: ConsoleConfigApplication;
+    applicationError?: 'unconfirmed' | 'superseded' | 'invalid';
     paths: readonly (readonly string[])[];
     /** Environment references in the written sections that are not defined yet (warning only). */
     missingEnv: readonly string[];
@@ -579,7 +639,7 @@ export function parsePluginConsoleRpcType(type: unknown): PluginConsoleRpcAddres
 
 export type ConsoleConfigFormat = 'yaml' | 'json';
 
-export interface ConsoleConfigSource {
+export interface ConsoleConfigSource extends ConsoleConfigApplicationStatus {
   readonly source: string;
   readonly format: ConsoleConfigFormat;
   readonly revision: string;
@@ -639,7 +699,9 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
 export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
   CONFIG_RPC.SET,
   CONFIG_RPC.PATCH,
+  CONFIG_RPC.PATCH_PROJECT,
   CONFIG_RPC.REPLACE_SOURCE,
+  CONFIG_RPC.APPLY,
   PLUGIN_RPC.APPLY,
   PLUGIN_RPC.VERIFY,
   PLUGIN_RPC.INSTALL,

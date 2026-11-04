@@ -13,14 +13,15 @@ const menuMessages = createMessages({
   next: { 'zh-CN': '下一页', en: 'Next' },
 });
 
+/** Rendering dependencies for one menu response; callbacks retain the same generation. */
+export interface CommandMenuReplyContext {
+  readonly commands: CommandIndex;
+  readonly snapshot: RuntimeSnapshot;
+  readonly conversation: ConversationRef;
+  readonly prefix: string;
+}
 /** IM-only presentation: Command remains independent of JSX, adapters and callback registries. */
-export async function commandMenuReply(
-  result: CommandDispatchResult,
-  commands: CommandIndex,
-  snapshot: RuntimeSnapshot,
-  conversation: ConversationRef,
-  prefix: string,
-): Promise<SendContent> {
+export async function commandMenuReply(result: CommandDispatchResult, { commands, snapshot, conversation, prefix }: CommandMenuReplyContext): Promise<SendContent> {
   // Only validated menus carry this metadata; other command return values stay opaque.
   const menu = result.menu;
   if (!menu) return result.value as SendContent;
@@ -37,8 +38,8 @@ export async function commandMenuReply(
     onClick: async (message: Message): Promise<SendContent> => {
       if (disabled) return [];
       const input = `${menu.keyword}${menu.pluginKey ? ` ${menu.pluginKey}` : ''} --page ${page}`;
-      const next = await commands.dispatch(input, message, undefined, prefix, snapshot, menu.locale);
-      return commandMenuReply(next, commands, snapshot, message.conversation, prefix);
+      const next = await commands.dispatch({ input: input, source: message, commandPrefix: prefix, snapshot: snapshot, locale: menu.locale });
+      return commandMenuReply(next, { commands: commands, snapshot: snapshot, conversation: message.conversation, prefix: prefix });
     },
   });
   return [content,

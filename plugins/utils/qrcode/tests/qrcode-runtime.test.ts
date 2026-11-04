@@ -25,19 +25,19 @@ describe('@zhin.js/plugin-qrcode', () => {
   it('executes declared text and size through the real parser', async () => {
     expect(parseCommandDefinition(qrcodeCommand)).toBe(qrcodeCommand);
     expect(parseCommandDefinition(scanCommand)).toBe(scanCommand);
-    const result = await commandIndex('gen', qrcodeCommand).dispatch('gen hello beautiful world --size 512');
+    const result = await commandIndex('gen', qrcodeCommand).dispatch({ input: 'gen hello beautiful world --size 512' });
     expect(result.status).toBe('executed');
     expect(isRawContent(result.value) && result.value.payload).toEqual({ type: 'image', data: { url: buildQrImageUrl('hello beautiful world', 512) } });
   });
 
   it('uses defaults and reports invalid size without creating an image', async () => {
     const index = commandIndex('gen', qrcodeCommand);
-    const result = await index.dispatch('gen ping');
+    const result = await index.dispatch({ input: 'gen ping' });
     expect(isRawContent(result.value) && result.value.payload).toEqual({ type: 'image', data: { url: buildQrImageUrl('ping') } });
-    const invalid = await index.dispatch('gen ping -s 10');
+    const invalid = await index.dispatch({ input: 'gen ping -s 10' });
     expect(invalid).toMatchObject({ status: 'invalid', issues: [{ field: '--size' }] });
     expect(invalid.value).toBeUndefined();
-    const help = await index.dispatch('gen --help', undefined, undefined, '#');
+    const help = await index.dispatch({ input: 'gen --help', commandPrefix: '#' });
     expect(String(help.value)).toContain('#gen <text> [--size <integer>]');
     expect(String(help.value)).toContain('默认值：300');
   });
@@ -49,7 +49,7 @@ describe('@zhin.js/plugin-qrcode', () => {
       for (const options of [undefined, {}]) {
         const index = commandIndex('scan/$url', { ...scanCommand, options, $parameter: { name: 'url', type: 'string' } });
         for (const input of ['scan --help', 'scan --help https://example.org', 'scan https://example.org --help']) {
-          await expect(index.dispatch(input)).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('scan <url>') });
+          await expect(index.dispatch({ input })).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('scan <url>') });
         }
       }
       expect(fetchMock).not.toHaveBeenCalled();

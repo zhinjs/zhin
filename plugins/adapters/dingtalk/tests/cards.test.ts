@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { DingTalkCards } from '../src/cards.js';
 import { resolveDingTalkConfig } from '../src/protocol.js';
 const config = resolveDingTalkConfig({ id: 'bot', appKey: 'key', appSecret: 'secret', mode: 'stream', cardTemplateId: 'template.schema', cardButtonCount: 2 });
@@ -39,41 +41,40 @@ it('does not resurrect an old card correlation after stop/restart', () => {
 });
 it('sends the real card API request and dispatches a matching callback through the endpoint', async () => {
   const { DingTalkEndpoint } = await import('../src/endpoint.js');
-  const { bindTestEndpoint } = await import('../../test-utils/endpoint.js');
   const { capabilityId, rootPluginId, featureId } = await import('zhin.js');
   const receive = vi.fn(async () => Object.freeze({ matched: true }));
   let body: any;
   const fetch = vi.fn(async (url: any, options: any) => {
+    if (String(url).includes('/gateway/connections/open')) return { ok: true, status: 200, json: async () => ({ endpoint: 'wss://stream.fixture', ticket: 'synthetic' }), text: async () => '' };
     if (String(url).includes('/gettoken')) return { ok: true, status: 200, json: async () => ({ errcode: 0, access_token: 'fixture', expires_in: 7200 }), text: async () => '' };
     body = JSON.parse(options.body);
     return { ok: true, status: 200, json: async () => ({ success: true, result: { outTrackId: body.outTrackId, deliverResults: [{ spaceType: 'IM_ROBOT', spaceId: 'staff', success: true }] } }), text: async () => '' };
   });
-  const endpoint = bindTestEndpoint(new DingTalkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'ding'), config, fetch, gateway: { receive, send: vi.fn(async () => 'sent') } }), { receive, send: vi.fn(async () => 'sent') }, undefined);
-  endpoint.open();
-  await endpoint.admit({ msgtype: 'text', msgId: 'incoming', text: { content: 'hello' }, conversationId: conversation.id, conversationType: '1', senderStaffId: 'staff', senderId: 'sender', senderCorpId: 'corp' });
+  const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'ding'), config, fetch, createStreamSocket: () => { const socket = Object.assign(new EventEmitter(), { send() {}, ping() {}, terminate() { this.emit('close'); } }); queueMicrotask(() => socket.emit('open')); return socket; }, gateway: { receive, send: vi.fn(async () => 'sent') } }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
+  await endpoint.start(); endpoint.open();
+  await endpoint.endpoint.admit({ msgtype: 'text', msgId: 'incoming', text: { content: 'hello' }, conversationId: conversation.id, conversationType: '1', senderStaffId: 'staff', senderId: 'sender', senderCorpId: 'corp' });
   const canonical = receive.mock.calls[0][0] as any;
   const id = await endpoint.send({ conversation: canonical.conversation, payload, locale: 'en' });
   expect(body.cardData.cardParamMap).toMatchObject({ title: 'Message', text: 'question', button0_label: 'Yes', button0_payload: 'answer' });
   expect(fetch).toHaveBeenLastCalledWith('https://api.dingtalk.com/v1.0/card/instances/createAndDeliver', expect.objectContaining({ headers: expect.objectContaining({ 'x-acs-dingtalk-access-token': 'fixture' }) }));
   receive.mockClear();
-  await endpoint.admitCard({ outTrackId: id, spaceType: 'IM_ROBOT', spaceId: 'staff', userId: 'staff', userIdType: 1, corpId: 'corp', content: JSON.stringify({ cardPrivateData: { params: { action: 'answer' } } }) }, 'click');
+  await endpoint.endpoint.admitCard({ outTrackId: id, spaceType: 'IM_ROBOT', spaceId: 'staff', userId: 'staff', userIdType: 1, corpId: 'corp', content: JSON.stringify({ cardPrivateData: { params: { action: 'answer' } } }) }, 'click');
   expect(receive).toHaveBeenCalledWith(expect.objectContaining({ conversation: canonical.conversation, sender: { id: 'sender' }, segments: [{ type: 'action', data: { id: 'click', payload: 'answer', sourceMessageId: id } }] }));
-  endpoint.close(); await expect(endpoint.admitCard({}, 'late')).rejects.toThrow('closed'); await endpoint.stop();
+  endpoint.close(); await expect(endpoint.endpoint.admitCard({}, 'late')).rejects.toThrow('closed'); await endpoint.stop();
 });
 it.each([
   [403, { code: 'Forbidden.AccessDenied.AccessTokenPermission', message: 'SECRET-TOKEN https://credential.example' }, 'response', 'Forbidden.AccessDenied.AccessTokenPermission'],
   [200, { success: false, code: 'InvalidParameter' }, 'delivery', 'InvalidParameter'],
 ])('logs safe diagnostics for card failure HTTP %s', async (status, responseBody, stage, platformCode) => {
   const { DingTalkEndpoint } = await import('../src/endpoint.js');
-  const { bindTestEndpoint } = await import('../../test-utils/endpoint.js');
   const { capabilityId, rootPluginId, featureId } = await import('zhin.js');
   const { getAdapterLogger } = await import('@zhin.js/logger');
   const warn = vi.spyOn(getAdapterLogger('dingtalk', config.id), 'warn');
   const receive = vi.fn(async () => Object.freeze({ matched: true }));
-  const fetch = vi.fn(async (url: any) => ({ ok: String(url).includes('/gettoken') || status === 200, status, json: async () => String(url).includes('/gettoken') ? { errcode: 0, access_token: 'SECRET-TOKEN', expires_in: 7200 } : responseBody, text: async () => '' }));
-  const endpoint = bindTestEndpoint(new DingTalkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'ding'), config, fetch, gateway: { receive, send: vi.fn(async () => 'sent') } }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+  const fetch = vi.fn(async (url: any) => String(url).includes('/gateway/connections/open') ? { ok: true, status: 200, json: async () => ({ endpoint: 'wss://stream.fixture', ticket: 'synthetic' }), text: async () => '' } : ({ ok: String(url).includes('/gettoken') || status === 200, status, json: async () => String(url).includes('/gettoken') ? { errcode: 0, access_token: 'SECRET-TOKEN', expires_in: 7200 } : responseBody, text: async () => '' }));
+  const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'ding'), config, fetch, createStreamSocket: () => { const socket = Object.assign(new EventEmitter(), { send() {}, ping() {}, terminate() { this.emit('close'); } }); queueMicrotask(() => socket.emit('open')); return socket; }, gateway: { receive, send: vi.fn(async () => 'sent') } }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
   try {
-    endpoint.open(); await endpoint.admit({ msgtype: 'text', conversationId: conversation.id, conversationType: '1', senderStaffId: 'staff' });
+    await endpoint.start(); endpoint.open(); await endpoint.endpoint.admit({ msgtype: 'text', conversationId: conversation.id, conversationType: '1', senderStaffId: 'staff' });
     await expect(endpoint.send({ conversation, payload })).rejects.toBeInstanceOf(Error);
     const log = JSON.stringify(warn.mock.calls);
     expect(log).toContain('dingtalk_card_delivery_failed'); expect(log).toContain(stage); expect(log).toContain(String(status)); expect(log).toContain(platformCode);

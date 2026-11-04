@@ -47,7 +47,7 @@ async function fixture(settings: Record<string, unknown> = {}) {
     environment: { name: 'test', mode: 'test', platform: 'node' } });
   const command = async (text: string, source = alice, prefix = ''): Promise<unknown> => {
     const index = runtime.snapshot.projections.get(commandFeatureId); if (!(index instanceof CommandIndex)) throw new Error('Missing CommandIndex');
-    const result = await index.dispatch(text, { ...source, content: text }, undefined, prefix); return result.status === 'executed' ? result.value : result;
+    const result = await index.dispatch({ input: text, source: { ...source, content: text }, commandPrefix: prefix }); return result.status === 'executed' ? result.value : result;
   };
   const service = (): QuizService => runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'answers'))!.get(quizServiceToken.id) as QuizService;
   /** Drive the inbound middleware with the owner-scoped service, mirroring Runtime's `context.use`. */

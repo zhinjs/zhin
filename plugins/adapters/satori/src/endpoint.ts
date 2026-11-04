@@ -1,17 +1,24 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createSatoriSelfProfile } from './self-profile.js';
+import { acceptHttpIngress } from 'imhelper';
 /**
  * SatoriEndpoint — WebSocket and webhook lifecycle, outbound, admit.
  */
 import {
-  ClientEndpoint,
+  createEndpointSpecification,
+  endpointSpec,
+  type Endpoint,
+  type EndpointSpecification,
   createEndpointLifecycle,
   type EndpointChannel,
   type EndpointConnectHandle,
   type EndpointControl,
+  type EndpointRecallRequest,
   type EndpointGroup,
   type EndpointLifecycle,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointManagementRequest,
+  type EndpointGroupRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -31,13 +38,12 @@ import {
   satoriInboundConversation,
   type ResolvedSatoriWebhookConfig,
   type ResolvedSatoriWsConfig,
-  type SatoriApiOptions,
   type SatoriEventBody,
   type SatoriLogin,
   type SatoriSignal,
 } from './protocol.js';
 import { registerSatoriWebhookRoutes } from './webhook.js';
-import { createSatoriEndpointClient, forwardSatoriClientEvents, type SatoriClient } from './client.js';
+import { satoriClientOptions, createSatoriActionCaller, type SatoriActionCaller, type SatoriActionRequest, forwardSatoriClientEvents, SatoriClient } from './client.js';
 import {
   WS_OPEN,
   defaultCreateWebSocket,
@@ -48,45 +54,51 @@ import {
 export type SatoriApiCaller = typeof callSatoriApi;
 
 export interface SatoriWsEndpointOptions {
+  readonly signal?: AbortSignal;
   readonly id: CapabilityId;
   readonly config: ResolvedSatoriWsConfig;
   readonly createWebSocket?: CreateSatoriWebSocket;
   readonly callApi?: SatoriApiCaller;
 }
 
-export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
-  readonly client: SatoriClient;
+export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  #open = false;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: SatoriWsEndpointOptions;
   readonly #lifecycle: EndpointLifecycle;
   #ws: SatoriWsSocket | null = null;
-  #login: SatoriLogin | undefined;
   #lastSn: number | undefined;
-  readonly management: EndpointManagement;
-  readonly control: EndpointControl = Object.freeze<EndpointControl>({
-    recall: (message) => this.recall(message.id, message.conversation.id),
+  readonly #management: EndpointManagement;
+  readonly #call: SatoriActionCaller;
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: request => this.#recall(request),
   });
 
   constructor(options: SatoriWsEndpointOptions) {
-    super();
+    const call = createSatoriActionCaller({ config: options.config, request: options.callApi ?? callSatoriApi, signal: options.signal });
+    super(satoriClientOptions({ config: options.config, call }));
+    this.#call = call;
     this.#logger = getAdapterLogger('satori', options.config.id);
     this.#options = options;
-    this.client = createSatoriEndpointClient(
-      options.config,
-      options.callApi ?? callSatoriApi,
-      () => this.#apiOptions(),
-    );
-    this.management = createSatoriEndpointManagement(
-      (resource, method, params) => this.client.call(resource, method, params),
-    );
-    this.bindClientEvents(
-      (receive) => forwardSatoriClientEvents(this.client, receive),
-      (name, payload) => {
+    this.#management = createSatoriEndpointManagement(call);
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => { this.#open = true; },
+      close: () => { this.#open = false; }, stop: () => this.#stop(),
+      send: request => this.#send(request),
+      management: this.#management, control: this.#control,
+      profile: createSatoriSelfProfile({ call, platform: options.config.platform, accountId: options.config.userId,
+        reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
+    });
+    forwardSatoriClientEvents(this, (name, payload) => {
+      void this[endpointSpec].events.run(() => {
+        if (!this.#open && !this.#lifecycle.started) return;
+        void this[endpointSpec].events.platform(name, payload).catch(error => this.#warnPlatformEvent(name, error));
         if (name === 'event') this.#admitRaw(payload as SatoriEventBody);
-      },
-      (name, error) => this.#warnPlatformEvent(name, error),
-    );
+      }).catch(error => this.#warnPlatformEvent(name, error));
+    });
     const { config } = options;
     this.#lifecycle = createEndpointLifecycle({
       name: config.id,
@@ -105,7 +117,7 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
     });
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     try {
       await this.#lifecycle.start((handle) => this.#connect(handle));
     } catch (err) {
@@ -122,19 +134,19 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
     }
   }
 
-  async stop(): Promise<void> {
-    this.close();
+  async #stop(): Promise<void> {
+    this.#open = false;
     // 基座负责：清重连/心跳定时器、强关 ws、唤醒 stop-during-connect 竞态
     await this.#lifecycle.stop();
     this.#ws = null;
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.client.call('message', 'create', {
+    const result = await this.#call({ resource: 'message', method: 'create', signal, params: {
       channel_id: conversation.id,
       content,
-    });
+    } });
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
@@ -146,14 +158,16 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
   }
 
   #admitRaw(body: SatoriEventBody): void {
-    if (body.login && !this.#login) this.#login = body.login;
+    if (!matchesSatoriLogin(this.#options.config, body.login)) return;
     if (!isMessageEvent(body)) return;
-    const conversation = satoriInboundConversation(String(this.#options.id), body);
+    const conversation = { ...satoriInboundConversation(String(this.#options.id), body), endpoint: this[endpointSpec].identity };
     const content = formatInboundContent(body);
     const sender = resolveInboundSender(body);
-    const selfId = this.#login?.user?.id ?? body.login?.user?.id;
+    const selfId = this.#options.config.userId;
     const mentioned = isSelfMentioned(body, selfId);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event: body,
+      ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
       conversation,
       message: { conversation, id: body.message.id },
       content,
@@ -164,7 +178,7 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
         type: body.type,
         channelType: isPrivateChannelType(body) ? 'private' : 'group',
         sn: body.sn,
-        platform: this.#login?.platform,
+        platform: this.#options.config.platform,
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -175,12 +189,12 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
     });
   }
 
-  async recall(id: string, fallbackChannelId?: string): Promise<void> {
-    const { channelId, messageId } = parseMessageRef(id);
-    await this.client.call('message', 'delete', {
-      channel_id: channelId || fallbackChannelId || '',
+  async #recall({ message, signal }: EndpointRecallRequest): Promise<void> {
+    const { channelId, messageId } = parseMessageRef(message.id);
+    await this.#call({ resource: 'message', method: 'delete', signal, params: {
+      channel_id: channelId || message.conversation.id,
       message_id: messageId,
-    });
+    } });
   }
 
   #warnPlatformEvent(name: string, error: unknown): void {
@@ -210,6 +224,7 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
       });
 
       ws.on('open', () => {
+        if (this.#ws !== ws || !this.#lifecycle.started) return;
         this.#logger.debug(formatCompact({ mode: 'ws' }));
         this.#sendSignal(SatoriOpcode.IDENTIFY, {
           token: config.token,
@@ -223,6 +238,7 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
       });
 
       ws.on('message', (data) => {
+        if (this.#ws !== ws || !this.#lifecycle.started) return;
         try {
           const raw = typeof data === 'string'
             ? data
@@ -275,7 +291,7 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
     if (signal.op === SatoriOpcode.PONG) {
       // 喂狗：复位基座看门狗计数
       this.#lifecycle.notifyHeartbeatAck();
-      void this.emitPlatform('pong', signal).catch((error) => {
+      void this[endpointSpec].events.platform('pong', signal).catch((error) => {
         this.#logger.warn(formatCompact({
           op: 'satori_platform_event_failed',
           event: 'pong',
@@ -286,22 +302,26 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
     }
     if (signal.op === SatoriOpcode.READY && signal.body?.logins) {
       const logins = signal.body.logins as SatoriLogin[];
-      this.#login = logins[0];
-      void this.emitPlatform('ready', signal).catch((error) => {
+      const login = logins.find(candidate => matchesSatoriLogin(this.#options.config, candidate));
+      if (login?.user?.id) this[endpointSpec].reportSelfUserId(login.user.id);
+      void this[endpointSpec].events.platform('ready', signal).catch((error) => {
         this.#logger.warn(formatCompact({
           op: 'satori_platform_event_failed',
           event: 'ready',
           error: error instanceof Error ? error.message : String(error),
         }));
       });
-      if (!this.#login?.platform || !this.#login?.user?.id) {
+      if (!login) {
         this.#logger.warn(formatCompact({ op: 'ready', ok: false, error: 'missing platform/user' }));
       }
       return;
     }
     if (signal.op === SatoriOpcode.EVENT && signal.body) {
-      if (typeof signal.body.sn === 'number') this.#lastSn = signal.body.sn;
-      this.client.ingest(signal.body as Parameters<SatoriClient['ingest']>[0]);
+      const body = signal.body;
+      void this[endpointSpec].events.run(() => {
+        if (typeof body.sn === 'number') this.#lastSn = body.sn;
+        this.#receive(body as SatoriEventBody);
+      }).catch(error => this.#warnPlatformEvent('event', error));
     }
   }
 
@@ -310,72 +330,62 @@ export class SatoriWsEndpoint extends ClientEndpoint<SatoriClient> {
     this.#ws.send(JSON.stringify({ op, body: body ?? {} }));
   }
 
-  #apiOptions(): SatoriApiOptions {
-    return {
-      baseUrl: this.#options.config.baseUrl,
-      platform: this.#login?.platform ?? '',
-      userId: this.#login?.user?.id ?? '',
-      token: this.#options.config.token,
-    };
+  #receive(body: SatoriEventBody): void {
+    if (!matchesSatoriLogin(this.#options.config, body.login)) return;
+    this[endpointSpec].reportSelfUserId(this.#options.config.userId);
+    this.ingest(body as Parameters<SatoriClient['ingest']>[0]);
   }
 
 }
 
 export interface SatoriWebhookEndpointOptions {
+  readonly signal?: AbortSignal;
   readonly id: CapabilityId;
   readonly http: HttpHost;
   readonly config: ResolvedSatoriWebhookConfig;
   readonly callApi?: SatoriApiCaller;
 }
 
-export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
-  readonly client: SatoriClient;
+export class SatoriWebhookEndpoint extends SatoriClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  #open = false;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: SatoriWebhookEndpointOptions;
-  #login: SatoriLogin | undefined;
   #routeReleases: HttpRouteRegistration[] = [];
   #started = false;
-  readonly management: EndpointManagement;
-  readonly control: EndpointControl = Object.freeze<EndpointControl>({
-    recall: (message) => this.recall(message.id, message.conversation.id),
+  readonly #management: EndpointManagement;
+  readonly #call: SatoriActionCaller;
+  readonly #control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: request => this.#recall(request),
   });
 
   constructor(options: SatoriWebhookEndpointOptions) {
-    super();
+    const call = createSatoriActionCaller({ config: options.config, request: options.callApi ?? callSatoriApi, signal: options.signal });
+    super(satoriClientOptions({ config: options.config, call }));
+    this.#call = call;
     this.#logger = getAdapterLogger('satori', options.config.id);
     this.#options = options;
-    this.client = createSatoriEndpointClient(
-      options.config,
-      options.callApi ?? callSatoriApi,
-      () => this.#apiOptions(),
-    );
-    this.management = createSatoriEndpointManagement(
-      (resource, method, params) => this.client.call(resource, method, params),
-    );
-    this.bindClientEvents(
-      (receive) => forwardSatoriClientEvents(this.client, receive),
-      (name, payload) => {
+    this.#management = createSatoriEndpointManagement(call);
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => { this.#open = true; },
+      close: () => { this.#open = false; }, stop: () => this.#stop(),
+      send: request => this.#send(request),
+      management: this.#management, control: this.#control,
+      profile: createSatoriSelfProfile({ call, platform: options.config.platform, accountId: options.config.userId,
+        reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
+    });
+    forwardSatoriClientEvents(this, (name, payload) => {
+      void this[endpointSpec].events.run(() => {
+        if (!this.#started) return;
+        void this[endpointSpec].events.platform(name, payload).catch(error => this.#warnPlatformEvent(name, error));
         if (name === 'event') this.#admitRaw(payload as SatoriEventBody);
-      },
-      (name, error) => this.#warnPlatformEvent(name, error),
-    );
+      }).catch(error => this.#warnPlatformEvent(name, error));
+    });
   }
 
-  /** Used by webhook handler. */
-  get isOpen(): boolean {
-    return this.clientEventsOpen;
-  }
-
-  get config(): ResolvedSatoriWebhookConfig {
-    return this.#options.config;
-  }
-
-  async acceptHttp(request: IncomingMessage, response: ServerResponse): Promise<void> {
-    await this.client.acceptHttp(request, response);
-  }
-
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
     if (!this.#options.config.token) {
@@ -387,7 +397,17 @@ export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
         hint: 'set token to authenticate Satori webhook callbacks',
       }));
     }
-    this.#routeReleases.push(...registerSatoriWebhookRoutes(this.#options.http, this));
+    const isOpen = () => this.#open;
+    this.#routeReleases.push(...registerSatoriWebhookRoutes(this.#options.http, {
+      config: this.#options.config,
+      get isOpen() { return isOpen(); },
+      acceptHttp: async (request, response) => {
+        await acceptHttpIngress<SatoriEventBody>(request, response, body => {
+          void this[endpointSpec].events.run(() => this.#receive(body))
+            .catch(error => this.#warnPlatformEvent('event', error));
+        });
+      },
+    }));
     this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.id,
@@ -396,8 +416,8 @@ export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
     }));
   }
 
-  async stop(): Promise<void> {
-    this.close();
+  async #stop(): Promise<void> {
+    this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
     this.#logger.debug(formatCompact({
@@ -405,12 +425,12 @@ export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
     }));
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const content = formatSatoriOutbound(payload);
-    const result = await this.client.call('message', 'create', {
+    const result = await this.#call({ resource: 'message', method: 'create', signal, params: {
       channel_id: conversation.id,
       content,
-    });
+    } });
     const msgId = extractCreatedMessageId(result);
     this.#logger.debug(formatCompact({
       op: 'satori_send',
@@ -422,14 +442,16 @@ export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
   }
 
   #admitRaw(body: SatoriEventBody): void {
-    if (body.login && !this.#login) this.#login = body.login;
+    if (!matchesSatoriLogin(this.#options.config, body.login)) return;
     if (!isMessageEvent(body)) return;
-    const conversation = satoriInboundConversation(String(this.#options.id), body);
+    const conversation = { ...satoriInboundConversation(String(this.#options.id), body), endpoint: this[endpointSpec].identity };
     const content = formatInboundContent(body);
     const sender = resolveInboundSender(body);
-    const selfId = this.#login?.user?.id ?? body.login?.user?.id;
+    const selfId = this.#options.config.userId;
     const mentioned = isSelfMentioned(body, selfId);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event: body,
+      ...(typeof body.timestamp === 'number' ? { platformSentAt: body.timestamp } : {}),
       conversation,
       message: { conversation, id: body.message.id },
       content,
@@ -440,7 +462,7 @@ export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
         type: body.type,
         channelType: isPrivateChannelType(body) ? 'private' : 'group',
         sn: body.sn,
-        platform: this.#login?.platform,
+        platform: this.#options.config.platform,
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -451,12 +473,12 @@ export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
     });
   }
 
-  async recall(id: string, fallbackChannelId?: string): Promise<void> {
-    const { channelId, messageId } = parseMessageRef(id);
-    await this.client.call('message', 'delete', {
-      channel_id: channelId || fallbackChannelId || '',
+  async #recall({ message, signal }: EndpointRecallRequest): Promise<void> {
+    const { channelId, messageId } = parseMessageRef(message.id);
+    await this.#call({ resource: 'message', method: 'delete', signal, params: {
+      channel_id: channelId || message.conversation.id,
       message_id: messageId,
-    });
+    } });
   }
 
   #warnPlatformEvent(name: string, error: unknown): void {
@@ -467,13 +489,10 @@ export class SatoriWebhookEndpoint extends ClientEndpoint<SatoriClient> {
     }));
   }
 
-  #apiOptions(): SatoriApiOptions {
-    return {
-      baseUrl: this.#options.config.baseUrl,
-      platform: this.#login?.platform ?? '',
-      userId: this.#login?.user?.id ?? '',
-      token: this.#options.config.token,
-    };
+  #receive(body: SatoriEventBody): void {
+    if (!matchesSatoriLogin(this.#options.config, body.login)) return;
+    this[endpointSpec].reportSelfUserId(this.#options.config.userId);
+    this.ingest(body as Parameters<SatoriClient['ingest']>[0]);
   }
 
 }
@@ -489,15 +508,8 @@ function isPrivateChannelType(body: SatoriEventBody): boolean {
  * 并以字符串回传给 listGroupMembers，因此保留原始字符串（仅按契约类型
  * 声明强转）是全链路最不丢信息的方案。
  */
-function toGroupId(id: string): number {
-  return id as unknown as number;
-}
 
-export type SatoriManagementApi = (
-  resource: string,
-  method: string,
-  params: Record<string, unknown>,
-) => Promise<unknown>;
+export type SatoriManagementApi = SatoriActionCaller;
 
 interface SatoriListPage {
   readonly data?: unknown[];
@@ -507,13 +519,12 @@ interface SatoriListPage {
 /** Satori 分页列表（{data, next?}）聚合；兼容直接返回数组的实现。 */
 async function listSatoriPages(
   api: SatoriManagementApi,
-  resource: string,
-  params: Record<string, unknown>,
+  { resource, params = {}, signal }: Omit<SatoriActionRequest, 'method'>,
 ): Promise<unknown[]> {
   const items: unknown[] = [];
   let next: string | undefined;
   do {
-    const page = await api(resource, 'list', next ? { ...params, next } : params);
+    const page = await api({ resource, method: 'list', params: next ? { ...params, next } : params, signal });
     if (Array.isArray(page)) {
       items.push(...page);
       break;
@@ -537,26 +548,26 @@ function asRecord(value: unknown): Record<string, unknown> {
  */
 export function createSatoriEndpointManagement(api: SatoriManagementApi): EndpointManagement {
   return Object.freeze<EndpointManagement>({
-    async listGroups(): Promise<readonly EndpointGroup[]> {
+    async listGroups(request: EndpointManagementRequest = {}): Promise<readonly EndpointGroup[]> {
       const groups: EndpointGroup[] = [];
-      for (const value of await listSatoriPages(api, 'guild', {})) {
+      for (const value of await listSatoriPages(api, { resource: 'guild', signal: request.signal })) {
         const guild = asRecord(value);
         if (guild.id == null) continue;
         groups.push({
-          group_id: toGroupId(String(guild.id)),
+          group_id: String(guild.id),
           name: String(guild.name ?? guild.id),
         });
       }
       return groups;
     },
-    async listChannels(): Promise<readonly EndpointChannel[]> {
+    async listChannels(request: EndpointManagementRequest = {}): Promise<readonly EndpointChannel[]> {
       const channels: EndpointChannel[] = [];
-      for (const value of await listSatoriPages(api, 'guild', {})) {
+      for (const value of await listSatoriPages(api, { resource: 'guild', signal: request.signal })) {
         const guild = asRecord(value);
         if (guild.id == null) continue;
         const guildId = String(guild.id);
         const guildName = String(guild.name ?? guildId);
-        for (const channelValue of await listSatoriPages(api, 'channel', { guild_id: guildId })) {
+        for (const channelValue of await listSatoriPages(api, { resource: 'channel', params: { guild_id: guildId }, signal: request.signal })) {
           const channel = asRecord(channelValue);
           if (channel.id == null) continue;
           // Channel.type: 0=TEXT 1=DIRECT 2=CATEGORY 3=VOICE；缺省按 TEXT 处理
@@ -570,11 +581,16 @@ export function createSatoriEndpointManagement(api: SatoriManagementApi): Endpoi
       }
       return channels;
     },
-    async listGroupMembers(groupId: string): Promise<readonly unknown[]> {
+    async listGroupMembers({ groupId, signal }: EndpointGroupRequest): Promise<readonly unknown[]> {
       // 平台形状（GuildMember[]）原样返回
-      return listSatoriPages(api, 'guild-member', { guild_id: groupId });
+      return listSatoriPages(api, { resource: 'guild-member', params: { guild_id: groupId }, signal });
     },
   });
 }
 
 export type { CreateSatoriWebSocket, SatoriWsSocket } from './ws.js';
+
+/** A transport connection may multiplex logins; this Endpoint admits only its selected account. */
+function matchesSatoriLogin(config: { readonly platform: string; readonly userId: string }, login: SatoriLogin | undefined): boolean {
+  return login?.platform === config.platform && login.user?.id === config.userId;
+}

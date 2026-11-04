@@ -19,7 +19,6 @@ export {
 } from './protocol.js';
 
 export {
-  discordClient,
   requireDiscordGatewayClient,
   type DiscordClient,
   type DiscordClientEventMap,
@@ -35,7 +34,6 @@ export {
 export {
   DiscordGatewayEndpoint,
   DiscordInteractionsEndpoint,
-  type CreateDiscordClient,
   type DiscordClientTransport,
   type DiscordEndpointOptions,
   type DiscordInteractionsEndpointOptions,
@@ -43,7 +41,7 @@ export {
 
 export {
   connectDiscordGatewayClient,
-  defaultCreateClient,
+  discordClientOptions,
   normalizeDiscordMessage,
   resolveSenderRole,
   toMessageCreateOptions,
@@ -55,3 +53,4 @@ export {
   registerDiscordInteractionRoutes,
   type DiscordInteractionsHandler,
 } from './webhook.js';
+export { DiscordAdapter } from './adapter.js';

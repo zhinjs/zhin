@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   PluginConsoleRpcError, SnapshotStore, childPluginId, definePluginConsoleRpc, pluginConsoleRpcToken, rootPluginId,
-  type PluginConsoleRpcDefinition, type SnapshotState,
+  featureId, type PluginConsoleRpcDefinition, type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { publicConsoleAccess, unrestrictedConsoleAccess, type ConsoleAccess } from '@zhin.js/host-http';
 import { dispatchPluginConsoleRpcRequest } from '../../../src/plugin-runtime/console/plugin-console-rpc.js';
@@ -109,6 +109,26 @@ it('times out slow handlers and aborts their signal', async () => {
   expect(signal?.aborted).toBe(true);
 });
 
+it('injects only an authenticated narrow operation view and rejects other feature reads', async () => {
+  const { call } = setup({ status: { handler: (_input, ctx) => {
+    expect(ctx.runtime).toMatchObject({ owner, generation: 0, operator: true });
+    expect(Object.keys(ctx.runtime!)).toEqual(['owner', 'generation', 'operator', 'project']);
+    expect(ctx.runtime).not.toHaveProperty('snapshot');
+    expect(ctx.runtime).not.toHaveProperty('resources');
+    expect(ctx.runtime).not.toHaveProperty('config');
+    expect(() => ctx.runtime!.project(featureId('ungranted.feature'))).toThrow(PluginConsoleRpcError);
+    return { scoped: true };
+  } } });
+  expect(await call('plugin.root/ambient.status')).toMatchObject({ status: 200, body: { data: { scoped: true } } });
+});
+
+it('reports unknown commit only after the internal commit-start boundary, without changing ordinary timeout', async () => {
+  const handler = vi.fn((_input, ctx) => { ctx.commitStarted?.(); return new Promise(() => undefined); });
+  const { call } = setup({ actions: { save: { handler } } });
+  expect(await call('plugin.root/ambient.save', {}, 'full', 20)).toMatchObject({ status: 504, body: { code: 'commit_unknown' } });
+  expect(handler).toHaveBeenCalledTimes(1);
+});
+
 it('bounds output size so status cannot become a log dump', async () => {
   const { call } = setup({ status: { handler: async () => ({ rows: 'x'.repeat(300 * 1024) }) } });
   expect(await call('plugin.root/ambient.status')).toMatchObject({ status: 500, body: { code: 'failed' } });
@@ -205,7 +225,7 @@ it('serves host-owned queries as plugin.root.<name> ahead of a root plugin provi
     actions: { reset: { handler: async () => null } },
   });
   const call = (type: string, access: ConsoleAccess) => dispatchPluginConsoleRpcRequest({ type, requestId: 1 },
-    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc });
+    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: () => hostRpc });
   expect(await call('plugin.root.ambient', scoped(['ambient:read']))).toMatchObject({ status: 200, body: { data: { from: 'host' } } });
   expect(await call('plugin.root.ambient', scoped())).toMatchObject({ status: 403 });
   expect(await call('plugin.root.reset', scoped(['ambient:read']))).toMatchObject({ status: 403 });

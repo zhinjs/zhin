@@ -55,6 +55,20 @@ describe("apiFetch 401 handling", () => {
     expect(win.dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['host', 'credential'])('does not let an old %s response invalidate the new authenticated connection', async changed => {
+    const win = installBrowserGlobals();
+    localStorage.setItem('zhin_api_base', 'https://old-host.test');
+    localStorage.setItem('zhin_api_token', 'synthetic-old-token');
+    let finish!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
+    const pending = apiFetch('/api/system/status');
+    if (changed === 'host') localStorage.setItem('zhin_api_base', 'https://new-host.test');
+    else localStorage.setItem('zhin_api_token', 'synthetic-new-token');
+    finish(fakeResponse(401)); await pending;
+    expect(getToken()).toBe(changed === 'host' ? 'synthetic-old-token' : 'synthetic-new-token');
+    expect(win.dispatchEvent).not.toHaveBeenCalled();
+  });
+
   it("keeps the runtime token when the response is not 401", async () => {
     const win = installBrowserGlobals("valid-demo-token");
     vi.stubGlobal("fetch", vi.fn(async () => fakeResponse(200)));

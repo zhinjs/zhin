@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { currentConversation } from '../../../../conversation.js';
 
 export default defineAgentTool({
-  description: '读取当前 ICQQ 会话及机器人自己的群／频道身份；区分调用者权限、机器人平台权限和不支持的操作',
+  description: '读取当前 ICQQ 会话及你自己的群／频道身份；区分调用者权限、你的平台权限和不支持的操作',
   adapter: 'icqq',
   requiresApproval: 'never',
   inputSchema: z.object({}),

@@ -8,7 +8,7 @@ import {
   isApprovalPortAvailable,
   requestApprovalOutcome,
 } from '../session/approval-port.js';
-import { resolveMessageAliasArguments, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
+import { resolveMessageAliasArguments, UnconfirmedMessageAliasError, type AgentTool, type MessageAliasTable, type ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
@@ -123,7 +123,15 @@ export class TurnToolRuntime {
     await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId }, causedBy);
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
     // The journal keeps what the model wrote; policies and the tool see platform ids.
-    if (this.#messageAliases) input = resolveMessageAliasArguments(input, this.#messageAliases);
+    if (this.#messageAliases) {
+      try {
+        input = resolveMessageAliasArguments(input, this.#messageAliases);
+      } catch (error) {
+        if (!(error instanceof UnconfirmedMessageAliasError)) throw error;
+        await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: error.message, durationMs: 0 }, causedBy);
+        return Object.freeze({ status: 'failed', error: error.message, retryable: false });
+      }
+    }
     let actingFor: string | undefined;
     const merge = this.turn.policy.merge;
     if (merge) {
@@ -241,14 +249,22 @@ export class TurnToolRuntime {
       effectiveInput = this.#leakInspector.inspectArguments(effectiveInput).input;
     }
 
+    // Keep the policy-approved identity even if a tool mutates its input while executing.
+    const fileChange = (name === 'write_file' || name === 'edit_file') && typeof effectiveInput.file_path === 'string'
+      ? Object.freeze({ path: effectiveInput.file_path })
+      : undefined;
     const startedAt = Date.now();
     try {
-      const output = await tool.execute(effectiveInput, toolInvocationFromTurn(this.turn));
+      const effects = this.turn.ports.operationEvidence?.started({
+        turnId: this.turn.identity.turnId, toolUseId, toolName: tool.name, readOnly: tool.readOnly === true,
+      });
+      const output = await tool.execute(effectiveInput, { ...toolInvocationFromTurn(this.turn), ...(effects ? { effects } : {}) });
       this.#observeOutput(tool, effectiveInput, output);
       const durationMs = Date.now() - startedAt;
       // A tool that ignores cancellation may already have committed side effects.
       // Record its real settlement so the audit trail never invites an unsafe retry.
-      await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId }, causedBy);
+      await this.#append({ type: 'tool_result', toolName: name, output, durationMs, toolUseId,
+        ...(fileChange ? { fileChange } : {}) }, causedBy);
       if (this.turn.signal.aborted) return this.#cancelledOutcome();
       return Object.freeze({ status: 'completed', output, durationMs });
     } catch (error) {

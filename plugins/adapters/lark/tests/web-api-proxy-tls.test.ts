@@ -1,3 +1,5 @@
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
+import { createHttpHost } from '@zhin.js/host-http';
 import https from 'node:https';
 import tls from 'node:tls';
 import net from 'node:net';
@@ -56,8 +58,9 @@ it('version-paired Undici fetch uses its dispatcher with verified official ident
   const proxy = await createTcpFaultProxy({ upstreamHost: '127.0.0.1', upstreamPort: (server.address() as { port: number }).port, port: 0, controlPort: 0 });
   const original = tls.connect.bind(tls);
   const connect = vi.spyOn(tls, 'connect').mockImplementation(options => original({ ...options as tls.ConnectionOptions, ca: cert.cert }));
-  const endpoint = new LarkEndpoint({ id: 'fixture', config: resolveLarkConfig({ id: 'fixture', appId: 'fixture', appSecret: 'fixture', webApiProxy: { port: proxy.port } }) });
+  const endpoint = await createEndpointHarness(() => new LarkEndpoint({ http: createHttpHost({ host: '127.0.0.1', port: 0 }), id: 'fixture', config: resolveLarkConfig({ id: 'fixture', appId: 'fixture', appSecret: 'fixture', webApiProxy: { port: proxy.port } }) }), { capabilities: ['inbound', 'outbound'], operations: ['recall'] });
   try {
+    await endpoint.start(); endpoint.open();
     await expect(endpoint.send({ conversation, payload: 'first' })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
     expect(posts).toBe(1);
     cutting = false; proxy.recover(); await new Promise(resolve => setTimeout(resolve, 30)); expect(posts).toBe(1);
@@ -106,7 +109,7 @@ it('default endpoint uses direct global fetch without a fault dispatcher', async
       : { code: 0, data: { message_id: 'direct-receipt' } })));
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  const endpoint = new LarkEndpoint({ id: 'fixture', config: resolveLarkConfig({ id: 'fixture', appId: 'fixture', appSecret: 'fixture', apiBaseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/open-apis` }) });
-  try { await expect(endpoint.send({ conversation, payload: 'direct' })).resolves.toBe('direct-receipt'); expect(calls).toBe(2); }
+  const endpoint = await createEndpointHarness(() => new LarkEndpoint({ http: createHttpHost({ host: '127.0.0.1', port: 0 }), id: 'fixture', config: resolveLarkConfig({ id: 'fixture', appId: 'fixture', appSecret: 'fixture', apiBaseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/open-apis` }) }), { capabilities: ['inbound', 'outbound'], operations: ['recall'] });
+  try { await endpoint.start(); endpoint.open(); await expect(endpoint.send({ conversation, payload: 'direct' })).resolves.toBe('direct-receipt'); expect(calls).toBe(2); }
   finally { await endpoint.stop(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });

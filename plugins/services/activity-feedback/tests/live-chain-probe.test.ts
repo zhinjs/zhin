@@ -1,3 +1,4 @@
+import { withCapturedOutbound, sourcePayload } from './feedback-fixture.js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createActivityFeedbackAIEventHandlers,
@@ -19,11 +20,11 @@ describe('live chain probe', () => {
       }),
       recall: vi.fn(),
     };
-    const access = createOutboundEndpointAccess(outbound, logger);
+    const access = createOutboundEndpointAccess(withCapturedOutbound(outbound), logger);
     const orchestrator = createActivityFeedbackOrchestratorForRuntime({}, logger, access);
     const handlers = createActivityFeedbackAIEventHandlers(orchestrator);
 
-    await handlers.onProcessingStart?.({
+    await handlers.onProcessingStart?.(sourcePayload({
       sessionId: 'icqq:group:1001',
       source: 'zhin-agent',
       mode: 'text',
@@ -34,7 +35,7 @@ describe('live chain probe', () => {
       messageId: 'm1',
       scope: 'group',
       hookContext: { activityFeedbackEligible: true },
-    } as never);
+    } as never));
 
     expect(sent.length).toBeGreaterThan(0);
     expect(sent[0]).toMatchObject({

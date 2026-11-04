@@ -4,7 +4,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { onebot11RuntimeStateToken } from '../../../src/onebot11-runtime-state.js';
 
 export const onebot11EndpointCommands = createEndpointCommands({
   adapterKey: 'onebot11',
@@ -14,7 +13,6 @@ export const onebot11EndpointCommands = createEndpointCommands({
     { key: 'path', description: 'reverse-wss 路径（connection: wss）', descriptionI18n: { en: "Reverse WebSocket path (connection: wss)" } },
     { key: 'access_token', env: true, description: 'OneBot access token' },
   ],
-  running: (use) => use(onebot11RuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => {
     if (entry.url) return `url: ${String(entry.url)}`;
     if (entry.path) return `path: ${String(entry.path)}`;

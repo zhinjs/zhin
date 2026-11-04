@@ -4,7 +4,7 @@ import { recallMessage, resolveMessage } from '../../../../conversation.js';
 import { messages as t } from '../../../../messages.js';
 
 export default defineAgentTool({
-  description: '撤回机器人在当前 QQ 群或私聊中自己的发言；无需群管角色或逐次审批，时限由平台决定',
+  description: '撤回你在当前 QQ 群或私聊中自己的发言；无需群管角色或逐次审批，时限由平台决定',
   adapter: 'icqq',
   scopes: ['private', 'group'],
   requiresApproval: 'never',

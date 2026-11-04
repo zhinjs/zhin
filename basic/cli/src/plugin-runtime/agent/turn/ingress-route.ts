@@ -1,6 +1,9 @@
+import { readOperationSession } from '@zhin.js/core';
+import { withDeploymentModelScope } from '../../personal-models/deployment-scope.js';
 import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
-import type { ConversationRef } from '@zhin.js/im-contract';
+import { join } from 'node:path';
+import { EndpointDeliveryError, type ConversationRef, type TextSegment } from '@zhin.js/im-contract';
 import {
   createAutoApprovalPort,
   createBypassApprovalPort,
@@ -55,6 +58,8 @@ import {
   type GroupRuleViolationReport,
   type GroupRuleViolationTrigger,
   type ImRuntime,
+  type CapturedEndpointOperation,
+  type CoreReplyStream,
   type IngressRoute,
   type Message,
   type RuntimeSceneEventSignal,
@@ -108,6 +113,8 @@ import {
   resolveSnapshotTurnIntentResolver,
   resolveTrustedForRuntimeMessage,
   runtimeImSessionKey,
+  runtimePersonalSessionAddress,
+  runtimeSceneTaskSessionKey,
 } from './request.js';
 import { NO_WORKROOM_PORT, type AgentWorkroomPort } from '../workroom-port.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '@zhin.js/agent/context';
@@ -152,6 +159,8 @@ import {
   type DecisionAudit,
 } from './decision-audit.js';
 import type { AssistantStatus } from '../../console/assistant-status.js';
+import { withHostDeploymentModel } from '../deployment-model.js';
+import type { ModelRuntimeService, HostModelSelection } from '@zhin.js/agent/model-runtime';
 
 const logger = getLogger('agent');
 /** Read-only consumer: the ambient judge never moves the Agent session's context cursor. */
@@ -173,6 +182,7 @@ function logAmbientDecisionObservation(observation: DecisionObservation): void {
 }
 
 export interface AgentTurnIngressRouteOptions {
+  readonly modelConfiguration?: import('../../personal-models/configuration.js').ModelConfigurationAccess;
   readonly projectRoot: string;
   readonly runtime: AgentRuntime;
   readonly im: ImRuntime;
@@ -197,6 +207,8 @@ export interface AgentTurnIngressRouteOptions {
 export class AgentTurnIngressRoute implements IngressRoute {
 
   #admissionGate: TurnAdmissionGate | undefined;
+  /** Whether this generation's gate has the ADR 0038 group merge window. */
+  #mergeWindowEnabled = false;
   #ambient: AmbientEngagement | null | undefined;
   /** Chat-model judge(s) from `ai.trigger.ambient.judge`; the fallback of the decision route. */
   #ambientLlmJudge: EngagementJudge | undefined;
@@ -262,6 +274,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     );
     options.assistantStatus?.bindSessionEvents(() => options.agent.agent.getSessionEvents?.());
     options.assistantStatus?.bindGroupRules(() => options.agent.agent.getGroupRules?.());
+    options.assistantStatus?.bindUsageTraces(() => join(options.projectRoot, 'data', 'agent-traces'));
   }
 
   #createGroupRuleChannel(): GroupRuleImChannel {
@@ -286,11 +299,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
   #createGroupRuleEnforcer(): GroupRuleEnforcer {
     const options = this.options;
-    const endpointOf = (target: { platform: string; endpoint: string | null }) => {
-      const endpointKey = target.endpoint ?? this.#soleEndpoint(target.platform);
-      if (!endpointKey) throw new Error('endpoint_unresolved');
-      return endpointKey;
-    };
     return new GroupRuleEnforcer({
       rules: () => options.agent?.agent?.getGroupRules?.(),
       controlPlane: () => options.agent.agent.getControlPlane?.(),
@@ -300,54 +308,44 @@ export class AgentTurnIngressRoute implements IngressRoute {
       approvals: () => options.agent.agent.toolApprovals,
       opsCooldown: () => options.agent.agent.opsCooldown,
       onSpoke: (key) => this.#noteSpoke(key),
-      send: async (target, parts) => {
-        const content = parts.map((part) => (part.type === 'text'
-          ? { type: 'text', data: { text: part.text } }
-          : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }));
-        const result = await options.im.endpoints.send({
-          adapter: target.platform,
-          endpointKey: endpointOf(target),
-          conversation: { kind: 'group', id: target.groupId },
-          content,
-        });
-        return { status: 'sent' as const, ...(result.messageId ? { messageId: result.messageId } : {}) };
-      },
-      inspect: async (target, memberId, signal) => {
-        const result = await options.im.endpoints.withManagement(target.platform, endpointOf(target), (management) =>
-          management.inspectGroupMember ? management.inspectGroupMember(target.groupId, memberId, signal) : undefined);
-        return result ?? undefined;
-      },
-      mute: async (target, memberId, durationSec, signal) => {
-        const done = await options.im.endpoints.withManagement(target.platform, endpointOf(target), async (management) => {
-          // 优先走「执行前复核权限」的接口。
-          if (management.moderateGroupMember) {
-            await management.moderateGroupMember(target.groupId, memberId, { type: 'mute', durationSeconds: durationSec }, signal);
-          } else if (management.muteGroupMember) {
-            await management.muteGroupMember(target.groupId, memberId, durationSec);
-          } else {
-            throw new Error('mute_unsupported');
-          }
-          return true;
-        });
-        if (!done) throw new Error('endpoint_unavailable');
-      },
-      kick: async (target, memberId) => {
-        const done = await options.im.endpoints.withManagement(target.platform, endpointOf(target), async (management) => {
-          if (!management.kickGroupMember) throw new Error('kick_unsupported');
-          await management.kickGroupMember(target.groupId, memberId);
-          return true;
-        });
-        if (!done) throw new Error('endpoint_unavailable');
-      },
+
     });
   }
 
-  /**
-   * 群规执行入口（ADR 0039 §4）：违规判定方（`flood` 检测、content-moderation）报告一次命中，
-   * 这里按该群生效规则的阶梯档执行。没有生效规则时什么都不做。
-   */
-  enforceGroupRule(violation: GroupRuleViolation): Promise<GroupRuleEnforcementResult> {
-    return this.#groupRuleEnforcer.enforce(violation);
+  #executeGroupRule(input: Readonly<{
+    violation: GroupRuleViolation;
+    conversation: ConversationRef;
+    source: Readonly<{ client: unknown; signal: AbortSignal }>;
+  }>): Promise<GroupRuleEnforcementResult> {
+    const { violation, conversation, source } = input;
+    const operation = this.options.im.endpoints.captureOperation({ target: conversation,
+      client: source.client, signal: source.signal, requester: rootPluginId() });
+    const management = operation.management;
+    return this.#groupRuleEnforcer.enforce(violation, {
+      signal: operation.signal,
+      send: async (parts, signal) => deliveryOutcomeFromReceipt(await operation.send(
+        parts.map(part => part.type === 'text'
+          ? { type: 'text', data: { text: part.text } }
+          : { type: 'mention', data: { target: part.id, ...(part.name ? { name: part.name } : {}) } }),
+        { signal },
+      )),
+      ...(management?.inspectGroupMember ? { inspect: async signal =>
+        management.inspectGroupMember!({ groupId: conversation.id, userId: violation.memberId, signal }) } : {}),
+      mute: async (durationSec, signal) => {
+        if (management?.moderateGroupMember) {
+          await management.moderateGroupMember({ groupId: conversation.id, userId: violation.memberId,
+            action: { type: 'mute', durationSeconds: durationSec }, signal });
+        } else if (management?.muteGroupMember) {
+          await management.muteGroupMember({ groupId: conversation.id, userId: violation.memberId, durationSeconds: durationSec, signal });
+        } else throw new Error('mute_unsupported');
+      },
+      kick: async signal => {
+        signal.throwIfAborted();
+        if (!management?.kickGroupMember) throw new Error('kick_unsupported');
+        await management.kickGroupMember({ groupId: conversation.id, userId: violation.memberId, signal });
+      },
+      release: operation.release,
+    });
   }
 
   /**
@@ -357,7 +355,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   async reportGroupRuleViolation(report: GroupRuleViolationReport): Promise<GroupRuleViolationOutcome> {
     const { conversation } = report;
     if (conversation.kind !== 'group' || !report.memberId) return 'no_rule';
-    const result = await this.#groupRuleEnforcer.enforce({
+    const result = await this.#executeGroupRule({ conversation, source: report.source, violation: {
       platform: conversation.endpoint.adapter,
       endpoint: conversation.endpoint.id,
       groupId: conversation.id,
@@ -370,7 +368,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       ...(report.evidence?.length ? { evidence: report.evidence } : {}),
       ...(report.newcomer ? { newcomer: true } : {}),
       ...(report.recall ? { recall: report.recall } : {}),
-    });
+    } });
     if (result.kind !== 'no_rule') {
       logger.info(formatCompact({ op: 'group_rule_moderation', conv: `${conversation.endpoint.adapter}:${conversation.id}`, trigger: report.trigger, result: result.kind }));
     }
@@ -408,7 +406,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
       at,
     });
     if (!verdict.hit) return;
-    void this.#groupRuleEnforcer.enforce({
+    const session = readOperationSession(message);
+    if (!session) return;
+    void this.#executeGroupRule({ conversation: message.conversation, source: { client: session.endpoint, signal: session.signal }, violation: {
       platform,
       ...(endpoint ? { endpoint } : {}),
       groupId: message.conversation.id,
@@ -420,7 +420,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       ...(message.message?.id ? { messageId: message.message.id } : {}),
       evidence: verdict.samples,
       detection: { reasonCode: 'rule_hit_flood', payload: { count: verdict.count, windowMs: verdict.windowMs } },
-    }).then((result) => {
+    } }).then((result) => {
       if (result.kind !== 'no_rule') logger.info(formatCompact({ op: 'group_rule_flood', conv: `${platform}:${message.conversation.id}`, result: result.kind }));
     });
   }
@@ -463,7 +463,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         if (!endpointKey) return { status: 'failed' as const, code: 'endpoint_unresolved', retryable: false };
         const result = await options.im.endpoints.withManagement(target.platform, endpointKey, async (management) => {
           if (typeof management.sendGroupNotice !== 'function') return 'unsupported' as const;
-          await management.sendGroupNotice(target.id, content);
+          await management.sendGroupNotice({ groupId: target.id, content });
           return 'sent' as const;
         });
         if (result === 'sent') return { status: 'sent' as const };
@@ -577,6 +577,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   }
 
   dispose(): void {
+    this.options.assistantStatus?.bindUsageTraces(() => undefined);
     this.#coldField.dispose();
     this.#memberLifecycle.dispose();
     this.#stopAnnouncementSweep();
@@ -596,6 +597,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
   #gate(): TurnAdmissionGate {
     if (!this.#admissionGate) {
       const queue = normalizeInboundQueueConfig(this.options.agent.service.getAgentConfig()?.inboundQueue);
+      this.#mergeWindowEnabled = queue.merge.enabled;
       this.#admissionGate = new TurnAdmissionGate({
         maxQueuedTurns: queue.maxQueuedTurns,
         queueTtlMs: queue.ttlMs,
@@ -615,6 +617,39 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const service = this.options.agent.service;
     const config = service.getTriggerConfig()?.ambient;
     if (!config?.conversations?.length) return this.#ambient = null;
+    const configuration = this.options.modelConfiguration;
+    if (configuration) {
+      const configured = (typeof config.judge === 'string' ? [config.judge] : config.judge ?? [])
+        .map(entry => entry.trim()).filter(Boolean);
+      let version: ModelRuntimeService | undefined;
+      let selected: EngagementJudge | undefined;
+      const judgeFor = (selection?: HostModelSelection): EngagementJudge => ({
+        judge: input => withHostDeploymentModel(configuration, selection, input.signal, model =>
+          new LlmEngagementJudge(model.llmRuntime, model.llmRuntime.model(model.provider.name, model.invocation.model.model)).judge(input)),
+      });
+      this.#ambientLlmJudge = { judge: async input => {
+        // Preserve judge backoff while a deployment version is unchanged. Validate only
+        // local model references in the control queue; acquire/call each judge outside it.
+        const active = await configuration.withRuntime(async runtime => {
+          if (version === runtime && selected) return selected;
+          const judges: EngagementJudge[] = [];
+          for (const entry of configured) {
+            const [providerAlias, ...model] = entry.split('/');
+            const selection = { providerAlias: providerAlias!, model: model.join('/') };
+            try { runtime.resolveHostModel(selection); judges.push(judgeFor(selection)); }
+            catch (error) {
+              logger.warn(formatCompact({ op: 'ambient_judge_unavailable', judge: entry, error: error instanceof Error ? error.message : String(error) }));
+            }
+          }
+          if (!judges.length) judges.push(judgeFor());
+          selected = judges.length === 1 ? judges[0]! : new FallbackEngagementJudge(judges);
+          version = runtime;
+          return selected;
+        });
+        return active.judge(input);
+      } };
+      return this.#ambient = new AmbientEngagement({ config, judge: this.#ambientLlmJudge });
+    }
     const binding = service.getBindingRegistry().requireZhinBinding();
     const llm = service.getLlmRuntime();
     const configured = (typeof config.judge === 'string' ? [config.judge] : config.judge ?? [])
@@ -705,6 +740,13 @@ export class AgentTurnIngressRoute implements IngressRoute {
     if (!text || trigger?.enabled === false || hasIgnoredTriggerPrefix(text, trigger)) return null;
     const engagement = this.#ambientEngagement();
     if (!engagement?.enabledFor(platform, message.conversation.id)) return null;
+    const source = readOperationSession(message);
+    if (source) {
+      const operation = this.options.im.endpoints.captureOperation({ target: message.conversation,
+        client: source.endpoint, signal: source.signal });
+      try { botName = operation.profile?.peek().values.nickname?.trim() || botName; }
+      finally { operation.release(); }
+    }
     const key = `${platform}:${message.conversation.id}`;
     const judge = this.#ambientDecisionRoute(snapshot, key);
     const decision = await engagement.consider({
@@ -762,6 +804,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
     requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean> {
+    // Capture the actual inbound incarnation once, before async preprocessing can retire it.
+    const operationSession = readOperationSession(message);
+    const operationSignal = operationSession?.signal;
     const options = this.options;
     const service = options.agent.service;
     const zhinAgent = options.agent.agent;
@@ -774,13 +819,20 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const workroomAgentTurn = workroom.takeAgentTurn(message);
       let matched = resolveRuntimeAgentTrigger(message, trigger, workroomAgentTurn != null);
 
-      const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner);
-      const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted);
-      const senderRoles = resolveRuntimeSenderRoles(message, ownerId, endpointTrusted, trigger);
+      const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner, snapshot);
+      const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted, snapshot);
+      const senderRoles = resolveRuntimeSenderRoles(message, { endpointMaster: ownerId, endpointTrusted, trigger });
       const turnAccess = createRuntimeTurnAccess(message, senderRoles);
-      const sessionKey = workroomAgentTurn
+      // Unattended live reactions belong to the scene, independently of whichever
+      // participant supplied the first candidate in the window.
+      const liveRoom = !workroomAgentTurn
+        && turnAccess.origin.kind === 'im'
+        && turnAccess.origin.scope !== 'private'
+        && adapterDeclaresLiveDanmaku(message.conversation.endpoint.id as CapabilityId, snapshot);
+      let sessionKey = workroomAgentTurn
         ? workroomOrchestratorSessionKey(workroomAgentTurn)
-        : runtimeImSessionKey(turnAccess);
+        : liveRoom ? runtimeSceneTaskSessionKey(turnAccess, options.projectRoot)
+          : runtimeImSessionKey(turnAccess, options.projectRoot);
       const workroomReplyConversation = workroomAgentTurn
         ? await workroom.resolveOrchestratorConversation(workroomAgentTurn)
         : undefined;
@@ -826,6 +878,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             commandPrefix: message.commandPrefix,
             locale: message.locale,
             senderRoles,
+            withModelScope: operation => withDeploymentModelScope(service, options.projectRoot, operation, options.modelConfiguration),
             semanticMemory: options.agent.semanticMemory,
             senderId: turnAccess.principal.subjectId,
           });
@@ -872,8 +925,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       const approveReply = !workroomAgentTurn && /^approve(?:\s|$)/iu.test(managementCommandText(message.content, message.commandPrefix) ?? '')
         ? zhinAgent.ownerApprovals.handleCommand(
             {
-              platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
-              endpoint: turnAccess.origin.kind === 'im' ? turnAccess.origin.endpoint : '',
+              endpoint: message.conversation.endpoint,
               ownerId,
               subjectId: turnAccess.principal.subjectId,
               scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : 'private',
@@ -962,10 +1014,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
         }
       }
       // ADR 0038 §5: in a live room every danmaku is a candidate; viewers do not @ the Bot.
-      const liveRoom = !workroomAgentTurn
-        && turnAccess.origin.kind === 'im'
-        && turnAccess.origin.scope !== 'private'
-        && adapterDeclaresLiveDanmaku(message.conversation.endpoint.id as CapabilityId, snapshot);
       if (!matched && liveRoom) {
         const text = message.content.trim();
         if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger)) matched = { content: text };
@@ -981,9 +1029,33 @@ export class AgentTurnIngressRoute implements IngressRoute {
         );
         if (!matched) return false;
         ambient = true;
+        sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
       } else if (ambientKey) {
         this.#ambientEngagement()?.noteSpoke(ambientKey);
       }
+      // #725: ordinary IM turns go through the admission gate. Workroom turns
+      // and products that resolve their own turn intent keep their semantics.
+      const intentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
+      const gate = workroomAgentTurn || intentResolver || message.metadata?.turnIntent !== undefined
+        ? undefined
+        : this.#gate();
+      const plainText = isPlainTextRuntimeMessage(message);
+      const mergeable = gate !== undefined && !liveRoom && isMergeableGroupTurn({
+        message,
+        trigger,
+        plainText,
+        isMaster: senderRoles.isMaster,
+        content: matched.content,
+      });
+      // ADR 0038 R0-fix (#1049, relative to #1104): the merge window is keyed by
+      // Session, so a mergeable group wake waits in the shared scene Session (as
+      // danmaku does) and different senders can land in one window. Masters,
+      // commands, stop words, media / quote / forward, DMs and `merge.enabled: false`
+      // stay in the sender's personal Session; so does `clear`, which only ever
+      // archives the caller's own Session.
+      const personalSessionKey = sessionKey;
+      const sceneMerge = mergeable && !ambient && this.#mergeWindowEnabled && !isClearCommand(matched.content);
+      if (sceneMerge) sessionKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
       audit({
         kind: 'inbound_wake',
         outcome: 'allow',
@@ -996,6 +1068,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           sessionKey,
           conversation: message.conversation,
           platform,
+          endpointId: turnAccess.origin.endpoint,
           throughSequence: conversationSequence,
           selfIds: [effectiveEndpoint, message.metadata?.selfId, message.metadata?.self_id]
             .filter((value): value is string | number => (typeof value === 'string' && value !== '') || typeof value === 'number')
@@ -1011,7 +1084,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const productIntent = taskIntentResolver || message.metadata?.turnIntent !== undefined
           ? (await resolveProductTurnIntent(message, senderRoles, undefined, taskIntentResolver).catch(() => undefined))?.kind
           : undefined;
-        const routedTask = await routeTaskInterjection(detachedTasks, taskActor, matched.content, productIntent, { locale: message.locale });
+        let routedTask = await routeTaskInterjection(detachedTasks, { ...taskActor, sessionId: sceneMerge ? personalSessionKey : sessionKey }, matched.content, productIntent, { locale: message.locale });
+        if (!routedTask.handled && sceneMerge) {
+          routedTask = await routeTaskInterjection(detachedTasks, { ...taskActor, sessionId: sessionKey }, matched.content, productIntent, { locale: message.locale });
+        }
         if (routedTask.handled) {
           if (routedTask.reply) await reply(routedTask.reply);
           logger.info(formatCompact({ op: 'agent_host_task_interjection', kind: routedTask.kind, task: routedTask.taskId }));
@@ -1025,18 +1101,23 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       }
 
-      // #725: ordinary IM turns go through the admission gate. Workroom turns
-      // and products that resolve their own turn intent keep their semantics.
-      const intentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
-      const gate = workroomAgentTurn || intentResolver || message.metadata?.turnIntent !== undefined
-        ? undefined
-        : this.#gate();
       const senderId = turnAccess.principal.subjectId;
       if (gate && isCancelIntent(matched.content)) {
-        const stopped = gate.stop(sessionKey, senderId, senderRoles.isMaster);
+        let stoppedKey = sessionKey;
+        let stopped = gate.stop(sessionKey, senderId, senderRoles.isMaster);
+        // A stop word is never mergeable, so it routes to the personal Session; a
+        // merged group turn of the same scene runs in the scene Session (R0-fix).
+        if (stopped !== 'stopped' && this.#mergeWindowEnabled && !liveRoom && !ambient
+          && turnAccess.origin.kind === 'im' && turnAccess.origin.scope !== 'private') {
+          const sceneKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
+          if (sceneKey !== sessionKey && gate.stop(sceneKey, senderId, senderRoles.isMaster) === 'stopped') {
+            stopped = 'stopped';
+            stoppedKey = sceneKey;
+          }
+        }
         if (stopped === 'stopped') {
           await reply(t(message.locale, 'stopped'));
-          logger.info(formatCompact({ op: 'agent_host_turn_stopped', sessionKey }));
+          logger.info(formatCompact({ op: 'agent_host_turn_stopped', sessionKey: stoppedKey }));
           return true;
         }
         // Nothing of the sender's to stop: handle it as an ordinary message.
@@ -1054,6 +1135,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         ...(modelStartedAt !== undefined ? { durationMs: Date.now() - modelStartedAt } : {}),
       });
       let admission: Extract<TurnAdmission, { kind: 'run' }> | undefined;
+      let profileOperation: ReturnType<ImRuntime['endpoints']['captureOperation']> | undefined;
       /** ADR 0038 §4: the stale verdict is audited once per turn. */
       let staleAudited = false;
       const staleReplyBlocked = (): boolean => {
@@ -1073,7 +1155,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
         );
         let inbound = preprocessed;
         if (gate) {
-          const plainText = isPlainTextRuntimeMessage(message);
           const admitted = await gate.admit({
             sessionKey,
             senderId,
@@ -1081,13 +1162,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             plainText,
             // Masters keep their own turn (ADR 0038 §0.3), in a live room too.
             live: liveRoom && !senderRoles.isMaster,
-            mergeable: !liveRoom && isMergeableGroupTurn({
-              message,
-              trigger,
-              plainText,
-              isMaster: senderRoles.isMaster,
-              content: matched.content,
-            }),
+            mergeable,
             ...(message.sender?.name ? { senderName: message.sender.name } : {}),
             ...(message.message?.id ? { messageId: message.message.id } : {}),
             access: turnAccess,
@@ -1128,13 +1203,22 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const { outcome, capabilities, routed } = await withTriggerTimeout(async (timeoutSignal) => {
           const signal = AbortSignal.any([
             timeoutSignal,
+            ...(operationSignal ? [operationSignal] : []),
             ...(admission ? [admission.signal] : []),
-            ...(lease.retirementSignal ? [lease.retirementSignal] : []),
+            ...(lease.stopSignal ? [lease.stopSignal] : []),
           ]);
-          const contextState = await resolveRuntimeTurnContextState(
-            snapshot, message.conversation, signal, message.sender?.id,
-            { store: options.agent.agent.getUserProfiles?.()?.scenes, refresher: this.#sceneFactRefresher },
-          );
+          const source = readOperationSession(message);
+          if (source) profileOperation = options.im.endpoints.captureOperation({
+            target: message.conversation, client: source.endpoint, signal, requester,
+          });
+          const contextState = await resolveRuntimeTurnContextState({
+            snapshot,
+            conversation: message.conversation,
+            signal,
+            senderId: message.sender?.id,
+            selfProfile: profileOperation?.profile,
+            factServices: { store: options.agent.agent.getUserProfiles?.()?.scenes, refresher: this.#sceneFactRefresher },
+          });
           signal.throwIfAborted();
           // ADR 0044: platform capabilities, resolved once from the facts just read.
           const platformCapabilities = resolveRuntimeTurnCapabilities(snapshot, message.conversation, contextState);
@@ -1222,6 +1306,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
               isMaster: senderRoles.isMaster,
               scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : undefined,
               masterShell: service.getAgentConfig()?.masterShell,
+              masterShellApprovalMode: service.getAgentConfig()?.masterShellApprovalMode,
+              execApprovalMode: service.getAgentConfig()?.execApprovalMode,
               metadata: message.metadata,
               projectRoot: options.projectRoot,
               defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
@@ -1249,17 +1335,21 @@ export class AgentTurnIngressRoute implements IngressRoute {
               snapshot,
               replyConversation.kind,
             );
-            const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
+            let replyOperation: CapturedEndpointOperation | undefined;
+            const request = createRuntimeTurnRequest({ message, text: routed.userText, roles: senderRoles }, {
               ...(members || liveAccess ? { access: turnAccessForTurn } : {}),
               traceId,
               turnId,
               signal,
+              projectRoot: options.projectRoot,
               workspaceRoot: turnPolicy.filesystem.workspaceRoot,
               workingDirectory: turnPolicy.filesystem.workingDirectory,
               filesystemAccess: liveDanmaku ? 'read-only' : turnPolicy.filesystem.access,
               shell: liveDanmaku ? undefined : turnPolicy.shell,
               network: turnPolicy.network,
               sessionKey,
+              ...(!workroomAgentTurn && !liveRoom && !ambient && !sceneMerge
+                ? { personalSession: runtimePersonalSessionAddress(turnAccess, options.projectRoot) } : {}),
               contextState,
               ...(platformCapabilities ? { platformCapabilities } : {}),
               ...(sceneEvents.length ? { sceneEvents } : {}),
@@ -1311,6 +1401,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 },
               }),
               ports: {
+                ...(profileOperation?.profile ? { selfProfile: profileOperation.profile } : {}),
                 // ADR 0038 §5: a danmaku turn never puts an approval card in front of anyone.
                 approval: liveDanmaku ? NO_APPROVAL_PORT : options.approvalPort ?? resolveApprovalPort({
                   mode: turnPolicy.shell?.approvalMode
@@ -1320,6 +1411,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                     options.agent.approvalReviewer,
                     escalatedApprovalPort,
                     approvalJudgment,
+                    // Master's own DM: a reviewer rejection asks the master instead of refusing.
+                    { escalateRejections: senderRoles.isMaster && turnAccess.origin.kind === 'im' && turnAccess.origin.scope === 'private' },
                   ),
                   ask: askApprovalPort,
                 }),
@@ -1329,6 +1422,39 @@ export class AgentTurnIngressRoute implements IngressRoute {
                   segments: workroomReplyConversation || !message.message
                     ? { ...replySegments, reaction: undefined }
                     : replySegments,
+                  openStream: () => {
+                    // Redirected workroom and live-room replies keep their existing delivery authority.
+                    if (workroomAgentTurn || workroomReplyConversation || liveDanmaku) return undefined;
+                    replyOperation ??= options.im.endpoints.captureOperation({ target: replyConversation,
+                      client: message.$client, signal, requester });
+                    const stream = replyOperation.openReplyStream?.({ locale: message.locale,
+                      source: { messageId: message.message?.id, senderId: message.sender?.id, event: operationSession?.event },
+                      beforeSubmit: () => {
+                        if (staleReplyBlocked() || outboundBlocked('reply')) {
+                          throw new EndpointDeliveryError('reply_suppressed', 'Reply admission is no longer active', 'not_sent');
+                        }
+                      },
+                      prepare: segments => publishOutboundElements([{ type: 'message', segments: [...segments] }],
+                        effectiveAdapter || undefined, undefined, { filesystem: turnPolicy.filesystem,
+                          imageAssets: options.agent.service.imageAssets,
+                          ...(turnPolicy.network ? { network: turnPolicy.network } : {}) }),
+                    });
+                    if (!stream) return undefined;
+                    let settlement: Promise<CoreReplyStream['receipt']> | undefined;
+                    const settle = (receipt: CoreReplyStream['receipt']) => settlement ??= Promise.resolve().then(() => {
+                      const outcome = deliveryOutcomeFromReceipt(receipt);
+                      auditOutbound(audit, outcome, { progressive: true });
+                      if (stream.confirmed.length) { spoke = true; admission?.markDelivered(); }
+                      return receipt;
+                    });
+                    return Object.freeze({
+                      get minIntervalMs() { return stream.minIntervalMs; },
+                      get receipt() { return stream.receipt; }, get confirmed() { return stream.confirmed; },
+                      update: snapshot => stream.update(snapshot),
+                      finish: snapshot => stream.finish(snapshot).then(settle),
+                      cancel: () => stream.cancel().then(settle),
+                    } satisfies CoreReplyStream);
+                  },
                   send: async (output) => {
                     logger.debug(formatCompact({
                       op: 'replychain_port_send',
@@ -1355,8 +1481,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
                             sessionKey,
                             add: message.message
                               ? () => options.im.endpoints.addReaction({
-                                  adapter: effectiveAdapter,
-                                  endpointKey: effectiveEndpoint,
                                   message: message.message!,
                                   emoji: reaction,
                                 }).catch((error: unknown) => {
@@ -1388,7 +1512,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
                         }
                         let sent: Awaited<ReturnType<typeof deliveryOutcomeFromReceipt>>;
                         try {
-                          sent = deliveryOutcomeFromReceipt(await reply(content));
+                          const plannedText = content.length && content.every((segment): segment is TextSegment => segment.type === 'text')
+                            ? content.map(segment => String(segment.data.text)).join('') : undefined;
+                          sent = deliveryOutcomeFromReceipt(await reply(content), plannedText);
                         } catch (error) {
                           auditOutbound(audit, { status: 'failed', code: error instanceof Error ? error.message : String(error), retryable: false });
                           throw error;
@@ -1421,7 +1547,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 },
               },
             });
-            return options.runtime.executeLeased(
+            try {
+              return await options.runtime.executeLeased(
               lease,
               requester,
               request,
@@ -1431,7 +1558,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
               observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission),
-            );
+              );
+            } finally { replyOperation?.release(); }
           }, {
             disabled: workroomAgentTurn != null,
             observe: observation => {
@@ -1498,6 +1626,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       } finally {
         capabilityActive = false;
+        profileOperation?.release();
         admission?.release();
       }
   }

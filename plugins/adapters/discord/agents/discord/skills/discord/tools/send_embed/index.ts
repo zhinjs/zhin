@@ -30,7 +30,7 @@ export default defineAgentTool<{ channel_id: string; title?: string; description
       }
     }
     const channel = await client.channels.fetch(channel_id);
-    if (!channel?.isTextBased() || !channel.send) {
+    if (!channel?.isSendable()) {
       throw new Error(t(context.locale, 'notTextChannel', { p0: channel_id }));
     }
     const msg = await channel.send({ embeds: [embedData] } as never);

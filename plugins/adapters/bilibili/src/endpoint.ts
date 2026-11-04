@@ -1,6 +1,7 @@
 /**
- * BilibiliEndpoint — 白名单视频评论轮询 + 先审再发（Experimental）。
+ * BilibiliEndpoint — 白名单视频 / 动态 / 专栏评论轮询 + 先审再发（Experimental）。
  *
+ * - 动态先经动态详情解析出评论区 (type, oid)，解析不了的动态跳过（只记日志，不猜 oid）。
  * - 入站：轮询 `x/v2/reply`，首轮只建基线；新评论按「评论楼」归 conversation 后 emit `message.receive`。
  *   可选再轮询「回复我的 / @我的」通知（`x/msgfeed/reply|at`），以 `mentioned: true` 入站。
  * - 出站：`send()` 永远只把回复放进草稿队列（review），不会调用平台写接口。
@@ -8,11 +9,12 @@
  * - 风控错误码立即熔断，停止轮询与发送，不自动重试。
  */
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import { Endpoint, type EndpointSendRequest, type EndpointTransportState } from 'zhin.js/adapter';
+import { createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, type EndpointSendRequest, type EndpointTransportState, type EndpointPreviousIdentity } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { generateQrCode } from 'zhin.js/qrcode';
 import { BilibiliApiError, BilibiliClient, type BilibiliFetch } from './client.js';
+import { createBilibiliSelfProfile } from './self-profile.js';
 import { BilibiliDraftQueue, type BilibiliReplyDraft } from './drafts.js';
 import {
   QR_LIFETIME_MS,
@@ -23,16 +25,23 @@ import {
 } from './login.js';
 import { BilibiliStateFiles, readJson, removeFile, writeJsonAtomic } from './storage.js';
 import {
+  BILIBILI_ARTICLE_COMMENT_TYPE,
   BILIBILI_COMMENT_MAX_LENGTH,
+  BILIBILI_VIDEO_COMMENT_TYPE,
   bilibiliThreadConversation,
+  commentAreaUrl,
   flattenReplies,
   formatOutboundText,
-  notificationToReply,
+  notificationToComment,
   outboundReplyTarget,
   parseThreadConversationId,
+  resolveDynamicCommentArea,
   threadRootOf,
+  type BilibiliCommentArea,
   type BilibiliNotificationKind,
+  type BilibiliResourceKind,
   type BilibiliReply,
+  type BilibiliEndpointConfig,
   type ResolvedBilibiliConfig,
 } from './protocol.js';
 
@@ -65,7 +74,19 @@ export interface BilibiliSentReply {
   readonly rpid: string;
 }
 
-type InboundVia = 'video' | BilibiliNotificationKind;
+/** 入站来源：直接轮询的评论区种类，或「回复我的 / @我的」通知。 */
+type InboundVia = BilibiliResourceKind | BilibiliNotificationKind;
+
+/** Console / 状态用的白名单动态、专栏视图（不含 Cookie）。 */
+export interface BilibiliResourceView {
+  readonly kind: 'dynamic' | 'article';
+  /** 配置里的原始 id（动态 id / cvid）。 */
+  readonly ref: string;
+  readonly url: string;
+  /** 已解析的评论区；动态解析失败时省略并给出 `error`。 */
+  readonly area?: { readonly kind: BilibiliResourceKind; readonly type: number; readonly oid: string };
+  readonly error?: string;
+}
 
 /** 登录态：none=没有 Cookie；ok=Cookie 有效；expired=Cookie 失效需要重新登录。 */
 export type BilibiliLoginState = 'none' | 'ok' | 'expired';
@@ -100,6 +121,13 @@ export type BilibiliNotice =
 
 export interface BilibiliEndpointOptions {
   readonly id: CapabilityId;
+  readonly signal?: AbortSignal;
+  /** Original authoring configuration, captured by the owning Adapter. */
+  readonly configuration?: BilibiliEndpointConfig;
+  readonly reconcileLogin?: (input: { readonly userId: string; readonly config: BilibiliEndpointConfig;
+    readonly previousIdentity: EndpointPreviousIdentity;
+    readonly signal?: AbortSignal;
+  }) => Promise<'retained' | 'replaced'>;
   readonly config: ResolvedBilibiliConfig;
   readonly fetch?: BilibiliFetch;
   /** 轮询抖动随机源（测试注入）。 */
@@ -108,8 +136,6 @@ export interface BilibiliEndpointOptions {
   readonly autoPoll?: boolean;
   /** 时钟（测试注入）。 */
   readonly now?: () => number;
-  /** stop() 时从插件实例的审批注册表里移除自己。 */
-  readonly registry?: Map<string, BilibiliEndpoint>;
   /**
    * 本地状态目录（草稿、扫码凭据）。省略 = 只存内存（测试用）；adapter 默认传 `config.dataDir`。
    */
@@ -118,13 +144,17 @@ export interface BilibiliEndpointOptions {
   readonly notify?: (notice: BilibiliNotice) => void | Promise<void>;
 }
 
-export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
-  readonly client: BilibiliClient;
+export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
   readonly drafts: BilibiliDraftQueue;
   readonly #files?: BilibiliStateFiles;
   readonly #options: BilibiliEndpointOptions;
   readonly #logger: ReturnType<typeof getAdapterLogger>;
   readonly #aids: string[] = [];
+  /** 全部要轮询的评论区：视频、已解析的动态、专栏。 */
+  readonly #areas: BilibiliCommentArea[] = [];
+  /** 动态 id → 解析结果（成功的评论区或失败原因）。 */
+  readonly #dynamicResolution = new Map<string, { readonly area?: BilibiliCommentArea; readonly error?: string }>();
   readonly #baselined = new Set<string>();
   readonly #seen = new Set<string>();
   /** rpid → 评论摘要，用于草稿审批时展示被回复的原文。 */
@@ -133,6 +163,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   readonly #notificationCursor = new Map<BilibiliNotificationKind, number>();
   #lastSentAt = 0;
   #selfMid?: string;
+  // A failed nav or logout does not make a previously bound account unbound.
+  #previousIdentity: EndpointPreviousIdentity;
   #timer?: ReturnType<typeof setTimeout>;
   #state: EndpointTransportState = 'idle';
   #open = false;
@@ -143,13 +175,23 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   #qrKey?: string;
   #qrTimer?: ReturnType<typeof setTimeout>;
   #qrSeq = 0;
+  #qrAbort?: AbortController;
 
   constructor(options: BilibiliEndpointOptions) {
-    super();
+    super(options.config, options.fetch ?? (globalThis.fetch as unknown as BilibiliFetch), options.signal);
     this.#options = options;
+    this.#previousIdentity = options.config.sessdata ? { kind: 'unknown' } : { kind: 'unbound' };
+    const readTransportState = () => this.#transportState;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => this.#openEndpoint(),
+      close: () => this.#close(), stop: () => this.#stop(),
+      send: request => this.#send(request),
+      profile: createBilibiliSelfProfile({ client: this, reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
+      get transportState() { return readTransportState(); },
+    });
     this.#logger = getAdapterLogger('bilibili', options.config.id);
-    this.client = new BilibiliClient(options.config, options.fetch ?? (globalThis.fetch as unknown as BilibiliFetch));
-    this.#files = options.stateDir ? new BilibiliStateFiles(options.stateDir, options.config.id) : undefined;
+    this.#files = options.stateDir ? new BilibiliStateFiles(options.stateDir, options.config.stateDirectoryId ?? options.config.id) : undefined;
     this.drafts = new BilibiliDraftQueue({
       ...(this.#files ? { file: this.#files.draftsFile } : {}),
       onPersistError: (error) => this.#logger.warn(formatCompact({
@@ -184,6 +226,30 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     })));
   }
 
+  /** 配置里的白名单动态 / 专栏，以及解析出的评论区。 */
+  get resources(): readonly BilibiliResourceView[] {
+    const { dynamics, articles } = this.#options.config;
+    return Object.freeze([
+      ...dynamics.map((ref) => {
+        const resolved = this.#dynamicResolution.get(ref);
+        return Object.freeze({
+          kind: 'dynamic' as const, ref, url: `https://t.bilibili.com/${ref}`,
+          ...(resolved?.area ? { area: Object.freeze({ kind: resolved.area.kind, type: resolved.area.type, oid: resolved.area.oid }) } : {}),
+          ...(resolved?.error ? { error: resolved.error } : {}),
+        });
+      }),
+      ...articles.map(ref => Object.freeze({
+        kind: 'article' as const, ref, url: `https://www.bilibili.com/read/cv${ref}`,
+        area: Object.freeze({ kind: 'article' as const, type: BILIBILI_ARTICLE_COMMENT_TYPE, oid: ref }),
+      })),
+    ]);
+  }
+
+  /** 当前轮询的全部评论区（视频 + 已解析动态 + 专栏）。 */
+  get commentAreas(): readonly BilibiliCommentArea[] {
+    return Object.freeze([...this.#areas]);
+  }
+
   get sendMode(): ResolvedBilibiliConfig['sendMode'] {
     return this.#options.config.sendMode;
   }
@@ -192,7 +258,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     return this.#options.config.id;
   }
 
-  override get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     return this.#state;
   }
 
@@ -201,15 +267,28 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     return this.#tripped;
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
     this.#state = 'connecting';
     try {
       await this.#resolveLogin();
-      this.reportSelfUserId(this.#selfMid);
+      this[endpointSpec].reportSelfUserId(this.#selfMid);
+      // 重新启动时按当前配置重新解析，不叠加上一轮的结果。
+      this.#aids.length = 0;
+      this.#areas.length = 0;
+      this.#dynamicResolution.clear();
       for (const video of this.#options.config.videos) {
-        this.#aids.push(video.kind === 'aid' ? video.aid : await this.client.resolveAid(video.bvid));
+        const aid = video.kind === 'aid' ? video.aid : await this.resolveAid(video.bvid);
+        this.#aids.push(aid);
+        this.#addArea({ kind: 'video', type: BILIBILI_VIDEO_COMMENT_TYPE, oid: aid });
+      }
+      for (const dynamicId of this.#options.config.dynamics) {
+        if (this.#tripped) break;
+        await this.#resolveDynamic(dynamicId);
+      }
+      for (const cvid of this.#options.config.articles) {
+        this.#addArea({ kind: 'article', type: BILIBILI_ARTICLE_COMMENT_TYPE, oid: cvid });
       }
     } catch (error) {
       this.#handleError('start', error);
@@ -219,30 +298,67 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     if (this.#options.config.notifications.length > 0 && !this.#selfMid) {
       this.#logger.warn(formatCompact({ op: 'bilibili_notifications_disabled', hint: '「回复我的 / @我的」需要有效 Cookie' }));
     }
-    if (this.#aids.length === 0) {
-      this.#logger.warn(formatCompact({ op: 'bilibili_no_videos', hint: '未配置 videos 白名单，不会轮询' }));
+    if (this.#tripped) return;
+    if (this.#areas.length === 0) {
+      this.#logger.warn(formatCompact({ op: 'bilibili_no_videos', hint: '未配置 videos / dynamics / articles 白名单（或动态都无法解析），不会轮询' }));
     }
     this.#state = 'open';
-    if (this.#options.autoPoll !== false && this.#aids.length > 0) this.#schedule(0);
+    if (this.#options.autoPoll !== false && this.#areas.length > 0) this.#schedule(0);
   }
 
-  open(): void {
+  #addArea(area: BilibiliCommentArea): void {
+    if (this.#areas.some(existing => existing.type === area.type && existing.oid === area.oid)) return;
+    this.#areas.push(Object.freeze({ ...area }));
+  }
+
+  #findArea(type: number, oid: string): BilibiliCommentArea | undefined {
+    return this.#areas.find(area => area.type === type && area.oid === oid);
+  }
+
+  /**
+   * 动态 id → 评论区。平台风控码照常熔断；平台业务错误码（动态已删除 / 不可见等）与不支持的动态形状
+   * 只跳过这一条动态并记日志，不影响视频与其它资源。HTTP 错误、网络等暂时性错误向上抛出
+   * （与 BV 号解析一致：启动失败，交给运行时重试），避免一次抖动就永久跳过某条动态。
+   */
+  async #resolveDynamic(dynamicId: string): Promise<void> {
+    let detail;
+    try {
+      detail = await this.getDynamicDetail(dynamicId);
+    } catch (error) {
+      if (!(error instanceof BilibiliApiError) || (error.httpStatus !== undefined && !error.risk)) throw error;
+      if (error.risk) {
+        this.#handleError('resolve_dynamic', error, dynamicId);
+        return;
+      }
+      this.#dynamicResolution.set(dynamicId, Object.freeze({ error: `code ${error.code}` }));
+      this.#logger.warn(formatCompact({ op: 'bilibili_dynamic_unresolved', dynamic: dynamicId, code: error.code, hint: '动态不存在或不可见，已跳过' }));
+      return;
+    }
+    const resolution = resolveDynamicCommentArea(dynamicId, detail);
+    if (!resolution.ok) {
+      this.#dynamicResolution.set(dynamicId, Object.freeze({ error: resolution.reason }));
+      this.#logger.warn(formatCompact({ op: 'bilibili_dynamic_unsupported', dynamic: dynamicId, reason: resolution.reason }));
+      return;
+    }
+    this.#dynamicResolution.set(dynamicId, Object.freeze({ area: resolution.area }));
+    this.#addArea(resolution.area);
+  }
+
+  #openEndpoint(): void {
     this.#open = true;
   }
 
-  close(): void {
+  #close(): void {
     this.#open = false;
   }
 
-  stop(): void {
+  #stop(): void {
     this.#open = false;
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = undefined;
     this.#cancelQr();
     this.#started = false;
     this.#state = 'stopped';
-    const registry = this.#options.registry;
-    if (registry?.get(this.#options.config.id) === this) registry.delete(this.#options.config.id);
   }
 
   get #now(): number {
@@ -258,6 +374,11 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     if (!this.#files) return undefined;
     const raw = readJson(this.#files.credentialsFile);
     if (!isCredentials(raw)) return undefined;
+    if (typeof raw.mid === 'string' && /^\d+$/u.test(raw.mid)) {
+      this.#previousIdentity = { kind: 'verified', userId: raw.mid };
+    } else if (this.#previousIdentity.kind === 'unbound') {
+      this.#previousIdentity = { kind: 'unknown' };
+    }
     if (typeof raw.expiresAt === 'number' && raw.expiresAt <= this.#now) {
       removeFile(this.#files.credentialsFile);
       this.#logger.warn(formatCompact({ op: 'bilibili_login_expired', source: 'qr', hint: '扫码登录已过期，请重新扫码' }));
@@ -274,8 +395,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     const { sessdata, biliJct } = this.#options.config;
     let expiredSource: BilibiliCookieSource | undefined;
     if (sessdata) {
-      this.client.setCookie({ sessdata, ...(biliJct ? { biliJct } : {}) });
-      const nav = await this.client.getNav();
+      this.setCookie({ sessdata, ...(biliJct ? { biliJct } : {}) });
+      const nav = await this.getNav();
       if (nav) {
         this.#setLoggedIn(nav.mid, nav.uname, 'config');
         return;
@@ -285,8 +406,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     }
     const stored = this.#readStoredCredentials();
     if (stored) {
-      this.client.setCookie(stored);
-      const nav = await this.client.getNav();
+      this.setCookie(stored);
+      const nav = await this.getNav();
       if (nav) {
         this.#setLoggedIn(nav.mid, nav.uname, 'qr', stored.expiresAt);
         return;
@@ -296,13 +417,14 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', source: 'qr', hint: '扫码登录已失效，请重新扫码' }));
     }
     // 回到配置 Cookie（可能已失效，但保持「配置优先」的语义），否则清空。
-    this.client.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
+    this.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
     this.#selfMid = undefined;
     this.#login = Object.freeze(expiredSource ? { state: 'expired' as const, source: expiredSource } : { state: 'none' as const });
   }
 
   #setLoggedIn(mid: string, uname: string | undefined, source: BilibiliCookieSource, expiresAt?: number): void {
     this.#selfMid = mid;
+    this.#previousIdentity = { kind: 'verified', userId: mid };
     this.#login = Object.freeze({
       state: 'ok' as const, source, mid,
       ...(uname ? { uname } : {}),
@@ -317,7 +439,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     if (source === 'qr') {
       if (this.#files) removeFile(this.#files.credentialsFile);
       const { sessdata, biliJct } = this.#options.config;
-      this.client.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
+      this.setCookie(sessdata ? { sessdata, ...(biliJct ? { biliJct } : {}) } : undefined);
     }
     this.#login = Object.freeze({ state: 'expired' as const, ...(source ? { source } : {}) });
     this.#logger.warn(formatCompact({ op: 'bilibili_login_invalid', stage, source, hint: 'Cookie 已失效，请在 Console「评论审批」页或用 bili-login 重新扫码登录' }));
@@ -345,9 +467,10 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     }
     this.#cancelQr();
     const seq = ++this.#qrSeq;
+    this.#qrAbort = new AbortController();
     let code;
     try {
-      code = await generateLoginQr(this.client.fetch, this.#options.config.passportBaseUrl);
+      code = await generateLoginQr(this.fetch, this.#options.config.passportBaseUrl);
     } catch (error) {
       this.#handleQrFailure(error);
       return this.#qr;
@@ -381,7 +504,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       return this.#qr;
     }
     try {
-      const result = await pollLoginQr(this.client.fetch, this.#options.config.passportBaseUrl, key, this.#now);
+      const result = await pollLoginQr(this.fetch, this.#options.config.passportBaseUrl, key, this.#now);
       if (seq !== this.#qrSeq) return this.#qr;
       switch (result.state) {
         case 'waiting': break;
@@ -389,7 +512,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
           if (this.#qr.state !== 'scanned') this.#qr = Object.freeze({ ...this.#qr, state: 'scanned' as const });
           break;
         case 'expired': this.#finishQr({ state: 'expired' }); break;
-        case 'confirmed': await this.#applyQrCredentials(result.credentials); break;
+        case 'confirmed': await this.#applyQrCredentials(result.credentials, seq, this.#qrAbort?.signal); break;
       }
     } catch (error) {
       if (seq === this.#qrSeq) this.#handleQrFailure(error);
@@ -397,14 +520,21 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     return this.#qr;
   }
 
-  async #applyQrCredentials(credentials: BilibiliCredentials): Promise<void> {
-    this.client.setCookie(credentials);
-    const nav = await this.client.getNav();
+  async #applyQrCredentials(credentials: BilibiliCredentials, seq: number, signal?: AbortSignal): Promise<void> {
+    const { configuration, reconcileLogin } = this.#options;
+    if (!configuration || !reconcileLogin) throw new Error('Bilibili login identity reconciliation is unavailable');
+    const probe = new BilibiliClient({ ...this.config, sessdata: credentials.sessdata, biliJct: credentials.biliJct }, this.fetch);
+    const nav = await probe.getNav();
+    if (seq !== this.#qrSeq || signal?.aborted) return;
     if (!nav) {
       this.#finishQr({ state: 'failed', error: '登录未生效，请重新扫码' });
-      await this.#resolveLogin().catch(() => undefined);
       return;
     }
+    const decision = await reconcileLogin({ userId: nav.mid, previousIdentity: this.#previousIdentity, signal,
+      config: { ...configuration, sessdata: credentials.sessdata, biliJct: credentials.biliJct } });
+    if (decision === 'replaced') { this.#finishQr({ state: 'confirmed' }); return; }
+    this.#options.signal?.throwIfAborted();
+    this.setCookie(credentials);
     if (this.#files) {
       try {
         writeJsonAtomic(this.#files.credentialsFile, { ...credentials, mid: nav.mid }, 0o600);
@@ -413,7 +543,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       }
     }
     this.#setLoggedIn(nav.mid, nav.uname, 'qr', credentials.expiresAt);
-    this.reportSelfUserId(nav.mid);
+    this[endpointSpec].reportSelfUserId(nav.mid);
     this.#finishQr({ state: 'confirmed' });
     this.#logger.info(formatCompact({ op: 'bilibili_qr_login_ok', mid: nav.mid }));
     this.#emitNotice({ kind: 'login_ok', mid: nav.mid, ...(nav.uname ? { uname: nav.uname } : {}) });
@@ -436,6 +566,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   }
 
   #cancelQr(): void {
+    this.#qrAbort?.abort(new Error('Bilibili QR login canceled'));
+    this.#qrAbort = undefined;
     this.#qrSeq += 1;
     this.#finishQr({ state: 'idle' });
   }
@@ -453,7 +585,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     this.#cancelQr();
     if (this.#files) removeFile(this.#files.credentialsFile);
     await this.#resolveLogin().catch(() => {
-      this.client.setCookie(undefined);
+      this.setCookie(undefined);
       this.#login = Object.freeze({ state: 'none' as const });
     });
     this.#logger.info(formatCompact({ op: 'bilibili_logout' }));
@@ -472,26 +604,29 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     (this.#timer as { unref?: () => void }).unref?.();
   }
 
-  /** 轮询一次全部白名单视频。首轮只记录基线，不入站。 */
+  /** 轮询一次全部白名单评论区（视频 / 动态 / 专栏）。每个评论区首轮只记录基线，不入站。 */
   async pollOnce(): Promise<void> {
-    for (const aid of this.#aids) {
+    for (const area of [...this.#areas]) {
       if (this.#tripped) return;
+      const key = `${area.type}:${area.oid}`;
       try {
-        const page = await this.client.listLatestVideoReplies(aid);
-        const replies = flattenReplies(page.replies).sort((a, b) => a.ctime - b.ctime);
-        if (!this.#baselined.has(aid)) {
-          for (const reply of replies) this.#markSeen(String(reply.rpid));
-          this.#baselined.add(aid);
-          continue;
-        }
-        for (const reply of replies) {
-          const rpid = String(reply.rpid);
-          if (this.#seen.has(rpid)) continue;
-          this.#markSeen(rpid);
-          await this.#admit(aid, reply, { via: 'video', upperMid: page.upper?.mid });
-        }
+        const page = await this.listLatestReplies(area.type, area.oid);
+        await this[endpointSpec].events.run(async () => {
+          const replies = flattenReplies(page.replies).sort((a, b) => a.ctime - b.ctime);
+          if (!this.#baselined.has(key)) {
+            for (const reply of replies) this.#markSeen(String(reply.rpid));
+            this.#baselined.add(key);
+            return;
+          }
+          for (const reply of replies) {
+            const rpid = String(reply.rpid);
+            if (this.#seen.has(rpid)) continue;
+            this.#markSeen(rpid);
+            await this.#admit(area, reply, { via: area.kind, upperMid: page.upper?.mid });
+          }
+        });
       } catch (error) {
-        this.#handleError('poll', error, aid);
+        this.#handleError('poll', error, `${area.kind}:${area.oid}`);
       }
     }
     await this.pollNotificationsOnce();
@@ -499,35 +634,48 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
 
   /**
    * 轮询「回复我的 / @我的」通知（配置 `notifications` 开启时）。首轮只记录基线。
-   * 只收视频评论通知；`notificationScope: whitelist`（默认）时只收白名单视频下的。
+   * 收视频评论通知；配置了 `dynamics` / `articles` 时再收对应种类（11/17、12）的评论通知。
+   * `notificationScope: whitelist`（默认）时只收白名单评论区下的。
    */
   async pollNotificationsOnce(): Promise<void> {
     const { notifications, notificationScope } = this.#options.config;
-    if (notifications.length === 0 || !this.client.hasCookie || !this.#selfMid || this.#login.state !== 'ok') return;
+    if (notifications.length === 0 || !this.hasCookie || !this.#selfMid || this.#login.state !== 'ok') return;
+    const kinds = this.#notificationKinds();
     for (const kind of notifications) {
       if (this.#tripped) return;
       try {
-        const page = await this.client.listNotifications(kind);
-        const items = [...(page.items ?? [])].filter((entry) => Number.isFinite(entry?.id)).sort((a, b) => a.id - b.id);
-        const cursor = this.#notificationCursor.get(kind);
-        const newest = items.reduce((max, entry) => Math.max(max, entry.id), cursor ?? 0);
-        this.#notificationCursor.set(kind, newest);
-        if (cursor === undefined) continue; // 首轮基线
-        for (const entry of items) {
-          if (entry.id <= cursor) continue;
-          const reply = notificationToReply(entry);
-          if (!reply) continue;
-          const aid = String(reply.oid);
-          if (notificationScope === 'whitelist' && !this.#aids.includes(aid)) continue;
-          const rpid = String(reply.rpid);
-          if (this.#seen.has(rpid)) continue;
-          this.#markSeen(rpid);
-          await this.#admit(aid, reply, { via: kind });
-        }
+        const page = await this.listNotifications(kind);
+        await this[endpointSpec].events.run(async () => {
+          const items = [...(page.items ?? [])].filter((entry) => Number.isFinite(entry?.id)).sort((a, b) => a.id - b.id);
+          const cursor = this.#notificationCursor.get(kind);
+          const newest = items.reduce((max, entry) => Math.max(max, entry.id), cursor ?? 0);
+          this.#notificationCursor.set(kind, newest);
+          if (cursor === undefined) return; // 首轮基线
+          for (const entry of items) {
+            if (entry.id <= cursor) continue;
+            const comment = notificationToComment(entry, kinds);
+            if (!comment) continue;
+            const known = this.#findArea(comment.area.type, comment.area.oid);
+            if (notificationScope === 'whitelist' && !known) continue;
+            const rpid = String(comment.reply.rpid);
+            if (this.#seen.has(rpid)) continue;
+            this.#markSeen(rpid);
+            await this.#admit(known ?? comment.area, comment.reply, { via: kind });
+          }
+        });
       } catch (error) {
         this.#handleError(`notify_${kind}`, error);
       }
     }
+  }
+
+  /** 通知接受的评论区种类：视频始终接受（兼容 v1）；动态 / 专栏只在配置了对应白名单时接受。 */
+  #notificationKinds(): ReadonlySet<BilibiliResourceKind> {
+    const { dynamics, articles } = this.#options.config;
+    const kinds = new Set<BilibiliResourceKind>(['video']);
+    if (dynamics.length > 0) { kinds.add('dynamic'); kinds.add('album'); }
+    if (articles.length > 0) kinds.add('article');
+    return kinds;
   }
 
   #markSeen(rpid: string): void {
@@ -549,20 +697,22 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
   }
 
   async #admit(
-    aid: string,
+    area: BilibiliCommentArea,
     reply: BilibiliReply,
     options: { readonly via: InboundVia; readonly upperMid?: number },
   ): Promise<void> {
-    if (!this.#open) return;
+    if (!this.#open && !this.#started) return;
     const mid = String(reply.mid);
     if (this.#selfMid && mid === this.#selfMid) return; // 防自回环
     this.#remember(reply);
     const rootId = threadRootOf(reply);
     const parentId = String(reply.parent || reply.rpid);
-    const conversation = bilibiliThreadConversation(String(this.#options.id), aid, rootId);
-    const addressedToMe = options.via !== 'video';
-    void this.emitPlatform('reply', reply).catch(() => undefined);
-    await this.emit('message.receive', {
+    const conversation = { ...bilibiliThreadConversation(String(this.#options.id), area.oid, rootId, area.kind), endpoint: this[endpointSpec].identity };
+    const addressedToMe = options.via === 'reply' || options.via === 'at';
+    void this[endpointSpec].events.platform('reply', reply).catch(() => undefined);
+    await this[endpointSpec].events.message({
+      event: reply,
+      platformSentAt: reply.ctime * 1000,
       conversation,
       message: { conversation, id: String(reply.rpid) },
       content: reply.content?.message ?? '',
@@ -571,7 +721,11 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       ...(addressedToMe ? { mentioned: true } : {}),
       ...(reply.parent && String(reply.parent) !== String(reply.rpid) ? { replyTo: { id: String(reply.parent) } } : {}),
       metadata: Object.freeze({
-        resource: Object.freeze({ type: 'video', oid: aid }),
+        resource: Object.freeze({
+          type: area.kind, oid: area.oid, commentType: area.type,
+          ...(area.dynamicId ? { dynamicId: area.dynamicId } : {}),
+          url: commentAreaUrl(area, String(reply.rpid)),
+        }),
         rootId,
         parentId,
         via: options.via,
@@ -588,7 +742,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     });
   }
 
-  #handleError(op: string, error: unknown, aid?: string): void {
+  #handleError(op: string, error: unknown, target?: string): void {
     if (error instanceof BilibiliApiError && error.code === -101 && (op.startsWith('notify_') || op === 'send')) {
       this.#markLoginExpired(op);
       return;
@@ -599,13 +753,13 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       this.#timer = undefined;
       this.#state = 'closed';
       this.#logger.error(formatCompact({
-        op: 'bilibili_circuit_open', stage: op, aid, code: error.code,
+        op: 'bilibili_circuit_open', stage: op, target, code: error.code,
         hint: '触发平台风控，已停止轮询；请人工确认账号状态后重启',
       }));
       return;
     }
     this.#logger.warn(formatCompact({
-      op: `bilibili_${op}_failed`, aid,
+      op: `bilibili_${op}_failed`, target,
       error: error instanceof Error ? error.message : String(error),
     }));
   }
@@ -614,11 +768,11 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
    * 出站 = 回复评论楼。**永远**只进草稿队列，返回 not_sent（approval_pending），不调用平台写接口；
    * 真正发出必须由人调用 {@link approveDraft}（`bili-draft send <id>`）。
    */
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload }: EndpointSendRequest): Promise<string> {
     const thread = parseThreadConversationId(conversation.id);
     if (!thread) {
       throw new EndpointDeliveryError('invalid_recipient',
-        `Bilibili conversation must be video:<aid>:<rootRpid>, got "${conversation.id}"`, 'not_sent');
+        `Bilibili conversation must be <video|album|article|dynamic>:<oid>:<rootRpid>, got "${conversation.id}"`, 'not_sent');
     }
     const message = formatOutboundText(payload);
     const invalid = validateReplyText(message);
@@ -628,10 +782,13 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     }
     const parent = outboundReplyTarget(payload) ?? thread.root;
     const context = this.#context.get(parent) ?? this.#context.get(thread.root);
+    const dynamicId = this.#findArea(thread.commentType, thread.oid)?.dynamicId;
     const draft: BilibiliReplyDraft = this.drafts.add({
       endpointId: this.#options.config.id,
       target: conversation.id,
+      type: thread.commentType,
       oid: thread.oid,
+      ...(dynamicId ? { dynamicId } : {}),
       root: thread.root,
       parent,
       message,
@@ -680,7 +837,7 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
       throw new BilibiliReviewError('circuit_open',
         `Circuit breaker open (${this.#tripped.code}); check the account on bilibili.com and restart`);
     }
-    if (!this.client.canWrite || this.#login.state === 'expired') {
+    if (!this.canWrite || this.#login.state === 'expired') {
       throw new BilibiliReviewError('no_cookie', 'A valid login (SESSDATA and bili_jct) is required to post replies');
     }
     const invalid = validateReplyText(draft.message);
@@ -692,7 +849,8 @@ export class BilibiliEndpoint extends Endpoint<BilibiliClient> {
     this.drafts.update(id, { status: 'sending' }, this.#now);
     this.#lastSentAt = this.#now;
     try {
-      const rpid = await this.client.addReply({
+      const rpid = await this.addReply({
+        type: draft.type ?? BILIBILI_VIDEO_COMMENT_TYPE,
         oid: draft.oid,
         root: draft.root,
         parent: draft.parent,

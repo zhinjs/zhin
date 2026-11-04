@@ -22,8 +22,9 @@ describe('AgentHostPublicationCoordinator', () => {
     expect(resources.has(workroomHostToken)).toBe(false);
   });
 
-  it('publishes only the Agent Host port and no Workroom or late-bound controls', () => {
+  it('publishes generation-owned Agent ports without Workroom or late-bound controls', () => {
     const resources = new Scope(rootPluginId());
+    const history = { page: () => undefined, read: () => undefined, cleanup: () => undefined, health: () => undefined };
     const coordinator = new AgentHostPublicationCoordinator({
       projectRoot: process.cwd(),
       signal: new AbortController().signal,
@@ -51,7 +52,7 @@ describe('AgentHostPublicationCoordinator', () => {
           contextSystem: {},
         },
         traceRuntime: {},
-        schedule: { assistantRuntime: null },
+        schedule: { assistantRuntime: null, history },
         sessionTreeRuntime: {},
         listBindings: () => [],
       } as never,
@@ -59,8 +60,9 @@ describe('AgentHostPublicationCoordinator', () => {
     });
 
     expect(Object.keys(resources.use(agentHostToken).console).sort()).toEqual(
-      ['assistant', 'cancelSession', 'listBindings', 'sessionTree', 'trace'],
+      ['assistant', 'cancelSession', 'listBindings', 'scheduleExecutions', 'sessionTree', 'trace'],
     );
+    expect(resources.use(agentHostToken).console.scheduleExecutions).toBe(history);
     expect(resources.has(workroomHostToken)).toBe(false);
     for (const removed of [
       'bindWorkroomProfiles', 'bindWorkroomKnowledge', 'bindPortfolioSponsor',

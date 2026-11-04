@@ -69,6 +69,21 @@ path, rather than racing a Promise and leaving work running in the background.
 `TurnCancelledError` means an explicit caller cancellation. Hosts should not
 turn either condition into an ordinary assistant reply.
 
+### Incremental reply parsing
+
+Each answering attempt owns one append-only JSON candidate. Standard prefixes scan only new
+input and reuse unchanged nodes; non-public reactions do not materialize the growing message
+body. The existing decoder/schema still validate segments and the complete final response.
+SDK-specific repair syntax retains the original parser as a compatibility fallback; its worst-case
+cumulative parsing cost remains. Signed, fractional and exponential numbers use it temporarily
+while their partial spelling needs repair, then resume the incremental path once reliably retained.
+No parsing delay or new input/depth limit is introduced.
+
+Differential tests use a frozen pre-migration parser, prefix/chunk corpora, and real reply scheduling.
+Run the synthetic comparison from the repository root with
+`node --expose-gc --conditions=development --import tsx packages/im/agent/tests/benchmarks/reply-parser.ts`.
+Its timings and sampled heap are local parser evidence, not provider latency or a production bound.
+
 ### Shared-session intent
 
 `TurnRequest.intent` 明确描述一条入站消息如何影响同 session 的 active turn：
@@ -98,7 +113,7 @@ turn 会跨代执行。
 - 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository`；IM 事实由 `ConversationEventStore` 独占
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
 - 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`；结果写入 `provider.models` 并供 owner-scoped `LlmApiRuntime` 校验
-- 🔄 **模型自动降级**：首选模型失败时按 `resolveModelCandidates` 候选链 fallback（文本 / 多模态 / standalone 均走 agentLoop）
+- 🔄 **固定模型与重试**：聊天（含旧配置）、多模态主回合与 standalone 固定本轮选定模型；失败仅按原配置在同一模型上重试，不跨模型降级。媒体感知保留显式配置的 `ai.multimodal.perception.fallbacks` 备用链
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
 - 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
@@ -110,6 +125,16 @@ turn 会跨代执行。
 - 📐 **Compaction（ADR 0010）**：生产 `agentLoop` 接线 L1 micro + L2 LLM；IM `/compact`；yaml `ai.agent.compaction`
 - 🌳 **会话树**：`parent_id` + `active_leaf`；IM `/tree`、`/reset`；branch summarization；Console `GET/POST /api/agent/sessions/...`
 - 🪝 **Hook 系统**：generation-owned `AgentResourceHub.hooks` 与 canonical stream events
+
+## 定时任务执行记录
+
+更新 Host 与 Console 后，在「定时提醒 → 执行记录」查看每次运行的时间、各次尝试、基本过程、最终结果和独立的通知投递结果。读取及清理需要当前 Host 的 `full` 权限；模型诊断轨迹按需读取，继续沿用原有 Trace 保留规则。
+
+执行记录沿用部署的文件或 SQL 存储，保留一个 UTC 自然月。删除任务定义仍可查看未到期历史；「清理过期记录」只清理到期且非活动的执行记录。重启前没有结算的记录显示为中断或待核对，不自动续跑。
+
+失败后，只有实际调用能够证明整次尝试可安全重放时，才在既有次数内重试。已提交或无法确定副作用的调用不会从头重跑；通知或观察记录失败也不触发任务重放。插件的 `readOnly` 声明必须真实，不按工具名或返回文字猜测。
+
+记录写入与任务执行分离。慢存储时合并同次运行的快照，待保存终态最多 128 份／16 MiB（含正在写入的一份）；超大、满载或写入失败时显示记录缺口，不能据此判断任务没有执行。详细设计与验收见[定时任务方案](../../../docs/plans/schedule-outcome-retry-safety.md)。
 
 ## 依赖关系
 
@@ -346,7 +371,7 @@ Standalone Agent 不隐式继承主 Agent 的 native Tool，也**默认不带** 
 能力必须通过 `tools` 显式传入，或传 `includeRegisteredTools: true` 使用已注册的工具。
 
 只需要文本（总结群聊、分类消息、改写回复）时，不要借整轮 Agent，改用 `aiCompletionToken`：
-它只做一次补全，不带任何工具，自带重试和降级，不可信内容放进 `untrusted` 按数据渲染。见
+它只做一次补全，不带任何工具，固定所选模型并保留同模型重试与超时；不可信内容放进 `untrusted` 按数据渲染。见
 [Host Token 总览](../../../docs/authoring/host-tokens.md)。
 适合：按场景/按接口使用不同「角色」的 Agent（代码、翻译、总结等），彼此独立。
 

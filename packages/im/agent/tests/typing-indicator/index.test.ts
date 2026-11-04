@@ -8,7 +8,8 @@ import {
   ReactionTypingIndicatorAdapter,
   GenericTypingIndicatorAdapter,
 } from '../../src/typing-indicator/index.js';
-import { AdapterActivityFeedbackManager } from '../../src/activity-feedback/adapter-integration.js';
+import { createActivityFeedbackAdapter } from '../../src/activity-feedback/adapter-integration.js';
+import { ActivityFeedbackManager } from '../../src/activity-feedback/manager.js';
 
 describe('TypingIndicatorManager', () => {
   let manager: TypingIndicatorManager;
@@ -682,44 +683,29 @@ describe('NoneTypingIndicator', () => {
   });
 });
 
-describe('Endpoint activity feedback capability boundary', () => {
-  it('keeps language on legacy sendMessage fallback without changing its target', async () => {
-    const sendMessage = vi.fn().mockResolvedValue('status-1');
-    const feedback = new AdapterActivityFeedbackManager().enableForEndpoint({
-      $id: 'bot', control: { recall: vi.fn().mockResolvedValue(undefined) },
-    }, 'test', { sendMessage });
-    const options = { locale: 'en' as const, platform: 'test', endpointKey: 'bot',
+describe('Captured activity feedback capability boundary', () => {
+  const target = { endpoint: { id: 'canonical-bot', adapter: 'test' }, kind: 'private' as const, id: 'user',
+    parent: { kind: 'group' as const, id: 'source-group' }, threadId: 'source-thread' };
+  it('keeps locale and the complete captured target on message sends and cleanup', async () => {
+    const send = vi.fn(async () => 'status-1'), recall = vi.fn(async () => undefined);
+    const feedback = new ActivityFeedbackManager();
+    feedback.registerAdapter(createActivityFeedbackAdapter({ platform: 'test', io: { target, send, recall } }));
+    const options = { locale: 'en' as const, platform: 'test', endpointKey: 'display-alias',
       sessionId: 'private:user', userId: 'user', sceneType: 'private' as const };
-    await feedback.start('active', options, { type: 'message' });
-    expect(sendMessage).toHaveBeenCalledExactlyOnceWith({
-      type: 'private', id: 'user', context: 'test', endpoint: 'bot', locale: 'en',
-      content: [{ type: 'text', data: { text: 'Working...' } }],
-    });
+    await feedback.start('active', options, { type: 'message', autoRemove: true });
+    expect(send).toHaveBeenCalledExactlyOnceWith([{ type: 'text', data: { text: 'Working...' } }], { locale: 'en' });
     await feedback.stop('active', options);
+    expect(recall).toHaveBeenCalledExactlyOnceWith({ conversation: target, id: 'status-1' });
   });
-
-  it('does not use legacy $updateMessage without explicit endpoint edit control', async () => {
-    const legacyUpdate = vi.fn().mockResolvedValue(undefined);
-    const manager = new AdapterActivityFeedbackManager();
-    const endpoint = {
-      $id: 'bot',
-      control: { recall: vi.fn().mockResolvedValue(undefined) },
-      $updateMessage: legacyUpdate,
-    };
-    const feedback = manager.enableForEndpoint(endpoint as never, 'test', {
-      sendMessage: vi.fn().mockResolvedValue('status-1'),
-    } as never);
-    const options = {
-      platform: 'test', endpointKey: 'bot', sessionId: 'group:1',
-      groupId: '1', sceneType: 'group' as const,
-    };
-
-    const indicator = await feedback.start('active', options, {
-      type: 'message', message: 'processing',
-    });
+  it('updates only when the captured operation declares edit', async () => {
+    const undeclared = vi.fn(), send = vi.fn(async () => 'status-1');
+    const feedback = new ActivityFeedbackManager();
+    feedback.registerAdapter(createActivityFeedbackAdapter({ platform: 'test', io: { target, send,
+      recall: async () => undefined, $updateMessage: undeclared } as never }));
+    const options = { platform: 'test', endpointKey: 'display-alias', sessionId: 'private:user', userId: 'user', sceneType: 'private' as const };
+    const indicator = await feedback.start('active', options, { type: 'message', message: 'processing' });
     await indicator.update?.('next');
-
-    expect(legacyUpdate).not.toHaveBeenCalled();
+    expect(undeclared).not.toHaveBeenCalled();
     await feedback.stop('active', options);
   });
 });

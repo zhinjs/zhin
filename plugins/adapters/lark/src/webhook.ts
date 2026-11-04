@@ -21,7 +21,7 @@ export interface LarkWebhookHandler {
   readonly config: ResolvedLarkConfig;
   readonly isOpen: boolean;
   admitPlatform(name: string, event: unknown): void;
-  admit(msg: LarkMessage): void;
+  admit(msg: LarkMessage, nativeEvent?: unknown): void;
   admitCardAction?(event: LarkCardAction): void;
 }
 
@@ -103,7 +103,7 @@ export async function handleLarkWebhookRequest(
         ...event.event.message,
         sender: event.event.message.sender ?? event.event.sender,
       };
-      handler.admit(message);
+      handler.admit(message, event);
     }
 
     response.writeHead(200, { 'Content-Type': 'application/json' });

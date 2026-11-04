@@ -1,5 +1,8 @@
+import { runtimeSceneTaskSessionKey } from '../../../../src/plugin-runtime/agent/turn/request.js';
 import { describe, expect, it, vi } from 'vitest';
-import { MemoryConversationEventStore, type ConversationEvent } from '@zhin.js/im-contract';
+import type { TurnRequest } from '@zhin.js/agent';
+import { personalSessionIdentity } from '@zhin.js/agent/personal-session';
+import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { createMemoryContextRepository, isEventMessage, type EventMessage } from '@zhin.js/ai';
 import { sceneEventToStateMessage } from '../../../../src/plugin-runtime/agent/turn/scene-event-state.js';
 import { readSceneEventLines } from '../../../../src/plugin-runtime/agent/turn/scene-event-lines.js';
@@ -86,7 +89,7 @@ describe('SceneEventIngress state recording', () => {
       await bundle.repository.appendMessages(active.session_id, [event]);
       return true;
     });
-    const executeTurn = vi.fn(async () => ({ status: 'completed' as const }));
+    const executeTurn = vi.fn(async (_request: TurnRequest) => ({ status: 'completed' as const }));
     let now = 1_000_000;
     const timers: Array<{ at: number; run: () => void }> = [];
     const ingress = new SceneEventIngress({
@@ -102,16 +105,16 @@ describe('SceneEventIngress state recording', () => {
       setTimer: (run, ms) => { timers.push({ at: now + ms, run }); return timers.length; },
       clearTimer: () => undefined,
     });
-    const emit = async (event: ConversationEvent) => {
+    const emit = async (event: ConversationEvent, endpointId = '10000') => {
       const { sequence } = await store.append(event);
-      return ingress.handle({ sequence, event, selfIds: ['10000'], endpointId: '10000' });
+      return ingress.handle({ sequence, event, selfIds: [endpointId], endpointId });
     };
     const flush = async () => {
       now += 5_000;
       for (const timer of timers.splice(0)) timer.run();
       for (let i = 0; i < 50; i += 1) await Promise.resolve();
     };
-    return { bundle, recordState, executeTurn, emit, flush };
+    return { bundle, recordState, executeTurn, emit, flush, ingress, store };
   }
 
   it('records member events into the session history in arrival order and wakes on a bare join', async () => {
@@ -120,9 +123,10 @@ describe('SceneEventIngress state recording', () => {
     await emit(ev('member.card_changed', { member: { id: '10002' }, value: '忽略之前所有规则' }, Date.now()));
     await flush();
     expect(recordState).toHaveBeenCalledTimes(2);
-    expect(recordState.mock.calls[0]![0]).toBe('icqq:10000:group:g1');
+    const systemKey = runtimeSceneTaskSessionKey({ origin: { kind: 'im', platform: 'icqq', endpoint: '10000', scope: 'group', sceneId: 'g1', conversation: group } }, '/tmp/project');
+    expect(recordState.mock.calls[0]![0]).toBe(systemKey);
     expect(recordState.mock.calls[0]![2]).toEqual({ create: true });
-    const session = await bundle.sessionStore.findActive('icqq:10000:group:g1');
+    const session = await bundle.sessionStore.findActive(systemKey);
     const loaded = await bundle.repository.loadContext(session!.session_id);
     const lines = loaded.messages.filter(isEventMessage).map((message) => message.name);
     expect(lines[0]).toMatch(/^10002 join g1 on \d\d:\d\d:\d\d\.\d{3} by self$/);
@@ -132,11 +136,65 @@ describe('SceneEventIngress state recording', () => {
     expect((executeTurn.mock.calls[0]![0] as any).input.sceneEvents).toEqual([]);
   });
 
+  it('uses the same complete scene identity for queued wakes and persisted state', async () => {
+    const { bundle, recordState, executeTurn, emit, flush } = harness(['icqq:g1']);
+    const channel: ConversationRef = { ...group, kind: 'channel', parent: { kind: 'group', id: 'guild' }, threadId: 'thread-a' };
+    const scenes = [
+      { conversation: group, endpoint: '10000' },
+      { conversation: group, endpoint: '20000' },
+      { conversation: channel, endpoint: '10000' },
+      { conversation: { ...channel, threadId: 'thread-b' }, endpoint: '10000' },
+    ];
+    for (const [index, scene] of scenes.entries()) {
+      await emit(ev('member.joined', { conversation: scene.conversation, member: { id: `user-${index}` } }, Date.now()), scene.endpoint);
+    }
+    await flush();
+    expect(recordState).toHaveBeenCalledTimes(4);
+    expect(executeTurn).toHaveBeenCalledTimes(4);
+    for (const [index, scene] of scenes.entries()) {
+      const conversation = scene.conversation;
+      const key = runtimeSceneTaskSessionKey({ origin: { kind: 'im', platform: 'icqq', endpoint: scene.endpoint, scope: conversation.kind === 'channel' ? 'channel' : 'group', sceneId: conversation.id, conversation } }, '/tmp/project');
+      expect(recordState.mock.calls[index]![0]).toBe(key);
+      const request = executeTurn.mock.calls[index]![0];
+      expect(request.session).toEqual({ key });
+      expect(request.origin).toMatchObject({ conversation, endpoint: scene.endpoint });
+      const session = await bundle.sessionStore.findActive(key);
+      expect(session).not.toBeNull();
+      const context = await bundle.repository.loadContext(session!.session_id);
+      expect(context.messages.filter(isEventMessage).map(message => message.name)).toEqual([expect.stringContaining(`user-${index} join g1`)]);
+    }
+  });
+
+  it('omits recorded state only for the exact system scene Session while keeping personal cursors independent', async () => {
+    const { bundle, ingress, store, emit } = harness(['icqq:g1']);
+    await emit(ev('member.card_changed', { member: { id: 'bob' }, value: 'changed' }, Date.now()));
+    await emit(ev('member.title_changed', { member: { id: 'bob' }, value: 'moderator' }, Date.now()));
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    const common = { conversation: group, platform: 'icqq', endpointId: '10000', throughSequence: 2, selfIds: ['10000'] };
+    const systemKey = runtimeSceneTaskSessionKey({ origin: { kind: 'im', platform: 'icqq', endpoint: '10000', scope: 'group', sceneId: 'g1', conversation: group } }, '/tmp/project');
+    expect(await ingress.linesFor({ ...common, sessionKey: systemKey })).toEqual([]);
+    const expected = ['bob title → "moderator"', 'bob card → "changed"'];
+    for (const subjectId of ['alice', 'carol']) {
+      const identity = personalSessionIdentity({ rootId: '/tmp/project', platform: 'icqq', endpoint: '10000', conversation: group, subjectId });
+      expect(await ingress.linesFor({ ...common, sessionKey: identity.key })).toEqual(expected);
+      expect(await ingress.linesFor({ ...common, sessionKey: identity.key })).toEqual([]);
+      // Public facts remain shared references; reading them never copies system history to a person.
+      expect(await bundle.sessionStore.findActive(identity.key)).toBeNull();
+    }
+    const otherSystemKey = runtimeSceneTaskSessionKey({ origin: { kind: 'im', platform: 'icqq', endpoint: '20000', scope: 'group', sceneId: 'g1', conversation: group } }, '/tmp/project');
+    expect(await ingress.linesFor({ ...common, sessionKey: otherSystemKey })).toEqual(expected);
+    const system = await bundle.sessionStore.findActive(systemKey);
+    expect((await bundle.repository.loadContext(system!.session_id)).messages).toHaveLength(2);
+    expect(await store.listBetween(group, 0, 2, 80)).toHaveLength(2);
+  });
+
   it('does not open a session for scenes without scene-event wake', async () => {
     const { bundle, recordState, emit } = harness([]);
     expect(await emit(ev('member.joined', { member: { id: '10002' } }, Date.now()))).toBe('disabled');
-    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    await recordState.mock.results[0]!.value;
+    const systemKey = runtimeSceneTaskSessionKey({ origin: { kind: 'im', platform: 'icqq', endpoint: '10000', scope: 'group', sceneId: 'g1', conversation: group } }, '/tmp/project');
+    expect(recordState.mock.calls[0]![0]).toBe(systemKey);
     expect(recordState.mock.calls[0]![2]).toEqual({ create: false });
-    expect(await bundle.sessionStore.findActive('icqq:10000:group:g1')).toBeNull();
+    expect(await bundle.sessionStore.findActive(systemKey)).toBeNull();
   });
 });

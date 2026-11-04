@@ -1,5 +1,116 @@
 # @zhin.js/workroom
 
+## 0.0.15
+
+### Patch Changes
+
+- Updated dependencies [b88e988]
+- Updated dependencies [c15cef9]
+- Updated dependencies [b0c02a2]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [3c1912f]
+- Updated dependencies [af8f803]
+- Updated dependencies [032dc96]
+  - @zhin.js/agent@1.1.46
+  - @zhin.js/im-contract@1.1.10
+  - @zhin.js/core@1.1.55
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/ai@1.1.50
+  - @zhin.js/plugin-runtime@1.1.19
+  - @zhin.js/skill@1.1.12
+
+## 0.0.14
+
+### Patch Changes
+
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [6749002]
+- Updated dependencies [c7944a5]
+- Updated dependencies [f8505b0]
+- Updated dependencies [fc33495]
+- Updated dependencies [2c3610a]
+- Updated dependencies [4949b90]
+- Updated dependencies [4c05a4e]
+- Updated dependencies [4042a72]
+- Updated dependencies [f8505b0]
+- Updated dependencies [f1d4d66]
+  - @zhin.js/core@1.1.54
+  - @zhin.js/plugin-runtime@1.1.18
+  - @zhin.js/agent@1.1.45
+  - @zhin.js/ai@1.1.49
+  - @zhin.js/skill@1.1.11
+  - @zhin.js/tool@1.1.13
+
+## 0.0.13
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/agent@1.1.44
+  - @zhin.js/ai@1.1.48
+  - @zhin.js/core@1.1.53
+  - @zhin.js/im-contract@1.1.9
+  - @zhin.js/tool@1.1.12
+
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [e0f991c]
+- Updated dependencies [8846d5d]
+- Updated dependencies [8c85a2b]
+- Updated dependencies [f67883e]
+- Updated dependencies [2cc80df]
+- Updated dependencies [97bf337]
+- Updated dependencies [43560d0]
+- Updated dependencies [1bf0253]
+- Updated dependencies [ee9d38a]
+- Updated dependencies [eb306e1]
+- Updated dependencies [b76317d]
+- Updated dependencies [c9775fb]
+- Updated dependencies [5efb4e9]
+- Updated dependencies [b5071e7]
+- Updated dependencies [e23cabc]
+- Updated dependencies [3c4178d]
+- Updated dependencies [3fd758c]
+- Updated dependencies [16896fe]
+- Updated dependencies [825e4dc]
+- Updated dependencies [f1eb75c]
+- Updated dependencies [5621f75]
+- Updated dependencies [88c82d0]
+- Updated dependencies [e37f30f]
+- Updated dependencies [2b8b408]
+- Updated dependencies [4d728c0]
+- Updated dependencies [eb8feeb]
+- Updated dependencies [f0e1df7]
+- Updated dependencies [7f34293]
+- Updated dependencies [d9672ec]
+- Updated dependencies [42e630d]
+- Updated dependencies [1096173]
+- Updated dependencies [24a2b71]
+- Updated dependencies [119e9e6]
+- Updated dependencies [8ce6cd2]
+- Updated dependencies [f2bbab5]
+- Updated dependencies [44eb3f8]
+- Updated dependencies [ab2263a]
+- Updated dependencies [dfa14b5]
+- Updated dependencies [1bdbc08]
+- Updated dependencies [df6442c]
+- Updated dependencies [b223a51]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [1ca669a]
+- Updated dependencies [3771f7a]
+- Updated dependencies [945303c]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/agent@1.1.43
+  - @zhin.js/core@1.1.52
+  - @zhin.js/ai@1.1.47
+  - @zhin.js/tool@1.1.11
+  - @zhin.js/im-contract@1.1.8
+
 ## 0.0.11
 
 ### Patch Changes

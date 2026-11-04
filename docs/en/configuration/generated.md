@@ -164,7 +164,8 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.network.enabled` | boolean | no | `false` | Allow HTTPS egress for IM turns. |
 | `ai.agent.network.allowedDomains` | array&lt;string&gt; | no | — | When non-empty, only these domains (and their subdomains) are reachable. |
 | `ai.agent.masterShell` | string: `"off"`, `"isolated"` | no | `"off"` | Shell access for the master in IM private chats. off: no bash in IM turns. isolated: master DMs run bash inside a Docker container (workspace writable, no network, development allowlist, approval for anything else); fails closed when Docker is unavailable. |
-| `ai.agent.toolBudget` | object | no | — | Progress-aware tool-call budget. maxIterations is a soft budget extended while the turn makes progress; hard caps always apply. |
+| `ai.agent.masterShellApprovalMode` | string: `"ask"`, `"auto"`, `"inherit"` | no | `"ask"` | How approval-gated calls are approved in the master's IM private chat when masterShell is isolated. ask: show the master an approval prompt; auto: automatic reviewer (a reviewer rejection is escalated to the master); inherit: use execApprovalMode. |
+| `ai.agent.toolBudget` | object | no | — | Interactive runtime turns and their synchronous children have no fixed step or total wall-clock cap. They share configured token quotas. Step/time caps and continuation settings apply to bounded and legacy executions. |
 | `ai.agent.toolBudget.extendBy` | integer | no | `10` | Steps added per extension when progressing; 0 disables. |
 | `ai.agent.toolBudget.progressWindow` | integer | no | `5` | Progress must have happened within this many recent steps. |
 | `ai.agent.toolBudget.maxTotalIterations` | integer | no | `40` | Hard step cap per turn segment. |
@@ -175,9 +176,9 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.toolBudget.repeatLimit` | integer | no | `2` | Consecutive identical repeated calls that stop extensions. |
 | `ai.agent.toolBudget.autoContinue` | string: `"off"`, `"master_dm"`, `"on"` | no | `"master_dm"` | Auto-continue a progressing turn that hit its budget: off, only in the master's private chat, or always. Continuations reuse the same turn (same policy and approvals). |
 | `ai.agent.toolBudget.maxContinuations` | integer | no | `2` | Maximum automatic continuations per turn. |
-| `ai.agent.toolBudget.progressUpdates` | string: `"off"`, `"private"`, `"all"` | no | `"private"` | Brief natural-language progress updates during long turns: off, private chats only, or all chats (groups opt in). |
+| `ai.agent.toolBudget.progressUpdates` | string: `"off"`, `"private"`, `"all"` | no | `"private"` | off disables progress. Continuous interactive turns report in their current conversation; private/all select scope for bounded turns. |
 | `ai.agent.toolBudget.progressMinIntervalMs` | integer | no | `45000` | Minimum time between progress updates in ms. |
-| `ai.agent.toolBudget.progressMaxUpdates` | integer | no | `3` | Maximum progress updates per turn; 0 disables. |
+| `ai.agent.toolBudget.progressMaxUpdates` | integer | no | `3` | 0 disables progress. Positive values cap bounded turns only; continuous interactive turns use the configured interval without a count cap. |
 | `ai.agent.injectionGuard` | object | no | — | Prompt-injection defences. After lower-trust content (tool results, web pages, files, sub-agent reports, background messages) enters a turn, high-risk actions (shell, messaging other conversations, config changes, scheduling) need approval; replies are checked for system-prompt, secret and other-session memory leaks. |
 | `ai.agent.injectionGuard.confirmHighRisk` | string: `"external_content"`, `"off"` | no | `"external_content"` | external_content: high-risk actions after external content always ask for approval (denied in unattended turns). off: disabled. |
 | `ai.agent.injectionGuard.outboundCheck` | string: `"redact"`, `"off"` | no | `"redact"` | redact: mask leaked system-prompt lines, secrets and other sessions' memory in replies and outbound tool messages. off: disabled. |
@@ -336,6 +337,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agents.<key>.model` | string | no | — | — |
 | `ai.agents.<key>.mcpServers` | array \| null | no | — | — |
 | `ai.agents.<key>.nickname` | string | no | — | Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。 |
+| `ai.agents.<key>.preset` | string | no | — | Invocation preset reference; do not combine with legacy provider/model. MCP and permission fields remain Agent authority. |
 | `ai.sessions` | object \| null | no | — | — |
 | `ai.sessions.maxHistory` | number \| string | no | — | 最大历史消息数（数据库模式默认200，内存模式默认100） |
 | `ai.sessions.expireMs` | number \| string | no | — | 会话过期时间（毫秒，数据库模式默认7天，内存模式默认24小时） |
@@ -386,7 +388,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.multimodal.perception.maxChars` | number \| string | no | — | Description length cap in characters. Default 800. |
 | `ai.multimodal.perception.timeoutMs` | number \| string | no | — | Per-attempt timeout in ms. Default 30000. |
 | `ai.multimodal.perception.maxItemsPerTurn` | number \| string | no | — | Media described per turn; the rest keep the placeholder. Default 4. |
-| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | no | — | 主识图模型失败、空回答或不支持该媒体时，按顺序尝试；不改变主对话模型。 |
+| `ai.multimodal.perception.fallbacks` | array&lt;object&gt; | no | — | — |
 | `ai.multimodal.perception.fallbacks[].provider` | string | yes | — | — |
 | `ai.multimodal.perception.fallbacks[].model` | string | yes | — | — |
 | `ai.memory` | object \| null | no | — | 三层 Markdown 文件记忆（global / platform / session）。 默认启用；设 enabled: false 可关闭注入。 |
@@ -431,7 +433,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.trigger.ambient.cooldownMs` | number \| string | no | — | 两次主动插话之间的最短间隔（毫秒，默认 120000）；对话进行中不受限制 |
 | `ai.trigger.ambient.maxPerHour` | number \| string | no | — | 每个群每小时最多主动插话次数（默认 3）；对话进行中不计入 |
 | `ai.trigger.ambient.conversationWindowMs` | number \| string | no | — | 机器人说话后，这段时间内算作对话进行中：群友接它的话只由判断模型决定，不受冷却和每小时次数限制（毫秒，默认 180000） |
-| `ai.trigger.ambient.judgeIntervalMs` | number \| string | no | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度 |
+| `ai.trigger.ambient.judgeIntervalMs` | number \| string | no | — | 没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度；窗口内的消息顺延到窗口结束再判，不会丢 |
 | `ai.trigger.ambient.minConfidence` | number \| string | no | — | 判断模型置信度门槛 0..1（默认 0.7） |
 | `ai.trigger.ambient.mode` | string: `"active"`, `"shadow"` | no | — | shadow 只记录判断结果、不回复（默认 active） |
 | `ai.trigger.sceneEvents` | object | no | — | Scene awareness: high-priority social events (bot muted/unmuted, join request, member joined/left, notice updated, bot poked) wake one turn on their own without waiting for the next human message; low-priority events (reactions, card/title changes) never wake alone and only appear in the next turn's [Scene events] summary. When the bot cannot speak, only the session profile is updated and the model is not called. |
@@ -449,6 +451,64 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.imageStorage.secretAccessKey` | string | yes | — | — |
 | `ai.imageStorage.publicBaseUrl` | string | yes | — | Public HTTPS base URL; not the S3 upload endpoint. |
 | `ai.imageStorage.prefix` | string | yes | — | Object directory ending in /; must be covered by the bucket lifecycle. |
+| `ai.modelCatalog` | object | no | — | Closed Host connection/model/preset catalog. Dictionary keys supply omitted ids; this Host supplies omitted connection owners. Explicit identities must match; references are checked by the model compiler. |
+| `ai.modelCatalog.connections` | object | yes | — | — |
+| `ai.modelCatalog.connections.<key>.id` | string | no | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.connections.<key>.ownerId` | string | no | — | Defaults to this Host owner; an explicit owner must match this Host. |
+| `ai.modelCatalog.connections.<key>.revision` | integer | yes | — | — |
+| `ai.modelCatalog.connections.<key>.sdk` | string: `"openai"`, `"anthropic"`, `"google"`, `"deepseek"`, `"minimax"`, `"ollama"`, `"openai-compatible"` | yes | — | — |
+| `ai.modelCatalog.connections.<key>.baseUrl` | string | no | — | — |
+| `ai.modelCatalog.connections.<key>.secretRef` | string | no | — | Opaque credential reference; plaintext credentials are resolved only by the execution factory. |
+| `ai.modelCatalog.models` | object | yes | — | — |
+| `ai.modelCatalog.models.<key>.id` | string | no | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.models.<key>.connectionId` | string | yes | — | — |
+| `ai.modelCatalog.models.<key>.model` | string | yes | — | — |
+| `ai.modelCatalog.models.<key>.capabilities` | object | yes | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.input` | array&lt;string: `"text"`, `"image"`, `"audio"`, `"video"`, `"file"`&gt; | no | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.streaming` | boolean | no | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.toolCalling` | boolean | no | — | — |
+| `ai.modelCatalog.models.<key>.capabilities.thinking` | boolean | no | — | — |
+| `ai.modelCatalog.models.<key>.contextWindow` | integer | no | — | — |
+| `ai.modelCatalog.models.<key>.maxOutputTokens` | integer | no | — | — |
+| `ai.modelCatalog.presets` | object | yes | — | — |
+| `ai.modelCatalog.presets.<key>.id` | string | no | — | Defaults to the dictionary key; an explicit id must match that key. |
+| `ai.modelCatalog.presets.<key>.modelId` | string | yes | — | — |
+| `ai.modelPolicy` | object | no | — | Purpose references only. Adapter/Endpoint may select chat/perception; Scene may select chat. Session chat selection is stored separately. |
+| `ai.modelPolicy.defaults` | object | yes | — | — |
+| `ai.modelPolicy.defaults.chat` | string | yes | — | — |
+| `ai.modelPolicy.defaults.perception` | string | no | — | — |
+| `ai.modelPolicy.defaults.summary` | string | no | — | When omitted, compilation selects deployment defaults.chat. Personal/Adapter/Endpoint/Scene chat overrides do not change summary. |
+| `ai.modelPolicy.adapters` | object | no | — | — |
+| `ai.modelPolicy.adapters.<key>.chat` | string | no | — | — |
+| `ai.modelPolicy.adapters.<key>.perception` | string | no | — | — |
+| `ai.modelPolicy.endpoints` | array&lt;object&gt; | no | — | — |
+| `ai.modelPolicy.endpoints[].address` | object | yes | — | — |
+| `ai.modelPolicy.endpoints[].address.rootId` | string | yes | — | — |
+| `ai.modelPolicy.endpoints[].address.platform` | string | yes | — | — |
+| `ai.modelPolicy.endpoints[].address.endpoint` | string | yes | — | — |
+| `ai.modelPolicy.endpoints[].address.adapterId` | string | yes | — | — |
+| `ai.modelPolicy.endpoints[].models` | object | yes | — | — |
+| `ai.modelPolicy.endpoints[].models.chat` | string | no | — | — |
+| `ai.modelPolicy.endpoints[].models.perception` | string | no | — | — |
+| `ai.modelPolicy.scenes` | array&lt;object&gt; | no | — | — |
+| `ai.modelPolicy.scenes[].address` | object | yes | — | — |
+| `ai.modelPolicy.scenes[].address.rootId` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.platform` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.endpoint` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation` | object | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint` | object | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint.adapter` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.endpoint.id` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.id` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent` | object | no | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.parent.id` | string | yes | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.threadId` | string | no | — | — |
+| `ai.modelPolicy.scenes[].address.conversation.name` | string | no | — | — |
+| `ai.modelPolicy.scenes[].models` | object | yes | — | — |
+| `ai.modelPolicy.scenes[].models.chat` | string | no | — | — |
+| `ai.personalPrincipals` | object | no | — | Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input. |
 | `menuKeyword` | string \| `false` | no | — | Built-in command menu keyword. Defaults to 菜单; false or an empty string disables the menu. |
 | `menuStyle` | object | no | — | Command menu appearance when an HTML renderer is available; plain text fallback remains available. |
 | `menuStyle.title` | string | no | — | Menu title. |
@@ -591,8 +651,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
 | `bilibili.sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send with the bili-draft send command. off disables outbound messages. Automatic direct replies are not supported. |
 | `bilibili.minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
-| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default. |
-| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video. |
+| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments, plus dynamic or article comments when dynamics or articles are configured. Disabled by default. |
+| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos, dynamics and articles; all accepts notifications from any video, plus any dynamic or article comment when dynamics or articles are configured. |
 | `bilibili.dataDir` | string | no | `"data/bilibili"` | Local data directory. Pending drafts and QR-login credentials are stored under &lt;dataDir&gt;/&lt;endpoint id&gt;/ (relative to the working directory) and survive restarts. Keep it out of the repository. |
 | `bilibili.notify` | object | no | — | Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Comment review page and in logs. |
 | `bilibili.notify.adapter` | string | yes | — | Adapter name, such as icqq or telegram. |
@@ -600,6 +660,8 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation type. |
 | `bilibili.notify.id` | string \| number | yes | — | Conversation id: your account for a private chat, or the group id. |
 | `bilibili.videos` | array&lt;string \| number&gt; | no | — | Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search. |
+| `bilibili.dynamics` | array&lt;string&gt; | no | — | Allowed dynamics (posts), as dynamic IDs quoted as strings (the number in t.bilibili.com/&lt;id&gt; or bilibili.com/opus/&lt;id&gt;). Each is resolved to its comment area at startup (image post type=11 / text post type=17); dynamics that cannot be resolved are skipped. No site-wide search. |
+| `bilibili.articles` | array&lt;string \| number&gt; | no | — | Allowed articles, as cv IDs (cv123 or 123); comment area type=12. No site-wide search. |
 | `bilibili.master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
 | `bilibili.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
 | `bilibili.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
@@ -608,11 +670,13 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.endpoints[].sessdata` | string | no | — | SESSDATA cookie, acting as your account. Reference ${BILIBILI_SESSDATA}; never commit it to the repository. |
 | `bilibili.endpoints[].biliJct` | string | no | — | bili_jct cookie (CSRF token). Reference ${BILIBILI_BILI_JCT}. |
 | `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | no | — | Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search. |
+| `bilibili.endpoints[].dynamics` | array&lt;string&gt; | no | — | Allowed dynamics (posts), as dynamic IDs quoted as strings (the number in t.bilibili.com/&lt;id&gt; or bilibili.com/opus/&lt;id&gt;). Each is resolved to its comment area at startup (image post type=11 / text post type=17); dynamics that cannot be resolved are skipped. No site-wide search. |
+| `bilibili.endpoints[].articles` | array&lt;string \| number&gt; | no | — | Allowed articles, as cv IDs (cv123 or 123); comment area type=12. No site-wide search. |
 | `bilibili.endpoints[].pollIntervalSec` | number | no | `60` | Polling interval in seconds, at least 60; adds 0–20% random jitter. |
 | `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | no | `"review"` | Outbound mode: review (default) queues AI replies as drafts; a master approves each send with the bili-draft send command. off disables outbound messages. Automatic direct replies are not supported. |
 | `bilibili.endpoints[].minSendIntervalSec` | number | no | `30` | Minimum interval between approved sends in seconds (at least 10). Sending too soon is rejected, not queued. |
-| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default. |
-| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video. |
+| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | no | `[]` | Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments, plus dynamic or article comments when dynamics or articles are configured. Disabled by default. |
+| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | no | `"whitelist"` | Notification scope: whitelist (default) accepts only configured videos, dynamics and articles; all accepts notifications from any video, plus any dynamic or article comment when dynamics or articles are configured. |
 | `bilibili.endpoints[].dataDir` | string | no | `"data/bilibili"` | Local data directory. Pending drafts and QR-login credentials are stored under &lt;dataDir&gt;/&lt;endpoint id&gt;/ (relative to the working directory) and survive restarts. Keep it out of the repository. |
 | `bilibili.endpoints[].notify` | object | no | — | Chat conversation to notify when a new draft arrives or the login expires (usually your private chat with the bot). Without it, drafts only appear on the Console Comment review page and in logs. |
 | `bilibili.endpoints[].notify.adapter` | string | yes | — | Adapter name, such as icqq or telegram. |
@@ -623,6 +687,24 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (Bilibili uid). |
 | `bilibili.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `bilibili.endpoints[].commandPrefix` | string | no | — | — |
+| `bilibili.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `bilibili.endpoints[].profile` | object | no | — | Fallback account profile |
+| `bilibili.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `bilibili.endpoints[].profile.age` | integer \| null | no | — | — |
+| `bilibili.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `bilibili.endpoints[].profile.signature` | string \| null | no | — | — |
+| `bilibili.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `bilibili.endpoints[].profile.interests` | array \| null | no | — | — |
+| `bilibili.endpoints[].profile.bio` | string \| null | no | — | — |
+| `bilibili.nickname` | string \| null | no | — | Fallback account nickname |
+| `bilibili.profile` | object | no | — | Fallback account profile |
+| `bilibili.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `bilibili.profile.age` | integer \| null | no | — | — |
+| `bilibili.profile.birthday` | string \| null | no | — | — |
+| `bilibili.profile.signature` | string \| null | no | — | — |
+| `bilibili.profile.avatar` | string \| null | no | — | — |
+| `bilibili.profile.interests` | array \| null | no | — | — |
+| `bilibili.profile.bio` | string \| null | no | — | — |
 
 ### bilibili-live
 
@@ -655,6 +737,24 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `bilibili-live.endpoints[].master` | string \| number | no | — | Framework masters (Bilibili uid). endpoints[i].master can override this value. |
 | `bilibili-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Bilibili uid). |
 | `bilibili-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `bilibili-live.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `bilibili-live.endpoints[].profile` | object | no | — | Fallback account profile |
+| `bilibili-live.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `bilibili-live.endpoints[].profile.age` | integer \| null | no | — | — |
+| `bilibili-live.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `bilibili-live.endpoints[].profile.signature` | string \| null | no | — | — |
+| `bilibili-live.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `bilibili-live.endpoints[].profile.interests` | array \| null | no | — | — |
+| `bilibili-live.endpoints[].profile.bio` | string \| null | no | — | — |
+| `bilibili-live.nickname` | string \| null | no | — | Fallback account nickname |
+| `bilibili-live.profile` | object | no | — | Fallback account profile |
+| `bilibili-live.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `bilibili-live.profile.age` | integer \| null | no | — | — |
+| `bilibili-live.profile.birthday` | string \| null | no | — | — |
+| `bilibili-live.profile.signature` | string \| null | no | — | — |
+| `bilibili-live.profile.avatar` | string \| null | no | — | — |
+| `bilibili-live.profile.interests` | array \| null | no | — | — |
+| `bilibili-live.profile.bio` | string \| null | no | — | — |
 
 ### dingtalk
 
@@ -681,10 +781,28 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `dingtalk.endpoints[].streamProxy` | object | no | — | Fault-injection tests only: pin TCP to 127.0.0.1 while preserving the actual WSS TLS identity. |
 | `dingtalk.endpoints[].streamProxy.port` | integer | yes | — | — |
 | `dingtalk.endpoints[].streamProxy.serverName` | string | yes | — | — |
+| `dingtalk.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `dingtalk.endpoints[].profile` | object | no | — | Fallback account profile |
+| `dingtalk.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `dingtalk.endpoints[].profile.age` | integer \| null | no | — | — |
+| `dingtalk.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `dingtalk.endpoints[].profile.signature` | string \| null | no | — | — |
+| `dingtalk.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `dingtalk.endpoints[].profile.interests` | array \| null | no | — | — |
+| `dingtalk.endpoints[].profile.bio` | string \| null | no | — | — |
 | `dingtalk.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `dingtalk.mode` | string: `"webhook"`, `"stream"` | no | `"webhook"` | — |
 | `dingtalk.cardTemplateId` | string | no | — | Stream interactive card template ID |
 | `dingtalk.cardButtonCount` | integer | no | `2` | Fixed button count in the card template |
+| `dingtalk.nickname` | string \| null | no | — | Fallback account nickname |
+| `dingtalk.profile` | object | no | — | Fallback account profile |
+| `dingtalk.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `dingtalk.profile.age` | integer \| null | no | — | — |
+| `dingtalk.profile.birthday` | string \| null | no | — | — |
+| `dingtalk.profile.signature` | string \| null | no | — | — |
+| `dingtalk.profile.avatar` | string \| null | no | — | — |
+| `dingtalk.profile.interests` | array \| null | no | — | — |
+| `dingtalk.profile.bio` | string \| null | no | — | — |
 
 ### discord
 
@@ -727,8 +845,71 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `discord.endpoints[].gatewayFaultProxyUrl` | string | no | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
 | `discord.endpoints[].restApiProxy` | object | no | — | REST-only fault proxy for Gateway tests: pin discord.com:443 TCP to loopback while preserving SNI and certificate validation, independently of the Gateway proxy. |
 | `discord.endpoints[].restApiProxy.port` | integer | yes | — | — |
+| `discord.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `discord.endpoints[].profile` | object | no | — | Fallback account profile |
+| `discord.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `discord.endpoints[].profile.age` | integer \| null | no | — | — |
+| `discord.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `discord.endpoints[].profile.signature` | string \| null | no | — | — |
+| `discord.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `discord.endpoints[].profile.interests` | array \| null | no | — | — |
+| `discord.endpoints[].profile.bio` | string \| null | no | — | — |
 | `discord.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `discord.gatewayFaultProxyUrl` | string | no | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
+| `discord.nickname` | string \| null | no | — | Fallback account nickname |
+| `discord.profile` | object | no | — | Fallback account profile |
+| `discord.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `discord.profile.age` | integer \| null | no | — | — |
+| `discord.profile.birthday` | string \| null | no | — | — |
+| `discord.profile.signature` | string \| null | no | — | — |
+| `discord.profile.avatar` | string \| null | no | — | — |
+| `discord.profile.interests` | array \| null | no | — | — |
+| `discord.profile.bio` | string \| null | no | — | — |
+
+### douyin-live
+
+[`plugins/adapters/douyin-live/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/adapters/douyin-live/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `douyin-live.sendMode` | string: `"off"`, `"direct"` | no | `"off"` | Outbound mode: off (default) only listens; direct is not implemented yet and returns not_implemented. |
+| `douyin-live.maxLength` | number | no | `50` | Maximum characters per danmaku (default 50; reserved for future direct sending). |
+| `douyin-live.maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
+| `douyin-live.minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
+| `douyin-live.signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
+| `douyin-live.master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
+| `douyin-live.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
+| `douyin-live.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `douyin-live.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `douyin-live.endpoints[].id` | string | yes | — | Local endpoint name, not a Douyin account ID. |
+| `douyin-live.endpoints[].cookie` | string | no | — | Full browser cookie string. Reference ${DOUYIN_LIVE_COOKIE}; never commit it. Omit to request a guest ttwid at startup. |
+| `douyin-live.endpoints[].roomId` | string \| integer | yes | — | Live room web_rid (the number after live.douyin.com/); use your own room only. |
+| `douyin-live.endpoints[].sendMode` | string: `"off"`, `"direct"` | no | `"off"` | Outbound mode: off (default) only listens; direct is not implemented yet and returns not_implemented. |
+| `douyin-live.endpoints[].maxLength` | number | no | `50` | Maximum characters per danmaku (default 50; reserved for future direct sending). |
+| `douyin-live.endpoints[].maxChunks` | number | no | `2` | Maximum danmaku per reply (default 2). |
+| `douyin-live.endpoints[].minSendIntervalSec` | number | no | `5` | Minimum seconds between two replies, at least 2. |
+| `douyin-live.endpoints[].signerUrl` | string | no | — | Optional external signer (GET ?stub=&lt;X-MS-STUB&gt; returns the signature). The package ships no platform signing script; without it the socket connects unsigned and the platform may refuse. |
+| `douyin-live.endpoints[].master` | string \| number | no | — | Framework masters (Douyin user id). endpoints[i].master can override this value. |
+| `douyin-live.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users (Douyin user id). |
+| `douyin-live.endpoints[].commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `douyin-live.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `douyin-live.endpoints[].profile` | object | no | — | Fallback account profile |
+| `douyin-live.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `douyin-live.endpoints[].profile.age` | integer \| null | no | — | — |
+| `douyin-live.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.signature` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `douyin-live.endpoints[].profile.interests` | array \| null | no | — | — |
+| `douyin-live.endpoints[].profile.bio` | string \| null | no | — | — |
+| `douyin-live.nickname` | string \| null | no | — | Fallback account nickname |
+| `douyin-live.profile` | object | no | — | Fallback account profile |
+| `douyin-live.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `douyin-live.profile.age` | integer \| null | no | — | — |
+| `douyin-live.profile.birthday` | string \| null | no | — | — |
+| `douyin-live.profile.signature` | string \| null | no | — | — |
+| `douyin-live.profile.avatar` | string \| null | no | — | — |
+| `douyin-live.profile.interests` | array \| null | no | — | — |
+| `douyin-live.profile.bio` | string \| null | no | — | — |
 
 ### email
 
@@ -767,7 +948,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | no | — | — |
 | `email.endpoints[].commandPrefix` | string | no | — | — |
 | `email.endpoints[].id` | string | yes | — | Email bot name |
+| `email.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `email.endpoints[].profile` | object | no | — | Fallback account profile |
+| `email.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `email.endpoints[].profile.age` | integer \| null | no | — | — |
+| `email.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `email.endpoints[].profile.signature` | string \| null | no | — | — |
+| `email.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `email.endpoints[].profile.interests` | array \| null | no | — | — |
+| `email.endpoints[].profile.bio` | string \| null | no | — | — |
 | `email.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `email.nickname` | string \| null | no | — | Fallback account nickname |
+| `email.profile` | object | no | — | Fallback account profile |
+| `email.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `email.profile.age` | integer \| null | no | — | — |
+| `email.profile.birthday` | string \| null | no | — | — |
+| `email.profile.signature` | string \| null | no | — | — |
+| `email.profile.avatar` | string \| null | no | — | — |
+| `email.profile.interests` | array \| null | no | — | — |
+| `email.profile.bio` | string \| null | no | — | — |
 
 ### github
 
@@ -795,7 +994,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `github.endpoints[].bot_login` | string | no | — | Override App bot login |
 | `github.endpoints[].workspace_root` | string | no | — | Managed git workspace root |
 | `github.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
+| `github.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `github.endpoints[].profile` | object | no | — | Fallback account profile |
+| `github.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `github.endpoints[].profile.age` | integer \| null | no | — | — |
+| `github.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `github.endpoints[].profile.signature` | string \| null | no | — | — |
+| `github.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `github.endpoints[].profile.interests` | array \| null | no | — | — |
+| `github.endpoints[].profile.bio` | string \| null | no | — | — |
 | `github.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `github.nickname` | string \| null | no | — | Fallback account nickname |
+| `github.profile` | object | no | — | Fallback account profile |
+| `github.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `github.profile.age` | integer \| null | no | — | — |
+| `github.profile.birthday` | string \| null | no | — | — |
+| `github.profile.signature` | string \| null | no | — | — |
+| `github.profile.avatar` | string \| null | no | — | — |
+| `github.profile.interests` | array \| null | no | — | — |
+| `github.profile.bio` | string \| null | no | — | — |
 
 ### icqq
 
@@ -836,7 +1053,41 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `icqq.endpoints[].qqnt` | boolean | no | — | Use the QQNT protocol. |
 | `icqq.endpoints[].ntLogin` | boolean | no | — | Use the NT login method. |
 | `icqq.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
+| `icqq.endpoints[].notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
+| `icqq.endpoints[].notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
+| `icqq.endpoints[].notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `icqq.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation kind; defaults to private. |
+| `icqq.endpoints[].notify.id` | string \| number | yes | — | Master conversation id on that platform (openid for QQ official, QQ number for ICQQ). |
+| `icqq.endpoints[].notify.parent` | object | no | — | 可选的父频道/群容器 |
+| `icqq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `icqq.endpoints[].notify.parent.id` | string \| number | yes | — | — |
+| `icqq.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `icqq.endpoints[].profile` | object | no | — | Fallback account profile |
+| `icqq.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `icqq.endpoints[].profile.age` | integer \| null | no | — | — |
+| `icqq.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `icqq.endpoints[].profile.signature` | string \| null | no | — | — |
+| `icqq.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `icqq.endpoints[].profile.interests` | array \| null | no | — | — |
+| `icqq.endpoints[].profile.bio` | string \| null | no | — | — |
 | `icqq.commandPrefix` | string | no | `""` | Command prefix, empty by default. Each endpoints[i] can override it. |
+| `icqq.notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
+| `icqq.notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
+| `icqq.notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `icqq.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation kind; defaults to private. |
+| `icqq.notify.id` | string \| number | yes | — | Master conversation id on that platform (openid for QQ official, QQ number for ICQQ). |
+| `icqq.notify.parent` | object | no | — | 可选的父频道/群容器 |
+| `icqq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `icqq.notify.parent.id` | string \| number | yes | — | — |
+| `icqq.nickname` | string \| null | no | — | Fallback account nickname |
+| `icqq.profile` | object | no | — | Fallback account profile |
+| `icqq.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `icqq.profile.age` | integer \| null | no | — | — |
+| `icqq.profile.birthday` | string \| null | no | — | — |
+| `icqq.profile.signature` | string \| null | no | — | — |
+| `icqq.profile.avatar` | string \| null | no | — | — |
+| `icqq.profile.interests` | array \| null | no | — | — |
+| `icqq.profile.bio` | string \| null | no | — | — |
 
 ### kook
 
@@ -873,7 +1124,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `kook.endpoints[].streamProxy.serverName` | string | yes | — | — |
 | `kook.endpoints[].apiProxy` | object | no | — | Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled. |
 | `kook.endpoints[].apiProxy.port` | integer | yes | — | — |
+| `kook.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `kook.endpoints[].profile` | object | no | — | Fallback account profile |
+| `kook.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `kook.endpoints[].profile.age` | integer \| null | no | — | — |
+| `kook.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `kook.endpoints[].profile.signature` | string \| null | no | — | — |
+| `kook.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `kook.endpoints[].profile.interests` | array \| null | no | — | — |
+| `kook.endpoints[].profile.bio` | string \| null | no | — | — |
 | `kook.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `kook.nickname` | string \| null | no | — | Fallback account nickname |
+| `kook.profile` | object | no | — | Fallback account profile |
+| `kook.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `kook.profile.age` | integer \| null | no | — | — |
+| `kook.profile.birthday` | string \| null | no | — | — |
+| `kook.profile.signature` | string \| null | no | — | — |
+| `kook.profile.avatar` | string \| null | no | — | — |
+| `kook.profile.interests` | array \| null | no | — | — |
+| `kook.profile.bio` | string \| null | no | — | — |
 
 ### lark
 
@@ -904,10 +1173,32 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `lark.endpoints[].streamProxy.serverName` | string | yes | — | — |
 | `lark.endpoints[].webApiProxy` | object | no | — | Disabled by default. Loopback TLS fault proxy for Feishu outbound APIs only; preserves the official Host, SNI and certificate validation. Independent of streamProxy. |
 | `lark.endpoints[].webApiProxy.port` | integer | yes | — | — |
+| `lark.endpoints[].streaming` | boolean | no | — | Use native streaming cards for progressive replies. |
+| `lark.endpoints[].streamingIntervalMs` | integer | no | — | Reply stream update interval in milliseconds. |
+| `lark.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `lark.endpoints[].profile` | object | no | — | Fallback account profile |
+| `lark.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `lark.endpoints[].profile.age` | integer \| null | no | — | — |
+| `lark.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `lark.endpoints[].profile.signature` | string \| null | no | — | — |
+| `lark.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `lark.endpoints[].profile.interests` | array \| null | no | — | — |
+| `lark.endpoints[].profile.bio` | string \| null | no | — | — |
 | `lark.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `lark.mode` | string: `"webhook"`, `"websocket"` | no | `"webhook"` | — |
 | `lark.webApiProxy` | object | no | — | Disabled by default. Loopback TLS fault proxy for Feishu outbound APIs only; preserves the official Host, SNI and certificate validation. Independent of streamProxy. |
 | `lark.webApiProxy.port` | integer | yes | — | — |
+| `lark.streaming` | boolean | no | `true` | Use native streaming cards for progressive replies. |
+| `lark.streamingIntervalMs` | integer | no | `1000` | Reply stream update interval in milliseconds. |
+| `lark.nickname` | string \| null | no | — | Fallback account nickname |
+| `lark.profile` | object | no | — | Fallback account profile |
+| `lark.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `lark.profile.age` | integer \| null | no | — | — |
+| `lark.profile.birthday` | string \| null | no | — | — |
+| `lark.profile.signature` | string \| null | no | — | — |
+| `lark.profile.avatar` | string \| null | no | — | — |
+| `lark.profile.interests` | array \| null | no | — | — |
+| `lark.profile.bio` | string \| null | no | — | — |
 
 ### line
 
@@ -928,7 +1219,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `line.endpoints[].apiBaseUrl` | string | no | — | — |
 | `line.endpoints[].commandPrefix` | string | no | — | — |
 | `line.endpoints[].id` | string | yes | — | LINE bot name |
+| `line.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `line.endpoints[].profile` | object | no | — | Fallback account profile |
+| `line.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `line.endpoints[].profile.age` | integer \| null | no | — | — |
+| `line.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `line.endpoints[].profile.signature` | string \| null | no | — | — |
+| `line.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `line.endpoints[].profile.interests` | array \| null | no | — | — |
+| `line.endpoints[].profile.bio` | string \| null | no | — | — |
 | `line.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `line.nickname` | string \| null | no | — | Fallback account nickname |
+| `line.profile` | object | no | — | Fallback account profile |
+| `line.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `line.profile.age` | integer \| null | no | — | — |
+| `line.profile.birthday` | string \| null | no | — | — |
+| `line.profile.signature` | string \| null | no | — | — |
+| `line.profile.avatar` | string \| null | no | — | — |
+| `line.profile.interests` | array \| null | no | — | — |
+| `line.profile.bio` | string \| null | no | — | — |
 
 ### milky
 
@@ -952,7 +1261,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `milky.endpoints[].heartbeat_interval` | number | no | — | — |
 | `milky.endpoints[].commandPrefix` | string | no | — | — |
 | `milky.endpoints[].id` | string | yes | — | Milky bot name |
+| `milky.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `milky.endpoints[].profile` | object | no | — | Fallback account profile |
+| `milky.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `milky.endpoints[].profile.age` | integer \| null | no | — | — |
+| `milky.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `milky.endpoints[].profile.signature` | string \| null | no | — | — |
+| `milky.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `milky.endpoints[].profile.interests` | array \| null | no | — | — |
+| `milky.endpoints[].profile.bio` | string \| null | no | — | — |
 | `milky.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `milky.nickname` | string \| null | no | — | Fallback account nickname |
+| `milky.profile` | object | no | — | Fallback account profile |
+| `milky.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `milky.profile.age` | integer \| null | no | — | — |
+| `milky.profile.birthday` | string \| null | no | — | — |
+| `milky.profile.signature` | string \| null | no | — | — |
+| `milky.profile.avatar` | string \| null | no | — | — |
+| `milky.profile.interests` | array \| null | no | — | — |
+| `milky.profile.bio` | string \| null | no | — | — |
 
 ### napcat
 
@@ -980,7 +1307,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `napcat.endpoints[].poll_interval` | number | no | — | — |
 | `napcat.endpoints[].commandPrefix` | string | no | — | — |
 | `napcat.endpoints[].id` | string | yes | — | NapCat bot name |
+| `napcat.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `napcat.endpoints[].profile` | object | no | — | Fallback account profile |
+| `napcat.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `napcat.endpoints[].profile.age` | integer \| null | no | — | — |
+| `napcat.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `napcat.endpoints[].profile.signature` | string \| null | no | — | — |
+| `napcat.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `napcat.endpoints[].profile.interests` | array \| null | no | — | — |
+| `napcat.endpoints[].profile.bio` | string \| null | no | — | — |
 | `napcat.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `napcat.nickname` | string \| null | no | — | Fallback account nickname |
+| `napcat.profile` | object | no | — | Fallback account profile |
+| `napcat.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `napcat.profile.age` | integer \| null | no | — | — |
+| `napcat.profile.birthday` | string \| null | no | — | — |
+| `napcat.profile.signature` | string \| null | no | — | — |
+| `napcat.profile.avatar` | string \| null | no | — | — |
+| `napcat.profile.interests` | array \| null | no | — | — |
+| `napcat.profile.bio` | string \| null | no | — | — |
 
 ### onebot11
 
@@ -1004,7 +1349,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot11.endpoints[].heartbeat_interval` | number | no | — | — |
 | `onebot11.endpoints[].commandPrefix` | string | no | — | — |
 | `onebot11.endpoints[].id` | string | yes | — | OneBot11 bot name |
+| `onebot11.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `onebot11.endpoints[].profile` | object | no | — | Fallback account profile |
+| `onebot11.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `onebot11.endpoints[].profile.age` | integer \| null | no | — | — |
+| `onebot11.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `onebot11.endpoints[].profile.signature` | string \| null | no | — | — |
+| `onebot11.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `onebot11.endpoints[].profile.interests` | array \| null | no | — | — |
+| `onebot11.endpoints[].profile.bio` | string \| null | no | — | — |
 | `onebot11.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `onebot11.nickname` | string \| null | no | — | Fallback account nickname |
+| `onebot11.profile` | object | no | — | Fallback account profile |
+| `onebot11.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `onebot11.profile.age` | integer \| null | no | — | — |
+| `onebot11.profile.birthday` | string \| null | no | — | — |
+| `onebot11.profile.signature` | string \| null | no | — | — |
+| `onebot11.profile.avatar` | string \| null | no | — | — |
+| `onebot11.profile.interests` | array \| null | no | — | — |
+| `onebot11.profile.bio` | string \| null | no | — | — |
 
 ### onebot12
 
@@ -1017,7 +1380,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot12.heartbeat_interval` | number | no | `30000` | — |
 | `onebot12.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
 | `onebot12.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
-| `onebot12.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
+| `onebot12.endpoints` | array&lt;object&gt; | yes | — | Each endpoint explicitly selects platform and userId. id is the local account name; other connection fields override instance defaults. |
 | `onebot12.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
 | `onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | no | — | — |
@@ -1029,7 +1392,27 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `onebot12.endpoints[].heartbeat_interval` | number | no | — | — |
 | `onebot12.endpoints[].commandPrefix` | string | no | — | — |
 | `onebot12.endpoints[].id` | string | yes | — | OneBot12 bot name |
+| `onebot12.endpoints[].platform` | string | yes | — | Selected OneBot12 bot platform |
+| `onebot12.endpoints[].userId` | string | yes | — | Selected OneBot12 bot user ID |
+| `onebot12.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `onebot12.endpoints[].profile` | object | no | — | Fallback account profile |
+| `onebot12.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `onebot12.endpoints[].profile.age` | integer \| null | no | — | — |
+| `onebot12.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `onebot12.endpoints[].profile.signature` | string \| null | no | — | — |
+| `onebot12.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `onebot12.endpoints[].profile.interests` | array \| null | no | — | — |
+| `onebot12.endpoints[].profile.bio` | string \| null | no | — | — |
 | `onebot12.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `onebot12.nickname` | string \| null | no | — | Fallback account nickname |
+| `onebot12.profile` | object | no | — | Fallback account profile |
+| `onebot12.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `onebot12.profile.age` | integer \| null | no | — | — |
+| `onebot12.profile.birthday` | string \| null | no | — | — |
+| `onebot12.profile.signature` | string \| null | no | — | — |
+| `onebot12.profile.avatar` | string \| null | no | — | — |
+| `onebot12.profile.interests` | array \| null | no | — | — |
+| `onebot12.profile.bio` | string \| null | no | — | — |
 
 ### qq
 
@@ -1063,10 +1446,48 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `qq.endpoints[].streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.endpoints[].streamProxy.port` | integer | yes | — | — |
 | `qq.endpoints[].streamProxy.serverName` | string | yes | — | — |
+| `qq.endpoints[].notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
+| `qq.endpoints[].notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
+| `qq.endpoints[].notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `qq.endpoints[].notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation kind; defaults to private. |
+| `qq.endpoints[].notify.id` | string \| number | yes | — | Master conversation id on that platform (openid for QQ official, QQ number for ICQQ). |
+| `qq.endpoints[].notify.parent` | object | no | — | 可选的父频道/群容器 |
+| `qq.endpoints[].notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `qq.endpoints[].notify.parent.id` | string \| number | yes | — | — |
+| `qq.endpoints[].streaming` | boolean | no | — | Publish supported replies while generating. Set false to send only complete replies. |
+| `qq.endpoints[].streamingIntervalMs` | number | no | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
+| `qq.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `qq.endpoints[].profile` | object | no | — | Fallback account profile |
+| `qq.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `qq.endpoints[].profile.age` | integer \| null | no | — | — |
+| `qq.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `qq.endpoints[].profile.signature` | string \| null | no | — | — |
+| `qq.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `qq.endpoints[].profile.interests` | array \| null | no | — | — |
+| `qq.endpoints[].profile.bio` | string \| null | no | — | — |
 | `qq.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
 | `qq.streamProxy` | object | no | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
 | `qq.streamProxy.port` | integer | yes | — | — |
 | `qq.streamProxy.serverName` | string | yes | — | — |
+| `qq.notify` | object | no | — | Send outage/login notices to the master through another adapter instance (adapter/endpoint/kind/id identify the actual conversation). |
+| `qq.notify.adapter` | string | yes | — | Adapter type used for the notice, such as qq or icqq. |
+| `qq.notify.endpoint` | string | yes | — | Endpoint id of that adapter. |
+| `qq.notify.kind` | string: `"private"`, `"group"`, `"channel"` | no | `"private"` | Conversation kind; defaults to private. |
+| `qq.notify.id` | string \| number | yes | — | Master conversation id on that platform (openid for QQ official, QQ number for ICQQ). |
+| `qq.notify.parent` | object | no | — | 可选的父频道/群容器 |
+| `qq.notify.parent.kind` | string: `"private"`, `"group"`, `"channel"` | yes | — | — |
+| `qq.notify.parent.id` | string \| number | yes | — | — |
+| `qq.streaming` | boolean | no | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `qq.streamingIntervalMs` | number | no | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
+| `qq.nickname` | string \| null | no | — | Fallback account nickname |
+| `qq.profile` | object | no | — | Fallback account profile |
+| `qq.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `qq.profile.age` | integer \| null | no | — | — |
+| `qq.profile.birthday` | string \| null | no | — | — |
+| `qq.profile.signature` | string \| null | no | — | — |
+| `qq.profile.avatar` | string \| null | no | — | — |
+| `qq.profile.interests` | array \| null | no | — | — |
+| `qq.profile.bio` | string \| null | no | — | — |
 
 ### sandbox
 
@@ -1074,15 +1495,37 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
+| `sandbox.streaming` | boolean | no | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `sandbox.streamingIntervalMs` | number | no | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `sandbox.master` | string \| number | no | — | Framework masters (sandbox client id, distinct from endpoints[].owner; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
 | `sandbox.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
 | `sandbox.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: mount multiple endpoints in one plugin instance. Each entry uses the top-level fields; id is required and other fields override defaults. |
 | `sandbox.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (sandbox client id, distinct from endpoints[].owner), overriding the top-level master list. |
 | `sandbox.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `sandbox.endpoints[].owner` | string | no | — | Sandbox owner user ID |
+| `sandbox.endpoints[].streaming` | boolean | no | — | Publish supported replies while generating. Set false to send only complete replies. |
+| `sandbox.endpoints[].streamingIntervalMs` | number | no | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
 | `sandbox.endpoints[].commandPrefix` | string | no | — | — |
 | `sandbox.endpoints[].id` | string | yes | — | Sandbox bot name |
+| `sandbox.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `sandbox.endpoints[].profile` | object | no | — | Fallback account profile |
+| `sandbox.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `sandbox.endpoints[].profile.age` | integer \| null | no | — | — |
+| `sandbox.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `sandbox.endpoints[].profile.signature` | string \| null | no | — | — |
+| `sandbox.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `sandbox.endpoints[].profile.interests` | array \| null | no | — | — |
+| `sandbox.endpoints[].profile.bio` | string \| null | no | — | — |
 | `sandbox.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `sandbox.nickname` | string \| null | no | — | Fallback account nickname |
+| `sandbox.profile` | object | no | — | Fallback account profile |
+| `sandbox.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `sandbox.profile.age` | integer \| null | no | — | — |
+| `sandbox.profile.birthday` | string \| null | no | — | — |
+| `sandbox.profile.signature` | string \| null | no | — | — |
+| `sandbox.profile.avatar` | string \| null | no | — | — |
+| `sandbox.profile.interests` | array \| null | no | — | — |
+| `sandbox.profile.bio` | string \| null | no | — | — |
 
 ### satori
 
@@ -1094,7 +1537,7 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `satori.heartbeat_interval` | number | no | `10000` | WS PING interval in milliseconds |
 | `satori.master` | string \| number | no | — | Framework masters (platform user id; AI/tool permissions and endpoint management). endpoints[i].master can override this value. |
 | `satori.trusted` | array&lt;string \| number&gt; | no | — | Framework trusted users, below master authority. endpoints[i].trusted can add users. |
-| `satori.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry defines an endpoint. id and baseUrl are required; other fields override instance defaults. |
+| `satori.endpoints` | array&lt;object&gt; | yes | — | Multiple accounts: each entry selects an explicit platform and userId. id and baseUrl are required; remaining fields override instance defaults. |
 | `satori.endpoints[].master` | string \| number | no | — | Framework masters for this endpoint (platform user id), overriding the top-level master list. |
 | `satori.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | Trusted users for this endpoint. |
 | `satori.endpoints[].baseUrl` | string | yes | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
@@ -1104,7 +1547,27 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `satori.endpoints[].heartbeat_interval` | number | no | — | — |
 | `satori.endpoints[].commandPrefix` | string | no | — | — |
 | `satori.endpoints[].id` | string | yes | — | Satori bot name |
+| `satori.endpoints[].platform` | string | yes | — | Selected Satori login platform |
+| `satori.endpoints[].userId` | string | yes | — | Selected Satori login user ID |
+| `satori.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `satori.endpoints[].profile` | object | no | — | Fallback account profile |
+| `satori.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `satori.endpoints[].profile.age` | integer \| null | no | — | — |
+| `satori.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `satori.endpoints[].profile.signature` | string \| null | no | — | — |
+| `satori.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `satori.endpoints[].profile.interests` | array \| null | no | — | — |
+| `satori.endpoints[].profile.bio` | string \| null | no | — | — |
 | `satori.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `satori.nickname` | string \| null | no | — | Fallback account nickname |
+| `satori.profile` | object | no | — | Fallback account profile |
+| `satori.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `satori.profile.age` | integer \| null | no | — | — |
+| `satori.profile.birthday` | string \| null | no | — | — |
+| `satori.profile.signature` | string \| null | no | — | — |
+| `satori.profile.avatar` | string \| null | no | — | — |
+| `satori.profile.interests` | array \| null | no | — | — |
+| `satori.profile.bio` | string \| null | no | — | — |
 
 ### slack
 
@@ -1133,7 +1596,29 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `slack.endpoints[].streamProxy.serverName` | string | yes | — | — |
 | `slack.endpoints[].webApiProxy` | object | no | — | Fault proxy for outbound JSON Web APIs only: pin slack.com:443 TCP to loopback while preserving SNI and certificate validation. Independent of the Socket proxy; does not apply to upload hosts. |
 | `slack.endpoints[].webApiProxy.port` | integer | yes | — | — |
+| `slack.endpoints[].streaming` | boolean | no | — | Use native streaming replies when the target supports them. |
+| `slack.endpoints[].streamingIntervalMs` | integer | no | — | Reply stream update interval in milliseconds. |
+| `slack.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `slack.endpoints[].profile` | object | no | — | Fallback account profile |
+| `slack.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `slack.endpoints[].profile.age` | integer \| null | no | — | — |
+| `slack.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `slack.endpoints[].profile.signature` | string \| null | no | — | — |
+| `slack.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `slack.endpoints[].profile.interests` | array \| null | no | — | — |
+| `slack.endpoints[].profile.bio` | string \| null | no | — | — |
 | `slack.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `slack.streaming` | boolean | no | `true` | Use native streaming replies when the target supports them. |
+| `slack.streamingIntervalMs` | integer | no | `1000` | Reply stream update interval in milliseconds. |
+| `slack.nickname` | string \| null | no | — | Fallback account nickname |
+| `slack.profile` | object | no | — | Fallback account profile |
+| `slack.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `slack.profile.age` | integer \| null | no | — | — |
+| `slack.profile.birthday` | string \| null | no | — | — |
+| `slack.profile.signature` | string \| null | no | — | — |
+| `slack.profile.avatar` | string \| null | no | — | — |
+| `slack.profile.interests` | array \| null | no | — | — |
+| `slack.profile.bio` | string \| null | no | — | — |
 
 ### telegram
 
@@ -1163,7 +1648,29 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `telegram.endpoints[].apiBaseUrl` | string | no | — | — |
 | `telegram.endpoints[].commandPrefix` | string | no | — | — |
 | `telegram.endpoints[].id` | string | yes | — | Telegram bot name |
+| `telegram.endpoints[].streaming` | boolean | no | — | Publish supported replies while generating. Set false to send only complete replies. |
+| `telegram.endpoints[].streamingIntervalMs` | number | no | — | Minimum delay in milliseconds between reply updates; the first update is immediate. |
+| `telegram.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `telegram.endpoints[].profile` | object | no | — | Fallback account profile |
+| `telegram.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `telegram.endpoints[].profile.age` | integer \| null | no | — | — |
+| `telegram.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `telegram.endpoints[].profile.signature` | string \| null | no | — | — |
+| `telegram.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `telegram.endpoints[].profile.interests` | array \| null | no | — | — |
+| `telegram.endpoints[].profile.bio` | string \| null | no | — | — |
 | `telegram.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `telegram.streaming` | boolean | no | `true` | Publish supported replies while generating. Set false to send only complete replies. |
+| `telegram.streamingIntervalMs` | number | no | `500` | Minimum delay in milliseconds between reply updates; the first update is immediate. |
+| `telegram.nickname` | string \| null | no | — | Fallback account nickname |
+| `telegram.profile` | object | no | — | Fallback account profile |
+| `telegram.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `telegram.profile.age` | integer \| null | no | — | — |
+| `telegram.profile.birthday` | string \| null | no | — | — |
+| `telegram.profile.signature` | string \| null | no | — | — |
+| `telegram.profile.avatar` | string \| null | no | — | — |
+| `telegram.profile.interests` | array \| null | no | — | — |
+| `telegram.profile.bio` | string \| null | no | — | — |
 
 ### wechat-mp
 
@@ -1192,7 +1699,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | no | — | — |
 | `wechat-mp.endpoints[].commandPrefix` | string | no | — | — |
 | `wechat-mp.endpoints[].id` | string | yes | — | WeChat MP bot name |
+| `wechat-mp.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `wechat-mp.endpoints[].profile` | object | no | — | Fallback account profile |
+| `wechat-mp.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `wechat-mp.endpoints[].profile.age` | integer \| null | no | — | — |
+| `wechat-mp.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `wechat-mp.endpoints[].profile.signature` | string \| null | no | — | — |
+| `wechat-mp.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `wechat-mp.endpoints[].profile.interests` | array \| null | no | — | — |
+| `wechat-mp.endpoints[].profile.bio` | string \| null | no | — | — |
 | `wechat-mp.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `wechat-mp.nickname` | string \| null | no | — | Fallback account nickname |
+| `wechat-mp.profile` | object | no | — | Fallback account profile |
+| `wechat-mp.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `wechat-mp.profile.age` | integer \| null | no | — | — |
+| `wechat-mp.profile.birthday` | string \| null | no | — | — |
+| `wechat-mp.profile.signature` | string \| null | no | — | — |
+| `wechat-mp.profile.avatar` | string \| null | no | — | — |
+| `wechat-mp.profile.interests` | array \| null | no | — | — |
+| `wechat-mp.profile.bio` | string \| null | no | — | — |
 
 ### wecom
 
@@ -1215,7 +1740,26 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `wecom.endpoints[].apiBaseUrl` | string | no | — | — |
 | `wecom.endpoints[].commandPrefix` | string | no | — | — |
 | `wecom.endpoints[].id` | string | yes | — | WeCom bot name |
+| `wecom.endpoints[].agentId` | string | yes | — | WeCom application AgentId (not the application secret) |
+| `wecom.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `wecom.endpoints[].profile` | object | no | — | Fallback account profile |
+| `wecom.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `wecom.endpoints[].profile.age` | integer \| null | no | — | — |
+| `wecom.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `wecom.endpoints[].profile.signature` | string \| null | no | — | — |
+| `wecom.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `wecom.endpoints[].profile.interests` | array \| null | no | — | — |
+| `wecom.endpoints[].profile.bio` | string \| null | no | — | — |
 | `wecom.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `wecom.nickname` | string \| null | no | — | Fallback account nickname |
+| `wecom.profile` | object | no | — | Fallback account profile |
+| `wecom.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `wecom.profile.age` | integer \| null | no | — | — |
+| `wecom.profile.birthday` | string \| null | no | — | — |
+| `wecom.profile.signature` | string \| null | no | — | — |
+| `wecom.profile.avatar` | string \| null | no | — | — |
+| `wecom.profile.interests` | array \| null | no | — | — |
+| `wecom.profile.bio` | string \| null | no | — | — |
 
 ### weixin-ilink
 
@@ -1241,7 +1785,25 @@ These fields use the Runtime schema reader for trusted plugins’ `config: Schem
 | `weixin-ilink.endpoints[].longPollTimeoutMs` | number | no | — | — |
 | `weixin-ilink.endpoints[].dataDir` | string | no | — | Endpoint state root |
 | `weixin-ilink.endpoints[].commandPrefix` | string | no | — | Command prefix for this endpoint. |
+| `weixin-ilink.endpoints[].nickname` | string \| null | no | — | Fallback account nickname |
+| `weixin-ilink.endpoints[].profile` | object | no | — | Fallback account profile |
+| `weixin-ilink.endpoints[].profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `weixin-ilink.endpoints[].profile.age` | integer \| null | no | — | — |
+| `weixin-ilink.endpoints[].profile.birthday` | string \| null | no | — | — |
+| `weixin-ilink.endpoints[].profile.signature` | string \| null | no | — | — |
+| `weixin-ilink.endpoints[].profile.avatar` | string \| null | no | — | — |
+| `weixin-ilink.endpoints[].profile.interests` | array \| null | no | — | — |
+| `weixin-ilink.endpoints[].profile.bio` | string \| null | no | — | — |
 | `weixin-ilink.commandPrefix` | string | no | `""` | Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it. |
+| `weixin-ilink.nickname` | string \| null | no | — | Fallback account nickname |
+| `weixin-ilink.profile` | object | no | — | Fallback account profile |
+| `weixin-ilink.profile.gender` | string \| null: `"male"`, `"female"`, `"other"`, `"unknown"`, `null` | no | — | — |
+| `weixin-ilink.profile.age` | integer \| null | no | — | — |
+| `weixin-ilink.profile.birthday` | string \| null | no | — | — |
+| `weixin-ilink.profile.signature` | string \| null | no | — | — |
+| `weixin-ilink.profile.avatar` | string \| null | no | — | — |
+| `weixin-ilink.profile.interests` | array \| null | no | — | — |
+| `weixin-ilink.profile.bio` | string \| null | no | — | — |
 
 ### process-monitor
 

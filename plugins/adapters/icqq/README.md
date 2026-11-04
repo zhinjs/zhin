@@ -5,7 +5,7 @@ ICQQ Plugin Runtime 适配器 — 进程内直接使用 [@icqqjs/icqq](https://g
 ## 功能特性
 
 - 群聊 / 私聊 / 群临时会话 / QQ 频道消息
-- 入站：ICQQ Client 原始事件经 `Endpoint.emit(...)` 唯一入口上送；文本与图片 / 语音 / 视频 / 文件统一归一为 canonical `Segment` + `MediaRef`
+- 入站：ICQQ Client 原始事件经 `endpoint[endpointSpec].events` 唯一入口上送；文本与图片 / 语音 / 视频 / 文件统一归一为 canonical `Segment` + `MediaRef`
 - 出站：canonical Segment 直接投影为 ICQQ 原生 `Sendable`，再由 `sendGroupMsg` / `sendPrivateMsg` / …发送
 - 群聊 reaction：`control.addReaction` / `removeReaction`（协议 ACK 失败不阻塞后续发送）
 - Agent 工具：按职责拆分在 `agents/icqq/skills/icqq-*/tools/`，只在对应 Skill 激活后披露
@@ -97,9 +97,9 @@ export default defineHandler({
 })
 ```
 
-`client` 就是当前账号的真实 ICQQ SDK 实例，不是 Endpoint facade。未知扩展事件可显式使用
+原生 Handler 参数中的 `client` 就是当前账号的真实 ICQQ SDK 实例，`event` 保留同一原生事件对象、原型和方法。消息操作的 `session.endpoint`、`session.event` 与 `session.adapter` 分别提供同一个实际 Endpoint、原始消息事件和所属 Adapter。未知扩展事件可显式使用
 `event: '*'`；此时 Client 类型保持完整，事件 payload 为 `unknown`。普通消息回复仍应走
-`Message.$reply`；群管理、请求审批与 ICQQ 专属查询可直接调用当前事件的 `client`。
+`Message.$reply`；群管理、请求审批与 ICQQ 专属查询可直接调用当前 Session 的 Endpoint。
 
 Command context 的 `$client` 是按需读取的 getter：
 
@@ -140,16 +140,16 @@ export default defineAgentTool({
 
 `adapter` 缺失时 `$client` 静态类型为 `unknown`；声明后若实际 operation 不属于 ICQQ，
 运行时会在执行前拒绝。Client 只能在当前 operation 内使用。task、schedule 或 Host 等脱离
-IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择账号。
+IM turn 的场景，应通过 Host 提供的显式账号作用域操作，不能缓存旧 Client 或从另一个可写目录选择账号。
 
 ## 架构
 
 - `plugin.ts` + `adapters/icqq/index.ts`：Plugin Runtime 入口与 `defineAdapter` 声明
-- `src/endpoint.ts`：组合 ICQQ `Client`，只协调账号 transport、Zhin lifecycle 与各能力端口
+- `src/endpoint.ts`：继承真实 ICQQ `Client`，只协调账号 transport、Zhin lifecycle 与各能力端口
 - `src/content-resolver.ts`：保存已观察消息，并按深度和条数限制递归展开合并转发
 - `src/icqq-inbound.ts`：把 ICQQ 原生消息归一为 Zhin 入站消息
 - `src/protocol.ts`：配置解析、会话映射与出站目标转换
-- `src/client.ts`：向插件作者暴露 ICQQ `Client` / `EventMap` 类型注册
+- `src/client.ts`：从原生 SDK 推导事件类型，并将实际 `IcqqAdapter` 注册到唯一 `AdapterRegistry`
 - Agent 工具：`agents/icqq/skills/icqq-*/tools/<name>/index.ts`；权限说明见 `PERMITS.md`
 
 阅读适配器实现时从 `endpoint.ts` 看能力装配，再进入对应能力文件。包外代码只从
@@ -163,7 +163,7 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 - ICQQ 的语音、视频、文件是独立消息元素；它们与其他段混发时适配器会明确拒绝，避免协议栈静默丢段。
 - 入站语音 / 视频在 Endpoint 持有原生 Client 时解析可下载 URL；解析失败则保留真实平台引用，不伪造或丢弃媒体。
 - **Console 社交/群管 RPC 已接线**：endpoint 把好友/群/群成员列表、请求审批和群管操作归一化为冻结的 `EndpointManagement`。Host 只消费该语义端口。
-- 好友/入群请求与通知：经 the unified `Endpoint.emit(...)` ingress 分发到 `handlers`（`notice.receive` / `request.receive`）；审批走 `Request.$approve` / `EndpointManagement.approveRequest`。Console `request.list` 优先读 `management.listRequests()`（`getSystemMsg`），不再写入 `unified_inbox_request/notice`。
+- 好友/入群请求与通知：经 the unified `endpoint[endpointSpec].events` ingress 分发到 `handlers`（`notice.receive` / `request.receive`）；审批走 `Request.$approve` / `EndpointManagement.approveRequest`。Console `request.list` 优先读 `management.listRequests()`（`getSystemMsg`），不再写入 `unified_inbox_request/notice`。
 - `system.*`（登录扫码等）分发到 `system.receive`。
 - **登录辅助**：`system.login.qrcode|slider|device|auth` 经 `loginAssistToken`（`LoginAssist`）挂起待办；刷新后可用 Console `login.list` / `login.submit` 或终端 stdin 继续（对齐 icqq 官方 stdin 流程）。`system.online` / `login.error` 会清理该 endpoint 待办。
 
@@ -172,6 +172,51 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 ICQQ Agent 可按需加载 `icqq-conversation` 查询当前群／频道和 Bot 自身角色。`icqq-messages` 提供当前会话的引用回复、真实消息合并转发和撤回自己发言；自己的消息撤回不要求群管身份或逐次审批，时限由平台决定。
 
 `icqq-group-admin` 新增撤回他人消息与退群：前者保留群管发起权限、实时平台角色检查，无需逐次审批；退群仅主人可发起、每次审批，Bot 为群主时拒绝执行。引用／转发走统一发送链路，不支持跨会话转发。当前 guild-channel 接入仅提供身份查询，不能使用这些群／私聊操作。详见 [权限与能力说明](./PERMITS.md)。
+
+## Console 页面
+
+启动后打开 Console 的「ICQQ」页（地址 `/icqq`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 在账号库保存、修改、启动、停止、替换或删除该 Adapter 的账号；新增仅保存，不创建 SDK Client，需手动启动；
+- 处理登录待办（扫码 / 滑块 / 设备确认等，来自 LoginAssist）；
+
+ICQQ 首次登录的二维码、滑块、设备确认会出现在「登录待办」里，不需要再回到终端确认。
+
+读取需要 `icqq:read`，写操作需要 `icqq:write`；管理员 full token 不受限。页面里的「添加 endpoint」等价于原来的 `icqq endpoint add`。
+
+首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
+
+启停意图在进程重启后恢复。停止或删除会取消并关闭目标账号的在途操作，其他账号继续运行；删除保留历史。已启动账号的连接配置更新先关闭旧 incarnation，再仅重连该账号；平台身份变化按替换处理，分配新内部身份、保留旧历史，新账号不继承旧 Session、个人设置或启动意图。提交结果未知时先刷新核实，不自动重复 CAS 或平台操作。
+
+## 掉线通知与重新登录
+
+配置 `notify` 后，ICQQ 被踢下线、登录失败或启动失败时，会通过另一个适配器实例给 master 发通知。例如用 QQ 官方机器人实例通知：
+
+```yaml
+qq:
+  # ... 已配置好的 QQ 官方机器人
+icqq:
+  master: 123456
+  autoReconnect: true   # 默认 true：被踢下线后自动重新登录
+  notify:
+    adapter: qq
+    endpoint: bot-1
+    kind: private
+    id: "${QQ_MASTER_OPENID}"   # master 在 QQ 官方机器人里的 openid
+```
+
+`autoReconnect: true` 时，被踢下线会自动重试登录；二维码/滑块/设备确认就绪后，通知会提示下一步。收到通知后可以直接在 QQ 里完成：
+
+| 命令 | 作用 |
+|------|------|
+| `icqq login qr` | 把 ICQQ 登录二维码发到当前会话（QQ 支持图片时） |
+| `icqq login confirm` | 扫码后确认继续登录 |
+| `icqq login code <内容>` | 提交滑块 ticket、短信验证码或设备确认内容 |
+| `icqq login status` | 查看在线状态与登录待办 |
+| `icqq login retry` | 强制重新触发登录 |
+
+命令只接受 master（顶层或 `endpoints[i].master`）或 `notify.id` 对应账号；两者都没配置时请用 Console 的 ICQQ 页面。没有配置 `notify` 时，掉线只写日志并在 Console 显示登录待办。
 
 ## 故障排查
 
@@ -190,17 +235,27 @@ MIT
 
 发送成功回执只接受平台真实消息 ID。网络超时、断线、缺少消息 ID 的响应会报告 `deliveryUnknown`，框架不会自动重发；手动重发可能重复发送。
 
-ICQQ 原生分享和文件 API 可能已经成功，但只返回空值或文件 ID；这类结果不能当作可引用、可撤回的消息 ID。群聊和私聊的分享卡片发出后，适配器会读一次会话记录，找到机器人自己刚发出的卡片消息，用它的真实消息 ID 作为回执（记录有延迟时半秒后再读一次）。找不到时（以及临时会话、频道和文件）仍报告投递结果未知，不编造 ID。平台操作仍只执行一次。文件撤回应使用平台专用文件 API。
+ICQQ 原生分享和文件 API 可能已经成功，但只返回空值或文件 ID；这类结果不能当作可引用、可撤回的消息 ID。适配器不会根据时间和卡片类型从历史猜测本次分享的 ID；同一时刻的其他卡片也可能匹配。没有直接消息 ID 的部分保留为未知，平台操作仍只执行一次。文件撤回应使用平台专用文件 API。
 
 ### 独立元素按顺序拆分发送
 
 ICQQ 要求分享、文件、语音、视频、JSON 卡片和合并转发单独成条。一条消息里同时有文字和这些元素时（例如 Agent 回复“找到了：”加一张音乐分享卡片），适配器按原顺序拆成多条依次发送，引用只附在第一条普通消息上。
 
-- 回执的消息 ID 取第一条拿到 ID 的部分；所有部分都没有 ID（如单独一张分享）时，仍报告投递结果未知。
-- 第一条就失败时原样报告失败；后面的部分失败时报告 `partial_delivery`（结果未知），因为前面的部分已经送达，重发会重复。
+- 回执按发送顺序保留每部分的真实 ID 和原始段位置；没有 ID 的卡片或文件保留未知槽位，不把完整回复正文复制给每个 ID。所有部分都没有 ID（如单独一张分享）时，仍报告投递结果未知。
+- 第一条就失败时原样报告失败；后面的部分失败时报告 `partial_delivery`（结果未知），保留已完成部分的回执。前面的调用可能已被平台接收，重发可能重复。
 
 ## 语言
 
 Endpoint 管理和工具反馈跟随当前操作语言；登录没有当前聊天发送者，LoginAssist 提示采用项目语言。提示文案变化不改变扫码、短信、滑块验证过程，群管理权限、审批与平台结果检查保持原规则。
 
 Endpoint 添加用法中的调用头由当前环境的实际命令前缀与插件命名空间提供；未知时只提示所需参数，不生成猜测命令。
+
+## 当前账号资料
+
+`endpointSpec.profile` 接到原生 ICQQ Client 的资料卡与设置方法；Agent 通过统一的 `get_self_profile` / `set_self_profile` 工具访问当前账号，修改沿用身份类审批。平台资料优先于配置兜底，群名片仍是独立的场景资料。
+
+- 可读：昵称、性别、年龄、个性签名、头像 URL。只投影这些公开资料，不把 SDK 返回的邮箱、QID 等一起交给模型。
+- 可写：昵称、性别、签名、个人说明、头像。SDK 返回 `false` 时明确拒绝，不报告成功。头像输入经工具链解析为已授权图片，结果不回传图片 base64。
+- 年龄不反推生日；当前安装的 ICQQ 1.12.3 `setBirthday` 月日编码有缺陷，因此不开放生日写入。兴趣无对应已验证接口，只能使用配置兜底。
+
+配置的 `nickname`、`profile` 可放在适配器默认值或某个 `endpoints[]` 项中；Endpoint 逐字段覆盖默认值，只有平台未提供的字段才使用它们。配置兜底不会写回 QQ。

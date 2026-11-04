@@ -1,5 +1,29 @@
 # @zhin.js/layout
 
+## 1.1.13
+
+### Patch Changes
+
+- Updated dependencies [976886c]
+  - @zhin.js/plugin-runtime@1.1.19
+  - @zhin.js/feature-kit@1.1.11
+
+## 1.1.12
+
+### Patch Changes
+
+- 5e878ba: fix(console): match Page/Layout projections by `$projection` brand instead of prototype identity, so Console topology no longer comes back empty when the runtime loads feature packages with a `?zhin-generation` query (Sandbox and other plugin pages were missing).
+
+## 1.1.11
+
+### Patch Changes
+
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [2c3610a]
+  - @zhin.js/feature-kit@1.1.10
+  - @zhin.js/plugin-runtime@1.1.18
+
 ## 1.1.10
 
 ### Patch Changes

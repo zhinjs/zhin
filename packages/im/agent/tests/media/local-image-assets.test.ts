@@ -1,6 +1,7 @@
 import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { LocalImageAssetStore, type LocalImageScope } from '../../src/media/local-image-assets.js';
 import { captureMcpImages } from '../../src/media/mcp-image-results.js';
 import { authorizeTurnFileInput } from '../../src/security/turn-file-authority.js';
@@ -12,6 +13,51 @@ let root: string;
 let directory: string;
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'zhin-private-images-')); directory = join(root, 'data', 'agent-assets'); });
 afterEach(async () => { await rm(root, { recursive: true, force: true }); });
+
+it('binds a private image to canonical endpoint, parent, thread and the originating IM session', async () => {
+  const store = new LocalImageAssetStore(directory);
+  const origin = { kind: 'im' as const, platform: 'icqq', endpoint: 'bot1', scope: 'channel' as const, sceneId: 'channel',
+    conversation: { endpoint: { id: 'canonical', adapter: 'icqq' }, kind: 'channel' as const, id: 'channel', parent: { kind: 'channel' as const, id: 'guild-a' }, threadId: 'topic-a' } };
+  const source: LocalImageScope = { ...scope, origin, sessionKey: 'personal-session-a' };
+  const asset = await store.capture(image, source, 'private screenshot');
+  for (const other of [
+    { ...source, origin: { ...origin, conversation: { ...origin.conversation, parent: { kind: 'channel' as const, id: 'guild-b' } } } },
+    { ...source, origin: { ...origin, conversation: { ...origin.conversation, threadId: 'topic-b' } } },
+    { ...source, origin: { ...origin, conversation: { ...origin.conversation, endpoint: { id: 'other', adapter: 'icqq' } } } },
+    { ...source, sessionKey: 'personal-session-b' },
+    { ...source, sessionKey: 'personal-session-a#subagent:01' },
+    { ...source, sessionKey: 'personal-session-a#subagent:1#forged' },
+  ]) await expect(store.read(asset.asset_id, other)).rejects.toThrow('unavailable');
+  expect((await store.read(asset.asset_id, { ...source, sessionKey: 'personal-session-a#subagent:1' })).bytes).toEqual(Buffer.from(image, 'base64'));
+});
+
+it('retains legacy IM files and expiry, but requests recapture instead of guessing a missing canonical parent', async () => {
+  const store = new LocalImageAssetStore(directory);
+  const asset = await store.capture(image, scope, 'old screenshot');
+  const path = join(directory, asset.asset_id, 'metadata.json');
+  const record = JSON.parse(await readFile(path, 'utf8'));
+  delete record.scopeVersion;
+  record.scope = createHash('sha256').update(JSON.stringify(['im', 'icqq', 'bot1', 'group', 'group1', '', 'alice'])).digest('hex');
+  await writeFile(path, JSON.stringify(record));
+  const restarted = new LocalImageAssetStore(directory);
+  await expect(restarted.read(asset.asset_id, scope)).rejects.toThrow('capture it again');
+  await restarted.cleanup();
+  expect(await readFile(join(directory, asset.asset_id, 'image'))).toEqual(Buffer.from(image, 'base64'));
+  expect(JSON.parse(await readFile(path, 'utf8')).expires_at).toBe(record.expires_at);
+});
+
+it('preserves readable legacy non-IM resources whose stored address already identifies the caller and session', async () => {
+  const store = new LocalImageAssetStore(directory);
+  const source: LocalImageScope = { ...scope, origin: { kind: 'http', sessionId: 'http-session' }, sessionKey: 'http-session' };
+  const asset = await store.capture(image, source, 'old http screenshot');
+  const path = join(directory, asset.asset_id, 'metadata.json');
+  const record = JSON.parse(await readFile(path, 'utf8'));
+  delete record.scopeVersion;
+  record.scope = createHash('sha256').update(JSON.stringify(['http', 'http-session', 'alice'])).digest('hex');
+  await writeFile(path, JSON.stringify(record));
+  expect((await new LocalImageAssetStore(directory).read(asset.asset_id, source)).bytes).toEqual(Buffer.from(image, 'base64'));
+  await expect(store.read(asset.asset_id, { ...source, principal: { subjectId: 'bob', roles: [] } })).rejects.toThrow('unavailable');
+});
 
 it('keeps original bytes private, survives restart and permits only the originating principal/conversation', async () => {
   const store = new LocalImageAssetStore(directory);

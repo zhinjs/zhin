@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
-import { FileJournalStore, type TurnRequest } from '@zhin.js/agent';
+import { FileJournalStore, type ContextFile, type TurnRequest } from '@zhin.js/agent';
 import {
   agentHostToken,
   agentTurnEngineToken,
@@ -21,6 +21,7 @@ export interface AgentHostPublicationCoordinatorOptions {
   readonly processRuntime: AgentRuntime;
   readonly agent: AgentRuntimeFoundation;
   readonly bootstrapText: string;
+  readonly contextFiles?: readonly ContextFile[];
 }
 
 /** Publishes the Agent Host ports. Workroom ports are published separately and only when installed. */
@@ -57,6 +58,7 @@ export class AgentHostPublicationCoordinator {
         sessionTree: sessionTreeRuntime,
         listBindings: () => agent.listBindings(),
         assistant: schedule.assistantRuntime,
+        scheduleExecutions: schedule.history,
         trace: traceRuntime,
         cancelSession: (sessionKey: string) => agent.agent.cancelSession(sessionKey),
       }),
@@ -72,6 +74,7 @@ export class AgentHostPublicationCoordinator {
       contextSystem: composition.contextSystem,
       loopHooks: service.loopHooks,
       bootstrapContext: options.bootstrapText,
+      contextFiles: options.contextFiles,
     }));
   }
 }

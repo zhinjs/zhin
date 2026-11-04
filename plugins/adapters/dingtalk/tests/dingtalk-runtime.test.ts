@@ -1,4 +1,4 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -12,7 +12,6 @@ import {
   verifySignature,
   type DingTalkMessage,
 } from '../src/protocol.js';
-import { dingtalkClient } from '../src/client.js';
 import defineDingTalkAdapter from '../adapters/dingtalk/index.js';
 
 const adapterFeature = featureId('zhin.adapter');
@@ -185,13 +184,13 @@ describe('dingtalk plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway,
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -231,13 +230,13 @@ describe('dingtalk plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -260,13 +259,13 @@ describe('dingtalk plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -285,13 +284,13 @@ describe('dingtalk plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -316,18 +315,18 @@ describe('dingtalk plugin runtime adapter', () => {
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway,
       http,
       config: baseConfig, // robotCode = 'robot-1'
       fetch: mockFetchOk(),
-    }), gateway, undefined);
+    }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     await http.listen();
 
-    endpoint.admit({
+    endpoint.endpoint.admit({
       ...textMessage({ conversationType: '2' }),
       atUserIds: ['robot-1'],
     });
@@ -337,7 +336,7 @@ describe('dingtalk plugin runtime adapter', () => {
       mentioned: true,
     }));
 
-    endpoint.admit({ ...textMessage({ msgId: 'msg-2', conversationType: '2' }), isInAtList: false });
+    endpoint.endpoint.admit({ ...textMessage({ msgId: 'msg-2', conversationType: '2' }), isInAtList: false });
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
     expect(receive.mock.calls[1]?.[0]?.mentioned).toBeFalsy();
     await endpoint.stop();
@@ -347,16 +346,16 @@ describe('dingtalk plugin runtime adapter', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    }), { gateway: createTestEventGateway({ receive, send: vi.fn(async () => 'sent') }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
-    endpoint.admit(textMessage());
+    endpoint.endpoint.admit(textMessage());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
@@ -365,7 +364,7 @@ describe('dingtalk plugin runtime adapter', () => {
     const fetchMock = mockFetchOk('out-42');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -374,10 +373,10 @@ describe('dingtalk plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
     const id = await endpoint.send({
@@ -406,10 +405,10 @@ describe('dingtalk plugin runtime adapter', () => {
     const sendFetch = vi.fn(async () => ({ ok: status === 200, status, json: async () => data }));
     const http = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(http);
     const gateway = { receive: vi.fn(async () => Object.freeze({ matched: true, value: 'ok' })), send: vi.fn(async () => 'sent') };
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'), gateway, http, config: baseConfig,
-      fetch: ((url: string, init: unknown) => url === 'https://session.example/hook' ? sendFetch() : fetchMock(url, init)) as any }), gateway, undefined);
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'), gateway, http, config: baseConfig,
+      fetch: ((url: string, init: unknown) => url === 'https://session.example/hook' ? sendFetch() : fetchMock(url, init)) as any }), { gateway: createTestEventGateway(gateway, undefined), capabilities: ['inbound', 'outbound'] });
     try {
-      await endpoint.start(); endpoint.open(); await endpoint.admit(textMessage({ sessionWebhook: 'https://session.example/hook' }));
+      await endpoint.start(); endpoint.open(); await endpoint.endpoint.admit(textMessage({ sessionWebhook: 'https://session.example/hook' }));
       await expect(endpoint.send({ conversation: { endpoint: { id: 'test', adapter: 'dingtalk' }, kind: 'group', id: 'cid-1' }, payload: 'reply' }))
         .rejects.toMatchObject({ disposition });
       expect(sendFetch).toHaveBeenCalledTimes(1);
@@ -420,7 +419,7 @@ describe('dingtalk plugin runtime adapter', () => {
     const fetchMock = mockFetchOk('session-9');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: true, value: 'ok' })),
@@ -429,14 +428,14 @@ describe('dingtalk plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: fetchMock,
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: true, value: 'ok' })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     endpoint.open();
     await http.listen();
-    endpoint.admit(textMessage({
+    endpoint.endpoint.admit(textMessage({
       sessionWebhook: 'https://session.example/hook',
     }));
     const id = await endpoint.send({
@@ -455,10 +454,10 @@ describe('dingtalk plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('registers agent endpoint on start', async () => {
+  it('projects the actual Endpoint through the owning AdapterIndex', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new DingTalkEndpoint({
+    const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'),
       gateway: {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
@@ -467,14 +466,38 @@ describe('dingtalk plugin runtime adapter', () => {
       http,
       config: baseConfig,
       fetch: mockFetchOk(),
-    }), {
+    }), { gateway: createTestEventGateway({
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
-      }, undefined);
+      }, undefined), capabilities: ['inbound', 'outbound'] });
     await endpoint.start();
     await http.listen();
-    expect(dingtalkClient.get(endpointClientContext(endpoint), 'test-dingtalk-bot'))
-      .toBe(endpoint.client);
+    expect(endpoint.index.client('test-endpoint', endpoint.canonicalId))
+      .toBe(endpoint.endpoint);
     await endpoint.stop();
   });
+});
+
+it('cancels a token waiter without aborting the account shared refresh or posting after it completes', async () => {
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(http); let tokenCalls = 0;
+  let finish!: (value: { ok: boolean; status: number; text(): Promise<string>; json(): Promise<unknown> }) => void;
+  const response = (data: unknown) => ({ ok: true, status: 200, text: async () => '', json: async () => data });
+  let refreshSignal: AbortSignal | undefined;
+  const fetch = vi.fn(async (url: string, init?: { signal?: AbortSignal }) => {
+    if (url.includes('/gettoken')) {
+      if (++tokenCalls === 1) return response({ errcode: 0, access_token: 'synthetic', expires_in: 1 });
+      refreshSignal = init?.signal; return new Promise<ReturnType<typeof response>>(resolve => { finish = resolve; });
+    }
+    return response({ errcode: 0, msgId: 'unexpected' });
+  });
+  const endpoint = await createEndpointHarness(() => new DingTalkEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'), http, config: baseConfig, fetch }), { capabilities: ['inbound', 'outbound'] });
+  await endpoint.start(); const caller = new AbortController();
+  const sending = endpoint.send({ conversation: { endpoint: { adapter: 'dingtalk', id: endpoint.canonicalId }, kind: 'private', id: 'target' }, signal: caller.signal, payload: 'synthetic reply' }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(tokenCalls).toBe(2)); caller.abort();
+    let outcome: Awaited<typeof sending> | undefined; void sending.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'not_sent' } }), { timeout: 200 });
+    expect(refreshSignal?.aborted).not.toBe(true); finish(response({ errcode: 0, access_token: 'late', expires_in: 7200 }));
+    await Promise.resolve(); await Promise.resolve(); expect(fetch.mock.calls.every(([url]) => url.includes('/gettoken'))).toBe(true);
+  } finally { finish(response({ errcode: 0, access_token: 'cleanup', expires_in: 7200 })); await endpoint.stop(); await sending; }
 });

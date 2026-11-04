@@ -1,6 +1,7 @@
 import { EMPTY_DEFERRED_TOOL_SNAPSHOT, createUserMessage } from '@zhin.js/ai';
 import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
 import type { AgentCore } from '../core/agent-core.js';
+import type { InteractiveRun } from '../core/interactive-run.js';
 import { collectAgentLoopTurnRun } from '../core/agent-core-run.js';
 import { resolveToolBudget } from '../core/turn-progress.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
@@ -12,6 +13,7 @@ import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
 import { BASH_TOOL_NAME, turnPolicyAllowsShell } from './native-bash-tool.js';
 import { deriveSubagentPolicy } from '../security/policy-narrowing.js';
 import type { ImageInspectionBudget } from '../media/local-image-inspection.js';
+import type { ContextFile } from '../bootstrap.js';
 import {
   isToolAboveTrust,
   narrowPolicyForTrust,
@@ -29,6 +31,7 @@ export interface SubagentModelSelection {
 }
 
 export interface SubagentTurnCapabilityOptions {
+  readonly interactiveRun?: InteractiveRun;
   readonly imageInspectionBudget?: ImageInspectionBudget;
   readonly host: ZhinAgentPrivate;
   readonly core: AgentCore;
@@ -36,6 +39,9 @@ export interface SubagentTurnCapabilityOptions {
   /** The parent's exact, already-authorized generation projection. */
   readonly capabilities: AgentCapabilities;
   readonly loopHooks?: PluginAILoopHookRegistry;
+  /** Workspace text captured with the parent engine's generation; never resolve a latest Host value. */
+  readonly bootstrapContext?: string;
+  readonly contextFiles?: readonly ContextFile[];
   /** Resolved lazily: the parent's prompt (and model choice) is built after its capability plan. */
   readonly resolveModel: () => SubagentModelSelection | undefined;
 }
@@ -83,14 +89,15 @@ export function createSubagentTurnCapability(options: SubagentTurnCapabilityOpti
     spawned += 1;
     active += 1;
     try {
-      const reply = await runSubagentTurn(options, {
+      const result = await runSubagentTurn(options, {
         index: spawned,
         task,
         readOnly: args.read_only === true,
         model,
       });
       // The report is external_content: instructions in it never raise the parent's authority.
-      return `子任务${label}已完成（同步等待）。\n\n${renderExternalContent('subagent_report', clip(reply))}`;
+      const status = result.stoppedReason ? '未完成，已暂停' : '已完成';
+      return `子任务${label}${status}（同步等待）。\n\n${renderExternalContent('subagent_report', clip(result.reply))}`;
     } catch (error) {
       if (options.parentTurn.signal.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);
@@ -116,7 +123,7 @@ export function createSubagentTurnCapability(options: SubagentTurnCapabilityOpti
 async function runSubagentTurn(
   options: SubagentTurnCapabilityOptions,
   run: Readonly<{ index: number; task: string; readOnly: boolean; model: SubagentModelSelection }>,
-): Promise<string> {
+): Promise<{ reply: string; stoppedReason?: string }> {
   const { host, parentTurn } = options;
   // #726: a sub-agent keeps its initiator's trust level even if the parent's
   // policy or tool list was not already narrowed.
@@ -126,18 +133,29 @@ async function runSubagentTurn(
     trustLevel,
   );
   const shellAllowed = turnPolicyAllowsShell(policy);
+  const sourceProfile = parentTurn.ports.selfProfile;
+  const selfProfile = sourceProfile && (run.readOnly ? Object.freeze({
+    peek: () => ({ ...sourceProfile.peek(), writableFields: [] }),
+    read: async (request: import('@zhin.js/im-contract').SelfProfileReadRequest) => ({ ...await sourceProfile.read(request), writableFields: [] }),
+  }) : sourceProfile);
+  const accountProfile = selfProfile?.peek();
   const childTools = Object.freeze(options.capabilities.tools.filter(tool =>
     tool.name !== SUBAGENT_TOOL_NAME
     && (shellAllowed || tool.name !== BASH_TOOL_NAME)
+    && (sourceProfile || (tool.name !== 'get_self_profile' && tool.name !== 'set_self_profile'))
+    && (!run.readOnly || tool.name !== 'set_self_profile')
     && !isToolAboveTrust(tool, trustLevel)));
   const turnId = `${parentTurn.identity.turnId}:subagent:${run.index}`;
   const sessionKey = `${parentTurn.session.key}#subagent:${run.index}`;
   const turn = createTurnIngress({
     identity: Object.freeze({ ...parentTurn.identity, turnId }),
     origin: parentTurn.origin,
+    execution: parentTurn.execution,
     principal: parentTurn.principal,
     intent: Object.freeze({ kind: 'new' as const }),
-    input: Object.freeze({ text: run.task, locale: parentTurn.input.locale, commandPrefix: parentTurn.input.commandPrefix, commandMenu: parentTurn.input.commandMenu }),
+    input: Object.freeze({ text: run.task, locale: parentTurn.input.locale, commandPrefix: parentTurn.input.commandPrefix, commandMenu: parentTurn.input.commandMenu,
+      ...(accountProfile ? { contextState: { ...parentTurn.input.contextState, bot: { ...parentTurn.input.contextState?.bot, profile: accountProfile } } } : {}),
+    }),
     session: Object.freeze({ key: sessionKey }),
     policy,
     capabilities: Object.freeze({
@@ -147,10 +165,12 @@ async function runSubagentTurn(
     signal: parentTurn.signal,
     hostProtectedPaths: parentTurn.hostProtectedPaths,
     ports: Object.freeze({
+      ...(parentTurn.ports.operationEvidence ? { operationEvidence: parentTurn.ports.operationEvidence } : {}),
       // Child tool events land in the parent's journal for one audit trail.
       journal: createScopedTraceJournal(parentTurn.ports.journal, { turnId, sessionKey }),
       ...(parentTurn.ports.approval ? { approval: parentTurn.ports.approval } : {}),
       ...(parentTurn.ports.question ? { question: parentTurn.ports.question } : {}),
+      ...(selfProfile ? { selfProfile } : {}),
     }),
   });
   const plan = createDeferredCapabilityPlan({
@@ -165,7 +185,7 @@ async function runSubagentTurn(
     host,
     sessionId: sessionKey,
     rawContent: run.task,
-    promptProfile: { kind: 'interactive' },
+    promptProfile: { kind: 'delegated', persona: SUBAGENT_PERSONA },
     turnContext: turn,
     imageInspectionBudget: options.imageInspectionBudget,
     allTools: [...plan.allTools],
@@ -174,6 +194,8 @@ async function runSubagentTurn(
     toolEventSource: 'authority',
     loopHooks: options.loopHooks,
     promptRuntime: {
+      bootstrapContext: options.bootstrapContext?.trim() ?? '',
+      contextFiles: options.contextFiles,
       agentNickname: host.activeBinding?.nickname,
       modelId: run.model.modelId,
       providerAlias: host.activeBinding?.providerAlias,
@@ -193,9 +215,10 @@ async function runSubagentTurn(
     // an unfinished sub-agent reports back to the parent instead.
     maxTotalIterations: resolveToolBudget(host.config.toolBudget).maxSubagentTotalIterations,
     autoContinuation: false,
+    interactiveRun: options.interactiveRun,
     generation: parentTurn.identity.generation,
   }));
-  return result.reply.trim() || '子任务结束，但没有生成报告。';
+  return { reply: result.reply.trim() || '子任务结束，但没有生成报告。', stoppedReason: result.stoppedReason };
 }
 
 function clip(text: string): string {

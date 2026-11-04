@@ -5,6 +5,11 @@ import { appendScene, appendStable, joinSystemPrompt } from '../../src/prompt/as
 import { sceneLineForTurn } from '../../src/context/turn-envelope.js';
 import { structuredReplyInstruction } from '../../src/outbound/structured-reply.js';
 import { estimatePromptTokens } from '../../src/prompt/estimate-tokens.js';
+import { buildCapabilityContext } from '../../src/plugin-runtime/full-agent-turn-engine.js';
+import { PromptAssemblyRegistry } from '../../src/prompt/prompt-assembly-registry.js';
+import { BOOTSTRAP_PROMPT_ORDER } from '../../src/prompt/system-prompt.js';
+import { rootPluginId } from '@zhin.js/plugin-runtime';
+import { SKILL_DISCLOSURE_PROMPT_HINT } from '../../src/skill/progressive-disclosure.js';
 
 type Turn = NonNullable<RichSystemPromptContext['turn']>;
 
@@ -81,6 +86,35 @@ describe('stable system prompt prefix (ADR 0042 §1)', () => {
     }
   });
 
+  it.each([
+    { neutral: true, gated: true },
+    { neutral: false, gated: true },
+    { neutral: true, gated: false },
+    { neutral: false, gated: false },
+  ])('shares one Skill loading hint across neutral=$neutral and gated=$gated catalogs', ({ neutral, gated }) => {
+    const owner = rootPluginId();
+    const skill = (name: string, permissions?: string[]) => ({
+      $feature: 'zhin.skill/1', owner, name, qualifiedName: `plugin:${name}`, description: `${name} things`,
+      instructions: name, source: 'test', ...(permissions ? { permissions } : {}),
+    }) as never;
+    const skills = [
+      ...(neutral ? [skill('weather')] : []),
+      ...(gated ? [skill('deploy', ['master'])] : []),
+    ];
+    const context = buildCapabilityContext([], skills);
+    const request = `${context.stable}\n${context.tail}`;
+    expect(request.split(SKILL_DISCLOSURE_PROMPT_HINT)).toHaveLength(neutral || gated ? 2 : 1);
+    expect(context.stable.includes(SKILL_DISCLOSURE_PROMPT_HINT)).toBe(neutral);
+    expect(context.tail.includes(SKILL_DISCLOSURE_PROMPT_HINT)).toBe(!neutral && gated);
+    expect(context.stable.includes('- plugin:weather: weather things')).toBe(neutral);
+    expect(context.tail.includes('- plugin:deploy: deploy things')).toBe(gated);
+    expect(context.stable).not.toContain('deploy');
+    expect(context.tail).not.toContain('weather');
+    const hintedCatalog = neutral ? context.stable : context.tail;
+    if (neutral || gated) expect(hintedCatalog.indexOf(SKILL_DISCLOSURE_PROMPT_HINT))
+      .toBeLessThan(hintedCatalog.indexOf('## Available skills'));
+  });
+
   it('moves per-turn tail additions after the breakpoint', () => {
     const base = promptFor(turns.groupA);
     const plain = { stable: base.text.slice(0, base.cacheBreakpoint! - 7), scene: base.text.slice(base.cacheBreakpoint!) };
@@ -88,6 +122,71 @@ describe('stable system prompt prefix (ADR 0042 §1)', () => {
     expect(tail.text.startsWith(plain.stable)).toBe(true);
     expect(tail.text.slice(tail.cacheBreakpoint!)).toContain('Pre-fetched data:');
     expect(tail.cacheBreakpoint).toBe(base.cacheBreakpoint);
+  });
+
+  it('is byte-identical for master and member in the same group although their capabilities differ', () => {
+    const owner = rootPluginId();
+    const skill = (name: string, extra: Record<string, unknown> = {}) => ({
+      $feature: 'zhin.skill/1', owner, name, qualifiedName: name, description: `${name} things`, instructions: name, source: 'test', ...extra,
+    }) as never;
+    const agent = (name: string, extra: Record<string, unknown> = {}) => ({
+      $feature: 'zhin.agent/1', owner, name, qualifiedName: name, description: `${name} agent`, instructions: name, source: 'test',
+      displayName: name, version: '1', triggerRules: {}, entryPoints: [], workflows: [], knowledge: [], ...extra,
+    }) as never;
+    // What CapabilityIngress hands each sender: the member's projection lacks the gated entries.
+    const master = buildCapabilityContext([agent('helper'), agent('ops', { permissions: ['master'] })],
+      [skill('weather'), skill('deploy', { permissions: ['master'] })]);
+    const member = buildCapabilityContext([agent('helper')], [skill('weather')]);
+    expect(master.stable).toBe(member.stable);
+    expect(master.stable).toContain('weather');
+    expect(master.stable).not.toMatch(/deploy|ops/);
+    expect(master.tail).toMatch(/deploy/);
+    expect(master.tail).toMatch(/ops/);
+    expect(member.tail).toContain('helper');
+    expect(member.tail).not.toMatch(/deploy|ops/);
+
+    const systemFor = (turn: Turn, stable: string) => {
+      const registry = new PromptAssemblyRegistry();
+      registry.register('§11_capabilities', {
+        layer: 'system', kind: 'platform', title: 'Turn capabilities', content: stable,
+        order: BOOTSTRAP_PROMPT_ORDER.task - 1, budgetOrder: BOOTSTRAP_PROMPT_ORDER.chat, retention: 'preferred',
+      });
+      // The core run no longer puts the scene line in the system prompt (it is in the message tail).
+      return joinSystemPrompt(buildRichSystemPromptParts({
+        config: DEFAULT_CONFIG, skillRegistry: null, skillsSummaryXML: '', activeSkillsContext: '',
+        bootstrapContext: '## SOUL.md\nBe kind.', orchestratorSdk: 'openai-compatible', modelId: 'm', providerAlias: 'p',
+        modelSdk: 'openai-compatible', timeZone: 'UTC', turn, registry,
+      })).text;
+    };
+    const masterTurn = imTurn('group', 'group-a', 'icqq:group:a', ['master'], '1');
+    const memberTurn = imTurn('group', 'group-a', 'icqq:group:a', ['user'], '2');
+    expect(systemFor(masterTurn, master.stable)).toBe(systemFor(memberTurn, member.stable));
+    expect(systemFor(masterTurn, master.stable)).toContain('weather');
+    expect(systemFor(masterTurn, master.stable)).not.toContain('scene_id:');
+  });
+
+  it('renders set-valued scene fields in a stable order', () => {
+    const withAdmins = (adminIds: string[]) => sceneLineForTurn({
+      ...imTurn('group', 'group-a', 'icqq:group:a', ['user'], '1'),
+      input: { contextState: { conversation: { adminIds, memberCount: 5 } } },
+    } as unknown as Turn);
+    expect(withAdmins(['30', '10', '20', '10'])).toBe(withAdmins(['10', '20', '30']));
+    expect(withAdmins(['30', '10', '20'])).toContain('admins:10,20,30');
+  });
+
+  it('keeps the system catalog stable when selecting a specialist without exposing other agents', () => {
+    const owner = rootPluginId();
+    const agent = (name: string) => ({
+      $feature: 'zhin.agent/1', owner, name, qualifiedName: name, description: `${name} agent`, instructions: `${name} instructions`, source: 'test',
+      displayName: name, version: '1', triggerRules: {}, entryPoints: [], workflows: [], knowledge: [],
+    }) as never;
+    const agents = [agent('helper'), agent('researcher')];
+    const normal = buildCapabilityContext(agents, []);
+    const selected = buildCapabilityContext(agents, [], 'helper');
+    expect(selected.stable).toBe(normal.stable);
+    expect(`${selected.stable}\n${selected.tail}`).toContain('Active specialist: helper');
+    expect(`${selected.stable}\n${selected.tail}`).not.toContain('researcher');
+    expect(`${normal.stable}\n${normal.tail}`).toContain('researcher');
   });
 
   it('reports the stable prefix size', () => {

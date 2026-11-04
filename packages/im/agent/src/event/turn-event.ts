@@ -65,7 +65,8 @@ export interface ChunkEvent {
 export interface IterationStartEvent {
   type: 'iteration_start';
   iteration: number;
-  maxIterations: number;
+  /** Absent for continuous interactive execution. */
+  maxIterations?: number;
 }
 
 /** Immutable capability plan selected before model execution. */
@@ -109,6 +110,8 @@ export interface ToolResultEvent {
   output: unknown;
   durationMs: number;
   toolUseId: string;
+  /** Successful file mutation at the exact path approved for execution, not the model's raw argument. */
+  fileChange?: Readonly<{ path: string }>;
   causedBy?: ToolExecutionCause;
 }
 

@@ -8,15 +8,28 @@ export async function migrateConversationColumns(database: StructuredDatabase): 
   await ensureDatabaseColumns(database, 'conversation_events', CONVERSATION_EVENT_QUERY_MODEL);
   const model = database.models.get('conversation_events');
   if (!model) throw new Error('Missing conversation_events model');
+  let afterId: unknown;
   while (true) {
-    const rows = await model.select('id', 'event_json').where({ query_version: null }).orderBy('id').limit(200);
+    const rows = await model.select('id', 'event_json').where({ $and: [
+      ...(afterId === undefined ? [] : [{ id: { $gt: afterId } }]),
+      { $or: [{ query_version: null }, { message_revision: null }] },
+    ] }).orderBy('id').limit(200);
     if (!rows.length) break;
     for (const row of rows) {
       const event = JSON.parse(String(row.event_json)) as ConversationEvent;
       const fields = conversationEventQueryFields(event);
-      await model.update(fields).where({ id: row.id, query_version: null });
+      await model.update(fields).where({ id: row.id });
     }
+    // Seek past the completed batch instead of re-scanning already backfilled rows.
+    afterId = rows[rows.length - 1]!.id;
   }
+  // Derived indexes can be rebuilt from event_json; rollback ignores the additive columns/indexes.
+  await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_message_sequence', [
+    { name: 'message_key', text: true }, { name: 'event_type', text: true }, { name: 'id' },
+  ]);
+  await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_message_revision', [
+    { name: 'message_key', text: true }, { name: 'event_type', text: true }, { name: 'message_revision' }, { name: 'id' },
+  ]);
   await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_conversation_time', [{ name: 'conversation_key', text: true }, { name: 'time' }]);
   await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_type_time', [{ name: 'event_type', text: true }, { name: 'time' }]);
   await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_scene', [
@@ -24,6 +37,14 @@ export async function migrateConversationColumns(database: StructuredDatabase): 
     { name: 'conversation_kind', text: true }, { name: 'conversation_id', text: true },
     { name: 'id' },
   ]);
+  // Operator scope directory selects only canonical address columns. SQLite/PostgreSQL
+  // can cover the full tuple; MySQL TEXT prefixes cannot cover full identities and
+  // seven 128-character utf8mb4 prefixes exceed its key budget, so keep an endpoint seek.
+  await ensureDatabaseIndex(database, 'conversation_events', 'conversation_events_scope_directory',
+    (database.dialectName === 'mysql' ? ['endpoint_id'] : [
+      'endpoint_id', 'endpoint_adapter', 'conversation_kind', 'conversation_id', 'parent_kind', 'parent_id', 'thread_id',
+    ]).map(name => ({ name, text: true })));
+
 }
 
 /** Older observations without canonical addresses remain explicitly unknown. */

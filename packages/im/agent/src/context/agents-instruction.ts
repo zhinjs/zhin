@@ -5,7 +5,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { loadBootstrapFiles } from '../bootstrap.js';
-import { scopeBootstrapText, type BootstrapScene } from '../bootstrap-scope.js';
+import { scopeBootstrapDocument, type BootstrapScene } from '../bootstrap-scope.js';
 
 async function readAgentsFile(filePath: string): Promise<string | null> {
   try {
@@ -69,6 +69,7 @@ export async function collectAgentsInstructionChain(
     current = parent;
   }
 
+  if (options?.excludeRoot) return entries;
   const bootstrapFiles = await loadBootstrapFiles(workspaceRoot);
   const rootAgents = bootstrapFiles.find(f => f.name === 'AGENTS.md' && !f.missing);
   if (rootAgents?.content?.trim() && rootAgents.path) {
@@ -97,7 +98,7 @@ export async function buildAgentsEnvelopeContext(
 
   const lines: string[] = ['[Agents instructions]'];
   for (const entry of chain) {
-    const content = scene ? scopeBootstrapText(entry.content, scene).text.trim() : entry.content;
+    const content = scene ? scopeBootstrapDocument(entry.content, scene).text.trim() : entry.content;
     if (!content) continue;
     lines.push('', `## ${entry.path}`, '', content);
   }

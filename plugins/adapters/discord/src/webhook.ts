@@ -1,8 +1,9 @@
+import { endpointSpec, type Endpoint } from 'zhin.js/adapter';
 /**
  * Discord interactions HTTP: signature → parse → admit.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createMessages, type Locale } from 'zhin.js/i18n';
+import { createMessages } from 'zhin.js/i18n';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -25,11 +26,10 @@ const INTERACTION_RESPONSE_CHANNEL_MESSAGE_WITH_SOURCE = 4;
 /** EPHEHEMERAL — 仅发起者可见（对齐旧 endpoint-interactions 默认响应）。 */
 const INTERACTION_FLAG_EPHEMERAL = 64;
 
-export interface DiscordInteractionsHandler {
+export interface DiscordInteractionsHandler extends Endpoint {
   readonly config: ResolvedDiscordInteractionsConfig;
   readonly isOpen: boolean;
   admit(msg: DiscordInboundMessage): void;
-  resolveLocale?(senderId: string): Promise<Locale | undefined>;
   admitButton(interaction: DiscordButtonInbound): void;
   admitPlatform(event: Record<string, unknown>): void;
 }
@@ -71,42 +71,52 @@ export async function handleDiscordInteractionRequest(
       return;
     }
     const interaction = JSON.parse(rawBody) as Record<string, unknown>;
-    if (handler.isOpen) handler.admitPlatform(interaction);
+    if (!interaction || interaction.application_id !== handler.config.applicationId) {
+      response.writeHead(401, { 'Content-Type': 'text/plain' });
+      response.end('Unauthorized');
+      return;
+    }
+    // A verified protocol challenge is not a business message and keeps its immediate ACK.
     if (interaction.type === INTERACTION_TYPE_PING) {
+      if (handler.isOpen) void handler[endpointSpec].events.run(() => handler.admitPlatform(interaction))
+        .catch(() => logger.debug('Protocol event dispatch did not complete'));
       writeJson(response, 200, { type: INTERACTION_RESPONSE_PONG });
       return;
     }
-    if (interaction.type === 3) {
-      const data = interaction.data as { component_type?: number; custom_id?: string } | undefined;
-      if (data?.component_type === 2 && typeof data.custom_id === 'string') {
-        if (!handler.isOpen) { response.writeHead(503); response.end('Unavailable'); return; }
+    await handler[endpointSpec].events.run(async () => {
+      if (handler.isOpen) handler.admitPlatform(interaction);
+      if (interaction.type === 3) {
+        const data = interaction.data as { component_type?: number; custom_id?: string } | undefined;
+        if (data?.component_type === 2 && typeof data.custom_id === 'string') {
+          if (!handler.isOpen) { response.writeHead(503); response.end('Unavailable'); return; }
+          const message = interactionToInboundMessage(interaction);
+          handler.admitButton({ event: interaction, id: message.id, customId: data.custom_id, channelId: message.channelId, channelKind: message.channelKind, userId: message.authorId, userName: message.authorName, ...(message.guildId ? { guildId: message.guildId } : {}), sourceMessageId: (interaction.message as { id?: string } | undefined)?.id });
+          writeJson(response, 200, { type: 6 });
+          return;
+        }
+      }
+      if (interaction.type === INTERACTION_TYPE_APPLICATION_COMMAND) {
         const message = interactionToInboundMessage(interaction);
-        handler.admitButton({ id: message.id, customId: data.custom_id, channelId: message.channelId, channelKind: message.channelKind, userId: message.authorId, userName: message.authorName, ...(message.guildId ? { guildId: message.guildId } : {}), sourceMessageId: (interaction.message as { id?: string } | undefined)?.id });
-        writeJson(response, 200, { type: 6 });
+        if (handler.isOpen) {
+          handler.admit(message);
+        }
+        const locale = await handler[endpointSpec].resolveLocale(message.authorId);
+        // 即时响应（type 4）：defer(type 5) 需要 followup PATCH，未实现会让用户端一直转圈
+        const commandName = String(
+          (interaction.data as { name?: unknown } | undefined)?.name ?? '',
+        );
+        writeJson(response, 200, {
+          type: INTERACTION_RESPONSE_CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: messages(locale, 'processing', { command: commandName }),
+            flags: INTERACTION_FLAG_EPHEMERAL,
+          },
+        });
         return;
       }
-    }
-    if (interaction.type === INTERACTION_TYPE_APPLICATION_COMMAND) {
-      const message = interactionToInboundMessage(interaction);
-      if (handler.isOpen) {
-        handler.admit(message);
-      }
-      const locale = await handler.resolveLocale?.(message.authorId);
-      // 即时响应（type 4）：defer(type 5) 需要 followup PATCH，未实现会让用户端一直转圈
-      const commandName = String(
-        (interaction.data as { name?: unknown } | undefined)?.name ?? '',
-      );
-      writeJson(response, 200, {
-        type: INTERACTION_RESPONSE_CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: messages(locale, 'processing', { command: commandName }),
-          flags: INTERACTION_FLAG_EPHEMERAL,
-        },
-      });
-      return;
-    }
-    response.writeHead(400, { 'Content-Type': 'text/plain' });
-    response.end('Unsupported interaction type');
+      response.writeHead(400, { 'Content-Type': 'text/plain' });
+      response.end('Unsupported interaction type');
+    });
   } catch (error) {
     logger.error('Discord interactions error:', error);
     if (!response.headersSent) {

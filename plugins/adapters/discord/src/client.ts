@@ -1,10 +1,11 @@
-import { defineEndpointClient } from 'zhin.js/adapter';
-import type { DiscordRestClient } from './endpoint.js';
+import type { ClientEvents } from 'discord.js';
+import type { DiscordAdapter } from './adapter.js';
+import type { DiscordGatewayEndpoint, DiscordInteractionsEndpoint } from './endpoint.js';
 import type { DiscordClientTransport } from './gateway.js';
 
 /** Exact Client variants produced by the Gateway and Interactions Endpoints. */
-export type DiscordClient = DiscordClientTransport | DiscordRestClient;
-export type DiscordClientEventMap = Record<string, unknown>;
+export type DiscordClient = DiscordGatewayEndpoint | DiscordInteractionsEndpoint;
+export type DiscordClientEventMap = { readonly [K in keyof ClientEvents]: ClientEvents[K][0] } & Record<string, unknown>;
 
 /** Narrow an adapter Client for Gateway-only SDK operations. */
 export function requireDiscordGatewayClient(client: DiscordClient): DiscordClientTransport {
@@ -13,12 +14,5 @@ export function requireDiscordGatewayClient(client: DiscordClient): DiscordClien
 }
 
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly discord: {
-      readonly client: DiscordClient;
-      readonly events: DiscordClientEventMap;
-    };
-  }
+  interface AdapterRegistry { readonly discord: DiscordAdapter; }
 }
-
-export const discordClient = defineEndpointClient<DiscordClient, DiscordClientEventMap>('discord');

@@ -29,7 +29,8 @@ export {
   type TelegramWireSegment,
 } from './protocol.js';
 
-export { telegramClient, type TelegramClientEventMap } from './client.js';
+export { type TelegramClientEventMap } from './client.js';
+export { TelegramAdapter } from './adapter.js';
 
 export {
   checkTelegramPlatformPermit,
@@ -37,3 +38,5 @@ export {
   platformPermit,
   telegramGroupPermitResolver,
 } from './platform-permit.js';
+
+export type { TelegramPollRequest } from './telegram-client.js';

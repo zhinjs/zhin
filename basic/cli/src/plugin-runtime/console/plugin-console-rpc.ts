@@ -1,3 +1,4 @@
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import type { ConsoleAccess } from '@zhin.js/host-http';
 import { parsePluginConsoleRpcType } from '@zhin.js/console-protocol';
 import { ConsoleCatalog } from '@zhin.js/pagemanager/plugin-runtime';
@@ -8,6 +9,7 @@ import {
   pluginConsoleRpcToken,
   type NormalizedPluginConsoleRpcMethod,
   type PluginConsoleRpc,
+  type PluginConsoleRpcCall,
   type PluginId,
   type RuntimeSnapshot,
   type SnapshotLease,
@@ -20,7 +22,7 @@ export const PLUGIN_CONSOLE_RPC_OUTPUT_LIMIT = 256 * 1024;
 export const PLUGIN_CONSOLE_RPC_TIMEOUT_MS = 10_000;
 
 export type PluginConsoleRpcFailureCode =
-  | 'forbidden' | 'invalid_input' | 'conflict' | 'not_found' | 'unsupported' | 'unavailable' | 'timeout' | 'failed';
+  | 'forbidden' | 'invalid_input' | 'conflict' | 'not_found' | 'unsupported' | 'unavailable' | 'timeout' | 'failed' | 'commit_unknown';
 
 export type PluginConsoleRpcResult =
   | { readonly status: 200; readonly body: { readonly success: true; readonly data: unknown; readonly requestId?: unknown } }
@@ -28,17 +30,19 @@ export type PluginConsoleRpcResult =
 
 const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
 
+/** Trusted CLI composition resolves Host methods against this request's exact retained Root. */
+export type HostConsoleRpcFactory = (lease: SnapshotLease) => PluginConsoleRpc;
+
 export interface PluginConsoleRpcRequestOptions {
   readonly snapshots?: SnapshotReader;
   /** Caller access from its bearer token (`TokenRegistry.resolveAccess`). */
   readonly access: ConsoleAccess;
   readonly timeoutMs?: number;
   /**
-   * Host-owned methods answered as `plugin.root.<name>` (for example the Agent's 群聊插话 and
-   * 技能助手 views). They live for the whole process, so no generation admission applies, and they
-   * take precedence over the same name on the root plugin's own provider.
+   * Host-owned methods answered as `plugin.root.<name>`, resolved once from this request's lease.
+   * They take precedence over the same name on the root plugin's own provider.
    */
-  readonly hostRpc?: PluginConsoleRpc;
+  readonly hostRpc?: HostConsoleRpcFactory;
   /** @internal Test seam; defaults to the generation's Console Page catalog. */
   readonly pagesOwnedBy?: (snapshot: RuntimeSnapshot, owner: PluginId) => ReturnType<ConsoleCatalog['pagesOwnedBy']>;
 }
@@ -48,7 +52,7 @@ const catalogPagesOwnedBy = (snapshot: RuntimeSnapshot, owner: PluginId) =>
 
 const failureStatus: Readonly<Record<PluginConsoleRpcFailureCode, number>> = {
   forbidden: 403, invalid_input: 400, conflict: 409, not_found: 404,
-  unsupported: 400, unavailable: 503, timeout: 504, failed: 500,
+  unsupported: 400, unavailable: 503, timeout: 504, failed: 500, commit_unknown: 504,
 };
 
 class Failure extends Error {
@@ -74,13 +78,22 @@ export async function dispatchPluginConsoleRpcRequest(
     const snapshot = lease.value;
     const pluginId = address.pluginId as PluginId;
     if (!snapshot.tree.has(pluginId)) throw new Failure('not_found', '插件未加载');
-    const hostMethod = pluginId === snapshot.root ? options.hostRpc?.methods.get(address.method) : undefined;
+    const hostMethod = pluginId === snapshot.root ? options.hostRpc?.(lease).methods.get(address.method) : undefined;
     const provider = hostMethod ? undefined : ownProvider(snapshot, pluginId);
     const method = hostMethod ?? provider?.methods.get(address.method);
     if (!method) throw new Failure('not_found', '插件未提供该操作');
     authorize(snapshot, pluginId, method, options.access, options.pagesOwnedBy ?? catalogPagesOwnedBy);
     if (provider) releases.push(...admit(provider));
-    const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS);
+    const runtime: NonNullable<PluginConsoleRpcCall['runtime']> = Object.freeze({
+      owner: pluginId, generation: snapshot.generation, operator: options.access.unrestricted,
+      project(feature) {
+        if (feature !== adapterFeatureId) throw new PluginConsoleRpcError('unsupported', '该运行投影未授权');
+        const projection = snapshot.projections.get(adapterFeatureId);
+        if (!isAdapterIndex(projection)) throw new PluginConsoleRpcError('unsupported', '账号运行目录不可用');
+        return projection.forOwner(pluginId);
+      },
+    });
+    const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS, runtime);
     return { status: 200, body: { success: true, data: output, ...(requestId === undefined ? {} : { requestId }) } };
   } catch (error) {
     const failure = toFailure(error);
@@ -190,18 +203,22 @@ async function callWithTimeout(
   method: NormalizedPluginConsoleRpcMethod,
   input: Readonly<Record<string, unknown>>,
   timeoutMs: number,
+  runtime: NonNullable<PluginConsoleRpcCall['runtime']>,
 ): Promise<unknown> {
   const controller = new AbortController();
+  let commitStarted = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
       controller.abort();
-      reject(new Failure('timeout', '插件响应超时'));
+      reject(commitStarted
+        ? new Failure('commit_unknown', '提交结果尚未确认，请刷新状态，勿重复提交')
+        : new Failure('timeout', '插件响应超时'));
     }, timeoutMs);
   });
   try {
     const result = await Promise.race([
-      Promise.resolve().then(() => method.handler(input as never, { signal: controller.signal })),
+      Promise.resolve().then(() => method.handler(input as never, { signal: controller.signal, runtime, commitStarted: () => { commitStarted = true; } })),
       timeout,
     ]);
     return encodeOutput(result);

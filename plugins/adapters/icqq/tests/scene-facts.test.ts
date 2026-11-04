@@ -11,7 +11,8 @@ function generation(management: object) {
   const index = {
     $projection: 'zhin.adapter-index/1',
     capabilityProfile: () => definition.profile,
-    connection: () => ({ selfUserId: '8596238', management }),
+    connection: () => ({ identity: { id: 'icqq-1', adapter: 'icqq' }, selfUserId: '8596238' }),
+    management: () => management,
   };
   return { projections: new Map([[adapterFeatureId, index]]) } as never;
 }
@@ -24,12 +25,12 @@ const management = () => ({
 describe('icqq scene facts through its real profile', () => {
   it('queries group info and member profile in a group', async () => {
     const port = management();
-    const state = await resolveRuntimeTurnContextState(
-      generation(port),
-      { endpoint: { id: 'icqq-1', adapter: 'icqq' }, kind: 'group', id: '100' },
-      new AbortController().signal,
-      '10002',
-    );
+    const state = await resolveRuntimeTurnContextState({
+      snapshot: generation(port),
+      conversation: { endpoint: { id: 'icqq-1', adapter: 'icqq' }, kind: 'group', id: '100' },
+      signal: new AbortController().signal,
+      senderId: '10002',
+    });
     expect(port.inspectGroupScene).toHaveBeenCalled();
     expect(port.inspectGroupMemberProfile).toHaveBeenCalled();
     expect(state?.bot).toMatchObject({ id: '8596238', platformRole: 'admin' });
@@ -38,12 +39,12 @@ describe('icqq scene facts through its real profile', () => {
 
   it('does not query anything in a private chat', async () => {
     const port = management();
-    const state = await resolveRuntimeTurnContextState(
-      generation(port),
-      { endpoint: { id: 'icqq-1', adapter: 'icqq' }, kind: 'private', id: '10002' },
-      new AbortController().signal,
-      '10002',
-    );
+    const state = await resolveRuntimeTurnContextState({
+      snapshot: generation(port),
+      conversation: { endpoint: { id: 'icqq-1', adapter: 'icqq' }, kind: 'private', id: '10002' },
+      signal: new AbortController().signal,
+      senderId: '10002',
+    });
     expect(port.inspectGroupScene).not.toHaveBeenCalled();
     expect(state).toEqual({ bot: { id: '8596238' } });
   });

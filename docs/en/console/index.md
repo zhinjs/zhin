@@ -96,6 +96,7 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 | Dashboard | `GET /api/system/status`, `GET /api/stats` | Runtime status, version, statistics overview |
 | Plugins | `GET /api/plugins`, `GET /api/plugins/<name>` | Plugin list and details (commands, tools, config schema) |
 | Endpoints | Endpoint summary + inbox table | Platform endpoint connection status; detail page includes unified inbox (messages / requests / notifications) |
+| Adapter pages | `plugin.<pluginId>.status` + `endpoint.list` / `endpoint.test` + `login.*` | Each platform adapter has its own page (route `/<adapter>`): connection status and test, endpoint add/remove, LoginAssist pending tasks; QQ also exposes QR binding |
 | Config | RPC `config:get-source` / `config:replace-source` / `config:set` / `config:patch` | View the active YAML/JSON Root source and edit it with revision checks; simple pages write exact paths with `config:patch` (see [Console pages](../authoring/console-pages.md#saving-settings-from-a-page-config-patch)) |
 | Logs | `GET /api/logs`, `GET /api/logs/stats`, `DELETE /api/logs`, `POST /api/logs/cleanup` | System logs (`SystemLog` table, requires Database to be running) |
 | Cron | RPC `cron:*` | In-memory tasks registered by plugins (list); with Agent installed, can add/delete/pause persistent tasks |

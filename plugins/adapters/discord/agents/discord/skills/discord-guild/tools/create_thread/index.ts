@@ -3,6 +3,7 @@ import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
 import { platformPermission } from '@zhin.js/permission';
+import { ThreadAutoArchiveDuration } from 'discord.js';
 
 export default defineAgentTool<{ channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }>({
   description: '在 Discord 频道中创建帖子/子线程',
@@ -19,10 +20,12 @@ export default defineAgentTool<{ channel_id: string; name: string; message_id?: 
   async execute({ channel_id, name, message_id, auto_archive_duration  }: { channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }, context) {
     const client = requireDiscordGatewayClient(context.$client);
     const channel = await client.channels.fetch(channel_id);
-    if (!channel?.threads) throw new Error(t(context.locale, 'threadsUnsupported', { p0: channel_id }));
+    if (!channel || !('threads' in channel) || channel.isThreadOnly()) throw new Error(t(context.locale, 'threadsUnsupported', { p0: channel_id }));
+    const duration = auto_archive_duration || 1440;
+    if (!Object.values(ThreadAutoArchiveDuration).includes(duration)) throw new Error('Unsupported Discord thread auto archive duration');
     const thread = await channel.threads.create({
       name,
-      autoArchiveDuration: auto_archive_duration || 1440,
+      autoArchiveDuration: duration,
       ...(message_id ? { startMessage: message_id } : {}),
     });
     return { success: true, thread_id: thread.id, message: t(context.locale, 'threadCreated', { p0: name }) };

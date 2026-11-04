@@ -81,7 +81,8 @@
           "description": "HTTP Host 访问令牌。",
           "writeOnly": true,
           "x-zhin-config": {
-            "secret": true
+            "secret": true,
+            "security": true
           }
         },
         "tokens": {
@@ -158,6 +159,9 @@
                 "description": "Console 角色，对应页面的 requiredRoles；full 令牌忽略此项。"
               }
             }
+          },
+          "x-zhin-config": {
+            "security": true
           }
         },
         "corsOrigins": {
@@ -755,7 +759,10 @@
               "$ref": "#/$defs/decisionTask"
             },
             "approval": {
-              "$ref": "#/$defs/decisionTask"
+              "$ref": "#/$defs/decisionTask",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "ambient": {
               "$ref": "#/$defs/decisionTask",
@@ -778,7 +785,10 @@
               },
               "uniqueItems": true,
               "description": "Authenticated Console principal ids allowed to publish shared Capability Packs.",
-              "x-descriptionZh": "允许发布共享 Capability Pack 的 Console 认证 principalId。"
+              "x-descriptionZh": "允许发布共享 Capability Pack 的 Console 认证 principalId。",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "disclosure": {
               "type": "object",
@@ -864,6 +874,9 @@
                     }
                   }
                 }
+              },
+              "x-zhin-config": {
+                "security": true
               }
             }
           }
@@ -946,7 +959,10 @@
                   "properties": {
                     "mode": {
                       "type": "string",
-                      "enum": ["pick-one", "summary"],
+                      "enum": [
+                        "pick-one",
+                        "summary"
+                      ],
                       "default": "pick-one",
                       "description": "pick-one answers one danmaku of the window; summary answers the window as a whole once.",
                       "x-descriptionZh": "pick-one：从窗口里挑一条回；summary：概括整个窗口后回一次。"
@@ -983,7 +999,10 @@
                 "full"
               ],
               "description": "Shell command security boundary.",
-              "x-descriptionZh": "Shell 命令安全边界。"
+              "x-descriptionZh": "Shell 命令安全边界。",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "execPreset": {
               "type": "string",
@@ -994,7 +1013,10 @@
                 "custom"
               ],
               "description": "Command allowlist preset used outside full mode.",
-              "x-descriptionZh": "非 full 模式使用的命令白名单预设。"
+              "x-descriptionZh": "非 full 模式使用的命令白名单预设。",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "network": {
               "type": "object",
@@ -1026,12 +1048,29 @@
               ],
               "default": "off",
               "description": "Shell access for the master in IM private chats. off: no bash in IM turns. isolated: master DMs run bash inside a Docker container (workspace writable, no network, development allowlist, approval for anything else); fails closed when Docker is unavailable.",
-              "x-descriptionZh": "IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。"
+              "x-descriptionZh": "IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。",
+              "x-zhin-config": {
+                "security": true
+              }
+            },
+            "masterShellApprovalMode": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "auto",
+                "inherit"
+              ],
+              "default": "ask",
+              "description": "How approval-gated calls are approved in the master's IM private chat when masterShell is isolated. ask: show the master an approval prompt; auto: automatic reviewer (a reviewer rejection is escalated to the master); inherit: use execApprovalMode.",
+              "x-descriptionZh": "masterShell: isolated 时 master 私聊里需审批的调用怎么批。ask（默认）：弹确认卡给 master；auto：自动审核（审核拒绝时转问 master）；inherit：沿用 execApprovalMode。",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "toolBudget": {
               "type": "object",
-              "description": "Progress-aware tool-call budget. maxIterations is a soft budget extended while the turn makes progress; hard caps always apply.",
-              "x-descriptionZh": "进度感知的工具调用预算。maxIterations 为软上限，回合有进展时自动延长；硬上限始终生效。",
+              "description": "Interactive runtime turns and their synchronous children have no fixed step or total wall-clock cap. They share configured token quotas. Step/time caps and continuation settings apply to bounded and legacy executions.",
+              "x-descriptionZh": "交互运行时及其同步子任务不设固定轮数和总时长上限，共享配置的 token 额度。步数、时间和续跑设置用于有界任务及旧兼容入口。",
               "properties": {
                 "extendBy": {
                   "type": "integer",
@@ -1115,8 +1154,8 @@
                     "all"
                   ],
                   "default": "private",
-                  "description": "Brief natural-language progress updates during long turns: off, private chats only, or all chats (groups opt in).",
-                  "x-descriptionZh": "长回合中的简短进度更新：off 关闭；private 仅私聊；all 包括群聊（群聊需显式开启）。"
+                  "description": "off disables progress. Continuous interactive turns report in their current conversation; private/all select scope for bounded turns.",
+                  "x-descriptionZh": "off 关闭进度；持续交互任务在当前会话报告。private/all 用于选择有界任务的通知范围。"
                 },
                 "progressMinIntervalMs": {
                   "type": "integer",
@@ -1129,8 +1168,8 @@
                   "type": "integer",
                   "minimum": 0,
                   "default": 3,
-                  "description": "Maximum progress updates per turn; 0 disables.",
-                  "x-descriptionZh": "每回合最多进度更新次数；0 关闭。"
+                  "description": "0 disables progress. Positive values cap bounded turns only; continuous interactive turns use the configured interval without a count cap.",
+                  "x-descriptionZh": "0 关闭进度。正数仅限制有界任务的更新次数；持续交互任务按配置的间隔报告，不限次数。"
                 }
               }
             },
@@ -1168,6 +1207,9 @@
                   "description": "Tools whose results do not count as external content.",
                   "x-descriptionZh": "结果不算外部内容的工具。"
                 }
+              },
+              "x-zhin-config": {
+                "security": true
               }
             },
             "toolHardGate": {
@@ -1254,6 +1296,9 @@
                     }
                   }
                 }
+              },
+              "x-zhin-config": {
+                "security": true
               }
             },
             "reactions": {
@@ -1315,7 +1360,10 @@
                   "type": "boolean",
                   "default": true,
                   "description": "The owner is never limited.",
-                  "x-descriptionZh": "主人不受限制。"
+                  "x-descriptionZh": "主人不受限制。",
+                  "x-zhin-config": {
+                    "security": true
+                  }
                 }
               }
             },
@@ -1337,7 +1385,10 @@
                 "auto"
               ],
               "description": "Approval policy for main Agent commands.",
-              "x-descriptionZh": "主 Agent 命令的审批策略。"
+              "x-descriptionZh": "主 Agent 命令的审批策略。",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "subagentExecApprovalMode": {
               "type": "string",
@@ -1347,7 +1398,10 @@
                 "auto"
               ],
               "description": "Approval policy for sub-Agent commands.",
-              "x-descriptionZh": "子 Agent 命令的审批策略。"
+              "x-descriptionZh": "子 Agent 命令的审批策略。",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "workerExecApprovalMode": {
               "type": "string",
@@ -1357,7 +1411,10 @@
                 "auto"
               ],
               "description": "Approval policy for worker commands.",
-              "x-descriptionZh": "Worker 命令的审批策略。"
+              "x-descriptionZh": "Worker 命令的审批策略。",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "toolExecution": {
               "type": "string",
@@ -1367,7 +1424,10 @@
                 "tiered"
               ],
               "description": "How tool calls in one model step are scheduled.",
-              "x-descriptionZh": "同一模型步骤中的工具调用调度方式。"
+              "x-descriptionZh": "同一模型步骤中的工具调用调度方式。",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "modelSizeHint": {
               "type": "string",
@@ -1452,6 +1512,9 @@
                         "type": "string"
                       }
                     }
+                  },
+                  "x-zhin-config": {
+                    "security": true
                   }
                 },
                 "budget": {
@@ -1485,7 +1548,10 @@
               "items": {
                 "type": "string"
               },
-              "description": "allowlist 模式下允许的命令（支持正则字符串，如 \"^ls \"、\"^cat \"），与 preset 合并"
+              "description": "allowlist 模式下允许的命令（支持正则字符串，如 \"^ls \"、\"^cat \"），与 preset 合并",
+              "x-zhin-config": {
+                "security": true
+              }
             },
             "phaseTrace": {
               "type": [
@@ -2413,6 +2479,11 @@
               "nickname": {
                 "type": "string",
                 "description": "Agent 昵称（LLM 自称 + IM 协作展示，ADR 0024）。"
+              },
+              "preset": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Invocation preset reference; do not combine with legacy provider/model. MCP and permission fields remain Agent authority."
               }
             }
           },
@@ -2779,21 +2850,23 @@
                 },
                 "fallbacks": {
                   "type": "array",
-                  "description": "主识图模型失败、空回答或不支持该媒体时，按顺序尝试；不改变主对话模型。",
                   "items": {
                     "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "model": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
                     "required": [
                       "provider",
                       "model"
-                    ],
-                    "properties": {
-                      "provider": {
-                        "type": "string"
-                      },
-                      "model": {
-                        "type": "string"
-                      }
-                    }
+                    ]
                   }
                 }
               },
@@ -2930,7 +3003,10 @@
               "description": "为 true 时注册 server-github MCP（PAT，人身份）；默认 false，Bot 写操作用 adapter github_* 工具"
             }
           },
-          "description": "PAT for adapter-github auto-registered server-github MCP (overrides env when set)."
+          "description": "PAT for adapter-github auto-registered server-github MCP (overrides env when set).",
+          "x-zhin-config": {
+            "security": true
+          }
         },
         "mcpServers": {
           "type": [
@@ -2997,7 +3073,10 @@
               }
             }
           },
-          "description": "External MCP servers for the Agent MCP client (global, all bots).\nListed servers are exposed to ZhinAgent tool pool when connected."
+          "description": "External MCP servers for the Agent MCP client (global, all bots).\nListed servers are exposed to ZhinAgent tool pool when connected.",
+          "x-zhin-config": {
+            "security": true
+          }
         },
         "access": {
           "type": [
@@ -3166,7 +3245,7 @@
                     "number",
                     "string"
                   ],
-                  "description": "没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度"
+                  "description": "没在对话时，同一个群至少隔这么久才判断一次（毫秒，默认 30000），节省判断模型的额度；窗口内的消息顺延到窗口结束再判，不会丢"
                 },
                 "minConfidence": {
                   "type": [
@@ -3310,6 +3389,181 @@
               "description": "Object directory ending in /; must be covered by the bucket lifecycle."
             }
           }
+        },
+        "modelCatalog": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "connections": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/modelConnection"
+              }
+            },
+            "models": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/catalogModel"
+              }
+            },
+            "presets": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/modelPreset"
+              }
+            }
+          },
+          "required": [
+            "connections",
+            "models",
+            "presets"
+          ],
+          "description": "Closed Host connection/model/preset catalog. Dictionary keys supply omitted ids; this Host supplies omitted connection owners. Explicit identities must match; references are checked by the model compiler."
+        },
+        "modelPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "defaults": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "chat": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "perception": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "When omitted, compilation selects deployment defaults.chat. Personal/Adapter/Endpoint/Scene chat overrides do not change summary."
+                }
+              },
+              "required": [
+                "chat"
+              ]
+            },
+            "adapters": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "chat": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "perception": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "endpoints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "address": {
+                    "$ref": "#/$defs/modelPolicyEndpointAddress"
+                  },
+                  "models": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "chat": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "perception": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "address",
+                  "models"
+                ]
+              }
+            },
+            "scenes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "address": {
+                    "$ref": "#/$defs/modelPolicySceneAddress"
+                  },
+                  "models": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "chat": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "address",
+                  "models"
+                ]
+              }
+            }
+          },
+          "required": [
+            "defaults"
+          ],
+          "description": "Purpose references only. Adapter/Endpoint may select chat/perception; Scene may select chat. Session chat selection is stored separately."
+        },
+        "personalPrincipals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "rootId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "platform": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "endpoint": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "adapterId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "subjectId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "rootId",
+                "platform",
+                "endpoint",
+                "adapterId",
+                "subjectId"
+              ]
+            }
+          },
+          "description": "Administrator mapping from authenticated Console principal ids to exact IM owners; never inferred from client input."
         }
       }
     },
@@ -3391,6 +3645,9 @@
             "string"
           ]
         }
+      },
+      "x-zhin-config": {
+        "security": true
       }
     },
     "a2a": {
@@ -3546,6 +3803,9 @@
                 }
               }
             }
+          },
+          "x-zhin-config": {
+            "security": true
           }
         },
         "workroomRemoteExecutors": {
@@ -3681,7 +3941,10 @@
               }
             }
           },
-          "description": "Transport endpoints only. Project/Workroom topology remains in the persistent Catalog."
+          "description": "Transport endpoints only. Project/Workroom topology remains in the persistent Catalog.",
+          "x-zhin-config": {
+            "security": true
+          }
         }
       }
     },
@@ -4418,6 +4681,9 @@
                   },
                   "description": "home_call_service 允许的 domain 白名单（默认 light/climate/scene/cover/script）"
                 }
+              },
+              "x-zhin-config": {
+                "security": true
               }
             },
             "watch": {
@@ -4556,6 +4822,255 @@
           "maximum": 9007199254740991
         }
       }
+    },
+    "modelCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "text",
+              "image",
+              "audio",
+              "video",
+              "file"
+            ]
+          }
+        },
+        "streaming": {
+          "type": "boolean"
+        },
+        "toolCalling": {
+          "type": "boolean"
+        },
+        "thinking": {
+          "type": "boolean"
+        }
+      }
+    },
+    "modelConnection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Defaults to the dictionary key; an explicit id must match that key."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Defaults to this Host owner; an explicit owner must match this Host."
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sdk": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "anthropic",
+            "google",
+            "deepseek",
+            "minimax",
+            "ollama",
+            "openai-compatible"
+          ]
+        },
+        "baseUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "secretRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque credential reference; plaintext credentials are resolved only by the execution factory."
+        }
+      },
+      "required": [
+        "revision",
+        "sdk"
+      ]
+    },
+    "catalogModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Defaults to the dictionary key; an explicit id must match that key."
+        },
+        "connectionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capabilities": {
+          "$ref": "#/$defs/modelCapabilities"
+        },
+        "contextWindow": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "connectionId",
+        "model",
+        "capabilities"
+      ]
+    },
+    "modelPreset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Defaults to the dictionary key; an explicit id must match that key."
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "modelId"
+      ]
+    },
+    "modelPolicyEndpointAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "adapterId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "rootId",
+        "platform",
+        "endpoint",
+        "adapterId"
+      ]
+    },
+    "modelPolicySceneAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "endpoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "endpoint": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "adapter": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "adapter",
+                "id"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "private",
+                "group",
+                "channel"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parent": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "private",
+                    "group",
+                    "channel"
+                  ]
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "kind",
+                "id"
+              ]
+            },
+            "threadId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "endpoint",
+            "kind",
+            "id"
+          ]
+        }
+      },
+      "required": [
+        "rootId",
+        "platform",
+        "endpoint",
+        "conversation"
+      ]
     }
   }
 }

@@ -18,6 +18,46 @@ npx zhin runtime start --once --mode test  # 装配冒烟
 
 生产环境请按下文完整流程执行，并在升级前做好备份。升级前先停止 Bot，避免依赖目录在运行中被替换。
 
+## Adapter API 2：本批 patch 的插件边界 {#adapter-api-2}
+
+本批是包含插件接口变更的 patch，不能仅凭 `1.1.x` 判断兼容。下表是首批目标版本，尚未
+执行发布；安装前应核对正式发布清单，并将整组依赖和 lockfile 一起升级。
+
+| 包／契约 | 旧接口最后支持版本 | 新接口最低版本 |
+| --- | --- | --- |
+| `zhin.js` | `1.1.18` | `1.1.19` |
+| `@zhin.js/core` | `1.1.53` | `1.1.54` |
+| `@zhin.js/adapter` | `1.1.25`，Feature API `1.0.0` | `1.1.26`，Feature API `2.0.0` |
+| `@zhin.js/feature-kit` | `1.1.9` | `1.1.10` |
+| Runtime / Isolate | `1.1.15` | `1.1.16` |
+| Plugin Runtime / Agent | `1.1.17` / `1.1.44` | `1.1.18` / `1.1.45` |
+| 19 个普通官方平台适配器包 | 各包 `1.1.18` | 各包 `1.1.19` |
+| Bilibili / Bilibili-live 适配器 | 各包 `0.1.1` | 各包 `0.1.2` |
+| Sandbox 适配器 | `1.1.20` | `1.1.21` |
+
+新适配器在 `zhin.features` 中声明 `{ "package": "@zhin.js/adapter", "api": "^2.0.0" }`。
+这是现有 Feature API 校验：旧的显式 `^1.0.0` 在 API-2 Provider 上被拒绝，新的 `^2.0.0`
+在 API-1 Provider 上被拒绝。`zhin.engine` 仍是独立的 `^1.0.0` 契约，不是上述 npm 版本。
+历史包若省略 `api`，框架不新增默认拒绝；这种声明不足以证明它兼容，需作者与管理员
+检查真实依赖、旧接口使用和锁文件。无法为旧 npm 包追溯修改其宽泛的 peer 范围。
+
+自定义适配器需重新发布：使用 `createAdapter`、真实 Client 继承及 `endpointSpec`；只在
+`@zhin.js/feature-kit` 增补 `AdapterRegistry` 并直接声明 peer/dev 依赖；控制与群管方法改为
+命名请求对象。Host 的撤回／编辑／回应／typing 使用完整 canonical 消息或会话引用，
+不再额外传重复账号选择器。不要修改第三方 SDK 的原生签名。Satori、OneBot12 配置补齐
+`platform + userId`，企业微信补齐真实 `agentId`。详细接口见[适配器开发](../authoring/adapters.md)。
+
+升级时先在数据副本预演并备份旧 lockfile、账号身份与加密密钥材料、数据库、插件状态、
+Owner 审批文件及已有迁移计划／journal。历史别名记录不会自动猜测新账号、频道父级或
+话题；使用已认证的 `/api/data-migrations` 先预览、选择完整目标并准备计划，再显式 apply。
+apply 后保持 maintenance 暂停，核对后单独 resume；不自动重发通知、延长游戏截止时间或
+恢复权限。超时或断线后先 reconcile，不能根据缺少回执判断未提交并重试。
+
+Owner 审批 V2 保留为不生效的历史授权，新审批写入 V3。旧代码不能读取 V3：回退要同时
+恢复对应代码、lockfile 和已验证的旧数据，不是只降 npm 版本。数据 restore 只接受未变化的
+after-image；若已有新业务写入，先处理冲突，不覆盖它们。保留迁移计划和 domain journal；
+历史权限必须重新授权。此版本说明不代替真实账号操作、发布、部署或生产数据迁移的确认。
+
 ## 从 1.1.13 及更早版本升级：configVersion 2 {#configversion-2}
 
 ::: warning 破坏性配置变更

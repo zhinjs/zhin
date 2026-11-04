@@ -11,7 +11,10 @@ Zhin.js QQ 官方机器人适配器（Plugin Runtime），默认通过 **WebSock
 - Webhook / middleware 模式已实现（经 `httpHostToken` 注册 POST 路由）
 - AI `@` 触发标注：群消息（GROUP_AT_MESSAGE_CREATE 仅 @ 时下发）与频道 `mentions[].bot` 会在入站 metadata 标 `mentioned: true`（新 Plugin Runtime 纯文本 content 经 metadata 传递 @）
 - 群事件：机器人进群/退群、群成员加入/退出、入群申请（支持 `$approve()` / `$reject()`）
-- 完整 SDK 业务 API：通过 `qqClient.get(context, endpoint).api` 使用群管理、禁言、自动审批策略、自定义菜单、指令面板等 `qq-official-bot` 能力
+- 群管理（官方 v2 群接口）：成员列表 / 详情、移出（可拉黑）、禁言（≤30 天）、入群申请审批、黑名单查询；Endpoint 管理端口与自动群审核（`inspectGroupMember` / `moderateGroupMember`）可直接使用
+- 撤回：自己的消息，以及机器人为群管理员时普通成员 2 分钟内的消息（入站原生消息 ID 也可撤回）
+- 频道子频道消息表情回应（`reaction` 操作，Unicode emoji 或 `type:id`）
+- 完整 SDK 业务 API：当前消息操作的 `session.endpoint` 就是 `qq-official-bot` 实例，可直接使用群管理、禁言、自动审批策略、自定义菜单和指令面板等原生 Service
 
 ## 安装
 
@@ -22,12 +25,13 @@ pnpm add @zhin.js/adapter-qq
 ## Plugin Runtime
 
 - `@zhin.js/adapter` — 约定式 `adapters/qq/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpoint[endpointSpec].events` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`
 - **无需** `@zhin.js/host-http` / `@zhin.js/host-router`（WebSocket 路径）
 
-入站：`gateway.receive({ conversation, message, content, sender, metadata })`（ConversationRef 结构化寻址）  
+入站：`endpoint[endpointSpec].events.emit('message.receive', { conversation, message, content, sender, metadata })`（ConversationRef 结构化寻址）
+
 出站：`send({ conversation, payload })` → `sendPrivateMessage` / `sendGroupMessage` / `sendGuildMessage`
 
 ## 前置条件
@@ -39,6 +43,19 @@ pnpm add @zhin.js/adapter-qq
 | **host-http** | WebSocket **不需要**；Webhook / middleware 模式需要（经 `httpHostToken`） |
 
 必填字段（`endpoints[i]`）：`id`、`appid`、`secret`。
+
+## 渐进式回复
+
+C2C 私聊默认在生成过程中更新文本或 Markdown，群聊和频道继续使用完整消息发送。Markdown 是否可用仍取决于机器人已开通的平台权限；不支持的内容组合沿用完整发送链路。图片、语音、文件和按钮通过同一回复链路按内容顺序处理。
+
+首段立即发送，后续更新默认至少间隔 500 毫秒。可在实例配置或单个 endpoint 中设置：
+
+```yaml
+streaming: true
+streamingIntervalMs: 500
+```
+
+`streaming: false` 关闭生成中的公开更新，恢复完整消息发送。流式回复与普通回复共用被动消息来源和配额；同一流的分片不重复申领被动回复序号。取消停止后续更新，不自动撤回已确认内容；发送结果未知时不会整条重发。
 
 ## 最小配置
 
@@ -67,7 +84,7 @@ WebSocket Identify 的 `intents` **必须与开放平台已开通的权限一致
 | `private`（私域） | `GUILD_MESSAGES`（频道全量） | 同上 |
 
 公域机器人订阅 `GUILD_MESSAGES` 会 Identify 失败断连。显式配置 `intents` 时优先于 `botKind`。
-`create-zhin` / `zhin setup` 会询问公/私域并写入；`qq endpoint add` 扫码成功后在同一会话追问 `public`/`private`（或 `公域`/`私域`），确认后一次性写 `.env` 与 yaml。
+`create-zhin` / `zhin setup` 会询问公/私域并写入；`qq endpoint add` 扫码成功后在同一会话追问 `public`/`private`（或 `公域`/`私域`），确认后通过所属 Adapter 的单次 CAS 加密保存为未启动账号，需手动启动。
 
 多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
@@ -110,10 +127,10 @@ qq:
 
 | 命令 | 说明 |
 |------|------|
-| `qq endpoint add [name]` | 手机 QQ 扫码绑定 → **追问公域/私域** → 一次性写入 `.env` + `qq.endpoints`（重启生效） |
+| `qq endpoint add [name]` | 手机 QQ 扫码绑定 → **追问公域/私域** → 一次 CAS 保存为未启动账号（无需重启） |
 | `qq endpoint cancel` | 取消进行中的扫码绑定或待确认的公域/私域选择 |
 | `qq endpoint list` | 列出运行中与配置中的 endpoints |
-| `qq endpoint remove <name>` | 从配置移除 endpoint（`.env` 键保留，可手动清理） |
+| `qq endpoint remove <name>` | 删除账号配置，取消目标在途并关闭，保留历史 |
 
 add/cancel/remove 受 `master` 限制：实例配置声明了 `master`（顶层或 `endpoints[i].master`）时仅
 master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoint 的 `master`）。二维码当前以链接文本下发
@@ -132,30 +149,48 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 
 ## AI 工具（Skill）
 
-| 类别 | 路径 |
-|------|------|
-| Permit 词汇 | `PERMITS.md` |
-| 平台工具 | `tools/`（频道、角色等） |
-| 技能说明 | `agents/qq/skills/qq/SKILL.md` |
+| 技能 | 工具 | 场景 |
+|------|------|------|
+| `qq-conversation` | `conversation_info` | 当前会话、机器人实时群角色（`bot_state`）、可用操作与官方限制 |
+| `qq-messages` | `quote_reply`、`recall_own_message` | 私聊 / 群 / 频道 |
+| `qq-group-directory` | `group_info`、`group_members`、`group_member_info` | 当前群 |
+| `qq-group-admin` | `group_kick`、`set_mute`、`recall_member_message`、`handle_join_request` | 当前群（撤回也支持频道） |
+| `qq-group-state` | `list_muted`、`list_join_requests`、`group_blacklist` | 当前群 |
+| `qq-directory` | `list_guilds` | 任意 |
+| `qq` | `list_channels`、`channel_info`、`list_roles`、`create_role`、`add_role`、`remove_role`、`member_detail`、`guild_mute_member`、`guild_kick_member` | 频道 |
+
+群工具只作用于当前会话的群（`group_openid`），成员用 `member_openid` 标识；写操作前实时核验机器人角色。
+`group_kick` / `handle_join_request` / `guild_kick_member` 每次人工审批，禁言类每次审批。Permit 词汇见 `PERMITS.md`。
+
+### 与 ICQQ 的对齐情况
+
+| ICQQ 能力 | QQ 官方 | 说明 |
+|-----------|---------|------|
+| `group_member_info`、`conversation_info`、`quote_reply`、`recall_own_message`、`recall_member_message`、`group_kick`、`set_mute`、`list_muted` | ✅ 对齐 | 官方 v2 群接口；成员 / 移出类为白名单能力（11253） |
+| 入群申请审批、Console 成员列表 / 踢人 / 禁言、自动群审核 | ✅ 对齐 | `EndpointManagement` 端口 |
+| 表情回应 | ⚠️ 部分 | 仅频道子频道消息；官方无群 / 单聊表情回应 |
+| `friend_list`、`group_list`、`user_info` | ❌ 官方不支持 | 无机器人好友 / 群列表、任意用户资料接口 |
+| `forward_messages` | ❌ 官方不支持 | 无合并转发发送接口 |
+| `poke`、`send_user_like`、`group_sign` | ❌ 官方不支持 | |
+| `announce`、`essence`、`set_title`、`set_anonymous`、`group_files`、`group_invite`、`group_leave` | ❌ 官方不支持 | 群公告 / 精华 / 头衔 / 匿名 / 群文件 / 邀请 / 退群均无接口 |
+| 设管理员、删好友（Console） | ❌ 官方不支持 | |
 
 ## 平台 Client 与 QQ API
 
-`qqClient` 返回当前 endpoint 的传输 client。常用发送、撤回、频道查询仍有顶层快捷方法；
-`client.api` 暴露完整的 `qq-official-bot` 1.3 业务 Service 与实体入口；连接启停仍由 Endpoint 生命周期统一管理：
+在已有消息操作中，`session.endpoint` 是完整的 `qq-official-bot` 1.3 原生 Bot 实例，直接暴露业务 Service 与实体入口；账号连接启停仍通过所属 Adapter 管理：
 
 ```ts
-import { qqClient } from '@zhin.js/adapter-qq';
+// session 来自声明 adapter: 'qq' 的当前消息操作。
+const client = session.endpoint;
 
-const client = qqClient.get(context, 'my-qq-bot');
-
-const group = await client.api.groupService.getInfo(groupOpenid);
-const requests = await client.api.groupService.getJoinRequests(groupOpenid);
-await client.api.groupService.setMemberMute(groupOpenid, [
+const group = await client.groupService.getInfo(groupOpenid);
+const requests = await client.groupService.getJoinRequests(groupOpenid);
+await client.groupService.setMemberMute(groupOpenid, [
   { op: 'add', member_openid: memberOpenid, mute_expire_at: expiresAt },
 ]);
 
-const menu = await client.api.menuPanelService.getCustomMenu();
-const panels = await client.api.menuPanelService.getCommandPanels({ scope: 'group' });
+const menu = await client.menuPanelService.getCustomMenu();
+const panels = await client.menuPanelService.getCommandPanels({ scope: 'group' });
 ```
 
 群管理接口中有部分是白名单能力，入群审批和禁言还要求机器人具备群管理员权限；
@@ -195,6 +230,38 @@ QQ 开放平台按有没有带上用户消息的 `msg_id`（或事件的 `event_
 
 公域机器人在群里只能收到 @ 它的消息，所以群聊旁听（`ai.trigger.ambient`）只对拥有全量
 消息权限的私域机器人有意义。
+
+## Console 页面
+
+启动后打开 Console 的「QQ」页（地址 `/qq`），可以：
+
+- 查看运行中的连接、点「测试连接」做连通性诊断；
+- 在账号库查看、修改、启停、替换或删除 QQ 账号；新增走扫码绑定，保存后需手动启动；
+- 「平台操作」里扫码绑定新机器人：扫码 → 选择公域 / 私域 → 通过同一账号 CAS 保存为未启动状态；原来的 `qq endpoint add` 仍然保留。
+
+读取需要 `qq:read`，写操作需要 `qq:write`；管理员 full token 不受限。页面里的「扫码绑定新机器人」等价于原来的 `qq endpoint add`。
+
+首次修改启动配置里的既有账号前，管理员必须核对清单并确认一次迁移。原 canonical 身份与历史保留，完整账号配置加密进入 Host 数据库；此后账号管理只写数据库，不修改启动文件或 `.env`，不重启进程。没有持久化账号端口的环境可使用静态配置连接，动态写操作明确不可用。
+
+启停意图在进程重启后恢复。停止或删除会取消并关闭目标账号的在途操作，其他账号继续运行；删除保留历史。已启动账号的连接配置更新先关闭旧 incarnation，再仅重连该账号；平台身份变化按替换处理，分配新内部身份、保留旧历史，新账号不继承旧 Session、个人设置或启动意图。提交结果未知时先刷新核实，不自动重复 CAS 或平台操作。
+
+## 掉线通知
+
+QQ 官方机器人掉线 / 启动失败时，可以配置 `notify` 让另一个适配器实例通知 master：
+
+```yaml
+icqq:
+  # ... 已配置好的 ICQQ 实例
+qq:
+  master: "${QQ_MASTER_OPENID}"
+  notify:
+    adapter: icqq
+    endpoint: "123456"
+    kind: private
+    id: "123456"   # master 的 QQ 号
+```
+
+通知里会提示恢复方式：在 QQ 回复 `qq endpoint add` 重新扫码绑定（或打开 Console 的 QQ 页面）。`notify.id` 同时作为 endpoint 管理命令的 master 身份，方便从通知会话直接完成绑定。未配置 `notify` 时只在日志和 Console 的 QQ 页面显示连接状态。
 
 ## 故障排查
 

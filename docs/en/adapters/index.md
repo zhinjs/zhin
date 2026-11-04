@@ -2,6 +2,8 @@
 
 Adapters connect external platforms to Zhin's common message and Endpoint model. Choose by deployment constraints first, then verify capabilities and support tier. A platform name alone is not enough.
 
+The owning `Adapter` manages desired accounts and running incarnations. Endpoint is the actual SDK or protocol Client implementing `endpointSpec`; native APIs retain their contracts. Framework inbound events use `endpoint[endpointSpec].events`, with complete callbacks admitted through `events.run(...)`. See [Adapter authoring](/en/authoring/adapters).
+
 ## Make the choice first
 
 | Your constraint | Prefer | Representative adapters |
@@ -70,6 +72,7 @@ _(Currently none)_
 | Email | `@zhin.js/adapter-email` | — | [Email](/adapters/email) |
 | Bilibili Comments | `@zhin.js/adapter-bilibili` | — | [Bilibili Comments](/en/adapters/bilibili) |
 | Bilibili Live Danmaku | `@zhin.js/adapter-bilibili-live` | — | [Bilibili Live Danmaku](/en/adapters/bilibili-live) |
+| Douyin Live Danmaku | `@zhin.js/adapter-douyin-live` | — | [Douyin Live Danmaku](/en/adapters/douyin-live) |
 | GitHub | `@zhin.js/adapter-github` | — | [GitHub](/adapters/github) |
 | LINE | `@zhin.js/adapter-line` | — | [LINE](/adapters/line) |
 | Milky | `@zhin.js/adapter-milky` | — | [Milky](/adapters/milky) |

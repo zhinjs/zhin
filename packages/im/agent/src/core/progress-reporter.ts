@@ -84,13 +84,15 @@ export interface ProgressReportContext {
   readonly steps: number;
   /** The model's own interim note (text sent alongside tool calls), if any. */
   readonly interimText?: string;
+  readonly activityText?: string;
 }
 
 export interface TurnProgressReporterOptions {
   readonly locale?: Locale;
   readonly sink: (text: string) => Promise<void>;
   readonly minIntervalMs: number;
-  readonly maxUpdates: number;
+  readonly maxUpdates?: number;
+  readonly signal?: AbortSignal;
   readonly summarize: () => Promise<string | undefined>;
   readonly now?: () => number;
 }
@@ -101,6 +103,7 @@ export class TurnProgressReporter {
   readonly #reported: string[] = [];
   #last: number;
   #count = 0;
+  #closed = false;
 
   constructor(options: TurnProgressReporterOptions) {
     this.#options = options;
@@ -110,11 +113,12 @@ export class TurnProgressReporter {
 
   /** Texts already sent to the user in this Turn. */
   get reported(): readonly string[] {
-    return this.#reported;
+    return [...this.#reported];
   }
 
   due(trigger: ProgressUpdateTrigger): boolean {
-    if (this.#count >= this.#options.maxUpdates) return false;
+    if (this.#closed || this.#options.signal?.aborted) return false;
+    if (this.#options.maxUpdates !== undefined && this.#count >= this.#options.maxUpdates) return false;
     if (trigger === 'continuation') return true;
     const interval = trigger === 'extension'
       ? Math.min(this.#options.minIntervalMs, EXTENSION_MIN_INTERVAL_MS)
@@ -130,7 +134,9 @@ export class TurnProgressReporter {
     const fresh = interim && !this.#reported.includes(interim) ? interim : undefined;
     const text = fresh
       ?? friendlyProgressText(await this.#options.summarize().catch(() => undefined))
+      ?? friendlyProgressText(context.activityText)
       ?? fallbackProgressText(context.steps, this.#options.locale);
+    if (this.#closed || this.#options.signal?.aborted) return false;
     try {
       await this.#options.sink(`${PROGRESS_UPDATE_PREFIX}${text}`);
       this.#reported.push(text);
@@ -138,5 +144,19 @@ export class TurnProgressReporter {
     } catch {
       return false;
     }
+  }
+
+  /** Stops scheduling immediately; an already submitted platform send is not cancellable. */
+  watch(context: () => ProgressReportContext): () => void {
+    let pending: Promise<unknown> | undefined;
+    const timer = this.#options.minIntervalMs > 0 ? setInterval(() => {
+      if (pending) return;
+      pending = this.report('progress', context()).finally(() => { pending = undefined; });
+    }, this.#options.minIntervalMs) : undefined;
+    timer?.unref();
+    return () => {
+      this.#closed = true;
+      if (timer) clearInterval(timer);
+    };
   }
 }

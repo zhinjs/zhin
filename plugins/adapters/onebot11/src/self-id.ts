@@ -19,7 +19,7 @@ export async function probeOnebot11SelfId(
   onError: (error: unknown) => void,
 ): Promise<string | undefined> {
   try {
-    const data = await callOnebot11Client<{ user_id?: number | string }>(client, 'get_login_info');
+    const data = await callOnebot11Client<{ user_id?: number | string }>({ client, action: 'get_login_info' });
     return resolveOnebot11SelfId(data?.user_id);
   } catch (error) {
     onError(error);

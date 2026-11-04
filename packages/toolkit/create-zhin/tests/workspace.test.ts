@@ -48,6 +48,46 @@ afterEach(async () => {
 })
 
 describe('createWorkspace', () => {
+  it.each([
+    ['default', 'zh-CN'],
+    ['default', 'en'],
+    ['life-assistant', 'zh-CN'],
+    ['life-assistant', 'en'],
+  ] as const)('writes %s persona and agent instructions with distinct voices in %s', async (template, locale) => {
+    const projectPath = await makeProject({
+      template,
+      locale,
+      ai: {
+        enabled: true,
+        agentProvider: 'ollama',
+        providers: { ollama: { host: 'http://127.0.0.1:11434' } },
+      },
+    })
+    const soul = await fs.readFile(path.join(projectPath, 'SOUL.md'), 'utf8')
+    const instructions = await fs.readFile(path.join(projectPath, 'AGENTS.md'), 'utf8')
+    const tools = await fs.readFile(path.join(projectPath, 'TOOLS.md'), 'utf8')
+    const routines = parse(await fs.readFile(path.join(projectPath, 'assistant.profile.yml.example'), 'utf8'))
+
+    expect(soul).toMatch(/(?:我是一个|I am an? )/u)
+    expect(soul).not.toMatch(/\bYou (?:are|must|should)\b|你(?:是|不|应)|\{\{nickname\}\}/u)
+    expect(instructions).toContain('You are a helpful AI assistant.')
+    expect(instructions).toContain('*(You can append here via write_file / write_memory.)*')
+    expect(instructions).not.toContain("Briefly state what you're doing before acting")
+    expect(tools).toContain('Workspace-specific notes')
+    expect(tools).not.toContain('call its declared tools immediately')
+    expect(tools).not.toContain('Base answers on actual tool results')
+    expect(tools).not.toContain('try alternatives')
+    expect(routines.routines.morningBrief.prompt).toMatch(locale === 'zh-CN' ? /^汇总/ : /^Summarize/)
+  })
+
+  it.each(['zh-CN', 'en'] as const)('writes the localized life-assistant persona in first person in %s', async (locale) => {
+    const projectPath = await makeProject({ template: 'life-assistant', locale })
+    const soul = await fs.readFile(path.join(projectPath, 'SOUL.md'), 'utf8')
+    expect(soul).toContain(locale === 'zh-CN' ? '我是一个生活助手' : 'I am a life assistant.')
+    expect(soul).toContain(locale === 'zh-CN' ? '不执行危险的 bash 命令' : 'Do not run dangerous bash commands')
+    expect(soul).not.toMatch(/\bYou (?:are|must|should)\b|你(?:是|不|应)|\{\{nickname\}\}/u)
+  })
+
   it('copies every advertised built-in and development skill', async () => {
     const projectPath = await makeProject()
     const skillNames = [...BASE_SKILL_NAMES, ...DEV_SKILL_NAMES]
@@ -75,7 +115,7 @@ describe('createWorkspace', () => {
     const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
     // scripts：新 runtime 启动命令
-    expect(pkg.scripts.dev).toBe('zhin runtime start')
+    expect(pkg.scripts.dev).toBe('zhin runtime start --watch source config')
     expect(pkg.scripts.start).toBe('zhin runtime start --mode production --no-watch')
 
     // 依赖：用户面只直列 zhin.js + 适配器 +（卡片示例）components；无 legacy host
@@ -244,7 +284,7 @@ describe('createWorkspace', () => {
       { package: '@zhin.js/page', api: '^1.0.0' },
       { package: '@zhin.js/layout', api: '^1.0.0' },
       { package: '@zhin.js/skill', api: '^1.0.0' },
-      { package: '@zhin.js/tool', api: '^1.0.0' },
+      { package: '@zhin.js/tool', api: '^1.1.0' },
       { package: '@zhin.js/prompt-section', api: '^1.0.0' },
     ])
     expect(await fs.pathExists(path.join(projectPath, 'tools', 'echo', 'index.ts'))).toBe(true)

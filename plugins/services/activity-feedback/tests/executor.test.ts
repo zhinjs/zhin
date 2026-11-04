@@ -1,314 +1,145 @@
-import { describe, expect, it, vi } from 'vitest';
-import {
-  isGenericActivityFeedbackManager,
-  type ActivityFeedbackEventContext,
-  type ResolvedActivityFeedbackPhaseConfig,
-} from '@zhin.js/agent';
-import type { OutboundHost, OutboundSendInput } from 'zhin.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { activityFeedbackSource, type ActivityFeedbackEventContext } from '@zhin.js/agent';
+import type { CapturedOutboundOperation, OutboundHost } from 'zhin.js/plugin-runtime';
 import { ActivityFeedbackExecutor, createOutboundEndpointAccess } from '../src/executor.js';
 
-function createCtx(): ActivityFeedbackEventContext {
-  return {
-    platform: 'sandbox',
-    endpointKey: 'bot1',
-    sessionId: 'sandbox:bot1:private:u1',
-    sceneType: 'private',
-    userId: 'u1',
-    options: {
-      platform: 'sandbox',
-      endpointKey: 'bot1',
-      sessionId: 'sandbox:bot1:private:u1',
-      sceneType: 'private',
-      userId: 'u1',
-    },
-  };
+const executors: ActivityFeedbackExecutor[] = [];
+afterEach(async () => { await Promise.all(executors.splice(0).map(executor => executor.dispose())); vi.useRealTimers(); });
+const target = { endpoint: { adapter: 'synthetic', id: 'canonical-account' }, kind: 'private' as const,
+  id: 'alice', parent: { kind: 'group' as const, id: 'source-group' }, threadId: 'source-thread' };
+function context(messageId = 'incoming', controller = new AbortController()): ActivityFeedbackEventContext {
+  const value: ActivityFeedbackEventContext = { platform: 'synthetic', endpointKey: 'reusable-alias',
+    sessionId: 'session', messageId, sceneType: 'private', userId: 'alice', options: {
+      locale: 'en', platform: 'synthetic', endpointKey: 'reusable-alias', sessionId: 'session',
+      messageId, sceneType: 'private', userId: 'alice' } };
+  Object.defineProperty(value, activityFeedbackSource, { value: { target, client: controller, signal: controller.signal }, enumerable: false });
+  return value;
 }
+function fixture(methods: Partial<CapturedOutboundOperation> = {}) {
+  const controller = new AbortController(), release = vi.fn();
+  const operation: CapturedOutboundOperation = { target, signal: controller.signal,
+    send: vi.fn(async () => 'status-message'), release, ...methods };
+  const captureOperation = vi.fn(() => operation);
+  const host: OutboundHost = { send: vi.fn(), captureOperation };
+  const access = createOutboundEndpointAccess(host);
+  const executor = new ActivityFeedbackExecutor(access); executors.push(executor);
+  return { controller, release, operation, captureOperation, executor, access, ctx: context('incoming', controller) };
+}
+const messageConfig = { type: 'message' as const, message: 'Working', autoRemove: true };
 
-const phaseConfig: ResolvedActivityFeedbackPhaseConfig = {
-  type: 'message',
-  message: '处理中…',
-  autoRemove: true,
-};
-
-describe('createOutboundEndpointAccess', () => {
-  it('keeps status hints best-effort when business outbound rejects', async () => {
-    const send = vi.fn().mockRejectedValue(new Error('endpoint offline'));
-    const debug = vi.fn();
-    const access = createOutboundEndpointAccess({ send }, { debug });
-    const resolved = access.resolve('sandbox', 'bot1')!;
-    await expect(resolved.outbound.send({
-      conversation: {
-        endpoint: { id: 'bot1', adapter: 'sandbox' },
-        kind: 'private', id: 'u1',
-      },
-      content: 'working',
-    })).resolves.toBeNull();
-    expect(send).toHaveBeenCalledOnce();
-    expect(debug).toHaveBeenCalledOnce();
+describe('captured activity operations', () => {
+  it('keeps feedback best effort when the business send rejects and releases its operation', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('offline'));
+    const f = fixture({ send, recall: async () => undefined });
+    await expect(f.executor.start(f.ctx, 'active', messageConfig)).resolves.toBeUndefined();
+    expect(send).toHaveBeenCalledOnce(); expect(f.release).toHaveBeenCalledOnce();
   });
 
-  it('按 platform:endpointKey 缓存同一 { endpoint, outbound }，不伪造 Adapter', () => {
-    const access = createOutboundEndpointAccess({ send: vi.fn() });
-    const first = access.resolve('sandbox', 'bot1');
-    expect(first).toBeDefined();
-    expect(first).not.toHaveProperty('adapter');
-    expect(first?.outbound.send).toBeTypeOf('function');
-    expect(access.resolve('sandbox', 'bot1')).toBe(first);
-    expect(access.resolve('sandbox', 'bot2')).not.toBe(first);
+  it('captures once while a phase is active, deduplicates start, then releases on stop', async () => {
+    const recall = vi.fn(async () => undefined), f = fixture({ recall });
+    await f.executor.start(f.ctx, 'active', messageConfig);
+    await f.executor.start(f.ctx, 'active', messageConfig);
+    expect(f.captureOperation).toHaveBeenCalledExactlyOnceWith(f.ctx[activityFeedbackSource]);
+    expect(f.operation.send).toHaveBeenCalledOnce(); expect(f.release).not.toHaveBeenCalled();
+    await f.executor.stop(f.ctx, 'active');
+    expect(recall).toHaveBeenCalledExactlyOnceWith({ conversation: target, id: 'status-message' });
+    expect(f.release).toHaveBeenCalledOnce();
   });
 
-  it('start→stop 生命周期：指示器会停止，且不抛 TypeError', async () => {
-    const sent: OutboundSendInput[] = [];
-    const recall = vi.fn().mockResolvedValue(undefined);
-    const outbound: OutboundHost = {
-      capabilities: vi.fn(() => ({ operations: ['recall'] })),
-      send: vi.fn(async (input: OutboundSendInput) => {
-        sent.push(input);
-        return 'mid-1';
-      }),
-      recall,
-    };
-    const access = createOutboundEndpointAccess(outbound, { debug: vi.fn() });
-    const executor = new ActivityFeedbackExecutor(access);
-    const ctx = createCtx();
-
-    await executor.start(ctx, 'active', phaseConfig);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({
-      adapter: 'sandbox',
-      endpointKey: 'bot1',
-      conversation: { kind: 'private', id: 'u1' },
-    });
-
-    // manager 挂在缓存的 endpoint 上，stop 时能解析到同一个对象
-    const endpoint = access.resolve('sandbox', 'bot1')!.endpoint;
-    const manager = endpoint.$activityFeedback;
-    if (!manager || !isGenericActivityFeedbackManager(manager)) {
-      throw new Error('expected generic activity feedback manager on cached endpoint');
-    }
-    expect(manager.getActiveIndicator('active', ctx.options)).toBeDefined();
-
-    // 同 phase 重复 start：去重生效，不重复发送
-    await executor.start(ctx, 'active', phaseConfig);
-    expect(sent).toHaveLength(1);
-
-    await executor.stop(ctx, 'active');
-    expect(manager.getActiveIndicator('active', ctx.options)).toBeUndefined();
-    expect(recall).toHaveBeenCalledOnce();
+  it('retains complete source addressing and locale for send, edit and recall', async () => {
+    const recall = vi.fn(async () => undefined), edit = vi.fn(async () => 'status-message');
+    const f = fixture({ recall, edit });
+    await f.executor.start(f.ctx, 'active', messageConfig);
+    expect(f.operation.send).toHaveBeenCalledExactlyOnceWith([{ type: 'text', data: { text: 'Working' } }], { locale: 'en' });
+    await f.executor.updateText(f.ctx, 'active', 'Working [2/15]');
+    expect(edit).toHaveBeenCalledExactlyOnceWith({ conversation: target, id: 'status-message' }, 'Working [2/15]');
+    await f.executor.stop(f.ctx, 'active');
+    expect(recall).toHaveBeenCalledExactlyOnceWith({ conversation: target, id: 'status-message' });
   });
 
-  it('wires control.recall to OutboundHost.recall when available', async () => {
-    const recalled: Array<{ adapter: string; endpointKey: string; message: unknown }> = [];
-    const access = createOutboundEndpointAccess({
-      send: vi.fn(async () => 'mid-1'),
-      capabilities: vi.fn(() => ({ operations: ['recall'] })),
-      recall: vi.fn(async (input) => {
-        recalled.push(input);
-      }),
-    });
-    const endpoint = access.resolve('sandbox', 'bot1')!.endpoint;
-    const message = {
-      conversation: {
-        endpoint: { id: 'bot1', adapter: 'sandbox' },
-        kind: 'private' as const,
-        id: 'u1',
-      },
-      id: 'mid-1',
-    };
-    await endpoint.control?.recall?.(message);
-    expect(recalled).toEqual([{ adapter: 'sandbox', endpointKey: 'bot1', message }]);
+  it('does not fabricate transient messages or controls that the operation did not declare', async () => {
+    const f = fixture();
+    await f.executor.start(f.ctx, 'active', messageConfig);
+    expect(f.operation.send).not.toHaveBeenCalled(); expect(f.release).toHaveBeenCalledOnce();
   });
 
-  it('does not expose controls or temporary messages that the endpoint did not explicitly declare', async () => {
-    const access = createOutboundEndpointAccess({
-      send: vi.fn(),
-      recall: vi.fn(),
-      edit: vi.fn(),
-      addReaction: vi.fn(),
-      removeReaction: vi.fn(),
-      typing: vi.fn(),
-    });
-
-    const control = access.resolve('sandbox', 'bot1')!.endpoint.control;
-    expect(control?.recall).toBeUndefined();
-    expect(control?.edit).toBeUndefined();
-    expect(control?.addReaction).toBeUndefined();
-    expect(control?.removeReaction).toBeUndefined();
-    expect(control?.typing).toBeUndefined();
-    await new ActivityFeedbackExecutor(access).start(createCtx(), 'active', phaseConfig);
-    const manager = access.resolve('sandbox', 'bot1')!.endpoint.$activityFeedback;
-    if (!manager || !isGenericActivityFeedbackManager(manager)) {
-      throw new Error('expected generic activity feedback manager');
-    }
-    expect(manager.getAdapter('sandbox')?.supportedTypes).toEqual(['none']);
+  it('does not grant synthetic lifecycle events platform effects', async () => {
+    const f = fixture(), { [activityFeedbackSource]: _source, ...synthetic } = f.ctx;
+    await f.executor.start(synthetic, 'active', messageConfig);
+    expect(f.captureOperation).not.toHaveBeenCalled();
+    expect(f.operation.send).not.toHaveBeenCalled();
   });
 
-  it('uses declared native typing and stops it for the same conversation', async () => {
-    const typing = vi.fn().mockResolvedValue(undefined);
-    const access = createOutboundEndpointAccess({
-      send: vi.fn(),
-      capabilities: vi.fn(() => ({ operations: ['typing'] })),
-      typing,
-    });
-    const executor = new ActivityFeedbackExecutor(access);
-    const ctx = { ...createCtx(), platform: 'telegram', options: { ...createCtx().options, platform: 'telegram' } };
-
-    await executor.start(ctx, 'active', { type: 'typing' });
-    await executor.stop(ctx, 'active');
-
-    expect(typing).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      adapter: 'telegram',
-      endpointKey: 'bot1',
-      conversation: expect.objectContaining({ kind: 'private', id: 'u1' }),
-      active: true,
-    }));
-    expect(typing).toHaveBeenNthCalledWith(2, expect.objectContaining({ active: false }));
+  it('does not let source-free stop or update events affect an active operation', async () => {
+    const recall = vi.fn(async () => undefined), edit = vi.fn(async () => 'status-message');
+    const f = fixture({ recall, edit }), { [activityFeedbackSource]: _source, ...synthetic } = f.ctx;
+    await f.executor.start(f.ctx, 'active', messageConfig);
+    await f.executor.updateText(synthetic, 'active', 'spoofed');
+    await f.executor.stop(synthetic, 'active');
+    expect(edit).not.toHaveBeenCalled(); expect(recall).not.toHaveBeenCalled(); expect(f.release).not.toHaveBeenCalled();
+    await f.executor.stop(f.ctx, 'active'); expect(recall).toHaveBeenCalledOnce();
   });
 
-  it('updates an active status message through declared edit capability', async () => {
-    const edit = vi.fn().mockResolvedValue('mid-1');
-    const access = createOutboundEndpointAccess({
-      send: vi.fn(async () => 'mid-1'),
-      capabilities: vi.fn(() => ({ operations: ['edit', 'recall'] })),
-      edit,
-      recall: vi.fn(),
-    });
-    const executor = new ActivityFeedbackExecutor(access);
-    const ctx = createCtx();
-
-    await executor.start(ctx, 'active', phaseConfig);
-    await executor.updateText(ctx, 'active', '处理中 [2/15]…');
-
-    expect(edit).toHaveBeenCalledWith(expect.objectContaining({
-      adapter: 'sandbox',
-      endpointKey: 'bot1',
-      message: expect.objectContaining({ id: 'mid-1' }),
-      content: '处理中 [2/15]…',
-    }));
+  it('uses declared native typing and stops the same complete conversation', async () => {
+    const typing = vi.fn(async () => undefined), f = fixture({ typing });
+    await f.executor.start(f.ctx, 'active', { type: 'typing' });
+    await f.executor.stop(f.ctx, 'active');
+    expect(typing).toHaveBeenNthCalledWith(1, target, true);
+    expect(typing).toHaveBeenNthCalledWith(2, target, false);
   });
 
-  it('does not invent a message id or recall when send returns null', async () => {
-    const recall = vi.fn().mockResolvedValue(undefined);
-    const access = createOutboundEndpointAccess({
-      capabilities: vi.fn(() => ({ operations: ['recall'] })),
-      send: vi.fn().mockResolvedValue(null),
-      recall,
-    });
-    const executor = new ActivityFeedbackExecutor(access);
-    const ctx = createCtx();
-
-    await executor.start(ctx, 'active', phaseConfig);
-    await executor.stop(ctx, 'active');
-
-    expect(recall).not.toHaveBeenCalled();
+  it('never invents a message id or recalls when send returns null', async () => {
+    const recall = vi.fn(async () => undefined), f = fixture({ send: vi.fn(async () => null), recall });
+    await f.executor.start(f.ctx, 'active', messageConfig); await f.executor.stop(f.ctx, 'active');
+    expect(recall).not.toHaveBeenCalled(); expect(f.release).toHaveBeenCalledOnce();
   });
 
-  it('awaits reaction removal before reporting cleanup complete', async () => {
-    let release!: () => void;
-    const pending = new Promise<void>((resolve) => { release = resolve; });
-    const removeReaction = vi.fn(() => pending);
-    const access = createOutboundEndpointAccess({
-      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
-      send: vi.fn(),
-      removeReaction,
-    });
-    const endpoint = access.resolve('sandbox', 'bot1')!.endpoint;
-    const message = {
-      conversation: {
-        endpoint: { id: 'bot1', adapter: 'sandbox' },
-        kind: 'private' as const,
-        id: 'u1',
-      },
-      id: 'mid-1',
-    };
+  it('awaits reaction cleanup and does not release a still-running cleanup', async () => {
+    let finish!: () => void;
+    const cleanup = new Promise<void>(resolve => { finish = resolve; });
+    const removeReaction = vi.fn(() => cleanup);
+    const f = fixture({ addReaction: vi.fn(async () => 'reaction'), removeReaction });
+    await f.executor.start(f.ctx, 'active', { type: 'reaction', autoRemove: true });
     let settled = false;
-
-    const cleanup = endpoint.control!.removeReaction!(message, 'rid-1').then(() => {
-      settled = true;
-    });
+    const stopping = f.executor.stop(f.ctx, 'active').then(() => { settled = true; });
     await Promise.resolve();
-    expect(settled).toBe(false);
-    release();
-    await cleanup;
-
-    expect(removeReaction).toHaveBeenCalledOnce();
+    expect(settled).toBe(false); expect(f.release).not.toHaveBeenCalled();
+    finish(); await stopping;
+    expect(removeReaction).toHaveBeenCalledExactlyOnceWith({ conversation: target, id: 'incoming' }, 'reaction');
+    expect(f.release).toHaveBeenCalledOnce();
   });
 
-  it('awaits reaction cleanup through executor and activity manager', async () => {
-    let release!: () => void;
-    const pending = new Promise<void>((resolve) => { release = resolve; });
-    const removeReaction = vi.fn(() => pending);
-    const access = createOutboundEndpointAccess({
-      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
-      send: vi.fn(),
-      addReaction: vi.fn().mockResolvedValue('rid-1'),
-      removeReaction,
-    });
-    const executor = new ActivityFeedbackExecutor(access);
-    const base = createCtx();
-    const ctx = {
-      ...base,
-      messageId: 'source-mid',
-      options: { ...base.options, messageId: 'source-mid' },
-    };
-    await executor.start(ctx, 'active', {
-      type: 'reaction', emoji: '⏳', autoRemove: true,
-    });
-    let settled = false;
-
-    const stopping = executor.stop(ctx, 'active').then(() => { settled = true; });
-    await Promise.resolve();
-    expect(settled).toBe(false);
-    release();
-    await stopping;
-
-    expect(removeReaction).toHaveBeenCalledOnce();
+  it('tracks queued reactions per incoming message in a busy session', async () => {
+    const addReaction = vi.fn(async () => 'reaction'), removeReaction = vi.fn(async () => undefined);
+    const f = fixture({ addReaction, removeReaction });
+    const first = context('first', f.controller), second = context('second', f.controller);
+    await f.executor.start(first, 'queued', { type: 'reaction' });
+    await f.executor.start(second, 'queued', { type: 'reaction' });
+    expect(addReaction.mock.calls.map(([message]) => message.id)).toEqual(['first', 'second']);
+    await f.executor.stop(first, 'queued');
+    expect(removeReaction.mock.calls.map(([message]) => message.id)).toEqual(['first']);
+    await f.executor.stop(second, 'queued');
+    expect(removeReaction.mock.calls.map(([message]) => message.id)).toEqual(['first', 'second']);
+    expect(f.release).toHaveBeenCalledTimes(2);
   });
 
-  it('adds queued reaction for each new inbound message in the same busy group session', async () => {
-    const addReaction = vi.fn(async (input: { message: { id: string } }) => input.message.id);
-    const removeReaction = vi.fn().mockResolvedValue(undefined);
-    const access = createOutboundEndpointAccess({
-      capabilities: vi.fn(() => ({ operations: ['reaction'] })),
-      send: vi.fn(),
-      addReaction,
-      removeReaction,
-    });
-    const executor = new ActivityFeedbackExecutor(access);
-    const base = createCtx();
-    const first = {
-      ...base,
-      sceneType: 'group' as const,
-      groupId: 'group-1',
-      messageId: 'inbound-1',
-      options: {
-        ...base.options,
-        sceneType: 'group' as const,
-        groupId: 'group-1',
-        messageId: 'inbound-1',
-      },
-    };
-    const second = {
-      ...first,
-      messageId: 'inbound-2',
-      options: { ...first.options, messageId: 'inbound-2' },
-    };
-    const config = { type: 'reaction' as const, emoji: '⏳', autoRemove: true };
+  it('cleans keepalive timers and releases on account cancellation without a finish event', async () => {
+    vi.useFakeTimers();
+    const typing = vi.fn(async () => undefined), f = fixture({ typing });
+    await f.executor.start(f.ctx, 'active', { type: 'typing' });
+    f.controller.abort(); await f.executor.dispose();
+    const stopped = typing.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(typing).toHaveBeenCalledTimes(stopped); expect(f.release).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 
-    await executor.start(first, 'queued', config);
-    await executor.start(second, 'queued', config);
-
-    expect(addReaction).toHaveBeenCalledTimes(2);
-    expect(addReaction.mock.calls.map(([input]) => input.message.id)).toEqual([
-      'inbound-1',
-      'inbound-2',
-    ]);
-
-    await executor.stop(first, 'queued');
-    expect(removeReaction).toHaveBeenCalledOnce();
-    expect(removeReaction.mock.calls[0]![0].message.id).toBe('inbound-1');
-    await executor.stop(second, 'queued');
-    expect(removeReaction).toHaveBeenCalledTimes(2);
-    expect(removeReaction.mock.calls[1]![0].message.id).toBe('inbound-2');
+  it('contains a capture failure within feedback and never falls back to an alias send', async () => {
+    const send = vi.fn(), debug = vi.fn();
+    const executor = new ActivityFeedbackExecutor(createOutboundEndpointAccess({ send,
+      captureOperation: () => { throw new Error('source retired'); } }, { debug }));
+    executors.push(executor);
+    await expect(executor.start(context(), 'active', messageConfig)).resolves.toBeUndefined();
+    expect(send).not.toHaveBeenCalled(); expect(debug).toHaveBeenCalledOnce();
   });
 });

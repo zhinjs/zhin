@@ -12,7 +12,7 @@ it('lays out text and component-produced segments in one message, omitting null'
   });
   const image = { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } };
   const node = jsx(Fragment, { children: ['hello', jsx(() => image, {}), jsx(() => null, {})] });
-  expect(await new OutboundRenderer().render(node, root, snapshot)).toEqual([
+  expect(await new OutboundRenderer().render(node, { requester: root, snapshot: snapshot })).toEqual([
     { type: 'text', data: { text: 'hello' } }, image,
   ]);
 });
@@ -69,7 +69,10 @@ it('loads a registered music tag that returns share and skips a registered null 
     config: new Map([[root, {}]]), resources: new Map([[root, new Map()]]), capabilities: new Map([[music.id, music], [hidden.id, hidden]]), projections: new Map(),
   });
   const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex([music, hidden], view)]]) });
-  expect(await new OutboundRenderer().render(jsx(Fragment, { children: ['hello', jsx('music', {}), jsx('hidden', {})] }), root, snapshot))
+  expect(await new OutboundRenderer().render(
+    jsx(Fragment, { children: ['hello', jsx('music', {}), jsx('hidden', {})] }),
+    { requester: root, snapshot: snapshot },
+  ))
     .toEqual([{ type: 'text', data: { text: 'hello' } }, { type: 'share', data: share }]);
 });
 
@@ -97,7 +100,7 @@ it('rejects a named component cycle across ComponentCall without waiting on its 
     capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
   });
   const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex(slots, view)]]) });
-  await expect(new OutboundRenderer().render(node, root, snapshot)).rejects.toThrow('Circular JSX component tree');
+  await expect(new OutboundRenderer().render(node, { requester: root, snapshot: snapshot })).rejects.toThrow('Circular JSX component tree');
 });
 
 it('combines Text and Markdown children while rejecting embedded nontext message segments', async () => {
@@ -136,7 +139,7 @@ it('resolves raw content and nested ComponentCall arrays returned by registered 
     capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
   });
   const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex(slots, view)]]) });
-  expect(await new OutboundRenderer().render(jsx('mixed', {}), root, snapshot)).toEqual([
+  expect(await new OutboundRenderer().render(jsx('mixed', {}), { requester: root, snapshot: snapshot })).toEqual([
     { type: 'text', data: { text: 'raw' } }, { type: 'mention', data: { target: '123' } },
   ]);
 });
@@ -153,7 +156,7 @@ it('preserves opaque raw payloads from a registered root JSX component', async (
   });
   const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex([slot], view)]]) });
   const node = jsx('native', {});
-  expect(await new OutboundRenderer().render([node, node], root, snapshot)).toEqual([payload, payload]);
+  expect(await new OutboundRenderer().render([node, node], { requester: root, snapshot: snapshot })).toEqual([payload, payload]);
   expect(render).toHaveBeenCalledTimes(1);
 });
 
@@ -169,5 +172,5 @@ it('limits registered JSX tag expansion to 32 component calls', async () => {
     capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
   });
   const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex(slots, view)]]) });
-  await expect(new OutboundRenderer().render(jsx('part0', {}), root, snapshot)).rejects.toThrow('Component render depth exceeded 32');
+  await expect(new OutboundRenderer().render(jsx('part0', {}), { requester: root, snapshot: snapshot })).rejects.toThrow('Component render depth exceeded 32');
 });

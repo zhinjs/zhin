@@ -13,6 +13,7 @@ import {
   prepareRuntimeGeneration,
   type PreparedRuntimeGeneration,
   type RuntimeGenerationModel,
+  type ConfigViewUpdates,
 } from './runtime-generation.js';
 import { SourceOwnershipIndex } from './source-ownership.js';
 import { projectPrimaryConfigResources, type PrimaryConfig } from './primary-config.js';
@@ -26,6 +27,7 @@ export class SlotGenerationPreparer {
     private readonly modules: ModuleRuntime,
     private readonly model: RuntimeGenerationModel,
     private readonly primaryConfig?: PrimaryConfig,
+    private readonly configUpdates?: ConfigViewUpdates,
   ) {}
 
   async prepare(
@@ -57,19 +59,20 @@ export class SlotGenerationPreparer {
     const providers = [...this.model.providers.values()].filter((provider) =>
       selectedByFeature.has(provider.id) || provider.runtime.retain !== 'when-owner-unchanged');
     const projectedFeatures = providers.map((provider) => provider.id);
-    const projected = await new FeatureProjector(providers).project(
+    const projected = await new FeatureProjector(providers, this.model.scopes.get(current.root)).project(
       current.generation + 1,
       {
         root: current.root,
         tree: current.tree,
-        config: current.config,
+        config: this.configUpdates?.config.size ? new Map([...current.config,
+          ...[...this.configUpdates.config].map(([owner, view]) => [owner, Object.freeze(view ?? {})] as const)]) : current.config,
         resources: this.primaryConfig
           ? projectPrimaryConfigResources(current.resources, this.primaryConfig)
           : current.resources,
         capabilities,
       },
       signal,
-      current.projections,
+      new Map([...current.projections, ...(this.configUpdates?.projections ?? [])]),
     );
     try {
       const snapshot = createSnapshotView(current.generation + 1, projected.state);

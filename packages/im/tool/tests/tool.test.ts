@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { SelfProfilePort } from '@zhin.js/im-contract';
 import {
   childPluginId,
   createCapabilitySlot,
@@ -24,16 +25,80 @@ interface ToolTestClient {
   readonly id: string;
 }
 
+declare class RegisteredTestAdapter {
+  readonly adapterEvents: Record<string, unknown>;
+  getEndpoint(instanceId: string): ToolTestClient | undefined;
+}
 declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly 'tool-test': {
-      readonly client: ToolTestClient;
-      readonly events: Record<string, unknown>;
-    };
-  }
+  interface AdapterRegistry { readonly 'tool-test': RegisteredTestAdapter; }
 }
 
 describe('Tool Feature', () => {
+  it('forwards optional action-owner evidence without accepting it from model arguments or requiring it on older Hosts', async () => {
+    const root = rootPluginId();
+    const report = vi.fn();
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'effect', source: '/tools/effect/index.ts',
+      definition: defineAgentTool({ description: 'Fixture action owner', execute: (_input, context) => {
+        context.effects?.report({ disposition: 'committed' });
+        return 'done';
+      } }) });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+    expect(await index.execute(root, 'effect', {}, { ...invocation(), effects: { report } })).toBe('done');
+    expect(report).toHaveBeenCalledExactlyOnceWith({ disposition: 'committed' });
+    expect(await index.execute(root, 'effect', { effects: { report } }, invocation())).toBe('done');
+    expect(report).toHaveBeenCalledTimes(1);
+  });
+  it('passes only the originating account profile port through Tool execution', async () => {
+    const root = rootPluginId();
+    const selfProfile: SelfProfilePort = { peek: () => ({ values: { nickname: 'Original' }, sources: { nickname: 'platform' }, writableFields: [], platformStatus: 'available' }),
+      read: async () => ({ values: { nickname: 'Original' }, sources: { nickname: 'platform' }, writableFields: [], platformStatus: 'available' }) };
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'profile', source: '/tools/profile/index.ts',
+      definition: defineAgentTool({ description: 'Read current account', execute: (_input, context) => context.selfProfile }) });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+    expect(await index.execute(root, 'profile', {}, { ...invocation(), selfProfile })).toBe(selfProfile);
+    expect(await index.execute(root, 'profile', { selfProfile }, invocation())).toBeUndefined();
+  });
+  it('reads synchronous availability from the same owner definition without invoking the tool', () => {
+    const root = rootPluginId();
+    let executions = 0;
+    const definition = defineAgentTool({ description: 'Sticker',
+      isAvailable: ({ sessionKey }) => sessionKey === 'bot-b:scene',
+      execute: () => { executions++; },
+    });
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'sticker',
+      source: '/tools/sticker/index.ts', definition });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+    expect(index.isAvailable(root, 'sticker', { sessionKey: 'bot-a:scene', origin: invocation().origin })).toBe(false);
+    expect(index.isAvailable(root, 'sticker', { sessionKey: 'bot-b:scene', origin: invocation().origin })).toBe(true);
+    expect(executions).toBe(0);
+    let seen: unknown;
+    const byPrincipal = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'owner-only',
+      source: '/tools/owner-only/index.ts', definition: defineAgentTool({ description: 'Owner only',
+        isAvailable: ({ principal }) => { seen = principal; return principal?.roles.includes('master') === true; },
+        execute: () => undefined }) });
+    const principalIndex = new ToolIndex([byPrincipal], createSnapshot([byPrincipal], createToken('unused').id));
+    const origin = invocation().origin;
+    expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin, principal: { subjectId: 'u', roles: ['master'] } })).toBe(true);
+    expect(seen).toEqual({ subjectId: 'u', roles: ['master'] });
+    expect(Object.isFrozen(seen)).toBe(true);
+    expect(Object.isFrozen((seen as { roles: readonly string[] }).roles)).toBe(true);
+    expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin, principal: { subjectId: 'u', roles: ['user'] } })).toBe(false);
+    expect(principalIndex.isAvailable(root, 'owner-only', { sessionKey: 's', origin })).toBe(false);
+    expect(() => index.isAvailable(root, 'unknown', { sessionKey: 'bot-a:scene', origin: invocation().origin })).toThrow('Unknown Agent Tool');
+  });
+
+  it('rejects malformed availability declarations and asynchronous predicate results', () => {
+    const valid = defineAgentTool({ description: 'Sticker', execute() {} });
+    expect(() => defineAgentTool({ ...valid, isAvailable: true as never })).toThrow('isAvailable');
+    expect(() => parseAgentToolDefinition({ ...valid, isAvailable: 'yes' })).toThrow();
+    const root = rootPluginId();
+    const invalid = { ...valid, isAvailable: () => Promise.resolve(true) } as never;
+    const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'sticker',
+      source: '/tools/sticker/index.ts', definition: invalid });
+    const index = new ToolIndex([slot], createSnapshot([slot], createToken('unused').id));
+    expect(() => index.isAvailable(root, 'sticker', { sessionKey: 'scene', origin: invocation().origin })).toThrow('must return a boolean');
+  });
+
   it('uses the trusted turn language or project language, never a model argument', async () => {
     const root = rootPluginId();
     const slot = createCapabilitySlot({ owner: root, feature: toolFeatureId, localName: 'locale',

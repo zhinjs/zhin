@@ -140,23 +140,19 @@ describe('OutboundHost', () => {
       operations: ['edit', 'typing'],
     });
     await expect(host.edit?.({
-      adapter: 'discord',
-      endpointKey: 'bot',
       message,
       content: 'working',
     })).resolves.toBe('message-1');
     await expect(host.typing?.({
-      adapter: 'discord',
-      endpointKey: 'bot',
       conversation: message.conversation,
       active: true,
     })).resolves.toBeUndefined();
 
     expect(editEndpointMessage).toHaveBeenCalledWith({
-      adapter: 'discord', endpointKey: 'bot', message, content: 'working',
+      message, content: 'working',
     });
     expect(setEndpointTyping).toHaveBeenCalledWith({
-      adapter: 'discord', endpointKey: 'bot', conversation: message.conversation, active: true,
+      conversation: message.conversation, active: true,
     });
   });
 });

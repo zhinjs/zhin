@@ -45,25 +45,25 @@ describe('profile validation', () => {
 
   it('defineAdapter validates at definition time and folds aliases', () => {
     const create = () => ({});
-    expect(() => defineAdapter({ capabilities: ['outbound'], profile: { default: { nope: 1 } } as never, create }))
+    expect(() => defineAdapter({ capabilities: ['outbound'], profile: { default: { nope: 1 } } as never, createAdapter: create as never }))
       .toThrow('nope');
     expect(() => defineAdapter({
       capabilities: ['outbound'],
       segments: { supported: ['text'] },
-      profile: { default: { messaging: { segments: { supported: ['text'] } } } },
-      create,
+      profile: { default: { messaging: { segments: { supported: ['text', 'image'] } } } },
+      createAdapter: create as never,
     })).toThrow('segments twice');
     const viaProfile = defineAdapter({
       capabilities: ['outbound'],
       profile: { default: { messaging: { segments: { supported: ['text'] } } } },
-      create,
+      createAdapter: create as never,
     });
     expect(viaProfile.segments).toEqual({ supported: ['text'] });
     const danmaku = defineAdapter({
-      capabilities: ['inbound'], profile: { default: { events: { liveDanmaku: true } } }, create,
+      capabilities: ['inbound'], profile: { default: { events: { liveDanmaku: true } } }, createAdapter: create as never,
     });
     expect(danmaku.capabilities).toContain('liveDanmaku');
-    const legacyDanmaku = defineAdapter({ capabilities: ['inbound', 'liveDanmaku'], profile: {}, create });
+    const legacyDanmaku = defineAdapter({ capabilities: ['inbound', 'liveDanmaku'], profile: {}, createAdapter: create as never });
     expect(legacyDanmaku.profile?.default?.events?.liveDanmaku).toBe(true);
   });
 });

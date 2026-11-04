@@ -5,6 +5,7 @@ import {
   type GenerationAdmissionGate,
   type PluginId,
   type PluginMetadata,
+  type PluginLifecycleEventMap,
 } from '@zhin.js/plugin-runtime';
 import type {
   IsolatedPluginPrepareRequest,
@@ -80,6 +81,7 @@ export class NodeIsolatedPluginRuntime implements IsolatedPluginRuntimePort {
       }, signal);
       return {
         descriptor,
+        controlEvent: (name, event) => instance.controlEvent(name, event),
         resources: [{ token: isolatedPluginToken, value: instance }],
         handoff: {
           activateNext: (activationSignal) => instance.activate(activationSignal),
@@ -102,7 +104,7 @@ class IsolatedInstance implements IsolatedPluginHandle {
   readonly #pending = new Map<number, {
     resolve(value: unknown): void;
     reject(error: Error): void;
-    timer: NodeJS.Timeout;
+    timer?: NodeJS.Timeout;
   }>();
   readonly #listeners = new Set<(event: IsolatedPluginEvent) => void>();
 
@@ -145,6 +147,38 @@ class IsolatedInstance implements IsolatedPluginHandle {
   onEvent(listener: (event: IsolatedPluginEvent) => void): () => void {
     this.#listeners.add(listener);
     return () => { this.#listeners.delete(listener); };
+  }
+
+  /** Await the remote handler's actual settlement; control cancellation is cooperative. */
+  async controlEvent<TName extends keyof PluginLifecycleEventMap>(name: TName, event: PluginLifecycleEventMap[TName]): Promise<void> {
+    if (this.#closed || this.#status !== 'active') throw new Error(`Isolated Plugin ${this.owner} is not active`);
+    const id = this.#nextRequest++;
+    const error = () => serializeError(event.signal.reason instanceof Error
+      ? event.signal.reason : new Error('Root control event cancelled'));
+    const fail = (reason: unknown) => {
+      const pending = this.#pending.get(id);
+      this.#pending.delete(id);
+      pending?.reject(reason instanceof Error ? reason : new Error(String(reason)));
+    };
+    const abort = () => {
+      if (!this.#pending.has(id)) return;
+      try { this.transport.send({ type: 'control-cancel', id, error: error() }); }
+      catch (reason) { fail(reason); }
+    };
+    const settled = new Promise<void>((resolve, reject) => {
+      this.#pending.set(id, { resolve: () => resolve(), reject });
+      try {
+        this.transport.send({ type: 'request', id, method: 'control', payload: {
+          name, details: event.details, aborted: event.signal.aborted,
+          ...(event.signal.aborted ? { error: error() } : {}),
+        } });
+      } catch (reason) { fail(reason); }
+    });
+    event.signal.addEventListener('abort', abort, { once: true });
+    // Sending is synchronous; cover a cancellation occurring during that submission too.
+    if (event.signal.aborted) abort();
+    try { await settled; }
+    finally { event.signal.removeEventListener('abort', abort); }
   }
 
   request<TResult = unknown>(method: RequestMessage['method'], payload?: unknown): Promise<TResult> {

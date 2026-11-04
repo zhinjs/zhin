@@ -3,6 +3,17 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "streaming": {
+      "type": "boolean",
+      "default": true,
+      "description": "Publish supported replies while generating. Set false to send only complete replies."
+    },
+    "streamingIntervalMs": {
+      "type": "number",
+      "minimum": 0,
+      "default": 500,
+      "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
+    },
     "master": {
       "type": [
         "string",
@@ -70,12 +81,42 @@
             "type": "string",
             "description": "Sandbox owner user ID"
           },
+          "streaming": {
+            "type": "boolean",
+            "description": "Publish supported replies while generating. Set false to send only complete replies."
+          },
+          "streamingIntervalMs": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Minimum delay in milliseconds between reply updates; the first update is immediate."
+          },
           "commandPrefix": {
             "type": "string"
           },
           "id": {
             "type": "string",
             "description": "Sandbox bot name"
+          },
+          "nickname": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "账号昵称兜底",
+            "x-i18n": {
+              "en": {
+                "description": "Fallback account nickname"
+              }
+            }
+          },
+          "profile": {
+            "$ref": "#/$defs/selfProfileFallback",
+            "description": "账号资料兜底",
+            "x-i18n": {
+              "en": {
+                "description": "Fallback account profile"
+              }
+            }
           }
         },
         "required": [
@@ -97,9 +138,93 @@
           "description": "Command prefix. The default empty string allows unprefixed commands; '/' requires a leading slash. Each endpoints[i] can override it."
         }
       }
+    },
+    "nickname": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "账号昵称兜底",
+      "x-i18n": {
+        "en": {
+          "description": "Fallback account nickname"
+        }
+      }
+    },
+    "profile": {
+      "$ref": "#/$defs/selfProfileFallback",
+      "description": "账号资料兜底",
+      "x-i18n": {
+        "en": {
+          "description": "Fallback account profile"
+        }
+      }
     }
   },
   "required": [
     "endpoints"
-  ]
+  ],
+  "$defs": {
+    "selfProfileFallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gender": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "male",
+            "female",
+            "other",
+            "unknown",
+            null
+          ]
+        },
+        "age": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "birthday": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$"
+        },
+        "signature": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "avatar": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(https?://[^\\s/?#]+(?:[/?#].*)?|)$"
+        },
+        "interests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "bio": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
 }

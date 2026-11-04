@@ -45,7 +45,7 @@ export {
 
 export {
   LineClient,
-  lineClient,
   type LineClientEventMap,
   type LineGroupMember,
 } from './client.js';
+export { LineAdapter } from './adapter.js';

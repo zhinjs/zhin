@@ -8,15 +8,15 @@
  * Legacy rows that still carry a rendered header in `name` are read as facts. Stored history is never
  * mutated and `name` is never sent to a provider.
  */
-import type {
-  AgentMessage,
-  AssistantMessage,
-  ConversationActor,
-  EventMessage,
-  ConversationQuote,
-  UserMessage,
+import {
+  isEventMessage,
+  type AgentMessage,
+  type AssistantMessage,
+  type ConversationActor,
+  type EventMessage,
+  type ConversationQuote,
+  type UserMessage,
 } from '../llm/types/agent-message.js';
-import { isEventMessage } from '../llm/types/agent-message.js';
 import { formatHeader, quoteEventValue, renderSenderId } from './message-header.js';
 import { indexMessageAliases } from './message-alias.js';
 
@@ -151,6 +151,8 @@ interface RenderOptions extends HeaderFormatOptions {
   readonly replyTo?: string;
   /** Bots do not advertise mute_time (ADR: id/name/role/group_nickname). */
   readonly bot?: boolean;
+  /** Ordered aliases of a multi-message reply, each referring to one physical message. */
+  readonly parts?: readonly string[];
 }
 
 /** Renders a header line; the full form carries every known fact, the short form only id / user_id / time. */
@@ -159,11 +161,13 @@ export function renderParticipantHeader(facts: ParticipantFacts, timestamp: numb
   const date: [string, string | undefined] = ['date', options.date ? instant.date : undefined];
   const time: [string, string | undefined] = ['time', options.time === false ? undefined : instant.clock];
   const replyTo: [string, string | undefined] = ['reply_to', options.replyTo];
+  const parts = ['parts', options.parts] as const;
   if (!options.full) {
-    return formatHeader([['id', facts.messageId], ['user_id', facts.userId], replyTo, date, time]);
+    return formatHeader([['id', facts.messageId], parts, ['user_id', facts.userId], replyTo, date, time]);
   }
   return formatHeader([
     ['id', facts.messageId],
+    parts,
     ['user_id', facts.userId],
     ['name', facts.name],
     ['role', facts.role],
@@ -316,6 +320,13 @@ export function projectParticipantHeaders(messages: AgentMessage[], options?: He
   const aliasing = indexMessageAliases(messages);
   /** Platform ids of the messages already rendered in this window (a quote only points backwards). */
   const seenIds = new Map<string, string>();
+  const rememberParts = (parts: readonly (string | null)[] | undefined): void => {
+    for (const partAlias of parts ?? []) {
+      if (partAlias === null) continue;
+      const platformId = aliasing.idOf(partAlias);
+      if (platformId) seenIds.set(platformId, partAlias);
+    }
+  };
   let lastDate: string | undefined;
   let lastClockAt: number | undefined;
   let changed = false;
@@ -337,8 +348,19 @@ export function projectParticipantHeaders(messages: AgentMessage[], options?: He
     // A tool-call-only assistant turn has no text to carry a header; it neither introduces the bot nor changes its facts.
     if (text.role === 'assistant' && !text.content.some(block => block.type === 'text')) { out.push(message); continue; }
     const rawFacts = messageFacts(text);
-    if (!rawFacts) { out.push(message); continue; }
     const alias = aliasing.aliases.get(message);
+    const parts = aliasing.parts.get(message);
+    const displayedParts = parts && parts.length > 1 ? parts.map(part => part ?? 'unknown') : undefined;
+    if (!rawFacts) {
+      // A receipt proves message identity even when Bot/user lookup did not return participant facts.
+      if (text.role === 'assistant' && alias) {
+        const header = formatHeader([['id', alias], ['parts', displayedParts]]);
+        out.push(prefixFirstText(text, header));
+        rememberParts(parts);
+        changed = true;
+      } else out.push(message);
+      continue;
+    }
     // The model only ever sees the alias; the platform id stays host-side (tools take either).
     const facts: ParticipantFacts = alias ? { ...rawFacts, messageId: alias } : (({ messageId: _legacy, ...rest }) => rest)(rawFacts);
 
@@ -372,10 +394,10 @@ export function projectParticipantHeaders(messages: AgentMessage[], options?: He
     });
     const header = renderParticipantHeader(facts, text.timestamp, {
       ...options, full: !previous, date: withDate, time: withClock, bot, ...(replyTo ? { replyTo } : {}),
+      ...(displayedParts ? { parts: displayedParts } : {}),
     });
     out.push(prefixFirstText(text, quoteLine ? `${header}\n${quoteLine}` : header));
-    const platformId = (text as { messageId?: string }).messageId;
-    if (platformId && alias) seenIds.set(platformId, alias);
+    rememberParts(parts);
     changed = true;
   }
   return changed ? out : messages;

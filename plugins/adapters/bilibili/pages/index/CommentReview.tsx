@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { adapterConsoleStyles } from '@zhin.js/client';
 import { call, type ReviewDraft, type ReviewEndpoint, type ReviewStatus } from './rpc';
 import { detectLocale, text, type ReviewLocale } from './messages';
 
@@ -21,21 +22,15 @@ function ago(at: number, locale: ReviewLocale): string {
 }
 
 function Badge({ tone, children }: { tone: 'ok' | 'warn' | 'muted'; children: React.ReactNode }) {
-  const color = tone === 'ok' ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-    : tone === 'warn' ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-      : 'bg-muted text-muted-foreground';
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>{children}</span>;
+  return <span className={`ac-badge ac-badge-${tone}`}>{children}</span>;
 }
 
 function Button({ children, onClick, disabled, variant = 'default', title }: {
   children: React.ReactNode; onClick?: () => void; disabled?: boolean; variant?: 'default' | 'primary' | 'danger'; title?: string;
 }) {
-  const style = variant === 'primary' ? 'bg-primary text-primary-foreground hover:opacity-90'
-    : variant === 'danger' ? 'border border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400'
-      : 'border hover:bg-accent';
   return (
     <button type="button" title={title} disabled={disabled} onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${style}`}>
+      className={`ac-button ac-button-${variant}`}>
       {children}
     </button>
   );
@@ -70,8 +65,8 @@ function LoginPanel({ endpoint, locale, onChanged, setNotice }: {
   const configCookie = login.source === 'config';
   const canScan = !(login.state === 'ok' && configCookie);
   return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <section className="ac-review-login">
+      <div className="ac-actions">
         {login.state === 'ok' ? <Badge tone="ok">{text(locale, '已登录')}</Badge>
           : login.state === 'expired' ? <Badge tone="warn">{text(locale, '登录已失效')}</Badge>
             : <Badge tone="muted">{text(locale, '未登录')}</Badge>}
@@ -91,7 +86,7 @@ function LoginPanel({ endpoint, locale, onChanged, setNotice }: {
       )}
 
       {scanning && qr.image ? (
-        <div className="flex flex-wrap items-center gap-4 rounded-lg border p-4">
+        <div className="ac-login-body">
           <img src={qr.image} alt="QR" width={180} height={180} className="rounded bg-white p-1" />
           <div className="space-y-2">
             <p className="font-medium">{text(locale, qr.state === 'scanned' ? '已扫码，请在手机上确认登录' : '用 B 站 App 扫一扫')}</p>
@@ -160,35 +155,35 @@ function DraftCard({ draft, endpoint, locale, onChanged, setNotice }: {
   };
 
   return (
-    <li className="space-y-3 rounded-lg border p-4">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>{draft.video}</span>
+    <li className="ac-draft">
+      <div className="ac-draft-meta">
+        <span>{draft.resource ?? draft.video}</span>
         <span>·</span>
         <span>{ago(draft.createdAt, locale)}</span>
         <a href={draft.url} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">{text(locale, '查看原评论')}</a>
       </div>
       {draft.interrupted && (
-        <p className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+        <p className="ac-warning">
           {text(locale, '上次发送时程序中断了，这条可能已经发出。请先到 B 站确认，避免重复回复。')}
         </p>
       )}
       {draft.original !== undefined && (
-        <div className="rounded-md bg-muted/50 px-3 py-2 text-sm">
-          <div className="mb-1 text-xs text-muted-foreground">{text(locale, '原评论')} · {draft.author}</div>
-          <div className="whitespace-pre-wrap break-words">{draft.original}</div>
+        <div className="ac-draft-original">
+          <div className="ac-draft-label">{text(locale, '原评论')} · {draft.author}</div>
+          <div className="ac-draft-body">{draft.original}</div>
         </div>
       )}
       <div className="text-sm">
-        <div className="mb-1 text-xs text-muted-foreground">{text(locale, '拟回复')}</div>
+        <div className="ac-draft-label">{text(locale, '拟回复')}</div>
         {editing ? (
           <>
-            <textarea value={value} onChange={(event) => setValue(event.target.value)} rows={4}
+            <textarea aria-label={text(locale, '拟回复')} autoFocus value={value} onChange={(event) => setValue(event.target.value)} rows={4}
               className="w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
             <div className={`text-right text-xs ${length > COMMENT_LIMIT ? 'text-red-600' : 'text-muted-foreground'}`}>{text(locale, '{0} 字', length)} / {COMMENT_LIMIT}</div>
           </>
-        ) : <div className="whitespace-pre-wrap break-words">{draft.message}</div>}
+        ) : <div className="ac-draft-body">{draft.message}</div>}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="ac-actions">
         <Button variant="primary" disabled={!canSend || sending || busy !== '' || !value.trim() || length > COMMENT_LIMIT} onClick={() => act('send')}>
           {sending ? text(locale, '发送中…') : text(locale, '发送')}
         </Button>
@@ -206,24 +201,24 @@ function EndpointSection({ endpoint, locale, showTitle, onChanged, setNotice }: 
   endpoint: ReviewEndpoint; locale: ReviewLocale; showTitle: boolean; onChanged: () => void; setNotice: (notice: Notice) => void;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="ac-review-endpoint">
       {showTitle && <h2 className="text-lg font-semibold">{text(locale, '账号 {0}', endpoint.id)}</h2>}
       <LoginPanel endpoint={endpoint} locale={locale} onChanged={onChanged} setNotice={setNotice} />
       {endpoint.circuit && (
-        <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+        <p className="ac-notice ac-notice-error" role="alert">
           {text(locale, '触发了 B 站风控（错误码 {0}），已暂停轮询和发送。请到网页端确认账号状态，处理后重启。', endpoint.circuit.code)}
         </p>
       )}
       {endpoint.sendMode === 'off' && <p className="text-sm text-muted-foreground">{text(locale, '出站已关闭（sendMode: off），草稿无法发送。')}</p>}
 
-      <section className="space-y-3">
+      <section className="ac-review-drafts">
         <div className="flex items-center gap-2">
           <h3 className="font-medium">{text(locale, '待审回复')}</h3>
           {endpoint.pendingCount > 0 && <Badge tone="warn">{endpoint.pendingCount}</Badge>}
         </div>
         {!endpoint.persistent && <p className="text-xs text-muted-foreground">{text(locale, '草稿只存在内存里，重启会丢失。')}</p>}
         {endpoint.drafts.length === 0
-          ? <p className="text-sm text-muted-foreground">{text(locale, '没有待审的回复。新的 AI 回复会自动出现在这里。')}</p>
+          ? <div className="ac-empty"><p>{text(locale, '没有待审的回复。新的 AI 回复会自动出现在这里。')}</p></div>
           : (
             <ul className="space-y-3">
               {endpoint.drafts.map(draft => (
@@ -233,7 +228,7 @@ function EndpointSection({ endpoint, locale, showTitle, onChanged, setNotice }: 
           )}
       </section>
 
-      <section className="space-y-2">
+      <section className="ac-review-videos">
         <h3 className="font-medium">{text(locale, '管理的视频')}</h3>
         {endpoint.videos.length === 0
           ? <p className="text-sm text-muted-foreground">{text(locale, '还没有配置视频。要管理哪些视频请在配置的 videos 里填写 BV 号。')}</p>
@@ -246,6 +241,21 @@ function EndpointSection({ endpoint, locale, showTitle, onChanged, setNotice }: 
               ))}
             </ul>
           )}
+        {(endpoint.resources ?? []).length > 0 && (
+          <>
+            <h3 className="font-medium">{text(locale, '管理的动态 / 专栏')}</h3>
+            <ul className="flex flex-wrap gap-2">
+              {(endpoint.resources ?? []).map(resource => (
+                <li key={`${resource.kind}:${resource.ref}`}>
+                  <a href={resource.url} target="_blank" rel="noreferrer" className="rounded-md border px-2 py-1 text-sm hover:bg-accent">
+                    {resource.kind === 'article' ? `cv${resource.ref}` : `${text(locale, '动态')} ${resource.ref}`}
+                  </a>
+                  {resource.error !== undefined && <span className="ml-1 text-xs text-destructive">{text(locale, '无法解析，已跳过')}</span>}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <p className="text-xs text-muted-foreground">{text(locale, '视频列表来自配置，要增删请改配置文件。')}</p>
       </section>
     </div>
@@ -282,30 +292,31 @@ export default function CommentReview() {
   }, [refresh, scanning]);
 
   useEffect(() => {
-    if (!notice) return;
+    if (!notice || notice.kind === 'error') return;
     const id = setTimeout(() => setNotice(undefined), 6_000);
     return () => clearTimeout(id);
   }, [notice]);
 
   const endpoints = status?.endpoints ?? [];
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">{text(locale, '评论审批')}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{text(locale, 'AI 写好的 B 站评论回复先停在这里，你点「发送」才会真的发出去。')}</p>
+    <div className="zhin-console-surface zhin-review-page">
+      <style>{adapterConsoleStyles}</style>
+      <header className="ac-header">
+        <div className="ac-identity">
+          <span className="ac-platform-mark" aria-hidden="true">B</span>
+          <div><h1>{text(locale, '评论审批')}</h1><p>{text(locale, 'AI 写好的 B 站评论回复先停在这里，你点「发送」才会真的发出去。')}</p></div>
         </div>
         <Button onClick={() => void refresh()}>{text(locale, '刷新')}</Button>
       </header>
       {notice && (
-        <div className={`rounded-md px-3 py-2 text-sm ${notice.kind === 'ok' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-red-500/10 text-red-700 dark:text-red-300'}`}>
+        <div role={notice.kind === 'ok' ? 'status' : 'alert'} className={`ac-notice ${notice.kind === 'ok' ? '' : 'ac-notice-error'}`}>
           {notice.message}
           {notice.link && <> · <a href={notice.link} target="_blank" rel="noreferrer" className="underline">{text(locale, '查看')}</a></>}
         </div>
       )}
-      {loadError && <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>}
-      {!status && !loadError && <p className="text-sm text-muted-foreground">{text(locale, '加载中…')}</p>}
-      {status && endpoints.length === 0 && <p className="text-sm text-muted-foreground">{text(locale, 'B 站适配器还没有启动。请先在配置里添加 bilibili 插件和至少一个账号。')}</p>}
+      {loadError && <p role="alert" className="ac-notice ac-notice-error">{loadError}</p>}
+      {!status && !loadError && <div className="ac-loading" role="status" aria-busy="true"><p>{text(locale, '加载中…')}</p><span aria-hidden="true" /></div>}
+      {status && endpoints.length === 0 && <div className="ac-empty"><p>{text(locale, 'B 站适配器还没有启动。请先在配置里添加 bilibili 插件和至少一个账号。')}</p></div>}
       {endpoints.map(endpoint => (
         <EndpointSection key={endpoint.id} endpoint={endpoint} locale={locale} showTitle={endpoints.length > 1}
           onChanged={() => void refresh()} setNotice={setNotice} />

@@ -69,6 +69,15 @@ describe('HostSelfChangeApply ports', () => {
     expect(options.restarts).toBe(1);
   });
 
+  it('exposes whether a controlled restart brings the process back (#1051 F1)', () => {
+    const supervised = new HostSelfChangeApply(hostOptions());
+    expect(supervised.restartSupported).toBe(true);
+    expect(supervised.ports(noGeneration).restartSupported?.()).toBe(true);
+    const unsupervised = new HostSelfChangeApply(hostOptions({ restartSupported: false }));
+    expect(unsupervised.restartSupported).toBe(false);
+    expect(unsupervised.ports(noGeneration).restartSupported?.()).toBe(false);
+  });
+
   it('is unhealthy when a runtime error was reported after the change started applying', async () => {
     const host = new HostSelfChangeApply(hostOptions());
     host.noteError(); // before the change: does not count
@@ -81,6 +90,7 @@ describe('HostSelfChangeApply ports', () => {
         during = await health({ record: record(), restarted: false, signal: new AbortController().signal });
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     await host.apply('chg_1');
     expect(during).toMatchObject({ ok: false, error: expect.stringContaining('1 runtime error') });
@@ -118,6 +128,7 @@ describe('HostSelfChangeApply lifecycle', () => {
         order.push(`end ${id}`);
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     const first = host.apply('a');
     const second = host.apply('b');
@@ -135,12 +146,28 @@ describe('HostSelfChangeApply lifecycle', () => {
     expect(String(errors[0])).toContain('no Agent generation');
   });
 
+  it('keeps resuming the other leftover approvals when one throws, then surfaces the error', async () => {
+    const host = new HostSelfChangeApply(hostOptions());
+    const resumed: string[] = [];
+    host.bind({
+      apply: async () => undefined,
+      recover: async () => 0,
+      resumeApproved: async (id: string) => {
+        resumed.push(id);
+        if (id === 'chg_bad') throw new Error('boom');
+      },
+    }, async () => ['chg_bad', 'chg_ok']);
+    await expect(host.started()).rejects.toThrow('boom');
+    expect(resumed).toEqual(['chg_bad', 'chg_ok']);
+  });
+
   it('recovers once per process after start, then applies changes approved but never applied', async () => {
     const host = new HostSelfChangeApply(hostOptions());
     const calls: string[] = [];
     const applier = {
       apply: async (id: string) => { calls.push(`apply ${id}`); },
       recover: async () => { calls.push('recover'); return 1; },
+      resumeApproved: async (id: string) => { calls.push(`apply ${id}`); },
     };
     const unbind = host.bind(applier, async () => ['chg_left']);
     expect(calls).toEqual([]); // not before the first generation has started
@@ -192,6 +219,25 @@ describe('createSelfChangeConfigPort', () => {
       { op: 'set', path: ['b', 'y'], value: 2 },
     ])).toEqual({ status: 'conflict', message: 'changed elsewhere' });
     expect(calls).toBe(1);
+  });
+
+  it.each([true, false])('trusts a restart-pending receipt only when the save also requires a restart (restartRequired=%s)', async restartRequired => {
+    const receipt = (revision: string) => ({ operationId: 'self-change-config', sourceRevision: revision, saved: true as const, generation: 2,
+      applicationRevision: 1, groups: [
+        { id: 'ambient', paths: [['ai', 'trigger', 'ambient']], effect: 'in-place' as const, status: 'applied' as const, dependsOn: [] },
+        { id: 'http', paths: [['http', 'port']], effect: 'restart-process' as const, status: 'restart-pending' as const, dependsOn: [] },
+      ] });
+    const port = createSelfChangeConfigPort({
+      readSource: async () => ({ source: '', revision: 'r1' }),
+      patch: async request => ({ status: 'saved', revision: `${request.expectedRevision}+`, restartRequired, paths: [], missingEnv: [],
+        message: 'ok', application: receipt(`${request.expectedRevision}+`) }) as ConsoleConfigPatchResult,
+      replaceSource: async (_source, expectedRevision) => ({ revision: `${expectedRevision}!`, restartRequired,
+        application: receipt(`${expectedRevision}!`) }),
+    });
+    const expected = restartRequired ? 'restart-pending' : 'unconfirmed';
+    expect(await port.patch('r1', [{ op: 'set', path: ['http', 'port'], value: 8087 }]))
+      .toEqual({ status: 'saved', revision: 'r1+', restartRequired, application: expected });
+    expect(await port.restore('a: 1\n', 'r9')).toEqual({ revision: 'r9!', restartRequired, application: expected });
   });
 });
 
@@ -288,6 +334,7 @@ describe('HostSelfChangeApply deferred restart', () => {
         expect(restarts).toBe(1);
       },
       recover: async () => 0,
+      resumeApproved: async () => undefined,
     });
     await host.apply('chg_1');
     expect(restarts).toBe(2);

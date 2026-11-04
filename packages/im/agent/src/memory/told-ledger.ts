@@ -12,6 +12,8 @@
  * The ledger lives in process memory; after a restart the persisted history
  * (and its compaction summary) still carries the same facts.
  */
+import { createPromptContextBlock, type TextContentBlock } from '@zhin.js/ai';
+import { deliveredReplyContextRef } from '../session/context-provenance.js';
 
 export type ToldEntryKind = 'conclusion' | 'commitment' | 'progress';
 
@@ -19,6 +21,8 @@ export interface ToldEntry {
   readonly kind: ToldEntryKind;
   readonly text: string;
   readonly turnId?: string;
+  /** Host-authored coverage identity; several answers can belong to the same real Turn. */
+  readonly contextRef?: string;
   readonly at: number;
 }
 
@@ -99,7 +103,7 @@ export class SessionToldLedger {
   }
 
   /** Records what was sent. A repeated statement moves to the newest position instead of duplicating. */
-  record(sessionId: string, text: string, source: 'reply' | 'progress', turnId?: string): void {
+  record(sessionId: string, text: string, source: 'reply' | 'progress', turnId?: string, contextRef?: string): void {
     const extracted = extractToldEntries(text, source);
     if (extracted.length === 0) return;
     const current = [...(this.#sessions.get(sessionId) ?? [])];
@@ -107,7 +111,7 @@ export class SessionToldLedger {
       const key = normalizeToldText(entry.text);
       const existing = current.findIndex((item) => normalizeToldText(item.text) === key);
       if (existing >= 0) current.splice(existing, 1);
-      current.push(Object.freeze({ ...entry, ...(turnId ? { turnId } : {}), at: this.#now() }));
+      current.push(Object.freeze({ ...entry, ...(turnId ? { turnId } : {}), ...(contextRef ? { contextRef } : {}), at: this.#now() }));
     }
     this.#sessions.delete(sessionId);
     this.#sessions.set(sessionId, current.slice(-this.#maxEntries));
@@ -122,6 +126,23 @@ export class SessionToldLedger {
       `${TOLD_LEDGER_HEADING} Do not repeat these unless asked; if something changed, say so explicitly instead of contradicting them.`,
       ...entries.map((entry) => `- (${entry.kind}) ${entry.text}`),
     ].join('\n');
+  }
+
+  /** Per-entry projection lets retained assistant history cover only the facts it still contains. */
+  renderBlocks(sessionId: string): TextContentBlock[] {
+    return this.entries(sessionId).map(entry => {
+      const block = createPromptContextBlock('already-told',
+        `${TOLD_LEDGER_HEADING} Do not repeat unless asked; say explicitly when something changed.\n- (${entry.kind}) ${entry.text}`);
+      return {
+        ...block,
+        perTurn: true,
+        contextRef: {
+          ...block.contextRef!,
+          ...(entry.turnId && entry.kind !== 'progress'
+            ? { representedBy: entry.contextRef ?? deliveredReplyContextRef(sessionId, entry.turnId) } : {}),
+        },
+      };
+    });
   }
 
   clear(sessionId?: string): void {

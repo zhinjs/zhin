@@ -5,7 +5,7 @@ tier: Experimental
 ---
 
 ::: info Documentation Sync
-This page is auto-generated from [`plugins/adapters/bilibili/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili/README.md). Please edit the in-package README and then run `pnpm sync:adapter-docs`.
+This page translates [`plugins/adapters/bilibili/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili/README.md). Keep this English page aligned with the README; `pnpm sync:adapter-docs` updates the Chinese pages.
 :::
 
 <!-- sync-adapter-docs:sha256=8e234a00fd9ec03a -->
@@ -14,13 +14,13 @@ This page is auto-generated from [`plugins/adapters/bilibili/README.md`](https:/
 
 > **Experimental** — built on Bilibili's **unofficial Web APIs** (including the QR login API) and may break at any time when the site changes. Not part of the stable smoke suite; config and behavior may change incompatibly.
 
-Zhin.js Bilibili comment adapter (Plugin Runtime): lets AI help you reply to comments under **your own videos**. Contract: [ADR 0035: Comment-reply adapter contract](/adr/0035-comment-reply-adapter-contract). Discussion: [#971](https://github.com/zhinjs/zhin/issues/971).
+Zhin.js Bilibili comment adapter (Plugin Runtime): lets AI help you reply to comments under **your own videos, dynamics and articles**. Contract: [ADR 0035: Comment-reply adapter contract](/adr/0035-comment-reply-adapter-contract). Discussion: [#971](https://github.com/zhinjs/zhin/issues/971).
 
 ## Read this first
 
 - **It acts as your account**: Bilibili's open platform grants no comment read/write scopes, so this adapter uses your login cookies (`SESSDATA` + `bili_jct`). The recommended way is **QR login** on the Console "Comment review" page; the credentials stay only in the data directory of the machine running the bot (`data/bilibili/<account>/credentials.json`, mode 600). Environment variables still work. Treat cookies like a password: **never put them in `zhin.config.yml` in plain text, commit them, or paste them into logs or issues.**
 - **Review before send by default**: `sendMode` defaults to `review`. AI-written replies only land in a draft queue and are **never posted to Bilibili automatically**; they are posted only when you press Send on the Console "Comment review" page or a master runs `bili-draft send <id>`. There is no auto-send.
-- **Allow-listed videos only**: only the videos listed in `videos` are polled (ideally your own uploads). No site-wide search, no posting in other people's comment sections. Follow Bilibili's user agreement — no marketing, lead generation, or spam.
+- **Allow-listed content only**: only the videos, dynamics and articles listed in `videos` / `dynamics` / `articles` are polled (ideally your own); a blank list polls nothing of that kind. No site-wide search, no posting in other people's comment sections. Follow Bilibili's user agreement — no marketing, lead generation, or spam.
 - **Risk control trips a breaker**: on rate-limit / captcha / risk-block / duplicate-comment codes the endpoint stops polling and logs an error with no automatic retry; restart after checking the account manually.
 
 ## Current capabilities
@@ -28,9 +28,9 @@ Zhin.js Bilibili comment adapter (Plugin Runtime): lets AI help you reply to com
 | Capability | Status |
 |---|---|
 | BV id → aid | ✅ |
-| Poll latest comments on allow-listed videos (`x/v2/reply`, video `type=1` only) | ✅ read-only |
+| Poll latest comments on allow-listed videos (`x/v2/reply`, video `type=1`) | ✅ read-only |
 | Detect own uid from the login, skip own comments | ✅ |
-| One comment thread = one conversation (`video:<aid>:<rootRpid>`) | ✅ |
+| One comment thread = one conversation (`<resource>:<oid>:<rootRpid>`, e.g. `video:<aid>:<rpid>`) | ✅ |
 | First poll only records a baseline (history is not fed to AI) | ✅ |
 | AI replies go to a draft queue (`review`) | ✅ |
 | Draft persistence (survives restarts; interrupted sends are flagged) | ✅ `data/bilibili/<account>/drafts.json` |
@@ -38,14 +38,15 @@ Zhin.js Bilibili comment adapter (Plugin Runtime): lets AI help you reply to com
 | Edit / discard drafts before sending (`bili-draft edit` / `drop`) | ✅ |
 | QR login / cookie persistence (Console page or `bili-login start`) | ✅ environment variables still work and take precedence |
 | Expired-cookie detection: clear stale credentials, ask you to scan again | ✅ |
-| Console "Comment review" page: login status, watched videos, send / edit / discard drafts | ✅ |
+| Console "Comment review" page: login status, watched videos / dynamics / articles, send / edit / discard drafts | ✅ |
 | Push new drafts / expired login to you (`notify`) | ✅ optional, via the unified outbound pipeline to a chat you choose |
-| "Replies to me / @me" notifications (`x/msgfeed/reply`, `x/msgfeed/at`) | ✅ needs a login, off by default, video comments only |
-| Dynamic / article comments | 🚧 v1.1 |
+| "Replies to me / @me" notifications (`x/msgfeed/reply`, `x/msgfeed/at`) | ✅ needs a login, off by default; video comments, plus dynamic / article comments when `dynamics` / `articles` are configured |
+| Dynamic comments (`dynamics`: dynamic id → comment area via dynamic detail; image posts `type=11`, text / forward posts `type=17`) | ✅ Experimental |
+| Article comments (`articles`: cv ids, `type=12`) | ✅ Experimental |
 
 ## Prerequisites
 
-1. Your own Bilibili account and the BV ids of the videos to manage (ideally your own uploads)
+1. Your own Bilibili account and the BV ids / dynamic ids / article cv ids to manage (ideally your own)
 2. Pick one way to sign in:
    - **QR login (recommended)**: after starting, open the Console "Comment review" page, press "Sign in with QR code", and confirm in the Bilibili app; or send `bili-login start` to the bot in a private chat (the QR code is only sent in private chats)
    - **Environment variables**: log in at bilibili.com, copy `SESSDATA` and `bili_jct` from DevTools → Application → Cookies, and put them in a gitignored `.env`: `BILIBILI_SESSDATA`, `BILIBILI_BILI_JCT`
@@ -73,6 +74,10 @@ bilibili:
     - id: my-bilibili
       videos:
         - BV1xx411c7mD       # your own videos only
+      dynamics:              # optional: dynamic ids (the number in t.bilibili.com/<id> or bilibili.com/opus/<id>)
+        - "1073543151725051921"  # always quote: dynamic ids exceed JS safe integers and unquoted values are rejected
+      articles:              # optional: article cv ids
+        - cv40000001
       # Only when using environment variables instead of QR login:
       # sessdata: ${BILIBILI_SESSDATA}
       # biliJct: ${BILIBILI_BILI_JCT}
@@ -94,7 +99,7 @@ With the Console installed, "Comment review" appears in the navigation (route is
 
 - See the login status; sign in with a QR code, scan again, or sign out
 - Review pending replies: the original comment and the AI's proposed reply, with Send / Edit / Discard
-- See the watched videos (read-only; edit the config to change them)
+- See the watched videos / dynamics / articles (read-only; edit the config to change them); dynamics that cannot be resolved are marked as skipped
 
 The page refreshes every 10 seconds (2 seconds while scanning), so new drafts appear automatically.
 
@@ -110,10 +115,21 @@ Review commands require the master role: set yourself as `master` in the config 
 
 ## Conversations and messages
 
-- `conversation.kind = 'channel'`, `id = video:<aid>:<rootRpid>`, `parent = video:<aid>`
+- `conversation.kind = 'channel'`, `id = <resource>:<oid>:<rootRpid>`, `parent = <resource>:<oid>`
 - `message.id` = comment `rpid`
 - `sender` = commenter uid / nickname
-- `metadata`: `resource`, `rootId`, `parentId`, `via` (`video` / `reply` / `at`), `createdAt`, `likeCount`, `isUploader`
+- `metadata`: `resource` (`type` / `oid` / `commentType` / `dynamicId?` / `url`), `rootId`, `parentId`, `via` (`video` / `album` / `dynamic` / `article` / `reply` / `at`), `createdAt`, `likeCount`, `isUploader`
+
+Each resource prefix maps to exactly one Bilibili comment area, so the conversation id alone decides where a reply is posted:
+
+| Prefix | Comment `type` | `oid` | Source |
+|---|---|---|---|
+| `video` | 1 | video aid | `videos` |
+| `album` | 11 | album id (**not** the dynamic id) | image posts in `dynamics` |
+| `dynamic` | 17 | the dynamic id itself | text / forward posts in `dynamics` |
+| `article` | 12 | article cvid | `articles` |
+
+Each entry in `dynamics` is resolved once at start through dynamic detail (`x/polymer/web-dynamic/v1/detail`), using the platform-declared `basic.comment_type` / `basic.comment_id_str` instead of guessing an oid. Video dynamics (`type=1`) belong in `videos` and article dynamics (`type=12`) in `articles`; those, deleted / hidden dynamics and other unsupported shapes are skipped (logs `bilibili_dynamic_unsupported` / `bilibili_dynamic_unresolved`) without affecting other resources.
 - Comments from "replies to me / @me" carry `mentioned: true`; nested replies carry `replyTo`
 
 Group-style trigger rules apply: a comment thread is a shared conversation, so AI is triggered by @ / prefix by default; "replies to me / @me" count as @-ing the bot.
@@ -123,8 +139,9 @@ Group-style trigger rules apply: a comment thread is a shared conversation, so A
 With `notifications: [reply, at]`, each poll also reads one page of `x/msgfeed/reply` / `x/msgfeed/at`:
 
 - The first poll only records a baseline; afterwards only new notifications are admitted
-- Video comments only (dynamic / article notifications are ignored)
-- `notificationScope: whitelist` (default) admits only notifications under videos in `videos`; `all` admits every video-comment notification (for example replies to your comment under someone else's video)
+- Video comments (`business_id=1`); dynamic comments (11 / 17) when `dynamics` is configured, article comments (12) when `articles` is configured; other businesses are ignored
+- `notificationScope: whitelist` (default) admits only notifications under allow-listed videos / dynamics / articles; `all` admits every video-comment notification plus every dynamic / article comment notification of the enabled kinds (for example replies to your comment under someone else's video)
+- Text-dynamic oids (dynamic ids) exceed JS safe integers, so the notification number loses precision: the adapter recovers the exact id from the notification link and requires it to match; otherwise the notification is dropped rather than replied to in the wrong thread
 - A comment seen by both the video poll and a notification is admitted once
 
 ## Outbound
@@ -164,11 +181,12 @@ Without `notify`, drafts only show on the Console page and in logs (`bilibili_dr
 ## Known Limitations
 
 - Unofficial APIs; signature, field, or QR-flow changes on Bilibili's side can break it outright
-- Only the first page of each video's comments (latest 20 by time) is polled; more than 20 new comments between polls will be missed
+- Only the first page of each comment area (latest 20 by time) is polled; more than 20 new comments between polls will be missed
 - Seen comment ids and notification baselines live in memory; a restart re-baselines (old comments from the downtime are not handed to AI)
 - No automatic cookie refresh; scan again after expiry
 - "Replies to me / @me" reads only the first notification page per poll
-- Video comments (`type=1`) only
+- Only video (`type=1`), image-post (`type=11`), article (`type=12`) and text / forward dynamic (`type=17`) comments; dynamic → comment-area mapping depends on the dynamic detail API and may stop resolving after platform changes (such dynamics are skipped, never guessed)
+- Dynamics are resolved when the endpoint starts (like BV ids in `videos`) and are not re-resolved while running
 
 ## Troubleshooting
 
@@ -177,7 +195,10 @@ Without `notify`, drafts only show on the Console page and in logs (`bilibili_dr
 | Log `bilibili_circuit_open` | Risk control triggered (rate limit / captcha / block / duplicate). Polling stopped: check the account on the website, complete verification if needed, raise `pollIntervalSec`, then restart |
 | Log `bilibili_login_invalid` / page shows "Login expired" | The cookie expired. Scan again for QR logins; update the environment variables (or remove them and scan) otherwise |
 | QR login says Bilibili risk control blocked it | The QR API is rate-limited; wait a few minutes and retry |
-| Log `bilibili_no_videos` | `videos` is empty; nothing will be polled |
+| Log `bilibili_no_videos` | `videos` / `dynamics` / `articles` are empty (or no dynamic could be resolved); nothing will be polled |
+| Log `bilibili_dynamic_unsupported` | The dynamic's comment area is unsupported (put video dynamics in `videos`, article dynamics in `articles`); skipped |
+| Log `bilibili_dynamic_unresolved` | Dynamic detail returned an error (deleted / hidden); skipped |
+| Startup error `lost precision` | A dynamic id in `dynamics` is unquoted; make it a string |
 | AI replies don't show up on Bilibili | Expected: only drafts are created (`bilibili_draft_queued`); press Send on the Console page or run `bili-draft send <id>` |
 | No "Comment review" in the Console | Make sure the Console (`@zhin.js/page`) is installed and the token has `bilibili:read` |
 | Page buttons say you lack permission | The token lacks `bilibili:review` / `bilibili:login` |

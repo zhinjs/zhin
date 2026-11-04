@@ -1,18 +1,12 @@
-import {
-  defineAdapter,
-  type EndpointImplementation,
-  type EndpointTransportState,
-} from 'zhin.js/adapter';
+import { Adapter, createEndpointSpecification, defineAdapter, endpointSpec,
+  type Endpoint, type EndpointSpecification, type EndpointTransportState } from 'zhin.js/adapter';
+import { EventEmitter } from 'node:events';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
 
 interface TerminalConfig {
-  readonly terminal?: {
-    readonly interactive?: boolean;
-    readonly prompt?: string;
-  };
+  readonly terminal?: { readonly interactive?: boolean; readonly prompt?: string };
 }
-
 export interface TerminalEndpointOptions {
   readonly input: Readable;
   readonly output: Writable;
@@ -21,136 +15,95 @@ export interface TerminalEndpointOptions {
   readonly prompt: string;
 }
 
-export class TerminalClient {
+/** Owns terminal IO; the Endpoint never supplies a callback to find Client state. */
+export class TerminalClient extends EventEmitter<{ line: [line: string] }> {
   readonly input: Readable;
   readonly output: Writable;
   readonly error: Writable;
-  private readonly resolveReadline: () => ReadlineInterface | undefined;
+  readonly #options: TerminalEndpointOptions;
+  #readline?: ReadlineInterface;
+  #promptTimer?: ReturnType<typeof setTimeout>;
+  #state: EndpointTransportState = 'idle';
+  #sequence = 0;
 
-  constructor(
-    input: Readable,
-    output: Writable,
-    error: Writable,
-    resolveReadline: () => ReadlineInterface | undefined,
-  ) {
-    this.input = input;
-    this.output = output;
-    this.error = error;
-    this.resolveReadline = resolveReadline;
+  constructor(options: TerminalEndpointOptions) {
+    super(); this.#options = options;
+    this.input = options.input; this.output = options.output; this.error = options.error;
   }
-
-  get readline(): ReadlineInterface | undefined {
-    return this.resolveReadline();
-  }
-
-  write(payload: unknown): void {
+  get readline(): ReadlineInterface | undefined { return this.#readline; }
+  get transportState(): EndpointTransportState { return this.#state; }
+  write(payload: unknown): string {
     this.output.write(`${formatPayload(payload)}\n`);
+    return `terminal-${++this.#sequence}`;
+  }
+  openInput(): void {
+    this.#state = 'open';
+    if (!this.#options.interactive) return;
+    this.#readline = createInterface({ input: this.input, output: this.output,
+      crlfDelay: Infinity, terminal: isTerminal(this.input) && isTerminal(this.output) });
+    this.#readline.setPrompt(this.#options.prompt);
+    this.#readline.on('close', () => {
+      this.#clearPrompt();
+      if (this.#state === 'open') this.#state = 'closed';
+    });
+    // In raw TTY mode Ctrl+C is a readline event, not an OS process signal.
+    this.#readline.on('SIGINT', () => process.emit('SIGINT'));
+    this.#readline.on('line', line => this.emit('line', line));
+    this.schedulePrompt();
+  }
+  closeInput(): void {
+    this.#state = 'closed'; this.#clearPrompt(); this.#readline?.close(); this.#readline = undefined;
+  }
+  stopInput(): void { this.closeInput(); this.#state = 'stopped'; }
+  protected schedulePrompt(): void {
+    this.#clearPrompt();
+    if (this.#state !== 'open') return;
+    // Let the CLI print its startup summary before the interactive prompt.
+    this.#promptTimer = setTimeout(() => { this.#promptTimer = undefined; this.#readline?.prompt(); }, 0);
+  }
+  #clearPrompt(): void {
+    if (this.#promptTimer !== undefined) clearTimeout(this.#promptTimer);
+    this.#promptTimer = undefined;
   }
 }
 
-export function createTerminalEndpoint(
-  options: TerminalEndpointOptions,
-): EndpointImplementation<TerminalClient> {
-  let readline: ReadlineInterface | undefined;
-  let promptTimer: ReturnType<typeof setTimeout> | undefined;
-  let messageSequence = 0;
-  let transportState: EndpointTransportState = 'idle';
-  const client = new TerminalClient(
-    options.input,
-    options.output,
-    options.error,
-    () => readline,
-  );
-
-  const clearPrompt = () => {
-    if (!promptTimer) return;
-    clearTimeout(promptTimer);
-    promptTimer = undefined;
-  };
-  const schedulePrompt = () => {
-    clearPrompt();
-    // Let the CLI print its startup summary before the interactive prompt.
-    promptTimer = setTimeout(() => {
-      promptTimer = undefined;
-      readline?.prompt();
-    }, 0);
-  };
-
-  return {
-    client,
-    get transportState() {
-      return transportState;
-    },
-    activate({ events }) {
-      transportState = 'open';
-      if (!options.interactive) return () => { transportState = 'stopped'; };
-      readline = createInterface({
-        input: options.input,
-        output: options.output,
-        crlfDelay: Infinity,
-        terminal: isTerminal(options.input) && isTerminal(options.output),
-      });
-      readline.setPrompt(options.prompt);
-      readline.on('close', () => {
-        clearPrompt();
-        if (transportState === 'open') transportState = 'closed';
-      });
-      // In raw TTY mode Ctrl+C is a readline event, not an OS process signal.
-      readline.on('SIGINT', () => process.emit('SIGINT'));
-      readline.on('line', (line) => {
-        void events.platform('line', line).catch((error) => {
-          options.error.write(`${formatError(error)}\n`);
-        });
-        const content = line.trim();
-        if (!content) {
-          schedulePrompt();
-          return;
-        }
-        void events.message({
-          conversation: { kind: 'private', id: 'terminal' },
-          content,
-          sender: { id: 'local-user' },
-        }).catch((error: unknown) => {
-          options.error.write(`${formatError(error)}\n`);
-        }).finally(schedulePrompt);
-      });
-      schedulePrompt();
-      return () => {
-        transportState = 'stopped';
-        clearPrompt();
-        readline?.close();
-        readline = undefined;
-      };
-    },
-    send({ payload }) {
-      client.write(payload);
-      messageSequence += 1;
-      return `terminal-${messageSequence}`;
-    },
+export class TerminalEndpoint extends TerminalClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  constructor(options: TerminalEndpointOptions) {
+    super(options);
+    const endpoint = this;
+    this[endpointSpec] = createEndpointSpecification(this, {
+    start: signal => signal.throwIfAborted(),
+    open: () => { this.on('line', this.#receiveLine); this.openInput(); },
+    close: () => { this.off('line', this.#receiveLine); this.closeInput(); },
+    stop: () => { this.off('line', this.#receiveLine); this.stopInput(); },
+    send: request => this.write(request.payload),
+    get transportState() { return endpoint.transportState; },
+    });
+  }
+  readonly #receiveLine = (line: string): void => {
+    const events = this[endpointSpec].events;
+    void events.platform('line', line).catch(error => this.error.write(`${formatError(error)}\n`));
+    const content = line.trim();
+    if (!content) { this.schedulePrompt(); return; }
+    void events.message({ conversation: { kind: 'private', id: 'terminal' }, content, sender: { id: 'local-user' } })
+      .catch(error => this.error.write(`${formatError(error)}\n`)).finally(() => this.schedulePrompt());
   };
 }
 
-export default defineAdapter<TerminalConfig, TerminalClient>({
-  capabilities: ['inbound', 'outbound'],
-  create(context) {
-    return createTerminalEndpoint({
-      input: process.stdin,
-      output: process.stdout,
-      error: process.stderr,
-      interactive: context.config.terminal?.interactive ?? true,
-      prompt: context.config.terminal?.prompt ?? 'zhin> ',
-    });
-  },
-});
+export function createTerminalEndpoint(options: TerminalEndpointOptions): TerminalEndpoint {
+  return new TerminalEndpoint(options);
+}
+class TerminalAdapter extends Adapter<TerminalEndpoint, TerminalConfig> {
+  protected createEndpoint(config: TerminalConfig): TerminalEndpoint {
+    return new TerminalEndpoint({ input: process.stdin, output: process.stdout, error: process.stderr,
+      interactive: config.terminal?.interactive ?? true, prompt: config.terminal?.prompt ?? 'zhin> ' });
+  }
+}
+export default defineAdapter<TerminalConfig>({ capabilities: ['inbound', 'outbound'], createAdapter: () => new TerminalAdapter() });
 
 function isTerminal(stream: Readable | Writable): boolean {
   return (stream as Readable & { readonly isTTY?: boolean }).isTTY === true;
 }
-
-function formatPayload(payload: unknown): string {
-  return typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.stack ?? error.message : String(error);
-}
+function formatPayload(payload: unknown): string { return typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2); }
+function formatError(error: unknown): string { return error instanceof Error ? error.stack ?? error.message : String(error); }

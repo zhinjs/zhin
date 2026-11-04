@@ -92,15 +92,19 @@ async function readHead(response: Awaited<ReturnType<ImageProbeFetch>>): Promise
 }
 
 /** 读取公网图片文件头得到尺寸；网络错误、超时或格式不识别时返回 undefined。 */
+export interface ImageProbeOptions {
+  readonly fetch?: ImageProbeFetch;
+  readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+}
 export async function probeImageSize(
   url: string,
-  fetchImpl: ImageProbeFetch = fetch as unknown as ImageProbeFetch,
-  timeoutMs = PROBE_TIMEOUT_MS,
+  { fetch: fetchImpl = fetch as unknown as ImageProbeFetch, timeoutMs = PROBE_TIMEOUT_MS, signal }: ImageProbeOptions = {},
 ): Promise<QqImageSize | undefined> {
   try {
     const response = await fetchImpl(url, {
       headers: { Range: `bytes=0-${PROBE_BYTES - 1}` },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return undefined;
     return imageSizeFromBytes(await readHead(response));

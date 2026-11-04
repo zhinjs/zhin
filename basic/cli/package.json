@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/cli",
-  "version": "1.1.20",
+  "version": "1.1.27",
   "description": "Command-line interface for Zhin.js bot framework",
   "type": "module",
   "main": "./lib/index.js",
@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",

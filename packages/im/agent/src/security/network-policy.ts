@@ -80,9 +80,21 @@ export function isBlockedIpAddress(address: string): boolean {
     if (normalized === '::' || normalized === '::1') return true;
     const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(normalized)?.[1];
     if (mapped) return isBlockedIpAddress(mapped);
-    return /^(?:fc|fd)/i.test(normalized)
-      || /^fe[89ab]/i.test(normalized)
-      || /^ff/i.test(normalized);
+    // WHATWG URL canonicalization also covers expanded IPv4-mapped IPv6 spelling.
+    // Apply exactly the IPv4 rules to mapped hex addresses before the IPv6 ranges.
+    let canonical: string;
+    try { canonical = new URL(`http://[${normalized}]/`).hostname.slice(1, -1); }
+    catch { return true; }
+    if (canonical === '::' || canonical === '::1') return true;
+    const mappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(canonical);
+    if (mappedHex) {
+      const high = Number.parseInt(mappedHex[1]!, 16);
+      const low = Number.parseInt(mappedHex[2]!, 16);
+      return isBlockedIpAddress([high >>> 8, high & 255, low >>> 8, low & 255].join('.'));
+    }
+    return /^(?:fc|fd)/i.test(canonical)
+      || /^fe[89ab]/i.test(canonical)
+      || /^ff/i.test(canonical);
   }
   return true;
 }

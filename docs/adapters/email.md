@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=54a33cf303c31a65 -->
+<!-- sync-adapter-docs:sha256=ff73ab3879273ad8 -->
 
 # @zhin.js/adapter-email
 
@@ -30,12 +30,14 @@ pnpm add @zhin.js/adapter-email
 
 ## Plugin Runtime
 
+`EmailEndpoint` 组合实际 nodemailer SMTP 与 node-imap IMAP 连接，Client 自身拥有协议 IO 与取消；原始 `ParsedMail` 保留给入站事件。所属 `Adapter` 是账号期望状态与运行实例的唯一管理者，目录按实际内部身份路由。
+
 - `@zhin.js/adapter` — 约定式 `adapters/email/index.ts`（`defineAdapter`）
-- `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
+- `@zhin.js/core` — `endpointSpec.events` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到顶层 `<instanceKey>`（`smtp` / `imap`）
 
-入站：`gateway.receive({ conversation, message, content: text, sender, metadata })`（`conversation` 为 kind=private、id=发件人地址的 ConversationRef）  
+入站：`endpointSpec.events.emit('message.receive', { conversation, message, content: text, sender, metadata })`（`conversation` 为 kind=private、id=发件人地址的 ConversationRef）
 出站：`send({ conversation, payload })` → nodemailer（收件人取 `conversation.id`；payload 已由 gateway/core 渲染；无 segment-mapper）
 
 ## 前置条件
@@ -87,6 +89,16 @@ email:
 - `downloadPath`：保存目录，默认 `./downloads/email`
 - `maxFileSize`：单附件上限（字节），默认 10MB，超限跳过
 - `allowedTypes`：允许的 MIME 类型白名单，不在列表内跳过
+
+## Console 页面
+
+在所属插件的 Console 页面管理账号：查看配置与运行状态，添加、编辑、启动、停止、替换或删除账号。首次修改启动账号前，管理员需确认迁移清单；保留原身份与历史。此后保存到 Host 运行时存储，不改启动配置或 `.env`，无需重启进程。
+
+新增仅保存，需手动启动；运行账号的普通配置更新只重连该账号。身份变化走明确替换，新账号不会继承旧 Session 或登录状态。账号凭据变化先按平台实际只读接口核验；平台无法核验时需明确替换。空白或遮蔽的密码不会覆盖既有密码。
+
+读取需要 `email:read`，写入需要 `email:write`；首次迁移还需管理员身份。无持久化存储时管理操作不可用，提交结果未知时先刷新核实，不重复提交。
+
+SMTP 与 IMAP 的主机、账号、密码和连接参数分项填写；两种协议配置均必填。密码更新只做认证核验，不发送或读取邮件。
 
 ## 故障排查
 

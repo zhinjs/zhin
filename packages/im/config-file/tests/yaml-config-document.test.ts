@@ -173,7 +173,7 @@ plugins: {}
 });
 
 describe('RootRuntime with YamlConfigDocument', () => {
-  it('commits valid patches with the generation and leaves failed candidates untouched', async () => {
+  it('rejects invalid patches before save and retains saved desired YAML when activation fails', async () => {
     const project = await createProject('configVersion: 2\nplugins:\n  child: "@test/child"\nchild:\n  label: v1\n');
     const file = join(project, 'config.yml');
     const modules = new FakeModuleRuntime();
@@ -200,12 +200,18 @@ describe('RootRuntime with YamlConfigDocument', () => {
     await expect(runtime.patchConfig([{
       op: 'set', path: ['child', 'label'], value: 42,
     }])).rejects.toBeInstanceOf(ConfigValidationError);
+    expect(await readFile(file, 'utf8')).toBe(stableSource);
+    expect(runtime.snapshot).toBe(committed);
     await expect(runtime.patchConfig([{
       op: 'set', path: ['child', 'label'], value: 'broken',
     }])).rejects.toThrow('shadow setup failed');
 
     expect(runtime.snapshot).toBe(committed);
-    expect(await readFile(file, 'utf8')).toBe(stableSource);
+    expect([...runtime.snapshot.config.values()]).toContainEqual(expect.objectContaining({ label: 'v2' }));
+    expect(await readFile(file, 'utf8')).toBe(stableSource.replace('label: v2', 'label: broken'));
+    expect(runtime.configurationApplication).toMatchObject({ saved: true, generation: committed.generation,
+      sourceRevision: (await new YamlConfigDocument(file).read()).revision,
+      groups: expect.arrayContaining([expect.objectContaining({ status: 'failed' })]) });
     await runtime.stop();
   });
 

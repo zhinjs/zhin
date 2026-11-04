@@ -1,3 +1,5 @@
+import { isEndpoint, endpointRuntimeOf } from './endpoint-specification.js';
+
 export interface EndpointFriend {
   /** 数字平台（QQ 系）用 number；Slack/LINE/微信系用 string。 */
   readonly user_id: number | string;
@@ -36,66 +38,76 @@ export interface EndpointPendingRequest {
   readonly created_at: number;
 }
 
+/** Optional caller lifetime; scoped ports combine it with the exact account incarnation. */
+export interface EndpointManagementRequest { readonly signal?: AbortSignal; }
+export interface EndpointGroupRequest extends EndpointManagementRequest { readonly groupId: string; }
+export interface EndpointUserRequest extends EndpointManagementRequest { readonly userId: string; }
+export interface EndpointMemberRequest extends EndpointGroupRequest { readonly userId: string; }
+/** Inspection/moderation callers must supply their owned work lifetime. */
+export interface EndpointGroupInspectionRequest extends EndpointGroupRequest { readonly signal: AbortSignal; }
+export interface EndpointMemberInspectionRequest extends EndpointMemberRequest { readonly signal: AbortSignal; }
+export interface EndpointModerationRequest extends EndpointMemberInspectionRequest { readonly action: GroupModerationAction; }
+export interface EndpointMuteRequest extends EndpointMemberRequest { readonly durationSeconds: number; }
+export interface EndpointAdminRequest extends EndpointMemberRequest { readonly enabled: boolean; }
+export interface EndpointApproveRequest extends EndpointManagementRequest { readonly requestId: string; readonly remark?: string; }
+export interface EndpointRejectRequest extends EndpointManagementRequest { readonly requestId: string; readonly reason?: string; }
+export interface EndpointGroupNoticeRequest extends EndpointGroupRequest { readonly content: string; }
+/** ADR 0044 action requests. */
+export interface EndpointPokeRequest extends EndpointUserRequest { readonly groupId?: string; }
+export interface EndpointMuteAllRequest extends EndpointGroupRequest { readonly enabled: boolean; }
+export interface EndpointCardRequest extends EndpointMemberRequest { readonly card: string; }
+export interface EndpointTitleRequest extends EndpointMemberRequest { readonly title: string; readonly durationSeconds?: number; }
+export interface EndpointEssenceRequest extends EndpointGroupRequest { readonly messageId: string; readonly enabled: boolean; }
+
 /**
- * Optional, platform-neutral management surface exposed by an Endpoint.
- *
- * Platform adapters own SDK aliases, identifier coercion, and response
- * normalization. Hosts consume this interface without inspecting adapter
- * names or transport-specific fields.
+ * Platform-neutral semantic requests. Native SDK method signatures are not changed.
+ * Every request carries the lifetime of its work; platforms pass it to owned transports or
+ * use an operation scope for SDKs without cancellation. IDs remain platform addresses.
  */
 export interface EndpointManagement {
-  /** Fresh platform facts for moderation; absent means automatic moderation is unsupported. */
-  inspectGroupMember?(groupId: string, userId: string, signal: AbortSignal): Promise<GroupModerationMember>;
-  /**
-   * Scene facts for the ADR 0041 scene line (name, owner, admins, size, global mute). Single bounded
-   * lookup; every field is optional and absent means unknown. Host-internal, never a Console capability.
-   */
-  inspectGroupScene?(groupId: string, signal: AbortSignal): Promise<GroupSceneFacts>;
-  /**
-   * One member's display facts (role, card, title, mute expiry) from a single lookup. Unlike
-   * {@link inspectGroupMember} it carries no moderation verdict and costs one platform call.
-   */
-  inspectGroupMemberProfile?(groupId: string, userId: string, signal: AbortSignal): Promise<GroupMemberProfile>;
-  /** Recheck platform permissions and membership immediately before the operation. */
-  moderateGroupMember?(groupId: string, userId: string, action: GroupModerationAction, signal: AbortSignal): Promise<void>;
-  listFriends?(): Promise<readonly EndpointFriend[]>;
-  listGroups?(): Promise<readonly EndpointGroup[]>;
-  listChannels?(): Promise<readonly EndpointChannel[]>;
-  listGroupMembers?(groupId: string): Promise<readonly unknown[]>;
-  /** Live pending friend/group requests (preferred over unified_inbox_request). */
-  listRequests?(): Promise<readonly EndpointPendingRequest[]>;
-  approveRequest?(requestId: string, remark?: string): Promise<void>;
-  rejectRequest?(requestId: string, reason?: string): Promise<void>;
-  kickGroupMember?(groupId: string, userId: string): Promise<void>;
-  muteGroupMember?(groupId: string, userId: string, durationSeconds: number): Promise<void>;
-  setGroupAdmin?(groupId: string, userId: string, enabled: boolean): Promise<void>;
-  deleteFriend?(userId: string): Promise<void>;
-  /**
-   * Publish a group announcement (notice). Host-internal: used by the approved-announcement send path
-   * (ADR 0037 slice B) after the human approval, control plane and session gate. Not a Console capability,
-   * so it is intentionally absent from {@link endpointManagementCapabilityIds}.
-   */
-  sendGroupNotice?(groupId: string, content: string): Promise<void>;
+  /** Fresh platform permission, role and join facts; absent means unsupported. */
+  inspectGroupMember?(request: EndpointMemberInspectionRequest): Promise<GroupModerationMember>;
+  /** Scene name, owner, admins, size and mute facts; missing fields remain unknown. */
+  inspectGroupScene?(request: EndpointGroupInspectionRequest): Promise<GroupSceneFacts>;
+  inspectGroupMemberProfile?(request: EndpointMemberInspectionRequest): Promise<GroupMemberProfile>;
+  /** Recheck membership and platform permissions immediately before any effect. */
+  moderateGroupMember?(request: EndpointModerationRequest): Promise<void>;
+  listFriends?(request?: EndpointManagementRequest): Promise<readonly EndpointFriend[]>;
+  listGroups?(request?: EndpointManagementRequest): Promise<readonly EndpointGroup[]>;
+  listChannels?(request?: EndpointManagementRequest): Promise<readonly EndpointChannel[]>;
+  listGroupMembers?(request: EndpointGroupRequest): Promise<readonly unknown[]>;
+  listRequests?(request?: EndpointManagementRequest): Promise<readonly EndpointPendingRequest[]>;
+  approveRequest?(request: EndpointApproveRequest): Promise<void>;
+  rejectRequest?(request: EndpointRejectRequest): Promise<void>;
+  kickGroupMember?(request: EndpointMemberRequest): Promise<void>;
+  muteGroupMember?(request: EndpointMuteRequest): Promise<void>;
+  setGroupAdmin?(request: EndpointAdminRequest): Promise<void>;
+  deleteFriend?(request: EndpointUserRequest): Promise<void>;
+  /** Owner-approved publication remains in its existing policy path, outside Console capabilities. */
+  sendGroupNotice?(request: EndpointGroupNoticeRequest): Promise<void>;
   /**
    * ADR 0044 action ports (host-internal, absent from {@link endpointManagementCapabilityIds}). An
    * Adapter profile that declares the matching `actions.*` entry must implement the method; see
    * `ADAPTER_ACTION_PORTS`.
    */
   /** `actions.poke`: poke a user (in `groupId` when given, else privately). */
-  pokeUser?(userId: string, groupId?: string): Promise<void>;
+  pokeUser?(request: EndpointPokeRequest): Promise<void>;
   /** `actions.unmute` */
-  unmuteGroupMember?(groupId: string, userId: string): Promise<void>;
+  unmuteGroupMember?(request: EndpointMemberRequest): Promise<void>;
   /** `actions.muteAll`: turn the whole-group mute on or off. */
-  muteAllGroupMembers?(groupId: string, enabled: boolean): Promise<void>;
+  muteAllGroupMembers?(request: EndpointMuteAllRequest): Promise<void>;
   /** `actions.setCard` */
-  setGroupCard?(groupId: string, userId: string, card: string): Promise<void>;
+  setGroupCard?(request: EndpointCardRequest): Promise<void>;
   /** `actions.setTitle` (`durationSeconds` omitted = permanent where the platform supports it). */
-  setGroupTitle?(groupId: string, userId: string, title: string, durationSeconds?: number): Promise<void>;
+  setGroupTitle?(request: EndpointTitleRequest): Promise<void>;
   /** `actions.essence`: set or clear an essence message. */
-  setGroupEssence?(groupId: string, messageId: string, enabled: boolean): Promise<void>;
+  setGroupEssence?(request: EndpointEssenceRequest): Promise<void>;
   /** `actions.invite` */
-  inviteGroupMember?(groupId: string, userId: string): Promise<void>;
+  inviteGroupMember?(request: EndpointMemberRequest): Promise<void>;
 }
+
+export { createEndpointOperation } from './endpoint-operation.js';
+export type { EndpointOperation, EndpointOperationOptions } from './endpoint-operation.js';
 
 export interface GroupSceneFacts {
   readonly name?: string;
@@ -164,7 +176,7 @@ export function resolveEndpointManagement(endpoint: unknown): EndpointManagement
 export function listEndpointManagementCapabilities(
   endpoint: unknown,
 ): readonly EndpointManagementCapability[] {
-  const management = resolveEndpointManagement(endpoint);
+  const management = isEndpoint(endpoint) ? endpointRuntimeOf(endpoint).management : resolveEndpointManagement(endpoint);
   if (!management) return Object.freeze([]);
   return Object.freeze(endpointManagementCapabilityIds.filter(
     (capability) => typeof management[capability] === 'function',

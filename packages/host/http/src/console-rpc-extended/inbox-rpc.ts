@@ -364,7 +364,8 @@ export async function actOnRequest(
     const extra = approve
       ? strField(d, 'remark')
       : strField(d, 'reason');
-    await method.call(management, requestId, extra || undefined);
+    if (approve) await management.approveRequest!({ requestId, remark: extra || undefined });
+    else await management.rejectRequest!({ requestId, reason: extra || undefined });
     const model = getInboxModel(ctx, TABLE_REQUEST);
     if (model && typeof model.update === 'function') {
       await model.update({resolved: 1, resolved_at: Date.now()}).where({

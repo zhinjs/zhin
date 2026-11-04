@@ -13,6 +13,7 @@ import {
   type DatabaseHostConsole,
   type DatabaseHostModel,
   type DatabaseHostSelection,
+  type DatabaseHostAggregation,
   type ConfigDocumentPort,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
@@ -28,6 +29,7 @@ const logger = getLogger('Database');
 export type { DatabaseHostConfig } from './database-config.js';
 
 type RawModel = {
+  aggregate?(): DatabaseHostAggregation;
   select: (...fields: string[]) => {
     where(query: Record<string, unknown>): unknown;
     then?: unknown;
@@ -66,6 +68,17 @@ type RawDatabase = {
 
 function wrapModel(model: RawModel, db?: RawDatabase, tableName?: string): DatabaseHostModel {
   return {
+    ...(model.aggregate && db && ['sqlite', 'mysql', 'pg'].includes(db.dialectName) ? { aggregate: (): DatabaseHostAggregation => {
+      const source = model.aggregate!();
+      const chain: DatabaseHostAggregation = {
+        min(field, alias) { source.min(field, alias); return chain; },
+        max(field, alias) { source.max(field, alias); return chain; },
+        groupBy(...fields) { source.groupBy(...fields); return chain; },
+        where(query) { source.where(query); return chain; },
+        then(resolve, reject) { return Promise.resolve(source).then(resolve, reject); },
+      };
+      return Object.freeze(chain);
+    } } : {}),
     select: (...fields) => {
       if (fields.includes('*')) {
         throw new TypeError(

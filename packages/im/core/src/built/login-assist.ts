@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 /**
  * LoginAssist — 登录辅助生产者-消费者
  *
@@ -30,10 +32,18 @@ export interface PendingLoginTaskPayload {
   [key: string]: unknown;
 }
 
+export interface LoginAssistEndpointIdentity {
+  readonly canonicalId: string;
+  readonly instanceId: string;
+  readonly epoch: number;
+  readonly incarnationId: string;
+}
+
 export interface PendingLoginTask {
   id: string;
   adapter: string;
   endpointKey: string;
+  endpointIdentity?: LoginAssistEndpointIdentity;
   type: LoginAssistType;
   payload: PendingLoginTaskPayload;
   createdAt: number;
@@ -44,6 +54,9 @@ export interface PendingLoginTask {
 export interface WaitForInputOptions {
   /** Endpoint-instance owner. Only this owner may cancel the task during rollback/retirement. */
   owner: object;
+  /** Captured Endpoint incarnation; abort retires this exact challenge immediately. */
+  signal?: AbortSignal;
+  endpointIdentity?: LoginAssistEndpointIdentity;
   /**
    * 超时毫秒。默认 {@link DEFAULT_LOGIN_ASSIST_TIMEOUT_MS}。
    * 传 `0` / `Infinity` / 负数表示不超时（仅测试或显式长驻场景）。
@@ -67,6 +80,7 @@ interface PendingEntry {
   resolve: (value: string | Record<string, unknown>) => void;
   reject: (err: Error) => void;
   timer?: ReturnType<typeof setTimeout>;
+  detachAbort?: () => void;
 }
 
 // ============================================================================
@@ -77,7 +91,6 @@ export class LoginAssist {
   private readonly bus: LoginAssistBus | null;
   private readonly pending = new Map<string, PendingEntry>();
   private readonly local = new Map<LoginAssistEventName, Set<(task: PendingLoginTask) => void>>();
-  private idSeq = 0;
   /** 构造时默认超时；可被 waitForInput options 覆盖 */
   private readonly defaultTimeoutMs: number;
 
@@ -116,13 +129,15 @@ export class LoginAssist {
     payload: PendingLoginTaskPayload,
     options: WaitForInputOptions,
   ): Promise<string | Record<string, unknown>> {
-    const id = `login-${Date.now()}-${++this.idSeq}`;
+    options.signal?.throwIfAborted();
+    const id = `login-${randomUUID()}`;
     const timeoutMs = resolveTimeoutMs(options?.timeoutMs, this.defaultTimeoutMs);
     const createdAt = Date.now();
     const task: PendingLoginTask = {
       id,
       adapter,
       endpointKey,
+      ...(options.endpointIdentity ? { endpointIdentity: Object.freeze({ ...options.endpointIdentity }) } : {}),
       type,
       payload: { message: payload.message ?? '', ...payload },
       createdAt,
@@ -134,6 +149,7 @@ export class LoginAssist {
         entry.timer = setTimeout(() => {
           if (!this.pending.has(id)) return;
           this.pending.delete(id);
+          this.#detach(entry);
           try {
             this.#notify('endpoint.login.expired', task);
           } catch {
@@ -145,7 +161,14 @@ export class LoginAssist {
         entry.timer.unref?.();
       }
       this.pending.set(id, entry);
-      this.#notify('endpoint.login.pending', task);
+      if (options.signal) {
+        const signal = options.signal;
+        const abort = () => { this.cancel(id, 'endpoint_retired'); };
+        signal.addEventListener('abort', abort, { once: true });
+        entry.detachAbort = () => signal.removeEventListener('abort', abort);
+        if (signal.aborted) abort();
+      }
+      if (this.pending.has(id)) this.#notify('endpoint.login.pending', task);
     });
     return promise;
   }
@@ -153,11 +176,11 @@ export class LoginAssist {
   /**
    * 消费者：提交结果，对应 waitForInput 的 Promise 会 resolve。
    */
-  submit(id: string, value: string | Record<string, unknown>): boolean {
+  submit(id: string, value: string | Record<string, unknown>, endpointIdentity?: LoginAssistEndpointIdentity): boolean {
     const entry = this.pending.get(id);
-    if (!entry) return false;
+    if (!entry || !matchesIdentity(entry.task.endpointIdentity, endpointIdentity)) return false;
     this.pending.delete(id);
-    if (entry.timer) clearTimeout(entry.timer);
+    this.#detach(entry);
     entry.resolve(value);
     this.#notify('endpoint.login.resolved', entry.task);
     return true;
@@ -166,11 +189,11 @@ export class LoginAssist {
   /**
    * 消费者：取消某条待办，对应 Promise 会 reject。
    */
-  cancel(id: string, reason = 'cancelled'): boolean {
+  cancel(id: string, reason = 'cancelled', endpointIdentity?: LoginAssistEndpointIdentity): boolean {
     const entry = this.pending.get(id);
-    if (!entry) return false;
+    if (!entry || !matchesIdentity(entry.task.endpointIdentity, endpointIdentity)) return false;
     this.pending.delete(id);
-    if (entry.timer) clearTimeout(entry.timer);
+    this.#detach(entry);
     entry.reject(new Error(reason));
     this.#notify('endpoint.login.resolved', entry.task);
     return true;
@@ -184,7 +207,7 @@ export class LoginAssist {
     for (const [id, entry] of [...this.pending]) {
       if (entry.owner !== owner) continue;
       this.pending.delete(id);
-      if (entry.timer) clearTimeout(entry.timer);
+      this.#detach(entry);
       entry.reject(new Error(reason));
       this.#notify('endpoint.login.resolved', entry.task);
       count += 1;
@@ -211,11 +234,16 @@ export class LoginAssist {
 
   dispose(): void {
     for (const [, entry] of this.pending) {
-      if (entry.timer) clearTimeout(entry.timer);
+      this.#detach(entry);
       entry.reject(new Error('LoginAssist disposed'));
     }
     this.pending.clear();
     this.local.clear();
+  }
+
+  #detach(entry: PendingEntry): void {
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.detachAbort?.();
   }
 
   #notify(name: LoginAssistEventName, task: PendingLoginTask): void {
@@ -241,4 +269,9 @@ function resolveTimeoutMs(
   const raw = explicit === undefined ? fallback : explicit;
   if (!Number.isFinite(raw) || raw <= 0) return undefined;
   return raw;
+}
+
+function matchesIdentity(actual: LoginAssistEndpointIdentity | undefined, expected: LoginAssistEndpointIdentity | undefined): boolean {
+  return expected === undefined || (actual !== undefined && actual.canonicalId === expected.canonicalId
+    && actual.instanceId === expected.instanceId && actual.epoch === expected.epoch && actual.incarnationId === expected.incarnationId);
 }

@@ -30,7 +30,7 @@ afterEach(() => vi.useRealTimers());
 describe('ICQQ group scene facts', () => {
   it('maps group info and roster admins with one uncached info read', async () => {
     const f = fixture();
-    await expect(inspectGroupScene(f.client, String(GROUP), f.signal)).resolves.toEqual({
+    await expect(inspectGroupScene(f.client, { groupId: String(GROUP), signal: f.signal })).resolves.toEqual({
       name: '测试群', ownerId: '10001', adminIds: ['10003', '10002'], memberCount: 42, muteAll: false,
     });
     expect(f.native.getGroupInfo).toHaveBeenCalledExactlyOnceWith(GROUP, true);
@@ -39,45 +39,45 @@ describe('ICQQ group scene facts', () => {
 
   it('reports whole-group mute while it is in force', async () => {
     const f = fixture({ info: { shutup_time_whole: 0xffffffff } });
-    expect(await inspectGroupScene(f.client, String(GROUP), f.signal)).toMatchObject({ muteAll: true });
+    expect(await inspectGroupScene(f.client, { groupId: String(GROUP), signal: f.signal })).toMatchObject({ muteAll: true });
     const expired = fixture({ info: { shutup_time_whole: nowSeconds() - 10 } });
-    expect(await inspectGroupScene(expired.client, String(GROUP), expired.signal)).toMatchObject({ muteAll: false });
+    expect(await inspectGroupScene(expired.client, { groupId: String(GROUP), signal: expired.signal })).toMatchObject({ muteAll: false });
   });
 
   it('omits admins instead of failing when the roster read fails', async () => {
     const f = fixture();
     f.native.getGroupMemberList.mockRejectedValueOnce(new Error('roster timeout'));
-    const scene = await inspectGroupScene(f.client, String(GROUP), f.signal);
+    const scene = await inspectGroupScene(f.client, { groupId: String(GROUP), signal: f.signal });
     expect(scene).toEqual({ name: '测试群', ownerId: '10001', memberCount: 42, muteAll: false });
     expect('adminIds' in scene).toBe(false);
   });
 
   it('skips the roster read for very large groups', async () => {
     const f = fixture({ info: { member_count: ADMIN_SCAN_MAX_MEMBERS + 1 } });
-    const scene = await inspectGroupScene(f.client, String(GROUP), f.signal);
+    const scene = await inspectGroupScene(f.client, { groupId: String(GROUP), signal: f.signal });
     expect(f.native.getGroupMemberList).not.toHaveBeenCalled();
     expect('adminIds' in scene).toBe(false);
   });
 
   it('returns nothing for a mismatched group and propagates group-info failure', async () => {
     const f = fixture({ info: { group_id: 1 } });
-    expect(await inspectGroupScene(f.client, String(GROUP), f.signal)).toEqual({});
+    expect(await inspectGroupScene(f.client, { groupId: String(GROUP), signal: f.signal })).toEqual({});
     f.native.getGroupInfo.mockRejectedValueOnce(new Error('platform down'));
-    await expect(inspectGroupScene(f.client, String(GROUP), f.signal)).rejects.toThrow('platform down');
-    await expect(inspectGroupScene(f.client, 'abc', f.signal)).rejects.toThrow('Invalid QQ identifier');
+    await expect(inspectGroupScene(f.client, { groupId: String(GROUP), signal: f.signal })).rejects.toThrow('platform down');
+    await expect(inspectGroupScene(f.client, { groupId: 'abc', signal: f.signal })).rejects.toThrow('Invalid QQ identifier');
   });
 
   it('rejects results arriving after cancellation', async () => {
     const f = fixture(); const abort = new AbortController();
     f.native.getGroupInfo.mockImplementation(async () => { abort.abort(new Error('turn retired')); return f.info; });
-    await expect(inspectGroupScene(f.client, String(GROUP), abort.signal)).rejects.toThrow('turn retired');
+    await expect(inspectGroupScene(f.client, { groupId: String(GROUP), signal: abort.signal })).rejects.toMatchObject({ disposition: 'unknown', cause: abort.signal.reason });
   });
 });
 
 describe('ICQQ group member profile', () => {
   it('maps role, card, title and a single uncached lookup', async () => {
     const f = fixture();
-    await expect(inspectGroupMemberProfile(f.client, String(GROUP), '10002', f.signal)).resolves.toEqual({
+    await expect(inspectGroupMemberProfile(f.client, { groupId: String(GROUP), userId: '10002', signal: f.signal })).resolves.toEqual({
       platformRole: 'admin', card: '明明', title: '老玩家', mutedUntil: 0,
     });
     expect(f.native.getGroupMemberInfo).toHaveBeenCalledExactlyOnceWith(GROUP, 10002, true);
@@ -86,14 +86,14 @@ describe('ICQQ group member profile', () => {
   it('converts the mute expiry to epoch milliseconds and treats an elapsed one as unmuted', async () => {
     const f = fixture(); const expiry = nowSeconds() + 600;
     f.native.getGroupMemberInfo.mockResolvedValueOnce({ group_id: GROUP, user_id: 10002, role: 'member', card: '', title: '', shutup_time: expiry } as MemberInfo);
-    expect(await inspectGroupMemberProfile(f.client, String(GROUP), '10002', f.signal)).toEqual({ platformRole: 'member', mutedUntil: expiry * 1000 });
+    expect(await inspectGroupMemberProfile(f.client, { groupId: String(GROUP), userId: '10002', signal: f.signal })).toEqual({ platformRole: 'member', mutedUntil: expiry * 1000 });
     f.native.getGroupMemberInfo.mockResolvedValueOnce({ group_id: GROUP, user_id: 10002, role: 'member', shutup_time: nowSeconds() - 5 } as MemberInfo);
-    expect(await inspectGroupMemberProfile(f.client, String(GROUP), '10002', f.signal)).toEqual({ platformRole: 'member', mutedUntil: 0 });
+    expect(await inspectGroupMemberProfile(f.client, { groupId: String(GROUP), userId: '10002', signal: f.signal })).toEqual({ platformRole: 'member', mutedUntil: 0 });
   });
 
   it('attaches nothing when the returned member does not match the request', async () => {
     const f = fixture();
     f.native.getGroupMemberInfo.mockResolvedValueOnce({ group_id: GROUP, user_id: 999, role: 'owner' } as MemberInfo);
-    expect(await inspectGroupMemberProfile(f.client, String(GROUP), '10002', f.signal)).toEqual({});
+    expect(await inspectGroupMemberProfile(f.client, { groupId: String(GROUP), userId: '10002', signal: f.signal })).toEqual({});
   });
 });

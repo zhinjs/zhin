@@ -9,10 +9,10 @@ import {
   parseMessageChannel,
   resolveWorkspaceBranch,
 } from '../../../../src/github-channel-context.js';
-import type { GithubClient } from '../../../../src/client.js';
+import type { GithubEndpoint } from '../../../../src/endpoint.js';
 
-function requireBotGh(client: GithubClient, locale?: Locale) {
-  const gh = client.api;
+function requireBotGh(client: GithubEndpoint, locale?: Locale) {
+  const gh = client;
   if (!gh?.isAppAuth) {
     throw new Error(t(locale, 'appRequired'));
   }
@@ -36,7 +36,7 @@ function resolveChannel(msg: Message, repo?: string, locale?: Locale) {
 
 export async function executeGithubPrepareWorkspace(
   args: { repo?: string },
-  client: GithubClient,
+  client: GithubEndpoint,
   commMessage?: Message,
   preference?: Locale,
 ) {
@@ -57,7 +57,7 @@ export async function executeGithubPrepareWorkspace(
 
 export async function executeGithubPatchFile(
   args: { repo?: string; path: string; content: string; message: string; branch?: string },
-  client: GithubClient,
+  client: GithubEndpoint,
   commMessage?: Message,
   preference?: Locale,
 ) {
@@ -87,7 +87,7 @@ export async function executeGithubPatchFile(
 
 export async function executeGithubPushBranch(
   args: { repo?: string; branch?: string; message: string },
-  client: GithubClient,
+  client: GithubEndpoint,
   commMessage?: Message,
   preference?: Locale,
 ) {
@@ -103,7 +103,7 @@ export async function executeGithubPushBranch(
 
 export async function executeGithubCreatePr(
   args: { repo?: string; title: string; body?: string; head?: string; base?: string },
-  client: GithubClient,
+  client: GithubEndpoint,
   commMessage?: Message,
   preference?: Locale,
 ) {

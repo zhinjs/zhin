@@ -316,6 +316,7 @@ export type {
 // ── Agent session persistence ──
 export {
   AGENT_SESSION_SOURCE_MODEL,
+  agentSessionSourceFields,
   AGENT_MESSAGE_QUERY_MODEL,
   agentMessageQueryFields,
   AGENT_SESSION_MODEL,
@@ -363,6 +364,11 @@ export {
 export type { MemoryEntryRepository, MemoryEntryLocator, MemoryEntryListInput } from './memory/memory-entry-repository.js';
 export { tokenizeForBm25, rankBm25, rankMemoryEntries, memoryEntryDocument } from './memory/memory-bm25.js';
 export type { Bm25Options, Bm25Hit } from './memory/memory-bm25.js';
+export {
+  RUNTIME_CONTEXT_MARKER,
+  escapeHostMarkers,
+  isRuntimeContextMarkerText,
+} from './llm/types/runtime-context.js';
 export {
   parseAgentMessageExtra,
   renderUserMessageForLlm,
@@ -540,7 +546,7 @@ export {
   type ParticipantFacts, type BotHeaderFacts, type HeaderFormatOptions,
 } from './memory/participant-header.js';
 export {
-  MessageAliasTable, indexMessageAliases, isMessageAlias, messageAliasOf, resolveMessageAliasArguments,
+  MessageAliasTable, UnconfirmedMessageAliasError, indexMessageAliases, isMessageAlias, messageAliasOf, resolveMessageAliasArguments,
   assignRowAliasSeqs, payloadMessageId,
   type MessageAliasIndex, type MessageAliasAssignment,
 } from './memory/message-alias.js';
@@ -579,3 +585,4 @@ export {
   resolveMidConversationSystem,
 } from './llm/mid-conversation-system.js';
 export type { MidConversationSystem } from './llm/mid-conversation-system.js';
+export { parsePartialJson } from 'ai';

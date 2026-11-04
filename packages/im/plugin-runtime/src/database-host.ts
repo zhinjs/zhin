@@ -18,6 +18,14 @@ export interface DatabaseHostSelection {
   ): Promise<TResult1 | TResult2>;
 }
 
+/** Fixed-table read-only grouped aggregates; no SQL, joins or table selection. */
+export interface DatabaseHostAggregation extends PromiseLike<Record<string, unknown>[]> {
+  min(field: string, alias?: string): DatabaseHostAggregation;
+  max(field: string, alias?: string): DatabaseHostAggregation;
+  groupBy(...fields: string[]): DatabaseHostAggregation;
+  where(query: Record<string, unknown>): DatabaseHostAggregation;
+}
+
 /**
  * select() 需要显式列名：'*' 在 SQL 方言里会被当成字面列名（no such column: "*"），
  * 类型层直接拒绝；运行时另有可读报错兜底（见 Host 实现）。
@@ -31,6 +39,8 @@ type SelectFields<Fields extends readonly string[]> = {
  * and the Host-backed `@zhin.js/database` adapter.
  */
 export interface DatabaseHostModel {
+  /** Optional SQL capability; lightweight and transaction models may omit it. */
+  aggregate?(): DatabaseHostAggregation;
   select<Fields extends string[]>(...fields: SelectFields<Fields>): DatabaseHostSelection;
   insert(row: Record<string, unknown>): Promise<unknown>;
   delete(): { where(query: Record<string, unknown>): Promise<unknown> };
@@ -232,8 +242,23 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
     return Object.freeze(chain);
   }
 
+  #bindAggregation(aggregation: DatabaseHostAggregation): DatabaseHostAggregation {
+    const modify = (operation: () => DatabaseHostAggregation): DatabaseHostAggregation => this.#operation.setup(() => {
+      const next = operation();
+      return next === aggregation ? chain : this.#bindAggregation(next);
+    });
+    const chain: DatabaseHostAggregation = {
+      min: (field, alias) => modify(() => aggregation.min(field, alias)),
+      max: (field, alias) => modify(() => aggregation.max(field, alias)),
+      groupBy: (...fields) => modify(() => aggregation.groupBy(...fields)),
+      where: query => modify(() => aggregation.where(query)),
+      then: (fulfilled, rejected) => this.#execute(() => Promise.resolve(aggregation)).then(fulfilled, rejected),
+    };
+    return Object.freeze(chain);
+  }
+
   #bindModel(model: DatabaseHostModel): DatabaseHostModel {
-    const count = model.count?.bind(model);
+    const count = model.count?.bind(model), aggregate = model.aggregate?.bind(model);
     return Object.freeze({
       select: <Fields extends string[]>(...fields: SelectFields<Fields>) =>
         this.#operation.setup(() => this.#bindSelection(model.select<Fields>(...fields))),
@@ -245,6 +270,7 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
         where: (query: Record<string, unknown>) => this.#execute(() => model.update(patch).where(query)),
       })),
       ...(count ? { count: (query?: Record<string, unknown>) => this.#execute(() => count(query)) } : {}),
+      ...(aggregate ? { aggregate: () => this.#operation.setup(() => this.#bindAggregation(aggregate())) } : {}),
     } satisfies DatabaseHostModel);
   }
 
@@ -261,8 +287,16 @@ export function guardTransactionModel(model: DatabaseHostModel, check: () => voi
     limit(count) { check(); return selection(source.limit(count)); },
     then(resolve, reject) { return Promise.resolve().then(() => { check(); return source; }).then(resolve, reject); },
   });
+  const aggregation = (source: DatabaseHostAggregation): DatabaseHostAggregation => ({
+    min(field, alias) { check(); return aggregation(source.min(field, alias)); },
+    max(field, alias) { check(); return aggregation(source.max(field, alias)); },
+    groupBy(...fields) { check(); return aggregation(source.groupBy(...fields)); },
+    where(query) { check(); return aggregation(source.where(query)); },
+    then(resolve, reject) { return Promise.resolve().then(() => { check(); return source; }).then(resolve, reject); },
+  });
   return {
     select: <Fields extends string[]>(...fields: SelectFields<Fields>) => { check(); return selection(model.select<Fields>(...fields)); },
+    ...(model.aggregate ? { aggregate: () => { check(); return aggregation(model.aggregate!()); } } : {}),
     insert: async row => { check(); return model.insert(row); },
     update: patch => { check(); return { where: async query => { check(); return model.update(patch).where(query); } }; },
     delete: () => { check(); return { where: async query => { check(); return model.delete().where(query); } }; },

@@ -59,8 +59,20 @@ describe('sandbox per-session Turn policy', () => {
       expect(resolveSandboxTurnPolicy({ ...base, isMaster: true, scope: 'private', masterShell: 'isolated' }))
         .toEqual({
           filesystem: { workspaceRoot: '/projects/bot', workingDirectory: '/projects/bot', access: 'workspace-write' },
-          shell: { security: 'allowlist', execPreset: 'development', approvalMode: 'auto', isolation: 'required' },
+          shell: { security: 'allowlist', execPreset: 'development', approvalMode: 'ask', isolation: 'required' },
         });
+    });
+
+    it('asks the master by default instead of forcing auto over execApprovalMode', () => {
+      const shell = (extra: Record<string, unknown>) => resolveSandboxTurnPolicy({
+        ...base, isMaster: true, scope: 'private', masterShell: 'isolated', ...extra,
+      }).shell?.approvalMode;
+      expect(shell({ execApprovalMode: 'auto' })).toBe('ask');
+      expect(shell({ masterShellApprovalMode: 'ask', execApprovalMode: 'bypass' })).toBe('ask');
+      expect(shell({ masterShellApprovalMode: 'auto', execApprovalMode: 'ask' })).toBe('auto');
+      expect(shell({ masterShellApprovalMode: 'inherit', execApprovalMode: 'ask' })).toBe('ask');
+      expect(shell({ masterShellApprovalMode: 'inherit', execApprovalMode: 'bypass' })).toBe('bypass');
+      expect(shell({ masterShellApprovalMode: 'inherit' })).toBe('auto');
     });
 
     it('never grants it in groups or to non-masters', () => {

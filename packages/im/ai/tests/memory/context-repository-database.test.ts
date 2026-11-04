@@ -10,6 +10,8 @@ import {
 } from '../../src/memory/agent-db-models.js';
 import { AgentSessionStore } from '../../src/memory/agent-session-store.js';
 import { DatabaseContextRepository } from '../../src/memory/context-repository.js';
+import { indexMessageAliases } from '../../src/memory/message-alias.js';
+import { projectParticipantHeaders } from '../../src/memory/participant-header.js';
 import {
   createUserMessage,
   EMPTY_TOKEN_USAGE,
@@ -44,6 +46,35 @@ describe('DatabaseContextRepository (sqlite)', () => {
 
   afterEach(async () => {
     await db.stop();
+  });
+
+  it('reloads one reply row with all delivered ids and stable part aliases from a SQLite tail', async () => {
+    const store = new AgentSessionStore(db.models.get('agent_sessions')!);
+    const createRepo = () => new DatabaseContextRepository(db.models.get('agent_messages')!, db.models.get('agent_summaries')!, store, { tailMessageLimit: 2 });
+    await createRepo().appendMessages(sessionId, [
+      { ...createUserMessage('start', undefined, 1, { subjectId: 'user' }), messageId: 'platform-inbound' },
+      { role: 'assistant', content: [{ type: 'text', text: 'reply in two messages' }], api: 'test', provider: 'test', model: 'test',
+        usage: EMPTY_TOKEN_USAGE, stopReason: 'stop', timestamp: 2, assistantActor: { subjectId: 'bot' },
+        messageId: 'platform-first', messageIds: ['platform-first', 'platform-second'] },
+      { ...createUserMessage('about the second message', undefined, 3, { subjectId: 'user' }), messageId: 'platform-next',
+        quote: { id: 'platform-second', text: 'second' } },
+    ]);
+    const rows = await db.query<Array<{ id: number; payload: string }>>(
+      'SELECT id, payload FROM agent_messages WHERE session_id = ? ORDER BY id ASC', [sessionId],
+    );
+    expect(rows).toHaveLength(3);
+    expect(typeof rows[1]!.id).toBe('number');
+    expect(JSON.parse(rows[1]!.payload).messageIds).toEqual(['platform-first', 'platform-second']);
+    const loaded = await createRepo().loadContext(sessionId);
+    expect(loaded.messages).toHaveLength(2);
+    const aliases = indexMessageAliases(loaded.messages);
+    expect(aliases.idOf('m2')).toBe('platform-first');
+    expect(aliases.idOf('m2.2')).toBe('platform-second');
+    expect(aliases.idOf('m3')).toBe('platform-next');
+    const rendered = projectParticipantHeaders(loaded.messages).map(message =>
+      'content' in message ? message.content.filter(block => block.type === 'text').map(block => block.text).join('\n') : '');
+    expect(rendered[0]).toContain('id:m2;parts:m2,m2.2;');
+    expect(rendered[1]).toContain('reply_to:m2.2;');
   });
 
   it('retains all branch destinations when switching back to root', async () => {

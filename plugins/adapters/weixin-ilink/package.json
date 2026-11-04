@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-weixin-ilink",
-  "version": "1.1.16",
+  "version": "1.1.21",
   "type": "module",
   "description": "Zhin.js Weixin iLink (ClawBot) adapter for Plugin Runtime (long-poll)",
   "main": "./lib/index.js",
@@ -37,6 +37,7 @@
   "files": [
     "adapters",
     "commands",
+    "pages",
     "plugin.js",
     "schema.json",
     "src",
@@ -64,10 +65,13 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
-    "@zhin.js/logger": "workspace:*"
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -102,10 +106,14 @@
     "features": [
       {
         "package": "@zhin.js/adapter",
-        "api": "^1.0.0"
+        "api": "^2.1.0"
       },
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

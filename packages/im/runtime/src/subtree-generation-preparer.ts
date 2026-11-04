@@ -52,6 +52,10 @@ export class SubtreeGenerationPreparer {
     private readonly installResources?: RootResourceInstaller,
     private readonly environmentLayers: EnvironmentLayers = {},
     private readonly isolation?: IsolatedPluginRuntimePort,
+    private readonly configUpdates?: Readonly<{
+      config: ReadonlyMap<PluginId, unknown>;
+      projections: ReadonlyMap<FeatureId, unknown>;
+    }>,
   ) {}
 
   async prepare(
@@ -79,6 +83,7 @@ export class SubtreeGenerationPreparer {
       this.isolation,
     );
     plugins.installSetupFeatureAliases(featureSetupAliases(this.model.providers.values()), this.model.rootsByFeature);
+    for (const [owner, view] of this.configUpdates?.config ?? []) plugins.config.set(owner, Object.freeze(view ?? {}));
     plugins.removeSubtrees(roots);
 
     const projectionDisposers = new Map<FeatureId, Dispose>();
@@ -123,7 +128,7 @@ export class SubtreeGenerationPreparer {
         if (roots.some((root) => isWithin(slot.owner, root))) affectedFeatures.add(slot.feature);
       }
       const providers = [...this.model.providers.values()].filter((provider) => affectedFeatures.has(provider.id));
-      const projected = await new FeatureProjector(providers).project(
+      const projected = await new FeatureProjector(providers, plugins.scopes.get(current.root)).project(
         current.generation + 1,
         {
           root: current.root,
@@ -133,7 +138,7 @@ export class SubtreeGenerationPreparer {
           capabilities,
         },
         signal,
-        current.projections,
+        new Map([...current.projections, ...(this.configUpdates?.projections ?? [])]),
       );
       for (const [feature, dispose] of projected.disposers) {
         projectionDisposers.set(feature, dispose);

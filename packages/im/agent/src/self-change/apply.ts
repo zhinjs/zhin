@@ -2,13 +2,17 @@
  * 受控自我进化：生效、校验、回滚与回报（ADR 0040 §5 / §6，切片 E1）。
  *
  * 批准（`approved`）后按序：
- * 1. 复核 `content_hash`（逐个暂存文件重算摘要）与 `configPatch.expectedRevision`；不符 → `failed`，不动任何文件。
+ * 1. 复核 `content_hash`（逐个暂存文件重算摘要）、配置补丁是否触及当前禁改键、`configPatch.expectedRevision`；
+ *    不符 → `failed`，不动任何文件。
  * 2. 写回滚快照 `snapshot/`；把 `applying` + 回报目标 + 生效进度**先落盘**，再动手。
  * 3. 暂存文件写入目标路径（同目录临时文件 + rename），应用 `configPatch`。
  * 4. 按影响面：`none` 直接校验；`generation` 调热重载端口（返回需重启时按 `process`）；
  *    `process` 落盘 `verifying` 后请求受控重启（exit 75），由下次启动的 {@link SelfChangeApplier.recover} 接续。
  * 5. 健康检查通过 → `applied`，回报「已生效」；失败 → 用快照回滚**一次**，按同样方式恢复：
  *    恢复健康 → `rolled_back`，回报「失败，已回滚」；仍不健康 → `failed` + 控制面 `emergency_stop`，改投主人私聊，不再自动重启。
+ *
+ * 启动时残留的 `approved`（批准后进程没等到生效就结束）经 {@link SelfChangeApplier.resumeApproved}：批准不超过
+ * {@link DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS}（1 小时，#1051 Q2=B）照常生效；更早的转 `expired`，私聊主人重新起草。
  *
  * 宿主能力（文件系统之外的一切：热重载、重启、配置、健康检查、急停、发消息）都经 {@link SelfChangeApplyPorts}
  * 注入；agent 层不依赖 runtime / CLI。所有生产文件写入都在项目根内、重新过一遍路径白名单（防符号链接逃逸）。
@@ -19,12 +23,17 @@ import * as path from 'node:path';
 import type { DecisionReasonCode } from '../decision-events.js';
 import type { HostProtectedPaths } from '../security/host-config-paths.js';
 import {
+  DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS,
+  SelfChangeConfigKeyError,
   SelfChangePathError,
+  assertConfigPatchAllowed,
   normalizeChangeTarget,
   selfChangeContentHash,
+  selfChangePluginRootsProvider,
   sha256Hex,
   type SelfChangeConfigOperation,
   type SelfChangeFileEntry,
+  type SelfChangePluginRootsSource,
 } from './policy.js';
 import type { SelfChangeImpactKind } from './preview.js';
 import {
@@ -42,6 +51,14 @@ import {
 export const DEFAULT_CHANGE_HEALTH_WINDOW_MS = 60_000;
 /** 一次变更最多为它受控重启的次数：正向一次 + 回滚一次。 */
 const MAX_CHANGE_RESTARTS = 2;
+/** 没有守护进程（`--once`、裸 node 等）时，需要重启的变更不能自动生效。 */
+const RESTART_UNAVAILABLE_REASON = 'the change needs a process restart, but this instance has no supervisor to restart it';
+
+/** Evidence returned by a Host that applies a saved document before returning. */
+type ConfigApplication = NonNullable<SelfChangeApplyState['configApplication']>;
+class ConfigApplicationError extends Error {
+  constructor(readonly application: Exclude<ConfigApplication, 'applied' | 'restart-pending'>) { super(`configuration restore application: ${application}`); }
+}
 
 /** 根配置文档（字段级补丁 + 整份源文回滚）。 */
 export interface SelfChangeConfigPort {
@@ -49,11 +66,11 @@ export interface SelfChangeConfigPort {
   read(): Promise<Readonly<{ source: string; revision: string }>>;
   /** 按 `expectedRevision` 应用字段级补丁（同 Console `config:patch`）。 */
   patch(expectedRevision: string, patches: readonly SelfChangeConfigOperation[]): Promise<
-    | Readonly<{ status: 'saved'; revision: string; restartRequired: boolean }>
-    | Readonly<{ status: 'conflict' | 'invalid'; message: string }>
+    | Readonly<{ status: 'saved'; revision: string; restartRequired: boolean; application?: ConfigApplication }>
+    | Readonly<{ status: 'conflict' | 'invalid' | 'unconfirmed'; message: string; revision?: string }>
   >;
-  /** 回滚：整份换回快照源文。 */
-  restore(source: string, expectedRevision: string): Promise<Readonly<{ revision: string; restartRequired: boolean }>>;
+  /** 回滚：以本变更已确认的 revision 做 CAS，整份换回快照源文。 */
+  restore(source: string, expectedRevision: string): Promise<Readonly<{ revision?: string; restartRequired: boolean; application?: ConfigApplication }>>;
 }
 
 export interface SelfChangeHealthInput {
@@ -65,7 +82,8 @@ export interface SelfChangeHealthInput {
 
 export type SelfChangeHealth = Readonly<{ ok: true }> | Readonly<{ ok: false; error: string }>;
 
-export type SelfChangeReportKind = 'applied' | 'rolled_back' | 'failed';
+/** `expired`：残留的批准超过时限没生效（#1051 Q2=B），只投主人私聊。 */
+export type SelfChangeReportKind = 'applied' | 'rolled_back' | 'failed' | 'expired';
 
 export interface SelfChangeReportInput {
   readonly record: SelfChangeRecord;
@@ -84,12 +102,21 @@ export interface SelfChangeApplyPorts {
   /** 缺省时带 `configPatch` 的变更一律 `failed`（不动文件）。 */
   readonly config?: SelfChangeConfigPort;
   /**
-   * 热重载（`RootRuntime.reload()`，生产 `--no-watch` 也可用）。返回 `restart` 表示这次改动需要重启。
+   * 热重载（`RootRuntime.reload()`，未启用文件监听时也可用）。返回 `restart` 表示这次改动需要重启。
    * 抛错视为生效失败。
    */
-  reload(input: { readonly record: SelfChangeRecord; readonly changed: readonly string[] }): Promise<'reloaded' | 'restart'>;
+  reload(input: { readonly record: SelfChangeRecord; readonly changed: readonly string[];
+    /** The configuration Host has already handled this exact save/restore. Reload only the source files. */
+    readonly configurationHandled?: boolean }): Promise<'reloaded' | 'restart'>;
   /** 受控重启（exit 75）；调用前 `verifying` 已落盘。 */
   requestRestart(record: SelfChangeRecord): void | Promise<void>;
+  /**
+   * 受控重启能否把进程拉起来（有守护进程、不是 `--once`）。缺省视为可以。
+   * 返回 false 时：计划要重启的变更不动文件直接 `failed`；生效中途才发现要重启的按快照回滚（`rolled_back`），
+   * 两者原因码都是 `change_restart_unavailable`。回滚本身需要重启（恢复配置要重启 / 恢复后热重载要求重启 /
+   * recover() 接续的回滚要重启）时不请求重启，直接急停。
+   */
+  restartSupported?(): boolean;
   health(input: SelfChangeHealthInput): Promise<SelfChangeHealth>;
   /** 打开控制面实例级 `emergency_stop`（§6）。 */
   emergencyStop(record: SelfChangeRecord, reason: string): Promise<void>;
@@ -100,22 +127,30 @@ export interface SelfChangeApplierOptions {
   readonly store: SelfChangeStore;
   readonly projectRoot: string;
   readonly protectedPaths?: HostProtectedPaths;
-  readonly pluginRoots?: readonly string[];
+  readonly pluginRoots?: SelfChangePluginRootsSource;
   readonly ports: SelfChangeApplyPorts;
   readonly healthWindowMs?: number;
+  /** 残留 `approved` 自动生效的时限；默认 {@link DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS}。 */
+  readonly approvedApplyWindowMs?: number;
+  readonly now?: () => number;
   readonly onError?: (error: unknown) => void;
 }
 
-/** 生效路径结束时的结论。`restarting` = 已请求重启，结论由下次启动的 `recover()` 给出。 */
-export type SelfChangeApplyOutcome = 'applied' | 'rolled_back' | 'failed' | 'restarting';
+/**
+ * 生效路径结束时的结论。`restarting` = 已请求重启，结论由下次启动的 `recover()` 给出；`expired` = 残留的批准
+ * 已超时（只由 {@link SelfChangeApplier.resumeApproved} 给出）。
+ */
+export type SelfChangeApplyOutcome = 'applied' | 'rolled_back' | 'failed' | 'restarting' | 'expired';
 
 export class SelfChangeApplier {
   readonly #store: SelfChangeStore;
   readonly #projectRoot: string;
   readonly #protectedPaths?: HostProtectedPaths;
-  readonly #pluginRoots: readonly string[];
+  readonly #pluginRoots: () => readonly string[];
   readonly #ports: SelfChangeApplyPorts;
   readonly #healthWindowMs: number;
+  readonly #approvedApplyWindowMs: number;
+  readonly #now: () => number;
   readonly #onError: (error: unknown) => void;
   #tail: Promise<unknown> = Promise.resolve();
 
@@ -123,9 +158,11 @@ export class SelfChangeApplier {
     this.#store = options.store;
     this.#projectRoot = path.resolve(options.projectRoot);
     this.#protectedPaths = options.protectedPaths;
-    this.#pluginRoots = Object.freeze([...(options.pluginRoots ?? [])]);
+    this.#pluginRoots = selfChangePluginRootsProvider(options.pluginRoots);
     this.#ports = options.ports;
     this.#healthWindowMs = options.healthWindowMs ?? DEFAULT_CHANGE_HEALTH_WINDOW_MS;
+    this.#approvedApplyWindowMs = options.approvedApplyWindowMs ?? DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS;
+    this.#now = options.now ?? Date.now;
     this.#onError = options.onError ?? (() => undefined);
   }
 
@@ -135,9 +172,31 @@ export class SelfChangeApplier {
   }
 
   /**
+   * 启动时接续一个残留的 `approved`（批准了但进程没等到生效就结束，#1051 Q2=B）：批准（最后一次状态变化）
+   * 不超过 1 小时照常 {@link apply}；更早的转 `expired`（不动任何文件），私聊主人「批准已过期，请重新起草」。
+   */
+  resumeApproved(id: string): Promise<SelfChangeApplyOutcome> {
+    return this.#serialize(async () => {
+      const current = await this.#store.get(id);
+      if (!current) throw new SelfChangeNotFoundError(id);
+      if (current.status !== 'approved') throw new SelfChangeStateError(current.status, 'be applied');
+      const age = this.#now() - current.updatedAt;
+      if (age >= 0 && age <= this.#approvedApplyWindowMs) return this.#apply(id);
+      const minutes = Math.round(this.#approvedApplyWindowMs / 60_000);
+      const done = await this.#store.transition(id, 'expired', {
+        actor: 'policy',
+        error: `approved ${Math.round(age / 60_000)} min ago but not applied within ${minutes} min`,
+        auditPayload: { approved_age_ms: age, window_ms: this.#approvedApplyWindowMs },
+      });
+      await this.#report(done, 'expired', `批准已过期，未生效（未改动任何文件）：${describeChange(done)}。批准后 ${minutes} 分钟内没来得及生效，请重新起草。`, true);
+      return 'expired';
+    });
+  }
+
+  /**
    * 每次启动调用：接续 `applying` / `verifying` 的变更（§6 `recover()`）。
    * - `verifying`：刚为它重启过，做健康检查后给结论（正向 → `applied` 或回滚；回滚 → `rolled_back` 或急停）。
-   * - `applying`：生效中途进程没了，文件可能只写了一半——按快照回滚后再校验。
+   * - `applying`：有归属证据的已确认操作按快照回滚；未确认的配置操作保留现场交人工核验。
    * 返回接续的变更数。
    */
   recover(): Promise<number> {
@@ -165,6 +224,13 @@ export class SelfChangeApplier {
     const staged = await this.#readStaged(current);
     const mismatch = verifyStaged(current, staged);
     if (mismatch) return this.#failUntouched(current, 'change_hash_mismatch', mismatch);
+    // 禁改名单可能在起草 / 批准之后扩充：按当前名单重查，旧批准不能放行新禁改键。
+    const forbiddenConfigError = findForbiddenConfigPatchError(current);
+    if (forbiddenConfigError) return this.#failUntouched(current, 'change_config_key_forbidden', forbiddenConfigError);
+    // 起草时有守护进程、生效时没有（例如换成 `--once` / 裸 node 启动）：要重启的变更不动文件。
+    if (plannedMode(current) === 'process' && !this.#restartSupported()) {
+      return this.#failUntouched(current, 'change_restart_unavailable', RESTART_UNAVAILABLE_REASON);
+    }
     let configRevision: string | null = null;
     let configSource: string | null = null;
     if (current.configPatch) {
@@ -187,11 +253,12 @@ export class SelfChangeApplier {
       config: configSource !== null && configRevision !== null ? { source: configSource, revision: configRevision } : null,
     });
     let mode = plannedMode(current);
+    let configurationHandled = false;
     let record = await this.#store.transition(id, 'applying', {
       actor: 'policy',
       reasonCode: mode === 'none' ? 'change_applied_none' : mode === 'generation' ? 'change_applied_reload' : 'change_restart_requested',
       reportTarget: current.reportTarget ?? reportTargetOf(current.origin),
-      apply: { phase: 'forward', mode, restarts: 0, failure: null },
+      apply: { phase: 'forward', mode, restarts: 0, failure: null, ...(configRevision !== null ? { configRevision } : {}) },
     });
 
     // 3. 写入。
@@ -200,32 +267,57 @@ export class SelfChangeApplier {
         await this.#writeProjectFile(entry, staged.get(entry.path) ?? null);
       }
       if (current.configPatch && this.#ports.config && configRevision !== null) {
+        // Write intent before entering the config side-effect boundary. If the
+        // process disappears before acknowledgement, recover must not guess.
+        record = await this.#store.setApplyState(id, { ...record.apply!, configApplication: 'unconfirmed' });
         const result = await this.#ports.config.patch(configRevision, current.configPatch.patches);
-        if (result.status !== 'saved') throw new Error(`config patch ${result.status}: ${result.message}`);
+        if (result.status === 'unconfirmed' || result.status === 'conflict') return this.#configUnresolved(record,
+          result.status === 'conflict' ? 'superseded' : 'unconfirmed', 'patch');
+        if (result.status !== 'saved') {
+          record = await this.#store.setApplyState(id, { ...record.apply!, configRevision: result.revision ?? record.apply!.configRevision, configApplication: 'invalid' });
+          throw new Error(`config patch ${result.status}: ${result.message}`);
+        }
+        record = await this.#store.setApplyState(id, { ...record.apply!, configRevision: result.revision, configApplication: result.application });
+        if (result.application === 'unconfirmed' || result.application === 'superseded') return this.#configUnresolved(record, result.application, 'apply');
+        if (result.application === 'invalid' || result.application === 'failed' || result.application === 'blocked') throw new Error(`saved configuration application: ${result.application}`);
+        configurationHandled = result.application === 'applied' || result.application === 'restart-pending';
         if (result.restartRequired) mode = 'process';
+        else if (result.application === 'applied' && current.files.length === 0) mode = 'none';
       }
     } catch (error) {
+      if (record.apply?.configApplication === 'unconfirmed') return this.#configUnresolved(record, 'unconfirmed', 'patch');
       return this.#rollback(record, `apply failed: ${errorText(error)}`);
     }
 
     // 4. 按影响面生效。
     if (mode === 'generation') {
       try {
-        const reloaded = await this.#ports.reload({ record, changed: current.files.map(file => file.path) });
+        const reloaded = await this.#ports.reload({ record, changed: current.files.map(file => file.path), ...(configurationHandled ? { configurationHandled } : {}) });
         if (reloaded === 'restart') mode = 'process';
       } catch (error) {
         return this.#rollback(record, `reload failed: ${errorText(error)}`);
       }
     }
+    if (mode === 'process' && !this.#restartSupported()) {
+      return this.#rollbackWithoutRestart(record, RESTART_UNAVAILABLE_REASON);
+    }
     if (mode === 'process') {
       return this.#restart(record, 'verifying', { phase: 'forward', mode, restarts: 1, failure: null });
     }
-    if (record.apply?.mode !== mode) record = await this.#store.setApplyState(id, { phase: 'forward', mode, restarts: 0, failure: null });
+    if (record.apply?.mode !== mode) record = await this.#store.setApplyState(id, { ...record.apply!, phase: 'forward', mode, restarts: 0, failure: null });
     return this.#verifyForward(record, false);
   }
 
   async #recoverOne(record: SelfChangeRecord): Promise<void> {
     const apply = record.apply ?? { phase: 'forward', mode: 'process', restarts: 1, failure: null };
+    if (apply.configApplication === 'unconfirmed' || apply.configApplication === 'superseded') {
+      await this.#configUnresolved(record, apply.configApplication, 'recover'); return;
+    }
+    if (apply.configApplication === 'invalid' || apply.configApplication === 'failed' || apply.configApplication === 'blocked') {
+      if (apply.phase === 'rollback') await this.#emergency(record, `configuration restore application: ${apply.configApplication}`);
+      else await this.#rollback(record, `saved configuration application: ${apply.configApplication}`);
+      return;
+    }
     if (record.status === 'applying') {
       await this.#rollback(record, apply.phase === 'rollback' ? (apply.failure ?? 'interrupted while rolling back') : 'interrupted while applying');
       return;
@@ -235,6 +327,8 @@ export class SelfChangeApplier {
   }
 
   async #verifyForward(record: SelfChangeRecord, restarted: boolean): Promise<SelfChangeApplyOutcome> {
+    const ownership = await this.#configOwnership(record);
+    if (ownership !== 'owned') return this.#configUnresolved(record, ownership, 'verify');
     const health = await this.#health(record, restarted);
     if (!health.ok) return this.#rollback(record, `health check failed: ${health.error}`);
     const done = await this.#store.transition(record.id, 'applied', { actor: 'policy', auditPayload: { restarted } });
@@ -249,32 +343,98 @@ export class SelfChangeApplier {
     const prior = record.apply;
     // 回滚本身也先落盘：进程在回滚中途没了，recover() 会再按快照回滚一次（幂等）。
     let current = record.status === 'applying' || record.status === 'verifying'
-      ? await this.#store.setApplyState(record.id, { phase: 'rollback', mode: prior?.mode ?? 'process', restarts: prior?.restarts ?? 0, failure })
+      ? await this.#store.setApplyState(record.id, { ...prior, phase: 'rollback', mode: prior?.mode ?? 'process', restarts: prior?.restarts ?? 0, failure })
       : record;
     let mode = prior?.mode ?? 'process';
+    let configurationHandled = false;
     try {
-      mode = maxMode(mode, await this.#restoreSnapshot(current, snapshot));
+      const restored = await this.#restoreSnapshot(current, snapshot);
+      current = restored.record;
+      configurationHandled = restored.configurationHandled;
+      mode = configurationHandled && current.files.length === 0 && mode === 'generation' ? restored.mode : maxMode(mode, restored.mode);
     } catch (error) {
+      if (error instanceof ConfigApplicationError && (error.application === 'unconfirmed' || error.application === 'superseded')) return this.#configUnresolved(current, error.application, 'restore');
       return this.#emergency(current, `${failure}; rollback failed: ${errorText(error)}`);
     }
     if (mode === 'generation') {
       try {
-        const reloaded = await this.#ports.reload({ record: current, changed: current.files.map(file => file.path) });
+        const reloaded = await this.#ports.reload({ record: current, changed: current.files.map(file => file.path), ...(configurationHandled ? { configurationHandled } : {}) });
         if (reloaded === 'restart') mode = 'process';
       } catch (error) {
         return this.#emergency(current, `${failure}; reload after rollback failed: ${errorText(error)}`);
       }
     }
     if (mode === 'process') {
+      // 回滚也要守同一道闸：没有守护进程（`--once` / 裸 node，含 recover() 接续）时不请求重启，
+      // 恢复后的状态没法在本进程生效，只能急停等人处理。
+      if (!this.#restartSupported()) {
+        return this.#emergency(current, `${failure}; rollback needs a process restart, but this instance has no supervisor to restart it`);
+      }
       const restarts = (current.apply?.restarts ?? 0) + 1;
       if (restarts > MAX_CHANGE_RESTARTS) return this.#emergency(current, `${failure}; restart limit reached`);
       return this.#restart(current, current.status === 'verifying' ? null : 'verifying', { phase: 'rollback', mode, restarts, failure });
     }
-    if (current.apply?.mode !== mode) current = await this.#store.setApplyState(current.id, { phase: 'rollback', mode, restarts: current.apply?.restarts ?? 0, failure });
+    if (current.apply?.mode !== mode) current = await this.#store.setApplyState(current.id, { ...current.apply!, phase: 'rollback', mode, restarts: current.apply?.restarts ?? 0, failure });
     return this.#verifyRollback(current, failure, false);
   }
 
+  #restartSupported(): boolean {
+    return this.#ports.restartSupported?.() ?? true;
+  }
+
+  /**
+   * 生效中途才发现要重启（热重载说需要重启 / 配置补丁需要重启），而本实例没有守护进程：按快照回滚，不重启。
+   * 正向改动没有在本进程里生效过（热重载拒绝了、需要重启的配置也还没生效），恢复磁盘即可；
+   * 恢复配置只需热重载时照常热重载。恢复本身需要重启（快照配置要重启才生效）或恢复后的热重载要求重启时，
+   * 无法证明恢复后的状态已在本进程生效，不报 `rolled_back`，直接急停。之后校验：健康 → `rolled_back`，否则急停。
+   */
+  async #rollbackWithoutRestart(record: SelfChangeRecord, failure: string): Promise<SelfChangeApplyOutcome> {
+    const snapshot = await this.#store.readSnapshot(record.id).catch(() => null);
+    if (!snapshot) return this.#emergency(record, `${failure}; rollback snapshot is missing`);
+    let current = await this.#store.setApplyState(record.id, { ...record.apply!, phase: 'rollback', mode: 'generation', restarts: 0, failure });
+    let restoreMode: SelfChangeImpactKind;
+    let configurationHandled = false;
+    try {
+      const restored = await this.#restoreSnapshot(current, snapshot);
+      current = restored.record;
+      restoreMode = restored.mode;
+      configurationHandled = restored.configurationHandled;
+      if (configurationHandled && current.files.length > 0) restoreMode = maxMode(restoreMode, 'generation');
+    } catch (error) {
+      if (error instanceof ConfigApplicationError && (error.application === 'unconfirmed' || error.application === 'superseded')) return this.#configUnresolved(current, error.application, 'restore');
+      return this.#emergency(current, `${failure}; rollback failed: ${errorText(error)}`);
+    }
+    if (restoreMode === 'process') {
+      return this.#emergency(current, `${failure}; restoring the snapshot needs a process restart, but this instance has no supervisor to restart it`);
+    }
+    if (restoreMode === 'generation') {
+      let reloaded: 'reloaded' | 'restart';
+      try {
+        reloaded = await this.#ports.reload({ record: current, changed: current.files.map(file => file.path), ...(configurationHandled ? { configurationHandled } : {}) });
+      } catch (error) {
+        return this.#emergency(current, `${failure}; reload after rollback failed: ${errorText(error)}`);
+      }
+      if (reloaded === 'restart') {
+        return this.#emergency(current, `${failure}; reload after rollback needs a process restart, but this instance has no supervisor to restart it`);
+      }
+    }
+    const ownership = await this.#configOwnership(current);
+    if (ownership !== 'owned') return this.#configUnresolved(current, ownership, 'verify-rollback');
+    const health = await this.#health(current, false);
+    if (!health.ok) return this.#emergency(current, `${failure}; still unhealthy after rollback: ${health.error}`);
+    const done = await this.#store.transition(current.id, 'rolled_back', {
+      actor: 'policy',
+      reasonCode: 'change_restart_unavailable',
+      error: failure,
+      auditPayload: { restarted: false },
+    });
+    await this.#report(done, 'rolled_back', `未生效，已回滚：${describeChange(done)}。原因：这个变更需要重启，但本实例没有守护进程，无法自动重启。`);
+    return 'rolled_back';
+  }
+
   async #verifyRollback(record: SelfChangeRecord, failure: string, restarted: boolean): Promise<SelfChangeApplyOutcome> {
+    const ownership = await this.#configOwnership(record);
+    if (ownership !== 'owned') return this.#configUnresolved(record, ownership, 'verify-rollback');
     const health = await this.#health(record, restarted);
     if (!health.ok) return this.#emergency(record, `${failure}; still unhealthy after rollback: ${health.error}`);
     const done = await this.#store.transition(record.id, 'rolled_back', { actor: 'policy', error: failure, auditPayload: { restarted } });
@@ -294,6 +454,29 @@ export class SelfChangeApplier {
     return 'failed';
   }
 
+  /** Unknown application and source conflicts cannot authorize a retry or compensating write. */
+  async #configUnresolved(record: SelfChangeRecord, application: 'unconfirmed' | 'superseded', stage: string): Promise<SelfChangeApplyOutcome> {
+    const error = `configuration ${stage} outcome: ${application}; automatic continuation stopped; manual verification required`;
+    const current = await this.#store.get(record.id);
+    if (!current) throw new SelfChangeNotFoundError(record.id);
+    const done = await this.#store.transition(record.id, 'failed', { actor: 'policy', error,
+      reasonCode: application === 'superseded' ? 'change_config_superseded' : 'change_config_unconfirmed',
+      apply: current.apply ? { ...current.apply, configApplication: application } : current.apply,
+      auditPayload: { configurationApplication: application, stage } });
+    const detail = application === 'superseded' ? '配置修订已被其他修改替代'
+      : '配置保存或生效结果未确认';
+    await this.#report(done, 'failed', `${detail}，已停止后续自动操作并保留现场，请人工核验：${describeChange(done)}。阶段：${stage}。`);
+    return 'failed';
+  }
+
+  async #configOwnership(record: SelfChangeRecord): Promise<'owned' | 'unconfirmed' | 'superseded'> {
+    if (!record.configPatch) return 'owned';
+    const revision = record.apply?.configRevision;
+    if (!revision || !this.#ports.config) return 'unconfirmed';
+    try { return (await this.#ports.config.read()).revision === revision ? 'owned' : 'superseded'; }
+    catch { return 'unconfirmed'; }
+  }
+
   /** 复核不通过：不动任何文件，`failed`（§5.1），回报发起会话；不急停（生产没被改过）。 */
   async #failUntouched(record: SelfChangeRecord, reasonCode: DecisionReasonCode, error: string): Promise<SelfChangeApplyOutcome> {
     const done = await this.#store.transition(record.id, 'failed', { actor: 'policy', reasonCode, error });
@@ -302,6 +485,7 @@ export class SelfChangeApplier {
   }
 
   async #restart(record: SelfChangeRecord, to: 'verifying' | null, apply: SelfChangeApplyState): Promise<SelfChangeApplyOutcome> {
+    apply = { ...record.apply, ...apply };
     const next = to
       ? await this.#store.transition(record.id, to, { actor: 'policy', apply })
       : await this.#store.setApplyState(record.id, apply);
@@ -352,18 +536,41 @@ export class SelfChangeApplier {
   }
 
   /** 恢复快照里的文件与配置；返回恢复配置所需的生效方式。 */
-  async #restoreSnapshot(record: SelfChangeRecord, snapshot: SelfChangeSnapshot): Promise<SelfChangeImpactKind> {
+  async #restoreSnapshot(record: SelfChangeRecord, snapshot: SelfChangeSnapshot): Promise<{ mode: SelfChangeImpactKind; configurationHandled: boolean; record: SelfChangeRecord }> {
+    // Check ownership before any compensating file or config write. A fresh read
+    // may prove equality, but may never supply a newer revision as rollback authority.
+    // A config-patching record without a durably acknowledged revision (e.g. persisted by a
+    // pre-#1146 build) can never prove ownership, whether or not a config snapshot/port exists.
+    if (record.configPatch && !record.apply?.configRevision) throw new ConfigApplicationError('unconfirmed');
+    let config: Awaited<ReturnType<SelfChangeConfigPort['read']>> | undefined;
+    if (snapshot.config && record.configPatch && this.#ports.config) {
+      try { config = await this.#ports.config.read(); }
+      catch { throw new ConfigApplicationError('unconfirmed'); }
+    }
+    if (config) {
+      if (!record.apply?.configRevision) throw new ConfigApplicationError('unconfirmed');
+      if (config.revision !== record.apply.configRevision) throw new ConfigApplicationError('superseded');
+    }
     for (const file of snapshot.files) {
       await this.#writeProjectFile(
         { path: file.path, op: file.content === null ? 'delete' : 'write', sha256: null, bytes: 0 },
         file.content,
       );
     }
-    if (!snapshot.config || !record.configPatch || !this.#ports.config) return 'none';
-    const current = await this.#ports.config.read();
-    if (current.source === snapshot.config.source) return 'none';
-    const restored = await this.#ports.config.restore(snapshot.config.source, current.revision);
-    return restored.restartRequired ? 'process' : 'generation';
+    if (!snapshot.config || !record.configPatch || !this.#ports.config || !config) return { mode: 'none', configurationHandled: false, record };
+    if (config.source === snapshot.config.source) {
+      record = await this.#store.setApplyState(record.id, { ...record.apply!, configApplication: undefined });
+      return { mode: 'none', configurationHandled: false, record };
+    }
+    record = await this.#store.setApplyState(record.id, { ...record.apply!, configApplication: 'unconfirmed' });
+    let restored: Awaited<ReturnType<SelfChangeConfigPort['restore']>>;
+    try { restored = await this.#ports.config.restore(snapshot.config.source, record.apply!.configRevision!); }
+    catch { throw new ConfigApplicationError('unconfirmed'); }
+    record = await this.#store.setApplyState(record.id, { ...record.apply!,
+      ...(restored.revision !== undefined ? { configRevision: restored.revision } : {}), configApplication: restored.application });
+    if (restored.application && restored.application !== 'applied' && restored.application !== 'restart-pending') throw new ConfigApplicationError(restored.application);
+    return { mode: restored.restartRequired ? 'process' : restored.application === 'applied' ? 'none' : 'generation',
+      configurationHandled: restored.application !== undefined, record };
   }
 
   /** 读项目里一个目标文件的当前内容；不存在返回 `null`。 */
@@ -401,7 +608,7 @@ export class SelfChangeApplier {
   }
 
   async #resolveTarget(target: string): Promise<string> {
-    const rel = normalizeChangeTarget(target, { projectRoot: this.#projectRoot, protectedPaths: this.#protectedPaths, pluginRoots: this.#pluginRoots });
+    const rel = normalizeChangeTarget(target, { projectRoot: this.#projectRoot, protectedPaths: this.#protectedPaths, pluginRoots: this.#pluginRoots() });
     const absolute = path.join(this.#projectRoot, ...rel.split('/'));
     // 已存在的目标若是符号链接，拒绝跟随。
     try {
@@ -423,6 +630,18 @@ export class SelfChangeApplier {
     const run = this.#tail.then(task, task);
     this.#tail = run.catch(() => undefined);
     return run;
+  }
+}
+
+/** 配置补丁按当前禁改名单复核；触及禁改键返回原因。 */
+function findForbiddenConfigPatchError(record: SelfChangeRecord): string | null {
+  if (!record.configPatch) return null;
+  try {
+    assertConfigPatchAllowed(record.configPatch);
+    return null;
+  } catch (error) {
+    if (error instanceof SelfChangeConfigKeyError) return error.message;
+    throw error;
   }
 }
 

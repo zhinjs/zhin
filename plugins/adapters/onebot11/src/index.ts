@@ -40,17 +40,16 @@ export {
 export type { OneBot11WsSocket, OneBot11WsCreateOptions } from './ws-types.js';
 
 export {
-  callOneBot11WsAction,
+  createOneBot11Rpc,
+  type OneBot11Rpc,
+  type OneBot11RpcOptions,
   decodeWsPayload,
-  handleOneBot11WsMessage,
-  rejectAllPending,
 } from './ws-transport.js';
 
 export { verifyOneBotAccessToken } from './wss-auth.js';
 
 export {
   Onebot11Client,
-  onebot11Client,
   type Onebot11ClientEventMap,
 } from './client.js';
 
@@ -64,3 +63,4 @@ export type {
 } from '@imhelper/onebot-v11';
 export { ProtocolError } from '@imhelper/onebot-v11';
 export type { ProtocolErrorKind, ProtocolErrorOptions } from 'imhelper';
+export { Onebot11Adapter } from './adapter.js';

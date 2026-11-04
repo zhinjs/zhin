@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   Scope,
+  SnapshotStore,
+  readLeasedRootResource,
+  type SnapshotState,
   childPluginId,
   createRootPrivateToken,
   createToken,
@@ -100,4 +103,33 @@ describe('Root-private resource tokens', () => {
     expect(child.snapshot().get(shadow.id)).toBe('child-local');
     expect(grandchild.snapshot().get(shadow.id)).toBe('child-local');
   });
+  it('lets trusted Host leases read the exact generation without publishing private resources', async () => {
+    const rootId = rootPluginId();
+    const token = createRootPrivateToken<{ generation: string }>('private.generation.service');
+    const scope = (generation: string) => {
+      const value = new Scope(rootId); value.provide(token, { generation }); value.seal(); return value;
+    };
+    const state = (value: Scope): SnapshotState => ({ root: rootId, tree: new Map(), config: new Map(),
+      resources: new Map([[rootId, value.snapshot()]]), capabilities: new Map(), projections: new Map() });
+    const first = scope('old'); const second = scope('new');
+    const store = new SnapshotStore<Scope>(state(first), undefined, first,
+      (value, _root, requested) => value.has(requested) ? value.use(requested) : undefined);
+    const oldLease = store.acquire();
+    store.commit(0, { snapshot: state(second), state: second, dispose: () => undefined });
+    const newLease = store.acquire();
+    expect(oldLease.value.resources.get(rootId)?.has(token.id)).toBe(false);
+    expect(newLease.value.resources.get(rootId)?.has(token.id)).toBe(false);
+    expect(readLeasedRootResource(store, oldLease, token)).toEqual({ generation: 'old' });
+    expect(readLeasedRootResource(store, newLease, token)).toEqual({ generation: 'new' });
+    expect(readLeasedRootResource(store, newLease, createToken(token.id))).toBeUndefined();
+    expect(new Scope(childPluginId(rootId, 'child'), second).has(token)).toBe(false);
+    const other = new SnapshotStore(state(first)); const foreign = other.acquire();
+    expect(() => readLeasedRootResource(store, foreign, token)).toThrow('active owned');
+    foreign.release(); await other.close();
+    oldLease.release();
+    expect(store.owns(oldLease)).toBe(true);
+    expect(() => readLeasedRootResource(store, oldLease, token)).toThrow('active owned');
+    newLease.release(); await store.close();
+  });
+
 });

@@ -94,4 +94,58 @@ describe('Console topology Host endpoint', () => {
       },
     });
   });
+  it('resolves a page route while the Console view lease is still active', async () => {
+    const route = vi.fn();
+    let active = false;
+    const assertActive = () => {
+      if (!active) throw new Error('Console catalog view scope has ended');
+    };
+    const page = { id: 'sandbox', route: '/sandbox', title: 'Sandbox' };
+    const consoleRuntime = {
+      runView: async (_access: unknown, operation: (catalog: unknown) => unknown) => {
+        active = true;
+        try {
+          return await operation({
+            topology: () => {
+              assertActive();
+              return Object.freeze({
+                generation: 1,
+                pages: Object.freeze([page]),
+                navigation: Object.freeze([]),
+                resolve: (path: string) => {
+                  assertActive();
+                  return path === '/sandbox'
+                    ? Object.freeze({ status: 'found' as const, page, layouts: {} })
+                    : Object.freeze({ status: 'missing' as const });
+                },
+              });
+            },
+          });
+        } finally {
+          active = false;
+        }
+      },
+    } as unknown as ConsoleRuntime;
+    registerConsoleHttp({
+      http: { route, tokenRegistry: new TokenRegistry() } as never,
+      console: consoleRuntime,
+      clientOutDir: '/tmp/client',
+      projectRoot: '/tmp/project',
+    });
+
+    const handler = route.mock.calls.find((call) => call[1] === '/*')?.[2] as (
+      request: unknown,
+      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void; setHeader?: () => void },
+      url: URL,
+    ) => Promise<void>;
+    const writeHead = vi.fn();
+    const end = vi.fn();
+    await handler({}, { writeHead, end, setHeader: vi.fn() }, new URL('http://localhost/sandbox'));
+    expect(writeHead).not.toHaveBeenCalledWith(503);
+    expect(writeHead.mock.calls[0]?.[0]).toBe(200);
+
+    const missingHead = vi.fn();
+    await handler({}, { writeHead: missingHead, end: vi.fn(), setHeader: vi.fn() }, new URL('http://localhost/nope'));
+    expect(missingHead).toHaveBeenCalledWith(404);
+  });
 });

@@ -1,3 +1,4 @@
+import { qqFixture } from './fixture.js';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -33,7 +34,7 @@ it('endpoint send exposes SDK upload rejection as a structured delivery error', 
   const { QqWebsocketEndpoint } = await import('../src/endpoint.js');
   const { resolveQqConfig } = await import('../src/protocol.js');
   const { capabilityId, rootPluginId, featureId } = await import('zhin.js');
-  const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'), config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any, createBot: () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendPrivateMessage: async () => { throw { response: { status: 403, data: { code: 304023 } }, config: { url: '/v2/users/fixture/upload_prepare' } }; } }) as any });
+  const endpoint = await qqFixture(() => new QqWebsocketEndpoint({id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'qq'),config: resolveQqConfig({ id: 'fixture', appid: 'fixture', secret: 'fixture' }) as any}), () => ({ api: {}, start: async () => {}, stop: async () => {}, on: () => {}, removeAllListeners: () => {}, sendPrivateMessage: async () => { throw { response: { status: 403, data: { code: 304023 } }, config: { url: '/v2/users/fixture/upload_prepare' } }; } }) as any);
   try {
     await endpoint.start();
     await expect(endpoint.send({ conversation: { endpoint: { id: 'fixture', adapter: 'root/qq' }, kind: 'private', id: 'user' }, payload: [{ type: 'image', data: { media: { kind: 'base64', value: 'iVBORw0KGgo=' } } }] })).rejects.toMatchObject({ code: 'platform_rejected', disposition: 'rejected' });

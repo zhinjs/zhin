@@ -10,7 +10,7 @@ import {
   handlerFeature,
   type HandlerDefinition,
 } from '../src/index.js';
-import type { DirectoryEntry, DiscoveryHost } from '@zhin.js/feature-kit';
+import { operationInputBinding, operationSession, type OperationSession, type DirectoryEntry, type DiscoveryHost } from '@zhin.js/feature-kit';
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 
 // ---------------------------------------------------------------------------
@@ -136,6 +136,56 @@ describe('resolveHandlerEvent', () => {
 });
 
 describe('HandlerIndex', () => {
+  it('exposes the bound Session through the actual dispatch context and filters platform handlers', async () => {
+    const snapshot = createSnapshot();
+    const session: OperationSession<'handler-test'> = { adapterName: 'handler-test', adapter: {}, endpoint: {},
+      scene: { endpoint: { adapter: 'owner', id: 'canonical' }, kind: 'private', id: 'speaker' },
+      message: { text: 'original', receivedAt: 100 }, event: new Map([['original', true]]),
+      signal: new AbortController().signal, reply: async () => undefined };
+    const seen: unknown[] = [];
+    const handler = defineHandler({ adapter: 'handler-test', event: 'session.message', handle(event) {
+      seen.push(this.session); expect(event).toBe(source); expect(this.session).toBe(session);
+      expect(Reflect.set(this, 'session', undefined)).toBe(false);
+    } });
+    const index = new HandlerIndex([createSlot('session/message', handler)], snapshot);
+    const source = { payload: { [operationSession]: () => session } };
+    await index.dispatch('session.message', [source]);
+    await index.dispatch('session.message', [{ payload: { [operationSession]: () => ({ ...session, adapterName: 'other' }) } }]);
+    expect(seen).toEqual([session]);
+  });
+
+  it('rebinds Session reply authority to each handler owner without changing the event envelope', async () => {
+    const first = createSnapshot();
+    const secondOwner = 'second-handler' as PluginId;
+    const snapshot: RuntimeSnapshot = { ...first, tree: new Map([...first.tree, [secondOwner, { ...first.tree.get(first.root)!, id: secondOwner }]]),
+      config: new Map([...first.config, [secondOwner, {}]]), resources: new Map([...first.resources, [secondOwner, new Map()]]) };
+    const replies: string[] = [];
+    const bindingOwners: string[] = [];
+    const interactionOwners: string[] = [];
+    const payload = { message: 'same native envelope' };
+    const session: OperationSession<'handler-test'> = { adapterName: 'handler-test', adapter: {}, endpoint: {},
+      scene: { endpoint: { adapter: 'owner', id: 'canonical' }, kind: 'private', id: 'speaker' },
+      message: { text: 'hello', receivedAt: 100 }, event: payload, signal: new AbortController().signal,
+      reply: async () => { replies.push('adapter-owner'); } };
+    const source = { payload, [operationSession]: () => session,
+      [operationInputBinding](owner: PluginId, actual: RuntimeSnapshot) {
+        expect(actual).toBe(snapshot); bindingOwners.push(owner);
+        return { payload, [operationSession]: () => ({ ...session, reply: async () => { replies.push(owner); } }) };
+      } };
+    const definition = defineHandler({ event: 'session.message', async handle(event) {
+      expect(event).toMatchObject({ payload });
+      expect(this.session?.event).toBe(payload);
+      await this.session!.reply('answer');
+    } });
+    const index = new HandlerIndex([createSlot('first', definition), createSlot('second', definition, secondOwner)], snapshot);
+    await index.dispatch('session.message', [source], { resolveInteraction(_event, args, owner) {
+      interactionOwners.push(owner); expect(args[0]).not.toBe(source); return undefined;
+    } });
+    expect(bindingOwners).toEqual([first.root, secondOwner]);
+    expect(interactionOwners).toEqual([first.root, secondOwner]);
+    expect(replies).toEqual([first.root, secondOwner]);
+  });
+
   it('passes the indexed owner to the internal interaction factory', async () => {
     const snapshot = createSnapshot();
     const received: unknown[] = [];
@@ -366,3 +416,9 @@ async function discoverHandlers(
   }
   return sources;
 }
+
+// The test platform registers its Adapter once, just like an installed platform declaration.
+declare module '@zhin.js/feature-kit' {
+  interface AdapterRegistry { readonly 'handler-test': { readonly adapterEvents: Record<string, unknown>; getEndpoint(instance: string): object | undefined } }
+}
+declare module '../src/definition.js' { interface HandlerEventMap { 'session.message': [event: unknown] } }

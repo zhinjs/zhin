@@ -40,26 +40,26 @@ describe('operation-scoped command localization', () => {
     const state = snapshot(slots);
     const index = new CommandIndex(slots, state, {});
     const [chinese, english] = await Promise.all([
-      index.dispatch('菜单 reminders', message('zh-CN'), undefined, '/'),
-      index.dispatch('menu reminders', message('en'), undefined, '!'),
+      index.dispatch({ input: '菜单 reminders', source: message('zh-CN'), commandPrefix: '/' }),
+      index.dispatch({ input: 'menu reminders', source: message('en'), commandPrefix: '!' }),
     ]);
     expect(chinese.menu).toMatchObject({ locale: 'zh-CN', keyword: '菜单', commands: [{ name: '/daily list', description: '查看提醒' }] });
     expect(english.menu).toMatchObject({ locale: 'en', keyword: 'menu', commands: [{ name: '!daily list', description: 'List reminders' }] });
     expect(english.value).toContain('command menu');
-    expect((await index.dispatch('菜单', message('en'))).matched).toBe(false);
-    expect((await index.dispatch('menu', message('zh-CN'))).matched).toBe(false);
-    expect((await index.dispatch('菜单')).menu?.locale).toBe('zh-CN');
+    expect((await index.dispatch({ input: '菜单', source: message('en') })).matched).toBe(false);
+    expect((await index.dispatch({ input: 'menu', source: message('zh-CN') })).matched).toBe(false);
+    expect((await index.dispatch({ input: '菜单' })).menu?.locale).toBe('zh-CN');
     const englishProject = new CommandIndex(slots, snapshot(slots, 'en'), {});
-    expect((await englishProject.dispatch('menu')).menu?.locale).toBe('en');
+    expect((await englishProject.dispatch({ input: 'menu' })).menu?.locale).toBe('en');
   });
 
   it('preserves explicit menu keywords and pins a navigation operation to its original locale', async () => {
     const slots = Array.from({ length: 31 }, (_, index) => command(`item${index}`, defineCommand({ execute() {} }), root));
     const state = snapshot(slots);
     const index = new CommandIndex(slots, state, {});
-    const first = await index.dispatch('menu', message('en'), undefined, '#');
+    const first = await index.dispatch({ input: 'menu', source: message('en'), commandPrefix: '#' });
     expect(first.menu).toMatchObject({ locale: 'en', page: 1, pages: 2 });
-    const second = await index.dispatch('menu --page 2', message('zh-CN'), undefined, '#', state, first.menu!.locale);
+    const second = await index.dispatch({ input: 'menu --page 2', source: message('zh-CN'), commandPrefix: '#', snapshot: state, locale: first.menu!.locale });
     expect(second.menu).toMatchObject({ locale: 'en', page: 2 });
     expect(second.value).toContain('Previous page: #menu --page 1');
     const custom = new CommandIndex(slots, state, { keyword: 'commands' });
@@ -68,9 +68,9 @@ describe('operation-scoped command localization', () => {
     expect(index.formatMenu(undefined, 'en')).toBeUndefined();
     expect(custom.formatMenu('/', 'en')).toBe('/commands');
     expect(new CommandIndex(slots, state).formatMenu('/', 'en')).toBeUndefined();
-    expect((await custom.dispatch('commands', message('zh-CN'))).menu?.keyword).toBe('commands');
-    expect((await custom.dispatch('commands', message('en'))).menu?.keyword).toBe('commands');
-    expect((await custom.dispatch('menu', message('en'))).matched).toBe(false);
+    expect((await custom.dispatch({ input: 'commands', source: message('zh-CN') })).menu?.keyword).toBe('commands');
+    expect((await custom.dispatch({ input: 'commands', source: message('en') })).menu?.keyword).toBe('commands');
+    expect((await custom.dispatch({ input: 'menu', source: message('en') })).matched).toBe(false);
   });
 
   it('localizes validation and help while retaining reason, parameters and author text', async () => {
@@ -81,11 +81,11 @@ describe('operation-scoped command localization', () => {
       options: { count: { type: 'integer', default: 1, description: '次数', descriptionI18n: { en: 'Count' } } }, execute,
     }));
     const index = new CommandIndex([slot], snapshot([slot]));
-    const zh = await index.dispatch('daily remind 0', message('zh-CN'), undefined, '/');
-    const en = await index.dispatch('daily remind 0', message('en'), undefined, '!');
+    const zh = await index.dispatch({ input: 'daily remind 0', source: message('zh-CN'), commandPrefix: '/' });
+    const en = await index.dispatch({ input: 'daily remind 0', source: message('en'), commandPrefix: '!' });
     expect(zh.issues?.[0]).toMatchObject({ code: 'minimum', field: 'minutes', parameters: { field: 'minutes', minimum: 1 }, message: 'minutes：最小值为 1' });
     expect(en.issues?.[0]).toMatchObject({ code: 'minimum', parameters: zh.issues?.[0]?.parameters, message: 'minutes: minimum 1' });
-    const help = await index.dispatch('daily remind --help', message('en'), undefined, '!');
+    const help = await index.dispatch({ input: 'daily remind --help', source: message('en'), commandPrefix: '!' });
     expect(help.value).toContain('!daily remind <minutes>');
     expect(help.value).toContain('Create a reminder');
     expect(help.value).toContain('Minutes');
@@ -95,7 +95,7 @@ describe('operation-scoped command localization', () => {
 
     const custom = command('validate', defineCommand({ params: { name: { type: 'string', validate: () => 'Author-owned detail' } }, execute }));
     const customIndex = new CommandIndex([custom], snapshot([custom]));
-    expect((await customIndex.dispatch('daily validate x', message('zh-CN'))).issues?.[0]).toMatchObject({ code: 'custom', message: 'Author-owned detail' });
+    expect((await customIndex.dispatch({ input: 'daily validate x', source: message('zh-CN') })).issues?.[0]).toMatchObject({ code: 'custom', message: 'Author-owned detail' });
   });
 
   it.each(['', '/', '!', '!!'])('formats an indexed invocation with actual prefix %j and dispatches it to the referenced command', async prefix => {
@@ -106,12 +106,12 @@ describe('operation-scoped command localization', () => {
       command('remind/list', defineCommand({ execute: () => 'other account namespace' }), other),
     ];
     const index = new CommandIndex(slots, snapshot(slots));
-    const result = await index.dispatch('daily remind reference', message('en'), undefined, prefix);
+    const result = await index.dispatch({ input: 'daily remind reference', source: message('en'), commandPrefix: prefix });
     expect(result.value).toEqual({ locale: 'en', value: `${prefix}daily remind list`, other: `${prefix}work remind list`, missing: undefined });
     expect(target).not.toHaveBeenCalled();
     const rendered = (result.value as { value: string }).value;
     // CommandIndex receives text after the IM dispatcher removes this exact prefix.
-    expect((await index.dispatch(rendered.slice(prefix.length), message('en'), undefined, prefix)).value).toBe('listed');
+    expect((await index.dispatch({ input: rendered.slice(prefix.length), source: message('en'), commandPrefix: prefix })).value).toBe('listed');
     expect(target).toHaveBeenCalledTimes(1);
   });
 
@@ -123,9 +123,9 @@ describe('operation-scoped command localization', () => {
     const state = snapshot(slots, 'en');
     const index = new CommandIndex(slots, state);
     expect(await index.execute('daily reference')).toEqual({ locale: 'en', value: undefined });
-    expect((await index.dispatch('daily reference', message('en'))).value).toEqual({ locale: 'en', value: undefined });
+    expect((await index.dispatch({ input: 'daily reference', source: message('en') })).value).toEqual({ locale: 'en', value: undefined });
     const disabled = { ...state, config: new Map(state.config).set(reminders, { commandNamespace: 'daily', disabledCommands: ['list'] }) };
-    expect((await new CommandIndex(slots, disabled).dispatch('daily reference', message('en'), undefined, '/')).value)
+    expect((await new CommandIndex(slots, disabled).dispatch({ input: 'daily reference', source: message('en'), commandPrefix: '/' })).value)
       .toEqual({ locale: 'en', value: undefined });
   });
 
@@ -133,7 +133,7 @@ describe('operation-scoped command localization', () => {
     const slots = [command('list', defineCommand({ description: '查看提醒', descriptionI18n: { en: 'List reminders' }, execute() {} }))];
     const state = snapshot(slots);
     const htmlState = { ...state, resources: new Map(state.resources).set(root, new Map([[htmlRendererToken.id, {}]])) };
-    const response = await new CommandIndex(slots, htmlState, {}).dispatch('menu reminders', message('en'), undefined, '!');
+    const response = await new CommandIndex(slots, htmlState, {}).dispatch({ input: 'menu reminders', source: message('en'), commandPrefix: '!' });
     const html = response.value as { data: { html: string; text: string } };
     expect(html.data.html).toContain('<html lang="en">');
     expect(html.data.html).toContain('List reminders');
@@ -154,13 +154,13 @@ it('selects explicit localized aliases in help, menu and references without chan
     command('reference', defineCommand({ execute: context => context.formatCommand('提醒 详情') })),
   ];
   const index = new CommandIndex(slots, snapshot(slots), {});
-  expect((await index.dispatch('daily reference', message('en'), undefined, '!!')).value).toBe('!!daily reminder detail');
-  expect((await index.dispatch('daily reference', message('zh-CN'), undefined, '!!')).value).toBe('!!daily 提醒 详情');
-  expect((await index.dispatch('daily reminder detail --help', message('en'), undefined, '!!')).value).toContain('!!daily reminder detail <id>');
-  expect((await index.dispatch('menu reminders', message('en'), undefined, '!!')).menu?.commands).toContainEqual(expect.objectContaining({ name: '!!daily reminder detail <id>' }));
+  expect((await index.dispatch({ input: 'daily reference', source: message('en'), commandPrefix: '!!' })).value).toBe('!!daily reminder detail');
+  expect((await index.dispatch({ input: 'daily reference', source: message('zh-CN'), commandPrefix: '!!' })).value).toBe('!!daily 提醒 详情');
+  expect((await index.dispatch({ input: 'daily reminder detail --help', source: message('en'), commandPrefix: '!!' })).value).toContain('!!daily reminder detail <id>');
+  expect((await index.dispatch({ input: 'menu reminders', source: message('en'), commandPrefix: '!!' })).menu?.commands).toContainEqual(expect.objectContaining({ name: '!!daily reminder detail <id>' }));
   expect(index.list('en').find(item => item.alias)?.name).toBe('daily reminder detail <id>');
-  expect((await index.dispatch('daily reminder detail 42', message('zh-CN'), undefined, '!!')).value).toBe(42);
-  expect((await index.dispatch('daily 提醒 详情 43', message('en'), undefined, '!!')).value).toBe(43);
+  expect((await index.dispatch({ input: 'daily reminder detail 42', source: message('zh-CN'), commandPrefix: '!!' })).value).toBe(42);
+  expect((await index.dispatch({ input: 'daily 提醒 详情 43', source: message('en'), commandPrefix: '!!' })).value).toBe(43);
   expect(target).toHaveBeenCalledTimes(2);
 });
 

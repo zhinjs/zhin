@@ -17,6 +17,15 @@ describe('TurnNetworkClient', () => {
     expect(isBlockedIpAddress('2606:2800:220:1:248:1893:25c8:1946')).toBe(false);
   });
 
+  it('classifies IPv4-mapped hexadecimal IPv6 using the same IPv4 safety rules', () => {
+    for (const address of [
+      '::ffff:7f00:1', '::ffff:a00:1', '::ffff:ac10:1',
+      '::ffff:c0a8:1', '::ffff:a9fe:a9fe', '::ffff:6440:1',
+      '0:0:0:0:0:ffff:7f00:1',
+    ]) expect(isBlockedIpAddress(address), address).toBe(true);
+    expect(isBlockedIpAddress('::ffff:5db8:d822')).toBe(false);
+  });
+
   it('rejects a private resolved address before opening a socket', async () => {
     await expect(new NodeNetworkTransport().request(
       new URL('http://localhost/resource'),
@@ -60,3 +69,8 @@ function policy(allowedDomains: readonly string[]): ToolInvocationPolicy {
     network: { enabled: true, httpsOnly: true, allowedDomains },
   };
 }
+
+it('blocks expanded spellings of IPv6 unspecified and loopback addresses', () => {
+  expect(isBlockedIpAddress('0:0:0:0:0:0:0:0')).toBe(true);
+  expect(isBlockedIpAddress('0:0:0:0:0:0:0:1')).toBe(true);
+});

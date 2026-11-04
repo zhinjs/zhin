@@ -5,8 +5,16 @@ export interface ConversationMessage {
   readonly ref: MessageRef;
   readonly actor?: ActorRef;
   readonly segments: readonly Segment[];
+  /** The native identity is confirmed, but this store has no verified per-message body. */
+  readonly contentStatus?: 'unavailable';
   readonly timestamp: number;
   readonly replyTo?: MessageRef;
+  /** SHA-256 of the exact final plain-text outbound payload; absent when content is unverified/rich. */
+  readonly outboundTextDigest?: string;
+  /** Confirmed content revision; messages written before versioning have revision zero. */
+  readonly revision?: number;
+  /** A recall is permanent for this message identity; later updates cannot revive it. */
+  readonly recalled?: true;
 }
 
 export type ConversationReference =
@@ -26,6 +34,7 @@ interface ConversationEventBase {
 
 export type ConversationEvent =
   | (ConversationEventBase & Readonly<{ type: 'message.created'; message: ConversationMessage }>)
+  | (ConversationEventBase & Readonly<{ type: 'message.updated'; message: ConversationMessage & { readonly revision: number } }>)
   | (ConversationEventBase & Readonly<{ type: 'message.recalled'; message: MessageRef; actor?: ActorRef; operator?: ActorRef }>)
   | (ConversationEventBase & Readonly<{ type: 'message.reaction_changed'; message: MessageRef; actor?: ActorRef; reaction: string; operation: 'added' | 'removed' }>)
   | (ConversationEventBase & Readonly<{ type: 'conversation.poked'; actor?: ActorRef; target?: ActorRef }>)
@@ -54,4 +63,7 @@ export interface ConversationContextBlock {
   readonly sequence: number;
   readonly eventType: ConversationEvent['type'];
   readonly text: string;
+  /** Canonical source of a created message, retained separately from its display text. */
+  readonly message?: MessageRef;
+  readonly messageTextDigest?: string;
 }

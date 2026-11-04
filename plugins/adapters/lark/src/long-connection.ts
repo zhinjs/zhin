@@ -10,7 +10,7 @@ export interface LarkLongConnection {
 }
 export interface LarkLongConnectionOptions {
   readonly config: ResolvedLarkConfig;
-  readonly receive: (message: LarkMessage) => void;
+  readonly receive: (message: LarkMessage, nativeEvent?: unknown) => void;
   readonly cardAction?: (event: LarkCardAction) => void;
   readonly disconnected: () => void;
 }
@@ -50,7 +50,7 @@ export const createLarkLongConnection: LarkLongConnectionFactory = ({ config, re
   const dispatcher = new lark.EventDispatcher({}).register({
     'card.action.trigger': (event: LarkCardAction) => { if (!cancelled) cardAction?.(event as LarkCardAction); return {}; },
     'im.message.receive_v1': (event) => {
-      if (!cancelled) receive({ ...event.message, sender: event.sender });
+      if (!cancelled) receive({ ...event.message, sender: event.sender }, event);
       // No downstream send is awaited: SDK ACK remains within its 3-second window.
     },
   });

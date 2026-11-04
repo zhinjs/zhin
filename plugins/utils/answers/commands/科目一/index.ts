@@ -14,7 +14,7 @@ export default defineCommand<AnswersConfig>({
     if (!settings.enableDrivingQuiz) return messages(locale, 'disabled');
     const key = quizKey(input);
     if (!key) return messages(locale, 'conversation');
-    const question = use(quizServiceToken).ask(key, 'driving', DRIVING_QUESTIONS, settings.quizTimeoutSeconds, Date.now(), locale);
+    const question = use(quizServiceToken).ask({ key: key, kind: 'driving', bank: DRIVING_QUESTIONS, timeoutSeconds: settings.quizTimeoutSeconds, now: Date.now(), locale: locale });
     return formatQuestion('driving', question, settings.quizTimeoutSeconds, locale);
   },
 });

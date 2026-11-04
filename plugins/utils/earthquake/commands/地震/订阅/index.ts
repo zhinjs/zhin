@@ -24,6 +24,7 @@ export default defineCommand({
     try {
       const { created } = await service.store.upsert({
         locale,
+        target: target.target,
         adapter: target.adapter,
         endpointKey: target.endpointKey,
         conversationKind: target.conversationKind,

@@ -78,7 +78,7 @@ export type GroupRuleNoticePart = WelcomePart;
 
 export interface GroupRuleTarget {
   readonly platform: string;
-  /** 收到违规消息的 Bot 账号；为空时由宿主按平台唯一在线账号解析。 */
+  /** 收到违规消息的 Bot 账号，仅供规则审计；执行权限由 source effects 捕获。 */
   readonly endpoint: string | null;
   /** 平台原生群号（不带 `group:` 前缀）。 */
   readonly groupId: string;
@@ -121,8 +121,20 @@ export type GroupRuleEnforcementResult =
   | Readonly<{ kind: 'enforced'; action: GroupRuleAction; stage: number; ruleId: string }>
   | Readonly<{ kind: 'failed'; action: GroupRuleAction; stage: number; ruleId: string; reason: string }>;
 
-/** 实时查询：Bot 能否管理该成员；`undefined` = 平台不支持查询。 */
-export type GroupRuleInspect = (target: GroupRuleTarget, memberId: string, signal: AbortSignal) => Promise<{ canModerate: boolean } | undefined>;
+/** Bound to the source account incarnation, group and member before asynchronous policy work. */
+export interface GroupRuleEffects {
+  readonly signal: AbortSignal;
+  send(parts: readonly GroupRuleNoticePart[], signal: AbortSignal): Promise<DeliveryOutcome>;
+  inspect?(signal: AbortSignal): Promise<{ canModerate: boolean } | undefined>;
+  mute(durationSec: number, signal: AbortSignal): Promise<void>;
+  kick(signal: AbortSignal): Promise<void>;
+  release(): void;
+}
+interface RuleExecution {
+  readonly effects: GroupRuleEffects;
+  readonly signal: AbortSignal;
+  readonly retain: (completion: Promise<void>) => void;
+}
 
 export interface GroupRuleEnforcerDeps {
   readonly rules: () => AiGroupRules | undefined;
@@ -133,13 +145,6 @@ export interface GroupRuleEnforcerDeps {
   /** 宿主的硬闸审批队列：建议踢人的卡进这里（IM 审批通道 / Console 结算）。 */
   readonly approvals?: () => ToolApprovalQueue | undefined;
   readonly opsCooldown?: () => OpsCooldownView | undefined;
-  /** 发群消息（`text` / `mention` 段）；抛错视为失败。 */
-  readonly send: (target: GroupRuleTarget, parts: readonly GroupRuleNoticePart[]) => Promise<DeliveryOutcome>;
-  readonly inspect?: GroupRuleInspect;
-  /** 平台禁言；抛错视为失败。 */
-  readonly mute: (target: GroupRuleTarget, memberId: string, durationSec: number, signal: AbortSignal) => Promise<void>;
-  /** 平台踢人；只在人批之后调用。抛错视为失败。 */
-  readonly kick: (target: GroupRuleTarget, memberId: string, signal: AbortSignal) => Promise<void>;
   /** Bot 在群里说过话：`key` 为 `<platform>:<群号>`。 */
   readonly onSpoke?: (key: string) => void;
   readonly now?: () => number;
@@ -230,11 +235,25 @@ export class GroupRuleEnforcer {
   }
 
   /** 处理一次违规命中。永不抛错：存储 / 平台故障记为 `failed` 并写审计。 */
-  enforce(violation: GroupRuleViolation): Promise<GroupRuleEnforcementResult> {
-    return this.#enforce(violation).catch((error: unknown) => {
+  enforce(violation: GroupRuleViolation, effects: GroupRuleEffects): Promise<GroupRuleEnforcementResult> {
+    let resolveResult!: (outcome: GroupRuleEnforcementResult) => void;
+    const result = new Promise<GroupRuleEnforcementResult>(resolve => { resolveResult = resolve; });
+    let settlement: Promise<void> | undefined;
+    const execution: RuleExecution = { effects,
+      signal: AbortSignal.any([effects.signal, this.#dispose.signal]),
+      retain: completion => { settlement = completion; },
+    };
+    // The task owns the captured operation even after a kick card has been queued.
+    const task = this.#enforce(violation, execution).then(async outcome => {
+      resolveResult(outcome);
+      await settlement;
+    }, (error: unknown) => {
       logger.warn(formatCompact({ op: 'group_rule_enforce_failed', error: errorText(error) }));
-      return { kind: 'no_rule' } as const;
-    });
+      resolveResult({ kind: 'no_rule' });
+    }).finally(() => { effects.release(); });
+    this.#inFlight.add(task);
+    void task.finally(() => this.#inFlight.delete(task)).catch(() => undefined);
+    return result;
   }
 
   /** 进程内阶梯进度条目数（测试与观测）。 */
@@ -254,13 +273,15 @@ export class GroupRuleEnforcer {
     this.#botNotAdminNoticed.clear();
   }
 
-  async #enforce(violation: GroupRuleViolation): Promise<GroupRuleEnforcementResult> {
+  async #enforce(violation: GroupRuleViolation, execution: RuleExecution): Promise<GroupRuleEnforcementResult> {
+    execution.signal.throwIfAborted();
     const store = this.deps.rules();
-    if (!store || this.#dispose.signal.aborted || !violation.groupId || !violation.memberId) return { kind: 'no_rule' };
+    if (!store || execution.signal.aborted || !violation.groupId || !violation.memberId) return { kind: 'no_rule' };
     const sceneId = `group:${violation.groupId}`;
     const newcomer = violation.newcomer === true && violation.trigger === 'advertising';
     const rule = await store.getActive({ platform: violation.platform, sceneId, trigger: violation.trigger })
       ?? (newcomer ? await latestPending(store, violation.platform, sceneId, violation.trigger) : null);
+    execution.signal.throwIfAborted();
     if (!rule) return { kind: 'no_rule' };
 
     const turnId = randomUUID();
@@ -308,13 +329,14 @@ export class GroupRuleEnforcer {
     const target: GroupRuleTarget = { platform: violation.platform, endpoint: violation.endpoint ?? null, groupId: violation.groupId };
     // 3a. 新人发广告：不按阶梯，出一张踢人审批卡（每次人批），不推进阶梯。
     if (newcomer) {
-      const context = { rule, violation, target, audit, turnId, payload: { ...payload, action: 'suggest_kick' }, stage: 0 };
+      const context = { ...execution, rule, violation, target, audit, turnId, payload: { ...payload, action: 'suggest_kick' }, stage: 0 };
       return this.#suggestKick(context, () => undefined);
     }
 
     // 3. 阶梯（同一规则同一成员串行）。
     const key = `${rule.id}\u0000${violation.memberId}`;
     return this.#serialize(key, async () => {
+      execution.signal.throwIfAborted();
       const now = this.#now();
       this.#prune(now);
       const previous = this.#progress.get(key);
@@ -337,7 +359,7 @@ export class GroupRuleEnforcer {
         });
         this.#bound();
       };
-      const context = { rule, violation, target, audit, turnId, payload: stagePayload, stage: stageIndex + 1 };
+      const context = { ...execution, rule, violation, target, audit, turnId, payload: stagePayload, stage: stageIndex + 1 };
       switch (stage.action) {
         case 'remind':
         case 'warn':
@@ -353,7 +375,7 @@ export class GroupRuleEnforcer {
   async #notify(ctx: StageContext, action: 'remind' | 'warn', advance: (notified: boolean) => void): Promise<GroupRuleEnforcementResult> {
     const blocked = await this.#speakBlocked(ctx);
     if (blocked) return { kind: 'skipped', reasonCode: blocked, ruleId: ctx.rule.id };
-    const delivered = await this.#send(ctx.target, formatGroupRuleNotice(ctx.rule, action, ctx.violation.memberId, ctx.violation.memberName));
+    const delivered = await this.#send(ctx, formatGroupRuleNotice(ctx.rule, action, ctx.violation.memberId, ctx.violation.memberName));
     auditOutbound(ctx.audit, delivered, ctx.payload);
     if (delivered.status !== 'sent') {
       const reason = delivered.status === 'suppressed' ? 'suppressed' : `${delivered.status}:${delivered.code}`;
@@ -403,7 +425,7 @@ export class GroupRuleEnforcer {
       return { kind: 'skipped', reasonCode: verdict.reasonCode, ruleId: ctx.rule.id };
     }
     try {
-      await this.deps.mute(ctx.target, ctx.violation.memberId, durationSec, this.#dispose.signal);
+      await ctx.effects.mute(durationSec, ctx.signal);
     } catch (error) {
       const reason = errorText(error);
       auditOutbound(ctx.audit, { status: 'failed', code: reason, retryable: false }, ctx.payload);
@@ -421,7 +443,7 @@ export class GroupRuleEnforcer {
     // 禁言说明是附带的：过发言闸，被拦或失败不影响禁言已执行。
     let notified = false;
     if (!(await this.#speakBlocked(ctx, false))) {
-      const delivered = await this.#send(ctx.target, formatGroupRuleNotice(ctx.rule, 'mute', ctx.violation.memberId, ctx.violation.memberName));
+      const delivered = await this.#send(ctx, formatGroupRuleNotice(ctx.rule, 'mute', ctx.violation.memberId, ctx.violation.memberName));
       auditOutbound(ctx.audit, delivered, ctx.payload);
       notified = delivered.status === 'sent';
       if (notified) this.#spoke(ctx.target);
@@ -460,10 +482,9 @@ export class GroupRuleEnforcer {
     }
     ctx.audit({ kind: 'rule_enforcement', outcome: 'defer', reasonCode: 'rule_hit_kick_suggested', payload: ctx.payload, actor: 'policy' });
     advance(false);
-    const run = this.#settleKick(ctx, settled);
-    this.#inFlight.add(run);
-    void run.finally(() => this.#inFlight.delete(run));
-    return { kind: 'enforced', action: 'suggest_kick', stage: ctx.stage, ruleId: ctx.rule.id };
+    const outcome = { kind: 'enforced', action: 'suggest_kick', stage: ctx.stage, ruleId: ctx.rule.id } as const;
+    ctx.retain(this.#settleKick(ctx, settled));
+    return outcome;
   }
 
   async #settleKick(ctx: StageContext, settled: Promise<ToolHardGateResult>): Promise<void> {
@@ -475,9 +496,9 @@ export class GroupRuleEnforcer {
       return;
     }
     // 驳回 / 超时 / 取消：硬闸已写审计；这里只在批准时执行。
-    if (verdict.status !== 'approved' || this.#dispose.signal.aborted) return;
+    if (verdict.status !== 'approved' || ctx.signal.aborted) return;
     try {
-      await this.deps.kick(ctx.target, ctx.violation.memberId, this.#dispose.signal);
+      await ctx.effects.kick(ctx.signal);
       auditOutbound(ctx.audit, { status: 'sent' }, { ...ctx.payload, op: 'kick', ...(verdict.approvalId ? { approvalId: verdict.approvalId } : {}) });
     } catch (error) {
       const reason = errorText(error);
@@ -494,7 +515,7 @@ export class GroupRuleEnforcer {
       turnId: ctx.turnId,
       sessionKey: `group-rule:${ctx.rule.id}`,
       unattended: true,
-      signal: this.#dispose.signal,
+      signal: ctx.signal,
       location: { instanceId: ctx.target.endpoint || ctx.target.platform, platform: ctx.target.platform, sceneId: ctx.rule.sceneId, userId: ctx.violation.memberId },
       ...(events ? { audit: events } : {}),
       ...(queue ? { queue } : {}),
@@ -535,10 +556,10 @@ export class GroupRuleEnforcer {
 
   /** 实时确认 Bot 能管理该成员；不能 → `rule_hit_bot_not_admin`，每群每天首次提示一次。平台不支持查询时交给平台调用本身判定。 */
   async #botNotAdmin(ctx: StageContext): Promise<GroupRuleEnforcementResult | undefined> {
-    if (!this.deps.inspect) return undefined;
+    if (!ctx.effects.inspect) return undefined;
     let member: { canModerate: boolean } | undefined;
     try {
-      member = await this.deps.inspect(ctx.target, ctx.violation.memberId, this.#dispose.signal);
+      member = await ctx.effects.inspect(ctx.signal);
     } catch (error) {
       ctx.audit({ kind: 'rule_enforcement', outcome: 'error', reasonCode: 'rule_hit_bot_not_admin', reasonDetail: errorText(error), payload: ctx.payload, actor: 'policy' });
       return { kind: 'failed', action: ctx.payload.action as GroupRuleAction, stage: ctx.stage, ruleId: ctx.rule.id, reason: 'inspect_failed' };
@@ -562,7 +583,7 @@ export class GroupRuleEnforcer {
     }
     if (await this.#speakBlocked(ctx, false)) return;
     const code = groupRuleHashShort(ctx.rule.contentHash);
-    const delivered = await this.#send(ctx.target, [{
+    const delivered = await this.#send(ctx, [{
       type: 'text',
       text: `我在本群不是管理员（或无权管理该成员），群规 ${code} 的禁言 / 踢人档暂时无法执行。请群主把我设为管理员，或发 /rule disable ${code} 停用该规则。`,
     }]);
@@ -570,9 +591,10 @@ export class GroupRuleEnforcer {
     if (delivered.status === 'sent') this.#spoke(ctx.target);
   }
 
-  async #send(target: GroupRuleTarget, parts: readonly GroupRuleNoticePart[]): Promise<DeliveryOutcome> {
+  async #send(ctx: StageContext, parts: readonly GroupRuleNoticePart[]): Promise<DeliveryOutcome> {
     try {
-      return await this.deps.send(target, parts);
+      ctx.signal.throwIfAborted();
+      return await ctx.effects.send(parts, ctx.signal);
     } catch (error) {
       return { status: 'failed', code: errorText(error), retryable: false };
     }
@@ -614,7 +636,7 @@ export class GroupRuleEnforcer {
   }
 }
 
-interface StageContext {
+interface StageContext extends RuleExecution {
   readonly rule: GroupRuleRecord;
   readonly violation: GroupRuleViolation;
   readonly target: GroupRuleTarget;

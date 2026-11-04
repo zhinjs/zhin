@@ -15,62 +15,7 @@ import {
   type ResolvedKookWebsocketConfig,
 } from './protocol.js';
 
-/** Minimal client surface used by the endpoint (real kook-client or test mock). */
-export interface KookClientTransport {
-  getTransportState?(): EndpointTransportState | undefined;
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-  on(event: string, listener: (...args: unknown[]) => void): void;
-  removeAllListeners(): void;
-  sendChannelMsg(
-    channelId: string,
-    message: unknown,
-    quote?: { message_id: string },
-  ): Promise<{ msg_id?: string | number }>;
-  sendPrivateMsg(
-    userId: string,
-    message: unknown,
-    quote?: { message_id: string },
-  ): Promise<{ msg_id?: string | number }>;
-  uploadMedia?(data: Buffer): Promise<string>;
-  recallChannelMsg?(channelId: string, messageId: string): Promise<boolean>;
-  recallPrivateMsg?(userId: string, messageId: string): Promise<boolean>;
-  /** GET /api/v3/guild/view（群主 id）。 */
-  getGuildInfo?(guildId: string): Promise<{ user_id?: string | number }>;
-  pickGuild(guildId: string): {
-    kick(userId: string): Promise<boolean>;
-    getRoleList(): Promise<Array<{
-      role_id: string | number;
-      name: string;
-      color?: number;
-      position?: number;
-      permissions?: unknown;
-    }>>;
-    createRole(name: string): Promise<{ role_id: string | number; name: string }>;
-    deleteRole(roleId: string): Promise<boolean>;
-  };
-  pickGuildMember(guildId: string, userId: string): {
-    addToBlackList(remark?: string, delMsgDays?: number): Promise<boolean>;
-    removeFromBlackList(): Promise<boolean>;
-    grant(roleId: string): Promise<boolean>;
-    revoke(roleId: string): Promise<boolean>;
-    setNickname(nickname: string): Promise<boolean>;
-  };
-  /** GET /api/v3/guild/list（kook-client 内部分页聚合）。 */
-  getGuildList(): Promise<Array<{ id: string | number; name?: string }>>;
-  /** GET /api/v3/channel/list（type: 1=文字 2=语音；is_category 为分组）。 */
-  getChannelList(guildId: string): Promise<Array<{
-    id: string | number;
-    name?: string;
-    type?: string | number;
-    is_category?: boolean;
-  }>>;
-  /** GET /api/v3/guild/user-list。 */
-  getGuildUserList(guildId: string, channelId?: string): Promise<unknown[]>;
-  self_id?: string | number;
-}
-
-export type CreateKookClient = (config: ResolvedKookConfig) => KookClientTransport;
+export type KookClientTransport = RuntimeKookClient;
 
 export function normalizeKookMessage(raw: unknown): KookInboundMessage | null {
   if (!raw || typeof raw !== 'object') return null;
@@ -109,6 +54,8 @@ export function normalizeKookMessage(raw: unknown): KookInboundMessage | null {
 
   return {
     id: String(msg.message_id),
+    event: raw,
+    ...(typeof msg.timestamp === 'number' ? { platformSentAt: msg.timestamp } : {}),
     content,
     channelKind,
     channelId,
@@ -125,6 +72,7 @@ export function normalizeKookMessage(raw: unknown): KookInboundMessage | null {
 }
 
 export class RuntimeKookClient extends Client {
+  readonly #apiAgent?: ReturnType<typeof createKookApiAgent>;
   readonly #lifecycle: ReturnType<typeof createEndpointLifecycle>;
   #initialized = false;
   #connectionAttempt = 0;
@@ -132,7 +80,8 @@ export class RuntimeKookClient extends Client {
     super({ ...config, autoReconnect: false, handleProcessErrors: false } as ConstructorParameters<typeof Client>[0]);
     this.#lifecycle = createEndpointLifecycle(lifecycleOptions);
     if (apiProxy) {
-      this.request.defaults.httpsAgent = createKookApiAgent(apiProxy);
+      this.#apiAgent = createKookApiAgent(apiProxy);
+      this.request.defaults.httpsAgent = this.#apiAgent;
       this.request.defaults.proxy = false;
       this.request.defaults.maxRedirects = 0;
       this.request.interceptors.request.use(request => {
@@ -182,7 +131,7 @@ export class RuntimeKookClient extends Client {
       catch (error) { active = false; receiver.off('disconnected', disconnected); if (attempt === this.#connectionAttempt) await receiver.disconnect(); throw error; }
     });
   }
-  async disconnect(): Promise<void> { await this.#lifecycle.stop(); }
+  async disconnect(): Promise<void> { try { await this.#lifecycle.stop(); } finally { this.#apiAgent?.destroy(); } }
   /** Native FormData avoids kook-client's Buffer-to-text multipart conversion. */
   async uploadMedia(data: Buffer | string): Promise<string> {
     let bytes: Buffer;
@@ -241,8 +190,8 @@ export class RuntimeKookClient extends Client {
   }
 }
 
-export function defaultCreateClient(config: ResolvedKookWebsocketConfig): KookClientTransport {
-  return new RuntimeKookClient({
+export function kookWebsocketClientOptions(config: ResolvedKookWebsocketConfig): ConstructorParameters<typeof Client>[0] {
+  return {
     token: config.token,
     mode: 'websocket',
     socketFactory: (url: string) => createKookStreamSocket(url, config.streamProxy),
@@ -251,11 +200,11 @@ export function defaultCreateClient(config: ResolvedKookWebsocketConfig): KookCl
     max_retry: config.max_retry,
     ignore: config.ignore,
     logLevel: config.logLevel,
-  } as ConstructorParameters<typeof RuntimeKookClient>[0], undefined, config.apiProxy) as unknown as KookClientTransport;
+  } as ConstructorParameters<typeof Client>[0];
 }
 
-export function defaultCreateWebhookClient(config: ResolvedKookWebhookConfig): KookClientTransport {
-  return new RuntimeKookClient({
+export function kookWebhookClientOptions(config: ResolvedKookWebhookConfig): ConstructorParameters<typeof Client>[0] {
+  return {
     token: config.token,
     mode: 'webhook',
     data_dir: path.join(process.cwd(), 'data', 'kook'),
@@ -263,5 +212,5 @@ export function defaultCreateWebhookClient(config: ResolvedKookWebhookConfig): K
     max_retry: 3,
     ignore: config.ignore,
     logLevel: config.logLevel,
-  } as ConstructorParameters<typeof RuntimeKookClient>[0], undefined, config.apiProxy) as unknown as KookClientTransport;
+  } as ConstructorParameters<typeof Client>[0];
 }

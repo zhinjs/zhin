@@ -22,7 +22,7 @@ export {
   type WecomWireSegment,
 } from './protocol.js';
 
-export { wecomClient, type WecomClientEventMap } from './client.js';
+export { type WecomClientEventMap } from './client.js';
 
 export {
   checkWecomPlatformPermit,
@@ -32,9 +32,7 @@ export {
 } from './platform-permit.js';
 
 export {
-  WecomClient,
   WecomEndpoint,
-  type WecomClientApi,
   type WecomEndpointOptions,
   type WecomFetch,
 } from './endpoint.js';
@@ -53,3 +51,6 @@ export {
   handleWecomWebhookRequest,
   type WecomWebhookHandler,
 } from './webhook.js';
+
+export { WecomClient, type WecomClientApi } from './client.js';
+export { WecomAdapter } from './adapter.js';

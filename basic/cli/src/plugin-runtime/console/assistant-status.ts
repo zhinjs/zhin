@@ -20,6 +20,8 @@ import {
 import { sessionEventActions, sessionEventQueries, type SessionEventsSource } from './session-events-rpc.js';
 import { groupRuleActions, groupRuleQueries, type GroupRulesSource } from './group-rules-rpc.js';
 
+import { UsageStatsService, usageStatsQueries, type UsageTraceDirSource } from './usage-stats-rpc.js';
+
 /**
  * Ordinary-user-safe Console status for the Agent's 群聊插话 (ambient engagement) and 技能助手
  * (structured decisions) pages (#970). Process-owned and in memory only: it keeps a bounded
@@ -137,6 +139,8 @@ export class AssistantStatus {
   #readAnnouncementDispatcher: AnnouncementDispatcherSource = () => undefined;
   #readSessionEvents: SessionEventsSource = () => undefined;
   #readGroupRules: GroupRulesSource = () => undefined;
+  #readUsageTraceDir: UsageTraceDirSource = () => undefined;
+  readonly #usageStats = new UsageStatsService({ dir: () => this.#readUsageTraceDir(), now: () => this.#now() });
 
   /** Served as `plugin.root.ambient` / `plugin.root.skills`; read-only, permission-gated. */
   readonly consoleRpc: PluginConsoleRpc;
@@ -153,6 +157,8 @@ export class AssistantStatus {
         ...announcementQueries(() => this.#readAnnouncements()),
         ...sessionEventQueries(() => this.#readSessionEvents()),
         ...groupRuleQueries(() => this.#readGroupRules()),
+        // Read-only token usage charts from the turn trace archive (`control:read`).
+        ...usageStatsQueries(() => this.#usageStats),
       },
       actions: {
         // ADR 0036 slice D: the only writer of the control switches (the model has no tool for them).
@@ -204,6 +210,12 @@ export class AssistantStatus {
   /** The current generation's group rule store (ADR 0039 slice B); the latest route wins. */
   bindGroupRules(read: GroupRulesSource): void {
     this.#readGroupRules = read;
+  }
+
+  /** The current generation's trace archive dir for `usage-stats`; binding (or unbinding) drops the result cache. */
+  bindUsageTraces(read: UsageTraceDirSource): void {
+    this.#usageStats.dispose();
+    this.#readUsageTraceDir = read;
   }
 
   /** The current generation's decision audit log (`ai_decision_events`); the latest Agent ingress route wins. */

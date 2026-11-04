@@ -6,7 +6,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { discordRuntimeStateToken } from '../../../src/discord-runtime-state.js';
 
 export const discordEndpointCommands = createEndpointCommands({
   adapterKey: 'discord',
@@ -14,6 +13,5 @@ export const discordEndpointCommands = createEndpointCommands({
   fields: [
     { key: 'token', required: true, env: true, description: 'Discord bot token' },
   ],
-  running: (use) => use(discordRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);

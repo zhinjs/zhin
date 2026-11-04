@@ -27,8 +27,9 @@ export const HISTORY_WINDOW_FILL_AFTER_MOVE = 0.75;
 /** `8000`, `"8000"`, `"8k"`; `0` turns the token bound off. Anything else is ignored. */
 export function parseHistoryTokenCount(raw: unknown): number | undefined {
   if (typeof raw === 'number') return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : undefined;
-  if (typeof raw !== 'string') return undefined;
-  const match = /^\s*(\d+(?:\.\d+)?)\s*([kK])?\s*$/.exec(raw);
+  if (typeof raw !== 'string' || raw.length > 32) return undefined;
+  // Strip whitespace first so the pattern below has no overlapping quantifiers (linear time).
+  const match = /^(\d+(?:\.\d+)?)([kK])?$/.exec(raw.replace(/\s+/gu, ''));
   if (!match) return undefined;
   return Math.floor(Number(match[1]) * (match[2] ? 1000 : 1));
 }

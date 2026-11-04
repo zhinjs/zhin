@@ -1,10 +1,10 @@
 import { createMessages, resolveLocale, type Locale } from 'zhin.js/i18n';
 import type { Message } from 'zhin.js';
 import { getCurrentCommMessage } from '@zhin.js/agent/security';
-import type { GithubClient } from '../../../../src/client.js';
+import type { GithubEndpoint } from '../../../../src/endpoint.js';
 import type { EventType } from '../../../../src/types.js';
 
-function subscriptionsModel(client: GithubClient) {
+function subscriptionsModel(client: GithubEndpoint) {
   const db = client.database as {
     models?: Map<string, unknown>;
   } | null | undefined;
@@ -16,7 +16,7 @@ function subscriptionsModel(client: GithubClient) {
   } | undefined;
 }
 
-export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'check'; repo: string }, client: GithubClient, commMessage?: Message, preference?: Locale) {
+export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'check'; repo: string }, client: GithubEndpoint, commMessage?: Message, preference?: Locale) {
   const msg = commMessage ?? getCurrentCommMessage();
   const locale = resolveLocale(preference ?? msg?.locale);
   const gh = await client.getUserOrDefaultApi(msg?.clientAdapter, msg?.sender?.id);
@@ -38,7 +38,7 @@ export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'che
   }
 }
 
-export async function executeGithubSubscribe(args: { repo: string; events?: string }, client: GithubClient, commMessage?: Message, preference?: Locale) {
+export async function executeGithubSubscribe(args: { repo: string; events?: string }, client: GithubEndpoint, commMessage?: Message, preference?: Locale) {
   const msg = commMessage ?? getCurrentCommMessage();
   const locale = resolveLocale(preference ?? msg?.locale);
   if (!msg?.clientAdapter || !msg?.sender?.id || !msg?.conversation.id || !msg?.endpointId) {
@@ -77,7 +77,7 @@ export async function executeGithubSubscribe(args: { repo: string; events?: stri
   return t(locale, 'subscribed', { repo: args.repo, events: events.join(', ') });
 }
 
-export async function executeGithubUnsubscribe(args: { repo: string }, client: GithubClient, commMessage?: Message, preference?: Locale) {
+export async function executeGithubUnsubscribe(args: { repo: string }, client: GithubEndpoint, commMessage?: Message, preference?: Locale) {
   const msg = commMessage ?? getCurrentCommMessage();
   const locale = resolveLocale(preference ?? msg?.locale);
   if (!msg?.clientAdapter || !msg?.conversation.id || !msg?.endpointId) {
@@ -99,7 +99,7 @@ export async function executeGithubUnsubscribe(args: { repo: string }, client: G
   return t(locale, 'unsubscribed', { repo: args.repo });
 }
 
-export async function executeGithubSubscriptions(_args: Record<string, never>, client: GithubClient, commMessage?: Message, preference?: Locale) {
+export async function executeGithubSubscriptions(_args: Record<string, never>, client: GithubEndpoint, commMessage?: Message, preference?: Locale) {
   const msg = commMessage ?? getCurrentCommMessage();
   const locale = resolveLocale(preference ?? msg?.locale);
   if (!msg?.clientAdapter || !msg?.conversation.id || !msg?.endpointId) {

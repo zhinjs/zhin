@@ -11,6 +11,7 @@ import { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 import { DEFAULT_CONFIG, SECTION_SEP } from '../../src/config/index.js';
 import { buildAgentPathSystemPrompt, type PromptRuntimeOverrides } from '../../src/prompt/assembly.js';
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
+import { deliveredMessageContextRef, deliveredReplyContextRef, deliveredTextDigest } from '../../src/session/context-provenance.js';
 
 function selection() {
   return {
@@ -32,8 +33,11 @@ describe('FullAgentTurnEngine', () => {
     agentEvents.clear();
   });
 
-  it.each(['catalog', 'specialist', 'withdrawn'] as const)('runs canonical ingress with the current %s capability context after stable system rules', async (mode) => {
+  it.each(['catalog', 'specialist', 'withdrawn', 'mutated'] as const)('runs canonical ingress with the current %s capability context after stable system rules', async (mode) => {
     const order: string[] = [];
+    const deliveryRef = { conversation: { endpoint: { adapter: 'root/sandbox', id: 'main' }, kind: 'private' as const, id: 'user' }, id: 'sent-1' };
+    const deliveryRefs = [deliveryRef, { ...deliveryRef, id: 'sent-2' }];
+    const projectConversation = vi.fn(async () => undefined);
     const turn = createTurnIngress({
     intent: { kind: 'new' },
       identity: { rootId: 'root', generation: 7, traceId: 'trace', turnId: 'turn' },
@@ -46,7 +50,12 @@ describe('FullAgentTurnEngine', () => {
       signal: new AbortController().signal,
       ports: {
         journal: { append: async () => undefined },
-        reply: { send: async () => { order.push('reply'); return { status: 'sent' }; } },
+        reply: { send: async output => {
+          order.push('reply');
+          if (mode === 'mutated' && output[0]?.type === 'text') output[0].content = 'changed by a send hook';
+          return { status: 'sent', messageId: deliveryRef.id, messages: deliveryRefs,
+            messageContexts: [{ message: deliveryRef, plannedText: mode === 'mutated' ? 'changed by a send hook' : 'done' }] };
+        } },
         conversationContext: {
           readPending: async () => {
             order.push('context-read');
@@ -116,6 +125,7 @@ describe('FullAgentTurnEngine', () => {
             iterations: 1,
             model: 'model',
             toolCalls: [],
+            projectConversation,
           };
         })();
       },
@@ -161,13 +171,16 @@ describe('FullAgentTurnEngine', () => {
       tools: new TurnToolRuntime(turn, []),
       selection: { ...selection(), ...(mode === 'specialist' ? { agent: 'researcher' } : {}) },
     };
+    const contextFiles = [{ path: 'SOUL.md', content: 'Stable workspace persona.' }];
     const engine = createFullAgentTurnEngine({
       host: host as never,
       core: core as never,
       sessionSystem: sessionSystem as never,
       contextSystem: contextSystem as never,
       bootstrapContext: '## SOUL.md\nStable workspace persona.',
+      contextFiles,
     });
+    contextFiles[0]!.content = 'Changed after generation capture.';
     const events: string[] = [];
     const started: Array<Record<string, unknown>> = [];
     const finished: Array<Record<string, unknown>> = [];
@@ -193,6 +206,9 @@ describe('FullAgentTurnEngine', () => {
 
     expect(events).toEqual(['tool_call', 'tool_result', 'chunk', 'turn_end']);
     expect(order).toEqual(['context-read', 'terminal', 'reply', 'touch', 'context-commit:9', 'finalize', 'finish']);
+    expect(projectConversation).toHaveBeenCalledWith({ messageId: 'sent-1', messageIds: ['sent-1', 'sent-2'], contextRefs: mode === 'mutated' ? [] : [
+      deliveredMessageContextRef(deliveryRef, deliveredTextDigest('done')), deliveredReplyContextRef('session-id', 'turn'),
+    ] });
     expect(started).toHaveLength(1);
     expect(started[0]).toMatchObject({
       locale: 'en',
@@ -219,6 +235,7 @@ describe('FullAgentTurnEngine', () => {
     const runtime = coreInput?.promptRuntime as PromptRuntimeOverrides;
     expect(runtime).toMatchObject({ modelId: 'model', providerAlias: 'provider', modelSdk: 'google' });
     expect(runtime.bootstrapContext).toBe('## SOUL.md\nStable workspace persona.');
+    expect(runtime.contextFiles).toEqual([{ path: 'SOUL.md', content: 'Stable workspace persona.' }]);
     const buildPrompt = (runtime: PromptRuntimeOverrides) => buildAgentPathSystemPrompt({
       ...host, config: DEFAULT_CONFIG, skillRegistry: null, skillsSummaryXML: '', globalContext: '',
       getTurnActiveSkills: () => '',
@@ -228,7 +245,7 @@ describe('FullAgentTurnEngine', () => {
       personaEnhanced: 'persona', runtime,
     });
     const prompt = await buildPrompt(runtime);
-    const capabilityAt = prompt.indexOf('researcher');
+    const capabilityAt = [prompt.indexOf('researcher'), prompt.indexOf('lookup')].filter(at => at >= 0).sort((a, b) => a - b)[0] ?? -1;
     const stablePrefix = capabilityAt < 0 ? prompt : prompt.slice(0, capabilityAt);
     expect(stablePrefix).toContain('Stable workspace persona.');
     expect(stablePrefix).toContain('Model: provider/model');
@@ -240,16 +257,22 @@ describe('FullAgentTurnEngine', () => {
       expect(prompt).not.toContain('researcher');
       expect(prompt).not.toContain('Find primary sources');
     } else {
-      expect(prompt.indexOf('researcher')).toBeGreaterThan(prompt.indexOf('# Security'));
+      expect(prompt.indexOf('lookup')).toBeGreaterThan(prompt.indexOf('# Security'));
       expect(prompt).toContain('Find primary sources');
       if (mode === 'specialist') {
-        expect(prompt).toContain('## Active specialist: researcher');
-        expect(prompt).toContain('Verify the evidence before reporting.');
+        // The selected specialist depends on the turn: it rides in the current message's
+        // runtime-context tail, never in the cached system prefix.
+        expect(prompt).not.toContain('## Active specialist: researcher');
+        expect(prompt).not.toContain('Verify the evidence before reporting.');
+        expect(runtime.capabilityTail).toContain('## Active specialist: researcher');
+        expect(runtime.capabilityTail).toContain('Verify the evidence before reporting.');
         expect(prompt).not.toContain('## Available specialist agents');
         expect(prompt.indexOf('# Platform rules')).toBeGreaterThan(prompt.indexOf('Find primary sources'));
         expect(prompt.endsWith('Use the current bot client.')).toBe(true);
       } else {
-        expect(prompt).toContain('## Available specialist agents');
+        expect(prompt).not.toContain('researcher');
+        expect(runtime.capabilityTail).toContain('## Available specialist agents');
+        expect(runtime.capabilityTail).toContain('researcher');
         expect(prompt).not.toContain('Verify the evidence before reporting.');
       }
     }
@@ -265,6 +288,7 @@ describe('FullAgentTurnEngine', () => {
       expect(prompt.startsWith(`${withoutCapabilities}${SECTION_SEP}`)).toBe(true);
       expect(withoutCapabilities).not.toContain('researcher');
       expect(withoutCapabilities).not.toContain('lookup');
+      expect((coreInput?.promptRuntime as PromptRuntimeOverrides).capabilityTail).toBeUndefined();
     }
   });
 
@@ -491,8 +515,9 @@ describe('FullAgentTurnEngine', () => {
       },
     });
     const core = {
-      runText() {
+      runText(input: { interactiveRun?: { recordUsage(tokens: number): void } }) {
         return (async function* () {
+          input.interactiveRun?.recordUsage(2);
           yield {
             type: 'turn_end' as const,
             output: [{ type: 'text' as const, content: '你好' }],
@@ -581,7 +606,9 @@ describe('FullAgentTurnEngine', () => {
       }
     }
 
-    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 314);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 312);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ userId: 'user' }), 2);
+    expect(record.mock.calls.reduce((sum, call) => sum + call[1], 0)).toBe(314);
     expect(finalizeActiveTurn).toHaveBeenCalledWith(expect.objectContaining({
       usage: { prompt_tokens: 301, completion_tokens: 13, total_tokens: 314 },
     }));

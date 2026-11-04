@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AI_OUTBOUND_SEGMENT_TYPES, type AiOutboundSegmentProfile } from '@zhin.js/core';
-import { compactStructuredReplyPrompt, decodeStructuredReply, structuredReplySchema } from '../../src/outbound/structured-reply.js';
+import { withStructuredOutputInstruction } from '../../../ai/src/llm/bridge/prompt-structured-output.js';
+import { compactStructuredReplyPrompt, decodeStructuredReply, structuredReplyInstruction, structuredReplySchema } from '../../src/outbound/structured-reply.js';
 import { estimatePromptTokens } from '../../src/prompt/estimate-tokens.js';
 
 // Required data keys per segment type, as the schema declares them (ADR 0042 §6).
@@ -15,6 +16,18 @@ const full: AiOutboundSegmentProfile = {
 };
 
 describe('compact prompt-mode reply schema (ADR 0042 §6)', () => {
+  it('adds one reply envelope shape while retaining platform delivery guidance', () => {
+    const profile: AiOutboundSegmentProfile = { types: ['text', 'mention', 'image'] };
+    const schema = structuredReplySchema(profile);
+    const context = withStructuredOutputInstruction({ systemPrompt: structuredReplyInstruction(profile), messages: [] }, schema);
+    expect(context.systemPrompt?.match(/\{"messages":\[\{"segments":/g)).toHaveLength(1);
+    for (const rule of ['supplied schema', 'preserve message and segment order', 'real platform user ID',
+      'never Markdown image syntax', 'no prose and no Markdown fence', 'Use {"messages":[]} only when no reply is needed']) {
+      expect(context.systemPrompt).toContain(rule);
+    }
+    expect(decodeStructuredReply('{"messages":[{"segments":[{"type":"text","data":{"text":"好的"}}]}]}', profile)).toHaveLength(1);
+  });
+
   it('covers every segment type of the schema with its data keys', () => {
     const text = compactStructuredReplyPrompt(structuredReplySchema(full), full);
     for (const type of AI_OUTBOUND_SEGMENT_TYPES) {

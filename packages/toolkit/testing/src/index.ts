@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { defineAdapter, type AdapterDefinition, type AdapterSegmentPolicy,
+import { Adapter, createEndpointSpecification, endpointSpec, defineAdapter, type Endpoint, type AdapterDefinition, type AdapterSegmentPolicy,
   type EndpointIdentity, type EndpointEventSink, type EndpointIncomingMessage, type EndpointSendRequest } from 'zhin.js/adapter';
 import { ImRuntime, type ConversationAddress, type MessageDispatchResult,
   type RuntimeMessageDiagnosticsReader, type SendContent } from 'zhin.js/core/runtime';
@@ -81,26 +81,41 @@ export class PluginTestKit {
       throw new TypeError('Test endpoints must have unique lowercase names');
     }
     this.#defaultEndpoint = names[0]!;
-    const definitions = new Map<string, AdapterDefinition>(names.map(name => [name, defineAdapter({
-      capabilities: ['inbound', 'outbound'],
-      segments: options.segments ?? { html: 'text', interactive: 'text', markdown: 'text' },
-      create: () => ({
-        client: Object.freeze({ synthetic: true }),
-        connect: ({ events, identity }) => {
-          this.#identities.set(name, identity);
-          this.#sinks.set(name, events);
-          return () => { if (this.#sinks.get(name) === events) { this.#sinks.delete(name); this.#identities.delete(name); } };
-        },
-        send: (request: EndpointSendRequest) => {
-          const id = `test-${this.#nextDelivery++}`;
-          this.#attempts.push(Object.freeze({ endpoint: name, id,
-            conversation: captureDeliveryValue(request.conversation),
-            payload: captureDeliveryValue(request.payload),
+    const kit = this;
+    const definitions = new Map<string, AdapterDefinition>(names.map(name => {
+      class SyntheticClient {
+        readonly synthetic = true;
+        send(request: EndpointSendRequest): string {
+          const id = `test-${kit.#nextDelivery++}`;
+          kit.#attempts.push(Object.freeze({ endpoint: name, id,
+            conversation: captureDeliveryValue(request.conversation), payload: captureDeliveryValue(request.payload),
           }));
           return id;
-        },
-      }),
-    })]));
+        }
+      }
+      class SyntheticEndpoint extends SyntheticClient implements Endpoint {
+        readonly [endpointSpec] = createEndpointSpecification(this, {
+          start: signal => signal.throwIfAborted(),
+          open: () => {
+            kit.#identities.set(name, this[endpointSpec].identity);
+            kit.#sinks.set(name, this[endpointSpec].events);
+          },
+          close: () => this.#release(), stop: () => this.#release(),
+          send: request => this.send(request),
+        });
+        #release(): void {
+          if (kit.#sinks.get(name) !== this[endpointSpec].events) return;
+          kit.#sinks.delete(name); kit.#identities.delete(name);
+        }
+      }
+      class SyntheticAdapter extends Adapter<SyntheticEndpoint> {
+        protected createEndpoint(): SyntheticEndpoint { return new SyntheticEndpoint(); }
+      }
+      return [name, defineAdapter({ capabilities: ['inbound', 'outbound'],
+        segments: options.segments ?? { html: 'text', interactive: 'text', markdown: 'text' },
+        createAdapter: () => new SyntheticAdapter(),
+      })];
+    }));
     const modules = options.modules ?? new NativeDevelopmentModuleRuntime({ projectRoot, watch: false });
     this.#root = new RootRuntime({ projectRoot,
       modules: withTestEndpoints(modules, rootEntry, definitions),

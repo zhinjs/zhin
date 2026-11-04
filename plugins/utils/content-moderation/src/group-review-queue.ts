@@ -1,4 +1,4 @@
-import { createGenerationAdmissionGate, generationAdmissionSource } from 'zhin.js/plugin-runtime';
+import { createGenerationAdmissionGate, generationAdmissionSource, type PluginId } from 'zhin.js/plugin-runtime';
 import type { GroupModerationInput, GroupModerator } from './group-moderation.js';
 import { deferred, REQUEST_BATCHES, reviewGroupBatch, takeGroupBatch } from './group-review-batch.js';
 
@@ -8,6 +8,17 @@ const MAX_PENDING_BYTES = 256 * 1024;
 type Entry = { input: GroupModerationInput; sender: string; bytes: number; order: number;
   done: ReturnType<typeof deferred<boolean>>; ownsRecall: boolean; detach(): void };
 type Scene = { pending: Entry[]; bytes: number; active: Map<string, Entry> };
+/** Exact source ownership captured while the inbound operation is still live. */
+interface GroupReviewSourceInput {
+  readonly owner: PluginId;
+  /** Carries caller cancellation, account epoch retirement and explicit Root stop. */
+  readonly signal: AbortSignal;
+}
+interface CapturedGroupReviewSource {
+  readonly signal: AbortSignal;
+  /** Ends only this registration; it never resumes or replays detached work. */
+  release(): void;
+}
 
 /** One generation-owned worker; per-scene bounded buffers, no persisted/replayed punishment jobs. */
 export class GroupReviewQueue {
@@ -15,6 +26,7 @@ export class GroupReviewQueue {
   readonly #gate = createGenerationAdmissionGate();
   readonly #abort = new AbortController();
   readonly #scenes = new Map<string, Scene>();
+  readonly #sources = new Set<{ readonly owner: PluginId; readonly abort: AbortController }>();
   #timer?: ReturnType<typeof setTimeout>;
   #running = false;
   #order = 0;
@@ -22,11 +34,25 @@ export class GroupReviewQueue {
 
   constructor(moderator: GroupModerator) {
     this.#moderator = moderator;
-    this.#gate.onActivate(() => this.#gate.onDeactivate(() => this.stop()));
+  }
+
+  /** Bind detached review work to its actual Adapter owner, not a replaceable generation gate. */
+  captureSource(input: GroupReviewSourceInput): CapturedGroupReviewSource {
+    const source = { owner: input.owner, abort: new AbortController() };
+    this.#sources.add(source);
+    return { signal: AbortSignal.any([input.signal, source.abort.signal]), release: () => { this.#sources.delete(source); } };
+  }
+
+  /** Existing cancellation policy, applied only to the actual committed replacement set. */
+  cancelReplacedSources(owners: readonly PluginId[]): void {
+    for (const source of this.#sources) {
+      if (owners.includes(source.owner)) source.abort.abort(new Error('Moderation source Adapter was replaced'));
+    }
   }
 
   stop(): void {
     this.#abort.abort(new Error('Group review generation retired'));
+    for (const source of this.#sources) source.abort.abort(this.#abort.signal.reason);
     clearTimeout(this.#timer); this.#timer = undefined;
     for (const scene of this.#scenes.values()) {
       for (const entry of scene.pending) this.#finish(entry);

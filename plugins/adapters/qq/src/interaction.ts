@@ -11,5 +11,5 @@ export function normalizeQqInteraction(raw: unknown): { message: QqInboundMessag
   const id = kind === 'private' ? actor : kind === 'group' ? event.group_id : event.channel_id;
   if (!kind || !id || !actor || (kind === 'channel' && !event.guild_id)) return null;
   const sourceMessageId = typeof resolved.message_id === 'string' && resolved.message_id ? resolved.message_id : undefined;
-  return { message: { id: event.notice_id, content: '', channelKind: kind, channelId: id, authorId: actor, authorName: '', timestamp: Date.now(), ...(event.guild_id ? { guildId: event.guild_id } : {}), segments: [{ type: 'action', data: { payload: resolved.button_data } }] }, ...(sourceMessageId ? { sourceMessageId } : {}), ack: () => event.reply!(0) };
+  return { message: { event: raw, id: event.notice_id, content: '', channelKind: kind, channelId: id, authorId: actor, authorName: '', timestamp: Date.now(), ...(event.guild_id ? { guildId: event.guild_id } : {}), segments: [{ type: 'action', data: { payload: resolved.button_data } }] }, ...(sourceMessageId ? { sourceMessageId } : {}), ack: () => event.reply!(0) };
 }

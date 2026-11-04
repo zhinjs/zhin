@@ -1,12 +1,9 @@
-import { projectLocaleToken, resolveLocale } from 'zhin.js/i18n';
 /**
  * Convention entry: discover `adapters/sandbox/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { httpHostToken } from '@zhin.js/host-http';
-import { SandboxWsEndpoint } from '../../src/endpoint.js';
+import { SandboxAdapter } from '../../src/adapter.js';
 import {
-  resolveSandboxEndpoint,
   type SandboxEndpointConfig,
 } from '../../src/protocol.js';
 
@@ -22,6 +19,7 @@ export default defineAdapter<SandboxEndpointConfig>({
         // 物化为 base64 内联（sandbox 无平台上传通道）。交互段由 Console 原生承载。
         segments: {
           html: 'direct',
+          markdown: 'native',
           outboundMedia: ['url', 'base64', 'path'],
           interactive: 'native',
         },
@@ -31,12 +29,5 @@ export default defineAdapter<SandboxEndpointConfig>({
       runtime: { sandbox: true },
     },
   },
-  create(context) {
-    return new SandboxWsEndpoint({
-      id: context.id,
-      locale: resolveLocale(context.use(projectLocaleToken)),
-      http: context.use(httpHostToken),
-      defaults: resolveSandboxEndpoint(context.config),
-    });
-  },
+  createAdapter: context => new SandboxAdapter(context),
 });

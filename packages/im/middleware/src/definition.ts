@@ -4,6 +4,7 @@
  */
 import type {
   AdapterClient,
+  OperationSession,
   CapabilityContext,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
@@ -26,6 +27,7 @@ export interface MiddlewareContext<
   readonly input: TInput;
   /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
   readonly $client: AdapterClient<TAdapter>;
+  readonly session: OperationSession<TAdapter> | undefined;
 }
 
 /** Shared metadata for the public inbound and outbound definition contracts. */
@@ -45,7 +47,10 @@ export type MiddlewareDefinition<
   TAdapter extends string | undefined = string | undefined,
 > = MiddlewareDefinitionBase<TAdapter> & (
   | { readonly target: 'inbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: MiddlewareNext): unknown }
-  | { readonly target: 'outbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void> }
+  | { readonly target: 'outbound';
+      /** Opt in to cumulative prefixes. Previously published text, format and addressing must stay stable. */
+      readonly incremental?: true;
+      handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void> }
 );
 
 declare module '@zhin.js/plugin-runtime' {
@@ -69,7 +74,13 @@ type AuthoringForAdapter<TInput, TConfig, TAdapter extends string | undefined> =
     readonly order?: number;
   } & (
     | { readonly target?: 'inbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: MiddlewareNext): unknown }
-    | { readonly target: 'outbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void> }
+    | {
+        readonly target: 'outbound';
+        /** Opt in to cumulative prefixes. Previously published text, format and addressing must stay stable;
+         * do not repeat approvals, external sends or other side effects. */
+        readonly incremental?: true;
+        handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void>;
+      }
   );
 
 /** @internal Shape shared with the typed IM facade; not a separate authoring API. */

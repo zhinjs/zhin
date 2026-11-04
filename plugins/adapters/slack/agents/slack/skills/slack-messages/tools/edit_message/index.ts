@@ -18,9 +18,9 @@ export default defineAgentTool<{
   tags: ['slack'],
   async execute({ channel, message_ts, text }, context) {
     const client = context.$client;
-    await editSlackContent(client, channel, message_ts, [
+    await editSlackContent(client, { channel: channel, ts: message_ts, content: [
       { type: 'text', data: { text } },
-    ]);
+    ] });
     return { success: true, message: t(context.locale, 'messageEdited') };
   },
 });

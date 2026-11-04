@@ -1,3 +1,4 @@
+import { createDeliveryTarget, type DeliveryTarget } from 'zhin.js/plugin-runtime';
 import type { Locale } from 'zhin.js/i18n';
 import { messages as t } from './i18n.js';
 /**
@@ -8,6 +9,7 @@ import { isRecord } from './sources/parse-helpers.js';
 import type { ConversationKind } from './subscriptions.js';
 
 export interface ConversationTarget {
+  readonly target: DeliveryTarget;
   readonly adapter: string;
   readonly endpointKey: string;
   readonly conversationKind: ConversationKind;
@@ -41,16 +43,17 @@ export function extractConversation(input: unknown): ConversationTarget | null {
   if (!isRecord(conversation)) return null;
   const kind = conversation.kind;
   if (kind !== 'private' && kind !== 'group' && kind !== 'channel') return null;
-  // Same precedence as core: explicit message fields, then the conversation's endpoint.
+  // Canonical scene identity is authoritative; display names are never persisted as account identity.
   const endpoint = isRecord(conversation.endpoint) ? conversation.endpoint : {};
-  const adapter = isIdentifier(input.clientAdapter) ? input.clientAdapter : endpoint.adapter;
-  const endpointKey = isIdentifier(input.endpointId) ? input.endpointId : endpoint.id;
+  const adapter = endpoint.adapter;
+  const endpointKey = endpoint.id;
   if (!isIdentifier(adapter)) return null;
   if (!isIdentifier(endpointKey)) return null;
   if (!isIdentifier(conversation.id)) return null;
   const sender = input.sender;
   const senderId = isRecord(sender) && isIdentifier(sender.id) ? sender.id : '';
   return {
+    target: createDeliveryTarget({ conversation: conversation as DeliveryTarget }),
     adapter,
     endpointKey,
     conversationKind: kind,

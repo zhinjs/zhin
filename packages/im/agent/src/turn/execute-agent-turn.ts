@@ -117,7 +117,8 @@ async function runProjection(turn: TurnIngress, projection: TurnTerminalProjecti
   }
 }
 
-async function publishProjectionFailure(turn: TurnIngress, error: unknown): Promise<void> {
+/** Internal projection diagnostic shared by normal completion and confirmed-phase cleanup. */
+export async function publishProjectionFailure(turn: TurnIngress, error: unknown): Promise<void> {
   try {
     await turn.ports.activity?.publish({
       type: 'turn_projection_failed',

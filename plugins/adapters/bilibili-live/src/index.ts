@@ -2,7 +2,6 @@ export * from './protocol.js';
 export {
   BilibiliLiveApiError,
   BilibiliLiveClient,
-  bilibiliLiveClient,
   type BilibiliLiveClientEventMap,
   signWbi,
   type BilibiliLiveFetch,
@@ -15,3 +14,4 @@ export {
   type LiveSocket,
   type LiveSocketFactory,
 } from './endpoint.js';
+export { BilibiliLiveAdapter } from './adapter.js';

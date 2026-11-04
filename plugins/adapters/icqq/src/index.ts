@@ -3,12 +3,14 @@ export {
   formatInboundContent,
   formatOutboundBody,
   formatOutboundMessages,
+  formatOutboundMessageParts,
   icqqInboundConversation,
   icqqOutboundTarget,
   type ActionResult,
   type IcqqEndpointConfig,
   type IcqqInboundMessage,
   type IcqqWireSegment,
+  type IcqqOutboundMessagePart,
   type ParsedIcqqSendTarget,
   type ResolvedIcqqConfig,
 } from './protocol.js';
@@ -21,7 +23,6 @@ export {
 export * from './types.js';
 
 export {
-  icqqClient,
   type IcqqClient,
   type IcqqClientEventMap,
 } from './client.js';
@@ -29,3 +30,5 @@ export {
 export {
   resolveIcqqInboundMessageId,
 } from './icqq-inbound.js';
+
+export { IcqqAdapter } from './adapter.js';

@@ -1,5 +1,5 @@
 import { createMessages, type Locale } from '@zhin.js/plugin-runtime';
-import type { GameMessageLike } from './command-message.js';
+import type { GamePlayer } from './command-message.js';
 
 const messages = createMessages({
   help: { 'zh-CN': '帮助', en: 'Help' },
@@ -15,19 +15,23 @@ const messages = createMessages({
   startHint: { 'zh-CN': '发送「{command}」开始。', en: 'Send “{command}” to start.' },
 });
 
-export function gameCommandHint(message: Pick<GameMessageLike, 'locale' | 'formatCommand'>, path: string, action = 'start'): string {
+export function gameCommandHint(message: Pick<GamePlayer, 'locale' | 'formatCommand'>, path: string, action = 'start'): string {
   const command = message.formatCommand?.(path);
   return command === undefined ? '' : messages(message.locale, 'startHint', { command: `${command} ${action}` });
 }
 
+export interface GameHelpRequest {
+  /** Locale and command formatter of the actual presenting operation. */
+  readonly presentation: Pick<GamePlayer, 'locale' | 'formatCommand'>;
+  readonly title: Readonly<Record<Locale, string>>;
+  readonly commandPath: string;
+  readonly actions: readonly ('start' | 'continue' | 'quit' | 'bot' | 'join' | 'leave' | 'spectate')[];
+  readonly footer?: Readonly<Record<Locale, string>>;
+}
+
 /** Only render invocations confirmed by the current operation's CommandIndex. */
-export function formatGameHelp(
-  message: Pick<GameMessageLike, 'locale' | 'formatCommand'>,
-  title: Readonly<Record<Locale, string>>,
-  path: string,
-  actions: readonly ('start' | 'continue' | 'quit' | 'bot' | 'join' | 'leave' | 'spectate')[],
-  footer?: Readonly<Record<Locale, string>>,
-): string {
+export function formatGameHelp(input: GameHelpRequest): string {
+  const { presentation: message, title, commandPath: path, actions, footer } = input;
   const locale = message.locale ?? 'zh-CN';
   const lines = [title[locale]];
   const command = message.formatCommand?.(path);
@@ -39,8 +43,8 @@ export function formatGameHelp(
   return lines.join('\n');
 }
 
-export function gameCommandFeedback(message: Pick<GameMessageLike, 'locale'>, key: 'unknown', action: string): string;
-export function gameCommandFeedback(message: Pick<GameMessageLike, 'locale'>, key: 'noGame'): string;
-export function gameCommandFeedback(message: Pick<GameMessageLike, 'locale'>, key: 'unknown' | 'noGame', action = ''): string {
+export function gameCommandFeedback(message: Pick<GamePlayer, 'locale'>, key: 'unknown', action: string): string;
+export function gameCommandFeedback(message: Pick<GamePlayer, 'locale'>, key: 'noGame'): string;
+export function gameCommandFeedback(message: Pick<GamePlayer, 'locale'>, key: 'unknown' | 'noGame', action = ''): string {
   return messages(message.locale, key, { action });
 }

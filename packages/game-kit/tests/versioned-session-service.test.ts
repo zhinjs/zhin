@@ -24,9 +24,8 @@ class TestVersionedService extends VersionedSessionService<TestRow> {
 
   start(): Promise<TestRow> {
     const now = Date.now();
-    return this.createRow({
+    return this.createRow({ target: { endpoint: { adapter: 'sandbox', id: 'canonical-test' }, kind: 'group', id: 'room' }, fields: {
       id: 'session-1',
-      channel_key: 'sandbox-default-group:room',
       player_id: 'alice',
       score: 0,
       status: 'active',
@@ -34,7 +33,7 @@ class TestVersionedService extends VersionedSessionService<TestRow> {
       processed_actions: '[]',
       updated_at: now,
       created_at: now,
-    });
+    } });
   }
 }
 

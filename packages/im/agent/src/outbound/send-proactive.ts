@@ -2,6 +2,7 @@ import type { AgentOutputElement } from './agent-output.js';
 /** Proactive delivery contracts implemented by the generation-owned IM runtime. */
 import type { IMSceneRef, SendContent } from '@zhin.js/core';
 import type { Locale } from '@zhin.js/plugin-runtime';
+import type { DeliveryReceipt } from '@zhin.js/im-contract';
 
 export type ProactiveSendSource =
   | 'scheduled'
@@ -15,6 +16,8 @@ export interface ProactiveSendContext {
   scene: IMSceneRef;
   source: ProactiveSendSource;
   quoteMessageId?: string;
+  /** Optional observation of the same unified send; never a retry or delivery gate. */
+  onReceipt?: (receipt: DeliveryReceipt) => void | Promise<void>;
 }
 
 export interface ProactiveOutboundService {

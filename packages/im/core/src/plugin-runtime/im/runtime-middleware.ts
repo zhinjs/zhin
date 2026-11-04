@@ -17,3 +17,9 @@ function middleware(snapshot: RuntimeSnapshot): MiddlewareIndex | undefined {
   const projection = snapshot.projections.get(middlewareFeatureId);
   return isMiddlewareIndex(projection) ? projection : undefined;
 }
+
+/** Legacy outbound middleware sees one complete reply unless its author explicitly supports revisions. */
+export function supportsIncrementalOutbound(snapshot: RuntimeSnapshot, adapter: string): boolean {
+  return middleware(snapshot)?.list().every(record => record.target !== 'outbound'
+    || record.adapter !== undefined && record.adapter !== adapter || record.incremental === true) ?? true;
+}

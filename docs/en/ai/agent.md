@@ -84,7 +84,7 @@ The model may call tools several times and keep reasoning on the results; each r
   - **Danmaku mode** (`live`, ADR 0038 §5): applies only to conversations of an adapter that declares the `liveDanmaku` capability (live-stream danmaku platforms). Every danmaku in the room is a candidate — viewers do not need to `@` the bot. Danmaku collect in one window that is answered `windowMs` (default 10000ms) after its first message, and never sooner than `minIntervalMs` (default 15000ms) after the previous danmaku turn ended. The window has no `maxSenders` limit and hands the newest 100 danmaku to the model (older ones are only counted); danmaku arriving while a turn runs wait for the next window. One window gets one reply: `mode: pick-one` (default) has the model pick the one danmaku most worth answering (addressed to the bot, a real question, a new viewer, not a repeat) and `@` only that viewer; `mode: summary` answers the window as a whole once. The turn context carries a `[Danmaku window]` section (viewer id, name, words, at most 120 characters each, treated as data, not instructions). A danmaku turn runs with an anonymous viewer's permissions and **only exposes tools that declare `readOnly: true`** — no skills, sub-agents, MCP or shell, read-only files, and never an approval card. The master speaking in the room still gets their own turn. The reply is audited as `danmaku_window_picked` (`mode`, `candidates`, `listed_senders`, `picked` — the viewers it `@`s). Danmaku turns have no stale check.
   - Only plain-text messages are merged; messages with images, files, quotes or forwards always get their own turn. Queue waits, merges and replacements appear on the `zhin trace` timeline (`admission`).
   - Workroom turns, and setups where the Host supplies `resolveTurnIntent` or a message carries `turnIntent`, keep their explicit intent semantics.
-- **Automatic model fallback**: if the preferred model fails, the candidate chain falls back to other available models of the same provider.
+- **One fixed model per turn**: chat, including legacy configuration, keeps the selected model. Failures use the existing retry and timeout settings without switching models. Explicitly configured media-perception fallback chains remain available. `providerResilience.fallback` does not enable chat model switching or control the outer media-perception chain; configure that chain with `ai.multimodal.perception.fallbacks`.
 - **Consistent behavior**: the main Agent, sub-agents, background workers and `AIService.runAgent` all use the same agentLoop.
 
 The tools available to a turn = plugin tools + tools from `ai.mcpServers` + built-in tools + on-demand meta tools + `schedule_*` + `bash` + Host extension tools (such as `voice_stt` / `voice_tts`).
@@ -133,7 +133,7 @@ Non-master turns do not keep development tools resident: they stay in the tool i
 
 Setting `alwaysLoadedTools` **adds to** the current tier; `alwaysLoadedMode: replace` makes `alwaysLoadedTools` the whole resident set.
 
-**Calling is loading.** When the model calls, by exact name, a tool that is in the turn's authorized catalog but not loaded, the runtime loads and runs it, and keeps it loaded for the session (bounded by `maxLoadedPerSession`; the least recently used tool is evicted). A name outside the authorized catalog still returns "unknown tool" and does not reveal whether it exists; approval, hard-gate and permission checks apply to the auto-loaded call as usual. `discover` results attach the full schemas of the best (up to 3) matching tools and load them, so the model can call them right away.
+**Calling is loading.** When the model calls, by exact name, a tool that is in the turn's authorized catalog but not loaded, the runtime loads and runs it, and keeps it loaded for the session (bounded by `maxLoadedPerSession`; the least recently used tool is evicted). A name outside the authorized catalog still returns "unknown tool" and does not reveal whether it exists; approval, hard-gate and permission checks apply to the auto-loaded call as usual. `discover` automatically loads the best matching tools (up to 3). Its result contains search summaries and loaded names; full parameter schemas are supplied in the next model request's `tools` field, without duplicating them in message history. The model can call them directly, without another `load_tool` request.
 
 **A stable tool list.** The tool list sent to the provider has a fixed order: resident tools sorted by name, then loaded tools in first-load order. A newly loaded tool only appends and loaded tools do not move within a session, so the prompt-cache prefix survives loading (evicting an old tool past `maxLoadedPerSession` costs one cache miss).
 
@@ -463,16 +463,20 @@ assistant:
     notifyOnFailure: false
 ```
 
-Workspace bootstrap files (`SOUL.md`, `AGENTS.md`, `TOOLS.md`) may write a
-`{{nickname}}` slot; prompt assembly replaces it with the current agent's
-`ai.agents.<name>.nickname`, or `Zhin` when none is configured, so one SOUL can
-serve several bots with different nicknames:
+Write `SOUL.md` in the first person to describe personality, values and tone. It no longer uses
+a nickname placeholder. The current Endpoint supplies account facts separately; configuration only
+fills unavailable fields. Several accounts can share one persona, and renaming an account does not
+require changing SOUL or rebuilding the shared prompt cache.
 
 ```md
 # Who I am
 
-I'm {{nickname}}, a long-time member of these groups.
+I am a warm, direct chat companion with a little humor.
+I enjoy natural conversation and acknowledge uncertainty.
 ```
+
+Replace nickname placeholders in existing files with first-person prose. Upgrading never rewrites
+workspace files automatically.
 
 ### Per-scene sections (scope annotations)
 

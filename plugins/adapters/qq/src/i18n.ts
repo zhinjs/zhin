@@ -3,8 +3,8 @@ import { createMessages } from 'zhin.js/i18n';
 export const messages = createMessages({
   bindTaskFailed: { 'zh-CN': '获取绑定任务失败: {error}', en: 'Could not create the binding task: {error}' },
   "kindPrompt": {
-    "zh-CN": "请回复 public（公域）或 private（私域），确认后一次性写入 .env 与配置。",
-    "en": "Reply public or private to save .env and configuration together."
+    "zh-CN": "请回复 public（公域）或 private（私域），确认后保存账号；需手动启动。",
+    "en": "Reply public or private to save the account, then start it explicitly."
   },
   "cancelHint": {
     "zh-CN": "也可发 {command} 取消。",
@@ -19,8 +19,8 @@ export const messages = createMessages({
     "en": "⚠️ Endpoint “{id}” is waiting for public/private selection"
   },
   "endpointSaved": {
-    "zh-CN": "✅ 已按 botKind={kind} 将 endpoint「{id}」写入 .env 与 {file}。\nintents: {intents}。\n⚠️ 需重启 zhin 后新 endpoint 才会生效。",
-    "en": "✅ Saved endpoint “{id}” with botKind={kind} to .env and {file}.\nintents: {intents}.\n⚠️ Restart zhin to activate the new endpoint."
+    "zh-CN": "✅ 已按 botKind={kind} 保存账号「{id}」。\nintents: {intents}。\n尚未启动，请显式启动此账号。",
+    "en": "✅ Saved account “{id}” with botKind={kind}.\nintents: {intents}.\nThe account is inactive; start it explicitly."
   },
   "existingFlow": {
     "zh-CN": "已有进行中的 QQ 机器人绑定或待确认的公域/私域选择，请先取消后再试",

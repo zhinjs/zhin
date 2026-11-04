@@ -19,10 +19,10 @@ describe('capability catalog', () => {
     expect(clipped.endsWith('…')).toBe(true);
   });
 
-  it('renders skills as name + trigger with the load_skill hint', () => {
+  it('renders only the Skill directory without shared loading guidance', () => {
     const text = renderSkillCatalog([{ name: 'weekly-report', description: 'Write the report.\nInternal notes.' }])!;
     expect(text).toContain('## Available skills');
-    expect(text).toContain('load_skill(name)');
+    expect(text).not.toContain('load_skill(name)');
     expect(text).toContain('- weekly-report: Write the report');
     expect(text).not.toContain('Internal notes');
   });
@@ -92,9 +92,18 @@ describe('capability catalog', () => {
     it('derives the domain from the MCP server, else the tool owner', () => {
       const fullTool = (source?: string) => ({ source });
       expect(toolIndexGroup({ mcpServer: 'git', fullTool: fullTool('mcp:git') })).toBe('mcp:git');
+      expect(toolIndexGroup({ owner: 'root/calendar', fullTool: fullTool('/packages/calendar/tools/add/index.js') })).toBe('root/calendar');
+      expect(toolIndexGroup({ owner: 'root/calendar', mcpServer: 'git', fullTool: fullTool('/packages/calendar/tools/add/index.js') })).toBe('mcp:git');
       expect(toolIndexGroup({ fullTool: fullTool('plugin:calendar') })).toBe('calendar');
       expect(toolIndexGroup({ fullTool: fullTool('builtin:context') })).toBe('builtin:context');
+      expect(toolIndexGroup({ fullTool: fullTool('mcp:git') })).toBe('mcp:git');
       expect(toolIndexGroup({ fullTool: fullTool() })).toBe('other');
+    });
+
+    it('does not use diagnostic source paths as model-visible domains', () => {
+      for (const source of ['/workspace/node_modules/.pnpm/example@1/tools/add/index.js', './tools/add/index.ts', 'C:\\workspace\\tools\\add.ts']) {
+        expect(toolIndexGroup({ fullTool: { source } })).toBe('other');
+      }
     });
   });
 });

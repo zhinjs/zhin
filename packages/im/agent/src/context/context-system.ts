@@ -4,16 +4,19 @@ import { createDefaultContextBuilders } from './default-builders.js';
 import type { BuildContext, ContextBuilder, ContextInjector, ContextSystemConfig, InjectContext } from './contracts.js';
 import type { TurnEnvelopeParts } from './envelope-parts.js';
 import {
-  prependTurnContextBlocks,
+  appendTurnContextBlocks,
 } from './turn-user-message.js';
 import { buildAgentsEnvelopeContext } from './agents-instruction.js';
-import { bootstrapSceneFromTurn } from '../bootstrap-scope.js';
+import { bootstrapSceneFromTurn, scopeBootstrapText } from '../bootstrap-scope.js';
+import { buildPersonaSection } from '../prompt/system-prompt.js';
 import {
   buildTurnContextBlocks,
   type TurnContextView,
 } from './turn-envelope.js';
 import { getGitStatusLine } from '../prompt/git-context.js';
+import { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { resolveModelCandidates } from './model-resolver.js';
+import type { ContextFile } from '../bootstrap.js';
 export type { TurnEnvelopeParts } from './envelope-parts.js';
 export {
   ProfileContextBuilder,
@@ -100,21 +103,38 @@ export class ContextSystem {
     };
 
     const extraMessages = isScheduleTurn ? [] : await this.runPipeline(buildCtx, host);
-    const personaEnhanced = host.buildDisciplinedPrompt(host.config.persona);
+    // Rich turns assemble these same workspace files themselves. Tool-less turns use this
+    // prepared persona, so its SOUL reference must include the already-loaded, scene-scoped text.
+    // Delegated role prompts bypass ContextSystem and remain the caller's explicit persona.
+    const systemBootstrap = input.systemBootstrap ?? (input.contextFiles === undefined ? host.bootstrapContext : '');
+    const persona = !isScheduleTurn
+      ? [
+          buildPersonaSection({ config: host.config, bootstrapContext: systemBootstrap, contextFiles: input.contextFiles,
+            turn, agentNickname: host.activeBinding?.nickname }),
+          host.globalContext,
+          scopeBootstrapText(systemBootstrap ?? '', bootstrapSceneFromTurn(turn), { contextFiles: input.contextFiles }).text,
+        ].filter(text => text?.trim()).join('\n\n')
+      : host.config.persona;
+    // Final request assemblers own style/safety injection; context preparation only supplies content.
+    const personaEnhanced = persona;
 
-    const modelCandidates = resolveModelCandidates(
+    const selected = getAgentTurnConfiguration()?.models?.chat;
+    const resolvedCandidates = selected ? [selected.invocation.model.model] : resolveModelCandidates(
       host.getTurnProvider().models,
       host.modelRegistry,
       host.getTurnProvider().name,
       host.config,
       mode === 'vision' ? 'vision' : 'chat',
     );
-    const modelId = modelCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini';
+    const modelId = resolvedCandidates[0] || host.getTurnProvider().models[0];
+    if (!modelId) throw new Error('Chat model is not configured');
+    const modelCandidates = [modelId];
     const providerAlias = host.getTurnProvider().name;
     const llmModel = host.llmRuntime.model(providerAlias, modelId);
-    // The host bootstrap section (system prompt) already includes the root AGENTS.md: keep only nearer ones here.
-    const rootInSystemPrompt = /(?:^|\n)## AGENTS\.md\n/u.test(input.systemBootstrap ?? '');
-    const agentsContext = await buildAgentsEnvelopeContext(undefined, bootstrapSceneFromTurn(turn), { excludeRoot: rootInSystemPrompt });
+    // Captured files decide root presence or absence (including []); never borrow a newer root from disk.
+    const rootHandledBySystem = input.contextFiles !== undefined
+      || /(?:^|\n)## AGENTS\.md\n/u.test((!isScheduleTurn ? systemBootstrap : input.systemBootstrap) ?? '');
+    const agentsContext = await buildAgentsEnvelopeContext(undefined, bootstrapSceneFromTurn(turn), { excludeRoot: rootHandledBySystem });
 
     // Schedule ingress provides one current task; never infer its author from a history tail.
     const scheduleInput = isScheduleTurn && turnUser.promptMessages.length === 1 ? turnUser.promptMessages[0] : undefined;
@@ -124,6 +144,7 @@ export class ContextSystem {
     const first = preparedMessages[0]?.role === 'user' ? preparedMessages[0] as import('@zhin.js/ai').UserMessage : undefined;
     const turnBlocks = buildTurnContextBlocks({
       turn,
+      fallbackNickname: host.activeBinding?.nickname,
       observedAt: first?.timestamp,
       profileSummary: envelopeParts.profileSummary,
       sessionSummary: envelopeParts.sessionSummary,
@@ -136,11 +157,12 @@ export class ContextSystem {
       gitStatus: !isScheduleTurn && host.config.gitStatus ? await getGitStatusLine(process.cwd()) : undefined,
       agentsContext: agentsContext ?? undefined,
       toldLedger: input.toldLedger,
+      toldLedgerBlocks: input.toldLedgerBlocks,
       relevantMemory: input.relevantMemory,
     });
 
     const turnEnvelope = turnBlocks.map(block => block.text).join('\n');
-    let userMessages = prependTurnContextBlocks(
+    let userMessages = appendTurnContextBlocks(
       preparedMessages,
       turnBlocks,
       isScheduleTurn ? undefined : turnUser.userMessageExtra,
@@ -175,6 +197,7 @@ export interface TextTurnContextInput {
   deferredStats?: string;
   /** The bootstrap text the system prompt of this turn actually carries (host `## <file>` sections). */
   systemBootstrap?: string;
+  contextFiles?: readonly ContextFile[];
   quoteSystemHint?: string;
   prebuiltMessages?: AgentMessage[];
   mode?: 'chat' | 'vision';
@@ -182,6 +205,7 @@ export interface TextTurnContextInput {
   activeSkillBlocks?: readonly import('@zhin.js/ai').TextContentBlock[];
   /** Rendered "already told the user" ledger for this session (#730). */
   toldLedger?: string;
+  toldLedgerBlocks?: readonly import('@zhin.js/ai').TextContentBlock[];
   /** BM25-recalled semantic memory for this message (#734). */
   relevantMemory?: string;
 }

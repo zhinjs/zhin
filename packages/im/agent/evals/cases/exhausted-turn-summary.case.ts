@@ -3,8 +3,8 @@ import { defineEvalCase } from '../framework/index.js';
 const RAW = 'match: packages/im/agent/src/core/agent-core-run.ts:412 const directTools = input.toolLoading';
 
 export default defineEvalCase({
-  id: 'exhausted-turn-summary',
-  description: 'When the step budget runs out, tools are disabled and the model writes a summary; raw tool output is not sent.',
+  id: 'continuous-turn-completion',
+  description: 'The model keeps its tools beyond the old budget and finishes without dumping raw tool output.',
   source: 'QQ: iterations exhausted → user got a dump of tool output with no summary (#716 H1)',
   tags: ['long-task', 'tool-use'],
   inbound: { text: '帮我找出所有用到 toolLoading 的地方' },
@@ -13,13 +13,13 @@ export default defineEvalCase({
   script: [
     { toolCalls: [{ name: 'search_code', args: { q: 'toolLoading', page: 1 } }] },
     { toolCalls: [{ name: 'search_code', args: { q: 'toolLoading', page: 2 } }] },
-    // Harness asks for a summary with tools disabled.
-    { text: '已经查了两页结果，主要在 agent-core-run.ts；还有剩余结果没看完，要我继续吗？' },
+    // The same interactive run reaches its natural final answer with tools still available.
+    { text: '两页结果已查完，主要在 agent-core-run.ts。' },
   ],
   expect: {
-    outboundContains: ['要我继续吗'],
+    outboundContains: ['两页结果已查完'],
     noRawToolOutput: true,
-    modelInputContains: ['tool-call steps'],
+    modelInputNotContains: ['tool-call steps', 'One step left'],
     modelSteps: 3,
   },
 });

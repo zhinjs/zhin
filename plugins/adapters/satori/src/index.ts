@@ -14,6 +14,7 @@ export {
   type ResolvedSatoriWsConfig,
   type SatoriEndpointConfig,
   type SatoriApiOptions,
+  type SatoriApiRequest,
   type SatoriChannel,
   type SatoriEventBody,
   type SatoriLogin,
@@ -48,7 +49,6 @@ export {
 
 export {
   SatoriClient,
-  satoriClient,
   type SatoriClientEventMap,
 } from './client.js';
 
@@ -62,3 +62,4 @@ export type {
 } from '@imhelper/satori-v1';
 export { ProtocolError } from '@imhelper/satori-v1';
 export type { ProtocolErrorKind, ProtocolErrorOptions } from 'imhelper';
+export { SatoriAdapter } from './adapter.js';

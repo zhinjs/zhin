@@ -5,6 +5,7 @@ import type { Locale } from '@zhin.js/plugin-runtime';
 import { type SendOptions, sceneRefToSendOptions } from '@zhin.js/core';
 import { getLogger, formatCompact } from '@zhin.js/logger';
 import type { JobNotify } from './types.js';
+import type { DeliveryReceipt } from '@zhin.js/im-contract';
 const logger = getLogger('notification-router');
 
 export type ImJobNotify = Extract<JobNotify, { channel: 'im' }>;
@@ -12,7 +13,7 @@ export type ImJobNotify = Extract<JobNotify, { channel: 'im' }>;
 export interface NotificationRouterDeps {
   resolveAdapter: (platform: string) => { sendMessage: (opts: SendOptions) => Promise<string> } | undefined;
   /** 优先经 sendProactive 出站；未注入时回退 resolveAdapter.sendMessage */
-  sendIm?: (notify: ImJobNotify, content: string, source?: string, options?: Readonly<{ locale?: Locale }>) => Promise<void>;
+  sendIm?: (notify: ImJobNotify, content: string, source?: string, options?: Readonly<{ locale?: Locale }>) => Promise<void | DeliveryReceipt>;
   /** M4 注入 HA REST；M3 未配置时仅记日志 */
   callHaService?: (service: string, target?: string, data?: unknown) => Promise<void>;
 }
@@ -29,6 +30,7 @@ export interface DeliverParams {
 export interface DeliverResult {
   delivered: boolean;
   channel: JobNotify['channel'];
+  receipt?: DeliveryReceipt;
 }
 
 function assertImJobNotify(notify: ImJobNotify): void {
@@ -139,12 +141,13 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
       logger.warn(formatCompact({ op: 'notify_im_skip', reason: 'adapter_not_found', platform: scene.platform }));
       return { delivered: false, channel: 'im' };
     }
+    let receipt: void | DeliveryReceipt = undefined;
     if (deps.sendIm) {
-      await deps.sendIm(notify, content, source, { locale });
+      receipt = await deps.sendIm(notify, content, source, { locale });
     } else {
       await adapter!.sendMessage(imNotifyToSendOptions(notify, content, locale));
     }
-    return { delivered: true, channel: 'im' };
+    return { delivered: true, channel: 'im', ...(receipt ? { receipt } : {}) };
   }
 
   async function deliver(params: DeliverParams): Promise<DeliverResult> {

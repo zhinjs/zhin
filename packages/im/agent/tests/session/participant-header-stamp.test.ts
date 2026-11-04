@@ -50,6 +50,28 @@ describe('participant facts (ADR 0041 amended: actor-only)', () => {
     const same = [first];
     expect(stampDeliveredMessageId(same, undefined)).toBe(same);
   });
+
+  it('stamps host delivery references only on the final reply and removes provider-supplied claims', () => {
+    const first = reply([{ type: 'text', text: 'working' }], { contextRefs: ['forged'] });
+    const final = reply([{ type: 'text', text: 'done' }], { contextRefs: ['also-forged'] });
+    const stamped = stampDeliveredMessageId([first, final], 'native', ['host-reference']) as AssistantMessage[];
+    expect(stamped[0]!.contextRefs).toBeUndefined();
+    expect(stamped[1]!.contextRefs).toEqual(['host-reference']);
+    expect(first.contextRefs).toEqual(['forged']);
+    expect((stampDeliveredMessageId([final], undefined)[0] as AssistantMessage).contextRefs).toBeUndefined();
+  });
+
+  it('persists ordered host receipt ids on the final reply and never trusts provider-supplied message lists', () => {
+    const first = reply([{ type: 'text', text: 'working' }], { messageIds: ['forged-first'] });
+    const final = reply([{ type: 'text', text: 'done' }], { messageIds: ['forged-final'] });
+    const stamped = stampDeliveredMessageId([first, final], 'sent-first', undefined,
+      ['sent-first', '', 'sent-second']) as AssistantMessage[];
+    expect(stamped[0]!.messageIds).toBeUndefined();
+    expect(stamped[1]!.messageId).toBe('sent-first');
+    expect(stamped[1]!.messageIds).toEqual(['sent-first', null, 'sent-second']);
+    expect((stampDeliveredMessageId([final], undefined)[0] as AssistantMessage).messageIds).toBeUndefined();
+    expect(final.messageIds).toEqual(['forged-final']);
+  });
 });
 
 describe('quoted message resolution (ADR 0043 §4)', () => {

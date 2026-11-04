@@ -14,6 +14,11 @@ export default definePlugin({
     const engine = new ModerationEngine();
     engine.configure(context.config.get());
     context.resources.provide(moderationEngineToken, engine);
+    context.events.on('hmr.resume', ({ details }) => {
+      if (details.outcome !== 'committed') return;
+      engine.groupReviewQueue.cancelReplacedSources(details.replaced);
+      if (details.receiver.state === 'replaced') engine.groupReviewQueue.stop();
+    });
     return () => engine.groupReviewQueue.stop();
   },
 });

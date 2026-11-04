@@ -92,3 +92,5 @@ export {
   mergeModelHarnessValues,
   resolveModelHarness,
 } from './model-harness-runtime.js';
+
+export { validateModelRuntimeConfig } from '../model-runtime/validation.js';

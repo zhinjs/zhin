@@ -1,12 +1,13 @@
-import { defineMiddleware } from 'zhin.js/middleware';
-import type { Message } from '@zhin.js/core/runtime';
 import {
+  replyGameOperation,
   buildChoiceFallbackMap,
   channelKey,
-  messageFromCommandInput,
+  gamePlayerFromInput,
   parseChoicePayload,
   resolveGameTextPayload,
 } from '@zhin.js/game-kit';
+import { defineMiddleware } from 'zhin.js/middleware';
+import type { Message } from '@zhin.js/core/runtime';
 import { resolveGameServices } from '../../src/runtime-store.js';
 import { handleChoice, RPS_PREFIX } from '../../src/game-flow.js';
 
@@ -17,13 +18,14 @@ import { handleChoice, RPS_PREFIX } from '../../src/game-flow.js';
 export default defineMiddleware<Message>({
   target: 'inbound',
   async handle(context, next) {
+    if (!context.input.sender?.id) { await next(); return; }
     const raw = context.input.content?.trim() ?? '';
     if (!raw) {
       await next();
       return;
     }
     const services = resolveGameServices(context);
-    const message = messageFromCommandInput(context.input);
+    const message = gamePlayerFromInput(context.input);
     const ch = channelKey(message);
 
     // 直接 payload（QQ 指令预填 / Sandbox action→text）
@@ -33,8 +35,8 @@ export default defineMiddleware<Message>({
       if (parsed) {
         const session = await services.getById(parsed.sessionId);
         if (session?.channel_key === ch) {
-          const reply = await handleChoice(services, message, parsed.sessionId, parsed.choiceId);
-          if (reply) await context.input.$reply(reply);
+          await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+      run: () => handleChoice(services, message, parsed.sessionId, parsed.choiceId) });
           return;
         }
       }
@@ -42,7 +44,7 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    const session = await services.getActiveForUser(ch, message.$sender.id);
+    const session = await services.getActiveForUser(ch, message.sender.id);
     if (!session || session.status !== 'active') {
       await next();
       return;
@@ -61,7 +63,7 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    const reply = await handleChoice(services, message, session.id, parsed.choiceId);
-    if (reply) await context.input.$reply(reply);
+    await replyGameOperation({ session: services, player: message, reply: content => context.input.$reply(content),
+      run: () => handleChoice(services, message, session.id, parsed.choiceId) });
   },
 });

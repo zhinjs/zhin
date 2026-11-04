@@ -72,6 +72,11 @@ describe('validation reuse boundaries', () => {
     expect(versionCandidate([{ status: 'M', path: '.github/workflows/ci.yml' }])).toBe(false);
     expect(versionCandidate([{ status: 'M', path: 'package.json' }])).toBe(false);
     expect(versionCandidate([{ status: 'D', path: '.changeset/patch.md' }, { status: 'M', path: 'src/main.ts' }])).toBe(false);
+    expect(versionCandidate([{ status: 'D', path: '.changeset/patch.md' }])).toBe(false);
+    expect(versionCandidate([
+      { status: 'D', path: '.changeset/patch.md' },
+      { status: 'M', path: 'packages/a/package.json' },
+    ])).toBe(true);
   });
 });
 

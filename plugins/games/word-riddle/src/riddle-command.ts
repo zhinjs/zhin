@@ -1,4 +1,4 @@
-import { formatGameHelp, gameCommandFeedback, gameCommandHint, channelKey, type GameMessageLike, type GameReply } from '@zhin.js/game-kit';
+import { formatGameHelp, gameCommandFeedback, gameCommandHint, channelKey, type GamePlayer, type GameReply } from '@zhin.js/game-kit';
 import { createMessages } from 'zhin.js/i18n';
 import { continueGame, startGame } from './game-flow.js';
 import { riddleCount, type RiddleType } from './riddles-catalog.js';
@@ -18,10 +18,10 @@ const messages = createMessages({
   quit: { 'zh-CN': '已放弃猜谜。', en: 'You quit the riddle game.' },
 });
 
-export function getRiddleHelp(message: Pick<GameMessageLike, 'locale' | 'formatCommand'> = {}): string {
+export function getRiddleHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
   const locale = message.locale ?? 'zh-CN';
   const command = message.formatCommand?.('riddle');
-  return [formatGameHelp(message, { 'zh-CN': '🧩 猜谜（字谜 + 猜成语）', en: '🧩 Chinese Character and Idiom Riddles' }, 'riddle', ['start', 'continue', 'quit']),
+  return [formatGameHelp({ presentation: message, title: { 'zh-CN': '🧩 猜谜（字谜 + 猜成语）', en: '🧩 Chinese Character and Idiom Riddles' }, commandPath: 'riddle', actions: ['start', 'continue', 'quit'] }),
     messages(locale, 'counts', { chars: counts.char.toLocaleString(locale), idioms: counts.idiom.toLocaleString(locale) }),
     ...(command ? [messages(locale, 'char', { command: command + ' char' }), messages(locale, 'idiom', { command: command + ' idiom' })] : []),
     messages(locale, 'instructions'),
@@ -38,36 +38,38 @@ function parseMode(action: string): RiddleType | null {
 
 export async function runRiddleCommand(
   services: SessionService,
-  message: GameMessageLike,
+  message: GamePlayer,
   action: string,
 ): Promise<GameReply> {
-  const ch = channelKey(message);
-  const userId = message.$sender.id;
+  return services.runInScope({ scope: channelKey(message), run: async () => {
+    const ch = channelKey(message);
+    const userId = message.sender.id;
 
-  if (!action || action === 'help') {
-    const active = await services.getActiveByChannel(ch);
-    const lines = [getRiddleHelp(message), ''];
-    if (active) {
-      lines.push(messages(active.locale ?? undefined, 'active', { mode: typeLabel(active.mode as RiddleType, active.locale ?? undefined), score: active.score, streak: active.streak }));
-    } else {
-      lines.push(gameCommandFeedback(message, 'noGame'), gameCommandHint(message, 'riddle'));
+    if (!action || action === 'help') {
+      const active = await services.getActiveByChannel(ch);
+      const lines = [getRiddleHelp(message), ''];
+      if (active) {
+        lines.push(messages(active.locale ?? undefined, 'active', { mode: typeLabel(active.mode as RiddleType, active.locale ?? undefined), score: active.score, streak: active.streak }));
+      } else {
+        lines.push(gameCommandFeedback(message, 'noGame'), gameCommandHint(message, 'riddle'));
+      }
+      return lines.join('\n');
     }
-    return lines.join('\n');
-  }
 
-  const mode = parseMode(action);
-  if (mode) return (await startGame(services, message, mode)) ?? '';
+    const mode = parseMode(action);
+    if (mode) return (await startGame(services, message, mode)) ?? '';
 
-  if (action === 'continue' || action === '继续') {
-    return continueGame(services, message);
-  }
+    if (action === 'continue' || action === '继续') {
+      return continueGame(services, message);
+    }
 
-  if (action === 'quit' || action === '放弃') {
-    const row = await services.getActiveForUser(ch, userId);
-    if (!row) return gameCommandFeedback(message, 'noGame');
-    await services.updateSession(row.id, { status: 'aborted' });
-    return messages(row.locale ?? undefined, 'quit');
-  }
+    if (action === 'quit' || action === '放弃') {
+      const row = await services.getActiveForUser(ch, userId);
+      if (!row) return gameCommandFeedback(message, 'noGame');
+      await services.updateSession(row.id, { status: 'aborted' });
+      return messages(row.locale ?? undefined, 'quit');
+    }
 
-  return gameCommandFeedback(message, 'unknown', action) + '\n\n' + getRiddleHelp(message);
+    return gameCommandFeedback(message, 'unknown', action) + '\n\n' + getRiddleHelp(message);
+  } });
 }

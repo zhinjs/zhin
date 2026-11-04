@@ -1,10 +1,9 @@
+import { EmailAdapter } from '../../src/adapter.js';
 /**
  * Convention entry: discover `adapters/email/index.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
-import { EmailEndpoint } from '../../src/endpoint.js';
 import {
-  resolveEmailConfig,
   type EmailEndpointConfig,
 } from '../../src/protocol.js';
 
@@ -35,10 +34,5 @@ export default defineAdapter<EmailEndpointConfig>({
       delivery: { send: true, proactive: true, spool: true },
     },
   },
-  create(context) {
-    return new EmailEndpoint({
-      id: context.id,
-      config: resolveEmailConfig(context.config),
-    });
-  },
+  createAdapter: () => new EmailAdapter(),
 });

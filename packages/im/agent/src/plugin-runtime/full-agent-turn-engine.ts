@@ -1,15 +1,27 @@
+import type { CoreReplyStream } from '@zhin.js/core/runtime';
+import type { AgentOutputElement } from '../outbound/agent-output.js';
+import { renderAgentOutput } from '../outbound/agent-output.js';
+import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
+import { bindActivityFeedbackTurnSource, inheritActivityFeedbackSource } from '../activity-feedback/operation-source.js';
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
-import { createUserMessage, MessageAliasTable, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
+import { MessageAliasTable, type AgentMessage, type Usage } from '@zhin.js/ai';
+import { conversationContextMessage, deliveredReplyContextRef, deliveredReplyContextRefs, plannedReplyTexts } from '../session/context-provenance.js';
 import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
+import { SKILL_DISCLOSURE_PROMPT_HINT } from '../skill/progressive-disclosure.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
+import { resolveSkillTools, type SkillToolCandidate } from './skill-tool-resolution.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import { isTurnTerminalEvent, type TurnEndEvent, type TurnEvent, type TurnTerminalEvent } from '../event/turn-event.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
+import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../core/reply-phase.js';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import type { DeliveryOutcome } from '../turn/turn-ingress.js';
 import type { AgentCore } from '../core/agent-core.js';
+import { createInteractiveRun } from '../core/interactive-run.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime, type TurnToolRuntimeOptions } from '../tool/turn-tool-runtime.js';
 import type { DecisionAuditSink } from '../security/tool-hard-gate.js';
 import type { ContextSystem } from '../context/context-system.js';
@@ -22,7 +34,7 @@ import type {
   AgentTurnEngine,
   AgentTurnExecutionContext,
 } from './agent-runtime.js';
-import type { TurnTerminalProjection } from '../turn/execute-agent-turn.js';
+import { publishProjectionFailure, type TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
@@ -31,6 +43,8 @@ import { resolveToolTier } from './tool-tier.js';
 import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 import { labelThirdPartyGuidance } from '../prompt/third-party-guidance.js';
 import { BOOTSTRAP_PROMPT_ORDER, fillPromptSlots } from '../prompt/system-prompt.js';
+import { hasNicknameSlot, turnAgentNickname } from '../context/self-profile.js';
+import type { TurnContextView } from '../context/turn-envelope.js';
 import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress.js';
 import { TurnProvenance } from '../security/provenance.js';
@@ -46,6 +60,7 @@ import {
 } from './subagent-turn-capability.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
+import type { ContextFile } from '../bootstrap.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
 
 export interface FullAgentTurnEngineOptions {
@@ -55,14 +70,18 @@ export interface FullAgentTurnEngineOptions {
   readonly contextSystem: ContextSystem;
   readonly loopHooks?: PluginAILoopHookRegistry;
   readonly bootstrapContext?: string;
+  readonly contextFiles?: readonly ContextFile[];
 }
 
 const logger = getLogger('FullAgentTurnEngine');
 
 /** Generation-owned adapter from canonical TurnIngress to the one full AgentCore. */
 export function createFullAgentTurnEngine(options: FullAgentTurnEngineOptions): AgentTurnEngine {
+  const captured = { ...options, ...(options.contextFiles !== undefined ? {
+    contextFiles: Object.freeze(options.contextFiles.map(file => Object.freeze({ ...file }))),
+  } : {}) };
   return Object.freeze({
-    run: (context: AgentTurnExecutionContext) => runFullAgentTurn(options, context),
+    run: (context: AgentTurnExecutionContext) => runFullAgentTurn(captured, context),
   });
 }
 
@@ -138,6 +157,9 @@ async function* runInteractiveTurn(
     };
   }
 
+  const interactiveRun = context.turn.execution.kind === 'interactive' && !context.turn.policy.unattended
+    ? createInteractiveRun(host.usageQuota, quotaSubject, resolveToolBudget(host.config.toolBudget).maxTotalTokens)
+    : undefined;
   const snapshot = await host.contextRepository.getDeferredToolSnapshot(prep.sessionId);
   const subagentModel: { current?: SubagentModelSelection } = {};
   const subagentCapability = subagentsEnabled(host, context.turn)
@@ -146,9 +168,12 @@ async function* runInteractiveTurn(
       core: options.core,
       parentTurn: context.turn,
       capabilities: { ...context.capabilities, tools: context.toolCapabilities },
+      bootstrapContext: options.bootstrapContext,
+      contextFiles: options.contextFiles,
       loopHooks: options.loopHooks,
       resolveModel: () => subagentModel.current,
       imageInspectionBudget,
+      interactiveRun,
     })
     : undefined;
   const projected = {
@@ -191,9 +216,10 @@ async function* runInteractiveTurn(
     mode: context.turn.input.media?.some((item) => item.kind === 'image') ? 'vision' : undefined,
     activeSkillsContext,
     activeSkillBlocks: plan.controller.loadedSkillBlocks(),
-    toldLedger: host.toldLedger?.render(prep.sessionId),
+    toldLedgerBlocks: host.toldLedger?.renderBlocks(prep.sessionId),
     relevantMemory,
     systemBootstrap: options.bootstrapContext,
+    contextFiles: options.contextFiles,
   });
   const providerInput = context.turn.input.media?.length
     ? prompt.modelInput
@@ -220,24 +246,15 @@ async function* runInteractiveTurn(
   }
   imageInspectionBudget.remaining = Math.max(0, imageInspectionBudget.remaining
     - (media.perceptionItems ?? 0) - media.blocks.filter(block => block.type === 'image').length);
-  const contextText = pendingContext?.blocks.length
-    ? renderContextMessage({
-        role: 'user-context',
-        blocks: pendingContext.blocks.map((block) => ({
-          type: 'untrusted_conversation_event',
-          eventType: block.eventType,
-          text: block.text,
-          source: 'external_content',
-        })),
-      } satisfies ContextMessage)
-    : '';
+  if (media.perceptionUsage) interactiveRun?.recordUsage(media.perceptionUsage.total_tokens);
+  const background = pendingContext ? conversationContextMessage(pendingContext.blocks) : undefined;
   const userMessages = applyInboundMediaInjection(
-    contextText ? [createUserMessage(contextText), ...prompt.userMessages] : prompt.userMessages,
+    background ? [background, ...prompt.userMessages] : prompt.userMessages,
     media,
   );
   subagentModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   const provenance = new TurnProvenance();
-  if (contextText) provenance.record({ kind: 'conversation_context' });
+  if (background) provenance.record({ kind: 'conversation_context' });
   // Perception descriptions are generated from user media (text in an image is an injection path).
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
     provenance.record({ kind: 'media_perception' });
@@ -254,20 +271,23 @@ async function* runInteractiveTurn(
     provenance,
     leakInspector,
   });
-  const promptRegistry = createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner);
+  const agentNickname = turnAgentNickname(context.turn, host.activeBinding?.nickname);
+  const promptRegistry = createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner, context.turn, agentNickname);
   const capabilityContext = buildCapabilityContext(
     context.capabilities.agents,
     context.capabilities.skills,
     context.selection.agent,
+    context.capabilities.tools,
   );
-  if (capabilityContext) {
-    // Capabilities vary with the current principal and selected specialist. Keep
-    // their system role and retention, but place them after stable instructions.
+  if (capabilityContext.stable) {
+    // Only sender-neutral (scene-tier) capabilities stay in the cached system prefix, so master and
+    // members speaking in the same group get identical system bytes. Sender-/selection-dependent
+    // entries go to the current message's runtime-context tail; load/execute still enforce access.
     promptRegistry.register('§11_capabilities', {
       layer: 'system',
-      kind: 'platform',
+      kind: context.turn.origin.kind === 'im' && hasNicknameSlot(capabilityContext.stable) ? 'scene' : 'platform',
       title: 'Turn capabilities',
-      content: fillPromptSlots(capabilityContext, host.activeBinding?.nickname),
+      content: fillPromptSlots(capabilityContext.stable, agentNickname),
       order: BOOTSTRAP_PROMPT_ORDER.task - 1,
       budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat : BOOTSTRAP_PROMPT_ORDER.task,
       retention: 'preferred',
@@ -275,8 +295,11 @@ async function* runInteractiveTurn(
   }
   const promptRuntime = Object.freeze({
     bootstrapContext: options.bootstrapContext?.trim() ?? '',
+    contextFiles: options.contextFiles,
     activeSkillsContext,
-    agentNickname: host.activeBinding?.nickname,
+    capabilityTail: capabilityContext.tail
+      ? fillPromptSlots(capabilityContext.tail, agentNickname) : undefined,
+    agentNickname,
     modelId: prompt.modelId,
     providerAlias: prompt.providerAlias,
     modelSdk: prompt.modelSdk,
@@ -285,6 +308,62 @@ async function* runInteractiveTurn(
     platformGuidanceExternal: context.capabilities.platformGuidanceExternal,
   });
 
+  let replyStream: CoreReplyStream | undefined;
+  const replyStreams = new Map<string, CoreReplyStream>();
+  const phaseFacts = new Map<string, ReplyPhaseFacts>();
+  const executions: BufferedExecution[] = [];
+  let phaseSequence = 0;
+  const replyLifetime = new AbortController();
+  const openPhase: ReplyPhaseLifecycle['open'] = () => {
+    const id = `${context.turn.identity.turnId}:answer:${++phaseSequence}`;
+    const stream = context.turn.intent.kind === 'observe' ? undefined : reply?.openStream?.({ phaseId: id });
+    if (stream) { replyStreams.set(id, stream); replyStream = stream; }
+    return { id, ...(stream ? { stream } : {}) };
+  };
+  const settlePhase: ReplyPhaseLifecycle['settle'] = async phase => {
+    const existing = phaseFacts.get(phase.id);
+    if (existing) return existing;
+    if (!reply) throw new Error('Answer phase has no reply port');
+    const answer = { intent: 'answer' as const, phaseId: phase.id };
+    let delivery: DeliveryOutcome, confirmedOutput: AgentOutputElement[];
+    if (phase.run) {
+      ({ delivery, confirmedOutput } = await deliverProgressiveReply({ run: phase.run, snapshot: phase.snapshot }, phase.output, reply, context.turn.input.locale, answer));
+    } else {
+      await replyStreams.get(phase.id)?.cancel();
+      try { delivery = await reply.send(phase.output, answer); }
+      catch (error) {
+        const known = error instanceof EndpointDeliveryError;
+        // ReplyPort can redirect delivery; native ids alone cannot establish a target scene.
+        const canonical = known ? error.receipt : undefined;
+        const messages = canonical
+          ? canonical.parts?.map(part => part.message ?? null) ?? (canonical.message ? [canonical.message] : [])
+          : known ? error.parts?.map(() => null) ?? [] : [];
+        delivery = known && error.disposition === 'rejected'
+          ? { status: 'rejected', code: error.code, messages }
+          : { status: 'failed', code: known ? error.code : 'reply_phase_unknown', retryable: false, messages,
+              ...(!known || error.disposition === 'unknown' ? { deliveryUnknown: true as const } : {}),
+              ...(messages.length ? { deliveryPartial: true as const } : {}) };
+      }
+      // Partial receipts prove send slots, not their bodies: sourceIndices address the rendered,
+      // middleware-transformed payload, so they cannot promote phase.output into history/ledger.
+      confirmedOutput = delivery.status === 'sent' ? [...phase.output] : [];
+    }
+    const messages = 'messages' in delivery ? delivery.messages ?? [] : [];
+    const messageId = messages.find(message => message !== null)?.id ?? (delivery.status === 'sent' ? delivery.messageId : undefined);
+    const stopped = delivery.status !== 'sent' && !(delivery.status === 'suppressed' && !phase.output.length);
+    const facts: ReplyPhaseFacts = {
+      delivery, confirmedOutput, ...(messageId ? { messageId } : {}),
+      ...(messages.length ? { messageIds: messages.map(message => message?.id ?? null) } : {}),
+      ...(delivery.status === 'sent' ? { contextRefs: deliveredReplyContextRefs(prep.sessionId, context.turn.identity.turnId, plannedReplyTexts(confirmedOutput), delivery, phase.id) } : {}),
+      ...(stopped ? { stopped: true } : {}),
+    };
+    phaseFacts.set(phase.id, facts);
+    const told = renderAgentOutput(confirmedOutput);
+    if (told.trim()) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId,
+      deliveredReplyContextRef(prep.sessionId, context.turn.identity.turnId, phase.id));
+    return facts;
+  };
+  const cancelReplyStreams = async () => { await Promise.all([...replyStreams.values()].map(stream => stream.cancel())); };
   const stream = host.promptController.scheduleStream({
     turnId: context.turn.identity.turnId,
     intent: context.turn.intent,
@@ -294,7 +373,22 @@ async function* runInteractiveTurn(
     sessionId: prep.sessionId,
     userMessages,
     signal: context.turn.signal,
-    execute: (initialMessages, hooks, signal) => options.core.runText({
+    execute: (initialMessages, hooks, signal) => (async function* () {
+      // A follow-up execute must retain accepted input/tool history. Only a settled phase
+      // may contribute an answer; complete-message mode has not delivered its candidate yet.
+      const previous = executions.at(-1);
+      if (previous && !previous.projected) {
+        previous.projected = true;
+        await previous.result.projectConversation?.(previous.result.replyPhaseId ? undefined : { confirmedOutput: [] });
+      }
+      const firstPhase = openPhase();
+      let firstAvailable = true;
+      const completion = yield* bufferTerminal(options.core.runText({
+      replyStream: firstPhase.stream,
+      ...(firstPhase.stream ? { replyPhases: {
+        open: () => { if (firstAvailable) { firstAvailable = false; return firstPhase; } return openPhase(); },
+        settle: settlePhase,
+      } } : {}),
       host,
       sessionId: prep.sessionId,
       userMessageExtra: prep.turnUser.userMessageExtra,
@@ -315,15 +409,19 @@ async function* runInteractiveTurn(
       modelCandidates: prompt.modelCandidates,
       initialMessages,
       promptHooks: hooks,
-      signal,
+      signal: AbortSignal.any([signal, replyLifetime.signal]),
       deferredStats: plan.deferredStats,
       deferredController: plan.controller,
       toolCatalog: plan.catalog,
       toolLoading: 'deferred',
       conversationPersistence: 'session',
       progressSink: createProgressSink(host, context.turn, reply),
+      interactiveRun,
       generation: context.turn.identity.generation,
-    }),
+      }));
+      executions.push(completion);
+      return completion.result;
+    })(),
   });
 
   const projectActivity = payload ? createTurnActivityProjector({
@@ -332,30 +430,61 @@ async function* runInteractiveTurn(
     thinkingPreview: host.config.thinkingPreview === true,
     thinkingMaxLength: host.config.thinkingPreviewMaxLength ?? 200,
   }) : undefined;
-  const completion = yield* bufferTerminal(stream, projectActivity);
+  let projectionOwnsReply = false;
+  try {
+  const completion = yield* collectPromptExecutions(stream, executions, projectActivity);
+  if (phaseFacts.size && completion.terminal.type === 'turn_end') {
+    const output = [...phaseFacts.values()].flatMap(facts => facts.confirmedOutput);
+    completion.terminal = { ...completion.terminal, output };
+    completion.result = { ...completion.result, reply: renderAgentOutput(output), output };
+  }
   yield completion.terminal;
+  projectionOwnsReply = true;
   return {
     project: async () => {
+      let projectionError: Error | undefined;
       try {
         // The perception pre-pass is billed to the same subject as the turn itself.
-        host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
+        if (!interactiveRun) host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens + (media.perceptionUsage?.total_tokens ?? 0));
         let deliveredMessageId: string | undefined;
+        let deliveredMessageIds: readonly (string | null)[] | undefined;
+        let deliveredContextRefs: readonly string[] | undefined;
+        let confirmedOutput: AgentOutputElement[] | undefined = phaseFacts.size
+          ? [...phaseFacts.values()].flatMap(facts => facts.confirmedOutput) : undefined;
         if (completion.terminal.type === 'turn_end' && reply) {
           const outbound = completion.terminal.output.length > 0
             ? completion.terminal.output
             : buildTextTurnOutbound(completion.result.reply, completion.result);
-          const delivery = await reply.send(outbound);
-          if (delivery.status === 'sent') deliveredMessageId = delivery.messageId;
+          const progressive = completion.result.progressive;
+          if (!progressive && !phaseFacts.size) await replyStream?.cancel();
+          const progressiveDelivery = phaseFacts.size ? aggregateReplyPhases([...phaseFacts.values()])
+            : progressive ? await deliverProgressiveReply(progressive, outbound, reply, context.turn.input.locale) : undefined;
+          confirmedOutput = progressiveDelivery?.confirmedOutput;
+          const actualOutput = confirmedOutput ?? outbound;
+          const plannedTexts = plannedReplyTexts(actualOutput);
+          const delivery = progressiveDelivery?.delivery ?? await reply.send(outbound);
+          if (delivery.status === 'sent') {
+            deliveredMessageId = delivery.messageId;
+            deliveredMessageIds = delivery.messages?.map(message => message?.id ?? null);
+            deliveredContextRefs = deliveredReplyContextRefs(prep.sessionId, context.turn.identity.turnId, plannedTexts, delivery);
+          }
           if (
             delivery.status === 'failed'
             || delivery.status === 'rejected'
+            || (delivery.status === 'unsupported' && delivery.messages?.some(message => message !== null))
             || (delivery.status === 'suppressed' && outbound.length > 0)
           ) {
             const code = 'code' in delivery ? delivery.code : delivery.status;
-            throw new Error(`Synchronous reply projection failed: ${code}`);
+            const error = new Error(`Synchronous reply projection failed: ${code}`);
+            if (!progressive && !phaseFacts.size) throw error;
+            projectionError = error;
           }
-          if (delivery.status === 'sent' && completion.result.reply.trim()) {
-            host.toldLedger?.record(prep.sessionId, completion.result.reply, 'reply', context.turn.identity.turnId);
+          const told = confirmedOutput ? renderAgentOutput(confirmedOutput) : delivery.status === 'sent' ? completion.result.reply : '';
+          if (told.trim() && !phaseFacts.size) host.toldLedger?.record(prep.sessionId, told, 'reply', context.turn.identity.turnId);
+          if (progressive || phaseFacts.size) {
+            const messages = 'messages' in delivery ? delivery.messages ?? [] : [];
+            deliveredMessageIds = messages.map(message => message?.id ?? null);
+            deliveredMessageId = messages.find(message => message !== null)?.id;
           }
         }
         // 画像 + 好感度：回复已发出后异步写，不阻塞、不抛错。
@@ -367,7 +496,9 @@ async function* runInteractiveTurn(
             { messageExtras: [prep.turnUser.userMessageExtra] },
           );
         } else {
-          await completion.result.projectConversation?.(deliveredMessageId ? { messageId: deliveredMessageId } : undefined);
+          await completion.result.projectConversation?.(deliveredMessageId || deliveredMessageIds?.length || deliveredContextRefs?.length
+            ? { messageId: deliveredMessageId, messageIds: deliveredMessageIds, contextRefs: deliveredContextRefs,
+                ...(confirmedOutput ? { confirmedOutput } : {}) } : confirmedOutput ? { confirmedOutput } : undefined);
         }
         await sessionSystem.touchAfterTurn(host, prep.sessionId);
         if (
@@ -389,16 +520,19 @@ async function* runInteractiveTurn(
           iterations: completion.result.iterations,
           model: completion.result.model,
           userInput: prep.turnUser.rawContent,
-          output: completion.result.reply,
+          output: confirmedOutput ? renderAgentOutput(confirmedOutput) : completion.result.reply,
           thinking: completion.result.thinking,
         });
+        if (projectionError) throw projectionError;
       } finally {
+        replyLifetime.abort();
+        await cancelReplyStreams();
         // Stop activity-feedback AFTER the reply is sent. Awaiting icqq
         // delReaction (packet timeout) before send would block the AI reply.
-        if (completion.terminal.type === 'error') {
+        if (completion.terminal.type === 'error' || projectionError) {
           emitActivityStop(host, payload, {
             event: 'ai.processing.error',
-            extra: { error: completion.terminal.error.message },
+            extra: { error: projectionError?.message ?? (completion.terminal.type === 'error' ? completion.terminal.error.message : 'Reply delivery failed') },
             reason: 'processing_error',
           });
         } else {
@@ -413,6 +547,20 @@ async function* runInteractiveTurn(
       }
     },
   };
+  } finally {
+    if (!projectionOwnsReply) {
+      replyLifetime.abort();
+      await cancelReplyStreams();
+      for (const execution of executions) {
+        if (execution.projected || !execution.result.replyPhaseId || !phaseFacts.has(execution.result.replyPhaseId)) continue;
+        // The phase has its own delivery facts even when the enclosing Turn cannot commit a terminal.
+        // Never retry a partially applied projection, and never replace the original cancellation/error.
+        execution.projected = true;
+        try { await execution.result.projectConversation?.(); }
+        catch (error) { await publishProjectionFailure(context.turn, error); }
+      }
+    }
+  }
 }
 
 async function* runScheduleTurn(
@@ -453,6 +601,7 @@ async function* runScheduleTurn(
     },
     activeSkillsContext,
     systemBootstrap: options.bootstrapContext,
+    contextFiles: options.contextFiles,
   });
   const messageAliases = new MessageAliasTable();
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
@@ -462,12 +611,13 @@ async function* runScheduleTurn(
   });
   const promptRuntime = Object.freeze({
     bootstrapContext: options.bootstrapContext,
+    contextFiles: options.contextFiles,
     activeSkillsContext,
     agentNickname: host.activeBinding?.nickname,
     modelId: prompt.modelId,
     providerAlias: prompt.providerAlias,
     modelSdk: prompt.modelSdk,
-    registry: createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner),
+    registry: createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner, context.turn, host.activeBinding?.nickname),
     segments: context.capabilities.promptSegments,
   });
   const stream = host.promptController.scheduleStream({
@@ -540,6 +690,8 @@ async function* runScheduleTurn(
 function createTurnPromptRegistry(
   sections: readonly PromptSectionDescriptor[],
   agentOwner: PromptSectionDescriptor['owner'],
+  turn: TurnContextView,
+  nickname?: string,
 ): PromptAssemblyRegistry {
   const registry = new PromptAssemblyRegistry();
   for (const section of sections) {
@@ -547,7 +699,8 @@ function createTurnPromptRegistry(
     registry.register(section.qualifiedName, {
       layer: section.layer,
       title: section.title,
-      content: thirdParty ? labelThirdPartyGuidance(`plugin:${String(section.owner)}`, section.content) : section.content,
+      content: fillPromptSlots(thirdParty ? labelThirdPartyGuidance(`plugin:${String(section.owner)}`, section.content) : section.content, nickname),
+      kind: turn.origin.kind === 'im' && hasNicknameSlot(section.content) ? 'scene' : undefined,
       order: section.order,
       placement: section.platforms?.length ? 'tail' : undefined,
       retention: section.retention,
@@ -563,11 +716,98 @@ function createTurnPromptRegistry(
   return registry;
 }
 
+interface BufferedExecution {
+  terminal: TurnTerminalEvent;
+  result: AgentLoopTurnResult;
+  projected?: true;
+}
+
+/** Each Core execute retains its single terminal contract; PromptController may execute follow-ups. */
+async function* collectPromptExecutions(
+  stream: AsyncGenerator<TurnEvent, AgentLoopTurnResult>,
+  executions: BufferedExecution[],
+  onEvent?: (event: TurnEvent) => void,
+): AsyncGenerator<TurnEvent, BufferedExecution> {
+  let control: TurnTerminalEvent | undefined;
+  try {
+    while (true) {
+      const step = await stream.next();
+      if (step.done) {
+        if (!executions.length) {
+          if (!control) throw new Error('Full AgentCore completed without a terminal TurnEvent');
+          return { terminal: control, result: step.value };
+        }
+        const last = executions.at(-1)!;
+        const usage = executions.reduce((sum, execution) => ({
+          prompt_tokens: sum.prompt_tokens + execution.result.usage.prompt_tokens,
+          completion_tokens: sum.completion_tokens + execution.result.usage.completion_tokens,
+          total_tokens: sum.total_tokens + execution.result.usage.total_tokens,
+        }), zeroUsage());
+        const result: AgentLoopTurnResult = { ...last.result, usage,
+          iterations: executions.reduce((sum, execution) => sum + execution.result.iterations, 0),
+          toolCalls: executions.flatMap(execution => execution.result.toolCalls),
+          projectConversation: async delivered => {
+            for (const execution of executions) {
+              if (execution.projected) continue;
+              execution.projected = true;
+              await execution.result.projectConversation?.(execution.result.replyPhaseId ? undefined
+                : execution === last ? delivered : { confirmedOutput: [] });
+            }
+          },
+        };
+        const terminal = last.terminal.type === 'turn_end'
+          ? { ...last.terminal, usage: sumTerminalUsage(executions) } : last.terminal;
+        return { terminal, result };
+      }
+      if (isTurnTerminalEvent(step.value)) {
+        if (control || executions.length) throw new Error('PromptController emitted an unexpected terminal');
+        control = step.value;
+      } else { onEvent?.(step.value); yield step.value; }
+    }
+  } finally { await stream.return(undefined as never); }
+}
+
+function sumTerminalUsage(executions: readonly BufferedExecution[]): TurnEndEvent['usage'] {
+  if (executions.length === 1 && executions[0]!.terminal.type === 'turn_end') return executions[0]!.terminal.usage;
+  const usage: TurnEndEvent['usage'] = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  for (const { terminal } of executions) {
+    if (terminal.type !== 'turn_end') continue;
+    usage.promptTokens += terminal.usage.promptTokens;
+    usage.completionTokens += terminal.usage.completionTokens;
+    usage.totalTokens += terminal.usage.totalTokens;
+    for (const key of ['cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens'] as const) {
+      if (terminal.usage[key] !== undefined) usage[key] = (usage[key] ?? 0) + terminal.usage[key]!;
+    }
+  }
+  const reported = executions.flatMap(execution => execution.terminal.type === 'turn_end' ? [execution.terminal.usage.reported] : []);
+  if (reported.some(value => value !== undefined)) {
+    usage.reported = Object.fromEntries((['input', 'output', 'totalTokens', 'cacheRead', 'cacheWrite', 'reasoning'] as const)
+      .flatMap(key => reported.some(value => value?.[key] !== undefined)
+        ? [[key, reported.every(value => value?.[key] === true)]] : []));
+  }
+  return usage;
+}
+
+function aggregateReplyPhases(phases: readonly ReplyPhaseFacts[]): { delivery: DeliveryOutcome; confirmedOutput: AgentOutputElement[] } {
+  const confirmedOutput = phases.flatMap(phase => phase.confirmedOutput);
+  const messages = phases.flatMap(phase => 'messages' in phase.delivery ? phase.delivery.messages ?? [] : []);
+  const last = (phases.find(phase => phase.stopped) ?? phases.at(-1)!).delivery;
+  if (last.status === 'sent' || last.status === 'suppressed' && confirmedOutput.length) {
+    return { confirmedOutput, delivery: { status: 'sent', messages,
+      ...(messages.find(message => message !== null) ? { messageId: messages.find(message => message !== null)!.id } : {}),
+      messageContexts: phases.flatMap(phase => phase.delivery.status === 'sent' ? phase.delivery.messageContexts ?? [] : []),
+    } };
+  }
+  return { confirmedOutput, delivery: last.status === 'suppressed' ? last : { ...last, messages,
+    ...(last.status === 'failed' && confirmedOutput.length ? { deliveryPartial: true as const, retryable: false } : {}) } };
+}
+
 async function* bufferTerminal(
   stream: AsyncGenerator<TurnEvent, AgentLoopTurnResult>,
   onEvent?: (event: TurnEvent) => void,
 ): AsyncGenerator<TurnEvent, { terminal: TurnTerminalEvent; result: AgentLoopTurnResult }> {
   let buffered: TurnTerminalEvent | undefined;
+  try {
   while (true) {
     const step = await stream.next();
     if (step.done) {
@@ -583,6 +823,7 @@ async function* bufferTerminal(
     onEvent?.(step.value);
     yield step.value;
   }
+  } finally { await stream.return(undefined as never); }
 }
 
 function activityPayloadFromImTurn(
@@ -593,7 +834,7 @@ function activityPayloadFromImTurn(
   const origin = turn.origin;
   if (origin.kind !== 'im') return undefined;
   const { hookContext: extraHook, ...rest } = extra;
-  return {
+  return bindActivityFeedbackTurnSource<AIEventPayload>({
     sessionId,
     source: 'zhin-agent',
     mode: 'text',
@@ -610,7 +851,7 @@ function activityPayloadFromImTurn(
     },
     ...rest,
     locale: isLocale(turn.input.locale) ? turn.input.locale : undefined,
-  };
+  }, turn);
 }
 
 function emitActivityEvent(
@@ -631,36 +872,75 @@ function emitActivityStop(
   },
 ): void {
   if (!payload) return;
-  emitActivityEvent(host, options.event, { ...payload, ...options.extra });
-  emitActivityEvent(host, 'ai.typing.stop', {
+  emitActivityEvent(host, options.event, inheritActivityFeedbackSource({ ...payload, ...options.extra }, payload));
+  emitActivityEvent(host, 'ai.typing.stop', inheritActivityFeedbackSource({
     ...payload,
     reason: options.reason ?? 'processing_complete',
-  });
+  }, payload));
 }
 
-function buildCapabilityContext(
+type AccessGated = {
+  readonly permissions?: readonly string[];
+  readonly currentConversationBotRoles?: readonly string[];
+};
+
+/** Visible to every sender of this scene: no permission or bot-role gate (platform/scope only). */
+function isSenderNeutral(descriptor: AccessGated): boolean {
+  return !descriptor.permissions?.length && !descriptor.currentConversationBotRoles?.length;
+}
+
+type CatalogTool = SkillToolCandidate & AccessGated;
+
+function isSenderNeutralSkill(skill: SkillDescriptor, tools: readonly CatalogTool[]): boolean {
+  if (!isSenderNeutral(skill as AccessGated) || skill.agentName) return false;
+  // A skill is only listed while one of its tools is available; that tool must be ungated as well.
+  return !skill.toolNames?.length || resolveSkillTools(skill, tools.filter(isSenderNeutral)).length > 0;
+}
+
+const byQualifiedName = <T extends { qualifiedName: string }>(a: T, b: T): number =>
+  (a.qualifiedName < b.qualifiedName ? -1 : a.qualifiedName > b.qualifiedName ? 1 : 0);
+
+/**
+ * `stable`: sender-neutral catalog (system prefix, cached). `tail`: entries that depend on the
+ * sender's permissions, the bot's role or the selected specialist (current message runtime tail).
+ */
+export function buildCapabilityContext(
   agents: readonly AgentDescriptor[],
   skills: readonly SkillDescriptor[],
   selectedName?: string,
-): string {
-  const parts: string[] = [];
+  tools: readonly CatalogTool[] = [],
+): { stable: string; tail: string } {
+  const stable: string[] = [];
+  const tail: string[] = [];
   const selected = selectedName
     ? agents.find((agent) => agent.qualifiedName === selectedName || agent.name === selectedName)
     : undefined;
   if (selectedName && !selected) {
     throw new Error(`Selected Agent capability is not visible: ${selectedName}`);
   }
+  const entry = (item: { qualifiedName: string; description: string }) => ({ name: item.qualifiedName, description: item.description });
   if (selected) {
-    parts.push(`## Active specialist: ${selected.qualifiedName}\n${selected.description}\n${selected.instructions}`);
+    tail.push(`## Active specialist: ${selected.qualifiedName}\n${selected.description}\n${selected.instructions}`);
   } else {
-    const agentCatalog = renderAgentCatalog(agents.map((agent) => ({ name: agent.qualifiedName, description: agent.description })));
-    if (agentCatalog) parts.push(agentCatalog);
+    const sorted = [...agents].sort(byQualifiedName);
+    // The whole Agent catalog disappears when a specialist is selected. Keep that
+    // selection-dependent section in the tail without exposing it to specialists.
+    const catalog = renderAgentCatalog(sorted.map(entry));
+    if (catalog) tail.push(catalog);
   }
   // Progressive disclosure (#729): names and one-line triggers only; the full
   // instructions arrive through load_skill or intent priming.
-  const skillCatalog = renderSkillCatalog(skills.map((skill) => ({ name: skill.qualifiedName, description: skill.description })));
-  if (skillCatalog) parts.push(skillCatalog);
-  return parts.join('\n\n');
+  const neutralSkills = renderSkillCatalog(skills.filter(skill => isSenderNeutralSkill(skill, tools)).map(entry));
+  if (neutralSkills) stable.push(SKILL_DISCLOSURE_PROMPT_HINT, neutralSkills);
+  const gatedSkills = renderSkillCatalog(skills.filter(skill => !isSenderNeutralSkill(skill, tools)).map(entry));
+  if (gatedSkills) {
+    if (!neutralSkills) tail.push(SKILL_DISCLOSURE_PROMPT_HINT);
+    tail.push(gatedSkills);
+  }
+  return {
+    stable: stable.join('\n\n'),
+    tail: tail.length ? ['Also available to you this turn (depends on the sender, your account role or selected specialist):', ...tail].join('\n\n') : '',
+  };
 }
 
 function terminal(text: string, usage: Usage): TurnEndEvent {
@@ -700,8 +980,10 @@ function createProgressSink(
   reply: TurnIngress['ports']['reply'],
 ): ((text: string) => Promise<void>) | undefined {
   if (!reply || turn.policy.unattended) return undefined;
-  if (!progressUpdatesAllowed(resolveToolBudget(host.config.toolBudget).progressUpdates, turn)) return undefined;
+  const mode = resolveToolBudget(host.config.toolBudget).progressUpdates;
+  if (turn.execution.kind === 'interactive' ? mode === 'off' : !progressUpdatesAllowed(mode, turn)) return undefined;
   return async (text) => {
+    turn.signal.throwIfAborted();
     const delivery = await reply.send([{ type: 'text', content: text }]);
     if (delivery.status !== 'sent') throw new Error(`progress update not sent: ${delivery.status}`);
   };

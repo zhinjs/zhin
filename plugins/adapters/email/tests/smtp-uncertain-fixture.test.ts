@@ -31,7 +31,7 @@ it.each(['cut', 'accepted', 'rejected', 'partial'])('actual nodemailer and final
   const proxy = await createTcpFaultProxy({ upstreamHost: '127.0.0.1', upstreamPort: (server.address() as net.AddressInfo).port, port: 0, controlPort: 0 }); cut = () => { proxy.cut(); };
   const imap = Object.assign(new EventEmitter(), { connect() { queueMicrotask(() => this.emit('ready')); }, end() {}, openBox() {}, search() {}, fetch() {} }) as unknown as EmailImapTransport;
   const config = resolveEmailConfig({ id: 'fixture', smtp: { host: '127.0.0.1', port: proxy.port, secure: false, auth: { user: 'fixture', pass: 'fixture' } }, imap: { host: 'imap.fixture', user: 'fixture', password: 'fixture', port: 993, tls: true } });
-  const endpoint = new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => imap });
+  const endpoint = () => new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => imap });
   const runtime = await emailDeliveryRuntime(endpoint);
   try {
     const receipt = await runtime.send('local fixture', mode === 'partial' ? 'actor@example.com, other@example.com' : 'actor@example.com');

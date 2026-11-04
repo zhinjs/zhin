@@ -119,8 +119,8 @@ export class FakeOutboundRootHost implements OutboundRootHost {
   }
 
   send(input: OutboundSendInput): Promise<string | null> { return this.#record('send', input); }
-  sendTarget(target: DeliveryTarget, content: unknown, requester: PluginId): Promise<string | null> {
-    return this.#record('sendTarget', { target, content }, requester);
+  sendTarget(target: DeliveryTarget, content: unknown, requester: PluginId, options?: Readonly<{ locale?: import('@zhin.js/plugin-runtime').Locale }>): Promise<string | null> {
+    return this.#record('sendTarget', { target, content, ...(options?.locale ? { locale: options.locale } : {}) }, requester);
   }
   addReaction(input: OutboundReactionInput): Promise<string | null> { return this.#record('addReaction', input); }
   async removeReaction(input: unknown): Promise<void> { await this.#record('removeReaction', input, undefined, false); }

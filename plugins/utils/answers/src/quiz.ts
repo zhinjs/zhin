@@ -1,3 +1,4 @@
+import { conversationRefKey, type ConversationRef } from 'zhin.js';
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import { messages } from './messages.js';
 import { randomInt } from 'node:crypto';
@@ -12,6 +13,7 @@ export interface QuizConversationInput {
     readonly kind?: string;
     readonly id?: string;
     readonly threadId?: string;
+    readonly parent?: { readonly kind: 'private' | 'group' | 'channel'; readonly id: string };
   };
   readonly sender?: { readonly id?: string } | string;
 }
@@ -39,9 +41,8 @@ export const MAX_PENDING_QUIZZES = 1000;
 export function quizKey(input: QuizConversationInput | undefined): string | undefined {
   const conversation = input?.conversation;
   const sender = typeof input?.sender === 'string' ? input.sender : input?.sender?.id;
-  if (!conversation?.id || !conversation.kind || !sender) return undefined;
-  return JSON.stringify(['answers-quiz-v1', conversation.endpoint?.adapter ?? null, conversation.endpoint?.id ?? null,
-    conversation.kind, conversation.id, conversation.threadId ?? null, sender]);
+  if (!conversation?.id || !conversation.kind || !conversation.endpoint?.adapter || !conversation.endpoint.id || !sender) return undefined;
+  return JSON.stringify(['answers-quiz-v2', conversationRefKey(conversation as ConversationRef), sender]);
 }
 
 /** 只接受单个选项字母（大小写、全角均可），其余文本一律放行给后续中间件。 */
@@ -77,13 +78,24 @@ export function formatJudgement(judgement: QuizJudgement): string {
   return `${verdict}\n💡 ${question.explanation}${footer}`;
 }
 
+export interface AskQuizRequest {
+  /** Complete conversation-and-actor key from conversationKey(). */
+  readonly key: string;
+  readonly kind: QuizKind;
+  readonly bank: readonly QuizQuestion[];
+  readonly timeoutSeconds: number;
+  readonly now?: number;
+  readonly locale?: Locale;
+}
+
 /** Generation-owned, in-memory only: pending questions vanish on reload, which is acceptable for a party game. */
 export class QuizService {
   readonly #pending = new Map<string, PendingQuiz>();
   readonly #lastQuestion = new Map<string, string>();
   #disposed = false;
 
-  ask(key: string, kind: QuizKind, bank: readonly QuizQuestion[], timeoutSeconds: number, now = Date.now(), locale: Locale = 'zh-CN'): QuizQuestion {
+  ask(input: AskQuizRequest): QuizQuestion {
+    const { key, kind, bank, timeoutSeconds, now = Date.now(), locale = 'zh-CN' } = input;
     this.#assertLive();
     this.sweep(now);
     const question = pickQuestion(bank, this.#lastQuestion.get(key));

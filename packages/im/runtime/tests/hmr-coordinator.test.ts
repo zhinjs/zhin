@@ -13,6 +13,41 @@ const child = childPluginId(root, 'child');
 const command = featureId('zhin.command');
 
 describe('HmrCoordinator', () => {
+  it('filters automatic events without blocking explicit reload requests', async () => {
+    const source = '/project/commands/status/index.ts';
+    const config = '/project/zhin.config.yml';
+    const modules = new WatchingFakeModules();
+    const plans: GenerationInvalidationPlan[] = [];
+    const ownership = ownershipFor(source, '/project');
+    ownership.addPackageRoot('/project', root);
+    let accepted!: () => void;
+    const acceptedReload = new Promise<void>(resolve => { accepted = resolve; });
+    const coordinator = new HmrCoordinator({
+      modules, ownership: () => ownership,
+      acceptWatchedSource: path => path === config,
+      runtime: { reload: async plan => { plans.push(plan); } },
+      onRestartRequired: () => { throw new Error('Unexpected restart'); },
+      onError: error => { throw error; },
+      onReload: plan => { if (plan.changed.includes(config)) accepted(); },
+    });
+    const stop = coordinator.start();
+    try {
+      modules.emit(source);
+      // Enqueue is a completion barrier for all events emitted above; it also
+      // proves an explicit source reload remains available with config-only watch.
+      await coordinator.enqueue(source);
+      expect(plans.map(plan => plan.changed)).toEqual([[source]]);
+      expect(modules.invalidated).toEqual([source]);
+      modules.emit(config);
+      await acceptedReload;
+      expect(plans.map(plan => plan.changed)).toEqual([[source], [config]]);
+      expect(modules.invalidated).toEqual([source, config]);
+      modules.emit(source);
+      await coordinator.stop();
+      expect(plans).toHaveLength(2);
+    } finally { await stop(); }
+  });
+
   it('batches synchronous watcher events into one serialized reload', async () => {
     const first = capabilityId(child, command, 'first');
     const second = capabilityId(child, command, 'second');

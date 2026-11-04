@@ -412,27 +412,16 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
             <div
                 ref={editorRef}
                 contentEditable
+                role="textbox"
+                aria-label={placeholder}
+                aria-multiline="true"
                 suppressContentEditableWarning
                 onInput={handleChange}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 data-placeholder={placeholder}
                 className="rich-text-editor"
-                style={{
-                    width: '100%',
-                    minHeight,
-                    maxHeight,
-                    padding: '0.5rem 0.75rem',
-                    border: '1px solid var(--gray-6)',
-                    borderRadius: '6px',
-                    backgroundColor: 'var(--gray-1)',
-                    fontSize: 'var(--font-size-2)',
-                    outline: 'none',
-                    overflowY: 'auto',
-                    lineHeight: '1.5',
-                    wordWrap: 'break-word',
-                    color: 'var(--gray-12)'
-                }}
+                style={{ width: '100%', minHeight, maxHeight }}
             />
         )
     }

@@ -13,16 +13,19 @@ import {
 /** Query dimensions only; arbitrary content and extensions remain lossless in payload. */
 const nullableText = { type: 'text' as const, nullable: true };
 export const AGENT_SESSION_SOURCE_MODEL = {
+  source_root: nullableText, source_platform: nullableText, source_instance: nullableText, source_subject: nullableText,
   source_kind: nullableText, source_adapter: nullableText, source_endpoint: nullableText,
   source_scope: nullableText, source_id: nullableText, source_parent_kind: nullableText,
   source_parent_id: nullableText, source_thread_id: nullableText,
 };
 export interface AgentSessionSource {
+  rootId?: string; platform?: string; instance?: string; subjectId?: string;
   kind: string; adapter?: string; endpoint?: string; scope?: string; id?: string;
   parentKind?: string; parentId?: string; threadId?: string;
 }
 export function agentSessionSourceFields(source?: AgentSessionSource): Record<string, string | null> {
-  return { source_kind: source?.kind ?? null, source_adapter: storageIdentity(source?.adapter),
+  return { source_root: storageIdentity(source?.rootId), source_platform: storageIdentity(source?.platform),
+    source_instance: storageIdentity(source?.instance), source_subject: storageIdentity(source?.subjectId), source_kind: source?.kind ?? null, source_adapter: storageIdentity(source?.adapter),
     source_endpoint: storageIdentity(source?.endpoint), source_scope: source?.scope ?? null,
     source_id: storageIdentity(source?.id), source_parent_kind: source?.parentKind ?? null,
     source_parent_id: storageIdentity(source?.parentId), source_thread_id: storageIdentity(source?.threadId) };
@@ -117,7 +120,7 @@ export function serializeAgentMessage(
   extra?: AgentMessageExtra,
 ): AgentMessageRow {
   // `aliasSeq` is derived from stored order on every load (ADR 0043 §5); it is never persisted.
-  const { aliasSeq: _derived, ...persistable } = message as AgentMessage & { aliasSeq?: number };
+  const { aliasSeq: _derived, aliasParts: _derivedParts, ...persistable } = message as AgentMessage & { aliasSeq?: number; aliasParts?: readonly (string | null)[] };
   const stored = normalizeUserMessageForStorage(persistable as AgentMessage, extra);
   return {
     session_id: '',

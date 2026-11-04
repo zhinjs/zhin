@@ -1,8 +1,8 @@
 import {
-  DisposeStack, GenerationHandoffStack, PluginDatabaseHost, PluginOutboundHost, PluginScheduleHost,
+  DisposeStack, GenerationHandoffStack, PluginDatabaseHost, PluginOutboundHost, PluginScheduleHost, createPluginEventChannel,
   Scope, databaseHostToken, outboundHostToken, qualifyPluginResourceName, rootPluginId, scheduleHostToken,
   type Dispose, type FeatureId, type PluginDefinition, type PluginId, type PluginNodeSnapshot,
-  type PluginSetupContext, type Token,
+  type PluginSetupContext, type Token, type PluginLifecycleEventMap,
 } from 'zhin.js/plugin-runtime';
 import type { CapabilityContext } from 'zhin.js';
 import { parsePluginConfigSchema } from '@zhin.js/runtime';
@@ -66,6 +66,7 @@ export class FakePlugin<TConfig = unknown> {
   readonly schedule: PluginScheduleHost;
   readonly outbound: PluginOutboundHost;
   readonly #abort = new AbortController();
+  readonly #events = createPluginEventChannel();
   readonly #context: PluginSetupContext<TConfig>;
 
   constructor(options: FakePluginOptions<TConfig> = {}) {
@@ -130,11 +131,18 @@ export class FakePlugin<TConfig = unknown> {
   /** Abort `signal` and run every disposer (reverse order). */
   async dispose(): Promise<void> {
     this.#abort.abort();
-    await this.lifecycle.dispose();
+    try { await this.lifecycle.dispose(); }
+    finally { this.#events.dispose(); }
+  }
+
+  /** Deliver a Runtime lifecycle fact to this concrete test instance. */
+  dispatchLifecycle<TName extends keyof PluginLifecycleEventMap>(name: TName, event: PluginLifecycleEventMap[TName]): Promise<void> {
+    return this.#events.dispatch(name, event);
   }
 
   #createSetupContext(): PluginSetupContext<TConfig> {
     const base = {
+      events: this.#events.events,
       signal: this.signal,
       plugin: Object.freeze({ id: this.id, instanceKey: this.name, root: this.id, role: 'root' as const }),
       config: Object.freeze({ get: () => this.config as Readonly<TConfig> }),

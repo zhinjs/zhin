@@ -1,4 +1,5 @@
-import type { ProviderInstanceConfig } from './types/model.js';
+import type { ProviderInstanceConfig, Model } from './types/model.js';
+import type { Context } from './types/context.js';
 import { LlmApiRuntime } from './llm-api-runtime.js';
 import { createAiSdkStreamFn } from './bridge/ai-sdk-stream.js';
 
@@ -13,8 +14,9 @@ export interface SdkProviderEntry {
 export function createLlmApiRuntime(
   entries: readonly SdkProviderEntry[],
   resolveModels: (alias: string) => string[],
+  validateRequest?: (model: Model, context: Context) => void,
 ): LlmApiRuntime {
-  const runtime = new LlmApiRuntime(resolveModels);
+  const runtime = new LlmApiRuntime(resolveModels, validateRequest);
   const stream = createAiSdkStreamFn(runtime);
   runtime.registerApiProvider({ api: 'ai-sdk', stream, streamSimple: stream });
   for (const entry of entries) {

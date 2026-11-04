@@ -27,6 +27,7 @@ export {
   type ParsedSendTarget,
   type ResolvedNapCatConfig,
 } from './protocol.js';
+export { NapcatAdapter } from './adapter.js';
 
 export {
   InboundMessageDeduper,
@@ -36,9 +37,13 @@ export {
 } from './napcat-inbound.js';
 
 export {
-  napcatClient,
   type NapcatClient,
   type NapcatClientEventMap,
+  type NapcatClientOptions,
+  type NapcatMemberTitleRequest,
+  type NapcatProfileRequest,
+  type NapcatGroupFileRequest,
+  type NapcatMiniAppRequest,
 } from './client.js';
 
 export { parseOneBotGetMsgResponse } from './onebot-get-msg.js';
@@ -61,11 +66,10 @@ export {
 export type { NapCatWsSocket, NapCatWsCreateOptions } from './ws-types.js';
 
 export {
-  callNapCatWsAction,
+  createNapCatRpc,
   decodeWsPayload,
-  handleNapCatWsMessage,
-  rejectAllPending,
-  startNapCatHeartbeat,
+  type NapCatRpc,
+  type NapCatRpcOptions,
 } from './ws-transport.js';
 
 export { verifyNapCatAccessToken } from './wss-auth.js';

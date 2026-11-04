@@ -1,5 +1,6 @@
 import {
   Scope,
+  OwnerOperation,
   createToken,
   generationAdmissionBinder,
   type CapabilityId,
@@ -17,6 +18,7 @@ import {
   endpointEventGatewayToken,
   type EndpointEvent,
   type EndpointEventGateway,
+  type EndpointReceipt,
   getProcessPeerRegistry,
   type PeerRegistry,
 } from '@zhin.js/adapter';
@@ -40,7 +42,7 @@ import { loginAssistToken } from './login-assist-host.js';
 import { LoginAssist } from '../../built/login-assist.js';
 import type { UserInteraction } from '@zhin.js/interaction';
 import type { OutboundRenderer } from './outbound-renderer.js';
-import { RuntimeInteractionCoordinator } from './interaction-runtime.js';
+import { RuntimeInteractionCoordinator, type PendingUserInteraction } from './interaction-runtime.js';
 import { ConversationRuntime } from './conversation-runtime.js';
 import {
   EndpointRuntime,
@@ -59,6 +61,7 @@ import {
   OutboundDeliveryRuntime,
   failedDeliveryReceipt,
 } from './outbound-delivery-runtime.js';
+import type { OutboundDeliveryExecution } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
 import { messageLocale } from './locale.js';
 import { InboundDeduper } from './inbound-dedup.js';
@@ -144,7 +147,8 @@ export class ImRuntime implements OutboundMessageService {
     this.#outbound = new OutboundDeliveryRuntime({
       diagnostics: this.#messageDiagnostics,
       ledger: (conversation, receipt, payload) => ledger.record(conversation, receipt, payload),
-      record: (request, receipt) => this.#conversations.recordOutbound(request, receipt),
+      record: (request, receipt, canonicalContent) => this.#conversations.recordOutbound(request, receipt, canonicalContent),
+      recordUpdate: (request, receipt, revision, canonicalContent) => this.#conversations.recordOutboundUpdate(request, receipt, revision, canonicalContent),
       rememberFallback: (conversation, generation, map) =>
         this.#interactions.rememberFallback(conversation, generation, map),
       publish: (event) => this.#messageEventStream.publish(event),
@@ -155,6 +159,7 @@ export class ImRuntime implements OutboundMessageService {
       runCommandOperation: (controller, operation) => this.#commandOperation.run(controller, operation),
       diagnostics: this.#messageDiagnostics,
       interactions: this.#interactions,
+      captureOperation: input => this.endpoints.captureOperation(input),
       inboundClaim: options.inboundClaim,
       originClassifier,
       deduper,
@@ -173,8 +178,9 @@ export class ImRuntime implements OutboundMessageService {
     }, options.commandPrefix);
     this.endpoints = new EndpointRuntime({
       acquire: () => this.#acquire(),
+      retain: () => this.#retainSnapshot(),
       release: (lease) => this.#release(lease),
-      send: (request, snapshot) => this.#deliver(request, snapshot),
+      send: (request, snapshot, execution) => this.#deliver(request, snapshot, execution),
     });
   }
 
@@ -281,17 +287,29 @@ export class ImRuntime implements OutboundMessageService {
         self.#release(lease);
       }
     };
+    const runWithReceipt = <T>(receive: (receipt: EndpointReceipt) => T | Promise<T>, gate?: GenerationAdmissionGate): Promise<T> =>
+      self.runWithSnapshotView(async () => {
+        const lease = self.#acquire();
+        return receive(Object.freeze<EndpointReceipt>({ receive: event => {
+          if (!lease.active) throw new Error('Endpoint receipt scope has ended');
+          lease.stopSignal.throwIfAborted();
+          return self.#operationSnapshot.run(lease, () => self.#inbound.receive(event, gate));
+        } }));
+      });
     const gateway: EndpointEventGateway & {
       [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway;
     } = {
-      receive: (event) => self.#inbound.receive(event),
+      run: runWithReceipt,
+      receive: event => self.runWithSnapshotView(() => self.#inbound.receive(event)),
       resolveLocale,
       [generationAdmissionBinder](gate: GenerationAdmissionGate): EndpointEventGateway {
+        const owner = new OwnerOperation(gate, 'Endpoint ingress');
+        const run = <T>(receive: (receipt: EndpointReceipt) => T | Promise<T>): Promise<T> =>
+          owner.run(() => runWithReceipt(receive, gate));
         return Object.freeze<EndpointEventGateway>({
-          receive: async (event: EndpointEvent) => gate.enter(
-            () => self.#inbound.receive(event, gate),
-          ),
-          resolveLocale: async (endpoint, senderId) => gate.enter(() => resolveLocale(endpoint, senderId)),
+          run,
+          receive: event => run(() => self.#inbound.receive(event, gate)),
+          resolveLocale: (endpoint, senderId) => run(() => resolveLocale(endpoint, senderId)),
         });
       },
     };
@@ -328,6 +346,11 @@ export class ImRuntime implements OutboundMessageService {
     bind?: { readonly subjectId: string },
   ): UserInteraction | undefined {
     return this.#inbound.createInteraction(message, bind);
+  }
+
+  /** Reads a prompt within the caller's current generation lease; answering uses the original IM ingress. */
+  readPendingInteraction(conversation: ConversationRef, subjectId: string, generation: number): PendingUserInteraction | undefined {
+    return this.#interactions.readPendingInteraction(conversation, subjectId, generation);
   }
 
   async send(request: SendRequest): Promise<DeliveryReceipt> {
@@ -383,8 +406,8 @@ export class ImRuntime implements OutboundMessageService {
   }
 
   /** All unified outbound entry points observe the actual delivery, never their own caller/drain promise. */
-  #deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
-    const delivery = this.#outbound.deliver(request, snapshot);
+  #deliver(request: SendRequest, snapshot: RuntimeSnapshot, execution?: OutboundDeliveryExecution): Promise<DeliveryReceipt> {
+    const delivery = this.#outbound.deliver(request, snapshot, execution);
     this.#commandOperation.getStore()?.trackSend(delivery);
     return delivery;
   }
@@ -404,6 +427,12 @@ export class ImRuntime implements OutboundMessageService {
       ...(source.endpointId ? { endpointId: source.endpointId } : {}),
       selfIds: Object.freeze([...new Set(selfIds)]),
     }));
+  }
+
+  #retainSnapshot(): SnapshotLease {
+    if (!this.#snapshots) throw new Error('ImRuntime is not attached to a Root');
+    const inherited = this.#operationSnapshot.getStore();
+    return inherited?.active ? this.#snapshots.retain(inherited) : this.#snapshots.acquire();
   }
 
   #acquire(): SnapshotLease {

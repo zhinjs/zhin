@@ -8,7 +8,7 @@ export default defineAgentTool<Record<string, never>>({
   tags: ['qq'],
   async execute(_input, context) {
     const client = context.$client;
-    const guilds = await client.getGuilds();
+    const guilds = await client.guildService.getList();
     return { guilds, count: guilds.length };
   },
 });

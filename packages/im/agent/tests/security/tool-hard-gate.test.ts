@@ -785,6 +785,50 @@ describe('ToolHardGate.checkPreApproved (ADR 0039 slice C group rules)', () => {
 });
 
 describe('ToolApprovalQueue', () => {
+  it('closes terminally, settles pending waiters, and never consumes old approved grants afterward', async () => {
+    const queue = new ToolApprovalQueue();
+    const input = { toolName: 'group_kick', category: 'member' as const, sessionKey: 'session', turnId: 'turn', args: { userId: 'one' } };
+    const approved = queue.enqueue(input);
+    queue.resolve(approved.id, true, 'operator');
+    const pending = queue.enqueue({ ...input, args: { userId: 'two' } });
+    const waiting = queue.wait(pending.id);
+    queue.dispose();
+    await expect(waiting).resolves.toBe('expired');
+    expect(queue.consumeApproved(input.sessionKey, input.toolName, input.args)).toBeUndefined();
+    expect(() => queue.enqueue({ ...input, args: { userId: 'later' } })).toThrow(/closed/);
+    expect(queue.list({ status: 'pending' })).toHaveLength(0);
+  });
+
+  it('denies a pending dangerous call when its queue closes without cancelling the chat or safe tools', async () => {
+    const queue = new ToolApprovalQueue(), port = scriptedPort([]), audit = auditSink();
+    const { turn } = fixture({ approval: port });
+    const kick = vi.fn(async () => 'kicked'), read = vi.fn(async () => 'weather');
+    const capabilities = [tool('group_kick', kick, 'never'), tool('weather', read, 'never')];
+    const runtime = new TurnToolRuntime(turn, capabilities, { approvalQueue: queue, decisionAudit: audit });
+    const running = runtime.execute('group_kick', { userId: 'one' }, 'pending');
+    await vi.waitFor(() => expect(queue.list({ status: 'pending' })).toHaveLength(1));
+    queue.dispose();
+    await expect(running).resolves.toMatchObject({ status: 'denied', policy: TOOL_HARD_GATE_POLICY });
+    expect(audit.codes()).toContain('tool_hard_gate:deny:tool_dangerous_no_approval');
+    expect(port.aborted()).toBe(true);
+    expect(turn.signal.aborted).toBe(false);
+    await expect(runtime.execute('weather', {}, 'read')).resolves.toMatchObject({ status: 'completed' });
+    const later = new TurnToolRuntime(turn, capabilities, { approvalQueue: queue });
+    await expect(later.execute('group_kick', { userId: 'later' }, 'later')).resolves.toMatchObject({ status: 'denied' });
+    expect(kick).not.toHaveBeenCalled(); expect(read).toHaveBeenCalledOnce();
+    expect(port.requests).toHaveLength(1); expect(queue.list()).toHaveLength(1);
+  });
+
+  it('does not open an approval prompt when an enqueue listener closes the queue during admission', async () => {
+    const queue = new ToolApprovalQueue(), port = scriptedPort([]);
+    queue.onEnqueue(() => queue.dispose());
+    const execute = vi.fn(async () => 'kicked');
+    const runtime = new TurnToolRuntime(fixture({ approval: port }).turn, [tool('group_kick', execute, 'never')], { approvalQueue: queue });
+    await expect(runtime.execute('group_kick', {}, 'closed-on-enqueue')).resolves.toMatchObject({ status: 'denied' });
+    expect(port.requests).toHaveLength(0); expect(execute).not.toHaveBeenCalled();
+    expect(queue.list({ status: 'pending' })).toHaveLength(0);
+  });
+
   it('expires pending cards after the ttl', async () => {
     vi.useFakeTimers();
     const queue = new ToolApprovalQueue({ ttlMs: 1_000 });

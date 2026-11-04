@@ -84,7 +84,7 @@ The Sandbox adapter (`plugins/adapters/sandbox`) provides both an adapter and a 
     "entry": "./plugin.ts",
     "runtime": "trusted",
     "features": [
-      { "package": "@zhin.js/adapter", "api": "^1.0.0" },
+      { "package": "@zhin.js/adapter", "api": "^2.0.0" },
       { "package": "@zhin.js/page", "api": "^1.0.0" }
     ]
   }
@@ -276,6 +276,14 @@ A single result is capped at 256 KB, so the list and export are paged by size. R
 
 Rows are kept for 14 days by default; change it with `ai.audit.retentionDays`. Expired rows are removed at startup and then hourly. For the switches, see the control plane below.
 
+### Built-in queries: usage stats
+
+`plugin.root.usage-stats` (`pluginRpc('root', 'usage-stats', { ... })`, permission `control:read`) is read-only and feeds token-usage charts. It reads `data/agent-traces/*.jsonl` with the same aggregation as `zhin usage report`.
+
+- Input (all optional): `since` / `until` (epoch ms; `until` defaults to now, `since` to 7 days before it), `bucket` (`'hour'` or `'day'`; default `day` when the range is over 2 days, else `hour`), `session` (substring of the session key, or a glob with `*`). Ranges over 31 days return `invalid_input`.
+- Output: `range` (with the host `timeZone`), `totals`, `byModel` (by input tokens, descending), `bySession` (top 50), `series` (one entry per bucket in range, zero-filled, ascending), `segments` (summed history / fixed / user context estimates), `filesRead`, `malformedLines`. `totals`, `byModel`, `bySession` and `series` carry `cacheReadTokens`, `cacheWriteTokens` and `cacheShare` (0 to 1); `totals.cacheShareByCall` is the p50 / p90 of per-call cache share.
+- Only counts, session keys and provider / model names are returned, never message text. Results are cached in memory for 60 s (at most 32 entries) and dropped when the generation changes.
+
 ### Built-in actions: control plane
 
 The control plane on the Bot status (机器人状态) page (ADR 0036 slice D) is also provided by the Host. It is the one place to make the bot go quiet right away.
@@ -413,6 +421,50 @@ Calls stopped by the hard gate (ADR 0036 §3) leave an approval card here. The a
 | --- | --- | --- |
 | `plugin.root.tool-approvals` | `pluginRpc('root', 'tool-approvals')` | `tool_approvals:read` or `ops:approve` |
 | `plugin.root.resolve-tool-approval` | `pluginRpc('root', 'resolve-tool-approval', { id, decision: 'approve' \| 'deny' })` | `ops:approve` or `tool_approvals:resolve` (action; the admin token can always call it) |
+
+### Built-in actions: self-change approval (ADR 0040)
+
+Controlled self-changes drafted by the bot (see [Letting the bot change itself](../ai/self-change.md)). The list carries metadata only; file bodies and config values are served to approvers through the detail call.
+
+| Method | Call | Permission |
+| --- | --- | --- |
+| `plugin.root.self-changes` | `pluginRpc('root', 'self-changes')` | `tool_approvals:read` or `ops:approve` (pending / recent changes and staging usage `usageBytes`, no bodies) |
+| `plugin.root.self-change-detail` | `pluginRpc('root', 'self-change-detail', { id })` | `ops:approve` **only** (unified diff per file, ≤ 64 KB combined across all files, cut by line; config patch values redacted like audit payloads; full trial checks and `skippedChecks`; `bodiesAvailable: false` once slimmed) |
+| `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve` (action) |
+| `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve` (action; a `failed` change was dealt with) |
+
+## Adapter Console pages
+
+Every built-in platform adapter (`plugins/adapters/*`) ships a `pages/index/index.ts`. Pages use `createAdapterConsolePage(adapterKey)` from `@zhin.js/client`; the server side uses `createAdapterConsoleRpc(spec)` from `@zhin.js/adapter`:
+
+```ts
+// pages/index/index.ts
+import { definePage } from '@zhin.js/console-contract';
+import { createAdapterConsolePage } from '@zhin.js/client';
+
+export const meta = definePage({
+  title: 'Telegram',
+  icon: 'Send',
+  order: 74,
+  requiredPermissions: ['telegram:read'],
+});
+
+export default createAdapterConsolePage('telegram');
+```
+
+From the page you can:
+
+- see the adapter's running endpoints from Host `endpoint.list` and run `endpoint.test` for connectivity;
+- read the owning Adapter’s account directory and runtime state from `plugin.<pluginId>.status`, with sensitive fields masked;
+- manage accounts through `endpoint-add` / `endpoint-update` / `endpoint-start` / `endpoint-stop` / `endpoint-remove` / `endpoint-replace`; Host persistence uses CAS and leaves startup files and `.env` unchanged;
+- consume LoginAssist tasks from `login.list` with `login.submit` / `login.cancel` (QR code, slider, SMS, device confirmation);
+- render adapter-specific actions from `status.actions` (for example QQ QR binding and public/private selection).
+
+Permissions are per adapter: page reads need `<adapterKey>:read`; writes (account changes and custom actions) need `<adapterKey>:write`. A full admin token is unrestricted. An administrator must review and confirm the existing account list before its first migration. Without a persistence management port, `runtime.canManage` is false or the request explicitly fails as unavailable; there is no configuration-file fallback.
+
+Each mutation supplies the directory’s `expectedGeneration` and `expectedRevision` and targets an `instanceId`; the first migration adds `confirmMigration: true` only after user confirmation. New and replacement accounts are saved disabled; connection updates reconnect only the target account. Refresh to verify conflicts or unknown commit outcomes rather than automatically retrying. Persistence acknowledgment and asynchronous startup or cleanup completion are separate states.
+
+Keep `createAdapterConsoleRpc` specs limited to public field metadata. Fields marked `env: true` or `secret: true` are masked; `env` no longer grants file-writing behavior. Editing submits only fields declared mutable by the platform; blank or masked secrets retain their current value. Replacement requires a complete new configuration. `extraStatus` should expose only a few state values (for example `bindState` or `scanUrl`), never logs, chat text or secrets.
 
 ## Saving settings from a page (config:patch)
 

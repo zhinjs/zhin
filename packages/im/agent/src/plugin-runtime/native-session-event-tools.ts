@@ -60,7 +60,7 @@ export function createNativeSessionEventToolFeatures(source: SessionEventStoreSo
       feature: toolFeatureId,
       name: SESSION_EVENT_CREATE_TOOL_NAME,
       definition: defineAgentTool<Record<string, unknown>, string>({
-        description: 'Schedule an event for the CURRENT group/channel so the bot reminds the group before it and when it starts. '
+        description: 'Schedule an event for the CURRENT group/channel so you remind the group before it and when it starts. '
           + 'Only works inside a group or channel conversation and always targets that conversation. '
           + 'The reminder is a fixed template message; it cannot be changed or cancelled from chat (operators use the Console).',
         inputSchema: Object.freeze({

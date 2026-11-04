@@ -10,11 +10,10 @@ export {
   type PenaltyConversation,
 } from './mute-penalty.js';
 export { ROULETTE_HELP, normalizeRouletteAction, type RouletteCommandAction } from './roulette-actions.js';
-export { endpointOf, rouletteServicesToken, resolveRouletteFlow } from './runtime.js';
+export { rouletteServicesToken, resolveRouletteFlow } from './runtime.js';
 export {
   RouletteGroupSettings,
   RouletteSessionService,
   createServices,
-  type EndpointIdentity,
   type RouletteServices,
 } from './session-service.js';

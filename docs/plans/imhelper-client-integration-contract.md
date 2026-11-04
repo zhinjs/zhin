@@ -4,8 +4,9 @@ sidebar: false
 
 # Platform Client × Zhin integration contract
 
-> 实施状态（2026-08-24）：Zhin 已接入 `imhelper@1.0.7` 及 Milky V1、Satori V1、
-> OneBot 11/12 `1.0.7` Client。下文既记录已落地契约，也列出仍适合在上游继续收紧的边界。
+> 已由 [Adapter 目标模式迁移](./adapter-target-mode-migration.md) 取代（2026-10-30）。本文保留早期 Client/协议接口调查，不能作为当前 Zhin 实施教程；其中 ClientEndpoint、公开 Endpoint 基类、AdapterClientRegistry 与 Client token 方案已删除。当前只用 createAdapter、实际 AdapterRegistry 和原生 Client 的 endpointSpec，正式作者入口见 [适配器开发](../authoring/adapters.md)。
+>
+> 历史调查快照（2026-08-24）：当时使用 imhelper@1.0.7 与 Milky V1、Satori V1、OneBot 11/12 1.0.7 Client；这些版本事实不代表当前安装版本。
 
 这份契约适用于所有 Zhin 平台适配器：ICQQ 等 SDK 实例、Discord/Slack/Telegram 等平台
 Client，以及 `imhelper` / `@imhelper/*` 协议 Client。目标是让事件直接暴露真实 Client，

@@ -1,3 +1,4 @@
+import { createTestEventGateway } from '../../../adapters/test-utils/endpoint.js';
 // group-suite 欢迎套件（#1012 A9：欢迎验收收拢到同一个 group-suite 套件，去重旧 welcome-scope* 用例）。
 // 三层各测一次、不重复：范围解析（纯函数）→ 投递（ImRuntime + handler）→ 原生链路（PluginTestKit / HMR / 回滚，子进程）。
 // 会话级欢迎模板（ADR 0037 切片 A，Agent session-ops）的合并窗口 / 限频 / 过闸由 Agent 侧测试负责，这里不复制；
@@ -8,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import type { DeliveryTarget } from 'zhin.js';
 import { resolveGroupSuiteConfig } from '../src/config.js';
 import { normalizeWelcomeConversations, welcomeConversationAllowed } from '../src/welcome-scope.js';
-import { AdapterIndex, Endpoint, defineAdapter, adapterFeatureId, endpointEventGatewayToken, type EndpointSendRequest } from '../../../../packages/im/adapter/src/index.js';
+import { Adapter, AdapterIndex, createEndpointSpecification, defineAdapter, endpointSpec, adapterFeatureId, endpointEventGatewayToken, type EndpointSendRequest } from '../../../../packages/im/adapter/src/index.js';
 import { HandlerIndex, handlerFeatureId } from '../../../../packages/im/handler/src/index.js';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '../../../../packages/im/middleware/src/index.js';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, childPluginId, type SnapshotState } from '../../../../packages/im/plugin-runtime/src/index.js';
@@ -79,18 +80,22 @@ async function fixture(session?: SessionWelcomeOptions) {
   const alpha = childPluginId(root, 'alpha'); const beta = childPluginId(root, 'beta');
   const im = new ImRuntime(); const sent: EndpointSendRequest[] = []; const requesters: string[] = [];
   let failure: 'unknown' | 'not_sent' | undefined;
-  class MemoryEndpoint extends Endpoint<object> {
-    readonly client = {};
-    start() {} stop() {} open() {} close() {}
+  class MemoryClient {
     async send(request: EndpointSendRequest) {
       sent.push(request);
       if (failure) throw new EndpointDeliveryError('synthetic_delivery_failure', 'synthetic delivery failure', failure);
       return `message-${sent.length}`;
     }
   }
+  class MemoryEndpoint extends MemoryClient {
+    readonly [endpointSpec] = createEndpointSpecification(this, {
+      start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request),
+    });
+  }
+  class MemoryAdapter extends Adapter<MemoryEndpoint> { protected createEndpoint() { return new MemoryEndpoint(); } }
   const adapters = ([[first, 'memory'], [second, 'memory'], [first, 'another']] as const).map(([owner, localName]) => createCapabilitySlot({
     owner, feature: adapterFeatureId, localName, source: `/adapters/${localName}/index.ts`,
-    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], segments: { markdown: 'text', interactive: 'text' }, create: () => new MemoryEndpoint() }),
+    definition: defineAdapter({ capabilities: ['inbound', 'outbound'], segments: { markdown: 'text', interactive: 'text' }, createAdapter: () => new MemoryAdapter() }),
   }));
   const handlers = [alpha, beta].map(owner => createCapabilitySlot({ owner, feature: handlerFeatureId, localName: 'welcome',
     source: '/handlers/welcome/index.ts', definition: welcome }));
@@ -103,7 +108,7 @@ async function fixture(session?: SessionWelcomeOptions) {
     config: new Map(ids.map(id => [id, id === alpha ? { welcomeMessage: '欢迎 {name} ({id})', welcomeConversations: [] }
       : id === beta ? { welcomeMessage: 'not enabled', welcomeConversations: [] } : {}])),
     capabilities: new Map([...adapters, ...handlers, observer].map(slot => [slot.id, slot])), projections: new Map(),
-    resources: new Map(ids.map(id => [id, new Map<string, unknown>([[endpointEventGatewayToken.id, { receive: async () => undefined }], [outboundMessageToken.id, im]])])),
+    resources: new Map(ids.map(id => [id, new Map<string, unknown>([[endpointEventGatewayToken.id, createTestEventGateway()], [outboundMessageToken.id, im]])])),
   };
   const lifecycle = session ? await sessionWelcome(im, String(adapters[0]!.id), session) : undefined;
   if (lifecycle) {
@@ -123,8 +128,11 @@ async function fixture(session?: SessionWelcomeOptions) {
   store.commit(0, { snapshot: createSnapshotView(1, { ...store.current, config }), dispose() {} });
   const notice: IncomingNotice = { id: 'joined', type: 'notice', name: 'notice.group.member_increase', timestamp: 1, metadata: {},
     conversation: { kind: target.kind, id: target.id, parent: target.parent, threadId: target.threadId }, target: { id: 'new', name: 'Bob' } };
-  const receive = (payload = notice, endpointId = String(adapters[0]!.id)) => im.endpointEvents.receive({ name: 'notice.receive',
-    endpoint: im.endpoints.list().find(item => item.id === endpointId)!.endpoint, payload, client: {} });
+  const receive = (payload = notice, endpointId = String(adapters[0]!.id)) => {
+    const row = im.endpoints.list().find(item => item.id === endpointId)!;
+    return im.endpointEvents.receive({ name: 'notice.receive', endpoint: row.endpoint, payload,
+      client: index.clientById(row.id as typeof adapters[number]['id']) });
+  };
   return { target, alpha, root, sent, requesters, adapters, notice, receive, lifecycle,
     fail: (status: typeof failure) => { failure = status; },
     close: async () => { lifecycle?.dispose(); await store.close(); await index.stop(); },

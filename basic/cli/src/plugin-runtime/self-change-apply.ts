@@ -7,14 +7,16 @@ import type {
   SelfChangeHealthInput,
   SelfChangeRecord,
 } from '@zhin.js/agent';
-import type { ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
-import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
+import type { ConsoleConfigApplicationStatus, ConsoleConfigPatchRequest, ConsoleConfigPatchResult } from '@zhin.js/console-protocol';
+import { ConfigValidationError, ConfigurationSupersededError, HOST_CONFIG_KEYS } from '@zhin.js/runtime';
+import { ConfigDocumentConflictError } from '@zhin.js/config-file';
+import { ConfigPatchScopeError } from './console/module.js';
 
 /**
  * Process-owned host side of ADR 0040 §5 / §6 (slice E2): the ports a {@link import('@zhin.js/agent').SelfChangeApplier}
  * needs that only the Root process can provide.
  *
- * - `reload`: `RootHost.reloadSources()` — the same HMR path as file watching, also under `--no-watch`.
+ * - `reload`: `RootHost.reloadSources()` — the same HMR path, also when file watching is disabled.
  * - `requestRestart`: the controlled exit 75 the supervisor turns into a fresh process.
  * - `health`: the committed generation is up, the plugins owning the changed files are assembled, and no
  *   runtime error was reported since the change started applying (after a restart: since this process started).
@@ -26,7 +28,7 @@ import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
 export interface SelfChangeConfigurationSource {
   readSource(): Promise<Readonly<{ source: string; revision: string }>>;
   patch(request: ConsoleConfigPatchRequest): Promise<ConsoleConfigPatchResult>;
-  replaceSource(source: string, expectedRevision: string): Promise<Readonly<{ revision: string; restartRequired: boolean }>>;
+  replaceSource(source: string, expectedRevision: string): Promise<Readonly<{ revision: string; restartRequired: boolean }> & ConsoleConfigApplicationStatus>;
 }
 
 export interface SelfChangeApplyHostOptions {
@@ -41,6 +43,12 @@ export interface SelfChangeApplyHostOptions {
   readonly configuration?: SelfChangeConfigurationSource;
   /** Absolute root config file; reloaded with a change that carries a config patch. */
   readonly configFile?: string;
+  /**
+   * #1051 F1 / Q6=A: whether a controlled exit 75 brings the process back (a `zhin` supervisor is present and
+   * the process was not started with `--once`). Default true. When false, `change_draft` does not submit changes
+   * that need a restart, and the applier rolls back instead of restarting.
+   */
+  readonly restartSupported?: boolean;
 }
 
 /** What the Agent generation contributes: the control plane and the IM. */
@@ -50,6 +58,8 @@ export type SelfChangeGenerationPorts = Pick<SelfChangeApplyPorts, 'emergencySto
 export interface SelfChangeApplierHandle {
   apply(id: string): Promise<unknown>;
   recover(): Promise<number>;
+  /** Leftover `approved` at start: applied within the approval window, else expired (#1051 Q2=B). Required so the window cannot be skipped. */
+  resumeApproved(id: string): Promise<unknown>;
 }
 
 export class HostSelfChangeApply {
@@ -66,6 +76,11 @@ export class HostSelfChangeApply {
 
   constructor(options: SelfChangeApplyHostOptions) {
     this.#options = options;
+  }
+
+  /** A controlled restart (exit 75) brings this process back; see {@link SelfChangeApplyHostOptions.restartSupported}. */
+  get restartSupported(): boolean {
+    return this.#options.restartSupported ?? true;
   }
 
   /** An approved change is being applied (or recovered): HMR restart requests are left to the applier. */
@@ -95,8 +110,9 @@ export class HostSelfChangeApply {
     const config = this.#options.configuration ? createSelfChangeConfigPort(this.#options.configuration) : undefined;
     const ports: SelfChangeApplyPorts = {
       ...(config ? { config } : {}),
-      reload: ({ record, changed }) => this.#options.reload(this.#sources(record, changed)),
+      reload: ({ record, changed, configurationHandled }) => this.#options.reload(this.#sources(record, changed, configurationHandled)),
       requestRestart: () => this.#options.restart(),
+      restartSupported: () => this.restartSupported,
       health: input => this.#health(input),
       emergencyStop: generation.emergencyStop,
       report: generation.report,
@@ -106,8 +122,8 @@ export class HostSelfChangeApply {
 
   /**
    * The newest Agent generation binds its applier; the returned function unbinds it on dispose.
-   * `listApproved` lists changes approved but never applied (the process ended in between); they are applied
-   * once after `recover()`.
+   * `listApproved` lists changes approved but never applied (the process ended in between); after `recover()`
+   * each goes through `resumeApproved` once (applied when approved within the last hour, else expired, Q2=B).
    */
   bind(applier: SelfChangeApplierHandle, listApproved?: () => Promise<readonly string[]>): () => void {
     this.#applier = applier;
@@ -147,14 +163,20 @@ export class HostSelfChangeApply {
     const listApproved = this.#listApproved;
     return this.#run(async () => {
       await applier.recover();
+      // One failing leftover must not strand the rest until the next start; every error is surfaced at the end.
+      const failures: unknown[] = [];
       for (const id of await listApproved?.() ?? []) {
         this.#errorBaseline.set(id, this.#errors);
         try {
-          await applier.apply(id);
+          await applier.resumeApproved(id);
+        } catch (error) {
+          failures.push(error);
         } finally {
           this.#errorBaseline.delete(id);
         }
       }
+      if (failures.length === 1) throw failures[0];
+      if (failures.length > 1) throw new AggregateError(failures, `${failures.length} approved self-changes failed to resume: ${failures.map(error => error instanceof Error ? error.message : String(error)).join('; ')}`);
     });
   }
 
@@ -170,10 +192,10 @@ export class HostSelfChangeApply {
     return run;
   }
 
-  #sources(record: SelfChangeRecord, changed: readonly string[]): string[] {
+  #sources(record: SelfChangeRecord, changed: readonly string[], configurationHandled = false): string[] {
     const root = path.resolve(this.#options.projectRoot);
     const sources = changed.map(file => path.join(root, ...file.split('/')));
-    if (record.configPatch && this.#options.configFile) sources.push(path.resolve(this.#options.configFile));
+    if (!configurationHandled && record.configPatch && this.#options.configFile) sources.push(path.resolve(this.#options.configFile));
     return sources;
   }
 
@@ -205,7 +227,8 @@ export class HostSelfChangeApply {
 /**
  * `configPatch` → Console `config:patch`, one request per top-level section: Host sections use the Host
  * allowlist, every other section is scoped to its plugin instance. Revisions chain; the first non-`saved`
- * result stops (the applier then rolls back from the snapshot source).
+ * result stops. Saved/application evidence is preserved; an unknown outcome or
+ * superseded source cannot authorize another apply or a snapshot overwrite.
  */
 export function createSelfChangeConfigPort(configuration: SelfChangeConfigurationSource): SelfChangeConfigPort {
   return Object.freeze({
@@ -223,19 +246,64 @@ export function createSelfChangeConfigPort(configuration: SelfChangeConfiguratio
       }
       let revision = expectedRevision;
       let restartRequired = false;
+      let application: ConfigApplication | undefined;
+      let allHandled = true;
       for (const [section, group] of groups) {
         const host = (HOST_CONFIG_KEYS as readonly string[]).includes(section);
-        const result = await configuration.patch({
-          ...(host ? {} : { instanceKey: section }),
-          expectedRevision: revision,
-          patches: group,
-        });
-        if (result.status !== 'saved') return Object.freeze({ status: result.status, message: result.message });
+        let result: ConsoleConfigPatchResult;
+        try {
+          result = await configuration.patch({
+            ...(host ? {} : { instanceKey: section }), expectedRevision: revision, patches: group,
+          });
+        } catch (error) {
+          if (error instanceof ConfigDocumentConflictError || error instanceof ConfigurationSupersededError) return Object.freeze({ status: 'conflict' as const,
+            message: 'Configuration source was superseded' });
+          if (error instanceof ConfigValidationError || error instanceof ConfigPatchScopeError) return Object.freeze({ status: 'invalid' as const,
+            message: 'Configuration candidate was rejected', ...(revision !== expectedRevision ? { revision } : {}) });
+          return Object.freeze({ status: 'unconfirmed' as const, message: 'Configuration save outcome is unconfirmed' });
+        }
+        if (result.status !== 'saved') return Object.freeze({ status: result.status, message: result.message,
+          ...(revision !== expectedRevision ? { revision } : {}) });
         revision = result.revision;
         restartRequired ||= result.restartRequired;
+        const outcome = configApplication(result);
+        if (outcome && outcome !== 'applied' && outcome !== 'restart-pending') return Object.freeze({ status: 'saved' as const,
+          revision, restartRequired, application: outcome });
+        if (!outcome) allHandled = false;
+        if (outcome) application = application === 'restart-pending' ? application : outcome;
       }
-      return Object.freeze({ status: 'saved' as const, revision, restartRequired });
+      return Object.freeze({ status: 'saved' as const, revision, restartRequired, ...(allHandled && application ? { application } : {}) });
     },
-    restore: (source: string, expectedRevision: string) => configuration.replaceSource(source, expectedRevision),
+    async restore(source: string, expectedRevision: string) {
+      try {
+        const restored = await configuration.replaceSource(source, expectedRevision);
+        const application = configApplication(restored);
+        return Object.freeze({ revision: restored.revision, restartRequired: restored.restartRequired, ...(application ? { application } : {}) });
+      } catch (error) {
+        return Object.freeze({ restartRequired: false, application: error instanceof ConfigDocumentConflictError || error instanceof ConfigurationSupersededError
+          ? 'superseded' as const : error instanceof ConfigValidationError ? 'invalid' as const : 'unconfirmed' as const });
+      }
+    },
   });
+}
+
+type ConfigApplication = NonNullable<Awaited<ReturnType<SelfChangeConfigPort['restore']>>['application']>;
+function configApplication(
+  result: Readonly<{ revision: string; restartRequired?: boolean }> & ConsoleConfigApplicationStatus,
+): ConfigApplication | undefined {
+  if (result.applicationError) return result.applicationError;
+  const application = result.application;
+  if (!application) return undefined;
+  if (application.sourceRevision !== result.revision || application.saved !== true
+    || !Number.isSafeInteger(application.generation) || application.generation <= 0
+    || !Number.isSafeInteger(application.applicationRevision) || application.applicationRevision <= 0
+    || !Array.isArray(application.groups) || application.groups.some(group => !group || typeof group !== 'object')) return 'unconfirmed';
+  if (application.groups.some(group => group.status === 'superseded')) return 'superseded';
+  if (application.groups.some(group => group.status === 'unknown')) return 'unconfirmed';
+  if (application.groups.some(group => group.status === 'failed')) return 'failed';
+  if (application.groups.some(group => group.status === 'blocked')) return 'blocked';
+  if (application.groups.some(group => group.status !== 'applied' && group.status !== 'restart-pending')) return 'unconfirmed';
+  if (!application.groups.some(group => group.status === 'restart-pending')) return 'applied';
+  // A group waiting for a restart while the save says none is required is inconsistent: do not trust either.
+  return result.restartRequired === true ? 'restart-pending' : 'unconfirmed';
 }

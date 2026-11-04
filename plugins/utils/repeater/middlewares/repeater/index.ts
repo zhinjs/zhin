@@ -17,10 +17,7 @@ export default defineMiddleware<Message, RepeaterConfig>({
     const config = context.config;
     const engine = context.use(repeaterEngineToken);
     const result = engine.tick({
-      conversation: {
-        kind: context.input.conversation.kind,
-        id: context.input.conversation.id,
-      },
+      conversation: context.input.conversation,
       content: context.input.content,
       sender: context.input.sender,
       metadata: context.input.metadata,

@@ -4,9 +4,9 @@ import { formatCompact } from '@zhin.js/logger';
 import type { Message } from 'zhin.js';
 import { getCurrentCommMessage } from '@zhin.js/agent/security';
 import { GhClient } from '../../../../src/gh-client.js';
-import type { GithubClient } from '../../../../src/client.js';
+import type { GithubEndpoint } from '../../../../src/endpoint.js';
 
-function oauthModel(client: GithubClient) {
+function oauthModel(client: GithubEndpoint) {
   const db = client.database as {
     models?: Map<string, unknown>;
   } | null | undefined;
@@ -25,7 +25,7 @@ function depsLogger() {
   };
 }
 
-export async function executeGithubBind(_args: Record<string, never>, client: GithubClient, commMessage?: Message, preference?: Locale) {
+export async function executeGithubBind(_args: Record<string, never>, client: GithubEndpoint, commMessage?: Message, preference?: Locale) {
   const log = depsLogger();
   const msg = commMessage ?? getCurrentCommMessage();
   const locale = resolveLocale(preference ?? msg?.locale);
@@ -91,7 +91,7 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
   }
 }
 
-export async function executeGithubUnbind(_args: Record<string, never>, client: GithubClient, commMessage?: Message, preference?: Locale) {
+export async function executeGithubUnbind(_args: Record<string, never>, client: GithubEndpoint, commMessage?: Message, preference?: Locale) {
   const msg = commMessage ?? getCurrentCommMessage();
   const locale = resolveLocale(preference ?? msg?.locale);
   if (!msg?.clientAdapter || !msg?.sender?.id) return t(locale, 'missingUser');
@@ -106,7 +106,7 @@ export async function executeGithubUnbind(_args: Record<string, never>, client: 
   return t(locale, 'unbound', { login: existing.github_login });
 }
 
-export async function executeGithubWhoami(_args: Record<string, never>, client: GithubClient, commMessage?: Message, preference?: Locale) {
+export async function executeGithubWhoami(_args: Record<string, never>, client: GithubEndpoint, commMessage?: Message, preference?: Locale) {
   const msg = commMessage ?? getCurrentCommMessage();
   const locale = resolveLocale(preference ?? msg?.locale);
   if (!msg?.clientAdapter || !msg?.sender?.id) return t(locale, 'missingUser');
@@ -125,7 +125,7 @@ export async function executeGithubWhoami(_args: Record<string, never>, client: 
   return t(locale, 'expired', { login: existing.github_login });
 }
 
-export async function executeGithubInstall(client: GithubClient, locale?: Locale) {
+export async function executeGithubInstall(client: GithubEndpoint, locale?: Locale) {
   const slug = client.appSlug;
   if (!slug) return t(locale, 'missingApp');
   const host = client.host || 'github.com';

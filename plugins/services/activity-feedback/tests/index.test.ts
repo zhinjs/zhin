@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { AIEventPayload } from '@zhin.js/agent';
 import { mergeActivityFeedbackLayers, loadActivityFeedbackServiceConfig } from '../src/config.js';
 import { ActivityFeedbackOrchestrator } from '../src/orchestrator.js';
-import type { ActivityFeedbackExecutor } from '../src/executor.js';
+import type { ActivityFeedbackExecution } from '../src/executor.js';
 import { ActivityFeedbackPolicy } from '../src/policy.js';
 
 describe('activityFeedback config', () => {
@@ -72,7 +72,8 @@ describe('ActivityFeedbackOrchestrator', () => {
       stop: vi.fn(),
       updateText: vi.fn(),
       updateThinkingText: vi.fn(),
-    } satisfies ActivityFeedbackExecutor;
+      dispose: vi.fn(async () => undefined),
+    } satisfies ActivityFeedbackExecution;
 
     const policy = new ActivityFeedbackPolicy(
       loadActivityFeedbackServiceConfig({
@@ -113,7 +114,8 @@ describe('ActivityFeedbackOrchestrator', () => {
       stop: vi.fn(),
       updateText: vi.fn(),
       updateThinkingText: vi.fn(),
-    } satisfies ActivityFeedbackExecutor;
+      dispose: vi.fn(async () => undefined),
+    } satisfies ActivityFeedbackExecution;
 
     const policy = new ActivityFeedbackPolicy(
       loadActivityFeedbackServiceConfig({
@@ -170,7 +172,8 @@ describe('ActivityFeedbackOrchestrator', () => {
       stop: vi.fn(),
       updateText: vi.fn(),
       updateThinkingText: vi.fn(),
-    } satisfies ActivityFeedbackExecutor;
+      dispose: vi.fn(async () => undefined),
+    } satisfies ActivityFeedbackExecution;
     const orchestrator = new ActivityFeedbackOrchestrator(
       new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({})),
       executor,
@@ -207,7 +210,8 @@ describe('ActivityFeedbackOrchestrator', () => {
       stop: vi.fn(),
       updateText: vi.fn(),
       updateThinkingText: vi.fn(),
-    } satisfies ActivityFeedbackExecutor;
+      dispose: vi.fn(async () => undefined),
+    } satisfies ActivityFeedbackExecution;
     const orchestrator = new ActivityFeedbackOrchestrator(
       new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({})),
       executor,
@@ -238,7 +242,8 @@ describe('ActivityFeedbackOrchestrator', () => {
       stop: vi.fn(),
       updateText: vi.fn(),
       updateThinkingText: vi.fn(),
-    } satisfies ActivityFeedbackExecutor;
+      dispose: vi.fn(async () => undefined),
+    } satisfies ActivityFeedbackExecution;
     const orchestrator = new ActivityFeedbackOrchestrator(
       new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({})),
       executor,
@@ -283,7 +288,8 @@ describe('ActivityFeedbackOrchestrator', () => {
       stop: vi.fn(() => stopPending),
       updateText: vi.fn(),
       updateThinkingText: vi.fn(),
-    } satisfies ActivityFeedbackExecutor;
+      dispose: vi.fn(async () => undefined),
+    } satisfies ActivityFeedbackExecution;
     const orchestrator = new ActivityFeedbackOrchestrator(
       new ActivityFeedbackPolicy(loadActivityFeedbackServiceConfig({
         schedule: {

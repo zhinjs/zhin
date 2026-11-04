@@ -9,7 +9,7 @@ const config = resolveEmailConfig({ id: 'fixture', smtp: { host: 'smtp.fixture',
 async function fixture(result: EmailSmtpResult | Error) {
   const imap = Object.assign(new EventEmitter(), { connect() { queueMicrotask(() => this.emit('ready')); }, end() {}, openBox() {}, search() {}, fetch() {} }) as unknown as EmailImapTransport;
   const sendMail = vi.fn(async () => { if (result instanceof Error) throw result; return result; });
-  const endpoint = new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => imap, createSmtp: () => ({ verify: async () => {}, close: () => {}, sendMail }) });
+  const endpoint = () => new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => imap, createSmtp: () => ({ verify: async () => {}, close: () => {}, sendMail }) });
   return { ...(await emailDeliveryRuntime(endpoint)), sendMail };
 }
 it.each([

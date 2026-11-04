@@ -489,7 +489,7 @@ async function fixture(settings: Record<string, unknown> = {}, persistence = tru
   const restart = async (locale: 'zh-CN' | 'en' = projectLocale) => { projectLocale = locale; runtime = makeRuntime(); await runtime.start(); };
   const command = async (text: string, source = alice): Promise<unknown> => {
     const index = runtime.snapshot.projections.get(commandFeatureId); if (!(index instanceof CommandIndex)) throw new Error('Missing CommandIndex');
-    const result = await index.dispatch(text, { ...source, content: text }); return result.status === 'executed' ? result.value : result;
+    const result = await index.dispatch({ input: text, source: { ...source, content: text } }); return result.status === 'executed' ? result.value : result;
   };
   const service = (name: string): ReminderService => runtime.snapshot.resources.get(childPluginId(rootPluginId(), name))!.get(reminderServiceToken.id) as ReminderService;
   const tasks = (name: string): PluginTaskProvider => runtime.snapshot.resources.get(childPluginId(rootPluginId(), name))!.get(pluginTaskProviderToken.id) as PluginTaskProvider;

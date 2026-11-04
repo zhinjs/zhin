@@ -65,7 +65,7 @@ description: "插件是什么、插件树如何组成、Plugin 与 Feature 的�
     "type": "feature",
     "entry": "./lib/provider.js",
     "engine": "^1.0.0",
-    "featureApi": "1.0.0"
+    "featureApi": "2.0.0"
   }
 }
 ```
@@ -82,18 +82,12 @@ description: "插件是什么、插件树如何组成、Plugin 与 Feature 的�
 ```ts
 // plugins/adapters/sandbox/adapters/sandbox/index.ts
 import { defineAdapter } from 'zhin.js/adapter';
-import { outboundMessageToken } from '@zhin.js/core/runtime';
-import { SandboxWsEndpoint } from '../src/endpoint.js';
+import { SandboxAdapter } from '../../src/adapter.js';
+import type { SandboxEndpointConfig } from '../../src/protocol.js';
 
-export default defineAdapter({
+export default defineAdapter<SandboxEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
-  create(context) {
-    return new SandboxWsEndpoint({
-      gateway: context.use(outboundMessageToken),
-      defaults: resolveSandboxEndpoint(context.config),
-      // ...
-    });
-  },
+  createAdapter: context => new SandboxAdapter(context),
 });
 ```
 
@@ -141,7 +135,7 @@ CLI 会以当前目录为项目根，读取包契约和 `configVersion: 2` 主�
 
 ```json
 "features": [
-  { "package": "@zhin.js/adapter",     "api": "^1.0.0" },
+  { "package": "@zhin.js/adapter",     "api": "^2.0.0" },
   { "package": "@zhin.js/command",     "api": "^1.0.0" },
   { "package": "@zhin.js/component",   "api": "^1.0.0" },
   { "package": "@zhin.js/middleware",  "api": "^1.0.0" },

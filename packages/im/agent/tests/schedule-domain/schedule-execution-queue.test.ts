@@ -10,6 +10,37 @@ function queue(maxConcurrency = 1): ScheduleExecutionQueue {
 }
 
 describe('ScheduleExecutionQueue', () => {
+  it('records timeout stop even when an in-flight operation returns a late value', async () => {
+    const subject = queue();
+    const decisions = vi.fn();
+    const execute = vi.fn((signal: AbortSignal) => new Promise<string>(resolve => {
+      signal.addEventListener('abort', () => resolve('Already completed'), { once: true });
+    }));
+    await expect(subject.enqueueAndWait({ name: 'late', timeoutMs: 5, maxRetries: 1,
+      canRetry: () => true, onRetryDecision: decisions, execute })).rejects.toThrow('timed out');
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(decisions).toHaveBeenCalledExactlyOnceWith({ retry: false, reason: 'timeout' });
+    await subject.dispose();
+  });
+  it('does not replay an unclassified failure merely because a retry budget remains', async () => {
+    const subject = queue();
+    const failure = new Error('Unclassified operation failure');
+    const execute = vi.fn(async () => { throw failure; });
+    const decisions = vi.fn();
+    await expect(subject.enqueueAndWait({ name: 'unknown', maxRetries: 2, execute, onRetryDecision: decisions })).rejects.toBe(failure);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(decisions).toHaveBeenCalledExactlyOnceWith({ retry: false, reason: 'not_retryable' });
+    await subject.dispose();
+  });
+
+  it('isolates a retry observer failure from the actual safe retry and original result', async () => {
+    const subject = queue();
+    const execute = vi.fn().mockRejectedValueOnce(new Error('Transient read failure')).mockResolvedValueOnce('Read recovered');
+    await expect(subject.enqueueAndWait({ name: 'safe', maxRetries: 1, execute, canRetry: () => true,
+      onRetryDecision: () => { throw new Error('Observation unavailable'); } })).resolves.toBe('Read recovered');
+    expect(execute).toHaveBeenCalledTimes(2);
+    await subject.dispose();
+  });
   it('limits actual concurrent operations', async () => {
     const subject = queue(1);
     const releases: Array<() => void> = [];
@@ -42,6 +73,7 @@ describe('ScheduleExecutionQueue', () => {
     const result = subject.enqueueAndWait({
       name: 'retry',
       maxRetries: 1,
+      canRetry: () => true,
       execute: async () => {
         attempts += 1;
         if (attempts === 1) throw new Error('flaky');

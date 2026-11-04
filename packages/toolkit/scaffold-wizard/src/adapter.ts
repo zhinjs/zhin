@@ -289,6 +289,7 @@ export const ADAPTERS: AdapterDefinition[] = [
     docUrl: adapterDocsUrl('wecom'),
     fields: [
       { key: 'corpId', message: 'Corp ID:', required: true, envKey: 'WECOM_CORP_ID' },
+      { key: 'agentId', message: '应用 Agent ID:', required: true },
       { key: 'agentSecret', message: '应用 Secret:', required: true, type: 'password', envKey: 'WECOM_AGENT_SECRET' },
       { key: 'token', message: '回调 Token:', required: true, type: 'password', envKey: 'WECOM_TOKEN' },
       { key: 'encodingAESKey', message: 'EncodingAESKey（43 字符）:', required: true, type: 'password', envKey: 'WECOM_AES_KEY' },

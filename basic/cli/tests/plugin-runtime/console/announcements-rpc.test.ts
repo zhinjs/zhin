@@ -45,7 +45,7 @@ function consoleDispatch(status: AssistantStatus) {
   const store = new SnapshotStore(state); stores.push(store);
   return (type: string, access: ConsoleAccess, data?: unknown) => dispatchPluginConsoleRpcRequest(
     { type, requestId: 1, ...(data === undefined ? {} : { data }) },
-    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: status.consoleRpc },
+    { snapshots: store, access, pagesOwnedBy: () => [] as never, hostRpc: () => status.consoleRpc },
   );
 }
 

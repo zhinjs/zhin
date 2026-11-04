@@ -17,6 +17,7 @@ import type {
   ToolRiskCategory,
   ToolInvocationContext,
   ToolScope,
+  ToolAvailabilityContext,
 } from './definition.js';
 import { parseToolInputSchema } from './input-schema.js';
 import type { ToolInputSchema } from './input-schema.js';
@@ -69,6 +70,22 @@ export class ToolIndex {
 
   has(requester: PluginId, name: string): boolean {
     return this.#index.resolve(requester, name) !== undefined;
+  }
+
+  /** Read eligibility without executing the tool or exposing its predicate to the model. */
+  isAvailable(requester: PluginId, name: string, context: ToolAvailabilityContext): boolean {
+    const entry = this.#index.resolve(requester, name);
+    if (!entry) throw new Error(`Unknown Agent Tool ${name} for ${requester}`);
+    const predicate = entry.slot.definition.isAvailable;
+    if (!predicate) return true;
+    const available = predicate(Object.freeze({ sessionKey: context.sessionKey, origin: context.origin,
+      ...(context.accountProfile ? { accountProfile: Object.freeze({ writableFields: Object.freeze([...context.accountProfile.writableFields]) }) } : {}),
+      ...(context.principal ? { principal: Object.freeze({ subjectId: context.principal.subjectId, roles: Object.freeze([...context.principal.roles]) }) } : {}),
+    }));
+    if (typeof available !== 'boolean') {
+      throw new TypeError(`Agent Tool ${entry.qualifiedName} isAvailable must return a boolean`);
+    }
+    return available;
   }
 
   async execute<TInput = unknown, TResult = unknown>(
@@ -125,6 +142,8 @@ export class ToolIndex {
           : {}),
       }),
       ...(invocation.question ? { question: invocation.question } : {}),
+      ...(invocation.selfProfile ? { selfProfile: invocation.selfProfile } : {}),
+      ...(invocation.effects ? { effects: invocation.effects } : {}),
     } as ToolExecutionContext;
     Object.defineProperty(context, '$client', {
       enumerable: true,

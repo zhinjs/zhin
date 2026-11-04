@@ -20,8 +20,10 @@ export async function uploadBufferToCdn(params: {
   cdnBaseUrl: string;
   label: string;
   aeskey: Buffer;
+  abortSignal?: AbortSignal;
 }): Promise<{ downloadParam: string }> {
   const { buf, uploadFullUrl, uploadParam, filekey, cdnBaseUrl, label, aeskey } = params;
+  params.abortSignal?.throwIfAborted();
   const ciphertext = encryptAesEcb(buf, aeskey);
   const trimmedFull = uploadFullUrl?.trim();
   let cdnUrl: string;
@@ -38,9 +40,11 @@ export async function uploadBufferToCdn(params: {
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= UPLOAD_MAX_RETRIES; attempt++) {
+    params.abortSignal?.throwIfAborted();
     try {
       const res = await fetch(cdnUrl, {
         method: "POST",
+        signal: params.abortSignal,
         headers: { "Content-Type": "application/octet-stream" },
         body: new Uint8Array(ciphertext),
       });
@@ -68,6 +72,7 @@ export async function uploadBufferToCdn(params: {
       logger.debug(`${label}: CDN upload success attempt=${attempt}`);
       break;
     } catch (err) {
+      params.abortSignal?.throwIfAborted();
       lastError = err;
       if (err instanceof Error && err.message.includes("client error")) throw err;
       if (attempt < UPLOAD_MAX_RETRIES) {

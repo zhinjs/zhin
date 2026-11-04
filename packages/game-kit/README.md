@@ -43,7 +43,7 @@ export default defineGamePlugin({
 - `DEFAULT_GAME_STALE_CRON` 与 `scheduleHostToken` 用于清理超时会话。
 - `defineGamePlugin()` 在存在 `outboundHostToken` 时自动通知超时会话所在频道。
 - 对局创建时将 `message.locale` 保存到会话行的可空 `locale` 字段；后续棋盘、提示和超时通知沿用该语言。旧行缺少语言时保留原有中文流程，不因升级后项目或玩家语言变化而切换。新开一局重新读取创建者的语言。
-- `messageFromCommandInput(input)` 透传消息的 `locale` 与 `formatCommand`；命令也可显式传入第二参数 `{ locale, formatCommand }`。`buildGridKeyboard({ locale })` 本地化默认数字提示，自定义提示保持原文。
+- `gamePlayerFromInput(input)` 透传消息的 `locale` 与 `formatCommand`；命令也可显式传入第二参数 `{ locale, formatCommand }`。`buildGridKeyboard({ locale })` 本地化默认数字提示，自定义提示保持原文。
 - 大厅通过 `GameIndex.formatHelp(locale, context.formatCommand)` 从当前命令索引解析 `commandPath` 与真实插件 owner；不会将旧的 `commandPrefix` 当作当前环境的调用入口。缺少真实入口时只展示游戏说明。
 - 每个游戏包定义自己的 typed service token；`plugin.ts` 提供资源，command/middleware
   通过 Capability Context 的 `use(token)` 消费。禁止以模块变量保存当前 SessionService。
@@ -63,7 +63,7 @@ class SessionService extends BaseSessionService<MySessionRow> {
   }
 
   createSession(input: StartInput) {
-    return this.createRow(createInitialRow(input));
+    return this.createRow({ target: input.player.target, fields: createInitialFields(input) });
   }
 }
 ```
@@ -132,8 +132,8 @@ const board = buildGridKeyboard({
 ```
 
 `plainTextFromSendContent()` 会在无编辑能力或 text-only 路径移除按钮并保留正文；平台差异
-仍由 Adapter 出站链处理。`messageFromCommandInput()` 把 Runtime `Message` 转成游戏引擎使用
-的稳定 message-like 结构。
+仍由 Adapter 出站链处理。`gamePlayerFromInput()` 把 Runtime `Message` 转成游戏引擎使用
+的不可变 `GamePlayer`：完整 `target`、真实 `sender` 与展示选项；不会保留 Client 或补造发言者。
 
 ## 数据
 
@@ -142,7 +142,8 @@ const board = buildGridKeyboard({
 - `createHostGameDb()`：把 generation-owned `DatabaseHost` 转成 SessionService 所需接口。
 - `GameRecordStore`：每个游戏实例显式持有自己的战绩库，并作为 `GameRecordPort`
   随 Game capability 投影给大厅；不存在全局当前数据库。
-- `channelKey()` / `generateSessionId()`：稳定会话身份。
+- `channelKey({ target })` 使用框架目标 codec 保存完整账号、会话、父场景与线程；`gameTargetFromKey()` 用于恢复延迟投递目标。历史别名键的迁移方案见 [数据迁移提案](../../docs/plans/adapter-operation-data-migration.md)，尚未自动迁移。
+- `generateSessionId()`：生成单次游戏的身份。
 
 游戏包应优先使用 `databaseHostToken`，缺失时为每个插件实例创建独立内存库。数据库、
 SessionService、cron 闭包都属于同一个 owner generation；热更卸载旧代不会覆盖新代状态。

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import { hostModelOwnerId } from '../src/plugin-runtime/personal-models/host-identity.js';
 import { readConfig } from '../src/utils/config-file.js';
 import {
   applyConfigFixes,
@@ -19,6 +20,42 @@ describe('config check', () => {
 
   afterEach(async () => {
     await fs.remove(tmpDir);
+  });
+
+  function canonicalAi() {
+    return {
+      modelCatalog: {
+        connections: { main: { id: 'main', ownerId: hostModelOwnerId(tmpDir), revision: 1, sdk: 'openai-compatible', baseUrl: 'https://provider.test/v1', secretRef: 'env://AI_KEY' } },
+        models: { chat: { id: 'chat', connectionId: 'main', model: 'configured-model', capabilities: { input: ['text'] } } },
+        presets: { main: { id: 'main', modelId: 'chat' } },
+      },
+      modelPolicy: { defaults: { chat: 'main', summary: 'main' } },
+    };
+  }
+
+  it('validates explicit model catalog/policy without legacy providers or reading credentials', async () => {
+    await fs.writeJson(path.join(tmpDir, 'zhin.config.json'), { configVersion: 2, plugins: {}, ai: canonicalAi() });
+    const result = await runConfigCheck(tmpDir, {});
+    expect(result.issues.filter(issue => ['config.legacy_v1', 'ai.model_config_invalid', 'ai.routing_invalid'].includes(issue.code))).toEqual([]);
+  });
+
+  it('reports explicit missing presets and forbidden lower-scope fields', async () => {
+    const ai = canonicalAi();
+    ai.modelPolicy.defaults.chat = 'missing';
+    await fs.writeJson(path.join(tmpDir, 'zhin.config.json'), { configVersion: 2, plugins: {}, ai });
+    const result = await runConfigCheck(tmpDir, {});
+    expect(result.issues).toContainEqual(expect.objectContaining({ code: 'ai.model_config_invalid', severity: 'error' }));
+    await fs.writeJson(path.join(tmpDir, 'zhin.config.json'), { configVersion: 2, plugins: {}, ai: { ...canonicalAi(), modelPolicy: { defaults: { chat: 'main' }, adapters: { sandbox: { summary: 'main' } } } } });
+    const forbidden = await runConfigCheck(tmpDir, {});
+    expect(forbidden.issues).toContainEqual(expect.objectContaining({ code: 'ai.model_config_invalid', message: expect.stringContaining('unknown field') }));
+  });
+
+  it('--fix preserves an explicit catalog and does not inject empty legacy sections', () => {
+    const ai = canonicalAi();
+    const { config } = applyConfigFixes({ ai });
+    expect(config.ai).toEqual(ai);
+    expect(config.ai).not.toHaveProperty('providers');
+    expect(config.ai).not.toHaveProperty('agents');
   });
 
   it('数据库连接变量缺失时应阻止启动并给出向导修复命令', async () => {

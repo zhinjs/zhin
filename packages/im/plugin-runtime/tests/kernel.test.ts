@@ -9,6 +9,7 @@ import {
   capabilityId,
   childPluginId,
   createToken,
+  definePlugin,
   createSnapshotView,
   featureId,
   rootPluginId,
@@ -42,14 +43,47 @@ describe('Plugin Runtime kernel', () => {
     expect(old.active).toBe(true);
     expect(disposed).toBe(false);
     const current = store.acquire();
+    expect(old.stopSignal).toBe(current.stopSignal);
+    expect(old.stopSignal.aborted).toBe(false);
+    const retained = store.retain(old);
+    expect(retained.value).toBe(old.value);
+    old.release();
+    expect(retained.active).toBe(true);
+    expect(() => store.retain(old)).toThrow('active owned lease');
+    const foreign = new SnapshotStore(emptyState());
+    const foreignLease = foreign.acquire();
+    expect(() => store.retain(foreignLease)).toThrow('active owned lease');
+    foreignLease.release();
+    await foreign.close();
     const closing = store.close();
+    expect(retained.stopSignal.aborted).toBe(true);
+    expect(() => store.retain(retained)).toThrow('closed');
     expect(current.retirementSignal.aborted).toBe(true);
     expect(current.active).toBe(true);
     old.release();
+    retained.release();
     current.release();
     await closing;
     expect(disposed).toBe(true);
   });
+  it('validates and detaches inert feature configuration ownership declarations', () => {
+    const paths = [['profile']];
+    const definition = definePlugin({ name: 'profile', configUpdate: { featurePaths: paths } });
+    paths[0][0] = 'credentials';
+    expect(definition.configUpdate?.featurePaths).toEqual([['profile']]);
+    expect(Object.isFrozen(definition.configUpdate?.featurePaths[0])).toBe(true);
+    for (const invalid of [null, false, { featurePaths: [['__proto__']] }, { featurePaths: [[]] },
+      { featurePaths: [new Array(1)] }, { featurePaths: new Array(1) }, { featurePaths: [['profile']], apply() {} }]) {
+      expect(() => definePlugin({ name: 'profile', configUpdate: invalid as never })).toThrow(TypeError);
+    }
+    const state = emptyState();
+    const declaration = { featurePaths: [['nickname']] };
+    const snapshot = createSnapshotView(1, { ...state, tree: new Map([[state.root, { id: state.root, instanceKey: 'root',
+      packageName: 'root', packageRoot: '/root', children: [], configUpdate: declaration }]]) });
+    declaration.featurePaths[0][0] = 'token';
+    expect(snapshot.tree.get(state.root)?.configUpdate?.featurePaths).toEqual([['nickname']]);
+  });
+
   it('detaches and deeply freezes custom schema metadata when creating a snapshot', () => {
     const declaration = { type: 'object', properties: { count: { type: 'number', default: 1 } } };
     const state = emptyState();

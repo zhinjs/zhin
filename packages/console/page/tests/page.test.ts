@@ -6,9 +6,18 @@ import {
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { FeatureDiscovery, type DiscoveryHost } from '@zhin.js/feature-kit';
-import pageFeature, { PageIndex } from '../src/index.js';
+import pageFeature, { PageIndex, isPageIndex, pageIndexProjection } from '../src/index.js';
 
 describe('Page Feature', () => {
+  it('recognizes PageIndex by its projection brand rather than prototype identity', () => {
+    expect(pageIndexProjection).toBe('zhin.page-index/1');
+    expect(isPageIndex({ $projection: 'zhin.page-index/1' })).toBe(true);
+    expect(isPageIndex({ $projection: 'zhin.other/1' })).toBe(false);
+    expect(isPageIndex({})).toBe(false);
+    expect(isPageIndex(null)).toBe(false);
+    expect(isPageIndex(undefined)).toBe(false);
+  });
+
   it('discovers only pages/<name>/index.tsx modules through the client adapter', async () => {
     const loaded: string[] = [];
     const host = memoryHost(

@@ -188,7 +188,11 @@ export function createDeferredCapabilityPlan(
     alwaysLoaded.add(name);
   }
   const publicTools = publicCapabilities.map(capabilityAsAgentTool);
-  const publicCatalog = buildToolCatalog({ tools: publicTools, alwaysLoaded });
+  const publicCatalog = buildToolCatalog({
+    tools: publicTools,
+    ...capabilityCatalogMetadata(publicCapabilities),
+    alwaysLoaded,
+  });
   let snapshot = projectSessionSnapshot(options.sessionSnapshot, projected);
 
   const persist = async (next: DeferredToolSessionSnapshot): Promise<void> => {
@@ -211,7 +215,7 @@ export function createDeferredCapabilityPlan(
   });
   const capabilities = Object.freeze([...executableCapabilities, ...metaCapabilities]);
   const allTools = capabilities.map(capabilityAsAgentTool);
-  const catalog = buildToolCatalog({ tools: allTools, alwaysLoaded });
+  const catalog = buildToolCatalog({ tools: allTools, ...capabilityCatalogMetadata(capabilities), alwaysLoaded });
   const publicToolNames = new Set(publicCatalog.map(item => item.name));
   const controller: DeferredCapabilityController = Object.freeze({
     loadedToolNames: () => getLoadedToolNamesInLoadOrder(snapshot),
@@ -365,6 +369,16 @@ export function capabilityAsAgentTool(tool: ToolCapability): AgentTool {
   });
 }
 
+function capabilityCatalogMetadata(tools: readonly ToolCapability[]) {
+  const ownerByTool = new Map<string, string>();
+  const mcpServerByTool = new Map<string, string>();
+  for (const tool of tools) {
+    ownerByTool.set(tool.name, tool.owner);
+    if (tool.mcpServer) mcpServerByTool.set(tool.name, tool.mcpServer);
+  }
+  return { ownerByTool, mcpServerByTool };
+}
+
 interface MetaCapabilityOptions {
   readonly owner: AgentCapabilities['owner'];
   readonly catalog: readonly ToolCatalogItem[];
@@ -380,7 +394,7 @@ interface MetaCapabilityOptions {
   readonly decision?: AgentDecisionRuntime;
 }
 
-/** Best discover matches whose schema is attached (and loaded) in the same result. */
+/** Maximum best discover matches auto-loaded for the next model request. */
 export const DISCOVER_SCHEMA_LIMIT = 3;
 
 function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCapability[] {
@@ -425,8 +439,8 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const rows = [...tools, ...skills];
       if (rows.length === 0) return 'No matches.';
       const listing = rows.map((item) => `- [${item.kind}] ${item.name}: ${item.brief}`).join('\n');
-      // ADR 0042 §3: the best matches are loaded and their schemas attached, so the
-      // model can call them right away instead of spending a load_tool round.
+      // ADR 0042 §3: load the best matches so the next request carries their full
+      // definitions in tools. Do not duplicate those schemas in message history.
       const loadedNow = new Set(getLoadedToolNamesInLoadOrder(options.getSnapshot()));
       const attach = tools
         .slice(0, DISCOVER_SCHEMA_LIMIT)
@@ -440,12 +454,8 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
         attach.map(entry => entry.name),
         options.maxLoaded,
       ));
-      const schemas = attach.map(entry => JSON.stringify({
-        name: entry.name,
-        description: entry.fullTool.description,
-        parameters: entry.fullTool.parameters,
-      })).join('\n');
-      return `${listing}\n\nLoaded (callable now; schemas):\n${schemas}\n__zhin_tools_mutated__`;
+      const names = attach.map(entry => entry.name).join(', ');
+      return `${listing}\n\nLoaded: ${names}. Use their tool definitions for arguments.\n__zhin_tools_mutated__`;
     }),
     metaCapability(options.owner, 'load_tool', 'Load a deferred tool schema into this session.', {
       type: 'object',
@@ -551,7 +561,11 @@ function disclosedToolCatalog(options: MetaCapabilityOptions): ToolCatalogItem[]
   const loaded = new Set(getLoadedToolNamesInLoadOrder(options.getSnapshot()));
   const privateTools = options.tools.filter(tool => tool.hidden && loaded.has(tool.name));
   return [...options.catalog,
-    ...buildToolCatalog({ tools: privateTools.map(capabilityAsAgentTool), alwaysLoaded: new Set<string>() })];
+    ...buildToolCatalog({
+      tools: privateTools.map(capabilityAsAgentTool),
+      ...capabilityCatalogMetadata(privateTools),
+      alwaysLoaded: new Set<string>(),
+    })];
 }
 
 function uniqueBestAgentSkill(

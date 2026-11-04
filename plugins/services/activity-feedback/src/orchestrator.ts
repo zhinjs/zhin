@@ -3,12 +3,14 @@ import {
   isActivityFeedbackEnabled,
   applySubagentActivityPrefixToConfig,
   withSubagentActivityPrefix,
+  activityFeedbackSource,
   type AIEventPayload,
   type ActivityFeedbackPhase,
 } from '@zhin.js/agent';
-import { ActivityFeedbackExecutor } from './executor.js';
+import type { ActivityFeedbackExecution } from './executor.js';
 import { ActivityFeedbackPolicy } from './policy.js';
 import type { Locale } from 'zhin.js/i18n';
+import { conversationRefKey } from 'zhin.js';
 
 type Logger = { debug: (msg: string, ...args: unknown[]) => void; error: (msg: string, ...args: unknown[]) => void };
 
@@ -26,7 +28,7 @@ export class ActivityFeedbackOrchestrator {
 
   constructor(
     private readonly policy: ActivityFeedbackPolicy,
-    private readonly executor: ActivityFeedbackExecutor,
+    private readonly executor: ActivityFeedbackExecution,
     private readonly log: Logger,
     private readonly defaultLocale: Locale = 'zh-CN',
   ) {}
@@ -141,13 +143,16 @@ export class ActivityFeedbackOrchestrator {
       ...pending.map((item) => this.executor.stop(item.ctx, item.phase)),
       ...this.pendingCleanup,
     ]);
+    await this.executor.dispose();
   }
 
   private phaseKey(
     ctx: NonNullable<ReturnType<typeof toActivityFeedbackEventContext>>,
     phase: ActivityFeedbackPhase,
   ): string {
-    return JSON.stringify([ctx.platform, ctx.endpointKey, ctx.sessionId, phase, ctx.messageId]);
+    const source = ctx[activityFeedbackSource];
+    return JSON.stringify([source ? conversationRefKey(source.target) : [ctx.platform, ctx.endpointKey],
+      ctx.sessionId, phase, ctx.messageId]);
   }
 
   private clearTransient(key: string): void {

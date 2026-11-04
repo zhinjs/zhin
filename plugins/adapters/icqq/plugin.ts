@@ -1,18 +1,17 @@
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import { definePlugin } from 'zhin.js';
+import { definePlugin, pluginConsoleRpcToken } from 'zhin.js';
 import { permissionHostToken, createSceneRolePlatformChecker } from '@zhin.js/permission';
 import { registerSensitiveExecCommand } from '@zhin.js/agent';
+import { createIcqqConsoleRpc } from './src/console.js';
 import { icqqSensitiveExecRule } from './src/sensitive-commands.js';
-import { icqqRuntimeStateToken } from './src/icqq-runtime-state.js';
 
 export default definePlugin({
   name: 'icqq',
+  configUpdate: { featurePaths: [['nickname'], ['profile'], ['endpoints']] },
   metadata: {
     displayName: 'ICQQ Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（icqq endpoint list 的"运行中"数据源）
-    context.resources.provide(icqqRuntimeStateToken, createEndpointRuntimeState());
+    context.resources.provide(pluginConsoleRpcToken, createIcqqConsoleRpc(() => context.config.get()));
     const disposePlatform = context.resources.has(permissionHostToken)
       ? context.resources.use(permissionHostToken).registerPlatform(
         'icqq',

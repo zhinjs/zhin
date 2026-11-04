@@ -169,7 +169,7 @@ describe('ephemeral injection', () => {
   it('never persists [Relationship] or [Session] into stored conversation history', async () => {
     const { createUserMessage, serializeAgentMessage } = await import('@zhin.js/ai');
     const { buildTurnContextBlocks } = await import('../src/context/turn-envelope.js');
-    const { prependTurnContextBlocks } = await import('../src/context/turn-user-message.js');
+    const { appendTurnContextBlocks } = await import('../src/context/turn-user-message.js');
     const actor = { scope: 'group', subjectId: 'u1', displayName: '小明', roles: ['user'] } as any;
     for (const [agentsContext, withActor] of [[undefined, false], ['workspace rules', false], [undefined, true], ['workspace rules', true]] as const) {
       const blocks = buildTurnContextBlocks({
@@ -178,7 +178,7 @@ describe('ephemeral injection', () => {
         ...(agentsContext ? { agentsContext } : {}),
       });
       const user = withActor ? { ...createUserMessage('你好'), actor } : createUserMessage('你好');
-      const [prompt] = prependTurnContextBlocks([user], blocks, {} as any);
+      const [prompt] = appendTurnContextBlocks([user], blocks, {} as any);
       expect(JSON.stringify(prompt)).toContain('[Relationship]');
       const row = serializeAgentMessage(prompt!);
       expect(row.payload).not.toContain('[Relationship]');

@@ -16,6 +16,7 @@ export type { ServiceAgent, ServiceAgentResult, CreateServiceAgentOptions } from
 export { createAgentSession } from './create-agent-session.js';
 export type { AgentSessionHandle, CreateAgentSessionOptions } from './create-agent-session.js';
 export { PluginAILoopHookRegistry } from './plugin-loop-hooks.js';
+
 export type {
   PluginBeforeToolCallHandler,
   PluginAfterToolCallHandler,
@@ -63,6 +64,7 @@ export type {
   DeliveryOutcome,
   DeliveryPort,
   FrozenCapabilityCatalog,
+  ReplyAnswerContext,
   ReplyPort,
   TurnIdentity,
   TurnAccessContext,
@@ -259,6 +261,8 @@ export {
   decisionEventFromRow,
   decisionEventToExport,
   decisionEventToRow,
+  isPromptPayloadKey,
+  isSecretLikeKey,
   redactDecisionPayload,
   speakBlockReasonCode,
   type DecisionActor,
@@ -435,19 +439,24 @@ export {
 } from './group-rules.js';
 export {
   CHANGE_CONVENTION_DIRS,
+  DEFAULT_APPROVED_CHANGE_APPLY_WINDOW_MS,
   DEFAULT_CHANGE_IDLE_TTL_MS,
   DEFAULT_CHANGE_PRUNE_INTERVAL_MS,
   DEFAULT_CHANGE_RETENTION_MS,
+  DEFAULT_MAX_PENDING_CHANGES,
   FORBIDDEN_CHANGE_CONFIG_KEYS,
   MAX_CHANGE_BYTES,
   MAX_CHANGE_FILES,
   MAX_CHANGES_TOTAL_BYTES,
+  SELF_CHANGE_SECURITY_CONFIG_KEYS,
   SELF_CHANGE_STATUSES,
   SELF_CHANGE_TERMINAL_STATUSES,
   SelfChangeConfigKeyError,
   SelfChangePathError,
   SelfChangeValidationError,
+  assertConfigPatchAllowed,
   canTransitionSelfChange,
+  findForbiddenConfigKey,
   isSelfChangeStatus,
   isSelfChangeTerminal,
   normalizeChangeConfigPatch,
@@ -505,8 +514,26 @@ export {
   type SelfChangePreview,
 } from './self-change/preview.js';
 export {
+  MAX_CARD_SKIPPED_CHECKS,
+  MAX_IM_DIFF_EXCERPT_BYTES,
+  MAX_IM_DIFF_EXCERPT_LINES,
+  buildSelfChangeDetailDiff,
+  redactSecretAssignments,
+  selfChangeDiffExcerpt,
+  skippedTrialChecks,
+  unifiedDiff as selfChangeUnifiedDiff,
+  type BuildSelfChangeDetailDiffInput,
+  type SelfChangeDetailDiff,
+  type SelfChangeDiffBaseline,
+  type SelfChangeDiffExcerpt,
+  type SelfChangeDiffExcerptLimits,
+  type SelfChangeFileDetailDiff,
+  type SelfChangeFileDiffUnavailableReason,
+} from './self-change/detail-diff.js';
+export {
   SELF_CHANGE_APPROVAL_TOOL,
   SelfChangeApprovals,
+  SelfChangePendingCapError,
   SelfChangePendingLimitError,
   approvalOrigin as selfChangeApprovalOrigin,
   selfChangeApprovalArgs,
@@ -531,6 +558,12 @@ export {
   type SelfChangeTrialOptions,
   type SelfChangeTrialResult,
 } from './self-change/trial.js';
+export {
+  SELF_CHANGE_MASTER_ROLE,
+  SelfChangeDraftForbiddenError,
+  canDraftSelfChange,
+  type SelfChangeDrafter,
+} from './self-change/drafters.js';
 export {
   AI_SESSION_EVENTS_TABLE,
   AI_SESSION_EVENT_MODEL,
@@ -785,6 +818,10 @@ export type {
 } from './ai-event-contract.js';
 export { AgentEventBus } from './event/ai-event-bus.js';
 
+export { activityFeedbackSource, bindActivityFeedbackSource } from './activity-feedback/operation-source.js';
+export type { ActivityFeedbackSource } from './activity-feedback/operation-source.js';
+export { createActivityFeedbackAdapter } from './activity-feedback/adapter-integration.js';
+export type { ActivityFeedbackIO } from './activity-feedback/adapter-integration.js';
 // ── Activity Feedback（替代 endpoint typingIndicator）──
 export {
   ActivityFeedbackManager,
@@ -793,8 +830,6 @@ export {
   toActivityFeedbackEventContext,
   resolveActivitySceneType,
   resolveActivityEventTargets,
-  enableActivityFeedbackForBot,
-  isGenericActivityFeedbackManager,
   resolveSubagentActivityTag,
   formatSubagentActivityPrefix,
   withSubagentActivityPrefix,
@@ -809,11 +844,6 @@ export type {
   ActivityFeedbackScenePhases,
   ActivityFeedbackConfig,
   ResolvedActivityFeedbackPhaseConfig,
-  EndpointWithActivityFeedback,
-  ActivityFeedbackSendPort,
-  PlatformActivityFeedbackManager,
-  PlatformActivityFeedbackStartOptions,
-  BotActivityFeedbackManager,
   ActivityFeedbackEventContext,
   ActivityFeedbackGatePhase,
 } from './activity-feedback/index.js';

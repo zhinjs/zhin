@@ -57,7 +57,7 @@ export function normalizeProviderEntry(
   return result;
 }
 
-function rejectRemovedAiConfigFields(ai: AIConfig | undefined): void {
+export function rejectRemovedAiConfigFields(ai: AIConfig | undefined): void {
   const raw = ai as Record<string, unknown> | undefined;
   if (!raw) return;
   if (raw.routes && typeof raw.routes === 'object' && Object.keys(raw.routes as object).length > 0) {

@@ -9,6 +9,7 @@
  * tools-off summary inside the same Turn (same policy, ports and history).
  */
 import type { TurnContextView } from '../context/turn-envelope.js';
+import { createHash } from 'node:crypto';
 import { classifyBashCommand } from '../security/file-policy.js';
 import { EXPLORATION_TOOLS } from './tool-calls-user-format.js';
 
@@ -141,13 +142,15 @@ export function isProgress(kind: ToolProgressKind): boolean {
 export class TurnProgressTracker {
   readonly #signatures = new Set<string>();
   readonly #settings: ToolBudgetSettings;
+  readonly #observeResults: boolean;
   #lastProgressIteration = -1;
   #failureStreak = 0;
   #repeatStreak = 0;
   #segmentProgress = 0;
 
-  constructor(settings: ToolBudgetSettings) {
+  constructor(settings: ToolBudgetSettings, observeResults = false) {
     this.#settings = settings;
+    this.#observeResults = observeResults;
   }
 
   record(iteration: number, call: ToolProgressRecord): ToolProgressKind {
@@ -184,7 +187,13 @@ export class TurnProgressTracker {
 
   #classify(call: ToolProgressRecord): ToolProgressKind {
     if (!call.ok) return 'failure';
-    const signature = `${call.toolName}:${stableStringify(call.args)}`;
+    const command = (call.args as { command?: unknown } | undefined)?.command;
+    const mutating = MUTATING_TOOLS.has(call.toolName) || MUTATING_NAME.test(call.toolName)
+      || (call.toolName === 'bash' && typeof command === 'string' && !classifyBashCommand(command).isReadOnly);
+    // A fresh read of a changing result is useful; repeated writes are still repeated side effects.
+    const resultKey = this.#observeResults && !mutating
+      ? createHash('sha256').update(call.output ?? '').digest('hex') : '';
+    const signature = `${call.toolName}:${stableStringify(call.args)}:${resultKey}`;
     if (this.#signatures.has(signature)) return 'repeat';
     this.#signatures.add(signature);
     if (call.toolName === 'spawn_task') {

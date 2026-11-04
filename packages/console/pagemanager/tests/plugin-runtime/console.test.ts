@@ -120,6 +120,32 @@ describe('Console Runtime', () => {
     });
   });
 
+  it('accepts page and layout projections created by another module instance', async () => {
+    // The runtime imports feature packages with `?zhin-generation=N`, so the PageIndex /
+    // LayoutIndex in the snapshot can be built by a second copy of the class. Simulate
+    // that by moving the projections onto foreign prototypes with the same methods.
+    const base = state();
+    const store = new SnapshotStore({
+      ...base,
+      projections: new Map([...base.projections].map(([id, value]) => [id, foreignInstance(value)])),
+    });
+    expect(store.current.projections.get(pageFeatureId)).not.toBeInstanceOf(PageIndex);
+    expect(store.current.projections.get(layoutFeatureId)).not.toBeInstanceOf(LayoutIndex);
+    const runtime = new ConsoleRuntime();
+    runtime.attach(store);
+    await runtime.runView({ permissions: [], roles: [], unrestricted: true }, (catalog) => {
+      const topology = catalog.topology();
+      expect(topology.pages.map((page) => page.localName)).toEqual(
+        expect.arrayContaining(['home', 'status', 'secret', 'overview']),
+      );
+      expect(topology.navigation.length).toBeGreaterThan(0);
+      expect(topology.resolve('/a/p-status')).toMatchObject({
+        status: 'found',
+        layouts: { nav: { module: '/a-nav.js' } },
+      });
+    });
+  });
+
   it('expires a catalog after the view lease is released', async () => {
     const store = new SnapshotStore(state());
     const runtime = new ConsoleRuntime();
@@ -226,4 +252,11 @@ function layout(owner: PluginId, slot: LayoutDefinition['slot'], module: string)
     source: `/app/pages/${slot}/index.tsx`,
     definition: Object.freeze({ slot, module, hash: `hash-${slot}` }),
   });
+}
+
+function foreignInstance(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+  const proto = Object.getPrototypeOf(value) as object;
+  const foreign = Object.create(Object.prototype, Object.getOwnPropertyDescriptors(proto)) as object;
+  return Object.setPrototypeOf(value, foreign);
 }

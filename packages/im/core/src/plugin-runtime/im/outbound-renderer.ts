@@ -23,66 +23,72 @@ import { resolveOutboundPresentation } from './outbound-presentation.js';
 const maxComponentDepth = 32;
 const TEMPLATE_MARKER = '${';
 
-export interface OutboundRenderOptions {
+/** One render operation's author, target, dependencies and shared JSX cache. */
+export interface OutboundRenderContext {
+  readonly requester: PluginId;
+  readonly snapshot: RuntimeSnapshot;
+  readonly conversation?: ConversationRef;
+  readonly incoming?: IncomingContext;
   readonly jsxCache?: WeakMap<JSXElement, Promise<unknown>>;
   readonly bindButton?: MessageRenderOptions['bindButton'];
   readonly signal?: AbortSignal;
 }
 
+/** Preview requires a concrete target but never sends or registers live buttons. */
+export interface OutboundPreviewContext extends Pick<OutboundRenderContext, 'requester' | 'snapshot' | 'signal'> {
+  readonly conversation: ConversationRef;
+}
+
+/** Shared dependencies are immutable references; only the request-local cache changes. */
+interface RenderOperation extends Pick<OutboundRenderContext, 'requester' | 'snapshot' | 'signal' | 'bindButton'> {
+  readonly host?: ComponentHost;
+  readonly template?: TemplateContext;
+  readonly jsxCache: WeakMap<JSXElement, Promise<unknown>>;
+}
+
+/** Each recursive branch owns its depth and ancestry; sibling branches share no mutable sets. */
+interface RenderTraversal {
+  readonly operation: RenderOperation;
+  readonly depth: number;
+  readonly arrayAncestors: ReadonlySet<readonly SendContent[]>;
+  readonly jsxAncestors: ReadonlySet<JSXElement>;
+}
+
 export class OutboundRenderer {
   /** Target projection only: no middleware, transport or live button registration. */
-  async preview(
-    content: SendContent,
-    requester: PluginId,
-    snapshot: RuntimeSnapshot,
-    conversation: ConversationRef,
-    options: Pick<OutboundRenderOptions, 'signal'> = {},
-  ): Promise<OutboundProjection> {
+  async preview(content: SendContent, context: OutboundPreviewContext): Promise<OutboundProjection> {
+    const { requester, snapshot, conversation, signal } = context;
     const adapters = requireAdapters(snapshot);
     const endpointId = conversation.endpoint.id as import('@zhin.js/plugin-runtime').CapabilityId;
     if (adapters.clientAdapter(endpointId) !== conversation.endpoint.adapter) throw new Error('Preview endpoint identity mismatch');
     if (!adapters.list().find(item => item.id === endpointId)?.capabilities.includes('outbound')) {
       throw new Error('Preview endpoint does not support outbound messages');
     }
-    options.signal?.throwIfAborted();
+    signal?.throwIfAborted();
     const presentation = resolveOutboundPresentation(snapshot, conversation, requester);
     const buttons = new JsxButtonRegistry().prepare({ content, requester, conversation }, snapshot);
-    const rendered = await this.render(content, requester, snapshot, conversation, undefined, { ...options, bindButton: buttons.bind });
-    const result = await projectOutboundPayload(rendered, conversation, snapshot, { ...options, presentation });
-    options.signal?.throwIfAborted();
+    const rendered = await this.render(content, { requester, snapshot, conversation, signal, bindButton: buttons.bind });
+    const result = await projectOutboundPayload(rendered, conversation, snapshot, { signal, presentation });
+    signal?.throwIfAborted();
     return result;
   }
 
-  async render(
-    content: SendContent,
-    requester: PluginId,
-    snapshot: RuntimeSnapshot,
-    conversation?: ConversationRef,
-    incoming?: IncomingContext,
-    options: OutboundRenderOptions = {},
-  ): Promise<unknown> {
-    options.signal?.throwIfAborted();
+  async render(content: SendContent, context: OutboundRenderContext): Promise<unknown> {
+    const { requester, snapshot, conversation, incoming, signal, bindButton } = context;
+    signal?.throwIfAborted();
     const host = resolveComponentHost(snapshot);
     const ctx = conversation ? buildTemplateContext(conversation, incoming) : undefined;
-    const rendered = await this.#render(content, requester, snapshot, host, ctx, 0,
-      options.jsxCache ?? new WeakMap(), options.signal, new Set(), options.bindButton);
-    options.signal?.throwIfAborted();
+    const operation: RenderOperation = { requester, snapshot, host, template: ctx,
+      jsxCache: context.jsxCache ?? new WeakMap(), signal, bindButton };
+    const rendered = await this.#render(content, { operation, depth: 0,
+      arrayAncestors: new Set(), jsxAncestors: new Set() });
+    signal?.throwIfAborted();
     return rendered;
   }
 
-  async #render(
-    content: SendContent,
-    requester: PluginId,
-    snapshot: RuntimeSnapshot,
-    host: ComponentHost | undefined,
-    ctx: TemplateContext | undefined,
-    depth: number,
-    jsxCache: WeakMap<JSXElement, Promise<unknown>>,
-    signal: AbortSignal | undefined,
-    arrayAncestors: ReadonlySet<readonly SendContent[]>,
-    bindButton: MessageRenderOptions['bindButton'],
-    jsxAncestors: ReadonlySet<JSXElement> = new Set(),
-  ): Promise<unknown> {
+  async #render(content: SendContent, traversal: RenderTraversal): Promise<unknown> {
+    const { operation, depth, arrayAncestors, jsxAncestors } = traversal;
+    const { requester, snapshot, host, template: ctx, jsxCache, signal, bindButton } = operation;
     signal?.throwIfAborted();
     if (depth > maxComponentDepth) throw new Error('Component render depth exceeded 32');
     if (typeof content === 'string') return compileText(content, host, ctx);
@@ -91,7 +97,7 @@ export class OutboundRenderer {
       if (arrayAncestors.size >= MAX_OUTBOUND_ARRAY_DEPTH) throw new RangeError('SendContent array depth exceeded 512');
       // Each parallel branch gets its own ancestry; repeated sibling arrays are valid.
       const ancestors = new Set(arrayAncestors).add(content);
-      const items = await Promise.all(content.map((item) => this.#render(item, requester, snapshot, host, ctx, depth, jsxCache, signal, ancestors, bindButton, jsxAncestors)));
+      const items = await Promise.all(content.map((item) => this.#render(item, { ...traversal, arrayAncestors: ancestors })));
       signal?.throwIfAborted();
       return flattenOutboundArray(items);
     }
@@ -109,8 +115,7 @@ export class OutboundRenderer {
           if (rendered == null) return [];
           // Resolve every SendContent shape with the same depth and ancestry
           // guards as ComponentCall. Root raw payloads remain opaque.
-          return this.#render(rendered as SendContent, requester, snapshot, host, ctx, depth + 1,
-            jsxCache, signal, arrayAncestors, bindButton, ancestors);
+          return this.#render(rendered as SendContent, { ...traversal, depth: depth + 1, jsxAncestors: ancestors });
         };
         segments = typeof content.type === 'string' && !isNativeMessageTag(content.type)
           ? renderNamedComponent(content.type, content.props)
@@ -141,7 +146,7 @@ export class OutboundRenderer {
         { snapshot, ...(signal ? { signal } : {}) },
       );
       if (rendered == null) return [];
-      return this.#render(rendered, requester, snapshot, host, ctx, depth + 1, jsxCache, signal, arrayAncestors, bindButton, jsxAncestors);
+      return this.#render(rendered, { ...traversal, depth: depth + 1 });
     }
     throw new TypeError('Unsupported SendContent');
   }

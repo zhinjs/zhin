@@ -15,6 +15,8 @@ export interface InMemoryGameModel {
 
 export interface InMemoryGameDb {
   models: { get: (name: string) => InMemoryGameModel | undefined };
+  /** Callback models belong to this atomic unit and cannot be retained after it ends. */
+  transaction<T>(operation: (database: InMemoryGameDb) => Promise<T>): Promise<T>;
 }
 
 function createMemoryModel(): InMemoryGameModel {
@@ -61,14 +63,50 @@ function createMemoryModel(): InMemoryGameModel {
 
 /** Create an in-memory db with the given model table names. */
 export function createInMemoryGameDb(tableNames: readonly string[]): InMemoryGameDb {
-  const models = new Map<string, InMemoryGameModel>();
-  for (const name of tableNames) {
-    models.set(name, createMemoryModel());
-  }
+  const models = new Map(tableNames.map(name => [name, { model: createMemoryModel() }]));
+  let tail: Promise<unknown> = Promise.resolve();
+  const serialize = <T>(run: () => Promise<T>): Promise<T> => {
+    const work = tail.then(run, run); tail = work.catch(() => undefined); return work;
+  };
+  const views = new Map<string, InMemoryGameModel>();
+  for (const [name, slot] of models) views.set(name, {
+    findAll: query => serialize(() => slot.model.findAll(query)),
+    findOne: query => serialize(() => slot.model.findOne(query)),
+    create: row => serialize(() => slot.model.create(row)),
+    updateWhere: (where, patch) => serialize(() => slot.model.updateWhere(where, patch)),
+    deleteWhere: where => serialize(() => slot.model.deleteWhere(where)),
+  });
   return {
-    models: {
-      get: (name: string) => models.get(name),
-    },
+    models: { get: name => views.get(name) },
+    transaction: operation => serialize(async () => {
+      const candidate = new Map<string, InMemoryGameModel>();
+      const commits: Array<{ slot: { model: InMemoryGameModel }; model: InMemoryGameModel }> = [];
+      for (const [name, slot] of models) {
+        const copy = createMemoryModel();
+        for (const row of await slot.model.findAll()) await copy.create(row);
+        candidate.set(name, copy); commits.push({ slot, model: copy });
+      }
+      let active = true;
+      const assertActive = () => { if (!active) throw new Error('Game transaction has ended'); };
+      const scoped: InMemoryGameDb = {
+        models: { get(name) {
+          assertActive(); const model = candidate.get(name); if (!model) return undefined;
+          return {
+            findAll: query => { assertActive(); return model.findAll(query); },
+            findOne: query => { assertActive(); return model.findOne(query); },
+            create: row => { assertActive(); return model.create(row); },
+            updateWhere: (where, patch) => { assertActive(); return model.updateWhere(where, patch); },
+            deleteWhere: where => { assertActive(); return model.deleteWhere(where); },
+          };
+        } },
+        async transaction() { throw new Error('Nested game transactions are not supported'); },
+      };
+      try {
+        const result = await operation(scoped);
+        for (const commit of commits) commit.slot.model = commit.model;
+        return result;
+      } finally { active = false; }
+    }),
   };
 }
 
@@ -99,6 +137,7 @@ export interface HostGameModelSource {
 
 export interface HostGameDbSource {
   models: { get(name: string): HostGameModelSource | undefined };
+  transaction?<T>(operation: (transaction: { model(name: string): HostGameModelSource }) => Promise<T>): Promise<T>;
 }
 
 function wrapHostModel(model: HostGameModelSource): InMemoryGameModel {
@@ -141,6 +180,10 @@ export function createHostGameDb(
         if (!tableNames.includes(name)) return undefined;
         return createDeferredHostModel(host, name);
       },
+    },
+    async transaction(operation) {
+      if (!host.transaction) throw new Error('The configured game Database Host does not support atomic transactions');
+      return host.transaction(transaction => operation(createHostGameDb({ models: { get: name => transaction.model(name) } }, tableNames)));
     },
   };
 }

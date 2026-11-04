@@ -10,6 +10,8 @@
  */
 
 import { spawn } from 'node:child_process';
+import { createEndpointOperation } from 'zhin.js/adapter';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 
@@ -35,6 +37,7 @@ export interface GitHubCommitAuthor {
 }
 
 export interface GhClientOptions {
+  readonly signal?: AbortSignal;
   /** GitHub Enterprise 主机名（默认 github.com） */
   host?: string;
   /** 覆盖 gh CLI 默认认证的 Personal Access Token / OAuth Token */
@@ -43,8 +46,27 @@ export interface GhClientOptions {
   appAuth?: AppAuth;
 }
 
+/** Per-request cancellation is independent of this account's execution lifetime. */
+export interface GhRequestLifetime { readonly signal?: AbortSignal }
+/** An API action and its transport inputs, retained together through authentication and subprocess IO. */
+export interface GhApiRequest extends GhRequestLifetime {
+  readonly method: string;
+  readonly path: string;
+  readonly body?: unknown;
+  readonly headers?: Readonly<Record<string, string>>;
+}
+/** One comment publication, shared by issue and PR conversation sends. */
+export interface GhCommentRequest extends GhRequestLifetime {
+  readonly repo: string;
+  readonly number: number;
+  readonly body: string;
+}
+interface GhCommandRequest extends GhRequestLifetime { readonly args: readonly string[]; readonly stdin?: string; readonly token?: string }
+
 export class GhClient {
-  private host?: string;
+  protected apiHost?: string;
+  protected executionSignal?: AbortSignal;
+  protected bindExecutionSignal(signal: AbortSignal): void { this.executionSignal = signal; }
   private token?: string;
   private _appAuth?: AppAuth;
   private _resolvedKey?: string;
@@ -59,27 +81,34 @@ export class GhClient {
   private _lastSyncTime = 0;
 
   constructor(options: GhClientOptions = {}) {
-    this.host = options.host;
+    this.apiHost = options.host;
+    this.executionSignal = options.signal;
     this.token = options.token;
     this._appAuth = options.appAuth;
   }
 
+  protected fetchNative(input: string, init?: RequestInit): Promise<Response> {
+    this.executionSignal?.throwIfAborted(); init?.signal?.throwIfAborted();
+    return fetch(input, { ...init, ...(this.executionSignal ? { signal: init?.signal ? AbortSignal.any([this.executionSignal, init.signal]) : this.executionSignal } : {}) });
+  }
+
   /** 创建使用指定 token 的副本（共享 host 配置，不继承 App 认证） */
   withToken(token: string): GhClient {
-    return new GhClient({ host: this.host, token });
+    return new GhClient({ host: this.apiHost, token, signal: this.executionSignal });
   }
 
   get authenticatedUser() { return this._user; }
 
   // ── 底层执行 ──────────────────────────────────────────────────────
 
-  private exec(args: string[], stdin?: string): Promise<string> {
-    const fullArgs = this.host ? [...args, '--hostname', this.host] : args;
-    const env = this.token
-      ? { ...process.env, GH_TOKEN: this.token }
+  private exec({ args, stdin, token, signal = this.executionSignal }: GhCommandRequest): Promise<string> {
+    signal?.throwIfAborted();
+    const fullArgs = this.apiHost ? [...args, '--hostname', this.apiHost] : args;
+    const env = token
+      ? { ...process.env, GH_TOKEN: token }
       : undefined;
     return new Promise((resolve, reject) => {
-      const proc = spawn('gh', fullArgs, { stdio: ['pipe', 'pipe', 'pipe'], env });
+      const proc = spawn('gh', fullArgs, { stdio: ['pipe', 'pipe', 'pipe'], env, signal });
       let stdout = '';
       let stderr = '';
       proc.stdout.on('data', (d: Buffer) => (stdout += d.toString()));
@@ -110,8 +139,8 @@ export class GhClient {
    * 确保 App 认证的 Installation Token 有效（自动按 repo 查找对应安装）
    * @param repo 仓库全名（owner/repo），用于选择正确的 Installation
    */
-  private async ensureTokenForRepo(repo?: string): Promise<void> {
-    if (!this._appAuth) return;
+  private async ensureTokenForRepo(repo?: string, signal?: AbortSignal): Promise<string | undefined> {
+    if (!this._appAuth) return this.token;
     let installId: number | undefined;
     if (repo) {
       const key = repo.toLowerCase();
@@ -128,7 +157,7 @@ export class GhClient {
       }
       // 懒加载重新发现（5 分钟冷却）
       if (!installId && Date.now() - this._lastSyncTime > 5 * 60_000) {
-        await this.syncInstallations();
+        await this.syncInstallations({ signal });
         installId = this._repoToInstallation.get(key);
         if (!installId) {
           const owner = key.split('/')[0];
@@ -145,24 +174,21 @@ export class GhClient {
     if (!installId && this._allInstallations.length) {
       installId = this._allInstallations[0].id;
     }
-    if (!installId) return;
+    if (!installId) return this.token;
     const cached = this._installationTokens.get(installId);
     if (cached && cached.expiresAt > Date.now() + 60_000) {
-      this.token = cached.token;
-      return;
+      return cached.token;
     }
-    await this.refreshInstallationToken(installId);
+    await this.refreshInstallationToken(installId, { signal });
+    return this._installationTokens.get(installId)?.token;
   }
 
-  async request<T = any>(
-    method: string,
-    path: string,
-    body?: any,
-    headers?: Record<string, string>,
-  ): Promise<{ ok: boolean; status: number; data: T }> {
+  async request<T = any>({ method, path, body, headers, signal }: GhApiRequest): Promise<{ ok: boolean; status: number; data: T }> {
+    const operationSignal = this.executionSignal && signal ? AbortSignal.any([this.executionSignal, signal]) : this.executionSignal ?? signal;
+    const operation = createEndpointOperation({ signal: operationSignal });
     // 从路径自动检测 repo 以选择正确的 Installation Token
     const repoMatch = path.match(/^\/repos\/([^/?]+\/[^/?]+)/);
-    await this.ensureTokenForRepo(repoMatch?.[1]);
+    const token = await operation.prepare(() => this.ensureTokenForRepo(repoMatch?.[1], operationSignal));
     const args = ['api', path, '--method', method];
     if (body) args.push('--input', '-');
     if (headers) {
@@ -171,11 +197,13 @@ export class GhClient {
       }
     }
     try {
-      const raw = await this.exec(args, body ? JSON.stringify(body) : undefined);
+      const execute = () => this.exec({ args, stdin: body ? JSON.stringify(body) : undefined, token, signal: operationSignal });
+      const raw = await operation.run(execute);
       let data: any;
       try { data = raw ? JSON.parse(raw) : null; } catch { data = raw; }
       return { ok: true, status: 200, data };
     } catch (err: unknown) {
+      if (err instanceof EndpointDeliveryError) throw err;
       let data: any;
       const errObj = err instanceof Error ? err : new Error(String(err));
       try { data = (err as any).stdout ? JSON.parse((err as any).stdout) : { message: errObj.message }; } catch {
@@ -185,11 +213,11 @@ export class GhClient {
     }
   }
 
-  private get<T = any>(path: string) { return this.request<T>('GET', path); }
-  private post<T = any>(path: string, body?: any) { return this.request<T>('POST', path, body); }
-  private patch<T = any>(path: string, body?: any) { return this.request<T>('PATCH', path, body); }
-  private put<T = any>(path: string, body?: any) { return this.request<T>('PUT', path, body); }
-  private del<T = any>(path: string, body?: any) { return this.request<T>('DELETE', path, body); }
+  private get<T = any>(path: string) { return this.request<T>({ method: 'GET', path }); }
+  private post<T = any>(path: string, body?: any) { return this.request<T>({ method: 'POST', path, body }); }
+  private patch<T = any>(path: string, body?: any) { return this.request<T>({ method: 'PATCH', path, body }); }
+  private put<T = any>(path: string, body?: any) { return this.request<T>({ method: 'PUT', path, body }); }
+  private del<T = any>(path: string, body?: any) { return this.request<T>({ method: 'DELETE', path, body }); }
 
   // ── 认证验证 ──────────────────────────────────────────────────────
 
@@ -204,8 +232,8 @@ export class GhClient {
         // 用 JWT 查询 App 信息（/app 端点只接受 JWT 认证，不能用 Installation Token）
         const key = this.resolvePrivateKey();
         const jwt = GhClient.createJWT(this._appAuth.appId, key);
-        const baseUrl = this.host ? `https://${this.host}/api/v3` : 'https://api.github.com';
-        const appRes = await fetch(`${baseUrl}/app`, {
+        const baseUrl = this.apiHost ? `https://${this.apiHost}/api/v3` : 'https://api.github.com';
+        const appRes = await this.fetchNative(`${baseUrl}/app`, {
           headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/vnd.github+json' },
         });
         if (appRes.ok) {
@@ -235,8 +263,8 @@ export class GhClient {
         }
         return { ok: false, user: '', message: 'Token 无效' };
       }
-      await this.exec(['auth', 'status']);
-      const raw = await this.exec(['api', '/user', '--jq', '.login']);
+      await this.exec({ args: ['auth', 'status'], token: this.token });
+      const raw = await this.exec({ args: ['api', '/user', '--jq', '.login'], token: this.token });
       const login = raw.trim();
       this._user = login;
       return { ok: true, user: login, message: `gh CLI: ${login}` };
@@ -308,19 +336,18 @@ export class GhClient {
     return this.patch(`/repos/${repo}/pulls/${number}`, { state: 'closed' });
   }
 
-  async createIssueComment(repo: string, issueNumber: number, body: string) {
-    return this.post<{ id: number; html_url: string; message?: string }>(
-      `/repos/${repo}/issues/${issueNumber}/comments`,
-      { body },
-    );
+  async createIssueComment({ repo, number, body, signal }: GhCommentRequest) {
+    return this.request<{ id: number; html_url: string; message?: string }>({
+      method: 'POST', path: `/repos/${repo}/issues/${number}/comments`, body: { body }, signal,
+    });
   }
 
   async deleteIssueComment(repo: string, commentId: number) {
     return this.del(`/repos/${repo}/issues/comments/${commentId}`);
   }
 
-  async createPRComment(repo: string, prNumber: number, body: string) {
-    return this.createIssueComment(repo, prNumber, body);
+  async createPRComment(request: GhCommentRequest) {
+    return this.createIssueComment(request);
   }
 
   async deletePRReviewComment(repo: string, commentId: number) {
@@ -409,7 +436,7 @@ export class GhClient {
   }
 
   buildCloneUrl(repo: string, token: string): string {
-    const host = this.host || 'github.com';
+    const host = this.apiHost || 'github.com';
     return `https://x-access-token:${encodeURIComponent(token)}@${host}/${repo}.git`;
   }
 
@@ -418,9 +445,9 @@ export class GhClient {
     const slug = this._appSlug;
     if (!slug) return null;
     const login = `${slug}[bot]`;
-    const baseUrl = this.host ? `https://${this.host}/api/v3` : 'https://api.github.com';
+    const baseUrl = this.apiHost ? `https://${this.apiHost}/api/v3` : 'https://api.github.com';
     try {
-      const res = await fetch(`${baseUrl}/users/${encodeURIComponent(login)}`, {
+      const res = await this.fetchNative(`${baseUrl}/users/${encodeURIComponent(login)}`, {
         headers: { Accept: 'application/vnd.github+json' },
       });
       if (!res.ok) return null;
@@ -446,7 +473,7 @@ export class GhClient {
   }
 
   async isStarred(repo: string): Promise<boolean> {
-    const r = await this.request('GET', `/user/starred/${repo}`);
+    const r = await this.request({ method: 'GET', path: `/user/starred/${repo}` });
     return r.ok;
   }
 
@@ -487,17 +514,18 @@ export class GhClient {
   }
 
   /** 使用 JWT 获取指定 Installation 的 Access Token（有效期 1 小时） */
-  async refreshInstallationToken(installationId: number): Promise<void> {
+  async refreshInstallationToken(installationId: number, { signal }: GhRequestLifetime = {}): Promise<void> {
+    signal?.throwIfAborted();
     if (!this._appAuth) throw new Error('未配置 App 认证');
     const key = this.resolvePrivateKey();
     const jwt = GhClient.createJWT(this._appAuth.appId, key);
-    const baseUrl = this.host
-      ? `https://${this.host}/api/v3`
+    const baseUrl = this.apiHost
+      ? `https://${this.apiHost}/api/v3`
       : 'https://api.github.com';
-    const res = await fetch(
+    const res = await this.fetchNative(
       `${baseUrl}/app/installations/${installationId}/access_tokens`,
       {
-        method: 'POST',
+        method: 'POST', signal,
         headers: {
           Authorization: `Bearer ${jwt}`,
           Accept: 'application/vnd.github+json',
@@ -509,6 +537,7 @@ export class GhClient {
       throw new Error(`Installation Token 获取失败 (${res.status}): ${body}`);
     }
     const data = (await res.json()) as { token: string; expires_at: string };
+    signal?.throwIfAborted();
     this.token = data.token;
     this._installationTokens.set(installationId, {
       token: data.token,
@@ -517,13 +546,14 @@ export class GhClient {
   }
 
   /** 发现所有 App 安装及其可访问的仓库 */
-  async syncInstallations(): Promise<void> {
+  async syncInstallations({ signal }: GhRequestLifetime = {}): Promise<void> {
+    signal?.throwIfAborted();
     if (!this._appAuth) return;
     const key = this.resolvePrivateKey();
     const jwt = GhClient.createJWT(this._appAuth.appId, key);
-    const baseUrl = this.host ? `https://${this.host}/api/v3` : 'https://api.github.com';
-    const listRes = await fetch(`${baseUrl}/app/installations`, {
-      headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/vnd.github+json' },
+    const baseUrl = this.apiHost ? `https://${this.apiHost}/api/v3` : 'https://api.github.com';
+    const listRes = await this.fetchNative(`${baseUrl}/app/installations`, {
+      headers: { Authorization: `Bearer ${jwt}`, Accept: 'application/vnd.github+json' }, signal,
     });
     if (!listRes.ok) {
       const errBody = await listRes.text();
@@ -532,23 +562,26 @@ export class GhClient {
     const installations = (await listRes.json()) as Array<{
       id: number; account: { login: string; type: string }; target_type: string;
     }>;
+    signal?.throwIfAborted();
     this._allInstallations = installations;
     this._repoToInstallation.clear();
     for (const inst of installations) {
       try {
-        await this.refreshInstallationToken(inst.id);
+        await this.refreshInstallationToken(inst.id, { signal });
         const cached = this._installationTokens.get(inst.id);
         if (!cached) continue;
-        const repoRes = await fetch(`${baseUrl}/installation/repositories?per_page=100`, {
-          headers: { Authorization: `Bearer ${cached.token}`, Accept: 'application/vnd.github+json' },
+        const repoRes = await this.fetchNative(`${baseUrl}/installation/repositories?per_page=100`, {
+          headers: { Authorization: `Bearer ${cached.token}`, Accept: 'application/vnd.github+json' }, signal,
         });
         if (repoRes.ok) {
           const data = (await repoRes.json()) as { repositories: Array<{ full_name: string }> };
+          signal?.throwIfAborted();
           for (const repo of data.repositories) {
             this._repoToInstallation.set(repo.full_name.toLowerCase(), inst.id);
           }
         }
       } catch {
+        signal?.throwIfAborted(); this.executionSignal?.throwIfAborted();
         // 单个安装失败不影响其他
       }
     }
@@ -588,11 +621,11 @@ export class GhClient {
     repo: string,
     etag?: string,
   ): Promise<{ events: any[]; etag: string | null }> {
-    await this.ensureTokenForRepo(repo);
+    const token = await this.ensureTokenForRepo(repo);
     const args = ['api', `/repos/${repo}/events?per_page=30`, '--method', 'GET', '--include'];
     if (etag) args.push('-H', `If-None-Match: ${etag}`);
     try {
-      const raw = await this.exec(args);
+      const raw = await this.exec({ args, token });
       // --include 输出包含 HTTP 头 + 空行 + body
       const sepIdx = raw.indexOf('\r\n\r\n');
       const headerPart = sepIdx >= 0 ? raw.slice(0, sepIdx) : '';

@@ -34,8 +34,7 @@ describe('OwnerApprovalRuntime commands', () => {
   function ownerContext(subjectId = '1659488338') {
     return {
       commandPrefix: '/',
-      platform: 'icqq',
-      endpoint: '8596238',
+      endpoint: { adapter: 'icqq', id: '8596238' },
       ownerId: '1659488338',
       subjectId,
       scope: 'private' as const,
@@ -53,8 +52,7 @@ describe('OwnerApprovalRuntime commands', () => {
       extra: { endpointMaster: '1659488338' },
     });
     expect(ownerApprovalAddressFromMessage(message)).toEqual({
-      platform: 'icqq',
-      endpoint: '8596238',
+      endpoint: { adapter: 'icqq', id: '8596238' },
       ownerId: '1659488338',
     });
   });
@@ -109,7 +107,7 @@ it('uses the operation prefix and language without changing owner-only private a
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-approval-locale-'));
   try {
     const runtime = new OwnerApprovalRuntime(workspace);
-    const context = { platform: 'fixture', endpoint: 'bot', ownerId: 'owner', subjectId: 'owner',
+    const context = { endpoint: { adapter: 'fixture', id: 'bot' }, ownerId: 'owner', subjectId: 'owner',
       scope: 'private' as const, locale: 'en' as const, commandPrefix: '!' };
     expect(runtime.handleCommand(context, '!approve')).toContain('!approve always bash');
     expect(runtime.handleCommand(context, '/approve always bash')).toBeNull();

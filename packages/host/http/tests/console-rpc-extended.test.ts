@@ -828,7 +828,7 @@ describe('dispatchExtendedConsoleRpc', () => {
           ctx,
         ),
       ).resolves.toEqual({ data: { success: true } });
-      expect(approveRequest).toHaveBeenCalledWith('req-1', '欢迎');
+      expect(approveRequest).toHaveBeenCalledWith({ requestId: 'req-1', remark: '欢迎' });
       expect(requestRows[0]).toMatchObject({resolved: 1, resolved_at: expect.any(Number)});
 
       await expect(
@@ -838,7 +838,7 @@ describe('dispatchExtendedConsoleRpc', () => {
           ctx,
         ),
       ).resolves.toEqual({ data: { success: true } });
-      expect(rejectRequest).toHaveBeenCalledWith('req-2', 'spam');
+      expect(rejectRequest).toHaveBeenCalledWith({ requestId: 'req-2', reason: 'spam' });
       expect(requestRows[1]).toMatchObject({resolved: 1, resolved_at: expect.any(Number)});
     });
 
@@ -977,7 +977,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(result).toEqual({
         data: { members: [{ user_id: 1 }, { user_id: 2 }], count: 2 },
       });
-      expect(getGroupMemberList).toHaveBeenCalledWith('888');
+      expect(getGroupMemberList).toHaveBeenCalledWith({ groupId: '888' });
     });
 
     it('social reads are allowed in demo scope', async () => {
@@ -1027,42 +1027,42 @@ describe('dispatchExtendedConsoleRpc', () => {
       type: string;
       data: Record<string, unknown>;
       method: string;
-      expectedArgs: unknown[];
+      expectedRequest: Record<string, unknown>;
       unsupported: string;
     }> = [
       {
         type: 'endpoint.group_kick',
         data: { adapter: 'icqq', endpointKey: '1', groupId: '888', userId: '10001' },
         method: 'kickGroupMember',
-        expectedArgs: ['888', '10001'],
+        expectedRequest: { groupId: '888', userId: '10001' },
         unsupported: '当前适配器（icqq）不支持踢出群成员',
       },
       {
         type: 'endpoint.group_mute',
         data: { adapter: 'icqq', endpointKey: '1', groupId: '888', userId: '10001' },
         method: 'muteGroupMember',
-        expectedArgs: ['888', '10001', 600],
+        expectedRequest: { groupId: '888', userId: '10001', durationSeconds: 600 },
         unsupported: '当前适配器（icqq）不支持禁言群成员',
       },
       {
         type: 'endpoint.group_mute',
         data: { adapter: 'icqq', endpointKey: '1', groupId: '888', userId: '10001', duration: 3600 },
         method: 'muteGroupMember',
-        expectedArgs: ['888', '10001', 3600],
+        expectedRequest: { groupId: '888', userId: '10001', durationSeconds: 3600 },
         unsupported: '当前适配器（icqq）不支持禁言群成员',
       },
       {
         type: 'endpoint.group_admin',
         data: { adapter: 'icqq', endpointKey: '1', groupId: '888', userId: '10001', enable: false },
         method: 'setGroupAdmin',
-        expectedArgs: ['888', '10001', false],
+        expectedRequest: { groupId: '888', userId: '10001', enabled: false },
         unsupported: '当前适配器（icqq）不支持设置群管理员',
       },
       {
         type: 'endpoint.delete_friend',
         data: { adapter: 'icqq', endpointKey: '1', userId: '10001' },
         method: 'deleteFriend',
-        expectedArgs: ['10001'],
+        expectedRequest: { userId: '10001' },
         unsupported: '当前适配器暂不支持删除好友',
       },
     ];
@@ -1074,7 +1074,7 @@ describe('dispatchExtendedConsoleRpc', () => {
         await expect(
           dispatchExtendedConsoleRpc(c.type, c.data, ctx),
         ).resolves.toEqual({ data: { success: true } });
-        expect(fn).toHaveBeenCalledWith(...c.expectedArgs);
+        expect(fn).toHaveBeenCalledWith(c.expectedRequest);
       }
     });
 
@@ -1125,4 +1125,20 @@ describe('dispatchExtendedConsoleRpc', () => {
       ).resolves.toEqual({ error: 'adapter, endpointKey, and userId are required' });
     });
   });
+});
+
+it('round-trips exact login incarnation metadata and rejects a stale target without consuming the real challenge', async () => {
+  const { LoginAssist } = await import('../../../im/core/src/built/login-assist.js');
+  const assist = new LoginAssist();
+  const identity = { canonicalId: 'canonical', instanceId: 'instance', epoch: 1, incarnationId: 'execution-one' };
+  const waiting = assist.waitForInput('icqq', 'display', 'slider', {}, { owner: {}, endpointIdentity: identity });
+  try {
+    const task = assist.listPending()[0]!;
+    const ctx = makeCtx({ loginAssist: assist });
+    await expect(dispatchExtendedConsoleRpc('login.list', {}, ctx)).resolves.toMatchObject({ data: { tasks: [{ endpointIdentity: identity }] } });
+    await expect(dispatchExtendedConsoleRpc('login.submit', { taskId: task.id, value: 'ticket', endpointIdentity: { ...identity, epoch: 2, incarnationId: 'execution-two' } }, ctx)).resolves.toHaveProperty('error');
+    expect(assist.listPending()).toHaveLength(1);
+    await expect(dispatchExtendedConsoleRpc('login.submit', { taskId: task.id, value: 'ticket', endpointIdentity: identity }, ctx)).resolves.toEqual({ data: { success: true } });
+    await expect(waiting).resolves.toBe('ticket');
+  } finally { assist.dispose(); await waiting.catch(() => undefined); }
 });

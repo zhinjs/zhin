@@ -1,3 +1,4 @@
+import { bindActivityFeedbackSource } from '../activity-feedback/operation-source.js';
 import type { Message } from '@zhin.js/core';
 import { getActivityFeedbackEligible } from '../internal/turn-context.js';
 import type { AIEventName, AIEventPayload } from '../ai-event-contract.js';
@@ -17,7 +18,7 @@ export class ZhinAgentEventEmitter {
       ...(extraHookContext && typeof extraHookContext === 'object' ? extraHookContext : {}),
     };
     if (getActivityFeedbackEligible()) hookContext.activityFeedbackEligible = true;
-    return {
+    return bindActivityFeedbackSource({
       sessionId,
       source,
       mode,
@@ -30,7 +31,7 @@ export class ZhinAgentEventEmitter {
       ...(Object.keys(hookContext).length > 0 ? { hookContext } : {}),
       ...rest,
       locale: commMessage.locale,
-    };
+    }, commMessage);
   }
 
   async dispatch(

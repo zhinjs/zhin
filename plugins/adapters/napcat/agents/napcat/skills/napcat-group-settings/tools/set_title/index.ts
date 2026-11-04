@@ -16,7 +16,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
   scopes: ['group'],
   async execute({ group_id, user_id, title }: { group_id: number; user_id: number; title: string }, context) {
     const endpoint = context.$client;
-      await endpoint.setTitle(group_id, user_id, title);
+      await endpoint.setTitle({ groupId: group_id, userId: user_id, title });
       return { success: true, message: t(context.locale, 'memberTitleSet', { p0: user_id, p1: title }) };
   },
 });

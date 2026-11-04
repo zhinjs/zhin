@@ -186,7 +186,7 @@ function omitMediaText(value: string): string {
   } catch { return text; }
 }
 
-function omitInlineMedia(value: string): string {
+export function omitInlineMedia(value: string): string {
   const markers = /data:|base64:\/\//gi;
   const headerBoundary = /[\s,]/g;
   const payload = /[A-Za-z0-9+/_=-]+/y;

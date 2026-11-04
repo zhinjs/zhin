@@ -39,7 +39,7 @@ describe('eval:budget measurement (ADR 0042 §8)', () => {
 });
 
 describe('spin hint trace event (ADR 0042 §7)', () => {
-  it('records spin_hint and last_iteration_nudge on the turn timeline', async () => {
+  it('records spin hints without a false last-iteration nudge in continuous interactive turns', async () => {
     const run = await runEvalCase(defineEvalCase({
       id: 'spin-trace',
       description: 'spin trace',
@@ -56,6 +56,6 @@ describe('spin hint trace event (ADR 0042 §7)', () => {
     const timeline = run.traces[0]!.timeline;
     expect(timeline.filter((entry) => entry.kind === 'spin_hint')).toHaveLength(1);
     expect(timeline.find((entry) => entry.kind === 'spin_hint')?.detail).toBe('lookup x3: identical_results');
-    expect(timeline.filter((entry) => entry.kind === 'last_iteration_nudge').map((entry) => entry.detail)).toEqual(['5/6']);
+    expect(timeline.filter((entry) => entry.kind === 'last_iteration_nudge').map((entry) => entry.detail)).toEqual([]);
   });
 });

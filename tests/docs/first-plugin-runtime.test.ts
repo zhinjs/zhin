@@ -109,7 +109,7 @@ async function dispatch(config, expected, owner, expectedFailure) {
     const snapshot = await runtime.start();
     const commands = snapshot.projections.get('zhin.command');
     assert.ok(commands, 'Root must inherit the Command Feature');
-    const result = await commands.dispatch('ping');
+    const result = await commands.dispatch({ input: 'ping' });
     if (expected === undefined) {
       assert.deepEqual(commands.list(), [], 'a child without a Feature must not publish commands');
       assert.equal(result.matched, false);

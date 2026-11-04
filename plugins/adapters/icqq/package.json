@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-icqq",
-  "version": "1.1.16",
+  "version": "1.1.21",
   "description": "Zhin.js ICQQ adapter — direct connection to @icqqjs/icqq",
   "type": "module",
   "main": "./lib/index.js",
@@ -47,10 +47,13 @@
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"
@@ -93,6 +96,7 @@
   "files": [
     "adapters",
     "commands",
+    "pages",
     "plugin.js",
     "schema.json",
     "src",
@@ -125,7 +129,7 @@
     "features": [
       {
         "package": "@zhin.js/adapter",
-        "api": "^1.0.0"
+        "api": "^2.1.0"
       },
       {
         "package": "@zhin.js/command",
@@ -133,7 +137,7 @@
       },
       {
         "package": "@zhin.js/tool",
-        "api": "^1.0.0"
+        "api": "^1.1.0"
       },
       {
         "package": "@zhin.js/skill",
@@ -141,6 +145,10 @@
       },
       {
         "package": "@zhin.js/agent-feature",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

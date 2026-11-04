@@ -71,7 +71,7 @@ describe('AssistantEventIngress', () => {
     expect(result.ok).toBe(true);
     expect(result.status).toBe('queued');
     expect(result.jobId).toMatch(/^event_/);
-    expect(engine.runJobNow).toHaveBeenCalledWith(result.jobId);
+    expect(engine.runJobNow).toHaveBeenCalledWith(result.jobId, { source: 'event' });
 
     const job = await store.getJob(result.jobId!);
     expect(job?.schedule.kind).toBe('event');
@@ -112,7 +112,7 @@ describe('AssistantEventIngress', () => {
     const result = await ingress.handle({ source: 'homeassistant', jobId: 'cron_existing' });
     expect(result.ok).toBe(true);
     expect(result.jobId).toBe('cron_existing');
-    expect(engine.runJobNow).toHaveBeenCalledWith('cron_existing');
+    expect(engine.runJobNow).toHaveBeenCalledWith('cron_existing', { source: 'event' });
   });
 
   it('限流', async () => {

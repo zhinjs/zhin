@@ -2,8 +2,6 @@ import {
   buildRichSystemPromptParts,
   buildLiteSystemPrompt,
   buildUserMessageWithHistory,
-  FIXED_DISCIPLINE_RULES,
-  fillPromptSlots,
   describePromptSectionsForDebug,
   buildStableRuntimeLines,
   type PromptSectionDebugInfo,
@@ -15,10 +13,16 @@ import { type AgentMessage } from '@zhin.js/ai';
 import { assembleSchedulePrompt } from '../schedule-domain/prompt-assembler.js';
 import type { AgentPromptProfile } from './turn-prompt-profile.js';
 import type { TurnContextView } from '../context/turn-envelope.js';
+import { turnAgentNickname } from '../context/self-profile.js';
 import { PromptSegmentRegistry, type SystemPromptParts } from './segments/registry.js';
 import { SECTION_SEP } from '../config/zhin-agent-constants.js';
 import type { PromptSegment } from './segments/types.js';
 import { DEFAULT_CONFIG } from '../config/index.js';
+import { CRITICAL_RULES } from './rules/critical-rules.js';
+import { REQUEST_SECURITY_BOUNDARY } from './rules/security.js';
+import { ModelAwarePromptBuilder } from './model-aware-builder.js';
+import { bootstrapSceneFromTurn, scopeBootstrapDocument, scopeBootstrapText } from '../bootstrap-scope.js';
+import type { ContextFile } from '../bootstrap.js';
 
 /**
  * System prompt split at the provider cache breakpoint (ADR 0042 §1): `stable` is byte-identical
@@ -53,18 +57,23 @@ function toSplit(parts: SystemPromptParts): SystemPromptSplit {
 function scheduleSystemPrompt(
   agent: ZhinAgentPrivate,
   profile: Extract<AgentPromptProfile, { kind: 'schedule' }>,
-  platformContext?: string,
-  runtime?: PromptRuntimeOverrides,
+  options: { runtime?: PromptRuntimeOverrides; turn?: TurnContextView } = {},
 ): SystemPromptSplit {
+  const { runtime, turn } = options;
+  const scene = bootstrapSceneFromTurn(turn);
+  const bootstrap = runtime?.bootstrapContext ?? (runtime?.contextFiles === undefined ? agent.bootstrapContext : '');
+  const scopedBootstrap = runtime?.contextFiles === undefined
+    ? scopeBootstrapText([agent.globalContext, bootstrap].filter(Boolean).join('\n\n'), scene).text
+    : [scopeBootstrapDocument(agent.globalContext, scene).text,
+        scopeBootstrapText(bootstrap, scene, { contextFiles: runtime.contextFiles }).text].filter(Boolean).join('\n\n');
   const base = assembleSchedulePrompt({
     jobId: profile.jobId,
     prompt: profile.prompt,
     createdBy: profile.createdBy,
     security: profile.security,
-    platformContext,
     runtimeContext: buildStableRuntimeLines(runtime ?? {}).join('\n'),
     skillContext: agent.getTurnActiveSkills(),
-    bootstrapContext: fillPromptSlots([agent.globalContext, agent.bootstrapContext].filter(Boolean).join('\n\n'), agent.activeBinding?.nickname),
+    bootstrapContext: scopedBootstrap,
   }).systemPrompt;
   return mergeRequiredBasePrompt(
     base,
@@ -100,11 +109,11 @@ function mergeRequiredBasePrompt(
 
 export function buildDisciplinedPrompt(_host: AgentContextHost, basePrompt: string): string {
   const guidance = [
-    '# Style',
-    '- Be concise, direct, and useful.',
-    '',
+    CRITICAL_RULES,
+    new ModelAwarePromptBuilder().buildStyleSection(),
     '# Safety',
-    ...FIXED_DISCIPLINE_RULES.map(rule => `- ${rule}`),
+    REQUEST_SECURITY_BOUNDARY,
+    'If a capability is unavailable, state it honestly and suggest the closest valid alternative.',
   ].join('\n');
   return `${basePrompt}\n\n${guidance}`;
 }
@@ -126,6 +135,7 @@ export async function describeAgentPathPromptSections(
 function agentPathPromptContext(
   agent: ZhinAgentPrivate,
   options: {
+    profile?: AgentPromptProfile;
     turn: TurnContextView;
     deferredStats?: string;
     modelSdk?: string;
@@ -140,6 +150,7 @@ function agentPathPromptContext(
     ? agent.llmRuntime.model(providerAlias, bindingModel)
     : undefined;
   return {
+    profile: options.profile,
     config: agent.config,
     skillRegistry: agent.skillRegistry,
     skillsSummaryXML: agent.skillsSummaryXML,
@@ -148,12 +159,14 @@ function agentPathPromptContext(
     sceneText: options.runtime?.sceneText,
     platformGuidanceExternal: options.runtime?.platformGuidanceExternal,
     activeSkillsContext: options.runtime?.activeSkillsContext ?? agent.getTurnActiveSkills(),
-    bootstrapContext: options.runtime?.bootstrapContext ?? agent.bootstrapContext,
+    bootstrapContext: options.runtime?.bootstrapContext
+      ?? (options.runtime?.contextFiles === undefined ? agent.bootstrapContext : ''),
+    contextFiles: options.runtime?.contextFiles,
     globalContext: agent.globalContext,
     turn: options.turn,
     toolSearchDeferredStats: options.deferredStats,
     orchestratorSdk: options.modelSdk,
-    agentNickname: options.runtime?.agentNickname ?? agent.activeBinding?.nickname,
+    agentNickname: options.runtime?.agentNickname ?? turnAgentNickname(options.turn, agent.activeBinding?.nickname),
     modelId: bindingModel,
     providerAlias,
     modelSdk: options.runtime?.modelSdk ?? options.modelSdk,
@@ -187,7 +200,7 @@ export async function buildAgentPathSystemPromptParts(
   const { preData } = options;
 
   if (options.profile.kind === 'schedule') {
-    return scheduleSystemPrompt(agent, options.profile, undefined, options.runtime);
+    return scheduleSystemPrompt(agent, options.profile, { runtime: options.runtime, turn: options.turn });
   }
 
   const rich = toSplit(buildRichSystemPromptParts(agentPathPromptContext(agent, options)));
@@ -196,6 +209,7 @@ export async function buildAgentPathSystemPromptParts(
 
 export interface PromptRuntimeOverrides {
   readonly bootstrapContext?: string;
+  readonly contextFiles?: readonly ContextFile[];
   readonly activeSkillsContext?: string;
   readonly agentNickname?: string;
   readonly modelId?: string;
@@ -209,6 +223,11 @@ export interface PromptRuntimeOverrides {
   readonly sceneText?: string;
   /** ADR 0044 §4: the adapter is third-party relative to the agent owner. */
   readonly platformGuidanceExternal?: boolean;
+  /**
+   * Sender-/selection-dependent capability catalog. Not part of the system prompt: the core run
+   * puts it in the current message's runtime-context tail.
+   */
+  readonly capabilityTail?: string;
 }
 
 function withStableRuntime(base: string, runtime?: PromptRuntimeOverrides): string {
@@ -230,9 +249,9 @@ export function buildChatPathSystemPromptParts(
   profile: AgentPromptProfile,
   runtime?: PromptRuntimeOverrides,
 ): SystemPromptSplit {
-  if (profile.kind === 'schedule') return scheduleSystemPrompt(agent, profile, undefined, runtime);
+  if (profile.kind === 'schedule') return scheduleSystemPrompt(agent, profile, { runtime });
   return mergeRequiredBasePrompt(
-    buildDisciplinedPrompt(agent, withStableRuntime(personaEnhanced, runtime)),
+    buildDisciplinedPrompt(agent, withStableRuntime(profile.kind === 'delegated' ? profile.persona : personaEnhanced, runtime)),
     'Agent Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
     runtime,
@@ -250,7 +269,7 @@ export async function buildMultimodalVisionSystemPrompt(
   },
 ): Promise<string> {
   return joinSystemPrompt(mergeRequiredBasePrompt(
-    buildLiteSystemPrompt(withStableRuntime(options.personaEnhanced, options.runtime)),
+    buildLiteSystemPrompt(buildDisciplinedPrompt(agent, withStableRuntime(options.personaEnhanced, options.runtime))),
     'Vision Runtime',
     agent.config?.systemPromptMaxChars ?? DEFAULT_CONFIG.systemPromptMaxChars,
     options.runtime,

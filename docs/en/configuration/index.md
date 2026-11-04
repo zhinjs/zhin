@@ -20,6 +20,7 @@ This is the complete reference for `zhin.config.yml`. When configuring for the f
 | Set masters or the command prefix | [Adapter instances](#adapter-instances-master-trusted-commandprefix) |
 | Configure AI models | [ai](#ai), or the [AI overview](../ai/index.md) |
 | Reference secrets from `.env` | [Environment variable expansion](#environment-variable-expansion) |
+| Apply configuration changes selectively | [Applying configuration changes](#applying-configuration-changes) |
 | See a complete minimal config | [Minimal configuration](#minimal-configuration) |
 
 ## Where the config file lives
@@ -66,6 +67,64 @@ flowchart LR
 Configuration passes JSON Schema validation, and **only the keys listed below are allowed at the top level**. A misspelled key produces `Invalid Plugin config in zhin.config.yml` at startup.
 
 Host sections are consumed by CLI assembly. Each plugin receives only its own same-named business block.
+
+## Applying configuration changes
+
+`zhin runtime start` **watches changes only when `--watch` is explicit**. Without it, editing a file does not apply it automatically. Development scripts that need watching should select their scopes:
+
+```bash
+npx zhin runtime start --watch source config  # Source and configuration
+npx zhin runtime start --watch config         # Configuration only
+npx zhin runtime start --watch source         # Source only
+npx zhin runtime start --mode production      # Neither
+```
+
+`--no-watch` remains a compatibility alias for watching neither and cannot be combined with `--watch`. Source watching does not enable configuration watching; a source reload does not pull in configuration that is still pending a restart.
+
+**A successful save does not mean every change is active.** Console configuration forms request application after saving and display the file revision separately from each application result. Even with watching disabled, the new Console's runtime status panel offers “Apply saved configuration”: it applies the saved revision, without saving an unsubmitted form draft or restarting the process. An older Host without application details is explicitly shown as unconfirmed.
+
+| Change | Application boundary |
+| --- | --- |
+| Only the configured `nickname` / `profile` fallback of an adapter declaring in-place profile updates | New profile reads use the new fallback while retaining the connection. No platform profile write is made; an observed platform nickname still takes precedence |
+| Model selection, or new and compatible provider/model definitions | New operations through standard Host model entry points acquire the new version. In-flight operations retain their captured model and leases throughout their tool loop |
+| HTTP listeners, database connections, `.env` inputs, YAML account roles, and other startup dependencies | Parts without a safe replacement path remain pending a process restart and keep their old effective values |
+| Other plugin configuration | Uses the owning plugin's existing local reload path; an undeclared update capability does not imply an in-place update |
+
+A save can apply partially. For example, an account nickname fallback and default model may apply while an HTTP port change waits for restart. A model change depending on a pending environment-variable change also stays pending. If the complete candidate fails validation, the current runtime is retained. Failure, an unconfirmed outcome, and supersession by a newer revision are distinct; refresh read-only to verify an unconfirmed outcome rather than submitting it again.
+
+Deleting or renaming model definitions, changing Agent binding topology, and breaking capability contracts are not hot-updated; they remain pending a process restart. Third-party code that retains its own SDK/provider reference does not receive a replacement automatically; acquire it through the framework again for a new operation.
+
+### Manage configuration in chat
+
+With the root Command Feature installed, a Bot owner can send `config` (Chinese alias `配置`) in a **private chat** with the Bot to see its usage. There are exactly four subcommands:
+
+- `config fields [scope]`: list chat-manageable field paths and types, without values;
+- `config get <path>`: read one field's saved value;
+- `config set <path> <value>`: change one field;
+- `config unset <path>`: remove one optional field.
+
+Hints use the account's actual command prefix and namespace. AI Agent is not required.
+
+**Who can use it**: only the `master` of any configured account (endpoint) on the same adapter that received the private message (the account-level `master`, otherwise the inherited plugin-level `master`), so owner identity always stays on the same adapter/platform. Masters of other adapters (including another plugin instance of the same adapter package) cannot use it. `ai.trigger.masters` has no platform dimension and is not accepted for chat configuration in v1. Groups, channels and forged metadata never reach the save path.
+
+**Entry is per adapter; field scope is project-wide**: authorization (entry) only considers masters on the same Adapter instance that received the message. Once authorized, the manageable field scope is **every chat-safe leaf in the project** plus the Host allowlist `HOST_CONFIG_PATCH_PATHS`; it is not limited to the authorizing adapter's own plugin, so any legitimate owner can manage chat-safe fields globally (including other plugins' fields). If an owner should not change other plugins, do not grant them master, or manage those settings with the CLI/Console.
+
+**What can change**:
+
+- Host config is limited to the same allowlist as ordinary Console pages (`HOST_CONFIG_PATCH_PATHS`, currently fields under `ai.trigger.ambient`). Use the CLI or Console for `locale`, `http`, `database` and other Host settings.
+- Plugin config must be proven safe by its schema. Secrets, tokens, passwords, missing schemas and uncertain scopes are rejected.
+- Permission fields such as owners, trust lists, approvals and tool gates (`master`, `trusted`, `endpoints[*].master`, `ai.trigger.masters`, `toolHardGate.*`) cannot be read or changed in chat. Matching is by contains/prefix/suffix, so compound names are refused too, e.g. `adminIds`, `ownerId`, `masterId`, `trustedUsers`, `superUsers`, `whitelist`/`allowlist`/`blacklist` and `bypassMasters` (such as content-moderation's `inbound.whitelist.userIds` and `inbound.bypassMasters`). The rule is deliberately conservative: ordinary fields whose names contain these words (e.g. `masterVolume`) must be changed with the CLI.
+- `endpoints[*].id` / `endpoints[*].name` bind account-level masters and trust lists, so remapping them is an indirect permission change and is refused in chat; `set`/`unset` only target fields listed by `config fields <root>`.
+- A `set` value cannot contain a `${…}` or `env://` environment reference (regardless of whether the name looks like a secret), so a later read or echo cannot leak an environment value; existing references are not affected by other operations.
+- Chat reads and writes a **single leaf field** (a scalar or scalar array) only; whole objects cannot be overwritten or removed, and required fields cannot be unset. `configVersion`, `plugins`, `disable_plugins`, root `plugin` and undeclared instances cannot be changed either.
+
+Paths accept dotted notation such as `mybot.nickname` or JSON Pointer such as `/mybot/dot.key` (`~1` escapes `/`, `~0` escapes `~`). Values are parsed by field type: numbers, booleans and arrays use JSON; string fields accept plain text, for example `config set mybot.nickname -- My Bot` (add the actual prefix). Object values are not accepted.
+
+Saving follows the complete candidate validation and selective application described above. Failures before saving are reported as not saved. A lost commit acknowledgement is reported as unconfirmed: do not resend, check with `get` first; the command never retries or rolls back automatically. Denials only state a reason and never echo values, defaults or raw exceptions.
+
+### Files and database records have separate ownership
+
+`zhin.config.yml` remains the deployment declaration, and Console configuration forms still write that file. The entire configuration is not moved into a database. Managed Endpoint desired records, personal models and session choices, and runtime model-policy overrides keep their existing databases and APIs. File updates do not overwrite explicit domain records or clear personal choices. YAML account seeds do not rewrite existing managed accounts; adapter profile defaults can still update accounts that inherit them.
 
 ## Environment Variable Expansion
 
@@ -129,7 +188,7 @@ npx zhin config check
 `setup` writes the non-secret structure to `zhin.config.yml` and the actual connection values to the
 project-root `.env`. Runtime reads `.env` first, then overrides matching keys from the selected
 `.env.<environment>`. For example, use
-`zhin runtime start --mode production --no-watch` to load `.env.production` by default; an explicit
+`zhin runtime start --mode production` to load `.env.production` by default; an explicit
 `--environment <name>` selects a different environment overlay.
 
 ### SQLite
@@ -425,16 +484,16 @@ plugins:
 icqq:
   master: "${ICQQ_MASTER}" # Top-level shared: applies to all endpoints
   endpoints:
-    # Per-entry: name is required, other fields merge with top-level (per-entry takes priority)
-    - name: "${ICQQ_ACCOUNT_1}"
-    - name: "${ICQQ_ACCOUNT_2}"
+    # Per-entry: id is required, other fields merge with top-level (per-entry takes priority)
+    - id: "${ICQQ_ACCOUNT_1}"
+    - id: "${ICQQ_ACCOUNT_2}"
 ```
 
 Expansion rules (`@zhin.js/adapter`'s `expandEndpointConfigs`):
 
-- Each endpoint's final configuration = instance configuration (without the `endpoints` key) shallow-merged with the entry's fields, **per-entry fields override top-level**.
-- `name` is required and must be a non-empty string; must not contain `~`; duplicates keep only the first with a warning.
-- When `endpoints` is empty or all entries are invalid, it falls back to a single Endpoint (named after the instanceKey).
+- Connection fields are shallow-merged, with per-entry fields taking precedence. Profile fallbacks merge separately per field.
+- Every entry requires a non-empty `id`. Reserved delimiters (`~` and NUL), duplicate IDs and invalid entries are rejected.
+- Missing or empty `endpoints` creates one Endpoint using the top-level `id`, or the instance key when it is absent.
 
 Real-world example (QQ official bot, main account through proxy gateway + sandbox account coexisting):
 
@@ -445,14 +504,14 @@ plugins:
   slack: "@zhin.js/adapter-slack"
 qq:
   endpoints:
-    - name: zhin
+    - id: zhin
       appid: "${QQ_APPID}"
       secret: "${QQ_SECRET}"
       mode: websocket
       sandbox: false
       gatewayUrl: "https://bots.example.com/gateway/102005927"
       intents: [ GUILDS, GROUP_AND_C2C_EVENT, PUBLIC_GUILD_MESSAGES ]
-    - name: "102069707"
+    - id: "102069707"
       appid: "${QQ_SANDBOX_APPID}"
       secret: "${QQ_SANDBOX_SECRET}"
       mode: websocket
@@ -460,7 +519,7 @@ qq:
       intents: [ GUILDS, GROUP_AND_C2C_EVENT ]
 slack:
   endpoints:
-    - name: zhin
+    - id: zhin
       token: "${SLACK_TOKEN}"
       appToken: "${SLACK_APP_TOKEN}"
       signingSecret: "${SLACK_SIGNING_SECRET}"
@@ -483,3 +542,32 @@ plugins: {}
 ```
 
 After starting, use the `zhin setup` wizard to progressively add database / adapters / AI (see [CLI Reference](../cli/index.md)); for how to run, see [zhin runtime start in Detail](../cli/runtime.md).
+
+## Account self profile
+
+The Agent uses the current Endpoint's platform facts first. Adapter-level `nickname` and `profile`
+are missing-field fallbacks; each `endpoints[]` entry can override them. `profile` is merged per field.
+Saving these defaults never changes the platform account. A known empty signature or interests list
+stays empty, and group cards remain separate. The existing AI nickname is the final fallback;
+internal task agents keep their role identities.
+
+```yaml
+icqq:
+  master: "your QQ ID"
+  nickname: Zhin
+  profile:
+    gender: unknown
+    interests: [music, photography]
+    bio: A conversational assistant
+  endpoints:
+    - id: "bot QQ ID"
+      nickname: Zhin Bot
+      profile:
+        interests: [music, reading]
+```
+
+`profile` accepts `gender`, `age`, `birthday` (`YYYY-MM-DD`), `signature`, `avatar` (image URL),
+`interests` (string array), and `bio`. Missing information stays unknown. Ordinary turns reuse facts
+read for that account incarnation; `get_self_profile` refreshes them explicitly. `set_self_profile`
+changes one actually supported platform field under the existing identity approval policy. Editing
+fallback configuration and changing platform profile are separate operations.

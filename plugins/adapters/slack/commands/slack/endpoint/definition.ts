@@ -4,7 +4,6 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { slackRuntimeStateToken } from '../../../src/slack-runtime-state.js';
 
 export const slackEndpointCommands = createEndpointCommands({
   adapterKey: 'slack',
@@ -14,6 +13,5 @@ export const slackEndpointCommands = createEndpointCommands({
     { key: 'signingSecret', env: true, description: '签名密钥（HTTP Events，socketMode: false 必填）', descriptionI18n: { en: "Signing secret (required for HTTP Events when socketMode is false)" } },
     { key: 'appToken', env: true, description: 'App-Level Token（xapp-...，Socket Mode）' },
   ],
-  running: (use) => use(slackRuntimeStateToken).endpoints.values(),
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);

@@ -11,7 +11,7 @@ import {
   type AgentToolDefinition, type ToolExecutionContext, type ToolInvocationOrigin,
   type ToolInvocationPolicy, type ToolQuestionPort,
 } from '@zhin.js/tool';
-import type { OperationClientPort } from 'zhin.js';
+import { readOperationSession, type OperationClientPort } from 'zhin.js';
 import type { FakePlugin } from './fake-plugin.js';
 import { fileURLToPath } from 'node:url';
 
@@ -83,6 +83,7 @@ export function createCommandContext<TConfig, TInput extends CommandMessage = Fa
     options: options.options ?? {},
     segments: options.segments ?? [],
     input,
+    get session() { return readOperationSession(input); },
     $client: input.$client as never,
     interaction: options.interaction,
     adapter: conversation.endpoint.adapter,
@@ -134,6 +135,7 @@ export async function runMiddleware<TConfig, TInput = FakeMessage>(
   const context: MiddlewareContext<TInput, TConfig, string | undefined> = {
     ...fake.capabilityContext(),
     input,
+    get session() { return readOperationSession(input); },
     $client: (input as { $client?: unknown } | undefined)?.$client as never,
   };
   const next = (async () => { continued = true; return undefined; }) as unknown as MiddlewareNext;
@@ -147,7 +149,10 @@ export async function runHandler<TConfig>(
   definition: HandlerDefinition,
   ...args: unknown[]
 ): Promise<void> {
-  const context: HandlerContext<TConfig> = fake.capabilityContext();
+  const context: HandlerContext<TConfig> = {
+    ...fake.capabilityContext(),
+    get session() { return readOperationSession(args[0]); },
+  };
   await definition.handle.call(context as HandlerContext, ...args);
 }
 

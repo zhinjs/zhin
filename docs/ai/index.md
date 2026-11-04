@@ -47,7 +47,7 @@ ai:
       model: gpt-4o-mini
 ```
 
-`providers` 定义"连哪个模型服务"，`agents` 定义"哪个 Agent 用哪个模型"。
+`providers` 定义"连哪个模型服务"，`agents` 定义"哪个 Agent 用哪个模型"。这是兼容配置表单；个人 Session、按作用域选择模型及显式 `modelCatalog/modelPolicy` 见[个人 Session 与模型策略](./model-policy.md)。
 
 ::: details 不用向导，手动安装
 ```bash
@@ -155,7 +155,7 @@ ai:
   - `supportsReasoningContent`、`toolCallsInAssistant` 已废弃，不起作用。
 - `authScheme`：`Authorization` 头方案。不写时用 SDK 默认（OpenAI 系 `Bearer`，Anthropic `x-api-key`，Google `x-goog-api-key`）；`''` 发送 `Authorization: <key>`；`Bearer`、`Token` 等发送 `Authorization: <scheme> <key>`。对话请求和模型列表请求用同一规则。
 - `timeout`、`maxRetries`：该 provider 的单次请求超时（毫秒，0 关闭）和每个模型的重试次数，覆盖 `ai.providerResilience` 的 `requestTimeoutMs` / `maxRetries`；按模型配置的 `modelHarness.requestTimeoutMs` 仍然优先。
-- `firstChunkTimeoutMs`、`chunkTimeoutMs`：流式卡顿超时（毫秒），默认关闭。前者限制等响应头和第一个 chunk 的时间，后者限制两个 chunk 之间的静默时间。超时按 timeout 处理：重试，用尽后切换备用模型。比 `timeout` 更早发现“连上了但不出字”的请求，建议设成几十秒。
+- `firstChunkTimeoutMs`、`chunkTimeoutMs`：流式卡顿超时（毫秒），默认关闭。前者限制等响应头和第一个 chunk 的时间，后者限制两个 chunk 之间的静默时间。超时按 timeout 处理：在所选模型上重试，用尽后反馈错误，不切换聊天模型。比 `timeout` 更早发现“连上了但不出字”的请求，建议设成几十秒。
 - `imageGeneration`：文生图的默认参数。
 - `providerOptions`：按 SDK 名分组的 AI SDK `providerOptions`，每次请求都会合并进去。Gemini 常用的是安全设置和思考深度：
 
@@ -213,7 +213,7 @@ ai:
   - `reasoning_effort` 只发给 GPT-OSS 和 Qwen 3；GPT-OSS 默认 `low`，回复快，也更不容易碰到免费档每分钟 8K token 的上限。其他模型（如 Llama）即使配置了 `thinkingLevel` 也不会带这个字段。
   - GPT-OSS 只收文本，图片会按"模型不支持图片"处理，不会发给 Groq；Llama 4 Scout / Maverick 默认 `text, image`。写了 `input` 以它为准。
   - 上下文窗口按模型名推断：GPT-OSS 是 131072，其他模型按 128k 估算，可用 `contextWindow` 覆盖。
-  - 免费档限额很低（GPT-OSS 约每分钟 8K token、每天 1000 次请求，见 [Groq 限额](https://console.groq.com/docs/rate-limits)）。每分钟的限额（RPM / TPM）触发 429 时按 `retry-after` 等待后重试；每天的限额（RPD / TPD）当天重试没用，直接切换到下一个候选模型（限额按模型计算），没有候选时提示今天的额度已用完。
+  - 免费档限额很低（GPT-OSS 约每分钟 8K token、每天 1000 次请求，见 [Groq 限额](https://console.groq.com/docs/rate-limits)）。每分钟的限额（RPM / TPM）触发 429 时按 `retry-after` 等待后重试；每天的限额（RPD / TPD）当天重试没用，不重试，提示今天的额度已用完，不切换聊天模型。
 
 ### ai.agents
 
@@ -339,7 +339,7 @@ ai:
       cooldownMs: 120000                  # 两次主动插话之间的最短间隔
       maxPerHour: 3                       # 每个群每小时最多主动插话次数
       conversationWindowMs: 180000        # Bot 说话后这段时间内算作对话进行中
-      judgeIntervalMs: 30000              # 没在对话时，同一个群至少隔这么久才判断一次
+      judgeIntervalMs: 30000              # 没在对话时，同一个群至少隔这么久才判断一次（窗口内的消息顺延判断，不丢）
       minConfidence: 0.7                  # 判断模型的置信度门槛
       mode: active                        # shadow：只记录判断结果，不回复
 ```
@@ -348,7 +348,7 @@ ai:
 1. 群里有新消息后等群安静 `quietMs`，期间的新消息合并为一次判断。
 2. 判断模型读最近 20 条消息（Bot 自己的话标为 `You (this bot)`），给出要不要接话和置信度。
    - **对话进行中**（Bot 在 `conversationWindowMs` 内说过话，无论是被 @ 还是主动接话）：群友接它的话只看判断结果，不受冷却和每小时次数限制，只有每小时 30 次的安全上限。
-   - **没有对话时**：主动插话受 `cooldownMs` 和 `maxPerHour` 限制。
+   - **没有对话时**：主动插话受 `cooldownMs` 和 `maxPerHour` 限制；判断本身至多每 `judgeIntervalMs` 一次，窗口内到达的消息会顺延到窗口结束再判（期间有新消息就改判最新的那串），不会被丢掉。
 3. 达到门槛后交给主 Agent 正常处理。这一轮的上下文会注明"没人叫你"，Agent 仍然可以选择不说话。
 
 每次判断都会记一条 `ambient_engagement` 日志（结果、置信度、理由）。建议先用 `shadow` 跑一段时间，看判断是否靠谱，再改成 `active`。
@@ -440,7 +440,7 @@ ai:
 - 描述会随用户消息写入会话历史，之后的回合可以继续问“刚才那张图”；图片本身不写入历史。
 - 相同内容的图片（按字节的 sha256）只描述一次，常见的表情包和贴纸不会重复调用。
 - 描述失败、超时或超出 `maxItemsPerTurn` 时，回到原来的占位，回合照常进行。每项媒体的结果记录在 `zhin trace` 时间线的 `media_resolution` 事件里，描述成功时 `code` 为 `media_perception` 并带上所用模型。
-- `fallbacks` 按顺序切换：请求失败、空回答或模型不支持媒体类型都会尝试下一项；每个候选适用 `timeoutMs` 和至多一次重试。取消回合立即停止，不切换。所有候选失败才保留占位，不猜测图片内容。
+- `fallbacks` 按顺序切换：请求失败、空回答或模型不支持媒体类型都会尝试下一项；每个候选适用 `timeoutMs` 和至多一次重试。取消回合立即停止，不切换。所有候选失败才保留占位，不猜测图片内容。聊天固定模型的规则不取消这条显式感知备用链，`providerResilience.fallback` 也不控制它的外层遍历。
 - 缓存与 trace 记录实际成功的 provider/model；费用统计累计失败候选和最终候选。备用列表越长，最坏等待时间越长，应使用少量已验证的模型。
 - ICQQ 的普通动画表情按 image 处理；原创 bface 表情转换为图片链接并保留文字标签。失效链接仍可能无法识别。
 - 不配置 `perception` 时行为与之前完全一样。

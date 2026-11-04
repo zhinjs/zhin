@@ -9,6 +9,7 @@ import type {
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
 import type { DeliveryTarget, Locale } from '@zhin.js/plugin-runtime';
+import type { SelfProfilePort, SelfProfileSnapshot } from '@zhin.js/im-contract';
 import { isToolInputSchema, type ToolInputSchema } from './input-schema.js';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
@@ -102,7 +103,14 @@ export type ToolInvocationOrigin =
   | Readonly<{ kind: 'internal'; source: string }>
   | Readonly<{ kind: 'mcp'; requestId: string }>;
 
+/** @internal Exact action-owner evidence; ordinary tool text/results never imply this contract. */
+export interface ToolEffectReporter {
+  report(effect: Readonly<{ disposition: 'committed' | 'unknown' | 'not_submitted' }>): void;
+}
+
 export interface ToolInvocationContext {
+  /** @internal Optional Host evidence capability; it grants no permissions and may be absent. */
+  readonly effects?: ToolEffectReporter;
   /** Trusted turn language; never inferred from model tool arguments. */
   readonly locale?: Locale;
   readonly signal: AbortSignal;
@@ -117,6 +125,8 @@ export interface ToolInvocationContext {
   }>;
   readonly policy: ToolInvocationPolicy;
   readonly question?: ToolQuestionPort;
+  /** Current account's profile authority, pinned by the originating IM operation. */
+  readonly selfProfile?: SelfProfilePort;
   /** Runtime-only native Client capability for an IM-origin turn. */
   readonly client?: OperationClientPort;
 }
@@ -125,6 +135,8 @@ export interface ToolExecutionContext<
   TConfig = unknown,
   TAdapter extends string | undefined = undefined,
 > extends CapabilityContext<TConfig> {
+  /** @internal Only report a real operation's confirmed result; never require this field to exist. */
+  readonly effects?: ToolEffectReporter;
   readonly locale: Locale;
   readonly signal: AbortSignal;
   readonly traceId: string;
@@ -134,9 +146,21 @@ export interface ToolExecutionContext<
   readonly principal: ToolInvocationContext['principal'];
   readonly policy: ToolInvocationPolicy;
   readonly question?: ToolQuestionPort;
+  readonly selfProfile?: SelfProfilePort;
   /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
   readonly $client: AdapterClient<TAdapter>;
 }
+
+/** Read-only admission facts; no platform IO or profile mutation authority. */
+export type ToolAvailabilityContext = Pick<ToolInvocationContext, 'sessionKey' | 'origin'> & Readonly<{
+  /** Turn-start snapshot of this account's editable fields; absent without a bound IM account. */
+  accountProfile?: Pick<SelfProfileSnapshot, 'writableFields'>;
+  /**
+   * Who started the turn (authenticated sender id and framework / platform roles); absent on static
+   * capability queries. Use it to hide a tool from requesters who may never call it.
+   */
+  principal?: Readonly<{ subjectId: string; roles: readonly string[] }>;
+}>;
 
 export interface AgentToolDefinition<
   TInput = unknown,
@@ -191,6 +215,12 @@ export interface AgentToolDefinition<
    * tools that declare `readOnly: true`; undeclared counts as not read-only.
    */
   readonly readOnly?: boolean;
+  /**
+   * Optional synchronous, side-effect-free eligibility check before this turn's model tools
+   * are projected. Read existing state only: do not reserve capacity, start I/O or draw randomness.
+   * This narrows disclosure, never grants permission; execute must recheck mutable conditions.
+   */
+  readonly isAvailable?: (context: ToolAvailabilityContext) => boolean;
   /** @internal Filesystem-derived private capability binding. */
   readonly placement?: ToolPlacement;
   execute(
@@ -302,6 +332,9 @@ export function defineAgentTool<
   if (definition.readOnly !== undefined && typeof definition.readOnly !== 'boolean') {
     throw new TypeError('Agent Tool readOnly must be a boolean');
   }
+  if (definition.isAvailable !== undefined && typeof definition.isAvailable !== 'function') {
+    throw new TypeError('Agent Tool isAvailable must be a function');
+  }
   if (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel')) {
     throw new TypeError('Agent Tool scopes must be private, group, or channel');
   }
@@ -365,6 +398,7 @@ export function parseAgentToolDefinition(
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')
     || (definition.alwaysLoaded !== undefined && typeof definition.alwaysLoaded !== 'boolean')
     || (definition.readOnly !== undefined && typeof definition.readOnly !== 'boolean')
+    || (definition.isAvailable !== undefined && typeof definition.isAvailable !== 'function')
     || (definition.risk !== undefined && !isToolRisk(definition.risk))
     || (definition.riskCategory !== undefined && !isToolRiskCategory(definition.riskCategory))
   ) throw invalidTool();

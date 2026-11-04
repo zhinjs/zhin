@@ -3,8 +3,44 @@ import {
   MAX_RESPAWNS_PER_MINUTE,
   planRespawn,
   processRestartExitCode,
+  processRestartSupported,
   supervisedNodeArguments,
 } from '../../../src/plugin-runtime/start/process-supervisor.js';
+
+describe('processRestartSupported (#1051 F1)', () => {
+  it('is true only when the supervisor that stamped ZHIN_SUPERVISOR_PID is our parent, and not with --once', () => {
+    expect(processRestartSupported(false, { ZHIN_SUPERVISOR_PID: '4242' }, 4242)).toBe(true);
+    expect(processRestartSupported(true, { ZHIN_SUPERVISOR_PID: '4242' }, 4242)).toBe(false);
+  });
+
+  it('rejects a missing, empty or non-decimal pid', () => {
+    for (const value of [undefined, '', ' ', 'abc', '0', '-1', '00', '042', '4242 ', ' 4242', '42.0', '4.2e3', '0x10', '+42', '1e3', 'Infinity']) {
+      const environment = value === undefined ? {} : { ZHIN_SUPERVISOR_PID: value };
+      expect(processRestartSupported(false, environment, 4242), JSON.stringify(value)).toBe(false);
+    }
+  });
+
+  it('does not trust an inherited / image-level pid that is not our parent (e.g. Dockerfile ZHIN_SUPERVISOR_PID=1)', () => {
+    expect(processRestartSupported(false, { ZHIN_SUPERVISOR_PID: '1' }, 4242)).toBe(false);
+    expect(processRestartSupported(false, { ZHIN_SUPERVISOR_PID: '4242' }, 1)).toBe(false);
+    // 守护进程本身就是容器 PID 1 时，pid=1 与父进程一致，仍然可信。
+    expect(processRestartSupported(false, { ZHIN_SUPERVISOR_PID: '1' }, 1)).toBe(true);
+    expect(processRestartSupported(true, { ZHIN_SUPERVISOR_PID: '1' }, 1)).toBe(false);
+  });
+
+  it('defaults to the current process environment and parent pid', () => {
+    const previous = process.env.ZHIN_SUPERVISOR_PID;
+    try {
+      process.env.ZHIN_SUPERVISOR_PID = String(process.ppid);
+      expect(processRestartSupported(false)).toBe(true);
+      process.env.ZHIN_SUPERVISOR_PID = '1';
+      expect(processRestartSupported(false)).toBe(process.ppid === 1);
+    } finally {
+      if (previous === undefined) delete process.env.ZHIN_SUPERVISOR_PID;
+      else process.env.ZHIN_SUPERVISOR_PID = previous;
+    }
+  });
+});
 
 describe('native TypeScript process supervisor', () => {
   it('preserves configured Node loaders in supervised and daemon children', () => {

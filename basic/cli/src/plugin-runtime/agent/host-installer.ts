@@ -1,3 +1,13 @@
+import { RuntimePolicyManagementService } from '../runtime-model-policy/service.js';
+import { runtimePolicyManagementToken } from '../runtime-model-policy/token.js';
+import { createPersonalSessionDirectory } from '../personal-models/directory.js';
+import { PersonalModelManagementService } from '../personal-models/service.js';
+import { personalModelManagementToken } from '../personal-models/token.js';
+import { createPersonalModelHost } from '../personal-models/host.js';
+import { modelRuntimeBaselineToken, turnModelPortToken } from '@zhin.js/agent/model-runtime';
+import { createModelConfigurationAccess, type ModelConfigurationAccess, type ModelConfigurationControl } from '../personal-models/configuration.js';
+import { createOwnerApprovalMigrationProvider } from '../data-migration/owner-approval-provider.js';
+import { pluginDataMigrationProviderToken, databaseRootHostToken, type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
@@ -15,11 +25,11 @@ import {
 } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   LocalImageAssetStore,
   localImageAssetsToken,
   type AssistantConfig,
+  type ContextFile,
   type ApprovalPort,
   hostProtectedPathsToken,
   SelfChangeApplier,
@@ -66,18 +76,18 @@ import {
 import { AgentRuntimeFoundation } from './runtime-foundation.js';
 import { resolveToolHardGateImApproval } from '@zhin.js/agent/security';
 import { ImToolApprovalChannel } from './tool-approval-im-channel.js';
+import { agentToolApprovalQueueToken } from '../console/tool-approval-resource.js';
 
 const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
 const MAX_BOOTSTRAP_CHARS = 12_000;
 
 export interface InstallAgentHostOptions {
+  readonly configurationControl?: ModelConfigurationControl;
   /** Process-owned trace archive; reuse the generation's existing persistence maintenance. */
   readonly pruneTraces?: () => Promise<unknown>;
   /** Process-owned 群聊插话 / 技能助手 Console status (#970). */
   readonly assistantStatus?: import('../console/assistant-status.js').AssistantStatus;
-  /** Process-owned Console approval cards for the dangerous-tool hard gate (ADR 0036). */
-  readonly toolApprovals?: import('../console/tool-approvals.js').HostToolApprovals;
   /** Process-owned Console surface for self-change approval (ADR 0040 §4). */
   readonly selfChanges?: import('../console/self-changes.js').HostSelfChanges;
   /** Process-owned host side of self-change apply / recover (ADR 0040 §5 / §6). Absent: approved changes wait. */
@@ -97,6 +107,7 @@ export interface InstallAgentHostOptions {
   readonly workroomStorageMode: WorkroomStorageMode;
   readonly im: ImRuntime;
   readonly projectRoot: string;
+  readonly resolveModelSecret?: (reference: string) => string | undefined | Promise<string | undefined>;
   /**
    * Resolve Endpoint Owner id for `/approve` + bashAlways key.
    * Key: `localName` (e.g. icqq) or live endpoint name (uin).
@@ -133,6 +144,11 @@ export interface InstallAgentHostOptions {
   readonly workroomLocalDataGovernance?: LocalWorkroomDataGovernanceAuthority;
   /** ADR 0040 §2: `InvalidationPlanner` over the committed source ownership, for `change_draft` previews. */
   readonly selfChangeImpact?: SelfChangeImpactPort;
+  /**
+   * #1051 F1: local plugin roots (relative to the project root) whose convention dirs a self-change may write,
+   * re-read from the committed generation on every use. Absent: only the project root's convention dirs.
+   */
+  readonly selfChangePluginRoots?: () => readonly string[];
 }
 
 /**
@@ -148,7 +164,7 @@ export interface InstallAgentHostOptions {
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   const localAssets = new LocalImageAssetStore(join(options.projectRoot, 'data', 'agent-assets'), message => logger.warn(message));
-  return async ({ generation, signal, resources, lifecycle, handoff, admission, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
+  return async ({ generation, signal, resources, lifecycle, handoff, admission, events, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
@@ -169,7 +185,21 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     resources.provide(hostProtectedPathsToken, hostProtectedPaths);
     lifecycle.add(await localAssets.acquire());
     resources.provide(localImageAssetsToken, localAssets);
+    const personalModels = createPersonalModelHost({
+      projectRoot: options.projectRoot,
+      state: () => resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken).state : undefined,
+      resolveHostSecret: reference => options.resolveModelSecret?.(reference),
+      configurationControl: options.configurationControl,
+    });
+    const modelConfiguration: ModelConfigurationAccess = createModelConfigurationAccess({ control: options.configurationControl,
+      runtime: () => agentFoundation.service.getModelRuntime() });
     const agentFoundation = await AgentRuntimeFoundation.create({
+      modelRuntime: { ...personalModels.runtimeOptions,
+        acquireDeploymentSelection: (selection, signal) => modelConfiguration.acquireHostModel(selection, signal),
+        acquireDeploymentDefault: signal => modelConfiguration.acquire(async () => ({
+          rootId: personalModels.rootId, ownerId: personalModels.hostOwnerId,
+        }), signal),
+      },
       config: aiConfig,
       localAssets,
       assistantConfig,
@@ -180,6 +210,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       audioTranscriber: options.audioTranscriber,
       resources,
       lifecycle,
+      modelConfiguration,
     });
     const {
       service,
@@ -190,12 +221,35 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       homeTools,
       assistantEnabled,
     } = agentFoundation;
+    resources.provide(modelRuntimeBaselineToken, service.getModelRuntime());
+    resources.provide(pluginDataMigrationProviderToken, createOwnerApprovalMigrationProvider({
+      approvals: zhinAgent.ownerApprovals, admission,
+    }));
+    resources.provide(turnModelPortToken, personalModels.turnPort(service, modelConfiguration));
+    resources.provide(runtimePolicyManagementToken, new RuntimePolicyManagementService({
+      rootId: personalModels.rootId, repository: personalModels.runtimePolicy, runtime: () => service.getModelRuntime(),
+      configuration: modelConfiguration,
+    }));
+    resources.provide(personalModelManagementToken, new PersonalModelManagementService({
+      rootId: personalModels.rootId,
+      hostOwnerId: personalModels.hostOwnerId,
+      bindings: aiConfig.personalPrincipals ?? {},
+      state: personalModels.state,
+      directory: createPersonalSessionDirectory(() => resources.has(databaseRootHostToken) ? resources.use(databaseRootHostToken) : undefined),
+      vault: personalModels.vault,
+      hostCatalog: () => service.getModelRuntime().getCatalogConfig(),
+      configuration: modelConfiguration,
+    }));
     zhinAgent.hostProtectedPaths = hostProtectedPaths;
+    // #1051 F1: the store (drafts), the trial (grouping by plugin root) and the applier (writes) share one view
+    // of the local plugin roots, so a draft accepted under `plugins/<x>/commands/` is also trial-run and written.
+    const selfChangePluginRoots = options.selfChangePluginRoots ?? (() => []);
     // ADR 0040 §6a: the self-change staging area is bounded — prune on start, then every 6 hours.
     const selfChanges = new SelfChangeStore({
       root: join(options.projectRoot, '.zhin', 'changes'),
       projectRoot: options.projectRoot,
       protectedPaths: hostProtectedPaths,
+      pluginRoots: selfChangePluginRoots,
       audit: () => zhinAgent.decisionEvents,
       onError: error => logger.warn(formatCompact({
         op: 'self_change_prune_failed',
@@ -205,7 +259,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     resources.provide(selfChangeStoreToken, selfChanges);
     const selfChangeTrialOptions = createSelfChangeTrialOptions(options.projectRoot);
     lifecycle.add(selfChanges.startPruning());
-    if (options.toolApprovals) lifecycle.add(options.toolApprovals.bind(zhinAgent.toolApprovals));
+    resources.provide(agentToolApprovalQueueToken, zhinAgent.toolApprovals);
+    events.on('hmr.resume', ({ details }) => {
+      if (details.outcome === 'committed' && details.receiver.state === 'replaced') zhinAgent.toolApprovals.dispose();
+    });
+    lifecycle.add(() => zhinAgent.toolApprovals.dispose());
     // ADR 0040 §5 / §6: approved changes are applied by the process-owned host (reload / exit 75 / health),
     // reported through this generation's IM and control plane; the newest generation's applier is the bound one.
     const selfChangeApplyHost = options.selfChangeApply;
@@ -218,6 +276,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         store: selfChanges,
         projectRoot: options.projectRoot,
         protectedPaths: hostProtectedPaths,
+        pluginRoots: selfChangePluginRoots,
         ports: selfChangeApplyHost.ports(createSelfChangeGenerationPorts({
           send: (target, text) => options.im.endpoints.send({
             adapter: target.adapter,
@@ -282,12 +341,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       planningDisclosure: options.workroomPlanningDisclosurePort,
       dynamicPlanningPolicy: options.workroomDynamicPlanningPolicyPort,
     });
-    const bootstrapText = await loadBootstrap(options.projectRoot);
+    const { bootstrapText, contextFiles } = await loadBootstrap(options.projectRoot);
 
     // Register before any await so a cancelled generation cannot leak Agent
     // Resources. DisposeStack continues through later cleanup when one
     // Resource fails.
     publishAgentToolFeatures({
+      modelConfiguration,
       addFeature,
       projectRoot: options.projectRoot,
       service,
@@ -300,7 +360,15 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       announcements: () => zhinAgent.getAnnouncements?.(),
       sessionEvents: () => zhinAgent.getSessionEvents?.(),
       groupRules: () => zhinAgent.getGroupRules?.(),
-      selfChanges: { store: () => selfChanges, impact: () => options.selfChangeImpact, trial: () => selfChangeTrialOptions, approvals: () => selfChangeApprovals },
+      selfChanges: {
+        store: () => selfChanges,
+        impact: () => options.selfChangeImpact,
+        trial: () => ({ ...selfChangeTrialOptions, pluginRoots: selfChangePluginRoots() }),
+        approvals: () => selfChangeApprovals,
+        // #1051 F4: master + IM approvers (same allowlist as G6 cards) may draft.
+        imApproval: () => resolveToolHardGateImApproval(zhinAgent.config.toolHardGate?.imApproval),
+        ...(selfChangeApplyHost ? { restartSupported: () => selfChangeApplyHost.restartSupported } : {}),
+      },
     });
 
     const publicationCoordinator = new AgentHostPublicationCoordinator({
@@ -310,6 +378,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       processRuntime: options.runtime,
       agent: agentFoundation,
       bootstrapText,
+      contextFiles,
     });
 
     const workroom = assembly
@@ -346,6 +415,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resolveEndpointTrusted: options.resolveEndpointTrusted,
       ingress,
       agent: agentFoundation,
+      modelConfiguration,
       ...(workroom ? { workroom } : {}),
       ...(options.assistantStatus ? { assistantStatus: options.assistantStatus } : {}),
       toolApprovalIm,
@@ -398,8 +468,12 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
 }
 
 
-async function loadBootstrap(projectRoot: string): Promise<string> {
+async function loadBootstrap(projectRoot: string): Promise<{
+  bootstrapText: string;
+  contextFiles: readonly ContextFile[];
+}> {
   const parts: string[] = [];
+  const contextFiles: ContextFile[] = [];
   let total = 0;
   for (const name of BOOTSTRAP_FILES) {
     try {
@@ -408,13 +482,14 @@ async function loadBootstrap(projectRoot: string): Promise<string> {
       if (!body) continue;
       const chunk = truncate(body, Math.max(500, MAX_BOOTSTRAP_CHARS - total));
       parts.push(`## ${name}\n${chunk}`);
+      contextFiles.push({ path: name, content: chunk });
       total += chunk.length;
       if (total >= MAX_BOOTSTRAP_CHARS) break;
     } catch {
       /* missing bootstrap files are optional */
     }
   }
-  return parts.join('\n\n');
+  return { bootstrapText: parts.join('\n\n'), contextFiles };
 }
 
 function truncate(value: string, max: number): string {

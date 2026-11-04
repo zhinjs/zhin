@@ -12,12 +12,14 @@ import {
   createSnapshotView,
   rootPluginId,
   type CapabilitySlot,
+  type TokenId,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { MemoryConversationEventStore } from '@zhin.js/im-contract';
 import {
   AdapterIndex,
-  Endpoint,
+  Adapter, endpointSpec, createEndpointSpecification, type Endpoint,
+  type EndpointSendRequest,
   adapterFeatureId,
   createPeerRegistry,
   defineAdapter,
@@ -27,20 +29,6 @@ import {
 import { ImRuntime, ingressRouteToken, roomMembershipToken, type Message } from 'zhin.js/core/runtime';
 import { createRoomMembershipPort, type RoomDefinition, type RoomRegistry } from '@zhin.js/workroom';
 import { BOT_ENDPOINTS, ROOM_ID, SANDBOX_ADAPTER, buildRoomDefinition, buildRoomRegistry } from '../../src/room.js';
-
-class SandboxTestEndpoint extends Endpoint<object> {
-  readonly client: object;
-  constructor(surface: object) {
-    super();
-    this.client = surface;
-    Object.defineProperties(this, Object.getOwnPropertyDescriptors(surface));
-  }
-  // Lifecycle stubs (the surface's own members shadow them at runtime).
-  start(): void {}
-  open(): void {}
-  close(): void {}
-  stop(): void {}
-}
 
 const ignored = Object.freeze({ receive: async (_event: EndpointEvent) => undefined });
 
@@ -82,6 +70,12 @@ export async function createSandboxImFixture(options: { room?: RoomDefinition } 
   const root = rootPluginId();
   const sent: SentRecord[] = [];
   let outSeq = 0;
+  class MemoryClient {
+    send(request: EndpointSendRequest) { sent.push(request); return `out-${++outSeq}`; }
+  }
+  class SandboxTestEndpoint extends MemoryClient implements Endpoint {
+    readonly [endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, send: request => this.send(request) });
+  }
   const adapter = createCapabilitySlot({
     owner: root,
     feature: adapterFeatureId,
@@ -90,15 +84,9 @@ export async function createSandboxImFixture(options: { room?: RoomDefinition } 
     definition: defineAdapter({
       capabilities: ['inbound', 'outbound'],
       segments: { interactive: 'text' },
-      async create() {
-        return new SandboxTestEndpoint({
-          start() {}, open() {}, close() {}, stop() {},
-          send(request: SentRecord) {
-            sent.push(request);
-            return `out-${++outSeq}`;
-          },
-        });
-      },
+      createAdapter: () => new class extends Adapter<SandboxTestEndpoint> {
+        protected createEndpoint() { return new SandboxTestEndpoint(); }
+      }(),
     }),
   });
   const slots: readonly CapabilitySlot[] = [adapter];
@@ -138,7 +126,7 @@ export async function createSandboxImFixture(options: { room?: RoomDefinition } 
     return resolved;
   });
 
-  const commit = (key: string, value: unknown) => {
+  const commit = (key: TokenId, value: unknown) => {
     const current = store.current;
     const resources = new Map(current.resources);
     resources.set(current.root, new Map([...resources.get(current.root)!, [key, value]]) as never);
@@ -178,7 +166,7 @@ export async function createSandboxImFixture(options: { room?: RoomDefinition } 
       name: 'message.receive',
       payload: { conversation: conv, content, sender: { id: sender }, message: { conversation: conv, id: messageId }, ...rest },
       endpoint: Object.freeze({ id: endpointId as never, name: 'test' }),
-      client: ignored,
+      client: adapters.clientById(endpointId as typeof adapter.id),
     }) as never) as Promise<{ matched: boolean }>;
   };
   /** Deliver the same message to several Endpoints concurrently (each Bot in the group sees one copy). */

@@ -1,9 +1,10 @@
+import { createMilkySelfProfile } from './self-profile.js';
 /**
  * Milky WS client endpoint — outbound connect to Milky protocol server.
  */
 import WebSocket from 'ws';
 import {
-  ClientEndpoint,
+  createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification,
   createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
@@ -16,10 +17,10 @@ import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { createMilkyEndpointManagement } from './endpoint-management.js';
 import {
-  callMilkyClient,
-  createMilkyEndpointClient,
+  createMilkyActionCaller, readMilkyResponse, type MilkyActionCaller,
+  milkyClientOptions,
   forwardMilkyClientEvents,
-  type MilkyClient,
+  MilkyClient,
 } from './client.js';
 import {
   buildSendAction,
@@ -46,6 +47,7 @@ const WS_OPEN = 1;
 
 export interface MilkyWsEndpointOptions {
   readonly id: CapabilityId;
+  readonly signal?: AbortSignal;
   readonly config: MilkyWsConfig;
   readonly createWebSocket?: (
     url: string,
@@ -54,34 +56,46 @@ export interface MilkyWsEndpointOptions {
   readonly callApi?: typeof callApi;
 }
 
-export class MilkyWsEndpoint extends ClientEndpoint<MilkyClient> {
-  readonly client: MilkyClient;
+export class MilkyWsEndpoint extends MilkyClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  #open = false;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: MilkyWsEndpointOptions;
-  readonly #callApi: typeof callApi;
-  readonly management: EndpointManagement;
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
+  readonly #management: EndpointManagement;
+  readonly #call: MilkyActionCaller;
+  readonly #control: EndpointControl = createRecallEndpointControl((id, signal) => this.#recallMessage({ id, signal }));
   readonly #lifecycle: EndpointLifecycle;
   #ws?: MilkyWsSocket;
   #clientSocketRelease?: () => void;
 
   constructor(options: MilkyWsEndpointOptions) {
-    super();
+    const call = createMilkyActionCaller({ config: options.config, request: options.callApi ?? callApi, signal: options.signal });
+    super(milkyClientOptions({ config: options.config, call }));
+    this.#call = call;
     this.#logger = getAdapterLogger('milky', options.config.id);
     this.#options = options;
-    this.#callApi = options.callApi ?? callApi;
-    this.client = createMilkyEndpointClient(options.config, this.#callApi);
-    this.management = createMilkyEndpointManagement({
-      callApi: (action, params) => callMilkyClient(this.client, action, params),
+    this.#management = createMilkyEndpointManagement({
+      callApi: request => call(request).then(response => readMilkyResponse(response, request.action)),
     });
-    this.bindClientEvents(
-      (receive) => forwardMilkyClientEvents(this.client, receive),
-      (name, payload) => {
+    const readTransportState = () => this.#lifecycle.state;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => { this.#open = true; },
+      close: () => { this.#close(); }, stop: () => this.#stop(),
+      send: request => this.#send(request),
+      management: this.#management, control: this.#control,
+      profile: createMilkySelfProfile({ call: request => call(request).then(response => readMilkyResponse(response, request.action)),
+        reportAccount: id => this[endpointSpec].reportSelfUserId(id) }),
+      get transportState() { return readTransportState(); },
+    });
+    forwardMilkyClientEvents(this, (name, payload) => {
+      void this[endpointSpec].events.run(() => {
+        if (!this.#open && !this.#lifecycle.started) return;
+        void this[endpointSpec].events.platform(name, payload).catch(error => this.#warnPlatformEvent(error));
         if (name === 'event') this.#admitRaw(payload as MilkyEvent);
-      },
-      (_name, error) => this.#warnPlatformEvent(error),
-    );
+      }).catch(error => this.#warnPlatformEvent(error));
+    });
     this.#lifecycle = createEndpointLifecycle({
       name: options.config.id,
       // reconnect_interval 旧语义为固定间隔：multiplier 1 + 无 jitter + 不封顶
@@ -94,19 +108,19 @@ export class MilkyWsEndpoint extends ClientEndpoint<MilkyClient> {
     });
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#lifecycle.started) return;
     await this.#lifecycle.start((handle) => this.#connect(handle));
   }
 
-  close(): void {
-    super.close();
+  #close(): void {
+    this.#open = false;
     this.#clientSocketRelease?.();
     this.#clientSocketRelease = undefined;
   }
 
-  async stop(): Promise<void> {
-    this.close();
+  async #stop(): Promise<void> {
+    this.#close();
     await this.#lifecycle.stop();
     if (this.#ws) {
       try {
@@ -118,10 +132,10 @@ export class MilkyWsEndpoint extends ClientEndpoint<MilkyClient> {
     }
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await callMilkyClient<{ message_seq?: number }>(this.client, action, params);
+    const data = readMilkyResponse<{ message_seq?: number }>(await this.#call({ action, params, signal }), action);
     const messageId = formatOutboundMessageId(conversation, data?.message_seq);
     this.#logger.debug(formatCompact({
       op: 'milky_send',
@@ -132,23 +146,24 @@ export class MilkyWsEndpoint extends ClientEndpoint<MilkyClient> {
     return messageId;
   }
 
-  async recallMessage(id: string): Promise<void> {
+  async #recallMessage({ id, signal }: { readonly id: string; readonly signal?: AbortSignal }): Promise<void> {
     const parsed = parseMilkyMessageId(id);
     if (!parsed) throw new Error(`Invalid message id: ${id}`);
     if (parsed.message_scene === 'group') {
-      await callMilkyClient(this.client, 'recall_group_message', {
+      readMilkyResponse(await this.#call({ action: 'recall_group_message', signal, params: {
         group_id: parsed.peer_id,
         message_seq: parsed.message_seq,
-      });
+      } }), 'recall_group_message');
     } else {
-      await callMilkyClient(this.client, 'recall_private_message', {
+      readMilkyResponse(await this.#call({ action: 'recall_private_message', signal, params: {
         user_id: parsed.peer_id,
         message_seq: parsed.message_seq,
-      });
+      } }), 'recall_private_message');
     }
   }
 
   #admitRaw(event: MilkyEvent): void {
+    if (event.self_id != null) this[endpointSpec].reportSelfUserId(String(event.self_id));
     const data = parseMessageReceiveData(event);
     if (!data) return;
     this.#admitMessage(data, event);
@@ -162,14 +177,16 @@ export class MilkyWsEndpoint extends ClientEndpoint<MilkyClient> {
   }
 
   #admitMessage(data: MilkyIncomingMessage, event: MilkyEvent): void {
-    const conversation = milkyInboundConversation(String(this.#options.id), data);
+    const conversation = { ...milkyInboundConversation(String(this.#options.id), data), endpoint: this[endpointSpec].identity };
     const target = `${conversation.kind}:${conversation.id}`;
     const content = formatInboundContent(data);
     const segments = formatInboundSegments(data);
     const audioUrl = extractInboundAudioUrl(data);
     const nickname = senderNickname(data);
     const mentioned = isMentioned(data, event.self_id);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event,
+      ...(typeof event.time === 'number' ? { platformSentAt: event.time * 1000 } : {}),
       conversation,
       message: { conversation, id: formatInboundMessageId(data) },
       content,
@@ -242,7 +259,7 @@ export class MilkyWsEndpoint extends ClientEndpoint<MilkyClient> {
       });
 
       this.#clientSocketRelease?.();
-      this.#clientSocketRelease = this.client.acceptWebSocket(ws);
+      this.#clientSocketRelease = this.acceptWebSocket(ws);
 
       ws.on('close', (code, reason) => {
         this.#clientSocketRelease?.();

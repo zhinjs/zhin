@@ -21,9 +21,7 @@ export {
 } from './protocol.js';
 
 export {
-  DingTalkClient,
   DingTalkEndpoint,
-  type DingTalkClientApi,
   type DingTalkEndpointOptions,
   type DingTalkFetch,
 } from './endpoint.js';
@@ -34,7 +32,7 @@ export {
   type DingTalkWebhookHandler,
 } from './webhook.js';
 
-export { dingtalkClient, type DingtalkClientEventMap } from './client.js';
+export { type DingtalkClientEventMap } from './client.js';
 
 export {
   checkDingtalkPlatformPermit,
@@ -42,3 +40,6 @@ export {
   normalizeDingtalkSenderForPermit,
   platformPermit,
 } from './platform-permit.js';
+
+export { DingTalkClient, type DingTalkClientApi } from './client.js';
+export { DingTalkAdapter } from './adapter.js';

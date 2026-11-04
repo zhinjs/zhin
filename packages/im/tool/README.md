@@ -46,6 +46,14 @@ export default defineAgentTool<{ city: string }>({
 单文件插件可用 `setup({ addTool })` 注册 `defineAgentTool(...)`。Tool Feature 必须已在
 插件 manifest 中挂载；注册结果与约定目录进入同一 ToolIndex。
 
+工具若有会话冷却等已知状态，可声明 `isAvailable({ sessionKey, origin })`。`origin` 提供原始
+IM 会话地址；同一会话的子任务可能有不同的存储 sessionKey，按平台会话限流时应使用完整的
+`origin.conversation` 身份（endpoint、parent、thread），不使用显示名称。它在当前回合通过平台、
+权限等筛选后同步读取状态，返回 `false` 时，本轮的常驻列表、已加载工具、发现与加载入口都不
+提供该工具。静态索引查询不执行它。此函数必须无副作用，只返回 boolean；不能发起 I/O、
+抽取概率、预留额度或改变冷却。状态可能在模型思考期间变化，`execute` 仍须重新检查；
+`isAvailable` 不是执行权限或互斥锁，异常会保留为错误，不会被当作工具不存在。
+
 ## Owner 解析
 
 `ToolIndex.execute(requester, name, input, invocation)` 从 requester 向 Root 查找最近 definition。`invocation` 必须包含所属 Turn 的 `AbortSignal`、trace/turn/session identity、principal 与不可变 policy（permissions / unattended / network authority）；这些字段会连同声明 owner 的 config/resource 组成 `ToolExecutionContext`。网络 transport 必须读取该 context 的 authority，不能读取模块全局或自行猜测执行域。child 可覆盖继承的 Root Tool。

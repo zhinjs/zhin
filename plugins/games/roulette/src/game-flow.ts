@@ -1,5 +1,5 @@
 import { createMessages, resolveLocale, type Locale } from 'zhin.js/i18n';
-import { gameCommandHint, GameSessionConflictError, SessionRevisionConflictError, channelKey, type GameMessageLike } from '@zhin.js/game-kit';
+import { gameCommandHint, GameSessionConflictError, SessionRevisionConflictError, channelKey, gameTargetFromKey, type GamePlayer } from '@zhin.js/game-kit';
 import type { RouletteConfig } from './config.js';
 import { RouletteRuleError, loserOf, type RouletteState } from './engine.js';
 import type { RouletteSessionRow } from './models.js';
@@ -10,7 +10,6 @@ import {
   stateOf,
   type RouletteAction,
   type RouletteActionResult,
-  type EndpointIdentity,
   type RouletteServices,
 } from './session-service.js';
 import {
@@ -31,8 +30,7 @@ export interface RouletteFlow {
 
 /** Who sent the action, from the runtime message. */
 export interface RouletteActor {
-  readonly message: GameMessageLike;
-  readonly endpoint: EndpointIdentity;
+  readonly message: GamePlayer;
   readonly roles: readonly string[];
 }
 
@@ -43,30 +41,32 @@ export interface ExpiredSessionNotice {
 
 const DEADLINE_ACTOR = 'deadline';
 const MANAGER_ROLES: readonly string[] = ['master', 'trusted', 'owner', 'admin'];
-function noGame(message: GameMessageLike): string { return messages(message.locale, 'noGame') + gameCommandHint(message, 'roulette', 'open'); }
+function noGame(message: GamePlayer): string { return messages(message.locale, 'noGame') + gameCommandHint(message, 'roulette', 'open'); }
 
 export async function runRouletteAction(
   flow: RouletteFlow,
   actor: RouletteActor,
   action: RouletteCommandAction,
 ): Promise<string> {
-  const message = actor.message;
-  const locale = resolveLocale(message.locale);
-  if (action === 'help') return getRouletteHelp(message);
-  if (message.$channel.type === 'private') return messages(locale, 'text1');
-  if (action === 'penalty-on' || action === 'penalty-off' || action === 'penalty-status') {
-    return handlePenaltySetting(flow, actor, action);
-  }
+  return flow.services.sessions.runInScope({ scope: channelKey(actor.message), run: async () => {
+    const message = actor.message;
+    const locale = resolveLocale(message.locale);
+    if (action === 'help') return getRouletteHelp(message);
+    if (message.target.kind === 'private') return messages(locale, 'text1');
+    if (action === 'penalty-on' || action === 'penalty-off' || action === 'penalty-status') {
+      return handlePenaltySetting(flow, actor, action);
+    }
 
-  const notices: string[] = [];
-  let session = await flow.services.sessions.getActiveByChannel(channelKey(message));
-  if (session && isOverdue(session, Date.now())) {
-    const expired = await expireSession(flow, session);
-    if (expired) notices.push(expired);
-    session = null;
-  }
-  const reply = await handleGameAction(flow, actor, action, session);
-  return [...notices, reply].join('\n\n');
+    const notices: string[] = [];
+    let session = await flow.services.sessions.getActiveByChannel(channelKey(message));
+    if (session && isOverdue(session, Date.now())) {
+      const expired = await expireSession(flow, session);
+      if (expired) notices.push(expired);
+      session = null;
+    }
+    const reply = await handleGameAction(flow, actor, action, session);
+    return [...notices, reply].join('\n\n');
+  } });
 }
 
 /** Called by the deadline schedule; each returned notice still has to be delivered. */
@@ -79,12 +79,14 @@ export async function expireOverdueSessions(
   const notices: ExpiredSessionNotice[] = [];
   for (const session of overdue) {
     try {
-      const text = await expireSession(flow, session);
-      if (!text) continue;
-      const notice = { session, text };
-      notices.push(notice);
-      // Announce as soon as the result is stored, so a later failure cannot drop it.
-      if (onNotice) await onNotice(notice);
+      await flow.services.sessions.runInScope({ scope: session.channel_key, run: async () => {
+        const text = await expireSession(flow, session);
+        if (!text) return;
+        const notice = { session, text };
+        notices.push(notice);
+        // Announce as soon as the result is stored, so a later failure cannot drop it.
+        if (onNotice) await onNotice(notice);
+      } });
     } catch (error) {
       // The session stays active when anything before the commit failed; the next sweep retries it.
       const reason = error instanceof Error ? error.message : String(error);
@@ -113,7 +115,7 @@ async function handleGameAction(
   try {
     const result = await flow.services.sessions.applyAction(
       session,
-      message.$sender.id,
+      message.sender.id,
       gameAction,
       flow.config,
     );
@@ -136,7 +138,7 @@ async function openLobby(
     return messages(locale, 'text4', { p0: describeStatus(stateOf(session), flow.config, { ...actor.message, locale }) });
   }
   try {
-    const created = await flow.services.sessions.createLobby(actor.message, actor.endpoint, flow.config);
+    const created = await flow.services.sessions.createLobby(actor.message, flow.config);
     return describeLobby(stateOf(created), flow.config, { ...actor.message, locale });
   } catch (error) {
     if (error instanceof GameSessionConflictError) return error.format(locale);
@@ -148,7 +150,7 @@ async function describeResult(
   flow: RouletteFlow,
   action: RouletteAction,
   result: RouletteActionResult,
-  message: GameMessageLike,
+  message: GamePlayer,
 ): Promise<string> {
   const state = result.state;
   const locale = resolveLocale(result.session.locale);
@@ -231,7 +233,7 @@ async function handlePenaltySetting(
 ): Promise<string> {
   const message = actor.message;
   const locale = resolveLocale(message.locale);
-  if (message.$channel.type !== 'group') return messages(locale, 'text9');
+  if (message.target.kind !== 'group') return messages(locale, 'text9');
   const key = channelKey(message);
   const settings = flow.services.settings;
   const support = flow.penalty.support(conversationOfActor(actor));
@@ -241,13 +243,13 @@ async function handlePenaltySetting(
   }
   if (!isManager(actor.roles)) return messages(locale, 'text10');
   if (action === 'penalty-off') {
-    await settings.setMutePenalty(key, false, message.$sender.id);
+    await settings.setMutePenalty(key, false, message.sender.id);
     return messages(locale, 'text11');
   }
   if (support !== 'supported') {
     return messages(locale, 'text12');
   }
-  await settings.setMutePenalty(key, true, message.$sender.id);
+  await settings.setMutePenalty(key, true, message.sender.id);
   return messages(locale, 'text13', { p0: flow.config.muteSeconds });
 }
 
@@ -257,7 +259,7 @@ function describePenaltyStatus(enabled: boolean, supported: boolean, config: Rou
   return messages(locale, 'text17', { p0: config.muteSeconds, p1: platform });
 }
 
-function toGameAction(action: RouletteCommandAction, message: GameMessageLike): RouletteAction | null {
+function toGameAction(action: RouletteCommandAction, message: GamePlayer): RouletteAction | null {
   if (action === 'join') return { type: 'join', player: playerFromMessage(message) };
   if (action === 'start') return { type: 'start' };
   if (action === 'fire') return { type: 'fire' };
@@ -268,10 +270,10 @@ function toGameAction(action: RouletteCommandAction, message: GameMessageLike): 
 
 function mayCancel(
   session: RouletteSessionRow,
-  message: GameMessageLike,
+  message: GamePlayer,
   senderRoles: readonly string[],
 ): boolean {
-  if (stateOf(session).hostId === message.$sender.id) return true;
+  if (stateOf(session).hostId === message.sender.id) return true;
   return isManager(senderRoles);
 }
 
@@ -284,20 +286,17 @@ function isOverdue(session: RouletteSessionRow, now: number): boolean {
 }
 
 export function conversationOfSession(session: RouletteSessionRow): PenaltyConversation {
-  return {
-    endpointAdapter: session.endpoint_adapter,
-    endpointId: session.endpoint_id,
-    kind: session.channel_type,
-    id: session.channel_id,
-  };
+  const target = gameTargetFromKey(session.channel_key);
+  if (!target) throw new Error('Historical roulette session awaits explicit target migration');
+  return { endpointAdapter: target.endpoint.adapter, endpointId: target.endpoint.id, kind: target.kind, id: target.id };
 }
 
 function conversationOfActor(actor: RouletteActor): PenaltyConversation {
   return {
-    endpointAdapter: actor.endpoint.adapter,
-    endpointId: actor.endpoint.id,
-    kind: actor.message.$channel.type,
-    id: actor.message.$channel.id,
+    endpointAdapter: actor.message.target.endpoint.adapter,
+    endpointId: actor.message.target.endpoint.id,
+    kind: actor.message.target.kind,
+    id: actor.message.target.id,
   };
 }
 

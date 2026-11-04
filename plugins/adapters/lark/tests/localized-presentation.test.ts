@@ -1,17 +1,20 @@
+import { createEndpointHarness, createTestEventGateway } from '../../test-utils/endpoint.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
+import { createHttpHost } from '@zhin.js/host-http';
 import { LarkEndpoint } from '../src/endpoint.js';
 import { formatOutboundBody, resolveLarkConfig } from '../src/protocol.js';
 import upload from '../agents/lark/skills/lark/tools/upload_file/index.js';
 
 it('passes operation language through the endpoint to generated link buttons without translating author content', async () => {
   const bodies: any[] = [];
-  const endpoint = new LarkEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'lark'),
-    config: resolveLarkConfig({ id: 'fixture', appId: 'fixture', appSecret: 'fixture', mode: 'websocket' }),
+  const endpoint = await createEndpointHarness(() => new LarkEndpoint({ http: createHttpHost({ host: '127.0.0.1', port: 0 }), id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'lark'),
+    config: resolveLarkConfig({ id: 'fixture', appId: 'fixture', appSecret: 'fixture', mode: 'webhook' }),
     fetch: async (url, options) => {
       if (!url.includes('/auth/')) bodies.push(JSON.parse(String(options?.body)));
       return { ok: true, status: 200, text: async () => '', json: async () => url.includes('/auth/') ? { code: 0, tenant_access_token: 'fixture', expire: 7200 } : { code: 0, data: { message_id: 'message-1' } } };
     },
-  });
+  }), { capabilities: ['inbound', 'outbound'], operations: ['recall'] });
+  await endpoint.start(); endpoint.open();
   const payload = [{ type: 'share', data: { title: '保留中文标题', description: '原文内容', url: 'https://example.test/article' } },
     { type: 'keyboard', data: { rows: [[{ label: '确认', payload: 'unchanged-action' }]] } }];
   await endpoint.send({ locale: 'en', conversation: { endpoint: { id: 'fixture', adapter: 'lark' }, kind: 'group', id: 'room' }, payload });

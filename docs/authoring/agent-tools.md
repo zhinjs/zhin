@@ -56,6 +56,13 @@ export default defineAgentTool({
 
 不满足条件时，模型根本看不到这个工具。`permissions` 与命令的 [`permit`](./commands.md) 使用同一套规则。`hidden: true` 表示注册但不提供给模型，只能按名字调用。
 
+会话冷却等动态状态可以用 `isAvailable({ sessionKey, origin })` 在回合开始时判断。按平台会话
+限流时，使用 `origin.conversation` 的完整身份（含 endpoint、parent、thread），因为子任务的
+存储 sessionKey 可能不同。它在权限筛选后
+同步读取已有状态，返回 `false` 时，本轮也不能通过 `discover` / `load_tool` 加载该工具。
+不要在这里发请求、抽概率或消耗额度；执行时仍要复核可变条件。该函数必须同步返回 boolean，
+异常会作为错误上报。没有会话的静态能力查询不执行这一检查。
+
 ### 执行前让用户确认
 
 ```ts
@@ -139,6 +146,8 @@ export default definePlugin({
 | `$client` | 按适配器推断的平台客户端 |
 
 请始终通过这个参数取用依赖，而不是在执行时查找其他插件。这样工具在热重载期间也能使用正确版本的资源。
+
+Host 还可能提供可选的内部 `effects` 证据接口。它不授予权限，也不能替代审批；只有实际动作 owner 能按真实提交结果上报，普通返回文本不能充当提交凭据。工具不能依赖该字段存在，旧 Host 缺失时仍应正常执行；未提供可靠证据的调用不会被当作可安全重放。普通插件与脚手架无需为此修改。
 
 `config` 默认是 `unknown`。要给它加类型，用 `defineAgentTool.withConfig` 先固定配置类型，第二次调用再写输入类型（`inputSchema` 用 Zod 时输入类型会自动推断）：
 

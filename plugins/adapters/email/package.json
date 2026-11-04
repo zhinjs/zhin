@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/adapter-email",
-  "version": "1.1.16",
+  "version": "1.1.21",
   "type": "module",
   "description": "Zhin.js Email adapter for Plugin Runtime (SMTP/IMAP)",
   "main": "./lib/index.js",
@@ -15,14 +15,17 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/client": "workspace:*",
+    "@zhin.js/console-contract": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
+    "@zhin.js/page": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
     "imap": "^0.8.19",
     "mailparser": "^3.9.14",
-    "nodemailer": "^10.1.4",
-    "@zhin.js/skill": "workspace:*"
+    "nodemailer": "^10.1.4"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -66,6 +69,7 @@
   },
   "files": [
     "adapters",
+    "pages",
     "plugin.js",
     "schema.json",
     "src",
@@ -103,10 +107,14 @@
     "features": [
       {
         "package": "@zhin.js/adapter",
-        "api": "^1.0.0"
+        "api": "^2.1.0"
       },
       {
         "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/page",
         "api": "^1.0.0"
       }
     ],

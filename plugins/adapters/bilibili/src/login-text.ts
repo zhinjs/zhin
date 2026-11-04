@@ -1,7 +1,6 @@
 /** `bili-login` 命令的文案；扫码与凭据保存仍由 endpoint 负责。 */
 import { createMessages, type Locale } from 'zhin.js/i18n';
-import type { BilibiliEndpointRegistry } from './bilibili-runtime-state.js';
-import type { BilibiliEndpoint } from './endpoint.js';
+import type { BilibiliEndpointDirectory, BilibiliEndpointView } from './endpoint-directory.js';
 
 const t = createMessages({
   none: { 'zh-CN': 'B 站适配器还没有启动', en: 'The Bilibili adapter has not started.' },
@@ -21,7 +20,7 @@ const t = createMessages({
   after: { 'zh-CN': '扫码后发 {command} 查看结果', en: 'After scanning, send {command} to check the result.' },
 });
 
-export function pickLoginEndpoint(registry: BilibiliEndpointRegistry, id: string | undefined, locale?: Locale): BilibiliEndpoint | string {
+export function pickLoginEndpoint(registry: BilibiliEndpointDirectory, id: string | undefined, locale?: Locale): BilibiliEndpointView | string {
   if (id) return registry.get(id) ?? t(locale, 'missing', { id });
   const endpoints = [...registry.values()];
   if (endpoints.length === 0) return t(locale, 'none');
@@ -29,7 +28,7 @@ export function pickLoginEndpoint(registry: BilibiliEndpointRegistry, id: string
   return endpoints[0]!;
 }
 
-export function loginStatusLine(endpoint: BilibiliEndpoint, locale?: Locale): string {
+export function loginStatusLine(endpoint: BilibiliEndpointView, locale?: Locale): string {
   const id = endpoint.localId;
   const login = endpoint.login;
   const base = login.state === 'ok'
@@ -42,7 +41,7 @@ export function loginStatusLine(endpoint: BilibiliEndpoint, locale?: Locale): st
   return `${base}\n${t(locale, 'drafts', { count: endpoint.drafts.size })}`;
 }
 
-export function loginStatusText(registry: BilibiliEndpointRegistry, locale?: Locale): string {
+export function loginStatusText(registry: BilibiliEndpointDirectory, locale?: Locale): string {
   const endpoints = [...registry.values()];
   if (endpoints.length === 0) return t(locale, 'none');
   return endpoints.map(endpoint => loginStatusLine(endpoint, locale)).join('\n\n');
@@ -53,7 +52,7 @@ export type LoginStartResult =
   | { readonly kind: 'qr'; readonly text: string; readonly image: string; readonly hint?: string };
 
 export async function startLoginForChat(
-  registry: BilibiliEndpointRegistry,
+  registry: BilibiliEndpointDirectory,
   options: { readonly id?: string; readonly locale?: Locale; readonly isPrivate: boolean; readonly statusCommand?: string },
 ): Promise<LoginStartResult> {
   const { locale } = options;

@@ -2,7 +2,7 @@ import { defineEvalCase } from '../framework/index.js';
 
 export default defineEvalCase({
   id: 'told-ledger-carried',
-  description: 'Conclusions and commitments from the previous reply reach the next turn as a short "already told" block.',
+  description: 'Visible delivered conclusions and commitments reach the next turn once, without a duplicate ledger block.',
   source: '#730 M2.5: the agent repeated or contradicted what it had already told the user',
   tags: ['context', 'memory'],
   inbound: [
@@ -14,11 +14,9 @@ export default defineEvalCase({
     { text: '会的，周五上午提醒你。' },
   ],
   expect: {
-    modelInputContains: [
-      '[Already told the user]',
-      '- (conclusion) 周报周五 18:00 前交。',
-      '- (commitment) 我会在周五上午提醒你。',
-    ],
+    requestInputContains: { 2: ['周报周五 18:00 前交。', '我会在周五上午提醒你。'] },
+    maxInputOccurrences: { '周报周五 18:00 前交。': 1, '我会在周五上午提醒你。': 1 },
+    modelInputNotContains: ['[Already told the user]'],
     outboundMessages: 2,
     modelSteps: 2,
   },

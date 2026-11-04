@@ -1,5 +1,57 @@
 # @zhin.js/plugin-group-suite
 
+## 1.1.20
+
+### Patch Changes
+
+- Updated dependencies [b0c02a2]
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [032dc96]
+  - @zhin.js/core@1.1.55
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/jsx@1.1.9
+  - @zhin.js/skill@1.1.12
+  - @zhin.js/components@1.1.9
+
+## 1.1.19
+
+### Patch Changes
+
+- Updated dependencies [2c3610a]
+- Updated dependencies [a9f4e48]
+- Updated dependencies [f8505b0]
+  - @zhin.js/core@1.1.54
+  - @zhin.js/skill@1.1.11
+  - @zhin.js/tool@1.1.13
+
+## 1.1.18
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/core@1.1.53
+  - @zhin.js/tool@1.1.12
+  - @zhin.js/jsx@1.1.8
+  - @zhin.js/components@1.1.8
+
+## 1.1.17
+
+### Patch Changes
+
+- Updated dependencies [f67883e]
+- Updated dependencies [4d728c0]
+- Updated dependencies [eb8feeb]
+- Updated dependencies [24a2b71]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [3771f7a]
+- Updated dependencies [4f96ad5]
+  - @zhin.js/core@1.1.52
+  - @zhin.js/tool@1.1.11
+  - @zhin.js/jsx@1.1.7
+  - @zhin.js/components@1.1.7
+
 ## 1.1.16
 
 ### Patch Changes

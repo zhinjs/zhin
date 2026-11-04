@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
+import { endpointRuntimeOf } from '../../../packages/im/adapter/src/endpoint-specification.js';
 import {
   assertDeclaredProfileActions,
   endpointKindCapabilities,
@@ -10,7 +11,6 @@ import {
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import { resolveActivityFeedbackPhaseConfig } from '../../../packages/im/agent/src/activity-feedback/config-resolver.js';
-import { bindTestEndpoint } from '../test-utils/endpoint.js';
 
 import bilibili from '../bilibili/adapters/bilibili/index.js';
 import bilibiliLive from '../bilibili-live/adapters/bilibili-live/index.js';
@@ -54,7 +54,7 @@ describe('adapter capability profiles (ADR 0044 C5)', () => {
   it.each(Object.entries(definitions))('%s declares a profile that validates and can send', (name, definition) => {
     expect(definition.profile, name).toBeDefined();
     // Re-defining proves the stored profile still passes validation (segments live in the profile alias).
-    expect(() => defineAdapter({ ...definition, segments: undefined, create: () => ({ send: async () => 'id' }) as never })).not.toThrow();
+    expect(() => defineAdapter({ ...definition, segments: undefined, createAdapter: () => ({}) as never })).not.toThrow();
     const caps = resolveTurnCapabilities({ profile: definition.profile!, conversation: conv(name, 'group') });
     expect(caps.has('delivery.send'), name).toBe(true);
     expect(definition.segments, name).toBeDefined();
@@ -115,7 +115,7 @@ describe('declared actions find their ports on real endpoints (assembly check)',
   const id = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'x');
   const check = (definition: AdapterDefinition<never>, endpoints: unknown[]) => {
     for (const endpoint of endpoints) {
-      expect(() => assertDeclaredProfileActions(endpoint, definition.profile!, 'x', true)).not.toThrow();
+      expect(() => assertDeclaredProfileActions(endpointRuntimeOf(endpoint as never), definition.profile!, 'x', true)).not.toThrow();
     }
   };
 
@@ -124,22 +124,22 @@ describe('declared actions find their ports on real endpoints (assembly check)',
       new NapCatWsEndpoint({ id, gateway, config: resolveNapCatConfig({ connection: 'ws', id: 't', url: 'ws://127.0.0.1:3001' }) as never }),
       new NapCatWssEndpoint({ id, gateway, http: httpStub, config: resolveNapCatConfig({ connection: 'wss', id: 't', path: '/napcat' }) as never }),
       new NapCatHttpEndpoint({ id, gateway, http: httpStub, config: resolveNapCatConfig({ connection: 'http', id: 't', http_url: 'http://127.0.0.1:3000', post_path: '/napcat/post' }) as never }),
-    ].map((endpoint) => bindTestEndpoint(endpoint, gateway, undefined)));
+    ]);
   });
 
   it('onebot11 (ws, wss)', () => {
     check(onebot11, [
       new OneBot11WsEndpoint({ id, gateway, config: resolveOneBot11Config({ connection: 'ws', id: 't', url: 'ws://127.0.0.1:6700' }) as never }),
       new OneBot11WssEndpoint({ id, gateway, http: httpStub, config: resolveOneBot11Config({ connection: 'wss', id: 't', path: '/onebot11' }) as never }),
-    ].map((endpoint) => bindTestEndpoint(endpoint, gateway, undefined)));
+    ]);
   });
 
   it('onebot12 (ws, wss, webhook)', () => {
     check(onebot12, [
-      new OneBot12WsEndpoint({ id, gateway, config: resolveOneBot12Config({ connection: 'ws', id: 't', url: 'ws://127.0.0.1:6700' }) as never }),
-      new OneBot12WssEndpoint({ id, gateway, http: httpStub, config: resolveOneBot12Config({ connection: 'wss', id: 't', path: '/onebot12' }) as never }),
-      new OneBot12WebhookEndpoint({ id, gateway, http: httpStub, config: resolveOneBot12Config({ connection: 'webhook', id: 't', path: '/onebot12/webhook', api_url: 'http://127.0.0.1:5701' }) as never }),
-    ].map((endpoint) => bindTestEndpoint(endpoint, gateway, undefined)));
+      new OneBot12WsEndpoint({ id, gateway, config: resolveOneBot12Config({ connection: 'ws', id: 't', platform: 'qq', userId: 'bot', url: 'ws://127.0.0.1:6700' }) as never }),
+      new OneBot12WssEndpoint({ id, gateway, http: httpStub, config: resolveOneBot12Config({ connection: 'wss', id: 't', platform: 'qq', userId: 'bot', path: '/onebot12' }) as never }),
+      new OneBot12WebhookEndpoint({ id, gateway, http: httpStub, config: resolveOneBot12Config({ connection: 'webhook', id: 't', platform: 'qq', userId: 'bot', path: '/onebot12/webhook', api_url: 'http://127.0.0.1:5701' }) as never }),
+    ]);
   });
 
   it('milky (ws, wss, sse, webhook)', () => {
@@ -149,12 +149,12 @@ describe('declared actions find their ports on real endpoints (assembly check)',
       new MilkyWssEndpoint({ id, gateway, http: httpStub, config: resolveMilkyConfig({ ...base, connection: 'wss', path: '/milky' }) as never }),
       new MilkySseEndpoint({ id, gateway, config: resolveMilkyConfig({ ...base, connection: 'sse' }) as never }),
       new MilkyWebhookEndpoint({ id, gateway, http: httpStub, config: resolveMilkyConfig({ ...base, connection: 'webhook', path: '/milky/webhook' }) as never }),
-    ].map((endpoint) => bindTestEndpoint(endpoint, gateway, undefined)));
+    ]);
   });
 
   it('qq official (websocket)', () => {
     const config = resolveQqConfig({ id: 'qq-t', appid: 'a', secret: 's', mode: 'websocket' }) as never;
-    check(qq, [bindTestEndpoint(new QqWebsocketEndpoint({ id, config, createBot: (() => ({})) as never }), gateway, undefined)]);
+    check(qq, [new QqWebsocketEndpoint({ id, config, createBot: (() => ({})) as never })]);
   });
 });
 

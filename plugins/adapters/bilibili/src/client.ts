@@ -1,13 +1,14 @@
 /**
  * Bilibili Web API client（非官方接口，Experimental）。
- * 读：白名单视频评论、「回复我的 / @我的」通知；写：`addReply`，只在人工审批草稿后由 endpoint 调用。
+ * 读：白名单视频 / 动态 / 专栏评论、动态详情（解析评论区）、「回复我的 / @我的」通知；
+ * 写：`addReply`，只在人工审批草稿后由 endpoint 调用。
  * 永远不要记录 Cookie。
  */
-import { defineEndpointClient } from 'zhin.js/adapter';
 import {
   BILIBILI_RISK_CODES,
   BILIBILI_VIDEO_COMMENT_TYPE,
   type BilibiliApiEnvelope,
+  type BilibiliDynamicDetail,
   type BilibiliNotificationKind,
   type BilibiliNotificationPage,
   type BilibiliReply,
@@ -31,6 +32,7 @@ export type BilibiliFetch = (
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const USER_AGENT = 'Mozilla/5.0 (zhin.js adapter-bilibili; experimental)';
+const DYNAMIC_DETAIL_FEATURES = 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,commentsNewVersion';
 
 /** 平台返回非 0 code。`risk` 为 true 时调用方必须熔断。 */
 export class BilibiliApiError extends Error {
@@ -51,15 +53,19 @@ export interface BilibiliCookie {
 export interface BilibiliNav {
   readonly mid: string;
   readonly uname?: string;
+  readonly face?: string;
 }
 
 export class BilibiliClient {
   #cookie: BilibiliCookie;
+  readonly fetch: BilibiliFetch;
 
   constructor(
     readonly config: ResolvedBilibiliConfig,
-    readonly fetch: BilibiliFetch,
+    fetch: BilibiliFetch,
+    signal?: AbortSignal,
   ) {
+    this.fetch = bindBilibiliFetch(fetch, signal);
     this.#cookie = Object.freeze({
       ...(config.sessdata ? { sessdata: config.sessdata } : {}),
       ...(config.biliJct ? { biliJct: config.biliJct } : {}),
@@ -123,15 +129,16 @@ export class BilibiliClient {
   /** 登录态自检：uid + 昵称（未登录返回 undefined）。未登录时 B 站返回 -101。 */
   async getNav(): Promise<BilibiliNav | undefined> {
     if (!this.hasCookie) return undefined;
-    let data: { isLogin?: boolean; mid?: number; uname?: string } | undefined;
+    let data: { isLogin?: boolean; mid?: number; uname?: string; face?: string } | undefined;
     try {
-      data = await this.request<{ isLogin?: boolean; mid?: number; uname?: string }>('/x/web-interface/nav');
+      data = await this.request<{ isLogin?: boolean; mid?: number; uname?: string; face?: string }>('/x/web-interface/nav');
     } catch (error) {
       if (error instanceof BilibiliApiError && error.code === -101) return undefined;
       throw error;
     }
     return data?.isLogin && data.mid
-      ? Object.freeze({ mid: String(data.mid), ...(data.uname ? { uname: data.uname } : {}) })
+      ? Object.freeze({ mid: String(data.mid), ...(typeof data.uname === 'string' ? { uname: data.uname } : {}),
+          ...(typeof data.face === 'string' ? { face: data.face } : {}) })
       : undefined;
   }
 
@@ -144,14 +151,33 @@ export class BilibiliClient {
 
   /** 读取视频评论第一页（按时间倒序）。 */
   listLatestVideoReplies(aid: string, pageSize = 20): Promise<BilibiliReplyPage> {
+    return this.listLatestReplies(BILIBILI_VIDEO_COMMENT_TYPE, aid, pageSize);
+  }
+
+  /** 读取任一评论区（type + oid）第一页（按时间倒序）。oid 保持字符串，动态 id 超过 2^53。 */
+  listLatestReplies(type: number, oid: string, pageSize = 20): Promise<BilibiliReplyPage> {
     const query = new URLSearchParams({
-      type: String(BILIBILI_VIDEO_COMMENT_TYPE),
-      oid: aid,
+      type: String(type),
+      oid,
       sort: '0',
       pn: '1',
       ps: String(pageSize),
     });
     return this.request<BilibiliReplyPage>(`/x/v2/reply?${query.toString()}`);
+  }
+
+  /**
+   * 动态详情（公开接口，`x/polymer/web-dynamic/v1/detail`），只用来把动态 id 解析成评论区 (type, oid)。
+   * `features` 按 bilibili-API-collect 标注为必要参数。
+   */
+  getDynamicDetail(dynamicId: string): Promise<BilibiliDynamicDetail> {
+    const query = new URLSearchParams({
+      id: dynamicId,
+      timezone_offset: '-480',
+      platform: 'web',
+      features: DYNAMIC_DETAIL_FEATURES,
+    });
+    return this.request<BilibiliDynamicDetail>(`/x/polymer/web-dynamic/v1/detail?${query.toString()}`);
   }
 
   /** 「回复我的」（`x/msgfeed/reply`）/「@我的」（`x/msgfeed/at`）最新一页通知。需要 Cookie。 */
@@ -167,13 +193,20 @@ export class BilibiliClient {
    * 回复评论（`POST x/v2/reply/add`）。
    * 只由 `BilibiliEndpoint.approveDraft()` 在人工审批后调用；`send()` 永远不直接调用。
    */
-  async addReply(input: { readonly oid: string; readonly root: string; readonly parent: string; readonly message: string }): Promise<string> {
+  async addReply(input: {
+    /** 评论区 type，省略为视频（1）。 */
+    readonly type?: number;
+    readonly oid: string;
+    readonly root: string;
+    readonly parent: string;
+    readonly message: string;
+  }): Promise<string> {
     const csrf = this.#cookie.biliJct;
     if (!this.#cookie.sessdata || !csrf) {
       throw new BilibiliApiError(-101, 'Bilibili cookie (SESSDATA + bili_jct) is required to reply');
     }
     const body = new URLSearchParams({
-      type: String(BILIBILI_VIDEO_COMMENT_TYPE),
+      type: String(input.type ?? BILIBILI_VIDEO_COMMENT_TYPE),
       oid: input.oid,
       root: input.root,
       parent: input.parent,
@@ -192,13 +225,15 @@ export class BilibiliClient {
 
 export type BilibiliClientEventMap = Record<string, BilibiliReply>;
 
-declare module '@zhin.js/feature-kit' {
-  interface AdapterClientRegistry {
-    readonly bilibili: {
-      readonly client: BilibiliClient;
-      readonly events: BilibiliClientEventMap;
-    };
-  }
+/** Bind the actual account incarnation without changing existing request timeouts. */
+function bindBilibiliFetch(fetch: BilibiliFetch, signal: AbortSignal | undefined): BilibiliFetch {
+  if (!signal) return fetch;
+  return async (url, init) => {
+    signal.throwIfAborted();
+    const response = await fetch(url, { ...init, signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal });
+    signal.throwIfAborted();
+    return { ok: response.ok, status: response.status, async json() {
+      const body = await response.json(); signal.throwIfAborted(); return body;
+    } };
+  };
 }
-
-export const bilibiliClient = defineEndpointClient<BilibiliClient, BilibiliClientEventMap>('bilibili');

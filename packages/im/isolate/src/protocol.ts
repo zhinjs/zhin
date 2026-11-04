@@ -1,7 +1,7 @@
 export interface RequestMessage {
   readonly type: 'request';
   readonly id: number;
-  readonly method: 'prepare' | 'activate' | 'deactivate' | 'call' | 'dispose';
+  readonly method: 'prepare' | 'activate' | 'deactivate' | 'call' | 'dispose' | 'control';
   readonly payload?: unknown;
 }
 
@@ -41,7 +41,13 @@ export interface SerializedError {
 }
 
 export type HostMessage = ResponseMessage | HostCallMessage | EventMessage;
-export type IsolateMessage = RequestMessage | HostResultMessage;
+/** Cooperative cancellation of one control notification, never a request to terminate the isolate. */
+export interface ControlCancelMessage {
+  readonly type: 'control-cancel';
+  readonly id: number;
+  readonly error: SerializedError;
+}
+export type IsolateMessage = RequestMessage | HostResultMessage | ControlCancelMessage;
 
 export function serializeError(error: unknown): SerializedError {
   if (error instanceof Error) {

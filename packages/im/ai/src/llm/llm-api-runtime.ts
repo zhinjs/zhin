@@ -40,6 +40,10 @@ export interface StreamOptions {
   /** Optional semantic-input observer; the SDK can repeat it for same-input retries. Failures are isolated. */
   onRequest?: (request: LlmRequestObservation) => void;
   onResponse?: (response: unknown) => void;
+  /** Functional text consumer before completion resolves; throwing aborts this provider request. */
+  onTextDelta?: (text: string) => void;
+  /** A completion owner may prohibit regeneration after publishing partial output. */
+  retryAllowed?: () => boolean;
   /** Override the AI SDK's built-in retry count (SDK default 2). The resilient port sets 0. */
   maxRetries?: number;
 }
@@ -187,9 +191,11 @@ export class LlmApiRuntime implements LlmCompletionPort {
   readonly #providers = new Map<string, RegisteredProvider>();
   readonly #languageModels = new Map<string, LanguageModel>();
   readonly #resolveLiveModels?: (alias: string) => string[];
+  readonly #validateRequest?: (model: Model, context: Context) => void;
 
-  constructor(resolveLiveModels?: (alias: string) => string[]) {
+  constructor(resolveLiveModels?: (alias: string) => string[], validateRequest?: (model: Model, context: Context) => void) {
     this.#resolveLiveModels = resolveLiveModels;
+    this.#validateRequest = validateRequest;
   }
 
   registerApiProvider(registration: ApiProviderRegistration): this {
@@ -244,12 +250,14 @@ export class LlmApiRuntime implements LlmCompletionPort {
   }
 
   stream(model: Model, context: Context, options?: StreamOptions): AssistantMessageEventStream {
+    this.#validateRequest?.(model, context);
     const registration = this.#apiProviders.get(model.api);
     if (!registration) throw new Error(`No ApiProvider registered for api: ${model.api}`);
     return registration.stream(model, context, options);
   }
 
   streamSimple(model: Model, context: Context, options?: StreamOptions): AssistantMessageEventStream {
+    this.#validateRequest?.(model, context);
     const registration = this.#apiProviders.get(model.api);
     if (!registration) throw new Error(`No ApiProvider registered for api: ${model.api}`);
     return (registration.streamSimple ?? registration.stream)(model, context, options);
@@ -260,7 +268,7 @@ export class LlmApiRuntime implements LlmCompletionPort {
     context: Context,
     options?: StreamOptions,
   ): Promise<AssistantMessage> {
-    return this.consume(this.stream(model, context, options));
+    return this.consumeCompletion(resolved => this.stream(model, context, resolved), options);
   }
 
   async completeSimple(
@@ -268,12 +276,24 @@ export class LlmApiRuntime implements LlmCompletionPort {
     context: Context,
     options?: StreamOptions,
   ): Promise<AssistantMessage> {
-    return this.consume(this.streamSimple(model, context, options));
+    return this.consumeCompletion(resolved => this.streamSimple(model, context, resolved), options);
   }
 
-  private async consume(eventStream: AssistantMessageEventStream): Promise<AssistantMessage> {
+  private consumeCompletion(open: (options?: StreamOptions) => AssistantMessageEventStream, options?: StreamOptions): Promise<AssistantMessage> {
+    const cancellation = options?.onTextDelta ? new AbortController() : undefined;
+    const resolved = cancellation ? { ...options,
+      signal: options?.signal ? AbortSignal.any([options.signal, cancellation.signal]) : cancellation.signal,
+    } : options;
+    return this.consume(open(resolved), resolved, cancellation);
+  }
+
+  private async consume(eventStream: AssistantMessageEventStream, options?: StreamOptions, cancellation?: AbortController): Promise<AssistantMessage> {
     let lastMessage: AssistantMessage | undefined;
     for await (const event of eventStream) {
+      if (event.type === 'text_delta' && event.text) {
+        try { options?.onTextDelta?.(event.text); }
+        catch (error) { cancellation?.abort(error); throw error; }
+      }
       if (event.type === 'done' && event.message) lastMessage = event.message;
       if (event.type === 'error') throw event.error ?? new Error('Stream failed');
     }

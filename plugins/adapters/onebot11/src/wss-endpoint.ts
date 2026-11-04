@@ -1,15 +1,18 @@
+import { createOnebot11SelfProfile } from './self-profile.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * OneBot11 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
 import {
-  ClientEndpoint,
+  createEndpointSpecification, endpointSpec,
+  type Endpoint, type EndpointSpecification,
   createEndpointLifecycle,
   createRecallEndpointControl,
   type EndpointLifecycle,
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
+  type PendingRpcRequest,
   type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
@@ -31,20 +34,15 @@ import {
 import { receiveOneBot11SideEvent } from './side-event-dispatch.js';
 import { createOneBot11ContentPort } from './content-port.js';
 import { verifyOneBotAccessToken } from './wss-auth.js';
+import { createOneBot11Rpc, type OneBot11Rpc } from './ws-transport.js';
 import {
-  callOneBot11WsAction,
-  handleOneBot11WsMessage,
-  rejectAllPending,
-} from './ws-transport.js';
-import { OneBot11WsEndpoint } from './ws-endpoint.js';
-import {
-  type OneBot11PendingAction,
   type OneBot11WsSocket,
 } from './ws-types.js';
 import { probeOnebot11SelfId, resolveOnebot11SelfId } from './self-id.js';
-import { callOnebot11Client, createOnebot11EndpointClient, forwardOnebot11ClientEvents, type Onebot11Client } from './client.js';
+import { callOnebot11Client, readOnebot11Response, onebot11ClientOptions, forwardOnebot11ClientEvents, Onebot11Client } from './client.js';
 
 export interface OneBot11WssEndpointOptions {
+  readonly signal?: AbortSignal;
   readonly id: CapabilityId;
   /** 连接后 best-effort 调用 get_login_info 上报账号（Adapter 工厂开启）。 */
   readonly probeLoginInfo?: boolean;
@@ -52,25 +50,31 @@ export interface OneBot11WssEndpointOptions {
   readonly config: OneBot11WssConfig;
 }
 
-export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
-  readonly client: Onebot11Client;
+export class OneBot11WssEndpoint extends Onebot11Client implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  #open = false;
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: OneBot11WssEndpointOptions;
-  readonly management: EndpointManagement;
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
-  readonly content;
+  readonly #management: EndpointManagement;
+  readonly #control: EndpointControl = createRecallEndpointControl((id, signal?: AbortSignal) => this.#recallMessage(id, signal));
+  readonly #content;
+  readonly #releaseClientEvents: () => void;
   #ws?: OneBot11WsSocket;
   #wsRelease?: () => void;
   readonly #connectionLifecycle: EndpointLifecycle;
   #connectionTask = Promise.resolve();
-  #requestId = { value: 0 };
-  #pending = new Map<string, OneBot11PendingAction>();
+  readonly #rpc: OneBot11Rpc;
+  readonly #profile: ReturnType<typeof createOnebot11SelfProfile>;
   #started = false;
   #stopped = false;
 
   constructor(options: OneBot11WssEndpointOptions) {
-    super();
+    const rpc = createOneBot11Rpc({ endpointId: options.config.id, signal: options.signal,
+      socket: () => this.#connectionLifecycle.state === 'closed' ? undefined : this.#ws,
+    });
+    super(onebot11ClientOptions(options.config, (action, params) => rpc.call({ action, params })));
+    this.#rpc = rpc;
     this.#logger = getAdapterLogger('onebot11', options.config.id);
     this.#options = options;
     this.#connectionLifecycle = createEndpointLifecycle({
@@ -78,20 +82,30 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
       reconnect: false,
       heartbeat: { intervalMs: options.config.heartbeat_interval, watchdogMisses: 2 },
     });
-    this.client = createOnebot11EndpointClient(options.config, (action, params) => this.#callApi(action, params));
-    const callApi = (action: string, params?: Record<string, unknown>) => callOnebot11Client(this.client, action, params);
-    this.management = createOneBot11EndpointManagement({ callApi });
-    this.content = createOneBot11ContentPort(callApi);
-    this.bindClientEvents(
-      (receive) => forwardOnebot11ClientEvents(this.client, receive),
-      (name, payload) => {
+    const callApi = (request: PendingRpcRequest) => this.#rpc.call(request).then(readOnebot11Response);
+    this.#management = createOneBot11EndpointManagement({ callApi });
+    this.#content = createOneBot11ContentPort(callApi);
+    this.#profile = createOnebot11SelfProfile({ call: callApi, reportAccount: id => this[endpointSpec].reportSelfUserId(id) });
+    const readTransportState = () => this.#transportState;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      name: options.config.id,
+      start: () => this.#start(), open: () => { this.#open = true; },
+      close: () => { this.#open = false; }, stop: () => this.#stop(),
+      send: request => this.#send(request),
+      get transportState() { return readTransportState(); },
+      management: this.#management, control: this.#control, content: this.#content,
+      profile: this.#profile,
+    });
+    this.#releaseClientEvents = forwardOnebot11ClientEvents(this, (name, payload) => {
+      void this[endpointSpec].events.run(() => {
+        if (this.#stopped || (!this.#open && !this.#started)) return;
+        void this[endpointSpec].events.platform(name, payload).catch(error => this.#warnPlatformEvent(error));
         if (name === 'event') this.#admitRaw(payload as OneBot11Event);
-      },
-      (_name, error) => this.#warnPlatformEvent(error),
-    );
+      }).catch(error => this.#warnPlatformEvent(error));
+    });
   }
 
-  get transportState(): EndpointTransportState {
+  get #transportState(): EndpointTransportState {
     if (this.#stopped) return 'stopped';
     if (!this.#started) return 'idle';
     if (this.#connectionLifecycle.state === 'closed') return 'closed';
@@ -99,7 +113,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     return this.#connectionLifecycle.state === 'connecting' ? 'connecting' : 'idle';
   }
 
-  async start(): Promise<void> {
+  async #start(): Promise<void> {
     if (this.#started) return;
     this.#stopped = false;
     if (!this.#options.config.access_token) {
@@ -132,23 +146,27 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     }));
   }
 
-  async stop(): Promise<void> {
+  async #stop(): Promise<void> {
     this.#stopped = true;
-    this.close();
+    this.#open = false;
     this.#wsRelease?.();
     this.#wsRelease = undefined;
-    await this.#connectionTask;
-    await this.#connectionLifecycle.stop();
-    rejectAllPending(this.#pending);
-    this.#ws = undefined;
-    this.#started = false;
-    this.reportSelfUserId(undefined);
+    try {
+      await this.#connectionTask;
+      await this.#connectionLifecycle.stop();
+    } finally {
+      this.#rpc.dispose();
+      this.#releaseClientEvents();
+      this.#ws = undefined;
+      this.#started = false;
+      this.#profile.reportAccount(undefined);
+    }
   }
 
-  async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
+  async #send({ conversation, payload, signal }: EndpointSendRequest): Promise<string> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
-    const data = await callOnebot11Client<{ message_id?: number | string }>(this.client, action, params);
+    const data = readOnebot11Response<{ message_id?: number | string }>(await this.#rpc.call({ action, params, signal }));
     const rawId = data?.message_id;
     if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
       throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
@@ -156,34 +174,29 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     return String(rawId);
   }
 
-  async recallMessage(messageId: string): Promise<void> {
+  async #recallMessage(messageId: string, signal?: AbortSignal): Promise<void> {
     if (!messageId) return;
-    await callOnebot11Client(this.client, 'delete_msg', { message_id: Number(messageId) });
+    await this.#rpc.call({ action: 'delete_msg', params: { message_id: Number(messageId) }, signal }).then(readOnebot11Response);
   }
 
-  #callApi(
-    action: string,
-    params: Record<string, unknown> = {},
-  ): ReturnType<typeof callOneBot11WsAction> {
-    return callOneBot11WsAction(this.#connectionLifecycle.state === 'closed' ? undefined : this.#ws, this.#pending, this.#requestId, action, params);
-  }
 
   #admitRaw(ev: OneBot11Event): void {
     const selfId = resolveOnebot11SelfId(ev.self_id);
-    if (!this.#stopped && selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
+    if (!this.#stopped && selfId) this.#profile.reportAccount(selfId);
     if (!isMessageEvent(ev)) {
-      receiveOneBot11SideEvent(
-        (name, payload) => this.emit(name, payload),
-        this.#options.config.id,
-        { callApi: (action, params) => callOnebot11Client(this.client, action, params) },
-        ev,
-        this.#logger,
-      );
+      receiveOneBot11SideEvent(ev, {
+        emit: (name, payload) => this[endpointSpec].events.emit(name, payload),
+        endpointKey: this.#options.config.id,
+        caller: { callApi: (action, params) => callOnebot11Client({ client: this, action, params }) },
+        logger: this.#logger,
+      });
       return;
     }
-    const conversation = onebot11InboundConversation(String(this.#options.id), ev);
+    const conversation = { ...onebot11InboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const inbound = formatInboundMetadata(ev, this.#options.config.id);
-    void this.emit('message.receive', {
+    void this[endpointSpec].events.message({
+      event: ev,
+      ...(typeof ev.time === 'number' ? { platformSentAt: ev.time * 1000 } : {}),
       conversation,
       message: { conversation, id: String(ev.message_id) },
       content: formatInboundContent(ev),
@@ -207,14 +220,14 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
 
   /** Best-effort 登录账号探测；失败仅 debug，不影响连接。 */
   async #probeSelfUserId(): Promise<void> {
-    const selfId = await probeOnebot11SelfId(this.client, (error) => {
+    const selfId = await probeOnebot11SelfId(this, (error) => {
       this.#logger.debug(formatCompact({
         op: 'onebot11_get_login_info_failed',
         error: error instanceof Error ? error.message : String(error),
       }));
     });
-    if (this.#stopped || this.transportState !== 'open') return;
-    if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
+    if (this.#stopped || this.#transportState !== 'open') return;
+    if (selfId) this.#profile.reportAccount(selfId);
   }
 
   #warnPlatformEvent(error: unknown): void {
@@ -235,12 +248,12 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     }
     const socket = connection.socket as unknown as OneBot11WsSocket;
     await this.#connectionLifecycle.stop();
-    rejectAllPending(this.#pending, '连接已替换');
+    this.#rpc.disconnect('连接已替换');
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
       this.#ws = socket;
       lifecycleHandle.onForceClose(() => {
         if (this.#ws === socket) {
-          rejectAllPending(this.#pending);
+          this.#rpc.disconnect();
         }
         try {
           socket.close();
@@ -262,11 +275,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
       socket.on('message', (data) => {
         if (this.#ws !== socket || this.#connectionLifecycle.state === 'closed') return;
         this.#connectionLifecycle.notifyHeartbeatAck();
-        handleOneBot11WsMessage(data, {
-          endpointId: this.#options.config.id,
-          pending: this.#pending,
-          ingest: (ev) => this.client.ingest(ev as Parameters<Onebot11Client['ingest']>[0]),
-        });
+        this.#rpc.receive(data, (ev) => this.ingest(ev as Parameters<Onebot11Client['ingest']>[0]));
       });
       socket.on('error', (error) => {
         if (this.#ws !== socket) return;
@@ -276,7 +285,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
         if (this.#ws !== socket) return;
         if (this.#ws === socket) {
           this.#ws = undefined;
-          rejectAllPending(this.#pending);
+          this.#rpc.disconnect();
         }
         lifecycleHandle.notifyClosed(new Error('OneBot11 reverse WebSocket closed'));
       });

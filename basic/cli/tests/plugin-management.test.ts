@@ -10,7 +10,7 @@ import { definePlugin, pluginVerificationToken } from '@zhin.js/plugin-runtime';
 import { PluginManagementWorkflow, PluginManagementOperationError } from '../src/plugin-management/workflow.js';
 import { PluginManagementActivity } from '../src/plugin-management/activity.js';
 import { createPluginManagementPort } from '../src/plugin-runtime/console/plugin-management.js';
-import adapterFeature, { Endpoint, defineAdapter, adapterFeatureId, isAdapterIndex, endpointEventGatewayToken, type EndpointTransportState } from '@zhin.js/adapter';
+import adapterFeature, { Adapter, endpointSpec, createEndpointSpecification, type Endpoint, type EndpointSpecification, defineAdapter, adapterFeatureId, isAdapterIndex, endpointEventGatewayToken, type EndpointTransportState } from '@zhin.js/adapter';
 
 const roots: string[] = [];
 function application(configs: Record<string, unknown>, packages: Record<string, string> = Object.fromEntries(Object.keys(configs).map(key => [key, key]))) { return {configVersion: 2, plugins: packages, ...configs}; }
@@ -34,7 +34,7 @@ function pauseDependencyInspection() {
   const entered = new Promise<void>(resolve => { reached = resolve; });
   const wait = new Promise<void>(resolve => { release = resolve; });
   const original = ProjectGraphService.prototype.inspect;
-  const spy = vi.spyOn(ProjectGraphService.prototype, 'inspect').mockImplementationOnce(async function (...args) {
+  const spy = vi.spyOn(ProjectGraphService.prototype, 'inspect').mockImplementationOnce(async function (this: ProjectGraphService, ...args) {
     reached(); await wait; return original.apply(this, args);
   });
   return { entered, release, spy };
@@ -163,15 +163,19 @@ describe('Shared CLI and Console plugin workflow', () => {
     const config = application({ reminder: { endpoints: [{ id: 'one' }, { id: 'two' }] }, preferences: { endpoints: [{ id: 'one' }] } });
     await writeFile(join(root, 'zhin.config.json'), JSON.stringify(config));
     const states = new Map<string, EndpointTransportState | undefined>([['root/reminder:one', 'open'], ['root/reminder:two', 'open'], ['root/preferences:one', 'closed']]);
-    class LiveEndpoint extends Endpoint {
-      readonly client = {};
-      constructor(readonly key: string) { super(); }
-      get transportState() { return states.get(this.key); }
+    class LiveClient { constructor(readonly key: string) {} }
+    class LiveEndpoint extends LiveClient implements Endpoint {
+      readonly [endpointSpec]: EndpointSpecification;
+      constructor(key: string) {
+        super(key);
+        const transportState = () => states.get(this.key);
+        this[endpointSpec] = createEndpointSpecification(this, { start() {}, open() {}, close() {}, stop() {}, get transportState() { return transportState(); } });
+      }
     }
     const plugin = () => ({ default: definePlugin({ name: 'platform', config: { toJsonSchema: () => ({ type: 'object', properties: {
       endpoints: { type: 'array', items: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
     } }) }, setup({ addAdapter }) {
-      addAdapter('platform', defineAdapter({ capabilities: ['inbound'], create: context => new LiveEndpoint(`${context.owner.id}:${context.endpointId}`) }));
+      addAdapter('platform', defineAdapter({ capabilities: ['inbound'], createAdapter: context => new class extends Adapter<LiveEndpoint> { protected createEndpoint(config: Readonly<Record<string, unknown>>) { return new LiveEndpoint(`${context.owner.id}:${String(config.id ?? context.endpointId)}`); } }() }));
     } }) });
     const files = new Map<string, unknown>([
       [join(root, 'plugin.js'), { default: definePlugin({ name: 'root' }) }],

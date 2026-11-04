@@ -30,7 +30,7 @@ export interface TextContentBlock {
    * The digest prevents a later text transform from reusing stale provenance.
    * Provider bridges must not serialize this metadata.
    */
-  contextRef?: { readonly key: string; readonly digest: string; readonly state?: PromptContextState };
+  contextRef?: { readonly key: string; readonly digest: string; readonly state?: PromptContextState; readonly representedBy?: string };
   /**
    * Per-turn runtime context (e.g. who the participants are to the bot): sent to the
    * model for this request only and dropped before the message is stored, so later

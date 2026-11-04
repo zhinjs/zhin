@@ -1,4 +1,4 @@
-import { bindTestEndpoint, endpointClientContext } from '../../test-utils/endpoint.js';
+import { slackFixture } from './fixture.js';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
@@ -14,7 +14,6 @@ import {
   verifySlackSignature,
   type SlackMessageEvent,
 } from '../src/protocol.js';
-import { slackClient } from '../src/client.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -206,10 +205,11 @@ describe('slack plugin runtime adapter (socket)', () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const socket = mockSocket();
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'), gateway, config: socketConfig,
-      createClient: () => mockClient(), createSocket: () => socket,
-    }), gateway, undefined);
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    config: socketConfig,
+    createSocket: () => socket
+  }, () => mockClient(), gateway, undefined);
     try {
       await endpoint.start(); endpoint.open();
       await socket.emit('slack_event', { type: 'event_callback', event: textEvent({ ...(inboundThread ? { thread_ts: inboundThread } : {}) }) });
@@ -241,13 +241,11 @@ describe('slack plugin runtime adapter (socket)', () => {
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const socket = mockSocket();
     const client = mockClient();
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway,
-      config: socketConfig,
-      createClient: () => client,
-      createSocket: () => socket,
-    }), gateway, undefined);
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    config: socketConfig,
+    createSocket: () => socket
+  }, () => client, gateway, undefined);
     await endpoint.start();
     endpoint.open();
 
@@ -268,31 +266,24 @@ describe('slack plugin runtime adapter (socket)', () => {
 
   it('does not admit inbound while closed', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
-      config: socketConfig,
-      createClient: () => mockClient(),
-      createSocket: () => mockSocket(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    config: socketConfig,
+    createSocket: () => mockSocket()
+  }, () => mockClient(), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
-    endpoint.admit(textEvent());
+    endpoint.endpoint.admit(textEvent());
     expect(receive).not.toHaveBeenCalled();
     await endpoint.stop();
   });
 
   it('sends via chat.postMessage', async () => {
     const client = mockClient();
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
-      config: socketConfig,
-      createClient: () => client,
-      createSocket: () => mockSocket(),
-    }), {
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    config: socketConfig,
+    createSocket: () => mockSocket()
+  }, () => client, {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
@@ -315,16 +306,11 @@ describe('slack plugin runtime adapter (socket)', () => {
 
   it('maps canonical message controls to Slack chat and reaction APIs', async () => {
     const client = mockClient();
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
-      config: socketConfig,
-      createClient: () => client,
-      createSocket: () => mockSocket(),
-    }), {
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    config: socketConfig,
+    createSocket: () => mockSocket()
+  }, () => client, {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
@@ -336,10 +322,10 @@ describe('slack plugin runtime adapter (socket)', () => {
     };
     const message = { conversation, id: '1700000001.000000' };
 
-    await endpoint.control.recall?.(message);
-    await expect(endpoint.control.edit?.(message, 'updated')).resolves.toBe(message.id);
-    await expect(endpoint.control.addReaction?.(message, ':thumbsup:')).resolves.toBe('thumbsup');
-    await endpoint.control.removeReaction?.(message, 'thumbsup');
+    await endpoint.control.recall?.({ message: message });
+    await expect(endpoint.control.edit?.({ message: message, content: 'updated' })).resolves.toBe(message.id);
+    await expect(endpoint.control.addReaction?.({ message: message, emoji: ':thumbsup:' })).resolves.toBe('thumbsup');
+    await endpoint.control.removeReaction?.({ message: message, reactionId: 'thumbsup' });
 
     expect(client.chat.delete).toHaveBeenCalledWith({ channel: 'C001', ts: message.id });
     expect(client.chat.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -357,21 +343,16 @@ describe('slack plugin runtime adapter (socket)', () => {
   });
 
   it('registers agent endpoint on start', async () => {
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
-      config: socketConfig,
-      createClient: () => mockClient(),
-      createSocket: () => mockSocket(),
-    }), {
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    config: socketConfig,
+    createSocket: () => mockSocket()
+  }, () => mockClient(), {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
     await endpoint.start();
-    const client = slackClient.get(endpointClientContext(endpoint), 'test-slack-bot');
+    const client = endpoint.index.clientById<SlackEndpoint>(endpoint.canonicalId);
     expect((await client.conversations.members({ channel: 'C001' })).members).toEqual(['U1']);
     await endpoint.stop();
   });
@@ -382,13 +363,11 @@ describe('slack plugin runtime adapter (http)', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
-      http,
-      config: httpConfig,
-      createClient: () => mockClient(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    http,
+    config: httpConfig
+  }, () => mockClient(), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -420,13 +399,11 @@ describe('slack plugin runtime adapter (http)', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const receive = vi.fn(async () => Object.freeze({ matched: false }));
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: { receive, send: vi.fn(async () => 'sent') },
-      http,
-      config: httpConfig,
-      createClient: () => mockClient(),
-    }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    http,
+    config: httpConfig
+  }, () => mockClient(), { receive, send: vi.fn(async () => 'sent') }, undefined);
     await endpoint.start();
     endpoint.open();
     const { port } = await http.listen();
@@ -449,16 +426,11 @@ describe('slack plugin runtime adapter (http)', () => {
   it('answers url_verification challenge', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
-      http,
-      config: httpConfig,
-      createClient: () => mockClient(),
-    }), {
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    http,
+    config: httpConfig
+  }, () => mockClient(), {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
@@ -483,34 +455,29 @@ describe('slack plugin runtime adapter (http)', () => {
 });
 
 describe('slack messageChannelMap LRU', () => {
-  it('evicts the oldest entries beyond 1024', () => {
-    const endpoint = bindTestEndpoint(new SlackEndpoint({
-      id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
-      gateway: {
-        receive: vi.fn(async () => Object.freeze({ matched: false })),
-        send: vi.fn(async () => 'sent'),
-      },
-      config: socketConfig,
-      createClient: () => mockClient(),
-    }), {
+  it('evicts the oldest entries beyond 1024', async () => {
+    const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    config: socketConfig
+  }, () => mockClient(), {
         receive: vi.fn(async () => Object.freeze({ matched: false })),
         send: vi.fn(async () => 'sent'),
       }, undefined);
     for (let i = 0; i < 1100; i += 1) {
-      endpoint.trackMessageChannel(`1700000000.${String(i).padStart(6, '0')}`, 'C001');
+      endpoint.endpoint.trackMessageChannel(`1700000000.${String(i).padStart(6, '0')}`, 'C001');
     }
     // 最早写入的 76 条已被淘汰
-    expect(endpoint.resolveMessageRef('1700000000.000000')).toBeNull();
-    expect(endpoint.resolveMessageRef('1700000000.000075')).toBeNull();
+    expect(endpoint.endpoint.resolveMessageRef('1700000000.000000')).toBeNull();
+    expect(endpoint.endpoint.resolveMessageRef('1700000000.000075')).toBeNull();
     // 最新写入的仍可解析
-    expect(endpoint.resolveMessageRef('1700000000.001099')).toEqual({
+    expect(endpoint.endpoint.resolveMessageRef('1700000000.001099')).toEqual({
       channel: 'C001',
       ts: '1700000000.001099',
     });
     // 重复 track 同一条刷新热度，不重复计数
-    endpoint.trackMessageChannel('1700000000.001099', 'C001');
-    endpoint.trackMessageChannel('1700000001.000000', 'C001');
-    expect(endpoint.resolveMessageRef('1700000000.001099')).toEqual({
+    endpoint.endpoint.trackMessageChannel('1700000000.001099', 'C001');
+    endpoint.endpoint.trackMessageChannel('1700000001.000000', 'C001');
+    expect(endpoint.endpoint.resolveMessageRef('1700000000.001099')).toEqual({
       channel: 'C001',
       ts: '1700000000.001099',
     });
@@ -526,9 +493,44 @@ it('preserves canonical markdown/share and button payload for Slack', () => {
 it('admits Slack button values as canonical action segments', async () => {
   const receive = vi.fn(async () => Object.freeze({ matched: true }));
   const http = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(http);
-  const endpoint = bindTestEndpoint(new SlackEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'slack'), gateway: { receive, send: vi.fn(async () => 'sent') }, http, config: httpConfig, createClient: () => mockClient() }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+  const endpoint = await slackFixture({
+    id: capabilityId(rootPluginId(), adapterFeature, 'slack'),
+    http,
+    config: httpConfig
+  }, () => mockClient(), { receive, send: vi.fn(async () => 'sent') }, undefined);
   await endpoint.start(); endpoint.open();
-  endpoint.admitInteraction({ type: 'block_actions', user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'source' }, actions: [{ type: 'button', action_id: 'generated-id', block_id: 'row', value: 'canonical-callback', action_ts: 'action' }] });
+  endpoint.endpoint.admitInteraction({ type: 'block_actions', user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'source' }, actions: [{ type: 'button', action_id: 'generated-id', block_id: 'row', value: 'canonical-callback', action_ts: 'action' }] });
   await vi.waitFor(() => expect(receive).toHaveBeenCalledWith(expect.objectContaining({ segments: [{ type: 'action', data: { id: 'action', payload: 'canonical-callback', sourceMessageId: 'source' } }] })));
   await endpoint.stop();
+});
+
+it('ends a pending native upload wait without posting text after its late completion', async () => {
+  const client = mockClient();
+  const endpoint = await slackFixture({ id: capabilityId(rootPluginId(), adapterFeature, 'slack'), config: socketConfig, createSocket: () => mockSocket() }, () => client);
+  await endpoint.start(); const caller = new AbortController();
+  let finish!: (value: never) => void;
+  const upload = vi.spyOn(endpoint.endpoint, 'filesUploadV2').mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const sending = endpoint.send({ conversation: { endpoint: { adapter: 'slack', id: endpoint.canonicalId }, kind: 'group', id: 'C001' },
+    signal: caller.signal, payload: [{ type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } }] }).then(value => ({ value }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(1)); caller.abort();
+    let outcome: Awaited<typeof sending> | undefined; void sending.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'unknown' } }), { timeout: 200 });
+    finish({ ok: true } as never); await Promise.resolve(); await Promise.resolve(); expect(client.chat.postMessage).not.toHaveBeenCalled();
+    await expect(endpoint.send({ conversation: { endpoint: { adapter: 'slack', id: endpoint.canonicalId }, kind: 'group', id: 'C001' }, payload: 'fresh reply' })).resolves.toBe('C001:1700000001.000000');
+  } finally { finish({ ok: true } as never); await endpoint.stop(); await sending; }
+});
+it('cancels a retained Slack control owner while leaving native account state usable', async () => {
+  const client = mockClient(); const endpoint = await slackFixture({ id: capabilityId(rootPluginId(), adapterFeature, 'slack'), config: socketConfig, createSocket: () => mockSocket() }, () => client);
+  await endpoint.start(); const source = new AbortController(); let finish!: (value: never) => void;
+  vi.mocked(client.chat.delete).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const recalling = endpoint.index.control(endpoint.canonicalId, 'recall', { signal: source.signal })!.recall!({
+    message: { conversation: { endpoint: { adapter: 'slack', id: endpoint.canonicalId }, kind: 'group', id: 'C001' }, id: '1700000001.000000' },
+  }).then(() => ({ success: true }), error => ({ error }));
+  try {
+    await vi.waitFor(() => expect(client.chat.delete).toHaveBeenCalledTimes(1)); source.abort();
+    let outcome: Awaited<typeof recalling> | undefined; void recalling.then(value => { outcome = value; });
+    await vi.waitFor(() => expect(outcome).toMatchObject({ error: { disposition: 'unknown' } }), { timeout: 200 });
+    finish({ ok: true } as never); expect(endpoint.transportState).toBe('open');
+  } finally { finish({ ok: true } as never); await endpoint.stop(); await recalling; }
 });

@@ -12,9 +12,3 @@ export interface NapCatWsCreateOptions {
 }
 
 export const WS_OPEN = 1;
-
-export interface NapCatPendingAction {
-  resolve: (value: unknown) => void;
-  reject: (err: Error) => void;
-  timeout: NodeJS.Timeout;
-}

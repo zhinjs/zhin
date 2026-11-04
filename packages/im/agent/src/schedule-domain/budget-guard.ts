@@ -55,8 +55,10 @@ export class BudgetGuard {
           if (toolCalls.length > this.budget.maxToolCalls) terminate('tool_limit');
         },
       });
-      externalSignal?.throwIfAborted();
-      return { value, terminatedBy, tokenUsage, toolCalls };
+      // Cancellation cannot erase a late SDK settlement that is already known.
+      const error = externalSignal?.aborted
+        ? externalSignal.reason instanceof Error ? externalSignal.reason : new Error('Schedule execution cancelled') : undefined;
+      return { value, ...(error ? { error } : {}), terminatedBy, tokenUsage, toolCalls };
     } catch (error) {
       return {
         error: error instanceof Error ? error : new Error(String(error)),

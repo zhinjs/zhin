@@ -1,5 +1,37 @@
 # @zhin.js/plugin-nettools
 
+## 0.1.7
+
+### Patch Changes
+
+- Updated dependencies [af8f803]
+- Updated dependencies [032dc96]
+  - @zhin.js/tool@1.1.14
+  - @zhin.js/skill@1.1.12
+
+## 0.1.6
+
+### Patch Changes
+
+- @zhin.js/skill@1.1.11
+- @zhin.js/tool@1.1.13
+
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/tool@1.1.12
+
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [eb8feeb]
+- Updated dependencies [24a2b71]
+- Updated dependencies [d0e1fac]
+  - @zhin.js/tool@1.1.11
+
 ## 0.1.3
 
 ### Patch Changes

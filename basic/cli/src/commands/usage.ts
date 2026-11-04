@@ -4,15 +4,10 @@
  * Streams files line by line, never writes anything, and only reads token
  * counts, session keys and termination markers.
  */
-import { createReadStream } from 'node:fs';
-import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createInterface } from 'node:readline';
 import { Command } from 'commander';
+import { FIXED_SEGMENTS, num, scanTraces } from '../usage/aggregate.js';
 import { parseTraceTime } from './trace.js';
-
-const DAY_MS = 86_400_000;
-const FIXED_SEGMENTS = new Set(['system', 'tool_schemas', 'output_schema', 'tool_index', 'skill_catalog', 'agent_catalog', 'memory', 'bootstrap']);
 
 export interface UsageReportOptions {
   readonly since?: number;
@@ -74,17 +69,6 @@ function localDay(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function num(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
-}
-
-function sessionMatcher(pattern: string | undefined): (key: string) => boolean {
-  if (!pattern) return () => true;
-  if (!pattern.includes('*')) return key => key.includes(pattern);
-  const re = new RegExp(`^${pattern.split('*').map(part => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
-  return key => re.test(key);
-}
-
 interface DayAcc {
   turns: number;
   callsPerTurn: number[];
@@ -99,87 +83,50 @@ interface DayAcc {
 
 /** Aggregates every `*.jsonl` file under `dir`. A missing dir yields an empty report. */
 export async function buildUsageReport(dir: string, options: UsageReportOptions = {}): Promise<UsageReport> {
-  let names: string[] = [];
-  try {
-    names = (await readdir(dir)).filter(name => name.endsWith('.jsonl')).sort();
-  } catch {
-    names = [];
-  }
-  const matches = sessionMatcher(options.session);
   const days = new Map<string, DayAcc>();
-  let lines = 0;
-  let malformed = 0;
 
-  for (const name of names) {
-    // Files are named for their day; skip those clearly outside the window (slack for time zones).
-    const stamp = /^(\d{4}-\d{2}-\d{2})/.exec(name);
-    if (stamp) {
-      const fileStart = Date.parse(`${stamp[1]}T00:00:00Z`);
-      if (options.since !== undefined && fileStart + 2 * DAY_MS <= options.since) continue;
-      if (options.until !== undefined && fileStart - DAY_MS >= options.until) continue;
+  const scan = await scanTraces(dir, options, (trace, startedAt) => {
+    const day = localDay(startedAt);
+    let acc = days.get(day);
+    if (!acc) {
+      acc = { turns: 0, callsPerTurn: [], inputs: [], input: 0, cache: 0, segments: { history: 0, fixed: 0, user: 0, other: 0 }, budgetTurns: 0, limitTurns: 0, sessions: new Map() };
+      days.set(day, acc);
     }
-    const reader = createInterface({ input: createReadStream(join(dir, name), { encoding: 'utf8' }), crlfDelay: Infinity });
-    for await (const line of reader) {
-      if (line.trim() === '') continue;
-      lines++;
-      let trace: any;
-      try {
-        trace = JSON.parse(line);
-      } catch {
-        malformed++;
-        continue;
-      }
-      const startedAt = num(trace?.started_at);
-      if (!trace || typeof trace !== 'object' || startedAt === undefined || typeof trace.session_key !== 'string') {
-        malformed++;
-        continue;
-      }
-      if (options.since !== undefined && startedAt < options.since) continue;
-      if (options.until !== undefined && startedAt >= options.until) continue;
-      if (!matches(trace.session_key)) continue;
-
-      const day = localDay(startedAt);
-      let acc = days.get(day);
-      if (!acc) {
-        acc = { turns: 0, callsPerTurn: [], inputs: [], input: 0, cache: 0, segments: { history: 0, fixed: 0, user: 0, other: 0 }, budgetTurns: 0, limitTurns: 0, sessions: new Map() };
-        days.set(day, acc);
-      }
-      const calls: unknown[] = Array.isArray(trace.model_calls) ? trace.model_calls : [];
-      let turnInput = 0;
-      let turnCalls = 0;
-      for (const call of calls) {
-        const prompt = num((call as any)?.prompt_tokens);
-        if (prompt === undefined) continue;
-        turnCalls++;
-        turnInput += prompt;
-        acc.inputs.push(prompt);
-        acc.cache += num((call as any)?.cache_read_tokens) ?? 0;
-      }
-      acc.turns++;
-      acc.callsPerTurn.push(turnCalls);
-      acc.input += turnInput;
-
-      const segments = trace.context_budget?.segments;
-      if (segments && typeof segments === 'object') {
-        acc.budgetTurns++;
-        for (const [key, raw] of Object.entries(segments)) {
-          const value = num(raw) ?? 0;
-          if (key === 'history') acc.segments.history += value;
-          else if (key === 'user') acc.segments.user += value;
-          else if (FIXED_SEGMENTS.has(key)) acc.segments.fixed += value;
-          else acc.segments.other += value;
-        }
-      }
-      const timeline: unknown[] = Array.isArray(trace.timeline) ? trace.timeline : [];
-      if (trace.termination?.status === 'budget_exceeded' || timeline.some(entry => (entry as any)?.kind === 'last_iteration_nudge')) acc.limitTurns++;
-
-      const session = acc.sessions.get(trace.session_key) ?? { turns: 0, calls: 0, input: 0 };
-      session.turns++;
-      session.calls += turnCalls;
-      session.input += turnInput;
-      acc.sessions.set(trace.session_key, session);
+    const calls: unknown[] = Array.isArray(trace.model_calls) ? trace.model_calls : [];
+    let turnInput = 0;
+    let turnCalls = 0;
+    for (const call of calls) {
+      const prompt = num((call as any)?.prompt_tokens);
+      if (prompt === undefined) continue;
+      turnCalls++;
+      turnInput += prompt;
+      acc.inputs.push(prompt);
+      acc.cache += num((call as any)?.cache_read_tokens) ?? 0;
     }
-  }
+    acc.turns++;
+    acc.callsPerTurn.push(turnCalls);
+    acc.input += turnInput;
+
+    const segments = trace.context_budget?.segments;
+    if (segments && typeof segments === 'object') {
+      acc.budgetTurns++;
+      for (const [key, raw] of Object.entries(segments)) {
+        const value = num(raw) ?? 0;
+        if (key === 'history') acc.segments.history += value;
+        else if (key === 'user') acc.segments.user += value;
+        else if (FIXED_SEGMENTS.has(key)) acc.segments.fixed += value;
+        else acc.segments.other += value;
+      }
+    }
+    const timeline: unknown[] = Array.isArray(trace.timeline) ? trace.timeline : [];
+    if (trace.termination?.status === 'budget_exceeded' || timeline.some(entry => (entry as any)?.kind === 'last_iteration_nudge')) acc.limitTurns++;
+
+    const session = acc.sessions.get(trace.session_key) ?? { turns: 0, calls: 0, input: 0 };
+    session.turns++;
+    session.calls += turnCalls;
+    session.input += turnInput;
+    acc.sessions.set(trace.session_key, session);
+  });
 
   const result: DayUsage[] = [...days.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, acc]) => {
     const segTotal = acc.segments.history + acc.segments.fixed + acc.segments.user + acc.segments.other;
@@ -203,7 +150,7 @@ export async function buildUsageReport(dir: string, options: UsageReportOptions 
         .slice(0, 5),
     };
   });
-  return { days: result, files: names.length, lines, malformed_lines: malformed };
+  return { days: result, files: scan.files, lines: scan.lines, malformed_lines: scan.malformed };
 }
 
 const pct = (value: number | undefined): string => (value === undefined ? 'n/a' : `${(value * 100).toFixed(1)}%`);

@@ -2,6 +2,7 @@
  * Handler authoring API consumed from `zhin.js/handler`.
  * @module zhin.js/handler
  */
+import type { RegisteredAdapterName } from '@zhin.js/feature-kit';
 import type { HandlerContext } from './context.js';
 
 const handlerBrand = 'zhin.handler/1' as const;
@@ -19,6 +20,7 @@ export interface HandlerDefinition<K extends string = string> {
   /** @internal Runtime feature brand. */
   readonly $feature: typeof handlerBrand;
   readonly event?: K;
+  readonly adapter?: string;
   handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
 }
 
@@ -28,6 +30,13 @@ export interface HandlerDefinition<K extends string = string> {
  *
  * @public
  */
+type BoundHandlerAuthoring<K extends keyof HandlerEventMap & string> = {
+  [A in RegisteredAdapterName]: { readonly adapter: A; readonly event: K;
+    handle(this: HandlerContext<unknown, A>, ...args: HandlerEventMap[K] extends unknown[] ? HandlerEventMap[K] : unknown[]): void | Promise<void>;
+  }
+}[RegisteredAdapterName];
+export function defineHandler<K extends keyof HandlerEventMap & string>(options: BoundHandlerAuthoring<K>): Readonly<HandlerDefinition<K>>;
+
 export function defineHandler<K extends keyof HandlerEventMap & string>(
   options: {
     readonly event: K;
@@ -48,9 +57,11 @@ export function defineHandler(
 export function defineHandler(
   options: {
     readonly event?: string;
-    handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
+    readonly adapter?: string;
+    handle(this: never, ...args: never[]): unknown;
   },
 ): Readonly<HandlerDefinition> {
+  if (options.adapter !== undefined && (typeof options.adapter !== 'string' || !options.adapter.trim())) throw new TypeError('Handler adapter must be a non-empty string');
   if (typeof options.handle !== 'function') {
     throw new TypeError('Handler handle must be a function');
   }
@@ -63,7 +74,9 @@ export function defineHandler(
   return Object.freeze({
     $feature: handlerBrand,
     ...(options.event !== undefined ? { event: options.event } : {}),
-    handle: options.handle,
+    // The public overloads retain platform-specific arguments; the index stores an erased callable.
+    handle: options.handle as HandlerDefinition['handle'],
+    ...(options.adapter !== undefined ? { adapter: options.adapter } : {}),
   });
 }
 
@@ -86,6 +99,7 @@ export function parseHandlerDefinition(value: unknown): HandlerDefinition {
     definition.$feature !== handlerBrand
     || typeof definition.handle !== 'function'
   ) throw invalidHandler();
+  if (definition.adapter !== undefined && (typeof definition.adapter !== 'string' || !definition.adapter.trim())) throw invalidHandler();
   if (definition.event !== undefined && typeof definition.event !== 'string') {
     throw invalidHandler();
   }

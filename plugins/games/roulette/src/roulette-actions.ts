@@ -1,5 +1,5 @@
 import { createMessages } from 'zhin.js/i18n';
-import type { GameMessageLike } from '@zhin.js/game-kit';
+import type { GamePlayer } from '@zhin.js/game-kit';
 export type RouletteCommandAction =
   | 'help'
   | 'open'
@@ -66,7 +66,7 @@ const messages = createMessages({
   'mute-off': { 'zh-CN': '关闭本群禁言惩罚', en: 'Disable mute penalties for this group' },
   rules: { 'zh-CN': '规则：按加入顺序轮流开枪；轮到的人超时不开枪判负；幸存者各记 1 胜，输家记 1 负。禁言惩罚默认关闭。', en: 'Players take turns in join order. Missing your turn deadline loses the game. Each survivor gets one win; the loser gets one loss. Mute penalties are off by default.' },
 });
-export function getRouletteHelp(message: Pick<GameMessageLike, 'locale' | 'formatCommand'> = {}): string {
+export function getRouletteHelp(message: Pick<GamePlayer, 'locale' | 'formatCommand'> = {}): string {
   const command = message.formatCommand?.('roulette');
   const actions = ['open', 'join', 'start', 'fire', 'leave', 'cancel', 'status', 'mute', 'mute-on', 'mute-off'] as const;
   return [messages(message.locale, 'title'),

@@ -1,3 +1,4 @@
+import { extractChannelInfo, subscriptionScope } from '../src/channel.js';
 import { projectLocaleToken } from 'zhin.js/i18n';
 import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
@@ -11,7 +12,7 @@ import checkCommand from '../commands/rss-check/[[url]]/index.ts';
 import { formatFeedPreview, resolveRssConfig, stripHtml } from '../src/feed.js';
 import { createInMemoryRssDb, getRssSubs } from '../src/db-store.js';
 import { rssRuntimeToken, type RssRuntime } from '../src/runtime.js';
-import { rssMessage, RSS_TEST_CHANNEL } from './message-fixture.js';
+import { rssMessage } from './message-fixture.js';
 
 function createRuntime(overrides: Partial<RssRuntime> = {}): RssRuntime {
   return {
@@ -78,10 +79,7 @@ describe('@zhin.js/plugin-rss runtime', () => {
     await Subs.insert({
       url: 'https://example.com/feed.xml',
       feed_title: 'Example',
-      adapter_name: RSS_TEST_CHANNEL.adapterName,
-      endpoint_id: RSS_TEST_CHANNEL.endpointKey,
-      channel_type: RSS_TEST_CHANNEL.channelType,
-      channel_id: RSS_TEST_CHANNEL.channelId,
+      ...subscriptionScope(extractChannelInfo(rssMessage())!),
       creator_id: '',
       creator_name: '',
       created_at: new Date().toISOString(),
@@ -150,10 +148,7 @@ describe('@zhin.js/plugin-rss runtime', () => {
       await Subs.insert({
         url,
         feed_title: 'Empty',
-        adapter_name: RSS_TEST_CHANNEL.adapterName,
-        endpoint_id: RSS_TEST_CHANNEL.endpointKey,
-        channel_type: RSS_TEST_CHANNEL.channelType,
-        channel_id: RSS_TEST_CHANNEL.channelId,
+        ...subscriptionScope(extractChannelInfo(rssMessage())!),
         creator_id: '',
         creator_name: '',
         created_at: new Date().toISOString(),

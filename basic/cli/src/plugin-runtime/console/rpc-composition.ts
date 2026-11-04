@@ -23,26 +23,23 @@ export interface ConsoleRpcComposition {
   readonly databaseHost?: DatabaseHost;
   readonly scheduleHost?: unknown;
   readonly snapshots?: SnapshotReader;
-  /** Host-owned read-only Console RPC answered as `plugin.root.<name>`. */
-  readonly hostConsoleRpc?: import('@zhin.js/plugin-runtime').PluginConsoleRpc;
+  /** Host-owned Console methods resolved from each request's captured Root lease. */
+  readonly hostConsoleRpc?: import('./plugin-console-rpc.js').HostConsoleRpcFactory;
 }
 
 export interface ConsoleRpcConfigurationPort {
-  readSource(): Promise<Readonly<{
-    source: string;
-    format: 'yaml' | 'json';
-    revision: string;
-    configKeys: readonly string[];
-    configPaths?: Readonly<Record<string, readonly string[]>>;
-  }>>;
+  readSource(): Promise<import('@zhin.js/console-protocol').ConsoleConfigSource>;
   readDocument(): Promise<Record<string, unknown>>;
+  apply?(expectedRevision: string): Promise<import('@zhin.js/console-protocol').ConsoleConfigApplyResult>;
   replaceSource(
     source: string,
     expectedRevision: string,
-  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }>;
-  setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
+  setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   patch(request: import('@zhin.js/console-protocol').ConsoleConfigPatchRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigPatchResult>;
-  removeKey(pluginName: string): Promise<{ restartRequired: boolean }>;
+  readProject?(request: import('@zhin.js/console-protocol').ConsoleConfigProjectReadRequest): Promise<import('@zhin.js/console-protocol').ConsoleConfigProjectRead>;
+  patchProject?(request: Omit<import('@zhin.js/console-protocol').ConsoleConfigPatchRequest, 'instanceKey'>): Promise<import('@zhin.js/console-protocol').ConsoleConfigProjectPatchResult>;
+  removeKey(pluginName: string): Promise<{ restartRequired: boolean } & import('@zhin.js/console-protocol').ConsoleConfigApplicationStatus>;
   readEnvironmentFile(filename: string): Promise<string>;
   writeEnvironmentFile(filename: string, content: string): Promise<void>;
   readSchema(pluginName?: string): Promise<unknown>;

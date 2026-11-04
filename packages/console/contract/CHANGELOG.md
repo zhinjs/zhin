@@ -1,5 +1,58 @@
 # @zhin.js/contract
 
+## 1.1.18
+
+### Patch Changes
+
+- Updated dependencies [af8f803]
+- Updated dependencies [26fda97]
+- Updated dependencies [976886c]
+- Updated dependencies [3c1912f]
+  - @zhin.js/ai@1.1.50
+
+## 1.1.17
+
+### Patch Changes
+
+- Updated dependencies [6749002]
+- Updated dependencies [c7944a5]
+- Updated dependencies [fc33495]
+- Updated dependencies [2c3610a]
+- Updated dependencies [4949b90]
+- Updated dependencies [4c05a4e]
+  - @zhin.js/ai@1.1.49
+
+## 1.1.16
+
+### Patch Changes
+
+- Updated dependencies [c58c589]
+  - @zhin.js/ai@1.1.48
+
+## 1.1.15
+
+### Patch Changes
+
+- Updated dependencies [b5071e7]
+- Updated dependencies [e23cabc]
+- Updated dependencies [3c4178d]
+- Updated dependencies [825e4dc]
+- Updated dependencies [f1eb75c]
+- Updated dependencies [5621f75]
+- Updated dependencies [2b8b408]
+- Updated dependencies [4d728c0]
+- Updated dependencies [f0e1df7]
+- Updated dependencies [d9672ec]
+- Updated dependencies [24a2b71]
+- Updated dependencies [119e9e6]
+- Updated dependencies [f2bbab5]
+- Updated dependencies [1bdbc08]
+- Updated dependencies [df6442c]
+- Updated dependencies [b223a51]
+- Updated dependencies [d0e1fac]
+- Updated dependencies [945303c]
+  - @zhin.js/ai@1.1.47
+
 ## 1.1.14
 
 ### Patch Changes

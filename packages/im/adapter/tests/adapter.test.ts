@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+import { retireEndpoint } from '../src/endpoint-specification.js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   SnapshotStore,
@@ -10,6 +12,8 @@ import {
   rootPluginId,
   type GenerationAdmissionGate,
   type RuntimeSnapshot,
+  type PluginId,
+  type TokenId,
 } from '@zhin.js/plugin-runtime';
 import {
   FeatureDiscovery,
@@ -18,8 +22,14 @@ import {
 } from '@zhin.js/feature-kit';
 import adapterFeature, {
   AdapterIndex,
-  Endpoint,
-  retireEndpoint,
+  Adapter,
+  createEndpointSpecification,
+  endpointSpec,
+  type Endpoint,
+  type EndpointHooks,
+  type EndpointCreationContext,
+  type EndpointTransportState,
+  type EndpointSpecification,
   adapterFeatureId,
   defineAdapter as defineAdapterContract,
   endpointEventGatewayToken,
@@ -34,46 +44,41 @@ import adapterFeature, {
   type AdapterSegmentPolicy,
   type AdapterContext,
   type AdapterDefinition,
-  type EndpointCleanup,
   type EndpointEvent,
 } from '../src/index.js';
 
-type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
-  create(context: AdapterContext<TConfig>): object | Promise<object>;
+type FixtureDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'createAdapter'> & {
+  createEndpoint(context: AdapterContext<TConfig>): Endpoint | Promise<Endpoint>;
 };
-
-class TestEndpoint extends Endpoint<object> {
-  readonly client: object;
-  get transportState(): NonNullable<Endpoint['transportState']> { return 'open'; }
-
-  constructor(surface: object) {
+class NativeClient extends EventEmitter { nativeCall() { return 'native'; } }
+class TestEndpoint extends NativeClient implements Endpoint {
+  readonly [endpointSpec]: EndpointSpecification;
+  get transportState(): EndpointTransportState | undefined { return 'open'; }
+  constructor(hooks: Partial<EndpointHooks>) {
     super();
-    this.client = surface;
-    Object.assign(this, surface);
+    const transportState = () => this.transportState;
+    this[endpointSpec] = createEndpointSpecification(this, {
+      start: hooks.start ?? (() => undefined), open: hooks.open ?? (() => undefined), close: hooks.close ?? (() => undefined), stop: hooks.stop ?? (() => undefined),
+      send: hooks.send, name: hooks.name, control: hooks.control, management: hooks.management, content: hooks.content,
+      get transportState() { return transportState(); },
+    });
   }
-
-  start(): void {}
-  open(): void {}
-  close(): void {}
-  stop(): void {}
 }
-
-function defineAdapter<TConfig = unknown>(
-  definition: TestAdapterDefinition<TConfig>,
-): Readonly<AdapterDefinition<TConfig>> {
-  return defineAdapterContract<TConfig>({
-    ...definition,
-    async create(context) {
-      const value = await definition.create(context);
-      return value instanceof Endpoint ? value : new TestEndpoint(value);
-    },
-  });
+function defineFixtureAdapter<TConfig = unknown>(definition: FixtureDefinition<TConfig>): Readonly<AdapterDefinition<TConfig>> {
+  const { createEndpoint, ...metadata } = definition;
+  return defineAdapterContract({ ...metadata, createAdapter: context => new class extends Adapter<Endpoint, TConfig> {
+    protected createEndpoint(config: TConfig, execution: EndpointCreationContext) {
+      return createEndpoint({ ...context, config, id: execution.canonicalId, endpointId: execution.endpointId });
+    }
+  }() });
 }
 
 const testEndpointEvents = Object.freeze({
+  async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
   receive: async (_event: EndpointEvent) => undefined,
   [generationAdmissionBinder](gate: GenerationAdmissionGate) {
     return Object.freeze({
+      async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
       receive: (event: EndpointEvent) => gate.enter(() => this.receive(event)),
     });
   },
@@ -82,7 +87,7 @@ const testEndpointEvents = Object.freeze({
 describe('Adapter Feature', () => {
   it('rejects JavaScript project access during transport creation instead of capturing another Feature', async () => {
     const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'invalid-construction', source: '/fixture/index.ts',
-      definition: defineAdapter({ capabilities: ['outbound'], create(context) {
+      definition: defineFixtureAdapter({ capabilities: ['outbound'], createEndpoint(context) {
         expect(Reflect.has(context, 'project')).toBe(false);
         const invalid = context as unknown as { project(feature: unknown): never };
         return invalid.project(adapterFeatureId);
@@ -92,10 +97,10 @@ describe('Adapter Feature', () => {
   });
 
   it('derives explicit endpoint operations from the adapter declaration', () => {
-    const definition = defineAdapter({
+    const definition = defineFixtureAdapter({
       capabilities: ['inbound', 'outbound'],
       operations: ['recall', 'typing'],
-      create: () => ({}),
+      createEndpoint: () => new TestEndpoint({}),
     });
 
     expect(endpointCapabilitiesOf(definition)).toEqual({
@@ -103,10 +108,10 @@ describe('Adapter Feature', () => {
       outbound: true,
       operations: { recall: true, typing: true },
     });
-    expect(() => defineAdapter({
+    expect(() => defineFixtureAdapter({
       capabilities: ['outbound'],
       operations: ['send' as never],
-      create: () => ({}),
+      createEndpoint: () => new TestEndpoint({}),
     })).toThrow('operations');
   });
 
@@ -133,16 +138,16 @@ describe('Adapter Feature', () => {
   it('adapts platform recall-by-id methods to canonical MessageRef control', async () => {
     const recall = vi.fn(async () => undefined);
     const control = createRecallEndpointControl(recall);
-    await control.recall?.({
+    await control.recall?.({ message: {
       conversation: {
         endpoint: { id: 'memory', adapter: 'memory' },
         kind: 'group',
         id: 'room-1',
       },
       id: 'message-1',
-    });
+    } });
 
-    expect(recall).toHaveBeenCalledWith('message-1');
+    expect(recall).toHaveBeenCalledWith('message-1', undefined);
     expect(Object.isFrozen(control)).toBe(true);
   });
 
@@ -159,9 +164,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'memory',
       source: '/adapters/memory/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           content: {
             resolve: async (received) => ({
               status: 'resolved' as const,
@@ -195,10 +200,10 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'invalid-control',
       source: '/adapters/invalid-control/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
         operations: ['edit', 'typing'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           send: async () => 'message-1',
           control: { recall: async () => undefined },
         }),
@@ -212,10 +217,10 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'valid-control',
       source: '/adapters/valid-control/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
         operations: ['recall', 'edit', 'reaction', 'typing'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           send: async () => 'message-1',
           control: {
             recall: async () => undefined,
@@ -237,12 +242,12 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'multi-mode',
       source: '/adapters/multi-mode/index.ts',
-      definition: defineAdapter<{ mode: 'gateway' | 'webhook' }>({
+      definition: defineFixtureAdapter<{ mode: 'gateway' | 'webhook' }>({
         capabilities: ['inbound', 'outbound'],
         operations: (context) => context.config.mode === 'gateway'
           ? ['recall', 'reaction']
           : ['recall'],
-        create: (context) => ({
+        createEndpoint: (context) => new TestEndpoint({
           send: async () => 'message-1',
           control: {
             recall: async () => undefined,
@@ -290,9 +295,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'hidden-control',
       source: '/adapters/hidden-control/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           send: async () => 'message-1',
           control: { recall: async () => undefined },
         }),
@@ -307,9 +312,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'hidden-reaction-removal',
       source: '/adapters/hidden-reaction-removal/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           send: async () => 'message-1',
           control: { removeReaction: async () => undefined },
         }),
@@ -329,9 +334,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'memory',
       source: '/adapters/memory/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
-        create: () => ({ send: async (request) => {
+        createEndpoint: () => new TestEndpoint({ send: async (request) => {
           received = request;
           return 'message-1';
         } }),
@@ -349,7 +354,7 @@ describe('Adapter Feature', () => {
       conversation,
       payload: 'hello',
     });
-    expect(received).toEqual({ conversation, payload: 'hello' });
+    expect(received).toEqual({ conversation, payload: 'hello', signal: expect.any(AbortSignal) });
     await index.stop();
   });
 
@@ -360,13 +365,50 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'missing-send',
       source: '/adapters/missing-send/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
-        create: () => ({}),
+        createEndpoint: () => new TestEndpoint({}),
       }),
     });
     await expect(createAdapterIndex([missing], snapshot([missing])))
       .rejects.toThrow('declares outbound but send() is missing');
+  });
+
+  it.each([
+    'legacy-id',
+    { parts: [{ messageId: 'first', sourceIndices: [0] }, { sourceIndices: [1] }, { messageId: 'last', sourceIndices: [2] }] },
+    { parts: [{}] },
+  ])('preserves single-ID and ordered multi-part native send evidence: %j', async result => {
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'batch',
+      source: '/adapters/batch/index.ts', definition: defineFixtureAdapter({ capabilities: ['outbound'],
+        createEndpoint: () => new TestEndpoint({ send: () => result }),
+      }) });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.start();
+    try {
+      expect(await index.send(slot.id, {
+        conversation: { endpoint: { id: String(slot.id), adapter: 'batch' }, kind: 'group', id: 'scene' },
+        payload: ['first', 'share', 'last'],
+      })).toEqual(result);
+    } finally { await index.stop(); }
+  });
+
+  it.each([undefined, '', { message_id: 'wrong-shape' }, { parts: [] }, { parts: [null] },
+    { parts: [{ messageId: '' }] }, { parts: [{ sourceIndices: [-1] }] }, { parts: [{ sourceIndices: [0.5] }] },
+  ])('rejects malformed send evidence as unknown without resending: %j', async result => {
+    const send = vi.fn(() => result as never);
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'batch',
+      source: '/adapters/batch/index.ts', definition: defineFixtureAdapter({ capabilities: ['outbound'],
+        createEndpoint: () => new TestEndpoint({ send }),
+      }) });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.start();
+    try {
+      await expect(index.send(slot.id, {
+        conversation: { endpoint: { id: String(slot.id), adapter: 'batch' }, kind: 'group', id: 'scene' }, payload: 'hello',
+      })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
+      expect(send).toHaveBeenCalledOnce();
+    } finally { await index.stop(); }
   });
 
   it('reports an invalid create result before checking outbound send', async () => {
@@ -376,31 +418,31 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'invalid-result',
       source: '/adapters/invalid-result/index.ts',
-      definition: defineAdapterContract({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
-        create: () => null as never,
+        createEndpoint: () => null as never,
       }),
     });
 
     await expect(createAdapterIndex([invalid], snapshot([invalid])))
-      .rejects.toThrow('must return an Endpoint or an object with a client');
+      .rejects.toThrow('must implement Endpoint');
   });
 
   it('brands definitions and discovers named adapter modules', async () => {
-    const definition = defineAdapter({
+    const definition = defineFixtureAdapter({
       capabilities: ['inbound', 'outbound'],
-      create: () => ({}),
+      createEndpoint: () => new TestEndpoint({}),
     });
     expect(parseAdapterDefinition(definition)).toBe(definition);
-    expect(() => defineAdapter({ capabilities: [], create: () => ({}) })).toThrow(
+    expect(() => defineFixtureAdapter({ capabilities: [], createEndpoint: () => new TestEndpoint({}) })).toThrow(
       'capabilities',
     );
     // ADR 0038 §5: liveDanmaku marks a live-stream adapter and needs inbound.
-    const live = defineAdapter({ capabilities: ['inbound', 'outbound', 'liveDanmaku'], create: () => ({}) });
+    const live = defineFixtureAdapter({ capabilities: ['inbound', 'outbound', 'liveDanmaku'], createEndpoint: () => new TestEndpoint({}) });
     expect(parseAdapterDefinition(live).capabilities).toEqual(['inbound', 'outbound', 'liveDanmaku']);
-    expect(() => defineAdapter({ capabilities: ['outbound', 'liveDanmaku'], create: () => ({}) }))
+    expect(() => defineFixtureAdapter({ capabilities: ['outbound', 'liveDanmaku'], createEndpoint: () => new TestEndpoint({}) }))
       .toThrow('liveDanmaku requires inbound');
-    expect(() => defineAdapter({ capabilities: ['liveDanmaku'], create: () => ({}) })).toThrow('capabilities');
+    expect(() => defineFixtureAdapter({ capabilities: ['liveDanmaku'], createEndpoint: () => new TestEndpoint({}) })).toThrow('capabilities');
     expect(() => parseAdapterDefinition({ ...live, capabilities: ['outbound', 'liveDanmaku'] }))
       .toThrow('Adapter module must default-export defineAdapter(...)');
 
@@ -416,150 +458,37 @@ describe('Adapter Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['discord']);
   });
 
-  it('injects Endpoint identity and owns start/open/close/stop exactly once', async () => {
-    const events: string[] = [];
-    const root = rootPluginId();
-    const slot = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'memory',
-      source: '/adapters/memory/index.ts',
-      definition: defineAdapterContract({
-        capabilities: ['outbound'],
-        create(context) {
-          events.push(`create:${context.name}:${context.id}`);
-          return {
-            client: Object.freeze({ kind: 'memory' }),
-            connect() {
-              events.push('connect');
-              return () => { events.push('disconnect'); };
-            },
-            activate() {
-              events.push('activate');
-              return () => { events.push('deactivate'); };
-            },
-            send({ target, payload }) {
-              events.push(`send:${target}:${String(payload)}`);
-              return 'sent';
-            },
-          };
-        },
-      }),
-    });
-    const value = snapshot([slot]);
-    const index = await createAdapterIndex([slot], value);
-    expect(isAdapterIndex(index)).toBe(true);
-    expect(isAdapterIndex({ $projection: 'zhin.adapter-index/1' })).toBe(true);
-
-    await index.start();
-    index.open();
-    await expect(index.send(slot.id, { target: 'room', payload: 'hello' })).resolves.toBe('sent');
-    await index.close();
-    index.open();
-    await index.stop();
-    await index.stop();
-
-    expect(events).toEqual([
-      `create:memory:${slot.id}`,
-      'connect',
-      'activate',
-      'send:room:hello',
-      'deactivate',
-      'activate',
-      'deactivate',
-      'disconnect',
-    ]);
-  });
-
-  it('rolls back registered connection resources when connect returns an invalid cleanup', async () => {
-    const cleanup = vi.fn();
-    const root = rootPluginId();
-    const slot = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'invalid-connect',
-      source: '/adapters/invalid-connect/index.ts',
-      definition: defineAdapterContract({
-        capabilities: ['inbound'],
-        create: () => ({
-          client: Object.freeze({ kind: 'invalid-connect' }),
-          connect({ onCleanup }) {
-            onCleanup(cleanup);
-            return 'invalid' as unknown as EndpointCleanup;
-          },
-        }),
-      }),
-    });
+  it('injects symbol identity and owns the actual native Endpoint lifecycle exactly once per transition', async () => {
+    const events: string[] = [], root = rootPluginId();
+    const endpoint = new TestEndpoint({ start: () => { events.push('start'); }, open: () => { events.push('open'); }, close: () => { events.push('close'); }, stop: () => { events.push('stop'); },
+      send: async request => { events.push('send:' + request.conversation.id + ':' + request.payload); return 'sent'; } });
+    const slot = createCapabilitySlot({ owner: root, feature: adapterFeatureId, localName: 'memory', source: '/adapters/memory/index.ts',
+      definition: defineFixtureAdapter({ capabilities: ['outbound'], createEndpoint(context) { events.push('create:' + context.name + ':' + context.id); return endpoint; } }) });
     const index = await createAdapterIndex([slot], snapshot([slot]));
-
-    await expect(index.start()).rejects.toThrow('connect() must return a cleanup function');
-    expect(cleanup).toHaveBeenCalledOnce();
+    expect(endpoint.emit).toBe(EventEmitter.prototype.emit); expect(index.clientAdapter(slot.id)).toBe('memory');
+    expect(endpoint[endpointSpec].identity).toEqual({ id: slot.id, adapter: 'memory' });
+    expect(isAdapterIndex(index)).toBe(true); expect(isAdapterIndex({ $projection: 'zhin.adapter-index/1' })).toBe(true);
+    await index.start(); index.open();
+    await expect(index.send(slot.id, { conversation: { endpoint: { id: slot.id, adapter: 'memory' }, kind: 'private', id: 'room' }, payload: 'hello' })).resolves.toBe('sent');
+    await index.close(); index.open(); await index.stop(); await index.stop();
+    expect(events).toEqual(['create:memory:' + slot.id, 'start', 'open', 'send:room:hello', 'close', 'open', 'close', 'stop']);
   });
 
-  it('runs connection cleanup even when activation cleanup fails', async () => {
+  it('rejects the removed compact lifecycle factory before any connection resource can be created', () => {
+    const connect = vi.fn();
+    expect(() => defineAdapterContract({ capabilities: ['inbound'], create: () => ({ client: {}, connect }) } as never)).toThrow(/createAdapter/);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('still stops the actual native transport when closing its input fails', async () => {
     const events: string[] = [];
-    const root = rootPluginId();
-    const slot = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'cleanup-failure',
-      source: '/adapters/cleanup-failure/index.ts',
-      definition: defineAdapterContract({
-        capabilities: ['inbound'],
-        create: () => ({
-          client: Object.freeze({ kind: 'cleanup-failure' }),
-          connect: () => () => { events.push('connect cleanup'); },
-          activate: () => () => {
-            events.push('activation cleanup');
-            throw new Error('activation cleanup failed');
-          },
-        }),
-      }),
-    });
-    const index = await createAdapterIndex([slot], snapshot([slot]));
-    await index.start();
-    index.open();
-
-    await expect(index.stop()).rejects.toBeInstanceOf(AggregateError);
-    expect(events).toEqual(['activation cleanup', 'connect cleanup']);
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'cleanup-failure', source: '/adapters/cleanup-failure/index.ts',
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => new TestEndpoint({ close: () => { events.push('input close'); throw new Error('input close failed'); }, stop: () => { events.push('native stop'); } }) }) });
+    const index = await createAdapterIndex([slot], snapshot([slot])); await index.start(); index.open();
+    await expect(index.stop()).rejects.toBeInstanceOf(AggregateError); expect(events).toEqual(['input close', 'native stop']);
   });
 
-  it('cleans up a connect result that settles after generation abort', async () => {
-    const events: string[] = [];
-    const controller = new AbortController();
-    let finishConnect!: () => void;
-    const root = rootPluginId();
-    const slot = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'slow-connect',
-      source: '/adapters/slow-connect/index.ts',
-      definition: defineAdapterContract({
-        capabilities: ['inbound'],
-        create: () => ({
-          client: Object.freeze({ kind: 'slow-connect' }),
-          connect({ onCleanup }) {
-            onCleanup(() => { events.push('registered cleanup'); });
-            return new Promise<EndpointCleanup>((resolve) => {
-              finishConnect = () => resolve(() => { events.push('returned cleanup'); });
-            });
-          },
-        }),
-      }),
-    });
-    const index = await createAdapterIndex([slot], snapshot([slot]));
-    const starting = index.start(controller.signal);
-    await vi.waitFor(() => expect(finishConnect).toBeTypeOf('function'));
 
-    controller.abort(new Error('generation aborted'));
-    await expect(starting).rejects.toThrow('generation aborted');
-    finishConnect();
-
-    await vi.waitFor(() => expect(events).toEqual([
-      'returned cleanup',
-      'registered cleanup',
-    ]));
-  });
 
   it('handles both promises when a synchronous Endpoint start aborts and throws', async () => {
     const controller = new AbortController();
@@ -567,7 +496,7 @@ describe('Adapter Feature', () => {
     const originalError = new Error('synchronous startup failure');
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'sync-abort', source: '/adapters/sync-abort/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => ({
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => new TestEndpoint({
         start: () => {
           controller.abort(new Error('startup cancelled'));
           throw originalError;
@@ -595,7 +524,7 @@ describe('Adapter Feature', () => {
     const cleanup = vi.fn();
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'cancel-before-start', source: '/adapters/cancel-before-start/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => ({ start, stop: cleanup }) }),
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => new TestEndpoint({ start, stop: cleanup }) }),
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
     const starting = index.start(controller.signal);
@@ -613,9 +542,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'a-good',
       source: '/adapters/a-good/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           start: () => { events.push('start-good'); },
           stop: () => { events.push('stop-good'); },
         }),
@@ -626,9 +555,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'z-broken',
       source: '/adapters/z-broken/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => { throw new Error('create failed'); },
+        createEndpoint: () => { throw new Error('create failed'); },
       }),
     });
 
@@ -642,9 +571,9 @@ describe('Adapter Feature', () => {
     const stop = vi.fn();
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'late', source: '/adapters/late/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: async () => {
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: async () => {
         controller.abort(new Error('cancel prepare'));
-        return { stop };
+        return new TestEndpoint({ stop });
       } }),
     });
     await expect(AdapterIndex.create([slot], snapshot([slot]), controller.signal)).rejects.toThrow('cancel prepare');
@@ -655,7 +584,7 @@ describe('Adapter Feature', () => {
     const stop = vi.fn();
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'invalid', source: '/adapters/invalid/index.ts',
-      definition: defineAdapter({ capabilities: ['outbound'], create: () => ({ stop }) }),
+      definition: defineFixtureAdapter({ capabilities: ['outbound'], createEndpoint: () => new TestEndpoint({ stop }) }),
     });
     await expect(createAdapterIndex([slot], snapshot([slot]))).rejects.toThrow('send() is missing');
     expect(stop).toHaveBeenCalledOnce();
@@ -671,9 +600,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'slow',
       source: '/adapters/slow/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           async start() {
             events.push('start-begin');
             await started;
@@ -687,8 +616,7 @@ describe('Adapter Feature', () => {
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
     const activation = index.activate(new AbortController().signal);
-    await Promise.resolve();
-    expect(events).toEqual(['start-begin']);
+    await vi.waitFor(() => expect(events).toEqual(['start-begin']));
     resolveStart();
     await activation;
     expect(events).toEqual(['start-begin', 'start-done', 'open']);
@@ -704,9 +632,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'a-healthy',
       source: '/adapters/a-healthy/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           start: () => { events.push('healthy:start'); },
           stop: () => { events.push('healthy:stop'); },
         }),
@@ -717,9 +645,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'z-broken',
       source: '/adapters/z-broken/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           start() {
             events.push('broken:start');
             throw new Error('connect failed');
@@ -746,9 +674,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'broken-cleanup',
       source: '/adapters/broken-cleanup/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           start: () => { throw new Error('connect failed'); },
           stop: () => { throw new Error('cleanup failed'); },
         }),
@@ -785,9 +713,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'waiting',
       source: '/adapters/waiting/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           start(signal) {
             events.push('start');
             return new Promise<void>((_resolve, reject) => {
@@ -833,9 +761,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'broken',
       source: '/adapters/broken/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => { throw new TypeError('icqq requires uin'); },
+        createEndpoint: () => { throw new TypeError('icqq requires uin'); },
       }),
     });
     await expect(createAdapterIndex([slot], snapshot([slot])))
@@ -850,9 +778,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'memory',
       source: '/adapters/memory/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           start: () => { events.push(`${version}:start`); },
           open: () => { events.push(`${version}:open`); },
           close: () => { events.push(`${version}:close`); },
@@ -913,11 +841,11 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'memory',
       source: '/adapters/memory/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create(context) {
+        createEndpoint(context) {
           receive = context.use(ingressToken).receive;
-          return {};
+          return new TestEndpoint({});
         },
       }),
     });
@@ -942,54 +870,55 @@ describe('Adapter Feature', () => {
 
   it('bounds candidate events and exposes overflow and replay failures without payloads', async () => {
     class PublishingEndpoint extends TestEndpoint {
-      publish() { return this.emit('message.receive', { content: 'private payload' }); }
+      publish() { return this[endpointSpec].events.emit('message.receive', { content: 'private payload' }); }
     }
     const endpoint = new PublishingEndpoint({});
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'buffer', source: '/adapters/buffer/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }),
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }),
     });
     const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, {
+      async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
       receive: async () => { throw new Error('private error'); },
     }]]));
     const index = await createAdapterIndex([slot], candidate);
     for (let i = 0; i < 257; i += 1) await endpoint.publish();
-    expect(endpoint.eventDiagnostics).toEqual({ buffered: 256, dropped: 1, dispatchFailures: 0 });
+    expect(index.describe()[0]!.eventDiagnostics!).toEqual({ buffered: 256, dropped: 1, dispatchFailures: 0 });
     const store = new SnapshotStore({ ...snapshotState(candidate), projections: new Map([[adapterFeatureId, index]]) });
-    await vi.waitFor(() => expect(endpoint.eventDiagnostics.dispatchFailures).toBe(256));
+    await vi.waitFor(() => expect(index.describe()[0]!.eventDiagnostics!.dispatchFailures).toBe(256));
     expect(index.describe()[0]?.eventDiagnostics).toEqual({ buffered: 0, dropped: 1, dispatchFailures: 256 });
     await store.close();
   });
 
   it('settles every reliable buffered event when a gateway throws synchronously', async () => {
     class ReliableEndpoint extends TestEndpoint {
-      publish() { return this.emitAccepted('message.receive', {}); }
+      publish() { return this[endpointSpec].events.emitAccepted('message.receive', {}); }
     }
     const endpoint = new ReliableEndpoint({});
     let count = 0;
     const receive = vi.fn(() => { if (++count === 1) throw new Error('sync receive failure'); return Promise.resolve('accepted'); });
     const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'sync-buffer', source: '/adapters/sync-buffer/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }) });
-    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { receive }]]));
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }) });
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive }]]));
     const index = await createAdapterIndex([slot], candidate); await index.start(); index.open();
     const first = endpoint.publish(); const failed = expect(first).rejects.toThrow('dispatch failed');
     const second = endpoint.publish();
     const store = new SnapshotStore({ ...snapshotState(candidate), projections: new Map([[adapterFeatureId, index]]) });
     await failed; await expect(second).resolves.toBe('accepted');
     expect(receive).toHaveBeenCalledTimes(2);
-    expect(endpoint.eventDiagnostics.dispatchFailures).toBe(1);
+    expect(index.describe()[0]!.eventDiagnostics!.dispatchFailures).toBe(1);
     await store.close();
   });
 
   it('does not confirm queued events if retirement occurs inside the first dispatch', async () => {
     class ReliableEndpoint extends TestEndpoint {
-      publish() { return this.emitAccepted('message.receive', {}); }
+      publish() { return this[endpointSpec].events.emitAccepted('message.receive', {}); }
     }
     const endpoint = new ReliableEndpoint({});
     const receive = vi.fn(() => { retireEndpoint(endpoint); return Promise.resolve('entered before retirement'); });
     const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'retiring-buffer', source: '/adapters/retiring-buffer/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }) });
-    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { receive }]]));
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }) });
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive }]]));
     const index = await createAdapterIndex([slot], candidate); await index.start(); index.open();
     const first = endpoint.publish(), second = endpoint.publish();
     const rejected = expect(second).rejects.toThrow('retired before event admission');
@@ -998,9 +927,10 @@ describe('Adapter Feature', () => {
     expect(receive).toHaveBeenCalledOnce(); await store.close();
   });
 
-  it('reports unobserved compact endpoint health as unknown after connect resolves', async () => {
+  it('reports unobserved native transport health as unknown after readiness resolves', async () => {
+    class UnobservedEndpoint extends TestEndpoint { override get transportState() { return undefined; } }
     const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'unobserved', source: '/adapters/unobserved/index.ts',
-      definition: defineAdapterContract({ capabilities: ['inbound'], create: () => ({ client: {}, connect() {} }) }) });
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => new UnobservedEndpoint({}) }) });
     const index = await createAdapterIndex([slot], snapshot([slot])); await index.start(); index.open();
     expect(index.describe()[0]).toMatchObject({ admitted: true, connected: false, status: 'offline', transportState: 'unknown' });
     await index.stop(); expect(index.describe()[0]).toMatchObject({ connected: false, transportState: 'stopped' });
@@ -1011,7 +941,7 @@ describe('Adapter Feature', () => {
     const stop = vi.fn(() => { throw new Error('sync stop failure'); });
     let entered = false;
     const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'sync-stop', source: '/adapters/sync-stop/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => ({ start() { entered = true; return new Promise(() => {}); }, stop }) }) });
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => new TestEndpoint({ start() { entered = true; return new Promise(() => {}); }, stop }) }) });
     const index = await createAdapterIndex([slot], snapshot([slot]));
     const starting = index.start(controller.signal);
     const rejected = expect(starting).rejects.toThrow('cleanup');
@@ -1021,15 +951,16 @@ describe('Adapter Feature', () => {
 
   it('does not acknowledge reliable candidate events until actual dispatch completes', async () => {
     class ReliableEndpoint extends TestEndpoint {
-      publish() { return this.emitAccepted('message.receive', {}); }
+      publish() { return this[endpointSpec].events.emitAccepted('message.receive', {}); }
     }
     const endpoint = new ReliableEndpoint({});
     let finish!: () => void;
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'reliable', source: '/adapters/reliable/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }),
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }),
     });
     const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, {
+      async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); },
       receive: () => new Promise<void>((resolve) => { finish = resolve; }),
     }]]));
     const index = await createAdapterIndex([slot], candidate);
@@ -1047,12 +978,12 @@ describe('Adapter Feature', () => {
 
   it('rejects reliable candidate events on overflow and rollback', async () => {
     class ReliableEndpoint extends TestEndpoint {
-      publish() { return this.emitAccepted('message.receive', {}); }
+      publish() { return this[endpointSpec].events.emitAccepted('message.receive', {}); }
     }
     const endpoint = new ReliableEndpoint({});
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'reliable', source: '/adapters/reliable/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }),
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }),
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
     const first = endpoint.publish();
@@ -1064,68 +995,18 @@ describe('Adapter Feature', () => {
     await expect(endpoint.publish()).rejects.toThrow('retired');
   });
 
-  it('replays pre-commit endpoint events after admission opens', async () => {
-    const root = rootPluginId();
-    const received: EndpointEvent[] = [];
-    const eventGateway = {
-      async receive(event: EndpointEvent): Promise<void> {
-        received.push(event);
-      },
-      [generationAdmissionBinder](gate: GenerationAdmissionGate) {
-        return Object.freeze({
-          receive: async (event: EndpointEvent) => gate.enter(() => this.receive(event)),
-        });
-      },
-    };
-    const client = Object.freeze({ api: 'native' });
-    let publish!: () => Promise<unknown>;
-    const slot = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'native',
-      source: '/adapters/native/index.ts',
-      definition: defineAdapterContract({
-        capabilities: ['inbound'],
-        create: () => ({
-          client,
-          connect({ events }) {
-            publish = () => events.message({
-              conversation: { kind: 'private', id: 'room-1' },
-              content: 'hello',
-              sender: { id: 'user-1' },
-            });
-          },
-        }),
-      }),
-    });
-    const candidate = snapshot([slot], undefined, new Map([
-      [endpointEventGatewayToken.id, eventGateway],
-    ]));
-    const index = await createAdapterIndex([slot], candidate);
-    await index.start();
-
-    await publish();
+  it('replays actual native pre-commit events with the same Client after admission opens', async () => {
+    const received: EndpointEvent[] = [], endpoint = new TestEndpoint({});
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'native', source: '/adapters/native/index.ts',
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => endpoint }) });
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { async run<T>(this: import('@zhin.js/adapter').EndpointEventGateway, receive: (receipt: import('@zhin.js/adapter').EndpointReceipt) => T | Promise<T>) { return receive(this); }, receive: async (event: EndpointEvent) => { received.push(event); } }]]));
+    const index = await createAdapterIndex([slot], candidate); await index.start();
+    await endpoint[endpointSpec].events.message({ conversation: { kind: 'private', id: 'room-1' }, content: 'hello', sender: { id: 'user-1' } });
     expect(received).toEqual([]);
-
-    const store = new SnapshotStore({
-      ...snapshotState(candidate),
-      projections: new Map([[adapterFeatureId, index]]),
-    });
+    const store = new SnapshotStore({ ...snapshotState(candidate), projections: new Map([[adapterFeatureId, index]]) });
     await vi.waitFor(() => expect(received).toHaveLength(1));
-    expect(received[0]).toMatchObject({
-      name: 'message.receive',
-      client,
-      payload: {
-        conversation: {
-          kind: 'private',
-          id: 'room-1',
-          endpoint: { id: slot.id, adapter: 'native' },
-        },
-        endpointId: 'native',
-        content: 'hello',
-      },
-    });
-    await store.close();
+    expect(received[0]).toMatchObject({ name: 'message.receive', payload: { conversation: { kind: 'private', id: 'room-1', endpoint: { id: slot.id, adapter: 'native' } }, content: 'hello' } });
+    expect(received[0].client).toBe(endpoint); await store.close(); await index.stop();
   });
 
   it('describes endpoint status and resolves Console adapter/endpoint pairs', async () => {
@@ -1135,9 +1016,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'sandbox',
       source: '/adapters/sandbox/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           send: async () => 'ok',
         }),
       }),
@@ -1163,7 +1044,7 @@ describe('Adapter Feature', () => {
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'live',
       source: '/adapters/live/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => new LiveEndpoint({}) }),
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => new LiveEndpoint({}) }),
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
     await index.start();
@@ -1186,9 +1067,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'icqq',
       source: '/adapters/icqq-a/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           name: '111111',
           send: async () => 'a',
         }),
@@ -1199,9 +1080,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'icqq',
       source: '/adapters/icqq-b/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({
+        createEndpoint: () => new TestEndpoint({
           name: '222222',
           send: async () => 'b',
         }),
@@ -1222,11 +1103,11 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'icqq',
       source: '/adapters/icqq/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound'],
-        create(context) {
+        createEndpoint(context) {
           seen.push({ id: String(context.id), config: context.config as Record<string, unknown> });
-          return { start() {}, stop() {} };
+          return new TestEndpoint({ start() {}, stop() {} });
         },
       }),
     });
@@ -1256,7 +1137,7 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'memory',
       source: '/adapters/memory/index.ts',
-      definition: defineAdapter({ capabilities: ['inbound'], create: () => ({}) }),
+      definition: defineFixtureAdapter({ capabilities: ['inbound'], createEndpoint: () => new TestEndpoint({}) }),
     });
 
     await expect(createAdapterIndex([slot], snapshot([slot], new Map([[root, {
@@ -1276,9 +1157,9 @@ describe('Adapter Feature', () => {
       feature: adapterFeatureId,
       localName: 'icqq',
       source: '/adapters/icqq/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: (context) => ({
+        createEndpoint: (context) => new TestEndpoint({
           name: (context.config as { id?: string }).id,
           send: async () => 'ok',
         }),
@@ -1298,19 +1179,19 @@ describe('Adapter Feature', () => {
 });
 
 describe('defineAdapter segments policy', () => {
-  const create = () => ({});
+  const createEndpoint = () => new TestEndpoint({});
 
   it('defaults segments to undefined（未声明 = 未迁移，宽松）', () => {
-    const definition = defineAdapter({ capabilities: ['outbound'], create });
+    const definition = defineFixtureAdapter({ capabilities: ['outbound'], createEndpoint });
     expect(definition.segments).toBeUndefined();
     expect(parseAdapterDefinition(definition).segments).toBeUndefined();
   });
 
   it('accepts outboundMedia / interactive / markdown declarations, deduped and frozen', () => {
-    const definition = defineAdapter({
+    const definition = defineFixtureAdapter({
       capabilities: ['outbound'],
       segments: { outboundMedia: ['url', 'base64', 'url'], interactive: 'text', markdown: 'native' },
-      create,
+      createEndpoint,
     });
     expect(definition.segments).toEqual({
       outboundMedia: ['url', 'base64'],
@@ -1323,10 +1204,10 @@ describe('defineAdapter segments policy', () => {
   });
 
   it('rejects invalid segments shapes', () => {
-    const defineWithSegments = (segments: unknown) => () => defineAdapter({
+    const defineWithSegments = (segments: unknown) => () => defineFixtureAdapter({
       capabilities: ['outbound'],
       segments: segments as AdapterSegmentPolicy,
-      create,
+      createEndpoint,
     });
     expect(defineWithSegments('native')).toThrow('segments');
     expect(defineWithSegments({ outboundMedia: [] })).toThrow('outboundMedia');
@@ -1345,20 +1226,20 @@ describe('defineAdapter segments policy', () => {
   });
 
   it('accepts reactions with labels, deduped by value and frozen', () => {
-    const definition = defineAdapter({
+    const definition = defineFixtureAdapter({
       capabilities: ['outbound'],
       segments: { reaction: { values: [{ value: '76', label: ' 赞 ' }, { value: '76', label: '赞' }], scopes: ['group', 'group'] } },
-      create,
+      createEndpoint,
     });
     expect(definition.segments?.reaction).toEqual({ values: [{ value: '76', label: '赞' }], scopes: ['group'] });
     expect(Object.isFrozen(definition.segments?.reaction?.values)).toBe(true);
   });
 
   it('accepts model extensions per segment type, deduped and frozen', () => {
-    const definition = defineAdapter({
+    const definition = defineFixtureAdapter({
       capabilities: ['outbound'],
       segments: { supported: ['text', 'share'], model: { share: { fields: ['audio', 'audio'], hint: ' music card ', scopes: ['group', 'group'] } } },
-      create,
+      createEndpoint,
     });
     expect(definition.segments?.model).toEqual({ share: { fields: ['audio'], hint: 'music card', scopes: ['group'] } });
     expect(Object.isFrozen(definition.segments?.model?.share?.scopes)).toBe(true);
@@ -1366,7 +1247,7 @@ describe('defineAdapter segments policy', () => {
   });
 
   it('parseAdapterDefinition rejects invalid segments on hand-built definitions', () => {
-    const definition = defineAdapter({ capabilities: ['outbound'], create });
+    const definition = defineFixtureAdapter({ capabilities: ['outbound'], createEndpoint });
     expect(() => parseAdapterDefinition({
       ...definition,
       segments: { outboundMedia: ['url', 'cdn'] },
@@ -1392,7 +1273,7 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
   it('rejects a declared action whose port is missing and names the port', async () => {
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'icqq-like', source: '/adapters/x/index.ts',
-      definition: defineAdapter({ capabilities: ['outbound'], profile, create: () => ({ send: async () => 'id' }) }),
+      definition: defineFixtureAdapter({ capabilities: ['outbound'], profile, createEndpoint: () => new TestEndpoint({ send: async () => 'id' }) }),
     });
     await expect(createAdapterIndex([slot], snapshot([slot])))
       .rejects.toThrow('declares actions.mute but management.muteGroupMember is missing');
@@ -1401,12 +1282,12 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
   it('resolves per-turn capabilities from the effective profile and the adapter patch', async () => {
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'icqq-like', source: '/adapters/x/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
         profile,
         resolveCapabilities: ({ facts }) => facts.bot?.platformRole === 'member'
           ? { actions: { mute: false } } : undefined,
-        create: () => ({ send: async () => 'id', management: { muteGroupMember: async () => undefined } }),
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', management: { muteGroupMember: async () => undefined } }),
       }),
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
@@ -1421,10 +1302,10 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
   it('derives a conservative profile from legacy declarations when none is declared', async () => {
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'legacy', source: '/adapters/legacy/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound', 'outbound'],
         operations: ['recall'],
-        create: () => ({ send: async () => 'id', control: { recall: async () => undefined } }),
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', control: { recall: async () => undefined } }),
       }),
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
@@ -1438,9 +1319,9 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
   it('a legacy-derived profile gains scene lookups from the management ports the Endpoint implements', async () => {
     const make = (name: string, management?: object) => createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: name, source: `/adapters/${name}/index.ts`,
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['inbound', 'outbound'],
-        create: () => ({ send: async () => 'id', ...(management ? { management } : {}) }),
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', ...(management ? { management } : {}) }),
       }),
     });
     const withPorts = make('with-ports', {
@@ -1461,14 +1342,14 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
   it('exposes feedback, spool and quote-only delivery of a declared profile as the serializable kinds view', async () => {
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'declared', source: '/adapters/declared/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
         profile: {
           default: { delivery: { send: true, spool: false }, feedback: { mode: 'reaction', emoji: '⏳' }, runtime: { sandbox: true } },
           group: { delivery: { proactive: false } },
           private: { feedback: { mode: 'typing', refreshSeconds: 5 }, delivery: { spool: true } },
         },
-        create: () => ({ send: async () => 'id', control: { typing: async () => undefined } }),
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', control: { typing: async () => undefined } }),
       }),
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
@@ -1482,7 +1363,7 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
   it('a declared profile implies its operations and keeps segments as an alias', async () => {
     const slot = createCapabilitySlot({
       owner: rootPluginId(), feature: adapterFeatureId, localName: 'implied', source: '/adapters/implied/index.ts',
-      definition: defineAdapter({
+      definition: defineFixtureAdapter({
         capabilities: ['outbound'],
         profile: {
           default: {
@@ -1490,7 +1371,7 @@ describe('Adapter capability profile assembly (ADR 0044)', () => {
             actions: { recall: { scopes: ['group'] } },
           },
         },
-        create: () => ({ send: async () => 'id', control: { recall: async () => undefined } }),
+        createEndpoint: () => new TestEndpoint({ send: async () => 'id', control: { recall: async () => undefined } }),
       }),
     });
     const index = await createAdapterIndex([slot], snapshot([slot]));
@@ -1510,15 +1391,15 @@ function createAdapterIndex(
 function snapshot(
   slots: readonly ReturnType<typeof createCapabilitySlot>[],
   configs?: ReadonlyMap<ReturnType<typeof rootPluginId>, Record<string, unknown>>,
-  rootResources: ReadonlyMap<string, unknown> = new Map(),
+  rootResources: ReadonlyMap<TokenId, unknown> = new Map(),
 ): RuntimeSnapshot {
   const root = rootPluginId();
-  const tree = new Map<string, {
-    id: typeof root;
+  const tree = new Map<PluginId, {
+    id: PluginId;
     instanceKey: string;
     packageName: string;
     packageRoot: string;
-    children: string[];
+    children: PluginId[];
   }>([[root, {
     id: root,
     instanceKey: 'root',
@@ -1541,7 +1422,7 @@ function snapshot(
   return {
     generation: 1,
     root,
-    tree: tree as RuntimeSnapshot['tree'],
+    tree,
     config: new Map([[root, configs?.get(root) ?? {}], ...slots.map((slot) => [slot.owner, configs?.get(slot.owner as ReturnType<typeof rootPluginId>) ?? {}] as const)]),
     resources: new Map([
       [root, new Map([

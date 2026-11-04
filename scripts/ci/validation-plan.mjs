@@ -11,8 +11,13 @@ export function comparison(eventName, event, sha) {
 }
 
 export function versionCandidate(changes) {
+  // A real generated version tree always bumps package metadata. Pure leftover
+  // changeset deletions (e.g. privatePackages.version:false entries bump never
+  // consumes) must not look like a version PR — otherwise merge_group demands a
+  // full release batch on main and deadlocks publish.
   return changes.length > 0
     && changes.some(({ status, path }) => status === 'D' && /^\.changeset\/(?!README\.md$)[^/]+\.md$/.test(path))
+    && changes.some(({ status, path }) => ['M', 'A'].includes(status) && /^(?:.+\/)?(?:package\.json|CHANGELOG\.md)$/.test(path))
     && changes.every(({ status, path }) =>
       status === 'D' && /^\.changeset\/(?!README\.md$)[^/]+\.md$/.test(path)
       || ['M', 'A'].includes(status) && /^(?:.+\/)?(?:package\.json|CHANGELOG\.md)$/.test(path)

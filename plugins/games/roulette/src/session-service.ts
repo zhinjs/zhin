@@ -1,10 +1,10 @@
+import { encodeStorageIdentity } from 'zhin.js/plugin-runtime';
 import type { Database, Models } from '@zhin.js/core';
 import {
   VersionedSessionService,
-  channelKey,
   generateCompactId,
   secureRandomInt,
-  type GameMessageLike,
+  type GamePlayer,
   type GameOutcome,
   type GameSessionDatabase,
 } from '@zhin.js/game-kit';
@@ -32,12 +32,6 @@ import type {
 } from './models.js';
 
 export type RouletteDatabase = Database<unknown, Models, string>;
-
-/** `message.conversation.endpoint`: the adapter plugin owner and the Endpoint capability id. */
-export interface EndpointIdentity {
-  readonly adapter: string;
-  readonly id: string;
-}
 
 export type RouletteAction =
   | { readonly type: 'join'; readonly player: RoulettePlayer }
@@ -73,33 +67,30 @@ export class RouletteSessionService extends VersionedSessionService<RouletteSess
   }
 
   async createLobby(
-    message: GameMessageLike,
-    endpoint: EndpointIdentity,
+    message: GamePlayer,
     config: RouletteConfig,
   ): Promise<RouletteSessionRow> {
     const now = Date.now();
     const host = playerFromMessage(message);
     const state = createLobby(host, tableRules(config));
     return this.createRow({
-      id: generateCompactId('rlt_'),
-      locale: message.locale ?? 'zh-CN',
-      adapter: String(message.$adapter),
-      endpoint: message.$endpoint,
-      channel_type: message.$channel.type,
-      channel_id: message.$channel.id,
-      channel_key: channelKey(message),
-      endpoint_adapter: endpoint.adapter,
-      endpoint_id: endpoint.id,
-      host_id: host.id,
-      state_json: JSON.stringify(state),
-      phase: state.phase,
-      turn: '',
-      revision: 0,
-      processed_actions: '[]',
-      deadline_at: now + config.lobbyTimeoutSeconds * 1000,
-      status: 'active',
-      updated_at: now,
-      created_at: now,
+      target: message.target,
+      fields: {
+        id: generateCompactId('rlt_'),
+        locale: message.locale ?? 'zh-CN',
+        endpoint_adapter: encodeStorageIdentity(message.target.endpoint.adapter),
+        endpoint_id: encodeStorageIdentity(message.target.endpoint.id),
+        host_id: host.id,
+        state_json: JSON.stringify(state),
+        phase: state.phase,
+        turn: '',
+        revision: 0,
+        processed_actions: '[]',
+        deadline_at: now + config.lobbyTimeoutSeconds * 1000,
+        status: 'active',
+        updated_at: now,
+        created_at: now,
+      },
     });
   }
 
@@ -227,9 +218,9 @@ export function stateOf(session: RouletteSessionRow): RouletteState {
   return decodeRouletteState(session.state_json);
 }
 
-export function playerFromMessage(message: GameMessageLike): RoulettePlayer {
-  const name = message.$sender.name?.trim() || message.$sender.id;
-  return { id: message.$sender.id, name };
+export function playerFromMessage(message: GamePlayer): RoulettePlayer {
+  const name = message.sender.name?.trim() || message.sender.id;
+  return { id: message.sender.id, name };
 }
 
 function tableRules(config: RouletteConfig): RouletteTableRules {

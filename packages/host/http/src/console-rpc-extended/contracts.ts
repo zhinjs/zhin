@@ -1,3 +1,10 @@
+interface LoginEndpointIdentity {
+  readonly canonicalId: string;
+  readonly instanceId: string;
+  readonly epoch: number;
+  readonly incarnationId: string;
+}
+
 export interface ConsoleRpcExtendedCtx {
   /** full scope 才允许写操作；demo scope 只放行只读 RPC。 */
   fullScope: boolean;
@@ -20,13 +27,14 @@ export interface ConsoleRpcExtendedCtx {
       id: string;
       adapter: string;
       endpointKey: string;
+      endpointIdentity?: LoginEndpointIdentity;
       type: string;
       payload: Record<string, unknown>;
       createdAt: number;
       expiresAt?: number;
     }[];
-    submit(id: string, value: string | Record<string, unknown>): boolean;
-    cancel(id: string, reason?: string): boolean;
+    submit(id: string, value: string | Record<string, unknown>, endpointIdentity?: LoginEndpointIdentity): boolean;
+    cancel(id: string, reason?: string, endpointIdentity?: LoginEndpointIdentity): boolean;
   };
   /** Authenticated Root adapter; mutation DTOs deliberately contain no principal/decision fields. */
   workroomProfileControl?: ConsoleWorkroomProfileControlPort;
@@ -126,6 +134,15 @@ export interface InboxModel {
   };
 }
 
+/** HTTP's narrow structural seam; implementations keep platform objects and credentials private. */
+export interface EndpointGroupCommand { readonly groupId: string; readonly signal?: AbortSignal }
+export interface EndpointUserCommand { readonly userId: string; readonly signal?: AbortSignal }
+export interface EndpointMemberCommand extends EndpointGroupCommand, EndpointUserCommand {}
+export interface EndpointMuteCommand extends EndpointMemberCommand { readonly durationSeconds: number }
+export interface EndpointAdminCommand extends EndpointMemberCommand { readonly enabled: boolean }
+export interface EndpointApproveCommand { readonly requestId: string; readonly remark?: string; readonly signal?: AbortSignal }
+export interface EndpointRejectCommand { readonly requestId: string; readonly reason?: string; readonly signal?: AbortSignal }
+
 export interface EndpointManagementPort {
   listFriends?(): Promise<readonly { user_id: number | string; nickname: string; remark: string }[]>;
   listGroups?(): Promise<readonly { group_id: number | string; name: string }[]>;
@@ -134,7 +151,7 @@ export interface EndpointManagementPort {
     name?: string;
     parent?: { type: string; id: string; name?: string };
   }[]>;
-  listGroupMembers?(groupId: string): Promise<readonly unknown[]>;
+  listGroupMembers?(request: EndpointGroupCommand): Promise<readonly unknown[]>;
   listRequests?(): Promise<readonly {
     platform_request_id: string;
     type: string;
@@ -146,10 +163,10 @@ export interface EndpointManagementPort {
     comment?: string | null;
     created_at: number;
   }[]>;
-  approveRequest?(requestId: string, remark?: string): Promise<void>;
-  rejectRequest?(requestId: string, reason?: string): Promise<void>;
-  kickGroupMember?(groupId: string, userId: string): Promise<void>;
-  muteGroupMember?(groupId: string, userId: string, durationSeconds: number): Promise<void>;
-  setGroupAdmin?(groupId: string, userId: string, enabled: boolean): Promise<void>;
-  deleteFriend?(userId: string): Promise<void>;
+  approveRequest?(request: EndpointApproveCommand): Promise<void>;
+  rejectRequest?(request: EndpointRejectCommand): Promise<void>;
+  kickGroupMember?(request: EndpointMemberCommand): Promise<void>;
+  muteGroupMember?(request: EndpointMuteCommand): Promise<void>;
+  setGroupAdmin?(request: EndpointAdminCommand): Promise<void>;
+  deleteFriend?(request: EndpointUserCommand): Promise<void>;
 }

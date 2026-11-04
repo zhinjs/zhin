@@ -12,7 +12,7 @@ user-invocable: true
 
 - 不要输出通用平台示例，优先实现贴合当前适配器的真实代码
 - 不要绕开框架发送链，遵守 Adapter 和 Endpoint 的既有抽象
-- `send()` 返回非空平台消息 ID；入站统一经 `events.message()` 发布
+- specification 的 `send()` 返回确认的消息 ID 或有序 `{ parts }` 投递证据；入站统一经 `events.message()` 发布
 - 不要把插件层问题误处理到适配器层
 
 ## 工作方式
@@ -29,13 +29,13 @@ user-invocable: true
 
 ## 关键约定
 
-- `adapters/<name>/index.ts` default-export `defineAdapter({ capabilities, create })`
-- 普通协议返回 `{ client, connect, activate?, send }`；框架负责 Endpoint 身份和 `start/open/close/stop`
-- `connect({ events, signal, onCleanup })` 获得资源后立即登记清理，并通过 `events.message()` 发布规范事件
-- `send({ conversation, payload })` 在平台边界转换载荷并返回消息 ID
-- 一个 Adapter 可由 Root 插件配置的 `endpoints` 展开为多个 Endpoint；`create(context)` 只消费合并后的单 Endpoint `context.config` 与 `context.name`，不要在适配器内部再次解析 Root 配置
+- `adapters/<name>/index.ts` default-export `defineAdapter({ capabilities, createAdapter })`
+- Adapter 基类统一拥有 desired、实际账号执行与租约；平台子类只实现真实平台差异
+- Endpoint 继承真实 SDK／实质协议 Client，以 `endpointSpec` 实现结构规范；通过 `events.run` 跟踪完整回调，`events.message` 发布规范消息
+- `send({ conversation, payload })` 在平台边界转换载荷，返回确认的消息 ID 或有序 `{ parts }` 投递证据
+- 一个 Adapter 管理多个账号；`createEndpoint(config, execution)` 消费已解析的单账号配置与执行身份，不在平台实现中重建账号目录或解析 Root 配置
 - Command、Middleware、Tool 通过 operation-scoped `$client` 使用平台 SDK，不跨 operation 缓存 Client
-- 只有确需多阶段生命周期时继承 `Endpoint`；WebSocket/SSE 使用 `createEndpointLifecycle`
+- `Endpoint` 是结构 interface，无可继承的框架基类；WebSocket/SSE 使用 `createEndpointLifecycle`，原生 Client 的方法和事件重载保持原样
 - `operations` 显式声明 recall/edit/reaction/typing，并提供匹配的窄端口
 
 ## 输出格式

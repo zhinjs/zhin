@@ -21,6 +21,9 @@ export {
   type OneBot12EndpointConfig,
   type OneBot12Event,
   type OneBot12HttpOptions,
+  type OneBot12HttpRequest,
+  type OneBot12MediaUpload,
+  type OneBot12MediaSource,
   type OneBot12Segment,
   type OneBot12Self,
   type OneBot12WebhookConfig,
@@ -50,7 +53,6 @@ export type { OneBot12WsSocket, OneBot12WsCreateOptions } from './ws-types.js';
 export { verifyOneBotAccessToken } from './wss-auth.js';
 export {
   Onebot12Client,
-  onebot12Client,
   type Onebot12ClientEventMap,
 } from './client.js';
 
@@ -64,3 +66,4 @@ export type {
 } from '@imhelper/onebot-v12';
 export { ProtocolError } from '@imhelper/onebot-v12';
 export type { ProtocolErrorKind, ProtocolErrorOptions } from 'imhelper';
+export { Onebot12Adapter } from './adapter.js';

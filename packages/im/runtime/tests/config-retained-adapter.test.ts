@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
-import { definePlugin, applyConfigPatches, type ConfigDocumentPort, type ConfigDocumentSnapshot, type ConfigPatch, type PreparedConfigDocument, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
-import adapterFeature, { AdapterIndex, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointEventSink } from '@zhin.js/adapter';
+import { definePlugin, applyConfigPatches, type ConfigDocumentPort, type ConfigDocumentSnapshot, type ConfigPatch, type PreparedConfigDocument, type RuntimeConfigDocument, type SnapshotLease } from '@zhin.js/plugin-runtime';
+import adapterFeature, { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointSpec, endpointEventGatewayToken, type EndpointEventSink } from '@zhin.js/adapter';
 import handlerFeature, { HandlerIndex, handlerFeatureId, defineHandler } from '@zhin.js/handler';
 import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { RootRuntime, primaryConfigToken, type PrimaryConfig, type ModuleRuntime } from '../src/index.js';
@@ -13,6 +13,8 @@ it('retains the untouched adapter transport across config source HMR, patches an
   const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-retained-adapter-')));
   let runtime: RootRuntime | undefined;
   let coordinator: ReturnType<RootRuntime['createHmrCoordinator']> | undefined;
+  let oldLease: SnapshotLease | undefined;
+  let beforeMixed: SnapshotLease | undefined;
   const modules = new Modules();
   const transports = { create: 0, connect: 0, stop: 0 };
   const sinks: EndpointEventSink[] = [];
@@ -41,9 +43,23 @@ it('retains the untouched adapter transport across config source HMR, patches an
     modules.set(join(root, 'plugins/reminder/plugin.ts'), { default: definePlugin({ name: 'reminder', setup({ config, handoff }) { const label = (config.get() as { label: string }).label; if (label === 'broken') throw new Error('reminder setup failed'); if (label === 'activation-broken') handoff.add({ activateNext() { throw new Error('reminder activation failed'); } }); } }) });
     modules.set(join(root, 'packages/adapter/index.ts'), { default: adapterFeature });
     modules.set(join(root, 'packages/command/index.ts'), { default: commandFeature });
-    modules.set(adapterSource, { default: defineAdapter({ capabilities: ['inbound', 'outbound'], create(context) {
-      transports.create++;
-      return { client: { account: (context.config as { label: string }).label, readProjection: () => (context as unknown as { project(feature: unknown): unknown }).project(commandFeatureId) }, connect({ events }) { transports.connect++; sinks.push(events); return () => { transports.stop++; }; }, send: () => 'synthetic-id' };
+    modules.set(adapterSource, { default: defineAdapter<{ label: string }>({ capabilities: ['inbound', 'outbound'], createAdapter(context) {
+      class TestClient {
+        readonly account: string;
+        constructor(account: string) { this.account = account; }
+        readProjection() { return (context as unknown as { project(feature: unknown): unknown }).project(commandFeatureId); }
+        send() { return 'synthetic-id'; }
+      }
+      class TestEndpoint extends TestClient {
+        readonly [endpointSpec] = createEndpointSpecification(this, {
+          start: () => { transports.connect++; sinks.push(this[endpointSpec].events); },
+          open() {}, close() {}, stop: () => { transports.stop++; }, send: () => this.send(),
+        });
+      }
+      class TestAdapter extends Adapter<TestEndpoint, { label: string }> {
+        protected createEndpoint(config: { label: string }): TestEndpoint { transports.create++; return new TestEndpoint(config.label); }
+      }
+      return new TestAdapter();
     } }) });
     modules.set(commandSource, { default: defineCommand({ execute: ({ config }) => (config as { label: string }).label }) });
     const handlerSource = join(root, 'plugins/watcher/handlers/diagnostic/index.ts');
@@ -61,10 +77,13 @@ it('retains the untouched adapter transport across config source HMR, patches an
       await (snapshot.projections.get(handlerFeatureId) as HandlerIndex).dispatch('diagnostic.receive', [], { snapshot });
       expect(crossFeature.at(-1)).toEqual({ generation: snapshot.generation, label, account });
     };
-    runtime = new RootRuntime({ projectRoot: root, modules, config, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources }) { resources.provide(endpointEventGatewayToken, { receive: async () => { observations.push(runtime!.snapshot.generation); } }); } });
+    runtime = new RootRuntime({ projectRoot: root, modules, config, environment: { name: 'test', mode: 'test', platform: 'node' }, installResources({ resources }) {
+      const receive = async () => { observations.push(runtime!.snapshot.generation); };
+      resources.provide(endpointEventGatewayToken, { run: async execute => execute({ receive }), receive });
+    } });
     const first = await runtime.start();
     const firstIndex = first.projections.get(adapterFeatureId) as AdapterIndex;
-    const oldLease = runtime.snapshots.acquire();
+    oldLease = runtime.snapshots.acquire();
     await verifyHandler('max-20', 'account-v1');
     const client = firstIndex.clientById<{ readProjection(): unknown }>(firstIndex.list()[0]!.id);
     expect(() => client.readProjection()).toThrow(/project/);
@@ -89,6 +108,10 @@ it('retains the untouched adapter transport across config source HMR, patches an
     expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
     await expect(runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'broken' }])).rejects.toThrow('reminder setup failed');
     await expect(runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'activation-broken' }])).rejects.toThrow('reminder activation failed');
+    // Saving and applying are separate: correct the saved rejected desired value
+    // before unrelated later edits, rather than depending on automatic file rollback.
+    expect(config.document.reminder).toEqual({ label: 'activation-broken' });
+    await runtime.patchConfig([{ op: 'set', path: ['reminder', 'label'], value: 'max-22' }]);
     expect(runtime.snapshot.projections.get(adapterFeatureId)).toBe(firstIndex);
     expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
     await sinks[0]!.message({ content: 'still alive', conversation: { kind: 'private', id: 'u1' }, sender: { id: 'u1' } });
@@ -117,7 +140,7 @@ it('retains the untouched adapter transport across config source HMR, patches an
     expect(transports).toEqual({ create: 1, connect: 1, stop: 0 });
 
     // A config-only disabled owner and capability edit share one HMR candidate.
-    const beforeMixed = runtime.snapshots.acquire();
+    beforeMixed = runtime.snapshots.acquire();
     const primary = (snapshot: typeof runtime.snapshot) => snapshot.resources.get('root' as never)?.get(primaryConfigToken.id) as PrimaryConfig;
     config.writeExternal({ ...config.document, draft: { label: 'unvalidated draft' } });
     modules.set(commandSource, { default: defineCommand({ execute: ({ config }) => `${(config as { label: string }).label}:mixed` }) });
@@ -139,7 +162,7 @@ it('retains the untouched adapter transport across config source HMR, patches an
     expect(transports.create).toBe(2); expect(transports.connect).toBe(2);
     await setImmediate(); expect(transports.stop).toBe(1);
     await runtime.stop(); expect(transports.stop).toBe(2);
-  } finally { await coordinator?.stop(); await runtime?.stop(); await rm(root, { recursive: true, force: true }); }
+  } finally { oldLease?.release(); beforeMixed?.release(); await coordinator?.stop(); await runtime?.stop(); await rm(root, { recursive: true, force: true }); }
 });
 
 class Modules implements ModuleRuntime {

@@ -3,7 +3,7 @@ import { defineCommand } from 'zhin.js/command';
 import {
   channelKey,
   gameFeatureId,
-  messageFromCommandInput,
+  gamePlayerFromInput,
   type GameIndex,
   type UserGameStats,
 } from '@zhin.js/game-kit';
@@ -24,8 +24,8 @@ export default defineCommand({
   description: '查看本人在本群的游戏战绩', descriptionI18n: { en: "View your game statistics in this group" },
   async execute({ input, project, locale, formatCommand }) {
     const index = project<GameIndex>(gameFeatureId);
-    const message = messageFromCommandInput(input, { locale, formatCommand });
-    const stats = await index.getUserStats(message.$sender.id, channelKey(message));
+    const message = gamePlayerFromInput(input, { locale, formatCommand });
+    const stats = await index.getUserStats(message.sender.id, channelKey(message));
     return formatStats(index, stats, locale, formatCommand?.('games'));
   },
 });
