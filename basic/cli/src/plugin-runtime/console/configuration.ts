@@ -380,7 +380,7 @@ export class ConsoleConfigurationStore {
       // Only a verbatim whole-document reply needs its own copy; masking builds new values.
       if (reveal) return Object.freeze({ revision, path, exists: true, value: path.length ? value : structuredClone(document), redacted: false });
       let masked: unknown;
-      if (path.length) masked = await this.#maskedValue(document, path);
+      if (path.length) masked = await this.#maskedValue(document, path, { unknownSchema: 'redact' });
       else {
         const keys = Object.keys(document);
         const schemas = await this.#schemas.readJsonMany(keys, document);
@@ -388,7 +388,7 @@ export class ConsoleConfigurationStore {
           const schema = schemas.get(key);
           // Fail closed: without the schema we cannot rule out a schema-marked secret under an ordinary key.
           return [key, schema instanceof Error || schema === undefined ? REDACTED_CONFIG_VALUE
-            : maskConfigValue(schema, [key], document[key])] as const;
+            : maskConfigValue(schema, [key], document[key], { unknownSchema: 'redact' })] as const;
         })));
       }
       return Object.freeze({ revision, path, exists: true, value: masked, redacted: true });

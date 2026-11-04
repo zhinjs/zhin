@@ -284,9 +284,26 @@ export function assertChatOptionalLeaf(schema: unknown, path: readonly string[])
   }
 }
 
+/** Prove the same properties-only ancestry used by root discovery, without enumerating siblings. */
+function declaredPropertyPath(schema: Schema, path: readonly string[]): boolean {
+  try {
+    let current = variants(schema, schema);
+    for (const key of path) {
+      // Listing never descends into array items or dynamic dictionary keys.
+      if (current.some(nodes => typeNames(nodes).includes('array'))
+        || !current.some(nodes => nodes.some(node => record(node.properties) && own(node.properties, key)))) return false;
+      current = descend(current, key, schema);
+    }
+    return true;
+  } catch (error) {
+    if (error instanceof ConfigChatAccessError) return false;
+    throw error;
+  }
+}
+
 /** Declared leaf paths below `path` (properties only), each still re-checked by the store. */
 export function chatConfigurationLeaves(schema: unknown, path: readonly string[], limit = 256): readonly (readonly string[])[] {
-  if (!record(schema)) return [];
+  if (!record(schema) || !declaredPropertyPath(schema, path)) return [];
   const found: (readonly string[])[] = [];
   const walk = (relative: readonly string[]) => {
     if (found.length >= limit || relative.length > 12) return;

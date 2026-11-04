@@ -73,6 +73,8 @@ it('discovers real ICQQ skills, gates member tools by requester, and loads own r
   const admin = await ingress.read(snapshot, root, () => true, turn, 'icqq');
   expect(admin.tools.some(tool => tool.name.endsWith('__recall_member_message'))).toBe(true);
   expect(admin.tools.some(tool => tool.name.endsWith('__group_leave'))).toBe(false);
+  // Promote/demote needs the platform owner role; a merely-admin Bot never sees it.
+  expect(admin.tools.some(tool => tool.name.endsWith('__set_group_admin'))).toBe(false);
   turn.principal.roles = ['master'];
   const master = await ingress.read(snapshot, root, () => true, turn, 'icqq');
   expect(master.tools.find(tool => tool.name.endsWith('__group_leave'))).toMatchObject({ requiresApproval: 'human', risk: 'dangerous' });
@@ -81,6 +83,10 @@ it('discovers real ICQQ skills, gates member tools by requester, and loads own r
   const ownerBot = await ingress.read(snapshot, root, () => true, turn, 'icqq');
   expect(ownerBot.tools.some(tool => tool.name.endsWith('__group_leave'))).toBe(false);
   expect(ownerBot.tools.some(tool => tool.name.endsWith('__recall_member_message'))).toBe(true);
+  expect(ownerBot.tools.find(tool => tool.name.endsWith('__set_group_admin'))).toMatchObject({
+    requiresApproval: 'human', permissions: ['role(master,admin,trusted,owner)'], currentConversationBotRoles: ['owner'],
+    placement: { kind: 'agent-skill', agent: 'icqq', skill: 'icqq-group-admin' },
+  });
   turn.input.contextState.bot.platformRole = 'member';
   turn.input.platformCapabilities = capsFor('member');
   const memberBot = await ingress.read(snapshot, root, () => true, turn, 'icqq');
@@ -89,6 +95,7 @@ it('discovers real ICQQ skills, gates member tools by requester, and loads own r
   expect(memberBot.tools.some(tool => tool.name.endsWith('__recall_own_message'))).toBe(true);
   // Demoted: the moderation tools disappear; restored: they are back.
   expect(memberBot.tools.some(tool => tool.name.endsWith('__group_kick'))).toBe(false);
+  expect(memberBot.tools.some(tool => tool.name.endsWith('__set_group_admin'))).toBe(false);
   turn.input.contextState.bot.platformRole = 'admin';
   turn.input.platformCapabilities = capsFor('admin');
   const restored = await ingress.read(snapshot, root, () => true, turn, 'icqq');

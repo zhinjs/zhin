@@ -12,6 +12,7 @@
 | `icqq-group-admin` / `recall_member_message` | master/admin/trusted/owner | 无逐次审批；Bot 管理员可撤回普通成员，Bot 群主可撤回管理员或普通成员，执行前实时检查 |
 | `icqq-group-admin` / `group_leave` | 仅 master | 当前群，每次人工审批；Bot 为群主时拒绝，以免 SDK 解散群 |
 | `icqq-group-admin` / `group_kick` | master/admin/trusted/owner | 每次人工审批；执行前检查 Bot 与目标成员角色 |
+| `icqq-group-admin` / `set_group_admin` | master/admin/trusted/owner | 仅 Bot 为当前群群主时注入；每次人工审批；执行前实时检查 Bot 仍为群主、设管理员目标为普通成员、取消目标为现任管理员 |
 
 已配置的自动群审核独立按获准规则执行撤回；上述工具不新增审核触发条件、敏感类别、处罚或目标群。Bot 对自己的消息始终不需要群管权限；平台拒绝或未确认时不能宣称撤回成功，也不自动重试。
 

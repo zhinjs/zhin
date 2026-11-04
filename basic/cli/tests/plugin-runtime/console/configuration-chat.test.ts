@@ -5,7 +5,7 @@ import { ConfigDocumentConflictError, createConfigDocument } from '@zhin.js/conf
 import type { ConsoleConfigApplication } from '@zhin.js/console-protocol';
 import { ConsoleConfigurationStore, ConfigChatRequestRejectedError } from '../../../src/plugin-runtime/console/configuration.js';
 import { ConfigChatAccessError, assertChatConfigurationAccess } from '../../../src/plugin-runtime/console/configuration-chat-policy.js';
-import { parseConfigurationPath } from '../../../src/plugin-runtime/console/configuration-path.js';
+import { parseConfigurationPath, formatConfigurationPath } from '../../../src/plugin-runtime/console/configuration-path.js';
 import { normalizeConfigPatchOperations } from '../../../src/plugin-runtime/console/configuration-patch.js';
 
 const roots: string[] = [];
@@ -33,6 +33,22 @@ async function fixture(initial: Record<string, unknown> = { label: 'before', pas
 }
 
 describe('configuration paths', () => {
+  it.each([
+    [[], ''],
+    [['demo', 'safe', 'size'], 'demo.safe.size'],
+    [['demo', 'literal.dot'], '/demo/literal.dot'],
+    [['demo', 'slash/key'], '/demo/slash~1key'],
+    [['demo', 'tilde~key'], '/demo/tilde~0key'],
+    [['demo', 'a space'], '/demo/a space'],
+    [['demo', '显示名称'], '/demo/显示名称'],
+  ] as const)('formats %j without changing its parsed path', (path, expected) => {
+    const formatted = formatConfigurationPath(path);
+    expect(formatted).toBe(expected);
+    if (formatted !== undefined) expect(parseConfigurationPath(formatted)).toEqual(path);
+  });
+  it.each([['demo', ''], ['demo', '__proto__'], ['demo', '\u0000'], ['demo', 'x'.repeat(129)]])('does not format unaddressable paths: %j', (...path) => {
+    expect(formatConfigurationPath(path)).toBeUndefined();
+  });
   it('accepts simple paths and lossless JSON Pointer escapes', () => {
     expect(parseConfigurationPath('')).toEqual([]);
     expect(parseConfigurationPath('demo.safe.size')).toEqual(['demo', 'safe', 'size']);

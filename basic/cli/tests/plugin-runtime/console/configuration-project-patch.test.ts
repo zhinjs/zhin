@@ -32,6 +32,90 @@ async function fixture(overrides: Partial<ConstructorParameters<typeof ConsoleCo
 }
 const set = (path: string[], value: unknown) => ({ op: 'set' as const, path, value });
 
+describe('trusted project reads with conservative schema redaction', () => {
+  it.each(['contains', 'dependencies', 'nested-resource'] as const)('redacts uncertain %s values in both path and whole-document reads', async boundary => {
+    const f = await fixture();
+    const privateValue = 'synthetic-private-value';
+    const value = boundary === 'contains' ? { samples: [privateValue] }
+      : boundary === 'dependencies' ? { label: privateValue } : { nested: { label: privateValue } };
+    const protectedSchema = boundary === 'contains'
+      ? { type: 'object', properties: { samples: { type: 'array', items: { type: 'string' }, contains: { type: 'string', writeOnly: true } } } }
+      : boundary === 'dependencies' ? { type: 'object', properties: { label: { type: 'string' } },
+        dependencies: { label: { type: 'object', properties: { label: { type: 'string', writeOnly: true } } } } }
+        : { type: 'object', $defs: { field: { type: 'string', const: 'public' } }, properties: {
+          nested: { $id: 'urn:fixture:project-read-resource', type: 'object',
+            $defs: { field: { type: 'string', const: privateValue, writeOnly: true } }, properties: { label: { $ref: '#/$defs/field' } } },
+        } };
+    await writeFile(join(f.root, 'demo', 'schema.json'), JSON.stringify(protectedSchema));
+    const document = JSON.parse(await readFile(f.file, 'utf8')); document.demo = value;
+    await writeFile(f.file, JSON.stringify(document));
+    expect((await f.store.validatePluginConfig('demo', value)).valid).toBe(true);
+    const path = boundary === 'contains' ? ['demo', 'samples'] : boundary === 'dependencies' ? ['demo', 'label'] : ['demo', 'nested', 'label'];
+    const before = await readFile(f.file, 'utf8');
+    const read = await f.store.readProject({ path });
+    const whole = await f.store.readProject();
+    expect(read).toMatchObject({ exists: true, redacted: true, value: REDACTED_CONFIG_VALUE });
+    expect(whole).toMatchObject({ exists: true, redacted: true });
+    expect(JSON.stringify([read, whole])).not.toContain(privateValue);
+    expect(await f.store.readProject({ path, reveal: true })).toMatchObject({ redacted: false,
+      value: boundary === 'contains' ? [privateValue] : privateValue });
+    expect(await f.store.readProject({ reveal: true })).toMatchObject({ redacted: false, value: { demo: value } });
+    expect(await readFile(f.file, 'utf8')).toBe(before);
+  });
+
+  it.each(['path-read', 'whole-read', 'conflict'] as const)('does not expose a writeOnly value past a long local reference chain in %s', async operation => {
+    const f = await fixture();
+    const privateValue = 'synthetic-private-reference';
+    const protectedSchema = { type: 'object', properties: { label: { $ref: '#/$defs/ref0' } },
+      $defs: Object.fromEntries(Array.from({ length: 38 }, (_, index) => [`ref${index}`,
+        index === 37 ? { type: 'string', writeOnly: true } : { $ref: `#/$defs/ref${index + 1}` }])) };
+    await writeFile(join(f.root, 'demo', 'schema.json'), JSON.stringify(protectedSchema));
+    const document = JSON.parse(await readFile(f.file, 'utf8')); document.demo = { label: privateValue };
+    await writeFile(f.file, JSON.stringify(document));
+    expect((await f.store.validatePluginConfig('demo', document.demo)).valid).toBe(true);
+    const before = await readFile(f.file, 'utf8');
+    if (operation === 'conflict') {
+      const result = await f.store.patchProject({ expectedRevision: 'f'.repeat(64), patches: [set(['demo', 'label'], 'next')] });
+      expect(result).toMatchObject({ status: 'conflict', current: [{ path: ['demo', 'label'], value: REDACTED_CONFIG_VALUE }] });
+    } else {
+      const result = await f.store.readProject(operation === 'path-read' ? { path: ['demo', 'label'] } : {});
+      expect(result).toMatchObject({ redacted: true,
+        value: operation === 'path-read' ? REDACTED_CONFIG_VALUE : { demo: { label: REDACTED_CONFIG_VALUE } } });
+    }
+    expect(await readFile(f.file, 'utf8')).toBe(before);
+  });
+
+  it.each(['missing-reference', 'reference-cycle'] as const)('redacts values whose local schema proof ends in %s', async boundary => {
+    const f = await fixture();
+    const protectedSchema = { type: 'object', properties: { label: { $ref: '#/$defs/field' } },
+      $defs: boundary === 'reference-cycle' ? { field: { $ref: '#/$defs/field' } } : {} };
+    await writeFile(join(f.root, 'demo', 'schema.json'), JSON.stringify(protectedSchema));
+    const document = JSON.parse(await readFile(f.file, 'utf8')); document.demo = { label: 'synthetic-unresolved-value' };
+    await writeFile(f.file, JSON.stringify(document));
+    expect(await f.store.readProject({ path: ['demo', 'label'] })).toMatchObject({ redacted: true, value: REDACTED_CONFIG_VALUE });
+    expect(await f.store.patchProject({ expectedRevision: 'f'.repeat(64), patches: [set(['demo', 'label'], 'next')] }))
+      .toMatchObject({ status: 'conflict', current: [{ path: ['demo', 'label'], value: REDACTED_CONFIG_VALUE }] });
+    // The non-strict helper keeps its existing best-effort behavior.
+    expect(maskConfigValue(protectedSchema, ['demo', 'label'], 'public')).toBe('public');
+  });
+
+  it('preserves ordinary fields through recursive schemas in masked reads and conflicts', async () => {
+    const f = await fixture();
+    const recursiveSchema = { type: 'object', $id: 'urn:fixture:public-recursive',
+      $defs: { node: { type: 'object', properties: { label: { type: 'string' }, next: { $ref: '#/$defs/node' } } } },
+      properties: { nested: { $ref: '#/$defs/node' }, color: { type: 'string' } } };
+    const value = { nested: { label: 'public', next: { label: 'still public' } }, color: 'blue' };
+    await writeFile(join(f.root, 'demo', 'schema.json'), JSON.stringify(recursiveSchema));
+    const document = JSON.parse(await readFile(f.file, 'utf8')); document.demo = value;
+    await writeFile(f.file, JSON.stringify(document));
+    expect((await f.store.validatePluginConfig('demo', value)).valid).toBe(true);
+    expect(await f.store.readProject({ path: ['demo'] })).toMatchObject({ redacted: true, value });
+    expect(await f.store.readProject()).toMatchObject({ redacted: true, value: { demo: value } });
+    expect(await f.store.patchProject({ expectedRevision: 'f'.repeat(64), patches: [set(['demo'], {})] }))
+      .toMatchObject({ status: 'conflict', current: [{ path: ['demo'], value }] });
+  });
+});
+
 describe('ordinary config:patch scope stays byte-stable', () => {
   it('pins HOST_CONFIG_PATCH_PATHS to the page allowlist', () => {
     expect(HOST_CONFIG_PATCH_PATHS).toEqual([['ai', 'trigger', 'ambient']]);
