@@ -4,7 +4,6 @@
  */
 
 export const TIERED_PARALLEL_TOOL_NAMES = new Set([
-  'spawn_task',
   'read_file',
   'grep',
   'glob',

@@ -128,7 +128,7 @@ Agent 由一个 `agent.json`  manifest 和核心 Markdown 文件定义。该 man
 运行时通过多层机制确保安全：
 - **执行策略**：通过 `execSecurity`（例如 `allowlist`）和 `execApprovalMode`（例如 `ask`）进行控制。
 - **文件与网络策略**：限制对敏感文件或未经授权域名的访问。
-- **子代理过滤**：子代理会自动阻止危险工具（如 `spawn_task`）的使用，除非明确授权。
+- **子代理过滤**：子代理会自动阻止危险工具（如 `bash`）的使用，除非明确授权。
 
 来源：[AGENTS.md:144-150](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L144-L150), [packages/im/agent/tests/agent-definition-enhancements.test.ts:16-25](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/agent/tests/agent-definition-enhancements.test.ts#L16-L25)
 

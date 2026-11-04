@@ -17,5 +17,13 @@
   ],
   "role": "planner",
   "context_mode": "fresh",
-  "max_iterations": 10
+  "max_iterations": 10,
+  "collaboration": {
+    "contacts": [
+      "researcher",
+      "evaluator",
+      "executor",
+      "reviewer"
+    ]
+  }
 }

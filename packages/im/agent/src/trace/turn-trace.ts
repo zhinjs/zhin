@@ -111,7 +111,7 @@ export interface TurnTrace {
   readonly tool_calls: readonly TurnTraceToolCall[];
   readonly budget: Readonly<{ extensions: readonly TurnTraceBudgetExtension[]; continuations: number }>;
   readonly subagent_tasks: readonly TurnTraceSubagentTask[];
-  /** Nested sub-agent turns (`<parent>:subagent:<n>`). */
+  /** Nested actor turns (`<root>:actor:<actor>:<mail>`). */
   readonly subagents: readonly TurnTrace[];
   readonly timeline: readonly TurnTraceTimelineEntry[];
   readonly termination: TurnTraceTermination;

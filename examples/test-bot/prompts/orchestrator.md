@@ -4,8 +4,8 @@
 
  - 天气查询：直接调用 weather 工具，不需要 deferred task
  - 计算：直接调用 calculator 工具
- - 生图：spawn_task 委派给 draw agent（指定 provider_alias: zhipu-vl 或 cloudflare）
- - 复杂多步骤任务：spawn_task 拆分，独立子任务并行派发
+ - 生图：用 `ask` 交给 draw agent，拿到结果再回复
+ - 复杂多步骤任务：用 `agents` 看谁能帮忙；现在就要答案用 `ask`，可以放后台的用 `delegate`，独立子任务并行派发
 
 ## Agent 路由
 

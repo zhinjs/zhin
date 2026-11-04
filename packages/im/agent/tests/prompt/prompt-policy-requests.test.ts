@@ -11,8 +11,6 @@ import { defaultAgentCore } from '../../src/core/agent-core.js';
 import { collectAgentLoopTurnRun, runAgentLoopTextTurnRun } from '../../src/core/agent-core-run.js';
 import type { ZhinAgentPrivate } from '../../src/internal/agent-host.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
-import { createSubagentTurnCapability } from '../../src/plugin-runtime/subagent-turn-capability.js';
-import { toolInvocationFromTurn } from '../../src/plugin-runtime/capability-tools.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { assistantTextReply, assistantToolCallReply } from '../helpers/mock-llm-api.js';
@@ -80,13 +78,7 @@ it.each(CASES)('captures actual %s requests with immutable evidence and disjoint
     capabilities: { tools: [capability.name], skills: [] },
     signal: new AbortController().signal, ports: { journal: { append: async () => {} } },
   });
-  if (name === 'delegated') {
-    const child = createSubagentTurnCapability({ host, core: defaultAgentCore, parentTurn: turn,
-      capabilities: { generation: 1, owner: rootPluginId(), tools: [capability], skills: [], agents: [], mcp: [], promptSections: [] },
-      resolveModel: () => ({ modelId: 'synthetic-model', modelCandidates: ['synthetic-model'] }),
-    });
-    await child.execute({ task, read_only: true }, toolInvocationFromTurn(turn));
-  } else {
+  {
     const user = createUserMessage(task, name === 'vision' ? [
       { type: 'image', data: { media: { kind: 'url', value: 'https://example.test/synthetic-image.png' } } },
     ] : undefined, Date.now());
@@ -97,6 +89,7 @@ it.each(CASES)('captures actual %s requests with immutable evidence and disjoint
       : [{ name: capability.name, description: capability.description, parameters: SCHEMA }];
     const profile: AgentPromptProfile = name === 'schedule' ? { kind: 'schedule', jobId: 'synthetic-job', prompt: task,
       createdBy: { userId: 'synthetic-owner', roles: ['trusted'] }, security: { execPreset: 'readonly', rejectOwnerApproval: true, allowedDomains: [] } }
+      : name === 'delegated' ? { kind: 'delegated', persona: 'You are an actor executing one delegated task for another agent.' }
       : { kind: 'interactive' };
     await collectAgentLoopTurnRun(runAgentLoopTextTurnRun({ host, sessionId: `synthetic-${name}`, rawContent: task,
       promptProfile: profile, turnContext: turn, allTools: tools, resolvedTools: tools, toolLoading: 'direct',
