@@ -1,0 +1,22 @@
+README.md
+  h_b680f75345178a 229-230
+README.zh-CN.md
+  h_b680f75345178a 229-230
+docs/en/wiki/cubic/ai-providers.md
+  h_b680f75345178a 9-10
+docs/wiki/cubic/ai-providers.md
+  h_b680f75345178a 10-11
+tests/docs/ai-provider-experimental.test.ts
+  h_b680f75345178a 31-38,42-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "21ab33ccd202fdcb41b1c76e226026832fcf3624",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
