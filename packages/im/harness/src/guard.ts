@@ -199,7 +199,11 @@ export function createGuardKernel(options: GuardKernelOptions): GuardKernel {
             `Signal ${mail.id} from actor ${sender} targets unknown mail ${mail.body.target}`,
           );
         }
-      } else if (!senderAuthority || !isAttenuationOf(mail.authority, senderAuthority)) {
+      } else if (
+        !senderAuthority
+        || !isAttenuationOf(mail.authority, senderAuthority)
+        || mail.authority.chain.at(-1) !== sender
+      ) {
         return deny(
           'authority_not_attenuated',
           senderAuthority

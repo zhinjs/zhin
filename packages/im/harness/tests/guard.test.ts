@@ -57,6 +57,11 @@ const human: MailSender = { kind: 'human', principal };
 const actor = (id: string): MailSender => ({ kind: 'actor', actor: id });
 
 function mail(id: string, from: MailSender, to: string, body: MailBody, causationId?: string, extra: Partial<Mail> = {}): Mail {
+  const base = extra.authority ?? AUTH;
+  // An actor's outgoing authority is derived by that actor: its chain ends with the sender.
+  const derived = from.kind === 'actor' && base.chain.at(-1) !== from.actor
+    ? { ...base, chain: [...base.chain, from.actor] }
+    : base;
   return {
     id,
     kind: body.kind,
@@ -64,11 +69,11 @@ function mail(id: string, from: MailSender, to: string, body: MailBody, causatio
     causationId,
     from,
     to,
-    authority: AUTH,
     grantId: 'g0',
     body,
     createdAt: 0,
     ...extra,
+    authority: derived,
   };
 }
 
@@ -171,6 +176,13 @@ describe('guard: authority attenuation', () => {
   it('admits an attenuated authority', () => {
     const m = mail('m1', actor('alice'), 'bob', ask('q'), 'root', { authority: authority({ tools: only(['read']) }) });
     expect(kernel.admitMail(m, ctx([rootMail])).allow).toBe(true);
+  });
+
+  it('denies an authority whose chain was not derived by the sender', () => {
+    const base = mail('m1', actor('alice'), 'bob', ask('q'), 'root');
+    const forged: Mail = { ...base, authority: { ...base.authority, chain: ['mallory'] } };
+    const d = denied(kernel.admitMail(forged, ctx([rootMail])));
+    expect(d.code).toBe('authority_not_attenuated');
   });
 
   it('does not check attenuation for human mails', () => {
