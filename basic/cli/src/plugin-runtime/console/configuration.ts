@@ -417,6 +417,7 @@ export class ConsoleConfigurationStore {
     assertChatConfigurationScope(path, CHAT_SCOPE);
     const schema = await this.#chatSchema(document, path);
     assertChatConfigurationAccess(schema, path.slice(1), values, deep, path);
+    chatLeafTypes(schema, path.slice(1), values);
     return schema;
   }
 
