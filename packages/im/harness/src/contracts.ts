@@ -158,7 +158,11 @@ export interface BudgetSnapshot {
   readonly grantId: GrantId;
   readonly parentId?: GrantId;
   readonly granted: BudgetAmounts;
-  /** Consumed by this grant itself, excluding children. */
+  /**
+   * Consumed by this grant plus its closed children. A closed child adds at
+   * most its own granted amount (overspend stays visible on the child's
+   * snapshot and in the journal, but never pushes an ancestor past its grant).
+   */
   readonly spent: BudgetAmounts;
   /** Currently reserved by open child grants. */
   readonly reservedForChildren: BudgetAmounts;
