@@ -1,0 +1,14 @@
+scripts/check-created-project.mjs
+  h_b680f75345178a 221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f7bb7b7f76a37934e2fc3ba3b4cec9bef7a5d5f3",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
