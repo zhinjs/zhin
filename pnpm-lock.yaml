@@ -1601,6 +1601,15 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
+  packages/im/harness:
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
   packages/im/im-contract:
     devDependencies:
       '@types/node':
