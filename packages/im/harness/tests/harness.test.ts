@@ -245,6 +245,9 @@ describe('harness: attached root turn', () => {
     const held = await attached.detach({ status: 'completed' });
     expect(held.map((mail) => mail.body)).toEqual([expect.objectContaining({ kind: 'result', content: 'delegated-answer' })]);
     expect(await attached.detach({ status: 'completed' })).toBe(held);
+    await harness.idle();
+    // The held result continues as a normal turn of the root actor.
+    expect(seen.map((turn) => `${turn.actor}:${turn.mails[0]!.kind}`)).toEqual(['researcher:ask', 'researcher:delegate', 'zhin:result']);
     expect(harness.engagement(attached.engagement.id)).toBeUndefined();
     expect((await eventTypes(journal, attached.engagement.id)).at(-1)).toBe('engagement_closed');
   });

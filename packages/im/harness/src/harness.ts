@@ -85,9 +85,10 @@ export interface AttachedEngagement {
   readonly root: Mail;
   /**
    * Ends the externally running root turn. `delegate` results that came back
-   * for the root actor while it was attached are returned (and journaled as
-   * admitted); the host decides how to continue with them (e.g. a follow-up
-   * turn). Idempotent.
+   * for the root actor while it was attached are posted to its mailbox now,
+   * so the root actor continues with them in a normal actor turn (results
+   * arriving later go there directly). Returns the re-posted mails.
+   * Idempotent.
    */
   detach(result: ActorTurnResult): Promise<readonly Mail[]>;
 }
@@ -413,6 +414,10 @@ export function createHarness(options: HarnessOptions): Harness {
             await record(state.engagement.id, 'turn_finished', { actor: root.to, mails: [root.id], status: result.status, held: held.map((mail) => mail.id) });
           } catch (error) {
             reportError(error);
+          }
+          for (const mail of held) {
+            const posted = await post(state, mail);
+            if (!posted.ok) await record(state.engagement.id, 'mail_denied', { ...mailSummary(mail), code: 'queue_full', reason: posted.reason }).catch(reportError);
           }
           await maybeCloseEngagement(state).catch(reportError);
           return Object.freeze(held);
