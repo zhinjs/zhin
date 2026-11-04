@@ -28,7 +28,7 @@ export default function HtmlMessage({ html, locale = 'zh-CN' }: { readonly html:
     title={sandboxText(locale, "HTML 消息")}
     sandbox="allow-scripts"
     srcDoc={srcDoc}
-    className="block w-full min-w-0 border-0 rounded-lg my-1 bg-transparent"
+    className="sandbox-html-frame"
     style={{ height }}
   />;
 }
