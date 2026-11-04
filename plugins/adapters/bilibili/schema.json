@@ -54,10 +54,10 @@
       },
       "uniqueItems": true,
       "default": [],
-      "description": "额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开",
+      "description": "额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；收视频评论，配置了 dynamics / articles 时也收动态 / 专栏评论）。默认不开",
       "x-i18n": {
         "en": {
-          "description": "Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default."
+          "description": "Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments, plus dynamic or article comments when dynamics or articles are configured. Disabled by default."
         }
       }
     },
@@ -68,10 +68,10 @@
         "all"
       ],
       "default": "whitelist",
-      "description": "通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知",
+      "description": "通知入站范围：whitelist=只收 videos / dynamics / articles 白名单下的通知（默认）；all=所有视频评论通知，以及配置了 dynamics / articles 时对应种类的全部评论通知",
       "x-i18n": {
         "en": {
-          "description": "Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video."
+          "description": "Notification scope: whitelist (default) accepts only configured videos, dynamics and articles; all accepts notifications from any video, plus any dynamic or article comment when dynamics or articles are configured."
         }
       }
     },
@@ -159,6 +159,36 @@
       "x-i18n": {
         "en": {
           "description": "Allowed videos, using BV or av IDs. Only comments on these videos are polled; no site-wide search."
+        }
+      }
+    },
+    "dynamics": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string"
+        ],
+        "pattern": "^[1-9][0-9]{0,19}$"
+      },
+      "description": "白名单动态：动态 id（t.bilibili.com/<id> 或 bilibili.com/opus/<id> 里的数字，请写成字符串）。启动时经动态详情解析出评论区（图文动态 type=11 / 文字动态 type=17），无法解析的动态会跳过。不做全站搜索",
+      "x-i18n": {
+        "en": {
+          "description": "Allowed dynamics (posts), as dynamic IDs quoted as strings (the number in t.bilibili.com/<id> or bilibili.com/opus/<id>). Each is resolved to its comment area at startup (image post type=11 / text post type=17); dynamics that cannot be resolved are skipped. No site-wide search."
+        }
+      }
+    },
+    "articles": {
+      "type": "array",
+      "items": {
+        "type": [
+          "string",
+          "number"
+        ]
+      },
+      "description": "白名单专栏：cv 号（cv123 或 123），评论区 type=12。不做全站搜索",
+      "x-i18n": {
+        "en": {
+          "description": "Allowed articles, as cv IDs (cv123 or 123); comment area type=12. No site-wide search."
         }
       }
     },
@@ -255,6 +285,36 @@
               }
             }
           },
+          "dynamics": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string"
+              ],
+              "pattern": "^[1-9][0-9]{0,19}$"
+            },
+            "description": "白名单动态：动态 id（t.bilibili.com/<id> 或 bilibili.com/opus/<id> 里的数字，请写成字符串）。启动时经动态详情解析出评论区（图文动态 type=11 / 文字动态 type=17），无法解析的动态会跳过。不做全站搜索",
+            "x-i18n": {
+              "en": {
+                "description": "Allowed dynamics (posts), as dynamic IDs quoted as strings (the number in t.bilibili.com/<id> or bilibili.com/opus/<id>). Each is resolved to its comment area at startup (image post type=11 / text post type=17); dynamics that cannot be resolved are skipped. No site-wide search."
+              }
+            }
+          },
+          "articles": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number"
+              ]
+            },
+            "description": "白名单专栏：cv 号（cv123 或 123），评论区 type=12。不做全站搜索",
+            "x-i18n": {
+              "en": {
+                "description": "Allowed articles, as cv IDs (cv123 or 123); comment area type=12. No site-wide search."
+              }
+            }
+          },
           "pollIntervalSec": {
             "type": "number",
             "minimum": 60,
@@ -302,10 +362,10 @@
             },
             "uniqueItems": true,
             "default": [],
-            "description": "额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开",
+            "description": "额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；收视频评论，配置了 dynamics / articles 时也收动态 / 专栏评论）。默认不开",
             "x-i18n": {
               "en": {
-                "description": "Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments only. Disabled by default."
+                "description": "Additional notifications to poll: reply (replies to me) and at (mentions). Requires cookies; video comments, plus dynamic or article comments when dynamics or articles are configured. Disabled by default."
               }
             }
           },
@@ -316,10 +376,10 @@
               "all"
             ],
             "default": "whitelist",
-            "description": "通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知",
+            "description": "通知入站范围：whitelist=只收 videos / dynamics / articles 白名单下的通知（默认）；all=所有视频评论通知，以及配置了 dynamics / articles 时对应种类的全部评论通知",
             "x-i18n": {
               "en": {
-                "description": "Notification scope: whitelist (default) accepts only configured videos; all accepts notifications from any video."
+                "description": "Notification scope: whitelist (default) accepts only configured videos, dynamics and articles; all accepts notifications from any video, plus any dynamic or article comment when dynamics or articles are configured."
               }
             }
           },

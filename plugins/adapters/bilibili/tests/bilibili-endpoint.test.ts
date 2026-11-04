@@ -59,7 +59,7 @@ describe('bilibili protocol', () => {
     expect(parseVideoRef('av170001')).toEqual({ kind: 'aid', aid: '170001' });
     expect(parseVideoRef(170001)).toEqual({ kind: 'aid', aid: '170001' });
     expect(() => parseVideoRef('https://evil')).toThrow();
-    expect(parseThreadConversationId('video:170001:99')).toEqual({ type: 'video', oid: '170001', root: '99' });
+    expect(parseThreadConversationId('video:170001:99')).toEqual({ type: 'video', commentType: 1, oid: '170001', root: '99' });
     expect(parseThreadConversationId('video:abc')).toBeUndefined();
     expect(threadRootOf({ rpid: 5, root: 0 })).toBe('5');
     expect(threadRootOf({ rpid: 6, root: 5 })).toBe('5');
