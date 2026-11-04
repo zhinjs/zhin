@@ -1,0 +1,33 @@
+plugins/adapters/bilibili/pages/index/CommentReview.tsx
+  s_079f1dc5e6308d::t_af0ce5159ae0d9 160,244-258
+plugins/adapters/bilibili/pages/index/messages.ts
+  s_079f1dc5e6308d::t_3ea43453cfe3e8 33-35
+plugins/adapters/bilibili/pages/index/rpc.ts
+  s_079f1dc5e6308d::t_606ab07896a9f8 7,9,38-46
+plugins/adapters/bilibili/src/adapter.ts
+  s_079f1dc5e6308d::t_db30e7504e1685 15
+plugins/adapters/bilibili/src/console.ts
+  s_079f1dc5e6308d::t_7e13934cf10331 4,6,12,87-93,98-99,141
+plugins/adapters/bilibili/src/endpoint-directory.ts
+  s_079f1dc5e6308d::t_29fafce888999b 8,51-52
+plugins/adapters/bilibili/src/endpoint.ts
+  s_079f1dc5e6308d::t_964fddaad0be21 2,4,28,30,32,35,38,40,42,77-89,154-157,229-252,278-287,297-299,302-339,602,604,606,608,611,613,620,624,632-633,638,651-655,658,667-675,695,705-706,719-723,740,751,757,770,780,784,786,848
+plugins/adapters/bilibili/src/review.ts
+  s_079f1dc5e6308d::t_3e45937c2627ce 6,67-73,80-81,85,144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "756f25e96783f3473018ffbe8d828c01a9b5a8d6",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
