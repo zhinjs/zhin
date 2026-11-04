@@ -80,6 +80,22 @@ export interface OpenEngagementInput {
   readonly venue?: VenueRef;
 }
 
+export interface AttachedEngagement {
+  readonly engagement: Engagement;
+  readonly root: Mail;
+  /**
+   * Ends the externally running root turn. `delegate` results that came back
+   * for the root actor while it was attached are returned (and journaled as
+   * admitted); the host decides how to continue with them (e.g. a follow-up
+   * turn). Idempotent.
+   */
+  detach(result: ActorTurnResult): Promise<readonly Mail[]>;
+}
+
+export type AttachOutcome =
+  | ({ readonly ok: true } & AttachedEngagement)
+  | { readonly ok: false; readonly code: HarnessDenyCode; readonly reason: string };
+
 export type OpenOutcome =
   | { readonly ok: true; readonly engagement: Engagement; readonly root: Mail }
   | { readonly ok: false; readonly code: HarnessDenyCode; readonly reason: string };
@@ -113,6 +129,13 @@ export interface HarnessOptions {
 
 export interface Harness {
   open(input: OpenEngagementInput): Promise<OpenOutcome>;
+  /**
+   * Opens an engagement whose root turn is already running outside the
+   * mailbox (the live IM turn). The root actor counts as busy until `detach`.
+   */
+  attach(input: OpenEngagementInput): Promise<AttachOutcome>;
+  /** Remaining budget of the grant `current` runs on. */
+  remaining(current: Mail): BudgetAmounts | undefined;
   /** Called by collaboration tools while `current` (the mail being processed) is running. */
   send(from: ActorId, current: Mail, request: SendRequest): Promise<SendOutcome>;
   /** Records model / tool usage against the grant of `current`. */
@@ -134,6 +157,8 @@ interface EngagementState {
   /** ask / delegate mails without a reply yet. */
   readonly outstanding: Set<MailId>;
   closed: boolean;
+  /** Root actor running outside the mailbox, and results held for it until detach. */
+  attached?: { readonly actor: ActorId; readonly held: Mail[] };
 }
 
 interface Waiter {
@@ -302,57 +327,103 @@ export function createHarness(options: HarnessOptions): Harness {
       waiter.resolve({ status: result.status, content });
       return;
     }
+    if (state.attached && state.attached.actor === requester) {
+      state.attached.held.push(back);
+      return;
+    }
     const posted = await post(state, back);
     if (!posted.ok) await record(state.engagement.id, 'mail_denied', { ...mailSummary(back), code: 'queue_full', reason: posted.reason });
   }
 
+  async function begin(input: OpenEngagementInput, attach: boolean): Promise<
+    | { ok: true; state: EngagementState; root: Mail }
+    | { ok: false; code: HarnessDenyCode; reason: string }
+  > {
+    if (closed) return { ok: false, code: 'closed', reason: 'harness is closed' };
+    const ceiling = options.ceilingOf(agentOf(input.entry));
+    if (!ceiling) return { ok: false, code: 'unknown_agent', reason: `unknown agent ${agentOf(input.entry)}` };
+    const rootGrantId = options.ledger.openRoot(input.budget);
+    const engagementId = newId();
+    const rootMailId = newId();
+    const engagement: Engagement = Object.freeze({
+      id: engagementId,
+      principal: input.principal,
+      rootMailId,
+      rootGrantId,
+      venue: input.venue,
+      openedAt: clock(),
+    });
+    const from: MailSender = input.body.kind === 'human'
+      ? { kind: 'human', principal: input.principal }
+      : { kind: 'system', source: input.body.kind === 'timer' ? 'timer' : 'event' };
+    const root: Mail = Object.freeze({
+      id: rootMailId,
+      kind: input.body.kind,
+      engagementId,
+      from: Object.freeze(from),
+      to: input.entry,
+      authority: options.rootAuthority(input.principal, ceiling, { approvers: input.approvers }),
+      grantId: rootGrantId,
+      body: input.body,
+      createdAt: clock(),
+    });
+    const state: EngagementState = { engagement, mails: [], byId: new Map(), pendingTurns: 0, outstanding: new Set(), closed: false };
+    engagements.set(engagementId, state);
+    await record(engagementId, 'engagement_opened', { principal: input.principal.id, entry: input.entry, rootMailId, rootGrantId, budget: input.budget });
+    const decision = options.guard.admitMail(root, { graph: graphOf(state), targetCeiling: ceiling, limits });
+    if (!decision.allow) {
+      await record(engagementId, 'mail_denied', { ...mailSummary(root), code: decision.code, reason: decision.reason });
+      await maybeCloseEngagement(state);
+      return { ok: false, code: decision.code, reason: decision.reason };
+    }
+    admit(state, root);
+    await record(engagementId, 'mail_admitted', mailSummary(root));
+    if (attach) {
+      state.attached = { actor: input.entry, held: [] };
+      state.pendingTurns += 1;
+      await record(engagementId, 'turn_started', { actor: input.entry, mails: [rootMailId], attached: true });
+      return { ok: true, state, root };
+    }
+    const posted = await post(state, root);
+    if (!posted.ok) {
+      await maybeCloseEngagement(state);
+      return { ok: false, code: 'queue_full', reason: posted.reason };
+    }
+    return { ok: true, state, root };
+    }
+
+
   return {
     async open(input) {
-      if (closed) return { ok: false, code: 'closed', reason: 'harness is closed' };
-      const ceiling = options.ceilingOf(agentOf(input.entry));
-      if (!ceiling) return { ok: false, code: 'unknown_agent', reason: `unknown agent ${agentOf(input.entry)}` };
-      const rootGrantId = options.ledger.openRoot(input.budget);
-      const engagementId = newId();
-      const rootMailId = newId();
-      const engagement: Engagement = Object.freeze({
-        id: engagementId,
-        principal: input.principal,
-        rootMailId,
-        rootGrantId,
-        venue: input.venue,
-        openedAt: clock(),
-      });
-      const from: MailSender = input.body.kind === 'human'
-        ? { kind: 'human', principal: input.principal }
-        : { kind: 'system', source: input.body.kind === 'timer' ? 'timer' : 'event' };
-      const root: Mail = Object.freeze({
-        id: rootMailId,
-        kind: input.body.kind,
-        engagementId,
-        from: Object.freeze(from),
-        to: input.entry,
-        authority: options.rootAuthority(input.principal, ceiling, { approvers: input.approvers }),
-        grantId: rootGrantId,
-        body: input.body,
-        createdAt: clock(),
-      });
-      const state: EngagementState = { engagement, mails: [], byId: new Map(), pendingTurns: 0, outstanding: new Set(), closed: false };
-      engagements.set(engagementId, state);
-      await record(engagementId, 'engagement_opened', { principal: input.principal.id, entry: input.entry, rootMailId, rootGrantId, budget: input.budget });
-      const decision = options.guard.admitMail(root, { graph: graphOf(state), targetCeiling: ceiling, limits });
-      if (!decision.allow) {
-        await record(engagementId, 'mail_denied', { ...mailSummary(root), code: decision.code, reason: decision.reason });
-        await maybeCloseEngagement(state);
-        return { ok: false, code: decision.code, reason: decision.reason };
-      }
-      admit(state, root);
-      await record(engagementId, 'mail_admitted', mailSummary(root));
-      const posted = await post(state, root);
-      if (!posted.ok) {
-        await maybeCloseEngagement(state);
-        return { ok: false, code: 'queue_full', reason: posted.reason };
-      }
-      return { ok: true, engagement, root };
+      const opened = await begin(input, false);
+      return opened.ok ? { ok: true, engagement: opened.state.engagement, root: opened.root } : opened;
+    },
+
+    async attach(input) {
+      const opened = await begin(input, true);
+      if (!opened.ok) return opened;
+      const { state, root } = opened;
+      let detached: Promise<readonly Mail[]> | undefined;
+      const detach = (result: ActorTurnResult): Promise<readonly Mail[]> => {
+        detached ??= (async () => {
+          const held = state.attached?.held.splice(0) ?? [];
+          state.attached = undefined;
+          state.pendingTurns -= 1;
+          try {
+            await record(state.engagement.id, 'turn_finished', { actor: root.to, mails: [root.id], status: result.status, held: held.map((mail) => mail.id) });
+          } catch (error) {
+            reportError(error);
+          }
+          await maybeCloseEngagement(state).catch(reportError);
+          return Object.freeze(held);
+        })();
+        return detached;
+      };
+      return { ok: true, engagement: state.engagement, root, detach };
+    },
+
+    remaining(current) {
+      return options.ledger.snapshot(current.grantId)?.remaining;
     },
 
     async send(from, current, request) {

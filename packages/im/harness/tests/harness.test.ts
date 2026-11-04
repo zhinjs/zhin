@@ -226,3 +226,35 @@ describe('harness: collaboration', () => {
     expect(outcome).toMatchObject({ ok: false, code: 'authority_not_attenuated' });
   });
 });
+
+describe('harness: attached root turn', () => {
+  it('lets the live root turn ask, holds delegate results until detach, then closes', async () => {
+    const { harness, journal, seen } = setup([ceiling('zhin', ALL), ceiling('researcher', ALL)], {
+      researcher: async (mail) => ({ status: 'completed', content: mail.body.kind === 'ask' ? 'asked-answer' : 'delegated-answer' }),
+    });
+    const attached = await harness.attach({ principal: master, entry: 'zhin', body: humanBody('live'), budget: BUDGET });
+    if (!attached.ok) throw new Error('attach failed');
+    expect(seen).toEqual([]); // the root turn is not run by the mailbox
+    const asked = await harness.send('zhin', attached.root, { kind: 'ask', to: 'researcher', text: 'q1' });
+    expect(asked).toMatchObject({ ok: true, reply: { status: 'completed', content: 'asked-answer' } });
+    const delegated = await harness.send('zhin', attached.root, { kind: 'delegate', to: 'researcher', text: 'q2' });
+    expect(delegated.ok).toBe(true);
+    await harness.idle();
+    expect(seen.map((turn) => turn.actor)).toEqual(['researcher', 'researcher']); // nothing re-runs zhin
+    expect(harness.engagement(attached.engagement.id)).toBeDefined();
+    const held = await attached.detach({ status: 'completed' });
+    expect(held.map((mail) => mail.body)).toEqual([expect.objectContaining({ kind: 'result', content: 'delegated-answer' })]);
+    expect(await attached.detach({ status: 'completed' })).toBe(held);
+    expect(harness.engagement(attached.engagement.id)).toBeUndefined();
+    expect((await eventTypes(journal, attached.engagement.id)).at(-1)).toBe('engagement_closed');
+  });
+
+  it('reports the remaining budget of a grant', async () => {
+    const { harness } = setup([ceiling('zhin', ALL)], {});
+    const attached = await harness.attach({ principal: master, entry: 'zhin', body: humanBody('live'), budget: BUDGET });
+    if (!attached.ok) throw new Error('attach failed');
+    await harness.charge(attached.root, { modelCalls: 3 });
+    expect(harness.remaining(attached.root)?.modelCalls).toBe(17);
+    await attached.detach({ status: 'completed' });
+  });
+});
