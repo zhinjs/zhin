@@ -1,0 +1,41 @@
+.changeset/icqq-set-group-admin.md
+  s_a485474ef9a441::t_3637bb73b47727 1-5
+packages/im/agent/tests/plugin-runtime/adapter-disclosure.test.ts
+  s_079f1dc5e6308d::t_f3f61fe103b838 90,92-94,140-142
+plugins/adapters/icqq/PERMITS.md
+  s_a485474ef9a441::t_06034e29b8ecaf 15
+plugins/adapters/icqq/agents/icqq/messages.ts
+  s_a485474ef9a441::t_4d14289180aeb7 88-107
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/SKILL.md
+  s_a485474ef9a441::t_41ac8916c0ddd2 14-15,20,41-42
+plugins/adapters/icqq/agents/icqq/skills/icqq-group-admin/tools/set_group_admin/index.ts
+  s_a485474ef9a441::t_b67440b1db8c0a 1-35
+plugins/adapters/icqq/tests/agent-discovery.test.ts
+  s_a485474ef9a441::t_32dc89e4e94973 61-62,70-73,80
+plugins/adapters/icqq/tests/group-moderation.test.ts
+  s_a485474ef9a441::t_73bbe319f2df83 5,15,33-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2766d096887515ece4d0a12a11549b7a19fd747a",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_a485474ef9a441": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a254-9c67-7562-83e3-35b9d2857bbc",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
