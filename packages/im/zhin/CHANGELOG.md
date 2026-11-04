@@ -1,5 +1,24 @@
 # zhin.js
 
+## 1.1.21
+
+### Patch Changes
+
+- b652db3: Keep default Database, Core and Agent declarations independent of unselected external database drivers. Memory and SQLite remain available from the root; native MySQL, PostgreSQL, MongoDB and Redis classes/configuration move to their precise `@zhin.js/database/dialects/*` entries. TypeScript `Registry.create()` callers select the corresponding dialect types, and third-party dialects augment the single `@zhin.js/database/registry` contract.
+
+  This updates author imports: plugins using these new entries need `@zhin.js/database >=1.1.6` (pending this patch release). Built-in registration, synchronous creation, connection-time driver loading and existing Host database configuration remain unchanged. No drivers, type peers, data migration or version bump are added by this change.
+
+- Updated dependencies [b249e5e]
+- Updated dependencies [57661f6]
+- Updated dependencies [cbd3f14]
+- Updated dependencies [299863a]
+- Updated dependencies [4fe49b5]
+- Updated dependencies [b652db3]
+- Updated dependencies [0315ba0]
+  - @zhin.js/core@1.1.56
+  - @zhin.js/plugin-runtime@1.1.20
+  - @zhin.js/permission@1.1.12
+
 ## 1.1.20
 
 ### Patch Changes
