@@ -33,6 +33,8 @@ import telegram from '../telegram/adapters/telegram/index.js';
 import wechatMp from '../wechat-mp/adapters/wechat-mp/index.js';
 import wecom from '../wecom/adapters/wecom/index.js';
 import weixinIlink from '../weixin-ilink/adapters/weixin-ilink/index.js';
+import douyinLive from '../douyin-live/adapters/douyin-live/index.js';
+import juejin from '../juejin/adapters/juejin/index.js';
 import icqq from '../icqq/adapters/icqq/index.js';
 
 import { resolveMilkyConfig } from '../milky/src/protocol.js';
@@ -44,7 +46,7 @@ import { resolveQqConfig } from '../qq/src/protocol.js';
 const definitions: Record<string, AdapterDefinition<never>> = {
   icqq, qq, napcat, onebot11, onebot12, milky, kook, discord, telegram, slack, lark, satori, wecom,
   'weixin-ilink': weixinIlink, 'wechat-mp': wechatMp, line, dingtalk, email, github, bilibili,
-  'bilibili-live': bilibiliLive, sandbox,
+  'bilibili-live': bilibiliLive, sandbox, 'douyin-live': douyinLive, juejin,
 } as never;
 
 const conv = (adapter: string, kind: 'private' | 'group' | 'channel') =>
