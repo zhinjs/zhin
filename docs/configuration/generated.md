@@ -651,8 +651,8 @@ outline: [2, 3]
 | `bilibili.pollIntervalSec` | number | 否 | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
 | `bilibili.sendMode` | string: `"review"`, `"off"` | 否 | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
 | `bilibili.minSendIntervalSec` | number | 否 | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
-| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | 否 | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开 |
-| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | 否 | `"whitelist"` | 通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知 |
+| `bilibili.notifications` | array&lt;string: `"reply"`, `"at"`&gt; | 否 | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；收视频评论，配置了 dynamics / articles 时也收动态 / 专栏评论）。默认不开 |
+| `bilibili.notificationScope` | string: `"whitelist"`, `"all"` | 否 | `"whitelist"` | 通知入站范围：whitelist=只收 videos / dynamics / articles 白名单下的通知（默认）；all=所有视频评论通知，以及配置了 dynamics / articles 时对应种类的全部评论通知 |
 | `bilibili.dataDir` | string | 否 | `"data/bilibili"` | 本地数据目录：待审草稿与扫码登录凭据存在 &lt;dataDir&gt;/&lt;endpoint id&gt;/ 下（相对进程工作目录），重启不丢。不要放进仓库 |
 | `bilibili.notify` | object | 否 | — | 有新草稿或登录失效时，主动发消息提醒到这个聊天会话（通常是你和机器人的私聊）。不填则只在 Console「评论审批」页和日志里看到 |
 | `bilibili.notify.adapter` | string | 是 | — | 适配器名，如 icqq、telegram |
@@ -660,6 +660,8 @@ outline: [2, 3]
 | `bilibili.notify.kind` | string: `"private"`, `"group"`, `"channel"` | 否 | `"private"` | 会话类型 |
 | `bilibili.notify.id` | string \| number | 是 | — | 会话 id：私聊填你的账号，群聊填群号 |
 | `bilibili.videos` | array&lt;string \| number&gt; | 否 | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
+| `bilibili.dynamics` | array&lt;string&gt; | 否 | — | 白名单动态：动态 id（t.bilibili.com/&lt;id&gt; 或 bilibili.com/opus/&lt;id&gt; 里的数字，请写成字符串）。启动时经动态详情解析出评论区（图文动态 type=11 / 文字动态 type=17），无法解析的动态会跳过。不做全站搜索 |
+| `bilibili.articles` | array&lt;string \| number&gt; | 否 | — | 白名单专栏：cv 号（cv123 或 123），评论区 type=12。不做全站搜索 |
 | `bilibili.master` | string \| number | 否 | — | 框架 master（B 站 uid）。endpoints[i].master 可逐项覆盖 |
 | `bilibili.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（B 站 uid） |
 | `bilibili.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
@@ -668,11 +670,13 @@ outline: [2, 3]
 | `bilibili.endpoints[].sessdata` | string | 否 | — | Cookie SESSDATA（以你的账号身份操作；请用 ${BILIBILI_SESSDATA} 注入，切勿写入仓库） |
 | `bilibili.endpoints[].biliJct` | string | 否 | — | Cookie bili_jct（csrf token；请用 ${BILIBILI_BILI_JCT} 注入） |
 | `bilibili.endpoints[].videos` | array&lt;string \| number&gt; | 否 | — | 白名单视频：BV 号或 av 号。只轮询这些视频的评论，不做全站搜索 |
+| `bilibili.endpoints[].dynamics` | array&lt;string&gt; | 否 | — | 白名单动态：动态 id（t.bilibili.com/&lt;id&gt; 或 bilibili.com/opus/&lt;id&gt; 里的数字，请写成字符串）。启动时经动态详情解析出评论区（图文动态 type=11 / 文字动态 type=17），无法解析的动态会跳过。不做全站搜索 |
+| `bilibili.endpoints[].articles` | array&lt;string \| number&gt; | 否 | — | 白名单专栏：cv 号（cv123 或 123），评论区 type=12。不做全站搜索 |
 | `bilibili.endpoints[].pollIntervalSec` | number | 否 | `60` | 轮询间隔（秒），最小 60，实际会加 0–20% 随机抖动 |
 | `bilibili.endpoints[].sendMode` | string: `"review"`, `"off"` | 否 | `"review"` | 出站模式：review=AI 回复只进草稿队列，master 用 bili-draft send &lt;id&gt; 审批后才发出（默认）；off=禁止出站。不提供自动直发 |
 | `bilibili.endpoints[].minSendIntervalSec` | number | 否 | `30` | 审批后两次真实发送的最小间隔（秒），最小 10；不足时拒绝发送，不排队 |
-| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | 否 | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；只收视频评论）。默认不开 |
-| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | 否 | `"whitelist"` | 通知入站范围：whitelist=只收 videos 白名单视频下的通知（默认）；all=所有视频评论通知 |
+| `bilibili.endpoints[].notifications` | array&lt;string: `"reply"`, `"at"`&gt; | 否 | `[]` | 额外轮询的通知：reply=回复我的，at=@我的（需要 Cookie；收视频评论，配置了 dynamics / articles 时也收动态 / 专栏评论）。默认不开 |
+| `bilibili.endpoints[].notificationScope` | string: `"whitelist"`, `"all"` | 否 | `"whitelist"` | 通知入站范围：whitelist=只收 videos / dynamics / articles 白名单下的通知（默认）；all=所有视频评论通知，以及配置了 dynamics / articles 时对应种类的全部评论通知 |
 | `bilibili.endpoints[].dataDir` | string | 否 | `"data/bilibili"` | 本地数据目录：待审草稿与扫码登录凭据存在 &lt;dataDir&gt;/&lt;endpoint id&gt;/ 下（相对进程工作目录），重启不丢。不要放进仓库 |
 | `bilibili.endpoints[].notify` | object | 否 | — | 有新草稿或登录失效时，主动发消息提醒到这个聊天会话（通常是你和机器人的私聊）。不填则只在 Console「评论审批」页和日志里看到 |
 | `bilibili.endpoints[].notify.adapter` | string | 是 | — | 适配器名，如 icqq、telegram |
