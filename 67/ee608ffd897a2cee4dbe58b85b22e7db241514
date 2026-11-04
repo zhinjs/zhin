@@ -1,0 +1,33 @@
+docs/configuration/generated.md
+  s_ce30e957c2b2e6::t_d9f964b3f08c09 654-655,663-664,673-674,678-679
+docs/en/configuration/generated.md
+  s_ce30e957c2b2e6::t_4ac8080a313f20 654-655,663-664,673-674,678-679
+plugins/adapters/bilibili/package.json
+  s_079f1dc5e6308d::t_55112af808a4f9 4
+plugins/adapters/bilibili/schema.json
+  s_079f1dc5e6308d::t_795b3290e4f80c 57,60,71,74,165-194,288-317,365,368,379,382
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "67ee608ffd897a2cee4dbe58b85b22e7db241514",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce30e957c2b2e6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1a10c-3427-7b42-a1c7-c55c08b8229d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
