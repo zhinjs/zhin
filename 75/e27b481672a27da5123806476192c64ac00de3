@@ -1,0 +1,19 @@
+docs/adr/0047-ai-provider-subscriptions-and-decision-models.md
+  s_9622fd28aba994::t_3e1aa384d8a81c 9-10,85,87,89-91,155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "75e27b481672a27da5123806476192c64ac00de3",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
