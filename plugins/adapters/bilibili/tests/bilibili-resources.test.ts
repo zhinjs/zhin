@@ -316,6 +316,15 @@ describe('BilibiliEndpoint dynamic / article comment areas', () => {
     await endpoint.stop();
   });
 
+  it('fails start on transient HTTP errors from dynamic detail instead of skipping the dynamic', async () => {
+    const fetch: BilibiliFetch = vi.fn(async (url: string) => {
+      if (url.includes('/x/web-interface/nav')) return { ok: true, status: 200, json: async () => ({ code: 0, data: { isLogin: true, mid: 99 } }) };
+      if (url.includes('/web-dynamic/')) return { ok: false, status: 502, json: async () => ({}) };
+      throw new Error(`unexpected ${url}`);
+    });
+    await expect(makeEndpoint(fetch, { dynamics: [TEXT_DYN] })).rejects.toThrow(/502/);
+  });
+
   it('trips the circuit breaker on risk codes from dynamic detail', async () => {
     const { fetch, calls } = fakeFetch({ detailCode: -352 });
     const { endpoint } = await makeEndpoint(fetch, { dynamics: [TEXT_DYN, DRAW_DYN], articles: [CVID] });

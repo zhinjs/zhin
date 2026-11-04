@@ -274,6 +274,10 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
     try {
       await this.#resolveLogin();
       this[endpointSpec].reportSelfUserId(this.#selfMid);
+      // 重新启动时按当前配置重新解析，不叠加上一轮的结果。
+      this.#aids.length = 0;
+      this.#areas.length = 0;
+      this.#dynamicResolution.clear();
       for (const video of this.#options.config.videos) {
         const aid = video.kind === 'aid' ? video.aid : await this.resolveAid(video.bvid);
         this.#aids.push(aid);
@@ -312,15 +316,16 @@ export class BilibiliEndpoint extends BilibiliClient implements Endpoint {
   }
 
   /**
-   * 动态 id → 评论区。平台风控码照常熔断；其它平台错误（动态已删除 / 不可见等）与不支持的动态形状
-   * 只跳过这一条动态并记日志，不影响视频与其它资源。网络等非平台错误向上抛出（启动失败，交给运行时重试）。
+   * 动态 id → 评论区。平台风控码照常熔断；平台业务错误码（动态已删除 / 不可见等）与不支持的动态形状
+   * 只跳过这一条动态并记日志，不影响视频与其它资源。HTTP 错误、网络等暂时性错误向上抛出
+   * （与 BV 号解析一致：启动失败，交给运行时重试），避免一次抖动就永久跳过某条动态。
    */
   async #resolveDynamic(dynamicId: string): Promise<void> {
     let detail;
     try {
       detail = await this.getDynamicDetail(dynamicId);
     } catch (error) {
-      if (!(error instanceof BilibiliApiError)) throw error;
+      if (!(error instanceof BilibiliApiError) || (error.httpStatus !== undefined && !error.risk)) throw error;
       if (error.risk) {
         this.#handleError('resolve_dynamic', error, dynamicId);
         return;
