@@ -52,6 +52,7 @@ import {
   type Principal,
   type VenueRef,
 } from './contracts.js';
+import { agentOf } from './authority.js';
 
 export type HarnessDenyCode = GuardDenyCode | 'unknown_agent' | 'wait_cycle' | 'budget_exceeded' | 'queue_full' | 'closed';
 
@@ -123,10 +124,6 @@ export interface Harness {
   close(reason?: string): Promise<void>;
 }
 
-export function agentOfActor(actor: ActorId): AgentName {
-  const hash = actor.indexOf('#');
-  return hash === -1 ? actor : actor.slice(0, hash);
-}
 
 interface EngagementState {
   readonly engagement: Engagement;
@@ -286,7 +283,7 @@ export function createHarness(options: HarnessOptions): Harness {
     });
     options.ledger.close(request.grantId);
     state.outstanding.delete(request.id);
-    const ceiling = options.ceilingOf(agentOfActor(requester));
+    const ceiling = options.ceilingOf(agentOf(requester));
     const decision = ceiling
       ? options.guard.admitMail(back, { graph: graphOf(state), targetCeiling: ceiling, limits })
       : { allow: false as const, code: 'not_accepted_by_target' as const, reason: `unknown agent ${requester}`, escalate: false };
@@ -312,8 +309,8 @@ export function createHarness(options: HarnessOptions): Harness {
   return {
     async open(input) {
       if (closed) return { ok: false, code: 'closed', reason: 'harness is closed' };
-      const ceiling = options.ceilingOf(agentOfActor(input.entry));
-      if (!ceiling) return { ok: false, code: 'unknown_agent', reason: `unknown agent ${agentOfActor(input.entry)}` };
+      const ceiling = options.ceilingOf(agentOf(input.entry));
+      if (!ceiling) return { ok: false, code: 'unknown_agent', reason: `unknown agent ${agentOf(input.entry)}` };
       const rootGrantId = options.ledger.openRoot(input.budget);
       const engagementId = newId();
       const rootMailId = newId();
@@ -372,8 +369,8 @@ export function createHarness(options: HarnessOptions): Harness {
       if (current.to !== from || !state.byId.has(current.id)) {
         return deny('authority_not_attenuated', `${from} is not processing mail ${current.id}`);
       }
-      const ceiling = options.ceilingOf(agentOfActor(request.to));
-      if (!ceiling) return deny('unknown_agent', `unknown agent ${agentOfActor(request.to)}`);
+      const ceiling = options.ceilingOf(agentOf(request.to));
+      if (!ceiling) return deny('unknown_agent', `unknown agent ${agentOf(request.to)}`);
 
       const granted = options.ledger.grant(current.grantId, request.budget ?? {});
       const grantId: GrantId = granted.ok ? granted.value : current.grantId;
