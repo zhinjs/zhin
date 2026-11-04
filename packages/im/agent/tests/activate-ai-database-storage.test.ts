@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AIConfig } from '@zhin.js/ai';
+import type { AgentStartupConfig as AIConfig } from '../src/config/agent-startup.js';
 import { activateAiDatabaseStorage } from '../src/init/activate-ai-database-storage.js';
 import type { AIServiceRefs } from '../src/internal/ai-service-refs.js';
 

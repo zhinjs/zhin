@@ -8,7 +8,7 @@ export default defineEvalCase({
   inbound: { text: '帮我写一句早安问候' },
   models: ['scripted-fallback'],
   // The scripted model id does not match the `gemini-` preset, so opt in the same way the preset does.
-  agentConfig: { modelHarness: { models: { 'scripted-model': { emptyReplyRetries: 1 } } } },
+  agentConfig: { modelHarness: { services: { 'eval-scripted': { models: { 'scripted-model': { emptyReplyRetries: 1 } } } } } },
   script: [
     { model: 'scripted-model', fault: { kind: 'finish', finishReason: 'error', raw: 'MALFORMED_FUNCTION_CALL' } },
     { model: 'scripted-model', text: '早上好，愿你今天心情明朗！' },

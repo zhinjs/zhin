@@ -1,6 +1,5 @@
 import {Database, Dialect} from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
-import {Registry} from "../registry.js";
 
 interface MemoryTable {
   name: string;
@@ -928,4 +927,3 @@ export class Memory<S extends Record<string, object>> extends RelatedDatabase<Me
     super(new MemoryDialect<S>(config), definitions);
   }
 }
-Registry.register('memory', Memory);

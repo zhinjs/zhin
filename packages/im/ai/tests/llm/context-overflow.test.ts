@@ -57,7 +57,7 @@ describe('shared context-overflow detector', () => {
   it('classifies Gemini and Anthropic overflows as context_overflow (no retry, no fallback)', () => {
     for (const text of OVERFLOW_MESSAGES.slice(2, 5)) {
       const info = classifyProviderError(apiError(400, text));
-      expect(info).toMatchObject({ kind: 'context_overflow', retryable: false, fallbackEligible: false });
+      expect(info).toMatchObject({ kind: 'context_overflow', retryable: false });
     }
   });
 });

@@ -1,12 +1,15 @@
+import { SyntheticCompletionRuntime } from '../helpers/synthetic-completion-runtime.js';
 import { describe, it, expect } from 'vitest';
 import {
-  LlmApiRuntime,
   createAssistantMessageEventStream,
   createContext,
   createUserMessage,
   EMPTY_TOKEN_USAGE,
   type AssistantMessage,
 } from '../../src/llm/index.js';
+
+import { graphFixture, context } from '../provider/fixtures.js';
+import { normalizeProviderGraph, resolveProviderProfile } from '../../src/provider/index.js';
 
 function mockAssistantMessage(text: string): AssistantMessage {
   return {
@@ -21,57 +24,41 @@ function mockAssistantMessage(text: string): AssistantMessage {
   };
 }
 
-describe('LlmApiRuntime', () => {
-  it('uses owner-local live models when the explicit allowlist is empty', () => {
-    const runtime = new LlmApiRuntime(() => ['mimo-v2.5-pro']);
-    runtime.registerProvider('openai-main', { sdk: 'openai' });
-    expect(runtime.model('openai-main', 'mimo-v2.5-pro').id).toBe('mimo-v2.5-pro');
+describe('SyntheticCompletionRuntime', () => {
+  it('requires an explicit deployment chat selection instead of auto-selecting live-discovered IDs', () => {
+    const original = graphFixture();
+    const graph = normalizeProviderGraph({ ...original, purposes: { defaults: {} } });
+    expect(() => resolveProviderProfile({ graph, context, kind: 'language', purpose: 'chat' })).toThrow('not-configured');
   });
 
-  it('rejects a model outside live discovery', () => {
-    const runtime = new LlmApiRuntime(() => ['gpt-4o']);
-    runtime.registerProvider('openai-main', { sdk: 'openai' });
-    expect(() => runtime.model('openai-main', 'mimo-v2.5-pro')).toThrow(/not registered/);
+  it('rejects a Profile outside its explicit Service catalog', () => {
+    const original = graphFixture();
+    expect(() => normalizeProviderGraph({ ...original, profiles: { text: { ...original.profiles.text, model: 'not-configured' } } })).toThrow('invalid-graph');
   });
 
-  it('prefers an explicit allowlist over live discovery', () => {
-    const runtime = new LlmApiRuntime(() => ['other-model']);
-    runtime.registerProvider(
-      'cloudflare-flash',
-      { sdk: 'openai-compatible', accountId: 'acc' },
-      ['@cf/zai-org/glm-4.7-flash'],
-    );
-    expect(runtime.model('cloudflare-flash', '@cf/zai-org/glm-4.7-flash').id)
-      .toBe('@cf/zai-org/glm-4.7-flash');
-    expect(() => runtime.model('cloudflare-flash', 'other-model')).toThrow(/not registered/);
+  it('retains the selected explicit model rather than adding a discovered candidate', () => {
+    const graph = graphFixture();
+    expect(resolveProviderProfile({ graph, context, kind: 'language', purpose: 'chat' }).model.id).toBe('text');
+    expect(graph.services.service.models).not.toHaveProperty('discovered-outside-model');
   });
 
-  it('builds transport metadata from the registered provider', () => {
-    const runtime = new LlmApiRuntime();
-    runtime.registerProvider('openai', {
-      sdk: 'openai',
-      apiKey: 'k',
-      baseUrl: 'https://api.example.com/v1',
-    }, ['gpt-test']);
-    const model = runtime.model('openai', 'gpt-test');
-    expect(model).toMatchObject({ provider: 'openai', api: 'ai-sdk', id: 'gpt-test' });
-    expect(model.input).toEqual(['text']);
+  it('keeps exact Service and Account identity in the immutable execution binding', () => {
+    const graph = graphFixture();
+    const binding = resolveProviderProfile({ graph, context, kind: 'language', purpose: 'chat' });
+    expect(binding).toMatchObject({ service: { id: 'service', driver: { owner: 'root/providers' } }, account: { id: 'account', incarnation: 'first' }, model: { id: 'text' } });
+    expect(binding.profile).not.toHaveProperty('apiKey');
   });
 
-  it('preserves input modalities and context-window overrides', () => {
-    const runtime = new LlmApiRuntime();
-    runtime.registerProvider('multimodal', {
-      sdk: 'openai',
-      input: ['text', 'image', 'audio', 'video', 'file'],
-      contextWindow: 32_768,
-    }, ['omni']);
-    const model = runtime.model('multimodal', 'omni');
-    expect(model.input).toEqual(['text', 'image', 'audio', 'video', 'file']);
-    expect(model.contextWindow).toBe(32_768);
+  it('preserves explicit model input and native context metadata without model-name inference', () => {
+    const original = graphFixture();
+    const graph = normalizeProviderGraph({ ...original, services: { service: { ...original.services.service, models: { ...original.services.service.models,
+      text: { ...original.services.service.models.text, input: ['text', 'image', 'audio', 'video', 'file'], contextWindow: 32768 } } } } });
+    const binding = resolveProviderProfile({ graph, context, kind: 'language', purpose: 'chat' });
+    expect(binding.model.input).toEqual(['text', 'image', 'audio', 'video', 'file']); expect(binding.model.contextWindow).toBe(32768);
   });
 
   it('delegates completion to its registered transport', async () => {
-    const runtime = new LlmApiRuntime();
+    const runtime = new SyntheticCompletionRuntime();
     runtime.registerProvider('openai', { sdk: 'openai' }, ['gpt-test']);
     runtime.registerApiProvider({
       api: 'ai-sdk',
@@ -93,8 +80,8 @@ describe('LlmApiRuntime', () => {
   });
 
   it('keeps provider and transport state isolated between owners', () => {
-    const left = new LlmApiRuntime();
-    const right = new LlmApiRuntime();
+    const left = new SyntheticCompletionRuntime();
+    const right = new SyntheticCompletionRuntime();
     left.registerProvider('openai', { sdk: 'openai' }, ['gpt-test']);
     const model = left.model('openai', 'gpt-test');
     expect(() => right.model('openai', 'gpt-test')).toThrow(/Unknown provider/);

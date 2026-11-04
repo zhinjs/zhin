@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { UsageQuota } from '../../src/security/usage-quota.js';
 import { createUserMessage, type AgentTool } from '@zhin.js/ai';
@@ -112,7 +113,8 @@ async function runQqTurn(options: {
       setDeferredToolSnapshot: async () => undefined,
     },
     promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
-    activeBinding: { providerAlias: 'provider', model: 'model', nickname: 'bot' },
+    activeBinding: { nickname: 'bot' },
+    getTurnExecution: () => executionBundle({ model: { id: 'minimax/minimax-m3', provider: 'provider', api: 'fixture', input: ['text'], contextWindow: 128_000, maxTokens: 8192 }, completion: { complete: async () => { throw new Error('No completion expected'); } } }),
     finalizeActiveTurn: vi.fn(async () => undefined),
   };
   const context: AgentTurnExecutionContext = {

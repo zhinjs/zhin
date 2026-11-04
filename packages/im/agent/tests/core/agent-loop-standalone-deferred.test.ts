@@ -1,10 +1,12 @@
+import type { FixtureTextProvider } from '../../../ai/tests/helpers/text-provider-fixture.js';
+import { executionBundle } from '../helpers/execution-bundle.js';
 /**
  * Standalone loop 延迟加载回归：load_tool 之后目标工具必须真实可执行
  * （修复前：load_tool 只写 snapshot，executor 报 "Unknown tool"），
  * 且子 loop 的加载不污染父会话 snapshot。
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentTool, AIProvider } from '@zhin.js/ai';
+import type {AgentTool} from '@zhin.js/ai';
 import { runAgentLoopStandaloneTurn } from '../../src/core/agent-loop-standalone.js';
 import {
   createDeferredTurnController,
@@ -42,7 +44,7 @@ describe('standalone loop 延迟加载', () => {
     });
     const provider = Object.assign(llm.provider, {
       capabilities: { input: ['text'], streaming: false, toolCalling: true },
-    }) as unknown as AIProvider;
+    }) as unknown as FixtureTextProvider;
 
     const parentSnapshot = { loadedTools: {} as Record<string, number> };
     const controller = createDeferredTurnController({
@@ -59,16 +61,12 @@ describe('standalone loop 延迟加载', () => {
     });
     const commMessage = {} as never;
 
-    const result = await runWithDeferredTurnController(controller, () => runAgentLoopStandaloneTurn({
-      provider,
-      llmRuntime: llm.runtime,
-      model: 'mock',
-      systemPrompt: '',
-      tools: [],
-      userInput: '加载并运行 bash',
-      maxIterations: 6,
-      commMessage,
-    }));
+    const result = await runWithDeferredTurnController(controller, () => runAgentLoopStandaloneTurn({ execution: executionBundle({ model: (llm.runtime).model((provider).name, 'mock'), completion: llm.runtime }),
+systemPrompt: '',
+tools: [],
+userInput: '加载并运行 bash',
+maxIterations: 6,
+commMessage }));
 
     // 关键断言 1：bash 真正执行了（不再是 Unknown tool）
     expect(executed).toEqual(['bash']);
@@ -107,7 +105,7 @@ describe('standalone loop 延迟加载', () => {
     });
     const provider = Object.assign(llm.provider, {
       capabilities: { input: ['text'], streaming: false, toolCalling: true },
-    }) as unknown as AIProvider;
+    }) as unknown as FixtureTextProvider;
 
     const parentSnapshot = { loadedTools: {} as Record<string, number> };
     const controller = createDeferredTurnController({
@@ -124,17 +122,13 @@ describe('standalone loop 延迟加载', () => {
     });
     const commMessage = {} as never;
 
-    const result = await runWithDeferredTurnController(controller, () => runAgentLoopStandaloneTurn({
-      provider,
-      llmRuntime: llm.runtime,
-      model: 'mock',
-      systemPrompt: '',
-      tools: [],
-      userInput: '加载并运行 bash',
-      maxIterations: 6,
-      commMessage,
-      turnPolicy: { filesystem: { workspaceRoot: '/workspace', access: 'read-only' } },
-    }));
+    const result = await runWithDeferredTurnController(controller, () => runAgentLoopStandaloneTurn({ execution: executionBundle({ model: (llm.runtime).model((provider).name, 'mock'), completion: llm.runtime }),
+systemPrompt: '',
+tools: [],
+userInput: '加载并运行 bash',
+maxIterations: 6,
+commMessage,
+turnPolicy: { filesystem: { workspaceRoot: '/workspace', access: 'read-only' } } }));
 
     expect(executed).toEqual([]);
     expect(result.toolCalls.map((t) => t.tool)).toEqual(['load_tool']);
@@ -145,18 +139,14 @@ describe('standalone loop 延迟加载', () => {
     llm.hang();
     const provider = Object.assign(llm.provider, {
       capabilities: { input: ['text'], streaming: false, toolCalling: true },
-    }) as unknown as AIProvider;
+    }) as unknown as FixtureTextProvider;
     const controller = new AbortController();
-    const pending = runAgentLoopStandaloneTurn({
-      provider,
-      llmRuntime: llm.runtime,
-      model: 'mock',
-      systemPrompt: '',
-      tools: [],
-      userInput: 'plan this',
-      maxIterations: 1,
-      signal: controller.signal,
-    });
+    const pending = runAgentLoopStandaloneTurn({ execution: executionBundle({ model: (llm.runtime).model((provider).name, 'mock'), completion: llm.runtime }),
+systemPrompt: '',
+tools: [],
+userInput: 'plan this',
+maxIterations: 1,
+signal: controller.signal });
     await vi.waitFor(() => expect(llm.calls).toHaveLength(1));
 
     controller.abort(new DOMException('planning generation retired', 'AbortError'));

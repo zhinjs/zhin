@@ -1,3 +1,4 @@
+import { ingressInferenceFixture } from './inference-fixture.js';
 import { describe, expect, it, vi } from 'vitest';
 import { Adapter, AdapterIndex, adapterFeatureId, createEndpointSpecification, defineAdapter, endpointEventGatewayToken, endpointSpec,
   type EndpointDesiredRepository, type EndpointDesiredSnapshot, type Endpoint as EndpointContract } from '@zhin.js/adapter';
@@ -28,10 +29,11 @@ async function fixture() {
     return { status: 'completed', output: [] };
   });
   const im = new ImRuntime(), adapter = new LocalAdapter(), root = rootPluginId();
-  const route = new AgentTurnIngressRoute({ projectRoot: '/host-a', runtime: { executeLeased } as never, im,
+  const route = new AgentTurnIngressRoute({
+    withInferenceScope: ingressInferenceFixture().withInferenceScope, projectRoot: '/host-a', runtime: { executeLeased } as never, im,
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
-      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', providerAlias: 'fixture', model: 'fixture' }) }),
+      getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
       getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({ inboundQueue: { merge: { enabled: false } } }),
     }, agent: {} } as never });
   let saved: EndpointDesiredSnapshot | undefined;

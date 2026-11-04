@@ -5,7 +5,7 @@
  * `addResultSink` / `composeSender` 对接 IM outbound。
  */
 
-import type { SpawnOptions } from './subagent-runtime.js';
+import type { SpawnOptions, SubagentSyncResult } from './subagent-runtime.js';
 
 export interface SubagentDefinition {
   name: string;
@@ -39,7 +39,7 @@ export interface SubagentSystemConfig {
 export interface SubagentSystemSpawn {
   register(definition: SubagentDefinition): void;
   spawn(options: SpawnOptions): Promise<string>;
-  spawnSync(options: SpawnOptions): Promise<string>;
+  spawnSync(options: SpawnOptions): Promise<SubagentSyncResult>;
   cancel(taskId: string): boolean;
 }
 

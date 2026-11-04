@@ -7,11 +7,11 @@
  * @module @zhin.js/ai
  */
 
+export { DEFAULT_MAX_OUTPUT_TOKENS, resolveEffectiveOutputTokens } from './llm/llm-api-runtime.js';
+
 // ── LLM engine core (ADR 0009) ──
+export { projectProviderDiagnostics, PROVIDER_STATE_OMITTED } from './llm/provider-diagnostics.js';
 export {
-  LlmApiRuntime,
-  createLlmTransportModel,
-  defaultModelInput,
   resolveProviderConfigResilience,
   createAssistantMessageEventStream,
   createContext,
@@ -34,26 +34,14 @@ export {
   parseLenientJsonObject,
   registerStructuredOutputPromptText,
   CompletionFailureError,
-  createLlmApiRuntime,
   isSdkId,
   SDK_IDS,
-  createSdkProviderAdapter,
-  SdkProviderAdapter,
-  sdkEntryFromProvider,
-  sdkSupportsImageGeneration,
-  resolveSdkProviderModels,
-  SDK_DEFAULT_MODELS,
   agentToolToLlmTool,
   agentToolsToLlmTools,
   formatRedactedJson,
   buildPromptCacheKey,
   supportsPromptCacheSdk,
   isStreamPromptCacheEnabled,
-  applyProviderGatewayPreset,
-  validateProviderGatewayConfig,
-  inferModelReasoning,
-  resolveTransportContextWindow,
-  PROVIDER_GATEWAY_PRESETS,
   DEFAULT_PROVIDER_MEDIA,
   filterMediaBlocksForProvider,
   mediaBlockPlaceholder,
@@ -66,7 +54,6 @@ export {
 } from './llm/index.js';
 export type {
   PromptCacheRetention,
-  ProviderGatewayPreset,
   ProviderMediaKind,
   AiHttpTransportOptions,
 } from './llm/index.js';
@@ -75,7 +62,6 @@ export type {
   Model,
   ModelApi,
   ModelInputModality,
-  ProviderInstanceConfig,
   AgentMessage,
   ConversationActor,
   ConversationQuote,
@@ -139,16 +125,13 @@ export type { FinishFailureKind, FinishInput, FinishOutcome } from './llm/index.
 
 // ── Core AI Types ──
 export type {
-  AIConfig,
   AmbientEngagementConfig,
+  WorkroomModelProcessingConfig,
+  ModelHarnessConfig,
+  ModelHarnessOverride,
   SceneEventWakeConfig,
-  DecisionTaskConfig,
-  AIProvider,
-  ProviderConfig,
-  ProviderCapabilities,
-  OllamaProviderConfig,
+  TextCompletionPort,
   ChatMessage,
-  TextCompleteOptions,
   TextCompleteResult,
   ToolCall,
   MessageRole,
@@ -301,6 +284,7 @@ export type { FileState } from './file-state-cache.js';
 // ── Context Manager ──
 export {
   ContextManager,
+  type ContextSummaryCompletion,
   createContextManager,
   CHAT_MESSAGE_MODEL,
   CONTEXT_SUMMARY_MODEL,
@@ -451,8 +435,7 @@ export {
 export type { StorageBackend, DbModel } from './storage.js';
 
 // ── Model Registry ──
-export { ModelRegistry, extractModelRoot, computeTierScore } from './model-registry.js';
-export type { AIModelInfo, ModelTask } from './model-registry.js';
+export { extractModelRoot, computeTierScore } from './model-name-utils.js';
 
 // ── Agent stream wire format (ADR 0039 P0) ──
 export {
@@ -577,7 +560,6 @@ export {
   isMidConversationSystemMessage,
 } from './memory/event-rendering.js';
 export type { MidConversationSystemMessage } from './memory/event-rendering.js';
-export { agentMessagesToAiSdk } from './llm/bridge/ai-sdk-messages.js';
 export {
   MID_CONVERSATION_SYSTEM_VALUES,
   isMidConversationSystem,
@@ -585,4 +567,4 @@ export {
   resolveMidConversationSystem,
 } from './llm/mid-conversation-system.js';
 export type { MidConversationSystem } from './llm/mid-conversation-system.js';
-export { parsePartialJson } from 'ai';
+export { parsePartialJson } from './llm/partial-json.js';

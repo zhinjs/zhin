@@ -1,10 +1,6 @@
-import { Database } from './base/database.js';
-import { Memory } from './dialects/memory.js';
-import { MongoDB } from './dialects/mongodb.js';
-import {MySQL} from "./dialects/mysql.js";
-import {PG} from "./dialects/pg.js";
-import {Redis} from "./dialects/redis.js";
-import {Sqlite} from "./dialects/sqlite.js";
+import type { Database } from './base/database.js';
+import type { Memory, MemoryConfig } from './dialects/memory.js';
+import type { Sqlite, SQLiteDialectConfig } from './dialects/sqlite.js';
 
 /**
  * 数据库注册表接口
@@ -12,10 +8,6 @@ import {Sqlite} from "./dialects/sqlite.js";
  */
 export interface Databases<S extends Record<string, object> = Record<string, object>> {
   memory: Memory<S>;
-  mongodb: MongoDB<S>;
-  mysql: MySQL<S>;
-  pg: PG<S>;
-  redis: Redis<S>;
   sqlite: Sqlite<S>;
 }
 
@@ -29,12 +21,8 @@ export type Factory<D, S extends Record<string, object>,R extends Database<D, S,
 export namespace Registry {
   export const factories=new Map<string, Factory<any, any,any>>();
   export interface Config{
-    memory:import('./dialects/memory.js').MemoryConfig
-    mongodb:import('./dialects/mongodb.js').MongoDBDialectConfig
-    mysql:import('./dialects/mysql.js').MySQLDialectConfig
-    pg:import('./dialects/pg.js').PostgreSQLDialectConfig
-    redis:import('./dialects/redis.js').RedisDialectConfig
-    sqlite:import('./dialects/sqlite.js').SQLiteDialectConfig
+    memory: MemoryConfig;
+    sqlite: SQLiteDialectConfig;
   }
   export type DatabaseType = 'related' | 'document' | 'keyvalue';
   

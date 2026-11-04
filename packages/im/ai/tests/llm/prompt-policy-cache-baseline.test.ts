@@ -2,7 +2,6 @@
 import { z } from 'zod';
 import { anthropicMessages, createProviderHarness, openaiChat } from '../helpers/provider-harness/index.js';
 import { buildPromptCacheKey } from '../../src/llm/bridge/ai-sdk-prompt-cache.js';
-import { generateTextViaAiSdk } from '../../src/llm/bridge/ai-sdk-stream.js';
 import type { StreamOptions } from '../../src/llm/llm-api-runtime.js';
 
 const tool = (units: boolean) => ({
@@ -12,7 +11,7 @@ const tool = (units: boolean) => ({
 
 describe('current prompt content with retained provider cache routing', () => {
   it.each(['openai', 'openai-compatible'] as const)('%s keeps its routing key but sends changed policy and schemas', async sdk => {
-    const h = createProviderHarness({ sdk, config: { compat: { promptCacheKey: true } } })
+    const h = createProviderHarness({ sdk, config: sdk === 'openai-compatible' ? { compat: { promptCacheKey: true } } : {} })
       .reply(openaiChat.reply({ text: 'first' }), openaiChat.reply({ text: 'second' }), openaiChat.reply({ text: 'third' }));
     const cache = { promptCacheKey: buildPromptCacheKey({ label: 'orchestrator', provider: h.alias, modelId: h.modelId }) };
     await h.complete({ system: 'POLICY_A', user: 'synthetic task', tools: [tool(false)] }, cache);
@@ -35,7 +34,7 @@ describe('current prompt content with retained provider cache routing', () => {
     const complete = (system: string, user: string, options?: StreamOptions) => {
       const input = { system, user, tools: [tool(true)] };
       return stream ? h.complete(input, options)
-        : generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, h.context(input), options);
+        : h.runtime.generate(h.model, h.context(input), options);
     };
     await complete('POLICY_A', 'INPUT_A');
     await complete('POLICY_B', 'INPUT_B');

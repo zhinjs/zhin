@@ -1,5 +1,6 @@
-import { TypeSafeClient, APIError, type Fetch, type Questions, type SystemOneRequest } from '@typesafe-ai/sdk';
+import { TypeSafeClient, APIError, type Fetch, type Questions, type SystemOneRequest, type TypeSafeClientConfig } from '@typesafe-ai/sdk';
 import type { DecisionOptions, DecisionProvider, DecisionQuestions, DecisionRequest, DecisionResult, JsonValue } from '@zhin.js/ai';
+import { ProviderAdmissionError } from '@zhin.js/ai/provider';
 import { TypeSafeDecisionError, validateDecisionResult } from './response-validator.js';
 
 export interface TypeSafeDecisionConfig {
@@ -56,9 +57,10 @@ function validateRequest(request: DecisionRequest): void {
   }
 }
 
-/** Generation-owned client. SDK logs are disabled because prompts and error bodies are private. */
+/** Generation-owned configuration; each call owns SDK cancellation and its private rejection reason. */
 export class TypeSafeDecisionProvider implements DecisionProvider {
-  readonly #client: TypeSafeClient;
+  readonly #configuration: Readonly<TypeSafeClientConfig>;
+  readonly #fetch: Fetch;
   readonly #timeoutMs: number;
   readonly #disposed = new AbortController();
 
@@ -75,9 +77,10 @@ export class TypeSafeDecisionProvider implements DecisionProvider {
         if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
       } catch { throw new TypeSafeDecisionError('invalid-config'); }
     }
-    try {
-      this.#client = new TypeSafeClient({ apiKey: config.apiKey, defaultModel: config.model ?? 'jev-latest', baseURL: config.baseUrl ?? 'https://api.typesafe.ai', timeout: this.#timeoutMs, retry: { maxRetries }, logLevel: 'off', fetch: transport.fetch });
-    } catch { throw new TypeSafeDecisionError('invalid-config'); }
+    // All SDK environment-backed fields are explicit, especially the real account key.
+    this.#configuration = Object.freeze({ apiKey: config.apiKey, defaultModel: config.model ?? 'jev-latest', baseURL: config.baseUrl ?? 'https://api.typesafe.ai',
+      timeout: this.#timeoutMs, retry: Object.freeze({ maxRetries }), logLevel: 'off' });
+    this.#fetch = transport.fetch ?? ((input, init) => globalThis.fetch(input, init));
   }
 
   async evaluate<const Q extends DecisionQuestions>(request: DecisionRequest<Q>, options: DecisionOptions): Promise<DecisionResult<Q>> {
@@ -97,7 +100,8 @@ export class TypeSafeDecisionProvider implements DecisionProvider {
     const controller = new AbortController();
     const signal = AbortSignal.any([options.signal, this.#disposed.signal, controller.signal]);
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const abortError = (): TypeSafeDecisionError => new TypeSafeDecisionError(this.#disposed.signal.aborted ? 'disposed' : options.signal.aborted ? 'cancelled' : 'timeout');
+    const abortError = (): Error => controller.signal.reason instanceof ProviderAdmissionError ? controller.signal.reason
+      : new TypeSafeDecisionError(this.#disposed.signal.aborted ? 'disposed' : options.signal.aborted ? 'cancelled' : 'timeout');
     let onAbort: (() => void) | undefined;
     try {
       const aborted = new Promise<never>((_, reject) => {
@@ -106,13 +110,24 @@ export class TypeSafeDecisionProvider implements DecisionProvider {
         if (signal.aborted) onAbort();
       });
       // Readonly JSON types differ only in mutability from the SDK's wire contract.
-      const pending = this.#client.systemOne(snapshot as unknown as SystemOneRequest<Questions>, { signal, timeout: timeoutMs });
+      const client = new TypeSafeClient({ ...this.#configuration, fetch: async (input, init) => {
+        try { return await this.#fetch(input, init); }
+        catch (error) {
+          // The SDK wraps every fetch rejection as a retryable connection error. Its
+          // caller-abort contract stops retries without changing actual network policy.
+          if (error instanceof ProviderAdmissionError) controller.abort(error);
+          throw error;
+        }
+      } });
+      const pending = client.systemOne(snapshot as unknown as SystemOneRequest<Questions>, { signal, timeout: timeoutMs });
       const raw = await Promise.race([pending, aborted]);
-      if (signal.aborted) throw abortError();
       return validateDecisionResult(raw, snapshot.questions);
     } catch (error) {
-      if (signal.aborted) throw abortError();
+      // Once the result branch wins, later cancellation cannot replace its known
+      // response/validation outcome. Pending calls still resolve via abortError.
+      if (error instanceof ProviderAdmissionError) throw error;
       if (error instanceof TypeSafeDecisionError) throw error;
+      if (signal.aborted) throw abortError();
       throw new TypeSafeDecisionError('request-failed', error instanceof APIError ? error.status : undefined);
     } finally {
       clearTimeout(timer);

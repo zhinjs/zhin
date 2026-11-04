@@ -5,11 +5,12 @@
 import { generateText, NoObjectGeneratedError, Output, jsonSchema, streamText, type LanguageModel, type JSONValue } from 'ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
-import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
+import { createAssistantMessageEventStream, type AssistantStreamEvent, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
 import type { Model } from '../types/model.js';
 import type { ThinkingLevel } from '../types/agent-event.js';
 import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
 import { streamPartError } from './stream-error.js';
+import { classifyProviderError } from '../provider-resilience.js';
 import { parseLenientJsonObject } from './lenient-json.js';
 import { normalizePromptStructuredText, structuredOutputMode, withStructuredOutputInstruction } from './prompt-structured-output.js';
 import { toolCallInput } from './tool-call-input.js';
@@ -152,7 +153,20 @@ type CapturedThinkingPart = {
 
 /** Signatures to keep on a thinking block: Anthropic signature/redactedData and Gemini thoughtSignature. */
 function thinkingOptionsFromProviderMetadata(metadata: unknown): ThinkingProviderOptions | undefined {
-  return mergeThinkingOptions(anthropicOptionsFromProviderMetadata(metadata), toolCallProviderOptions(metadata));
+  return mergeThinkingOptions(
+    mergeThinkingOptions(anthropicOptionsFromProviderMetadata(metadata), toolCallProviderOptions(metadata)),
+    openAiThinkingOptions(metadata),
+  );
+}
+
+function openAiThinkingOptions(metadata: unknown): ThinkingProviderOptions | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const value = (metadata as { openai?: { itemId?: unknown; reasoningEncryptedContent?: unknown } }).openai;
+  if (typeof value?.reasoningEncryptedContent !== 'string' || !value.reasoningEncryptedContent) return undefined;
+  return { openai: {
+    ...(typeof value.itemId === 'string' ? { itemId: value.itemId } : {}),
+    reasoningEncryptedContent: value.reasoningEncryptedContent,
+  } };
 }
 
 function anthropicOptionsFromProviderMetadata(
@@ -198,7 +212,7 @@ function resolveThinkingParts(input: {
     .map((part): CapturedThinkingPart | undefined => {
       const text = typeof part.text === 'string' ? part.text : '';
       const providerOptions = thinkingOptionsFromProviderMetadata(part.providerMetadata);
-      if (!text && !providerOptions?.anthropic?.redactedData) return undefined;
+      if (!text && !providerOptions?.anthropic?.redactedData && !providerOptions?.openai?.reasoningEncryptedContent) return undefined;
       return { text, providerOptions };
     })
     .filter((part): part is CapturedThinkingPart => part !== undefined);
@@ -365,11 +379,11 @@ function refusalFinish(
   refusal: string,
   hasText: boolean,
   hasToolCalls: boolean,
-): { finishReason: 'content-filter'; rawFinishReason: string } | undefined {
+): { finishReason: 'content-filter'; rawFinishReason: string; refusal: string } | undefined {
   const reason = refusal.trim();
   if (!reason || hasText || hasToolCalls) return undefined;
   const clipped = reason.length > REFUSAL_REASON_MAX_CHARS ? `${reason.slice(0, REFUSAL_REASON_MAX_CHARS)}…` : reason;
-  return { finishReason: 'content-filter', rawFinishReason: `refusal: ${clipped}` };
+  return { finishReason: 'content-filter', rawFinishReason: 'refusal', refusal: clipped };
 }
 
 function reasoningDeltaText(part: { text?: unknown; delta?: unknown }): string {
@@ -378,189 +392,217 @@ function reasoningDeltaText(part: { text?: unknown; delta?: unknown }): string {
   return '';
 }
 
-export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
-  return (model, requestedContext, requestedOptions) => {
-    const promptStructured = Boolean(requestedOptions?.outputSchema) && structuredOutputMode(model) === 'prompt';
-    const context = promptStructured ? withStructuredOutputInstruction(requestedContext, requestedOptions!.outputSchema!) : requestedContext;
-    const options = promptStructured ? { ...requestedOptions, outputSchema: undefined } : requestedOptions;
-    return createAssistantMessageEventStream(async (push) => {
-      const languageModel = runtime.resolveLanguageModel(model.provider, model.id);
-      if (!languageModel) {
-        throw new Error(`No LanguageModel registered for provider ${model.provider}`);
+/** The existing stream bridge depends on a model resolver, not a provider registry. */
+export interface LanguageModelResolver {
+  resolveLanguageModel(provider: string, model: string): LanguageModel | undefined;
+}
+
+/** Compatibility adapter for engine consumers; conversion lives in the pull-based iterator. */
+export function createAiSdkStreamFn(runtime: LanguageModelResolver): StreamFn {
+  return (model, context, options) => createAssistantMessageEventStream(async (push) => {
+    const languageModel = runtime.resolveLanguageModel(model.provider, model.id);
+    if (!languageModel) throw new Error(`No LanguageModel registered for provider ${model.provider}`);
+    for await (const event of streamViaAiSdk(languageModel, model, context, options)) {
+      if (event.type === 'done' && event.message) return event.message;
+      push(event);
+    }
+    throw new Error('Model stream ended without a completion');
+  });
+}
+
+/**
+ * Pull-based SDK bridge. No request starts before iteration and no private event
+ * queue drains an unread stream. The invocation owner supplies cancellation.
+ */
+export async function* streamViaAiSdk(
+  languageModel: LanguageModel,
+  model: Model,
+  requestedContext: Context,
+  requestedOptions?: StreamOptions,
+): AsyncGenerator<AssistantStreamEvent> {
+  const promptStructured = Boolean(requestedOptions?.outputSchema) && structuredOutputMode(model) === 'prompt';
+  const context = promptStructured ? withStructuredOutputInstruction(requestedContext, requestedOptions!.outputSchema!) : requestedContext;
+  const options = promptStructured ? { ...requestedOptions, outputSchema: undefined } : requestedOptions;
+  const cacheCtx = resolvePromptCacheApplyInput(
+    isStreamPromptCacheEnabled(options?.promptCache) && model.promptCacheRouting !== 'driver',
+    model.sdk,
+    options,
+    model.compat,
+  );
+  const toolNames = createToolNameCodec((context.tools ?? []).map((t) => t.name), model.sdk);
+  const { system: systemText, systemParts, messages } = contextToAiSdkPrompt(
+    context,
+    model.input.filter((kind): kind is 'image' | 'audio' | 'video' | 'file' => kind !== 'text'),
+    {
+    ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
+    sdk: model.sdk,
+    toolNames,
+    },
+  );
+  const system = wrapSystemForPromptCache(systemText, cacheCtx, systemParts);
+  const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk, toolNames }), cacheCtx);
+  const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
+  const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
+  const providerOptions = buildProviderOptions(model, cacheOpts, hasDeferredTools);
+
+  llmContextLogger.debug(formatCompact({
+    op: 'ai_sdk_request',
+    provider: model.provider,
+    model: model.id,
+    api: model.api,
+    sdk: model.sdk,
+    prompt_cache: cacheCtx.enabled || undefined,
+    prompt_cache_key: cacheCtx.cacheKey,
+    anthropic_reasoning_protocol: usesAnthropicReasoningProtocol(model.sdk) || undefined,
+    messages: formatRedactedJson(messages),
+    tools: tools ? Object.keys(tools).length : 0,
+  }));
+
+  options?.onPayload?.({ system, messages, tools: tools ? Object.keys(tools) : [] });
+
+  const captureRefusal = model.sdk === 'openai';
+  const captureStructuredText = model.sdk === 'minimax' && Boolean(options?.outputSchema);
+  let structuredResponseText = '';
+  let structuredResponseHasTool = false;
+  const result = streamText({
+    model: languageModel,
+    system,
+    messages: applyPromptCacheToMessages(messages, cacheCtx),
+    onLanguageModelCallStart: options?.onRequest ? event => observeModelRequest(options.onRequest, event, options.outputSchema) : undefined,
+    onError: ({ error }) => {
+      // The SDK default prints the complete raw error (including request/body).
+      // Keep classified diagnostics here, before control returns to the Driver.
+      try {
+        const failure = classifyProviderError(error);
+        llmContextLogger.warn(formatCompact({ op: 'ai_sdk_stream_error', provider: model.provider, model: model.id,
+          kind: failure.kind, status: failure.status, retry_after_ms: failure.retryAfterMs }));
+      } catch { /* Diagnostic failure cannot change the inference outcome. */ }
+    },
+    tools,
+    toolChoice: tools ? 'auto' : undefined,
+    temperature: options?.temperature,
+    maxOutputTokens: options?.maxTokens ?? model.maxTokens,
+    abortSignal: options?.signal,
+    ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
+    providerOptions,
+    ...withReasoning(model, options),
+    output: buildStructuredOutputSpec(options?.outputSchema),
+    // Gemini reports a blocked prompt only in a candidate-less chunk, OpenAI a refusal
+    // only in `delta.refusal`; the SDK drops both.
+    ...(isGoogleSdk(model.sdk) || captureRefusal || captureStructuredText ? { includeRawChunks: true } : {}),
+    // Provider-config stall timeouts (firstChunkTimeoutMs / chunkTimeoutMs); abort as TimeoutError.
+    ...(model.streamTimeout ? { timeout: model.streamTimeout } : {}),
+  });
+  let refusal = '';
+
+  let text = '';
+  let rawBlockReason: string | undefined;
+  let thinking = '';
+  let streamedThinkingOptions: ThinkingProviderOptions | undefined;
+  let textSignature: ToolCallProviderOptions | undefined;
+  const toolCalls = new Map<string, CapturedToolCall>();
+  const toolInputBuffers = new Map<string, string>();
+
+  for await (const part of result.fullStream) {
+    if (captureRefusal && part.type === 'raw') refusal += openAiRefusalText(part.rawValue);
+    if (part.type === 'text-delta') {
+      text += part.text;
+      textSignature = toolCallProviderOptions(part.providerMetadata) ?? textSignature;
+      if (part.text) yield { type: 'text_delta', text: part.text };
+    } else if (part.type === 'reasoning-delta') {
+      const chunk = reasoningDeltaText(part);
+      if (chunk) {
+        thinking += chunk;
+        yield { type: 'thinking_delta', thinking: chunk };
       }
-
-      const cacheCtx = resolvePromptCacheApplyInput(
-        isStreamPromptCacheEnabled(options?.promptCache),
-        model.sdk,
-        options,
-        model.compat,
+      streamedThinkingOptions = mergeThinkingOptions(
+        streamedThinkingOptions,
+        thinkingOptionsFromProviderMetadata(part.providerMetadata),
       );
-      const toolNames = createToolNameCodec((context.tools ?? []).map((t) => t.name), model.sdk);
-      const { system: systemText, systemParts, messages } = contextToAiSdkPrompt(
-        context,
-        model.input.filter((kind): kind is 'image' | 'audio' | 'video' | 'file' => kind !== 'text'),
-        {
-        ensureToolCallReasoning: shouldEnsureToolCallReasoning(model),
-        sdk: model.sdk,
-        toolNames,
-        },
-      );
-      const system = wrapSystemForPromptCache(systemText, cacheCtx, systemParts);
-      const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk, toolNames }), cacheCtx);
-      const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
-      const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
-      const providerOptions = buildProviderOptions(model, cacheOpts, hasDeferredTools);
-
-      llmContextLogger.debug(formatCompact({
-        op: 'ai_sdk_request',
-        provider: model.provider,
-        model: model.id,
-        api: model.api,
-        sdk: model.sdk,
-        prompt_cache: cacheCtx.enabled || undefined,
-        prompt_cache_key: cacheCtx.cacheKey,
-        anthropic_reasoning_protocol: usesAnthropicReasoningProtocol(model.sdk) || undefined,
-        messages: formatRedactedJson(messages),
-        tools: tools ? Object.keys(tools).length : 0,
-      }));
-
-      options?.onPayload?.({ system, messages, tools: tools ? Object.keys(tools) : [] });
-
-      const captureRefusal = model.sdk === 'openai';
-      const captureStructuredText = model.sdk === 'minimax' && Boolean(options?.outputSchema);
-      let structuredResponseText = '';
-      let structuredResponseHasTool = false;
-      const result = streamText({
-        model: languageModel,
-        system,
-        messages: applyPromptCacheToMessages(messages, cacheCtx),
-        onLanguageModelCallStart: options?.onRequest ? event => observeModelRequest(options.onRequest, event, options.outputSchema) : undefined,
-        tools,
-        toolChoice: tools ? 'auto' : undefined,
-        temperature: options?.temperature,
-        maxOutputTokens: options?.maxTokens ?? model.maxTokens,
-        abortSignal: options?.signal,
-        ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
-        providerOptions,
-        ...withReasoning(model, options),
-        output: buildStructuredOutputSpec(options?.outputSchema),
-        // Gemini reports a blocked prompt only in a candidate-less chunk, OpenAI a refusal
-        // only in `delta.refusal`; the SDK drops both.
-        ...(isGoogleSdk(model.sdk) || captureRefusal || captureStructuredText ? { includeRawChunks: true } : {}),
-        // Provider-config stall timeouts (firstChunkTimeoutMs / chunkTimeoutMs); abort as TimeoutError.
-        ...(model.streamTimeout ? { timeout: model.streamTimeout } : {}),
+    } else if (part.type === 'tool-input-start') {
+      toolInputBuffers.set(part.id, '');
+    } else if (part.type === 'tool-input-delta') {
+      const prev = toolInputBuffers.get(part.id) ?? '';
+      toolInputBuffers.set(part.id, prev + part.delta);
+    } else if (part.type === 'tool-call') {
+      const { arguments: args, inputError } = toolCallInput(part, toolInputBuffers.get(part.toolCallId));
+      const signed = toolCallProviderOptions(part.providerMetadata);
+      const name = toolNames.fromWire(part.toolName);
+      toolCalls.set(part.toolCallId, {
+        id: part.toolCallId,
+        name,
+        arguments: args,
+        ...(inputError ? { inputError } : {}),
+        ...(signed ? { providerOptions: signed } : {}),
       });
-      let refusal = '';
-
-      let text = '';
-      let rawBlockReason: string | undefined;
-      let thinking = '';
-      let streamedThinkingOptions: ThinkingProviderOptions | undefined;
-      let textSignature: ToolCallProviderOptions | undefined;
-      const toolCalls = new Map<string, CapturedToolCall>();
-      const toolInputBuffers = new Map<string, string>();
-
-      for await (const part of result.fullStream) {
-        if (captureRefusal && part.type === 'raw') refusal += openAiRefusalText(part.rawValue);
-        if (part.type === 'text-delta') {
-          text += part.text;
-          textSignature = toolCallProviderOptions(part.providerMetadata) ?? textSignature;
-          if (part.text) push({ type: 'text_delta', text: part.text });
-        } else if (part.type === 'reasoning-delta') {
-          const chunk = reasoningDeltaText(part);
-          if (chunk) {
-            thinking += chunk;
-            push({ type: 'thinking_delta', thinking: chunk });
-          }
-          streamedThinkingOptions = mergeThinkingOptions(
-            streamedThinkingOptions,
-            thinkingOptionsFromProviderMetadata(part.providerMetadata),
-          );
-        } else if (part.type === 'tool-input-start') {
-          toolInputBuffers.set(part.id, '');
-        } else if (part.type === 'tool-input-delta') {
-          const prev = toolInputBuffers.get(part.id) ?? '';
-          toolInputBuffers.set(part.id, prev + part.delta);
-        } else if (part.type === 'tool-call') {
-          const { arguments: args, inputError } = toolCallInput(part, toolInputBuffers.get(part.toolCallId));
-          const signed = toolCallProviderOptions(part.providerMetadata);
-          const name = toolNames.fromWire(part.toolName);
-          toolCalls.set(part.toolCallId, {
-            id: part.toolCallId,
-            name,
-            arguments: args,
-            ...(inputError ? { inputError } : {}),
-            ...(signed ? { providerOptions: signed } : {}),
-          });
-          push({
-            type: 'toolcall_delta',
-            toolCall: { id: part.toolCallId, name, arguments: args },
-          });
-        } else if (part.type === 'raw') {
-          if (captureStructuredText) {
-            structuredResponseText += anthropicTextDelta(part.rawValue);
-            structuredResponseHasTool ||= anthropicStartsTool(part.rawValue);
-          }
-          rawBlockReason ??= promptBlockReason({ google: part.rawValue });
-        } else if (part.type === 'error') {
-          throw streamPartError(part.error);
-        }
+      yield {
+        type: 'toolcall_delta',
+        toolCall: { id: part.toolCallId, name, arguments: args },
+      };
+    } else if (part.type === 'raw') {
+      if (captureStructuredText) {
+        structuredResponseText += anthropicTextDelta(part.rawValue);
+        structuredResponseHasTool ||= anthropicStartsTool(part.rawValue);
       }
+      rawBlockReason ??= promptBlockReason({ google: part.rawValue });
+    } else if (part.type === 'error') {
+      throw streamPartError(part.error);
+    }
+  }
 
-      const final = await result;
-      options?.onResponse?.(final.response);
+  const final = await result;
+  options?.onResponse?.(final.response);
 
-      const structured = await readStructuredOutput(final, Boolean(options?.outputSchema), toolCalls.size > 0,
-        structuredResponseHasTool ? '' : structuredResponseText);
-      const finalText = await final.text;
-      const finalReasoning = await Promise.resolve(final.reasoningText).catch(() => '');
-      const finalReasoningParts = await Promise.resolve(final.reasoning).catch(() => undefined);
-      const finishReason = await final.finishReason;
-      const finalUsage = await final.usage;
+  const structured = await readStructuredOutput(final, Boolean(options?.outputSchema), toolCalls.size > 0,
+    structuredResponseHasTool ? '' : structuredResponseText);
+  const finalText = await final.text;
+  const finalReasoning = await Promise.resolve(final.reasoningText).catch(() => '');
+  const finalReasoningParts = await Promise.resolve(final.reasoning).catch(() => undefined);
+  const finishReason = await final.finishReason;
+  const finalUsage = await final.usage;
 
-      const calls = [...toolCalls.values()];
-      const answerText = structured !== undefined
-        ? formatStructuredAsAssistantText(structured)
-        : (text || finalText);
-      const resolvedText = promptStructured && calls.length === 0 ? normalizePromptStructuredText(answerText) : answerText;
-      let thinkingParts = resolveThinkingParts({
-        streamedText: thinking,
-        finalText: finalReasoning || '',
-        reasoningParts: finalReasoningParts,
-      });
-      // If SDK returned plain text without metadata but stream captured a signature, attach it.
-      if (
-        thinkingParts.length === 1
-        && !thinkingParts[0]?.providerOptions
-        && streamedThinkingOptions
-      ) {
-        thinkingParts = [{
-          text: thinkingParts[0]!.text,
-          providerOptions: streamedThinkingOptions,
-        }];
-      }
-      const refused = refusalFinish(refusal, Boolean(resolvedText.trim()), calls.length > 0);
-      const assistant = buildAssistantMessage(
-        model,
-        resolvedText,
-        thinkingParts,
-        calls,
-        resolveFinish({
-          finishReason: refused?.finishReason ?? finishReason,
-          rawFinishReason: refused?.rawFinishReason
-            ?? await Promise.resolve(final.rawFinishReason).catch(() => undefined),
-          providerMetadata: rawBlockReason
-            ? { google: { promptFeedback: { blockReason: rawBlockReason } } }
-            : await Promise.resolve(final.providerMetadata).catch(() => undefined),
-          hasText: Boolean(resolvedText.trim()),
-          hasToolCalls: calls.length > 0,
-        }),
-        usageFromAiSdk(finalUsage),
-        structured === undefined ? textSignature : undefined,
-      );
-      return assistant;
-    });
-  };
+  const calls = [...toolCalls.values()];
+  const answerText = structured !== undefined
+    ? formatStructuredAsAssistantText(structured)
+    : (text || finalText);
+  const resolvedText = promptStructured && calls.length === 0 ? normalizePromptStructuredText(answerText) : answerText;
+  let thinkingParts = resolveThinkingParts({
+    streamedText: thinking,
+    finalText: finalReasoning || '',
+    reasoningParts: finalReasoningParts,
+  });
+  // If SDK returned plain text without metadata but stream captured a signature, attach it.
+  if (
+    thinkingParts.length === 1
+    && !thinkingParts[0]?.providerOptions
+    && streamedThinkingOptions
+  ) {
+    thinkingParts = [{
+      text: thinkingParts[0]!.text,
+      providerOptions: streamedThinkingOptions,
+    }];
+  }
+  const refused = refusalFinish(refusal, Boolean(resolvedText.trim()), calls.length > 0);
+  const assistant = buildAssistantMessage(
+    model,
+    resolvedText,
+    thinkingParts,
+    calls,
+    resolveFinish({
+      finishReason: refused?.finishReason ?? finishReason,
+      refusal: refused?.refusal,
+      rawFinishReason: refused?.rawFinishReason
+        ?? await Promise.resolve(final.rawFinishReason).catch(() => undefined),
+      providerMetadata: rawBlockReason
+        ? { google: { promptFeedback: { blockReason: rawBlockReason } } }
+        : await Promise.resolve(final.providerMetadata).catch(() => undefined),
+      hasText: Boolean(resolvedText.trim()),
+      hasToolCalls: calls.length > 0,
+    }),
+    usageFromAiSdk(finalUsage),
+    structured === undefined ? textSignature : undefined,
+  );
+  yield { type: 'done', message: assistant };
 }
 
 /** Non-streaming complete via AI SDK generateText (legacy service.chat paths). */
@@ -574,7 +616,7 @@ export async function generateTextViaAiSdk(
   const context = promptStructured ? withStructuredOutputInstruction(requestedContext, requestedOptions!.outputSchema!) : requestedContext;
   const options = promptStructured ? { ...requestedOptions, outputSchema: undefined } : requestedOptions;
   const cacheCtx = resolvePromptCacheApplyInput(
-    isStreamPromptCacheEnabled(options?.promptCache),
+    isStreamPromptCacheEnabled(options?.promptCache) && model.promptCacheRouting !== 'driver',
     model.sdk,
     options,
     model.compat,
@@ -656,6 +698,7 @@ export async function generateTextViaAiSdk(
     toolCalls,
     resolveFinish({
       finishReason: refused?.finishReason ?? result.finishReason,
+      refusal: refused?.refusal,
       rawFinishReason: refused?.rawFinishReason ?? result.rawFinishReason,
       providerMetadata: result.providerMetadata,
       hasText: Boolean(text.trim()),

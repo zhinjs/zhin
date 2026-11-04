@@ -12,7 +12,7 @@
 | **full-bot** | L4 参考（**含 `@zhin.js/agent` + provider**），`pnpm check:l4` |
 | test-bot | 厨房水槽，全平台/全插件；**勿复制到新项目** |
 
-Provider 网关（OpenCode / OpenRouter 等）的 sdk 与 `contextWindow` 预设见 [AI 模块 — 已知 LLM 网关预设](../../docs/advanced/ai.md#已知-llm-网关预设)。L4 契约测试：`examples/full-bot/tests/provider-gateway-contract.test.ts`。
+模型设置见 [模型服务与订阅账号](../../docs/ai/providers.md)。启动后在 Console 预览并显式导入示例的 `ai.plan.yml`；它声明了工具和流式能力，请核对本地模型确实支持。L4 契约测试：`examples/full-bot/tests/provider-gateway-contract.test.ts`。
 
 ## 依赖
 

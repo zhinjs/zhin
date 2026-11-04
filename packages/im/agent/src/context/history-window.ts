@@ -1,13 +1,14 @@
+import type { AgentStartupConfig } from '../config/agent-startup.js';
 /**
  * ADR 0043 §2: the history sent to the model is bounded by a token budget instead of a message
  * count. The window is applied at the LLM boundary only (stored history and the compaction input
  * are untouched), measured on what the model really gets (after projection), and always starts at
  * a turn boundary so a tool call and its results, or a merged turn, never get split.
  */
-import { estimateAgentMessagesTokens, lastTurnStart, projectPromptContext, type AgentMessage, type AIConfig } from '@zhin.js/ai';
+import { estimateAgentMessagesTokens, lastTurnStart, projectPromptContext, type AgentMessage } from '@zhin.js/ai';
 
 export type HistoryScene = 'group' | 'private' | 'masterPrivate';
-export type HistoryTokensConfig = NonNullable<NonNullable<AIConfig['context']>['historyTokens']>;
+export type HistoryTokensConfig = NonNullable<NonNullable<AgentStartupConfig['context']>['historyTokens']>;
 export interface ContextHistoryConfig {
   /** `ai.context.historyTokens` */
   tokens?: HistoryTokensConfig;

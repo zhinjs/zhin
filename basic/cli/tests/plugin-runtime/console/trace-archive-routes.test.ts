@@ -92,3 +92,18 @@ it.each(['disabled', 'unsupported', 'too_large', 'capture_failed'] as const)('re
   expect(data.request).not.toHaveProperty('body');
   expect(data).not.toHaveProperty('usage');
 });
+
+
+it('omits provider replay state from the actual Console request DTO while preserving ordinary options and call ids', async () => {
+  const row = trace();
+  row.requests![0].body!.messages = [{ role: 'assistant', providerStateScope: { accountIncarnation: 'private-account' }, content: [
+    { type: 'thinking', thinking: 'considered', providerOptions: { anthropic: { signature: 'private-signature', cacheControl: { type: 'ephemeral' } }, openai: { reasoningEncryptedContent: 'private-encrypted' } } },
+    { type: 'toolCall', id: 'call-real', name: 'lookup', arguments: {}, providerOptions: { google: { thoughtSignature: 'private-thought' } } },
+  ] }];
+  const request = await start([row]);
+  const response = await request('request', { turnId: 'root-turn', requestId: 'root-turn/request' });
+  expect(response.status).toBe(200);
+  const body = JSON.stringify(await response.json());
+  for (const marker of ['private-account', 'private-signature', 'private-encrypted', 'private-thought']) expect(body).not.toContain(marker);
+  expect(body).toContain('call-real'); expect(body).toContain('cacheControl');
+});

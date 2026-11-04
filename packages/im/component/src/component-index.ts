@@ -65,7 +65,7 @@ export class ComponentIndex {
     const record = this.#resolve(requesterId, name, snapshot);
     if (!record) throw new Error(`Unknown Component ${name} for ${requesterId}`);
     const context: ComponentContext = Object.freeze({
-      ...createCapabilityContext(snapshot, record.owner),
+      ...createCapabilityContext({ snapshot: snapshot, ownerId: record.owner }),
       requester,
       ...(options.signal ? { signal: options.signal } : {}),
     });

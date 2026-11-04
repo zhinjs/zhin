@@ -2,6 +2,7 @@
 import type { CheckResult } from './checks.js';
 import { SCORE_DIMENSIONS, type Judgment, type ScoreDimension } from './judge.js';
 import type { Scenario } from './scenario.js';
+import type { EvalModelSelection } from './workspace.js';
 import type { TurnResult } from './turn.js';
 
 export interface RunRecord {
@@ -25,6 +26,7 @@ export interface EvalReport {
   readonly startedAt: string;
   readonly model: string;
   readonly judge: string;
+  readonly selections?: Readonly<{ model: EvalModelSelection; judge: EvalModelSelection }>;
   readonly runsPerScenario: number;
   readonly passRate: number;
   readonly scores: Readonly<Partial<Record<ScoreDimension, number>>>;
@@ -64,6 +66,7 @@ export function buildReport(input: {
   readonly startedAt: string;
   readonly model: string;
   readonly judge: string;
+  readonly selections?: Readonly<{ model: EvalModelSelection; judge: EvalModelSelection }>;
   readonly runsPerScenario: number;
   readonly scenarios: readonly Scenario[];
   readonly records: readonly RunRecord[];
@@ -82,6 +85,7 @@ export function buildReport(input: {
     startedAt: input.startedAt,
     model: input.model,
     judge: input.judge,
+    ...(input.selections ? { selections: input.selections } : {}),
     runsPerScenario: input.runsPerScenario,
     passRate: records.length === 0 ? 0 : records.filter(runPassed).length / records.length,
     scores: meanScores(records),
@@ -110,6 +114,7 @@ export function renderMarkdown(report: EvalReport, baseline?: EvalReport): strin
     '',
     `Model \`${report.model}\` · judge \`${report.judge}\` · ${report.scenarios.length} scenarios × ${report.runsPerScenario} runs`,
     '',
+    ...(report.selections ? [`Profiles: model \`${report.selections.model.profile}\` → \`${report.selections.model.nativeModel}\`; judge \`${report.selections.judge.profile}\` → \`${report.selections.judge.nativeModel}\`.`, `Explicit Profile parameters: model \`${JSON.stringify(report.selections.model.profileParameters)}\`; judge \`${JSON.stringify(report.selections.judge.profileParameters)}\`. Unreported vendor defaults remain unknown.`, ''] : []),
     '| | value | vs baseline |',
     '|---|---|---|',
     `| pass rate | ${percent(report.passRate)} | ${baseline ? signed((report.passRate - baseline.passRate) * 100, 0) + ' pt' : '—'} |`,

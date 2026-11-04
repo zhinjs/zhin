@@ -37,7 +37,7 @@ function apiError(statusCode: number, message: string, body?: unknown) {
 const ctx = { systemPrompt: '', messages: [] } as unknown as Context;
 
 /** Answers per model id: an Error is thrown, a string is the reply text. */
-function run(primary: Model, fallbacks: Model[], answers: Record<string, Error | string>) {
+function run(primary: Model, answers: Record<string, Error | string>) {
   const calls: string[] = [];
   const base: LlmCompletionPort = {
     async complete(m) {
@@ -51,7 +51,7 @@ function run(primary: Model, fallbacks: Model[], answers: Record<string, Error |
     },
   };
   const events: ProviderResilienceEvent[] = [];
-  const port = createResilientCompletionPort(base, { fallbackModels: fallbacks, onEvent: (e) => events.push(e), sleep: async () => {}, config: { requestTimeoutMs: 0 } });
+  const port = createResilientCompletionPort(base, { onEvent: (e) => events.push(e), sleep: async () => {}, config: { requestTimeoutMs: 0 } });
   return { result: port.complete(primary, ctx).catch((e: unknown) => e), calls, events };
 }
 
@@ -72,32 +72,21 @@ describe('billing classification', () => {
   });
 });
 
-describe('billing fallback', () => {
-  const broke = () => apiError(402, 'Insufficient Balance');
-
-  it('does not fall back to another model behind the same provider alias', async () => {
-    const { result, calls, events } = run(model('deepseek', 'chat'), [model('deepseek', 'reasoner')], { 'deepseek/chat': broke(), 'deepseek/reasoner': 'never' });
-    const error = await result;
+describe('fixed-model billing and server failures', () => {
+  it('reports the selected account balance failure without retry or another account', async () => {
+    const { result, calls, events } = run(model('deepseek', 'chat'), { 'deepseek/chat': apiError(402, 'Insufficient Balance'), 'openai/other': 'never' });
+    expect(await result).toMatchObject({ kind: 'billing', attempts: 1, message: describeProviderFailure('billing') });
     expect(calls).toEqual(['deepseek/chat']);
-    expect(error).toBeInstanceOf(ProviderRequestError);
-    expect(error).toMatchObject({ kind: 'billing', message: describeProviderFailure('billing') });
     expect(events).toEqual([expect.objectContaining({ type: 'give_up', kind: 'billing' })]);
   });
-
-  it('skips same-alias candidates but still tries one on another alias (its own key)', async () => {
-    const { result, calls, events } = run(
-      model('deepseek', 'chat'),
-      [model('deepseek', 'reasoner'), model('openai', 'gpt-4o-mini')],
-      { 'deepseek/chat': broke(), 'openai/gpt-4o-mini': 'ok from openai' },
-    );
-    expect(await result).toMatchObject({ content: [{ text: 'ok from openai' }] });
-    expect(calls).toEqual(['deepseek/chat', 'openai/gpt-4o-mini']);
-    expect(events).toEqual([expect.objectContaining({ type: 'fallback', from: 'chat', to: 'gpt-4o-mini', kind: 'billing' })]);
+  it('does not try another model on the same account after a balance error', async () => {
+    const { result, calls } = run(model('deepseek', 'chat'), { 'deepseek/chat': apiError(402, 'Insufficient Balance'), 'deepseek/other': 'never' });
+    expect(await result).toBeInstanceOf(ProviderRequestError);
+    expect(calls).toEqual(['deepseek/chat']);
   });
-
-  it('leaves other kinds free to fall back within the same alias', async () => {
-    const { result, calls } = run(model('gemini', 'flash'), [model('gemini', 'lite')], { 'gemini/flash': apiError(500, 'Internal'), 'gemini/lite': 'ok' });
-    expect(await result).toMatchObject({ content: [{ text: 'ok' }] });
-    expect(calls).toEqual(['gemini/flash', 'gemini/flash', 'gemini/flash', 'gemini/lite']);
+  it('retains same-model server retries without switching to another model', async () => {
+    const { result, calls } = run(model('gemini', 'flash'), { 'gemini/flash': apiError(500, 'Internal'), 'gemini/lite': 'never' });
+    expect(await result).toMatchObject({ kind: 'server', attempts: 3 });
+    expect(calls).toEqual(['gemini/flash', 'gemini/flash', 'gemini/flash']);
   });
 });

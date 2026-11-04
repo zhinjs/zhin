@@ -11,7 +11,7 @@ import { operationEndpoint } from './operation-endpoint.js';
 import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
-import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit';
+import { bindOperationInput, operationInputBinding, type OperationResourceView } from '@zhin.js/feature-kit';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
 import type { UserInteraction } from '@zhin.js/interaction';
@@ -98,6 +98,7 @@ interface InboundRuntimeContext {
   readonly diagnostics?: RuntimeMessageDiagnostics;
   readonly interactions: InboundInteractionPort;
   captureOperation(input: CaptureEndpointOperationInput): CapturedEndpointOperation;
+  createOperationResources?(input: Readonly<{ lease: SnapshotLease; message: import('./contracts.js').RuntimeMessage; owner: PluginId; signal: AbortSignal }>): OperationResourceView | undefined;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** Trusted origin classifier. Absent: messages carry no origin (legacy behavior). */
   readonly originClassifier?: InboundOriginClassifier;
@@ -462,6 +463,7 @@ export class InboundRuntime {
             captureInteraction: owner => this.context.captureOperation({ target: conversation,
               client: source.client, requester: owner, signal: boundEndpoint.signal }),
             registerOperationView: commandOperation?.bind,
+            createOperationResources: request => this.context.createOperationResources?.({ ...request, lease }),
             assertActive: () => {
               if (!active) throw new Error('Message author binding scope has ended');
               boundEndpoint.assertActive();

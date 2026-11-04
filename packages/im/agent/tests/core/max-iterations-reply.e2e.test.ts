@@ -1,10 +1,12 @@
+import type { FixtureTextProvider } from '../../../ai/tests/helpers/text-provider-fixture.js';
+import { createTestZhinAgent } from '../helpers/scoped-agent.js';
 /**
  * Reproduces the QQ incident: the model keeps calling exploration tools until
  * maxIterations, and the harness used to send the raw tool output as the reply.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ZhinAgent } from '@zhin.js/agent';
-import type { AIProvider, Tool } from '@zhin.js/core';
+import type {Tool} from '@zhin.js/core';
 import {
   assistantTextReply,
   assistantToolCallReply,
@@ -32,16 +34,11 @@ function probeTool(): Tool {
 function createAgent(llm: MockLlmApi): ZhinAgent {
   const provider = Object.assign(llm.provider, {
     listModels: vi.fn(async () => ['mock-model']),
-  }) as unknown as AIProvider;
-  return new ZhinAgent(
-    provider,
-    {
+  }) as unknown as FixtureTextProvider;
+  return createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: {
       persona: '测试助手',
       deferredTools: { alwaysLoadedTools: [...DEFAULT_ALWAYS_LOADED_TOOLS, 'probe_source'] },
-    },
-    undefined,
-    llm.runtime,
-  );
+    }, events: undefined });
 }
 
 function replyText(output: Awaited<ReturnType<ZhinAgent['process']>>): string {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { HOST_CONFIG_SCHEMA, parsePluginConfigSchema } from '../../../../packages/im/runtime/src/config-composer.js';
 import { resolveAssistantDefaultsConfig, resolveAssistantEventsConfig, resolveAssistantQueueConfig } from '../../../../packages/im/agent/src/assistant/config.js';
 import { resolveAssistantHomeConfig } from '../../../../packages/im/agent/src/assistant/home-config.js';
-import { normalizeAiRoutingConfig } from '../../../../packages/im/agent/src/config/normalize-ai-config.js';
+import { validateModelRuntimeConfig } from '../../../../packages/im/agent/src/model-runtime/validation.js';
 import { DEPRECATED_AGENT_CONFIG_KEYS } from '../../../../packages/im/agent/src/config/deprecated-agent-keys.js';
 import { DEPRECATED_AGENT_BINDING_KEYS } from '../../../../packages/im/agent/src/config/deprecated-agent-binding-keys.js';
 import { resolvePerceptionConfig } from '../../../../packages/im/agent/src/config/perception-config.js';
@@ -29,7 +29,7 @@ describe('Host schema null compatibility with actual configuration consumers', (
     expect(result.value).toMatchObject(input);
     // visionModel still has a programmatic fallback; the application Host explicitly rejects its YAML path.
     for (const key of ['chatModel', 'visionModel']) {
-      expect(() => normalizeAiRoutingConfig({ agent: { [key]: 'retired-model' } } as never)).toThrow(/removed/u);
+      expect(validateModelRuntimeConfig({ agent: { [key]: 'retired-model' } }, 'host').join(' ')).toContain('migration required');
     }
   });
 
@@ -43,10 +43,10 @@ describe('Host schema null compatibility with actual configuration consumers', (
   });
 
   it('retains the nullish defaults of the actual AI routing, perception and recall helpers', () => {
-    const ai = { providers: null, agents: null, mcpServers: null, multimodal: { perception: null }, memory: { semantic: { recall: null } } };
+    const ai = { agents: null, mcpServers: null, multimodal: { perception: null }, memory: { semantic: { recall: null } } };
     expect(parsePluginConfigSchema(HOST_CONFIG_SCHEMA, { ai }).errors).toEqual([]);
-    expect(normalizeAiRoutingConfig(ai as never)).toEqual({ providers: {}, agents: {}, mcpServerNames: [] });
-    expect(normalizeAiRoutingConfig({ providers: { unused: null }, agents: {} } as never).providers).toEqual({});
+    expect(validateModelRuntimeConfig(ai, 'host')).toEqual([]);
+    expect(validateModelRuntimeConfig({ providers: { unused: null } }, 'host').join(' ')).toContain('migration required');
     expect(resolvePerceptionConfig(ai.multimodal.perception)).toBeUndefined();
     expect(resolveRecallOptions(ai.memory.semantic.recall as never)).toEqual(resolveRecallOptions(undefined));
   });

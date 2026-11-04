@@ -1,6 +1,7 @@
+import { agentMessagesToAiSdk } from '../../../ai/src/llm/bridge/ai-sdk-messages.js';
 import { describe, expect, it } from 'vitest';
 import {
-  agentMessageRowToLlm, agentMessagesToAiSdk, createLlmMessageProjection, createPromptContextBlock, createUserMessage,
+  agentMessageRowToLlm, createLlmMessageProjection, createPromptContextBlock, createUserMessage,
   EMPTY_TOKEN_USAGE, RUNTIME_CONTEXT_MARKER, serializeAgentMessage,
   type AgentMessage, type AssistantMessage, type TextContentBlock, type UserMessage,
 } from '@zhin.js/ai';

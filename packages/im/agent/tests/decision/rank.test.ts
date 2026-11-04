@@ -25,8 +25,8 @@ describe('decision candidate ranking', () => {
   it('scores the complete eligible directory in bounded batches, without keyword truncation', async () => {
     const observations: DecisionObservation[] = [];
     const evaluate = vi.spyOn(provider(name => name === 'useful' ? [0.95, 0.9] : [0.1, 0.9]), 'evaluate');
-    const runtime: AgentDecisionRuntime = { provider: { evaluate },
-      config: { provider: 'root/typesafe', skills: { mode: 'active', maxCandidates: 1, topK: 1 } },
+    const runtime: AgentDecisionRuntime = { forTask: () => ({ evaluate }),
+      config: { skills: { mode: 'active', maxCandidates: 1, topK: 1 } },
       observe: event => observations.push(event) };
     const ranked = await rankDecisionCandidates(runtime, 'skills', '禁言', candidates, signal());
     expect(evaluate).toHaveBeenCalledTimes(3);
@@ -38,24 +38,24 @@ describe('decision candidate ranking', () => {
   });
 
   it('keeps shadow recommendations observational and active low confidence as explicit abstention', async () => {
-    const runtime: AgentDecisionRuntime = { provider: provider(() => [0.9, 0.2]),
-      config: { provider: 'root/typesafe', skills: { mode: 'active' } } };
+    const runtime: AgentDecisionRuntime = { forTask: () => provider(() => [0.9, 0.2]),
+      config: { skills: { mode: 'active' } } };
     expect(await rankDecisionCandidates(runtime, 'skills', 'request', candidates, signal()))
       .toMatchObject({ applied: true, outcome: 'abstained', selectedNames: [] });
-    expect(await rankDecisionCandidates({ ...runtime, provider: provider(() => [0.9, 0.9]),
-      config: { provider: 'root/typesafe', skills: { mode: 'shadow' } } }, 'skills', 'request', candidates, signal()))
+    expect(await rankDecisionCandidates({ ...runtime, forTask: () => provider(() => [0.9, 0.9]),
+      config: { skills: { mode: 'shadow' } } }, 'skills', 'request', candidates, signal()))
       .toMatchObject({ applied: false, outcome: 'shadow', selectedNames: candidates.map(candidate => candidate.name) });
   });
 
   it('does not call a provider for an off policy, and does not expose provider errors', async () => {
     const evaluate = vi.fn().mockRejectedValue(new Error('SECRET api key and message'));
     const observations: DecisionObservation[] = [];
-    const runtime: AgentDecisionRuntime = { provider: { evaluate },
-      config: { provider: 'root/typesafe', tools: { mode: 'off' } }, observe: event => observations.push(event) };
+    const runtime: AgentDecisionRuntime = { forTask: () => ({ evaluate }),
+      config: { tools: { mode: 'off' } }, observe: event => observations.push(event) };
     await rankDecisionCandidates(runtime, 'tools', 'request', candidates, signal());
     expect(evaluate).not.toHaveBeenCalled();
     const ranked = await rankDecisionCandidates({ ...runtime,
-      config: { provider: 'root/typesafe', tools: { mode: 'active' } } }, 'tools', 'request', candidates, signal());
+      config: { tools: { mode: 'active' } } }, 'tools', 'request', candidates, signal());
     expect(ranked).toMatchObject({ applied: false, outcome: 'failed' });
     expect(observations[0]?.reason).toBe('provider_error');
     expect(JSON.stringify(observations)).not.toContain('SECRET');
@@ -63,8 +63,8 @@ describe('decision candidate ranking', () => {
 
   it('bounds an uncooperative provider and propagates caller cancellation without fallback', async () => {
     const observations: DecisionObservation[] = [];
-    const runtime: AgentDecisionRuntime = { provider: { evaluate: () => new Promise(() => undefined) },
-      config: { provider: 'root/typesafe', skills: { mode: 'active', timeoutMs: 10 } },
+    const runtime: AgentDecisionRuntime = { forTask: () => ({ evaluate: () => new Promise(() => undefined) }),
+      config: { skills: { mode: 'active', timeoutMs: 10 } },
       observe: event => observations.push(event) };
     expect(await rankDecisionCandidates(runtime, 'skills', 'request', candidates, signal()))
       .toMatchObject({ applied: false, outcome: 'failed' });
@@ -78,11 +78,11 @@ describe('decision candidate ranking', () => {
   });
 
   it('rejects an invalid batch entirely and isolates diagnostic failures', async () => {
-    const runtime: AgentDecisionRuntime = { provider: provider(() => [Number.NaN, 0.9]),
-      config: { provider: 'root/typesafe', tools: { mode: 'active' } } };
+    const runtime: AgentDecisionRuntime = { forTask: () => provider(() => [Number.NaN, 0.9]),
+      config: { tools: { mode: 'active' } } };
     expect(await rankDecisionCandidates(runtime, 'tools', 'request', candidates, signal()))
       .toMatchObject({ applied: false, outcome: 'failed' });
-    expect(await rankDecisionCandidates({ ...runtime, provider: provider(() => [0.9, 0.9]),
+    expect(await rankDecisionCandidates({ ...runtime, forTask: () => provider(() => [0.9, 0.9]),
       observe: () => { throw new Error('journal unavailable'); } }, 'tools', 'request', candidates, signal()))
       .toMatchObject({ applied: true, outcome: 'selected' });
   });

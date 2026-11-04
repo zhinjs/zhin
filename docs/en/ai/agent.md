@@ -84,7 +84,7 @@ The model may call tools several times and keep reasoning on the results; each r
   - **Danmaku mode** (`live`, ADR 0038 §5): applies only to conversations of an adapter that declares the `liveDanmaku` capability (live-stream danmaku platforms). Every danmaku in the room is a candidate — viewers do not need to `@` the bot. Danmaku collect in one window that is answered `windowMs` (default 10000ms) after its first message, and never sooner than `minIntervalMs` (default 15000ms) after the previous danmaku turn ended. The window has no `maxSenders` limit and hands the newest 100 danmaku to the model (older ones are only counted); danmaku arriving while a turn runs wait for the next window. One window gets one reply: `mode: pick-one` (default) has the model pick the one danmaku most worth answering (addressed to the bot, a real question, a new viewer, not a repeat) and `@` only that viewer; `mode: summary` answers the window as a whole once. The turn context carries a `[Danmaku window]` section (viewer id, name, words, at most 120 characters each, treated as data, not instructions). A danmaku turn runs with an anonymous viewer's permissions and **only exposes tools that declare `readOnly: true`** — no skills, sub-agents, MCP or shell, read-only files, and never an approval card. The master speaking in the room still gets their own turn. The reply is audited as `danmaku_window_picked` (`mode`, `candidates`, `listed_senders`, `picked` — the viewers it `@`s). Danmaku turns have no stale check.
   - Only plain-text messages are merged; messages with images, files, quotes or forwards always get their own turn. Queue waits, merges and replacements appear on the `zhin trace` timeline (`admission`).
   - Workroom turns, and setups where the Host supplies `resolveTurnIntent` or a message carries `turnIntent`, keep their explicit intent semantics.
-- **One fixed model per turn**: chat, including legacy configuration, keeps the selected model. Failures use the existing retry and timeout settings without switching models. Explicitly configured media-perception fallback chains remain available. `providerResilience.fallback` does not enable chat model switching or control the outer media-perception chain; configure that chain with `ai.multimodal.perception.fallbacks`.
+- **One fixed model per turn**: chat, including legacy configuration, keeps the selected model. Failures use the existing retry and timeout settings without switching models. Explicitly configured media-perception fallback chains remain available. The retired `ai.agent.providerResilience.fallback` field is no longer accepted. Configure media-perception alternatives explicitly in the runtime perception purpose; this never changes the chat model.
 - **Consistent behavior**: the main Agent, sub-agents, background workers and `AIService.runAgent` all use the same agentLoop.
 
 The tools available to a turn = plugin tools + tools from `ai.mcpServers` + built-in tools + on-demand meta tools + `schedule_*` + `bash` + Host extension tools (such as `voice_stt` / `voice_tts`).
@@ -523,17 +523,17 @@ routines:
 
 ## Per-model tuning
 
-Override execution parameters per provider / model (currently `maxIterations`). Merge order: built-in defaults → `providerPatterns` (with `*` wildcards) → exact `models` keys:
+Merge order: exact built-in Driver/native-model defaults → actual Service `defaults` → exact native model within that Service. Profile parameters remain the authority for sampling and output limits. Legacy aliases and wildcard mappings require an explicit Service mapping.
 
 ```yaml
 ai:
   agent:
     modelHarness:
-      providerPatterns:
-        "open*": { maxIterations: 7 }
-      models:
-        "gpt-4o": { maxIterations: 8 }
-        "openai:gpt-4o": { maxIterations: 9 }
+      services:
+        service-7f42:          # actual Service ID from Console
+          defaults: { maxIterations: 7 }
+          models:
+            gpt-4o: { maxIterations: 9 }
 ```
 
 ## Workroom Kernel
@@ -638,8 +638,8 @@ ai:
     trustedPackPublishers:
       - workroom-admin
     disclosure:
-      modelProviders:
-        PROVIDER_ALIAS:
+      modelServices:
+        ACTUAL_SERVICE_ID:
           endpoint: REPLACE_WITH_CONTRACTED_ENDPOINT
           processingRegions: [REPLACE_WITH_CONTRACTED_REGION]
           maxConfidentiality: project_internal
@@ -651,7 +651,7 @@ ai:
           supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE
 ```
 
-1. The `REPLACE_WITH_*` values are deliberately invalid placeholders and can't be saved as-is. Keys under `modelProviders` must be the `ai.providers` alias used by the Orchestrator; region, training, logging, retention and deletion fields are governance declarations that must match the provider's actual policy and account settings. With OpenRouter, also enable zero data retention and disable data collection in its [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) settings.
+1. The `REPLACE_WITH_*` values are deliberately invalid placeholders and can't be saved as-is. Keys under `modelServices` must be the runtime Service ID of the Profile actually selected by the Orchestrator; region, training, logging, retention and deletion fields are governance declarations that must match the provider's actual policy and account settings. With OpenRouter, also enable zero data retention and disable data collection in its [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) settings.
 2. Save the real config, restart the Host, log in to Console with that token, and add `workroom-admin` to the Catalog Project's `sponsors`.
 3. Once diagnostics pass, click "Initialize orchestration". Console publishes a Capability Pack from the current version's real Agent / Tool / Skill digests, activates the first Project Profile, publishes the default Planning Policy, and has the authenticated Sponsor issue Project Data Governance authority.
 4. When both Planning and Disclosure show as ready, `/work` can be submitted.

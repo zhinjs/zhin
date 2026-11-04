@@ -166,6 +166,18 @@
       ],
       "@zhin.js/mcp": [
         "./packages/host/mcp/src/index.ts"
+      ],
+      "@zhin.js/ai/provider": [
+        "./packages/im/ai/src/provider/index.ts"
+      ],
+      "@zhin.js/ai/providers": [
+        "./packages/im/ai/src/providers/index.ts"
+      ],
+      "@zhin.js/ai-provider": [
+        "./packages/im/ai-provider/src/index.ts"
+      ],
+      "@zhin.js/agent/migration": [
+        "./packages/im/agent/src/migration/index.ts"
       ]
     }
   },

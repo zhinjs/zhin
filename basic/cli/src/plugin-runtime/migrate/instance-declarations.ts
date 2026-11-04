@@ -440,7 +440,7 @@ async function readJournal(root: string): Promise<Journal | undefined> {
   try { return JSON.parse(await readFile(join(root, JOURNAL_DIRECTORY, JOURNAL_NAME), 'utf8')) as Journal; }
   catch (error) { if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined; throw error; }
 }
-async function assertStopped(root: string) {
+export async function assertStopped(root: string) {
   let source: string;
   try { source = await readFile(join(root, '.zhin.pid'), 'utf8'); }
   catch (error) { if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return; throw error; }
@@ -450,7 +450,7 @@ async function assertStopped(root: string) {
   catch (error) { if (error instanceof Error && 'code' in error && error.code === 'ESRCH') return; throw error; }
   throw new Error('Stop the running Bot before migrating instance declarations.');
 }
-async function withProjectLock<T>(root: string, operation: () => Promise<T>, recovery = false): Promise<T> {
+export async function withProjectLock<T>(root: string, operation: () => Promise<T>, recovery = false): Promise<T> {
   await mkdir(join(root, '.zhin'), { recursive: true });
   const file = join(root, '.zhin/plugin-management.lock');
   const nonce = randomUUID();

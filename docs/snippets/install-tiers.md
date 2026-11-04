@@ -42,7 +42,7 @@
 <!-- #endregion tiers-table-host -->
 
 <!-- #region breaking -->
-1.1 稳定线兼容说明：`import from 'zhin.js'` **不含** `ZhinAgent` / `AIService` / `ModelRegistry`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [分层架构](/concepts/architecture)。
+1.1 稳定线兼容说明：`import from 'zhin.js'` **不含** `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [分层架构](/concepts/architecture)。
 <!-- #endregion breaking -->
 
 <!-- #region breaking-short -->
@@ -56,7 +56,8 @@
 | `defineCommand` / `defineAdapter` / `defineComponent` | `zhin.js/command` / `zhin.js/adapter` / `zhin.js/component` |
 | Plugin、Message、Adapter 等 IM 运行时 API | `zhin.js` |
 | `ZhinAgent`、`AIService`、`AgentResourceHub` | `zhin.js/agent` 或 `@zhin.js/agent` |
-| `ModelRegistry`、`agentLoop`、`AIProvider` 类型 | `zhin.js/ai` 或 `@zhin.js/ai` |
+| `agentLoop`、消息与 completion 契约 | `zhin.js/ai` 或 `@zhin.js/ai` |
+| `InferenceClient`、Driver／Profile 契约 | `@zhin.js/ai/provider`；Host 执行 token 见 `@zhin.js/ai-provider` |
 <!-- #endregion imports -->
 
 <!-- #region deps-install -->

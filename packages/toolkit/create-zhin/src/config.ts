@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { InitOptions, buildRuntimeConfigDocument, serializeRuntimeConfig } from '@zhin.js/scaffold-wizard';
+import { InitOptions, buildRuntimeConfigDocument, serializeRuntimeConfig, materializeAIPlan, saveAIPlanProposal } from '@zhin.js/scaffold-wizard';
 
 // 生成数据库环境变量（实现已收敛到 @zhin.js/scaffold-wizard，值统一走 formatEnvValue 转义）
 export { generateDatabaseEnvVars } from '@zhin.js/scaffold-wizard';
@@ -15,5 +15,6 @@ export async function createConfigFile(appPath: string, format: string, options:
   const filename = configFormat === 'json'
     ? 'zhin.config.json'
     : 'zhin.config.yml';
+  if (options.ai?.enabled) await saveAIPlanProposal(appPath, materializeAIPlan(options.ai));
   await fs.writeFile(path.join(appPath, filename), serializeRuntimeConfig(doc, configFormat));
 }

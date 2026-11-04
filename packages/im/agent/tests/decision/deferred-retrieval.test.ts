@@ -24,7 +24,7 @@ function runtime(mode: 'active' | 'shadow' = 'active'): AgentDecisionRuntime {
         ])) } as DecisionResult<Q>;
     },
   };
-  return { provider, config: { provider: 'root/typesafe', memory: { mode } } };
+  return { forTask: () => provider, config: { memory: { mode } } };
 }
 
 describe('native retrieval decision integration', () => {
@@ -39,7 +39,7 @@ describe('native retrieval decision integration', () => {
     const baseline = createNativeSemanticMemoryToolFeatures(memory).find(tool => tool.name === 'memory_search')!;
     expect(await baseline.definition.execute({ query: 'tea', limit: 1 }, context())).toContain('tea is a drink');
     const decision = runtime();
-    const evaluate = vi.spyOn(decision.provider, 'evaluate');
+    const evaluate = vi.spyOn(decision.forTask('memory')!, 'evaluate');
     const tool = createNativeSemanticMemoryToolFeatures(memory, () => decision).find(tool => tool.name === 'memory_search')!;
     const result = await tool.definition.execute({ query: 'tea', limit: 1 }, context());
     expect(result).toContain('preferred with milk');
@@ -54,7 +54,7 @@ describe('native retrieval decision integration', () => {
     const memory = new SemanticMemoryRuntime();
     memory.activate(repository);
     const decision = runtime();
-    const evaluate = vi.spyOn(decision.provider, 'evaluate');
+    const evaluate = vi.spyOn(decision.forTask('memory')!, 'evaluate');
     const tool = createNativeSemanticMemoryToolFeatures(memory, () => decision).find(tool => tool.name === 'memory_search')!;
     expect(await tool.definition.execute({ query: 'tea', limit: 1 }, context())).toContain('drink=milk');
     expect(evaluate.mock.calls[0]![0].state).toMatchObject({
@@ -81,7 +81,7 @@ describe('native retrieval decision integration', () => {
     const shadow = createNativeKnowledgeToolFeature(index, () => runtime('shadow'));
     expect(await shadow.definition.execute({ query: 'paragraph', limit: 1 }, context())).toContain('baseline paragraph');
     const failed = createNativeKnowledgeToolFeature(index, () => ({ ...decision,
-      provider: { evaluate: async () => { throw new Error('network'); } } }));
+      forTask: () => ({ evaluate: async () => { throw new Error('network'); } }) }));
     expect(await failed.definition.execute({ query: 'paragraph', limit: 1 }, context())).toContain('baseline paragraph');
   });
 

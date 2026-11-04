@@ -1,5 +1,4 @@
 import { readOperationSession } from '@zhin.js/core';
-import { withDeploymentModelScope } from '../../personal-models/deployment-scope.js';
 import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -49,7 +48,8 @@ import {
   runWithAgentDecisionTurn,
   type DecisionObservation,
 } from '@zhin.js/agent/runtime';
-import type { DecisionProvider, DecisionTaskConfig } from '@zhin.js/ai';
+import type { InferenceOperationScope } from '@zhin.js/ai/provider';
+import { createInvocationCompletion, invocationModel } from '@zhin.js/agent/model-runtime';
 import {
   adapterDeclaresLiveDanmaku,
   resolveAiOutboundSegments,
@@ -122,7 +122,6 @@ import {
   AmbientEngagement,
   createAmbientDecisionJudge,
   type AmbientDecision,
-  FallbackEngagementJudge,
   LlmEngagementJudge,
   type EngagementJudge,
 } from './ambient-engagement.js';
@@ -159,8 +158,6 @@ import {
   type DecisionAudit,
 } from './decision-audit.js';
 import type { AssistantStatus } from '../../console/assistant-status.js';
-import { withHostDeploymentModel } from '../deployment-model.js';
-import type { ModelRuntimeService, HostModelSelection } from '@zhin.js/agent/model-runtime';
 
 const logger = getLogger('agent');
 /** Read-only consumer: the ambient judge never moves the Agent session's context cursor. */
@@ -182,8 +179,11 @@ function logAmbientDecisionObservation(observation: DecisionObservation): void {
 }
 
 export interface AgentTurnIngressRouteOptions {
-  readonly modelConfiguration?: import('../../personal-models/configuration.js').ModelConfigurationAccess;
   readonly projectRoot: string;
+  readonly withInferenceScope?: <T>(input: Readonly<{ lease: SnapshotLease; sessionKey: string; operationId?: string; signal: AbortSignal }>,
+    operation: (scope: InferenceOperationScope) => Promise<T>) => Promise<T>;
+  readonly withModelScope?: <T>(input: Readonly<{ lease: SnapshotLease; sessionKey: string; signal: AbortSignal }>,
+    operation: () => Promise<T>) => Promise<T>;
   readonly runtime: AgentRuntime;
   readonly im: ImRuntime;
   readonly transcribeUrl?: (audioUrl: string) => Promise<string | null>;
@@ -210,10 +210,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /** Whether this generation's gate has the ADR 0038 group merge window. */
   #mergeWindowEnabled = false;
   #ambient: AmbientEngagement | null | undefined;
-  /** Chat-model judge(s) from `ai.trigger.ambient.judge`; the fallback of the decision route. */
-  #ambientLlmJudge: EngagementJudge | undefined;
-  /** Decision route for `ai.decisions.ambient` per group, kept while provider and policy are unchanged. */
-  readonly #ambientDecisionJudges = new Map<string, { provider: DecisionProvider; policy: DecisionTaskConfig; judge: EngagementJudge }>();
   private readonly workroomPort: AgentWorkroomPort;
   /** 状态感知（#996）：高优先社交事件独立唤醒；所有回合的 `[Scene events]` 摘要。 */
   readonly #sceneEvents: SceneEventIngress;
@@ -611,123 +607,55 @@ export class AgentTurnIngressRoute implements IngressRoute {
     return this.#admissionGate;
   }
 
-  /** Ambient engagement of this generation; null when no group is configured for it. */
+  /** Pacing belongs to this route; model execution belongs to each held operation. */
   #ambientEngagement(): AmbientEngagement | null {
     if (this.#ambient !== undefined) return this.#ambient;
-    const service = this.options.agent.service;
-    const config = service.getTriggerConfig()?.ambient;
+    const config = this.options.agent.service.getTriggerConfig()?.ambient;
     if (!config?.conversations?.length) return this.#ambient = null;
-    const configuration = this.options.modelConfiguration;
-    if (configuration) {
-      const configured = (typeof config.judge === 'string' ? [config.judge] : config.judge ?? [])
-        .map(entry => entry.trim()).filter(Boolean);
-      let version: ModelRuntimeService | undefined;
-      let selected: EngagementJudge | undefined;
-      const judgeFor = (selection?: HostModelSelection): EngagementJudge => ({
-        judge: input => withHostDeploymentModel(configuration, selection, input.signal, model =>
-          new LlmEngagementJudge(model.llmRuntime, model.llmRuntime.model(model.provider.name, model.invocation.model.model)).judge(input)),
-      });
-      this.#ambientLlmJudge = { judge: async input => {
-        // Preserve judge backoff while a deployment version is unchanged. Validate only
-        // local model references in the control queue; acquire/call each judge outside it.
-        const active = await configuration.withRuntime(async runtime => {
-          if (version === runtime && selected) return selected;
-          const judges: EngagementJudge[] = [];
-          for (const entry of configured) {
-            const [providerAlias, ...model] = entry.split('/');
-            const selection = { providerAlias: providerAlias!, model: model.join('/') };
-            try { runtime.resolveHostModel(selection); judges.push(judgeFor(selection)); }
-            catch (error) {
-              logger.warn(formatCompact({ op: 'ambient_judge_unavailable', judge: entry, error: error instanceof Error ? error.message : String(error) }));
-            }
-          }
-          if (!judges.length) judges.push(judgeFor());
-          selected = judges.length === 1 ? judges[0]! : new FallbackEngagementJudge(judges);
-          version = runtime;
-          return selected;
-        });
-        return active.judge(input);
-      } };
-      return this.#ambient = new AmbientEngagement({ config, judge: this.#ambientLlmJudge });
-    }
-    const binding = service.getBindingRegistry().requireZhinBinding();
-    const llm = service.getLlmRuntime();
-    const configured = (typeof config.judge === 'string' ? [config.judge] : config.judge ?? [])
-      .map(entry => entry.trim()).filter(Boolean);
-    const judgeFor = (entry: string): LlmEngagementJudge | undefined => {
-      const [alias, ...model] = entry.split('/');
-      try {
-        return new LlmEngagementJudge(llm, llm.model(alias!, model.join('/')));
-      } catch (error) {
-        // An unknown provider or model must not break every group message; skip that judge.
-        logger.warn(formatCompact({ op: 'ambient_judge_unavailable', judge: entry, error: error instanceof Error ? error.message : String(error) }));
-        return undefined;
-      }
-    };
-    let judges = configured.map(judgeFor).filter(judge => judge !== undefined);
-    if (judges.length === 0) {
-      const fallback = judgeFor(`${binding.providerAlias}/${binding.model}`);
-      if (!fallback) return this.#ambient = null;
-      judges = [fallback];
-    }
-    this.#ambientLlmJudge = judges.length === 1 ? judges[0]! : new FallbackEngagementJudge(judges);
-    return this.#ambient = new AmbientEngagement({ config, judge: this.#ambientLlmJudge });
+    return this.#ambient = new AmbientEngagement({ config });
   }
 
-  /**
-   * `ai.decisions.ambient` of the held generation. active: the DecisionProvider judges first and the
-   * chat-model judges take over when it fails; shadow: the chat-model judges decide and the provider
-   * is only logged. Undefined (configured chat-model judges only) when off, unset or unavailable.
-   */
-  #ambientDecisionRoute(snapshot: RuntimeSnapshot, key: string): EngagementJudge | undefined {
-    const base = this.#ambientLlmJudge;
-    if (!base) return undefined;
-    let runtime: AgentDecisionRuntime | undefined;
-    try {
-      runtime = resolveAgentDecisionRuntime(snapshot);
-    } catch (error) {
-      // A missing provider must not silence ambient engagement; the chat-model judges still work.
-      logger.debug(formatCompact({ op: 'ambient_decision_unavailable', error: error instanceof Error ? error.message : String(error) }));
-      return undefined;
-    }
-    const policy = runtime?.config.ambient;
-    if (!runtime || !policy || policy.mode === 'off') return undefined;
-    const cached = this.#ambientDecisionJudges.get(key);
-    if (cached?.provider === runtime.provider && cached.policy === policy) return cached.judge;
-    let judge: EngagementJudge | undefined;
-    try {
-      judge = createAmbientDecisionJudge({
-        base,
-        provider: runtime.provider,
-        policy,
-        observe: (observation) => {
+  async #withInference<T>(input: Readonly<{ lease: SnapshotLease; sessionKey: string; operationId?: string; signal: AbortSignal }>,
+    run: (scope: InferenceOperationScope) => Promise<T>): Promise<T> {
+    if (!this.options.withInferenceScope) throw new Error('The Host inference operation is unavailable');
+    return this.options.withInferenceScope(input, run);
+  }
+
+  /** Every judgment uses one graph and its exact retained generation. */
+  #ambientJudge(lease: SnapshotLease, key: string): EngagementJudge {
+    return { judge: input => this.#withInference({ lease, sessionKey: key,
+      signal: AbortSignal.any([input.signal, lease.stopSignal]) }, async scope => {
+      const runtime = resolveAgentDecisionRuntime({ graph: scope.graph, inference: scope.client, resolve: scope.resolve });
+      const policy = runtime?.config.ambient;
+      const provider = runtime?.forTask('ambient');
+      const base = policy?.mode === 'active' ? undefined : await (async () => {
+        const selected = await scope.resolve({ kind: 'language', purpose: 'ambient' });
+        return new LlmEngagementJudge(createInvocationCompletion({ binding: selected, client: scope.client, purpose: 'ambient' }), invocationModel(selected));
+      })();
+      if (!provider || !policy || policy.mode === 'off') {
+        if (!base) throw new Error('No engagement judgment is available');
+        return base.judge(input);
+      }
+      const judge = createAmbientDecisionJudge({ ...(base ? { base } : {}), provider, policy,
+        observe: observation => {
           logAmbientDecisionObservation(observation);
           this.options.assistantStatus?.recordDecision(observation);
         },
         reportShadow: (decision, primary) => {
           this.options.assistantStatus?.recordAmbientShadow(decision?.engage, primary?.engage);
-          logger.info(formatCompact({
-          op: 'ambient_decision_shadow',
-          conv: key,
-          decision: decision ? (decision.engage ? 'engage' : 'declined') : 'failed',
-          confidence: decision?.confidence,
-          judge: primary ? (primary.engage ? 'engage' : 'declined') : 'failed',
-          judgeConfidence: primary?.confidence,
-          }));
+          logger.info(formatCompact({ op: 'ambient_decision_shadow', conv: key,
+            decision: decision ? (decision.engage ? 'engage' : 'declined') : 'failed', confidence: decision?.confidence,
+            judge: primary ? (primary.engage ? 'engage' : 'declined') : 'failed', judgeConfidence: primary?.confidence }));
         },
       });
-    } catch (error) {
-      logger.warn(formatCompact({ op: 'ambient_decision_unavailable', error: error instanceof Error ? error.message : String(error) }));
-      return undefined;
-    }
-    if (!judge) return undefined;
-    this.#ambientDecisionJudges.set(key, { provider: runtime.provider, policy, judge });
-    return judge;
+      if (!judge) throw new Error('No engagement judgment is available');
+      return judge.judge(input);
+    }) };
   }
 
   /** For a group message nobody addressed: wait for the burst, throttle, then let the judge decide. */
   async #considerAmbient(
-    snapshot: RuntimeSnapshot,
+    lease: SnapshotLease,
     message: Message,
     conversationSequence: number | undefined,
     platform: string,
@@ -748,7 +676,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       finally { operation.release(); }
     }
     const key = `${platform}:${message.conversation.id}`;
-    const judge = this.#ambientDecisionRoute(snapshot, key);
+    const judge = this.#ambientJudge(lease, key);
     const decision = await engagement.consider({
       key,
       botName,
@@ -878,7 +806,12 @@ export class AgentTurnIngressRoute implements IngressRoute {
             commandPrefix: message.commandPrefix,
             locale: message.locale,
             senderRoles,
-            withModelScope: operation => withDeploymentModelScope(service, options.projectRoot, operation, options.modelConfiguration),
+            inference: { list: query => this.#withInference({ lease, sessionKey,
+              signal: operationSignal ?? lease.stopSignal }, scope => scope.client.list(query)) },
+            withModelScope: operation => {
+              if (!options.withModelScope) throw new Error('The Host model operation is unavailable');
+              return options.withModelScope({ lease, sessionKey, signal: operationSignal ?? lease.stopSignal }, operation);
+            },
             semanticMemory: options.agent.semanticMemory,
             senderId: turnAccess.principal.subjectId,
           });
@@ -1020,7 +953,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       }
       if (!matched) {
         matched = workroomAgentTurn ? null : await this.#considerAmbient(
-          snapshot,
+          lease,
           message,
           conversationSequence,
           platform,
@@ -1128,8 +1061,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
       let modelStartedAt: number | undefined;
       let spoke = false;
       const modelPayload = (): Record<string, unknown> => ({
-        model: binding.model,
-        provider: binding.providerAlias,
         ambient,
         spoke,
         ...(modelStartedAt !== undefined ? { durationMs: Date.now() - modelStartedAt } : {}),
@@ -1282,7 +1213,26 @@ export class AgentTurnIngressRoute implements IngressRoute {
 
           const traceId = randomUUID();
           modelStartedAt = Date.now();
-          const outcome = await runWithAgentDecisionTurn(snapshot, turnId, async decisionRuntime => {
+          const outcome = await this.#withInference({ lease, sessionKey, operationId: turnId, signal }, scope => runWithAgentDecisionTurn({
+            snapshot, turnId, inferenceSnapshot: scope.snapshot, models: { graph: scope.graph, inference: scope.client, resolve: scope.resolve },
+            disabled: workroomAgentTurn != null, observe: observation => {
+              options.assistantStatus?.recordDecision(observation);
+              logger.debug(formatCompact({
+                op: 'agent_decision_evaluation',
+                task: observation.task,
+                mode: observation.mode,
+                outcome: observation.outcome,
+                candidates: observation.candidates,
+                selected: observation.selected,
+                durationMs: observation.durationMs,
+                model: observation.model,
+                reason: observation.reason,
+                inputTokens: observation.usage?.inputTokens,
+                outputTokens: observation.usage?.outputTokens,
+              }));
+
+            },
+          }, async decisionRuntime => {
             routed = await selectDecisionAgentRoute({
               routed,
               capabilities,
@@ -1293,7 +1243,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             const approvalPolicy = decisionRuntime?.config.approval;
             const approvalJudgment = decisionRuntime && approvalPolicy && approvalPolicy.mode !== 'off'
               ? new DecisionApprovalJudgment({
-                  provider: decisionRuntime.provider,
+                  provider: decisionRuntime.forTask('approval')!,
                   policy: approvalPolicy,
                   baseline: options.agent.approvalJudgment,
                   observe: decisionRuntime.observe,
@@ -1560,25 +1510,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
               observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission),
               );
             } finally { replyOperation?.release(); }
-          }, {
-            disabled: workroomAgentTurn != null,
-            observe: observation => {
-              options.assistantStatus?.recordDecision(observation);
-              logger.debug(formatCompact({
-                op: 'agent_decision_evaluation',
-                task: observation.task,
-                mode: observation.mode,
-                outcome: observation.outcome,
-                candidates: observation.candidates,
-                selected: observation.selected,
-                durationMs: observation.durationMs,
-                model: observation.model,
-                reason: observation.reason,
-                inputTokens: observation.usage?.inputTokens,
-                outputTokens: observation.usage?.outputTokens,
-              }));
-            },
-          });
+          }));
           return { outcome, capabilities, routed };
         }, resolveTriggerTimeoutMs(trigger));
         auditModelRun(audit, outcome, { ...modelPayload(), agent: routed.agent?.name ?? null });
@@ -1598,8 +1530,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
           tools: outcome.status === 'completed' ? capabilities.tools.length : 0,
           ingressTools: capabilities.tools.length,
           elements: elements.length,
-          model: binding.model,
-          provider: binding.providerAlias,
           stt: inbound.sttApplied,
           agent: routed.agent?.name ?? '-',
         }));
@@ -1759,10 +1689,10 @@ async function readTurnCapabilities(
   members: readonly TurnAccessContext[];
   memberTools: readonly (readonly string[])[];
 }>> {
-  const own = await ingress.read(snapshot, requester, isActive, carrier);
+  const own = await ingress.read({ snapshot: snapshot, owner: requester, isActive: isActive, turn: carrier });
   if (!members) return { capabilities: own, members: [], memberTools: [] };
   const others = members.filter((member) => member !== carrier);
-  const reads = await Promise.all(others.map((member) => ingress.read(snapshot, requester, isActive, member)));
+  const reads = await Promise.all(others.map((member) => ingress.read({ snapshot: snapshot, owner: requester, isActive: isActive, turn: member })));
   return {
     capabilities: intersectCapabilities(own, reads),
     members: [carrier, ...others],

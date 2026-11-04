@@ -31,8 +31,6 @@ export function resolveFiveAgentRoleBinding(
   const override = sources.agents[role];
   return {
     name: role,
-    providerAlias: override?.provider ?? base.provider,
-    model: override?.model ?? base.model,
     mcpServers: override?.mcpServers ?? base.mcpServers ?? [],
     nickname: override?.nickname
       ?? (role === 'planner' ? base.nickname : undefined)

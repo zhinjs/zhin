@@ -112,7 +112,7 @@ export interface WorkroomPlanningSetupStatus {
   readonly planningPolicyReady: boolean;
   readonly disclosureReady: boolean;
   readonly disclosureConfigReady: boolean;
-  readonly modelProviderAlias?: string;
+  readonly modelServiceId?: string;
   readonly availableAgents: readonly string[];
   readonly availableTools: readonly string[];
   readonly availableSkills: readonly string[];

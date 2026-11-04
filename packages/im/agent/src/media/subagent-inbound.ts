@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import type { SegmentMediaRef } from '@zhin.js/core';
-import type { AIProvider, MediaContentBlock } from '@zhin.js/ai';
+import type { Model, MediaContentBlock } from '@zhin.js/ai';
 import {
   normalizeMediaRefsToPayloads,
   payloadToVisionPart,
@@ -8,7 +8,7 @@ import {
 import { spoolPayloadToFile } from './media-spool.js';
 import type { AgentRunInput, AgentRunInputPart, AudioTranscriptionPort, MediaBinaryPayload, MultimodalConfig } from './media-types.js';
 import { resolveMultimodalConfig } from './resolve-config.js';
-import { providerSupportsVision } from './vision-capability.js';
+import { modelSupportsVision } from './vision-capability.js';
 
 function byteLengthFromBase64(b64: string): number {
   return Math.floor((b64.length * 3) / 4);
@@ -47,7 +47,7 @@ export async function buildSubagentInboundTask(
   mediaRefs: readonly SegmentMediaRef[],
   opts?: {
     workspaceDir?: string;
-    provider?: AIProvider;
+    model?: Model;
     config?: MultimodalConfig;
     transcriber?: AudioTranscriptionPort;
   },
@@ -59,8 +59,8 @@ export async function buildSubagentInboundTask(
   const visionParts: MediaContentBlock[] = [];
   const spooledPaths: string[] = [];
   const useNativeVision = Boolean(
-    opts?.provider
-    && providerSupportsVision(opts.provider)
+    opts?.model
+    && modelSupportsVision(opts.model)
     && config.enabled
     && config.image.preferNativeVision,
   );

@@ -1,3 +1,5 @@
+import { executionBundle, executionScope } from '../../../../../../packages/im/agent/tests/helpers/execution-bundle.js';
+import { runWithAgentTurnConfiguration } from '../../../../../../packages/im/agent/src/turn/agent-turn-context.js';
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import { createCapabilitySlot, createSnapshotView, SnapshotStore, rootPluginId,
@@ -77,9 +79,9 @@ describe('physical reply aliases through Core, CLI and Agent', () => {
     await adapters.start();
     adapters.open();
     const llm = wireMockLlmApi();
-    const agent = new ZhinAgent(llm.provider, { maxIterations: 3, toolExecution: 'sequential',
-      deferredTools: { alwaysLoadedTools: ['recall_own_message'] } }, undefined, llm.runtime);
-    agent.activeBinding = { name: 'zhin', providerAlias: 'mock', model: 'mock-model', mcpServers: [] };
+    const agent = new ZhinAgent({ config: { maxIterations: 3, toolExecution: 'sequential',
+      deferredTools: { alwaysLoadedTools: ['recall_own_message'] } } });
+    agent.activeBinding = { name: 'zhin', mcpServers: [] };
     agent.markMemoryPersistenceReady();
     const host = asPrivate(agent);
     if (!host.sessionSystem || !host.contextSystem) throw new Error('Synthetic Agent session systems did not initialize');
@@ -101,11 +103,14 @@ describe('physical reply aliases through Core, CLI and Agent', () => {
         capabilities: { tools: ['recall_own_message'], skills: [] }, signal: new AbortController().signal,
         ports: { journal: { append: async () => undefined }, reply: { segments: { types: ['text'] }, send } },
       });
-      const capabilities = await new CapabilityIngress().read(store.current, root, () => true, turn);
+      const capabilities = await new CapabilityIngress().read({ snapshot: store.current, owner: root, isActive: () => true, turn: turn });
       const context = { turn, capabilities, toolCapabilities: capabilities.tools, tools: new TurnToolRuntime(turn, capabilities.tools),
         selection: { binding: agent.activeBinding!, mcpServers: [] },
       };
-      return executeAgentTurn(turn, () => engine.run(context));
+      const chat = executionBundle({ model: llm.runtime.model('mock', 'mock-model'), completion: llm.runtime });
+      const models = await executionScope({ chat, summary: chat });
+      try { return await runWithAgentTurnConfiguration({ models }, () => executeAgentTurn(turn, () => engine.run(context))); }
+      finally { await models.release(); }
     };
     try {
       llm.respondText(JSON.stringify({ messages: [

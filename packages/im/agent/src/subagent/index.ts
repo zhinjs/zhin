@@ -18,6 +18,7 @@ export {
 export type {
   SpawnOptions,
   SubagentCompletePayload,
+  SubagentSyncResult,
   SubagentLifecycleEvent,
   SubagentOrigin,
   SubagentResultDelivery,

@@ -12,7 +12,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import fs from 'fs-extra';
-import path, { join } from 'path';
+import path, { join, resolve } from 'path';
 import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
@@ -537,3 +537,158 @@ migrateCommand.addCommand(new Command('instances')
       console.log('dry-run: no files changed. 未写入任何文件。Stop the Bot, review the plan, then run: zhin migrate instances --apply');
     }
   }));
+
+
+migrateCommand.addCommand(
+  new Command('inference')
+    .description('离线预览、迁移旧 AI 资源与 Session；不加载 .env 或启动 Bot')
+    .option('--output <file>', '预览输出文件（包含密封源证明，不含明文凭据）')
+    .option('--mapping <file>', '明确选择官方 Driver、协议与模型能力的 JSON 映射')
+    .option('--sessions-only', '只将明确选中的旧 Session 绑定到现有 Profile；不加载 Driver 或凭据')
+    .option('--state-snapshot <file>', '非 SQLite 数据库的显式旧元数据快照')
+    .option('--database-config <file>', '离线数据库连接 JSON，不加载 .env')
+    .option('--apply <file>', '应用已审查的预览；未知结果只查原操作回执')
+    .option('--finalize <file>', '数据迁移确认后显式切换启动文件，保留原文备份')
+    .option('--maintenance', '确认 Bot 已停止并处于维护期')
+    .option('--backup-confirmed', '确认已备份原配置、数据库与加密主密钥')
+    .option('--with-credentials', '授权读取预览列出的旧凭据并按原 owner 重封装')
+    .action(
+      async (options: {
+        output?: string;
+        mapping?: string;
+        sessionsOnly?: boolean;
+        stateSnapshot?: string;
+        databaseConfig?: string;
+        apply?: string;
+        finalize?: string;
+        maintenance?: boolean;
+        backupConfirmed?: boolean;
+        withCredentials?: boolean;
+      }) => {
+        if (options.apply && options.finalize) throw new Error('Choose apply or finalize');
+        if (migrateCommand.opts().dryRun)
+          throw new Error(
+            'Inference migration does not support --dry-run; use --output for an explicit preview'
+          );
+        if (options.apply || options.finalize) {
+          if (
+            options.output ||
+            options.mapping ||
+            options.stateSnapshot ||
+            options.databaseConfig ||
+            options.sessionsOnly
+          )
+            throw new Error(
+              'Apply the exact reviewed preview; do not replace its sources or mapping'
+            );
+          const previewFile = resolve(options.apply ?? options.finalize!);
+          const kind: unknown = await fs.readJson(previewFile);
+          if (kind && typeof kind === 'object' && 'mode' in kind && kind.mode === 'sessions') {
+            if (options.finalize || options.withCredentials)
+              throw new Error(
+                'Session binding neither finalizes startup files nor imports credentials'
+              );
+            const sessions = await import(
+              '../plugin-runtime/inference/migration-session-bindings.js'
+            );
+            const preview = await sessions.readSessionBindingsPreview(previewFile);
+            if (preview.rootId !== resolve(process.cwd()))
+              throw new Error('Migration preview belongs to another project Root');
+            const result = await sessions.applySessionBindings({
+              preview,
+              maintenance: !!options.maintenance,
+              backupConfirmed: !!options.backupConfirmed,
+            });
+            console.log(JSON.stringify(result, null, 2));
+            return;
+          }
+          const migration = await import('../plugin-runtime/inference/migration-preview.js');
+          const preview = await migration.readInferenceMigrationPreview(previewFile);
+          if (preview.rootId !== resolve(process.cwd()))
+            throw new Error('Migration preview belongs to another project Root');
+          const writer = await import('../plugin-runtime/inference/migration-apply.js');
+          const run = options.finalize
+            ? writer.finalizeInferenceMigration
+            : writer.applyInferenceMigration;
+          const result = await run({
+            preview,
+            maintenance: !!options.maintenance,
+            backupConfirmed: !!options.backupConfirmed,
+            withCredentials: !!options.withCredentials,
+          });
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+        if (!options.output)
+          throw new Error('Choose --output <preview.json> for a read-only source preview');
+        if (options.mapping && /^\.env(?:\.|$)/u.test(path.basename(options.mapping)))
+          throw new Error('Dotenv files are not migration mappings');
+        let mapping;
+        try {
+          mapping = options.mapping ? await fs.readJson(resolve(options.mapping)) : undefined;
+        } catch {
+          throw new Error('Invalid migration mapping JSON');
+        }
+        const sources = {
+          root: process.cwd(),
+          ...(options.stateSnapshot ? { stateSnapshot: resolve(options.stateSnapshot) } : {}),
+          ...(options.databaseConfig ? { databaseConfig: resolve(options.databaseConfig) } : {}),
+        };
+        if (options.sessionsOnly) {
+          if (!mapping) throw new Error('Choose an explicit Session binding --mapping');
+          if (options.withCredentials)
+            throw new Error('Session binding does not import credentials');
+          const sessions = await import(
+            '../plugin-runtime/inference/migration-session-bindings.js'
+          );
+          const preview = await sessions.previewSessionBindings({ ...sources, mapping });
+          await fs.writeFile(resolve(options.output), `${JSON.stringify(preview, null, 2)}\n`, {
+            flag: 'wx',
+            mode: 0o600,
+          });
+          console.log(
+            JSON.stringify(
+              {
+                id: preview.id,
+                mode: preview.mode,
+                output: resolve(options.output),
+                stateSource: preview.stateSource,
+                targetValidation: preview.targetValidation,
+                sessions: preview.sessions.length,
+              },
+              null,
+              2
+            )
+          );
+          return;
+        }
+        const migration = await import('../plugin-runtime/inference/migration-preview.js');
+        const preview = await migration.previewInferenceMigration({
+          ...sources,
+          ...(mapping ? { mapping } : {}),
+        });
+        await fs.writeFile(resolve(options.output), `${JSON.stringify(preview, null, 2)}\n`, {
+          flag: 'wx',
+          mode: 0o600,
+        });
+        console.log(
+          JSON.stringify(
+            {
+              id: preview.id,
+              output: resolve(options.output),
+              stateSource: preview.stateSource,
+              units: preview.units.map((unit) => ({
+                id: unit.id,
+                ownerId: unit.ownerId,
+                blocked: unit.migration.blocked,
+              })),
+              sessions: preview.sessions.length,
+              blocked: preview.blocked,
+            },
+            null,
+            2
+          )
+        );
+      }
+    )
+);

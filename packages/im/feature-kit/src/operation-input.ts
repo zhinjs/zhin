@@ -1,3 +1,4 @@
+import type { CapabilityOperationFactory } from './operation-resources.js';
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 
 /** @internal Author binding carried by an operation input, never by global state. */
@@ -26,4 +27,16 @@ export function bindOperationInput<TInput>(input: TInput, owner: PluginId, snaps
   if (!input || typeof input !== 'object') return input;
   const binding = (input as Partial<OperationInputBinding>)[operationInputBinding];
   return typeof binding === 'function' ? binding.call(input, owner, snapshot) as TInput : input;
+}
+
+/** @internal Factory carried only by framework-controlled source objects. */
+export const operationInputResources = Symbol.for('zhin.operation-input-resources/1');
+export interface OperationInputResources {
+  [operationInputResources](snapshot: RuntimeSnapshot): CapabilityOperationFactory | undefined;
+}
+/** User text and JSON properties cannot provide the symbol hook or a held generation. */
+export function readOperationInputResources(input: unknown, snapshot: RuntimeSnapshot): CapabilityOperationFactory | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const read = (input as Partial<OperationInputResources>)[operationInputResources];
+  return typeof read === 'function' ? read.call(input, snapshot) : undefined;
 }

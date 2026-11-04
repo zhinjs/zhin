@@ -8,7 +8,6 @@ import {
   SelectQueryParams, UpdateQueryParams
 } from "../types.js";
 import {DocumentDatabase} from "../type/document/database.js";
-import {Registry} from "../registry.js";
 import { getLogger } from '@zhin.js/logger';
 import type { MongoClientOptions } from 'mongodb';
 
@@ -554,4 +553,12 @@ export class MongoDB<S extends Record<string, object> = Record<string, object>> 
     super(new MongoDBDialect<S>(config), definitions);
   }
 }
-Registry.register('mongodb', MongoDB);
+
+declare module '../registry.js' {
+  interface Databases<S extends Record<string, object> = Record<string, object>> {
+    mongodb: MongoDB<S>;
+  }
+  namespace Registry {
+    interface Config { mongodb: MongoDBDialectConfig; }
+  }
+}

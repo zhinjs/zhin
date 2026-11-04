@@ -111,6 +111,17 @@ function extractText(message: AssistantMessage): string {
     .join('');
 }
 
+function modelFailure(input: { model: Model; error: unknown; signal?: AbortSignal }): AssistantMessage {
+  return {
+    role: 'assistant', content: [{ type: 'text', text: '' }],
+    api: input.model.api, provider: input.model.provider, model: input.model.id,
+    usage: EMPTY_TOKEN_USAGE,
+    stopReason: input.signal?.aborted ? 'aborted' : 'error',
+    errorMessage: input.error instanceof Error ? input.error.message : String(input.error),
+    timestamp: Date.now(),
+  };
+}
+
 function createErrorToolResult(toolCall: ParsedToolCall, error: string): AgentMessage {
   return {
     role: 'toolResult',
@@ -331,17 +342,7 @@ export async function* agentLoop(
         }
       }
       if (!assistant!) {
-        assistant = {
-          role: 'assistant',
-          content: [{ type: 'text', text: '' }],
-          api: config.model.api,
-          provider: config.model.provider,
-          model: config.model.id,
-          usage: EMPTY_TOKEN_USAGE,
-          stopReason: signal?.aborted ? 'aborted' : 'error',
-          errorMessage: error instanceof Error ? error.message : String(error),
-          timestamp: Date.now(),
-        };
+        assistant = modelFailure({ model: config.model, error, signal });
       }
     }
 
@@ -393,12 +394,22 @@ export async function* agentLoop(
       tools = [...refreshed];
       recompleteCount += 1;
       try {
-        const followUp = await config.transport.complete(config.model, await buildLlmContext(), {
-          ...config.streamOptions,
-          signal,
-          sessionId: config.sessionId,
-          thinkingLevel: config.reasoning,
-        });
+        // Build/repair failures and tool execution errors are not model failures.
+        const followContext = await buildLlmContext();
+        let followUp: AssistantMessage;
+        try {
+          followUp = await config.transport.complete(config.model, followContext, {
+            ...config.streamOptions, signal, sessionId: config.sessionId, thinkingLevel: config.reasoning,
+          });
+        } catch (error) {
+          const failed = modelFailure({ model: config.model, error, signal });
+          yield { type: 'message_start', message: failed };
+          yield { type: 'message_end', message: failed };
+          emitted.push(failed);
+          // Keep the original tool history for the already scheduled next turn.
+          // This synthetic failed response is evidence, not a new wire message.
+          throw error;
+        }
         yield { type: 'message_start', message: followUp };
         yield { type: 'message_end', message: followUp };
         messages.push(followUp);

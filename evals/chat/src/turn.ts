@@ -9,7 +9,7 @@ import {
   createPromptContextBlock,
   createUserMessage,
   renderContextMessage,
-  type LlmApiRuntime,
+  type LlmCompletionPort,
   type Model,
   type UserMessage,
 } from '../../../packages/im/ai/src/index.js';
@@ -148,7 +148,7 @@ export function outputMessages(output: readonly AgentOutputElement[]): { message
 }
 
 export async function runScenarioTurn(input: {
-  readonly runtime: LlmApiRuntime;
+  readonly runtime: LlmCompletionPort;
   readonly model: Model;
   readonly systemPrompt: string;
   readonly scenario: Scenario;
