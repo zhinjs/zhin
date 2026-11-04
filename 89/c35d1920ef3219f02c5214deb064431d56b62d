@@ -1,0 +1,26 @@
+packages/im/agent/tests/model-runtime/standalone-terminal.test.ts
+  s_9622fd28aba994::t_999fdf4c6bfc0f 187,189
+docs/plans/ai-provider-behavior-migration.md
+  s_9622fd28aba994::t_06741037638439 98
+  s_9622fd28aba994::t_be6eec27b1be64 108-109
+packages/im/agent/src/core/agent-run-shared.ts
+  s_9622fd28aba994::t_d7448bf0dd4550 15-16
+packages/im/agent/tests/subagent-artifact.test.ts
+  s_9622fd28aba994::t_2e78538cf77720 10,45-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "89c35d1920ef3219f02c5214deb064431d56b62d",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
