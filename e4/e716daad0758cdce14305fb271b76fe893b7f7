@@ -1,0 +1,51 @@
+.changeset/971-b3-juejin.md
+  s_9622fd28aba994::t_9bf45a1c5a60f5 1-5
+docs/.vitepress/config.ts
+  s_9622fd28aba994::t_727d2f45df1849 88,255
+docs/adapters/index.md
+  s_9622fd28aba994::t_454ec53566b420 71
+docs/adapters/juejin.md
+  s_9622fd28aba994::t_e80a3808ade7ee 1-158
+docs/adr/0035-comment-reply-adapter-contract.md
+  s_9622fd28aba994::t_ce9e72209f4309 64
+docs/configuration/generated.md
+  s_9477e63ef5cee5::t_da5fafc45495da 1092-1147
+docs/contributing/publishing.md
+  s_9622fd28aba994::t_b3ecd65d441671 211
+docs/en/adapters/index.md
+  s_9622fd28aba994::t_308b937f7b6e7b 75
+docs/en/adapters/juejin.md
+  s_9477e63ef5cee5::t_712642010edbe8 1-158
+docs/en/configuration/generated.md
+  s_9477e63ef5cee5::t_8c32a38ddf9e89 1092-1147
+docs/snippets/platform-tiers.md
+  s_9622fd28aba994::t_e21b8b85094667 25
+plugins/adapters/juejin/README.md
+  s_9622fd28aba994::t_b8b33b96a04eb2 1-146
+scripts/adapter-meta.mjs
+  s_9622fd28aba994::t_72314a26151632 53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e4e716daad0758cdce14305fb271b76fe893b7f7",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
