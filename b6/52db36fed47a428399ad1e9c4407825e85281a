@@ -1,0 +1,80 @@
+basic/database/src/dialects/pg.ts
+  s_9622fd28aba994::t_99388daab56f7d 358-366
+tests/fixtures/database-types/runtime.mjs
+  s_9622fd28aba994::t_8a512145b9a761 1-29,31-53
+  s_9622fd28aba994::t_de7e838b869755 30
+scripts/check-database-optional-types.mjs
+  s_9622fd28aba994::t_81021adefad2d2 19,84-86,122-124,152-157,163
+  s_9622fd28aba994::t_705954b58d5c3e 110-111,113
+  s_9622fd28aba994::t_c5116179616d46 1-18,20-83,87-108,114-121,125-132,145-151,158-162,164
+  s_9622fd28aba994::t_4ae4adea1a5090 133-144
+  s_9622fd28aba994::t_c19bd94448c11a 109,112
+basic/database/src/dialects/redis.ts
+  s_9622fd28aba994::t_99388daab56f7d 603-611
+basic/database/src/builtin-runtime.ts
+  s_9622fd28aba994::t_99388daab56f7d 1-17
+tests/fixtures/database-types/root.ts
+  s_9622fd28aba994::t_e97348cf53bd05 19
+  s_9622fd28aba994::t_d26bfa907d1e3e 1-18,20-21
+docs/plans/database-optional-dialect-types.md
+  s_9622fd28aba994::t_d42bac44d87f9d 1-43
+  s_9622fd28aba994::t_7ae78b6d290878 44-46
+basic/cli/tests/plugin-runtime/database-host.test.ts
+  s_9622fd28aba994::t_bc3775d8384f24 45-52,55-59
+basic/database/src/dialects/mongodb.ts
+  s_9622fd28aba994::t_99388daab56f7d 556-564
+tests/fixtures/database-types/mongodb.ts
+  s_9622fd28aba994::t_d26bfa907d1e3e 1-15
+basic/database/src/index.ts
+  s_9622fd28aba994::t_99388daab56f7d 17-20
+basic/database/src/dialects/mysql.ts
+  s_9622fd28aba994::t_99388daab56f7d 401-409
+tests/fixtures/database-types/third-party.ts
+  s_9622fd28aba994::t_9af2e5a5c625db 21-22,25-26
+  s_9622fd28aba994::t_d26bfa907d1e3e 1-20,23-24,27-29
+docs/plans/ai-provider-behavior-migration.md
+  s_9622fd28aba994::t_7ae78b6d290878 97-98
+tests/fixtures/database-types/mysql.ts
+  s_9622fd28aba994::t_d26bfa907d1e3e 1-15
+basic/database/tests/public-entry-contract.test.ts
+  s_9622fd28aba994::t_840d7bd3aa690d 1-53
+basic/database/src/registry.ts
+  s_9622fd28aba994::t_99388daab56f7d 1-3,24-25
+basic/database/package.json
+  s_9622fd28aba994::t_2285806fd8e293 14-43,100-124
+packages/im/ai/tests/memory/context-repository-database.test.ts
+  s_9622fd28aba994::t_bc3775d8384f24 6
+basic/database/README.md
+  s_9622fd28aba994::t_705954b58d5c3e 55
+  s_9622fd28aba994::t_5aa03110ad1789 975-977
+  s_9622fd28aba994::t_d42bac44d87f9d 19-20,29-54,56,158-159,174-175,190-191,203-204
+.changeset/neutral-database-declarations.md
+  s_9622fd28aba994::t_d42bac44d87f9d 1-10
+basic/cli/tests/plugin-runtime/mysql-startup.live.test.ts
+  s_9622fd28aba994::t_bc3775d8384f24 7
+tests/fixtures/database-types/redis.ts
+  s_9622fd28aba994::t_d26bfa907d1e3e 1-15
+tests/fixtures/database-types/pg.ts
+  s_9622fd28aba994::t_d26bfa907d1e3e 1-15
+tsconfig.typecheck.json
+  s_9622fd28aba994::t_bcd5b79ae9d026 439
+  s_9622fd28aba994::t_7ff125badbbfe2 367-381,438
+package.json
+  s_9622fd28aba994::t_969b00dd353c8f 158-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b652db36fed47a428399ad1e9c4407825e85281a",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
