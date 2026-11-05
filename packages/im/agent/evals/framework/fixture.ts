@@ -18,6 +18,8 @@ import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
 export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'quota' | 'multimodal' | 'collaboration';
 
 export interface EvalInboundMessage {
+  /** Human IM message; the default when `kind` is absent. */
+  readonly kind?: 'human';
   readonly text: string;
   /** Defaults to `private`. */
   readonly scope?: 'private' | 'group';
@@ -62,6 +64,40 @@ export interface EvalInboundMessage {
    * interrupt and the stale-reply check.
    */
   readonly deliver?: Readonly<{ duringStep: number }>;
+}
+
+/**
+ * ADR 0048 H3 Gap A: a timer firing delivered as Mail to an actor instead of a human IM message.
+ * The driver does not deliver these yet (see `TIMER_INBOUND_NOT_SUPPORTED`); cases using it stay skipped
+ * until timer Mail delivery is wired.
+ * TODO(ADR 0048 H3): add `budget` once the runtime engagement budget type is exported.
+ */
+export interface EvalTimerInbound {
+  readonly kind: 'timer';
+  readonly timerId: string;
+  readonly content: string;
+  /** Actor that receives the timer Mail; defaults to the entry agent. */
+  readonly target?: string;
+  /** Reminder owner: the principal and the Venue reply target. Required. */
+  readonly owner: Readonly<{ id: string; roles?: readonly string[] }>;
+}
+
+/** One inbound event: a human IM message (default) or a timer Mail. */
+export type EvalInbound = EvalInboundMessage | EvalTimerInbound;
+
+export function isTimerInbound(inbound: EvalInbound): inbound is EvalTimerInbound {
+  return inbound.kind === 'timer';
+}
+
+function timerInboundProblems(inbound: EvalTimerInbound, index: number): string[] {
+  const label = `inbound ${index + 1} (timer)`;
+  const problems: string[] = [];
+  if (!inbound.timerId?.trim()) problems.push(`${label} needs a timerId`);
+  if (!inbound.content?.trim()) problems.push(`${label} needs content`);
+  if (!inbound.owner?.id?.trim()) problems.push(`${label} needs an owner with an id`);
+  if (inbound.target !== undefined && !inbound.target.trim()) problems.push(`${label} target must not be empty`);
+  if ('text' in inbound) problems.push(`${label} uses content, not text`);
+  return problems;
 }
 
 export interface EvalImage {
@@ -256,7 +292,7 @@ export interface EvalCase {
   readonly skip?: string;
   readonly tags?: readonly EvalTag[];
   /** One inbound message, or a sequence run as consecutive turns in one session. */
-  readonly inbound: EvalInboundMessage | readonly EvalInboundMessage[];
+  readonly inbound: EvalInbound | readonly EvalInbound[];
   readonly tools?: readonly EvalTool[];
   /** ADR 0048 peer Agents (H2). Script steps tagged `actor: '<name>'` answer that agent's model requests. */
   readonly agents?: readonly EvalAgentFixture[];
@@ -335,6 +371,16 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   if (!candidate.source?.trim()) problems.push('source is required (the issue or incident this case guards against)');
   const inbound = Array.isArray(candidate.inbound) ? candidate.inbound : [candidate.inbound];
   if (inbound.length === 0) problems.push('inbound must contain at least one message');
+  inbound.forEach((entry, index) => {
+    const kind = (entry as { kind?: unknown }).kind;
+    if (kind !== undefined && kind !== 'human' && kind !== 'timer') {
+      problems.push(`inbound ${index + 1} has unknown kind "${String(kind)}"`);
+      return;
+    }
+    if (isTimerInbound(entry)) {
+      problems.push(...timerInboundProblems(entry, index));
+    }
+  });
   if (!Array.isArray(candidate.script) || candidate.script.length === 0) problems.push('script must contain at least one step');
   const toolNames = (candidate.tools ?? []).map((tool) => tool.name);
   const duplicates = toolNames.filter((name, index) => toolNames.indexOf(name) !== index);

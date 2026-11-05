@@ -129,3 +129,23 @@ it('updates non-identity Service settings in place while requiring new identity 
     await expect(review({ ...options, [key]: `${options[key]}-changed` })).rejects.toThrow('plan-conflict');
   }
 });
+
+it('rejects undefined or invisible Decision Profiles at save and import (ADR 0047 S3)', async () => {
+  // Undefined alias fails at save (plan review) without inventing a Profile.
+  await expect(reviewer()({ version: 1, purposes: { decisions: { tools: { profile: 'missing', mode: 'active' } } } })).rejects.toThrow('invalid-plan');
+  const graph = graphFixture();
+  // Undefined Profile id fails at import/normalize.
+  expect(() => normalizeProviderGraph({ ...graph, purposes: { ...graph.purposes,
+    decisions: { tools: { profile: 'missing', mode: 'active' } } } })).toThrow('invalid-graph');
+  // Active purpose without a Profile is invalid at normalize (import) time.
+  expect(() => normalizeProviderGraph({ ...graph, purposes: { ...graph.purposes,
+    decisions: { skills: { mode: 'active' } } } })).toThrow('invalid-graph');
+  // Invisible to deployment: a private Profile must not become a Host Decision purpose.
+  const privateGraph = normalizeProviderGraph({ ...graph,
+    accounts: { ...graph.accounts, alice: { ...graph.accounts.account, id: 'alice', ownerId: 'alice', incarnation: 'alice' } },
+    profiles: { ...graph.profiles, alice: { ...graph.profiles.decision, id: 'alice', ownerId: 'alice', accountId: 'alice' } } });
+  await expect(reviewer(privateGraph)({ version: 1, purposes: { decisions: { tools: { profile: 'private', mode: 'active' } } } },
+    { profiles: { private: 'alice' } })).rejects.toThrow('forbidden');
+  await expect(reviewer(privateGraph, 'alice')({ version: 1, purposes: { decisions: { tools: { profile: 'private', mode: 'active' } } } },
+    { profiles: { private: 'alice' } })).rejects.toThrow('forbidden');
+});
