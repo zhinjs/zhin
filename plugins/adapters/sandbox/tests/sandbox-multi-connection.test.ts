@@ -10,6 +10,13 @@ import { SandboxWsEndpoint } from '../src/endpoint.js';
 import { SandboxClient, type SandboxClientConnection } from '../src/client.js';
 import { resolveSandboxEndpoint } from '../src/protocol.js';
 
+// The ready frame is gated on a host `docker info` probe; keep this transport suite independent of the runner's Docker.
+vi.mock('node:child_process', async importOriginal => ({
+  ...await importOriginal<typeof import('node:child_process')>(),
+  execFile: (_file: string, _args: readonly string[], _options: object,
+    callback: (error: Error | null, stdout: string) => void) => queueMicrotask(() => callback(null, 'synthetic-version')),
+}));
+
 type Frame = Record<string, unknown>;
 type Scene = { type: 'private' | 'group' | 'channel'; id: string };
 const endpointKey = String(capabilityId(rootPluginId(), featureId('zhin.adapter'), 'sandbox'));
