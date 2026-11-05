@@ -1,0 +1,150 @@
+.changeset/adr-0048-h3-mailbox-pr2.md
+  h_6f5e45c41d0910 1-9
+.changeset/eval-h3-timer-gap-a-shape.md
+  h_6f5e45c41d0910 1-5
+basic/cli/tests/plugin-runtime/agent/turn/endpoint-cancellation.test.ts
+  h_6f5e45c41d0910 37
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  h_6f5e45c41d0910 10,294,386,388,605
+basic/cli/tests/plugin-runtime/inference/console-s4-acceptance.test.ts
+  h_6f5e45c41d0910 1-116
+docs/adapters/bilibili-live.md
+  h_6f5e45c41d0910 25,50,81,128
+docs/adapters/douyin-live.md
+  h_6f5e45c41d0910 53,92
+docs/ai/agent.md
+  h_6f5e45c41d0910 78
+docs/ai/default-behavior.md
+  h_6f5e45c41d0910 25-26,130
+docs/ai/index.md
+  h_6f5e45c41d0910 279,311
+docs/configuration/generated.md
+  h_6f5e45c41d0910 103-116
+docs/configuration/index.md
+  h_6f5e45c41d0910 385
+docs/en/adapters/bilibili-live.md
+  h_6f5e45c41d0910 19,30,59,109
+docs/en/adapters/douyin-live.md
+  h_6f5e45c41d0910 51,90
+docs/en/ai/agent.md
+  h_6f5e45c41d0910 78
+docs/en/ai/default-behavior.md
+  h_6f5e45c41d0910 25-26,130
+docs/en/ai/index.md
+  h_6f5e45c41d0910 253,285
+docs/en/configuration/generated.md
+  h_6f5e45c41d0910 103-116
+docs/en/configuration/index.md
+  h_6f5e45c41d0910 389
+packages/im/agent/README.md
+  h_6f5e45c41d0910 92
+packages/im/agent/evals/README.md
+  h_6f5e45c41d0910 76,90,390
+packages/im/agent/evals/cases/harness-mailbox-admission-gate.case.ts
+  h_6f5e45c41d0910 6,16,22
+packages/im/agent/evals/cases/harness-mailbox-interrupt-stale.case.ts
+  h_6f5e45c41d0910 6-8,16,23
+packages/im/agent/evals/cases/harness-timer-ask-peer-allowed.case.ts
+  h_6f5e45c41d0910 5-6,13-18
+packages/im/agent/evals/cases/harness-timer-budget-enforced.case.ts
+  h_6f5e45c41d0910 6-7,14-19
+packages/im/agent/evals/cases/harness-timer-cancel-or-escalate.case.ts
+  h_6f5e45c41d0910 5-6,13-18
+packages/im/agent/evals/cases/harness-timer-mail-starts-engagement.case.ts
+  h_6f5e45c41d0910 6-7,14-19
+packages/im/agent/evals/framework/assertions.ts
+  h_6f5e45c41d0910 149
+packages/im/agent/evals/framework/driver.ts
+  h_6f5e45c41d0910 17-21,135-137,141,202,224-240,243-250,269,277-284,292-314,347-348,365,406,411,414
+packages/im/agent/evals/framework/fixture.ts
+  h_6f5e45c41d0910 54-66,180-181
+packages/im/agent/evals/framework/ingress.ts
+  h_6f5e45c41d0910 4-11,14,17-18,24,93,106-109,113-120,150,171,188-189,198,203
+packages/im/agent/evals/framework/scripted-model.ts
+  h_6f5e45c41d0910 167-172,231,294-297
+packages/im/agent/evals/ingress.eval.ts
+  h_6f5e45c41d0910 4
+packages/im/agent/src/collaboration/host-mailbox.ts
+  h_6f5e45c41d0910 1-75,77-100,103-108,111-119,122-125,128,130-132,134-142,144-147,149-150,152-167,169-171,173-183,185-186,188-205,207-268,270-274,276-281,283-289,292-330,332-337,339,342-363,366-373,375-397,399,401-426,428-440,443-447,449-456,458-464,466-479,481,483-490,492-499,501-530,534-618
+packages/im/agent/src/collaboration/mail-turn-context.ts
+  h_6f5e45c41d0910 1-29
+packages/im/agent/src/collaboration/registry.ts
+  h_6f5e45c41d0910 2,4-9,11-14,16,18-19
+packages/im/agent/src/collaboration/turn-collaboration.ts
+  h_6f5e45c41d0910 2,4-12,14-19,21,31,35,39,41,80-81,86-96,123,134-139,146-147,149,152,156,158,160-161
+packages/im/agent/src/config/agent-startup.ts
+  h_6f5e45c41d0910 141-142
+packages/im/agent/src/config/index.ts
+  h_6f5e45c41d0910 34-35
+packages/im/agent/src/config/zhin-agent-config.ts
+  h_6f5e45c41d0910 18,20-24,27-28,32,34,38,40,47,50,112
+packages/im/agent/src/init/dispose-zhin-agent.ts
+  h_6f5e45c41d0910 1,13,22
+packages/im/agent/src/model-runtime/validation.ts
+  h_6f5e45c41d0910 15-16,65-73
+packages/im/agent/src/plugin-runtime/ingress/ingress-delivery-helpers.ts
+  h_6f5e45c41d0910 12,31,34-35,53
+packages/im/agent/src/plugin-runtime/ingress/ingress-moderation-stage.ts
+  h_6f5e45c41d0910 2,253-254,256,260
+packages/im/agent/src/plugin-runtime/ingress/ingress-route.ts
+  h_6f5e45c41d0910 18,24-25,201-202,263,376-377,381-385,387-391,393,610-613,615,618,664,670,697-698,714-758,761-762,766,790,955,957,960,1149
+packages/im/agent/src/plugin-runtime/ingress/scene-event-ingress.ts
+  h_6f5e45c41d0910 36-37,102-107,354-368,371-373,396-397,407-410,423-429,432
+packages/im/agent/src/turn/index.ts
+  h_6f5e45c41d0910 76-83,115-118,146,153
+packages/im/agent/src/turn/mail-turn-runtime.ts
+  h_6f5e45c41d0910 1-6,8-9,11-20,22-29,32-33,35,37,39-74
+packages/im/agent/src/turn/mailbox-config.ts
+  h_6f5e45c41d0910 1-6,8-12,16-20,23,30-31,36-37,40-41,44,51,57,61-62,65-69,73,76,81-82,86-87,96-97,111,114,116,119,125,130,132-133,135,142,148,150-151,153
+packages/im/agent/src/turn/process-stream.ts
+  h_6f5e45c41d0910 7-9,21-22,26,42,44-45,47,51
+packages/im/agent/src/turn/turn-admission.ts
+  h_6f5e45c41d0910 2-5,7,10,13,25,28,41-52,60,87,105-106,118,130-136,139
+packages/im/agent/src/turn/turn-terminal.ts
+  h_6f5e45c41d0910 31-32,42
+packages/im/agent/src/zhin-agent/index.ts
+  h_6f5e45c41d0910 73-75,219-220,286,552,559,566,568-569,571,585
+packages/im/agent/tests/collaboration/actor-turn.test.ts
+  h_6f5e45c41d0910 15,138-145,147-150,155,161-169
+packages/im/agent/tests/collaboration/tools.test.ts
+  h_6f5e45c41d0910 50-55,67-74,79-90,226,230
+packages/im/agent/tests/turn/host-mailbox-admission.test.ts
+  h_6f5e45c41d0910 1-5,7,12-13,18-59,68,70,77,82,92,96,98,100,103,112,114,119,121,123,133,135,140,142,150,153,161,164,173,177,191,194,205,213,215,223,225,241,244,256-258,263,270-272,280-282,287,289-290,298,311,317,320,323,336-337,350,363,366,368,371-372,374,376,378,380,387,396,399,401,403,413,415,420,430-431,435,443,446,449,460,462,464,466,470,472,481,483,499,507,511-512,514,516,518,526,529-530,541,543,545,555,557,574,576,578,588-589,594,598,610-611,622,631,634,643,652,655,658,660,672,675,678,681,685,695,705,714-715,717,725,728,731,733,742,748,751,754,768-769,780,794,797,799,801,803,805,807,816-817,819,821,832,834,836,838,846,850,853-854,856,858,866,869,871,873,881,889,891,893,895
+packages/im/agent/tests/zhin-agent/mailbox-config.test.ts
+  h_6f5e45c41d0910 3-10,12,14,18,22-23,28-29,31,35,38-40,45-46,51,54-57,62-63,67-73
+packages/im/ai/tests/llm/completion-delta.test.ts
+  h_6f5e45c41d0910 99-165
+packages/im/harness/src/contracts.ts
+  h_6f5e45c41d0910 229-234,535,601
+packages/im/harness/src/harness.ts
+  h_6f5e45c41d0910 25-36,65-68,70,76-83,108-117,119,122-123,126-133,136-138,151-156,164-170,174-175,181-186,188-190,198-199,251-254,336,339-343,345-350,354-381,399-400,409,428-429,432,434-435,456,464-467,476-483,485,487,489,491-493,496,498,519,569,575,596-599
+packages/im/harness/src/policies/admission.ts
+  h_6f5e45c41d0910 6-8,101-103
+packages/im/harness/src/policies/markers.ts
+  h_6f5e45c41d0910 22,43,56
+packages/im/harness/tests/harness.test.ts
+  h_6f5e45c41d0910 9,231-235,237-249,252-257,259-284,286,290-353,360-361,371-380,387
+packages/im/harness/tests/policies/admission.test.ts
+  h_6f5e45c41d0910 28-37
+packages/im/harness/tests/support/inbox-driver.ts
+  h_6f5e45c41d0910 26,91
+packages/im/runtime/src/host-config-schema.json
+  h_6f5e45c41d0910 851,854-855
+plugins/adapters/bilibili-live/README.md
+  h_6f5e45c41d0910 13,38,69,116
+plugins/adapters/douyin-live/README.md
+  h_6f5e45c41d0910 41,80
+tests/docs/config-enum-reference.test.ts
+  h_6f5e45c41d0910 67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7fbcb56d52fb3fe33a8f11f625d39d4002c6084e",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
