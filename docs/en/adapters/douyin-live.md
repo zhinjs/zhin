@@ -48,7 +48,7 @@ A Douyin live danmaku adapter for Zhin.js (Plugin Runtime). The Bot watches danm
 1. The web_rid of your own Douyin live room (the number in `https://live.douyin.com/<web_rid>`) as `roomId`
 2. Optional: your full browser cookie string in `.env` (gitignored) as `DOUYIN_LIVE_COOKIE`. Without it a guest `ttwid` is used
 3. Optional: a self-hosted signer service URL as `signerUrl` (see "Signature")
-4. The Agent is enabled (`ai.agent`): its `inboundQueue.live` drives the danmaku window
+4. The Agent is enabled (`ai.agent`): its `mailbox.live` drives the danmaku window
 
 ## Minimal Configuration
 
@@ -87,7 +87,7 @@ The window is controlled by the Agent config (not this adapter's config), the sa
 ```yaml
 ai:
   agent:
-    inboundQueue:
+    mailbox:
       live:
         mode: pick-one        # pick-one: answer one; summary: summarize the window and reply once
         windowMs: 10000       # how long to wait after the first danmaku

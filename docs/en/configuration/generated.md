@@ -100,20 +100,20 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.workroom.disclosure.modelServices.<key>.allowsRedisclosure` | boolean | yes | — | — |
 | `ai.workroom.disclosure.modelServices.<key>.supportsDeletion` | boolean | yes | — | — |
 | `ai.agent` | object | no | — | Agent execution, queueing, tool, and model policies. |
-| `ai.agent.inboundQueue` | object | no | — | Inbound turn queue policy. |
-| `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | no | — | supersede (default): a sender's new message replaces their own unanswered turn; fifo: every message waits in arrival order. Other members' messages always queue. |
-| `ai.agent.inboundQueue.ttlMs` | integer | no | `180000` | A queued turn that waited longer than this is dropped with a short notice. 0 disables expiry. |
-| `ai.agent.inboundQueue.maxQueuedTurns` | integer | no | `5` | Turns allowed to wait behind the running turn of one conversation; further messages get a short busy reply. |
-| `ai.agent.inboundQueue.merge` | object | no | — | Group merge window (ADR 0038): mentions from several members within a short window get one combined reply. Private chats, the master, commands, stop words and messages with media, quotes or forwards never merge. |
-| `ai.agent.inboundQueue.merge.enabled` | boolean | no | `true` | Turn the group merge window on (group chats only). Set false to answer every member one by one as before. |
-| `ai.agent.inboundQueue.merge.quietMs` | integer | no | `1500` | The window is answered once no new message joined it for this long. |
-| `ai.agent.inboundQueue.merge.maxWaitMs` | integer | no | `6000` | The window is answered at the latest this long after its first message. |
-| `ai.agent.inboundQueue.merge.maxSenders` | integer | no | `5` | Senders one merged reply covers; further senders wait for the next window. |
-| `ai.agent.inboundQueue.live` | object | no | — | Danmaku mode (ADR 0038): live-stream adapters that declare liveDanmaku collect danmaku in a window and reply once, with read-only tools and no approval cards. |
-| `ai.agent.inboundQueue.live.mode` | string: `"pick-one"`, `"summary"` | no | `"pick-one"` | pick-one answers one danmaku of the window; summary answers the window as a whole once. |
-| `ai.agent.inboundQueue.live.windowMs` | integer | no | `10000` | How long a danmaku window collects messages from its first danmaku. |
-| `ai.agent.inboundQueue.live.minIntervalMs` | integer | no | `15000` | Minimum time between two danmaku replies in one live room. |
-| `ai.agent.inboundQueue.coalesceWindowMs` | number \| string | no | — | — |
+| `ai.agent.mailbox` | object | no | — | IM inbox policy of the agent Mailbox (ADR 0048 H3; renamed from inboundQueue, which now fails startup). |
+| `ai.agent.mailbox.groupMode` | string: `"supersede"`, `"fifo"` | no | — | supersede (default): a sender's new message replaces their own unanswered turn; fifo: every message waits in arrival order. Other members' messages always queue. |
+| `ai.agent.mailbox.ttlMs` | integer | no | `180000` | A queued turn that waited longer than this is dropped with a short notice. 0 disables expiry. |
+| `ai.agent.mailbox.maxQueuedTurns` | integer | no | `5` | Turns allowed to wait behind the running turn of one conversation; further messages get a short busy reply. |
+| `ai.agent.mailbox.merge` | object | no | — | Group merge window (ADR 0038): mentions from several members within a short window get one combined reply. Private chats, the master, commands, stop words and messages with media, quotes or forwards never merge. |
+| `ai.agent.mailbox.merge.enabled` | boolean | no | `true` | Turn the group merge window on (group chats only). Set false to answer every member one by one as before. |
+| `ai.agent.mailbox.merge.quietMs` | integer | no | `1500` | The window is answered once no new message joined it for this long. |
+| `ai.agent.mailbox.merge.maxWaitMs` | integer | no | `6000` | The window is answered at the latest this long after its first message. |
+| `ai.agent.mailbox.merge.maxSenders` | integer | no | `5` | Senders one merged reply covers; further senders wait for the next window. |
+| `ai.agent.mailbox.live` | object | no | — | Danmaku mode (ADR 0038): live-stream adapters that declare liveDanmaku collect danmaku in a window and reply once, with read-only tools and no approval cards. |
+| `ai.agent.mailbox.live.mode` | string: `"pick-one"`, `"summary"` | no | `"pick-one"` | pick-one answers one danmaku of the window; summary answers the window as a whole once. |
+| `ai.agent.mailbox.live.windowMs` | integer | no | `10000` | How long a danmaku window collects messages from its first danmaku. |
+| `ai.agent.mailbox.live.minIntervalMs` | integer | no | `15000` | Minimum time between two danmaku replies in one live room. |
+| `ai.agent.mailbox.coalesceWindowMs` | number \| string | no | — | — |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | no | — | Shell command security boundary. |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | no | — | Command allowlist preset used outside full mode. |
 | `ai.agent.network` | object | no | — | Network access for IM turns (web_fetch / web_search and networked commands). Off by default; enabled allows HTTPS egress, optionally limited to allowedDomains. When enabled is unset, execPreset: network still enables it for compatibility. |
