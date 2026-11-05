@@ -9,9 +9,9 @@ import {
   type AdapterCapabilityProfile,
   type AITriggerConfig,
   type TurnCapabilities,
+  type UserInteraction,
 } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
-import type { UserInteraction } from '@zhin.js/interaction';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   approvalOutcomeToDecision,

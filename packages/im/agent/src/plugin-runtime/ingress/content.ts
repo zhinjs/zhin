@@ -83,13 +83,13 @@ function resolveInboundAudioUrl(
   }
   const fromMeta = message.metadata?.audio_url;
   if (typeof fromMeta === 'string' && fromMeta.trim()) return fromMeta.trim();
-  const match = message.content.match(/\[audio:([^\]]+)\]/u);
+  const match = message.content.match(/\[audio:([^\[\]]+)\]/u);
   const fromContent = match?.[1]?.trim();
   return fromContent || undefined;
 }
 
 function stripAudioPlaceholders(content: string): string {
-  return content.replace(/\[audio:[^\]]*\]/gu, '').trim();
+  return content.replace(/\[audio:[^\[\]]*\]/gu, '').trim();
 }
 
 export function flattenOutputElements(elements: readonly OutputElementLike[]): string {

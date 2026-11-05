@@ -176,8 +176,8 @@ export function resolveRuntimeAgentTrigger(
 
 function stripMentionMarkup(text: string): string {
   return text
-    .replace(/\[CQ:(?:at|mention),[^\]]*\]/giu, '')
-    .replace(/<@!?[^>\s]+>/gu, '')
-    .replace(/\[(?:at|mention):[^\]]*\]/giu, '')
+    .replace(/\[CQ:(?:at|mention),[^\[\]]*\]/giu, '')
+    .replace(/<@!?[^<>\s]+>/gu, '')
+    .replace(/\[(?:at|mention):[^\[\]]*\]/giu, '')
     .trim();
 }
