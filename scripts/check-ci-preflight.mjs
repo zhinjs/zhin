@@ -137,7 +137,63 @@ console.log(
   `[ci-preflight] base=${base.slice(0, 8)} changed=${changed.length} builds=${scope.builds.length} tests=${scope.tests.length}`,
 );
 
+function checkLockfileImporters(files) {
+  const changedManifests = files.filter((file) => file === 'package.json' || file.endsWith('/package.json'));
+  if (changedManifests.length === 0) return;
+  const lockfileContent = readFileSync(join(root, 'pnpm-lock.yaml'), 'utf8');
+  const importersEnd = lockfileContent.indexOf('\npackages:\n');
+  const importersText = importersEnd !== -1 ? lockfileContent.slice(0, importersEnd) : lockfileContent;
+  const mismatches = [];
+  for (const manifestFile of changedManifests) {
+    const importerKey = manifestFile === 'package.json' ? '.' : manifestFile.slice(0, -'/package.json'.length);
+    const header = importerKey === '.' ? '\n  .:\n' : `\n  ${importerKey}:\n`;
+    const startIdx = importersText.indexOf(header);
+    if (startIdx === -1) continue;
+    const afterHeader = importersText.slice(startIdx + header.length).split(/\r?\n/);
+    const lockSpecifiers = new Map();
+    let currentDepName = null;
+    for (const line of afterHeader) {
+      if (line.startsWith('  ') && !line.startsWith('    ') && line.endsWith(':')) break;
+      if (line.startsWith('      ') && !line.startsWith('        ') && line.endsWith(':')) {
+        const rawKey = line.trim().slice(0, -1);
+        currentDepName = rawKey.startsWith("'") && rawKey.endsWith("'") ? rawKey.slice(1, -1) : rawKey;
+        continue;
+      }
+      if (line.startsWith('        specifier: ') && currentDepName) {
+        const rawSpec = line.slice('        specifier: '.length).trim();
+        lockSpecifiers.set(
+          currentDepName,
+          rawSpec.startsWith("'") && rawSpec.endsWith("'") ? rawSpec.slice(1, -1) : rawSpec,
+        );
+        currentDepName = null;
+      }
+    }
+    const manifest = JSON.parse(readFileSync(join(root, manifestFile), 'utf8'));
+    const manifestSpecs = new Map([
+      ...Object.entries(manifest.dependencies ?? {}),
+      ...Object.entries(manifest.devDependencies ?? {}),
+      ...Object.entries(manifest.optionalDependencies ?? {}),
+    ]);
+    for (const [dep, spec] of manifestSpecs) {
+      if (lockSpecifiers.get(dep) !== spec) {
+        mismatches.push(`${manifestFile}: "${dep}" specifier is "${spec}" in package.json but "${lockSpecifiers.get(dep) ?? '<missing>'}" in pnpm-lock.yaml`);
+      }
+    }
+    for (const [dep, spec] of lockSpecifiers) {
+      if (!manifestSpecs.has(dep)) {
+        mismatches.push(`${manifestFile}: "${dep}" (${spec}) is still in pnpm-lock.yaml but removed from package.json`);
+      }
+    }
+  }
+  if (mismatches.length > 0) {
+    console.error('Outdated pnpm-lock.yaml detected (run `pnpm install --lockfile-only --ignore-scripts`):');
+    for (const mismatch of mismatches) console.error(`  - ${mismatch}`);
+    process.exit(1);
+  }
+}
+
 checkPolynomialReDoS(changed);
+checkLockfileImporters(changed);
 
 const lintFiles = scope.lint.filter((file) => existsSync(join(root, file)));
 if (lintFiles.length > 0) {
