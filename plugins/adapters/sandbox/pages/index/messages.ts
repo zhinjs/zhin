@@ -47,6 +47,8 @@ export const sandboxEnglish: Readonly<Record<string, string>> = {
   "停止中": "Stopping",
   "停止": "Stop",
   "重试": "Retry",
+  "表情列表加载失败，表情选择器暂不可用。": "Could not load the emoji list. The emoji picker is unavailable.",
+  "收到一条无法解析的消息，已忽略。": "Received a message that could not be parsed and ignored it.",
   "导出 Markdown 运行报告": "Export Markdown run report",
   "导出": "Export",
   "耗时": "Duration",
