@@ -164,6 +164,12 @@ export interface ScriptedModelOptions {
   readonly modelInputs?: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>;
   /** Also register the media-capable perception model (`eval-perception/scripted-perception`). */
   readonly perception?: boolean;
+  /**
+   * Awaited while a request is served, after its step was taken and before
+   * the response is returned (`entryStep` is 1-based, entry actor only;
+   * undefined for actor requests). Drives mid-turn Mail delivery.
+   */
+  readonly onRequest?: (entryStep: number | undefined) => Promise<void> | void;
 }
 
 export class ScriptedHangError extends Error {
@@ -222,6 +228,7 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
   const exhaustedBy = new Map<string, number>();
   let exhausted = 0;
   let consumed = 0;
+  let entryRequests = 0;
 
   const respond = (model: Model, context: Context, sessionId: string | undefined): { response: AssistantMessage | ScriptFault; step: ScriptStep } => {
     const index = requests.length;
@@ -284,6 +291,10 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
   const stream = (model: Model, context: Context, streamOptions?: { signal?: AbortSignal; outputSchema?: Record<string, unknown>; sessionId?: string }) =>
     createAssistantMessageEventStream(async (push) => {
       const { response, step } = respond(model, context, streamOptions?.sessionId);
+      if (options.onRequest) {
+        const entryStep = actorOfSession(streamOptions?.sessionId) === ENTRY_ACTOR ? ++entryRequests : undefined;
+        await options.onRequest(entryStep);
+      }
       if (!('role' in response)) return hang(requests.length - 1, streamOptions?.signal);
       const message = response;
       if (streamOptions?.outputSchema === aiOutboundJsonSchema && step && !('segments' in step) && !message.errorMessage
