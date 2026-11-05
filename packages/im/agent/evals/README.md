@@ -73,7 +73,7 @@ fallback is separate and remains covered by `multimodal-perception-fallback`.
 
 | Field | Meaning |
 |---|---|
-| `inbound` | One message, or an array run as consecutive turns in the same session. Each message has `text`, an optional `scope` (`private` or `group`), an optional `sender` (`id`, `name`, `roles`), optional `backgroundEvents` (rendered as untrusted conversation events), optional `images` (`{ base64, mimeType, name? }`, see `fixtures/images.ts`), and an optional `policy` override. |
+| `inbound` | One message, or an array run as consecutive turns in the same session. Each message has `text`, an optional `scope` (`private` or `group`), an optional `sender` (`id`, `name`, `roles`), optional `backgroundEvents` (rendered as untrusted conversation events), optional `images` (`{ base64, mimeType, name? }`, see `fixtures/images.ts`), and an optional `policy` override. ADR 0048 H3: every message is posted as a human Mail to the case's host Mailbox and runs as its Mail turn; `addressed: false` marks an unaddressed group message (the Mailbox rejects it, `termination: 'none'`), and `deliver: { duringStep: N }` posts the message while the model serves entry step N of an earlier turn (mid-turn delivery: supersede / stale reply). |
 | `tools` | Mocked tools: `name`, `description`, `parameters` (JSON Schema of the arguments, sent to the model), `result` (a value or `(args) => value`), `error`, and `requiresApproval`. Cases with `live` checks must declare every argument their script passes, or a real model has nothing to fill in. Built-in reserved names such as `read_file` or `bash` are rejected, so give mocks their own names. |
 | `approval` | How the fake approval channel answers: `approve` (the default), `deny`, or `unavailable` (no channel). |
 | `agentConfig` | Partial `ZhinAgentConfig`, for example `maxIterations` or `toolBudget`. |
@@ -87,7 +87,7 @@ fallback is separate and remains covered by `multimodal-perception-fallback`.
 | `models` | Extra model ids registered after the primary `scripted-model`, in registration order (legacy `modelCandidates`; fixed chat selection must not call the later models). A step's optional `model` pins which model must receive that request. |
 | `modelInput` | Input modalities the scripted model declares (default `['text']`). Add `'image'` so turn images reach it. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
-| `agents` | ADR 0048 H2 peer Agents (`name`, `description`, `tools`, optional `collaboration: { contacts, acceptsFrom }`). The driver registers them as `capabilities.agents` (owned by the driver's root plugin) and awaits `collaborationIdle()` after every inbound turn, then `closeCollaborations()` at the end of the case. See "Peer agents and actors". |
+| `agents` | ADR 0048 H2 peer Agents (`name`, `description`, `tools`, optional `collaboration: { contacts, acceptsFrom }`). The driver registers them as `capabilities.agents` (owned by the driver's root plugin) and awaits `collaborationIdle()` after every inbound turn, then closes the case's host Mailbox at the end of the case. See "Peer agents and actors". |
 
 ### Peer agents and actors (ADR 0048 H2)
 
@@ -387,7 +387,7 @@ requests to Gemini send no temperature, since Gemini 3.6+ ignores it and warns.
 
 ## Multi-message ingress cases (#725)
 
-`ingress-cases/*.case.ts` (run by `ingress.eval.ts`, part of `pnpm eval:agent`) feed several timed messages to one session through the IM admission protocol, the same `TurnAdmissionGate` calls the CLI IM ingress route makes. A cancel intent (`取消`, `/cancel`) calls `gate.stop`, and every other message calls `gate.admit`. Each `run` admission executes one real agent turn with the scripted model and the admitted (possibly merged) text. Time is virtual: `at` is the arrival time, `turnMs` is how long each turn runs, and the same clock drives the queue TTL.
+`ingress-cases/*.case.ts` (run by `ingress.eval.ts`, part of `pnpm eval:agent`) feed several timed messages to one session through the IM admission protocol, the same host Mailbox (`HostMailbox`, ADR 0048 H3) calls the IM ingress route makes. A cancel intent (`取消`, `/cancel`) calls `mailbox.stop`, and every other message calls `mailbox.admit`. Each `run` admission executes one real agent turn with the scripted model and the admitted (possibly merged) text. Time is virtual: `at` is the arrival time, `turnMs` is how long each turn runs, and the same clock drives the queue TTL.
 
 | Expectation | Checks |
 |---|---|

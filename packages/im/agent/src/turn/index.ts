@@ -113,6 +113,9 @@ export type {
   TaskDecomposition,
 } from './task-continuation.js';
 export { DEFAULT_MAX_QUEUED_TURNS, LIVE_WINDOW_MAX_MESSAGES } from './turn-admission.js';
+// ADR 0048 H3: same-session admission is the host Mailbox (replaces TurnAdmissionGate).
+export { HostMailbox, type HostMailboxOptions } from '../collaboration/host-mailbox.js';
+export { MailboxTurnRejectedError } from './mail-turn-runtime.js';
 export {
   intersectCapabilities,
   narrowMergedAccess,
