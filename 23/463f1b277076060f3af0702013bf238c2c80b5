@@ -1,0 +1,16 @@
+packages/im/runtime/src/typescript-specifier-remap.ts
+  h_6f5e45c41d0910 1,118-124,134-151
+packages/im/runtime/tests/native-development-runtime.test.ts
+  h_6f5e45c41d0910 538-581
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "23463f1b277076060f3af0702013bf238c2c80b5",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
