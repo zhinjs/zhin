@@ -489,22 +489,34 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
   }
 }
 
+const SHELL_ISOLATION_PROBE_TIMEOUT_MS = 500;
+/** Hard ceiling for the ready gate even if the Docker CLI ignores SIGTERM or a child keeps stdio open. */
+const SHELL_ISOLATION_PROBE_DEADLINE_MS = 750;
+
 function probeShellIsolation(): Promise<ShellIsolationStatus> {
   return new Promise<ShellIsolationStatus>((resolve) => {
-    execFile('docker', ['info', '--format', '{{.ServerVersion}}'], {
+    let settled = false;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const settle = (status: ShellIsolationStatus): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadline);
+      resolve(status);
+    };
+    const child = execFile('docker', ['info', '--format', '{{.ServerVersion}}'], {
       encoding: 'utf8',
-      timeout: 500,
+      timeout: SHELL_ISOLATION_PROBE_TIMEOUT_MS,
     }, (error, stdout) => {
       if (!error) {
         const version = stdout.trim();
-        resolve(Object.freeze({
+        settle(Object.freeze({
           available: true,
           provider: 'docker',
           message: version ? `Docker ${version}` : 'Docker ready',
         }));
         return;
       }
-      resolve(Object.freeze({
+      settle(Object.freeze({
         available: false,
         provider: 'docker',
         message: error.killed || error.code === 'ETIMEDOUT'
@@ -512,6 +524,12 @@ function probeShellIsolation(): Promise<ShellIsolationStatus> {
           : 'Docker daemon is unavailable',
       }));
     });
+    // execFile only reports after the child's stdio closes; a hung CLI must not hold `ready` hostage.
+    deadline = setTimeout(() => {
+      try { child?.kill('SIGKILL'); } catch { /* already gone */ }
+      settle(Object.freeze({ available: false, provider: 'docker', message: 'Docker readiness check timed out' }));
+    }, SHELL_ISOLATION_PROBE_DEADLINE_MS);
+    deadline.unref?.();
   }).catch(() => Object.freeze({
     available: false,
     provider: 'docker' as const,
