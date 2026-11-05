@@ -13,6 +13,10 @@ export function maskCommentsAndTemplates(content) {
   const stack = [{ mode: 'code', braceDepth: 0 }];
   const top = () => stack[stack.length - 1];
   const mask = (i) => { if (out[i] !== '\n') out[i] = ' '; };
+  const isModuleSpecifierStart = (idx) => {
+    const slice = out.slice(Math.max(0, idx - 80), idx).join('');
+    return /(?<![\w$.])(?:from|import|import\s*\(|require\s*\()\s*$/u.test(slice);
+  };
 
   for (let i = 0; i < content.length; i++) {
     const ch = content[i];
@@ -30,8 +34,17 @@ export function maskCommentsAndTemplates(content) {
       continue;
     }
     if (st.mode === 'squote' || st.mode === 'dquote') {
-      if (ch === '\\') { i++; continue; }
-      if ((st.mode === 'squote' && ch === "'") || (st.mode === 'dquote' && ch === '"')) stack.pop();
+      if (ch === '\\') {
+        if (st.maskContent) { mask(i); mask(i + 1); }
+        i++;
+        continue;
+      }
+      if ((st.mode === 'squote' && ch === "'") || (st.mode === 'dquote' && ch === '"')) {
+        if (st.maskContent) mask(i);
+        stack.pop();
+        continue;
+      }
+      if (st.maskContent) mask(i);
       continue;
     }
     if (st.mode === 'template') {
@@ -49,8 +62,18 @@ export function maskCommentsAndTemplates(content) {
     // code 模式
     if (ch === '/' && next === '/') { mask(i); mask(i + 1); i++; stack.push({ mode: 'line' }); continue; }
     if (ch === '/' && next === '*') { mask(i); mask(i + 1); i++; stack.push({ mode: 'block' }); continue; }
-    if (ch === "'") { stack.push({ mode: 'squote' }); continue; }
-    if (ch === '"') { stack.push({ mode: 'dquote' }); continue; }
+    if (ch === "'") {
+      const maskContent = !isModuleSpecifierStart(i);
+      if (maskContent) mask(i);
+      stack.push({ mode: 'squote', maskContent });
+      continue;
+    }
+    if (ch === '"') {
+      const maskContent = !isModuleSpecifierStart(i);
+      if (maskContent) mask(i);
+      stack.push({ mode: 'dquote', maskContent });
+      continue;
+    }
     if (ch === '`') { mask(i); stack.push({ mode: 'template' }); continue; }
     if (ch === '{') { st.braceDepth++; continue; }
     if (ch === '}' && stack.length > 1) {

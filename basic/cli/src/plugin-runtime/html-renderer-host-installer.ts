@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -70,9 +70,20 @@ async function importHtmlRendererModule(): Promise<HtmlRendererModule> {
       const manifest = JSON.parse(
         readFileSync(manifestPath, 'utf8'),
       ) as { exports?: Record<string, Record<string, string>> };
-      const entry = manifest.exports?.['.']?.import ?? './lib/index.js';
-      const entryUrl = pathToFileURL(join(dirname(manifestPath), entry)).href;
-      return await import(entryUrl) as HtmlRendererModule;
+      const manifestDir = dirname(manifestPath);
+      const dotExports = manifest.exports?.['.'];
+      const preferSource = import.meta.url.endsWith('.ts')
+        && !manifestDir.split(/[/\\]/u).includes('node_modules');
+      const candidates = preferSource
+        ? [dotExports?.development, dotExports?.import ?? './lib/index.js']
+        : [dotExports?.import ?? './lib/index.js', dotExports?.development];
+      for (const entry of candidates) {
+        if (!entry) continue;
+        const absEntry = join(manifestDir, entry);
+        if (!existsSync(absEntry)) continue;
+        const entryUrl = pathToFileURL(absEntry).href;
+        return await import(entryUrl) as HtmlRendererModule;
+      }
     } catch {
       // try next root
     }

@@ -153,6 +153,7 @@ describe('workflow routing contracts', () => {
   it('fails the required aggregate on planner/build/test failure and keeps merge queue validation', () => {
     const ci = workflow('ci');
     expect(ci.on).toHaveProperty('merge_group');
+    expect(workflow('plugin-runtime-size').on).toHaveProperty('merge_group');
     expect(ci.jobs.checks.if).toContain('always()');
     expect(ci.jobs.checks.needs).toEqual(['plan', 'contracts', 'build', 'test']);
     const aggregate = ci.jobs.checks.steps[0];

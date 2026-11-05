@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   dispatchRuntimeConsoleRpc,
   isDemoHttpAllowed,
@@ -735,51 +735,61 @@ describe('runtime console RPC', () => {
   });
 
   it('accepts system:restart on full scope and blocks demo', async () => {
-    let restarted = false;
-    const denied = await dispatchRuntimeConsoleRpc(
-      { type: 'system:restart', requestId: 50 },
-      { authScope: 'demo', listPages: async () => [] },
-    );
-    expect(pickRpcReply({ type: 'system:restart', requestId: 50 }, denied)?.error)
-      .toMatch(/Demo scope/);
+    vi.useFakeTimers();
+    try {
+      let restarted = false;
+      const denied = await dispatchRuntimeConsoleRpc(
+        { type: 'system:restart', requestId: 50 },
+        { authScope: 'demo', listPages: async () => [] },
+      );
+      expect(pickRpcReply({ type: 'system:restart', requestId: 50 }, denied)?.error)
+        .toMatch(/Demo scope/);
 
-    const ok = await dispatchRuntimeConsoleRpc(
-      { type: 'system:restart', requestId: 51 },
-      {
-        authScope: 'full',
-        listPages: async () => [],
-        requestRestart: () => { restarted = true; },
-      },
-    );
-    expect(pickRpcReply({ type: 'system:restart', requestId: 51 }, ok)).toMatchObject({
-      requestId: 51,
-      data: { success: true },
-    });
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(restarted).toBe(true);
+      const ok = await dispatchRuntimeConsoleRpc(
+        { type: 'system:restart', requestId: 51 },
+        {
+          authScope: 'full',
+          listPages: async () => [],
+          requestRestart: () => { restarted = true; },
+        },
+      );
+      expect(pickRpcReply({ type: 'system:restart', requestId: 51 }, ok)).toMatchObject({
+        requestId: 51,
+        data: { success: true },
+      });
+      await vi.advanceTimersByTimeAsync(600);
+      expect(restarted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('persists a Plugin lifecycle change, publishes it and schedules restart', async () => {
-    const published: Array<{type: string; data: unknown}> = [];
-    let restarted = false;
-    const result = await dispatchRuntimeConsoleRpc(
-      {type: 'plugin:set-enabled', requestId: 90, instanceKey: 'sandbox', enabled: false},
-      {
-        authScope: 'full',
-        listPages: async () => [],
-        setPluginEnabled: async () => ({disabled: ['sandbox']}),
-        requestRestart: () => { restarted = true; },
-        publishEvent: (type, data) => { published.push({type, data}); },
-      },
-    );
-    expect(pickRpcReply({type: 'plugin:set-enabled', requestId: 90}, result)).toMatchObject({
-      data: {instanceKey: 'sandbox', enabled: false, restartRequired: true},
-    });
-    expect(published).toEqual([{
-      type: 'plugin:lifecycle-updated', data: {instanceKey: 'sandbox', enabled: false},
-    }]);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    expect(restarted).toBe(true);
+    vi.useFakeTimers();
+    try {
+      const published: Array<{type: string; data: unknown}> = [];
+      let restarted = false;
+      const result = await dispatchRuntimeConsoleRpc(
+        {type: 'plugin:set-enabled', requestId: 90, instanceKey: 'sandbox', enabled: false},
+        {
+          authScope: 'full',
+          listPages: async () => [],
+          setPluginEnabled: async () => ({disabled: ['sandbox']}),
+          requestRestart: () => { restarted = true; },
+          publishEvent: (type, data) => { published.push({type, data}); },
+        },
+      );
+      expect(pickRpcReply({type: 'plugin:set-enabled', requestId: 90}, result)).toMatchObject({
+        data: {instanceKey: 'sandbox', enabled: false, restartRequired: true},
+      });
+      expect(published).toEqual([{
+        type: 'plugin:lifecycle-updated', data: {instanceKey: 'sandbox', enabled: false},
+      }]);
+      await vi.advanceTimersByTimeAsync(600);
+      expect(restarted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

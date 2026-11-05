@@ -29,10 +29,14 @@ if (mode === 'build') {
   const checks = ['check:architecture', 'check:dependency-policy', 'check:release-plan', 'check:harness-paths',
     'check:no-removed-plugin-api', 'check:api-surface', 'check:plugin-runtime-api', 'check:feature-peers', 'check:doc-links',
     'check:runtime-config-boundaries', 'check:plugin-runtime-migration-readiness', 'check:publishing-manifest'];
-  await Promise.all(checks.map(command => new Promise((resolve, reject) => {
-    import('node:child_process').then(({ spawn }) => {
-      const child = spawn('pnpm', [command], { stdio: 'inherit', env: { ...process.env, NPM_TOKEN: '' } });
-      child.once('error', reject); child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${command} failed (${code})`)));
-    }).catch(reject);
-  })));
+  const { spawn } = await import('node:child_process');
+  const queue = [...checks];
+  const runCheck = command => new Promise((resolve, reject) => {
+    const child = spawn('pnpm', [command], { stdio: 'inherit', env: { ...process.env, NPM_TOKEN: '' } });
+    child.once('error', reject);
+    child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${command} failed (${code})`)));
+  });
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+    while (queue.length) await runCheck(queue.shift());
+  }));
 } else throw new Error(`Unknown PR check: ${mode}`);

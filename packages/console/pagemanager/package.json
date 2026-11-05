@@ -6,11 +6,13 @@
   "exports": {
     ".": {
       "types": "./lib/node/index.d.ts",
+      "development": "./src/node/index.ts",
       "import": "./lib/node/index.js",
       "default": "./lib/node/index.js"
     },
     "./node": {
       "types": "./lib/node/index.d.ts",
+      "development": "./src/node/index.ts",
       "import": "./lib/node/index.js",
       "default": "./lib/node/index.js"
     },

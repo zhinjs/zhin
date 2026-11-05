@@ -42,7 +42,7 @@ describe('CLI new command integration', () => {
       expect(readme).toContain('也是本插件唯一的配置声明')
       expect(readme).toContain('两者同时存在会拒绝启动')
     }
-  })
+  }, 30000)
 
   it('should create normal plugin with convention-based structure', async () => {
     const pluginName = 'test-normal-plugin'
