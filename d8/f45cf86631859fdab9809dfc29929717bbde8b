@@ -1,0 +1,16 @@
+.changeset/adr-0048-h3-inbox-policies.md
+  h_b680f75345178a 1-5
+packages/im/harness/README.md
+  h_b680f75345178a 6-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d8f45cf86631859fdab9809dfc29929717bbde8b",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
