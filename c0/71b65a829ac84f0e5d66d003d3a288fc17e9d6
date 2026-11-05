@@ -1,0 +1,14 @@
+packages/im/agent/evals/cases/harness-timer-budget-enforced.case.ts
+  h_6f5e45c41d0910 16-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c071b65a829ac84f0e5d66d003d3a288fc17e9d6",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
