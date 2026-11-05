@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0044：适配器能力画像——规范在 zhin，能力由适配器注入，功能按能力组合
 
-状态：Proposed
+状态：Implemented（Accepted，Slices P1–P6 及全部 24 个适配器 Profile 声明已全部落盘）
 
 关联：[ADR 0041](./0041-prompt-segments-and-message-headers.md)（段组装器、`platform` 段、场景事实）、[ADR 0042](./0042-first-turn-token-budget.md)（工具分档）、[ADR 0038](./0038-continuous-input-merge.md)（`liveDanmaku` 能力，本 ADR 的先例）、[ADR 0035](./0035-comment-reply-adapter-contract.md)（评论回复适配器契约）。
 
@@ -131,18 +131,16 @@ Fin 2026-10-29 拍板：
 
 icqq 先完整声明（它是当前主力），其余适配器按能力补齐；未补齐的能力按「不支持」降级。
 
-### 8. 实现分工（多 agent 并行，最后一个 PR）
+### 8. 实施切片（已全部完成）
 
-| 工作项 | 内容 |
-|---|---|
-| C1 规范 | `AdapterCapabilityProfile` 类型、校验、`resolveCapabilities` 收窄语义、`TurnCapabilities` 计算与缓存 |
-| C2 prompt | §4 自动生成模板 + 自定义文本、`platform` / `scene` 段接线 |
-| C3 消费方迁移 | §5：工具 `requiresCapabilities`、出站、交互反馈、场景事实、沙箱 |
-| C4 事件映射包 | §3：共享包 + 各适配器映射迁出 core |
-| C5 适配器声明 | icqq 完整画像（含全部动作：回应、戳一戳、禁言、踢人、名片 / 头衔、撤回、精华、公告、邀请）；其余适配器的基础画像 |
-| C6 守卫 | §6 检查脚本 + 白名单 |
-
-C1 先行；C2–C5 依赖 C1 的类型；C6 最后（迁移完成后才能全绿）。
+| 工作项 | 内容 | 状态与主要落点 |
+|---|---|---|
+| P1（C1）规范 | `AdapterCapabilityProfile` 类型、校验、`resolveCapabilities` 收窄语义、`TurnCapabilities` 计算与缓存 | ✅ 已完成（`packages/im/adapter/src/capability-profile.ts`） |
+| P2（C2）prompt | §4 自动生成模板 + 自定义文本、`platform` / `scene` 段接线 | ✅ 已完成（`packages/im/agent/src/prompt/{platform-guidance.ts,third-party-guidance.ts}`） |
+| P3（C3）消费方迁移 | §5：工具 `requiresCapabilities`、出站、交互反馈、场景事实、沙箱 | ✅ 已完成（`packages/im/agent`、`packages/im/core`、`basic/cli`） |
+| P4（C4）事件映射包 | §3：共享包 + 各适配器映射迁出 core | ✅ 已完成（`@zhin.js/adapter-onebot-events`、`packages/im/core/src/side-event/`） |
+| P5（C5）适配器声明 | icqq 完整画像及全部 24 个适配器的 Profile 声明 | ✅ 已完成（`plugins/adapters/*/adapters/*/index.ts` 共 24 个适配器） |
+| P6（C6）守卫 | §6 检查脚本 + 白名单 | ✅ 已完成（`scripts/check-no-platform-branches.mjs`） |
 
 ## 验收标准
 
@@ -153,7 +151,7 @@ C1 先行；C2–C5 依赖 C1 的类型；C6 最后（迁移完成后才能全�
 5. OneBot / NapCat / icqq 的进出群、改名片等事件经共享包得到相同的标准事件。
 6. 适配器自定义 prompt 文本出现在 `platform` 段；第三方适配器的文本带 `external_content` 标注；超长被截断。
 
-## 待 Fin 确认的默认值
+## 已落地默认值
 
 - 共享映射包名：`@zhin.js/adapter-onebot-events`。
 - 适配器自定义 prompt 文本上限 600 字符。

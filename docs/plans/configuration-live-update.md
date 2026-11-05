@@ -6,7 +6,7 @@ sidebar: false
 
 # 配置按需生效技术方案
 
-日期：2026-11-03。状态：用户已批准，[#1139](https://github.com/zhinjs/zhin/issues/1139) 对应实现已完成本地检查与独立复审，尚未据此宣称远程 CI、发布或真实平台验收完成。调研代码基线：`447638ddc0e014425b532cbce56b07fb8607d795`；开工刷新至 `b708d40f154d3558eb90ef2a419b9a623c28ae3c`。本文记录当前实现边界；检查证据见第 15 节。行业依据见[配置来源与动态生效调研](./configuration-update-research.md)。
+日期：2026-11-03。状态：用户已批准，[#1139](https://github.com/zhinjs/zhin/issues/1139) 对应实现已完成本地检查与独立复审，尚未据此宣称远程 CI、发布或真实平台验收完成。调研代码基线：`447638ddc0e014425b532cbce56b07fb8607d795`；开工刷新至 `b708d40f154d3558eb90ef2a419b9a623c28ae3c`。本文记录当前实现边界；检查证据见第 15 节。行业依据见配置来源与动态生效调研。
 
 **Provider 目标架构同步说明（2026-11-04）**：本文保留固定 main `38e5c0bd` 的通用文件配置、Endpoint 资料和控制队列方案及原验收记录。下文涉及 YAML 模型目录、`configuration-version`、`ModelConfigurationAccess` 和模型专属文件 handler 的实现已被[Provider 目标架构](./ai-provider-target-architecture.md)替代，不是当前公开配置合同。模型 Service／Account／Profile／用途只经 inference 领域事务持久化；文件应用回执与模型图提交回执独立，不提供文件与图的原子合并提交。文件监听或配置命令不会写入模型图、凭据及个人绑定。现有控制队列不等待模型请求，在途 operation 保留其实际 generation、principal 与图，新回合读取新图。相应短控制阶段测试迁至[新模型配置边界](../../basic/cli/tests/plugin-runtime/inference/configuration.test.ts)，原模型文件分组与破坏性目录“待重启”策略不再生效。
 

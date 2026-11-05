@@ -38,7 +38,8 @@ import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 import { resolveToolTier } from './tool-tier.js';
-import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
+import { segmentKindForLayer } from '../prompt/prompt-assembly-registry.js';
+import type { PromptSegment } from '../prompt/segments/types.js';
 import { labelThirdPartyGuidance } from '../prompt/third-party-guidance.js';
 import { BOOTSTRAP_PROMPT_ORDER, fillPromptSlots } from '../prompt/system-prompt.js';
 import { hasNicknameSlot, turnAgentNickname } from '../context/self-profile.js';
@@ -289,7 +290,7 @@ async function* runInteractiveTurn(
     leakInspector,
   });
   const agentNickname = turnAgentNickname(context.turn, host.activeBinding?.nickname);
-  const promptRegistry = createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner, context.turn, agentNickname);
+  const turnSegments = createTurnPromptSegments(context.capabilities.promptSections, context.capabilities.owner, context.turn, agentNickname);
   const capabilityContext = buildCapabilityContext(
     context.capabilities.agents,
     context.capabilities.skills,
@@ -300,14 +301,13 @@ async function* runInteractiveTurn(
     // Only sender-neutral (scene-tier) capabilities stay in the cached system prefix, so master and
     // members speaking in the same group get identical system bytes. Sender-/selection-dependent
     // entries go to the current message's runtime-context tail; load/execute still enforce access.
-    promptRegistry.register('§11_capabilities', {
-      layer: 'system',
+    turnSegments.push({
+      id: '§11_capabilities',
       kind: context.turn.origin.kind === 'im' && hasNicknameSlot(capabilityContext.stable) ? 'scene' : 'platform',
-      title: 'Turn capabilities',
-      content: fillPromptSlots(capabilityContext.stable, agentNickname),
-      order: BOOTSTRAP_PROMPT_ORDER.task - 1,
+      weight: BOOTSTRAP_PROMPT_ORDER.task - 1,
       budgetOrder: context.turn.origin.kind === 'im' ? BOOTSTRAP_PROMPT_ORDER.chat : BOOTSTRAP_PROMPT_ORDER.task,
       retention: 'preferred',
+      inject: () => fillPromptSlots(capabilityContext.stable, agentNickname),
     });
   }
   const promptRuntime = Object.freeze({
@@ -320,8 +320,7 @@ async function* runInteractiveTurn(
     modelId: prompt.modelId,
     providerAlias: prompt.providerAlias,
     modelSdk: prompt.modelSdk,
-    registry: promptRegistry,
-    segments: context.capabilities.promptSegments,
+    segments: Object.freeze([...turnSegments, ...(context.capabilities.promptSegments ?? [])]),
     platformGuidanceExternal: context.capabilities.platformGuidanceExternal,
   });
 
@@ -644,6 +643,7 @@ async function* runScheduleTurn(
     injectionGuard: host.config.injectionGuard,
     ...hardGateOptions(host),
   });
+  const turnSegments = createTurnPromptSegments(context.capabilities.promptSections, context.capabilities.owner, context.turn, host.activeBinding?.nickname);
   const promptRuntime = Object.freeze({
     bootstrapContext: options.bootstrapContext,
     contextFiles: options.contextFiles,
@@ -652,8 +652,7 @@ async function* runScheduleTurn(
     modelId: prompt.modelId,
     providerAlias: prompt.providerAlias,
     modelSdk: prompt.modelSdk,
-    registry: createTurnPromptRegistry(context.capabilities.promptSections, context.capabilities.owner, context.turn, host.activeBinding?.nickname),
-    segments: context.capabilities.promptSegments,
+    segments: Object.freeze([...turnSegments, ...(context.capabilities.promptSegments ?? [])]),
   });
   const stream = host.promptController.scheduleStream({
     turnId: context.turn.identity.turnId,
@@ -722,33 +721,38 @@ async function* runScheduleTurn(
  * external_content. They still guide the model, but are labelled so their
  * text cannot claim owner authority or grant permissions.
  */
-function createTurnPromptRegistry(
+function createTurnPromptSegments(
   sections: readonly PromptSectionDescriptor[],
   agentOwner: PromptSectionDescriptor['owner'],
   turn: TurnContextView,
   nickname?: string,
-): PromptAssemblyRegistry {
-  const registry = new PromptAssemblyRegistry();
+): PromptSegment[] {
+  const seen = new Set<string>();
+  const segments: PromptSegment[] = [];
   for (const section of sections) {
+    if (seen.has(section.qualifiedName)) throw new Error(`Duplicate Prompt Section: ${section.qualifiedName}`);
+    seen.add(section.qualifiedName);
     const thirdParty = section.owner !== agentOwner;
-    registry.register(section.qualifiedName, {
-      layer: section.layer,
-      title: section.title,
-      content: fillPromptSlots(thirdParty ? labelThirdPartyGuidance(`plugin:${String(section.owner)}`, section.content) : section.content, nickname),
-      kind: turn.origin.kind === 'im' && hasNicknameSlot(section.content) ? 'scene' : undefined,
-      order: section.order,
-      placement: section.platforms?.length ? 'tail' : undefined,
+    const content = fillPromptSlots(
+      thirdParty ? labelThirdPartyGuidance(`plugin:${String(section.owner)}`, section.content) : section.content,
+      nickname,
+    );
+    const tail = Boolean(section.platforms?.length);
+    const kind = turn.origin.kind === 'im' && hasNicknameSlot(section.content)
+      ? 'scene'
+      : (tail ? 'platform' : segmentKindForLayer(section.layer));
+    const weight = tail ? section.order - 1_000_000 : section.order;
+    segments.push({
+      id: section.qualifiedName,
+      kind,
+      weight,
+      budgetOrder: section.order,
       retention: section.retention,
       maxChars: section.maxChars,
-      metadata: {
-        ...section.metadata,
-        owner: section.owner,
-        source: section.source,
-        generation: section.generation,
-      },
+      inject: () => content,
     });
   }
-  return registry;
+  return segments;
 }
 
 interface BufferedExecution {

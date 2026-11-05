@@ -29,6 +29,9 @@ export class Schema<S = any, T = S> {
             set(target, p: string | symbol, value: any, receiver: any): boolean {
                 return Reflect.set(_this, p, value, receiver);
             },
+            has(target, p: string | symbol): boolean {
+                return Reflect.has(_this, p) || Reflect.has(target, p);
+            },
         });
     }
     static fromJSON<S, T>(json: Schema.JSON<S, T>) {

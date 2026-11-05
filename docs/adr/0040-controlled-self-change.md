@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0040：受控自我进化——变更草稿、审批生效与重启回报
 
-状态：Accepted（2026-11-03，Fin 确认默认值，见文末「Fin 已确认的默认值」）
+状态：Implemented（Accepted，Slices A–F6 已全部落盘合入）
 
 实现：MVP 切片 A–E2 已合入 main（[#1058](https://github.com/zhinjs/zhin/pull/1058) / [#1062](https://github.com/zhinjs/zhin/pull/1062) / [#1064](https://github.com/zhinjs/zhin/pull/1064) / [#1069](https://github.com/zhinjs/zhin/pull/1069) / [#1071](https://github.com/zhinjs/zhin/pull/1071) / [#1072](https://github.com/zhinjs/zhin/pull/1072) / [#1075](https://github.com/zhinjs/zhin/pull/1075) / [#1076](https://github.com/zhinjs/zhin/pull/1076)）；#1051 收口切片 F1 / F2 / F4 / F5 已合入（[#1136](https://github.com/zhinjs/zhin/pull/1136) / [#1131](https://github.com/zhinjs/zhin/pull/1131) / [#1137](https://github.com/zhinjs/zhin/pull/1137) / [#1138](https://github.com/zhinjs/zhin/pull/1138)），F6 为本文与用户文档收口；F3（Console 详情 / diff 页与 IM 卡 diff 摘录）按 [#1142](https://github.com/zhinjs/zhin/issues/1142) 交付（见 §8a）。用户向说明见[让 Bot 改自己](../ai/self-change.md)，运行时细节见[默认行为规范](../ai/default-behavior.md)。
 
@@ -50,7 +50,7 @@ Fin 2026-10-27 拍板（#1030 / #1051）：
 状态只前进：`draft` → `trialing` → `ready` → `pending` → `approved` → `applying` → `verifying` → `applied`；旁路 `trial_failed` / `rejected` / `expired` / `rolled_back` / `failed`。
 
 - **可改的范围**（`files[]` 目标路径白名单）：插件约定目录（`commands/`、`middlewares/`、`handlers/`、`tools/`、`components/`、`skills/`、`agents/`，相对项目根或已安装的本地插件根）、根 `AGENTS.md`、`skills/**`。P0 B 名单里的根配置文件**不能**整文件写入，只能经 `configPatch`。
-- **永远不能改**：P0 A 名单（`node_modules`、lockfile、`.zhin/**`、`.env*` 等）；`ai.agent.toolHardGate`、`ai.agent.execApprovalMode`、`ai.agent.masterShell`、`ai.agent.toolHardGate.imApproval` 等**放松安全**的配置键——补丁里出现这些键直接拒绝，不进审批（「模型不能自解禁」）。#1051 F2 起，这份名单由宿主 schema 的 `x-zhin-config.security` 标记与集中常量 `SELF_CHANGE_SECURITY_CONFIG_KEYS` 维护（含执行安全 / 执行审批 / 注入防护 / 配额豁免 / 定时安全、`ai.decisions.approval`、`http.token(s)`、`a2a.workroomRemoteExecutors` 等，完整名单见[默认行为规范](../ai/default-behavior.md)），守卫单测保证 schema 标记的键都在拒绝集里；生效前按当前名单再复核一次。
+- **永远不能改**：P0 A 名单（`node_modules`、lockfile、`.zhin/**`、`.env*` 等）；`ai.agent.toolHardGate`、`ai.agent.execApprovalMode`、`ai.agent.masterShell`、`ai.agent.toolHardGate.imApproval` 等**放松安全**的配置键——补丁里出现这些键直接拒绝，不进审批（「模型不能自解禁」）。#1051 F2 起，这份名单由宿主 schema 的 `x-zhin-config.security` 标记与集中常量 `SELF_CHANGE_SECURITY_CONFIG_KEYS` 维护（含执行安全 / 执行审批 / 注入防护 / 配额豁免 / 定时安全、`ai.decisions.approval`、`http.token(s)`、`a2a.mailbox` 等，完整名单见[默认行为规范](../ai/default-behavior.md)），守卫单测保证 schema 标记的键都在拒绝集里；生效前按当前名单再复核一次。
 - **本地插件根**（#1051 F1）：「已安装的本地插件根」取当前 generation 源码归属中位于项目内、且真实路径不含 `node_modules` 的插件根；`node_modules` 里的插件不可写。
 - **`configPatch`**：沿用 Console `config:patch` 的白名单路径与 `expectedRevision` 语义（字段级，#1030 MVP「字段级配置补丁」在此落地）。
 - 依赖安装（`npm` 装插件）不在本期；需要新依赖的变更在预览里标为「需要人工安装」，不自动执行（后置，复用 Console `plugin:install` 事务）。
@@ -137,7 +137,7 @@ payload 记 `changeId`、文件列表（路径 + 摘要，不含内容）、影�
 | D | 审批：G6 `self` 卡（禁业务群结算，改投主人私聊）、Console 列表 / 批准 / 驳回 |
 | E | 生效与恢复：快照、先落盘、`RootRuntime.reload()` / 受控 exit 75、`recover()`、健康检查、回滚一次、失败急停、原会话回报 |
 
-A → B → C → D → E 依次依赖（以下为当时的计划，均已完成）；E 可先用只含 `none` / `generation` 的变更做集成测试，再补 `process` 重启路径。本 ADR 不含代码。
+A → B → C → D → E 依次依赖（当时按切片顺序合入，均已完成）。
 
 ### 8a. #1051 收口切片
 
@@ -148,7 +148,7 @@ A → B → C → D → E 依次依赖（以下为当时的计划，均已完成
 | F3 | 审批可见性：Console 详情 RPC `plugin.root.self-change-detail`（仅 `ops:approve`；逐文件 unified diff，全部文件合计 ≤ 64 KB，用完后其余文件标「未展示」；配置值脱敏、完整试跑检查）与 Console「自我变更」页、IM 卡 diff 摘录（≤ 40 行 / 2 KB + 盲批提示）与 skipped 检查名 | 已交付，[#1142](https://github.com/zhinjs/zhin/issues/1142)（Host RPC 与 IM 卡在本仓库；Console 页面随 `zhinjs/console` 配套 PR 发布） |
 | F4 | 起草权限（主人 + IM 审批人，其他人工具不可见）、全实例待审 ≤ 3 | 已合入 [#1137](https://github.com/zhinjs/zhin/pull/1137) |
 | F5 | Q2=B 残留 `approved` 1 小时时限（`resumeApproved`）；脚本化 harness eval（`packages/im/agent/evals/cases/self-change-*.case.ts`，6 例）与 `basic/cli` e2e（假守护进程 exit 75 → recover、回滚、急停、中途被杀、残留 `approved`） | 已合入 [#1138](https://github.com/zhinjs/zhin/pull/1138) |
-| F6 | ADR 转 Accepted、默认值表、默认行为规范与用户文档 | 本次 |
+| F6 | ADR 转 Accepted、默认值表、默认行为规范与用户文档 | ✅ 已完成 |
 
 ## 验收标准
 
@@ -161,7 +161,7 @@ A → B → C → D → E 依次依赖（以下为当时的计划，均已完成
 7. 变更终态后 `.zhin/changes/<id>/` 只剩 `change.json`，14 天后整个目录消失；超过配额的草稿被拒绝。
 8. 生效过程中强杀进程：重启后 `recover()` 接着完成校验或回滚，并完成回报。
 
-## Fin 已确认的默认值
+## 10. 已落地默认值
 
 2026-11-03 经 Fin 确认（#1051 Q1–Q9）。Q1 = 除下表 Q2 / Q3 / Q4 另行拍板外，当时 ADR 与实现中的默认值全部按现值接受。
 

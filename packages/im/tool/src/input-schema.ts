@@ -117,11 +117,15 @@ export function parseToolInputSchema<T>(
 }
 
 function projectExecutableSchema(schema: ExecutableToolInputSchema): unknown {
-  if ('toJSONSchema' in schema && typeof schema.toJSONSchema === 'function') {
-    return schema.toJSONSchema({ io: 'input' });
+  const candidate = schema as {
+    toJSONSchema?: (options?: Readonly<{ io?: 'input' }>) => unknown;
+    toJsonSchema?: () => unknown;
+  };
+  if (typeof candidate.toJSONSchema === 'function') {
+    return candidate.toJSONSchema({ io: 'input' });
   }
-  if ('toJsonSchema' in schema && typeof schema.toJsonSchema === 'function') {
-    return schema.toJsonSchema();
+  if (typeof candidate.toJsonSchema === 'function') {
+    return candidate.toJsonSchema();
   }
   return undefined;
 }

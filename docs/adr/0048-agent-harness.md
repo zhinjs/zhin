@@ -8,7 +8,7 @@ sidebar: false
 
 设计原则（Fin，2026-11-04）：大胆设计，现有架构可推翻、无效支线可删除，只要最终理想形态，不背历史包袱。
 
-取代：`docs/plans/workroom-group-collaboration-redesign.md`（含进度表）、`docs/plans/agent-workroom-orchestration-decision-map.md`、`docs/plans/agent-workroom-production-ledger.md`、`docs/plans/governed-delivery-workflow.md`，以及代码中的 Workroom Kernel 与五角色矩阵（ADR 0024 #9）。
+取代：原 Workroom 与治理交付计划文档（`workroom-group-collaboration-redesign.md`、`agent-workroom-orchestration-decision-map.md`、`agent-workroom-production-ledger.md`、`governed-delivery-workflow.md`，已于 H5 清理中删除），以及代码中的 Workroom Kernel 与五角色矩阵（ADR 0024 #9）。
 
 ## 0. 一句话
 
@@ -182,7 +182,7 @@ packages/im/
 
 | 阶段 | 状态 | 内容 | 结束时删除 |
 |---|---|---|---|
-| H0 | ✅ 已完成 | 本文定稿为 ADR；盘点引用（`docs/plans/agent-harness-h0-inventory.md`）；写第 7 节评测用例（`packages/im/agent/evals/cases/harness-*.case.ts`） | — |
+| H0 | ✅ 已完成 | 本文定稿为 ADR；盘点引用（临时盘点文档 `agent-harness-h0-inventory.md` 已于 H5 清理中删除）；写第 7 节评测用例（`packages/im/agent/evals/cases/harness-*.case.ts`） | — |
 | H1 | ✅ 已完成 | `packages/im/harness` 包：Mail、Mailbox、Engagement、Authority `attenuate()`、守恒预算池、Guard Kernel、Journal（`engagement_events`）与共享黑板重建 | — |
 | H2 | ✅ 已完成 | `agents/<name>/agent.json` `collaboration` 声明（`contacts` / `accepts_from` / `budget`）；协作工具 `ask / delegate / tell / follow_up / board_read / board_write / escalate` 与 `policy-facade` 统一准入 | `spawn/`、`subagent/`、deferred worker、detached task、standalone loop |
 | H3 | ✅ 已完成 | `HostMailbox` 与 `TimerScheduler` 统一收编 IM 入站、Cron、Heartbeat、Proactive 与 FollowUp 为 `human` / `timer` / `event` Mail | `assistant/` job engine、ingress 里的散落调度 |

@@ -116,8 +116,8 @@ turn 会跨代执行。
 - 🔄 **固定模型与重试**：聊天、多模态主回合与 standalone 固定本轮选定模型；失败仅按原配置在同一模型上重试，不跨模型降级。媒体感知保留显式配置的 perception 用途的 fallbacks 备用链
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
-- 📋 **精简系统提示词**：`PromptBuilder` 组装 Context、Style、Tools、Safety，并按需注入 Platform、Skills、Memory、Bootstrap
-- 🧩 **代际提示词能力**：`@zhin.js/prompt-section` 将插件上下文投影到当前 Runtime generation，`order` 与 `retention` 分离，并在 `systemPromptMaxChars` 预算下明确保留或失败
+- 📋 **精简系统提示词**：`PromptSegmentRegistry` 组装 `system` → `environment` → `role_rules` → `platform` → `scene` 五层文本分段，并在缓存断点处切分 `SystemPromptSplit`（ADR 0041 / 0042）
+- 🧩 **代际提示词能力**：插件通过 `promptSegmentToken`（或 `@zhin.js/prompt-section`）向当前 Runtime generation 贡献文本段，随 generation 发布与释放，并在 `systemPromptMaxChars` 预算下明确保留或失败
 - 🔌 **框架挂载**：Plugin Runtime (basic/cli) 装配 Agent 服务，通过 Scope+Token 提供
 - 📦 **上下文与记忆**：`ContextRepository`（`agent_messages`）、`AgentSessionStore`；聊天事件从 `ConversationEventStore` 游标消费
 - ⏰ **跟进与定时**：`FollowUpManager`、`PersistentCronEngine`、cron 工具
@@ -141,12 +141,16 @@ turn 会跨代执行。
 - 依赖 **@zhin.js/core**（IM 类型与消息链）与 **@zhin.js/ai**（`agentLoop`、Provider 抽象）
 - **zhin.js 1.1.x 稳定线**主包为 optional peer；运行时通过 `zhin.js/agent` 子路径或本包 import
 
-## PromptAssemblyRegistry
+## PromptSegmentRegistry 与提示词组装（ADR 0041 / 0042）
 
-`buildRichSystemPrompt()` 先创建内建分段，再合并当前 Runtime snapshot 中的
-Prompt Section 投影。身份由 owner 与本地名共同决定，重复身份会在组合时被拒绝，
-不存在暗中覆盖。最终内容按 `order` 呈现，并按 `retention` 和 `maxChars`
-执行预算策略。新回合使用新 generation，已开始回合保持原 generation。
+`buildRichSystemPromptParts()` 通过 `PromptSegmentRegistry` 按固定五层文本段顺序
+（`system` → `environment` → `role_rules` → `platform` → `scene`）与段内 `weight` 降序组装系统提示词，
+并在 `scene` 段之前设置缓存断点，将无时钟的稳定前缀与易变尾部切分为 `SystemPromptSplit`
+（`{ stable, scene }`）下发给 Provider 以复用前缀缓存。
+
+插件通过 `promptSegmentToken`（或 `@zhin.js/prompt-section`）注册文本段，随所在 generation 生命周期自动挂载与释放；
+重复 `id` 会在组装时被拒绝，最终内容按 `retention`、`budgetOrder` 和 `maxChars` 执行预算策略。
+`PromptAssemblyRegistry` 仅作为向文本段投影的 `@deprecated` 兼容适配层保留。
 
 ## 模块化架构（理想蓝图 8 模块）
 

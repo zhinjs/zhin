@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0042：压低首轮 token——固定前缀瘦身与少走回合
 
-状态：Proposed
+状态：Implemented（Accepted，Slices W1–W5 已全部落盘合入）
 
 关联：建立在 [ADR 0041](./0041-prompt-segments-and-message-headers.md)（段组装器、场景段在系统提示词末尾、消息头）之上，0041 落地后开工。
 
@@ -95,19 +95,17 @@ sidebar: false
 
 数字为估算，以 §8 实测为准。
 
-## 实现分工（ADR 合入后多 agent 并行，最后一个 PR）
+## 实施切片（已全部完成）
 
-| 工作项 | 内容 | 主要位置 |
+| 工作项 | 内容 | 状态与主要落点 |
 |---|---|---|
-| W1 稳定前缀 + 缓存断点 | §1 | `prompt/segments`、`packages/im/ai` 请求组装 |
-| W2 场景分档 + 发现即调用 | §2、§3 | `deferred-capability-plan.ts`、工具执行入口、`discover` |
-| W3 目录折叠 + 紧凑 schema | §4、§6 | 工具索引 / 技能目录渲染、`structured-reply` |
-| W4 bootstrap 作用域 | §5 | workspace prompt 解析、trace |
-| W5 少走回合 + 度量 | §7、§8 | agent loop、exploration budget、evals |
+| W1 稳定前缀 + 缓存断点 | §1 | ✅ 已完成（`packages/im/agent/src/prompt/assembly.ts` `SystemPromptSplit`、`packages/im/agent/src/prompt/segments/`、`packages/im/ai/src/llm/prompt-cache.ts`） |
+| W2 场景分档 + 发现即调用 | §2、§3 | ✅ 已完成（`packages/im/agent/src/plugin-runtime/{deferred-capability-plan.ts,tool-tier.ts}`、`packages/im/agent/src/core/missing-tool-resolver.ts`） |
+| W3 目录折叠 + 紧凑 schema | §4、§6 | ✅ 已完成（`packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts`、`packages/im/agent/src/prompt/structured-reply.ts`） |
+| W4 bootstrap 作用域 | §5 | ✅ 已完成（`packages/im/agent/src/bootstrap-scope.ts`） |
+| W5 少走回合 + 度量 | §7、§8 | ✅ 已完成（`packages/im/agent/src/core/exploration-budget.ts`、`packages/im/agent/evals/`） |
 
-W2 与 W3 都碰工具目录渲染，分工时按文件划清；其余互不依赖。
-
-## 待 Fin 确认的默认值
+## 已落地默认值
 
 - 群聊 / 普通私聊常驻工具清单（§2）。
 - 迭代上限：群聊 6、私聊 10、主人私聊 15。

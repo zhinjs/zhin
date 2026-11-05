@@ -4,7 +4,7 @@ sidebar: false
 
 # ADR 0038：连续输入合流——高热群与弹幕
 
-状态：Proposed
+状态：Implemented（Accepted，Slices A–E 已全部落盘，并由 ADR 0048 H3 统一收口至 HostMailbox）
 
 关联：[#1029](https://github.com/zhinjs/zhin/issues/1029) A 部分（B 部分「动态群管工作流」另起 ADR）；建立在 [#725](https://github.com/zhinjs/zhin/issues/725) 会话准入（`TurnAdmissionGate`）、[ADR 0036](./0036-controlled-landing-phase0.md) 审计与硬闸、[ADR 0037](./0037-controlled-landing-phase1-group-ops.md) 群运营闭环之上。#1029 的前置条件（0037 切片 B / C / E）已合入 main：[#1027](https://github.com/zhinjs/zhin/pull/1027)、[#1034](https://github.com/zhinjs/zhin/pull/1034)、[#1031](https://github.com/zhinjs/zhin/pull/1031)。
 
@@ -101,17 +101,15 @@ Fin 2026-10-27 拍板（#1029）：
 | `danmaku_window_picked` | 弹幕窗口选中一条 / 生成摘要 |
 | `hard_gate_scene_pending_cap` | 每群待审上限命中 |
 
-### 7. 实现切片（ADR 合入后按序做，每个切片单独 PR）
+### 7. 实现切片（已全部实现）
 
-| 切片 | 内容 |
-|---|---|
-| A | `TurnAdmissionGate` 合并等待位、窗口计时、进 / 不进窗口的判定、配置与审计码 |
-| B | `MergedPrincipal`：工具可见性取交集、`onBehalfOf` 复核、硬闸「每回合 1 卡 / 哈希去重 / 每群上限」 |
-| C | 合并 turn context 与回复形态（逐人 `@`），以及 `eval:chat` / `eval:agent` 合流用例 |
-| D | 发送前过时检查与防饿死 |
-| E | 弹幕模式（依赖 adapter 声明 `liveDanmaku`），先接 B 站直播 |
-
-A → B → C 有依赖，D 依赖 A，E 可在 A 之后并行。本 ADR 不含代码。
+| 切片 | 内容 | 状态与落点 |
+|---|---|---|
+| A | 合并等待位、窗口计时、进 / 不进窗口的判定、配置与审计码 | ✅ 已实现（原 `TurnAdmissionGate` 已在 ADR 0048 H3 中统一收口至 `@zhin.js/harness` `HostMailbox`：`mergeWindowMs` / `liveWindowMs` / `runInMailTurn`） |
+| B | `MergedPrincipal`：工具可见性取交集、`onBehalfOf` 复核、硬闸「每回合 1 卡 / 哈希去重 / 每群上限」 | ✅ 已实现（`packages/im/agent/src/turn/merged-principal.ts`） |
+| C | 合并 turn context 与回复形态（逐人 `@`），以及 `eval:chat` / `eval:agent` 合流用例 | ✅ 已实现（`packages/im/agent/src/turn/merged-turn-context.ts`） |
+| D | 发送前过时检查与防饿死 | ✅ 已实现（`packages/im/agent/src/turn/stale-reply.ts`） |
+| E | 弹幕模式（依赖 adapter 声明 `liveDanmaku`） | ✅ 已实现（`packages/im/agent/src/turn/live-turn-context.ts`，以及 `plugins/adapters/bilibili-live` `@zhin.js/adapter-bilibili-live` 与 `plugins/adapters/douyin-live` `@zhin.js/adapter-douyin-live`） |
 
 ## 验收标准
 
@@ -122,7 +120,7 @@ A → B → C 有依赖，D 依赖 A，E 可在 A 之后并行。本 ADR 不含�
 5. B 站直播弹幕 10 秒内 50 条：只回一条，无任何审批卡；审计可见候选数与选中项。
 6. 关闭 `merge.enabled` 后行为与现在（#725）逐条一致。
 
-## 待 Fin 确认的默认值
+## 7. 已落地默认值
 
 - 群聊合流默认开启（`merge.enabled: true`），私聊不合流。
 - 窗口 `quietMs 1500` / `maxWaitMs 6000` / `maxSenders 5`。

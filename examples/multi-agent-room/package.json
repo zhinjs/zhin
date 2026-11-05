@@ -21,12 +21,12 @@
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/adapter-sandbox": "workspace:*",
-    "ai": "^6.0.159",
-    "@ai-sdk/openai-compatible": "^2.0.42",
-    "zod": "^4.3.6"
+    "ai": "^7.0.44",
+    "@ai-sdk/openai-compatible": "^3.0.18",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "@zhin.js/cli": "workspace:*",
+    "typescript": "^6.0.3"
   }
 }
