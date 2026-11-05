@@ -1,6 +1,9 @@
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
-import { JobWorker } from '../../src/assistant/job-worker.js';
+import { TimerScheduler } from '../../src/assistant/timer-scheduler.js';
+import { ScheduleJobStore } from '../../src/assistant/job-store.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createNotificationRouter, type NotificationRouter } from '../../src/assistant/notification-router.js';
 import { createTaskExecutor } from '../../src/task-executor.js';
 import { ScheduleExecutionDomainImpl } from '../../src/schedule-domain/execution-domain.js';
@@ -80,8 +83,20 @@ export function createScheduleExecutionFixture(options: {
     await options.history?.observe(event);
   } };
   const executor = createTaskExecutor({ domain, router: options.router ?? createNotificationRouter({ resolveAdapter: () => undefined }), history, observations });
-  const worker = new JobWorker({ executor, history, queue: { maxRetries: 1, maxConcurrency: 1, defaultTimeoutMs: 5_000 } });
-  const dispose = async () => { await worker.stop(); await executor.dispose(); ownedObservations?.close(); };
+  const dataDir = mkdtempSync(join(tmpdir(), 'zhin-schedule-fixture-'));
+  const store = new ScheduleJobStore({ dataDir });
+  const scheduler = new TimerScheduler({
+    store,
+    due: { run: (job, runOptions) => executor.execute(job, { signal: runOptions.signal, attempt: runOptions.attempt }) },
+    history,
+    router: options.router ?? createNotificationRouter({ resolveAdapter: () => undefined }),
+    queue: { maxRetries: 1, maxConcurrency: 1, defaultTimeoutMs: 5_000 },
+  });
+  const worker = {
+    run: (job: ScheduleJob, runOptions?: Parameters<TimerScheduler['deliver']>[1]) => scheduler.deliver(job, runOptions),
+    stop: () => scheduler.stop(),
+  };
+  const dispose = async () => { await scheduler.stop(); scheduler.unload(); await executor.dispose(); ownedObservations?.close(); };
   return { worker, executor, observations, dispose, events, effects: () => effects, turns: () => turns };
 }
 

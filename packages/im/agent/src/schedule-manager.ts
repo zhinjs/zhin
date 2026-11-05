@@ -12,7 +12,7 @@ import {
   parseScheduleAddFromToolArgs,
   type ScheduleInvocationContext,
 } from './assistant/schedule-job-service.js';
-import type { ScheduleJobEngine } from './assistant/job-engine.js';
+import type { TimerScheduler } from './assistant/timer-scheduler.js';
 import type { TaskExecutionResult } from './task-executor.js';
 
 export const SCHEDULE_JOBS_FILENAME = 'schedule-jobs.json';
@@ -28,7 +28,7 @@ export interface ScheduleManager {
       plugin: string;
     }>;
   };
-  engine: ScheduleJobEngine | null;
+  engine: TimerScheduler | null;
   previewTask?: (
     prompt: string,
     context: ScheduleInvocationContext,

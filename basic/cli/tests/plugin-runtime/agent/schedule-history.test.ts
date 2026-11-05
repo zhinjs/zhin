@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { DatabaseScheduleHistoryRepository, FileScheduleHistoryRepository, ScheduleExecutionHistory, SCHEDULE_RUN_MODEL, SCHEDULE_ATTEMPT_MODEL,
   historyKey, scheduleHistoryCutoff, type ScheduleRunContext, type ScheduleAttemptIdentity, type ScheduleHistoryResult, type ScheduleHistoryRepository, type ScheduleHistoryEvent } from '@zhin.js/agent/runtime';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
-import { JobWorker, createTaskExecutor, createNotificationRouter } from '@zhin.js/agent';
+import { TimerScheduler, ScheduleJobStore, createTaskExecutor, createNotificationRouter } from '@zhin.js/agent';
 import { createScheduleAuditRecord } from '../../../../../packages/im/agent/src/schedule-domain/audit-logger.js';
 
 const OWNER = 100;
@@ -167,7 +167,7 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
     expect(JSON.stringify(detail)).not.toContain('UNPERSISTED_BODY_MUST_NOT_BE_CACHED');
   });
 
-  it.each(['start', 'terminal'] as const)('keeps one business execution when actual %s persistence fails through Worker and TaskExecutor', async failure => {
+  it.each(['start', 'terminal'] as const)('keeps one business execution when actual %s persistence fails through TimerScheduler and TaskExecutor', async failure => {
     const original = repository.save.bind(repository);
     let saves = 0;
     vi.spyOn(repository, 'save').mockImplementation(async record => {
@@ -184,16 +184,22 @@ describe.each(['file', 'sqlite'] as const)('execution history (%s)', mode => {
         return { success: true, output: 'Verified', durationMs: 1, toolsUsed: [], tokenUsage: { input: 1, output: 1 }, audit };
       },
     } });
-    const worker = new JobWorker({ executor, observations: store, queue: { maxRetries: 2 } });
+    const scheduler = new TimerScheduler({
+      store: new ScheduleJobStore({ dataDir: directory }),
+      due: { run: (job, opts) => executor.execute(job, { signal: opts.signal, attempt: opts.attempt }) },
+      observations: store,
+      router: createNotificationRouter({ resolveAdapter: () => undefined }),
+      queue: { maxRetries: 2 },
+    });
     try {
-      const task = await worker.run({ ...run('business').job, notify: { channel: 'silent' } });
+      const task = await scheduler.deliver({ ...run('business').job, notify: { channel: 'silent' } });
       await store.drain();
       expect(task.success).toBe(true);
       expect(effects).toBe(1);
       const page = await store.page({ limit: 10 });
       if (failure === 'terminal') expect(page.recordingHealth.incompleteCompletedRuns).toBe(1);
       else expect(page.recordingHealth.activeWriteFailures).toBe(0);
-    } finally { await worker.stop(); await executor.dispose(); }
+    } finally { await scheduler.stop(); scheduler.unload(); await executor.dispose(); }
   });
 
   it('saves only the approved result projection, scrubbing secrets and inline images without clipping the final text', async () => {

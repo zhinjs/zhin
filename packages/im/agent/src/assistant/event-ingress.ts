@@ -1,17 +1,19 @@
 /**
- * Assistant Event Ingress — 外部事件入队并触发 Job 执行（M2）
+ * Assistant Event Ingress — external events become due work on TimerScheduler
+ * (ADR 0048 H3 PR-3). Ad-hoc / jobId triggers run through the timer Mail path
+ * (TimerScheduler → timer Mail on the host Mailbox), not the removed JobWorker queue.
  */
 import { getLogger, formatCompact } from '@zhin.js/logger';
 import { type AssistantEventsConfig, resolveAssistantEventsConfig } from './config.js';
 import type { AssistantEventRequest, AssistantEventResult } from './event-types.js';
-import type { ScheduleJobEngine } from './job-engine.js';
+import type { TimerScheduler } from './timer-scheduler.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { JobAction, JobNotify } from './types.js';
 const logger = getLogger('assistant-event-ingress');
 
 export interface AssistantEventIngressOptions {
   store: ScheduleJobStore;
-  engine: ScheduleJobEngine;
+  engine: TimerScheduler;
   eventsConfig?: AssistantEventsConfig;
 }
 
@@ -22,7 +24,7 @@ interface RateBucket {
 
 export class AssistantEventIngress {
   private store: ScheduleJobStore;
-  private engine: ScheduleJobEngine;
+  private engine: TimerScheduler;
   private eventsCfg: ReturnType<typeof resolveAssistantEventsConfig>;
   private rateBuckets = new Map<string, RateBucket>();
 

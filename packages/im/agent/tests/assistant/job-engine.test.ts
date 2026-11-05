@@ -2,14 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ScheduleJobEngine } from '../../src/assistant/job-engine.js';
+import { TimerScheduler } from '../../src/assistant/timer-scheduler.js';
 import { createNotificationRouter } from '../../src/assistant/notification-router.js';
 import { ScheduleJobStore } from '../../src/assistant/job-store.js';
-import { JobWorker } from '../../src/assistant/job-worker.js';
 import type { TaskExecutor } from '../../src/task-executor.js';
 import { DEFAULT_HEARTBEAT_PROMPT } from '../../src/assistant/profile-types.js';
 
-describe('ScheduleJobEngine', () => {
+describe('TimerScheduler', () => {
   const router = createNotificationRouter({ resolveAdapter: () => undefined });
   let dataDir: string;
 
@@ -26,11 +25,10 @@ describe('ScheduleJobEngine', () => {
   it.each(['every', 'at'] as const)('keeps %s business completion separate from an unknown final delivery', async kind => {
     const execute = vi.fn(async () => ({ success: true, output: 'Completed result', responseText: 'Completed result',
       durationMs: 10, delivery: { status: 'unknown', channel: 'im' } }));
-    const worker = new JobWorker({ executor: { execute } as unknown as TaskExecutor });
     const store = new ScheduleJobStore({ dataDir });
     const sendIm = vi.fn(async () => {});
-    const engine = new ScheduleJobEngine({ store, worker, notifyOnFailure: true,
-      router: createNotificationRouter({ resolveAdapter: () => undefined, sendIm }) });
+    const engine = new TimerScheduler({ store, due: { run: (job, opts) => ({ execute } as unknown as TaskExecutor).execute(job, { signal: opts.signal, attempt: opts.attempt }) },
+      notifyOnFailure: true, router: createNotificationRouter({ resolveAdapter: () => undefined, sendIm }) });
     try {
       await engine.addJob({ id: 'completed-notice-unknown', enabled: true,
         schedule: kind === 'at' ? { kind: 'at', atMs: Date.now() + 60_000, deleteAfterRun: true } : { kind: 'every', everyMs: 60_000 },
@@ -43,10 +41,10 @@ describe('ScheduleJobEngine', () => {
       const stored = await store.getJob('completed-notice-unknown');
       if (kind === 'at') expect(stored).toBeUndefined();
       else expect(stored?.state).toMatchObject({ lastStatus: 'ok' });
-    } finally { engine.unload(); await worker.stop(); }
+    } finally { engine.unload(); await engine.stop(); }
   });
 
-  it('addJob 持久化并在 every 调度触发时调用 worker', async () => {
+  it('addJob 持久化并在 every 调度触发时调用 due handler', async () => {
     const execute = vi.fn(async () => ({
       success: true,
       responseText: 'ok',
@@ -54,9 +52,7 @@ describe('ScheduleJobEngine', () => {
     }));
     const executor = { execute } as unknown as TaskExecutor;
     const store = new ScheduleJobStore({ dataDir });
-    const worker = new JobWorker({ executor });
-
-    const engine = new ScheduleJobEngine({ store, worker, router });
+    const engine = new TimerScheduler({ store, due: { run: (job, opts) => executor.execute(job, { signal: opts.signal, attempt: opts.attempt }) }, router });
     await engine.load();
 
     await engine.addJob({
@@ -86,8 +82,7 @@ describe('ScheduleJobEngine', () => {
     const localizedRouter = createNotificationRouter({ resolveAdapter: () => undefined, sendIm });
     const execute = vi.fn(async () => ({ success: false, responseText: '', error: 'synthetic failure', durationMs: 1 }));
     const store = new ScheduleJobStore({ dataDir });
-    const worker = new JobWorker({ executor: { execute } as unknown as TaskExecutor });
-    const engine = new ScheduleJobEngine({ store, worker, router: localizedRouter, notifyOnFailure: true });
+    const engine = new TimerScheduler({ store, due: { run: (job, opts) => ({ execute } as unknown as TaskExecutor).execute(job, { signal: opts.signal, attempt: opts.attempt }) }, router: localizedRouter, notifyOnFailure: true });
     const notify = { channel: 'im', target: { channel: 'im', scene: {
       platform: 'qq', endpointKey: 'bot1', sceneId: 'group1', kind: 'group',
     } } } as const;
@@ -109,8 +104,7 @@ describe('ScheduleJobEngine', () => {
     }));
     const executor = { execute } as unknown as TaskExecutor;
     const store = new ScheduleJobStore({ dataDir });
-    const worker = new JobWorker({ executor });
-    const engine = new ScheduleJobEngine({ store, worker, router });
+    const engine = new TimerScheduler({ store, due: { run: (job, opts) => executor.execute(job, { signal: opts.signal, attempt: opts.attempt }) }, router });
 
     await engine.addJob({
       id: 'sched-owner',
@@ -144,8 +138,7 @@ describe('ScheduleJobEngine', () => {
     }));
     const executor = { execute } as unknown as TaskExecutor;
     const store = new ScheduleJobStore({ dataDir });
-    const worker = new JobWorker({ executor });
-    const engine = new ScheduleJobEngine({ store, worker, router });
+    const engine = new TimerScheduler({ store, due: { run: (job, opts) => executor.execute(job, { signal: opts.signal, attempt: opts.attempt }) }, router });
 
     await engine.addJob({
       id: 'sched-plan',
@@ -185,8 +178,7 @@ describe('ScheduleJobEngine', () => {
   ])('runs the default heartbeat only when HEARTBEAT.md has a task (%s)', async (_label, content, calls) => {
     const execute = vi.fn(async () => ({ success: true, responseText: 'HEARTBEAT_OK', durationMs: 1 }));
     const store = new ScheduleJobStore({ dataDir });
-    const worker = new JobWorker({ executor: { execute } as unknown as TaskExecutor });
-    const engine = new ScheduleJobEngine({ store, worker, router, workspaceDir: dataDir });
+    const engine = new TimerScheduler({ store, due: { run: (job, opts) => ({ execute } as unknown as TaskExecutor).execute(job, { signal: opts.signal, attempt: opts.attempt }) }, router, workspaceDir: dataDir });
     if (content !== undefined) await writeFile(join(dataDir, 'HEARTBEAT.md'), content);
     await engine.addJob({
       id: 'heartbeat',
@@ -203,8 +195,7 @@ describe('ScheduleJobEngine', () => {
   it('runs a heartbeat with a custom prompt even without HEARTBEAT.md', async () => {
     const execute = vi.fn(async () => ({ success: true, responseText: 'ok', durationMs: 1 }));
     const store = new ScheduleJobStore({ dataDir });
-    const worker = new JobWorker({ executor: { execute } as unknown as TaskExecutor });
-    const engine = new ScheduleJobEngine({ store, worker, router, workspaceDir: dataDir });
+    const engine = new TimerScheduler({ store, due: { run: (job, opts) => ({ execute } as unknown as TaskExecutor).execute(job, { signal: opts.signal, attempt: opts.attempt }) }, router, workspaceDir: dataDir });
     await engine.addJob({
       id: 'heartbeat',
       enabled: true,

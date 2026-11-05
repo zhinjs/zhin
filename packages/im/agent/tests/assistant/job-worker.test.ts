@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
-import { JobWorker } from '../../src/assistant/job-worker.js';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { TimerScheduler } from '../../src/assistant/timer-scheduler.js';
+import { ScheduleJobStore } from '../../src/assistant/job-store.js';
+import { createNotificationRouter } from '../../src/assistant/notification-router.js';
 import type { ScheduleJob } from '../../src/assistant/types.js';
 import type { TaskExecutionResult, TaskExecutor } from '../../src/task-executor.js';
 
@@ -16,7 +21,28 @@ function scheduleJob(id: string): ScheduleJob {
   };
 }
 
-describe('JobWorker queue ownership', () => {
+function createScheduler(executor: TaskExecutor, queue?: { maxConcurrency?: number; maxRetries?: number; defaultTimeoutMs?: number }, dataDir?: string) {
+  const store = new ScheduleJobStore({ dataDir: dataDir! });
+  const router = createNotificationRouter({ resolveAdapter: () => undefined });
+  return new TimerScheduler({
+    store,
+    due: { run: (job, opts) => executor.execute(job, { signal: opts.signal, attempt: opts.attempt }) },
+    router,
+    ...(queue ? { queue } : {}),
+  });
+}
+
+describe('TimerScheduler queue ownership', () => {
+  let dataDir: string;
+
+  beforeEach(async () => {
+    dataDir = await mkdtemp(join(tmpdir(), 'zhin-timer-queue-'));
+  });
+
+  afterEach(async () => {
+    await rm(dataDir, { recursive: true, force: true });
+  });
+
   it('enforces one owned queue across concurrent runs', async () => {
     const releases: Array<() => void> = [];
     let active = 0;
@@ -35,13 +61,14 @@ describe('JobWorker queue ownership', () => {
         tokenUsage: { input: 0, output: 0 },
       };
     });
-    const worker = new JobWorker({
-      executor: { execute } as TaskExecutor,
-      queue: { maxConcurrency: 1, maxRetries: 0, defaultTimeoutMs: 5_000 },
-    });
+    const scheduler = createScheduler(
+      { execute } as TaskExecutor,
+      { maxConcurrency: 1, maxRetries: 0, defaultTimeoutMs: 5_000 },
+      dataDir,
+    );
 
-    const first = worker.run(scheduleJob('first'));
-    const second = worker.run(scheduleJob('second'));
+    const first = scheduler.deliver(scheduleJob('first'));
+    const second = scheduler.deliver(scheduleJob('second'));
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
     expect(maxActive).toBe(1);
 
@@ -51,7 +78,8 @@ describe('JobWorker queue ownership', () => {
     releases.shift()?.();
 
     await expect(Promise.all([first, second])).resolves.toHaveLength(2);
-    await worker.stop();
+    await scheduler.stop();
+    scheduler.unload();
   });
 
   it('uses the owned queue without an enable switch', async () => {
@@ -67,16 +95,17 @@ describe('JobWorker queue ownership', () => {
         tokenUsage: { input: 0, output: 0 },
       };
     });
-    const worker = new JobWorker({ executor: { execute } as TaskExecutor });
+    const scheduler = createScheduler({ execute } as TaskExecutor, undefined, dataDir);
 
-    const runs = Array.from({ length: 4 }, (_, index) => worker.run(scheduleJob(String(index))));
+    const runs = Array.from({ length: 4 }, (_, index) => scheduler.deliver(scheduleJob(String(index))));
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(3));
     releases.splice(0).forEach(release => release());
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(4));
     releases.splice(0).forEach(release => release());
 
     await expect(Promise.all(runs)).resolves.toHaveLength(4);
-    await worker.stop();
+    await scheduler.stop();
+    scheduler.unload();
   });
 
   it('settles running and queued runs when stopped', async () => {
@@ -90,19 +119,21 @@ describe('JobWorker queue ownership', () => {
       });
       throw new Error('unreachable');
     });
-    const worker = new JobWorker({
-      executor: { execute } as TaskExecutor,
-      queue: { maxConcurrency: 1, maxRetries: 0, defaultTimeoutMs: 5_000 },
-    });
+    const scheduler = createScheduler(
+      { execute } as TaskExecutor,
+      { maxConcurrency: 1, maxRetries: 0, defaultTimeoutMs: 5_000 },
+      dataDir,
+    );
 
-    const running = worker.run(scheduleJob('running'));
-    const queued = worker.run(scheduleJob('queued'));
+    const running = scheduler.deliver(scheduleJob('running'));
+    const queued = scheduler.deliver(scheduleJob('queued'));
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
-    const stopping = worker.stop();
+    const stopping = scheduler.stop();
 
     await expect(running).resolves.toMatchObject({ success: false });
     await expect(queued).resolves.toMatchObject({ success: false });
     await stopping;
     expect(operationSettled).toBe(true);
+    scheduler.unload();
   });
 });

@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { SnapshotStore, createCapabilitySlot, createSnapshotView, rootPluginId, projectLocaleToken, PluginOutboundHost,
   userLocalePreferencesToken, type Locale, type TokenId, type FeatureId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import { AdapterIndex, Adapter, endpointSpec, createEndpointSpecification, type Endpoint, adapterFeatureId, defineAdapter, endpointEventGatewayToken, type EndpointSendRequest } from '@zhin.js/adapter';
@@ -7,7 +10,7 @@ import { ImRuntime, type Message, type SendContent, type OutboundEnvelope } from
 import { createOutboundHost } from '../../../../../basic/cli/src/plugin-runtime/outbound-host-installer.js';
 import { createRuntimeProactiveOutbound } from '../../../../../basic/cli/src/plugin-runtime/agent/runtime-factory.js';
 import { EndpointDeliveryError, type DeliveryReceipt } from '@zhin.js/im-contract';
-import { createNotificationRouter, createTaskExecutor, JobWorker } from '../../../agent/src/index.js';
+import { createNotificationRouter, createTaskExecutor, TimerScheduler, ScheduleJobStore } from '../../../agent/src/index.js';
 import { createScheduleAuditRecord } from '../../../agent/src/schedule-domain/audit-logger.js';
 import type { ScheduleJob } from '../../../agent/src/assistant/types.js';
 
@@ -122,20 +125,26 @@ it('keeps a real partial unified-send receipt separate from completed scheduled 
       return receipt;
     } });
   const executor = createTaskExecutor({ domain: { execute }, router });
-  const worker = new JobWorker({ executor, queue: { maxRetries: 1 } });
+  const dataDir = await mkdtemp(join(tmpdir(), 'zhin-outbound-locale-'));
+  const scheduler = new TimerScheduler({
+    store: new ScheduleJobStore({ dataDir }),
+    due: { run: (job, opts) => executor.execute(job, { signal: opts.signal, attempt: opts.attempt }) },
+    router,
+    queue: { maxRetries: 1 },
+  });
   const job: ScheduleJob = { id: 'partial-job', enabled: true, schedule: { kind: 'every', everyMs: 60_000 },
     action: { kind: 'agent', prompt: 'Fixture' }, notify: { channel: 'im', target: { channel: 'im', scene: {
       platform: f.row.endpoint.adapter, endpointKey: f.row.endpoint.id, kind: 'private', sceneId: 'recipient',
     } } }, createdAt: 1, updatedAt: 1, state: {} };
   try {
-    const result = await worker.run(job);
+    const result = await scheduler.deliver(job);
     expect(result).toMatchObject({ success: true, output: 'Already completed task', durationMs: 7,
       delivery: { status: 'partial', deliveryUnknown: true, messages: [{ id: 'confirmed-first', conversation: {
         endpoint: f.row.endpoint, kind: 'private', id: 'recipient',
       } }] } });
     expect(execute).toHaveBeenCalledTimes(1);
     expect(f.sent).toHaveLength(1);
-  } finally { await worker.stop(); await executor.dispose(); await f.stop(); }
+  } finally { await scheduler.stop(); scheduler.unload(); await executor.dispose(); await rm(dataDir, { recursive: true, force: true }); await f.stop(); }
 });
 
 it('observes the same successful proactive receipt without letting observer failure repeat or reject its send', async () => {

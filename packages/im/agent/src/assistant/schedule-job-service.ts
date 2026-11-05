@@ -1,6 +1,6 @@
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { FestivalName } from '@zhin.js/kernel';
-import type { ScheduleJobEngine } from './job-engine.js';
+import type { TimerScheduler } from './timer-scheduler.js';
 import { parseScheduleJobCreator, scheduleJobCreatorFromPrincipal } from './job-creator.js';
 import { parseExecutionPlanFromArgs } from './schedule-execution.js';
 import { parseJobNotify } from './notification-router.js';
@@ -37,7 +37,7 @@ export type ScheduleInvocationContext = Pick<
 >;
 
 export async function addScheduleJob(
-  engine: ScheduleJobEngine,
+  engine: TimerScheduler,
   input: ScheduleAddInput,
 ): Promise<ScheduleJob> {
   const actionPrompt = input.executionPlan?.prompt?.trim() || input.prompt;

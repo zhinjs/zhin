@@ -439,10 +439,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `htmlRenderer.aiTextAsImage` | boolean \| object | no | — | Optional plain-text to image conversion before send. |
 | `assistant` | object | no | — | Scheduled jobs, event ingress, and failure notifications. |
 | `assistant.enabled` | boolean \| string | no | — | 启用统一 JobStore（默认 false，Stable 行为不变） |
-| `assistant.queue` | object \| null | no | — | Schedule execution queue（重试 / 并发 / 死信） |
-| `assistant.queue.maxConcurrency` | number \| string \| null | no | — | Schedule execution 并发上限 |
-| `assistant.queue.maxRetries` | number \| string \| null | no | — | — |
-| `assistant.queue.defaultTimeoutMs` | number \| string \| null | no | — | — |
 | `assistant.defaults` | object \| null | no | — | — |
 | `assistant.defaults.notify` | object \| object \| object \| object \| null | no | — | 未显式指定 notify 时的默认投递目标（M3） |
 | `assistant.defaults.notifyOnFailure` | boolean \| string | no | — | Job 失败时是否通知（默认 false） |

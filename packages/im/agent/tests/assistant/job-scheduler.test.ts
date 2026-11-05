@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { registerJobSchedule, isRuntimeSchedulable } from '../../src/assistant/job-scheduler.js';
+import { registerJobSchedule, isRuntimeSchedulable } from '../../src/assistant/timer-scheduler.js';
 import { ScheduleEngine } from '@zhin.js/kernel';
 import type { ScheduleJob } from '../../src/assistant/types.js';
 
-describe('assistant job-scheduler', () => {
+describe('assistant timer-scheduler registration', () => {
   it('isRuntimeSchedulable 识别 every/at/cron', () => {
     expect(isRuntimeSchedulable({
       id: 'a', enabled: true, schedule: { kind: 'every', everyMs: 1000 },

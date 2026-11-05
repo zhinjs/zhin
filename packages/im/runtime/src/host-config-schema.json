@@ -3600,38 +3600,6 @@
           ],
           "description": "启用统一 JobStore（默认 false，Stable 行为不变）"
         },
-        "queue": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": true,
-          "properties": {
-            "maxConcurrency": {
-              "type": [
-                "number",
-                "string",
-                "null"
-              ],
-              "description": "Schedule execution 并发上限"
-            },
-            "maxRetries": {
-              "type": [
-                "number",
-                "string",
-                "null"
-              ]
-            },
-            "defaultTimeoutMs": {
-              "type": [
-                "number",
-                "string",
-                "null"
-              ]
-            }
-          },
-          "description": "Schedule execution queue（重试 / 并发 / 死信）"
-        },
         "defaults": {
           "type": [
             "object",
