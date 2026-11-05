@@ -7,8 +7,8 @@ import type { ImRuntime } from '@zhin.js/core/runtime';
 import {
   AIService,
   AssistantEventIngress,
-  JobWorker,
-  ScheduleJobEngine,
+  TimerScheduler,
+  createTimerMailDueHandler,
   bootstrapAssistantHome,
   createNotificationRouter,
   createScheduleJobStoreFromConfig,
@@ -132,14 +132,13 @@ export function createAssistantScheduleRuntime(
     defaultLocale: locale,
     defaultNotify,
   });
-  const jobWorker = new JobWorker({
-    executor,
-    queue: assistantCfg.queue,
-    history,
-  });
-  const jobEngine = new ScheduleJobEngine({
+  const timerScheduler = new TimerScheduler({
     store,
-    worker: jobWorker,
+    due: createTimerMailDueHandler({
+      mailbox: () => agent.hostMailbox,
+      executor,
+    }),
+    history,
     notifyOnFailure: defaults.notifyOnFailure,
     router: notificationRouter,
     defaultNotify,
@@ -150,18 +149,18 @@ export function createAssistantScheduleRuntime(
     scheduleFeature: {
       getStatus: () => [],
     },
-    engine: jobEngine,
+    engine: timerScheduler,
     previewTask: (prompt: string, context: ScheduleInvocationContext, options?: { activityFeedback?: boolean }) =>
       executor.preview(prompt, context, options),
   };
 
   let assistantRuntime: AssistantRuntimeHandle | null = null;
   let stopped = false;
-  let start = async () => { if (!stopped) await jobEngine.load(); };
+  let start = async () => { if (!stopped) await timerScheduler.load(); };
   if (assistantCfg.enabled) {
     const ingress = new AssistantEventIngress({
       store,
-      engine: jobEngine,
+      engine: timerScheduler,
       eventsConfig: assistantCfg.events,
     });
     assistantRuntime = {
@@ -170,11 +169,11 @@ export function createAssistantScheduleRuntime(
         handle: (body) => ingress.handle(body),
       },
       jobs: {
-        list: () => jobEngine.listJobs(),
-        add: (job) => jobEngine.addJob(job),
-        remove: (id) => jobEngine.removeJob(id),
-        pause: (id) => jobEngine.pauseJob(id),
-        resume: (id) => jobEngine.resumeJob(id),
+        list: () => timerScheduler.listJobs(),
+        add: (job) => timerScheduler.addJob(job),
+        remove: (id) => timerScheduler.removeJob(id),
+        pause: (id) => timerScheduler.pauseJob(id),
+        resume: (id) => timerScheduler.resumeJob(id),
       },
     };
     start = async () => {
@@ -192,7 +191,7 @@ export function createAssistantScheduleRuntime(
       } catch (error) {
         logger.warn(formatCompact({ op: 'assistant_profile_load_fail', error: error instanceof Error ? error.message : String(error) }));
       }
-      if (!stopped) await jobEngine.load();
+      if (!stopped) await timerScheduler.load();
     };
     logger.info(formatCompact({
       op: 'agent_host_assistant',
@@ -214,8 +213,8 @@ export function createAssistantScheduleRuntime(
     // assistant / schedule-manager 注册随 generation lifecycle 反注册（provide 时挂接）
     dispose: async () => {
       stopped = true;
-      jobEngine.unload();
-      await jobWorker.stop();
+      timerScheduler.unload();
+      await timerScheduler.stop();
       await executor.dispose();
       history.close();
     },

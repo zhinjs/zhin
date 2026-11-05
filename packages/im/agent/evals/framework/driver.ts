@@ -15,7 +15,8 @@ import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot
 import { defineAgentPromptSection, type PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { ToolIndex, type ToolAvailabilityContext } from '@zhin.js/tool';
 import { collaborationIdle } from '../../src/collaboration/registry.js';
-import { HostMailbox } from '../../src/collaboration/host-mailbox.js';
+import { DEFAULT_ENGAGEMENT_BUDGET, HostMailbox } from '../../src/collaboration/host-mailbox.js';
+import type { BudgetAmounts } from '@zhin.js/harness';
 import { runInMailTurn } from '../../src/collaboration/mail-turn-context.js';
 import { normalizeMailboxConfig } from '../../src/turn/mailbox-config.js';
 import type { TurnAdmission } from '../../src/turn/turn-admission.js';
@@ -242,10 +243,19 @@ async function runInWorkspace(
       const releaseTrace = registerTurnTrace(trace);
       // A merged / superseding batch answers every mail in it.
       const admitted = admission.batch.length > 1 ? { ...message, text: admission.text } : message;
+      // Timer Mail carries its own engagement grant; stop the entry turn when it runs out (invariant 2).
+      const allowance = admission.mail.body.kind === 'timer' ? admission.harness.remaining(admission.mail) : undefined;
+      const budgetStop = allowance ? new AbortController() : undefined;
+      const turnSignal = budgetStop ? AbortSignal.any([admission.signal, budgetStop.signal]) : admission.signal;
+      let modelRequests = 0;
+      let usageTokens = 0;
+      const budgetExhausted = (): boolean => Boolean(allowance && (
+        modelRequests >= allowance.modelCalls || (allowance.tokens > 0 && usageTokens >= allowance.tokens)
+      ));
       const { turn, tools: turnTools } = buildTurn(definition, admitted, index, tools, native.available, approval, outbound, workspace, trace, {
-        signal: admission.signal,
+        signal: turnSignal,
         // A superseded / stopped turn never sends; a stale reply is dropped (ADR 0038 §4).
-        blocked: () => admission.signal.aborted || admission.staleCheck().kind === 'discard',
+        blocked: () => turnSignal.aborted || admission.staleCheck().kind === 'discard',
         delivered: () => admission.markDelivered(),
       });
       const context: AgentTurnExecutionContext = {
@@ -278,8 +288,48 @@ async function runInWorkspace(
           runWithAgentTurnConfiguration({ models, mediaPerception }, () => executeAgentTurn(turn, () => engine.run(context), (event) => {
             events.push(event);
             if (isTurnTerminalEvent(event)) terminals.push(event);
+            if (!allowance || !budgetStop) return;
+            if (event.type === 'iteration_start') {
+              if (modelRequests > 0 && budgetExhausted() && !budgetStop.signal.aborted) {
+                budgetStop.abort(Object.assign(new Error('budget exhausted'), { code: 'budget_exceeded' }));
+              }
+              return;
+            }
+            if (event.type !== 'usage') return;
+            modelRequests += 1;
+            usageTokens += event.usage.totalTokens;
+            if ((modelRequests > allowance.modelCalls || (allowance.tokens > 0 && usageTokens > allowance.tokens)) && !budgetStop.signal.aborted) {
+              budgetStop.abort(Object.assign(new Error('budget exhausted'), { code: 'budget_exceeded' }));
+            }
           })));
-        status = admission.signal.aborted ? 'cancelled' : 'completed';
+        if (budgetStop?.signal.aborted) {
+          // Still report what finished: the next unused entry text step is the turn's reply
+          // (scripted eval stand-in for the actor-turn budget_exceeded report-back).
+          const entrySteps = definition.script.filter((step) => step.actor === undefined);
+          const leftover = entrySteps.slice(modelRequests);
+          const report = leftover.find((step): step is { text: string } => 'text' in step && typeof step.text === 'string');
+          if (report && !outbound.includes(report.text)) {
+            outbound.push(report.text);
+            admission.markDelivered();
+          }
+          if (modelRequests > 0 || usageTokens > 0) {
+            await admission.harness.charge(admission.mail, { modelCalls: modelRequests, tokens: usageTokens });
+          }
+          const exceeded = Object.freeze({
+            type: 'budget_exceeded' as const,
+            budget: 'modelCalls',
+            usage: Object.freeze({
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: usageTokens,
+            }),
+          });
+          events.push(exceeded);
+          terminals.push(exceeded);
+          status = 'cancelled';
+        } else {
+          status = admission.signal.aborted ? 'cancelled' : 'completed';
+        }
       } finally {
         admission.release(status);
         // Delegated work outlives the entry turn; wait for it (and the result turns it wakes) before observing.
@@ -305,10 +355,23 @@ async function runInWorkspace(
         for (let tick = 0; tick < 8; tick += 1) await new Promise<void>((resolve) => setImmediate(resolve));
       }
     };
+    const runTimerInbound = async (inbound: EvalTimerInbound, index: number): Promise<void> => {
+      const admission = await deliverTimerMailInbound(mailbox, inbound);
+      if (admission.kind !== 'run') return;
+      const owner = inbound.owner;
+      const message: EvalInboundMessage = {
+        text: inbound.content,
+        sender: { id: owner.id, roles: [...(owner.roles ?? ['user'])] },
+      };
+      await runAdmitted(message, index, admission);
+    };
     for (const [index, entry] of inboundList.entries()) {
-      // ADR 0048 H3 Gap A: timer Mail delivery is PR-3; the hook still throws.
-      if (isTimerInbound(entry)) deliverTimerMailInbound(entry);
-      const message = entry as EvalInboundMessage;
+      if (isTimerInbound(entry)) {
+        await runTimerInbound(entry, index);
+        while (spawned.length) await spawned.shift();
+        continue;
+      }
+      const message = entry;
       if (message.deliver) continue;
       await runInbound(message, index);
       while (spawned.length) await spawned.shift();
@@ -745,14 +808,45 @@ async function hostBootstrapText(root: string): Promise<string> {
   return parts.join('\n\n');
 }
 
-/** Stable phrase in the error raised for timer inbound until ADR 0048 H3 timer Mail delivery lands. */
+/**
+ * @deprecated Gap A closed in ADR 0048 H3 PR-3; kept so older tests that imported the phrase still resolve.
+ */
 export const TIMER_INBOUND_NOT_SUPPORTED = 'ADR 0048 H3 HOOK GAP: timer Mail inbound not supported';
 
+function engagementBudget(partial: Partial<BudgetAmounts> | undefined): BudgetAmounts {
+  if (!partial) return DEFAULT_ENGAGEMENT_BUDGET;
+  return Object.freeze({
+    modelCalls: partial.modelCalls ?? DEFAULT_ENGAGEMENT_BUDGET.modelCalls,
+    tokens: partial.tokens ?? DEFAULT_ENGAGEMENT_BUDGET.tokens,
+    wallMs: partial.wallMs ?? DEFAULT_ENGAGEMENT_BUDGET.wallMs,
+    sideEffects: partial.sideEffects ?? DEFAULT_ENGAGEMENT_BUDGET.sideEffects,
+  });
+}
+
 /**
- * ADR 0048 H3 Gap A hook: a timer inbound must reach its target actor as Mail, not through the
- * human Venue path. Runtime timer Mail delivery is not wired yet, so this always throws.
+ * ADR 0048 H3 Gap A: post a timer inbound as `timer` Mail onto the target actor's Mailbox
+ * (lane `timer:<timerId>`), not through the human Venue path. The owner is the engagement
+ * principal and the Venue reply target.
  */
-export function deliverTimerMailInbound(inbound: EvalTimerInbound): never {
-  const target = inbound.target ?? 'entry agent';
-  throw new Error(`${TIMER_INBOUND_NOT_SUPPORTED} (timer "${inbound.timerId}" for ${target}); keep the case skipped until timer Mail delivery is wired`);
+export async function deliverTimerMailInbound(
+  mailbox: HostMailbox,
+  inbound: EvalTimerInbound,
+): Promise<TurnAdmission> {
+  const owner = inbound.owner;
+  const roles = owner.roles ?? [];
+  const isMaster = roles.includes('master');
+  const ownerSession = `im:${PLATFORM}:${ENDPOINT}:private:${owner.id}`;
+  return mailbox.admit({
+    sessionKey: `timer:${inbound.timerId}`,
+    senderId: owner.id,
+    text: inbound.content,
+    plainText: true,
+    kind: 'timer',
+    timerId: inbound.timerId,
+    ...(inbound.target ? { entry: inbound.target } : {}),
+    isMaster,
+    trust: isMaster ? 'master' : 'trusted',
+    venue: Object.freeze({ kind: 'turn', id: ownerSession }),
+    ...(inbound.budget ? { budget: engagementBudget(inbound.budget) } : {}),
+  });
 }

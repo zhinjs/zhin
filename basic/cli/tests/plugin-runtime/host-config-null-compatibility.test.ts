@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HOST_CONFIG_SCHEMA, parsePluginConfigSchema } from '../../../../packages/im/runtime/src/config-composer.js';
-import { resolveAssistantDefaultsConfig, resolveAssistantEventsConfig, resolveAssistantQueueConfig } from '../../../../packages/im/agent/src/assistant/config.js';
+import { ASSISTANT_QUEUE_MIGRATION_HINT, resolveAssistantConfig, resolveAssistantDefaultsConfig, resolveAssistantEventsConfig, resolveAssistantQueueConfig } from '../../../../packages/im/agent/src/assistant/config.js';
 import { resolveAssistantHomeConfig } from '../../../../packages/im/agent/src/assistant/home-config.js';
 import { validateModelRuntimeConfig } from '../../../../packages/im/agent/src/model-runtime/validation.js';
 import { DEPRECATED_AGENT_CONFIG_KEYS } from '../../../../packages/im/agent/src/config/deprecated-agent-keys.js';
@@ -33,13 +33,17 @@ describe('Host schema null compatibility with actual configuration consumers', (
     }
   });
 
-  it('keeps explicit null MCP entries and Assistant queue blocks accepted by the existing resolvers', () => {
-    const input = { ai: { mcpServers: null }, assistant: { queue: null } };
+  it('keeps explicit null MCP entries accepted by the existing resolvers', () => {
+    const input = { ai: { mcpServers: null }, assistant: {} };
     expect(parsePluginConfigSchema(HOST_CONFIG_SCHEMA, input)).toEqual({ value: input, errors: [] });
     expect(resolveAgentHostMcpServers(input.ai as never)).toEqual([]);
-    expect(resolveAssistantQueueConfig(input.assistant.queue as never)).toEqual({
+    expect(resolveAssistantQueueConfig(undefined)).toEqual({
       maxConcurrency: 3, maxRetries: 2, defaultTimeoutMs: 120_000,
     });
+  });
+
+  it('rejects assistant.queue at resolve (ADR 0048 H3 PR-3)', () => {
+    expect(() => resolveAssistantConfig({ queue: { maxRetries: 1 } })).toThrow(ASSISTANT_QUEUE_MIGRATION_HINT);
   });
 
   it('retains the nullish defaults of the actual AI routing, perception and recall helpers', () => {
@@ -52,10 +56,11 @@ describe('Host schema null compatibility with actual configuration consumers', (
   });
 
   it('retains Assistant nested nullish defaults without resolving credentials or loading files', () => {
-    const queue = { maxConcurrency: null, maxRetries: null, defaultTimeoutMs: null };
     const home = { aliases: null, watch: null, policy: { confirmServices: null, allowedServiceDomains: null }, debounceMs: null };
-    expect(parsePluginConfigSchema(HOST_CONFIG_SCHEMA, { assistant: { queue, home, defaults: null, events: null } }).errors).toEqual([]);
-    expect(resolveAssistantQueueConfig(queue as never)).toEqual(resolveAssistantQueueConfig(undefined));
+    expect(parsePluginConfigSchema(HOST_CONFIG_SCHEMA, { assistant: { home, defaults: null, events: null } }).errors).toEqual([]);
+    expect(resolveAssistantQueueConfig(undefined)).toEqual({
+      maxConcurrency: 3, maxRetries: 2, defaultTimeoutMs: 120_000,
+    });
     expect(resolveAssistantHomeConfig(home as never)).toEqual(resolveAssistantHomeConfig(undefined));
     expect(resolveAssistantDefaultsConfig(null as never)).toEqual(resolveAssistantDefaultsConfig(undefined));
     expect(resolveAssistantEventsConfig(null as never)).toEqual(resolveAssistantEventsConfig(undefined));

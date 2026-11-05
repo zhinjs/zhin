@@ -640,10 +640,11 @@ export {
 export type { ScheduleManager, ScheduleToolRegistration } from './schedule-manager.js';
 
 export {
-  ScheduleJobEngine,
+  TimerScheduler,
+  createTimerMailDueHandler,
   ScheduleJobStore,
   AssistantEventIngress,
-  JobWorker,
+  ASSISTANT_QUEUE_MIGRATION_HINT,
   createScheduleJobStoreFromConfig,
   getScheduleJobsPath,
   resolveAssistantConfig,

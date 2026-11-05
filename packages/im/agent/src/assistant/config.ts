@@ -31,10 +31,18 @@ export interface AssistantQueueConfig {
   defaultTimeoutMs?: number;
 }
 
+/** Startup error when the removed key is still set (ADR 0048 H3 PR-3). */
+export const ASSISTANT_QUEUE_MIGRATION_HINT =
+  'assistant.queue was removed (ADR 0048 H3): timer retries / concurrency / dead-letter are internal;'
+  + ' delete assistant.queue from config (Mailbox policy lives under ai.agent.mailbox).';
+
 export interface AssistantConfig {
   /** 启用统一 JobStore（默认 false，Stable 行为不变） */
   enabled?: boolean;
-  /** Schedule execution queue（重试 / 并发 / 死信） */
+  /**
+   * @deprecated Removed in ADR 0048 H3 PR-3. Presence fails startup with
+   * {@link ASSISTANT_QUEUE_MIGRATION_HINT}; retries stay internal to TimerScheduler.
+   */
   queue?: AssistantQueueConfig;
   defaults?: AssistantDefaultsConfig;
   profile?: import('./profile-types.js').AssistantProfileConfig;
@@ -57,9 +65,11 @@ export function resolveAssistantQueueConfig(
 }
 
 export function resolveAssistantConfig(raw?: AssistantConfig): AssistantConfig & { enabled: boolean } {
+  if (raw && Object.prototype.hasOwnProperty.call(raw, 'queue') && raw.queue != null) {
+    throw new Error(ASSISTANT_QUEUE_MIGRATION_HINT);
+  }
   return {
     enabled: raw?.enabled === true,
-    queue: raw?.queue,
     defaults: raw?.defaults,
     profile: raw?.profile,
     home: raw?.home,

@@ -4,7 +4,7 @@ export { createFakeClock } from './fake-clock.js';
 export type { EvalClock } from './fake-clock.js';
 export { defineEvalCase, validateEvalCase, loadEvalCases, isTimerInbound } from './fixture.js';
 export type {
-  EvalCase, EvalAgentFixture, EvalExpectations, EvalInboundMessage, EvalImage, EvalTool, EvalTag, EvalTermination, EvalApprovalBehaviour, EvalNativeTool, EvalLiveMode, EvalMemoryEntry,
+  EvalCase, EvalAgentFixture, EvalExpectations, EvalInbound, EvalInboundMessage, EvalTimerInbound, EvalImage, EvalTool, EvalTag, EvalTermination, EvalApprovalBehaviour, EvalNativeTool, EvalLiveMode, EvalMemoryEntry,
   EvalSelfChangeFixture, EvalSelfChangeFile, EvalSelfChangeStatus,
 } from './fixture.js';
 export { runEvalCase, deliverTimerMailInbound, TIMER_INBOUND_NOT_SUPPORTED } from './driver.js';

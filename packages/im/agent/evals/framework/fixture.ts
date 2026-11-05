@@ -14,6 +14,7 @@ import type { EvalLiveCheck } from './live-checks.js';
 import type { MemoryEntryUpsertInput } from '@zhin.js/ai';
 import type { ToolInputJsonObjectSchema } from '@zhin.js/tool';
 import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
+import type { BudgetAmounts } from '@zhin.js/harness';
 
 export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'quota' | 'multimodal' | 'collaboration';
 
@@ -68,9 +69,8 @@ export interface EvalInboundMessage {
 
 /**
  * ADR 0048 H3 Gap A: a timer firing delivered as Mail to an actor instead of a human IM message.
- * The driver does not deliver these yet (see `TIMER_INBOUND_NOT_SUPPORTED`); cases using it stay skipped
- * until timer Mail delivery is wired.
- * TODO(ADR 0048 H3): add `budget` once the runtime engagement budget type is exported.
+ * The driver posts these via {@link deliverTimerMailInbound} onto the target actor's Mailbox
+ * (`lane: timer:<timerId>`), not through the human Venue path.
  */
 export interface EvalTimerInbound {
   readonly kind: 'timer';
@@ -80,6 +80,11 @@ export interface EvalTimerInbound {
   readonly target?: string;
   /** Reminder owner: the principal and the Venue reply target. Required. */
   readonly owner: Readonly<{ id: string; roles?: readonly string[] }>;
+  /**
+   * Engagement budget grant carried by the timer Mail (ADR 0048 §3.4 invariant 2).
+   * Omitted keys fall back to the host mailbox default for that key.
+   */
+  readonly budget?: Partial<BudgetAmounts>;
 }
 
 /** One inbound event: a human IM message (default) or a timer Mail. */
@@ -97,6 +102,19 @@ function timerInboundProblems(inbound: EvalTimerInbound, index: number): string[
   if (!inbound.owner?.id?.trim()) problems.push(`${label} needs an owner with an id`);
   if (inbound.target !== undefined && !inbound.target.trim()) problems.push(`${label} target must not be empty`);
   if ('text' in inbound) problems.push(`${label} uses content, not text`);
+  if (inbound.budget !== undefined) {
+    if (!inbound.budget || typeof inbound.budget !== 'object' || Array.isArray(inbound.budget)) {
+      problems.push(`${label} budget must be an object`);
+    } else {
+      for (const [key, value] of Object.entries(inbound.budget)) {
+        if (!['modelCalls', 'tokens', 'wallMs', 'sideEffects'].includes(key)) {
+          problems.push(`${label} budget has unknown key "${key}"`);
+        } else if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+          problems.push(`${label} budget.${key} must be a non-negative number`);
+        }
+      }
+    }
+  }
   return problems;
 }
 

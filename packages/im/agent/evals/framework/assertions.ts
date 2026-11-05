@@ -33,11 +33,17 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
       fail('workspaceFiles', content === null ? `${file} must not exist, but it does` : `${file} is ${actual === null ? 'missing' : JSON.stringify(actual.slice(0, 120))}; expected ${JSON.stringify(content.slice(0, 120))}${actual === null ? '' : ` (first difference at offset ${firstDiff(actual, content)})`}`);
     }
   }
+  // Collaboration tools (ask / escalate / …) execute outside the fixture
+  // tool wrappers, so they land as turn events rather than executedTools.
+  const ran = new Set(executed);
+  for (const event of run.events) {
+    if (event.type === 'tool_result') ran.add(event.toolName);
+  }
   for (const name of expect.toolsCalled ?? []) {
-    if (!executed.includes(name)) fail('toolsCalled', `expected tool "${name}" to run; ran [${list(executed)}]`);
+    if (!ran.has(name)) fail('toolsCalled', `expected tool "${name}" to run; ran [${list([...ran])}]`);
   }
   for (const name of expect.toolsNotCalled ?? []) {
-    if (executed.includes(name)) fail('toolsNotCalled', `expected tool "${name}" not to run, but it ran`);
+    if (ran.has(name)) fail('toolsNotCalled', `expected tool "${name}" not to run, but it ran`);
   }
   for (const needle of expect.outboundContains ?? []) {
     if (!outboundText.includes(needle)) fail('outboundContains', `outbound text is missing "${needle}"`);

@@ -3,13 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AssistantEventIngress } from '../../src/assistant/event-ingress.js';
-import { ScheduleJobEngine } from '../../src/assistant/job-engine.js';
+import { TimerScheduler } from '../../src/assistant/timer-scheduler.js';
 import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 
 describe('AssistantEventIngress', () => {
   let dataDir: string;
   let store: ScheduleJobStore;
-  let engine: ScheduleJobEngine;
+  let engine: TimerScheduler;
   let ingress: AssistantEventIngress;
 
   beforeEach(async () => {
@@ -17,7 +17,7 @@ describe('AssistantEventIngress', () => {
     store = new ScheduleJobStore({ dataDir });
     engine = {
       runJobNow: vi.fn(async () => {}),
-    } as unknown as ScheduleJobEngine;
+    } as unknown as TimerScheduler;
     ingress = new AssistantEventIngress({
       store,
       engine,

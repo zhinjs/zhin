@@ -4,7 +4,7 @@
  * (#725, ADR 0038), now produced by {@link HostMailbox} from the harness
  * Mailbox and its inbox policy.
  */
-import type { Harness, Mail, TrustLevel, VenueRef } from '@zhin.js/harness';
+import type { BudgetAmounts, Harness, Mail, TrustLevel, VenueRef } from '@zhin.js/harness';
 import type { TurnAccessContext } from './turn-ingress.js';
 
 export { DEFAULT_MAX_QUEUED_TURNS, LIVE_WINDOW_MAX_MESSAGES } from '@zhin.js/harness';
@@ -46,10 +46,17 @@ export interface TurnAdmissionRequest {
   readonly venue?: VenueRef;
   /** An ordinary group message that neither @s nor replies to the bot: never admitted (`not_addressed`). */
   readonly unaddressed?: boolean;
-  /** Body kind of the root Mail. `event` = a scene event (H3, Q3). Default `human`. */
-  readonly kind?: 'human' | 'event';
+  /** Body kind of the root Mail. `event` = scene event (H3, Q3); `timer` = due timer (H3 PR-3). Default `human`. */
+  readonly kind?: 'human' | 'event' | 'timer';
   /** Scene event name for `kind: 'event'`. */
   readonly event?: string;
+  /** Timer id for `kind: 'timer'` (lane is `timer:<timerId>`). */
+  readonly timerId?: string;
+  /**
+   * Engagement budget for this root Mail (ADR 0048 §3.4). When set, overrides
+   * the mailbox default so a timer Mail can carry its own grant.
+   */
+  readonly budget?: BudgetAmounts;
 }
 
 /** One sender's messages in a merged turn, in arrival order. */

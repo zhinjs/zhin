@@ -51,14 +51,22 @@ export {
   buildScheduleJobFromRoutine,
 } from './profile-loader.js';
 
-export { isRuntimeSchedulable } from './job-scheduler.js';
+export {
+  isRuntimeSchedulable,
+  jobScheduleToResolved,
+  jobPrompt,
+  registerJobSchedule,
+  TimerScheduler,
+} from './timer-scheduler.js';
+export type { ScheduleDispose, TimerDueHandler, TimerSchedulerOptions } from './timer-scheduler.js';
+export { createTimerMailDueHandler } from './timer-due.js';
 export { validateHomeMcpServer, listConfiguredMcpServerNames, isHomeMcpMode } from './home-mcp-bridge.js';
-export type { ScheduleDispose } from './job-scheduler.js';
 
 export { checkHomeToolAccess, toHomeOwnerSignal, toHomeDenyError } from './home-policy.js';
 
 export {
   DEFAULT_EVENTS_CONFIG,
+  ASSISTANT_QUEUE_MIGRATION_HINT,
   resolveAssistantConfig,
   resolveAssistantDefaultsConfig,
   resolveAssistantEventsConfig,
@@ -84,7 +92,6 @@ export {
   SCHEDULE_JOBS_VERSION,
 } from './types.js';
 
-export { jobPrompt } from './job-utils.js';
 export {
   scheduleJobCreatorFromPrincipal,
   parseScheduleJobCreator,
@@ -113,11 +120,6 @@ export {
 } from './job-store.js';
 export type { ScheduleJobStoreOptions } from './job-store.js';
 
-export { JobWorker } from './job-worker.js';
-export type { JobWorkerOptions } from './job-worker.js';
-
-export { ScheduleJobEngine } from './job-engine.js';
-export type { ScheduleJobEngineOptions } from './job-engine.js';
 
 export {
   createNotificationRouter,

@@ -93,14 +93,16 @@ describe('Host configuration field coverage', () => {
   it('declares Speech, Assistant and MCP/A2A inputs as structured objects', () => {
     for (const path of [
       ['speech', 'stt', 'provider'], ['speech', 'tts', 'headers'],
-      ['assistant', 'queue', 'maxConcurrency'], ['assistant', 'defaults', 'notify'],
+      // assistant.queue removed (ADR 0048 H3): retries/concurrency are internal to TimerScheduler
+      ['assistant', 'defaults', 'notify'],
       ['assistant', 'home', 'policy', 'requireMaster'], ['assistant', 'events', 'allowedSources'],
       ['mcp', 'allowUnauthenticatedLocalhost'], ['a2a', 'workroomCallbacks', 'bindings'],
       ['a2a', 'workroomRemoteExecutors', 'maxResponseBytes'],
     ]) expect(field(path)).toBeTypeOf('object');
+    expect(field(['assistant']).properties).not.toHaveProperty('queue');
     check({ speech: { stt: { enabled: true, provider: 'openai', apiKey: '${KEY}' },
       tts: { enabled: '${TTS_ON}', provider: 'azure', region: 'fixture', subscriptionKey: '${KEY}', rate: '+10%' } },
-    assistant: { enabled: true, queue: { maxConcurrency: '${CONCURRENCY}' },
+    assistant: { enabled: true,
       defaults: { notify: { channel: 'silent' } }, home: { aliases: { lamp: 'light.fixture' }, restToken: '${HOME_KEY}' } },
     mcp: { enabled: true, path: '/mcp', token: '${KEY}' },
     a2a: { enabled: '${A2A_ON}', workroomCallbacks: { bindings: [{ endpointId: 'fixture', credential: { source: 'config', value: '${KEY}' } }] } },
@@ -132,8 +134,8 @@ describe('Host configuration field coverage', () => {
     { ai: { multimodal: { perception: null }, memory: { semantic: null } } },
     { ai: { memory: { semantic: { recall: null } } } },
     { ai: { memory: { semantic: { recall: { topK: null, maxTokens: null } } } } },
-    { assistant: { queue: null, defaults: null, profile: null, home: null, events: null } },
-    { assistant: { queue: { maxConcurrency: null, maxRetries: null, defaultTimeoutMs: null }, defaults: { notify: null } } },
+    { assistant: { defaults: null, profile: null, home: null, events: null } },
+    { assistant: { defaults: { notify: null } } },
     { assistant: { profile: { file: null }, home: { aliases: null, watch: null, debounceMs: null, policy: null }, events: { rateLimitPerMinute: null } } },
     { assistant: { home: { policy: { confirmServices: null, allowedServiceDomains: null } } } },
     { speech: { stt: null, tts: null } },

@@ -439,10 +439,6 @@ outline: [2, 3]
 | `htmlRenderer.aiTextAsImage` | boolean \| object | 否 | — | 发送前可选的纯文本转图片。 |
 | `assistant` | object | 否 | — | 调度任务、事件入口和失败通知。 |
 | `assistant.enabled` | boolean \| string | 否 | — | 启用统一 JobStore（默认 false，Stable 行为不变） |
-| `assistant.queue` | object \| null | 否 | — | Schedule execution queue（重试 / 并发 / 死信） |
-| `assistant.queue.maxConcurrency` | number \| string \| null | 否 | — | Schedule execution 并发上限 |
-| `assistant.queue.maxRetries` | number \| string \| null | 否 | — | — |
-| `assistant.queue.defaultTimeoutMs` | number \| string \| null | 否 | — | — |
 | `assistant.defaults` | object \| null | 否 | — | — |
 | `assistant.defaults.notify` | object \| object \| object \| object \| null | 否 | — | 未显式指定 notify 时的默认投递目标（M3） |
 | `assistant.defaults.notifyOnFailure` | boolean \| string | 否 | — | Job 失败时是否通知（默认 false） |
