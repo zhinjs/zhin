@@ -54,9 +54,9 @@ export const defaultCommandPrefixResolver: CommandPrefixResolver = (message, sna
     | undefined;
   if (!config) return '';
   const adapters = snapshot.projections.get(adapterFeatureId);
+  const endpointCapabilityId = message.conversation.endpoint.id as CapabilityId;
   const desiredEndpointId = isAdapterIndex(adapters)
-    ? adapters.adapterForEndpoint(message.conversation.endpoint.id as CapabilityId)
-        ?.find(message.conversation.endpoint.id as CapabilityId)?.desired.endpointId
+    ? adapters.endpointEntry(endpointCapabilityId)?.desired.endpointId
     : undefined;
   const candidateIds = new Set(
     [message.endpointId, desiredEndpointId].filter((v): v is string => typeof v === 'string' && v.length > 0),

@@ -171,6 +171,13 @@ export class AdapterIndex {
   adapterForEndpoint(id: CapabilityId): AdapterInstance | undefined {
     return this.#adapters.find(adapter => adapter.find(id) !== undefined);
   }
+  endpointEntry(id: CapabilityId): ReturnType<AdapterInstance['find']> {
+    for (const adapter of this.#adapters) {
+      const entry = adapter.find(id);
+      if (entry !== undefined) return entry;
+    }
+    return undefined;
+  }
   acquire(id: CapabilityId, signal?: AbortSignal, expectedClient?: unknown): EndpointChildLease {
     const adapter = this.#adapters.find(value => value.find(id));
     if (!adapter) throw new EndpointDeliveryError('endpoint_not_found', 'Unknown Adapter Endpoint', 'not_sent');
