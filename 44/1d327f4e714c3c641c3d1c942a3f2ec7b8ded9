@@ -1,0 +1,28 @@
+packages/im/agent/evals/cases/harness-mailbox-admission-gate.case.ts
+  h_b680f75345178a 6,16,22
+packages/im/agent/evals/cases/harness-mailbox-interrupt-stale.case.ts
+  h_b680f75345178a 6-8,16,23
+packages/im/agent/evals/framework/assertions.ts
+  h_b680f75345178a 149
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 17-21,135-137,141,202,224-240,243-250,269,277-284,292-311,344-345,362,403,408,411
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 52-64,144-145
+packages/im/agent/evals/framework/ingress.ts
+  h_b680f75345178a 4-11,14,17-18,24,93,106-109,113-120,150,171,188-189,198,203
+packages/im/agent/evals/framework/scripted-model.ts
+  h_b680f75345178a 167-172,231,294-297
+packages/im/agent/evals/ingress.eval.ts
+  h_b680f75345178a 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "441d327f4e714c3c641c3d1c942a3f2ec7b8ded9",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
