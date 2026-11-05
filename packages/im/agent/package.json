@@ -206,10 +206,6 @@
         "types": "./lib/memory/index.d.ts",
         "import": "./lib/memory/index.js"
       },
-      "./subagent": {
-        "types": "./lib/subagent/index.d.ts",
-        "import": "./lib/subagent/index.js"
-      },
       "./context": {
         "types": "./lib/context/index.d.ts",
         "import": "./lib/context/index.js"
