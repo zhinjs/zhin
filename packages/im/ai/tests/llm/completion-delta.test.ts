@@ -96,3 +96,70 @@ describe('completion deltas', () => {
     expect(complete).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ADR 0047 S2/D3 partial-stream auth does not replay', () => {
+  const context = { systemPrompt: '', messages: [] };
+  const authError = (code: 401 | 403) => Object.assign(new Error(`HTTP ${code} Unauthorized`), { statusCode: code });
+
+  it.each([401, 403] as const)('a %s after partial reply is offered surfaces once without regenerating the call', async code => {
+    const runtime = new SyntheticCompletionRuntime(), failure = authError(code);
+    let streams = 0;
+    runtime.registerApiProvider({ api: 'ai-sdk', stream: () => {
+      streams++;
+      return createAssistantMessageEventStream(async push => {
+        push({ type: 'text_delta', text: 'partial' });
+        throw failure;
+      });
+    } });
+    let offered = false;
+    const chunks: string[] = [], events: ProviderResilienceEvent[] = [];
+    const port = createResilientCompletionPort(runtime, {
+      config: { maxRetries: 3, requestTimeoutMs: 0 }, sleep: async () => {}, onEvent: event => { events.push(event); },
+    });
+    const rejected = await port.complete(model, context, {
+      onTextDelta: value => { offered = true; chunks.push(value); },
+      retryAllowed: () => !offered,
+    }).catch(error => error);
+    expect(streams).toBe(1);
+    expect(chunks).toEqual(['partial']);
+    expect(rejected).not.toBeInstanceOf(ProviderRequestError);
+    expect(rejected?.message ?? String(rejected)).toContain(String(code));
+    expect(events.filter(event => event.type === 'retry')).toEqual([]);
+  });
+
+  it('a late 401 after tools already ran is not retried even with retry budget left', async () => {
+    const toolRuns = vi.fn();
+    let toolsRan = false;
+    const complete = vi.fn(async () => { toolRuns(); toolsRan = true; throw authError(401); });
+    const port = createResilientCompletionPort({ complete, completeSimple: complete }, {
+      config: { maxRetries: 5, requestTimeoutMs: 0 }, sleep: async () => {},
+    });
+    await expect(port.completeSimple(model, context, { retryAllowed: () => !toolsRan })).rejects.toMatchObject({ statusCode: 401 });
+    expect(complete).toHaveBeenCalledOnce();
+    expect(toolRuns).toHaveBeenCalledOnce();
+  });
+
+  it('auth stays non-retryable at the request level even before anything is offered', async () => {
+    const failure = authError(401);
+    const complete = vi.fn(async () => { throw failure; });
+    const events: ProviderResilienceEvent[] = [];
+    const port = createResilientCompletionPort({ complete, completeSimple: complete }, {
+      config: { maxRetries: 3, requestTimeoutMs: 0 }, sleep: async () => {}, onEvent: event => { events.push(event); },
+    });
+    const rejected = await port.complete(model, context, { retryAllowed: () => true }).catch(error => error);
+    expect(complete).toHaveBeenCalledOnce();
+    expect(rejected).toBe(failure);
+    expect(events.filter(event => event.type === 'retry')).toEqual([]);
+  });
+
+  it('a transient failure before any offer still gets request-level retry (control)', async () => {
+    const complete = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('HTTP 503'), { statusCode: 503 }))
+      .mockResolvedValueOnce(message);
+    const port = createResilientCompletionPort({ complete, completeSimple: complete }, {
+      config: { maxRetries: 2, requestTimeoutMs: 0 }, sleep: async () => {},
+    });
+    expect(await port.complete(model, context, { retryAllowed: () => true })).toBe(message);
+    expect(complete).toHaveBeenCalledTimes(2);
+  });
+});
