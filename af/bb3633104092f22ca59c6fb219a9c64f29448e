@@ -1,0 +1,14 @@
+basic/database/src/dialects/sqlite.ts
+  h_b680f75345178a 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "afbb3633104092f22ca59c6fb219a9c64f29448e",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
