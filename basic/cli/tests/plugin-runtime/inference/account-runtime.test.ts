@@ -6,14 +6,60 @@ import type {
 } from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { DatabaseInferenceRepository } from '../../../src/plugin-runtime/inference/repository.js';
-import { InferenceAuthenticationError, InferenceCredentialStore } from '../../../src/plugin-runtime/inference/credentials.js';
+import { InferenceAuthenticationError, InferenceCredentialStore, type EnvironmentExpressionSource } from '../../../src/plugin-runtime/inference/credentials.js';
 import { HostAccountRuntime } from '../../../src/plugin-runtime/inference/account-runtime.js';
+import { expandEnvironmentValue } from '@zhin.js/runtime';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
+
+it.each([':-', ':='])('stores a private %s expression offline and resolves missing, empty or present variables at authorization', async operator => {
+  for (const environment of [undefined, '', 'actual-environment-key']) {
+    const fixture = await setup('api-key');
+    const expression = '${SYNTHETIC' + operator + 'private-fallback}';
+    fixture.resolveSource.mockImplementation(source => typeof source === 'string' ? undefined
+      : expandEnvironmentValue(source.expression, () => environment));
+    try {
+      await fixture.host.putKey({ account: fixture.account, key: expression, expectedRevision: 0, authContractVersion: '1' });
+      expect(fixture.resolveSource).not.toHaveBeenCalled();
+      expect((await fixture.store.read(fixture.account))?.payload).toMatchObject({ source: { kind: 'environment-expression', expression } });
+      expect((await fixture.store.read(fixture.account))?.payload).not.toHaveProperty('key');
+      expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request()))
+        .toMatchObject({ token: environment || 'private-fallback' });
+      expect(fixture.resolveSource).toHaveBeenCalledOnce();
+      const record = await fixture.repo.readCredential({ rootId: '/root', accountId: 'account' });
+      expect(JSON.stringify(record)).not.toMatch(/private-fallback|actual-environment-key|SYNTHETIC/);
+      expect(JSON.stringify(await fixture.host.status(fixture.account))).not.toMatch(/private-fallback|SYNTHETIC/);
+    } finally { await fixture.close(); }
+  }
+});
+
+it.each(['${SYNTHETIC:-fallback', 'prefix-${SYNTHETIC:-fallback}', '${SYNTHETIC:-${NESTED}}', '${ONE:-a}${TWO:-b}'])('rejects malformed or unsupported private expression %s before storing', async key => {
+  const fixture = await setup('api-key');
+  try {
+    await expect(fixture.host.putKey({ account: fixture.account, key, expectedRevision: 0, authContractVersion: '1' })).rejects.toMatchObject({ code: 'not-authorized' });
+    expect(await fixture.store.read(fixture.account)).toBeUndefined();
+    expect(fixture.resolveSource).not.toHaveBeenCalled();
+  } finally { await fixture.close(); }
+});
+
+it('retains material identity when an environment expression resolves to a different key after restart', async () => {
+  const fixture = await setup('api-key');
+  fixture.resolveSource.mockImplementation(() => fixture.environment.key);
+  try {
+    await fixture.host.putKey({ account: fixture.account, key: '${SYNTHETIC:-fallback}', expectedRevision: 0, authContractVersion: '1' });
+    expect(await fixture.host.createPort(fixture.execution).authorize(fixture.request())).toMatchObject({ token: 'environment-key-one' });
+    fixture.environment.key = 'different-real-identity';
+    const rebuilt = fixture.runtime();
+    try {
+      await expect(rebuilt.createPort(fixture.execution).authorize(fixture.request())).rejects.toMatchObject({ code: 'identity-change' });
+      expect((await fixture.store.read(fixture.account))?.payload).toMatchObject({ status: 'reauthorize', source: { kind: 'environment-expression' } });
+    } finally { await rebuilt.close(); }
+  } finally { await fixture.close(); }
+});
 async function setup(method: 'api-key' | 'oauth' | 'none', source?: string) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-account-'));
   const db = createDatabaseHost({ dialect: 'sqlite', filename: join(directory, 'state.sqlite') });
@@ -39,7 +85,7 @@ async function setup(method: 'api-key' | 'oauth' | 'none', source?: string) {
   const lease = (): ProviderDriverLease => ({ reference: service.driver, definition, release });
   const store = new InferenceCredentialStore({ directory: join(directory, 'secrets'), repository: repo });
   const environment = { key: 'environment-key-one' };
-  const resolveSource = vi.fn(() => environment.key);
+  const resolveSource = vi.fn<(source: string | EnvironmentExpressionSource) => string | undefined>(() => environment.key);
   const runtime = () => new HostAccountRuntime({ hostOwnerId: 'host', repository: repo, credentials: store, drivers: { acquire: async () => lease() },
     fetch: () => vi.fn(async () => new Response('{}')),
     allowTarget: ({ target }) => target.origin === 'https://provider.example', resolveSource, now: () => 1000 });
@@ -254,7 +300,7 @@ it('persists unknown external refresh outcomes without retrying on a later or re
     try {
       await expect(rebuilt.createPort(fixture.execution).authorize(fixture.request())).rejects.toMatchObject({ code: 'outcome-unknown' });
       expect(fixture.refresh).toHaveBeenCalledOnce();
-      expect(await rebuilt.status(fixture.account)).toEqual({ status: 'uncertain', revision: 3 });
+      expect(await rebuilt.status(fixture.account)).toEqual({ status: 'uncertain', revision: 3, failure: { kind: 'transport-unknown' } });
     } finally { await rebuilt.close(); }
   } finally { await fixture.close(); }
 });

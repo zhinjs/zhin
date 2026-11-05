@@ -1,3 +1,4 @@
+import type { EnvironmentExpressionSource } from './credentials.js';
 import { aiProviderDefinitionsToken } from '@zhin.js/ai-provider';
 import { SnapshotStore, rootPluginId, type SnapshotState } from '@zhin.js/plugin-runtime';
 import type { PersonalSessionOwner } from '@zhin.js/agent/personal-session';
@@ -8,7 +9,7 @@ export interface HeadlessInferenceHostOptions {
   readonly projectRoot: string;
   readonly database: DatabaseHostConfig;
   /** Explicit process port. This helper never loads dotenv or another CLI's authorization cache. */
-  readonly resolveSource: (reference: string) => string | undefined | Promise<string | undefined>;
+  readonly resolveSource: (reference: string | EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
   readonly personalOwners?: readonly PersonalSessionOwner[];
   /** Metadata-only migration reads do not import any product Driver declarations. */
   readonly officialDrivers?: boolean;

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { defineProvider, type ProviderDiscoveryOptions, type ProviderSchema } from '../provider/driver.js';
 import { ProviderError, type ModelDefinition, type ProviderService } from '../provider/types.js';
 import { endpoint, sdkProfileSchema, serviceSchema, googleServiceSchema, providerSchema, compatibleServiceFields, type StandardServiceOptions, type StandardModelParameters } from './schema.js';
-import { sdkExecution } from './sdk-execution.js';
+import { sdkExecution, type SdkExecutionConfiguration } from './sdk-execution.js';
 import type { SdkFamily } from './sdk-family.js';
 import { restImageExecution } from './rest-image.js';
 import { executionTraits, serviceIdentity } from './traits.js';
@@ -50,6 +50,7 @@ function apiKeyProvider<const Id extends string, const Methods extends readonly 
   readonly label: string;
   readonly serviceSchema: ProviderSchema<S>;
   readonly nativeDeferredTools?: boolean;
+  readonly toolCallReasoning?: SdkExecutionConfiguration['toolCallReasoning'];
   readonly protocols: readonly Protocol[];
   readonly methods: Methods;
   readonly discovery?: 'openai' | 'anthropic' | 'google';
@@ -91,6 +92,7 @@ function apiKeyProvider<const Id extends string, const Methods extends readonly 
       }
       return sdkExecution(options, {
         family: input.family, api: protocol.api,
+        toolCallReasoning: input.toolCallReasoning,
         image: protocol.kind === 'image', noAuthentication: options.binding.account.authentication.method === 'none', normalizeEndpoint: true,
       });
     },
@@ -123,6 +125,7 @@ export const miniMaxProvider = apiKeyProvider({
 });
 export const ollamaProvider = apiKeyProvider({
   id: 'ollama', label: 'Ollama', family: 'openai-compatible', methods: ['none', 'api-key'], discovery: 'openai', serviceSchema: serviceSchema('http://127.0.0.1:11434/v1'),
+  toolCallReasoning: 'provider-native',
   protocols: [{ name: 'openai-chat', kind: 'language' }],
 });
 export const openAiCompatibleProvider = apiKeyProvider({

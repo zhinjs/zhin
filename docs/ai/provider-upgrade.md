@@ -62,6 +62,12 @@ zhin migrate inference --finalize migration.json --maintenance --backup-confirme
 Workroom 的旧 `disclosure.modelProviders` 需要明确映射到 `modelServices` 的真实 Service ID。处理合同与实际所选 Service 不匹配时停止披露，不以模型名称或旧 Provider 别名推断合同。
 
 
+### 修正已迁移的环境默认值密钥
+
+单个完整 `${NAME:-默认值}`／`${NAME:=默认值}` 会作为私有加密来源转移；离线预览和 apply 不读取环境、不展开默认值。普通 `${NAME}` 继续转为 `env://NAME`。需要转移私有来源时仍须明确使用 `--with-credentials`。
+
+若旧版本已把模板字面文本当成 API Key，管理员在 Console 选中**原账号**，打开“设置 API Key”，填入自己原配置或备份中的完整表达式，审查预览后确认保存。该入口只修复所选账号，不扫描其他凭据；只有当前密钥恰好等于所提交的合法模板且修订未变化时，才清除已证明错误的模板材料指纹。已有真实账号 subject 不清除；其他真实材料身份变化仍要求明确重新授权/替换，不能借模板输入重置身份。预览不回显默认值；不要把真实表达式贴进 Issue 或日志。
+
 ### 官方 TypeSafe 的手工迁移
 
 TypeSafe 不属于 headless 内置目录，离线 compiler 会把旧 `ai.decisions` 标为待显式处理，不会为预览执行插件 JS。先进入维护期并备份原配置、数据库和主密钥；保留 TypeSafe 插件声明，按[TypeSafe 升级步骤](https://github.com/zhinjs/zhin/blob/main/plugins/services/typesafe/README.md)移除其已退役的 secret/model/enabled 插件配置以及旧 `ai.decisions` 路由，再启动新 Host 管理界面。使用插件实际注册的 exact `typesafe` Driver，建立 API Key Account、`typesafe-system-one`／`decision` 模型与 Profile，然后逐项重建六个决策用途。native ID 沿用旧配置的实际值；每项原 mode、阈值与超时必须明确保留，不因升级自动启用。

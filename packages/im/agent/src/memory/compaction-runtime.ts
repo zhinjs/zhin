@@ -1,6 +1,6 @@
 import type { Locale } from '@zhin.js/plugin-runtime';
 import { managementMessages as t } from '../init/management-messages.js';
-import { projectPromptContext, AUTOCOMPACT_BUFFER_TOKENS, autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage, type LlmCompletionPort } from '@zhin.js/ai';
+import { projectPromptContext, AUTOCOMPACT_BUFFER_TOKENS, autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type AgentCompactionExecution, type ContextRepository, type Model, type AgentMessage, type LlmCompletionPort } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
@@ -14,6 +14,8 @@ export interface CompactionRuntimeOptions {
   sessionId: string;
   model: Model;
   transport: LlmCompletionPort;
+  /** Fixed operation selection, invoked only once a summary prefix exists. */
+  resolveExecution?: () => Promise<Pick<AgentCompactionExecution, 'model' | 'transport'>>;
   compactionConfig?: CompactionConfig;
   contextWindow: number;
   mode?: 'text' | 'multimodal';
@@ -121,13 +123,6 @@ export class AgentCompactionRuntime {
     if (cfg.enabled === false) return messages;
 
     const state = this.#getState(options.sessionId);
-    const compactionPrompt = resolveWorkspacePrompt('compaction', options.model.promptFamily);
-    const customInstructions = [
-      compactionPrompt?.trim(),
-      options.customInstructions?.trim(),
-      options.toldLedger?.trim() ? `${TOLD_LEDGER_SUMMARY_INSTRUCTION}\n${options.toldLedger.trim()}` : undefined,
-    ].filter(Boolean).join('\n\n') || undefined;
-
     const result = await autoCompactAgentMessagesIfNeeded({
       transport: options.transport,
       model: options.model,
@@ -135,7 +130,15 @@ export class AgentCompactionRuntime {
       config: cfg,
       state,
       force: options.force,
-      customInstructions,
+      resolveExecution: async () => {
+        const execution = options.resolveExecution ? await options.resolveExecution() : options;
+        const compactionPrompt = resolveWorkspacePrompt('compaction', execution.model.promptFamily);
+        const customInstructions = [
+          compactionPrompt?.trim(), options.customInstructions?.trim(),
+          options.toldLedger?.trim() ? `${TOLD_LEDGER_SUMMARY_INSTRUCTION}\n${options.toldLedger.trim()}` : undefined,
+        ].filter(Boolean).join('\n\n') || undefined;
+        return { model: execution.model, transport: execution.transport, customInstructions };
+      },
       signal,
     });
 

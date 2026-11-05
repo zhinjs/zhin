@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { OAuthAuthentication, OAuthCredential } from '../provider/driver.js';
 import type { FixedServiceOptions } from './schema.js';
 import type { JsonObject } from '../provider/types.js';
+import { parseRetryAfterMs } from '../llm/provider-resilience.js';
 
 export type AuthenticationFailure = 'rejected' | 'not-submitted' | 'outcome-unknown' | 'invalid-response';
 
@@ -11,14 +12,20 @@ export class ProviderAuthenticationError extends Error {
   readonly status?: number;
   readonly credentialInvalid: boolean;
   readonly oauthError?: string;
-  constructor(code: AuthenticationFailure, status?: number, oauthError?: string) {
+  readonly retryAfterMs?: number;
+  constructor(code: AuthenticationFailure, response?: Readonly<{
+    status: number;
+    oauthError?: string;
+    retryAfterMs?: number;
+  }>) {
     super(`Provider authentication: ${code}`);
     this.name = 'ProviderAuthenticationError';
     this.code = code;
-    this.status = status;
-    this.oauthError = oauthError;
-    this.credentialInvalid = code === 'rejected' && (status === 400 || status === 401)
-      && (oauthError === 'invalid_grant' || oauthError === 'invalid_token');
+    this.status = response?.status;
+    this.oauthError = response?.oauthError;
+    this.retryAfterMs = response?.retryAfterMs;
+    this.credentialInvalid = code === 'rejected' && (response?.status === 400 || response?.status === 401)
+      && (response.oauthError === 'invalid_grant' || response.oauthError === 'invalid_token');
   }
 }
 
@@ -83,10 +90,15 @@ async function exchange(input: {
       const codes = ['invalid_grant', 'invalid_token', 'invalid_client', 'unauthorized_client', 'access_denied', 'temporarily_unavailable', 'server_error', 'slow_down', 'invalid_request'];
       if (typeof error === 'string' && codes.includes(error)) oauthError = error;
     } catch { /* HTTP rejection remains a fact; an unreadable body cannot invalidate credentials. */ }
-    throw new ProviderAuthenticationError(response.status >= 400 && response.status < 500 ? 'rejected' : 'outcome-unknown', response.status, oauthError);
+    const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after') ?? undefined);
+    throw new ProviderAuthenticationError(response.status >= 400 && response.status < 500 ? 'rejected' : 'outcome-unknown', {
+      status: response.status,
+      ...(oauthError ? { oauthError } : {}),
+      ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    });
   }
   try { return await response.json(); }
-  catch { throw new ProviderAuthenticationError('outcome-unknown'); }
+  catch { throw new ProviderAuthenticationError('outcome-unknown', { status: response.status }); }
 }
 
 /** Stateless OAuth protocol; transactions, secret storage and refresh ownership belong to Host. */

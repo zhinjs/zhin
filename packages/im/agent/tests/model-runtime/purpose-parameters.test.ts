@@ -5,6 +5,7 @@ import { createInvocationCompletion, invocationModel } from '../../src/model-run
 import { LlmApprovalJudgment } from '../../src/decision/approval-judgment.js';
 import { summarizeSubagentResultForUser } from '../../src/routing/subagent-summarize.js';
 import { driverFixture, callContext, sse, chatReply } from '../../../ai/tests/providers/fixtures.js';
+import { executionCandidate } from '../helpers/execution-bundle.js';
 
 function codexReply(text: string) {
   return sse([
@@ -36,7 +37,7 @@ it.each(['summary', 'approval'] as const)('runs the real %s purpose through its 
   const bundle = { binding, model: invocationModel(binding), completion: createInvocationCompletion({ binding, client: scope.client, purpose: selectedPurpose }) };
   try {
     if (purpose === 'summary') {
-      expect(await summarizeSubagentResultForUser({ models: { summary: bundle }, subagentName: 'child', userRequest: 'summarize', subagentResult: 'Long raw synthetic report', signal })).toBe(payload);
+      expect(await summarizeSubagentResultForUser({ models: { summary: executionCandidate(bundle) }, subagentName: 'child', userRequest: 'summarize', subagentResult: 'Long raw synthetic report', signal })).toBe(payload);
     } else {
       expect(await new LlmApprovalJudgment({ completion: bundle.completion, model: bundle.model }).judge({ request, priorDecisions: [], signal })).toEqual({ decision: 'ask', reason: 'Confirm intent' });
     }
@@ -52,7 +53,18 @@ it('uses ordinary Profile generation parameters unchanged through the real summa
     fetch: async (url, init) => { bodies.push(await new Request(url, init).json()); return chatReply('summary'); } });
   const scope = await fixture.runtime.openScope({ context: callContext }), binding = await scope.resolve({ kind: 'language', purpose: 'summary' });
   const summary = { binding, model: invocationModel(binding), completion: createInvocationCompletion({ binding, client: scope.client, purpose: 'summary' }) };
-  expect(await summarizeSubagentResultForUser({ models: { summary }, subagentName: 'child', userRequest: 'summarize', subagentResult: 'raw' })).toBe('summary');
+  expect(await summarizeSubagentResultForUser({ models: { summary: executionCandidate(summary) }, subagentName: 'child', userRequest: 'summarize', subagentResult: 'raw' })).toBe('summary');
   expect(bodies).toEqual([expect.objectContaining({ model: 'configured-model', temperature: 0.17, max_tokens: 73 })]);
   await scope.close(); fixture.runtime.retire();
+});
+
+
+it('returns the completed child result when lazy summary acquisition fails', async () => {
+  const resolve = vi.fn(async () => { throw new Error('synthetic summary configuration failure'); });
+  const graph = graphFixture();
+  const candidate = { binding: { graphRevision: graph.revision, service: graph.services.service, account: graph.accounts.account,
+    profile: graph.profiles.text, model: graph.services.service.models[graph.profiles.text.model] }, resolve };
+  expect(await summarizeSubagentResultForUser({ models: { summary: candidate }, subagentName: 'child',
+    userRequest: 'summarize', subagentResult: 'Preserved completed child result' })).toBe('Preserved completed child result');
+  expect(resolve).toHaveBeenCalledOnce();
 });

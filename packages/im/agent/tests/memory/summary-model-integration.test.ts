@@ -91,8 +91,11 @@ describe('purpose model integration at summary call boundaries', () => {
     expect(f.summary.calls).toHaveLength(1);
     expect(f.chat.calls).toHaveLength(0);
     expect(compact).toHaveBeenCalledWith(f.repository, expect.objectContaining({
-      model: expect.objectContaining({ id: 'summary', contextWindow: 128000 }), contextWindow: 8192,
+      resolveExecution: expect.any(Function), contextWindow: 8192,
     }));
+    expect(await compact.mock.calls[0]![1].resolveExecution!()).toMatchObject({
+      model: expect.objectContaining({ id: 'summary', contextWindow: 128000 }),
+    });
   });
 
   it('branch switching summarizes through the summary lease and preserves the original rows', async () => {
@@ -106,6 +109,34 @@ describe('purpose model integration at summary call boundaries', () => {
     expect(await f.repository.hasBranchSummary(f.sessionId, firstId)).toBe(true);
     expect(await f.repository.loadMessageRows(f.sessionId)).toEqual(rows);
     expect((await f.sessionStore.getBySessionId(f.sessionId))!.active_leaf_message_id).toBe(firstId);
+  });
+
+  it('keeps branch switching best-effort when lazy summary acquisition fails', async () => {
+    const f = await fixture();
+    const rows = await f.repository.loadMessageRows(f.sessionId);
+    const target = rows[0]!.id!;
+    const resolve = vi.fn(async () => { throw new Error('synthetic summary configuration failure'); });
+    const models = { ...f.models, summary: { binding: f.models.summary!.binding, resolve } };
+    expect(await runWithAgentTurnConfiguration({ models }, () => switchActiveLeafWithBranchSummarization(
+      f.host, f.sessionId, target, { compactionConfig: { keepRecentTokens: 1 } }))).toBe(true);
+    expect(resolve).toHaveBeenCalledOnce();
+    expect((await f.sessionStore.getBySessionId(f.sessionId))!.active_leaf_message_id).toBe(target);
+    expect(await f.repository.loadMessageRows(f.sessionId)).toEqual(rows);
+    expect(f.chat.calls).toHaveLength(0);
+  });
+
+  it('does not acquire the summary when one retained abandoned message has no compactable prefix', async () => {
+    const f = await fixture();
+    const previous = await f.repository.loadMessageRows(f.sessionId);
+    const target = previous.at(-1)!.id!;
+    await f.repository.appendMessages(f.sessionId, [createUserMessage('One retained abandoned message. '.repeat(2000))]);
+    const rows = await f.repository.loadMessageRows(f.sessionId);
+    const resolve = vi.fn(async () => { throw new Error('summary must remain lazy'); });
+    const models = { ...f.models, summary: { binding: f.models.summary!.binding, resolve } };
+    expect(await runWithAgentTurnConfiguration({ models }, () => switchActiveLeafWithBranchSummarization(
+      f.host, f.sessionId, target, { compactionConfig: { keepRecentTokens: 1 } }))).toBe(true);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(await f.repository.loadMessageRows(f.sessionId)).toEqual(rows);
   });
 
   it('strategy-based compaction also consumes the fixed summary lease', async () => {

@@ -1,6 +1,7 @@
 export type { DecisionQuestions, DecisionResult } from '../decision/types.js';
 export type { JsonValue } from '../decision/types.js';
 export * from './types.js';
+export * from './environment-source.js';
 export * from './driver.js';
 export * from './repository.js';
 export * from './graph.js';

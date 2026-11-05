@@ -5,6 +5,7 @@ import { ModelRuntimeService } from '../../src/model-runtime/service.js';
 import { invocationModel } from '../../src/model-runtime/completion.js';
 import { AIService } from '../../src/service.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
+import { executionCandidate } from '../helpers/execution-bundle.js';
 
 function snapshot() {
   const root = rootPluginId();
@@ -163,7 +164,7 @@ it('imports the wizard-confirmed capabilities and sends real tool schemas throug
   const scope = await runtime.openScope({ context }), binding = await scope.resolve({ kind: 'language', purpose: 'chat' });
   const chat = { binding, model: invocationModel(binding), completion: createInvocationCompletion({ binding, client: scope.client, purpose: 'chat' }) };
   const service = new AIService();
-  const result = await service.runAgent('Synthetic question', { maxIterations: 1, models: { chat, summary: chat, graph: scope.graph, context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
+  const result = await service.runAgent('Synthetic question', { maxIterations: 1, models: { chat, summary: executionCandidate(chat), graph: scope.graph, context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
     summarySource: 'deployment-chat', policyRevision: 1, retainDelegation: () => { throw new Error('No delegation expected'); }, release: () => scope.close() },
     tools: [{ name: 'lookup_fact', description: 'Read a synthetic fact', parameters: { type: 'object', properties: {} }, execute: async () => 'fact' }] });
   expect(result.content).toBe('answer'); expect(requests).toHaveLength(1);
@@ -172,7 +173,7 @@ it('imports the wizard-confirmed capabilities and sends real tool schemas throug
   const mainAgent = new ZhinAgent({ config: { outputSchema: false, deferredTools: { alwaysLoadedTools: ['lookup_fact'] } } });
   requests.length = 0;
   await mainAgent.processTurn({ content: 'Synthetic question', message: mockCommMessage(),
-    configuration: { models: { chat, summary: chat, graph: scope.graph, context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
+    configuration: { models: { chat, summary: executionCandidate(chat), graph: scope.graph, context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
       summarySource: 'deployment-chat', policyRevision: 1, retainDelegation: () => { throw new Error('No delegation expected'); }, release: () => scope.close() } },
     tools: [{ name: 'lookup_fact', description: 'Read a synthetic fact', parameters: { type: 'object', properties: {} }, execute: async () => 'fact' }] });
   expect(requests).toHaveLength(1);

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { normalizeProviderGraph, type ProviderDefinition, type ProviderGraph } from '@zhin.js/ai/provider';
 import { createDatabaseHost } from '../../../src/plugin-runtime/database-host-installer.js';
 import { DatabaseInferenceRepository } from '../../../src/plugin-runtime/inference/repository.js';
-import { InferenceCredentialStore } from '../../../src/plugin-runtime/inference/credentials.js';
+import { InferenceCredentialStore, type EnvironmentExpressionSource } from '../../../src/plugin-runtime/inference/credentials.js';
 import { HostAccountRuntime } from '../../../src/plugin-runtime/inference/account-runtime.js';
 import { InferenceManagementService } from '../../../src/plugin-runtime/inference/management.js';
 
@@ -25,9 +25,10 @@ export async function setupInferenceManagement(options: Readonly<{ method?: 'api
       complete: exchange, refresh: vi.fn(),
     } }, models: () => ({ example: model }), targets: () => ({ authentication: [], inference: ['https://example.test/v1'] }), createExecution: () => ({}) };
   const store = new InferenceCredentialStore({ directory: join(directory, 'private'), repository });
+  const resolveSource = vi.fn<(source: string | EnvironmentExpressionSource) => string | undefined>();
   const accounts = new HostAccountRuntime({ hostOwnerId: 'host', repository, credentials: store,
     drivers: { acquire: async () => ({ definition, reference: graph.services.service!.driver, release() {} }) },
-    fetch: () => vi.fn(), allowTarget: () => true, resolveSource: vi.fn() });
+    fetch: () => vi.fn(), allowTarget: () => true, resolveSource });
   const management = new InferenceManagementService({ rootId: '/root', hostOwnerId: 'host', directory: join(directory, 'private'), repository, accounts,
     authenticationContract: () => '1',
     profileSchema: input => definition.profileSchema?.(input),
@@ -37,6 +38,6 @@ export async function setupInferenceManagement(options: Readonly<{ method?: 'api
   await db.start();
   await repository.commit({ rootId: '/root', expectedRevision: 0, mutationId: 'initial', fingerprint: 'initial', graph, result: null });
   const principal = { ownerId: 'host', hostAdministrator: true };
-  return { graph, definition, accounts, repository, management, principal, exchange, db, directory,
+  return { graph, definition, accounts, repository, management, principal, exchange, db, directory, store, resolveSource,
     async close() { await accounts.close(); await db.stop(); await rm(directory, { recursive: true, force: true }); } };
 }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { type Model } from '@zhin.js/ai';
-import type { ModelExecutionBundle, ModelExecutionScope } from '../model-runtime/types.js';
+import type { ModelExecutionBundle, ModelExecutionCandidate, ModelExecutionScope } from '../model-runtime/types.js';
 import { createLlmMediaPerceptionPort, resolvePerceptionConfig,
   type LlmMediaPerceptionOptions, type MediaPerceptionPort, type ResolvedPerceptionConfig, type PerceptionCacheEntry } from './perception.js';
 
@@ -14,14 +14,15 @@ export interface ScopedMediaPerceptionOptions {
   readonly onEvent?: LlmMediaPerceptionOptions['onEvent'];
 }
 
-/** Routes only already acquired models; it cannot discover or construct another provider. */
+/** Resolves only declared candidates from the captured operation, one at a time. */
 class ScopedPerceptionRuntime {
-  readonly #candidates = new Map<string, ModelExecutionBundle>();
+  readonly #candidates = new Map<string, ModelExecutionCandidate>();
   readonly #models = new WeakMap<Model, ModelExecutionBundle>();
+  readonly #resolved = new Map<string, ModelExecutionBundle>();
 
-  constructor(bundles: readonly ModelExecutionBundle[]) {
+  constructor(bundles: readonly ModelExecutionCandidate[]) {
     for (const bundle of bundles) {
-      const key = JSON.stringify([bundle.binding.profile.id, bundle.model.id]);
+      const key = JSON.stringify([bundle.binding.profile.id, bundle.binding.model.id]);
       const previous = this.#candidates.get(key);
       if (previous && (previous.binding.profile.id !== bundle.binding.profile.id
         || previous.binding.profile.revision !== bundle.binding.profile.revision)) {
@@ -31,16 +32,18 @@ class ScopedPerceptionRuntime {
     }
   }
 
-  model(alias: string, modelId: string): Model {
-    const bundle = this.#candidates.get(JSON.stringify([alias, modelId]));
-    if (!bundle) throw new Error('Perception model is outside the acquired scope');
+  async model(alias: string, modelId: string): Promise<Model> {
+    const candidate = this.#candidates.get(JSON.stringify([alias, modelId]));
+    if (!candidate) throw new Error('Perception model is outside the acquired scope');
+    const bundle = await candidate.resolve();
     const model = bundle.model;
     this.#models.set(model, bundle);
+    this.#resolved.set(alias, bundle);
     return model;
   }
 
   resilience(profileId: string): Model['executionPolicy'] {
-    return [...this.#candidates.values()].find(bundle => bundle.binding.profile.id === profileId)?.model.executionPolicy;
+    return this.#resolved.get(profileId)?.model.executionPolicy;
   }
 
   complete(...args: Parameters<ModelExecutionBundle['completion']['complete']>): ReturnType<ModelExecutionBundle['completion']['complete']> {
@@ -61,7 +64,7 @@ export function createScopedMediaPerceptionPort(options: ScopedMediaPerceptionOp
   const primary = options.scope.perception;
   if (!primary) return undefined;
   const fallbacks = options.scope.perceptionFallbacks ?? [];
-  const candidate = (bundle: ModelExecutionBundle) => ({ provider: bundle.binding.profile.id, model: bundle.model.id });
+  const candidate = (bundle: ModelExecutionCandidate) => ({ provider: bundle.binding.profile.id, model: bundle.binding.model.id });
   const config = resolvePerceptionConfig({
     ...candidate(primary),
     fallbacks: fallbacks.map(candidate),

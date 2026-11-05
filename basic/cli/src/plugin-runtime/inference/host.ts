@@ -28,7 +28,7 @@ import type { AIService } from '@zhin.js/agent';
 import { runWithAgentTurnConfiguration } from '@zhin.js/agent/turn';
 import { hostModelOwnerId } from './host-identity.js';
 import { DatabaseInferenceRepository } from './repository.js';
-import { InferenceCredentialStore } from './credentials.js';
+import { InferenceCredentialStore, type EnvironmentExpressionSource } from './credentials.js';
 import { HostAccountRuntime } from './account-runtime.js';
 import { createProviderNetwork, matchesProviderTarget } from './network.js';
 import { InferenceManagementService, InferenceManagementError } from './management.js';
@@ -45,7 +45,7 @@ export interface HostInferenceOptions {
   readonly projectRoot: string;
   readonly database: DatabaseHost;
   readonly snapshots: () => SnapshotReader;
-  readonly resolveSource: (source: string) => string | undefined | Promise<string | undefined>;
+  readonly resolveSource: (source: string | EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
   readonly personalOwners: readonly PersonalSessionOwner[];
   /** Trusted process-private in-flight evidence only; not a Console or persistent audit sink. */
   readonly observeCredentialTransport?: (fact: CredentialTransportFact) => void | Promise<void>;
@@ -341,6 +341,7 @@ export class HostInference {
             label: definition.label ?? definition.id,
             source: lease.value.tree.get(owner)?.packageName ?? String(owner),
             authentication: definition.authentication.methods,
+            discovery: typeof definition.discover === 'function',
             ...(definition.serviceSchema.inputSchema
               ? { serviceSchema: definition.serviceSchema.inputSchema }
               : {}),
