@@ -1,0 +1,22 @@
+.changeset/eval-h3-gap-a-timer-inbound.md
+  h_b680f75345178a 1-5
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 46,216-220,590-592,689-700
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 21-22,56-89,281,360-369
+packages/im/agent/evals/framework/framework.test.ts
+  h_b680f75345178a 20,361-392
+packages/im/agent/evals/framework/index.ts
+  h_b680f75345178a 5,10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ebef1a22568d8bd37de1364202b82eef11cb617",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
