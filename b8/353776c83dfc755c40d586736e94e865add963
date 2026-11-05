@@ -1,0 +1,53 @@
+basic/cli/src/plugin-runtime/database-host-installer.ts
+  s_9622fd28aba994::t_2dc8e33f13dc84 225-246
+basic/cli/src/plugin-runtime/sender-enrichment.ts
+  s_9622fd28aba994::t_1212ff5d7867e0 176-184,187-188,192-193
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9622fd28aba994::t_a963c8dd9a1328 177-186,257-278
+basic/database/src/dialects/mysql.ts
+  s_9622fd28aba994::t_01bfdbed0baa0d 322-332
+basic/database/src/dialects/pg.ts
+  s_9622fd28aba994::t_63f461d0da95e9 302-307
+basic/database/src/type/related/database.ts
+  s_9622fd28aba994::t_1aa50e6cf3e011 553,555-558,572,574-577,697-699
+basic/schedule/src/scheduler.ts
+  s_9622fd28aba994::t_3dfd2a392ffe8d 137-141,266,301,332,581,584,590,614
+basic/schedule/src/timer/timer-wheel.ts
+  s_9622fd28aba994::t_a6d8d6825c7aa7 104
+basic/schedule/tests/timer-wheel.test.ts
+  s_9622fd28aba994::t_2190ff9cea1187 144-169
+basic/schema/tests/schema-fixes.test.ts
+  s_9622fd28aba994::t_0b4adf4284c5d5 89-120
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_9622fd28aba994::t_205656b6113a53 153-157
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  s_9622fd28aba994::t_460272a9534f7a 109,116-119
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_9622fd28aba994::t_806ada0b38cd60 56-71
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_9622fd28aba994::t_e9f1ae38d8ccdb 136-140
+basic/schema/src/schema.ts
+  s_9622fd28aba994::t_81da7f8b81fa73 285-286,301-302,305-306,373-375,380,382-386,389-392
+basic/schema/src/validate.ts
+  s_9622fd28aba994::t_b1f336cfc15b41 48
+packages/im/adapter/src/peer-registry.ts
+  s_9622fd28aba994::t_b65a5422747153 100-106,131,133-136,148,151-154,176,180,207
+packages/im/im-contract/src/conversation-store.ts
+  s_9622fd28aba994::t_1436116cbcbe8b 206,213-216,413-416,467-477
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8353776c83dfc755c40d586736e94e865add963",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
