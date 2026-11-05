@@ -4,6 +4,8 @@ sidebar: false
 
 # Workroom 重构方案：群内多 Bot 角色协作
 
+> **已被取代（2026-11-04）**：由 [ADR 0048 Agent Harness](../adr/0048-agent-harness.md) 取代，本文仅作历史参考，不再按本文推进；相关代码将在 ADR 0048 的 H2–H4 阶段删除。
+
 状态：Draft（阶段 A 进行中，已落地 A1/A2a；方案内容仍以本文为准）
 
 ## 目标

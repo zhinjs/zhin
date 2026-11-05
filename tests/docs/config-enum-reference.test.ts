@@ -71,19 +71,12 @@ describe('source-owned configuration enums', () => {
       ['toolExecution', propertyStringLiterals(agentConfigSource, 'toolExecution'), agentSchema.toolExecution.enum],
       ['modelSizeHint', propertyStringLiterals(agentConfigSource, 'modelSizeHint'), agentSchema.modelSizeHint.enum],
       ['promptCacheRetention', propertyStringLiterals(agentConfigSource, 'promptCacheRetention'), agentSchema.promptCacheRetention.enum],
-      ['subagentTurnMode', propertyStringLiterals(agentConfigSource, 'subagentTurnMode'), agentSchema.subagentTurnMode.enum],
       ['steeringMode', stringLiterals(queueModeSource, 'QueueMode'), agentSchema.steeringMode.enum],
       ['followUpMode', stringLiterals(queueModeSource, 'QueueMode'), agentSchema.followUpMode.enum],
     ] as const;
 
     for (const [field, sourceValues, schemaValues] of contracts) {
       expect(schemaValues, field).toEqual(sourceValues);
-    }
-    for (const field of [
-      'subagentExecApprovalMode',
-      'workerExecApprovalMode',
-    ]) {
-      expect(agentSchema[field].enum).toEqual(stringLiterals(source, 'ExecApprovalMode'));
     }
     // #735: deprecated, no runtime effect, removed from the schema.
     expect(agentSchema.taskExecApprovalMode).toBeUndefined();
@@ -101,7 +94,6 @@ describe('source-owned configuration enums', () => {
       'execSecurity',
       'execPreset',
       'toolExecution',
-      'subagentTurnMode',
       'modelSizeHint',
       'promptCacheRetention',
       'outputSchema',

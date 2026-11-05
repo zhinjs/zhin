@@ -165,10 +165,20 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
     fail('maxModelSteps', `expected at most ${expect.maxModelSteps} model requests, got ${steps}`);
   }
   if (!definition.allowUnusedSteps && run.unusedScriptSteps > 0) {
-    fail('script', `${run.unusedScriptSteps} scripted step(s) were never requested by the harness`);
+    const byActor = Object.entries(run.unusedActorSteps);
+    const tagged = byActor.some(([actor]) => actor !== 'zhin') || definition.script.some((step) => step.actor !== undefined);
+    fail('script', `${run.unusedScriptSteps} scripted step(s) were never requested by the harness${tagged ? ` (${byActor.map(([actor, left]) => `${actor}: ${left}`).join(', ')})` : ''}`);
   }
   if (run.extraModelRequests > 0) {
-    fail('script', `the harness made ${run.extraModelRequests} model request(s) after the ${definition.script.length}-step script ran out`);
+    const tagged = definition.script.some((step) => step.actor !== undefined);
+    if (!tagged) {
+      fail('script', `the harness made ${run.extraModelRequests} model request(s) after the ${definition.script.length}-step script ran out`);
+    } else {
+      for (const [actor, count] of Object.entries(run.extraActorRequests)) {
+        const total = definition.script.filter((step) => (step.actor ?? 'zhin') === actor).length;
+        fail('script', `actor ${actor} made ${count} model request(s) after its ${total}-step script ran out`);
+      }
+    }
   }
   for (const call of run.unexpectedlyOfferedToolCalls) {
     fail('notOffered', `${call} was expected to be withheld from the model, but the harness offered it`);
@@ -193,7 +203,7 @@ export function formatEvalReport(
   lines.push('  trace:');
   lines.push(`    model requests: ${run.modelRequests.length}`);
   for (const request of run.modelRequests) {
-    lines.push(`      #${request.index + 1} model=${request.model} offered=[${list(request.offeredTools)}] called=[${list(request.toolCalls)}] user=${quote(request.lastUserText)}`);
+    lines.push(`      #${request.index + 1} model=${request.model}${request.actor && request.actor !== 'zhin' ? ` actor=${request.actor}` : ''} offered=[${list(request.offeredTools)}] called=[${list(request.toolCalls)}] user=${quote(request.lastUserText)}`);
   }
   lines.push(`    attempted tools: [${list(run.attemptedTools)}]`);
   lines.push(`    executed tools: [${list(run.executedTools.map((tool) => tool.name))}]`);

@@ -23,14 +23,6 @@ export {
 } from './event-context.js';
 
 export {
-  resolveSubagentActivityTag,
-  formatSubagentActivityPrefix,
-  withSubagentActivityPrefix,
-  applySubagentActivityPrefixToConfig,
-  resolveActivityFeedbackSessionId,
-} from './subagent-prefix.js';
-
-export {
   ActivityFeedbackManager,
 } from './manager.js';
 

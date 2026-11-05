@@ -137,9 +137,9 @@ The resilience and bridge transformations are described separately below; they a
 
 Source entry points: [Core requests/recovery](../../packages/im/agent/src/core/agent-core-run.ts),
 [AI loop](../../packages/im/ai/src/llm/agent-loop.ts),
-[standalone loop](../../packages/im/agent/src/core/agent-loop-standalone.ts),
-[background child](../../packages/im/agent/src/subagent/subagent-runtime.ts),
-[worker](../../packages/im/agent/src/deferred-worker-runner.ts),
+`standalone loop`（已在 ADR 0048 H2 删除）,
+`background child`（已在 ADR 0048 H2 删除）,
+`worker`（已在 ADR 0048 H2 删除）,
 [text completion port](../../packages/im/agent/src/plugin-runtime/ai-completion.ts),
 [summary runtime](../../packages/im/agent/src/memory/compaction-runtime.ts),
 [perception](../../packages/im/agent/src/media/perception.ts),

@@ -72,7 +72,7 @@ export function formatAiHandlerTurnTable(
 
   const rows: LogKvRow[] = [
     { label: 'Duration', value: `${Math.round(totalMs)} ms` },
-    { label: 'Token', value: formatCompactUsage(metrics.usage, metrics.subagentUsage) },
+    { label: 'Token', value: formatCompactUsage(metrics.usage) },
     { label: 'Mode', value: buildModeLine(metrics) },
   ];
 

@@ -226,6 +226,8 @@ ai:
 
 Messages that match no command now go to the model — in DMs by default, in groups with an `ai:` prefix or a mention. Give it abilities by adding files to `tools/`; permissions, approvals and file/network access are enforced by framework policy, not by the prompt.
 
+> Claude subscription and Antigravity are experimental channels: 实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担 (experimental · not officially supported · may violate vendor terms · use at your own risk). See [AI providers](./docs/ai/providers.md).
+
 Next: [AI overview](./docs/en/ai/index.md) · [Agent tools, Skills and Prompt Sections](./docs/en/authoring/agent-tools.md) · [AI Agent learning path](./docs/en/paths/ai-agent.md)
 
 ### Install only what you need

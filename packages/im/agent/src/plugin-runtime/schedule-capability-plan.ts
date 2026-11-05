@@ -5,7 +5,7 @@ import type { ToolCapability } from './capability-ingress.js';
 import { capabilityAsAgentTool } from './deferred-capability-plan.js';
 
 const UNATTENDED_FORBIDDEN_TOOLS = new Set([
-  'discover', 'load_tool', 'load_skill', 'ask_user', 'spawn_task',
+  'discover', 'load_tool', 'load_skill', 'ask_user',
 ]);
 
 export interface ScheduleCapabilityPlan {

@@ -162,18 +162,6 @@ export function workroomOrchestratorSessionKey(
   return `workroom:${encodeURIComponent(continuation.projectId)}:orchestrator:${encodeURIComponent(continuation.agentDefinitionId)}`;
 }
 
-export function restrictWorkroomAgentCapabilities(
-  capabilities: AgentCapabilities,
-  workroomTurn: boolean,
-): AgentCapabilities {
-  if (!workroomTurn) return capabilities;
-  const forbidden = new Set(['spawn_task']);
-  return Object.freeze({
-    ...capabilities,
-    tools: Object.freeze(capabilities.tools.filter(tool => !forbidden.has(tool.name))),
-  });
-}
-
 export function resolveRuntimeAgentTrigger(
   message: Message,
   trigger: AITriggerConfig | undefined,

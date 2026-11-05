@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/ai-provider",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Owner-scoped AI Provider registration for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,9 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -27,7 +29,9 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   },
-  "engines": { "node": ">=22.19.0" },
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
@@ -36,7 +40,10 @@
   "publishConfig": {
     "access": "public",
     "exports": {
-      ".": { "types": "./lib/index.d.ts", "import": "./lib/index.js" }
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      }
     }
   },
   "license": "MIT"

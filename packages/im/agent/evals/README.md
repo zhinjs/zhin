@@ -18,9 +18,9 @@ this gate. Request-hash record/replay is intentionally not used.
 1. `framework/scripted-model.ts` registers a fake provider. **Every model
    request consumes the next script step, in order**, across the whole case.
    That includes requests the harness makes on its own, such as the
-   exhausted-budget summary or progress updates. A synchronous sub-agent runs
-   inside the parent's `spawn_task` call, so its requests come between the
-   parent's in script order.
+   exhausted-budget summary or progress updates. A collaboration actor turn
+   (`ask` / `delegate`) runs inside the delegator's tool call, so its requests
+   come between the delegator's in script order.
 2. `framework/driver.ts` builds a real `ZhinAgent` host (with `AgentCore` and
    the session and context systems) around that model. It then creates one
    canonical `TurnIngress` per inbound message and runs it through
@@ -76,16 +76,36 @@ fallback is separate and remains covered by `multimodal-perception-fallback`.
 | `inbound` | One message, or an array run as consecutive turns in the same session. Each message has `text`, an optional `scope` (`private` or `group`), an optional `sender` (`id`, `name`, `roles`), optional `backgroundEvents` (rendered as untrusted conversation events), optional `images` (`{ base64, mimeType, name? }`, see `fixtures/images.ts`), and an optional `policy` override. |
 | `tools` | Mocked tools: `name`, `description`, `parameters` (JSON Schema of the arguments, sent to the model), `result` (a value or `(args) => value`), `error`, and `requiresApproval`. Cases with `live` checks must declare every argument their script passes, or a real model has nothing to fill in. Built-in reserved names such as `read_file` or `bash` are rejected, so give mocks their own names. |
 | `approval` | How the fake approval channel answers: `approve` (the default), `deny`, or `unavailable` (no channel). |
-| `agentConfig` | Partial `ZhinAgentConfig`, for example `maxIterations`, `toolBudget`, or `subagentTurnMode: 'sync'`. |
+| `agentConfig` | Partial `ZhinAgentConfig`, for example `maxIterations` or `toolBudget`. |
 | `promptSections` | Prompt sections from a third-party plugin (`{ plugin, title, content }`). They are owned by a child plugin, so the engine labels them `external_content`. |
 | `source` | Required. The issue, PR or QQ incident the case guards against. |
 | `skip` | Skip with an actionable reason (a known gap or an unmerged dependency). |
+| `agents` | ADR 0048 peer Agents (`name`, `description`, `tools` = capability ceiling, optional `collaboration: { contacts, acceptsFrom }`). The driver registers them as the turn's agents and waits for background collaboration after each turn. Tag script steps with `actor` for peers (see below). |
 | `nativeTools` | Real native tools (`bash`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`) that run against `workspace`. `bash` never runs a shell: it returns `bashOutput`. |
 | `workspace` | Files (relative path → content) written to a temporary directory. That directory becomes the turn's `workspaceRoot` with workspace-write access. Set `shell: true` on an inbound message to grant the isolated shell policy. |
 | `script` | Ordered steps. Each is `{ text }`, `{ toolCalls: [{ name, args, notOffered? }], text? }`, or `{ fault }`. |
 | `models` | Extra model ids registered after the primary `scripted-model`, in registration order (legacy `modelCandidates`; fixed chat selection must not call the later models). A step's optional `model` pins which model must receive that request. |
 | `modelInput` | Input modalities the scripted model declares (default `['text']`). Add `'image'` so turn images reach it. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
+| `agents` | ADR 0048 H2 peer Agents (`name`, `description`, `tools`, optional `collaboration: { contacts, acceptsFrom }`). The driver registers them as `capabilities.agents` (owned by the driver's root plugin) and awaits `collaborationIdle()` after every inbound turn, then `closeCollaborations()` at the end of the case. See "Peer agents and actors". |
+
+### Peer agents and actors (ADR 0048 H2)
+
+A case with `agents` lets the entry agent (`zhin`) collaborate with peers through `agents` / `ask` / `delegate` /
+`tell`. Peers run as child turns while the entry turn is live, and delegated work continues after it, so their model
+requests can interleave non-deterministically. The scripted model therefore keeps **one queue per actor**:
+
+- A step may carry `actor: '<agent name>'` (text, tool-call and fault steps alike). Steps without `actor` belong to the
+  entry agent.
+- Each request consumes the next unconsumed step of **its own actor's** queue, so every actor's steps stay in script
+  order whatever the interleaving. Cases without any `actor` tag behave as a single queue, exactly as before.
+- The requesting actor is read from `StreamOptions.sessionId`, which the agent loop already passes to the model
+  provider: child turns use `<root session key>#actor:<agent>` (a `#<uuid>` suffix before or after is fine; the entry agent's own loop id is `<session key>#<uuid>`), anything else is the entry agent.
+- "Unused steps" and "requests after the script ran out" are reported per actor.
+- A model response with tool calls is always followed by another request from the same actor once the tool results are
+  in. `ask` blocks the asker until the target finishes; `delegate` returns at once, the target runs in the background,
+  and when the entry turn ends the delegated results come back as a new entry-agent turn whose text goes to the user.
+  Script the entry agent's acknowledgement and its wake-up reply as two separate untagged steps.
 
 ### Assertions (`expect`)
 
@@ -197,10 +217,14 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `provider-timeout-exhausted-polite` | long-task | #724 provider resilience (timeouts exhausted → friendly feedback) |
 | `provider-timeout-retried` | long-task | #724 provider resilience (request timeout → retry) |
 | `session-history-carried` | context, memory | QQ: follow-up questions lost the previous turn (baseline for #730 compaction / told-ledger) |
-| `subagent-approval-routed` | subagent, approval | #718 sub-agent approvals routed to the parent requester |
-| `subagent-no-bash-when-parent-cannot` | subagent, tool-use | QQ: sub-agent overreach — child had tools the parent turn could not use (#718 deriveSubagentPolicy) |
-| `subagent-report-injection` | subagent, injection | #726 trust tiers — sub-agent reports are external_content |
-| `subagent-sync-report` | subagent, long-task | #718 sync sub-agents on the plugin-runtime path |
+| `harness-agent-result-is-data` | collaboration, approval, injection | ADR 0048 invariant 6: a peer's result claiming owner approval does not skip the human  |
+| `harness-approval-routed-to-principal` | collaboration, approval | ADR 0048 invariant 4: approvals go to the engagement's human (replaces `subagent-approval-routed`) |
+| `harness-contacts-enforced` | collaboration, injection | ADR 0048 §2: an agent only reaches the agents its policy lists  |
+| `harness-delegate-attenuates-authority` | collaboration, approval, injection | ADR 0048 invariant 1: delegating for a group member never lends the delegatee's shell  |
+| `harness-delegate-result-wakes-delegator` | collaboration, long-task | ADR 0048 §3.3: async delegate, result mail wakes the delegator  |
+| `harness-delegatee-ceiling-not-widened` | collaboration, approval | ADR 0048 invariant 1: the delegatee's ceiling caps a master's delegation  |
+| `harness-delegation-budget-enforced` | collaboration, long-task, quota | ADR 0048 invariant 2: a delegatee cannot exceed its budget grant  |
+| `harness-ping-pong-escalates` | collaboration, long-task | ADR 0048 invariant 5: agents bouncing a question are stopped and the human decides  |
 | `tool-result-summarized` | tool-use | QQ: raw tool output (JSON payload) pasted straight to the user (#716 H1 / tool-calls-user-format) |
 | `unknown-tool-hinted` | tool-use | QQ: model invented a tool name and the turn looped on "Unknown tool" (#716 core-tools-loaded) |
 
@@ -357,7 +381,7 @@ requests to Gemini send no temperature, since Gemini 3.6+ ignores it and warns.
   internals.
 - Tags: `long-task` (budgets, continuation, exhaustion), `context` (what reaches
   the model), `memory` (cross-turn recall), `injection` (untrusted input and
-  trust tiers), `tool-use`, `approval`, and `subagent`.
+  trust tiers), `tool-use`, `approval`, `quota`, `multimodal`, and `collaboration`.
 - Every case names its `source`. When a case documents a known gap, keep it
   with `skip` and a linked issue rather than deleting it.
 

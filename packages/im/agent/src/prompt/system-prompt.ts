@@ -320,8 +320,7 @@ function buildOrchestrationSection(modelSdk?: string, profile?: AgentPromptProfi
   const items = [
     toolNecessity,
       'Use discover(kind) to find deferred tools/skills, then load_skill / load_tool before calling them.',
-      'Use spawn_task for complex, long-running, or specialist work that should run in a sub-agent.',
-      'Send independent queries as parallel tool calls in one message (e.g. several spawn_task).',
+      'Send independent queries as parallel tool calls in one message.',
   ];
   return ['# Orchestration', ...prependBullets(items)].join('\n');
 }

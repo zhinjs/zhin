@@ -11,11 +11,6 @@ import type { ZhinAgentPrivate, Tool } from '../internal/agent-host.js';
 import { defaultToolSystem } from '../tool/tool-system.js';
 import type { ResolvedToolsForTurn } from './deferred-resolution.js';
 
-function listSpawnableAgentNames(host: ZhinAgentPrivate): string[] {
-  const presets = host.resourceHub?.subagents.getAllPresets().map((p) => p.name) ?? [];
-  return [...new Set(presets.filter(Boolean))].sort();
-}
-
 export interface TurnToolsPrep {
   contextForTools: Message;
   allTools: AgentTool[];
@@ -69,7 +64,6 @@ export async function prepareTurnTools(
 
   const toolSystem = host.toolSystem ?? defaultToolSystem;
   const allTools = await toolSystem.collectForTurn({
-    host,
     message: contextForTools,
     content: opts.content,
     sessionId: opts.sessionId,
@@ -80,7 +74,6 @@ export async function prepareTurnTools(
     externalRegistered: host.externalTools,
     userProfiles: host.userProfiles,
     mcpTools,
-    spawnableAgentNames: host.subagentSystem ? listSpawnableAgentNames(host) : undefined,
   });
 
   const resolved = await toolSystem.resolveForTurn(

@@ -53,6 +53,21 @@ describe('Agent Feature', () => {
     });
   });
 
+  it('parses and validates the collaboration policy', () => {
+    const parse = (collaboration: unknown) => parseAgentPackage(
+      { ...packageSource(), manifest: { ...manifest(), collaboration } }, validation(),
+    );
+    expect(parseAgentPackage(packageSource(), validation()).collaboration).toBeUndefined();
+    expect(parse({ contacts: ['coder', 'qa-bot'], accepts_from: ['human', 'planner'] }).collaboration)
+      .toEqual({ contacts: ['coder', 'qa-bot'], acceptsFrom: ['human', 'planner'] });
+    expect(parse({}).collaboration).toEqual({ contacts: undefined, acceptsFrom: undefined });
+    expect(() => parse({ contacts: ['Bad Name'] })).toThrow(/invalid agent name/);
+    expect(() => parse({ accepts_from: ['Bad_Name'] })).toThrow(/invalid agent name/);
+    expect(() => parse({ contacts: ['a', 'a'] })).toThrow(/duplicates/);
+    expect(() => parse({ extra: [] })).toThrow(/unknown fields/);
+    expect(() => parse(['x'])).toThrow(/must be an object/);
+  });
+
   it('rejects incomplete core entry points and traversal', () => {
     const source = packageSource();
     expect(() => parseAgentPackage({

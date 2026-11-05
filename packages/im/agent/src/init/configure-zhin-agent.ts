@@ -18,7 +18,7 @@ export type ConfigureZhinAgentTarget = Pick<
   | 'config' | 'skillRegistry' | 'skillSystem' | 'resourceHub' | 'agentCore' | 'toolSystem'
   | 'contextSystem' | 'sessionSystem'
   | 'agentSessionStore' | 'contextRepository' | 'semanticMemory'
-  | 'subagentSystem' | 'activeBinding'
+  | 'activeBinding'
   | 'audioTranscriber'
   | 'mediaPerception'
   | 'imageAssets'
@@ -64,10 +64,6 @@ export function applyZhinAgentConfigure(
   if (deps.activeBinding !== undefined) {
     target.activeBinding = deps.activeBinding;
   }
-  if (deps.subagentSender !== undefined) {
-    target.subagentSystem?.setSender(deps.subagentSender);
-  }
-  if (deps.deferredResultSender !== undefined) target.deferred.resultSender = deps.deferredResultSender;
   if (deps.bootstrapContext !== undefined) {
     target.bootstrapContext = deps.bootstrapContext;
     logger.debug(`Bootstrap context set (${deps.bootstrapContext.length} chars)`);

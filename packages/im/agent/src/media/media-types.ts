@@ -49,9 +49,6 @@ export interface PreprocessInboundResult {
   payloads: MediaBinaryPayload[];
 }
 
-/** 子 agent / standalone turn 首条 user content 的内部部件（text + canonical 媒体块）。 */
-export type AgentRunInputPart = { type: 'text'; text: string } | MediaContentBlock;
-export type AgentRunInput = string | AgentRunInputPart[];
 
 export interface OutboundMediaCapabilities {
   image?: boolean;

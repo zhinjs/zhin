@@ -48,23 +48,23 @@ describe('tool-catalog', () => {
 
   it('resolveDeferredToolsConfig uses deferredTools.alwaysLoadedTools', () => {
     const cfg = resolveDeferredToolsConfig({
-      deferredTools: { alwaysLoadedTools: ['ask_user', 'spawn_task'] },
+      deferredTools: { alwaysLoadedTools: ['ask_user', 'delegate'] },
     });
     expect(cfg.alwaysLoadedTools).toContain('ask_user');
     expect(cfg.maxLoadedPerSession).toBe(12);
   });
 
   it('alwaysLoadedTools extends the default resident set (#740)', () => {
-    const cfg = resolveDeferredToolsConfig({ deferredTools: { alwaysLoadedTools: ['probe_source', 'spawn_task'] } });
+    const cfg = resolveDeferredToolsConfig({ deferredTools: { alwaysLoadedTools: ['probe_source'] } });
     expect(cfg.alwaysLoadedTools).toEqual([...new Set([...DEFAULT_ALWAYS_LOADED_TOOLS, 'probe_source'])]);
-    expect(cfg.alwaysLoadedTools).toEqual(expect.arrayContaining(['discover', 'load_tool', 'load_skill', 'spawn_task']));
+    expect(cfg.alwaysLoadedTools).toEqual(expect.arrayContaining(['discover', 'load_tool', 'load_skill']));
   });
 
   it("alwaysLoadedMode 'replace' opts out of the defaults (#740)", () => {
     const cfg = resolveDeferredToolsConfig({
-      deferredTools: { alwaysLoadedTools: ['spawn_task'], alwaysLoadedMode: 'replace' },
+      deferredTools: { alwaysLoadedTools: ['delegate'], alwaysLoadedMode: 'replace' },
     });
-    expect(cfg.alwaysLoadedTools).toEqual(['spawn_task']);
+    expect(cfg.alwaysLoadedTools).toEqual(['delegate']);
     expect(resolveDeferredToolsConfig({ deferredTools: { alwaysLoadedMode: 'replace' } }).alwaysLoadedTools).toEqual([]);
   });
 

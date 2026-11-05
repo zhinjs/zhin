@@ -26,9 +26,6 @@ export type {
   ThinkingEvent,
   TurnEndEvent,
   TurnErrorEvent,
-  SubagentStartEvent,
-  SubagentProgressEvent,
-  SubagentEndEvent,
   McpConnectEvent,
   McpToolCallEvent,
 } from './turn-event.js';

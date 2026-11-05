@@ -51,10 +51,8 @@ import { resolveTurnTrustLevel } from '../security/trust-level.js';
 import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { getLogger } from '@zhin.js/logger';
 import { isLocale } from '@zhin.js/plugin-runtime';
-import {
-  createSubagentTurnCapability,
-  type SubagentModelSelection,
-} from './subagent-turn-capability.js';
+import { startTurnCollaboration } from '../collaboration/turn-collaboration.js';
+import type { ActorModelSelection } from '../collaboration/contracts.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import type { ContextFile } from '../bootstrap.js';
@@ -158,25 +156,25 @@ async function* runInteractiveTurn(
     ? createInteractiveRun(host.usageQuota, quotaSubject, resolveToolBudget(host.config.toolBudget).maxTotalTokens)
     : undefined;
   const snapshot = await host.contextRepository.getDeferredToolSnapshot(prep.sessionId);
-  const subagentModel: { current?: SubagentModelSelection } = {};
-  const subagentCapability = subagentsEnabled(host, context.turn)
-    ? createSubagentTurnCapability({
-      host,
-      core: options.core,
-      parentTurn: context.turn,
-      capabilities: { ...context.capabilities, tools: context.toolCapabilities },
-      bootstrapContext: options.bootstrapContext,
-      contextFiles: options.contextFiles,
-      loopHooks: options.loopHooks,
-      resolveModel: () => subagentModel.current,
-      imageInspectionBudget,
-      interactiveRun,
-    })
-    : undefined;
+  const actorModel: { current?: ActorModelSelection } = {};
+  // ADR 0048: the live turn is the root actor of an engagement whenever other agents exist.
+  const collaboration = await startTurnCollaboration({
+    host,
+    core: options.core,
+    turn: context.turn,
+    capabilities: { ...context.capabilities, tools: context.toolCapabilities },
+    entry: context.selection.binding.name,
+    resolveModel: () => actorModel.current,
+    loopHooks: options.loopHooks,
+    bootstrapContext: options.bootstrapContext,
+    contextFiles: options.contextFiles,
+    imageInspectionBudget,
+    interactiveRun,
+  });
   const projected = {
     ...context.capabilities,
-    tools: subagentCapability
-      ? Object.freeze([...context.toolCapabilities, subagentCapability])
+    tools: collaboration
+      ? Object.freeze([...context.toolCapabilities, ...collaboration.tools])
       : context.toolCapabilities,
   };
   const primed = await primeSkillsForIntent({
@@ -249,7 +247,7 @@ async function* runInteractiveTurn(
     background ? [background, ...prompt.userMessages] : prompt.userMessages,
     media,
   );
-  subagentModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
+  actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   const provenance = new TurnProvenance();
   if (background) provenance.record({ kind: 'conversation_context' });
   // Perception descriptions are generated from user media (text in an image is an injection path).
@@ -522,6 +520,8 @@ async function* runInteractiveTurn(
         });
         if (projectionError) throw projectionError;
       } finally {
+        // Delegated work keeps running; its results reach the human as follow-up replies.
+        await collaboration?.finish(completion.terminal.type === 'turn_end' && !projectionError ? 'completed' : 'failed');
         replyLifetime.abort();
         await cancelReplyStreams();
         // Stop activity-feedback AFTER the reply is sent. Awaiting icqq
@@ -546,6 +546,7 @@ async function* runInteractiveTurn(
   };
   } finally {
     if (!projectionOwnsReply) {
+      await collaboration?.finish(context.turn.signal.aborted ? 'cancelled' : 'failed');
       replyLifetime.abort();
       await cancelReplyStreams();
       for (const execution of executions) {
@@ -954,16 +955,6 @@ function terminal(text: string, usage: Usage): TurnEndEvent {
 
 function zeroUsage(): Usage {
   return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-}
-
-/**
- * Sub-agents run inside the parent turn, so they need a live interactive turn:
- * opt-in via `ai.agent.subagentTurnMode`, never for Workroom assignments.
- */
-function subagentsEnabled(host: ZhinAgentPrivate, turn: TurnIngress): boolean {
-  if (host.config.subagentTurnMode !== 'sync') return false;
-  return !turn.session.key.startsWith('workroom:')
-    && !turn.principal.roles.includes('workroom_assignment');
 }
 
 /**

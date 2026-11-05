@@ -80,5 +80,7 @@ export function createLiveModel(options: LiveModelOptions): ScriptedModel {
     modelMismatches: [],
     exhaustedRequests: () => 0,
     remainingSteps: () => 0,
+    remainingStepsByActor: () => ({}),
+    exhaustedRequestsByActor: () => ({}),
   };
 }

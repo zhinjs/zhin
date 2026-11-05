@@ -58,7 +58,7 @@ export interface ScheduleJob {
   updatedAt: number;
   state: ScheduleJobState;
   source?: 'schedule' | 'manual' | 'event' | 'profile';
-  /** 创建者身份（执行 agent / subagent 时用于 exec/file 策略） */
+  /** 创建者身份（执行 agent 时用于 exec/file 策略） */
   createdBy?: ScheduleJobCreator;
   /** 预演确认后的执行计划（prompt / tools / skills） */
   executionPlan?: ScheduleJobExecutionPlan;

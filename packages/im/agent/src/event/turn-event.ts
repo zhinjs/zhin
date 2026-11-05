@@ -37,9 +37,6 @@ export type TurnEvent =
   | TurnErrorEvent
   | TurnCancelledEvent
   | TurnBudgetExceededEvent
-  | SubagentStartEvent
-  | SubagentProgressEvent
-  | SubagentEndEvent
   | McpConnectEvent
   | McpToolCallEvent;
 
@@ -198,26 +195,6 @@ export function isTurnTerminalEvent(event: TurnEvent): event is TurnTerminalEven
     || event.type === 'error'
     || event.type === 'turn_cancelled'
     || event.type === 'budget_exceeded';
-}
-
-export interface SubagentStartEvent {
-  type: 'subagent_start';
-  taskId: string;
-  agentName?: string;
-  description: string;
-}
-
-export interface SubagentProgressEvent {
-  type: 'subagent_progress';
-  taskId: string;
-  summary: string;
-}
-
-export interface SubagentEndEvent {
-  type: 'subagent_end';
-  taskId: string;
-  status: 'ok' | 'error';
-  result?: string;
 }
 
 export interface McpConnectEvent {

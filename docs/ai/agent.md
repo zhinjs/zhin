@@ -1,6 +1,6 @@
 ---
 title: "Agent 深入"
-description: "AI 一轮对话是怎么运行的：进度显示与取消、按需加载工具、子 Agent、会话与上下文压缩、内置工具、定时任务、按模型调参，以及 Workroom 多 Agent 协作"
+description: "AI 一轮对话是怎么运行的：进度显示与取消、按需加载工具、多 Agent 协作、会话与上下文压缩、内置工具、定时任务、按模型调参，以及 Workroom 多 Agent 协作"
 ---
 
 # Agent 深入
@@ -20,7 +20,7 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 
 - `input`、`output`、`cache_read`、`cache_write`、`reasoning` 单位均为 token；缓存读写属于输入的分项，思考属于输出的分项，不能重复相加。数值沿用 Provider 经 SDK 归一化后的 usage，不用字符估算替代。
 - `?` 表示没有可证明的数据；`0` 表示明确的零值，或没有记录到模型响应；`>=60` 表示部分调用缺少该字段，已确认的部分合计为 60。旧记录无法证明的零值也会显示为 `?`。
-- `calls` 是本回合记录到的模型响应次数，包括统一完成链路中的摘要、进度总结、回复修复和同步子回合；`subagent_calls` 是其中的子回合次数，不能再加一次。SDK 内部 HTTP 重试没有独立响应事件，不按网络请求次数计数。
+- `calls` 是本回合记录到的模型响应次数，包括统一完成链路中的摘要、进度总结、回复修复和协作子回合；`subagent_calls` 是其中其他 Agent 子回合的次数，不能再加一次。SDK 内部 HTTP 重试没有独立响应事件，不按网络请求次数计数。
 - 汇总包含当前 trace 中已记录的子回合；`partial` 表示回合未正常完成、子回合结果不完整或记录达到上限；此时显示的只是已记录用量，不能当作全部消耗。它不是整个账号的账单：独立决策、嵌入、图像生成等没有进入该 trace 的调用不在此汇总，Provider 未回传的失败请求用量也无法推算。
 - `ms` 是 trace 记录的回合耗时；`trace` 用于串联日志，`turn` 可以交给 `zhin trace <turn>` 查看已有归档。日志无需归档开关；只开日志不会新增落盘存储。
 
@@ -40,7 +40,7 @@ SQL 数据库会独立保存结构化用量，默认保留 30 天。字段、查
 | AI 一轮对话是怎么跑的、会迭代几次、多久超时 | [一轮对话是怎么运行的](#一轮对话是怎么运行的) |
 | 让用户看到"思考中"的进度，或中途取消 | [显示进度](#显示进度) · [取消正在执行的回合](#取消正在执行的回合) |
 | 工具很多时怎么不撑爆提示词 | [按需加载工具](#按需加载工具) |
-| 把耗时任务交给后台 | [子 Agent 与 spawn_task](#子-agent-与-spawn-task) |
+| 让 Agent 找别的 Agent 帮忙、把耗时任务交给后台 | [多 Agent 协作](#多-agent-协作) |
 | 对话历史存在哪里、怎么重置、上下文太长怎么办 | [会话与会话树](#会话与会话树) · [上下文压缩](#上下文压缩) |
 | AI 记住了什么、谁能改记忆 | [语义记忆](#语义记忆) |
 | AI 怎么认识每个人和每个群、好感度怎么变、被禁言时会怎样 | [会话画像](#会话画像) |
@@ -63,7 +63,7 @@ sequenceDiagram
     H->>H: 收集工具（插件工具 + MCP + 内置 + deferred meta）
     H->>Z: process(text, commMessage, tools)
     Z->>L: agentLoop：system prompt + 会话历史 + 工具目录
-    L-->>Z: tool_call(bash / web_search / spawn_task …)
+    L-->>Z: tool_call(bash / web_search / delegate …)
     Z->>Z: 安全策略检查 → 执行工具 → 回写结果
     Z->>L: 继续（直到无 tool_call 或达 maxIterations）
     L-->>Z: 最终文本
@@ -80,12 +80,12 @@ sequenceDiagram
   - **其他人的消息**：一律按到达顺序排队，绝不打断、也不并入别人的回合，所以权限也不会串到别人身上。
   - **叫停**：发起人（或主人）发送 `取消` / `cancel` / `/cancel` 会停止当前回合，并丢掉他自己排队的消息；其他成员发这个词按普通消息处理。
   - **上限**：每个会话最多排 `maxQueuedTurns` 条（默认 5），超出时回复“请稍后再发”；排队超过 `ttlMs`（默认 180000ms）的消息会跳过并提示。
-  - **群聊合流**（`merge`，ADR 0038，默认开启，仅群聊；`enabled: false` 恢复逐人逐条回复）：群里短时间内多人点名 Bot 的纯文本消息由一个回合合并回答。窗口内 `quietMs`（默认 1500ms）没有新消息就发车，最晚在第一条消息后 `maxWaitMs`（默认 6000ms）发车；一个窗口最多 `maxSenders`（默认 5）个发送者，之后的人进下一个窗口。在跑回合期间到达的消息进窗口等待。主人、私聊、触发前缀指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。进窗口与发车分别写审计 `merge_window_joined` / `merge_window_flushed`。合并回合只能做**所有**发送者都能做的事：可见工具、技能与子 Agent 取各发送者各自可见集合的交集，回合角色与权限也取交集——合并只会让权限变少或不变，群里的管理员不会把自己的工具借给普通成员。合并回合里每次有副作用的工具调用（危险工具，或发消息 / 改配置 / 定时 / shell 类）都要带 `onBehalfOf`（合并内某位发送者的 id），运行时按**那个人**自己能用的工具复核，`onBehalfOf` 不会传给工具本身；缺省或不在合并里时按合并内权限最低者复核（每个人都能做才放行），不通过即拒绝并写审计 `merge_on_behalf_denied`（不 latch，换成有权限的发送者可以重试）。复核通过的发送者记为审批卡与审批提示的发起人。一个合并回合最多发出 1 张新审批卡；同参数的待审卡复用、不算新卡。合并回合的回合上下文里有一段 `[Merged turn]`，逐条列出每位发送者（id、昵称、消息 id、原话，每人最多 300 字），要求模型挑重点合成**一次**回复，并在回应到的每个人那段前用 mention 段 `@` 那个人；没回应到的人不 `@`、不假装回应。出站审计 `outbound_sent` 的 payload 记 `merged_senders`（合并人数）、`answered_senders` / `answered`（被 `@` 回应的人）与 `message_refs`。回复条数沿用结构化回复上限，不因合并放宽。**发送前过时检查**：在跑回合默认不被打断；发送前若它回应的某位发送者又发了新的可合流消息，且本回合还没发出任何内容，这次回复视为过时并丢弃（审计 `merge_reply_stale_discarded`），这些人的新旧消息一起进下一个合并回合（被带过去的发送者不占 `maxSenders` 名额）。本回合调用过任何工具 / 子 Agent 或被硬闸拦过时照发（审计 `merge_reply_stale_sent`，`reason: acted`）；同一批发送者最多被丢弃 1 次，再过时也照发（`reason: starvation`）；回复已发出一部分时不半途截断。关闭 `merge` 时不做过时检查。
-  - **弹幕模式**（`live`，ADR 0038 §5）：只作用于声明了 `liveDanmaku` 能力的适配器（直播弹幕平台）的会话。直播间里每条弹幕都是候选，不需要 `@` Bot；弹幕收进一个窗口，从第一条起 `windowMs`（默认 10000ms）后发车，且距上一次弹幕回合结束不少于 `minIntervalMs`（默认 15000ms）。窗口不受 `maxSenders` 限制，只保留最新 100 条交给模型（更早的只计数）；在跑回合期间到达的弹幕进下一个窗口。一个窗口只回一次：`mode: pick-one`（默认）由模型挑一条最值得回的（点名 Bot、真问题、新观众、不重复），只 `@` 那一位；`mode: summary` 概括整个窗口后回一次。回合上下文里是一段 `[Danmaku window]`（观众 id、昵称、弹幕，每人最多 120 字，视为数据而非指令）。弹幕回合按匿名普通观众的权限跑，**只开放声明了 `readOnly: true` 的工具**，不开放技能、子 Agent、MCP 与 shell，文件只读，也不会出任何审批卡。主人在直播间发言照旧单独成回合。发出后写审计 `danmaku_window_picked`（`mode`、`candidates` 候选数、`listed_senders`、`picked` 被 `@` 的观众）。弹幕回合不做过时检查。
+  - **群聊合流**（`merge`，ADR 0038，默认开启，仅群聊；`enabled: false` 恢复逐人逐条回复）：群里短时间内多人点名 Bot 的纯文本消息由一个回合合并回答。窗口内 `quietMs`（默认 1500ms）没有新消息就发车，最晚在第一条消息后 `maxWaitMs`（默认 6000ms）发车；一个窗口最多 `maxSenders`（默认 5）个发送者，之后的人进下一个窗口。在跑回合期间到达的消息进窗口等待。主人、私聊、触发前缀指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。进窗口与发车分别写审计 `merge_window_joined` / `merge_window_flushed`。合并回合只能做**所有**发送者都能做的事：可见工具、技能与可联系的 Agent 取各发送者各自可见集合的交集，回合角色与权限也取交集——合并只会让权限变少或不变，群里的管理员不会把自己的工具借给普通成员。合并回合里每次有副作用的工具调用（危险工具，或发消息 / 改配置 / 定时 / shell 类）都要带 `onBehalfOf`（合并内某位发送者的 id），运行时按**那个人**自己能用的工具复核，`onBehalfOf` 不会传给工具本身；缺省或不在合并里时按合并内权限最低者复核（每个人都能做才放行），不通过即拒绝并写审计 `merge_on_behalf_denied`（不 latch，换成有权限的发送者可以重试）。复核通过的发送者记为审批卡与审批提示的发起人。一个合并回合最多发出 1 张新审批卡；同参数的待审卡复用、不算新卡。合并回合的回合上下文里有一段 `[Merged turn]`，逐条列出每位发送者（id、昵称、消息 id、原话，每人最多 300 字），要求模型挑重点合成**一次**回复，并在回应到的每个人那段前用 mention 段 `@` 那个人；没回应到的人不 `@`、不假装回应。出站审计 `outbound_sent` 的 payload 记 `merged_senders`（合并人数）、`answered_senders` / `answered`（被 `@` 回应的人）与 `message_refs`。回复条数沿用结构化回复上限，不因合并放宽。**发送前过时检查**：在跑回合默认不被打断；发送前若它回应的某位发送者又发了新的可合流消息，且本回合还没发出任何内容，这次回复视为过时并丢弃（审计 `merge_reply_stale_discarded`），这些人的新旧消息一起进下一个合并回合（被带过去的发送者不占 `maxSenders` 名额）。本回合调用过任何工具 / 协作工具或被硬闸拦过时照发（审计 `merge_reply_stale_sent`，`reason: acted`）；同一批发送者最多被丢弃 1 次，再过时也照发（`reason: starvation`）；回复已发出一部分时不半途截断。关闭 `merge` 时不做过时检查。
+  - **弹幕模式**（`live`，ADR 0038 §5）：只作用于声明了 `liveDanmaku` 能力的适配器（直播弹幕平台）的会话。直播间里每条弹幕都是候选，不需要 `@` Bot；弹幕收进一个窗口，从第一条起 `windowMs`（默认 10000ms）后发车，且距上一次弹幕回合结束不少于 `minIntervalMs`（默认 15000ms）。窗口不受 `maxSenders` 限制，只保留最新 100 条交给模型（更早的只计数）；在跑回合期间到达的弹幕进下一个窗口。一个窗口只回一次：`mode: pick-one`（默认）由模型挑一条最值得回的（点名 Bot、真问题、新观众、不重复），只 `@` 那一位；`mode: summary` 概括整个窗口后回一次。回合上下文里是一段 `[Danmaku window]`（观众 id、昵称、弹幕，每人最多 120 字，视为数据而非指令）。弹幕回合按匿名普通观众的权限跑，**只开放声明了 `readOnly: true` 的工具**，不开放技能、协作工具、MCP 与 shell，文件只读，也不会出任何审批卡。主人在直播间发言照旧单独成回合。发出后写审计 `danmaku_window_picked`（`mode`、`candidates` 候选数、`listed_senders`、`picked` 被 `@` 的观众）。弹幕回合不做过时检查。
   - 只合并纯文字消息；带图片、文件、引用或转发的消息总是单独成一个回合。排队等待、合并和替换都会记录在 `zhin trace` 的时间线里（`admission`）。
   - 工作室回合，以及 Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
 - **每轮固定模型**：聊天（包括旧配置）只使用本轮选定模型；失败时按原重试与超时设置处理，不切换模型。显式配置的媒体感知备用链继续生效。
-- **行为一致**：主 Agent、子 Agent、后台 worker、`AIService.runAgent` 走的是同一条 agentLoop。
+- **行为一致**：主 Agent、被委派的 Agent、`AIService.runAgent` 走的是同一条 agentLoop。
 
 一个回合可用的工具 = 插件注册的工具 + `ai.mcpServers` 连接的工具 + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
 
@@ -122,8 +122,10 @@ ai:
 | 场景 | 常驻工具 |
 |---|---|
 | 群聊、频道、普通私聊（含信任名单成员的私聊） | 聊天必需：`pick_sticker`、`memory_search`、`conversation_info`，以及元工具 `discover`、`load_tool`、`load_skill` |
-| 主人私聊 | 上述 + 开发与编排工具：`read_file`、`list_dir`、`glob`、`grep`、`edit_file`、`write_file`、`bash`、`ask_user`、`spawn_task` |
-| 定时、后台、子 agent 等非 IM 回合 | 沿用原默认集合：`ask_user`、`spawn_task`、元工具和工作区文件工具 |
+| 主人私聊 | 上述 + 开发工具：`read_file`、`list_dir`、`glob`、`grep`、`edit_file`、`write_file`、`bash`、`ask_user` |
+| 定时等非 IM 回合 | 沿用原默认集合：`ask_user`、元工具和工作区文件工具 |
+
+回合里还有其他可协作的 Agent 时，[协作工具](#多-agent-协作)（`agents`、`ask`、`delegate`、`tell`、`cancel_delegation`、`escalate`）自动常驻，不受场景档限制。
 
 非主人回合不常驻开发工具：它们仍在工具索引里，但只对有权限的回合可加载（权限不变），群聊里模型不会再拿 `grep` 去翻源码。工具名不在当前场景档里时，模型直接按名字调用也会自动加载，不必先 `load_tool`。`bash` 能不能用仍取决于本回合的 shell 隔离策略，被策略拿掉就不会常驻。
 
@@ -162,37 +164,46 @@ ai:
         icqq: { alwaysLoaded: [send_msg] }   # 指定 MCP server 的常驻工具
 ```
 
-`bash`、`read_file`、`spawn_task` 等保留的内置工具名不能被插件覆盖；非保留工具重名时，后注册的覆盖先注册的，并记录 warn。
+`bash`、`read_file`、`delegate` 等保留的内置工具名不能被插件覆盖；非保留工具重名时，后注册的覆盖先注册的，并记录 warn。
 
-## 子 Agent 与 spawn_task
+## 多 Agent 协作
 
-主 Agent 可以用 `spawn_task` 把复杂或耗时的任务交给**后台子 Agent**，主对话不会被阻塞。
+框架只管边界，Agent 自己决定怎么协作（ADR 0048）。一次人的消息会开启一次**协作**（engagement）：当前回合的 Agent 是根，它可以找别的 Agent，对方的回合是它的子回合，全程写进同一份 journal。协作工具**只在本回合确实有其他 Agent 可联系时**才提供给模型：
 
-```yaml
-ai:
-  agent:
-    maxParallelSubagents: 5        # 并行子 Agent 上限（默认 5）
-    toolExecution: tiered          # parallel | sequential | tiered（默认）
-    subagentAutoContinue: true     # 子任务完成后唤醒主 Agent 继续对话（默认 true）
-    subagentDirectImDelivery: false # 额外把子任务摘要直接发到聊天（默认 false）
-    subagentTools: []              # 追加子 Agent 可用的工具
+| 工具 | 用途 |
+|------|------|
+| `agents` | 列出你能联系的 Agent 及其职责 |
+| `ask` | 同步提问，在本回合内等对方答复 |
+| `delegate` | 异步委派，立即返回句柄；结果稍后作为新消息回来，唤醒委派方继续 |
+| `tell` | 单向通知，不期待回复 |
+| `cancel_delegation` | 撤回自己委派出去的工作（传 `delegate` 返回的 mail id） |
+| `escalate` | 把决定交还给发起的人，等待回复 |
+
+谁能被联系，由 `agents/<name>/agent.json` 的 `collaboration` 声明：
+
+```json
+{
+  "name": "planner",
+  "collaboration": {
+    "contacts": ["researcher", "reviewer"],
+    "accepts_from": ["planner"]
+  }
+}
 ```
 
-`spawn_task` 的主要参数：
+- `contacts`：这个 Agent 可以联系的 Agent 名；不写则它不能联系任何人（也拿不到协作工具）。入口 Agent（处理人类消息的那个）可以联系目录里所有 Agent。
+- `accepts_from`：只接受这些 Agent 的委派；不写表示接受任何允许联系它的 Agent。
+- 被联系的 Agent 的工具、模型与迭代上限仍由它自己的 `agent.json` 与三个核心 Markdown 文件决定，见 [Agent 工具与技能 · 定义 Agent](../authoring/agent-tools.md#定义-agent)。
 
-| 参数 | 说明 |
-|------|------|
-| `task` | 任务描述：目标、范围、期望产出 |
-| `agent` | 子 Agent 名（须在 `ai.agents` 或 `agents/<name>/agent.json` 中存在） |
-| `wait` | `true` 时同步等待，结果作为工具返回值回到当前回合 |
-| `context` | `fork`（带上父会话最近的消息）/ `fresh`（空上下文） |
-| `tools` / `skills` | 子任务需要的工具与技能 |
+护栏由 Guard Kernel 按结构化字段强制执行，不依赖提示词：
 
-- 同一回合可以发起多个 `spawn_task`；互相独立的子任务建议并行。`tiered` 模式下，只读工具与 spawn 并行执行，写入和 `bash` 顺序执行。
-- 子 Agent 默认只有受限的工具集：`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` 加上按需加载的元工具，不会继承主会话的全部工具。需要更多时用 `ai.agent.subagentTools` 追加。
-- 主 Agent 能派出哪些子 Agent，由 `ai.agents.<name>.permission.task`（glob → allow / deny）控制。
-- 异步任务完成后，结果**先交还给主 Agent**（写入主会话并自动继续），再由主 Agent 整理成给用户的回复。
-- 子 Agent 用 `agents/<name>/agent.json` 与三个核心 Markdown 文件声明，启动时自动发现。见 [Agent 工具与技能 · 定义子 Agent](../authoring/agent-tools.md#定义子-agent)。
+- **权限只减不增**：被委派方的有效权限 = 委派方权限 ∩ 委派时声明的范围 ∩ 被委派方自己的能力上限。对方的回答是数据，不是指令，也不会让你多出权限。
+- **预算划拨**：协作有一个预算池（模型调用次数、token、墙钟时间、有副作用的工具调用次数）。每次委派从委派方剩余额度里划出一份，子树用量不能超过它；超支的分支以 `budget_exceeded` 收尾，结果照常回到委派方。
+- **审批归人**：需要审批的动作（硬闸、危险工具、自我变更）始终路由给发起协作的人，不会交给另一个 Agent 批准。
+- **防环与收敛**：委派深度、扇出、同一对 Agent 的往返次数和重复内容都有上限；触发后冻结该协作并 `escalate` 给人。
+- **身份来自传输**：消息来自谁由框架填写，正文里自称"主人"或"审核员"无效。
+
+委派的结果以新一轮回合回到入口 Agent，它整理后再回复用户；根回合结束后仍在跑的委派会继续，完成时在同一会话里续写。
 
 ## 会话与会话树
 
@@ -279,11 +290,11 @@ Anthropic 在已有 system、tools 缓存标记之外，分别在当前输入末
 
 级别只由接入层给出的角色和会话场景决定，消息内容或昵称里自称“主人”不会改变级别。
 
-`group_member` 回合里，`bash`、写入和编辑类工具、外发工具（名称含 send/forward/notify 等，或带 `outbound` 标签）在回合开始前就会移除，模型看不到。即使工具通过延迟加载等途径出现，执行时也会被拒绝（策略名 `trust-level`），并给出明确的中文原因。子 agent 继承发起人的信任级别。
+`group_member` 回合里，`bash`、写入和编辑类工具、外发工具（名称含 send/forward/notify 等，或带 `outbound` 标签）在回合开始前就会移除，模型看不到。即使工具通过延迟加载等途径出现，执行时也会被拒绝（策略名 `trust-level`），并给出明确的中文原因。被委派的 Agent 继承发起人的信任级别，且只能更低。
 
 以下内容按 `external_content` 渲染成带来源的数据块，其中的指令不会提升权限：
 
-- 子 agent 的报告（`source="subagent_report"`）；
+- 其他 Agent 经协作工具返回的内容（`actor:<名字>`）；
 - 第三方插件注册的提示词段落（`source="plugin:<插件>"`）和已加载的技能说明（`source="skill"`）；
 - 群里的背景消息（`source=external_content`）；
 - 工具输出、网页、文件、转发消息本来就以工具结果的形式交给模型，不会被当作发起人的指令。
@@ -509,7 +520,8 @@ ai:
 | 文件 | `read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep` |
 | 网络 | `web_search`、`web_fetch` |
 | 交互 | `ask_user` |
-| 任务 | `spawn_task`、`todo_read`、`todo_write` |
+| 任务 | `todo_read`、`todo_write` |
+| 协作 | `agents`、`ask`、`delegate`、`tell`、`cancel_delegation`、`escalate`（有其他可联系的 Agent 时才提供） |
 | 记忆 / 检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
 | 媒体 | `generate_image`；配置 R2 后可审批调用 `upload_image(file_path)`；Host 的 MCP 私有图片通过 `get_local_assets(asset_id)` 按需查看，见[图片存储](./index.md#ai-imagestorage) |
 | 元工具 | `discover`、`load_tool`、`load_skill` |
@@ -643,14 +655,14 @@ ai:
 
 Workroom 让多个 Agent 在一个群、频道或 GitHub 仓库里**按角色分工**处理多步骤任务：Orchestrator 负责理解需求和分派，Executor 执行，Reviewer 审核。和普通对话不同，它的每一步都记录在只追加的日志里，可审计、可恢复。
 
-**普通聊天和 `spawn_task` 都不会自动创建 Workroom**，只有显式的 Project 命令（如 `/work`）才会。
+**普通聊天和 Agent 之间的协作都不会自动创建 Workroom**，只有显式的 Project 命令（如 `/work`）才会。
 
 ### 核心规则
 
 - `WorkroomKernel` 只接受显式的、限定 Project 的命令，用带版本的只追加 Journal 作为 Run / Task / Assignment 的唯一事实来源。
 - 不提供让模型伪造"已执行 / 已验收"的通用状态切换工具。命令适配器必须持有认证后的 Project capability，并分别接入 Scheduler、Executor 与 Acceptance 端口。
 - 人类的消息先按完整空间地址进入 content-free 的 Project Inbox，再由 Orchestrator 仲裁成任务。`conversation.agent` 标识这个 Inbox 所属的 Orchestrator，但**不能**绕过仲裁直接把消息变成 Task 状态。
-- 普通讨论持久化后，以一次性 handoff 继续执行该 Orchestrator 回合，直接返回 Agent 回复。这个回合使用限定 Project 的会话和可信的 Project / Proposal envelope：不读取普通群聊的会话尾部、不暴露 `spawn_task`，回复固定经 Catalog Orchestrator Endpoint 的统一出站链路发出。
+- 普通讨论持久化后，以一次性 handoff 继续执行该 Orchestrator 回合，直接返回 Agent 回复。这个回合使用限定 Project 的会话和可信的 Project / Proposal envelope：不读取普通群聊的会话尾部，回复固定经 Catalog Orchestrator Endpoint 的统一出站链路发出。
 - 回复投影卡片或 `@` 具名成员时，只有在**唯一**一个 active Assignment 时才生成精确的 TaskInput，否则会请求澄清。
 - 只有显式的 `/work` 才会通过受治理的规划入口创建 Run / Task。
 
@@ -778,5 +790,5 @@ ai:
 ## 相关
 
 - [AI 总览](./index.md)：启用 AI、模型、触发规则与安全策略。
-- [Agent 工具与技能](../authoring/agent-tools.md)：编写工具、Skill、Prompt Section 与子 Agent。
+- [Agent 工具与技能](../authoring/agent-tools.md)：编写工具、Skill、Prompt Section 与 Agent。
 - [语音](./speech.md)：语音识别与语音回复。
