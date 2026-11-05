@@ -1,0 +1,346 @@
+packages/im/agent/tests/turn/stale-reply.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 6
+packages/im/agent/tests/orchestration/five-agent-contract.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 3,31
+.changeset/adr-0048-agent-harness-h0.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-4
+packages/im/agent/tests/media/local-image-inspection.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 7
+packages/im/agent/tests/ai/prompt-discipline.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 58
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 233-235
+packages/im/agent-feature/src/definition.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 57-65,91-94,149,171,266-283
+  s_9622fd28aba994::t_5233e05d72b42f 284-285
+packages/im/agent/src/collaboration/tools.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-227
+packages/im/agent/tests/model-runtime/purpose-parameters.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1,19-24,45,61
+plugins/services/activity-feedback/tests/index.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 110,135,143
+packages/im/agent/src/trace/turn-trace-registry.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 69,74
+packages/im/agent/src/prompt/prompts/orchestrator.openai-compatible.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 3
+packages/im/agent/evals/README.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 21-23,79,83,90-108,220-227,384
+packages/im/agent/src/reserved-tools.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 26-32
+packages/im/agent/src/session/session-system.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 116
+packages/im/agent/src/assistant/types.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 61
+packages/im/agent/src/trace/turn-trace.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 105
+packages/im/agent/tests/ai/integration.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 44
+packages/im/agent/evals/framework/fixture.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 18,215-235,247-248,315,340-342,344-346
+packages/im/agent/src/security/provenance.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 79
+packages/im/agent/tests/plugin-runtime/tool-tiers.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 122,126-127,132-133
+packages/im/agent/src/core/agent-run-shared.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1
+packages/im/agent/src/service.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 8,11,14
+docs/plans/workroom-group-collaboration-progress.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 7-8
+packages/im/harness/tests/guard.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-416
+packages/im/harness/tests/harness.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-292
+packages/im/harness/README.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-5
+packages/im/harness/src/authority.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-194
+tests/docs/ai-provider-experimental.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-57
+packages/im/agent/tests/model-runtime/lazy-auxiliary-models.test.ts
+  s_9622fd28aba994::t_da9cf797a07c31 4-6,92,94-95,109
+packages/im/agent/src/config/agent-interfaces.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 56
+packages/im/agent/evals/cases/harness-delegate-attenuates-authority.case.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-24
+basic/cli/src/plugin-runtime/agent/runtime-foundation.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 158,160
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 286
+packages/im/harness/tests/authority.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-330
+packages/im/agent/evals/framework/framework.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 11,13,208-216,304-358
+  s_9622fd28aba994::t_a93a31290ea639 359
+packages/im/agent/evals/framework/index.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1,7
+packages/im/agent/src/tool/tool-system.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 22,72
+packages/im/harness/tests/journal.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-165
+examples/test-bot/agents/home/system.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 17
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 2,165-178,180-181,183
+packages/im/harness/src/budget.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-181
+packages/im/agent/tests/model-runtime/ai-service.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 14-15,56-62
+packages/im/agent/src/collaboration/contracts.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-82
+packages/im/agent/src/config/deprecated-agent-binding-keys.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 9,12
+examples/online.config.yml
+  s_9622fd28aba994::t_a4e406a3a6bd84 31
+packages/im/agent/src/turn/deferred-turn-state.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 2
+examples/test-bot/README.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 19,54
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 90
+docs/plans/prompt-policy-request-paths.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 140-142
+packages/im/agent/tests/collaboration/actor-turn.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-329
+packages/im/harness/package.json
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-49
+examples/test-bot/agents/planner/boundaries.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 3
+packages/im/agent/evals/cases/harness-contacts-enforced.case.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-27
+packages/im/agent/src/init/configure-zhin-agent.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 21
+README.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 229-230
+packages/im/harness/src/journal.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-297
+docs/plans/agent-workroom-orchestration-decision-map.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 7-8
+examples/test-bot/prompts/orchestrator.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 7-8
+packages/im/agent/tests/init/compose-zhin-agent-runtime.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 7,10-11,26,42-43,49
+packages/im/agent/src/config/deprecated-agent-keys.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 13
+packages/im/agent/src/init/dispose-zhin-agent.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 8
+packages/im/agent/evals/framework/live-model.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 83-84
+packages/im/agent/src/plugin-runtime/schedule-capability-plan.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 8
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 21,24-25,33-35,143,161,359,362-363
+packages/im/agent/src/collaboration/actor-turn.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-352
+packages/im/agent/src/turn/turn-pipeline.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 110,135-145
+packages/im/harness/src/contracts.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-419
+docs/plans/agent-harness-h0-inventory.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-119
+packages/im/agent/src/turn/turn-tracker.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 2,8,12,14,20
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 54-55,159-173,176-177,250,523-524,549
+examples/test-bot/agents/planner/agent.json
+  s_9622fd28aba994::t_a4e406a3a6bd84 20-28
+examples/test-bot/tests/multi-agent-entry-contract.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 11,14-19
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 885,901-902,1312,1385,1421-1423,1452,1462
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 122
+packages/im/agent/tests/trace/turn-trace-archive.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 18
+examples/test-bot/ACCEPTANCE.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 37,63,75,79
+.changeset/adr-0048-agent-harness-h1-h2.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-8
+packages/im/agent/tests/plugin-runtime/deferred-capability-plan.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 501,513,517
+docs/plans/workroom-group-collaboration-redesign.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 7-8
+packages/im/harness/tests/mailbox.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-256
+packages/im/agent/src/activity-feedback/event-context.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 74
+packages/im/agent/src/turn/turn-context-bridge.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 26
+packages/im/agent/src/init/compose-zhin-agent-runtime.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 28-29
+packages/im/agent/src/prompt/prompts/orchestrator.anthropic.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 3
+packages/im/agent/src/plugin-runtime/native-tool-suite.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 28
+packages/im/agent/evals/cases/harness-ping-pong-escalates.case.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-29
+packages/im/harness/tsconfig.json
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-6
+packages/im/agent/tests/tool-catalog/deferred-tool-catalog.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 51,58,60,65,67
+examples/full-bot/ACCEPTANCE.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 25-27,43
+packages/im/agent/tests/ai/zhin-agent.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 331-332
+packages/im/agent/evals/framework/driver.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 17-18,46,75-76,79-80,227,249-250,280,282,289,400-426
+  s_9622fd28aba994::t_93fd9e9d63aa42 427-428
+examples/test-bot/agents/planner/system.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 7
+docs/plans/agent-workroom-production-ledger.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 7-8
+packages/im/agent/tests/collaboration/tools.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-277
+packages/im/agent/src/internal/host-types.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 109
+packages/im/harness/src/mailbox.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-222
+README.zh-CN.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 229-230
+packages/im/agent/src/core/turn-progress.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 26,137
+plugins/services/activity-feedback/src/orchestrator.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 63,98
+packages/im/agent-feature/tests/agent.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 56-70
+docs/contributing/publishing.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 138,169,183
+docs/en/wiki/cubic/ai-providers.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 9-10
+packages/im/agent/evals/framework/assertions.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 168-170,173-181,206
+packages/im/agent/src/ai-event-contract.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 29
+packages/im/agent/tests/prompt/prompt-policy-requests.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 79,90
+packages/im/agent/evals/agent.eval.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 24-26
+docs/plans/prompt-policy-cache-map.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 45,83
+packages/im/agent/tests/security/policy-narrowing.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-29
+examples/test-bot/agents/reviewer/system.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 7,9
+packages/im/agent/src/collaboration/registry.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-34
+packages/im/agent/tests/turn/turn-tracker.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 6,10-11,13-15,18,21-23
+packages/im/agent/src/resource-hub/types.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 190
+packages/im/agent/tests/zhin-agent/workspace-prompt.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 21
+packages/im/agent/src/turn/turn-metrics.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 75
+packages/im/agent/tests/model-runtime/target-runtime.test.ts
+  s_9622fd28aba994::t_1b0e22041a579e 134
+  s_9622fd28aba994::t_a4e406a3a6bd84 37,110,136-138,143-144,147,179
+packages/im/agent/evals/cases/harness-agent-result-is-data.case.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-26
+docs/adr/0048-agent-harness.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-200
+packages/im/agent/evals/cases/harness-delegation-budget-enforced.case.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-23
+packages/im/agent/src/tool-catalog/types.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 83
+packages/im/agent/tests/prompt/fixed-prompt-cost.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 30
+docs/contributing/legacy-concepts.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 73
+docs/plans/governed-delivery-workflow.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 7-8
+packages/im/agent/tests/model-runtime/runtime-policy.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 59-60,64,66
+packages/im/harness/tests/contracts.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-18
+examples/test-bot/fixtures/multi-agent-contract.zhin.config.yml
+  s_9622fd28aba994::t_a4e406a3a6bd84 1
+packages/im/agent/tests/collaboration/directory.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-106
+docs/wiki/cubic/ai-providers.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 10-11
+packages/im/agent/evals/cases/harness-delegatee-ceiling-not-widened.case.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-24
+packages/im/agent/package.json
+  s_9622fd28aba994::t_a4e406a3a6bd84 133,135-136,149
+tsconfig.typecheck.json
+  s_9622fd28aba994::t_a4e406a3a6bd84 272-274,404
+packages/im/agent/src/collaboration/turn-collaboration.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-207
+packages/im/agent/src/prompt/system-prompt.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 323
+packages/im/agent/src/zhin-agent/index.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 442
+docs/ai/agent.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 3,23,43,66,83-84,88,125-128,167,169,171,173-191,194-196,198-206,293,297,523-524,658,665,793
+plugins/services/activity-feedback/tests/localization.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 37
+.changeset/adr-0048-h2-delete-legacy.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-8
+packages/im/agent/evals/cases/harness-approval-routed-to-principal.case.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-22
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 10,186-187
+packages/im/agent/src/security/dangerous-tool-policy.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 93
+packages/im/agent/src/turn/stale-reply.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 6
+packages/im/harness/tests/budget.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-169
+packages/im/harness/src/harness.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-563
+docs/authoring/agent-tools.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 3,13,178,303,305,309,314-323
+  s_9622fd28aba994::t_9840cae82b023c 324
+packages/im/agent/src/prompt/prompt-builder.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 192
+packages/im/agent/evals/cases/harness-delegate-result-wakes-delegator.case.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-23
+packages/im/agent/src/resource-hub/role-configs.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 48,67,84,102,123,139,153
+packages/im/harness/src/index.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-7
+packages/im/agent/src/collaboration/directory.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-88
+packages/im/harness/src/guard.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-305
+packages/im/agent/src/model-runtime/validation.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1-14,52-62
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 1151,1479-1480
+tests/snapshots/api-surface.json
+  s_9622fd28aba994::t_a4e406a3a6bd84 62,76
+examples/test-bot/agents/vision/system.md
+  s_9622fd28aba994::t_a4e406a3a6bd84 5,11
+packages/im/agent/src/internal/agent-host.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 93,125
+packages/im/agent/src/internal/turn-context.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 10
+packages/im/agent/evals/framework/scripted-model.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 62-82,110-111,135-138,142-143,213-222,224,226,228-230,232,243,248-249,251-252,263-264,284,286,313-317
+basic/cli/tests/plugin-runtime/agent/model-consumers-configuration.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 3,34,67,72,113,115-116
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 154,158
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 61,67
+packages/im/agent/tests/trace/turn-trace.test.ts
+  s_9622fd28aba994::t_a4e406a3a6bd84 106,111,113,126,143
+pnpm-lock.yaml
+  s_9622fd28aba994::t_98907a58b2998d 1324-1326,1635-1646,10845-10846
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0a28c930b611ed0f552a0808364f96f0dc6f21d1",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
