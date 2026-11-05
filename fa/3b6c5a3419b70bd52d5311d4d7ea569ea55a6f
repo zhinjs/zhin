@@ -1,0 +1,242 @@
+basic/cli/src/plugin-runtime/agent/persistence-coordinator.ts
+  h_b680f75345178a 153-165,177-178
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  h_b680f75345178a 25,32
+basic/cli/src/plugin-runtime/agent/turn/ambient-engagement.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/announcement-dispatch.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/approval-messages.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/cold-field.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/content.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/control-gate.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/decision-audit.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/group-flood-detector.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/group-rule-defaults.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/group-rule-enforcer.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/group-rule-im.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/ingress-messages.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/member-lifecycle.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/reaction-pacer.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/reply-messages.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/sandbox-policy.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/scene-event-ingress.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/scene-event-lines.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/scene-event-state.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/scene-event-wake.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/scene-fact-events.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/scene-fact-refresher.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/session-event-dispatch.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/session-gate.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/turn/trigger.ts
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/agent/workroom-port.ts
+  h_b680f75345178a 1-5
+basic/cli/tests/plugin-runtime/agent/structured-persistence.test.ts
+  h_b680f75345178a 225-233,235-236,240-242,244-253
+packages/im/adapter/src/endpoint-specification.ts
+  h_b680f75345178a 9,77-84
+packages/im/adapter/src/inbound-deduper.ts
+  h_b680f75345178a 1-98
+packages/im/adapter/src/inbound-promotion.ts
+  h_b680f75345178a 1-98
+packages/im/adapter/src/index.ts
+  h_b680f75345178a 41-44
+packages/im/adapter/src/ttl-lookup-cache.ts
+  h_b680f75345178a 1-120
+packages/im/adapter/tests/adapter-primitives.test.ts
+  h_b680f75345178a 1-101
+packages/im/adapter/tests/inbound-promotion.test.ts
+  h_b680f75345178a 1-154
+packages/im/agent/src/assistant/job-storage.ts
+  h_b680f75345178a 86-94,96,116-130
+packages/im/agent/src/assistant/job-store.ts
+  h_b680f75345178a 161-164
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 272-280,876-878,880-885,889-894,1573-1581,1608-1618,1623-1635
+packages/im/agent/src/core/reply-phase.ts
+  h_b680f75345178a 21-23
+packages/im/agent/src/memory/compaction-runtime.ts
+  h_b680f75345178a 31-98,127-132,134,136-161,166,170,182-183,185-188,192-226,263-273,324-334
+packages/im/agent/src/memory/index.ts
+  h_b680f75345178a 20-30
+packages/im/agent/src/plugin-runtime/index.ts
+  h_b680f75345178a 67
+packages/im/agent/src/plugin-runtime/ingress/ambient-engagement.ts
+  h_b680f75345178a 1-417
+packages/im/agent/src/plugin-runtime/ingress/announcement-dispatch.ts
+  h_b680f75345178a 1-234
+packages/im/agent/src/plugin-runtime/ingress/approval-messages.ts
+  h_b680f75345178a 1-14
+packages/im/agent/src/plugin-runtime/ingress/cold-field.ts
+  h_b680f75345178a 1-172
+packages/im/agent/src/plugin-runtime/ingress/content.ts
+  h_b680f75345178a 1-126
+packages/im/agent/src/plugin-runtime/ingress/control-gate.ts
+  h_b680f75345178a 1-76
+packages/im/agent/src/plugin-runtime/ingress/decision-audit.ts
+  h_b680f75345178a 1-123
+packages/im/agent/src/plugin-runtime/ingress/group-flood-detector.ts
+  h_b680f75345178a 1-230
+packages/im/agent/src/plugin-runtime/ingress/group-rule-defaults.ts
+  h_b680f75345178a 1-88
+packages/im/agent/src/plugin-runtime/ingress/group-rule-enforcer.ts
+  h_b680f75345178a 1-673
+packages/im/agent/src/plugin-runtime/ingress/group-rule-im.ts
+  h_b680f75345178a 1-233
+packages/im/agent/src/plugin-runtime/ingress/index.ts
+  h_b680f75345178a 1-34
+packages/im/agent/src/plugin-runtime/ingress/ingress-ambient-stage.ts
+  h_b680f75345178a 1-212
+packages/im/agent/src/plugin-runtime/ingress/ingress-delivery-helpers.ts
+  h_b680f75345178a 1-92
+packages/im/agent/src/plugin-runtime/ingress/ingress-management-stage.ts
+  h_b680f75345178a 1-149
+packages/im/agent/src/plugin-runtime/ingress/ingress-messages.ts
+  h_b680f75345178a 1-8
+packages/im/agent/src/plugin-runtime/ingress/ingress-moderation-stage.ts
+  h_b680f75345178a 1-326
+packages/im/agent/src/plugin-runtime/ingress/ingress-route.ts
+  h_b680f75345178a 1-1190
+packages/im/agent/src/plugin-runtime/ingress/ingress-turn-execution-stage.ts
+  h_b680f75345178a 1-95
+packages/im/agent/src/plugin-runtime/ingress/member-lifecycle.ts
+  h_b680f75345178a 1-407
+packages/im/agent/src/plugin-runtime/ingress/ports.ts
+  h_b680f75345178a 1-94
+packages/im/agent/src/plugin-runtime/ingress/reaction-pacer.ts
+  h_b680f75345178a 1-98
+packages/im/agent/src/plugin-runtime/ingress/reply-messages.ts
+  h_b680f75345178a 1-49
+packages/im/agent/src/plugin-runtime/ingress/request.ts
+  h_b680f75345178a 1-1221
+packages/im/agent/src/plugin-runtime/ingress/sandbox-policy.ts
+  h_b680f75345178a 1-142
+packages/im/agent/src/plugin-runtime/ingress/scene-event-ingress.ts
+  h_b680f75345178a 1-417
+packages/im/agent/src/plugin-runtime/ingress/scene-event-lines.ts
+  h_b680f75345178a 1-69
+packages/im/agent/src/plugin-runtime/ingress/scene-event-state.ts
+  h_b680f75345178a 1-67
+packages/im/agent/src/plugin-runtime/ingress/scene-event-wake.ts
+  h_b680f75345178a 1-138
+packages/im/agent/src/plugin-runtime/ingress/scene-fact-events.ts
+  h_b680f75345178a 1-77
+packages/im/agent/src/plugin-runtime/ingress/scene-fact-refresher.ts
+  h_b680f75345178a 1-75
+packages/im/agent/src/plugin-runtime/ingress/session-event-dispatch.ts
+  h_b680f75345178a 1-363
+packages/im/agent/src/plugin-runtime/ingress/session-gate.ts
+  h_b680f75345178a 1-97
+packages/im/agent/src/plugin-runtime/ingress/trigger.ts
+  h_b680f75345178a 1-183
+packages/im/agent/src/plugin-runtime/ingress/turn-continuation-port.ts
+  h_b680f75345178a 1-27
+packages/im/agent/src/session/participant-header-stamp.ts
+  h_b680f75345178a 49-59,64-92,95-114,118-129,137-147
+packages/im/agent/src/session/turn-ingress-session.ts
+  h_b680f75345178a 50-55
+packages/im/agent/src/turn/index.ts
+  h_b680f75345178a 26
+packages/im/agent/src/turn/turn-ingress.ts
+  h_b680f75345178a 18-27,246-251,254-269,280-282
+packages/im/agent/tests/assistant/job-store.test.ts
+  h_b680f75345178a 1,6,189-222
+packages/im/agent/tests/memory/compaction-trigger.test.ts
+  h_b680f75345178a 2-6,35-66
+packages/im/agent/tests/session/participant-header-stamp.test.ts
+  h_b680f75345178a 75-101
+packages/im/agent/tests/session/turn-ingress-session.test.ts
+  h_b680f75345178a 81-95
+packages/im/ai/src/compaction/agent-message-compaction.ts
+  h_b680f75345178a 59,67-70,73-74,203-208,214-222,233,246,250,319-330,348
+packages/im/ai/src/compaction/agent-message-tokens.ts
+  h_b680f75345178a 54,61,66-68,72-74
+packages/im/ai/src/index.ts
+  h_b680f75345178a 251,306,308
+packages/im/ai/src/llm/types/agent-message.ts
+  h_b680f75345178a 89-94,142-143,146-151
+packages/im/ai/src/memory/agent-db-models.ts
+  h_b680f75345178a 37-38,44-47,51-59,64-79,85-89,149-152,195-214
+packages/im/ai/src/memory/context-repository.ts
+  h_b680f75345178a 133,142,145-148,307,317,351,373,383-384,409-413,437-508
+packages/im/ai/tests/compaction/agent-message-compaction.test.ts
+  h_b680f75345178a 23,388-423
+packages/im/ai/tests/memory/context-repository-database.test.ts
+  h_b680f75345178a 4,9,12-14,144-297
+packages/im/core/src/plugin-runtime/im/conversation-runtime.ts
+  h_b680f75345178a 157-158,160,175,179-180,184,194
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  h_b680f75345178a 11,376,380,539,550-555,568-573,577,583,607-643
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  h_b680f75345178a 26-31,33-41,66-67,75,124,145,147-158,162-164,169,173,177-189,193-194,196-200,203-206,213,235,240-241,243,247-253,390-397,421-431,433-435,452-453
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  h_b680f75345178a 2,6-8,14-33,41-42,63-65,69-80,104,107-117,120,123-128,145,148-149,160-164,169-184,187,189,195-196,201-204,209-210,223-249,253,255,257-258,266,268,270
+packages/im/core/src/plugin-runtime/im/jsx-button-registry.ts
+  h_b680f75345178a 6,9,19-62,74,76,80-81,90-95,108,111,115,122-123,125-126,137-138,140-144
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  h_b680f75345178a 22-23,42-43,50,135,141-146,150-155,169,171-193,196,199-201,261-262,267,271-277,282-289,291,307-313
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  h_b680f75345178a 530-631,2109,2133,2634
+packages/im/core/tests/plugin-runtime/interactive-router.test.ts
+  h_b680f75345178a 1,56-115
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  h_b680f75345178a 588-627
+packages/im/im-contract/src/endpoint.ts
+  h_b680f75345178a 73,102
+packages/im/middleware/src/definition.ts
+  h_b680f75345178a 21-27,38-39,83,86,92,122
+packages/im/middleware/src/middleware-index.ts
+  h_b680f75345178a 10,19-23,28,119,128,135-145,148-156,162-167,175-177,199
+packages/im/middleware/tests/middleware.test.ts
+  h_b680f75345178a 311-367
+plugins/adapters/icqq/src/icqq-inbound.ts
+  h_b680f75345178a 5,169-175,805-808,863
+plugins/adapters/kook/src/sender-roles.ts
+  h_b680f75345178a 9,28,52-54,71
+plugins/adapters/lark/src/client.ts
+  h_b680f75345178a 23-24,143-146,364,400-410,433
+plugins/adapters/napcat/src/napcat-inbound.ts
+  h_b680f75345178a 4,7,53-54
+plugins/adapters/telegram/src/endpoint.ts
+  h_b680f75345178a 7,94,99-102,456,464,515-516,527
+tests/snapshots/plugin-runtime-api.json
+  h_b680f75345178a 26-27,32-33,60,97-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa3b6c5a3419b70bd52d5311d4d7ea569ea55a6f",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
