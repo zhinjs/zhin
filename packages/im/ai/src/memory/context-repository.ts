@@ -447,10 +447,11 @@ export class DatabaseContextRepository implements ContextRepository {
     try {
       const probe = this.messageModel.select().where({ session_id: sessionId });
       if (isMessageQueryChain(probe)) {
-        const rows = (await probe.orderBy('timestamp', 'ASC').limit(10_000)) as AgentMessageRow[];
+        const rows = [...((await probe.orderBy('timestamp', 'DESC').limit(10_000)) as AgentMessageRow[])];
+        rows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
         return rows;
       }
-      const rows = (await Promise.resolve(probe as PromiseLike<AgentMessageRow[]>)) ?? [];
+      const rows = [...((await Promise.resolve(probe as PromiseLike<AgentMessageRow[]>)) ?? [])];
       rows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
       return rows;
     } catch (err) {

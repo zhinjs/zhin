@@ -133,10 +133,11 @@ export class OutboundDeliveryRuntime {
     const initialItems = Array.isArray(initialPayload) ? initialPayload.map(item => ({
       item, type: item?.type, text: item?.type === 'text' ? item.data?.text : undefined,
     })) : undefined;
-    const retainsInitialProjection = (value: unknown): boolean => value === initialPayload
-      && (!initialItems || (Array.isArray(value) && value.length === initialItems.length
-        && initialItems.every(({ item, type, text }, index) => value[index] === item
-          && item?.type === type && (type !== 'text' || item.data?.text === text))));
+    const retainsInitialProjection = (value: unknown): boolean =>
+      (value === initialPayload && !initialItems)
+      || (!!initialItems && initialItems.length > 0 && Array.isArray(value)
+        && initialItems.every(({ item, type, text }) => value.includes(item)
+          && item?.type === type && (type !== 'text' || item.data?.text === text)));
     let terminalEntered = false;
     let receipt: DeliveryReceipt | undefined;
 

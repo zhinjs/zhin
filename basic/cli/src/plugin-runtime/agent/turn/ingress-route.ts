@@ -1130,24 +1130,32 @@ export class AgentTurnIngressRoute implements IngressRoute {
           if (liveWindow) {
             logger.debug(formatCompact({ op: 'agent_host_danmaku_window', sessionKey, candidates: liveWindow.candidates, kept: liveWindow.kept }));
           }
-          // ADR 0038 §2: a merged turn may only do what every member may do.
-          const members = !liveDanmaku && admission && admission.participants.length > 1
+          // ADR 0038 §2: a merged turn may only do what every member may do; if the
+          // carrier stopped its own messages leaving another participant, use that participant's access.
+          const hasMergedOrShiftedParticipants = !liveDanmaku && admission !== undefined && (
+            admission.participants.length > 1
+            || (admission.participants.length === 1 && admission.participants[0]!.senderId !== senderId)
+          );
+          const members = hasMergedOrShiftedParticipants && admission
             ? mergedMemberAccess(admission.participants, contextAccess)
             : undefined;
+          const effectiveCarrier = members ? members[0]! : (liveAccess ?? contextAccess);
           const read = await readTurnCapabilities(
             ingress,
             snapshot,
             requester,
-            liveAccess ?? contextAccess,
-            members,
+            effectiveCarrier,
+            members && members.length > 1 ? members : undefined,
             () => capabilityActive,
           );
           signal.throwIfAborted();
           const turnAccessForTurn = members
-            ? withMergeMembers(narrowMergedAccess(contextAccess, members), read.members, read.memberTools)
-            : liveAccess ?? contextAccess;
+            ? (members.length > 1
+              ? withMergeMembers(narrowMergedAccess(effectiveCarrier, members), read.members, read.memberTools)
+              : effectiveCarrier)
+            : effectiveCarrier;
           // ADR 0038 §3: the model sees who it is answering; outbound audits "merged N, answered M".
-          const mergedSenders = members && admission ? mergedTurnSenders(admission.participants) : undefined;
+          const mergedSenders = members && members.length > 1 && admission ? mergedTurnSenders(admission.participants) : undefined;
           const capabilities = liveDanmaku ? readOnlyCapabilities(read.capabilities) : read.capabilities;
           /** `danmaku_window_picked` is written once, for the first delivered reply. */
           let danmakuAudited = false;

@@ -1,4 +1,5 @@
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { toCanonicalSegments } from '@zhin.js/core';
 /**
  * NapCat HTTP endpoint — POST inbound events + HTTP API outbound.
  */
@@ -25,6 +26,7 @@ import {
 import {
   buildSendAction,
   callNapCatHttpAction,
+  extractQuoteId,
   formatInboundContent,
   formatOutboundSegments,
   isMessageEvent,
@@ -171,12 +173,15 @@ export class NapCatHttpEndpoint extends NapcatClient implements Endpoint {
     const conversation = { ...napcatInboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const nickname = senderNickname(ev);
     const mentioned = isNapCatBotMentioned(ev);
+    const quoteId = extractQuoteId(ev);
+    const segments = Array.isArray(ev.message) ? toCanonicalSegments(ev.message) : undefined;
     void this[endpointSpec].events.message({
       event: nativeEvent,
       ...(typeof nativeEvent.time === 'number' ? { platformSentAt: nativeEvent.time * 1000 } : {}),
       conversation,
       message: { conversation, id: msgId },
       content: formatInboundContent(ev),
+      ...(segments?.length ? { segments } : {}),
       sender: {
         id: senderUserId(ev),
         name: nickname,
@@ -184,6 +189,7 @@ export class NapCatHttpEndpoint extends NapcatClient implements Endpoint {
       },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
+      ...(quoteId ? { replyTo: { id: quoteId } } : {}),
       metadata: Object.freeze({
         message_type: ev.message_type,
         user_id: ev.user_id != null ? String(ev.user_id) : undefined,

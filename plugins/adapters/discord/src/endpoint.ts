@@ -239,6 +239,7 @@ export class DiscordGatewayEndpoint extends Client implements Endpoint {
       },
       endpointId: this.#options.config.id,
       ...(msg.mentionedBot ? { mentioned: true } : {}),
+      ...(msg.replyToId ? { replyTo: { id: msg.replyToId } } : {}),
       metadata: Object.freeze({
         channelKind: msg.channelKind,
         userId: msg.authorId,

@@ -102,13 +102,14 @@ export class ScheduleJobStore {
 
   async listJobs(): Promise<ScheduleJob[]> {
     const store = await this.read();
-    return store.jobs;
+    return store.jobs.map((j) => structuredClone(j));
   }
 
   async getJob(id: string): Promise<ScheduleJob | undefined> {
     if (this.database) return this.database.get(id);
     const store = await this.read();
-    return store.jobs.find((j) => j.id === id);
+    const found = store.jobs.find((j) => j.id === id);
+    return found ? structuredClone(found) : undefined;
   }
 
   async upsertJob(job: ScheduleJob): Promise<void> {

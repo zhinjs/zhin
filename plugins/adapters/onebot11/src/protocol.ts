@@ -5,6 +5,7 @@ import type { EndpointProfileConfiguration } from 'zhin.js/adapter';
  * Spec: https://github.com/botuniverse/onebot-11
  */
 import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { toCanonicalSegments, type Segment } from '@zhin.js/core';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('onebot11');
@@ -261,6 +262,7 @@ export interface OneBot11InboundFields {
   readonly endpointId: string;
   readonly mentioned: boolean;
   readonly replyTo: { readonly id: string } | undefined;
+  readonly segments?: readonly Segment[];
 }
 
 /** 构造 gateway.receive 的 metadata 与提升字段（ws / wss 两个 endpoint 共用）。 */
@@ -272,6 +274,7 @@ export function formatInboundMetadata(
   const nickname = senderNickname(ev);
   const quoteId = extractQuoteId(ev);
   const mentioned = isOneBot11BotMentioned({ selfId, message: ev.message });
+  const segments = Array.isArray(ev.message) ? toCanonicalSegments(ev.message) : undefined;
   return {
     metadata: Object.freeze({
       message_type: ev.message_type,
@@ -285,6 +288,7 @@ export function formatInboundMetadata(
     endpointId: endpoint,
     mentioned,
     replyTo: quoteId ? { id: quoteId } : undefined,
+    ...(segments?.length ? { segments } : {}),
   };
 }
 

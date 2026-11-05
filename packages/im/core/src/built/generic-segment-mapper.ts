@@ -173,6 +173,7 @@ function normalizeMarkdown(seg: MessageSegment): Segment {
 
 function normalizeSegment(seg: MessageSegment): Segment {
   if (seg.type === 'at' || seg.type === 'mention') return normalizeMention(seg);
+  if (seg.type === 'record' || seg.type === 'voice') return normalizeMedia({ ...seg, type: 'audio' });
   if (MEDIA_SEGMENT_TYPES.has(seg.type)) return normalizeMedia(seg);
   if (seg.type === 'reply') return normalizeReply(seg);
   if (seg.type === 'forward') return normalizeForward(seg);

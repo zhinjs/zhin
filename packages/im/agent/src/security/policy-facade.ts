@@ -236,7 +236,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
           'read',
           path,
         );
-        const decision = turnFilePermissionDecision(sensitiveRead, 'bash-sensitive-read', input.input);
+        const decision = turnFilePermissionDecision(sensitiveRead, 'bash-sensitive-read', authorizedInput);
         if (decision) return decision;
       }
       const permission = checkBashFilePermission(toolRequesterRoleToFileRole(requesterRole), command);

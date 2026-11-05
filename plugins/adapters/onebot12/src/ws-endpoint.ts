@@ -1,4 +1,5 @@
 import { createOnebot12SelfProfile } from './self-profile.js';
+import { toCanonicalSegments } from '@zhin.js/core';
 /**
  * OneBot12 WS client endpoint — outbound connect to OneBot implementation.
  */
@@ -22,6 +23,7 @@ import {
   buildSendMessageParams,
   matchesOneBot12Self,
   buildWsConnectOptions,
+  extractQuoteId,
   formatInboundContent,
   formatOutboundSegments,
   isBotMentioned,
@@ -182,15 +184,19 @@ export class OneBot12WsEndpoint extends Onebot12Client implements Endpoint {
     const content = formatInboundContent(ev);
     const nickname = senderNickname(ev);
     const mentioned = isBotMentioned(ev);
+    const quoteId = extractQuoteId(ev);
+    const segments = Array.isArray(ev.message) ? toCanonicalSegments(ev.message) : undefined;
     void this[endpointSpec].events.message({
       event: ev,
       ...(typeof ev.time === 'number' ? { platformSentAt: ev.time * 1000 } : {}),
       conversation,
       message: { conversation, id: ev.message_id },
       content,
+      ...(segments?.length ? { segments } : {}),
       sender: { id: senderUserId(ev), name: senderNickname(ev) },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
+      ...(quoteId ? { replyTo: { id: quoteId } } : {}),
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,
@@ -228,8 +234,12 @@ export class OneBot12WsEndpoint extends Onebot12Client implements Endpoint {
       const ws = create(url, { headers });
       this.#ws = ws;
       handle.onForceClose(() => {
+        if (this.#ws === ws) {
+          this.#rpc.disconnect();
+        }
         try {
           ws.close();
+          ws.terminate?.();
         } catch {
           /* ignore */
         }

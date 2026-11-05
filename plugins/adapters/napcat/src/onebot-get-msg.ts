@@ -82,9 +82,13 @@ export function createNapCatContentPort(
   });
 }
 
+import { toCanonicalSegments } from '@zhin.js/core';
+import type { PendingRpcRequest, EndpointContentPort, EndpointContentResolveContext } from 'zhin.js/adapter';
+import type { ConversationMessage, ConversationReference, ForwardEntry } from '@zhin.js/im-contract';
+
 function canonicalSegments(content: Array<{ type: string; data?: Record<string, unknown> }>) {
-  return Object.freeze(content.map((segment) => Object.freeze({
-    type: segment.type,
+  return Object.freeze(toCanonicalSegments(content).map((segment) => Object.freeze({
+    ...segment,
     data: Object.freeze(segment.data ?? {}),
   })));
 }
@@ -93,5 +97,3 @@ function toMillis(value: unknown): number {
   const time = Number(value);
   return Number.isFinite(time) ? (time < 10_000_000_000 ? time * 1000 : time) : Date.now();
 }
-import type { PendingRpcRequest, EndpointContentPort, EndpointContentResolveContext } from 'zhin.js/adapter';
-import type { ConversationMessage, ConversationReference, ForwardEntry } from '@zhin.js/im-contract';

@@ -410,6 +410,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
+      ...(msg.reply_to_message?.message_id != null ? { replyTo: { id: String(msg.reply_to_message.message_id) } } : {}),
       metadata: Object.freeze({
         channelType: resolveTelegramChannelType(msg.chat.type),
         chatType: msg.chat.type,
@@ -421,17 +422,23 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     });
   }
 
-  /** entities 里 mention 文本命中 bot username（getMe 缓存），或 text_mention 指向 bot 用户。 */
+  /** entities / caption_entities 里 mention 文本命中 bot username（getMe 缓存），或 text_mention 指向 bot 用户。 */
   #isBotMentioned(msg: TelegramMessage): boolean {
-    if (!msg.entities?.length) return false;
-    for (const entity of msg.entities) {
-      if (entity.type === 'text_mention') {
-        if (this.#botUserId != null && entity.user?.id === this.#botUserId) return true;
-        continue;
+    const sources: Array<{ readonly text: string; readonly entities: readonly import('./protocol.js').TelegramMessageEntity[] | undefined }> = [
+      { text: msg.text ?? '', entities: msg.entities },
+      { text: msg.caption ?? '', entities: msg.caption_entities },
+    ];
+    for (const { text, entities } of sources) {
+      if (!entities?.length) continue;
+      for (const entity of entities) {
+        if (entity.type === 'text_mention') {
+          if (this.#botUserId != null && entity.user?.id === this.#botUserId) return true;
+          continue;
+        }
+        if (entity.type !== 'mention' || !this.#botUsername) continue;
+        const slice = text.slice(entity.offset, entity.offset + entity.length);
+        if (slice.toLowerCase() === `@${this.#botUsername.toLowerCase()}`) return true;
       }
-      if (entity.type !== 'mention' || !this.#botUsername) continue;
-      const slice = (msg.text ?? '').slice(entity.offset, entity.offset + entity.length);
-      if (slice.toLowerCase() === `@${this.#botUsername.toLowerCase()}`) return true;
     }
     return false;
   }

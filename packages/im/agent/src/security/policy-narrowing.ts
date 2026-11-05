@@ -43,5 +43,16 @@ export function deriveSubagentPolicy(
       : {}),
     ...(filesystem ? { filesystem } : {}),
     ...(keepShell ? { shell: Object.freeze({ ...parent.shell }) } : {}),
+    ...(parent.merge
+      ? {
+        merge: Object.freeze({
+          ...parent.merge,
+          members: Object.freeze(parent.merge.members.map(member => Object.freeze({
+            ...member,
+            tools: Object.freeze([...member.tools]),
+          }))),
+        }),
+      }
+      : {}),
   });
 }

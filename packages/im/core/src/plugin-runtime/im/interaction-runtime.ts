@@ -150,14 +150,17 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   }
 
   resolveClaim(message: Message): boolean {
-    const payload = this.#router.resolvePayload(message);
+    const claim = this.#claims.get(this.#conversationKey(message));
+    const effectiveGeneration = claim?.isLiveFor(message.generation) && claim.generation !== undefined
+      ? claim.generation
+      : message.generation;
+    const payload = this.#router.resolvePayload(message, effectiveGeneration);
     // A current question owns ordinary text answers, including numbers that once
     // labelled an expired button. Explicit JSX callbacks still belong to buttons.
     if (isJsxButtonPayload(payload)) return false;
     const explicit = actionPayloadFromSegments(message.segments);
     // Another feature's callback is not a plain-text answer to this question.
     if (explicit && !explicit.startsWith(ASK_ACTION_PREFIX)) return false;
-    const claim = this.#claims.get(this.#conversationKey(message));
     if (!claim || !claim.isLiveFor(message.generation)) return false;
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
       const answer = claim.actions.get(payload);

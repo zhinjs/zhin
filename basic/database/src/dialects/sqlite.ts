@@ -13,7 +13,7 @@ export interface SQLiteDialectConfig {
 
 export class SQLiteDialect<S extends Record<string, object> = Record<string, object>> extends Dialect<SQLiteDialectConfig, S, string> {
   /** Node 内置 SQLite 连接（node:sqlite），在 connect() 中动态加载 */
-  private db: { prepare(sql: string): any; close(): void } | null = null;
+  private db: { prepare(sql: string): any; exec?(sql: string): void; close(): void } | null = null;
 
   constructor(config: SQLiteDialectConfig) {
     super('sqlite', config);
@@ -33,6 +33,14 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
         fs.mkdirSync(dirname, { recursive: true });
       }
       this.db = new DatabaseSync(this.config.filename);
+      try {
+        if (this.config.filename !== ':memory:') {
+          this.db?.exec?.('PRAGMA journal_mode = WAL;');
+        }
+        this.db?.exec?.('PRAGMA busy_timeout = 5000;');
+      } catch {
+        // Ignore PRAGMA errors on special/read-only database files
+      }
     } catch (error) {
       throw new Error(`SQLite 连接失败（需要 Node.js 22.5+，推荐 24+）: ${error}`);
     }
@@ -70,8 +78,9 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     const trimmedSql = sql.trim().toLowerCase();
     const isInsert = trimmedSql.startsWith('insert');
     const isUpdateOrDelete = trimmedSql.startsWith('update') || trimmedSql.startsWith('delete');
-    // 带 RETURNING 的 DML 有结果集，不能走 run 丢行
-    const hasReturning = /\breturning\b/.test(trimmedSql);
+    // 带 RETURNING 的 DML 有结果集，不能走 run 丢行（剥离引号标识符与字符串字面量避免列名误判）
+    const sqlWithoutLiterals = trimmedSql.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
+    const hasReturning = /\breturning\b/.test(sqlWithoutLiterals);
     const args = this.prepareBindParams(params ?? []);
 
     const stmt = this.db.prepare(sql);

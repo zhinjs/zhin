@@ -33,6 +33,7 @@ import {
   formatInboundContent,
   formatOutboundBody,
   generateMessageId,
+  isLarkBotMentioned,
   larkInboundConversation,
   resolveChatType,
   resolveSender,
@@ -378,6 +379,8 @@ export class LarkClient extends SdkClient {
       : undefined;
     // 规范角色 owner / admin 进 roles；细粒度能力放 senderPermissions
     const role = permit?.role === 'owner' || permit?.role === 'admin' ? permit.role : undefined;
+    const mentioned = isLarkBotMentioned(msg);
+    const replyToId = msg.parent_id || msg.root_id;
     await this.publishEvent('message.receive', {
       event: nativeEvent,
       conversation,
@@ -385,6 +388,8 @@ export class LarkClient extends SdkClient {
       content: formatInboundContent(msg),
       ...(senderId ? { sender: { id: senderId, ...(role ? { roles: [role] } : {}) } } : {}),
       endpointId: this.#options.config.id,
+      ...(mentioned ? { mentioned: true } : {}),
+      ...(replyToId ? { replyTo: { id: replyToId } } : {}),
       metadata: Object.freeze({
         messageType: msg.message_type,
         chatType,

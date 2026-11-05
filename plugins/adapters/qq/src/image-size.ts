@@ -91,6 +91,51 @@ async function readHead(response: Awaited<ReturnType<ImageProbeFetch>>): Promise
   return out;
 }
 
+/** 校验公网 HTTP(S) URL，拒绝内网/回环/元数据地址以防 SSRF。 */
+export function isSafePublicImageUrl(rawUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
+    return false;
+  }
+  if (
+    host === '::1'
+    || host === '0:0:0:0:0:0:0:1'
+    || host === '::'
+    || host.startsWith('fe80:')
+    || host.startsWith('fc')
+    || host.startsWith('fd')
+    || host.startsWith('::ffff:127.')
+    || host.startsWith('::ffff:10.')
+    || host.startsWith('::ffff:192.168.')
+    || host.startsWith('::ffff:169.254.')
+  ) {
+    return false;
+  }
+  const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (ipv4Match) {
+    const [a, b] = [Number(ipv4Match[1]), Number(ipv4Match[2])];
+    if (
+      a === 0
+      || a === 10
+      || a === 127
+      || (a === 169 && b === 254)
+      || (a === 172 && b >= 16 && b <= 31)
+      || (a === 192 && b === 168)
+      || (a === 100 && b >= 64 && b <= 127)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** 读取公网图片文件头得到尺寸；网络错误、超时或格式不识别时返回 undefined。 */
 export interface ImageProbeOptions {
   readonly fetch?: ImageProbeFetch;
@@ -101,6 +146,7 @@ export async function probeImageSize(
   url: string,
   { fetch: fetchImpl = fetch as unknown as ImageProbeFetch, timeoutMs = PROBE_TIMEOUT_MS, signal }: ImageProbeOptions = {},
 ): Promise<QqImageSize | undefined> {
+  if (!isSafePublicImageUrl(url)) return undefined;
   try {
     const response = await fetchImpl(url, {
       headers: { Range: `bytes=0-${PROBE_BYTES - 1}` },

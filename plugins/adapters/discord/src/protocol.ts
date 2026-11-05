@@ -114,7 +114,8 @@ export interface DiscordWireSegment {
 
 export interface DiscordOutboundComponentButton {
   type: 2;
-  custom_id: string;
+  custom_id?: string;
+  url?: string;
   label: string;
   style: number;
   disabled?: boolean;
@@ -405,19 +406,32 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
       case 'keyboard': {
         const rows = (data.rows ?? []) as Array<Array<{
           label: string;
-          payload: string;
+          payload?: string;
+          url?: string;
           disabled?: boolean;
           style?: string;
         }>>;
         components = rows.map((row) => ({
           type: 1 as const,
-          components: row.map((btn) => ({
-            type: 2 as const,
-            custom_id: String(btn.payload).slice(0, 100),
-            label: btn.label,
-            style: btn.style === 'danger' ? 4 : btn.style === 'primary' ? 1 : 2,
-            disabled: !!btn.disabled,
-          })),
+          components: row.map((btn) => {
+            const url = typeof btn.url === 'string' && /^https?:\/\//i.test(btn.url.trim()) ? btn.url.trim() : undefined;
+            if (url) {
+              return {
+                type: 2 as const,
+                url,
+                label: btn.label,
+                style: 5,
+                disabled: !!btn.disabled,
+              };
+            }
+            return {
+              type: 2 as const,
+              custom_id: String(btn.payload ?? '').slice(0, 100),
+              label: btn.label,
+              style: btn.style === 'danger' ? 4 : btn.style === 'primary' ? 1 : 2,
+              disabled: !!btn.disabled,
+            };
+          }),
         }));
         break;
       }

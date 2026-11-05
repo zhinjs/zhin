@@ -96,9 +96,10 @@ export async function handleLarkWebhookRequest(
       return;
     }
 
-    if ((event as LarkEventBody & { header?: { event_type?: string } }).header?.event_type === 'card.action.trigger' && handler.isOpen) handler.admitCardAction?.(event.event as LarkCardAction);
+    const headerEventType = (event as LarkEventBody & { header?: { event_type?: string } }).header?.event_type;
+    if (headerEventType === 'card.action.trigger' && handler.isOpen) handler.admitCardAction?.(event.event as LarkCardAction);
 
-    if (event.type === 'event_callback' && event.event?.message && handler.isOpen) {
+    if ((event.type === 'event_callback' || headerEventType === 'im.message.receive_v1') && event.event?.message && handler.isOpen) {
       const message: LarkMessage = {
         ...event.event.message,
         sender: event.event.message.sender ?? event.event.sender,

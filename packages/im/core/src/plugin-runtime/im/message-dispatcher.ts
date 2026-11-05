@@ -53,13 +53,22 @@ export const defaultCommandPrefixResolver: CommandPrefixResolver = (message, sna
     | { commandPrefix?: unknown; endpoints?: unknown }
     | undefined;
   if (!config) return '';
-  const endpointId = message.endpointId;
-  if (endpointId && Array.isArray(config.endpoints)) {
-    const entry = config.endpoints.find((item) =>
-      !!item && typeof item === 'object'
-      && (item as { id?: unknown }).id === endpointId) as
-      | { commandPrefix?: unknown }
-      | undefined;
+  const adapters = snapshot.projections.get(adapterFeatureId);
+  const desiredEndpointId = isAdapterIndex(adapters)
+    ? adapters.adapterForEndpoint(message.conversation.endpoint.id as CapabilityId)
+        ?.find(message.conversation.endpoint.id as CapabilityId)?.desired.endpointId
+    : undefined;
+  const candidateIds = new Set(
+    [message.endpointId, desiredEndpointId].filter((v): v is string => typeof v === 'string' && v.length > 0),
+  );
+  if (candidateIds.size > 0 && Array.isArray(config.endpoints)) {
+    const entry = config.endpoints.find((item) => {
+      if (!item || typeof item !== 'object') return false;
+      const id = (item as { id?: unknown }).id;
+      const name = (item as { name?: unknown }).name;
+      return (typeof id === 'string' && candidateIds.has(id))
+        || (typeof name === 'string' && candidateIds.has(name));
+    }) as { commandPrefix?: unknown } | undefined;
     if (typeof entry?.commandPrefix === 'string') return entry.commandPrefix;
   }
   return typeof config.commandPrefix === 'string' ? config.commandPrefix : '';

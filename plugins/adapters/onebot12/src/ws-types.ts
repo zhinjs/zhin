@@ -4,6 +4,7 @@ export interface OneBot12WsSocket {
   readonly readyState: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
+  terminate?(): void;
   on(event: 'open' | 'message' | 'close' | 'error', listener: (...args: unknown[]) => void): void;
 }
 

@@ -106,14 +106,17 @@ export class RuntimeInteractiveRouter<Admission = never> {
     return resolvePayloadFromText(raw, Object.assign({}, ...live.map(entry => entry.map))) !== undefined;
   }
 
-  resolvePayload(message: Message): string | undefined {
+  resolvePayload(message: Message, fallbackGeneration = message.generation): string | undefined {
     const fromSegments = actionPayloadFromSegments(message.segments);
     if (fromSegments) return fromSegments;
     const raw = message.content.trim();
     if (!raw) return undefined;
     return resolvePayloadFromText(
       raw,
-      this.#fallbackMap(message.conversation, message.generation),
+      this.#fallbackMap(message.conversation, message.generation)
+        ?? (fallbackGeneration !== message.generation
+          ? this.#fallbackMap(message.conversation, fallbackGeneration)
+          : undefined),
     );
   }
 

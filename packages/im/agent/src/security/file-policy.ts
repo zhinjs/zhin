@@ -337,6 +337,93 @@ function splitShellOperatorParts(command: string): string[] {
   return parts;
 }
 
+const ENV_DUMP_COMMAND_NAMES: ReadonlySet<string> = new Set([
+  'env', 'printenv', 'export', 'set',
+]);
+
+const BASH_WRAPPER_COMMANDS: ReadonlySet<string> = new Set([
+  'command', 'builtin', 'nohup', 'time', 'nice', 'timeout', 'stdbuf',
+]);
+
+function stripShellTokenQuotes(token: string): string {
+  let result = token.trim();
+  if (
+    (result.startsWith('"') && result.endsWith('"'))
+    || (result.startsWith("'") && result.endsWith("'"))
+  ) {
+    result = result.slice(1, -1);
+  }
+  return result;
+}
+
+function normalizeCommandBaseName(token: string): string {
+  const unquoted = stripShellTokenQuotes(token).replace(/\\(.)/g, '$1');
+  const slashIdx = unquoted.lastIndexOf('/');
+  return slashIdx >= 0 ? unquoted.slice(slashIdx + 1) : unquoted;
+}
+
+function isEnvAssignmentToken(token: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(token);
+}
+
+/**
+ * 解析单个管道段中的实际执行命令名称及其参数起始下标，跳过前导变量赋值与常见包装命令（env/timeout/nice/command 等）。
+ */
+function resolveEffectiveCommandTokens(segment: string): { baseCmd: string; argStartIndex: number; tokens: string[] } | null {
+  const tokens = segment.trim().split(/\s+/).filter(Boolean);
+  let i = 0;
+  while (i < tokens.length) {
+    const tok = tokens[i]!;
+    if (isEnvAssignmentToken(tok)) {
+      i++;
+      continue;
+    }
+    const base = normalizeCommandBaseName(tok);
+    if (base === 'env') {
+      let j = i + 1;
+      while (j < tokens.length) {
+        const nextTok = stripShellTokenQuotes(tokens[j]!);
+        if (nextTok === '-u' || nextTok === '--unset' || nextTok === '-C' || nextTok === '--chdir' || nextTok === '-S' || nextTok === '--split-string') {
+          j += 2;
+          continue;
+        }
+        if (nextTok.startsWith('-') || isEnvAssignmentToken(nextTok)) {
+          j++;
+          continue;
+        }
+        break;
+      }
+      if (j >= tokens.length) {
+        return { baseCmd: 'env', argStartIndex: j, tokens };
+      }
+      i = j;
+      continue;
+    }
+    if (BASH_WRAPPER_COMMANDS.has(base)) {
+      i++;
+      while (i < tokens.length) {
+        const flagTok = stripShellTokenQuotes(tokens[i]!);
+        if ((base === 'nice' && flagTok === '-n') || (base === 'timeout' && (flagTok === '-k' || flagTok === '-s'))) {
+          i += 2;
+          continue;
+        }
+        if (flagTok.startsWith('-')) {
+          i++;
+          continue;
+        }
+        break;
+      }
+      if (base === 'timeout' && i < tokens.length) {
+        // 跳过 timeout 的时长参数
+        i++;
+      }
+      continue;
+    }
+    return { baseCmd: base, argStartIndex: i + 1, tokens };
+  }
+  return null;
+}
+
 /**
  * 检查 bash 命令是否可能泄漏敏感环境变量或文件。
  * 返回 { safe: true } 或 { safe: false, reason: string }。
@@ -344,10 +431,14 @@ function splitShellOperatorParts(command: string): string[] {
 export function checkBashCommandSafety(command: string): { safe: boolean; reason?: string } {
   const trimmed = command.trim();
 
-  // 按复合运算符（&&/||/;/|/换行）拆段，逐段检查 — 防止 `echo ok && printenv` 绕过
+  // 按复合运算符（&&/||/;/|/换行）拆段，逐段检查 — 防止 `echo ok && printenv` 或 `FOO=1 /usr/bin/printenv` 绕过
   const segments = splitShellOperatorParts(trimmed);
   for (const seg of segments) {
     if (ENV_DUMP_COMMANDS.test(seg)) {
+      return { safe: false, reason: '禁止执行环境变量导出命令（env/printenv/export/set），可能泄漏密钥' };
+    }
+    const resolved = resolveEffectiveCommandTokens(seg);
+    if (resolved && ENV_DUMP_COMMAND_NAMES.has(resolved.baseCmd)) {
       return { safe: false, reason: '禁止执行环境变量导出命令（env/printenv/export/set），可能泄漏密钥' };
     }
   }
@@ -369,22 +460,36 @@ const BASH_SEARCH_COMMANDS: ReadonlySet<string> = new Set([
 /** 读取/查看类命令 */
 const BASH_READ_COMMANDS: ReadonlySet<string> = new Set([
   'cat', 'head', 'tail', 'less', 'more', 'wc', 'stat', 'file', 'strings',
-  'jq', 'awk', 'cut', 'sort', 'uniq', 'tr',
+  'jq', 'awk', 'cut', 'sort', 'uniq', 'tr', 'sed', 'base64', 'xxd', 'od', 'hexdump',
 ]);
 
 /**
- * 从 bash 只读命令中提取可能的目标文件路径（不含 flag）。
+ * 从 bash 只读/搜索命令及输入重定向中提取可能的目标文件路径（不含 flag）。
  */
 export function extractBashReadPaths(command: string): string[] {
   const paths: string[] = [];
   for (const part of splitShellOperatorParts(command.trim())) {
     for (const segment of splitPipeSegments(part)) {
-      const tokens = segment.trim().split(/\s+/);
-      const baseCmd = tokens[0];
-      if (!baseCmd || !BASH_READ_COMMANDS.has(baseCmd)) continue;
-      for (let i = 1; i < tokens.length; i++) {
-        const tok = tokens[i];
-        if (!tok || tok.startsWith('-')) continue;
+      const resolved = resolveEffectiveCommandTokens(segment);
+      if (!resolved) continue;
+      const { baseCmd, argStartIndex, tokens } = resolved;
+      // 提取输入重定向（如 `< .env` 或 `<.env`）
+      for (let i = 0; i < tokens.length; i++) {
+        const rawTok = tokens[i]!;
+        if (rawTok === '<' && i + 1 < tokens.length) {
+          const redirTarget = stripShellTokenQuotes(tokens[i + 1]!);
+          if (redirTarget) paths.push(redirTarget);
+        } else if (rawTok.startsWith('<') && !rawTok.startsWith('<<')) {
+          const redirTarget = stripShellTokenQuotes(rawTok.slice(1));
+          if (redirTarget) paths.push(redirTarget);
+        }
+      }
+      if (!BASH_READ_COMMANDS.has(baseCmd) && !BASH_SEARCH_COMMANDS.has(baseCmd)) continue;
+      for (let i = argStartIndex; i < tokens.length; i++) {
+        const rawTok = tokens[i];
+        if (!rawTok || rawTok === '<') continue;
+        const tok = stripShellTokenQuotes(rawTok);
+        if (!tok || tok.startsWith('-') || tok.startsWith('<')) continue;
         if (tok === '|' || tok === '&&' || tok === '||' || tok === ';') break;
         paths.push(tok);
       }

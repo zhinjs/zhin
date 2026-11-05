@@ -282,7 +282,8 @@ export namespace Schema {
                     if (!['string', 'undefined'].includes(typeof value)) throw new TypeError(`${key} is not a string`);
                     break;
                 case 'number':
-                    if (!['number', 'undefined'].includes(typeof value)) throw new TypeError(`${key} is not a number`);
+                    if (!['number', 'undefined'].includes(typeof value) || (typeof value === 'number' && Number.isNaN(value)))
+                        throw new TypeError(`${key} is not a number`);
                     break;
                 case 'boolean':
                     if (!['boolean', 'undefined'].includes(typeof value)) throw new TypeError(`${key} is not a boolean`);
@@ -297,10 +298,12 @@ export namespace Schema {
                     if (value instanceof Date && isNaN(value.getTime())) throw new TypeError(`${key} is not a valid Date`);
                     break;
                 case 'dict':
-                    if (!['object', 'undefined', 'null'].includes(typeof value)) throw new TypeError(`${key} is not a object`);
+                    if (!['object', 'undefined'].includes(typeof value) || value === null || Array.isArray(value))
+                        throw new TypeError(`${key} is not a object`);
                     break;
                 case 'object':
-                    if (!['object', 'undefined', 'null'].includes(typeof value)) throw new TypeError(`${key} is not a object`);
+                    if (!['object', 'undefined'].includes(typeof value) || value === null || Array.isArray(value))
+                        throw new TypeError(`${key} is not a object`);
                     break;
                 case 'list':
                     if (typeof value !== 'undefined' && !Array.isArray(value)) throw new TypeError(`${key} is not a list`);
@@ -367,19 +370,26 @@ Schema.extend('dict', function (this: Schema, key: string, value: any) {
 Schema.extend('object', function (this: Schema, key: string, value: any) {
     const getDefault = (schema: Schema) => {
         const result = Object.create(null);
-        for (const key in schema.options.object) {
-            const propSchema = schema.options.object[key];
-            result[key] = propSchema.default !== undefined ? propSchema.default : undefined;
+        for (const propKey in schema.options.object) {
+            const propSchema = schema.options.object[propKey];
+            result[propKey] = propSchema.meta.default !== undefined ? propSchema.meta.default : undefined;
         }
         return result;
     };
     value = Schema.checkDefault(this, key, value, getDefault(this));
+    if (value === undefined) return value;
     const result = Object.create(null);
-    for (const [k, val] of Object.entries(value)) {
-        const propSchema = this.options.object![k];
+    const shape = this.options.object || {};
+    const allKeys = new Set([...Object.keys(shape), ...Object.keys(value)]);
+    for (const k of allKeys) {
+        const val = value[k];
+        const propSchema = shape[k];
         if (propSchema) {
             // propSchema是一个可调用的Schema实例
-            result[k] = (propSchema as any)(val, `${key}.${k}`);
+            const evaluated = (propSchema as any)(val, `${key}.${k}`);
+            if (evaluated !== undefined || k in value) {
+                result[k] = evaluated;
+            }
         } else {
             result[k] = val;
         }

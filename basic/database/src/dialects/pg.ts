@@ -299,7 +299,12 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
       if (options?.isolationLevel) {
         beginSql = `BEGIN ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`;
       }
-      await client.query(beginSql);
+      try {
+        await client.query(beginSql);
+      } catch (error) {
+        client.release();
+        throw error;
+      }
       
       return {
         async commit(): Promise<void> {

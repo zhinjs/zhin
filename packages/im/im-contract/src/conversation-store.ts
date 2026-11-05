@@ -203,13 +203,17 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     const existing = await this.#eventById(event.eventId);
     if (existing) return Object.freeze({ appended: false, sequence: Number(existing.id) });
     try {
-      await Promise.resolve(this.events.insert({
+      const insertResult = await Promise.resolve(this.events.insert({
         ...conversationEventQueryFields(event),
         event_id: databaseTextKey(event.eventId),
         conversation_key: databaseTextKey(conversationRefKey(event.conversation)),
         event_json: JSON.stringify(event),
         time: event.timestamp,
       }));
+      const insertedSequence = extractInsertedSequence(insertResult);
+      if (insertedSequence !== undefined) {
+        return Object.freeze({ appended: true, sequence: insertedSequence });
+      }
     } catch (error) {
       const raced = await this.#eventById(event.eventId);
       if (!raced) throw error;
@@ -406,6 +410,10 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
       return Promise.resolve(rows);
     };
     const encoded = await select(databaseTextKey(key));
+    if (encoded.length > 0) {
+      const encodedSeq = Number(encoded[0]?.sequence ?? 0);
+      if (encodedSeq > 0) return encodedSeq;
+    }
     const legacy = await toleratePostgresNul(() => select(key), []);
     return Math.max(
       Number(encoded[0]?.sequence ?? 0),
@@ -454,6 +462,17 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     const legacy = await toleratePostgresNul(() => select(eventId), undefined);
     return legacy && parseConversationEvent(legacy.event_json).eventId === eventId ? legacy : undefined;
   }
+}
+
+function extractInsertedSequence(result: unknown): number | undefined {
+  if (typeof result === 'number' && Number.isSafeInteger(result) && result > 0) return result;
+  if (result && typeof result === 'object') {
+    const record = result as { id?: unknown; lastID?: unknown };
+    const candidate = record.id ?? record.lastID;
+    const num = Number(candidate);
+    if (Number.isSafeInteger(num) && num > 0) return num;
+  }
+  return undefined;
 }
 
 function uniqueEventRows(rows: readonly Record<string, unknown>[]): Record<string, unknown>[] {

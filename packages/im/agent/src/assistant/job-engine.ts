@@ -63,6 +63,15 @@ export class ScheduleJobEngine {
   }
 
   registerOne(job: ScheduleJob): void {
+    const prev = this.disposes.get(job.id);
+    if (prev) {
+      try {
+        prev();
+      } catch {
+        /* ignore previous schedule dispose error */
+      }
+      this.disposes.delete(job.id);
+    }
     const dispose = registerJobSchedule(this.#scheduler, job, (jobId) => this.runJob(jobId));
     if (dispose) {
       this.disposes.set(job.id, dispose);

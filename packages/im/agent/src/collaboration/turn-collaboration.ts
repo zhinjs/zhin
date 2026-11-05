@@ -34,6 +34,7 @@ import type { ImageInspectionBudget } from '../media/local-image-inspection.js';
 import type { ContextFile } from '../bootstrap.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentCapabilities, ToolCapability } from '../plugin-runtime/capability-ingress.js';
+import type { TurnProvenance } from '../security/provenance.js';
 import { resolveTurnTrustLevel, type InitiatorTrustLevel } from '../security/trust-level.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { createActorTurnRunner } from './actor-turn.js';
@@ -66,6 +67,7 @@ export interface TurnCollaborationInput {
   readonly contextFiles?: readonly ContextFile[];
   readonly interactiveRun?: InteractiveRun;
   readonly imageInspectionBudget?: ImageInspectionBudget;
+  readonly provenance?: TurnProvenance;
   readonly budget?: BudgetAmounts;
 }
 
@@ -145,6 +147,7 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     contextFiles: input.contextFiles,
     interactiveRun: input.interactiveRun,
     imageInspectionBudget: input.imageInspectionBudget,
+    provenance: input.provenance,
     onEscalate,
   });
   const harness = createHarness({

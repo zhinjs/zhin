@@ -284,6 +284,25 @@ export function senderNickname(ev: NapCatEvent): string | undefined {
 }
 
 /**
+ * 回复引用 id：优先取 message 数组中的 {type:'reply', data:{id}} 段；
+ * 兼容部分实现把 reply 放在事件顶层（标量或带 message_id 的对象）。
+ */
+export function extractQuoteId(ev: NapCatEvent): string | undefined {
+  if (Array.isArray(ev.message)) {
+    for (const seg of ev.message) {
+      if (seg?.type === 'reply' && seg.data?.id != null) return String(seg.data.id);
+    }
+  }
+  const reply = ev.reply;
+  if (typeof reply === 'number' || typeof reply === 'string') return String(reply);
+  if (reply && typeof reply === 'object' && 'message_id' in reply) {
+    const id = (reply as { message_id?: unknown }).message_id;
+    if (id != null) return String(id);
+  }
+  return undefined;
+}
+
+/**
  * canonical MediaRef → OneBot `file` 参数：url 直传、base64 → `base64://`、
  * 本地路径 → `file://`（路径在 OneBot 实现侧解析）、kind=file 不透明引用原样透传。
  */

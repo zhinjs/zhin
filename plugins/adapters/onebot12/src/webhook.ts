@@ -1,4 +1,5 @@
 import { createOnebot12SelfProfile } from './self-profile.js';
+import { toCanonicalSegments } from '@zhin.js/core';
 import { acceptHttpIngress } from 'imhelper';
 /**
  * OneBot12 HTTP webhook endpoint — POST inbound + api_url outbound.
@@ -21,6 +22,7 @@ import {
   buildSendMessageParams,
   matchesOneBot12Self,
   callOneBot12Action,
+  extractQuoteId,
   formatInboundContent,
   formatOutboundSegments,
   isBotMentioned,
@@ -164,15 +166,19 @@ export class OneBot12WebhookEndpoint extends Onebot12Client implements Endpoint 
     const content = formatInboundContent(ev);
     const nickname = senderNickname(ev);
     const mentioned = isBotMentioned(ev);
+    const quoteId = extractQuoteId(ev);
+    const segments = Array.isArray(ev.message) ? toCanonicalSegments(ev.message) : undefined;
     void this[endpointSpec].events.message({
       event: ev,
       ...(typeof ev.time === 'number' ? { platformSentAt: ev.time * 1000 } : {}),
       conversation,
       message: { conversation, id: ev.message_id },
       content,
+      ...(segments?.length ? { segments } : {}),
       sender: { id: senderUserId(ev), ...(nickname ? { name: nickname } : {}) },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
+      ...(quoteId ? { replyTo: { id: quoteId } } : {}),
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,

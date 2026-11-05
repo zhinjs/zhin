@@ -141,4 +141,30 @@ describe('TimerWheel', () => {
     wheel.stop();
     wheel.add(job('j1', new Date('2025-06-27T09:00:00+08:00')));
   });
+
+  it('does not block subsequent jobs when a due job handler is slow', async () => {
+    vi.setSystemTime(new Date('2025-06-27T08:59:00+08:00'));
+    const fired: string[] = [];
+    let resolveSlow!: () => void;
+    const wheel = new TimerWheel(async (j) => {
+      fired.push(j.id);
+      if (j.id === 'slow') {
+        await new Promise<void>((resolve) => {
+          resolveSlow = resolve;
+        });
+      }
+    });
+
+    wheel.add(job('slow', new Date('2025-06-27T09:00:00+08:00')));
+    wheel.add(job('fast', new Date('2025-06-27T09:00:10+08:00')));
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fired).toEqual(['slow']);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(fired).toEqual(['slow', 'fast']);
+
+    resolveSlow();
+    wheel.stop();
+  });
 });

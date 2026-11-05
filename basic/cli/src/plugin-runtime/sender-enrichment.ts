@@ -173,17 +173,24 @@ export function resolveEndpointRoleTarget(conversation: ConversationRef, snapsho
 
 export async function createSenderEnricher(config: RuntimeConfigDocument | ConfigDocumentPort, endpointRoles: EndpointRoleResolver): Promise<NonNullable<ConstructorParameters<typeof ImRuntime>[0]>['enrichSender']> {
   const document = await readConfigDocumentValue(config);
-  const ai = isRecord(document) && isRecord(document.ai) ? document.ai : undefined;
-  const trigger = ai && isRecord(ai.trigger) ? ai.trigger : undefined;
-  const globalMasters = normalizeTrustedIdList(trigger?.masters);
-  const globalTrusted = normalizeTrustedIdList(trigger?.trusted);
+  const readTriggerLists = (doc: unknown) => {
+    const ai = isRecord(doc) && isRecord(doc.ai) ? doc.ai : undefined;
+    const trigger = ai && isRecord(ai.trigger) ? ai.trigger : undefined;
+    return {
+      masters: normalizeTrustedIdList(trigger?.masters),
+      trusted: normalizeTrustedIdList(trigger?.trusted),
+    };
+  };
+  const initialLists = readTriggerLists(document);
   return (sender, conversation, snapshot) => {
     if (!sender?.id) return sender;
+    const rootDoc = snapshot?.config.get(rootPluginId());
+    const activeLists = isRecord(rootDoc) && 'ai' in rootDoc ? readTriggerLists(rootDoc) : initialLists;
     const target = resolveEndpointRoleTarget(conversation, snapshot);
     const master = target && endpointRoles.resolveOwner(target.pluginKey, target.endpointId);
     const trusted = target ? endpointRoles.resolveTrusted(target.pluginKey, target.endpointId) : [];
-    const isMaster = globalMasters.includes(sender.id) || sender.id === master;
-    const isTrusted = !isMaster && (globalTrusted.includes(sender.id) || trusted.includes(sender.id));
+    const isMaster = activeLists.masters.includes(sender.id) || sender.id === master;
+    const isTrusted = !isMaster && (activeLists.trusted.includes(sender.id) || trusted.includes(sender.id));
     if (!isMaster && !isTrusted) return sender;
     const role = isMaster ? 'master' : 'trusted';
     const existing = sender.roles ?? [];

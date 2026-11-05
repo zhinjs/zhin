@@ -1,4 +1,5 @@
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { toCanonicalSegments } from '@zhin.js/core';
 /**
  * NapCat WS client endpoint — outbound connect to NapCat.
  */
@@ -27,6 +28,7 @@ import {
 import {
   buildSendAction,
   buildWsConnectOptions,
+  extractQuoteId,
   formatInboundContent,
   formatOutboundSegments,
   isMessageEvent,
@@ -190,12 +192,15 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
     const content = formatInboundContent(ev);
     const nickname = senderNickname(ev);
     const mentioned = isNapCatBotMentioned(ev);
+    const quoteId = extractQuoteId(ev);
+    const segments = Array.isArray(ev.message) ? toCanonicalSegments(ev.message) : undefined;
     void this[endpointSpec].events.message({
       event: nativeEvent,
       ...(typeof nativeEvent.time === 'number' ? { platformSentAt: nativeEvent.time * 1000 } : {}),
       conversation,
       message: { conversation, id: msgId },
       content,
+      ...(segments?.length ? { segments } : {}),
       sender: {
         id: senderUserId(ev),
         name: nickname,
@@ -203,6 +208,7 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
       },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
+      ...(quoteId ? { replyTo: { id: quoteId } } : {}),
       metadata: Object.freeze({
         message_type: ev.message_type,
         user_id: ev.user_id != null ? String(ev.user_id) : undefined,
@@ -237,6 +243,7 @@ export class NapCatWsEndpoint extends NapcatClient implements Endpoint {
         }
         try {
           ws.close();
+          ws.terminate?.();
         } catch {
           /* ignore */
         }

@@ -23,7 +23,17 @@ type TurnOutputElement = Extract<TurnOutcome, { status: 'completed' }>['output']
 
 function outputElementsToText(elements: readonly TurnOutputElement[]): string {
   return elements
-    .map((el) => (el.type === 'text' ? el.content || '' : ''))
+    .map((el) => {
+      if (el.type === 'text') return el.content || '';
+      if (el.type === 'message') {
+        return el.segments
+          .map((seg) => (seg.type === 'text' ? String((seg.data as { text?: unknown }).text ?? '') : ''))
+          .filter(Boolean)
+          .join('');
+      }
+      return '';
+    })
+    .filter(Boolean)
     .join('\n')
     .trim();
 }
@@ -44,7 +54,7 @@ function initialTask(requestContext: RequestContext, agentName: string): Task {
 }
 
 export class ZhinA2AExecutor implements AgentExecutor {
-  private readonly running = new Map<string, AbortController>();
+  private readonly running = new Map<string, { abort: AbortController; contextId: string }>();
 
   constructor(private readonly options: ZhinA2AExecutorOptions) {}
 
@@ -73,7 +83,7 @@ export class ZhinA2AExecutor implements AgentExecutor {
     const task = initialTask(requestContext, this.options.agentName);
     eventBus.publish(AgentEvent.task(task));
     const abort = new AbortController();
-    this.running.set(requestContext.taskId, abort);
+    this.running.set(requestContext.taskId, { abort, contextId: requestContext.contextId });
 
     const prompt = partsToPromptText(requestContext.userMessage.parts);
 
@@ -145,11 +155,12 @@ export class ZhinA2AExecutor implements AgentExecutor {
   }
 
   async cancelTask(taskId: string, eventBus: ExecutionEventBus): Promise<void> {
-    this.running.get(taskId)?.abort(new Error(`A2A task cancelled: ${taskId}`));
+    const entry = this.running.get(taskId);
+    entry?.abort.abort(new Error(`A2A task cancelled: ${taskId}`));
     this.running.delete(taskId);
     eventBus.publish(AgentEvent.statusUpdate({
       taskId,
-      contextId: '',
+      contextId: entry?.contextId ?? '',
       status: {
         state: TaskState.TASK_STATE_CANCELED,
         message: undefined,

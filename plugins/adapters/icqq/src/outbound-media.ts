@@ -68,14 +68,19 @@ export function prepareIcqqOutboundMedia(
     if (!data || typeof data !== "object") return seg;
     const d = data as Record<string, unknown>;
     const media = d.media;
-    if (!isMediaRef(media) || media.kind !== "base64") return seg;
-    const b64 = media.value.replace(/^base64:\/\//, "");
+    let b64 = "";
+    let mime = "";
+    if (isMediaRef(media) && media.kind === "base64") {
+      b64 = media.value.replace(/^base64:\/\//, "");
+      mime = media.mime_type ?? "";
+    } else if (typeof d.file === "string" && d.file.startsWith("base64://")) {
+      b64 = d.file.slice("base64://".length);
+    }
     if (!b64) return seg;
     if (type !== "image" && type !== "record" && type !== "audio" && type !== "video") {
       return seg;
     }
 
-    const mime = media.mime_type ?? "";
     const filePath = spoolBase64ToFile(
       b64,
       mime || (type === "image" ? "image/jpeg" : type === "video" ? "video/mp4" : "audio/mpeg"),
@@ -86,6 +91,7 @@ export function prepareIcqqOutboundMedia(
       type,
       data: {
         ...d,
+        ...(typeof d.file === "string" && d.file.startsWith("base64://") ? { file: filePath } : {}),
         media: {
           kind: "path",
           value: filePath,

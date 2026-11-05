@@ -222,7 +222,28 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
             if (!active) throw new Error('Database transaction is already closed');
             if (!definedTables.has(name)) throw new Error(`Table '${name}' is not registered`);
             return guardTransactionModel({
-              select: (...fields) => transaction.select(name, fields) as DatabaseHostSelection,
+              select: (...fields) => {
+                if (fields.includes('*')) {
+                  throw new TypeError(
+                    'select() requires explicit column names; "*" is not supported '
+                    + '(pass real column names, e.g. select("id", "title")), or use count() for counting.',
+                  );
+                }
+                const selection = transaction.select(name, fields) as {
+                  where(query: Record<string, unknown>): unknown;
+                  orderBy?(field: string, direction?: 'ASC' | 'DESC'): unknown;
+                  limit?(count: number): unknown;
+                };
+                const chain: DatabaseHostSelection = {
+                  where: (query) => { selection.where(query); return chain; },
+                  orderBy: (field, direction) => { selection.orderBy?.(field, direction); return chain; },
+                  limit: (count) => { selection.limit?.(count); return chain; },
+                  then: (onfulfilled, onrejected) =>
+                    Promise.resolve(selection as unknown as PromiseLike<Record<string, unknown>[]>)
+                      .then(onfulfilled, onrejected),
+                };
+                return chain;
+              },
               insert: row => transaction.insert(name, row),
               update: patch => ({ where: async query => transaction.update(name, patch).where(query) }),
               delete: () => ({ where: async query => transaction.delete(name).where(query) }),
