@@ -87,3 +87,43 @@ describe('decision candidate ranking', () => {
       .toMatchObject({ applied: true, outcome: 'selected' });
   });
 });
+
+describe('ADR 0047 S3 multi-decision acceptance', () => {
+  const candidates = ['alpha', 'beta', 'gamma'].map(name => ({ name, description: name }));
+  const signal = () => new AbortController().signal;
+
+  it('mode off yields 0 evaluate calls', async () => {
+    const evaluate = vi.fn().mockResolvedValue({ model: 'unused', answers: {}, usage: { inputTokens: 0, outputTokens: 0 } });
+    const runtime: AgentDecisionRuntime = {
+      forTask: () => ({ evaluate }),
+      config: { tools: { mode: 'off' }, skills: { mode: 'off' } },
+    };
+    for (const task of ['tools', 'skills'] as const) {
+      expect(await rankDecisionCandidates(runtime, task, 'request', candidates, signal()))
+        .toMatchObject({ outcome: 'off', applied: false, selectedNames: [] });
+    }
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it('keeps multi-batch ranking on one Profile/Account pin', async () => {
+    const evaluate = vi.fn().mockImplementation(async (request: DecisionRequest<Record<string, { type: 'score' }>>) => ({
+      model: 'pinned-decision',
+      answers: Object.fromEntries(Object.keys(request.questions).map(key => [key, {
+        type: 'score' as const, score: 0.9, confidence: 0.9, legend: {}, probabilities: {},
+      }])),
+      usage: { inputTokens: 1, outputTokens: 1 },
+    }));
+    const provider = { evaluate };
+    const forTask = vi.fn(() => provider);
+    const runtime: AgentDecisionRuntime = {
+      forTask,
+      config: { skills: { mode: 'active', maxCandidates: 1, topK: 3 } },
+    };
+    const ranked = await rankDecisionCandidates(runtime, 'skills', 'request', candidates, signal());
+    expect(forTask).toHaveBeenCalledTimes(1);
+    expect(forTask).toHaveBeenCalledWith('skills');
+    expect(evaluate).toHaveBeenCalledTimes(3);
+    expect(ranked).toMatchObject({ applied: true, outcome: 'selected', selectedNames: ['alpha', 'beta', 'gamma'] });
+    expect(evaluate.mock.calls.every(call => call[0].state.task === 'skills')).toBe(true);
+  });
+});
