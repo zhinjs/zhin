@@ -247,6 +247,7 @@ export type {
   AutoCompactTrackingState,
   AutoCompactResult,
   AgentCompactionConfig,
+  AgentCompactionExecution,
   AgentCompactionState,
   AgentCompactResult,
   AgentMicroCompactResult,

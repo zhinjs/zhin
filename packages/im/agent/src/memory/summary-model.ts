@@ -6,14 +6,14 @@ export interface SummaryExecution {
   readonly transport: LlmCompletionPort;
 }
 
-/** Summary uses only its deployment-owned lease; unscoped embedders retain their existing model. */
-export function resolveTurnSummaryExecution(legacy: SummaryExecution): SummaryExecution {
+/** Capture this operation synchronously; acquire its deployment summary only when called.
+ * Unscoped embedders retain their existing model. */
+export function createTurnSummaryExecutionResolver(legacy: SummaryExecution): () => Promise<SummaryExecution> {
   const scope = getAgentTurnConfiguration()?.models;
-  if (!scope) return legacy;
-  const summary = scope.summary;
-  if (!summary) throw new Error('Summary model is not configured in the turn scope');
-  return Object.freeze({
-    model: summary.model,
-    transport: summary.completion,
-  });
+  return async () => {
+    if (!scope) return legacy;
+    if (!scope.summary) throw new Error('Summary model is not configured in the turn scope');
+    const summary = await scope.summary.resolve();
+    return Object.freeze({ model: summary.model, transport: summary.completion });
+  };
 }

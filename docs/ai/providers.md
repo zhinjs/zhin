@@ -90,6 +90,8 @@ purposes:
 
 这里的能力是管理员对实际部署模型的明确声明，使用前应核实。向导会询问输入类型、工具和流式能力；未知能力保持未知。API Key 的环境引用写作 `auth: { method: api-key, source: env://AI_API_KEY }`，密钥值单独保存在 `.env`，或在 Console 私有密钥表单输入。OAuth 账号写作 `auth: { method: oauth }`，保存账号不代表已登录。
 
+Host 管理员也可在账号的“设置 API Key”密码框输入单个完整的 `${AI_API_KEY:-默认值}` 或 `${AI_API_KEY:=默认值}`。默认值可能是秘密，表达式只保存到私有加密凭据，不能写入公开 Account source；仅在实际授权时通过 Host 环境存储展开，变量缺失或为空时采用默认值。组合或嵌套模板不支持，个人账号不能读取 Host 环境。
+
 导入文档的字典键是可读别名，不是数据库账号身份。更新已有资源时使用预览提供的明确 bindings；删除后同名新建不继承旧账号、Session 或私人设置。结果未知时保留 mutationId 回查，不换新 ID 重放。
 
 ## 用途与 Session

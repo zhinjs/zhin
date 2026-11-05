@@ -23,7 +23,7 @@ import {
   normalizeProviderJson,
 } from '@zhin.js/ai/provider';
 import { createHostDocumentCipher } from '../host-credential-storage.js';
-import { InferenceCredentialStore, credentialMaterialFingerprint } from './credentials.js';
+import { InferenceCredentialStore, credentialMaterialFingerprint, environmentExpressionSource, normalizeApiKeyMaterial, type EnvironmentExpressionSource } from './credentials.js';
 import { createPersonalModelFetch } from './personal-network.js';
 import { HostAccountRuntime, type AccountStatusView } from './account-runtime.js';
 import { DatabaseInferenceRepository } from './repository.js';
@@ -85,6 +85,8 @@ export interface InferenceDriverView {
   readonly source?: string;
   readonly support?: ProviderSupportMetadata;
   readonly authentication: readonly AuthenticationMethod[];
+  /** True only when this held declaration implements model discovery. Metadata reads never probe it. */
+  readonly discovery: boolean;
   readonly serviceSchema?: Readonly<Record<string, unknown>>;
   readonly modelContracts: readonly Readonly<{
     protocol: string;
@@ -246,14 +248,14 @@ export class InferenceManagementService {
   async reviewImportedKeys(
     principal: InferenceManagementPrincipal,
     value: unknown,
-    keys: ReadonlyMap<string, string>
+    keys: ReadonlyMap<string, string | EnvironmentExpressionSource>
   ): Promise<PreparedInferenceChange> {
     return this.#review(principal, value, keys);
   }
   async #review(
     principal: InferenceManagementPrincipal,
     value: unknown,
-    importedKeys: ReadonlyMap<string, string> = new Map()
+    importedKeys: ReadonlyMap<string, string | EnvironmentExpressionSource> = new Map()
   ): Promise<PreparedInferenceChange> {
     this.#principal(principal);
     const input = record(value),
@@ -295,6 +297,7 @@ export class InferenceManagementService {
       repository: this.options.repository,
     });
     for (const [alias, key] of importedKeys) {
+      const material = normalizeApiKeyMaterial(typeof key === 'string' ? { key } : { source: key });
       const id = reviewed.bindings.accounts[alias],
         account = reviewed.graph.accounts[id];
       if (
@@ -303,7 +306,7 @@ export class InferenceManagementService {
         !reviewed.changes.accounts.created.includes(id) ||
         account.authentication.method !== 'api-key' ||
         account.authentication.source ||
-        !key.trim()
+        (material.source !== undefined && account.ownerId !== this.options.hostOwnerId)
       )
         throw new InferenceManagementError('forbidden');
       const record = await vault.seal({
@@ -316,8 +319,8 @@ export class InferenceManagementService {
         payload: {
           status: 'ready',
           method: 'api-key',
-          key,
-          materialFingerprint: credentialMaterialFingerprint(key),
+          ...material,
+          ...(material.key === undefined ? {} : { materialFingerprint: credentialMaterialFingerprint(material.key) }),
         },
       });
       credentials.push({
@@ -351,13 +354,15 @@ export class InferenceManagementService {
     principal: InferenceManagementPrincipal,
     value: unknown
   ): Promise<PreparedInferenceChange> {
-    const input = record(value),
-      account = await this.account(principal, text(input.accountId));
+    const input = record(value);
+    if (input.source !== undefined && input.key !== undefined)
+      throw new InferenceManagementError('invalid-input');
+    const account = await this.account(principal, text(input.accountId));
     const graph = await this.graph();
     const service = graph.services[account.serviceId];
     const write = await this.options.accounts.prepareKey({
       account,
-      key: text(input.key),
+      ...(input.source === undefined ? { key: text(input.key) } : { source: environmentExpressionSource(input.source) }),
       expectedRevision: revision(input.expectedRevision),
       authContractVersion: this.options.authenticationContract(account, service),
     });

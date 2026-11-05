@@ -3,10 +3,13 @@ import { MemoryPersonalSessionRepository, PersonalSessionService } from '@zhin.j
 import { registerInferenceRoutes } from '../../../src/plugin-runtime/inference/routes.js';
 import { resolveInferenceManagementPrincipal } from '../../../src/plugin-runtime/inference/principal.js';
 import { InferenceSessionManagement } from '../../../src/plugin-runtime/inference/session-management.js';
+import { join } from 'node:path';
+import { InferenceCredentialStore, credentialMaterialFingerprint } from '../../../src/plugin-runtime/inference/credentials.js';
+import { resolveHostCredentialSource } from '../../../src/plugin-runtime/inference/environment-source.js';
 import { setupInferenceManagement } from './fixtures.js';
 
-async function setup() {
-  const fixture = await setupInferenceManagement({ method: 'oauth' });
+async function setup(method: 'api-key' | 'oauth' = 'oauth') {
+  const fixture = await setupInferenceManagement({ method });
   const http = createHttpHost({ host: '127.0.0.1', port: 0, token: 'operator-fixture', tokens: [
     { token: 'member-fixture', scope: 'user', principalId: 'member' },
   ] });
@@ -115,4 +118,36 @@ it('marks only proven pre-persistence apply rejections as not committed', async 
     expect(unknown.payload).toMatchObject({ success: true, data: { status: 'commit-unknown' } });
     expect(unknown.payload).not.toHaveProperty('mutationOutcome');
   } finally { await fixture.close(); }
+});
+
+
+it('repairs one selected literal template through the Console key payload, opaque preview and authenticated apply', async () => {
+  const f = await setup('api-key');
+  const expression = '${PRIVATE_KEY:-synthetic-private-default}';
+  try {
+    const account = f.graph.accounts.account, service = f.graph.services.service, profile = f.graph.profiles.profile;
+    const store = new InferenceCredentialStore({ directory: join(f.directory, 'private'), repository: f.repository });
+    const record = await store.seal({ account, revision: 1, authContractVersion: '1', payload: {
+      status: 'ready', method: 'api-key', key: expression, materialFingerprint: credentialMaterialFingerprint(expression),
+    } });
+    expect(await f.repository.commitCredential({ rootId: '/root', write: { accountId: account.id, expectedIncarnation: account.incarnation, expectedRevision: 0, record } })).toMatchObject({ status: 'committed' });
+    const lookup = vi.fn(() => undefined);
+    vi.spyOn(f.accounts.options, 'resolveSource').mockImplementation(source => resolveHostCredentialSource(source, lookup));
+    const prepared = await f.call('/key/prepare', { accountId: account.id, expectedRevision: 1, key: expression });
+    expect(prepared.status).toBe(200);
+    expect(JSON.stringify(prepared.payload)).not.toContain('synthetic-private-default');
+    expect(lookup).not.toHaveBeenCalled();
+    const applied = await f.call('/apply', { prepared: prepared.payload.data.prepared, mutationId: 'selected-expression-repair' });
+    expect(applied.payload).toMatchObject({ success: true, data: { status: 'committed' } });
+    expect(JSON.stringify(applied.payload)).not.toContain('synthetic-private-default');
+    expect(lookup).not.toHaveBeenCalled();
+    const grant = await f.accounts.createPort({
+      binding: { graphRevision: f.graph.revision, service, account, profile, model: service.models.example },
+      context: { rootId: '/root', ownerId: 'host', hostOwnerId: 'host', operationId: 'selected-repair', sessionKey: 'session' },
+      driver: f.definition, retainDriver: () => ({ reference: service.driver, definition: f.definition, release() {} }),
+    }).authorize({ target: new URL('https://example.test/v1/messages'), signal: new AbortController().signal });
+    expect(grant.token).toBe('synthetic-private-default');
+    expect(lookup).toHaveBeenCalledWith('PRIVATE_KEY');
+    expect(JSON.stringify((await f.call('')).payload)).not.toContain('synthetic-private-default');
+  } finally { await f.close(); }
 });

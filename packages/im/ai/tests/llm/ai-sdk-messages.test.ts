@@ -106,6 +106,15 @@ describe('agentMessagesToAiSdk tool-call reasoning', () => {
     expect(shouldEnsureToolCallReasoning({})).toBe(false);
   });
 
+  it('separates thinking capability from the explicit Driver replay protocol', () => {
+    expect(shouldEnsureToolCallReasoning({ reasoning: true, sdk: 'openai-compatible', toolCallReasoning: 'provider-native' })).toBe(false);
+    expect(shouldEnsureToolCallReasoning({ reasoning: true, sdk: 'openai-compatible', toolCallReasoning: 'openai-content' })).toBe(true);
+    expect(shouldEnsureToolCallReasoning({ reasoning: false, toolCallReasoning: 'openai-content' })).toBe(false);
+    for (const sdk of ['google', 'ollama', 'openai']) {
+      expect(shouldEnsureToolCallReasoning({ reasoning: true, sdk, toolCallReasoning: 'provider-native' })).toBe(false);
+    }
+  });
+
   it('usesAnthropicReasoningProtocol covers anthropic and minimax', () => {
     expect(usesAnthropicReasoningProtocol('anthropic')).toBe(true);
     expect(usesAnthropicReasoningProtocol('minimax')).toBe(true);

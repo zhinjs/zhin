@@ -1,5 +1,5 @@
 import {
-  normalizeProviderJson, providerPlanFingerprint,
+  normalizeProviderJson, providerPlanFingerprint, parseCredentialEnvironmentExpression,
   type JsonObject, type ModelDefinition, type ProfileSelection, type ProviderDriverReference,
 } from '@zhin.js/ai/provider';
 
@@ -41,7 +41,7 @@ export interface LegacyInferenceMigrationOptions {
 export type LegacyCredentialReference =
   | Readonly<{ kind: 'environment'; reference: string }>
   | Readonly<{ kind: 'legacy-vault'; reference: string }>
-  | Readonly<{ kind: 'legacy-config'; path: string }>;
+  | Readonly<{ kind: 'legacy-config' | 'legacy-environment-expression'; path: string }>;
 export interface LegacyInferenceMigration {
   readonly version: 1;
   readonly source: LegacyInferenceSource & Readonly<{ fingerprint: string }>;
@@ -110,7 +110,7 @@ export function compileLegacyInferenceMigration(options: LegacyInferenceMigratio
     if (raw.id !== undefined && raw.id !== id) { block(`${path}.id`, 'identity-conflict'); return; }
     // A different Host's record can only move through an explicit identity mapping, not an owner rewrite.
     if (raw.ownerId !== undefined && raw.ownerId !== ownerId) { block(`${path}.ownerId`, 'owner-mapping-required'); return; }
-    const known = ['id', 'ownerId', 'revision', 'sdk', 'host', 'baseUrl', 'apiKey', 'secretRef', 'authScheme', 'models', 'defaultModel', 'capabilities', 'input', 'contextWindow', 'maxOutputTokens', 'maxTokens', 'temperature', 'thinkingLevel', 'timeout', 'timeoutMs', 'maxRetries', 'firstChunkTimeoutMs', 'chunkTimeoutMs', 'headers', 'compat', 'contextCache', 'imageGeneration', 'providerOptions', 'sdkOptions'];
+    const known = ['id', 'ownerId', 'revision', 'sdk', 'host', 'baseUrl', 'accountId', 'apiKey', 'secretRef', 'authScheme', 'models', 'defaultModel', 'capabilities', 'input', 'contextWindow', 'maxOutputTokens', 'maxTokens', 'temperature', 'thinkingLevel', 'timeout', 'timeoutMs', 'maxRetries', 'firstChunkTimeoutMs', 'chunkTimeoutMs', 'headers', 'compat', 'contextCache', 'imageGeneration', 'providerOptions', 'sdkOptions'];
     for (const key of Object.keys(raw)) if (!known.includes(key)) block(`${path}.${key}`, 'field-mapping-required');
     const sdk = text(raw.sdk);
     if (!sdk) { block(`${path}.sdk`, 'driver-selection-required'); return; }
@@ -146,6 +146,11 @@ export function compileLegacyInferenceMigration(options: LegacyInferenceMigratio
     const env = typeof raw.apiKey === 'string' ? /^(?:\$\{([A-Za-z_][A-Za-z0-9_]*)\}|env:\/\/([A-Za-z_][A-Za-z0-9_]*))$/u.exec(raw.apiKey) : null;
     if (secretRef) source = { kind: 'legacy-vault', reference: secretRef };
     else if (env) source = { kind: 'environment', reference: `env://${env[1] ?? env[2]}` };
+    else if (parseCredentialEnvironmentExpression(raw.apiKey)) {
+      if (ownerId !== options.target.hostOwnerId) block(`${path}.apiKey`, 'environment-source-owner-required');
+      else source = { kind: 'legacy-environment-expression', path: `${path}.apiKey` };
+    }
+    else if (typeof raw.apiKey === 'string' && raw.apiKey.includes('${')) block(`${path}.apiKey`, 'environment-expression-mapping-required');
     else if (raw.apiKey !== undefined) source = { kind: 'legacy-config', path: `${path}.apiKey` };
     const auth = resolved.authentication === 'none' ? { method: 'none' } : { method: 'api-key', ...(source?.kind === 'environment' ? { source: source.reference } : {}) };
     accounts[accountAlias] = { service: serviceAlias, auth };

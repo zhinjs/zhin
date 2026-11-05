@@ -83,6 +83,9 @@ export interface Model {
   baseUrl?: string;
   compat?: OpenAiCompatFlags;
   reasoning?: boolean;
+  /** Driver-derived repair protocol for tool calls whose reasoning was omitted.
+   * Separate from thinking capability; not a user configuration override. */
+  toolCallReasoning?: 'openai-content' | 'provider-native';
   input: ModelInputModality[];
   contextWindow: number;
   maxTokens: number;

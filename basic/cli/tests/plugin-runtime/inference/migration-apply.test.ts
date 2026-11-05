@@ -8,16 +8,18 @@ import {
 import { previewInferenceMigration } from '../../../src/plugin-runtime/inference/migration-preview.js';
 import { openHeadlessInferenceHost } from '../../../src/plugin-runtime/inference/headless-host.js';
 import { InferenceCredentialStore } from '../../../src/plugin-runtime/inference/credentials.js';
+import { openAiProvider } from '@zhin.js/ai/providers';
+import { resolveHostCredentialSource } from '../../../src/plugin-runtime/inference/environment-source.js';
 import { validateModelRuntimeConfig } from '../../../../../packages/im/agent/src/model-runtime/validation.js';
 
-async function setup() {
+async function setup(apiKey = 'synthetic-private-migration-key') {
   const root = await mkdtemp(join(tmpdir(), 'inference-offline-apply-'));
   const document = {
     configVersion: 2,
     ai: {
       enabled: true,
       providers: {
-        old: { sdk: 'openai', apiKey: 'synthetic-private-migration-key', models: ['native'] },
+        old: { sdk: 'openai', apiKey, models: ['native'] },
       },
       agents: { zhin: { provider: 'old', model: 'native', nickname: '保留角色' } },
       agent: {
@@ -390,4 +392,38 @@ it('migrates an original-owner private vault and exact Session selection without
   } finally {
     await f.close();
   }
+});
+
+
+it.each([':-', ':='])('migrates a private environment default without offline resolution and resolves it at Host authorization (%s)', async operator => {
+  const expression = `\${PRIVATE_KEY${operator}synthetic-private-default}`;
+  const f = await setup(expression);
+  try {
+    expect(f.preview.units.flatMap(unit => unit.migration.blocked)).toEqual([]);
+    expect(JSON.stringify(f.preview)).not.toContain('synthetic-private-default');
+    expect(f.preview.units[0].migration.credentials[0].source).toEqual({ kind: 'legacy-environment-expression', path: 'providers.old.apiKey' });
+    expect(await applyInferenceMigration(f.options)).toMatchObject({ phase: 'committed' });
+    const lookup = vi.fn(() => undefined);
+    const opened = await openHeadlessInferenceHost({
+      projectRoot: f.root, database: { dialect: 'sqlite', filename: join(f.root, '.zhin', 'data.sqlite') },
+      resolveSource: source => resolveHostCredentialSource(source, lookup),
+    });
+    try {
+      const graph = (await opened.host.repository.readGraph({ rootId: f.root }))!;
+      const account = Object.values(graph.accounts)[0], service = graph.services[account.serviceId];
+      const profile = Object.values(graph.profiles)[0];
+      const store = new InferenceCredentialStore({ directory: join(f.root, '.zhin', 'inference'), repository: opened.host.repository });
+      expect((await store.read(account))?.payload).toMatchObject({ status: 'ready', method: 'api-key', source: { kind: 'environment-expression', expression } });
+      expect((await store.read(account))?.payload).not.toHaveProperty('key');
+      expect(lookup).not.toHaveBeenCalled();
+      expect(JSON.stringify(graph)).not.toContain('synthetic-private-default');
+      const grant = await opened.host.accounts.createPort({
+        binding: { graphRevision: graph.revision, service, account, profile, model: service.models[profile.model] },
+        context: { rootId: f.root, ownerId: opened.host.hostOwnerId, hostOwnerId: opened.host.hostOwnerId, operationId: 'synthetic-source', sessionKey: 'synthetic-session' },
+        driver: openAiProvider, retainDriver: () => ({ reference: service.driver, definition: openAiProvider, release() {} }),
+      }).authorize({ target: new URL('https://api.openai.com/v1/responses'), signal: new AbortController().signal });
+      expect(grant.token).toBe('synthetic-private-default');
+      expect(lookup).toHaveBeenCalledWith('PRIVATE_KEY');
+    } finally { await opened.close(); }
+  } finally { await f.close(); }
 });

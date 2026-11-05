@@ -5,6 +5,7 @@ import { ModelRuntimeService } from '../../src/model-runtime/service.js';
 import { invocationModel } from '../../src/model-runtime/completion.js';
 import { AIService } from '../../src/service.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
+import { executionCandidate } from '../helpers/execution-bundle.js';
 
 function snapshot() {
   const root = rootPluginId();
@@ -130,7 +131,7 @@ it('runs the main Agent turn through Inference and the SDK using the selected Pr
   const scope = await runtime.openScope({ context });
   const binding = await scope.resolve({ kind: 'language', purpose: 'chat' });
   const chat = { binding, model: invocationModel(binding), completion: createInvocationCompletion({ binding, client: scope.client, purpose: 'chat' }) };
-  const models = { chat, summary: chat, graph, context, inference: scope.client, resolve: scope.resolve,
+  const models = { chat, summary: executionCandidate(chat), graph, context, inference: scope.client, resolve: scope.resolve,
     summarySource: 'deployment-chat' as const, policyRevision: 1, release: () => scope.close() };
   const { mockCommMessage } = await import('../helpers/mock-comm-message.js');
   const agent = new ZhinAgent({ config: { outputSchema: false } });
@@ -167,7 +168,7 @@ it('imports the wizard-confirmed capabilities and sends real tool schemas throug
   const { mockCommMessage } = await import('../helpers/mock-comm-message.js');
   const mainAgent = new ZhinAgent({ config: { outputSchema: false, deferredTools: { alwaysLoadedTools: ['lookup_fact'] } } });
   await mainAgent.processTurn({ content: 'Synthetic question', message: mockCommMessage(),
-    configuration: { models: { chat, summary: chat, graph: scope.graph, context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
+    configuration: { models: { chat, summary: executionCandidate(chat), graph: scope.graph, context, inference: scope.client, inferenceSnapshot: scope.snapshot, resolve: scope.resolve,
       summarySource: 'deployment-chat', policyRevision: 1, retainDelegation: () => { throw new Error('No delegation expected'); }, release: () => scope.close() } },
     tools: [{ name: 'lookup_fact', description: 'Read a synthetic fact', parameters: { type: 'object', properties: {} }, execute: async () => 'fact' }] });
   expect(requests).toHaveLength(1);

@@ -433,6 +433,10 @@ Bot 起草的受控自我变更（见[让 Bot 改自己](../ai/self-change.md)�
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve`（动作） |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve`（动作；`failed` 现场已处理） |
 
+## 页面 UI 套件
+
+不想自己写样式时，用 `@zhin.js/client/ui`：按钮、徽标、提示、空/加载/失败状态、行内确认、表单字段，以及带“加载中 / 为空 / 失败 / 数据过期”四态的 `usePluginRpc`。它直接使用 Console 的主题变量，亮暗色自动跟随，不依赖 Tailwind（远程页面不会被 Console 的 Tailwind 扫描）。用法与导出清单见 [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md)。
+
 ## 适配器 Console 页面
 
 内置平台适配器（`plugins/adapters/*`）各自带一个 `pages/index/index.ts`，统一用 `@zhin.js/client` 的 `createAdapterConsolePage(adapterKey)` 渲染，服务端用 `@zhin.js/adapter` 的 `createAdapterConsoleRpc(spec)` 提供数据：
@@ -465,6 +469,10 @@ export default createAdapterConsolePage('telegram');
 每次变更提交清单中的 `expectedGeneration` 与 `expectedRevision`，目标使用 `instanceId`；首次迁移经用户确认附 `confirmMigration: true`。新增与替换只保存为未启动状态；普通配置更新只重连目标账号。冲突或提交结果未知时先刷新核实，不自动重试；持久化保存成功与异步启动、关闭完成是不同状态。
 
 `createAdapterConsoleRpc` 的 `spec` 只放可公开的字段元数据：`env: true` 或 `secret: true` 的字段按敏感内容遮蔽，前者不再授予写 `.env` 的能力。编辑仅提交平台声明的可更新字段，空白或遮蔽的 secret 保留原值；替换账号需完整填写新配置。`extraStatus` 只返回少量状态（如 `bindState`、`scanUrl`），不要放日志、聊天原文或密钥。
+
+## 评论审批页
+
+「AI 起草 → 人工审批 → 发送」的评论回复适配器（Bilibili、掘金）不需要自己写页面：`pages/index/index.tsx` 用 `@zhin.js/client` 的 `createCommentReviewPage(spec)` 即可得到账号区、登录状态、草稿卡片（修改 / 发送 / 丢弃草稿）和统一的错误、过期数据提示。`spec` 只描述平台差异：平台名与中英文案、资源名词、账号 / 草稿资源的字段映射，以及可选的 `renderLoginExtras`（如扫码登录）、`renderResources`、`isLoginPending`（登录进行中加快轮询）。服务端按 `plugin.<pluginId>.status` / `edit` / `send` / `drop` 提供数据，各适配器仍在自己的 `src/console.ts` 里实现。完整字段见 [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md)。
 
 ## 在页面里保存设置 (config:patch)
 

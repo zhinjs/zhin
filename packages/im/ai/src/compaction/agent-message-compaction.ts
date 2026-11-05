@@ -34,6 +34,13 @@ const logger = getLogger('AgentCompaction');
 const DEFAULT_SUMMARY_FALLBACK = '无历史记录。';
 const SUMMARY_USER_PREFIX = '[Previous conversation summary]\n';
 
+/** Resolved only after the retained prefix proves that a summary request is needed. */
+export interface AgentCompactionExecution {
+  readonly transport: LlmCompletionPort;
+  readonly model: Model;
+  readonly customInstructions?: string;
+}
+
 const SUMMARY_SYSTEM = `You are a conversation summarization assistant. Compress the following conversation into a concise summary. Keep:
 - Key decisions and conclusions
 - Unfinished action items and open questions
@@ -204,6 +211,7 @@ export async function compactAgentMessages(params: {
   minKeepCount?: number;
   customInstructions?: string;
   signal?: AbortSignal;
+  resolveExecution?: () => Promise<AgentCompactionExecution>;
 }): Promise<{
   summary: string;
   keptMessages: AgentMessage[];
@@ -224,12 +232,13 @@ export async function compactAgentMessages(params: {
   const toKeep = messages.slice(startIdx);
   const beforeTokens = estimateAgentMessagesTokens(projectPromptContext(toCompact));
 
+  const execution = params.resolveExecution ? await params.resolveExecution() : params;
   const summary = await summarizeAgentMessages(
-    params.transport,
-    params.model,
+    execution.transport,
+    execution.model,
     toCompact,
     undefined,
-    params.customInstructions,
+    execution.customInstructions ?? params.customInstructions,
     params.signal,
   );
 
@@ -256,6 +265,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
   customInstructions?: string;
   /** 取消信号：透传给摘要请求；取消不计入熔断失败数。 */
   signal?: AbortSignal;
+  resolveExecution?: () => Promise<AgentCompactionExecution>;
 }): Promise<AgentCompactResult> {
   const config = params.config ?? {};
   if (config.enabled === false) {
@@ -303,6 +313,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
       minKeepCount: config.minKeepCount,
       customInstructions: params.customInstructions,
       signal: params.signal,
+      resolveExecution: params.resolveExecution,
     });
 
     // 最少保留数或工具配对可能使本次无可压缩前缀；不能宣称摘要成功。

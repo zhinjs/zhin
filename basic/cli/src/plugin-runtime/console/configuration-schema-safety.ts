@@ -14,6 +14,6 @@ export function isUnknownConfigurationSchemaBoundary(schema: Schema, root: Schem
 /** Credential names, excluding ordinary budgets such as maxTokens and tokenLimit. */
 export function sensitiveConfigKey(key: string): boolean {
   const normalized = key.replace(/[^a-z0-9]/giu, '').toLowerCase();
-  return /(?:password|passwd|secret|apikey|accesskey|privatekey|credential|authorization|cookie)/u.test(normalized)
-    || normalized === 'pwd' || /(?:^|api|access|refresh|auth|bearer|bot|oauth|session|private|client)tokens?(?:v[0-9]+)?$/u.test(normalized);
+  return /(?:password|passwd|secret|apikey|accesskey|privatekey|encrypt(?:ion)?key|encodingaeskey|credential|authorization|cookie)/u.test(normalized)
+    || normalized === 'pwd' || /(?:^|api|access|refresh|auth|bearer|bot|oauth|session|private|client|app|verify|verification)tokens?(?:v[0-9]+)?$/u.test(normalized);
 }

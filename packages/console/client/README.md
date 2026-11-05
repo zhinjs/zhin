@@ -30,6 +30,7 @@ Peer：`react >= 18`（`createPluginRegisterHostApi` 需要 React 引用）。
 | `ConsoleTransport.onConsoleEventRecoveryGap` | 观察不可续接游标并触发领域全量重同步 |
 | `ConsoleInboxNoticesQuery` / `ConsoleInboxNoticesResult` | 以 `unreadOnly` 从持久 Inbox 重建未读通知 |
 | `createAdapterConsolePage` / `AdapterConsolePage` | 平台适配器 Console 页的共享页面（连接、endpoint 增删、登录待办、适配器动作） |
+| `@zhin.js/client/ui` | 插件页 UI 套件（见下文“插件页 UI 套件”） |
 | `resolveAdapterConsolePluginId` | 从 `/console/api/pages` 解析当前适配器页所属的 PluginId |
 
 类型与 Entry 契约来自 `@zhin.js/contract`。
@@ -55,6 +56,69 @@ export default createAdapterConsolePage('telegram');
 ```
 
 页面会读取 `endpoint.list` / `endpoint.test` / `login.list`，并调用适配器自己的 `plugin.<pluginId>.*` RPC；凭据永远不会展示，只显示 `${ENV}` 引用或遮蔽值。
+
+## 插件页 UI 套件
+
+`@zhin.js/client/ui` 是给插件 Console 页面用的小套件：与 Console 共用同一套主题变量（亮暗色、字号、圆角、焦点环自动跟随），**不依赖 Tailwind**（远程页面不会被 Console 的 Tailwind 扫描），所有样式是 `zk-` 前缀的自带类。
+
+```tsx
+import { Badge, Button, ConfirmButton, ErrorState, LoadingState, Notice, PluginPage, Section, StaleNotice, pluginUiStyles, usePluginRpc, resolvePluginId, useLocale } from '@zhin.js/client/ui';
+
+export default function Page() {
+  const { t } = useLocale();
+  const status = usePluginRpc<{ items: string[] }>('root/my-plugin', 'status', undefined, { pollMs: 6000 });
+  return (
+    <PluginPage>
+      <style>{pluginUiStyles}</style>
+      {status.state === 'loading' && <LoadingState />}
+      {status.state === 'error' && <ErrorState message="读取状态失败，请稍后重试。" details={status.error?.message} onRetry={status.refresh} />}
+      {status.state === 'stale' && <StaleNotice lastSuccessAt={status.lastSuccessAt} />}
+      {status.data && <Section title={t('账号')}>…</Section>}
+    </PluginPage>
+  );
+}
+```
+
+| 导出 | 说明 |
+|------|------|
+| `pluginUiStyles` | 唯一的样式字符串，用 `<style>` 注入 |
+| `PluginPage` / `PageHeader` / `Section` | 页面容器、页头、分节 |
+| `Button` | `primary` / `secondary` / `ghost` / `danger`；`size` 为 `default` / `sm` / `icon`；`busy` 在按钮内显示转圈；手机上点击目标 ≥ 44px |
+| `Badge` | `neutral` / `success` / `warning` / `danger` / `info`；状态必须用文字表达，不能只靠颜色 |
+| `Notice` | `info` / `success` / `warning` / `danger`，可选关闭按钮；错误不应自动消失 |
+| `EmptyState` / `LoadingState` / `ErrorState` | 空、加载、失败（说明 + 重试 + 默认折叠的技术详情） |
+| `StaleNotice` | 刷新失败但仍展示旧数据时的“数据可能已过期，上次成功 hh:mm” |
+| `ConfirmButton` | 行内确认，替代 `window.confirm`；用具体动作做确认文案（“删除账号”而不是“确定”）；取消或 Esc 后焦点回到触发按钮 |
+| `Field` | 标签 + 说明 + 错误，自动接好 `aria-describedby` |
+| `usePluginRpc(pluginId, method, params?, { pollMs?, pauseWhenHidden? })` | 返回 `state`（`loading` / `empty` / `ready` / `error` / `stale`）、`data`、`error`、`lastSuccessAt`、`refresh()`、`mutate()`；失败时保留上次成功数据，并丢弃过期响应 |
+| `useRpcResource(key, load, options)` | `usePluginRpc` 的通用形态，可用于 `consoleRpc` 等其他读取 |
+| `useLocale(dictionary?)` | `{ locale, t }`，取代各页面重复的 `detectLocale` + `text` |
+| `resolvePluginId({ adapter } \| { source }, fallback?)` | 从 `/console/api/pages` 解析页面所属 PluginId |
+
+`adapterConsoleStyles` 仍然导出（sandbox 页在用），内容是套件样式加一小段通用兼容样式；旧版 `ac-*` 评论审批样式已删除。
+
+## 评论审批页
+
+「AI 起草 → 人工审批 → 发送」类的评论回复适配器（Bilibili、掘金…）用 `createCommentReviewPage(spec)` 生成整页：账号区、登录状态、草稿卡片（修改 / 发送 / 丢弃草稿，丢弃走行内确认）、可关闭的错误提示、刷新失败时的“数据可能已过期”。页面只依赖 `@zhin.js/client/ui` 套件，会先解析 PluginId，再读 `plugin.<pluginId>.status` 并调用 `edit` / `send` / `drop` 与你声明的登录动作。
+
+```tsx
+import { createCommentReviewPage, ReviewResourceList } from '@zhin.js/client';
+
+export default createCommentReviewPage({
+  adapter: 'juejin',                              // 解析 PluginId
+  platform: { zh: '掘金', en: 'Juejin' },
+  mark: '掘',
+  resource: { zh: '文章', en: 'articles' },
+  account: endpoint => ({ id: endpoint.login.userId, name: endpoint.login.userName }),
+  draftResource: (draft, t) => t('文章 {0}', draft.articleId),
+  renderLoginExtras: (endpoint, { t, act, pending }) => /* 如“重新检查登录”按钮：act('login-check') */ null,
+  renderResources: (endpoint, { t, noun }) => <ReviewResourceList title={t('管理的{0}', noun)} items={[]} />,
+  dictionary: { '文章 {0}': 'Article {0}' },       // 中文原文 → English
+  isLoginPending: endpoint => endpoint.qr.state === 'waiting', // 此时轮询由 10 秒加快到 2 秒（pendingPollMs）
+});
+```
+
+`status` 返回 `{ endpoints: [{ id, sendMode, persistent, circuit, login: { state }, pendingCount, drafts }], updatedAt }`，草稿含 `id / url / message / status / interrupted / createdAt / author? / original?`（见 `ReviewEndpointBase` / `ReviewDraftBase`）。上次发送被中断或结果未知的草稿会显示“结果未确认”警告。
 
 ## 启动：加载插件 Console Entry
 

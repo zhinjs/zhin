@@ -156,3 +156,17 @@ it('uses the existing declaration list once per view for every deployment Profil
     await f.close();
   }
 });
+
+
+it.each([true, false])('projects the held Driver discovery function without performing discovery (%s)', async discovery => {
+  const f = await supportFixture({ discovery }), held = f.host.acquireManagement();
+  const credentials = vi.spyOn(f.host.repository, 'readCredential');
+  const fetch = vi.spyOn(globalThis, 'fetch');
+  try {
+    const view = await held.management.view(f.member);
+    expect(view.drivers.find(driver => driver.owner === f.root && driver.id === 'same' && driver.contractVersion === '1')).toMatchObject({ discovery });
+    expect(view.drivers.find(driver => driver.owner !== f.root && driver.id === 'same' && driver.contractVersion === '1')).toMatchObject({ discovery: false });
+    expect(credentials).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  } finally { fetch.mockRestore(); await held.release(); await f.close(); }
+});

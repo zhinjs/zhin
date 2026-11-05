@@ -1,14 +1,14 @@
-import { executionBundle } from '../helpers/execution-bundle.js';
+import { executionBundle, executionCandidate } from '../helpers/execution-bundle.js';
 import { describe, expect, it } from 'vitest';
 import { createProviderHarness, geminiGenerate, openaiChat, type ProviderHarness } from '../../../ai/tests/helpers/provider-harness/index.js';
-import type { ModelExecutionBundle } from '../../src/model-runtime/types.js';
+import type { ModelExecutionCandidate } from '../../src/model-runtime/types.js';
 import { createScopedMediaPerceptionPort, createScopedPerceptionFactory } from '../../src/media/scoped-perception.js';
 import { DEFAULT_PERCEPTION_SETTINGS, resolvePerceptionConfig } from '../../src/config/perception-config.js';
 
 const payload = { kind: 'image' as const, base64: Buffer.from('synthetic image').toString('base64'), mimeType: 'image/png' };
 const NO_RETRY = { maxRetries: 0, baseDelayMs: 0, maxDelayMs: 0 };
-function bundle(h: ProviderHarness): ModelExecutionBundle {
-  return executionBundle({ model: h.model, completion: h.runtime });
+function bundle(h: ProviderHarness): ModelExecutionCandidate {
+  return executionCandidate(executionBundle({ model: h.model, completion: h.runtime }));
 }
 
 describe('scoped perception against real SDK completion with mocked HTTP', () => {

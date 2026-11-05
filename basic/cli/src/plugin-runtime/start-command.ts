@@ -1,3 +1,4 @@
+import { resolveHostCredentialSource } from './inference/environment-source.js';
 import { createConfigurationChatAuthorizer, createEndpointRoleConfigurationSelection, createEndpointRoleResolver, createSenderEnricher } from './sender-enrichment.js';
 export { createEndpointRoleResolver } from './sender-enrichment.js';
 import { migrateConversationColumns, migrateInboxColumns } from './conversation-migration.js';
@@ -157,10 +158,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
   const agentHost = await loadConfiguredAgentHost({ config: hostConfig, projectRoot: options.root, database: databaseHost,
-    resolveSource: reference => {
-      const match = /^env:\/\/([A-Za-z_][A-Za-z0-9_]*)$/u.exec(reference);
-      return match ? hostEnvironment.get(match[1]!) : undefined;
-    },
+    resolveSource: reference => resolveHostCredentialSource(reference, name => hostEnvironment.get(name)),
   });
   const endpointRoles = await createEndpointRoleResolver(hostConfig);
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
@@ -570,7 +568,7 @@ async function loadConfiguredAgentHost(options: Readonly<{
   config: RuntimeConfigDocument | ConfigDocumentPort;
   projectRoot: string;
   database: import('@zhin.js/plugin-runtime').DatabaseHost;
-  resolveSource: (reference: string) => string | undefined | Promise<string | undefined>;
+  resolveSource: (reference: string | import('./inference/credentials.js').EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
 }>): Promise<ConfiguredAgentHost | undefined> {
   const { config, projectRoot } = options;
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;

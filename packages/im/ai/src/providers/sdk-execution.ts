@@ -30,6 +30,8 @@ export function providerSessionId(input: ProviderCreateExecutionOptions<unknown,
 
 export interface SdkExecutionConfiguration {
   readonly family: SdkFamily;
+  /** Internal protocol selection, not a Model/Profile capability or user option. */
+  readonly toolCallReasoning?: Model['toolCallReasoning'];
   readonly api?: string;
   readonly bearer?: boolean;
   readonly noAuthentication?: boolean;
@@ -84,6 +86,9 @@ export function sdkExecution(
       api: 'ai-sdk', sdk: configuration.family,
       ...(configuration.promptCacheRouting ? { promptCacheRouting: configuration.promptCacheRouting } : {}),
       input: [...(input.binding.model.input ?? ['text'])],
+      reasoning: input.binding.model.thinking,
+      toolCallReasoning: configuration.toolCallReasoning
+        ?? (configuration.family === 'deepseek' || configuration.family === 'openai-compatible' ? 'openai-content' : 'provider-native'),
       contextWindow: input.binding.model.contextWindow ?? 0,
       maxTokens: resolveEffectiveOutputTokens({ configured: parameters.maxOutputTokens, declared: input.binding.model.maxOutputTokens }),
       ...(parameters.thinkingLevel ? { thinkingLevel: parameters.thinkingLevel } : {}),
