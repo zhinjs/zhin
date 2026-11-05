@@ -113,7 +113,7 @@ export async function runIngressEvalCase(definition: IngressEvalCase): Promise<I
   const gate = new HostMailbox({
     config: {
       ...DEFAULT_MAILBOX_CONFIG,
-      groupMode: (definition.gate?.supersedeSameSender ?? true) ? 'supersede' : 'queue',
+      groupMode: (definition.gate?.supersedeSameSender ?? true) ? 'supersede' : 'fifo',
       ttlMs: definition.gate?.queueTtlMs ?? 0,
       maxQueuedTurns: definition.gate?.maxQueuedTurns ?? DEFAULT_MAX_QUEUED_TURNS,
       merge: { ...DEFAULT_MAILBOX_CONFIG.merge, enabled: false },

@@ -37,7 +37,7 @@ class Gate {
     this.mailbox = new HostMailbox({
       config: {
         ...DEFAULT_MAILBOX_CONFIG,
-        groupMode: options.supersedeSameSender ? 'supersede' : 'queue',
+        groupMode: options.supersedeSameSender ? 'supersede' : 'fifo',
         ttlMs: options.queueTtlMs,
         maxQueuedTurns: options.maxQueuedTurns,
         merge: options.merge ? { enabled: true, ...options.merge } : { ...DEFAULT_MAILBOX_CONFIG.merge, enabled: false },
