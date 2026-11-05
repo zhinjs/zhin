@@ -496,11 +496,11 @@ const SHELL_ISOLATION_PROBE_DEADLINE_MS = 750;
 function probeShellIsolation(): Promise<ShellIsolationStatus> {
   return new Promise<ShellIsolationStatus>((resolve) => {
     let settled = false;
-    let deadline: ReturnType<typeof setTimeout> | undefined;
+    const settleRef: { clear?: () => void } = {};
     const settle = (status: ShellIsolationStatus): void => {
       if (settled) return;
       settled = true;
-      clearTimeout(deadline);
+      settleRef.clear?.();
       resolve(status);
     };
     const child = execFile('docker', ['info', '--format', '{{.ServerVersion}}'], {
@@ -525,11 +525,12 @@ function probeShellIsolation(): Promise<ShellIsolationStatus> {
       }));
     });
     // execFile only reports after the child's stdio closes; a hung CLI must not hold `ready` hostage.
-    deadline = setTimeout(() => {
+    const deadline = setTimeout(() => {
       try { child?.kill('SIGKILL'); } catch { /* already gone */ }
       settle(Object.freeze({ available: false, provider: 'docker', message: 'Docker readiness check timed out' }));
     }, SHELL_ISOLATION_PROBE_DEADLINE_MS);
     deadline.unref?.();
+    settleRef.clear = () => clearTimeout(deadline);
   }).catch(() => Object.freeze({
     available: false,
     provider: 'docker' as const,
