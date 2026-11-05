@@ -6,12 +6,8 @@ import { EndpointDeliveryError, type ConversationRef, type TextSegment } from '@
 import {
   createAutoApprovalPort,
   createBypassApprovalPort,
-  detachedTaskRunnerToken,
-  handleDetachedTaskCommand,
   handleRuntimeManagementCommand,
   managementCommandText,
-  routeTaskInterjection,
-  type DetachedTaskRunner,
   publishOutboundElements,
   resolveOutboundCapabilities,
   REACTION_SEGMENT_TYPE,
@@ -90,7 +86,6 @@ import {
   renderChatTurnError,
   resolveRuntimeAgentTrigger,
   resolveTriggerTimeoutMs,
-  restrictWorkroomAgentCapabilities,
   routeSpecialistAgent,
   withTriggerTimeout,
   workroomOrchestratorSessionKey,
@@ -197,8 +192,6 @@ export interface AgentTurnIngressRouteOptions {
   readonly workroom?: AgentWorkroomPort;
   /** Process-owned Console status for 群聊插话 / 技能助手 (#970); metadata only. */
   readonly assistantStatus?: AssistantStatus;
-  /** Detached task runner (#732); a snapshot-provided `detachedTaskRunnerToken` wins. */
-  readonly detachedTasks?: DetachedTaskRunner;
   /** Hard-gate IM approval channel (G6, #1013): settles `approve <id>` / `deny <id>` for approval cards. */
   readonly toolApprovalIm?: ImToolApprovalChannel;
 }
@@ -874,18 +867,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       }
 
-      // #732: /tasks, /task stop|redirect — only when a detached-task runner is provided.
-      const detachedTasks = workroomAgentTurn ? undefined : resolveSnapshotDetachedTaskRunner(snapshot, requester) ?? options.detachedTasks;
-      const taskActor = { sessionId: sessionKey, senderId: turnAccess.principal.subjectId, isMaster: senderRoles.isMaster };
-      if (detachedTasks) {
-        const taskReply = await handleDetachedTaskCommand(detachedTasks, taskActor, message.content, { locale: message.locale, commandPrefix: message.commandPrefix });
-        if (taskReply != null) {
-          await reply(taskReply);
-          logger.info(formatCompact({ op: 'agent_host_task_command', handled: true }));
-          return true;
-        }
-      }
-
       const platform = turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '';
       const ambientKey = message.conversation.kind === 'group' ? `${platform}:${message.conversation.id}` : undefined;
       let ambient = false;
@@ -1008,25 +989,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
             .map(String),
         })
         : [];
-
-      // #732: a message in a session with an active background task may stop
-      // or redirect it; anything else continues as an ordinary new turn.
-      if (detachedTasks) {
-        // Reuse the product TurnIntentResolver (or trusted metadata) when present.
-        const taskIntentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
-        const productIntent = taskIntentResolver || message.metadata?.turnIntent !== undefined
-          ? (await resolveProductTurnIntent(message, senderRoles, undefined, taskIntentResolver).catch(() => undefined))?.kind
-          : undefined;
-        let routedTask = await routeTaskInterjection(detachedTasks, { ...taskActor, sessionId: sceneMerge ? personalSessionKey : sessionKey }, matched.content, productIntent, { locale: message.locale });
-        if (!routedTask.handled && sceneMerge) {
-          routedTask = await routeTaskInterjection(detachedTasks, { ...taskActor, sessionId: sessionKey }, matched.content, productIntent, { locale: message.locale });
-        }
-        if (routedTask.handled) {
-          if (routedTask.reply) await reply(routedTask.reply);
-          logger.info(formatCompact({ op: 'agent_host_task_interjection', kind: routedTask.kind, task: routedTask.taskId }));
-          return true;
-        }
-      }
 
       if (!workroomAgentTurn && isClearCommand(matched.content)) {
         await zhinAgent.archiveSession(sessionKey);
@@ -1186,10 +1148,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             : liveAccess ?? contextAccess;
           // ADR 0038 §3: the model sees who it is answering; outbound audits "merged N, answered M".
           const mergedSenders = members && admission ? mergedTurnSenders(admission.participants) : undefined;
-          const capabilities = restrictWorkroomAgentCapabilities(
-            liveDanmaku ? readOnlyCapabilities(read.capabilities) : read.capabilities,
-            workroomAgentTurn != null,
-          );
+          const capabilities = liveDanmaku ? readOnlyCapabilities(read.capabilities) : read.capabilities;
           /** `danmaku_window_picked` is written once, for the first delivered reply. */
           let danmakuAudited = false;
           let routed = routeSpecialistAgent(
@@ -1517,8 +1476,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const elements = completedOutput(outcome);
         const outputText = flattenOutputElements(elements).trim();
         if (!outputText) {
-          // spawn_task 等委派回合 finalReply 为空：用户可见文案由 subagent auto-continue
-          // + proactive 出站；勿把 '(empty AI response)' 当成正文发给用户。
+          // 委派回合 finalReply 为空：用户可见文案由协作结果回流后的续写回合送出；
+          // 勿把 '(empty AI response)' 当成正文发给用户。
           logger.debug(formatCompact({
             op: 'agent_host_turn_no_outbound',
             reason: 'empty_elements_delegated',
@@ -1736,14 +1695,4 @@ function anonymousMemberAccess(carrier: TurnAccessContext, senderId: string): Tu
     principal: Object.freeze({ subjectId: senderId, roles: Object.freeze(['user']) }),
     policy: Object.freeze({ ...carrier.policy, permissions: Object.freeze(['user']) }),
   });
-}
-
-export function resolveSnapshotDetachedTaskRunner(
-  snapshot: Pick<RuntimeSnapshot, 'resources'>,
-  requester: PluginId,
-): DetachedTaskRunner | undefined {
-  const candidate = snapshot.resources.get(requester)?.get(detachedTaskRunnerToken.id);
-  return candidate && typeof (candidate as DetachedTaskRunner).steer === 'function'
-    ? candidate as DetachedTaskRunner
-    : undefined;
 }

@@ -28,7 +28,7 @@ inbox:
   enabled: true
 
 # AI：plan 是显式导入提案；运行时模型以 Console 确认后的数据库配置为准
-# 编排使用 discover / load_tool 按需加载能力，并通过 spawn_task 委派复杂任务
+# 编排使用 discover / load_tool 按需加载能力，并通过协作工具（ask / delegate）委派复杂任务
 ai:
   agents:
     zhin:
@@ -55,8 +55,6 @@ ai:
     execSecurity: allowlist
     execPreset: custom
     execApprovalMode: ask
-    subagentExecApprovalMode: auto
-    workerExecApprovalMode: auto
     execAllowlist:
       - echo
       - sort

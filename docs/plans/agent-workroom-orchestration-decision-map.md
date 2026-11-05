@@ -4,6 +4,8 @@ sidebar: false
 
 # Agent Workroom 与多 Agent 编排决策地图
 
+> **已被取代（2026-11-04）**：由 [ADR 0048 Agent Harness](../adr/0048-agent-harness.md) 取代，本文仅作历史参考，不再按本文推进；相关代码将在 ADR 0048 的 H2–H4 阶段删除。
+
 目标：把 Zhin 的多人 Session、动态多 Agent 工作流、可观察 Workroom、可靠调度与分层记忆收敛成一个 Kernel-owned 产品模型。
 
 生产化欠账单独记录在 [`agent-workroom-production-ledger.md`](./agent-workroom-production-ledger.md)；原型结论不等于已经上线。

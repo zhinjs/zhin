@@ -103,14 +103,14 @@ describe('sub-agent nesting', () => {
     const parent = collector();
     const committed: TurnEvent[] = [];
     const journal = createTracingJournal({ append: (event) => { committed.push(event); } }, parent);
-    const childJournal = createScopedTraceJournal(journal, { turnId: 'turn-1:subagent:1', sessionKey: 's#subagent:1' });
+    const childJournal = createScopedTraceJournal(journal, { turnId: 'turn-1:actor:researcher:m1', sessionKey: 's#subagent:1' });
 
     await journal.append({ type: 'tool_call', toolName: 'run_subagent', args: { task: 'scan' }, toolUseId: 'p1' });
     await childJournal.append({ type: 'tool_call', toolName: 'grep', args: { pattern: 'TODO' }, toolUseId: 'c1' });
     await childJournal.append({ type: 'tool_result', toolName: 'grep', output: 'hit', durationMs: 5, toolUseId: 'c1' });
-    noteTurnTrace('turn-1:subagent:1', { kind: 'budget_extended', from: 4, to: 8 }); // not registered: no-op
+    noteTurnTrace('turn-1:actor:researcher:m1', { kind: 'budget_extended', from: 4, to: 8 }); // not registered: no-op
     const release = registerTurnTrace(parent);
-    noteTurnTrace('turn-1:subagent:1', { kind: 'budget_extended', from: 4, to: 8 });
+    noteTurnTrace('turn-1:actor:researcher:m1', { kind: 'budget_extended', from: 4, to: 8 });
     release();
     await journal.append({ type: 'tool_result', toolName: 'run_subagent', output: 'done', durationMs: 50, toolUseId: 'p1' });
     parent.record({ type: 'turn_end', output: [], usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } });
@@ -123,7 +123,7 @@ describe('sub-agent nesting', () => {
     expect(snapshot.subagents).toHaveLength(1);
     const child = snapshot.subagents[0]!;
     expect(child).toMatchObject({
-      turn_id: 'turn-1:subagent:1',
+      turn_id: 'turn-1:actor:researcher:m1',
       session_key: 's#subagent:1',
       principal: { subject_id: 'u-7' },
       budget: { extensions: [{ from: 4, to: 8 }] },
@@ -140,22 +140,13 @@ describe('sub-agent nesting', () => {
       principal: { subjectId: 'u-7', roles: ['user'], trustLevel: 'group_member' },
     });
     trace.record({ type: 'tool_denied', toolName: 'bash', policy: 'trust-level', reason: 'no shell', toolUseId: 'b1' } as TurnEvent);
-    const child = trace.child('turn-9:subagent:1');
+    const child = trace.child('turn-9:actor:researcher:m1');
     trace.finalize();
     const snapshot = trace.snapshot();
     expect(snapshot.principal).toEqual({ subject_id: 'u-7', roles: ['user'], trust_level: 'group_member' });
     expect(snapshot.tool_calls[0]).toMatchObject({ tool_name: 'bash', status: 'denied', policy: 'trust-level' });
     expect(child.snapshot().principal?.trust_level).toBe('group_member');
     expect(formatTurnTrace(snapshot)).toContain('信任级别: group_member');
-  });
-
-  it('records subagent task lifecycle events', () => {
-    const trace = collector();
-    trace.record({ type: 'subagent_start', taskId: 'task-1', agentName: 'coder', description: 'fix bug' });
-    trace.record({ type: 'subagent_end', taskId: 'task-1', status: 'error', result: 'timed out' });
-    expect(trace.snapshot().subagent_tasks).toEqual([
-      { task_id: 'task-1', agent_name: 'coder', description: 'fix bug', status: 'error', result_summary: 'timed out' },
-    ]);
   });
 });
 

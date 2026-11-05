@@ -1,5 +1,74 @@
 # @zhin.js/cli
 
+## 1.1.28
+
+### Patch Changes
+
+- 299863a: ADR 0044 C3: runtime consumers read capabilities instead of platform names. Scene facts (group info, member profile) are queried where the profile declares `scene.groupInfo` / `scene.memberProfile`; activity feedback (reaction, typing, status message, refresh interval, quote-only delivery) follows `feedback`, `actions.reaction` and `delivery.proactive` and the per-platform table is gone; large inline media is spooled only where `delivery.spool` is declared; the sandbox ingress and its console shell follow a new additive `runtime.sandbox` capability. `defineAgentTool` and Skill frontmatter accept `requiresCapabilities` (for example `actions.mute`), evaluated against the per-turn `TurnCapabilities`, so moderation tools disappear when the Bot is not an administrator and return when it is; the icqq/qq keyword boost in tool selection is removed and the icqq group-admin tools are tagged. The `icqq` command-line special case in the exec policy is now a generic `registerSensitiveExecCommand` rule registered by the icqq plugin. `EndpointCapabilities` gains a serializable per-kind `kinds` view. Adapters without a profile keep their previous behaviour (their derived profile also reads the management ports they implement).
+- aaa93d7: ADR 0044 C1: adapter capability profile spec. `defineAdapter({ profile, resolveCapabilities })` declares seven capability groups (messaging, scene, actions, events, feedback, delivery, prompt) per conversation kind with inheritance from `default`, validated at definition time. `resolveTurnCapabilities` merges the sections and narrows them (Bot role, mute state, passive window, and the adapter's narrow-only patch), and the IM ingress attaches the result to the turn input as `platformCapabilities` (`has` / `get`). A declared action without its management/control port fails at assembly. Adapters without a profile get a conservative one derived from `capabilities`, `operations` and `segments`; `segments` and `liveDanmaku` remain as aliases. No behaviour change for existing adapters.
+- 9e6d70d: Ambient engagement no longer drops a burst that lands inside `judgeIntervalMs`: it waits for the window to end on the same ticket (a newer message still supersedes it), re-checks cooldown, hourly cap and conversation state, then judges the latest messages. Previously such a burst was skipped with `judge_interval` and never re-judged unless someone spoke again.
+- 3ac06aa: 补全聊天配置标量数组的 tuple 各位置、尾部及实际值校验，拒绝对象或嵌套数组绕过，同时保留正常标量 tuple 和已有权限范围。
+- bd524d1: **行为变更：Host 未运行时 `zhin config get|set|unset|list` 现在以退出码 7 失败，不再静默写本地文件；离线操作需显式加 `--offline`。**
+
+  `zhin config get|set|unset|list` 默认连接运行中的 Host（`config:get-project` / `config:patch-project`）；新增 `--offline` 显式本地保存（与 Host 相同的 patchProject 校验，不启动 Runtime）、`--host` / `--token-env` 连接选项（推导地址时通配监听 `0.0.0.0` / `::` 改连 loopback）、`unset` 子命令（`delete`/`del` 为别名）、按 Schema 脱敏读取与 `--reveal`，以及公开退出码 0/3/4/5/6/7。写请求发出后只有 Host 的权威拒绝（HTTP 400 且回显 requestId）才算未保存，网关 502/504 等一律为结果未知（6），并输出 `requestId` / `expectedRevision` 供核对。新增 full-scope `config:get-project` RPC，读取失败不回显原始错误；`config:patch-project` 保存后事件发布失败不再变成拒绝。
+
+- 66af7f7: 可信项目补丁（`config:patch-project`，即 `zhin config set/unset`）的冲突回显在 Schema 无法证明安全的分支下整体打码：`if`/`then`/`else`、`not`、`contains`、`dependencies`/`dependentSchemas`、`unevaluated*`、动态引用、嵌套 `$id` 资源与非本地 `$ref` 不再回显原值，与聊天字段策略的证明边界一致；`config get`/`list` 读取打码规则不变。新增 Console + CLI + IM 跨入口集成回归（三方 CAS、离线保存后 Console 应用、生效结果未确认的一致性）。
+- 126ae99: 新增可信项目配置补丁 `config:patch-project`（仅 full 权限，Demo 写入黑名单）：与 `config:patch` 共用单次修订 CAS、整份候选校验与按组生效链，跨分组一次提交；页面 `config:patch` 与 `HOST_CONFIG_PATCH_PATHS` 白名单保持不变。项目补丁拒绝写入 `configVersion` / `plugins` / `disable_plugins` / 根插件 `plugin` 及未声明实例（结构化 `invalid`），冲突回显中的秘密、writeOnly、`${…}` 引用与疑似凭据键一律遮蔽；提交确认丢失返回结构化 `unconfirmed`，不重试、不回滚。
+- 8690751: 修复项目配置默认读取与深层 Schema 引用的脱敏遗漏，并修复聊天配置字段展示上限阻断精确写入、特殊字段路径无法按展示结果使用的问题。
+- 5d26486: 新增 Bot 主人私聊配置指令 `config fields|get|set|unset`（别名 `配置`）：入口按适配器——仅接收消息的同一适配器实例上任一已配置端点的 `master`（端点级，未设置时继承插件级）在私聊中可用，其他适配器与 `ai.trigger.masters` 首版不认；授权后字段范围按项目——全项目聊天安全叶子字段加 Host 白名单 `HOST_CONFIG_PATCH_PATHS`（任一合法主人可管全局，不限于授权适配器所属插件）。拒绝权限字段（包含/前后缀匹配，如 `adminIds`、`whitelist`、`bypassMasters`）、`endpoints[*].id|name` 身份重映射、敏感字段与声明写入，`set` 不得写入新的 `${…}`/`env://` 引用，只读写单个叶子字段，复用项目补丁的单次 CAS 与按组应用（Refs #1139 P2）。
+- 4fe49b5: 支持配置按需生效：分离保存与有效版本，独立变更先应用，账号资料更新保留连接，模型按回合使用确定版本；Console 返回结构化应用结果。监听改为仅显式 --watch 启用，开发模板显式选择源码和配置监听。
+
+  自变更消费配置应用回执，避免已处理配置被二次重载；持久化本次写入修订和应用结果，未知结果或修订冲突时停止自动续作并保留现场，恢复不会覆盖未经本次变更确认的配置。
+
+- 509902b: ADR 0038 R0-fix (#1133): mergeable group wakes (plain-text `@bot` from non-master members, merge window on) now wait in the shared scene Session, so two people `@`-ing the Bot in one group are answered by one merged turn again. Masters, DMs, prefix/commands, stop words, `clear`, media/quote/forward and `merge.enabled: false` keep their #1104 personal Session. A stop word also stops the sender's merged scene turn.
+- 0315ba0: 用统一的 Service／Account／Profile 运行时替换旧 Provider／Catalog 选型入口；支持 Host 订阅账号、固定模型、结构化决策多用途与动态持久选择。命令、工具及委派任务绑定真实 operation／generation，权限、配额与取消不通过全局最新对象传递。
+
+  新增显式导入与恢复 journal、只读预览及旧 Session 完整身份绑定；向导单独生成 ai.plan.yml。旧插件接口需要与本次配套 patch 一起迁移，最低版本／旧支持上限与恢复流程见 docs/ai/provider-upgrade.md。本声明不表示版本已经发布，不执行版本提升、登录、真实模型调用、迁移用户数据或部署。
+
+- d086ff3: Add optional display-only Provider support metadata. Mark Claude subscription and Antigravity as experimental, and disclose that Codex has no explicit OpenAI authorization for third-party clients. Project only declared public support fields into exact held Driver and deployment views; registration, authentication, permissions and inference behavior remain unchanged.
+- be5c36e: 自变更跨 #1146 升级：旧版本遗留的 `applying` / `verifying` 记录若带配置补丁但缺少 `configRevision`，恢复时不再自动续作（无论是否存在配置快照或配置端口，回滚前即停止，不改动任何文件），记录转为 `failed` 并保留现场等待人工核验（补充回归测试）。配置回执出现 `restart-pending` 分组但保存结果 `restartRequired` 不为 true 时，按 `unconfirmed` 处理。文档说明 `change_config_unconfirmed` / `change_config_superseded` 下记录为 `failed`、决策事件 outcome 保持 `defer`。
+- 5d12234: Self-change approval visibility follow-up (#1142): IM diff excerpts redact secret-like `key = value` / `key: value` assignments (`redactSecretAssignments`, `isSecretLikeKey`; prompt-like config paths use `isPromptPayloadKey`) and keep content lines that look like file headers; line-ending-only changes are marked; an unreadable rollback snapshot is reported instead of diffing the disk. `plugin.root.self-change-detail` returns every trial check (each redacted), redacts config values without hitting the depth limit, and no longer carries an unredacted `change.trial`.
+
+  The Console detail diff (`files[].diff`) now goes through the same secret-assignment redaction as the IM excerpt; the scanner skips escaped quotes and redacts unquoted values past spaces (up to `,` `;` `)` `]` `}` or the line end). The nested `change.trial` is allow-listed to the documented trial fields, and `change.error` / trial check messages are redacted with the audit masking plus secret assignments.
+
+- 44a6456: Self-change approval visibility (#1142, ADR 0040 F3): `buildSelfChangeDetailDiff` / `selfChangeDiffExcerpt` / `skippedTrialChecks` in `@zhin.js/agent`; self-change approval cards now carry a bounded diff excerpt (≤ 40 lines / 2 KB) and the skipped check names, also after `restore()`. The CLI host adds the `plugin.root.self-change-detail` Console RPC (`ops:approve` only: per-file unified diff ≤ 64 KB, redacted config values, full trial checks) and shows the excerpt plus a blind-approval warning on the IM card; `plugin.root.tool-approvals` drops the excerpt from its read-only list.
+- 8be6c23: Preserve actual model error/aborted terminals, observed partial results and accumulated usage across standalone Agent tasks. Subagents and deferred workers now report those terminals as errors, and Workroom planning rejects failed responses before parsing JSON. Cancellation retains the caller's original rejection reason and exposes a copied interruption snapshot without retrying tools or changing continuation policies.
+
+  Update synchronous subagent callers to read `spawnSync()`'s structured status/result/toolCalls/terminal outcome instead of a string. The built-in waiting tool reports the actual outcome without exposing routing metadata. A failed deferred re-completion now reaches existing main-agent failure gates, which can stop segment continuation that previously proceeded after the hidden error.
+
+- Updated dependencies [b249e5e]
+- Updated dependencies [57661f6]
+- Updated dependencies [cbd3f14]
+- Updated dependencies [299863a]
+- Updated dependencies [aaa93d7]
+- Updated dependencies [9e6d70d]
+- Updated dependencies [bd524d1]
+- Updated dependencies [126ae99]
+- Updated dependencies [4fe49b5]
+- Updated dependencies [b652db3]
+- Updated dependencies [0315ba0]
+- Updated dependencies [d086ff3]
+- Updated dependencies [8be6c23]
+  - @zhin.js/core@1.1.56
+  - @zhin.js/adapter@1.1.28
+  - @zhin.js/im-contract@1.1.11
+  - @zhin.js/plugin-runtime@1.1.20
+  - @zhin.js/ai@1.1.51
+  - @zhin.js/runtime@1.1.18
+  - @zhin.js/host-http@1.1.14
+  - @zhin.js/console-protocol@1.1.13
+  - @zhin.js/feature-kit@1.1.12
+  - @zhin.js/database@1.1.6
+  - @zhin.js/command@1.1.14
+  - @zhin.js/component@1.1.13
+  - @zhin.js/middleware@1.1.13
+  - @zhin.js/scaffold-wizard@1.1.15
+  - @zhin.js/workroom@0.0.16
+  - @zhin.js/pagemanager@1.1.21
+  - @zhin.js/config-file@1.1.12
+  - @zhin.js/permission@1.1.12
+  - @zhin.js/prompt-section@1.1.12
+
 ## 1.1.27
 
 ### Patch Changes

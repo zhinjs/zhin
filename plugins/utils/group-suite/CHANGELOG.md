@@ -1,5 +1,22 @@
 # @zhin.js/plugin-group-suite
 
+## 1.1.21
+
+### Patch Changes
+
+- Updated dependencies [b249e5e]
+- Updated dependencies [57661f6]
+- Updated dependencies [cbd3f14]
+- Updated dependencies [299863a]
+- Updated dependencies [b652db3]
+- Updated dependencies [0315ba0]
+- Updated dependencies [00be764]
+  - @zhin.js/core@1.1.56
+  - @zhin.js/tool@1.1.15
+  - @zhin.js/skill@1.1.13
+  - @zhin.js/jsx@1.1.10
+  - @zhin.js/components@1.1.10
+
 ## 1.1.20
 
 ### Patch Changes

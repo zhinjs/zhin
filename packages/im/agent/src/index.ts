@@ -12,9 +12,6 @@ export { LocalImageAssetStore, localImageAssetsToken } from './media/local-image
 
 export { AIService } from './service.js';
 export type { AIServiceConfig } from './service.js';
-export type { ServiceAgent, ServiceAgentResult, CreateServiceAgentOptions } from './service.js';
-export { createAgentSession } from './create-agent-session.js';
-export type { AgentSessionHandle, CreateAgentSessionOptions } from './create-agent-session.js';
 export { PluginAILoopHookRegistry } from './plugin-loop-hooks.js';
 
 export type {
@@ -48,7 +45,6 @@ export type {
   ToolResultEvent,
   ThinkingEvent, TurnEndEvent, TurnErrorEvent,
   TurnBudgetExceededEvent,
-  SubagentStartEvent, SubagentProgressEvent, SubagentEndEvent,
   McpConnectEvent, McpToolCallEvent,
 } from './event/turn-event.js';
 export {
@@ -194,7 +190,6 @@ export {
 } from './prompt/workspace-prompt.js';
 export type { WorkspacePromptRole } from './prompt/workspace-prompt.js';
 export { createUserProfileTool } from './tool/context-tools.js';
-export { createSpawnTaskTool } from './spawn/spawn-task-tool.js';
 export * from './interaction/index.js';
 
 export {
@@ -629,13 +624,6 @@ export { capabilitySeamToken } from './seam/index.js';
 export { BuiltinToolService } from './builtins/builtin-tool-service.js';
 export { SkillRegistryAsService } from './skill/skill-registry-as-service.js';
 
-export { SubagentSystem } from './subagent/index.js';
-export { SubagentRuntime } from './subagent/subagent-runtime.js';
-export type {
-  SubagentOrigin, SubagentResultDelivery, SubagentResultSender, SpawnOptions, SubagentRuntimeOptions,
-  SubagentCompletePayload,
-  SubagentSyncResult,
-} from './subagent/index.js';
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
 export {
@@ -804,7 +792,6 @@ export {
   AI_EVENT_NAMES,
   subscribeAIEventsOnTarget,
 } from './ai-event-subscriber.js';
-export { originFromMessage } from './spawn/spawn-task-tool.js';
 export type {
   AIEventFilter,
   AIEventHandlers,
@@ -831,11 +818,6 @@ export {
   toActivityFeedbackEventContext,
   resolveActivitySceneType,
   resolveActivityEventTargets,
-  resolveSubagentActivityTag,
-  formatSubagentActivityPrefix,
-  withSubagentActivityPrefix,
-  applySubagentActivityPrefixToConfig,
-  resolveActivityFeedbackSessionId,
 } from './activity-feedback/index.js';
 export type {
   ActivityFeedbackType,
@@ -983,9 +965,6 @@ export type {
   AgentSurfacePluginInfo,
   AgentSurfaceWorkspaceAgentInfo,
 } from './discovery/agent-surface-info.js';
-
-// Detached background tasks (#731) and interjection / commands (#732)
-export * from './detached-task/index.js';
 
 // Plain text completion for plugins (#804): tool-free, with retry and fallback.
 export { aiCompletionToken, AiCompletionQuotaError } from './plugin-runtime/ai-completion.js';

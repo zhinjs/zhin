@@ -41,9 +41,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
 
 // Import after mocking — AIService from agent; Tool/trigger contracts from core
 import { AIService } from '@zhin.js/agent';
-import { executionBundle, executionScope } from '../helpers/execution-bundle.js';
-import { assistantTextReply } from '../helpers/mock-llm-api.js';
-import { shouldTriggerAI, resolveSenderRoles, type AgentTool } from '@zhin.js/core';
+import { shouldTriggerAI, resolveSenderRoles } from '@zhin.js/core';
 
 // ============================================================================
 // AI Service 测试
@@ -104,52 +102,6 @@ describe('AI Service 集成测试', () => {
         users: ['vip'],
       });
       await svc.dispose();
-    });
-  });
-
-  describe('工具管理', () => {
-    it('standalone agents do not receive implicit tools', () => {
-      expect(aiService.listRegisteredTools()).toEqual([]);
-    });
-
-    it('应该注册自定义工具', () => {
-      const customTool: AgentTool = {
-        name: 'custom_tool',
-        description: '自定义工具',
-        parameters: { type: 'object', properties: {} },
-        execute: async () => 'result',
-      };
-
-      const dispose = aiService.registerTool(customTool);
-      
-      const tools = aiService.listRegisteredTools();
-      expect(tools.some(t => t.name === 'custom_tool')).toBe(true);
-      expect(Object.isFrozen(tools)).toBe(true);
-      
-      dispose();
-      const toolsAfter = aiService.listRegisteredTools();
-      expect(toolsAfter.some(t => t.name === 'custom_tool')).toBe(false);
-    });
-
-    it('rejects ambiguous duplicate registrations', async () => {
-      const tool: AgentTool = {
-        name: 'duplicate',
-        description: 'first',
-        parameters: { type: 'object', properties: {} },
-        execute: async () => 'result',
-      };
-      aiService.registerTool(tool);
-
-      expect(() => aiService.registerTool({ ...tool, description: 'second' }))
-        .toThrow('already registered');
-      expect(() => aiService.registerTool({ ...tool, name: ' duplicate ' }))
-        .toThrow('canonical name');
-      const models = await executionScope({ chat: executionBundle({ model: { id: 'fixture', api: 'fixture', provider: 'fixture', input: ['text'], contextWindow: 8192, maxTokens: 100 }, completion: { complete: async () => assistantTextReply('done') } }) });
-      expect(() => aiService.createAgent({ models, tools: [tool], includeRegisteredTools: true }))
-        .toThrow('Duplicate standalone Agent Tool');
-      // Registered tools are opt-in: by default a standalone Agent starts with none.
-      expect(() => aiService.createAgent({ models, tools: [tool] })).not.toThrow();
-      await models.release();
     });
   });
 

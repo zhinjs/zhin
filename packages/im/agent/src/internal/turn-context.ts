@@ -7,7 +7,7 @@ export interface TurnContextStore {
   tracker: TurnTracker;
   turnActiveSkills: string;
   deferredSnapshotBefore?: DeferredToolSessionSnapshot;
-  /** 仅人类 register-ai-trigger 入站为 true；TaskExecutor/subagent/deferred 为 false */
+  /** 仅人类 register-ai-trigger 入站为 true；TaskExecutor / 协作 Actor 回合为 false */
   activityFeedbackEligible?: boolean;
 }
 

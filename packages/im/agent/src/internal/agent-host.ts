@@ -10,7 +10,6 @@ import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
 import type { AgentResourceHub } from '../resource-hub/index.js';
-import type { SubagentSystem } from '../subagent/index.js';
 import type { UserProfileStore } from '../user-profile.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
@@ -91,7 +90,7 @@ export interface AgentTurnLifecycleHost {
   readonly usageQuota: import('../security/usage-quota.js').UsageQuota;
   beginActiveTurn(): void;
   finalizeActiveTurn(
-    partial: Omit<HostTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },
+    partial: Omit<HostTurnMetrics, 'usage'> & { usage: Usage },
   ): Promise<void>;
   getActiveTurnTracker(): HostTurnTracker | undefined;
   runInTurnContext<T>(turnId: string, fn: () => Promise<T>): Promise<T>;
@@ -123,8 +122,7 @@ export interface ZhinAgentPrivate
   hostProtectedPaths?: import('../security/host-config-paths.js').HostProtectedPaths;
   readonly externalTools: Map<string, RegisteredAgentTool>;
   readonly userProfiles: UserProfileStore;
-  subagentSystem: SubagentSystem | null;
-  /** deferred 工具族的跨 turn 状态（目录/快照/统计/自动续轮深度/结果回投器）。 */
+  /** deferred 工具族的跨 turn 状态（目录/快照/统计）。 */
   readonly deferred: DeferredTurnState;
 }
 

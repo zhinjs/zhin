@@ -4,6 +4,8 @@ sidebar: false
 
 # 受治理研发交付闭环实施计划
 
+> **已被取代（2026-11-04）**：由 [ADR 0048 Agent Harness](../adr/0048-agent-harness.md) 取代，本文仅作历史参考，不再按本文推进；相关代码将在 ADR 0048 的 H2–H4 阶段删除。
+
 目标：基于最新 main，在独立功能分支完成可验收的小型研发交付闭环。复用 Workroom Kernel / Acceptance / Effect Ledger 的权威事实；不新增模型可写的任务终态，不让 IM 群身份直接授予项目权限。
 
 ## 执行安排

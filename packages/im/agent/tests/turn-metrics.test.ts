@@ -34,21 +34,6 @@ describe('turn-metrics', () => {
     expect(log).toContain('╯');
   });
 
-  it('formatAiHandlerTurnTable 含子 agent token 明细', () => {
-    const log = formatAiHandlerTurnTable(
-      {
-        usage: { prompt_tokens: 300, completion_tokens: 200, total_tokens: 500 },
-        subagentUsage: { prompt_tokens: 100, completion_tokens: 100, total_tokens: 200 },
-        path: 'agent',
-        iterations: 2,
-        model: 'deepseek-v4-flash',
-      },
-      12000,
-    );
-    expect(log).toContain('500');
-    expect(log).toContain('main 300 + sub 200');
-  });
-
   it('formatAiHandlerTurnTable 空内容显示占位', () => {
     const log = formatAiHandlerTurnTable(
       {

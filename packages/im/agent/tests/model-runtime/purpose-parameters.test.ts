@@ -1,9 +1,9 @@
+import { assistantText, createUserMessage } from '@zhin.js/ai';
 import { createInferenceRuntime, normalizeProviderGraph } from '@zhin.js/ai/provider';
 import { graphFixture } from '../../../ai/tests/provider/fixtures.js';
 import { codexProvider, openAiProvider } from '@zhin.js/ai/providers';
 import { createInvocationCompletion, invocationModel } from '../../src/model-runtime/completion.js';
 import { LlmApprovalJudgment } from '../../src/decision/approval-judgment.js';
-import { summarizeSubagentResultForUser } from '../../src/routing/subagent-summarize.js';
 import { driverFixture, callContext, sse, chatReply } from '../../../ai/tests/providers/fixtures.js';
 
 function codexReply(text: string) {
@@ -16,6 +16,12 @@ function codexReply(text: string) {
   ]);
 }
 const signal = new AbortController().signal;
+/** One summary-purpose completion, the way host callers use the summary operation. */
+async function summarize(summary: { model: ReturnType<typeof invocationModel>; completion: ReturnType<typeof createInvocationCompletion> }, text: string, abort?: AbortSignal) {
+  const answer = await summary.completion.complete(summary.model,
+    { systemPrompt: 'Summarize for the user.', messages: [createUserMessage(text)], tools: [] }, { signal: abort });
+  return assistantText(answer).trim();
+}
 const request = { requestId: 'synthetic', requesterId: 'synthetic', toolName: 'synthetic', scopeKey: 'synthetic', question: 'synthetic' };
 it.each(['summary', 'approval'] as const)('runs the real %s purpose through its fixed Codex scope without unsupported framework overrides', async purpose => {
   const bodies: unknown[] = [];
@@ -36,7 +42,7 @@ it.each(['summary', 'approval'] as const)('runs the real %s purpose through its 
   const bundle = { binding, model: invocationModel(binding), completion: createInvocationCompletion({ binding, client: scope.client, purpose: selectedPurpose }) };
   try {
     if (purpose === 'summary') {
-      expect(await summarizeSubagentResultForUser({ models: { summary: bundle }, subagentName: 'child', userRequest: 'summarize', subagentResult: 'Long raw synthetic report', signal })).toBe(payload);
+      expect(await summarize(bundle, 'Long raw synthetic report', signal)).toBe(payload);
     } else {
       expect(await new LlmApprovalJudgment({ completion: bundle.completion, model: bundle.model }).judge({ request, priorDecisions: [], signal })).toEqual({ decision: 'ask', reason: 'Confirm intent' });
     }
@@ -52,7 +58,7 @@ it('uses ordinary Profile generation parameters unchanged through the real summa
     fetch: async (url, init) => { bodies.push(await new Request(url, init).json()); return chatReply('summary'); } });
   const scope = await fixture.runtime.openScope({ context: callContext }), binding = await scope.resolve({ kind: 'language', purpose: 'summary' });
   const summary = { binding, model: invocationModel(binding), completion: createInvocationCompletion({ binding, client: scope.client, purpose: 'summary' }) };
-  expect(await summarizeSubagentResultForUser({ models: { summary }, subagentName: 'child', userRequest: 'summarize', subagentResult: 'raw' })).toBe('summary');
+  expect(await summarize(summary, 'raw')).toBe('summary');
   expect(bodies).toEqual([expect.objectContaining({ model: 'configured-model', temperature: 0.17, max_tokens: 73 })]);
   await scope.close(); fixture.runtime.retire();
 });

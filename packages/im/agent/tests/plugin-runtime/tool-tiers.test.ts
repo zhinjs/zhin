@@ -119,18 +119,18 @@ describe('tool tiers', () => {
   it('chat tier loads chat essentials only: no dev tools, no unrelated tools', () => {
     const names = resolvedNames(planFor({ tier: 'chat' }));
     expect(names).toEqual(expect.arrayContaining([...CHAT, 'discover', 'load_tool', 'load_skill']));
-    for (const name of [...DEV, ...OTHER, 'spawn_task', 'ask_user']) expect(names).not.toContain(name);
+    for (const name of [...DEV, ...OTHER, 'ask_user']) expect(names).not.toContain(name);
   });
 
   it('master tier adds the dev tools', () => {
-    const names = resolvedNames(planFor({ tier: 'master', tools: [...DEV, ...CHAT, ...OTHER, 'spawn_task', 'ask_user'] }));
-    expect(names).toEqual(expect.arrayContaining([...DEV, ...CHAT, 'spawn_task', 'ask_user']));
+    const names = resolvedNames(planFor({ tier: 'master', tools: [...DEV, ...CHAT, ...OTHER, 'ask_user'] }));
+    expect(names).toEqual(expect.arrayContaining([...DEV, ...CHAT, 'ask_user']));
     for (const name of OTHER) expect(names).not.toContain(name);
   });
 
   it('no tier keeps the previous default set', () => {
-    const names = resolvedNames(planFor({ tools: [...DEV.filter(n => n !== 'bash'), ...OTHER, 'spawn_task'] }));
-    expect(names).toEqual(expect.arrayContaining(['read_file', 'grep', 'spawn_task']));
+    const names = resolvedNames(planFor({ tools: [...DEV.filter(n => n !== 'bash'), ...OTHER] }));
+    expect(names).toEqual(expect.arrayContaining(['read_file', 'grep']));
   });
 
   it('keeps tier-excluded tools in the authorized deferred catalog', () => {

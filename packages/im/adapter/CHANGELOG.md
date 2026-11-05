@@ -1,5 +1,23 @@
 # @zhin.js/adapter
 
+## 1.1.28
+
+### Patch Changes
+
+- cbd3f14: ADR 0044 integration and C6 guard. `delivery.spool` now reproduces the pre-0044 media rule (icqq `false`, every other official adapter `true`). icqq narrows `actions.recall.others` unless the Bot is admin or owner, and declares recall for groups. Endpoint kind capabilities merge the Endpoint's `operations` (Discord reactions keep working; Discord declares reaction feedback). Adapters in the `@zhin.js/` scope are trusted: their custom prompt text is not labelled `external_content`. Core no longer keeps a telegram/discord interactive-policy table (adapters declare `segments.interactive`). New `pnpm check:no-platform-branches` blocks platform-name branches in runtime code.
+- 299863a: ADR 0044 C3: runtime consumers read capabilities instead of platform names. Scene facts (group info, member profile) are queried where the profile declares `scene.groupInfo` / `scene.memberProfile`; activity feedback (reaction, typing, status message, refresh interval, quote-only delivery) follows `feedback`, `actions.reaction` and `delivery.proactive` and the per-platform table is gone; large inline media is spooled only where `delivery.spool` is declared; the sandbox ingress and its console shell follow a new additive `runtime.sandbox` capability. `defineAgentTool` and Skill frontmatter accept `requiresCapabilities` (for example `actions.mute`), evaluated against the per-turn `TurnCapabilities`, so moderation tools disappear when the Bot is not an administrator and return when it is; the icqq/qq keyword boost in tool selection is removed and the icqq group-admin tools are tagged. The `icqq` command-line special case in the exec policy is now a generic `registerSensitiveExecCommand` rule registered by the icqq plugin. `EndpointCapabilities` gains a serializable per-kind `kinds` view. Adapters without a profile keep their previous behaviour (their derived profile also reads the management ports they implement).
+- aaa93d7: ADR 0044 C1: adapter capability profile spec. `defineAdapter({ profile, resolveCapabilities })` declares seven capability groups (messaging, scene, actions, events, feedback, delivery, prompt) per conversation kind with inheritance from `default`, validated at definition time. `resolveTurnCapabilities` merges the sections and narrows them (Bot role, mute state, passive window, and the adapter's narrow-only patch), and the IM ingress attaches the result to the turn input as `platformCapabilities` (`has` / `get`). A declared action without its management/control port fails at assembly. Adapters without a profile get a conservative one derived from `capabilities`, `operations` and `segments`; `segments` and `liveDanmaku` remain as aliases. No behaviour change for existing adapters.
+- 4fe49b5: 支持配置按需生效：分离保存与有效版本，独立变更先应用，账号资料更新保留连接，模型按回合使用确定版本；Console 返回结构化应用结果。监听改为仅显式 --watch 启用，开发模板显式选择源码和配置监听。
+
+  自变更消费配置应用回执，避免已处理配置被二次重载；持久化本次写入修订和应用结果，未知结果或修订冲突时停止自动续作并保留现场，恢复不会覆盖未经本次变更确认的配置。
+
+- Updated dependencies [299863a]
+- Updated dependencies [4fe49b5]
+- Updated dependencies [0315ba0]
+  - @zhin.js/im-contract@1.1.11
+  - @zhin.js/plugin-runtime@1.1.20
+  - @zhin.js/feature-kit@1.1.12
+
 ## 1.1.27
 
 ### Patch Changes

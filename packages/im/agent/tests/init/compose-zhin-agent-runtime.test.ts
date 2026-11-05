@@ -4,13 +4,11 @@ import { ZhinAgent } from '../../src/zhin-agent/index.js';
 import { wireMockLlmApi } from '../helpers/mock-llm-api.js';
 
 describe('composeZhinAgentRuntime', () => {
-  it('wires 8 ideal modules and returns deliverOutbound sender', () => {
+  it('wires the ideal modules', () => {
     const provider = wireMockLlmApi({ models: ['m1'] }).provider;
     const agent = new ZhinAgent();
-    const { deliverOutbound, agentCore, toolSystem, sessionSystem, eventSystem, skillSystem, memorySystem, subagentSystem, contextSystem } =
-      composeZhinAgentRuntime({agent, proactiveOutbound: {
-        send: async () => {},
-      }});
+    const { agentCore, toolSystem, sessionSystem, eventSystem, skillSystem, memorySystem, contextSystem } =
+      composeZhinAgentRuntime({ agent });
 
     expect(agent).toBeDefined();
     expect(agentCore).toBeDefined();
@@ -19,15 +17,13 @@ describe('composeZhinAgentRuntime', () => {
     expect(eventSystem).toBeDefined();
     expect(skillSystem).toBeDefined();
     expect(memorySystem).toBeDefined();
-    expect(subagentSystem).toBeDefined();
     expect(contextSystem).toBeDefined();
-    expect(typeof deliverOutbound).toBe('function');
   });
 
   it('injects composed runtime modules onto agent via configure', () => {
     const provider = wireMockLlmApi({ models: ['m1'] }).provider;
     const agent = new ZhinAgent();
-    const composed = composeZhinAgentRuntime({agent, proactiveOutbound: { send: async () => {} }});
+    const composed = composeZhinAgentRuntime({ agent });
     agent.configure({
       agentCore: composed.agentCore,
       toolSystem: composed.toolSystem,
@@ -43,14 +39,14 @@ describe('composeZhinAgentRuntime', () => {
 
   it('creates per-agent contextSystem instance (not global singleton)', () => {
     const provider = wireMockLlmApi({ models: ['m1'] }).provider;
-    const a = composeZhinAgentRuntime({agent:new ZhinAgent(), proactiveOutbound:{ send: async () => {} }});
-    const b = composeZhinAgentRuntime({agent:new ZhinAgent(), proactiveOutbound:{ send: async () => {} }});
+    const a = composeZhinAgentRuntime({ agent: new ZhinAgent() });
+    const b = composeZhinAgentRuntime({ agent: new ZhinAgent() });
     expect(a.contextSystem).not.toBe(b.contextSystem);
   });
 
   it('wires AgentCore eventBus to composed EventSystem', () => {
     const provider = wireMockLlmApi({ models: ['m1'] }).provider;
-    const { agentCore, eventSystem } = composeZhinAgentRuntime({ agent: new ZhinAgent(), proactiveOutbound: { send: async () => {} } });
+    const { agentCore, eventSystem } = composeZhinAgentRuntime({ agent: new ZhinAgent() });
     expect(agentCore.deps.eventBus).toBe(eventSystem);
     expect(agentCore.deps).not.toHaveProperty('provider');
   });

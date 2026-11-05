@@ -66,12 +66,12 @@ export function registerTurnTrace(collector: TurnTraceCollector): () => void {
 
 /**
  * Records a non-event fact (budget extension, auto-continuation) on the turn
- * with this id, including nested `<parent>:subagent:<n>` turns. No-op when
+ * with this id, including nested `<root>:actor:<actor>:<mail>` turns. No-op when
  * the turn is not traced.
  */
 export function noteTurnTrace(turnId: string | undefined, note: TurnTraceNote): void {
   if (!turnId) return;
-  const rootId = turnId.split(':subagent:')[0] ?? turnId;
+  const rootId = turnId.split(':actor:')[0] ?? turnId;
   const root = activeCollectors.get(rootId);
   const target = root?.find(turnId) ?? (root && turnId !== rootId ? root.child(turnId) : undefined);
   try {

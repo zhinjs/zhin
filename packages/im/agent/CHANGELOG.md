@@ -1,5 +1,64 @@
 # @zhin.js/agent
 
+## 1.1.47
+
+### Patch Changes
+
+- ebfdafb: Generate the `platform` prompt segment from the turn's adapter capabilities (ADR 0044 C2): fixed zh/en templates for the stable part, delivery state in `scene`, adapter `profile.prompt.text` (capped at 600 chars, `external_content` for third-party adapters) and `prompt.auto: false`.
+- 57661f6: core 转出 ADR 0044 能力类型（`TurnCapabilities` 等）与 `adapterFeatureId` / `isAdapterIndex`，agent 层经 core 读取，遵守依赖分层（agent 不直接依赖 adapter）。
+- cbd3f14: ADR 0044 integration and C6 guard. `delivery.spool` now reproduces the pre-0044 media rule (icqq `false`, every other official adapter `true`). icqq narrows `actions.recall.others` unless the Bot is admin or owner, and declares recall for groups. Endpoint kind capabilities merge the Endpoint's `operations` (Discord reactions keep working; Discord declares reaction feedback). Adapters in the `@zhin.js/` scope are trusted: their custom prompt text is not labelled `external_content`. Core no longer keeps a telegram/discord interactive-policy table (adapters declare `segments.interactive`). New `pnpm check:no-platform-branches` blocks platform-name branches in runtime code.
+- 299863a: ADR 0044 C3: runtime consumers read capabilities instead of platform names. Scene facts (group info, member profile) are queried where the profile declares `scene.groupInfo` / `scene.memberProfile`; activity feedback (reaction, typing, status message, refresh interval, quote-only delivery) follows `feedback`, `actions.reaction` and `delivery.proactive` and the per-platform table is gone; large inline media is spooled only where `delivery.spool` is declared; the sandbox ingress and its console shell follow a new additive `runtime.sandbox` capability. `defineAgentTool` and Skill frontmatter accept `requiresCapabilities` (for example `actions.mute`), evaluated against the per-turn `TurnCapabilities`, so moderation tools disappear when the Bot is not an administrator and return when it is; the icqq/qq keyword boost in tool selection is removed and the icqq group-admin tools are tagged. The `icqq` command-line special case in the exec policy is now a generic `registerSensitiveExecCommand` rule registered by the icqq plugin. `EndpointCapabilities` gains a serializable per-kind `kinds` view. Adapters without a profile keep their previous behaviour (their derived profile also reads the management ports they implement).
+- aaa93d7: ADR 0044 C1: adapter capability profile spec. `defineAdapter({ profile, resolveCapabilities })` declares seven capability groups (messaging, scene, actions, events, feedback, delivery, prompt) per conversation kind with inheritance from `default`, validated at definition time. `resolveTurnCapabilities` merges the sections and narrows them (Bot role, mute state, passive window, and the adapter's narrow-only patch), and the IM ingress attaches the result to the turn input as `platformCapabilities` (`has` / `get`). A declared action without its management/control port fails at assembly. Adapters without a profile get a conservative one derived from `capabilities`, `operations` and `segments`; `segments` and `liveDanmaku` remain as aliases. No behaviour change for existing adapters.
+- 4fe49b5: 支持配置按需生效：分离保存与有效版本，独立变更先应用，账号资料更新保留连接，模型按回合使用确定版本；Console 返回结构化应用结果。监听改为仅显式 --watch 启用，开发模板显式选择源码和配置监听。
+
+  自变更消费配置应用回执，避免已处理配置被二次重载；持久化本次写入修订和应用结果，未知结果或修订冲突时停止自动续作并保留现场，恢复不会覆盖未经本次变更确认的配置。
+
+- 17272ec: Parse standard structured-reply prefixes incrementally within each answering attempt, reuse unchanged nodes and avoid materializing reaction-withheld bodies. Resume incremental parsing after completed signed, fractional or exponential numeric fields, while preserving SDK behavior for their partial prefixes. Preserve immediate first safe content, configured update pacing, retry/cancellation isolation and final decoder validation. Keep SDK-specific partial-JSON repair on the compatible parser path without introducing new limits or behavior defaults.
+- b652db3: Keep default Database, Core and Agent declarations independent of unselected external database drivers. Memory and SQLite remain available from the root; native MySQL, PostgreSQL, MongoDB and Redis classes/configuration move to their precise `@zhin.js/database/dialects/*` entries. TypeScript `Registry.create()` callers select the corresponding dialect types, and third-party dialects augment the single `@zhin.js/database/registry` contract.
+
+  This updates author imports: plugins using these new entries need `@zhin.js/database >=1.1.6` (pending this patch release). Built-in registration, synchronous creation, connection-time driver loading and existing Host database configuration remain unchanged. No drivers, type peers, data migration or version bump are added by this change.
+
+- 0315ba0: 用统一的 Service／Account／Profile 运行时替换旧 Provider／Catalog 选型入口；支持 Host 订阅账号、固定模型、结构化决策多用途与动态持久选择。命令、工具及委派任务绑定真实 operation／generation，权限、配额与取消不通过全局最新对象传递。
+
+  新增显式导入与恢复 journal、只读预览及旧 Session 完整身份绑定；向导单独生成 ai.plan.yml。旧插件接口需要与本次配套 patch 一起迁移，最低版本／旧支持上限与恢复流程见 docs/ai/provider-upgrade.md。本声明不表示版本已经发布，不执行版本提升、登录、真实模型调用、迁移用户数据或部署。
+
+- e4d9538: Upgrade note for ADR 0044 C3 (activity feedback reads capabilities, not platform names): `@zhin.js/agent` no longer exports the per-platform `PLATFORM_FEATURES` table or the `PlatformFeatures` type. `buildTypingSendContent` now takes the conversation's capabilities instead of a platform name — `buildTypingSendContent(capabilities, options, text)`, where `capabilities` is `Pick<ActivityFeedbackKindCapabilities, 'needsReply'>` (quote the trigger message when `needsReply` is true, i.e. `delivery.proactive === false`). Code that read `PLATFORM_FEATURES[platform]` should read the adapter's capability profile (`feedback`, `actions.reaction`, `messaging.edit`, `messaging.recall`) through `TurnCapabilities` / `EndpointCapabilities.kinds` instead.
+- be5c36e: 自变更跨 #1146 升级：旧版本遗留的 `applying` / `verifying` 记录若带配置补丁但缺少 `configRevision`，恢复时不再自动续作（无论是否存在配置快照或配置端口，回滚前即停止，不改动任何文件），记录转为 `failed` 并保留现场等待人工核验（补充回归测试）。配置回执出现 `restart-pending` 分组但保存结果 `restartRequired` 不为 true 时，按 `unconfirmed` 处理。文档说明 `change_config_unconfirmed` / `change_config_superseded` 下记录为 `failed`、决策事件 outcome 保持 `defer`。
+- 5d12234: Self-change approval visibility follow-up (#1142): IM diff excerpts redact secret-like `key = value` / `key: value` assignments (`redactSecretAssignments`, `isSecretLikeKey`; prompt-like config paths use `isPromptPayloadKey`) and keep content lines that look like file headers; line-ending-only changes are marked; an unreadable rollback snapshot is reported instead of diffing the disk. `plugin.root.self-change-detail` returns every trial check (each redacted), redacts config values without hitting the depth limit, and no longer carries an unredacted `change.trial`.
+
+  The Console detail diff (`files[].diff`) now goes through the same secret-assignment redaction as the IM excerpt; the scanner skips escaped quotes and redacts unquoted values past spaces (up to `,` `;` `)` `]` `}` or the line end). The nested `change.trial` is allow-listed to the documented trial fields, and `change.error` / trial check messages are redacted with the audit masking plus secret assignments.
+
+- 44a6456: Self-change approval visibility (#1142, ADR 0040 F3): `buildSelfChangeDetailDiff` / `selfChangeDiffExcerpt` / `skippedTrialChecks` in `@zhin.js/agent`; self-change approval cards now carry a bounded diff excerpt (≤ 40 lines / 2 KB) and the skipped check names, also after `restore()`. The CLI host adds the `plugin.root.self-change-detail` Console RPC (`ops:approve` only: per-file unified diff ≤ 64 KB, redacted config values, full trial checks) and shows the excerpt plus a blind-approval warning on the IM card; `plugin.root.tool-approvals` drops the excerpt from its read-only list.
+- 8be6c23: Preserve actual model error/aborted terminals, observed partial results and accumulated usage across standalone Agent tasks. Subagents and deferred workers now report those terminals as errors, and Workroom planning rejects failed responses before parsing JSON. Cancellation retains the caller's original rejection reason and exposes a copied interruption snapshot without retrying tools or changing continuation policies.
+
+  Update synchronous subagent callers to read `spawnSync()`'s structured status/result/toolCalls/terminal outcome instead of a string. The built-in waiting tool reports the actual outcome without exposing routing metadata. A failed deferred re-completion now reaches existing main-agent failure gates, which can stop segment continuation that previously proceeded after the hidden error.
+
+- Updated dependencies [b249e5e]
+- Updated dependencies [57661f6]
+- Updated dependencies [cbd3f14]
+- Updated dependencies [299863a]
+- Updated dependencies [aaa93d7]
+- Updated dependencies [9e6d70d]
+- Updated dependencies [4fe49b5]
+- Updated dependencies [b652db3]
+- Updated dependencies [0315ba0]
+- Updated dependencies [d086ff3]
+- Updated dependencies [00be764]
+- Updated dependencies [8be6c23]
+  - @zhin.js/core@1.1.56
+  - @zhin.js/adapter@1.1.28
+  - @zhin.js/im-contract@1.1.11
+  - @zhin.js/plugin-runtime@1.1.20
+  - @zhin.js/tool@1.1.15
+  - @zhin.js/skill@1.1.13
+  - @zhin.js/ai@1.1.51
+  - @zhin.js/feature-kit@1.1.12
+  - @zhin.js/ai-provider@1.0.1
+  - @zhin.js/agent-feature@1.1.13
+  - @zhin.js/mcp-feature@1.1.13
+  - @zhin.js/permission@1.1.12
+  - @zhin.js/prompt-section@1.1.12
+
 ## 1.1.46
 
 ### Patch Changes

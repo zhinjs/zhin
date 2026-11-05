@@ -1,4 +1,3 @@
-import { currentAgentInference } from '../inference/current-operation.js';
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
@@ -6,7 +5,6 @@ import {
   AIService,
   AgentEventBus,
   AgentResourceHub,
-  discoverWorkspaceAgents,
   publishOutboundElements,
   resolveOutboundCapabilities,
   NO_MEDIA_AUTHORITY,
@@ -24,13 +22,8 @@ import {
 import {
   ZhinAgent,
   composeZhinAgentRuntime,
-  createNativeAgentToolSuite,
-  getAgentTurnDecisionRuntime,
-  type KnowledgeIndex,
   type AgentTraceRecorder,
 } from '@zhin.js/agent/runtime';
-import type { AgentTool, JsonSchema } from '@zhin.js/ai';
-import { createScopedPerceptionFactory, ModelRuntimeError } from '@zhin.js/agent/model-runtime';
 import { auditControlOutbound, checkControlAtOutbound, logControlBlocked } from './turn/control-gate.js';
 import { auditOutbound, createDecisionAudit, decisionScopeOf } from './turn/decision-audit.js';
 
@@ -55,10 +48,8 @@ export function observeAgentTurnTrace(
 export interface RuntimeZhinAgentOptions {
   readonly service: AIService;
   readonly im: ImRuntime;
-  readonly projectRoot: string;
   readonly approvalPort?: ApprovalPort;
   readonly audioTranscriber?: AudioTranscriptionPort;
-  readonly knowledgeIndex?: KnowledgeIndex;
   readonly localAssets?: LocalImageAssetStore;
 }
 
@@ -66,17 +57,14 @@ export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
   agent: ZhinAgent;
   events: AgentEventBus;
   runtime: ReturnType<typeof composeZhinAgentRuntime>;
-  seedPresets: () => Promise<number>;
 } {
-  const { service, im, projectRoot, approvalPort, audioTranscriber, knowledgeIndex, localAssets } = options;
+  const { service, im, approvalPort, audioTranscriber, localAssets } = options;
   const binding = service.getBindingRegistry().requireZhinBinding();
   const events = new AgentEventBus();
   const agent = new ZhinAgent({ config: {
     ...(service.getAgentConfig() ?? {}), contextHistory: service.getContextHistoryConfig(),
   }, events });
-  const composed = composeZhinAgentRuntime({ agent, proactiveOutbound: createRuntimeProactiveOutbound(
-    im, () => agent.getControlPlane(), () => agent.getDecisionEvents(), service.imageAssets,
-  ) });
+  const composed = composeZhinAgentRuntime({ agent });
   composed.host.approvalPort = approvalPort;
   const resourceHub = new AgentResourceHub();
   agent.configure({
@@ -91,31 +79,6 @@ export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
     imageAssets: service.imageAssets,
     localAssets,
     activeBinding: binding,
-    deferredResultSender: composed.deliverOutbound,
-    subagentSender: composed.deliverOutbound,
-  });
-
-  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, knowledgeIndex));
-  const createPerception = createScopedPerceptionFactory();
-  agent.getSubagentSystem()?.configureRouting({
-    imageAssets: service.imageAssets,
-    localAssets,
-    createPerception: (scope) => {
-      if (!scope.context.sessionKey) throw new ModelRuntimeError('invalid-context');
-      return createPerception({
-        scope,
-        sessionKey: scope.context.sessionKey,
-        settings: service.getPerceptionConfig(),
-        resilience: service.getAgentConfig()?.providerResilience,
-      });
-    },
-    resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
-    getMcpRegistry: () => null,
-    resolveAgentMeta: async (name) => {
-      const metas = await discoverWorkspaceAgents(projectRoot);
-      return metas.find((meta) => meta.name === name) ?? null;
-    },
-    getParentContextSnapshot: (origin) => agent.buildParentContextSnapshotForSubagent(origin),
   });
 
   // Persistence readiness is latched by the Workroom persistence coordinator
@@ -125,75 +88,7 @@ export function createRuntimeZhinAgent(options: RuntimeZhinAgentOptions): {
     agent,
     events,
     runtime: composed,
-    seedPresets: () => seedResourceHubAgentPresets(resourceHub, projectRoot),
   };
-}
-
-/**
- * Subagent tool pool — derived from the same generation projection as the
- * main turn so the ToolIndex is the single source of truth. Native builtin
- * tools are projected from the same native ToolFeature definitions used by the main turn.
- */
-function buildRuntimeSubagentAgentTools(
-  service: AIService,
-  knowledgeIndex?: KnowledgeIndex,
-): AgentTool[] {
-  const nativeTools = createNativeAgentToolSuite({
-    resolveInference: currentAgentInference,
-    imageAssets: service.imageAssets,
-    knowledgeIndex,
-    resolveDecision: getAgentTurnDecisionRuntime,
-  });
-  // Public file upload requires the canonical Turn approval and file-authority gateway.
-  // The legacy standalone pool cannot supply those capabilities.
-  return nativeTools.filter(native => native.name !== 'upload_image').map((native): AgentTool => ({
-    name: native.name,
-    description: native.definition.description,
-    parameters: native.definition.inputSchema as JsonSchema,
-    source: 'builtin',
-    requiresApproval: native.definition.requiresApproval,
-    risk: native.definition.risk,
-    riskCategory: native.definition.riskCategory,
-    execute: (args: Record<string, unknown>, _ctx?: unknown, execCtx?: unknown) =>
-      (native.definition.execute as (input: unknown, context: unknown) => Promise<unknown>)(
-        args,
-        execCtx,
-      ),
-  }));
-}
-
-async function seedResourceHubAgentPresets(
-  resourceHub: AgentResourceHub,
-  projectRoot: string,
-): Promise<number> {
-  try {
-    const metas = await discoverWorkspaceAgents(projectRoot);
-    for (const meta of metas) {
-      if (resourceHub.subagents.getPreset(meta.name)) continue;
-      resourceHub.addAgentPreset({
-        name: meta.name,
-        description: meta.description,
-        systemPrompt: meta.systemPrompt,
-        tools: meta.toolNames,
-        model: meta.model,
-        filePath: meta.filePath,
-      });
-    }
-    if (metas.length > 0) {
-      logger.info(formatCompact({
-        op: 'agent_host_presets',
-        count: metas.length,
-        names: metas.map((meta) => meta.name).join(','),
-      }));
-    }
-    return metas.length;
-  } catch (error) {
-    logger.warn(formatCompact({
-      op: 'agent_host_presets_fail',
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return 0;
-  }
 }
 
 /** 主动出站被控制面拦下（ADR 0036 切片 D）：不发送，调用方按发送失败处理。 */

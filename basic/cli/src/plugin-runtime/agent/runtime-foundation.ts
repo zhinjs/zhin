@@ -83,7 +83,6 @@ interface AgentRuntimeFoundationState {
   readonly schedule: ReturnType<typeof createAssistantScheduleRuntime>;
   readonly home: AssistantHomeRuntime;
   readonly sessionTreeRuntime: ReturnType<typeof createSessionTreeRuntimeFromAgent>;
-  readonly seedPresets: RuntimeZhinAgent['seedPresets'];
   readonly approvalReviewer: ApprovalReviewAgent;
   readonly approvalJudgment: ApprovalJudgmentPort;
   readonly bypassApprovalPort: ApprovalPort;
@@ -107,7 +106,6 @@ export class AgentRuntimeFoundation {
   readonly approvalReviewer: ApprovalReviewAgent;
   readonly approvalJudgment: ApprovalJudgmentPort;
   readonly bypassApprovalPort: ApprovalPort;
-  readonly #seedPresetResources: RuntimeZhinAgent['seedPresets'];
 
   private constructor(state: AgentRuntimeFoundationState) {
     this.withModels = state.withModels;
@@ -126,7 +124,6 @@ export class AgentRuntimeFoundation {
     this.approvalReviewer = state.approvalReviewer;
     this.approvalJudgment = state.approvalJudgment;
     this.bypassApprovalPort = state.bypassApprovalPort;
-    this.#seedPresetResources = state.seedPresets;
   }
 
   static async create(options: AgentRuntimeFoundationOptions): Promise<AgentRuntimeFoundation> {
@@ -158,9 +155,9 @@ export class AgentRuntimeFoundation {
         : approvalMode === 'bypass' ? bypassApprovalPort : undefined);
 
     try {
-      const created = createRuntimeZhinAgent({ service, im: options.im, projectRoot: options.projectRoot,
+      const created = createRuntimeZhinAgent({ service, im: options.im,
         approvalPort: defaultApprovalPort, audioTranscriber: options.audioTranscriber,
-        knowledgeIndex, localAssets: options.localAssets,
+        localAssets: options.localAssets,
       });
       options.lifecycle.add(() => created.agent.dispose());
       options.lifecycle.add(() => created.events.clear());
@@ -228,7 +225,6 @@ export class AgentRuntimeFoundation {
           try { return await runWithAgentTurnConfiguration({ models, activeBinding: service.getBindingRegistry().requireZhinBinding() }, operation); }
           finally { await models.release(); }
         }),
-        seedPresets: created.seedPresets,
         approvalReviewer,
         approvalJudgment,
         bypassApprovalPort,
@@ -245,10 +241,6 @@ export class AgentRuntimeFoundation {
         .filter((entry): entry is NonNullable<typeof entry> => entry != null)
         .map(entry => Object.freeze({ ...entry, mcpServers: [...entry.mcpServers] })),
     );
-  }
-
-  seedPresets(): Promise<number> {
-    return this.#seedPresetResources();
   }
 }
 

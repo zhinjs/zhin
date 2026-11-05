@@ -10,7 +10,7 @@ export const DEPRECATED_AGENT_CONFIG_KEYS: Readonly<Record<string, string>> = Ob
   maxSkills: '已无效果：技能目录按渐进披露常驻名称和触发说明，不再按数量截断。',
   policyDenialStopAfter: '已无效果：被拒绝的调用由工具预算（toolBudget.failureStreakLimit / repeatLimit）处理。',
   deferredToolMaxResults: '已无效果：使用 deferredTools.discoverTopK。',
-  taskExecApprovalMode: '已无效果：任务命令按 execApprovalMode / workerExecApprovalMode 审批。',
+  taskExecApprovalMode: '已无效果：任务命令按 execApprovalMode 审批。',
 });
 
 export interface DeprecatedAgentConfigKey {

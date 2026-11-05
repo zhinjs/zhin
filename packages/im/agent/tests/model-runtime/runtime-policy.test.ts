@@ -56,15 +56,14 @@ it('rejects unknown purpose references and excess override scope before executio
   expect(f.calls.requests).toEqual([]);
 });
 
-it('uses the supplied operation for standalone work while the next acquired run sees current settings', async () => {
-  const f = modelRuntimeFixture(), service = new AIService();
+it('keeps a borrowed operation on its selection while the next acquired run sees current settings', async () => {
+  const f = modelRuntimeFixture();
   const old = await f.acquire();
-  const standalone = service.createAgent({ models: old, maxIterations: 1 });
   const graph = withOther(f); f.update({ ...graph, revision: 2, purposes: { ...graph.purposes, defaults: { chat: 'other' } } });
   const next = await f.acquire();
-  await standalone.run('explicit old selection');
+  await old.chat.completion.complete(old.chat.model, { messages: [createUserMessage('explicit old selection')], systemPrompt: '' });
   expect(old.chat.binding.profile.id).toBe('text'); expect(next.chat.binding.profile.id).toBe('other');
-  await old.release(); await next.release(); await service.dispose();
+  await old.release(); await next.release();
 });
 
 it('plain completion acquires current scopes per call and leaves explicit role purpose selection fixed', async () => {

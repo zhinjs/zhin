@@ -1,6 +1,6 @@
 /**
  * Five-Agent 契约测试（ADR 0024，legacy pipeline tools removed ADR 0026/0027）：
- * - 角色 ACL（subagent spawn_task 路径）
+ * - 角色 ACL
  * - 内置 opt-in prompt：nickname 渲染
  */
 import { describe, it, expect } from 'vitest';
@@ -28,7 +28,7 @@ describe('role ACL', () => {
     expect(isToolAllowedForRole('write_file', 'planner')).toBe(false);
     expect(isToolAllowedForRole('workroom_create_run', 'planner')).toBe(false);
     expect(isToolAllowedForRole('workroom_transition', 'planner')).toBe(false);
-    expect(isToolAllowedForRole('spawn_task', 'planner')).toBe(true);
+    expect(isToolAllowedForRole('ask_user', 'planner')).toBe(true);
     expect(isToolAllowedForRole('group_delegate', 'planner')).toBe(false);
   });
 

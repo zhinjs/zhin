@@ -142,27 +142,6 @@ function mapTurnEvent(
         budget: event.budget,
         usage: event.usage,
       }, ctx)];
-    case 'subagent_start':
-      return [{
-        ...base,
-        type: AgentStreamEventType.SUBAGENT_CALLED,
-        data: {
-          taskId: event.taskId,
-          agentName: event.agentName,
-          description: event.description,
-        },
-      }];
-    case 'subagent_end':
-      return [{
-        ...base,
-        type: AgentStreamEventType.SUBAGENT_COMPLETED,
-        data: {
-          taskId: event.taskId,
-          status: event.status,
-          result: event.result,
-        },
-      }];
-    case 'subagent_progress':
     case 'mcp_connect':
     case 'mcp_tool_call':
       return [];

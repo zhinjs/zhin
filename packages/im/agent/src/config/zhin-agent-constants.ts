@@ -5,9 +5,3 @@ export const CURRENT_MESSAGE_MARKER = '[Current message - respond to this]';
 
 export { KEYWORD_TRIGGERS } from './keyword-triggers.js';
 
-/** Deferred Worker 默认基础工具 */
-export const DEFAULT_WORKER_BASE_TOOLS = [
-  'bash',
-  'read_file',
-  'web_search',
-] as const;

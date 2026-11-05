@@ -158,10 +158,7 @@ outline: [2, 3]
 | `ai.agent.usageQuota.perGroupTokens` | integer | 否 | `0` | 每个群每周期可用的 token；0 不限。 |
 | `ai.agent.usageQuota.perGroupRequestsPerMinute` | integer | 否 | `0` | 每个群每分钟可发起的回合数；0 不限。 |
 | `ai.agent.usageQuota.exemptOwner` | boolean | 否 | `true` | 主人不受限制。 |
-| `ai.agent.subagentTurnMode` | string: `"off"`, `"sync"` | 否 | `"off"` | IM 回合中的子 Agent。off：不提供 spawn_task；sync：spawn_task 在当前回合内同步运行子 Agent，权限不超过父回合（父回合不能运行 bash 时子 Agent 也没有），审批发往同一会话。 |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 主 Agent 命令的审批策略。 |
-| `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 子 Agent 命令的审批策略。 |
-| `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | Worker 命令的审批策略。 |
 | `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | 否 | — | 同一模型步骤中的工具调用调度方式。 |
 | `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | 否 | — | 可选模型尺寸提示；空字符串表示清除提示。 |
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | 否 | — | Provider Prompt Cache 保留策略。 |
@@ -210,7 +207,6 @@ outline: [2, 3]
 | `ai.agent.deferredTools.alwaysLoadedMode` | string | 否 | — | `extend`（默认）追加到内置常驻集合；`replace` 完全替换 |
 | `ai.agent.deferredTools.mcpServers` | object | 否 | — | — |
 | `ai.agent.deferredTools.mcpServers.<key>.alwaysLoaded` | array&lt;string&gt; | 否 | — | — |
-| `ai.agent.workerBaseTools` | array&lt;string&gt; | 否 | — | Deferred Worker 基础工具 |
 | `ai.agent.persona` | string | 否 | — | — |
 | `ai.agent.maxIterations` | number \| string | 否 | — | — |
 | `ai.agent.timeout` | number \| string | 否 | — | — |
@@ -231,20 +227,13 @@ outline: [2, 3]
 | `ai.agent.compaction.thresholdRatio` | number \| string | 否 | — | Share of the model context window (system prompt and tools included) at which auto-compaction runs. Default 0.7 (#730). |
 | `ai.agent.disabledTools` | array&lt;string&gt; | 否 | — | — |
 | `ai.agent.allowedTools` | array&lt;string&gt; | 否 | — | — |
-| `ai.agent.maxParallelSubagents` | number \| string | 否 | — | — |
-| `ai.agent.subagentAutoContinue` | boolean \| string | 否 | — | — |
-| `ai.agent.subagentDirectImDelivery` | boolean \| string | 否 | — | — |
 | `ai.agent.maxSubagentIterations` | number \| string | 否 | — | — |
-| `ai.agent.subagentTools` | array&lt;string&gt; | 否 | — | — |
-| `ai.agent.subagentTurnWaitMs` | number \| string | 否 | — | — |
 | `ai.agent.skillInstructionMaxChars` | number \| string | 否 | — | — |
 | `ai.agent.promptTrace` | boolean \| string | 否 | — | — |
 | `ai.agent.promptTraceVerbose` | boolean \| string | 否 | — | — |
 | `ai.agent.recordRequestBodies` | boolean | 否 | — | — |
 | `ai.agent.promptCache` | boolean \| string | 否 | — | — |
 | `ai.agent.promptCacheKeyPrefix` | string | 否 | — | — |
-| `ai.agent.deferredAutoContinue` | boolean \| string | 否 | — | — |
-| `ai.agent.deferredAutoContinueMaxDepth` | number \| string | 否 | — | — |
 | `ai.agent.gitStatus` | boolean \| string | 否 | — | §1 Runtime 注入单行 git 状态摘要（非 git 仓库自动跳过） |
 | `ai.agent.contextPaths` | array&lt;string&gt; | 否 | — | 追加的上下文文件路径（支持 ~ 与相对路径；默认另加载 ~/.config/zhin/AGENTS.md 等全局路径） |
 | `ai.agent.systemPromptMaxChars` | number \| string | 否 | — | 系统提示词总字符上限；按 retention/order 让出预算，required 内容放不下则失败。 |
