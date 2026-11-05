@@ -382,7 +382,7 @@ ai:
     groups: []
     denyMessage: ...
   agent:                   # 工具执行安全
-    inboundQueue:
+    mailbox:
       groupMode: supersede # supersede（默认）| fifo
     execSecurity: allowlist    # deny | allowlist | full
     execPreset: readonly       # readonly | network | development | custom

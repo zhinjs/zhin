@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DecisionProvider } from '@zhin.js/ai';
 import type { AgentCapabilities, AgentDecisionRuntime } from '@zhin.js/agent/runtime';
 import { AiControlPlane, DecisionEventLog, requestApprovalOutcome, type TurnRequest } from '@zhin.js/agent';
-import { TurnAdmissionGate } from '@zhin.js/agent/turn';
+import { HostMailbox } from '@zhin.js/agent/turn';
 import type { CoreReplyStream, Message, OpenReplyStreamOptions } from '@zhin.js/core/runtime';
 import { MemoryConversationEventStore, type ConversationEvent, type ConversationRef } from '@zhin.js/im-contract';
 import { ConversationRuntime } from '../../../../../../packages/im/core/src/plugin-runtime/im/conversation-runtime.js';
@@ -291,7 +291,7 @@ function progressiveIngress(options: {
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
       getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
-      getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({ inboundQueue: { merge: { enabled: false } } }),
+      getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({ mailbox: { merge: { enabled: false } } }),
       imageAssets: { ownsUrl: flow.ownsUrl },
     }, agent: { getControlPlane: () => flow.control } } as never,
   });
@@ -383,9 +383,9 @@ describe('CLI progressive reply ingress', () => {
   });
 
   it('rechecks the current admission stale verdict rather than caching initial permission', async () => {
-    const admit = TurnAdmissionGate.prototype.admit;
+    const admit = HostMailbox.prototype.admit;
     let stale = false;
-    const spy = vi.spyOn(TurnAdmissionGate.prototype, 'admit').mockImplementation(async function (this: TurnAdmissionGate, ...args) {
+    const spy = vi.spyOn(HostMailbox.prototype, 'admit').mockImplementation(async function (this: HostMailbox, ...args) {
       const admitted = await admit.apply(this, args);
       return admitted.kind === 'run' ? { ...admitted, staleCheck: () => stale
         ? { kind: 'discard' as const, senders: ['sender'] } : admitted.staleCheck() } : admitted;
@@ -602,7 +602,7 @@ describe('personal Session IM ingress', () => {
             ...(options.events ? { sceneEvents: { conversations: ['*'] } } : {}),
             ...(options.ambient ? { ambient: { conversations: ['*'], quietMs: 0, cooldownMs: 0, judgeIntervalMs: 0 } } : {}),
           }),
-          getAgentConfig: () => ({ inboundQueue: { merge: { enabled: options.merge ?? false, quietMs: options.quietMs ?? 0, maxWaitMs: (options.quietMs ?? 0) * 4 },
+          getAgentConfig: () => ({ mailbox: { merge: { enabled: options.merge ?? false, quietMs: options.quietMs ?? 0, maxWaitMs: (options.quietMs ?? 0) * 4 },
             ...(options.live ? { live: { windowMs: 50, minIntervalMs: 0 } } : {}) } }),
         },
         agent: { archiveSession, appendSessionEvents, ...(options.log ? { getDecisionEvents: () => options.log } : {}) },

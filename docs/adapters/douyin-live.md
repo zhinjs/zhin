@@ -50,7 +50,7 @@ Zhin.js 抖音直播弹幕适配器（Plugin Runtime）：让 Bot 在**你自己
 1. 你自己的抖音直播间 web_rid（`https://live.douyin.com/<web_rid>` 里的数字）作为 `roomId`
 2. 可选：浏览器 Cookie 整串，放进 `.env`（已被 gitignore）：`DOUYIN_LIVE_COOKIE`。不填则使用游客 `ttwid`
 3. 可选：自建签名服务地址 `signerUrl`（见下文「签名」）
-4. Agent 已启用（`ai.agent`）：弹幕窗口由 Agent 的 `inboundQueue.live` 驱动
+4. Agent 已启用（`ai.agent`）：弹幕窗口由 Agent 的 `mailbox.live` 驱动
 
 ## 最小配置
 
@@ -89,7 +89,7 @@ GET <signerUrl>?stub=<X-MS-STUB>
 ```yaml
 ai:
   agent:
-    inboundQueue:
+    mailbox:
       live:
         mode: pick-one        # pick-one：挑一条回；summary：总结窗口后回一次
         windowMs: 10000       # 第一条弹幕后等多久发车

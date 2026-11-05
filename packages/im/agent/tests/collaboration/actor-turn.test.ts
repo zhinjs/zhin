@@ -12,6 +12,7 @@ import {
   isAttenuationOf,
   only,
   rootAuthority,
+  type ActorTurnResult,
   type ActorTurnRunner,
   type AgentCeiling,
   type BudgetAmounts,
@@ -134,20 +135,38 @@ function setup(options: {
     rootAuthority,
     attenuate,
     limits: DEFAULT_GUARD_LIMITS,
-    runTurn: runner,
+    // ADR 0048 H3: the root human mail is the live root turn; it stays open until detached.
+    runTurn: async (actor, batch, signal, control) => {
+      if (batch[0]!.body.kind === 'human') {
+        rootStarted();
+        return rootResult;
+      }
+      return runner(actor, batch, signal, control);
+    },
   });
+  let releaseRoot!: (result: ActorTurnResult) => void;
+  const rootResult = new Promise<ActorTurnResult>((resolve) => { releaseRoot = resolve; });
+  let rootStarted!: () => void;
+  const started = new Promise<void>((resolve) => { rootStarted = resolve; });
   const charge = harness.charge.bind(harness);
   harness.charge = async (mail, usage) => { charges.push(usage); return charge(mail, usage); };
 
   async function attach() {
-    const attached = await harness.attach({
+    const opened = await harness.open({
       principal: options.principal ?? master,
       entry: options.agents[0]!.name,
       body: { kind: 'human', text: 'hi', venue: { kind: 'private', id: 'owner' } },
       budget: options.budget ?? BUDGET,
     });
-    if (!attached.ok) throw new Error(attached.reason);
-    return attached;
+    if (!opened.ok) throw new Error(opened.reason);
+    await started;
+    return {
+      root: opened.root,
+      detach: async (result: ActorTurnResult) => {
+        releaseRoot(result);
+        await harness.idle();
+      },
+    };
   }
   return { harness, runner, inputs, bindings, charges, attach, approval };
 }

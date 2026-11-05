@@ -89,7 +89,7 @@ Its timings and sampled heap are local parser evidence, not provider latency or 
 `TurnRequest.intent` 明确描述一条入站消息如何影响同 session 的 active turn：
 `supersede`、`steer`、`follow_up`、`new`（FIFO）或 `observe`。产品入口应显式解析 intent；
 为兼容现有行为，省略时以及普通 IM 入站默认解析为 `supersede`。现有
-`ai.agent.inboundQueue.groupMode: fifo` 会将普通重叠消息解析为 `new`（FIFO），但 Agent Runtime
+`ai.agent.mailbox.groupMode: fifo` 会将普通重叠消息解析为 `new`（FIFO），但 Agent Runtime
 不会自动猜测多人共识。
 `steer` / `follow_up` 可用 `targetTurnId` 精确指向 active turn；intent 由 adapter、
 command 或产品策略解析，Agent Runtime 不推断多人共识。跨 principal 的 `steer` / `follow_up`

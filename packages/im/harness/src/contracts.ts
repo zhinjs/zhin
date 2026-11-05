@@ -226,6 +226,12 @@ export type MailBody =
       readonly isMaster?: boolean;
       /** Explicit stop request: consumed by the inbox, never run as a turn. */
       readonly isStop?: boolean;
+      /**
+       * The transport saw neither an @ / reply to the bot nor a private chat
+       * (an ordinary group message). The admission policy does not run it as a
+       * turn (`not_addressed`).
+       */
+      readonly unaddressed?: boolean;
     }
   | { readonly kind: 'ask'; readonly question: string }
   | { readonly kind: 'delegate'; readonly brief: string; readonly deliverable?: string }
@@ -526,7 +532,7 @@ export interface InboxView {
   readonly lastTurn?: { readonly batch: readonly Mail[]; readonly endedAt: number };
 }
 
-export type InboxRejectCode = 'queue_full' | 'forbidden' | 'not_running';
+export type InboxRejectCode = 'queue_full' | 'forbidden' | 'not_running' | 'not_addressed';
 
 /** What happens to a mail being posted (decided before it is queued). */
 export type InboxPostDecision =
@@ -592,7 +598,7 @@ export type PostResult =
       readonly position: number;
       readonly disposition: 'queued' | 'merged' | 'superseded' | 'stopped';
     }
-  | { readonly accepted: false; readonly code: 'queue_full' | 'mailbox_closed' | 'forbidden' | 'not_running'; readonly message: string };
+  | { readonly accepted: false; readonly code: InboxRejectCode | 'mailbox_closed'; readonly message: string };
 
 export interface Mailbox {
   post(mail: Mail): PostResult;

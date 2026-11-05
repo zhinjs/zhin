@@ -1,31 +1,24 @@
 /**
- * ADR 0048 H2 — collaboration for one live IM / interactive turn.
+ * ADR 0048 H2/H3 — collaboration for one IM / interactive turn.
  *
- * The live turn is the engagement's root actor: it is `attach`ed to a fresh
- * harness and receives the collaboration tools bound to the root mail. Other
- * agents run as actor turns (child turns of the root turn). Delegated work may
- * outlive the root turn; its results come back as turns of the entry actor,
- * whose replies are delivered to the human through the root turn's reply port.
- * Guard escalations are told to the human the same way.
+ * The turn runs inside the host's long-lived harness Mailbox (H3): its Mail
+ * comes from {@link currentMailTurn}. When the turn has peer agents, its
+ * collaboration directory and actor runner are bound to the Mail's
+ * engagement and the turn gets the collaboration tools bound to that Mail.
+ * Other agents run as actor turns of the same harness. Delegated work may
+ * outlive the turn; its results come back as turns of the entry actor on the
+ * session lane, whose replies are delivered to the human through this turn's
+ * reply port. Guard escalations are told to the human the same way. Without
+ * peers (or outside a Mail turn) nothing is added (D3).
  */
-import {
-  DEFAULT_GUARD_LIMITS,
-  InMemoryBudgetLedger,
-  InMemoryEngagementJournal,
-  attenuate,
-  createGuardKernel,
-  createHarness,
-  createMailbox,
-  isAttenuationOf,
-  rootAuthority,
-  type ActorTurnResult,
-  type BudgetAmounts,
-  type Harness,
-  type Mail,
-  type Principal,
-  type TrustLevel as HarnessTrust,
-  type VenueRef,
+import type {
+  ActorTurnResult,
+  EscalationNotice,
+  Harness,
+  Mail,
+  TrustLevel as HarnessTrust,
 } from '@zhin.js/harness';
+import { AsyncResource } from 'node:async_hooks';
 import { getLogger } from '@zhin.js/logger';
 import type { AgentCore } from '../core/agent-core.js';
 import type { InteractiveRun } from '../core/interactive-run.js';
@@ -35,23 +28,17 @@ import type { ContextFile } from '../bootstrap.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentCapabilities, ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import type { TurnProvenance } from '../security/provenance.js';
-import { resolveTurnTrustLevel, type InitiatorTrustLevel } from '../security/trust-level.js';
+import type { InitiatorTrustLevel } from '../security/trust-level.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 import { createActorTurnRunner } from './actor-turn.js';
 import { createCollaborationDirectory } from './directory.js';
-import { registerCollaboration } from './registry.js';
+import { currentMailTurn } from './mail-turn-context.js';
 import { createCollaborationTools } from './tools.js';
 import type { ActorModelSelection, CollaborationDirectory } from './contracts.js';
 
-const logger = getLogger('ai.collaboration');
+export { DEFAULT_ENGAGEMENT_BUDGET } from './host-mailbox.js';
 
-/** Default budget for one engagement; delegations are carved out of it (invariant 2). */
-export const DEFAULT_ENGAGEMENT_BUDGET: BudgetAmounts = Object.freeze({
-  modelCalls: 60,
-  tokens: 400_000,
-  wallMs: 10 * 60 * 1000,
-  sideEffects: 30,
-});
+const logger = getLogger('ai.collaboration');
 
 export interface TurnCollaborationInput {
   readonly host: ZhinAgentPrivate;
@@ -68,7 +55,6 @@ export interface TurnCollaborationInput {
   readonly interactiveRun?: InteractiveRun;
   readonly imageInspectionBudget?: ImageInspectionBudget;
   readonly provenance?: TurnProvenance;
-  readonly budget?: BudgetAmounts;
 }
 
 export interface TurnCollaboration {
@@ -89,31 +75,30 @@ export function harnessTrust(level: InitiatorTrustLevel): HarnessTrust {
   }
 }
 
-function venueOf(turn: TurnIngress): VenueRef | undefined {
-  return turn.origin.kind === 'im'
-    ? { kind: `${turn.origin.platform}:${turn.origin.scope}`, id: turn.origin.sceneId }
-    : undefined;
-}
-
 /**
  * Starts collaboration for `input.turn`. Returns `undefined` when the turn has
- * no other agent to collaborate with, so ordinary turns pay nothing.
+ * no other agent to collaborate with (or does not run inside a Mail turn), so
+ * ordinary turns pay nothing.
  */
 export async function startTurnCollaboration(input: TurnCollaborationInput): Promise<TurnCollaboration | undefined> {
   const { turn, capabilities } = input;
   if (capabilities.agents.every((agent) => agent.name === input.entry)) return undefined;
+  const mailTurn = currentMailTurn();
+  if (!mailTurn) {
+    logger.debug('collaboration skipped: the turn does not run inside the host mailbox');
+    return undefined;
+  }
+  const root = mailTurn.mail;
+  if (root.to !== input.entry) {
+    logger.debug(`collaboration skipped: mail is for ${root.to}, the turn runs ${input.entry}`);
+    return undefined;
+  }
+  const harness = mailTurn.mailbox.harness;
   const catalogTools = capabilities.tools.map((tool) => tool.name);
   const directory = createCollaborationDirectory({
     entry: { name: input.entry, toolNames: catalogTools },
     agents: capabilities.agents,
     catalogTools,
-  });
-  const venue = venueOf(turn);
-  const principal: Principal = Object.freeze({
-    kind: 'human',
-    id: turn.principal.subjectId,
-    trust: harnessTrust(resolveTurnTrustLevel(turn)),
-    ...(venue ? { venue } : {}),
   });
   const reply = turn.ports.reply;
   const tell = async (text: string): Promise<void> => {
@@ -129,17 +114,13 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     return 'The human has been asked to decide; stop this line of work and wait for their answer in a later message.';
   };
 
-  const ref: { harness?: Harness } = {};
   const runner = createActorTurnRunner({
     host: input.host,
     core: input.core,
     rootTurn: turn,
     capabilities,
     directory,
-    harness: () => {
-      if (!ref.harness) throw new Error('collaboration harness is not ready');
-      return ref.harness;
-    },
+    harness: () => harness,
     createTools: createCollaborationTools,
     resolveModel: input.resolveModel,
     loopHooks: input.loopHooks,
@@ -150,61 +131,34 @@ export async function startTurnCollaboration(input: TurnCollaborationInput): Pro
     provenance: input.provenance,
     onEscalate,
   });
-  const harness = createHarness({
-    guard: createGuardKernel({ isAttenuationOf }),
-    ledger: new InMemoryBudgetLedger(),
-    journal: new InMemoryEngagementJournal(),
-    createMailbox: (options) => createMailbox(options, { onError: (error) => logger.warn(`collaboration mailbox: ${String(error)}`) }),
-    ceilingOf: (agent) => (agent === directory.entry.name ? directory.entry : directory.get(agent))?.ceiling,
-    rootAuthority,
-    attenuate,
-    limits: DEFAULT_GUARD_LIMITS,
-    runTurn: async (actor, batch, signal) => {
+  // Actor turns of this engagement run from the Mailbox pump, possibly after
+  // the root turn ended; bind them to the root turn's async context (turn
+  // configuration, models, mail turn) as the per-turn harness of H2 did.
+  mailTurn.mailbox.bindCollaboration(root.engagementId, {
+    directory,
+    runTurn: AsyncResource.bind(async (actor: string, batch: readonly Mail[], signal: AbortSignal) => {
       const result = await runner(actor, batch, signal);
       // The entry actor continuing with delegated results speaks to the human directly.
       if (actor === directory.entry.name && batch.every((mail) => mail.body.kind === 'result') && result.content?.trim()) {
         await tell(result.content.trim());
       }
       return result;
-    },
-    onEscalate: async (notice) => {
+    }),
+    onEscalate: AsyncResource.bind(async (notice: EscalationNotice) => {
       await tell(`协作已暂停，需要你来决定：${notice.reason}`);
-    },
-    onError: (error) => logger.warn(`collaboration harness: ${error instanceof Error ? error.message : String(error)}`),
+    }),
   });
-
-  ref.harness = harness;
-  const attached = await harness.attach({
-    principal,
-    entry: directory.entry.name,
-    body: { kind: 'human', text: turn.input.text, venue: venue ?? { kind: 'turn', id: turn.session.key }, ...(turn.origin.kind === 'im' && turn.origin.messageId ? { messageId: turn.origin.messageId } : {}) },
-    budget: input.budget ?? DEFAULT_ENGAGEMENT_BUDGET,
-  });
-  if (!attached.ok) {
-    logger.warn(`collaboration not started: ${attached.code} ${attached.reason}`);
-    return undefined;
-  }
-  const release = registerCollaboration(harness);
-  const owned = harness;
   const tools = createCollaborationTools(
-    { harness: owned, directory, actor: directory.entry.name, mail: attached.root },
+    { harness, directory, actor: directory.entry.name, mail: root },
     { owner: capabilities.owner, onEscalate },
   );
-  let finished = false;
   const collaboration: TurnCollaboration = {
-    harness: owned,
+    harness,
     directory,
-    root: attached.root,
+    root,
     tools,
-    async finish(status) {
-      if (finished) return;
-      finished = true;
-      await attached.detach({ status });
-      void owned.idle()
-        .then(() => owned.close('engagement settled'))
-        .catch((error) => logger.warn(`collaboration close failed: ${String(error)}`))
-        .finally(release);
-    },
+    // The Mailbox settles the turn; delegated work keeps running and reports back on the lane.
+    async finish() {},
   };
   return Object.freeze(collaboration);
 }

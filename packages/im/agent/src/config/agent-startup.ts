@@ -138,11 +138,10 @@ export interface AgentStartupConfig {
   }>;
   /** Agent 工具开关与执行安全 */
   agent?: {
-    /** Existing same-session ingress queue policy, reused by canonical Turn Intent resolution. */
-    inboundQueue?: {
+    /** ADR 0048 H3: IM inbox policy of the host Mailbox (renamed from `inboundQueue`). */
+    mailbox?: {
       groupMode?: 'supersede' | 'fifo';
       ttlMs?: number;
-      coalesceWindowMs?: number;
       /** Turns allowed to wait behind the running turn of one session (default 5). */
       maxQueuedTurns?: number;
       /** ADR 0038: merge mentions from several group members into one reply. */

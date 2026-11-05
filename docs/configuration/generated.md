@@ -100,20 +100,20 @@ outline: [2, 3]
 | `ai.workroom.disclosure.modelServices.<key>.allowsRedisclosure` | boolean | 是 | — | — |
 | `ai.workroom.disclosure.modelServices.<key>.supportsDeletion` | boolean | 是 | — | — |
 | `ai.agent` | object | 否 | — | Agent 执行、排队、工具与模型策略。 |
-| `ai.agent.inboundQueue` | object | 否 | — | 入站回合排队策略。 |
-| `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | supersede（默认）：同一发起人的新消息会替换他自己尚未回复的回合；fifo：全部按到达顺序排队。其他成员的消息总是排队。 |
-| `ai.agent.inboundQueue.ttlMs` | integer | 否 | `180000` | 排队超过该时长的回合会被丢弃并简短提示；0 表示不过期。 |
-| `ai.agent.inboundQueue.maxQueuedTurns` | integer | 否 | `5` | 同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。 |
-| `ai.agent.inboundQueue.merge` | object | 否 | — | 群聊合流窗口（ADR 0038）：短时间内多人点名 Bot 时合并为一次回复。私聊、主人、指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。 |
-| `ai.agent.inboundQueue.merge.enabled` | boolean | 否 | `true` | 开启群聊合流（仅群聊）。设为 false 则恢复逐人逐条回复。 |
-| `ai.agent.inboundQueue.merge.quietMs` | integer | 否 | `1500` | 窗口内最后一条消息后安静多久就发车。 |
-| `ai.agent.inboundQueue.merge.maxWaitMs` | integer | 否 | `6000` | 窗口从第一条消息起最多等多久。 |
-| `ai.agent.inboundQueue.merge.maxSenders` | integer | 否 | `5` | 一次合并回复最多容纳的发送者数；超出的人留到下一个窗口。 |
-| `ai.agent.inboundQueue.live` | object | 否 | — | 弹幕模式（ADR 0038）：声明了 liveDanmaku 的直播适配器把一段时间内的弹幕收进窗口后只回一次；只开放只读工具，不出审批卡。 |
-| `ai.agent.inboundQueue.live.mode` | string: `"pick-one"`, `"summary"` | 否 | `"pick-one"` | pick-one：从窗口里挑一条回；summary：概括整个窗口后回一次。 |
-| `ai.agent.inboundQueue.live.windowMs` | integer | 否 | `10000` | 弹幕窗口从第一条弹幕起收集多久。 |
-| `ai.agent.inboundQueue.live.minIntervalMs` | integer | 否 | `15000` | 同一直播间两次弹幕回复的最小间隔。 |
-| `ai.agent.inboundQueue.coalesceWindowMs` | number \| string | 否 | — | — |
+| `ai.agent.mailbox` | object | 否 | — | Agent 收件箱（Mailbox）的 IM 收件策略（ADR 0048 H3；由 inboundQueue 改名，旧键会导致启动失败）。 |
+| `ai.agent.mailbox.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | supersede（默认）：同一发起人的新消息会替换他自己尚未回复的回合；fifo：全部按到达顺序排队。其他成员的消息总是排队。 |
+| `ai.agent.mailbox.ttlMs` | integer | 否 | `180000` | 排队超过该时长的回合会被丢弃并简短提示；0 表示不过期。 |
+| `ai.agent.mailbox.maxQueuedTurns` | integer | 否 | `5` | 同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。 |
+| `ai.agent.mailbox.merge` | object | 否 | — | 群聊合流窗口（ADR 0038）：短时间内多人点名 Bot 时合并为一次回复。私聊、主人、指令、叫停以及带媒体 / 引用 / 转发的消息不参与合流。 |
+| `ai.agent.mailbox.merge.enabled` | boolean | 否 | `true` | 开启群聊合流（仅群聊）。设为 false 则恢复逐人逐条回复。 |
+| `ai.agent.mailbox.merge.quietMs` | integer | 否 | `1500` | 窗口内最后一条消息后安静多久就发车。 |
+| `ai.agent.mailbox.merge.maxWaitMs` | integer | 否 | `6000` | 窗口从第一条消息起最多等多久。 |
+| `ai.agent.mailbox.merge.maxSenders` | integer | 否 | `5` | 一次合并回复最多容纳的发送者数；超出的人留到下一个窗口。 |
+| `ai.agent.mailbox.live` | object | 否 | — | 弹幕模式（ADR 0038）：声明了 liveDanmaku 的直播适配器把一段时间内的弹幕收进窗口后只回一次；只开放只读工具，不出审批卡。 |
+| `ai.agent.mailbox.live.mode` | string: `"pick-one"`, `"summary"` | 否 | `"pick-one"` | pick-one：从窗口里挑一条回；summary：概括整个窗口后回一次。 |
+| `ai.agent.mailbox.live.windowMs` | integer | 否 | `10000` | 弹幕窗口从第一条弹幕起收集多久。 |
+| `ai.agent.mailbox.live.minIntervalMs` | integer | 否 | `15000` | 同一直播间两次弹幕回复的最小间隔。 |
+| `ai.agent.mailbox.coalesceWindowMs` | number \| string | 否 | — | — |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |
 | `ai.agent.network` | object | 否 | — | IM 回合的出网权限（web_fetch / web_search 与联网命令）。默认关闭；enabled 开启 HTTPS 出网，allowedDomains 非空时只允许这些域名。未设置 enabled 时兼容旧配置：execPreset: network 视为开启。 |

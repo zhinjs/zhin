@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 /**
  * Multi-message ingress evals (#725): every `ingress-cases/*.case.ts` feeds
- * timed messages through the IM admission protocol (TurnAdmissionGate) and
+ * timed messages through the IM admission protocol (host Mailbox, ADR 0048 H3) and
  * runs each admitted turn on the real engine with a scripted model.
  */
 import { describe, expect, it } from 'vitest';

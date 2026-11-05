@@ -3,6 +3,9 @@
  * semantics of `TurnAdmissionGate` (#725, ADR 0038 §1/§4/§5) onto the
  * Mailbox. What happens to a mail that arrives on a lane:
  *
+ * - **Not addressed** (`unaddressed`): an ordinary group message that
+ *   neither @s nor replies to the bot never becomes a turn
+ *   (`not_addressed`).
  * - **Explicit stop** (`isStop`) from the running batch's initiator (or the
  *   master) aborts the running turn and drops the stopping sender's and the
  *   initiator's queued mails; the stop itself never runs. Anyone else:
@@ -95,6 +98,9 @@ export function createInboxPolicy(input: InboxPolicyOptions): InboxPolicy {
 
     onPost(entry: InboxEntry, view: InboxView): InboxPostDecision {
       const m = inboxMarkers(entry.mail);
+      if (m.unaddressed && !m.isStop) {
+        return { kind: 'reject', code: 'not_addressed', message: 'the message does not address the agent' };
+      }
       if (m.isStop) {
         const running = view.running;
         if (!running) return { kind: 'reject', code: 'not_running', message: 'nothing is running on this lane' };

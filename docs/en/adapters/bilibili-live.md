@@ -16,7 +16,7 @@ A Bilibili live danmaku adapter for Zhin.js (Plugin Runtime). The Bot watches da
 
 ## Read this first
 
-- **One reply per window**: the adapter declares the `liveDanmaku` capability. The Agent does not answer each danmaku. It collects danmaku in a window, and the model picks one (or summarizes them) and replies once. Two replies are at least `ai.agent.inboundQueue.live.minIntervalMs` apart (15 seconds by default).
+- **One reply per window**: the adapter declares the `liveDanmaku` capability. The Agent does not answer each danmaku. It collects danmaku in a window, and the model picks one (or summarizes them) and replies once. Two replies are at least `ai.agent.mailbox.live.minIntervalMs` apart (15 seconds by default).
 - **Danmaku turns are read-only**: they run with anonymous-viewer access and only see tools that declare `readOnly: true`. They never show an approval card and never run shell, MCP or sub-agents. Muting and blocking do not go through danmaku.
 - **Danmaku is posted as your account**: sending needs your login cookies (`SESSDATA` + `bili_jct`). Treat them like your password: **inject them with environment variables, never write them in plain text in `zhin.config.yml`, never commit them, and never paste them into logs or issues**. Without cookies the Bot can only listen anonymously (the platform masks nicknames and reports uid 0) and cannot send.
 - **Direct send by default**: `sendMode` defaults to `direct`, so replies go out as danmaku immediately (danmaku is real-time; review-then-send makes no sense). Set `sendMode: off` to let the Bot listen without speaking.
@@ -27,7 +27,7 @@ A Bilibili live danmaku adapter for Zhin.js (Plugin Runtime). The Bot watches da
 
 1. The id of your own Bilibili live room (`roomId`; short or full id)
 2. To let the Bot send danmaku: your `SESSDATA` and `bili_jct` cookies in `.env` (gitignored) as `BILIBILI_SESSDATA` and `BILIBILI_BILI_JCT`. Leave them out to listen only
-3. The Agent is enabled (`ai.agent`): its `inboundQueue.live` drives the danmaku window
+3. The Agent is enabled (`ai.agent`): its `mailbox.live` drives the danmaku window
 
 ## Minimal Configuration
 
@@ -56,7 +56,7 @@ The window is configured on the Agent, not on this adapter:
 ```yaml
 ai:
   agent:
-    inboundQueue:
+    mailbox:
       live:
         mode: pick-one        # pick-one: answer one; summary: summarize the window and answer once
         windowMs: 10000       # how long after the first danmaku the window closes
@@ -106,6 +106,6 @@ QR login still lives on the Bilibili comment adapter page; this page manages liv
 | Log `bilibili_live_anonymous` | No cookies or expired cookies: listening anonymously, and sends fail with `not_logged_in`. Refresh the cookies and restart |
 | Connection keeps failing, `getDanmuInfo` returns `-352` | Risk control blocked the token request. Check the cookies, add `buvid3` and restart; if it still fails the API has changed |
 | `bilibili live auth rejected` | The auth packet was rejected (expired token or wrong room). Check `roomId`; reconnects fetch a fresh token |
-| Log `bilibili_live_circuit_open` | Sending hit rate limiting or risk control and has stopped. Raise `minSendIntervalSec` or `inboundQueue.live.minIntervalMs`, check the account and restart |
+| Log `bilibili_live_circuit_open` | Sending hit rate limiting or risk control and has stopped. Raise `minSendIntervalSec` or `mailbox.live.minIntervalMs`, check the account and restart |
 | Reply cut off with "…" | It exceeded `maxLength × maxChunks`. Accounts with a higher live level can raise `maxLength` |
 | Send returns `rate_limited` | Less than `minSendIntervalSec` since the last send; this reply is dropped, not queued |

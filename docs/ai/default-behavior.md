@@ -22,8 +22,8 @@
 - 工具预算：`extendBy 10`、`progressWindow 5`、`maxTotalIterations 40`、`maxWallClockMs 600000`、`failureStreakLimit 3`、`repeatLimit 2`
 - 用量配额：全部为 0（关闭），`exemptOwner true`
 - 危险工具硬闸：始终开启；资金类禁用（`allowFunds false`）；审批 5 分钟（`approvalTimeoutMs 300000`）未批即拒绝；每群同时最多 3 张待审卡（`maxPendingPerScene 3`），超出直接拒绝
-- 群聊合流：开启（`inboundQueue.merge.enabled true`，仅群聊；窗口 `quietMs 1500` / `maxWaitMs 6000` / `maxSenders 5`）
-- 弹幕模式：仅对声明 `liveDanmaku` 的直播适配器生效（`inboundQueue.live`：`mode pick-one` / `windowMs 10000` / `minIntervalMs 15000`；只读工具、无审批卡）
+- 群聊合流：开启（`mailbox.merge.enabled true`，仅群聊；窗口 `quietMs 1500` / `maxWaitMs 6000` / `maxSenders 5`）
+- 弹幕模式：仅对声明 `liveDanmaku` 的直播适配器生效（`mailbox.live`：`mode pick-one` / `windowMs 10000` / `minIntervalMs 15000`；只读工具、无审批卡）
 - 上下文压缩：`thresholdRatio 0.7`
 - 历史窗口（ADR 0043）：按 token 预算而不是条数，`ai.context.historyTokens`（不是 `ai.agent` 开关）——群聊 `8000`、普通私聊 `12000`、主人私聊 `24000`；可写数字（所有场景）或 `{ group, private, masterPrivate }`，`0` 表示不按 token 限制。`ai.context.maxRecentMessages` 仍是条数上限，两者取先到者。预算按真正发给模型的内容（投影后）计，窗口起点对齐回合边界，只在超出预算时整段前移并留 25% 余量（保持提示词缓存前缀稳定）；被挤出的部分仍留在存储与压缩输入里。已结束回合的工具结果只给模型看前 200 字符 + `…(已省略 N 字)`，当前回合和存储保持完整。
 - 请求轨迹：`recordRequestBodies true`，在 Host 本地保存脱敏后的模型输入文本与工具定义；默认最多保留 7 天、总量 64 MiB。达到容量会先清理最旧轨迹，单条正文仍放不下时仅保留统计和未保存状态。设置为 `false` 停止记录新请求正文，不影响用量统计，也不删除已有记录。
@@ -122,7 +122,7 @@ ai:
 | `execApprovalMode` | keep | 常用开关，保留 |
 | `disabledTools` | keep | 常用开关，保留 |
 | `allowedTools` | keep | 常用开关，保留 |
-| `inboundQueue` | keep | 常用开关，保留 |
+| `mailbox` | keep | 常用开关，保留 |
 | `reactions` | keep | 表情回应限频：会话内 `cooldownMs 600000`、放行概率 `probability 0.35`；`probability: 0` 关闭表情回应 |
 | `toolBudget` | keep | 常用开关，保留 |
 | `injectionGuard` | keep | 常用开关，保留 |

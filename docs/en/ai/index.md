@@ -200,7 +200,7 @@ ai:
     gitStatus: true               # default true: one-line git status in the prompt (skipped outside git repos)
     contextPaths: []              # extra context files for the system prompt (~ and relative paths ok)
     systemPromptMaxChars: 100000  # total system prompt character limit
-    inboundQueue:
+    mailbox:
       groupMode: supersede        # default: a sender's new message replaces their own unanswered turn; fifo queues everything
       maxQueuedTurns: 5           # queued turns allowed per conversation
       ttlMs: 180000               # queue timeout
@@ -232,7 +232,7 @@ In groups and channels an approval offers "deny / just this once / this conversa
 - **Prompt budget**: over `systemPromptMaxChars`, `opportunistic` content is removed first; if `required` content doesn't fit, the turn fails explicitly.
 - **Command check chain**: dangerous blocklist → strip env prefixes (`FOO=bar cmd` matches as `cmd`) → strip wrappers (`timeout 10 cmd`) → split compound commands (`&&`, `|` checked per segment) → outside `full`, reject newlines, `$(...)` and backticks → read-only commands pass automatically. Approval goes through the current turn's `ApprovalPort`.
 - **Legacy approval files**: V1 approval files aren't migrated online; rebuild rules explicitly before upgrading.
-- **Message queueing**: `inboundQueue.groupMode` is also the default turn-intent policy. `supersede` lets a sender's new message replace their own unanswered turn (other members' messages always queue and never interrupt someone else); `fifo` queues in arrival order. See [Agent: messages that arrive while a turn is running](./agent.md). `steer`, `follow_up` and `observe` are set explicitly by adapters, commands or other policies; cross-participant `steer` / `follow_up` authorization can only come from the Host's trusted `resolveTurnIntent` policy, never from message metadata. Tools stay bound to the active turn's authority, and the execution log records who triggered the control and the turn ID.
+- **Message queueing**: `mailbox.groupMode` is also the default turn-intent policy. `supersede` lets a sender's new message replace their own unanswered turn (other members' messages always queue and never interrupt someone else); `fifo` queues in arrival order. See [Agent: messages that arrive while a turn is running](./agent.md). `steer`, `follow_up` and `observe` are set explicitly by adapters, commands or other policies; cross-participant `steer` / `follow_up` authorization can only come from the Host's trusted `resolveTurnIntent` policy, never from message metadata. Tools stay bound to the active turn's authority, and the execution log records who triggered the control and the turn ID.
 :::
 
 ## How it works

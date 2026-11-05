@@ -4,9 +4,9 @@ import { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import type { Message, Tool } from '../resource-hub/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import { publishTurnStreamEvents } from '../event/publish-agent-stream.js';
-import type { InboundTurnQueue } from '../turn/inbound-turn-queue.js';
-import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
-import { runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
+import type { HostMailbox } from '../collaboration/host-mailbox.js';
+import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
+import { runAsMailTurn } from './mail-turn-runtime.js';
 import { processTextTurn } from './turn-pipeline.js';
 import { isTurnCancellation, turnCancelledEvent } from './turn-terminal.js';
 import { streamTurnEvents } from './turn-event-source.js';
@@ -18,12 +18,12 @@ export async function* processTextTurnStream(
     content: string;
     commMessage: Message;
     externalTools: Tool[];
-    inboundQueueConfig: ResolvedInboundQueueConfig;
-    inboundTurnQueue: InboundTurnQueue;
+    hostMailbox: HostMailbox;
+    emitter?: ZhinAgentEventEmitter;
     runInTurnContext: <T>(turnId: string, fn: () => Promise<T>) => Promise<T>;
   },
 ): AsyncGenerator<TurnEvent, void, undefined> {
-  const { content, commMessage, externalTools, inboundQueueConfig, inboundTurnQueue, runInTurnContext } = opts;
+  const { content, commMessage, externalTools, hostMailbox, emitter, runInTurnContext } = opts;
   const turnId = randomUUID();
   const sessionId = resolveIMSessionIdFromMessage(commMessage);
 
@@ -39,13 +39,16 @@ export async function* processTextTurnStream(
 
   const source = streamTurnEvents({
     execute: (emit) => runInTurnContext(turnId, () =>
-      runWithInboundQueue(commMessage, inboundQueueConfig, inboundTurnQueue, {
+      runAsMailTurn(hostMailbox, commMessage, {
         content,
-        run: (mergedContent) =>
+        ...(emitter ? { emitter } : {}),
+        run: (mergedContent, signal) =>
           processTextTurn(agent, mergedContent, commMessage, externalTools, undefined, {
+            signal,
             onTurnEvent: emit,
             journal,
           }),
+        merged: () => [],
       })),
     mapError: (error) => isTurnCancellation(error)
       ? turnCancelledEvent(error)
