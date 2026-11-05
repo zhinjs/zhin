@@ -4,6 +4,13 @@ import { WIZARD_TEMPLATES } from './message-templates.js';
 /** Package-owned copy; machine values and user input are only interpolated. */
 export const WIZARD_MESSAGES = {
   ...WIZARD_TEMPLATES,
+  "未知": {"zh-CN": "未知", "en": "Unknown"},
+  "支持": {"zh-CN": "支持", "en": "Supported"},
+  "不支持": {"zh-CN": "不支持", "en": "Unsupported"},
+  "模型支持工具调用？": {"zh-CN": "模型支持工具调用？", "en": "Does this model support tool calling?"},
+  "模型支持流式输出？": {"zh-CN": "模型支持流式输出？", "en": "Does this model support streaming?"},
+  "模型支持的输入类型：": {"zh-CN": "模型支持的输入类型：", "en": "Supported model inputs:"},
+
   "IMAP 服务器:": {
     "zh-CN": "IMAP 服务器:",
     "en": "IMAP server:"
@@ -1304,9 +1311,9 @@ export const WIZARD_MESSAGES = {
     "zh-CN": "配置已在预览后发生变更，请重新生成配置计划。",
     "en": "Configuration changed after preview. Generate a new configuration plan."
   },
-  "ai@6 与 @ai-sdk/openai-compatible@3（v4 model spec）不兼容，请升级 ai 至 ^7.0.0": {
-    "zh-CN": "ai@6 与 @ai-sdk/openai-compatible@3（v4 model spec）不兼容，请升级 ai 至 ^7.0.0",
-    "en": "ai@6 is incompatible with @ai-sdk/openai-compatible@3 (v4 model spec); upgrade ai to ^7.0.0"
+  "ai@6 与 @ai-sdk/openai-compatible@3（v4 model spec）不兼容，请升级 ai 至 ^7.0.35": {
+    "zh-CN": "ai@6 与 @ai-sdk/openai-compatible@3（v4 model spec）不兼容，请升级 ai 至 ^7.0.35",
+    "en": "ai@6 is incompatible with @ai-sdk/openai-compatible@3 (v4 model spec); upgrade ai to ^7.0.35"
   },
   "{v0}@{v1} 需要 ai@7（当前 ai@{v2}）": {
     "zh-CN": "{v0}@{v1} 需要 ai@7（当前 ai@{v2}）",

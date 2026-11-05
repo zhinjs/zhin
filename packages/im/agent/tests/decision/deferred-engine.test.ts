@@ -58,7 +58,7 @@ it('awaits authorized Jev Skill activation before prompt assembly and AgentCore 
         source: '/agents/icqq/skills/admin/SKILL.md' }] },
     toolCapabilities: [privateTool], tools: new TurnToolRuntime(turn, [privateTool]),
     selection: { binding: { name: 'zhin', providerAlias: 'chat', model: 'chat', mcpServers: [] }, mcpServers: [] },
-    decision: { provider, config: { provider: 'root/typesafe', skills: { mode: 'active' } } },
+    decision: { forTask: () => provider, config: { skills: { mode: 'active' } } },
   };
   const engine = createFullAgentTurnEngine({ host: host as never, core: core as never,
     sessionSystem: sessionSystem as never, contextSystem: { buildTextTurnContext: buildContext } as never });

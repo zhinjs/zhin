@@ -19,13 +19,22 @@ export class PersonalSessionRevisionConflictError extends Error {
 export class PersonalSessionRepositoryIntegrityError extends Error {
   constructor() { super('Personal Session repository returned a different address or invalid state'); this.name = 'PersonalSessionRepositoryIntegrityError'; }
 }
+export class PersonalSessionMigrationRequiredError extends Error {
+  readonly code = 'migration-required';
+  constructor() { super('Personal Session selection requires explicit Profile migration'); this.name = 'PersonalSessionMigrationRequiredError'; }
+}
 
 export function freezePersonalSessionSelection(selection: PersonalSessionSelection): PersonalSessionSelection {
   if (selection.kind === 'inherit') return Object.freeze({ kind: 'inherit' });
-  if (selection.kind !== 'preset' || typeof selection.presetId !== 'string' || !selection.presetId.trim()) {
-    throw new TypeError('Personal Session selection must inherit or reference a preset');
+  if ((selection as { kind?: string }).kind === 'preset') throw new PersonalSessionMigrationRequiredError();
+  if (selection.kind !== 'profile' || !selection.profile || selection.profile.kind !== 'language') {
+    throw new TypeError('Personal Session selection must inherit or reference a language Profile');
   }
-  return Object.freeze({ kind: 'preset', presetId: selection.presetId });
+  const { id, rootId, accountId, accountIncarnation, kind } = selection.profile;
+  if ([id, rootId, accountId, accountIncarnation].some(value => typeof value !== 'string' || !value || value !== value.trim())) {
+    throw new TypeError('Personal Session Profile identity is incomplete');
+  }
+  return Object.freeze({ kind: 'profile', profile: Object.freeze({ id, rootId, accountId, accountIncarnation, kind }) });
 }
 
 function authorize(access: PersonalSessionAccess): PersonalSessionIdentity {
@@ -43,7 +52,9 @@ function checkedState(state: PersonalSessionState, identity: PersonalSessionIden
     || !Number.isSafeInteger(state.revision) || state.revision < 0) {
     throw new PersonalSessionRepositoryIntegrityError();
   }
-  return Object.freeze({ identity, revision: state.revision, selection: freezePersonalSessionSelection(state.selection) });
+  const selection = freezePersonalSessionSelection(state.selection);
+  if (selection.kind === 'profile' && selection.profile.rootId !== identity.address.rootId) throw new PersonalSessionRepositoryIntegrityError();
+  return Object.freeze({ identity, revision: state.revision, selection });
 }
 
 /** Personal ownership and optimistic concurrency are enforced at this boundary. */
@@ -64,9 +75,9 @@ export class PersonalSessionService {
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || expectedRevision >= Number.MAX_SAFE_INTEGER) {
       throw new TypeError('expectedRevision must be a non-negative safe integer with room for a new revision');
     }
-    const next = Object.freeze({
-      identity, revision: expectedRevision + 1, selection: freezePersonalSessionSelection(command.selection),
-    });
+    const selection = freezePersonalSessionSelection(command.selection);
+    if (selection.kind === 'profile' && selection.profile.rootId !== identity.address.rootId) throw new PersonalSessionAccessError();
+    const next = Object.freeze({ identity, revision: expectedRevision + 1, selection });
     const result = await this.repository.compareAndSet(expectedRevision, next);
     if (result.kind === 'conflict') {
       throw new PersonalSessionRevisionConflictError(expectedRevision, result.actualRevision);

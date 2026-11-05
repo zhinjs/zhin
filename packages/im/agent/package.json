@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/agent",
-  "version": "1.1.46",
+  "version": "1.1.47",
   "description": "Zhin AI Agent — session, ZhinAgent, init; composes @zhin.js/core providers and tools",
   "type": "module",
   "main": "./lib/index.js",
@@ -101,11 +101,6 @@
       "development": "./src/plugin-runtime/index.ts",
       "import": "./lib/plugin-runtime/index.js"
     },
-    "./model-policy": {
-      "types": "./lib/model-policy/index.d.ts",
-      "development": "./src/model-policy/index.ts",
-      "import": "./lib/model-policy/index.js"
-    },
     "./personal-session": {
       "types": "./lib/personal-session/index.d.ts",
       "development": "./src/personal-session/index.ts",
@@ -115,6 +110,11 @@
       "types": "./lib/model-runtime/index.d.ts",
       "development": "./src/model-runtime/index.ts",
       "import": "./lib/model-runtime/index.js"
+    },
+    "./migration": {
+      "types": "./lib/migration/index.d.ts",
+      "development": "./src/migration/index.ts",
+      "import": "./lib/migration/index.js"
     }
   },
   "files": [
@@ -130,7 +130,10 @@
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/ai": "workspace:*",
+    "@zhin.js/ai-provider": "workspace:*",
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
+    "@zhin.js/harness": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/kernel": "workspace:*",
     "@zhin.js/logger": "workspace:*",
@@ -248,10 +251,6 @@
         "types": "./lib/plugin-runtime/index.d.ts",
         "import": "./lib/plugin-runtime/index.js"
       },
-      "./model-policy": {
-        "types": "./lib/model-policy/index.d.ts",
-        "import": "./lib/model-policy/index.js"
-      },
       "./personal-session": {
         "types": "./lib/personal-session/index.d.ts",
         "import": "./lib/personal-session/index.js"
@@ -259,6 +258,10 @@
       "./model-runtime": {
         "types": "./lib/model-runtime/index.d.ts",
         "import": "./lib/model-runtime/index.js"
+      },
+      "./migration": {
+        "types": "./lib/migration/index.d.ts",
+        "import": "./lib/migration/index.js"
       }
     }
   },

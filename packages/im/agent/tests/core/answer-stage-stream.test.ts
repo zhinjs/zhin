@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createUserMessage, type AgentMessage, type AgentTool, type Context, type StreamOptions } from '@zhin.js/ai';
 import type { CoreReplyStream, ReplyStreamSnapshot } from '@zhin.js/core/runtime';
@@ -49,7 +50,7 @@ async function run(steps: Step[], options: { tools?: AgentTool[]; stream?: CoreR
   const tools = options.tools ?? [];
   const host = {
     contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async (_id: string, messages: AgentMessage[]) => { persisted.push(...messages); } },
-    getTurnProvider: () => ({ name: 'mock' }), llmRuntime: llm.runtime,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(llm.runtime).model((llm.provider).name, (llm.provider).models?.[0]) }, completion: llm.runtime }), completion: llm.runtime,
     config: { maxIterations: options.maxIterations ?? 3, outputSchema: options.outputSchema, providerResilience: { maxRetries: options.retries ?? 0, emptyReplyRetries: 0 },
       toolExecution: 'sequential', compaction: {}, contextTokens: 100_000,
       toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 } },

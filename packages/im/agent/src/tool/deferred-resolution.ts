@@ -111,15 +111,17 @@ export async function persistDeferredToolSnapshot(
   await agent.contextRepository.setDeferredToolSnapshot(sessionId, snapshot);
 }
 
-export function buildLlmToolsForProvider(
-  sdk: string | undefined,
-  catalog: ToolCatalogItem[],
-  apiTools: AgentTool[],
-  alwaysLoaded: Set<string>,
-  sessionLoadedNames: string[],
-): LlmTool[] {
+export interface BuildLlmToolsOptions {
+  readonly nativeDeferredTools: boolean;
+  readonly catalog: readonly ToolCatalogItem[];
+  readonly apiTools: readonly AgentTool[];
+  readonly alwaysLoaded: ReadonlySet<string>;
+  readonly sessionLoadedNames: readonly string[];
+}
+export function buildLlmToolsForProvider(input: BuildLlmToolsOptions): LlmTool[] {
+  const { catalog, apiTools, alwaysLoaded, sessionLoadedNames } = input;
   const loaded = new Set([...alwaysLoaded, ...sessionLoadedNames]);
-  if (sdk === 'anthropic') {
+  if (input.nativeDeferredTools) {
     return catalog
       .filter(item => item.source !== 'meta')
       .map(item => ({

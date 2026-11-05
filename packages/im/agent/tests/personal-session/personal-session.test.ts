@@ -5,6 +5,10 @@ import {
   type PersonalSessionAddress, type PersonalSessionRepository, personalSessionOwnerId,
 } from '../../src/personal-session/index.js';
 
+function profileSelection(id: string, rootId = 'host-a') {
+  return { kind: 'profile' as const, profile: { id, rootId, accountId: 'account-a', accountIncarnation: 'first-account', kind: 'language' as const } };
+}
+
 function address(): PersonalSessionAddress {
   return {
     rootId: 'host-a', platform: 'qq', endpoint: 'account-a', subjectId: 'alice',
@@ -37,11 +41,11 @@ describe('PersonalSessionService', () => {
   it.each(variations)('isolates %s in reads and selections', async (_label, change) => {
     const service = new PersonalSessionService(new MemoryPersonalSessionRepository());
     const own = access();
-    await service.select({ ...own, expectedRevision: 0, selection: { kind: 'preset', presetId: 'chat-a' } });
+    await service.select({ ...own, expectedRevision: 0, selection: profileSelection('chat-a') });
     const other = access(change(address()));
     expect((await service.read(other)).selection).toEqual({ kind: 'inherit' });
-    await service.select({ ...other, expectedRevision: 0, selection: { kind: 'preset', presetId: 'chat-b' } });
-    expect((await service.read(own)).selection).toEqual({ kind: 'preset', presetId: 'chat-a' });
+    await service.select({ ...other, expectedRevision: 0, selection: profileSelection('chat-b', other.address.rootId) });
+    expect((await service.read(own)).selection).toEqual(profileSelection('chat-a'));
     expect(personalSessionIdentity(own.address).key).not.toBe(personalSessionIdentity(other.address).key);
   });
 
@@ -68,12 +72,12 @@ describe('PersonalSessionService', () => {
   it('rejects another owner for reads, preset selection and clearing to inherit', async () => {
     const repository = new MemoryPersonalSessionRepository();
     const service = new PersonalSessionService(repository);
-    await service.select({ ...access(), expectedRevision: 0, selection: { kind: 'preset', presetId: 'chat-a' } });
+    await service.select({ ...access(), expectedRevision: 0, selection: profileSelection('chat-a') });
     const read = vi.spyOn(repository, 'read');
     const write = vi.spyOn(repository, 'compareAndSet');
     const attacker = { address: address(), owner: { ...access().owner, subjectId: 'bob' } };
     await expect(service.read(attacker)).rejects.toBeInstanceOf(PersonalSessionAccessError);
-    for (const selection of [{ kind: 'inherit' as const }, { kind: 'preset' as const, presetId: 'chat-b' }]) {
+    for (const selection of [{ kind: 'inherit' as const }, profileSelection('chat-b')]) {
       await expect(service.select({ ...attacker, expectedRevision: 1, selection })).rejects.toBeInstanceOf(PersonalSessionAccessError);
     }
     await expect(service.read({ ...access(), owner: { ...access().owner, rootId: 'host-b' } })).rejects.toBeInstanceOf(PersonalSessionAccessError);
@@ -94,7 +98,7 @@ describe('PersonalSessionService', () => {
     const first = new PersonalSessionService(repository);
     const second = new PersonalSessionService(repository);
     const results = await Promise.allSettled([first, second].map((service, index) => service.select({
-      ...access(), expectedRevision: 0, selection: { kind: 'preset', presetId: `chat-${index}` },
+      ...access(), expectedRevision: 0, selection: profileSelection(`chat-${index}`),
     })));
     expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
     const rejected = results.find(result => result.status === 'rejected');
@@ -108,22 +112,22 @@ describe('PersonalSessionService', () => {
     const service = new PersonalSessionService(new MemoryPersonalSessionRepository());
     const target = address();
     const before = JSON.stringify(target);
-    const selection = { kind: 'preset' as const, presetId: 'chat-a' };
+    const chosenInput = profileSelection('chat-a');
     const initial = await service.read(access(target));
-    const chosen = await service.select({ ...access(target), expectedRevision: 0, selection });
+    const chosen = await service.select({ ...access(target), expectedRevision: 0, selection: chosenInput });
     const inherited = await service.select({ ...access(target), expectedRevision: 1, selection: { kind: 'inherit' } });
     expect(initial).toMatchObject({ revision: 0, selection: { kind: 'inherit' } });
-    expect(chosen).toMatchObject({ revision: 1, selection: { kind: 'preset', presetId: 'chat-a' } });
+    expect(chosen).toMatchObject({ revision: 1, selection: profileSelection('chat-a') });
     expect(inherited).toMatchObject({ revision: 2, selection: { kind: 'inherit' } });
-    await expect(service.select({ ...access(target), expectedRevision: 1, selection })).rejects.toBeInstanceOf(PersonalSessionRevisionConflictError);
+    await expect(service.select({ ...access(target), expectedRevision: 1, selection: chosenInput })).rejects.toBeInstanceOf(PersonalSessionRevisionConflictError);
     expect(JSON.stringify(target)).toBe(before);
     expect(Object.isFrozen(target)).toBe(false);
-    expect(Object.isFrozen(selection)).toBe(false);
+    expect(Object.isFrozen(chosenInput)).toBe(false);
     expect(Object.isFrozen(chosen.selection)).toBe(true);
     expect(Object.isFrozen(chosen.identity.address.conversation.endpoint)).toBe(true);
     expect(Object.isFrozen(chosen.identity.address.conversation.parent)).toBe(true);
-    selection.presetId = 'changed';
-    expect(chosen.selection).toEqual({ kind: 'preset', presetId: 'chat-a' });
+    chosenInput.profile.id = 'changed';
+    expect(chosen.selection).toEqual(profileSelection('chat-a'));
   });
 
   it('rejects a repository response from another complete session address', async () => {
@@ -164,7 +168,7 @@ describe('PersonalSessionService', () => {
     const service = new PersonalSessionService(new MemoryPersonalSessionRepository());
     await expect(service.select({ ...access(), expectedRevision: -1, selection: { kind: 'inherit' } })).rejects.toThrow(TypeError);
     await expect(service.select({ ...access(), expectedRevision: Number.MAX_SAFE_INTEGER, selection: { kind: 'inherit' } })).rejects.toThrow(TypeError);
-    await expect(service.select({ ...access(), expectedRevision: 0, selection: { kind: 'preset', presetId: ' ' } })).rejects.toThrow(TypeError);
+    await expect(service.select({ ...access(), expectedRevision: 0, selection: profileSelection(' ') })).rejects.toThrow(TypeError);
     expect((await service.read(access())).revision).toBe(0);
   });
 });

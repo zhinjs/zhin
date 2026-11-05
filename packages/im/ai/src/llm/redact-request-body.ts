@@ -4,8 +4,12 @@
 
 const DEFAULT_MAX_STRING = 800;
 const MAX_DEPTH = 10;
+import { projectProviderDiagnostics } from './provider-diagnostics.js';
 
 export function redactValueForLog(value: unknown, depth = 0, maxString = DEFAULT_MAX_STRING): unknown {
+  return redactLogValue(projectProviderDiagnostics(value), depth, maxString);
+}
+function redactLogValue(value: unknown, depth: number, maxString: number): unknown {
   if (depth > MAX_DEPTH) return '<max-depth>';
   if (value === null || value === undefined) return value;
   if (typeof value === 'string') {
@@ -21,12 +25,12 @@ export function redactValueForLog(value: unknown, depth = 0, maxString = DEFAULT
   }
   if (typeof value === 'number' || typeof value === 'boolean') return value;
   if (Array.isArray(value)) {
-    return value.map((item) => redactValueForLog(item, depth + 1, maxString));
+    return value.map((item) => redactLogValue(item, depth + 1, maxString));
   }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value)) {
-      out[key] = redactValueForLog(child, depth + 1, maxString);
+      out[key] = redactLogValue(child, depth + 1, maxString);
     }
     return out;
   }

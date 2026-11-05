@@ -22,15 +22,6 @@ database:
 ai:
   sessions:
     useDatabase: true
-  providers:
-    ollama:
-      sdk: ollama
-      host: "http://localhost:11434"
-
-  agents:
-    zhin:
-      provider: ollama
-      model: qwen3:8b
 
   # 本地知识库
   knowledge:

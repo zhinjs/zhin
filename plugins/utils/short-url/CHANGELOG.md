@@ -1,5 +1,15 @@
 # @zhin.js/plugin-short-url
 
+## 1.1.15
+
+### Patch Changes
+
+- Updated dependencies [299863a]
+- Updated dependencies [0315ba0]
+- Updated dependencies [00be764]
+  - @zhin.js/tool@1.1.15
+  - @zhin.js/skill@1.1.13
+
 ## 1.1.14
 
 ### Patch Changes

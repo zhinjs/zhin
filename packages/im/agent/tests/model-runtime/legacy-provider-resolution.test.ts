@@ -1,29 +1,12 @@
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
-import { ModelRuntimeService } from '../../src/model-runtime/service.js';
 import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
-import { createProviderHarness } from '../../../ai/tests/helpers/provider-harness/index.js';
+import { modelRuntimeFixture } from '../helpers/model-runtime.js';
 
-it('rejects an unresolved unscoped provider while scoped turns use only their leased provider', async () => {
-  const legacy = createProviderHarness({ sdk: 'anthropic' });
-  const original = legacy.adapter();
-  const agent = new ZhinAgent(original, { outputSchema: false }, undefined, legacy.runtime);
-  agent.activeBinding = { name: 'zhin', providerAlias: 'missing', model: 'missing-model', mcpServers: [] };
-  agent.providerResolver = vi.fn(() => { throw new Error('Legacy binding no longer resolves'); });
-  const runtime = new ModelRuntimeService({ hostOwnerId: 'host', config: {
-    providers: { scoped: { sdk: 'ollama', models: ['scoped-model'] } },
-    agents: { zhin: { provider: 'scoped', model: 'scoped-model' } },
-  } });
-  const models = await runtime.acquireForTurn({ rootId: '/host', ownerId: 'host' });
+it('rejects unresolved unscoped inference while a turn uses only its actual borrowed scope', async () => {
+  const agent = new ZhinAgent({ config: { outputSchema: false } }), f = modelRuntimeFixture(), models = await f.acquire();
   try {
-    expect(() => agent.getTurnProvider()).toThrow('Legacy binding no longer resolves');
-    expect(agent.providerResolver).toHaveBeenCalledOnce();
-    await runWithAgentTurnConfiguration({ models }, async () => {
-      expect(agent.getTurnProvider()).toBe(models.chat.provider);
-      expect(agent.getTurnProvider()).not.toBe(original);
-      expect(agent.providerResolver).toHaveBeenCalledOnce();
-    });
-    expect(() => agent.getTurnProvider()).toThrow('Legacy binding no longer resolves');
-  } finally {
-    await models.release(); await runtime.dispose(); await agent.dispose();
-  }
+    expect(() => agent.getTurnExecution()).toThrow('not configured');
+    await runWithAgentTurnConfiguration({ models }, async () => { expect(agent.getTurnExecution()).toBe(models.chat); });
+    expect(() => agent.getTurnExecution()).toThrow('not configured');
+  } finally { await models.release(); await agent.dispose(); }
 });

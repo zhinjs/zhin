@@ -50,18 +50,34 @@ export interface GeminiContextCacheStats {
   failed: number;
 }
 
+/** Non-secret directory data. A binding Resource owns it; no fetch or token is retained. */
+export interface GeminiContextCacheState {
+  readonly entries: Map<string, Entry>;
+  readonly stats: GeminiContextCacheStats;
+  readonly currentKeyByModel: Map<string, string>;
+  readonly unsupported: Set<string>;
+  readonly logged: Set<string>;
+}
+
+export function createGeminiContextCacheState(): GeminiContextCacheState {
+  return { entries: new Map(), stats: { created: 0, reused: 0, deleted: 0, failed: 0 },
+    currentKeyByModel: new Map(), unsupported: new Set(), logged: new Set() };
+}
+
+export interface GeminiCachingFetchOptions {
+  readonly config: GeminiContextCacheConfig;
+  readonly fetch?: typeof globalThis.fetch;
+  readonly now?: () => number;
+  readonly state?: GeminiContextCacheState;
+}
+
 export function createGeminiCachingFetch(
-  config: GeminiContextCacheConfig,
-  baseFetch: typeof globalThis.fetch = globalThis.fetch,
-  now: () => number = Date.now,
+  options: GeminiCachingFetchOptions,
 ): typeof globalThis.fetch & { readonly stats: GeminiContextCacheStats } {
+  const { config, fetch: baseFetch = globalThis.fetch, now = Date.now } = options;
   const ttlMs = Math.max(60, config.ttlSeconds ?? 600) * 1000;
   const minPrefixChars = config.minPrefixChars ?? 8_000;
-  const entries = new Map<string, Entry>();
-  const stats: GeminiContextCacheStats = { created: 0, reused: 0, deleted: 0, failed: 0 };
-  const currentKeyByModel = new Map<string, string>();
-  const unsupported = new Set<string>();
-  const logged = new Set<string>();
+  const { entries, stats, currentKeyByModel, unsupported, logged } = options.state ?? createGeminiContextCacheState();
 
   async function remove(url: string, name: string, headers: HeadersInit | undefined): Promise<void> {
     stats.deleted += 1;

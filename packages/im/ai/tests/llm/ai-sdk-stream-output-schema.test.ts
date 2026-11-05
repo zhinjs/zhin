@@ -1,3 +1,4 @@
+import { SyntheticCompletionRuntime } from '../helpers/synthetic-completion-runtime.js';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { streamText, type LanguageModel } from 'ai';
 
@@ -11,7 +12,7 @@ vi.mock('ai', async (importOriginal) => {
 });
 
 import { createAiSdkStreamFn } from '../../src/llm/bridge/ai-sdk-stream.js';
-import { createContext, createUserMessage, LlmApiRuntime } from '../../src/llm/index.js';
+import { createContext, createUserMessage } from '../../src/llm/index.js';
 import type { Model } from '../../src/llm/types/model.js';
 import type { AssistantMessage } from '../../src/llm/types/agent-message.js';
 
@@ -25,7 +26,7 @@ const model: Model = {
   contextWindow: 8192,
   maxTokens: 1024,
 } as Model;
-let runtime: LlmApiRuntime;
+let runtime: SyntheticCompletionRuntime;
 
 function makeStreamResult(final: Record<string, unknown>) {
   return {
@@ -61,7 +62,7 @@ async function runStream(options?: Record<string, unknown>): Promise<AssistantMe
 describe('createAiSdkStreamFn outputSchema', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    runtime = new LlmApiRuntime();
+    runtime = new SyntheticCompletionRuntime();
     runtime.registerLanguageModel('test', 'm1', {} as LanguageModel);
   });
 

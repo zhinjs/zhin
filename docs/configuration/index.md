@@ -86,13 +86,13 @@ npx zhin runtime start --mode production      # 均不监听
 | 修改内容 | 生效边界 |
 | --- | --- |
 | 仅修改已声明资料原地更新能力的适配器的 `nickname` / `profile` 配置兜底 | 新资料读取使用新兜底，保留连接；不调用平台资料写入。已观察到的平台昵称仍优先 |
-| 修改模型选择，或新增、兼容修订 provider/model 定义 | 标准 Host 模型入口的新操作取得新版本；在途操作继续使用已取得的模型与租约，不在工具循环中切换 |
+| 在模型管理中修改 Profile／用途选择 | 领域事务独立持久化，下一操作读取新图；在途操作保持原图、模型与租约，不属于文件应用分组 |
 | HTTP 监听、数据库连接、`.env` 输入、YAML 中的账号角色等启动依赖 | 未支持安全替换的部分显示待进程重启，当前继续使用旧值 |
 | 其他插件配置 | 沿所属插件的现有局部重载；未声明更新能力不视为原地更新 |
 
-同次保存可以部分生效。例如同时修改账号兜底昵称、默认模型和 HTTP 端口，前两项在满足条件时生效，端口仍待重启；依赖待重启环境变量的模型修改也不会提前启用。完整候选配置校验失败时保留当前运行。失败、结果未确认和被较新修订替代分别显示；结果未确认时先只读刷新核对，不重复提交。
+同次文件保存可以部分生效。例如同时修改账号兜底昵称和 HTTP 端口，昵称在满足条件时生效，端口仍待重启。模型图更新有独立的领域修订和提交回执，文件保存／应用不修改模型图、凭据或个人绑定。完整候选配置校验失败时保留当前运行。失败、结果未确认和被较新修订替代分别显示；结果未确认时先只读刷新核对，不重复提交。
 
-模型目录项删除、重命名、Agent 绑定拓扑或能力契约的破坏性修改不支持热更新，保留为待进程重启。第三方代码若长期保存自己取得的 SDK/provider 引用，也不会自动换成新对象，应在新操作时通过框架入口重新取得。
+Agent 安装、角色权限和其他未声明可替换的启动依赖保留待重启边界。Profile 的模型／参数修改下一回合生效；旧选择不因同名资源删除重建而继承账号身份。插件推理通过本次 operation 的 InferenceClient 取得，不能长期保存 SDK/provider 实例。
 
 ### 在聊天中管理配置
 
@@ -124,7 +124,7 @@ npx zhin runtime start --mode production      # 均不监听
 
 ### 文件与数据库记录各管什么
 
-`zhin.config.yml` 继续保存部署声明，Console 配置表单仍写回该文件，不会把整份配置迁入数据库。受管账号 desired 记录、个人模型与会话选择、模型运行策略覆写继续由各自现有数据库/API 管理；文件热更新不覆盖显式领域记录，也不清空个人选择。YAML 中的账号种子不会改写已经存在的受管账号记录；适配器资料默认值仍能作用于继承它的账号。
+`zhin.config.yml` 继续保存部署声明，Console 配置表单仍写回该文件，不会把整份配置迁入数据库。受管 Endpoint desired 记录、模型 Service／Account／Profile／用途与个人会话选择分别由所属领域数据库/API 管理；文件热更新不覆盖显式领域记录，也不清空个人选择。YAML 中的账号种子不会改写已经存在的受管账号记录；适配器资料默认值仍能作用于继承它的账号。
 
 ## 环境变量展开
 
@@ -306,66 +306,33 @@ transport binding（A2A 扩展，已冻结并移出 `@zhin.js/workroom` 包根�
 
 ## ai
 
-`ai` 段由 Agent Host 消费。只要配置了 `ai` / `assistant` 任一段，启动图就会加载 Agent 栈；缺凭据的 provider 会被 soft-prune，不阻断启动。
+`ai` 只保存 Agent 启动行为与工具权限。模型资源由 Console 的模型管理或显式 plan 导入维护，持久化到 inference 数据库；空模型图仍可启动管理界面，缺少所需 Profile 时推理明确报未配置。
 
-### providers：命名模型服务商
+### providers：模型资源改由运行时管理
 
-```yaml
-ai:
-  providers:
-    deepseek:
-      sdk: deepseek                  # 必填
-      apiKey: ${DEEP_SEEK_API_KEY}
-    openrouter:
-      sdk: openai-compatible
-      baseUrl: ${OPENROUTER_BASE_URL}
-      apiKey: ${OPENROUTER_API_KEY}
-      contextWindow: 32768
-      models:                        # 可用模型白名单
-        - "openrouter/free"
-    ollama-local:
-      sdk: ollama
-      host: http://127.0.0.1:11434   # ollama 用 host 而非 baseUrl
-    cloudflare:
-      sdk: openai-compatible
-      apiKey: ${CLOUDFLARE_API_TOKEN}
-      accountId: ${CLOUDFLARE_ACCOUNT_ID}
-```
+启动文件不再接受 `ai.providers`、`modelCatalog`、`modelPolicy`、`decisions` 或 Agent 的 `provider/model/preset` 选择器。Service 描述服务协议，Account 保存认证方式与私有凭据引用，Profile 选择模型与参数；chat、summary、ambient、image、perception 和决策用途引用 Profile。个人 Session 可单独选择已授权的语言 Profile。
 
-| 字段 | 说明 |
-| --- | --- |
-| `sdk` | 必填，七种之一：`openai`、`anthropic`、`google`、`deepseek`、`minimax`、`ollama`、`openai-compatible` |
-| `apiKey` / `baseUrl` / `host` | 凭据与接入点；`ollama` 用 `host`，Cloudflare 另需 `accountId` |
-| `models` | 显式模型列表 |
-| `defaultModel`、`contextWindow`、`timeout`、`maxRetries`、`firstChunkTimeoutMs`、`chunkTimeoutMs`、`headers` | 行为微调（见 [AI 文档](../ai/index.md)） |
-| `authScheme` | Authorization 头方案；不写用 SDK 默认，`''` 只发 key，`Bearer` / `Token` 发 `<scheme> <key>` |
-| `imageGeneration` | 文生图默认（支持该能力的 driver，如 `defaultModel`、`defaultSize`、`watermarkEnabled`、`promptSuffix`） |
+`ai.plan.yml` 是显式 review/apply/export 的输入，不是启动种子，也不放在 `zhin.config.yml` 的 `ai.plan` 下。升级步骤、备份和恢复边界见[模型接口升级](../ai/provider-upgrade.md)。
 
-provider 别名可任意命名；未显式写 `sdk` 时会按别名前缀推断（如 `deepseek-main` → `deepseek`），推断不出则回退 `openai-compatible`。对应 `@ai-sdk/*` 包是 optional peer，按所用 sdk 自行安装。
-
-### agents：绑定模型与角色
+### agents：角色与工具权限
 
 ```yaml
 ai:
+  enabled: true
   agents:
-    zhin:                            # 主 Agent，默认入口
-      provider: openrouter           # 引用 providers 的别名
-      model: openrouter/free
+    zhin:
       mcpServers: [icqq]             # 引用 ai.mcpServers 的 name
     researcher:
-      provider: openrouter
-      model: openrouter/free
-      nickname: '搜搜'               # Agent 自称与界面展示名
+      nickname: '搜搜'               # 任务角色显示名；IM 资料优先取当前 Endpoint
 ```
 
 | 字段 | 说明 |
 | --- | --- |
-| `provider` / `model` | 必填，绑定的 provider 别名与模型 |
-| `nickname` | Agent 自称与界面展示名 |
+| `nickname` | 任务角色显示名；当前账号资料仍由 Endpoint 提供 |
 | `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
 | `permission.task` | `spawn_task` 可见子 Agent 类型（glob → `allow` / `deny`） |
 
-IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除，详见 [ai.agents](../ai/index.md#ai-agents)。
+模型角色绑定在运行时用途配置中管理。IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除。
 
 ### mcpServers：外部 MCP Server
 
@@ -431,7 +398,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` 管理多模态入出站；主模型不能看图时可用 `ai.multimodal.perception` 让另一个模型先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
+`ai.multimodal` 管理多模态入出站；主模型不能看图时可用 模型管理中的 perception 用途让另一个 Profile 先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
 
 远程 Agent 不再通过 `ai.remoteAgents` 旁路接入。可选 A2A Executor 只通过持久 Workroom Catalog 和 generation-owned authority 接入，并服从 Assignment lease/fence 与 Journal 契约。
 

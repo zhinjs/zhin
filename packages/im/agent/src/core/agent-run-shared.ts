@@ -1,4 +1,4 @@
-/** agent-core-run / agent-loop-standalone 共用的装配小函数。 */
+/** agent-core-run 的装配小函数。 */
 import type { TokenUsage, Usage } from '@zhin.js/ai';
 
 export function tokenUsageToLegacy(usage: TokenUsage): Usage {
@@ -8,3 +8,4 @@ export function tokenUsageToLegacy(usage: TokenUsage): Usage {
     total_tokens: usage.totalTokens,
   };
 }
+

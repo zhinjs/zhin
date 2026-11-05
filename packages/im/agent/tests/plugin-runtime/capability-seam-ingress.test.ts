@@ -24,7 +24,7 @@ describe('Capability Seam production ingress', () => {
     seam.registerSkillService('global', skillService('remote_research'));
     const snapshot = snapshotWith(seam);
 
-    const capabilities = await new CapabilityIngress().read(snapshot, snapshot.root);
+    const capabilities = await new CapabilityIngress().read({ snapshot: snapshot, owner: snapshot.root });
 
     expect(capabilities.tools.map((tool) => tool.name)).toEqual(['remote_lookup']);
     expect(capabilities.tools[0]).toMatchObject({
@@ -46,7 +46,7 @@ describe('Capability Seam production ingress', () => {
       execute,
     });
     const snapshot = snapshotWith(seam);
-    const capabilities = await new CapabilityIngress().read(snapshot, snapshot.root);
+    const capabilities = await new CapabilityIngress().read({ snapshot: snapshot, owner: snapshot.root });
     const turn = createTurnIngress({
       intent: { kind: 'new' },
       identity: { rootId: String(snapshot.root), generation: 7, traceId: 'trace', turnId: 'turn' },
@@ -72,7 +72,7 @@ describe('Capability Seam production ingress', () => {
     seam.registerToolService('global', toolService('remote_lookup', 'never'));
     const snapshot = snapshotWith(seam);
     let active = true;
-    const capabilities = await new CapabilityIngress().read(snapshot, snapshot.root, () => active);
+    const capabilities = await new CapabilityIngress().read({ snapshot: snapshot, owner: snapshot.root, isActive: () => active });
     active = false;
 
     await expect(capabilities.tools[0]!.execute({}, invocation()))
@@ -103,12 +103,12 @@ describe('Capability Seam production ingress', () => {
       origin: { kind: 'im' as const, platform: 'qq', endpoint: 'bot', scope: 'group' as const, sceneId: 'group' },
       principal: { subjectId: 'user', roles: ['user'] }, policy: { permissions: [], unattended: false },
     };
-    const unknown = await ingress.read(snapshot, snapshot.root, () => true, turn);
+    const unknown = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: turn });
     expect(unknown.tools.map(tool => tool.name)).toEqual(['remote_lookup']);
     expect(unknown.skills.map(skill => skill.name)).toEqual(['mixed', 'guidance']);
-    const admin = await ingress.read(snapshot, snapshot.root, () => true, {
+    const admin = await ingress.read({ snapshot: snapshot, owner: snapshot.root, isActive: () => true, turn: {
       ...turn, input: { contextState: { bot: { platformRole: 'admin' } } },
-    });
+    } });
     expect(admin.tools.map(tool => tool.name)).toEqual(['remote_lookup', 'remote_moderate']);
     expect(admin.skills.map(skill => skill.name)).toEqual(['moderation', 'mixed', 'guidance']);
     expect(admin.tools.find(tool => tool.name === 'remote_moderate')?.requiresApproval).toBe('always');
@@ -134,7 +134,7 @@ describe('Capability Seam production ingress', () => {
       projections: new Map([[toolFeatureId, new ToolIndex([slot], base)]]),
     };
 
-    await expect(new CapabilityIngress().read(snapshot, snapshot.root))
+    await expect(new CapabilityIngress().read({ snapshot: snapshot, owner: snapshot.root }))
       .rejects.toThrow('Duplicate Agent Tool capability: lookup');
   });
 });

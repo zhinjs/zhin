@@ -70,6 +70,7 @@ export function buildAgentPromptCacheStreamOptions(
   config: Pick<ZhinAgentConfig, 'promptCache' | 'promptCacheRetention' | 'promptCacheKeyPrefix'>,
   parts: {
     modelSdk: string | undefined;
+    promptCacheRouting?: 'driver';
     provider: string;
     modelId: string;
     label: string;
@@ -82,6 +83,7 @@ export function buildAgentPromptCacheStreamOptions(
 } {
   const promptCache = isPromptCacheEnabled(config, parts.modelSdk, env);
   if (!promptCache) return { promptCache: false };
+  if (parts.promptCacheRouting === 'driver') return { promptCache: true };
   return {
     promptCache: true,
     promptCacheKey: buildPromptCacheKey({
@@ -92,21 +94,4 @@ export function buildAgentPromptCacheStreamOptions(
     }),
     promptCacheRetention: config.promptCacheRetention ?? 'in_memory',
   };
-}
-
-export function resolveDeferredTaskToolTimeout(
-  config: Pick<Required<ZhinAgentConfig>, 'timeout' | 'subagentTurnWaitMs' | 'maxSubagentIterations'>,
-): number {
-  const turnMs = config.timeout ?? 60_000;
-  const waitMs = config.subagentTurnWaitMs ?? 180_000;
-  const maxIter = config.maxSubagentIterations ?? 15;
-  const iterationBudget = turnMs * Math.min(maxIter, 10);
-  return Math.max(waitMs, iterationBudget, 180_000);
-}
-
-export function resolveWorkerSlowToolTimeout(
-  config: Pick<Required<ZhinAgentConfig>, 'timeout' | 'maxSubagentIterations'>,
-): number {
-  const turnMs = config.timeout ?? 60_000;
-  return Math.min(180_000, Math.max(60_000, turnMs * 2));
 }

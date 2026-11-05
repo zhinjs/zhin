@@ -1,3 +1,4 @@
+import { providerModelSupports } from '@zhin.js/ai/provider';
 /**
  * agentLoop turn runner (ADR 0009) — used when ContextRepository is wired.
  */
@@ -11,7 +12,7 @@ import { decodeStructuredReply, structuredReplyInstruction, structuredReplySchem
 import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { mergeToolOutboundElements } from '../media/media-tool-bridge.js';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { EMPTY_TOKEN_USAGE, createPromptContextBlock, createLlmMessageProjection, estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { EMPTY_TOKEN_USAGE, createPromptContextBlock, createLlmMessageProjection, estimateContextFixedTokens, parseOutput, type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, createResilientCompletionPort, isProviderFailureMessage, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -31,7 +32,6 @@ import { resolveTurnSummaryExecution } from '../memory/summary-model.js';
 import { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import { LocalImageInspection, type ImageInspectionBudget } from '../media/local-image-inspection.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
-import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
@@ -40,9 +40,8 @@ import type { AgentCore } from './agent-core.js';
 import type { ZhinAgentPrivate, OnChunkCallback } from '../internal/agent-host.js';
 import { buildLlmToolsForProvider } from '../tool/deferred-resolution.js';
 import { applyToolToModelOutput } from '../tool/tool-model-output.js';
-import { DEFERRED_META_TOOL_NAMES } from '../tool-catalog/types.js';
+import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
 import { resolveDeferredApiTools, residentToolNames } from '../tool-catalog/tool-catalog.js';
-import type { ToolCatalogItem } from '../tool-catalog/types.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import {
   createTurnEventMapperState,
@@ -115,11 +114,11 @@ function createTurnCompletionPort(input: {
   transport: LlmCompletionPort;
 }): LlmCompletionPort {
   const { host, providerAlias, sessionId } = input;
-  // Precedence: ai.providerResilience < provider `timeout` / `maxRetries` < model harness quirks.
-  const providerConfig = host.llmRuntime.providerConfig?.(providerAlias);
+  // Profile/Driver owns execution settings; global policy and explicit harness
+  // control same-model retry behavior without a Provider alias directory.
   const config = resolveProviderResilienceConfig(
     host.config.providerResilience,
-    resolveProviderConfigResilience(providerConfig),
+    host.getTurnExecution().model.executionPolicy,
     {
       emptyReplyRetries: input.harness.emptyReplyRetries,
       requestTimeoutMs: input.harness.requestTimeoutMs,
@@ -309,8 +308,8 @@ async function* runAgentLoopVisionTurnOnceRun(
 ): AsyncGenerator<TurnEvent, AgentLoopVisionTurnResult> {
   const { host, sessionId, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
   const repo = host.contextRepository;
-  const providerAlias = host.getTurnProvider().name;
-  const llmModel = host.llmRuntime.model(providerAlias, modelId);
+  const providerAlias = host.getTurnExecution().binding.account.id;
+  const llmModel = host.getTurnExecution().model;
   const loaded = await repo.loadContext(sessionId);
   const promptMessages = input.userMessages;
 
@@ -328,10 +327,11 @@ async function* runAgentLoopVisionTurnOnceRun(
 
   const loopConfig = {
     model: llmModel,
-    transport: host.llmRuntime,
+    transport: host.completion,
     maxIterations: 1,
     streamOptions: buildAgentPromptCacheStreamOptions(host.config, {
-      modelSdk: llmModel.sdk,
+      modelSdk: llmModel.promptFamily,
+      promptCacheRouting: llmModel.promptCacheRouting,
       provider: providerAlias,
       modelId,
       label: 'vision',
@@ -473,8 +473,8 @@ export async function* runAgentLoopTextTurnRun(
   const networkWithheld = [...input.allTools, ...input.resolvedTools, ...(input.toolCatalog ?? [])]
     .some(tool => NETWORK_TOOL_NAMES.has(tool.name)) && !allTools.some(tool => NETWORK_TOOL_NAMES.has(tool.name));
 
-  const providerAlias = host.getTurnProvider().name;
-  const llmModel = host.llmRuntime.model(providerAlias, modelId);
+  const providerAlias = host.getTurnExecution().binding.account.id;
+  const llmModel = host.getTurnExecution().model;
   const persistentConversation = input.conversationPersistence !== 'none';
   const loaded = persistentConversation
     ? await repo.loadContext(sessionId)
@@ -496,7 +496,8 @@ export async function* runAgentLoopTextTurnRun(
   const historyView = windowed ? windowed.messages.slice(0, windowed.messages.length - promptMessages.length) : loaded.messages;
 
   const directTools = input.toolLoading === 'direct';
-  const hasTools = directTools ? resolvedTools.length > 0 : allTools.length > 0;
+  const hasTools = providerModelSupports({ model: host.getTurnExecution().binding.model, requirements: { toolCalling: true } })
+    && (directTools ? resolvedTools.length > 0 : allTools.length > 0);
   const toolRun = hasTools && !directTools
     ? await planToolRun(resolvedTools, host.config.preExecTimeout)
     : { mode: 'agent' as const, preExecution: { tools: [], data: '' } };
@@ -553,7 +554,7 @@ export async function* runAgentLoopTextTurnRun(
         sessionId,
         personaEnhanced,
       deferredStats: input.deferredStats,
-      modelSdk: llmModel.sdk,
+      modelSdk: llmModel.promptFamily,
       runtime: input.promptRuntime,
       })
     : buildChatPathSystemPromptParts(host, personaEnhanced, input.promptProfile, input.promptRuntime);
@@ -597,7 +598,7 @@ export async function* runAgentLoopTextTurnRun(
           content: input.rawContent,
           sessionId,
           deferredStats: input.deferredStats,
-          modelSdk: llmModel.sdk,
+          modelSdk: llmModel.promptFamily,
           runtime: input.promptRuntime,
         })
       : [];
@@ -624,11 +625,13 @@ export async function* runAgentLoopTextTurnRun(
     });
   }
 
-  const harness = resolveModelHarness(host.getTurnProvider().name, modelId, host.config.modelHarness);
+  const harnessBinding = host.getTurnExecution().binding;
+  const harness = resolveModelHarness({ driver: harnessBinding.service.driver, serviceId: harnessBinding.service.id, modelId, config: host.config.modelHarness });
   const maxIterations = hasTools
     ? (input.maxIterations ?? resolveTurnMaxIterations({
-      providerName: host.getTurnProvider().name,
-      modelName: modelId,
+      driver: harnessBinding.service.driver,
+      serviceId: harnessBinding.service.id,
+      modelId,
       modelHarness: host.config.modelHarness,
       scene: iterationSceneOf(input.turnContext),
       configured: host.config.maxIterations,
@@ -665,13 +668,10 @@ export async function* runAgentLoopTextTurnRun(
   const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools
     ? agentToolsToLlmTools(agentTools)
-    : buildLlmToolsForProvider(
-        llmModel.sdk,
-        catalog,
-        agentTools,
-        turnResidentTools(),
-        deferredController?.loadedToolNames() ?? [],
-      );
+    : buildLlmToolsForProvider({
+        nativeDeferredTools: llmModel.nativeDeferredTools === true, catalog, apiTools: agentTools,
+        alwaysLoaded: turnResidentTools(), sessionLoadedNames: deferredController?.loadedToolNames() ?? [],
+      });
   llmTools = withReplyTransition(llmTools);
   if (hasTools) {
     noteTurnTrace(traceTurnId(input.turnContext), {
@@ -698,7 +698,7 @@ export async function* runAgentLoopTextTurnRun(
   let iterations = 0;
   let lastAssistantText = '';
   let activeTools = 0;
-  const completionUsage = trackTurnCompletionUsage(host.llmRuntime, host.imageAssets
+  const completionUsage = trackTurnCompletionUsage(host.completion, host.imageAssets
     ? (message, replySignal) => publishReplyImages(message, host.imageAssets!, replySignal)
     : undefined, { turnId: traceTurnId(input.turnContext), recordBodies: host.config.recordRequestBodies }, input.interactiveRun);
   const localInspection = host.localAssets ? new LocalImageInspection(
@@ -742,18 +742,15 @@ export async function* runAgentLoopTextTurnRun(
     executableTools.replace(nextAgentTools);
     llmTools = directTools
       ? agentToolsToLlmTools(nextAgentTools)
-      : buildLlmToolsForProvider(
-          llmModel.sdk,
-          catalog,
-          nextAgentTools,
-          turnResidentTools(),
-          deferredController?.loadedToolNames() ?? [],
-        );
+      : buildLlmToolsForProvider({
+          nativeDeferredTools: llmModel.nativeDeferredTools === true, catalog, apiTools: nextAgentTools,
+          alwaysLoaded: turnResidentTools(), sessionLoadedNames: deferredController?.loadedToolNames() ?? [],
+        });
     llmTools = withReplyTransition(llmTools);
     return llmTools;
   };
 
-  const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
+  const contextWindow = llmModel.contextWindow || host.config.contextTokens;
   // System prompt and tool schemas count against the window too, so the
   // compaction threshold is measured on what is left for messages (#730).
   let budgetTools: typeof llmTools | undefined;
@@ -834,7 +831,7 @@ export async function* runAgentLoopTextTurnRun(
     progress.record(iterations, { toolName, args, ok, output });
 
   const summaryExecution = () => {
-    const summary = resolveTurnSummaryExecution({ transport: host.llmRuntime, model: llmModel });
+    const summary = resolveTurnSummaryExecution({ transport: host.completion, model: llmModel });
     return { transport: completionUsage.forTransport(summary.transport), model: summary.model };
   };
   const settlePhase = async (output: AgentOutputElement[], raw: string, hostReply: boolean) => {
@@ -881,12 +878,10 @@ export async function* runAgentLoopTextTurnRun(
   const settleQueuedAnswer = async () => {
     if (!phaseAssistant || phaseSettled) return;
     const calls = toolCalls.slice(phaseToolStart);
-    if (calls.some(call => call.tool === 'spawn_task')) await host.getActiveTurnTracker()?.waitForPendingSubagents();
-    const delegated = suppressesPhaseReply(calls);
     let output: AgentOutputElement[] = [];
     let raw = lastAssistantText;
     let hostReply = lastAssistantNeedsHostReply;
-    if (!delegated && !hostReply) {
+    if (!hostReply) {
       try { output = decodeStructuredReply(raw, input.replySegments); } catch (error) {
         if (!replyRun?.offered) {
           const lenient = decodeLenientStructuredReply(raw, input.replySegments);
@@ -902,8 +897,8 @@ export async function* runAgentLoopTextTurnRun(
           }
         }
       }
-    } else if (!delegated) output = parseOutput(sanitizeAssistantReply(raw));
-    if (!delegated) output = mergeToolOutboundElements(output, calls);
+    } else output = parseOutput(sanitizeAssistantReply(raw));
+    output = mergeToolOutboundElements(output, calls);
     if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
     await settlePhase(output, raw, hostReply);
   };
@@ -942,7 +937,8 @@ export async function* runAgentLoopTextTurnRun(
     sessionId,
     streamOptions: {
       ...buildAgentPromptCacheStreamOptions(host.config, {
-        modelSdk: llmModel.sdk,
+        modelSdk: llmModel.promptFamily,
+        promptCacheRouting: llmModel.promptCacheRouting,
         provider: providerAlias,
         modelId,
         label: hasTools ? 'orchestrator' : 'chat',
@@ -1308,8 +1304,7 @@ export async function* runAgentLoopTextTurnRun(
         || !lastAssistantHadToolCalls
         || !progress.segmentProgressed
         || continuations >= toolBudget.maxContinuations
-        || hardLimitReached()
-        || suppressesPhaseReply(toolCalls.slice(phaseToolStart))) break;
+        || hardLimitReached()) break;
       const checkpoint = await summarizeExhaustedTurn({
         locale: input.turnContext.input?.locale,
         transport: completionUsage.transport,
@@ -1374,11 +1369,6 @@ export async function* runAgentLoopTextTurnRun(
   }
 
   const finalPhaseToolCalls = toolCalls.slice(phaseToolStart);
-  const spawnedSubagent = finalPhaseToolCalls.some(tc => tc.tool === 'spawn_task');
-  if (spawnedSubagent) {
-    await host.getActiveTurnTracker()?.waitForPendingSubagents();
-  }
-  const delegatedOnly = suppressesPhaseReply(finalPhaseToolCalls);
 
   // The loop ran tools but never produced visible text (usually maxIterations
   // was hit mid-exploration). Ask the model for a tools-off summary instead of
@@ -1387,7 +1377,7 @@ export async function* runAgentLoopTextTurnRun(
     ? input.interactiveRun.check() ?? (progress.stalled ? turnReplyMessages(input.turnContext.input?.locale, 'stalled') : undefined)
     : undefined;
   if (replyPhases && stopped) phaseStopped = true;
-  const needsReplyRecovery = !phaseSettled && !phaseStopped && !replyRun?.offered && !stopped && !(input.interactiveRun && lastAssistantNeedsHostReply) && !delegatedOnly
+  const needsReplyRecovery = !phaseSettled && !phaseStopped && !replyRun?.offered && !stopped && !(input.interactiveRun && lastAssistantNeedsHostReply)
     && hasTools
     && (toolCalls.length > 0 || iterations >= maxIterations)
     && (!lastAssistantText.trim() || (imReply && lastAssistantHadToolCalls));
@@ -1423,9 +1413,9 @@ export async function* runAgentLoopTextTurnRun(
       toolSummary: formatToolCallsForUser(finalPhaseToolCalls),
       ...(chatFailure ? { emptyMessage: chatFailureLine('malformed_tool_call', chatFailure) } : {}),
     });
-  const textReply = delegatedOnly ? '' : proseReply.trim() ? continuationPrefix + proseReply : proseReply;
-  let output: AgentOutputElement[] = phaseSettled ? [...settledPhaseOutput] : delegatedOnly || structuredReply ? [] : parseOutput(textReply);
-  if (!phaseSettled && !delegatedOnly && structuredReply) {
+  const textReply = proseReply.trim() ? continuationPrefix + proseReply : proseReply;
+  let output: AgentOutputElement[] = phaseSettled ? [...settledPhaseOutput] : structuredReply ? [] : parseOutput(textReply);
+  if (!phaseSettled && structuredReply) {
     try {
       output = decodeStructuredReply(rawReply, input.replySegments);
     } catch (error) {
@@ -1454,7 +1444,7 @@ export async function* runAgentLoopTextTurnRun(
       }
     }
   }
-  if (!phaseSettled && !delegatedOnly) {
+  if (!phaseSettled) {
     output = mergeToolOutboundElements(output, toolCalls.slice(phaseToolStart));
   }
   // ADR 0043 §5: a `reply` segment may name its target by alias (`m12`); delivery needs the platform id.
@@ -1464,7 +1454,7 @@ export async function* runAgentLoopTextTurnRun(
     await settlePhase(output, rawReply, hostReply);
   } else if (replyRun && (answering || replyRun.offered)) {
     await replyRun.stop();
-    if (!hostReply && structuredReply && !delegatedOnly && !replyRun.error) {
+    if (!hostReply && structuredReply && !replyRun.error) {
       try {
         const snapshot = await replyRun.complete(rawReply);
         if (snapshot) progressive = { run: replyRun, snapshot };
@@ -1515,11 +1505,6 @@ export async function* runAgentLoopTextTurnRun(
     projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches,
       replyPhases ? undefined : hostReply && delivered ? { ...delivered, contextRefs: undefined } : delivered, conversationPhaseFacts),
   };
-}
-
-function suppressesPhaseReply(calls: readonly ToolCallRecord[]): boolean {
-  return shouldSuppressReplyForSpawnDelegation([...calls]) && !calls.some(call => call.tool === 'generate_image'
-    && call.result && typeof call.result === 'object' && typeof (call.result as Record<string, unknown>).image === 'string');
 }
 
 function encodeConfirmedOutput(output: readonly AgentOutputElement[]): string {

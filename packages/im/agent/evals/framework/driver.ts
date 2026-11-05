@@ -1,3 +1,6 @@
+import { createEvalInference } from './inference.js';
+import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
+import { createScopedPerceptionFactory } from '../../src/media/scoped-perception.js';
 import { renderAgentOutput } from '../../src/outbound/agent-output.js';
 import { plannedReplyTexts } from '../../src/session/context-provenance.js';
 /**
@@ -11,6 +14,8 @@ import { dirname, join } from 'node:path';
 import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { defineAgentPromptSection, type PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { ToolIndex, type ToolAvailabilityContext } from '@zhin.js/tool';
+import { collaborationIdle, closeCollaborations } from '../../src/collaboration/registry.js';
+import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import { AgentCore } from '../../src/core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
 import { isTurnTerminalEvent, type TurnEvent, type TurnTerminalEvent } from '../../src/event/turn-event.js';
@@ -38,9 +43,9 @@ import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-tr
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalSelfChangeStatus, EvalMemoryEntry, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import type { EvalAgentFixture, EvalApprovalBehaviour, EvalCase, EvalSelfChangeStatus, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
-import { createLlmMediaPerceptionPort, resolvePerceptionConfig } from '../../src/media/perception.js';
+import { resolvePerceptionConfig } from '../../src/media/perception.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
 import type { ImageAssetPublisher } from '../../src/media/image-assets.js';
 
@@ -67,8 +72,12 @@ export interface EvalRunRecord {
   readonly terminals: readonly TurnTerminalEvent[];
   readonly modelRequests: readonly ScriptedModelRequest[];
   readonly unusedScriptSteps: number;
+  /** Unconsumed script steps per actor (only actors with any left); entry steps are under `zhin`. */
+  readonly unusedActorSteps: Readonly<Record<string, number>>;
   /** Model requests made after the script ran out. */
   readonly extraModelRequests: number;
+  /** Requests after an actor's own queue ran out, per actor. */
+  readonly extraActorRequests: Readonly<Record<string, number>>;
   /** Scripted tool calls naming a tool the harness did not offer on that request. */
   readonly unofferedToolCalls: readonly string[];
   /** Script steps pinned to a model id that went to a different model. */
@@ -138,7 +147,7 @@ async function runInWorkspace(
     ...(definition.agentConfig?.deferredTools?.alwaysLoadedTools ?? []),
     ...toolNames,
   ];
-  const agent = new ZhinAgent(model.provider, {
+  const agent = new ZhinAgent({ config: {
     maxIterations: 6,
     toolExecution: 'sequential',
     providerTimers: clock,
@@ -147,8 +156,8 @@ async function runInWorkspace(
       ...definition.agentConfig?.deferredTools,
       alwaysLoadedTools,
     },
-  }, undefined, model.runtime);
-  agent.activeBinding = { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] };
+  } });
+  agent.activeBinding = { name: 'zhin', mcpServers: [] };
   agent.markMemoryPersistenceReady();
   // The CLI host hands bootstrap to the turn engine (not the agent setter); mirror that.
   const bootstrapContext = definition.hostBootstrap ? await hostBootstrapText(process.cwd()) : undefined;
@@ -168,16 +177,8 @@ async function runInWorkspace(
       ...(definition.perception.maxItemsPerTurn ? { maxItemsPerTurn: definition.perception.maxItemsPerTurn } : {}),
     })
     : undefined;
-  if (perceptionConfig) {
-    agent.configure({
-      mediaPerception: createLlmMediaPerceptionPort({
-        runtime: model.runtime,
-        config: perceptionConfig,
-        resilience: definition.agentConfig?.providerResilience,
-        timers: clock,
-      }),
-    });
-  }
+  const inference = createEvalInference(model, liveModel ? { ...definition, perception: undefined } : definition);
+  const perception = createScopedPerceptionFactory();
   const host = asPrivate(agent);
   if (imageAssets) agent.configure({ imageAssets });
   const { sessionSystem, contextSystem } = host;
@@ -223,25 +224,32 @@ async function runInWorkspace(
           owner: rootPluginId(),
           tools: turnTools,
           skills: evalSkills(definition),
-          agents: [],
+          agents: evalAgents(definition),
           mcp: [],
           promptSections: promptSections(definition),
         },
         toolCapabilities: turnTools,
         tools: new TurnToolRuntime(turn, turnTools),
         selection: {
-          binding: { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] },
+          binding: { name: 'zhin', mcpServers: [] },
           mcpServers: [],
         },
       };
+      const lease = inference.snapshots.acquire();
+      const models = await inference.runtime.acquireForTurn({ request: turn, binding: context.selection.binding, lease, snapshots: inference.snapshots });
+      const mediaPerception = perception({ scope: models, sessionKey: turn.session.key, settings: perceptionConfig,
+        resilience: definition.agentConfig?.providerResilience, timers: clock });
       try {
         // Same path as AgentRuntime: the journal is the single source and
         // `events` is the journal-derived feed (includes authority tool events).
-        await executeAgentTurn(turn, () => engine.run(context), (event) => {
+        await runWithAgentTurnConfiguration({ models, mediaPerception }, () => executeAgentTurn(turn, () => engine.run(context), (event) => {
           events.push(event);
           if (isTurnTerminalEvent(event)) terminals.push(event);
-        });
+        }));
+        // Delegated work outlives the entry turn; wait for it (and the result turns it wakes) before observing.
+        await collaborationIdle();
       } finally {
+        await models.release(); lease.release();
         releaseTrace();
         trace.finalize();
         traces.push(trace.snapshot());
@@ -269,15 +277,19 @@ async function runInWorkspace(
       terminals,
       modelRequests: model.requests,
       unusedScriptSteps: model.remainingSteps(),
+      unusedActorSteps: model.remainingStepsByActor(),
       extraModelRequests: model.exhaustedRequests(),
+      extraActorRequests: model.exhaustedRequestsByActor(),
       unofferedToolCalls: model.unofferedToolCalls,
       modelMismatches: model.modelMismatches,
       unexpectedlyOfferedToolCalls: model.unexpectedlyOfferedToolCalls,
       traces,
     };
   } finally {
+    await closeCollaborations('eval case finished');
     selfChange?.approvals.dispose();
     selfChange?.queue.dispose();
+    await agent.dispose(); await inference.runtime.dispose(); await inference.snapshots.close();
   }
 }
 
@@ -383,6 +395,35 @@ function evalSkills(definition: EvalCase): SkillDescriptor[] {
     ...(skill.keywords ? { keywords: Object.freeze([...skill.keywords]) } : {}),
     source: `eval:skills/${skill.name}/SKILL.md`,
   }));
+}
+
+/**
+ * ADR 0048 peer Agents as the descriptors `agents/<name>/` packages would produce, owned by the driver's root plugin.
+ * `collaboration` (contacts / acceptsFrom) is the §2 policy; the shared descriptor type does not carry it yet, so it
+ * rides along as an extra field for the engine's directory to read.
+ */
+function evalAgents(definition: EvalCase): AgentDescriptor[] {
+  return (definition.agents ?? []).map((agent: EvalAgentFixture) => Object.freeze({
+    $feature: 'zhin.agent/1' as const,
+    name: agent.name,
+    displayName: agent.name,
+    version: '1.0.0',
+    description: agent.description,
+    triggerRules: Object.freeze({ filePatterns: Object.freeze([]), keywords: Object.freeze([]) }),
+    entryPoints: Object.freeze(['system.md']),
+    instructions: `You are ${agent.name}. ${agent.description} Do the work you are given with your own tools and answer concisely.`,
+    workflows: Object.freeze([]),
+    knowledge: Object.freeze([]),
+    toolNames: Object.freeze([...agent.tools]),
+    collaboration: Object.freeze({
+      contacts: Object.freeze([...(agent.collaboration?.contacts ?? [])]),
+      // Omitted acceptsFrom means "anyone in scope", so it stays absent rather than becoming an empty list.
+      ...(agent.collaboration?.acceptsFrom ? { acceptsFrom: Object.freeze([...agent.collaboration.acceptsFrom]) } : {}),
+    }),
+    owner: rootPluginId(),
+    qualifiedName: agent.name,
+    source: `eval:agents/${agent.name}/agent.json`,
+  } as AgentDescriptor));
 }
 
 /** Third-party plugin prompt sections, owned by a child plugin so the engine treats them as external_content. */
@@ -611,7 +652,7 @@ async function nativeCapabilities(
     ...descriptor,
     execute: (async (input: unknown, invocation: Parameters<ToolCapability['execute']>[1]) => {
       executed.push({ name: descriptor.name, args: (input ?? {}) as Record<string, unknown> });
-      const result = await index.execute(owner, descriptor.name, input, invocation as never);
+      const result = await index.execute({ requester: owner, name: descriptor.name, input, invocation: invocation as never });
       rawOutputs.push(typeof result === 'string' ? result : JSON.stringify(result));
       return result;
     }) as ToolCapability['execute'],

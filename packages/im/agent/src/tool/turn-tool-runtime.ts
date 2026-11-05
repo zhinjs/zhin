@@ -283,9 +283,7 @@ export class TurnToolRuntime {
   /** Records where the result came from, and which parts are another session's memory. */
   #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown): void {
     if (isExternalContentSource(tool, this.#guard)) {
-      this.provenance.record(tool.name === 'spawn_task'
-        ? { kind: 'subagent_report' }
-        : { kind: 'tool_result', toolName: tool.name });
+      this.provenance.record({ kind: 'tool_result', toolName: tool.name });
     }
     if (this.#leakInspector && readsOtherSessionMemory(input, this.turn.session.key)) {
       this.#leakInspector.protectOtherSessionMemory(collectText(output));

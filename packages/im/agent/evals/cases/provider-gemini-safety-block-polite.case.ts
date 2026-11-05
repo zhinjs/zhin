@@ -8,7 +8,7 @@ export default defineEvalCase({
   inbound: { text: '帮我写一句早安问候', sender: { id: 'owner', roles: ['master'] } },
   models: ['scripted-fallback'],
   // Even with an empty-reply re-ask enabled, a refusal is not re-asked.
-  agentConfig: { modelHarness: { models: { 'scripted-model': { emptyReplyRetries: 1 } } } },
+  agentConfig: { modelHarness: { services: { 'eval-scripted': { models: { 'scripted-model': { emptyReplyRetries: 1 } } } } } },
   script: [
     { model: 'scripted-model', fault: { kind: 'finish', finishReason: 'content-filter', raw: 'SAFETY' } },
   ],

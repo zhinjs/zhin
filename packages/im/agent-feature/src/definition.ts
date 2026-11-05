@@ -54,6 +54,15 @@ export interface AgentDefinition {
   readonly platforms?: readonly string[];
   readonly scopes?: readonly AgentScope[];
   readonly permissions?: readonly string[];
+  /** Who this agent may contact and accept work from (ADR 0048 H2). */
+  readonly collaboration?: AgentCollaboration;
+}
+
+export interface AgentCollaboration {
+  /** Agent names this agent may ask / delegate to / tell. */
+  readonly contacts?: readonly string[];
+  /** Agent names (or the literal `human`) allowed to hand this agent work. */
+  readonly acceptsFrom?: readonly string[];
 }
 
 interface AgentManifest {
@@ -79,6 +88,10 @@ interface AgentManifest {
   readonly platforms?: readonly string[];
   readonly scopes?: readonly AgentScope[];
   readonly permissions?: readonly string[];
+  readonly collaboration?: {
+    readonly contacts?: readonly string[];
+    readonly accepts_from?: readonly string[];
+  };
 }
 
 export function parseAgentPackage(value: unknown, context: ValidationContext): AgentDefinition {
@@ -133,6 +146,7 @@ export function parseAgentPackage(value: unknown, context: ValidationContext): A
     platforms: optionalStringList(manifest.platforms, 'platforms'),
     scopes: optionalScopes(manifest.scopes),
     permissions: optionalStringList(manifest.permissions, 'permissions'),
+    collaboration: optionalCollaboration(manifest.collaboration),
   });
 }
 
@@ -154,7 +168,7 @@ function parseManifest(value: unknown, context: ValidationContext): AgentManifes
   const allowed = new Set([
     'name', 'version', 'description', 'trigger_rules', 'entry_points', 'tools', 'skills',
     'disallowed_tools', 'tags', 'role', 'context_mode', 'max_iterations', 'model',
-    'provider', 'effort', 'memory', 'platforms', 'scopes', 'permissions',
+    'provider', 'effort', 'memory', 'platforms', 'scopes', 'permissions', 'collaboration',
   ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   if (unknown.length) throw new TypeError(`Agent ${context.source} agent.json has unknown fields: ${unknown.join(', ')}`);
@@ -247,6 +261,26 @@ function optionalScopes(value: unknown): readonly AgentScope[] | undefined {
     throw new TypeError('Agent agent.json scopes must be private, group, or channel');
   }
   return scopes as readonly AgentScope[] | undefined;
+}
+
+function optionalCollaboration(value: unknown): AgentCollaboration | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new TypeError('Agent agent.json collaboration must be an object');
+  const unknown = Object.keys(value).filter((key) => key !== 'contacts' && key !== 'accepts_from');
+  if (unknown.length) {
+    throw new TypeError(`Agent agent.json collaboration has unknown fields: ${unknown.join(', ')}`);
+  }
+  const contacts = optionalStringList(value.contacts, 'collaboration.contacts');
+  const acceptsFrom = optionalStringList(value.accepts_from, 'collaboration.accepts_from');
+  for (const name of contacts ?? []) {
+    if (!AGENT_NAME.test(name)) throw new TypeError(`Agent agent.json collaboration.contacts has invalid agent name: ${name}`);
+  }
+  for (const name of acceptsFrom ?? []) {
+    if (name !== 'human' && !AGENT_NAME.test(name)) {
+      throw new TypeError(`Agent agent.json collaboration.accepts_from has invalid agent name: ${name}`);
+    }
+  }
+  return Object.freeze({ contacts, acceptsFrom });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

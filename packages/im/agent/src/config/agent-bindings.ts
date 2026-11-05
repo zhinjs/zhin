@@ -7,11 +7,8 @@ export function resolveAgentBinding(
   if (!raw) return null;
   return {
     name,
-    providerAlias: raw.provider,
-    model: raw.model,
     mcpServers: raw.mcpServers ?? [],
     nickname: raw.nickname,
-    permission: raw.permission,
   };
 }
 

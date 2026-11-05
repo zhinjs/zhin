@@ -1,17 +1,14 @@
 import { join } from 'node:path';
 import { createConfigDocument } from '@zhin.js/config-file';
-import { rootPluginId, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import {
-  ConfigComposer, ConfigValidationError, createEnvStore, NativeDevelopmentModuleRuntime,
+  ConfigComposer, ConfigValidationError, NativeDevelopmentModuleRuntime,
   NodePackageResolver, ProjectGraphService,
 } from '@zhin.js/runtime';
 import { findConfigFile } from './config-file.js';
-import { loadRuntimeEnvironmentLayers } from '../plugin-runtime/start/environment.js';
 import { createTsxModuleLoader } from '../plugin-runtime/start/tsx-module-loader.js';
 import { loadAiConfigUtils } from './ai-config-loader.js';
-import { hostModelOwnerId } from '../plugin-runtime/personal-models/host-identity.js';
-import { isAiEnabledInConfig } from '@zhin.js/scaffold-wizard';
-import { modelConfigurationPaths, modelConfigurationEnvironmentReferences } from './model-configuration-environment.js';
+import { hostModelOwnerId } from '../plugin-runtime/inference/host-identity.js';
 import { ConsoleConfigurationStore } from '../plugin-runtime/console/configuration.js';
 
 export function requireConfigFile(root: string): string {
@@ -36,22 +33,23 @@ export async function validateOfflineConfiguration(
   pluginOrder?: readonly string[],
 ) {
   assertEnvironmentName(environment);
+  // Reject retired model authority before environment expansion or declaration loading.
+  // Runtime model resources are reviewed/applied through the inference repository.
+  const validateAi = (ai: unknown): void => {
+    // Disabled AI is not an installed domain in an IM-only project. Structured
+    // AI writes still have their own mandatory validation in ConsoleConfigurationStore.
+    if (ai === undefined || (ai && typeof ai === 'object' && !Array.isArray(ai) && 'enabled' in ai && ai.enabled === false)) return;
+    const validate = loadAiConfigUtils(root)?.validateModelRuntimeConfig;
+    if (!validate) throw new ConfigValidationError(['AI configuration validation requires the installed Agent package']);
+    const errors = validate(ai, hostModelOwnerId(root));
+    if (errors.length) throw new ConfigValidationError(errors);
+  };
+  validateAi(document.ai);
   const modules = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false, tsxLoader: createTsxModuleLoader(root) });
   try {
     const graph = await new ProjectGraphService(await NodePackageResolver.create(root)).inspect(root, document, pluginOrder);
     const composed = await new ConfigComposer([], modules).compose(graph, document);
-    const layers = await loadRuntimeEnvironmentLayers(root, environment);
-    const env = createEnvStore(rootPluginId(), { name: environment, mode: environment === 'production' ? 'production' : 'development', platform: process.platform }, layers);
-    const ai = env.expandMissingAsEmpty(composed.document.ai) as Record<string, unknown> | undefined;
-    if (ai && ai.enabled !== false && (isAiEnabledInConfig({ ai }) || ai.modelCatalog !== undefined || ai.modelPolicy !== undefined)) {
-      const { missing } = modelConfigurationEnvironmentReferences(modelConfigurationPaths(ai.agents), composed.document, ai,
-        name => { const value = env.get(name); return typeof value === 'string' && value.length > 0; });
-      if (missing.size) throw new ConfigValidationError([`AI model environment references are unavailable: ${[...missing].sort().join(', ')}`]);
-      const utils = loadAiConfigUtils(root);
-      if (!utils?.validateModelRuntimeConfig) throw new Error('无法完整校验 AI 配置：请安装当前项目对应的 @zhin.js/agent');
-      const errors = utils.validateModelRuntimeConfig(ai, hostModelOwnerId(root));
-      if (errors.length) throw new ConfigValidationError(errors);
-    }
+    validateAi(composed.document.ai);
     return composed;
   } finally {
     await modules.close();

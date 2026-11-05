@@ -1,6 +1,5 @@
 import type { CoreReplyStream } from '@zhin.js/core/runtime';
-import type { AgentOutputElement } from '../outbound/agent-output.js';
-import { renderAgentOutput } from '../outbound/agent-output.js';
+import { renderAgentOutput, type AgentOutputElement } from '../outbound/agent-output.js';
 import { deliverProgressiveReply } from '../outbound/progressive-reply-delivery.js';
 import { bindActivityFeedbackTurnSource, inheritActivityFeedbackSource } from '../activity-feedback/operation-source.js';
 import { resolveIngressUserMessage } from '../session/turn-ingress-session.js';
@@ -19,7 +18,7 @@ import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
 import type { ReplyPhaseFacts, ReplyPhaseLifecycle } from '../core/reply-phase.js';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import type { DeliveryOutcome } from '../turn/turn-ingress.js';
+import type { DeliveryOutcome, TurnIngress } from '../turn/turn-ingress.js';
 import type { AgentCore } from '../core/agent-core.js';
 import { createInteractiveRun } from '../core/interactive-run.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime, type TurnToolRuntimeOptions } from '../tool/turn-tool-runtime.js';
@@ -36,7 +35,6 @@ import type {
 } from './agent-runtime.js';
 import { publishProjectionFailure, type TurnTerminalProjection } from '../turn/execute-agent-turn.js';
 import { createScheduleCapabilityPlan } from './schedule-capability-plan.js';
-import type { TurnIngress } from '../turn/turn-ingress.js';
 import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 import { resolveToolTier } from './tool-tier.js';
@@ -50,14 +48,11 @@ import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress
 import { TurnProvenance } from '../security/provenance.js';
 import { OutboundLeakInspector, guardReplyPort, type LeakFinding } from '../security/outbound-leak-guard.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
-import type { UsageSubject } from '../security/usage-quota.js';
-import { usageGroupId } from '@zhin.js/core';
+import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { getLogger } from '@zhin.js/logger';
 import { isLocale } from '@zhin.js/plugin-runtime';
-import {
-  createSubagentTurnCapability,
-  type SubagentModelSelection,
-} from './subagent-turn-capability.js';
+import { startTurnCollaboration } from '../collaboration/turn-collaboration.js';
+import type { ActorModelSelection } from '../collaboration/contracts.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
 import { hostControlPlaneSource } from '../security/host-control-plane.js';
 import type { ContextFile } from '../bootstrap.js';
@@ -136,7 +131,7 @@ async function* runInteractiveTurn(
     };
   }
 
-  const quotaSubject = usageSubjectOf(context.turn, prep.userId);
+  const quotaSubject = usageSubjectFromTurn(context.turn);
   const quota = host.usageQuota.check(quotaSubject);
   if (!quota.allowed) {
     // #727: only this user (or this group) is stopped; everyone else carries on.
@@ -161,25 +156,25 @@ async function* runInteractiveTurn(
     ? createInteractiveRun(host.usageQuota, quotaSubject, resolveToolBudget(host.config.toolBudget).maxTotalTokens)
     : undefined;
   const snapshot = await host.contextRepository.getDeferredToolSnapshot(prep.sessionId);
-  const subagentModel: { current?: SubagentModelSelection } = {};
-  const subagentCapability = subagentsEnabled(host, context.turn)
-    ? createSubagentTurnCapability({
-      host,
-      core: options.core,
-      parentTurn: context.turn,
-      capabilities: { ...context.capabilities, tools: context.toolCapabilities },
-      bootstrapContext: options.bootstrapContext,
-      contextFiles: options.contextFiles,
-      loopHooks: options.loopHooks,
-      resolveModel: () => subagentModel.current,
-      imageInspectionBudget,
-      interactiveRun,
-    })
-    : undefined;
+  const actorModel: { current?: ActorModelSelection } = {};
+  // ADR 0048: the live turn is the root actor of an engagement whenever other agents exist.
+  const collaboration = await startTurnCollaboration({
+    host,
+    core: options.core,
+    turn: context.turn,
+    capabilities: { ...context.capabilities, tools: context.toolCapabilities },
+    entry: context.selection.binding.name,
+    resolveModel: () => actorModel.current,
+    loopHooks: options.loopHooks,
+    bootstrapContext: options.bootstrapContext,
+    contextFiles: options.contextFiles,
+    imageInspectionBudget,
+    interactiveRun,
+  });
   const projected = {
     ...context.capabilities,
-    tools: subagentCapability
-      ? Object.freeze([...context.toolCapabilities, subagentCapability])
+    tools: collaboration
+      ? Object.freeze([...context.toolCapabilities, ...collaboration.tools])
       : context.toolCapabilities,
   };
   const primed = await primeSkillsForIntent({
@@ -252,7 +247,7 @@ async function* runInteractiveTurn(
     background ? [background, ...prompt.userMessages] : prompt.userMessages,
     media,
   );
-  subagentModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
+  actorModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   const provenance = new TurnProvenance();
   if (background) provenance.record({ kind: 'conversation_context' });
   // Perception descriptions are generated from user media (text in an image is an injection path).
@@ -525,6 +520,8 @@ async function* runInteractiveTurn(
         });
         if (projectionError) throw projectionError;
       } finally {
+        // Delegated work keeps running; its results reach the human as follow-up replies.
+        await collaboration?.finish(completion.terminal.type === 'turn_end' && !projectionError ? 'completed' : 'failed');
         replyLifetime.abort();
         await cancelReplyStreams();
         // Stop activity-feedback AFTER the reply is sent. Awaiting icqq
@@ -549,6 +546,7 @@ async function* runInteractiveTurn(
   };
   } finally {
     if (!projectionOwnsReply) {
+      await collaboration?.finish(context.turn.signal.aborted ? 'cancelled' : 'failed');
       replyLifetime.abort();
       await cancelReplyStreams();
       for (const execution of executions) {
@@ -960,16 +958,6 @@ function zeroUsage(): Usage {
 }
 
 /**
- * Sub-agents run inside the parent turn, so they need a live interactive turn:
- * opt-in via `ai.agent.subagentTurnMode`, never for Workroom assignments.
- */
-function subagentsEnabled(host: ZhinAgentPrivate, turn: TurnIngress): boolean {
-  if (host.config.subagentTurnMode !== 'sync') return false;
-  return !turn.session.key.startsWith('workroom:')
-    && !turn.principal.roles.includes('workroom_assignment');
-}
-
-/**
  * Progress updates go out as normal (not auto-recalled) replies next to the
  * activity indicator. Outbound messages are recorded without an actor, so the
  * conversation event feed already keeps them out of later background context.
@@ -1007,16 +995,6 @@ function guardedReply(
 }
 
 /** Quota key for a turn: the sender, plus the group when the turn comes from a group or channel. */
-function usageSubjectOf(turn: TurnIngress, userId: string): UsageSubject {
-  const origin = turn.origin;
-  const shared = origin.kind === 'im' && (origin.scope === 'group' || origin.scope === 'channel');
-  return Object.freeze({
-    userId,
-    ...(shared ? { groupId: usageGroupId(origin.platform, origin.endpoint, origin.sceneId) } : {}),
-    owner: resolveTurnTrustLevel(turn) === 'owner',
-  });
-}
-
 /** #726: loaded skill instructions are labelled per skill as third-party guidance. */
 function labelSkillInstructions(instructions: readonly string[]): string {
   return instructions.map(text => labelThirdPartyGuidance('skill', text)).join('\n\n');

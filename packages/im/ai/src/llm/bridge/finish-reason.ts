@@ -18,6 +18,8 @@ import type { AssistantStopReason } from '../types/agent-message.js';
 export interface FinishInput {
   readonly finishReason: string | undefined;
   readonly rawFinishReason?: string | undefined;
+  /** Explicit model refusal content, distinct from a provider error/diagnostic payload. */
+  readonly refusal?: string;
   readonly providerMetadata?: unknown;
   readonly hasText: boolean;
   readonly hasToolCalls: boolean;
@@ -40,6 +42,11 @@ const PROVIDER_ERROR_PREFIX = '模型服务中途出错，未生成回复';
 
 /** Raw `error` finish reasons that mean the model emitted a tool call the provider could not parse. */
 const MALFORMED_RAW_REASONS = new Set(['MALFORMED_FUNCTION_CALL', 'UNEXPECTED_TOOL_CALL']);
+/** Public diagnostics may contain known protocol codes, never arbitrary provider text. */
+const DISPLAY_REASONS = new Set([
+  ...MALFORMED_RAW_REASONS, 'SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'IMAGE_SAFETY',
+  'MAX_TOKENS', 'length', 'max_tokens', 'content-filter', 'content_filter', 'refusal', 'insufficient_system_resource',
+]);
 
 /** Why a reply carries no usable content; see {@link finishFailureKind}. */
 export type FinishFailureKind = 'safety_block' | 'length' | 'malformed_tool_call' | 'provider_error';
@@ -63,7 +70,8 @@ export function isFinishFailureMessage(text: string): boolean {
 }
 
 function withReason(prefix: string, reason: string | undefined): string {
-  return reason ? `${prefix}（${reason}）` : prefix;
+  const value = reason?.startsWith('prompt ') ? reason.slice('prompt '.length) : reason;
+  return value && DISPLAY_REASONS.has(value) ? `${prefix}（${reason}）` : prefix;
 }
 
 function safetyBlockMessage(reason: string): string {
@@ -89,6 +97,7 @@ export function resolveFinish(input: FinishInput): FinishOutcome {
     return { stopReason: 'error', errorMessage: safetyBlockMessage(`prompt ${blocked}`) };
   }
   if (finishReason === 'content-filter') {
+    if (input.refusal) return { stopReason: 'error', errorMessage: `${CONTENT_FILTER_PREFIX}（refusal: ${input.refusal}）${CONTENT_FILTER_HINT}` };
     return { stopReason: 'error', errorMessage: safetyBlockMessage(rawFinishReason ?? 'content-filter') };
   }
   if (finishReason === 'length') {

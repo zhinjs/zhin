@@ -58,7 +58,6 @@ export interface WorkroomHostCoordinatorOptions {
 export class WorkroomHostCoordinator implements AgentWorkroomPort {
   readonly ingress: CapabilityIngress;
   readonly persistence: WorkroomPersistenceCoordinator;
-  readonly presetCount: number;
   readonly #execution: WorkroomExecutionCoordinator;
   readonly #humanIngress: WorkroomHumanIngressCoordinator;
 
@@ -67,13 +66,11 @@ export class WorkroomHostCoordinator implements AgentWorkroomPort {
     persistence: WorkroomPersistenceCoordinator;
     execution: WorkroomExecutionCoordinator;
     humanIngress: WorkroomHumanIngressCoordinator;
-    presetCount: number;
   }>) {
     this.ingress = state.ingress;
     this.persistence = state.persistence;
     this.#execution = state.execution;
     this.#humanIngress = state.humanIngress;
-    this.presetCount = state.presetCount;
   }
 
   static async create(options: WorkroomHostCoordinatorOptions): Promise<WorkroomHostCoordinator> {
@@ -109,7 +106,6 @@ export class WorkroomHostCoordinator implements AgentWorkroomPort {
     await persistence.prepare();
     governance.registerHandoff(handoff);
     options.publication.bindDataLifecycle(governance.lifecycle?.console);
-    const presetCount = await agent.seedPresets();
 
     const effect = new WorkroomEffectCoordinator({
       projectRoot: options.projectRoot,
@@ -155,6 +151,7 @@ export class WorkroomHostCoordinator implements AgentWorkroomPort {
       signal,
       snapshots: profiles.snapshots,
       service: agent.service,
+      withModelSelection: agent.withModelSelection,
       runtime: foundation,
       profiles,
       governance,
@@ -227,7 +224,6 @@ export class WorkroomHostCoordinator implements AgentWorkroomPort {
       persistence,
       execution,
       humanIngress,
-      presetCount,
     });
   }
 

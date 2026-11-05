@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/database",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Universal database abstraction layer for Zhin.js - supports SQLite, MySQL, PostgreSQL, MongoDB, Redis",
   "type": "module",
   "main": "./lib/index.js",
@@ -11,6 +11,36 @@
       "import": "./lib/index.js",
       "require": "./lib/index.js",
       "development": "./src/index.ts"
+    },
+    "./registry": {
+      "types": "./lib/registry.d.ts",
+      "import": "./lib/index.js",
+      "require": "./lib/index.js",
+      "development": "./src/index.ts"
+    },
+    "./dialects/mysql": {
+      "types": "./lib/dialects/mysql.d.ts",
+      "import": "./lib/dialects/mysql.js",
+      "require": "./lib/dialects/mysql.js",
+      "development": "./src/dialects/mysql.ts"
+    },
+    "./dialects/pg": {
+      "types": "./lib/dialects/pg.d.ts",
+      "import": "./lib/dialects/pg.js",
+      "require": "./lib/dialects/pg.js",
+      "development": "./src/dialects/pg.ts"
+    },
+    "./dialects/mongodb": {
+      "types": "./lib/dialects/mongodb.d.ts",
+      "import": "./lib/dialects/mongodb.js",
+      "require": "./lib/dialects/mongodb.js",
+      "development": "./src/dialects/mongodb.ts"
+    },
+    "./dialects/redis": {
+      "types": "./lib/dialects/redis.d.ts",
+      "import": "./lib/dialects/redis.js",
+      "require": "./lib/dialects/redis.js",
+      "development": "./src/dialects/redis.ts"
     }
   },
   "files": [
@@ -67,6 +97,31 @@
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js",
         "require": "./lib/index.js"
+      },
+      "./registry": {
+        "types": "./lib/registry.d.ts",
+        "import": "./lib/index.js",
+        "require": "./lib/index.js"
+      },
+      "./dialects/mysql": {
+        "types": "./lib/dialects/mysql.d.ts",
+        "import": "./lib/dialects/mysql.js",
+        "require": "./lib/dialects/mysql.js"
+      },
+      "./dialects/pg": {
+        "types": "./lib/dialects/pg.d.ts",
+        "import": "./lib/dialects/pg.js",
+        "require": "./lib/dialects/pg.js"
+      },
+      "./dialects/mongodb": {
+        "types": "./lib/dialects/mongodb.d.ts",
+        "import": "./lib/dialects/mongodb.js",
+        "require": "./lib/dialects/mongodb.js"
+      },
+      "./dialects/redis": {
+        "types": "./lib/dialects/redis.d.ts",
+        "import": "./lib/dialects/redis.js",
+        "require": "./lib/dialects/redis.js"
       }
     }
   },

@@ -1,3 +1,4 @@
+import { SyntheticCompletionRuntime } from '../../../ai/tests/helpers/synthetic-completion-runtime.js';
 import type { Segment } from '@zhin.js/im-contract';
 import { aiOutboundJsonSchema } from '@zhin.js/core';
 /**
@@ -11,8 +12,6 @@ import { aiOutboundJsonSchema } from '@zhin.js/core';
 import {
   createAssistantMessageEventStream,
   EMPTY_TOKEN_USAGE,
-  LlmApiRuntime,
-  SdkProviderAdapter,
   resolveFinish,
   type AssistantMessage,
   type Context,
@@ -60,7 +59,27 @@ export type ScriptStep = (
   | Readonly<{ segments: readonly Segment[]; tokens?: number }>
   | Readonly<{ toolCalls: readonly ScriptedToolCall[]; text?: string; tokens?: number }>
   | Readonly<{ fault: ScriptFault }>
-) & Readonly<{ model?: string }>;
+) & Readonly<{
+  model?: string;
+  /**
+   * ADR 0048 H2: the Agent whose model request this step answers. Omitted means the entry agent. Each actor has
+   * its own queue, consumed in script order by that actor's requests, so interleaving across actors cannot reorder
+   * a script.
+   */
+  actor?: string;
+}>;
+
+/** The entry agent's actor name, for steps without an `actor` tag. */
+export const ENTRY_ACTOR = 'zhin';
+
+/**
+ * Which actor made a request. The engine runs another agent's turn under the session id
+ * `<root session key>#actor:<agent>` (carried as `StreamOptions.sessionId`); any other session id is the entry agent.
+ */
+export function actorOfSession(sessionId: string | undefined): string {
+  const match = sessionId ? /#actor:([^#]+)/u.exec(sessionId) : null;
+  return match?.[1] ?? ENTRY_ACTOR;
+}
 
 export class ScriptedProviderError extends Error {
   /** Raw provider body, as the AI SDK's `APICallError.responseBody` carries it. */
@@ -88,6 +107,8 @@ export interface ScriptedModelRequest {
   readonly toolSchemaText: string;
   /** Model id this request was sent to. */
   readonly model: string;
+  /** Actor that made this request (`zhin` for the entry agent, otherwise the peer agent's name). */
+  readonly actor?: string;
   /** Image blocks attached to the messages of this request (multimodal cases). */
   readonly images: number;
 }
@@ -95,8 +116,8 @@ export interface ScriptedModelRequest {
 export interface ScriptedModel {
   readonly providerAlias: string;
   readonly modelId: string;
-  readonly provider: SdkProviderAdapter;
-  readonly runtime: LlmApiRuntime;
+  readonly modelIds: readonly string[];
+  readonly runtime: SyntheticCompletionRuntime;
   readonly requests: readonly ScriptedModelRequest[];
   /**
    * Scripted tool calls the harness did not offer on that request. A real
@@ -111,11 +132,15 @@ export interface ScriptedModel {
   exhaustedRequests(): number;
   /** Steps that were never consumed. */
   remainingSteps(): number;
+  /** Unconsumed steps per actor (only actors with any left). */
+  remainingStepsByActor(): Readonly<Record<string, number>>;
+  /** Requests after the actor's queue ran out, per actor (only actors with any). */
+  exhaustedRequestsByActor(): Readonly<Record<string, number>>;
 }
 
 export class ScriptExhaustedError extends Error {
-  constructor(readonly requestIndex: number, readonly scriptLength: number) {
-    super(`scripted model has no step for request #${requestIndex + 1} (script has ${scriptLength} steps)`);
+  constructor(readonly requestIndex: number, readonly scriptLength: number, readonly actor: string = ENTRY_ACTOR) {
+    super(`scripted model has no step for request #${requestIndex + 1} (script has ${scriptLength} steps${actor === ENTRY_ACTOR ? '' : ` for actor ${actor}`})`);
     this.name = 'ScriptExhaustedError';
   }
 }
@@ -148,8 +173,8 @@ export class ScriptedHangError extends Error {
   }
 }
 
-/** LlmApiRuntime whose model descriptors can declare per-model input modalities. */
-class ScriptedRuntime extends LlmApiRuntime {
+/** SyntheticCompletionRuntime whose model descriptors can declare per-model input modalities. */
+class ScriptedRuntime extends SyntheticCompletionRuntime {
   constructor(
     resolveModels: (alias: string) => string[],
     private readonly modelInputs: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>,
@@ -166,21 +191,18 @@ class ScriptedRuntime extends LlmApiRuntime {
 
 export function createScriptedModel(script: readonly ScriptStep[], options: ScriptedModelOptions = {}): ScriptedModel {
   const models = [MODEL_ID, ...(options.extraModels ?? []).filter((id) => id !== MODEL_ID)];
-  const provider = new SdkProviderAdapter(PROVIDER_ALIAS, 'openai', { sdk: 'openai', apiKey: 'eval' }, models);
   const runtime = new ScriptedRuntime((alias) => (
     alias === PROVIDER_ALIAS ? models : alias === PERCEPTION_PROVIDER_ALIAS ? [PERCEPTION_MODEL_ID] : []
   ), options.modelInputs ?? {});
   runtime.registerProvider(PROVIDER_ALIAS, {
     sdk: 'openai',
-    apiKey: 'eval',
     ...(options.contextWindow ? { contextWindow: options.contextWindow } : {}),
     ...(options.input?.length ? { input: [...options.input] } : {}),
   }, models);
   if (options.perception) {
     runtime.registerProvider(PERCEPTION_PROVIDER_ALIAS, {
       sdk: 'openai',
-      apiKey: 'eval',
-      input: ['text', 'image', 'video', 'file'],
+        input: ['text', 'image', 'video', 'file'],
     }, [PERCEPTION_MODEL_ID]);
   }
   const modelMismatches: string[] = [];
@@ -188,13 +210,26 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
   const requests: ScriptedModelRequest[] = [];
   const unofferedToolCalls: string[] = [];
   const unexpectedlyOfferedToolCalls: string[] = [];
-  let cursor = 0;
+  // One queue per actor, each consumed in script order. Entry steps carry no `actor` tag.
+  const queues = new Map<string, ScriptStep[]>();
+  for (const step of script) {
+    const actor = step.actor ?? ENTRY_ACTOR;
+    const queue = queues.get(actor) ?? [];
+    queue.push(step);
+    queues.set(actor, queue);
+  }
+  const cursors = new Map<string, number>();
+  const exhaustedBy = new Map<string, number>();
   let exhausted = 0;
+  let consumed = 0;
 
-  const respond = (model: Model, context: Context): AssistantMessage | ScriptFault => {
+  const respond = (model: Model, context: Context, sessionId: string | undefined): { response: AssistantMessage | ScriptFault; step: ScriptStep } => {
     const index = requests.length;
+    const actor = actorOfSession(sessionId);
+    const queue = queues.get(actor) ?? [];
+    const cursor = cursors.get(actor) ?? 0;
     const offeredTools = (context.tools ?? []).map((tool) => tool.name);
-    const step = script[cursor];
+    const step = queue[cursor];
     const calls = step && 'toolCalls' in step ? step.toolCalls : [];
     requests.push({
       index,
@@ -205,13 +240,16 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
       systemPrompt: context.systemPrompt ?? '',
       toolSchemaText: toolSchemaTextOf(context),
       model: model.id,
+      actor,
       images: countImages(context),
     });
     if (!step) {
       exhausted += 1;
-      throw new ScriptExhaustedError(index, script.length);
+      exhaustedBy.set(actor, (exhaustedBy.get(actor) ?? 0) + 1);
+      throw new ScriptExhaustedError(index, queue.length, actor);
     }
-    cursor += 1;
+    cursors.set(actor, cursor + 1);
+    consumed += 1;
     if (step.model && step.model !== model.id) {
       modelMismatches.push(`request #${index + 1} went to ${model.id}, script expected ${step.model}`);
     }
@@ -222,8 +260,8 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
       if (!call.notOffered && !offered) unofferedToolCalls.push(label);
     }
     if ('fault' in step && step.fault.kind === 'error') throw new ScriptedProviderError(step.fault.message, step.fault.status, step.fault.body);
-    if ('fault' in step && step.fault.kind === 'hang') return step.fault;
-    return toAssistantMessage(step, index, model.id);
+    if ('fault' in step && step.fault.kind === 'hang') return { response: step.fault, step };
+    return { response: toAssistantMessage(step, index, model.id), step };
   };
 
   /** Never answer; advance virtual time until the caller aborts the request. */
@@ -243,12 +281,11 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
       });
     });
 
-  const stream = (model: Model, context: Context, streamOptions?: { signal?: AbortSignal; outputSchema?: Record<string, unknown> }) =>
+  const stream = (model: Model, context: Context, streamOptions?: { signal?: AbortSignal; outputSchema?: Record<string, unknown>; sessionId?: string }) =>
     createAssistantMessageEventStream(async (push) => {
-      const response = respond(model, context);
+      const { response, step } = respond(model, context, streamOptions?.sessionId);
       if (!('role' in response)) return hang(requests.length - 1, streamOptions?.signal);
       const message = response;
-      const step = script[cursor - 1];
       if (streamOptions?.outputSchema === aiOutboundJsonSchema && step && !('segments' in step) && !message.errorMessage
         && message.content.length > 0 && !message.content.some(block => block.type === 'toolCall')) {
         const text = message.content.filter(block => block.type === 'text').map(block => block.text).join('');
@@ -266,14 +303,18 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
   return {
     providerAlias: PROVIDER_ALIAS,
     modelId: MODEL_ID,
-    provider,
+    modelIds: models,
     runtime,
     requests,
     unofferedToolCalls,
     unexpectedlyOfferedToolCalls,
     modelMismatches,
     exhaustedRequests: () => exhausted,
-    remainingSteps: () => script.length - cursor,
+    remainingSteps: () => script.length - consumed,
+    remainingStepsByActor: () => Object.fromEntries(
+      [...queues].map(([actor, queue]) => [actor, queue.length - (cursors.get(actor) ?? 0)] as const).filter(([, left]) => left > 0),
+    ),
+    exhaustedRequestsByActor: () => Object.fromEntries(exhaustedBy),
   };
 }
 

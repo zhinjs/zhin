@@ -21,8 +21,9 @@ const contextReport: Array<{ id: string; passed: boolean; context_budget?: Conte
 
 describe('agent evals (scripted model)', () => {
   for (const definition of cases) {
-    const test = definition.skip ? it.skip : it;
-    const title = definition.skip ? `${definition.id} — SKIPPED: ${definition.skip}` : `${definition.id} — ${definition.description}`;
+    const skipped = Boolean(definition.skip);
+    const test = skipped ? it.skip : it;
+    const title = skipped ? `${definition.id} — SKIPPED: ${definition.skip}` : `${definition.id} — ${definition.description}`;
     test(title, async () => {
       const run = await runEvalCase(definition);
       const failures = evaluateExpectations(definition, run);

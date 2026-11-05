@@ -4,6 +4,8 @@ sidebar: false
 
 # Agent Workroom 生产化 Ledger
 
+> **已被取代（2026-11-04）**：由 [ADR 0048 Agent Harness](../adr/0048-agent-harness.md) 取代，本文仅作历史参考，不再按本文推进；相关代码将在 ADR 0048 的 H2–H4 阶段删除。
+
 本文件追踪决策原型已经证明、但尚未吸收到生产模块的工作。决策地图回答“应该怎样”；本 Ledger 防止原型结论被误认为已经上线。只有代码、迁移、测试和文档全部完成后才能勾选。
 
 ## P1：Workroom Agent Identity Projection

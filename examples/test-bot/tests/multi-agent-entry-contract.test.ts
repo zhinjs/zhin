@@ -8,10 +8,15 @@ const configFixture = path.join(botRoot, 'fixtures/multi-agent-contract.zhin.con
 const configText = fs.readFileSync(configFixture, 'utf8');
 
 describe('test-bot multi-Agent contract', () => {
-  it('configures Agent bindings and the Kernel task tool', () => {
+  it('configures Agent bindings', () => {
     expect(configText).toMatch(/planner:/);
     expect(configText).toMatch(/researcher:/);
-    expect(configText).toMatch(/spawn_task/);
+    expect(configText).not.toMatch(/spawn_task/);
+  });
+
+  it('declares who the planner may collaborate with', () => {
+    const planner = JSON.parse(fs.readFileSync(path.join(botRoot, 'agents/planner/agent.json'), 'utf8'));
+    expect(planner.collaboration.contacts).toEqual(expect.arrayContaining(['researcher', 'reviewer']));
   });
 
   it('keeps the AI trigger prefix', () => {

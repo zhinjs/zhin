@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { createUserMessage, type AgentMessage } from '@zhin.js/ai';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import { buildBootstrapContextSection } from '../../src/bootstrap.js';
@@ -23,7 +24,7 @@ it.each(['http', 'internal'] as const)('preserves the configured binding nicknam
       toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 } },
     activeBinding: { nickname: 'Configured non-IM identity' }, bootstrapContext: '', globalContext: '',
     userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => llm.provider, modelRegistry: null, llmRuntime: llm.runtime,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(llm.runtime).model((llm.provider).name, (llm.provider).models?.[0]) }, completion: llm.runtime }), completion: llm.runtime,
     getTurnActiveSkills: () => '',
     contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async () => {} },
     compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },
@@ -53,7 +54,7 @@ it.each(['chat', 'vision', 'http'] as const)('sends a neutral persona with scope
       toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 } },
     activeBinding: { nickname: 'Configured fallback' }, bootstrapContext: BOOTSTRAP, globalContext: '',
     userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => llm.provider, modelRegistry: null, llmRuntime: llm.runtime,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(llm.runtime).model((llm.provider).name, (llm.provider).models?.[0]) }, completion: llm.runtime }), completion: llm.runtime,
     getTurnActiveSkills: () => '',
     contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async () => {} },
     compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },

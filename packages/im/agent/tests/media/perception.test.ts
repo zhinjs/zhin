@@ -1,3 +1,4 @@
+import type { LlmCompletionPort } from '@zhin.js/ai';
 /**
  * Perception pre-pass port (`ai.multimodal.perception`) against the real
  * transport and a mocked Gemini endpoint (#784 provider harness).
@@ -200,18 +201,18 @@ describe('AIService ai.multimodal.perception', () => {
 
   it('is off when not configured', async () => {
     const { AIService } = await import('../../src/service.js');
-    const service = new AIService(base);
+    const service = new AIService();
     expect(service.getPerceptionConfig()).toBeUndefined();
     await service.dispose();
   });
 
-  it('validates against ai.providers at startup', async () => {
+  it('keeps perception behavior settings but rejects a second startup routing authority', async () => {
     const { AIService } = await import('../../src/service.js');
-    const service = new AIService({ ...base, multimodal: { perception: { provider: 'vision', model: 'gemini-flash-lite', kinds: ['image', 'file'] } } });
-    expect(service.getPerceptionConfig()).toMatchObject({ provider: 'vision', model: 'gemini-flash-lite', kinds: ['image', 'file'] });
+    const service = new AIService({ multimodal: { perception: { kinds: ['image', 'file'] } } });
+    expect(service.getPerceptionConfig()).toMatchObject({ kinds: ['image', 'file'] });
     await service.dispose();
-    expect(() => new AIService({ ...base, multimodal: { perception: { provider: 'nope', model: 'm' } } }))
-      .toThrow('"nope" is not defined in ai.providers');
+    expect(() => new AIService({ ...base, multimodal: { perception: { provider: 'vision', model: 'gemini-flash-lite' } } }))
+      .toThrow('migration required');
   });
 });
 
@@ -220,13 +221,13 @@ describe('perception fallback chain', () => {
     first: 'success' | 'error' | 'empty' | 'hang' | 'text-only' = 'error',
     backupReply = geminiGenerate.reply({ text: '一只猫的表情包', usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 10, totalTokenCount: 110 } }),
   ) {
-    const { createLlmApiRuntime } = await import('../../../ai/src/llm/llm-runtime-factory.js');
     const primary = createProviderHarness({ sdk: 'google', alias: 'primary' });
     const backup = createProviderHarness({ sdk: 'google', alias: 'backup' });
-    const runtime = createLlmApiRuntime([
-      { alias: 'primary', config: primary.config, models: [primary.modelId], fetch: primary.server.fetch },
-      { alias: 'backup', config: backup.config, models: [backup.modelId], fetch: backup.server.fetch },
-    ], () => [primary.modelId]);
+    // Two explicit fixed Profile fixtures; this is the approved perception chain, not an alias-driven SDK directory.
+    const selected = (alias: string) => alias === 'primary' ? primary : alias === 'backup' ? backup : undefined;
+    const runtime = { model: (alias: string, id: string) => { const fixture = selected(alias); if (!fixture) throw new Error('Unknown perception fixture'); return fixture.runtime.model(alias, id); },
+      complete: ((model, context, options) => selected(model.provider)!.runtime.complete(model, context, options)) as LlmCompletionPort['complete'],
+      completeSimple: ((model, context, options) => selected(model.provider)!.runtime.completeSimple(model, context, options)) as LlmCompletionPort['completeSimple'] };
     if (first === 'text-only') {
       const original = runtime.model.bind(runtime);
       runtime.model = (provider, model) => ({ ...original(provider, model), ...(provider === 'primary' ? { input: ['text'] as const } : {}) });

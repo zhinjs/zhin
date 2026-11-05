@@ -366,11 +366,8 @@ export function createWorkroomGenerationAuthoritySnapshotFromRuntime(
       id: binding.name,
       digest: digestGenerationDescriptor('agent', {
         name: binding.name,
-        providerAlias: binding.providerAlias,
-        model: binding.model,
         mcpServers: [...binding.mcpServers].sort((left, right) => compareCanonicalWorkroomText(left, right)),
         ...(binding.nickname === undefined ? {} : { nickname: binding.nickname }),
-        ...(binding.permission === undefined ? {} : { permission: binding.permission }),
       }),
     })),
   });

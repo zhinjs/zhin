@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/cli",
-  "version": "1.1.27",
+  "version": "1.1.28",
   "description": "Command-line interface for Zhin.js bot framework",
   "type": "module",
   "main": "./lib/index.js",
@@ -60,6 +60,7 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@zhin.js/ai-provider": "workspace:*",
     "@types/cross-spawn": "^6.0.6",
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.10",
@@ -73,6 +74,9 @@
     "zod": "^4.4.3"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/ai-provider": {
+      "optional": true
+    },
     "@zhin.js/a2a": {
       "optional": true
     },
@@ -90,6 +94,7 @@
     }
   },
   "peerDependencies": {
+    "@zhin.js/ai-provider": "workspace:^",
     "@zhin.js/a2a": "workspace:^",
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/speech": "workspace:^",

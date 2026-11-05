@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { assistantText, createUserMessage } from '@zhin.js/ai';
+import type { ModelExecutionScope } from '@zhin.js/agent/model-runtime';
+import type { AgentRuntimeFoundation, FoundationModelOperation } from '../agent/runtime-foundation.js';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { JournalWorkroomAssignmentGrantClaimPreview, WorkroomPlanningClarificationError, createAssignmentExecutionEnvelope, createDurableWorkroomAssignmentAuthorityGrantProvider, createWorkroomRoleCapabilitySnapshot, DurableReportLocalModelExecutionPort, GenerationOwnedWorkroomAssignmentAuthorityProvider, LocalAssignmentExecutor, PinnedProfileCatalogLocalAssignmentRoute, WorkroomLocalAssignmentRuntime, bindWorkroomCapabilityRealization, createAgentCoreWorkroomLocalTurnPort, createGenerationOwnedDynamicPlanningProvider, createSelfDeliveryAssignmentExecutor, createWorkroomDynamicPlanningGenerationSnapshot, createWorkroomGenerationAuthoritySnapshotFromRuntime, structuredTaskReportPrompt, workroomAssignmentAuthorityGrantRepositoryToken, workroomAssignmentAuthorityGrantToken, workroomAssignmentGrantClaimPreviewToken, workroomDynamicPlanningPolicyToken, workroomEvidencePayloadWriterToken, workroomHumanIngressPlanningToken, workroomLocalAssignmentAuthorityToken, workroomLocalAssignmentRuntimeToken, workroomPlanningDisclosureToken, workroomProjectProfileRegistryToken, workroomTaskReportPayloadToken, type SelfDeliveryHostConfiguration, type WorkroomEvidencePayloadWriteInput, type WorkroomStructuredDagModelInput } from '@zhin.js/workroom';
 import { installWorkroomSchedulerPortfolioDispatchResources, type WorkroomSchedulerPortfolioDispatchResources } from '@zhin.js/workroom/scheduler';
@@ -6,7 +10,6 @@ import {
 } from '@zhin.js/agent/runtime';
 import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';
 import {
   createLocalWorkroomAssignmentGrantProvider,
   LOCAL_WORKROOM_RESOURCE_REQUIREMENTS,
@@ -53,6 +56,14 @@ export class WorkroomAssignmentCoordinator {
     signal.throwIfAborted();
     const service = options.agent.service;
     const composedRuntime = options.agent.composition;
+    const withModels = async <T>(input: Omit<FoundationModelOperation, 'lease'>,
+      run: (models: ModelExecutionScope) => Promise<T>): Promise<T> => {
+      const lease = options.snapshots.acquire();
+      try {
+        if (lease.value.generation !== generation) throw new Error('Workroom model operation generation is unavailable');
+        return await options.agent.withModels({ ...input, lease }, run);
+      } finally { lease.release(); }
+    };
     const listGenerationBindings = () => options.agent.listBindings();
     const assignmentAuthorityGrants = options.persistence.assignmentAuthorityGrants;
     const workroomJournal = options.runtime.journal;
@@ -150,18 +161,26 @@ export class WorkroomAssignmentCoordinator {
             const binding = service.getBindingRegistry()
               .getBinding(modelInput.binding.agentDefinitionId);
             if (!binding) throw new WorkroomPlanningClarificationError('planning_unavailable');
-            const result = await service.runAgent(JSON.stringify(modelInput.prompt), {
-              provider: binding.providerAlias,
-              model: binding.model,
-              systemPrompt: WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT,
-              tools: [],
-              includeRegisteredTools: false,
-              maxIterations: 1,
-              signal: operationSignal,
+            const operationId = randomUUID();
+            // One direct completion: dynamic planning needs no tools or agent loop (Workroom is removed in ADR 0048 H4).
+            const content = await withModels({ turnId: operationId, sessionKey: `workroom:planning:${operationId}`,
+              bindingName: binding.name, signal: operationSignal }, async models => {
+              const answer = await models.chat.completion.complete(models.chat.model, {
+                systemPrompt: WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT,
+                messages: [createUserMessage(JSON.stringify(modelInput.prompt))],
+                tools: [],
+              }, { signal: operationSignal });
+              if (answer.stopReason === 'error' || answer.stopReason === 'aborted') {
+                throw new WorkroomPlanningClarificationError('planning_unavailable');
+              }
+              return assistantText(answer);
+            }).catch((error: unknown) => {
+              if (operationSignal.aborted) throw error;
+              throw new WorkroomPlanningClarificationError('planning_unavailable');
             });
             operationSignal.throwIfAborted();
             try {
-              return JSON.parse(result.content) as unknown;
+              return JSON.parse(content) as unknown;
             } catch (error) {
               throw new Error('Dynamic planning model did not return one strict JSON DAG candidate', {
                 cause: error,
@@ -177,6 +196,7 @@ export class WorkroomAssignmentCoordinator {
         core: composedRuntime.agentCore,
         generation,
         loopHooks: service.loopHooks,
+        withModels,
         resolveBinding: agentDefinitionId => agentDefinitionId
           ? service.getBindingRegistry().getBinding(agentDefinitionId) ?? undefined
           : undefined,
@@ -268,10 +288,7 @@ export class WorkroomAssignmentCoordinator {
             if (canonicalEnvelope.digest !== envelope.digest) {
               throw new Error('Local Assignment current generation authority drifted from Envelope');
             }
-            const capabilities = await ingress.read(
-              lease.value,
-              rootPluginId(),
-              () => lease.active,
+            const capabilities = await ingress.read({ snapshot: lease.value, owner: rootPluginId(), isActive: () => lease.active }
             );
             const capabilitySnapshot = createWorkroomRoleCapabilitySnapshot({
               envelope,

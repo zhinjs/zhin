@@ -1,4 +1,5 @@
 import type { ConversationRef } from '@zhin.js/im-contract';
+import type { ProfileSelection } from '@zhin.js/ai/provider';
 
 /** Constructed by a trusted ingress from its authenticated platform identity. */
 export interface PersonalSessionAddress {
@@ -28,10 +29,10 @@ export interface PersonalSessionIdentity {
 }
 
 export type PersonalSessionSelection =
-  | Readonly<{ kind: 'preset'; presetId: string }>
+  | Readonly<{ kind: 'profile'; profile: ProfileSelection<'language'> }>
   | Readonly<{ kind: 'inherit' }>;
 
-/** Stores a preset reference only; provider configuration and credentials live elsewhere. */
+/** Stores an account-incarnation-bound Profile selection; credentials and model parameters live elsewhere. */
 export interface PersonalSessionState {
   readonly identity: PersonalSessionIdentity;
   readonly revision: number;

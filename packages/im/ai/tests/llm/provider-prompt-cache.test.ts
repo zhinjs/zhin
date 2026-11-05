@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { anthropicMessages, createProviderHarness } from '../helpers/provider-harness/index.js';
-import { generateTextViaAiSdk } from '../../src/llm/bridge/ai-sdk-stream.js';
 import { createUserMessage, EMPTY_TOKEN_USAGE, type AgentMessage } from '../../src/llm/types/agent-message.js';
 import { createPromptContextBlock, projectPromptContext } from '../../src/memory/prompt-context.js';
 
@@ -11,7 +10,7 @@ describe('Anthropic history cache transport', () => {
       .reply(anthropicMessages.reply({ text: 'ok' }));
     const input = { system: 'stable', user: 'hello', tools: [{ name: 'lookup', description: 'lookup', parameters: z.object({}) }] };
     if (stream) await h.complete(input);
-    else await generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, h.context(input));
+    else await h.runtime.generate(h.model, h.context(input));
     const body = h.lastRequest().body as Record<string, any>;
     expect(body.system.at(-1).cache_control).toEqual({ type: 'ephemeral' });
     expect(body.tools.at(-1).cache_control).toEqual({ type: 'ephemeral' });
@@ -26,7 +25,7 @@ describe('Anthropic history cache transport', () => {
       { type: 'text' as const, text: 'time-1' }, createPromptContextBlock('rules', 'A very long stable rule body. '.repeat(40)),
     ] };
     const call: AgentMessage = {
-      role: 'assistant', timestamp: 1, api: 'ai-sdk', provider: 'fixture', model: 'm', usage: EMPTY_TOKEN_USAGE, stopReason: 'toolCalls',
+      role: 'assistant', providerStateScope: h.runtime.stateScope(h.model), timestamp: 1, api: 'ai-sdk', provider: 'fixture', model: 'm', usage: EMPTY_TOKEN_USAGE, stopReason: 'toolCalls',
       content: [{ type: 'thinking', thinking: 'reason', providerOptions: { anthropic: { signature: 'signature' } } },
         { type: 'toolCall', id: 'c', name: 'lookup', arguments: {} }],
     };
@@ -84,10 +83,10 @@ it.each([true, false])('retains the previous written history prefix beyond 20 ne
     h.reply(anthropicMessages.reply({ text: 'ok' }));
     const context = h.context({ system: 'stable', messages, tools });
     if (stream) await h.runtime.complete(h.model, context);
-    else await generateTextViaAiSdk(h.runtime.resolveLanguageModel(h.alias, h.modelId)!, h.model, context);
+    else await h.runtime.generate(h.model, context);
     return h.lastRequest().body as Record<string, any>;
   };
-  const answer = (text: string): AgentMessage => ({ role: 'assistant', timestamp: 1, api: 'ai-sdk', provider: 'mock', model: 'm',
+  const answer = (text: string): AgentMessage => ({ role: 'assistant', providerStateScope: h.runtime.stateScope(h.model), timestamp: 1, api: 'ai-sdk', provider: 'mock', model: 'm',
     usage: EMPTY_TOKEN_USAGE, stopReason: 'stop', content: [{ type: 'text', text }] });
   const firstWire = await request([first]);
   const incoming = { ...createUserMessage(''), content: Array.from({ length: 25 }, (_, i) => ({ type: 'text' as const, text: `new block ${i}` })) };
@@ -108,7 +107,7 @@ it.each([true, false])('retains the previous written history prefix beyond 20 ne
 it('retains the prior tool-result cache boundary before a long signed assistant response', async () => {
   const h = createProviderHarness({ sdk: 'anthropic', model: 'claude-3-7-sonnet-20250219' });
   const first = createUserMessage('stable input '.repeat(1000));
-  const call: AgentMessage = { role: 'assistant', timestamp: 1, api: 'ai-sdk', provider: 'mock', model: 'm', usage: EMPTY_TOKEN_USAGE, stopReason: 'toolCalls',
+  const call: AgentMessage = { role: 'assistant', providerStateScope: h.runtime.stateScope(h.model), timestamp: 1, api: 'ai-sdk', provider: 'mock', model: 'm', usage: EMPTY_TOKEN_USAGE, stopReason: 'toolCalls',
     content: [{ type: 'toolCall', id: 'old', name: 'lookup', arguments: {} }] };
   const result: AgentMessage = { role: 'toolResult', toolCallId: 'old', toolName: 'lookup', timestamp: 1, isError: false,
     content: [{ type: 'text', text: 'tool result' }] };

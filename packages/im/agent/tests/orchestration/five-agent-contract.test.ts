@@ -1,6 +1,6 @@
 /**
  * Five-Agent 契约测试（ADR 0024，legacy pipeline tools removed ADR 0026/0027）：
- * - 角色 ACL（subagent spawn_task 路径）
+ * - 角色 ACL
  * - 内置 opt-in prompt：nickname 渲染
  */
 import { describe, it, expect } from 'vitest';
@@ -28,7 +28,7 @@ describe('role ACL', () => {
     expect(isToolAllowedForRole('write_file', 'planner')).toBe(false);
     expect(isToolAllowedForRole('workroom_create_run', 'planner')).toBe(false);
     expect(isToolAllowedForRole('workroom_transition', 'planner')).toBe(false);
-    expect(isToolAllowedForRole('spawn_task', 'planner')).toBe(true);
+    expect(isToolAllowedForRole('ask_user', 'planner')).toBe(true);
     expect(isToolAllowedForRole('group_delegate', 'planner')).toBe(false);
   });
 
@@ -51,22 +51,22 @@ describe('builtin prompts (opt-in WorkflowStrategy)', () => {
 });
 
 describe('pipeline role binding', () => {
-  const agents = { zhin: { provider: 'agnes', model: 'flash', nickname: '总监' } };
-  it('inherits zhin provider/model when role agent omits', () => {
+  const agents = { zhin: { nickname: '总监', mcpServers: ['facts'], permission: { level: 'user' } } };
+  it('inherits role capabilities while model selection stays in runtime purposes', () => {
     const b = resolveFiveAgentRoleBinding('executor', { agents });
-    expect(b.providerAlias).toBe('agnes');
-    expect(b.model).toBe('flash');
+    expect(b.mcpServers).toEqual(['facts']);
+    expect(b).not.toHaveProperty('providerAlias');
+    expect(b).not.toHaveProperty('model');
     expect(b.nickname).toBe('Executor');
   });
   it('uses ai.agents.<role> override', () => {
     const b = resolveFiveAgentRoleBinding('evaluator', {
       agents: {
         ...agents,
-        evaluator: { provider: 'bigmodel', model: 'glm', nickname: '分析师' },
+        evaluator: { mcpServers: ['review'], nickname: '分析师' },
       },
     });
-    expect(b.providerAlias).toBe('bigmodel');
-    expect(b.model).toBe('glm');
+    expect(b.mcpServers).toEqual(['review']);
     expect(b.nickname).toBe('分析师');
   });
   it('planner inherits zhin nickname', () => {

@@ -17,18 +17,16 @@ import {
   isProviderFailureMessage,
   type ProviderResilienceEvent,
 } from '../../src/llm/provider-resilience.js';
-import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
+
 import { ProviderStreamError, streamPartError } from '../../src/llm/bridge/stream-error.js';
 import { finishFailureKind, resolveFinish } from '../../src/llm/bridge/finish-reason.js';
 import { toolCallInput } from '../../src/llm/bridge/tool-call-input.js';
 import { ToolCallValidationError, validateToolCall } from '../../src/llm/validate-tool-call.js';
 
-/** The harness's resilience wrapper with no real waiting; records retry / fallback events. */
-function resilient(h: ProviderHarness, config = {}, fallbackModelIds: string[] = []) {
+/** The harness's resilience wrapper with no real waiting; records same-model retry events. */
+function resilient(h: ProviderHarness, config = {}) {
   const events: ProviderResilienceEvent[] = [];
   const port = h.resilient({
-    // Fallback candidates on the same alias: the harness registers one model, so describe the rest directly.
-    fallbackModels: fallbackModelIds.map((id) => createLlmTransportModel(h.alias, h.config, id)),
     sleep: async () => {},
     random: () => 0,
     onEvent: (e) => events.push(e),
@@ -63,8 +61,8 @@ describe('streamPartError', () => {
     expect(streamPartError({ foo: 1 }).message).toBe('{"foo":1}');
   });
 
-  it('classifies a converted overload / rate limit as retryable and fallback-eligible', () => {
-    expect(classifyProviderError(streamPartError({ type: 'overloaded_error', message: 'Overloaded' }))).toMatchObject({ kind: 'server', retryable: true, fallbackEligible: true });
+  it('classifies a converted overload / rate limit as retryable', () => {
+    expect(classifyProviderError(streamPartError({ type: 'overloaded_error', message: 'Overloaded' }))).toMatchObject({ kind: 'server', retryable: true });
     expect(classifyProviderError(streamPartError({ type: 'rate_limit_error', message: 'Too many' }))).toMatchObject({ kind: 'rate_limit', retryable: true });
     expect(classifyProviderError(streamPartError({ code: 503, message: 'x', status: 'UNAVAILABLE' }))).toMatchObject({ kind: 'server', retryable: true });
   });
@@ -79,18 +77,17 @@ describe('mid-stream errors over real transports', () => {
     const { port, events } = resilient(h);
     const reply = await port.complete('hi');
     expect(reply.content).toEqual([expect.objectContaining({ type: 'text', text: '你好' })]);
-    expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'server', error: 'Overloaded' })]);
+    expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'server', error: expect.stringContaining('server, HTTP 529') })]);
   });
 
-  it('falls back after an OpenAI server_error chunk keeps failing on the primary', async () => {
+  it('stops on the selected model after repeated OpenAI server_error chunks', async () => {
     const failing = () => openaiChat.streamError({ message: 'The server had an error while processing your request.', type: 'server_error' }, '');
     const h = createProviderHarness({ sdk: 'openai', model: 'primary' }).reply(failing(), failing(), openaiChat.reply({ text: 'ok' }));
-    const { port, events } = resilient(h, { maxRetries: 1 }, ['secondary']);
-    const reply = await port.complete('hi');
-    expect(reply.content).toEqual([expect.objectContaining({ text: 'ok' })]);
-    expect(h.requests.map((r) => r.body.model)).toEqual(['primary', 'primary', 'secondary']);
-    expect(events.map((e) => e.type)).toEqual(['retry', 'fallback']);
-    expect(events[0]).toMatchObject({ kind: 'server', error: expect.stringContaining('The server had an error') });
+    const { port, events } = resilient(h, { maxRetries: 1 });
+    await expect(port.complete('hi')).rejects.toMatchObject({ kind: 'server', attempts: 2 });
+    expect(h.requests.map((r) => r.body.model)).toEqual(['primary', 'primary']);
+    expect(events.map((e) => e.type)).toEqual(['retry', 'give_up']);
+    expect(events[0]).toMatchObject({ kind: 'server', error: expect.stringContaining('server, HTTP 500') });
   });
 });
 

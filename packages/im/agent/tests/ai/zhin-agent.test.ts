@@ -1,3 +1,5 @@
+import type { FixtureTextProvider } from '../../../ai/tests/helpers/text-provider-fixture.js';
+import { createTestZhinAgent } from '../helpers/scoped-agent.js';
 /**
  * ZhinAgent 补全测试
  * 
@@ -5,18 +7,18 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AgentEventBus, SkillRegistry, ZhinAgent } from '@zhin.js/agent';
-import { type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
+import {type AgentTool, type Tool} from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 
 // Mock LLM（ai-sdk 原生面）
-function createMockProvider(response: string = '你好！'): { provider: AIProvider; llm: MockLlmApi } {
+function createMockProvider(response: string = '你好！'): { provider: FixtureTextProvider; llm: MockLlmApi } {
   const llm = wireMockLlmApi({ responder: () => assistantTextReply(response) });
   const provider = Object.assign(llm.provider, {
     listModels: vi.fn(async () => ['mock-model']),
-  }) as unknown as AIProvider;
+  }) as unknown as FixtureTextProvider;
   return { provider, llm };
 }
 
@@ -50,7 +52,7 @@ function makeTool(name: string, desc: string = '', opts: Partial<Tool> = {}): To
   };
 }
 
-function createToolCallProvider(): AIProvider {
+function createToolCallProvider(): FixtureTextProvider {
   return {
     name: 'mock',
     models: ['mock-model'],
@@ -87,16 +89,16 @@ function createToolCallProvider(): AIProvider {
 describe('ZhinAgent', () => {
   const events = new AgentEventBus();
   let agent: ZhinAgent;
-  let provider: AIProvider;
+  let provider: FixtureTextProvider;
   let llm: MockLlmApi;
 
   beforeEach(() => {
     ({ provider, llm } = createMockProvider());
-    agent = new ZhinAgent(provider, {
+    agent = createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: {
       outputSchema: false,
       persona: '测试助手',
       maxIterations: 3,
-    }, undefined, llm.runtime);
+    }, events: undefined });
   });
 
   afterEach(() => {
@@ -107,11 +109,11 @@ describe('ZhinAgent', () => {
     it('ZhinAgentConfig.visionModel 已弃用：设置时告警', () => {
       const warn = vi.spyOn(getLogger('ZhinAgent'), 'warn').mockImplementation(() => undefined);
       try {
-        const legacy = new ZhinAgent(provider, { outputSchema: false, visionModel: 'legacy-vision' }, undefined, llm.runtime);
+        const legacy = createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: { outputSchema: false, visionModel: 'legacy-vision' }, events: undefined });
         legacy.dispose();
         expect(warn.mock.calls.some((call) => String(call[0]).startsWith('ZhinAgentConfig.visionModel 已弃用'))).toBe(true);
         warn.mockClear();
-        const plain = new ZhinAgent(provider, { outputSchema: false }, undefined, llm.runtime);
+        const plain = createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: { outputSchema: false }, events: undefined });
         plain.dispose();
         expect(warn.mock.calls.some((call) => String(call[0]).includes('visionModel'))).toBe(false);
       } finally {
@@ -130,14 +132,14 @@ describe('ZhinAgent', () => {
       expect(() => agent.configure({ skillRegistry: registry })).not.toThrow();
     });
 
-    it('providerResolver 必须与同一 owner 的 llmRuntime 一起注入', () => {
+    it('旧 Provider 注入必须显式拒绝，不能取代 operation scope', () => {
       expect(() => agent.configure({ providerResolver: () => provider })).toThrow(
-        /providerResolver requires an owner-scoped llmRuntime/,
+        /replaced by operation-bound inference/,
       );
       expect(() => agent.configure({
         providerResolver: () => provider,
         llmRuntime: llm.runtime,
-      })).not.toThrow();
+      })).toThrow(/replaced by operation-bound inference/);
     });
 
     it('registerTool 应添加和移除工具', () => {
@@ -184,10 +186,10 @@ describe('ZhinAgent', () => {
 
     it('速率限制应生效', async () => {
       // 创建一个严格限制的 agent
-      const strictAgent = new ZhinAgent(provider, {
+      const strictAgent = createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: {
         outputSchema: false,
         rateLimit: { maxRequestsPerMinute: 1, cooldownSeconds: 5 },
-      }, undefined, llm.runtime);
+      }, events: undefined });
 
       const commMessage = makeCommMessage();
 
@@ -206,11 +208,11 @@ describe('ZhinAgent', () => {
 
     it('phaseTrace 开启时应输出可解析 phase 序列', async () => {
       const phases: string[] = [];
-      const phaseAgent = new ZhinAgent(provider, {
+      const phaseAgent = createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: {
         outputSchema: false,
         phaseTrace: true,
         onPhaseTrace: ({ phase }) => phases.push(phase),
-      }, undefined, llm.runtime);
+      }, events: undefined });
       const commMessage = makeCommMessage();
       try {
         await phaseAgent.process('phase trace', commMessage, []);
@@ -227,11 +229,11 @@ describe('ZhinAgent', () => {
     });
 
     it('应将 AI 生命周期发布到 Runtime 事件总线', async () => {
-      const busAgent = new ZhinAgent(provider, {
+      const busAgent = createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: {
         outputSchema: false,
         persona: '测试助手',
         maxIterations: 3,
-      }, events, llm.runtime);
+      }, events: events });
       const received: string[] = [];
 
       const record = (event: string) => () => {
@@ -261,11 +263,11 @@ describe('ZhinAgent', () => {
     });
 
     it('应在首次写入会话时发出 ai.session.new', async () => {
-      const sessionAgent = new ZhinAgent(provider, {
+      const sessionAgent = createTestZhinAgent({ runtime: llm.runtime, alias: (provider).name, model: (provider).models[0], config: {
         outputSchema: false,
         persona: '测试助手',
         maxIterations: 3,
-      }, events, llm.runtime);
+      }, events: events });
       const payloads: any[] = [];
       events.on('ai.session.new', payload => payloads.push(payload));
       try {
@@ -325,20 +327,9 @@ describe('ZhinAgent', () => {
     });
 
     it('并发 dispose 应共享同一关闭完成', async () => {
-      let release!: () => void;
-      const dispose = vi.fn(() => new Promise<void>((resolve) => { release = resolve; }));
-      agent.subagentSystem = { dispose } as unknown as import('../../src/subagent/subagent-system.js').SubagentSystem;
-
       const first = agent.dispose();
-      let secondSettled = false;
-      const repeated = agent.dispose();
-      expect(repeated).toBe(first);
-      const second = repeated.then(() => { secondSettled = true; });
-      await Promise.resolve();
-      expect(secondSettled).toBe(false);
-      expect(dispose).toHaveBeenCalledTimes(1);
-      release();
-      await Promise.all([first, second]);
+      expect(agent.dispose()).toBe(first);
+      await first;
     });
   });
 });

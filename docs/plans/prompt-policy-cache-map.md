@@ -1,3 +1,5 @@
+> Historical baseline inventory. Removed runtime links are pinned to the pre-change commit; the target Provider runtime is documented in [model services](../ai/providers.md).
+
 ---
 title: Prompt policy cache map
 sidebar: false
@@ -40,8 +42,8 @@ obsolete cache.
 
 Evidence: [full engine](../../packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts),
 [main loop assembly](../../packages/im/agent/src/core/agent-core-run.ts),
-[standalone runner](../../packages/im/agent/src/core/agent-loop-standalone.ts),
-[lightweight provider](../../packages/im/ai/src/sdk-provider-adapter.ts),
+`standalone runner`（已在 ADR 0048 H2 删除）,
+[lightweight provider](https://github.com/zhinjs/zhin/blob/d8532ddbf8194dd422818463deb554bb97d587e7/packages/im/ai/src/sdk-provider-adapter.ts),
 [LLM runtime](../../packages/im/ai/src/llm/llm-api-runtime.ts).
 
 `LlmApiRuntime.#languageModels` uses `alias::modelId`. Registering a provider clears that alias's
@@ -56,7 +58,7 @@ The model-catalog resource layer additionally keys execution resources by
 `[ownerId, id, revision, sdk, baseUrl, secretRef]`. It rejects conflicting definitions at one
 revision and retires older resources when a newer revision is acquired. This is connection
 resource reuse, not prompt-content reuse. Evidence:
-[model leases](../../packages/im/ai/src/model-catalog/runtime.ts).
+[model leases](https://github.com/zhinjs/zhin/blob/d8532ddbf8194dd422818463deb554bb97d587e7/packages/im/ai/src/model-catalog/runtime.ts).
 
 ## Deployment and file-loading boundaries
 
@@ -78,7 +80,7 @@ Evidence: [Host installation](../../basic/cli/src/plugin-runtime/agent/host-inst
 [context preparation](../../packages/im/agent/src/context/context-system.ts),
 [instruction reads](../../packages/im/agent/src/context/agents-instruction.ts),
 [workspace overrides](../../packages/im/agent/src/prompt/workspace-prompt.ts),
-[worker assembly](../../packages/im/agent/src/deferred-worker-runner.ts),
+`worker assembly`（已在 ADR 0048 H2 删除）,
 [compaction assembly](../../packages/im/agent/src/memory/compaction-runtime.ts).
 
 **Conclusion:** an in-flight generation/turn continuing with its already captured bootstrap/system

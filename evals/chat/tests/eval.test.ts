@@ -9,7 +9,7 @@ import { parseJudgment, rateLimitDelayMs } from '../src/judge.js';
 import { buildReport, renderMarkdown, runPassed, type RunRecord } from '../src/report.js';
 import { loadScenarios, parseScenarios, selectScenarios, type Scenario } from '../src/scenario.js';
 import { buildSystemPrompt, scenarioPromptKey, scenarioTurn, buildUserMessages, outputMessages, type TurnResult } from '../src/turn.js';
-import { parseDotEnv, resolveEnvReferences } from '../src/workspace.js';
+import { resolveEnvReferences } from '../src/workspace.js';
 
 const scenariosPath = fileURLToPath(new URL('../scenarios.yaml', import.meta.url));
 const [scenario] = parseScenarios(`
@@ -192,10 +192,6 @@ describe('judgment and report', () => {
 });
 
 describe('workspace config', () => {
-  it('reads .env lines with spaces around =', () => {
-    expect(parseDotEnv('A = 1\nexport B="two"\n# C=3\nD=\'four\'')).toEqual({ A: '1', B: 'two', D: 'four' });
-  });
-
   it('resolves ${VAR} references deeply', () => {
     expect(resolveEnvReferences({ a: '${X}/v1', b: ['${Y}'], c: 1 }, { X: 'https://h', Y: 'k' }))
       .toEqual({ a: 'https://h/v1', b: ['k'], c: 1 });

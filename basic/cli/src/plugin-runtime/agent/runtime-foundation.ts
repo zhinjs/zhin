@@ -1,6 +1,7 @@
-import { withDeploymentModelScope } from '../personal-models/deployment-scope.js';
-import type { ModelRuntimeServiceOptions } from '@zhin.js/agent/model-runtime';
-import type { ModelConfigurationAccess } from '../personal-models/configuration.js';
+import { randomUUID } from 'node:crypto';
+import type { ExecutionBinding } from '@zhin.js/ai/provider';
+import type { ModelRuntimeServiceOptions, ModelExecutionScope } from '@zhin.js/agent/model-runtime';
+import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '@zhin.js/agent/turn';
 import { projectLocaleToken, resolveLocale } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
@@ -31,7 +32,6 @@ import {
   type AgentHostAIConfig,
 } from './config.js';
 import { createRuntimeZhinAgent } from './runtime-factory.js';
-import { withHostDeploymentModel } from './deployment-model.js';
 import {
   createAssistantHomeRuntime,
   createAssistantScheduleRuntime,
@@ -42,8 +42,8 @@ type RuntimeZhinAgent = ReturnType<typeof createRuntimeZhinAgent>;
 type AssistantHomeRuntime = Awaited<ReturnType<typeof createAssistantHomeRuntime>>;
 
 export interface AgentRuntimeFoundationOptions {
-  readonly modelConfiguration?: ModelConfigurationAccess;
-  readonly modelRuntime: Omit<ModelRuntimeServiceOptions, 'config' | 'hostProviders'>;
+  readonly modelRuntime: ModelRuntimeServiceOptions;
+  readonly acquireDeploymentModels: (input: Readonly<{ service: AIService; bindingName?: string; sessionKey?: string; operationId?: string; lease?: import('@zhin.js/plugin-runtime').SnapshotLease; signal?: AbortSignal }>) => Promise<ModelExecutionScope>;
   readonly config: AgentHostAIConfig;
   readonly assistantConfig?: AssistantConfig;
   readonly im: ImRuntime;
@@ -56,7 +56,24 @@ export interface AgentRuntimeFoundationOptions {
   readonly lifecycle: RootResourceContext['lifecycle'];
 }
 
+export interface FoundationModelOperation {
+  readonly lease: import('@zhin.js/plugin-runtime').SnapshotLease;
+  readonly bindingName: string;
+  readonly turnId: string;
+  readonly sessionKey: string;
+  readonly signal: AbortSignal;
+}
+export interface FoundationModelSelection {
+  readonly lease: import('@zhin.js/plugin-runtime').SnapshotLease;
+  readonly snapshots: import('@zhin.js/plugin-runtime').SnapshotReader;
+  readonly bindingName: string;
+  readonly signal: AbortSignal;
+}
+type WithModelSelection = <T>(input: FoundationModelSelection, run: (binding: ExecutionBinding) => Promise<T>) => Promise<T>;
+type WithFoundationModels = <T>(input: FoundationModelOperation, run: (models: ModelExecutionScope) => Promise<T>) => Promise<T>;
 interface AgentRuntimeFoundationState {
+  readonly withModels: WithFoundationModels;
+  readonly withModelSelection: WithModelSelection;
   readonly service: AIService;
   readonly agent: RuntimeZhinAgent['agent'];
   readonly composition: RuntimeZhinAgent['runtime'];
@@ -66,7 +83,6 @@ interface AgentRuntimeFoundationState {
   readonly schedule: ReturnType<typeof createAssistantScheduleRuntime>;
   readonly home: AssistantHomeRuntime;
   readonly sessionTreeRuntime: ReturnType<typeof createSessionTreeRuntimeFromAgent>;
-  readonly seedPresets: RuntimeZhinAgent['seedPresets'];
   readonly approvalReviewer: ApprovalReviewAgent;
   readonly approvalJudgment: ApprovalJudgmentPort;
   readonly bypassApprovalPort: ApprovalPort;
@@ -74,6 +90,8 @@ interface AgentRuntimeFoundationState {
 
 /** A complete, validated Agent runtime candidate with all owned auxiliaries. */
 export class AgentRuntimeFoundation {
+  readonly withModels: WithFoundationModels;
+  readonly withModelSelection: WithModelSelection;
   readonly service: AIService;
   readonly agent: RuntimeZhinAgent['agent'];
   readonly composition: RuntimeZhinAgent['runtime'];
@@ -88,9 +106,10 @@ export class AgentRuntimeFoundation {
   readonly approvalReviewer: ApprovalReviewAgent;
   readonly approvalJudgment: ApprovalJudgmentPort;
   readonly bypassApprovalPort: ApprovalPort;
-  readonly #seedPresetResources: RuntimeZhinAgent['seedPresets'];
 
   private constructor(state: AgentRuntimeFoundationState) {
+    this.withModels = state.withModels;
+    this.withModelSelection = state.withModelSelection;
     this.service = state.service;
     this.agent = state.agent;
     this.composition = state.composition;
@@ -105,7 +124,6 @@ export class AgentRuntimeFoundation {
     this.approvalReviewer = state.approvalReviewer;
     this.approvalJudgment = state.approvalJudgment;
     this.bypassApprovalPort = state.bypassApprovalPort;
-    this.#seedPresetResources = state.seedPresets;
   }
 
   static async create(options: AgentRuntimeFoundationOptions): Promise<AgentRuntimeFoundation> {
@@ -123,16 +141,11 @@ export class AgentRuntimeFoundation {
       : null;
     if (semanticMemory) options.lifecycle.add(() => semanticMemory.dispose());
     const traceRuntime = createAgentTraceRuntime();
-    const binding = service.getBindingRegistry().requireZhinBinding();
-    const startupApprovalJudgment = new LlmApprovalJudgment({
-      completion: service.getLlmRuntime(),
-      model: service.getLlmRuntime().model(binding.providerAlias, binding.model),
-    });
-    const approvalJudgment: ApprovalJudgmentPort = options.modelConfiguration ? {
-      judge: input => withHostDeploymentModel(options.modelConfiguration!, undefined, input.signal, model =>
-        new LlmApprovalJudgment({ completion: model.llmRuntime,
-          model: model.llmRuntime.model(model.provider.name, model.invocation.model.model) }).judge(input)),
-    } : startupApprovalJudgment;
+    const approvalJudgment: ApprovalJudgmentPort = { judge(input) {
+      const models = getAgentTurnConfiguration()?.models;
+      if (!models) return Promise.reject(new Error('Approval inference requires an admitted model operation'));
+      return new LlmApprovalJudgment({ completion: models.chat.completion, model: models.chat.model }).judge(input);
+    } };
     const approvalReviewer = new ApprovalReviewAgent({ judgment: approvalJudgment });
     const bypassApprovalPort = createBypassApprovalPort();
     const approvalMode = service.getAgentConfig()?.execApprovalMode ?? 'auto';
@@ -142,28 +155,16 @@ export class AgentRuntimeFoundation {
         : approvalMode === 'bypass' ? bypassApprovalPort : undefined);
 
     try {
-      const created = createRuntimeZhinAgent(
-        service,
-        options.im,
-        options.projectRoot,
-        defaultApprovalPort,
-        options.audioTranscriber,
-        knowledgeIndex,
-        options.localAssets,
-        options.modelConfiguration,
-      );
+      const created = createRuntimeZhinAgent({ service, im: options.im,
+        approvalPort: defaultApprovalPort, audioTranscriber: options.audioTranscriber,
+        localAssets: options.localAssets,
+      });
       options.lifecycle.add(() => created.agent.dispose());
       options.lifecycle.add(() => created.events.clear());
       options.resources.provide(agentEventBusToken, created.events);
       options.resources.provide(aiCompletionToken, createAiCompletion({
         service,
-        acquireExplicitModel: options.modelConfiguration
-          ? (bindingName, model, signal) => options.modelConfiguration!.acquireHostCompletion(bindingName, model, signal) : undefined,
-        acquireDefaultModel: signal => {
-          const input = { rootId: options.modelRuntime.rootId ?? options.projectRoot, ownerId: options.modelRuntime.hostOwnerId };
-          return options.modelConfiguration ? options.modelConfiguration.acquire(async () => input, signal)
-            : service.getModelRuntime().acquireForTurn(input, signal);
-        },
+        acquireDefaultModel: (signal, bindingName) => options.acquireDeploymentModels({ service, signal, bindingName }),
         usageQuota: created.agent.usageQuota,
       }));
 
@@ -196,6 +197,21 @@ export class AgentRuntimeFoundation {
       }
 
       return new AgentRuntimeFoundation({
+        withModelSelection: async (input, run) => {
+          const runtime = options.modelRuntime.inferenceFactory(input);
+          const scope = await runtime.openScope({ context: { rootId: options.modelRuntime.rootId,
+            hostOwnerId: options.modelRuntime.hostOwnerId, ownerId: options.modelRuntime.hostOwnerId, operationId: randomUUID() }, signal: input.signal });
+          try { return await run(await scope.resolve({ kind: 'language', purpose: input.bindingName === 'zhin' ? 'chat' : `agent:${input.bindingName}` })); }
+          finally { await scope.close(); runtime.retire(); }
+        },
+        withModels: async (input, run) => {
+          const activeBinding = service.getBindingRegistry().getBinding(input.bindingName);
+          if (!activeBinding) throw new Error('Workroom model role is unavailable');
+          const models = await options.acquireDeploymentModels({ service, bindingName: input.bindingName,
+            sessionKey: input.sessionKey, operationId: input.turnId, lease: input.lease, signal: input.signal });
+          try { return await runWithAgentTurnConfiguration({ models, activeBinding }, () => run(models)); }
+          finally { await models.release(); }
+        },
         service,
         agent: created.agent,
         composition: created.runtime,
@@ -204,9 +220,11 @@ export class AgentRuntimeFoundation {
         traceRuntime,
         schedule,
         home,
-        sessionTreeRuntime: createSessionTreeRuntimeFromAgent(created.runtime.host, operation =>
-          withDeploymentModelScope(service, options.projectRoot, operation, options.modelConfiguration)),
-        seedPresets: created.seedPresets,
+        sessionTreeRuntime: createSessionTreeRuntimeFromAgent(created.runtime.host, async operation => {
+          const models = await options.acquireDeploymentModels({ service });
+          try { return await runWithAgentTurnConfiguration({ models, activeBinding: service.getBindingRegistry().requireZhinBinding() }, operation); }
+          finally { await models.release(); }
+        }),
         approvalReviewer,
         approvalJudgment,
         bypassApprovalPort,
@@ -224,13 +242,9 @@ export class AgentRuntimeFoundation {
         .map(entry => Object.freeze({ ...entry, mcpServers: [...entry.mcpServers] })),
     );
   }
-
-  seedPresets(): Promise<number> {
-    return this.#seedPresetResources();
-  }
 }
 
-async function createReadyService(config: AgentHostAIConfig, modelRuntime: Omit<ModelRuntimeServiceOptions, 'config' | 'hostProviders'>): Promise<AIService> {
+async function createReadyService(config: AgentHostAIConfig, modelRuntime: ModelRuntimeServiceOptions): Promise<AIService> {
   let service: AIService | undefined;
   try {
     service = new AIService(config);
@@ -238,10 +252,6 @@ async function createReadyService(config: AgentHostAIConfig, modelRuntime: Omit<
   } catch (error) {
     await service?.dispose().catch(() => undefined);
     throw new Error('Agent Host rejected invalid AI configuration', { cause: error });
-  }
-  if (!service.isReady()) {
-    await service.dispose();
-    throw new Error('Agent Host requires at least one ready AI provider');
   }
   if (!service.getBindingRegistry().getBinding('zhin')) {
     await service.dispose();

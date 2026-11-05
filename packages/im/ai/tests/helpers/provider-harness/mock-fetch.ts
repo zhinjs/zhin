@@ -47,7 +47,7 @@ export interface MockResponse {
 /**
  * A protocol-aware reply that serves both transports: `stream` for streamed
  * requests (the agent path, `streamText`) and `json` for non-streamed ones
- * (`generateText`, e.g. `SdkProviderAdapter.completeText`). Built by the
+ * (`generateText`, including fixed-Profile plain completions). Built by the
  * protocol helpers in `protocols.ts`.
  */
 export interface ProtocolReply {
@@ -94,7 +94,8 @@ function abortError(signal: AbortSignal | undefined): unknown {
   return signal?.reason ?? new DOMException('The operation was aborted.', 'AbortError');
 }
 
-function toResponse(mock: MockResponse, signal: AbortSignal | undefined): Promise<Response> | Response {
+function toResponse(mock: MockResponse, request: Request): Promise<Response> | Response {
+  const signal = request.signal;
   const status = mock.status ?? 200;
   if (mock.hang === 'before-headers') {
     return new Promise<Response>((_resolve, reject) => {
@@ -105,6 +106,7 @@ function toResponse(mock: MockResponse, signal: AbortSignal | undefined): Promis
   if (mock.sse) {
     const payload = new TextEncoder().encode(serializeSse(mock.sse));
     const hang = mock.hang === 'after-events';
+    let onAbort: (() => void) | undefined;
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(payload);
@@ -112,9 +114,17 @@ function toResponse(mock: MockResponse, signal: AbortSignal | undefined): Promis
           controller.close();
           return;
         }
-        const onAbort = () => controller.error(abortError(signal));
-        if (signal?.aborted) onAbort();
-        else signal?.addEventListener('abort', onAbort, { once: true });
+        onAbort = () => {
+          request.signal.removeEventListener('abort', onAbort!);
+          controller.error(abortError(request.signal));
+        };
+        if (request.signal.aborted) onAbort();
+        else request.signal.addEventListener('abort', onAbort, { once: true });
+      },
+      cancel() {
+        // Native Fetch owns the Request while its body is pending. Holding only
+        // a followed signal permits Request's cancellation linkage to be collected.
+        if (onAbort) request.signal.removeEventListener('abort', onAbort);
       },
     });
     return new Response(body, { status, headers: { 'content-type': 'text/event-stream', ...mock.headers } });
@@ -134,10 +144,12 @@ export function createMockFetch(responders: readonly Responder[] = []): MockFetc
   const queue: Responder[] = [...responders];
   const routes: Array<{ match: (request: RecordedRequest) => boolean; responder: Responder }> = [];
   const requests: RecordedRequest[] = [];
+  const pendingHeaders = new Set<Request>();
 
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
-    const rawBody = typeof init?.body === 'string' ? init.body : undefined;
+    const transportRequest = new Request(input, init);
+    const rawBody = transportRequest.method === 'GET' || transportRequest.method === 'HEAD' ? undefined : await transportRequest.clone().text();
     let body: unknown;
     if (rawBody !== undefined) {
       try {
@@ -147,14 +159,14 @@ export function createMockFetch(responders: readonly Responder[] = []): MockFetc
       }
     }
     const request: RecordedRequest = {
-      method: (init?.method ?? 'GET').toUpperCase(),
+      method: transportRequest.method,
       url,
       path: new URL(url).pathname,
-      headers: headersToRecord(init?.headers),
+      headers: headersToRecord(transportRequest.headers),
       body,
       ...(rawBody !== undefined ? { rawBody } : {}),
       stream: (body as { stream?: unknown } | undefined)?.stream === true || STREAM_URL.test(url),
-      ...(init?.signal ? { signal: init.signal } : {}),
+      signal: transportRequest.signal,
     };
     requests.push(request);
 
@@ -165,7 +177,9 @@ export function createMockFetch(responders: readonly Responder[] = []): MockFetc
     }
     let resolved = typeof responder === 'function' ? await responder(request) : responder;
     if (isProtocolReply(resolved)) resolved = request.stream ? resolved.stream(request) : resolved.json(request);
-    return toResponse(resolved, init?.signal ?? undefined);
+    pendingHeaders.add(transportRequest);
+    try { return await toResponse(resolved, transportRequest); }
+    finally { pendingHeaders.delete(transportRequest); }
   }) as typeof globalThis.fetch;
 
   const api: MockFetch = {

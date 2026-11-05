@@ -1,5 +1,29 @@
 # @zhin.js/host-http
 
+## 1.1.14
+
+### Patch Changes
+
+- bd524d1: **行为变更：Host 未运行时 `zhin config get|set|unset|list` 现在以退出码 7 失败，不再静默写本地文件；离线操作需显式加 `--offline`。**
+
+  `zhin config get|set|unset|list` 默认连接运行中的 Host（`config:get-project` / `config:patch-project`）；新增 `--offline` 显式本地保存（与 Host 相同的 patchProject 校验，不启动 Runtime）、`--host` / `--token-env` 连接选项（推导地址时通配监听 `0.0.0.0` / `::` 改连 loopback）、`unset` 子命令（`delete`/`del` 为别名）、按 Schema 脱敏读取与 `--reveal`，以及公开退出码 0/3/4/5/6/7。写请求发出后只有 Host 的权威拒绝（HTTP 400 且回显 requestId）才算未保存，网关 502/504 等一律为结果未知（6），并输出 `requestId` / `expectedRevision` 供核对。新增 full-scope `config:get-project` RPC，读取失败不回显原始错误；`config:patch-project` 保存后事件发布失败不再变成拒绝。
+
+- 126ae99: 新增可信项目配置补丁 `config:patch-project`（仅 full 权限，Demo 写入黑名单）：与 `config:patch` 共用单次修订 CAS、整份候选校验与按组生效链，跨分组一次提交；页面 `config:patch` 与 `HOST_CONFIG_PATCH_PATHS` 白名单保持不变。项目补丁拒绝写入 `configVersion` / `plugins` / `disable_plugins` / 根插件 `plugin` 及未声明实例（结构化 `invalid`），冲突回显中的秘密、writeOnly、`${…}` 引用与疑似凭据键一律遮蔽；提交确认丢失返回结构化 `unconfirmed`，不重试、不回滚。
+- 4fe49b5: 支持配置按需生效：分离保存与有效版本，独立变更先应用，账号资料更新保留连接，模型按回合使用确定版本；Console 返回结构化应用结果。监听改为仅显式 --watch 启用，开发模板显式选择源码和配置监听。
+
+  自变更消费配置应用回执，避免已处理配置被二次重载；持久化本次写入修订和应用结果，未知结果或修订冲突时停止自动续作并保留现场，恢复不会覆盖未经本次变更确认的配置。
+
+- 0315ba0: 用统一的 Service／Account／Profile 运行时替换旧 Provider／Catalog 选型入口；支持 Host 订阅账号、固定模型、结构化决策多用途与动态持久选择。命令、工具及委派任务绑定真实 operation／generation，权限、配额与取消不通过全局最新对象传递。
+
+  新增显式导入与恢复 journal、只读预览及旧 Session 完整身份绑定；向导单独生成 ai.plan.yml。旧插件接口需要与本次配套 patch 一起迁移，最低版本／旧支持上限与恢复流程见 docs/ai/provider-upgrade.md。本声明不表示版本已经发布，不执行版本提升、登录、真实模型调用、迁移用户数据或部署。
+
+- Updated dependencies [299863a]
+- Updated dependencies [bd524d1]
+- Updated dependencies [126ae99]
+- Updated dependencies [4fe49b5]
+  - @zhin.js/plugin-runtime@1.1.20
+  - @zhin.js/console-protocol@1.1.13
+
 ## 1.1.13
 
 ### Patch Changes

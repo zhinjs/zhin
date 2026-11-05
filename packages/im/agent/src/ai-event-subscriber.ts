@@ -24,11 +24,6 @@ export interface AIEventHandlers {
   onTypingStop?: (payload: AIEventPayload) => void;
   onQueuedStart?: (payload: AIEventPayload) => void;
   onQueuedClear?: (payload: AIEventPayload) => void;
-  onSubagentSpawn?: (payload: AIEventPayload) => void;
-  onSubagentStart?: (payload: AIEventPayload) => void;
-  onSubagentFinish?: (payload: AIEventPayload) => void;
-  onDeferredStart?: (payload: AIEventPayload) => void;
-  onDeferredFinish?: (payload: AIEventPayload) => void;
   onMcpConnectStart?: (payload: AIEventPayload) => void;
   onMcpConnectFinish?: (payload: AIEventPayload) => void;
   onMcpConnectError?: (payload: AIEventPayload) => void;
@@ -54,11 +49,6 @@ const EVENT_HANDLER_MAP: Record<AIEventName, keyof AIEventHandlers | undefined> 
   'ai.typing.stop': 'onTypingStop',
   'ai.activity.queued.start': 'onQueuedStart',
   'ai.activity.queued.clear': 'onQueuedClear',
-  'ai.subagent.spawn': 'onSubagentSpawn',
-  'ai.subagent.start': 'onSubagentStart',
-  'ai.subagent.finish': 'onSubagentFinish',
-  'ai.deferred.start': 'onDeferredStart',
-  'ai.deferred.finish': 'onDeferredFinish',
   'ai.mcp.connect.start': 'onMcpConnectStart',
   'ai.mcp.connect.finish': 'onMcpConnectFinish',
   'ai.mcp.connect.error': 'onMcpConnectError',

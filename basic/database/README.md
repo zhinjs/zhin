@@ -16,6 +16,8 @@ npm install mysql2
 
 # For PostgreSQL
 npm install pg
+# TypeScript projects selecting PostgreSQL types also install its declarations
+npm install --save-dev @types/pg
 
 # For MongoDB
 npm install mongodb
@@ -23,6 +25,34 @@ npm install mongodb
 # For Redis
 npm install redis
 ```
+
+## TypeScript entry points
+
+The default entry exports the neutral database/model/transaction APIs and Memory/SQLite. External dialects expose their complete native driver options through their own entries:
+
+| Dialect | Class and configuration entry |
+| --- | --- |
+| MySQL | `@zhin.js/database/dialects/mysql` |
+| PostgreSQL | `@zhin.js/database/dialects/pg` |
+| MongoDB | `@zhin.js/database/dialects/mongodb` |
+| Redis | `@zhin.js/database/dialects/redis` |
+
+Select the corresponding types before using a remote `Registry.create()` call:
+
+```typescript
+import { Registry } from '@zhin.js/database';
+import type {} from '@zhin.js/database/dialects/pg';
+
+const db = Registry.create('pg', { application_name: 'my-bot', statement_timeout: 1000 });
+```
+
+Direct constructors are imported from the same dialect entry, for example `import { PG } from '@zhin.js/database/dialects/pg'`. They are no longer re-exported by the database, Core or Zhin default entry. SQLite users do not need the other four drivers or their declarations; JavaScript PostgreSQL users only need `pg`. `@types/pg` remains a build development dependency of this package, not a new optional peer.
+
+All built-in factories still register when the default entry is loaded. `Registry.create()` remains synchronous; native clients are loaded when the selected database connects. Host YAML/JSON configuration is unchanged.
+
+Third-party dialects augment only `@zhin.js/database/registry`: both `Databases<S>` and `Registry.Config` must describe their concrete class and configuration. The Registry value from this entry and from the default entry is the same initialized object. See the [type-isolation contract](../../docs/plans/database-optional-dialect-types.md).
+
+These entries first require **`@zhin.js/database >=1.1.6` (pending release)**. Plugins using them must declare that minimum database dependency; existing root imports of external dialect classes must be migrated together.
 
 ## Quick Start
 
@@ -125,6 +155,8 @@ MySQL 方言将 `text` 的非空默认值和 `json` 默认值写成表达式，�
 MySQL 或 mysql2，也无需删除已有数据库。修复针对新建表，不会缩窄既有文本列。
 
 ```typescript
+import type {} from '@zhin.js/database/dialects/mysql';
+
 const db = Registry.create('mysql', {
   host: 'localhost',
   port: 3306,
@@ -139,6 +171,8 @@ await db.start();
 ### PostgreSQL Example
 
 ```typescript
+import type {} from '@zhin.js/database/dialects/pg';
+
 const db = Registry.create('pg', {
   host: 'localhost',
   port: 5432,
@@ -153,6 +187,8 @@ await db.start();
 ### MongoDB Example
 
 ```typescript
+import type {} from '@zhin.js/database/dialects/mongodb';
+
 const db = Registry.create('mongodb', {
   url: 'mongodb://localhost:27017',
   dbName: 'myapp'
@@ -164,6 +200,8 @@ await db.start();
 ### Redis Example
 
 ```typescript
+import type {} from '@zhin.js/database/dialects/redis';
+
 const db = Registry.create('redis', {
   socket: {
     host: 'localhost',
@@ -934,6 +972,9 @@ if (db.isLogging) {
 MySQL 和 PostgreSQL 支持连接池，提高高并发场景下的性能：
 
 ```typescript
+import type {} from '@zhin.js/database/dialects/mysql';
+import type {} from '@zhin.js/database/dialects/pg';
+
 // MySQL 连接池配置
 const db = Registry.create('mysql', {
   host: 'localhost',

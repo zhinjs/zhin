@@ -1,13 +1,3 @@
-import type { ProviderConfig, SdkId, OllamaProviderConfig } from '@zhin.js/ai';
-export type { SdkId };
-
-export interface ProviderInstanceConfig extends ProviderConfig, OllamaProviderConfig {
-  /** AI SDK provider id (ADR 0018 closed table) */
-  sdk: SdkId;
-  /** Cloudflare Workers AI */
-  accountId?: string;
-}
-
 /**
  * @deprecated Inbound routing by `match` never took effect (IM inbound always
  * uses the `zhin` binding). Accepted with a warning; removed in the next minor.
@@ -25,12 +15,8 @@ export interface RouteMatchConfig {
   contentContains?: string;
 }
 
-export type PermissionTaskAction = 'allow' | 'deny';
-
 export interface AgentBindingConfig {
-  provider: string;
-  model: string;
-  mcpServers?: string[];
+  mcpServers?: readonly string[];
   /**
    * @deprecated Never took effect; accepted with a warning and removed by
    * `zhin config check --fix`. Dropped from the effective config.
@@ -44,22 +30,14 @@ export interface AgentBindingConfig {
   match?: RouteMatchConfig | RouteMatchConfig[];
   /** 任务/协作角色昵称（ADR 0024 #11）；IM 自我资料优先取当前 Endpoint，此值仅作最终显示名兜底。 */
   nickname?: string;
-  /** spawn_task 可见子 agent 类型（glob → allow/deny，ADR 0030）。 */
-  permission?: {
-    task?: Record<string, PermissionTaskAction>;
-  };
 }
 
 /** 解析后的 agent 绑定（运行时） */
 export interface ResolvedAgentBinding {
   name: string;
-  providerAlias: string;
-  model: string;
-  mcpServers: string[];
+  mcpServers: readonly string[];
   /** 任务/协作角色显示名；IM 当前账号昵称由 Endpoint 资料提供，此值仅作最终兜底。 */
   nickname?: string;
-  /** spawn_task 子 agent 类型过滤（ADR 0030）。 */
-  permission?: AgentBindingConfig['permission'];
 }
 
 export const DEFAULT_ZHIN_AGENT_NAME = 'zhin';

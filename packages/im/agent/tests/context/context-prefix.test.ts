@@ -1,17 +1,15 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { expect, it, vi } from 'vitest';
 import { createUserMessage, projectPromptContext, userMessagePlainText, serializeAgentMessage, agentMessageRowToLlm, type UserMessage, renderUserMessageForLlm, createPromptContextBlock, RUNTIME_CONTEXT_MARKER } from '@zhin.js/ai';
 import { ContextSystem } from '../../src/context/context-system.js';
 import { buildAgentsEnvelopeContext } from '../../src/context/agents-instruction.js';
-import { buildTurnContextBlocks } from '../../src/context/turn-envelope.js';
-import { sceneLineForTurn } from '../../src/context/turn-envelope.js';
+import { buildTurnContextBlocks, sceneLineForTurn } from '../../src/context/turn-envelope.js';
 import { resolveIngressUserMessage } from '../../src/session/turn-ingress-session.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import { buildTurnUserMessages, appendTurnContextBlocks } from '../../src/context/turn-user-message.js';
 import { getGitStatusLine } from '../../src/prompt/git-context.js';
 import { runEvalCase } from '../../evals/framework/index.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
-import { buildSubagentAutoContinueUserMessage, buildSubagentAutoContinueRetryMessage } from '../../src/turn/subagent-auto-continue.js';
-import { buildDeferredAutoContinueUserMessage } from '../../src/turn/deferred-auto-continue.js';
 import { turnContextViewFromMessage } from '../../src/context/im-turn-context-adapter.js';
 
 vi.mock('../../src/context/agents-instruction.js', () => ({ buildAgentsEnvelopeContext: vi.fn() }));
@@ -21,9 +19,9 @@ it('keeps workspace guidance once while updating Git, sender, user text and revi
   const host = {
     config: { persona: 'p', toneAwareness: false, gitStatus: true },
     userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'openai', models: ['m'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({ model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) }).model(((() => ({ name: 'openai', models: ['m'] }))()).name, ((() => ({ name: 'openai', models: ['m'] }))()).models?.[0]) }, completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) } }),
     buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
-    llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+    completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
   } as any;
   const system = new ContextSystem();
   const build = (text: string, senderId: string) => system.buildTextTurnContext({
@@ -55,9 +53,9 @@ it('keeps quoted replies and actor stable across a context-injected round trip',
   const host = {
     config: { persona: 'p', toneAwareness: false },
     userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'openai', models: ['m'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({ model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) }).model(((() => ({ name: 'openai', models: ['m'] }))()).name, ((() => ({ name: 'openai', models: ['m'] }))()).models?.[0]) }, completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) } }),
     buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
-    llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+    completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
   } as any;
   vi.mocked(buildAgentsEnvelopeContext).mockResolvedValue('[Agents instructions] workspace rules');
   const extra = { quote: { messageId: 'quoted', block: '[Quoted message context - the user is replying to this]\nquoted content' } };
@@ -151,9 +149,9 @@ it('places the deferred catalog and turn facts after the actual question on the 
 it.each(['private', 'http', 'schedule'] as const)('retains the real principal and message metadata in %s user input', async kind => {
   const host = {
     config: { persona: 'p', toneAwareness: false }, userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'openai', models: ['m'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({ model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) }).model(((() => ({ name: 'openai', models: ['m'] }))()).name, ((() => ({ name: 'openai', models: ['m'] }))()).models?.[0]) }, completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) } }),
     buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
-    llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+    completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
   } as any;
   const origin = kind === 'private'
     ? { kind: 'im' as const, platform: 'qq', endpoint: 'display-name', scope: 'private' as const, sceneId: 'person', messageId: 'native-id' }
@@ -186,9 +184,9 @@ it.each(['private', 'http', 'schedule'] as const)('retains the real principal an
 it('reassembles an owned message without rewriting its recorded identity from the executing principal', async () => {
   const host = {
     config: { persona: 'p', toneAwareness: false }, userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
+    getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: ((() => ({ name: 'openai', models: ['m'] }))()).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...({ model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) }).model(((() => ({ name: 'openai', models: ['m'] }))()).name, ((() => ({ name: 'openai', models: ['m'] }))()).models?.[0]) }, completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) } }),
     buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
-    llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
+    completion: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
   } as any;
   const user = renderUserMessageForLlm({ ...createUserMessage('question', undefined, 123,
     { subjectId: 'alice', authorizationRoles: ['master'], scope: 'group' }),
@@ -204,33 +202,4 @@ it('reassembles an owned message without rewriting its recorded identity from th
   expect(body).toContain('role:master');
   expect((result.userMessages[0] as UserMessage).actor).toEqual(user.actor);
   expect(user).toEqual(original);
-});
-
-
-it.each([
-  ['subagent', () => buildSubagentAutoContinueUserMessage('task', 'work', 'ok')],
-  ['subagent retry', () => buildSubagentAutoContinueRetryMessage('task', 'work', 'ok')],
-  ['deferred', () => buildDeferredAutoContinueUserMessage('task', 'work', 'ok')],
-] as const)('does not attribute a synthetic %s continuation to the original human input', async (_kind, buildMessage) => {
-  const host = {
-    config: { persona: 'p', toneAwareness: false }, userProfiles: { buildProfileSummary: async () => '' },
-    getTurnProvider: () => ({ name: 'openai', models: ['m'] }), modelRegistry: null,
-    buildDisciplinedPrompt: (p: string) => p, getTurnActiveSkills: () => '',
-    llmRuntime: { model: () => ({ id: 'm', sdk: 'openai', input: ['text'] }) },
-  } as any;
-  const commMessage = { ...mockCommMessage({ senderId: 'owner', isMaster: true }), id: 'old-native' };
-  const turn = turnContextViewFromMessage(commMessage);
-  const continuation = buildMessage();
-  const result = await new ContextSystem().buildTextTurnContext({ host, turn, content: '',
-    turnUser: { rawContent: '', promptMessages: [createUserMessage('')] }, prebuiltMessages: [continuation],
-  });
-  const current = result.userMessages[0] as UserMessage;
-  expect(current.actor).toBeUndefined();
-  expect(current.messageId).toBeUndefined();
-  const body = (projectPromptContext([current])[0] as UserMessage).content.find(block => block.presentation === 'user-input')!.text;
-  expect(body).not.toContain('user_id:');
-  expect(body).toContain(continuation.content[0]!.text);
-  expect(agentMessageRowToLlm(serializeAgentMessage(current))).toEqual({ ...current, content: current.content.filter(block => !block.perTurn) });
-  expect(turn.principal.roles).toEqual(['master']);
-  expect(turn.origin).toMatchObject({ messageId: 'old-native' });
 });

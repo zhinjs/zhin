@@ -226,6 +226,8 @@ ai:
 
 之后，没匹配到命令的消息会交给模型回答——私聊默认触发，群里用 `ai:` 前缀或 @ 触发。往 `tools/` 里加文件即可赋予它新能力；权限、审批、文件与网络访问由框架策略控制，而不是靠提示词。
 
+> Claude 订阅与 Antigravity：实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担。详见 [AI Provider](./docs/ai/providers.md)。
+
 下一步：[AI 总览](./docs/ai/index.md) · [Agent 工具、Skill 与 Prompt Section](./docs/authoring/agent-tools.md) · [AI Agent 学习路径](./docs/paths/ai-agent.md)
 
 ### 按需安装

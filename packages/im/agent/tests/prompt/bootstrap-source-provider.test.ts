@@ -1,3 +1,4 @@
+import { executionBundle } from '../helpers/execution-bundle.js';
 import { createUserMessage, type AgentMessage } from '@zhin.js/ai';
 import { DEFAULT_CONFIG } from '../../src/config/index.js';
 import { buildBootstrapContextSection } from '../../src/bootstrap.js';
@@ -12,8 +13,8 @@ function createHost(llm: ReturnType<typeof wireMockLlmApi>): ZhinAgentPrivate {
     config: { ...DEFAULT_CONFIG, gitStatus: false, outputSchema: false, maxIterations: 1,
       toolBudget: { autoContinue: 'off', progressMaxUpdates: 0, extendBy: 0 } },
     activeBinding: { providerAlias: 'mock', model: 'm' }, bootstrapContext: 'Latest unrelated Host workspace.',
-    globalContext: '', getTurnActiveSkills: () => '', getTurnProvider: () => llm.provider,
-    userProfiles: { buildProfileSummary: async () => '' }, modelRegistry: null, llmRuntime: llm.runtime,
+    globalContext: '', getTurnActiveSkills: () => '', getTurnExecution: () => executionBundle({ model: { api: 'fixture', provider: (llm.provider).name, input: ['text'], contextWindow: 0, maxTokens: 8192, ...(llm.runtime).model((llm.provider).name, (llm.provider).models?.[0]) }, completion: llm.runtime }),
+    userProfiles: { buildProfileSummary: async () => '' }, completion: llm.runtime,
     contextRepository: { loadContext: async () => ({ messages: [] }), appendMessages: async () => {} },
     compactionRuntime: { transformContext: async (messages: AgentMessage[]) => messages },
     getActiveTurnTracker: () => undefined, promptTraceConfig: {}, phaseConfig: {},

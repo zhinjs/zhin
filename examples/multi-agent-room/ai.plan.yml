@@ -1,0 +1,35 @@
+version: 1
+services:
+  ollama:
+    driver: ollama
+    options:
+      baseUrl: ${OLLAMA_HOST:-http://127.0.0.1:11434}
+    models:
+      qwen3:8b:
+        id: qwen3:8b
+        kinds:
+          - language
+        protocol: openai-chat
+        input:
+          - text
+        streaming: true
+        toolCalling: true
+accounts:
+  ollama:
+    service: ollama
+    auth:
+      method: none
+profiles:
+  ollama:qwen3:8b:
+    account: ollama
+    model: qwen3:8b
+purposes:
+  chat:
+    profile: ollama:qwen3:8b
+  agents:
+    coordinator:
+      profile: ollama:qwen3:8b
+    researcher:
+      profile: ollama:qwen3:8b
+    writer:
+      profile: ollama:qwen3:8b

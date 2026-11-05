@@ -1,3 +1,4 @@
+import { validateAgentMcpBindings } from '../model-runtime/validation.js';
 import type { AgentTool } from '@zhin.js/ai';
 import type { Message } from '@zhin.js/core';
 import {
@@ -9,11 +10,6 @@ import { captureDeferredSnapshotBefore, cloneDeferredSnapshot } from '../interna
 import type { ZhinAgentPrivate, Tool } from '../internal/agent-host.js';
 import { defaultToolSystem } from '../tool/tool-system.js';
 import type { ResolvedToolsForTurn } from './deferred-resolution.js';
-
-function listSpawnableAgentNames(host: ZhinAgentPrivate): string[] {
-  const presets = host.resourceHub?.subagents.getAllPresets().map((p) => p.name) ?? [];
-  return [...new Set(presets.filter(Boolean))].sort();
-}
 
 export interface TurnToolsPrep {
   contextForTools: Message;
@@ -38,6 +34,10 @@ export async function prepareTurnTools(
 ): Promise<TurnToolsPrep> {
   const userId = opts.userId;
   const contextForTools = opts.commMessage;
+  const bindingName = host.activeBinding?.name ?? 'zhin';
+  const mcpErrors = validateAgentMcpBindings({ agents: { [bindingName]: { mcpServers: opts.mcpServerNames } },
+    mcpServerNames: host.resourceHub?.mcps.getAll().map(server => server.name) ?? [] });
+  if (mcpErrors.length) throw new Error(mcpErrors.join('\n'));
 
   if (host.resourceHub && opts.mcpServerNames.length > 0) {
     await ensureMcpConnectionsForBinding(host.resourceHub.mcps, opts.mcpServerNames, (event) => {
@@ -64,7 +64,6 @@ export async function prepareTurnTools(
 
   const toolSystem = host.toolSystem ?? defaultToolSystem;
   const allTools = await toolSystem.collectForTurn({
-    host,
     message: contextForTools,
     content: opts.content,
     sessionId: opts.sessionId,
@@ -75,7 +74,6 @@ export async function prepareTurnTools(
     externalRegistered: host.externalTools,
     userProfiles: host.userProfiles,
     mcpTools,
-    spawnableAgentNames: host.subagentSystem ? listSpawnableAgentNames(host) : undefined,
   });
 
   const resolved = await toolSystem.resolveForTurn(

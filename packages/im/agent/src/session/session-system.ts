@@ -3,7 +3,6 @@ import { getLogger } from '@zhin.js/logger';
 import { resolveAgentTurnSessionKey } from './session-key.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { buildTurnUserMessages } from '../context/turn-user-message.js';
-import { logPhase } from '../internal/phase-trace.js';
 import type { SessionStrategy, SessionSystemConfig } from './contracts.js';
 import { type SessionIODeps, beginTurnSession, resolveSessionIsNewBeforeCreate, touchSession, archiveSessionByKey } from './session-io.js';
 import { GroupSessionStrategy } from './strategies.js';
@@ -114,19 +113,13 @@ export class SessionSystem {
     host: ZhinAgentPrivate,
     commMessage: Message,
     content: string,
-    options?: { deferredAutoContinue?: boolean; strategyName?: string },
+    options?: { strategyName?: string },
   ): Promise<TurnSessionPrep> {
     const deps = this.sessionDeps(host);
     const sessionKey = this.resolveSessionKey(commMessage, options?.strategyName);
     const userId = commMessage.sender?.id || 'unknown';
     const turnUser = buildTurnUserMessages(commMessage, content);
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
-
-    if (options?.deferredAutoContinue) {
-      logPhase(host.phaseConfig, 'turn.deferred_auto_continue', sessionKey, {});
-    } else {
-      host.deferred.resetAutoContinueDepth(sessionKey);
-    }
 
     await host.waitForMemoryPersistence();
     const { sessionId } = await beginTurnSession(deps, sessionKey);
@@ -143,19 +136,12 @@ export class SessionSystem {
   async prepareIngressTurn(
     host: ZhinAgentPrivate,
     turn: TurnIngress,
-    options?: { deferredAutoContinue?: boolean },
   ): Promise<IngressTurnSessionPrep> {
     const deps = this.sessionDeps(host);
     const sessionKey = turn.session.key;
     const userId = turn.principal.subjectId;
     const resolved = resolveIngressUserMessage(turn, await resolveTurnQuote(turn));
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
-
-    if (options?.deferredAutoContinue) {
-      logPhase(host.phaseConfig, 'turn.deferred_auto_continue', sessionKey, {});
-    } else {
-      host.deferred.resetAutoContinueDepth(sessionKey);
-    }
 
     await host.waitForMemoryPersistence();
     const { sessionId } = await beginIngressTurnSession(deps, turn);

@@ -1,11 +1,8 @@
 import type { LocalImageAssetStore } from '../media/local-image-assets.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import type {
-  AIProvider,
   AgentSessionRepository,
   ContextRepository,
-  ModelRegistry,
-  LlmApiRuntime,
 } from '@zhin.js/ai';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
@@ -15,7 +12,6 @@ import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
 import type { AgentResourceHub } from '../resource-hub/index.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
-import type { SubagentResultSender } from '../subagent/index.js';
 import type { ResolvedAgentBinding } from './types.js';
 import type { AudioTranscriptionPort } from '../media/media-types.js';
 import type { MediaPerceptionPort } from '../media/perception.js';
@@ -33,17 +29,12 @@ export interface ZhinAgentDependencies {
   eventSystem?: EventSystem;
   agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
-  modelRegistry: ModelRegistry;
-  llmRuntime: LlmApiRuntime;
   audioTranscriber: AudioTranscriptionPort;
   /** `ai.multimodal.perception` pre-pass for media the turn's model cannot take. */
   mediaPerception: MediaPerceptionPort;
   imageAssets: ImageAssetPublisher;
   localAssets?: LocalImageAssetStore;
-  providerResolver: (alias: string) => AIProvider;
   activeBinding: ResolvedAgentBinding;
-  subagentSender: SubagentResultSender;
-  deferredResultSender: SubagentResultSender;
   bootstrapContext: string;
   globalContext: string;
   activeSkillsContext: string;

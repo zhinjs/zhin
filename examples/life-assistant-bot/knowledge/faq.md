@@ -6,7 +6,7 @@
 
 ## 如何更换 AI 模型？
 
-修改 `zhin.config.yml` 中 `ai.agents.zhin.model` 字段。
+在 Console 模型管理中选择聊天 Profile，或在个人 Session 中切换模型；保存后下一回合生效。
 
 ## 如何接入真实 IM？
 

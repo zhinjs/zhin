@@ -8,7 +8,9 @@ import { z } from 'zod';
 import type { AssistantMessage, Context, LlmCompletionPort, Model } from '@zhin.js/ai';
 import {
   createFakeClock,
+  actorOfSession,
   createLiveModel,
+  createScriptedModel,
   defineEvalCase,
   evaluateExpectations,
   formatEvalReport,
@@ -203,6 +205,15 @@ describe('eval framework', () => {
       live: { checks: () => [] },
     });
     expect(validateEvalCase(liveWithoutSchema)).toEqual(['live case: tool "get_weather" must declare parameters for city']);
+    const peers = [
+      { name: 'reviewer', description: 'Reviews changes.', tools: [] },
+      { name: 'reviewer', description: 'Duplicate.', tools: [] },
+    ];
+    const withAgents = defineEvalCase({ ...approvalCase('approve'), id: 'peer-agents', agents: peers });
+    expect(validateEvalCase(withAgents)).toEqual(['duplicate agent names: reviewer']);
+    expect(validateEvalCase({ ...withAgents, agents: peers.slice(0, 1), script: [{ text: 'x', actor: 'ghost' }] }))
+      .toEqual(['script step 1 names actor "ghost" which is not a declared agent']);
+    expect(validateEvalCase({ ...withAgents, agents: peers.slice(0, 1) })).toEqual([]);
     const valid = approvalCase('approve');
     expect(() => loadEvalCases({ 'a.case.ts': { default: valid }, 'b.case.ts': { default: valid } }))
       .toThrow('b.case.ts: id "approval-gate" already used by a.case.ts');
@@ -289,4 +300,60 @@ describe('eval framework: mock tool parameters', () => {
     // Tools reach the model port as zod schemas; compare their JSON Schema projection.
     expect(z.toJSONSchema(tool!.parameters as z.ZodType)).toMatchObject({ type: 'object', properties: { city: { type: 'string' } }, required: ['city'] });
   });
+});
+
+describe('eval framework: per-actor scripted model', () => {
+  const ask = async (model: ReturnType<typeof createScriptedModel>, sessionId?: string) => {
+    const resolved = model.runtime.model(model.providerAlias, model.modelId);
+    const context = { messages: [{ role: 'user', content: 'hi', timestamp: 0 }] } as unknown as Context;
+    return model.runtime.complete(resolved, context, sessionId ? { sessionId } : undefined);
+  };
+  const textOf = (message: AssistantMessage) => message.content.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
+
+  it('reads the actor from the child session id and treats everything else as the entry agent', () => {
+    expect(actorOfSession(undefined)).toBe('zhin');
+    expect(actorOfSession('eval:private:u1')).toBe('zhin');
+    expect(actorOfSession('eval:private:u1#actor:researcher')).toBe('researcher');
+  });
+
+  it('serves each actor its own queue in script order, whatever the interleaving', async () => {
+    const model = createScriptedModel([
+      { text: 'entry-1' },
+      { text: 'ops-1', actor: 'ops' },
+      { text: 'researcher-1', actor: 'researcher' },
+      { text: 'entry-2' },
+      { text: 'ops-2', actor: 'ops' },
+    ]);
+    const root = 'session';
+    const replies = [
+      await ask(model, `${root}#actor:ops`),
+      await ask(model, root),
+      await ask(model, `${root}#actor:researcher`),
+      await ask(model, `${root}#actor:ops`),
+      await ask(model),
+    ].map(textOf);
+    expect(replies).toEqual(['ops-1', 'entry-1', 'researcher-1', 'ops-2', 'entry-2']);
+    expect(model.requests.map((request) => request.actor)).toEqual(['ops', 'zhin', 'researcher', 'ops', 'zhin']);
+    expect(model.remainingSteps()).toBe(0);
+    expect(model.remainingStepsByActor()).toEqual({});
+  });
+
+  it('reports unused steps and exhausted requests per actor', async () => {
+    const model = createScriptedModel([{ text: 'entry' }, { text: 'a-1', actor: 'a' }, { text: 'a-2', actor: 'a' }, { text: 'b-1', actor: 'b' }]);
+    await ask(model);
+    await ask(model, 'k#actor:a');
+    await expect(ask(model, 'k#actor:c')).rejects.toThrow(/actor c/);
+    await expect(ask(model)).rejects.toThrow(/no step/);
+    expect(model.remainingSteps()).toBe(2);
+    expect(model.remainingStepsByActor()).toEqual({ a: 1, b: 1 });
+    expect(model.exhaustedRequests()).toBe(2);
+    expect(model.exhaustedRequestsByActor()).toEqual({ c: 1, zhin: 1 });
+  });
+
+  it('keeps untagged scripts behaving as a single queue', async () => {
+    const model = createScriptedModel([{ text: 'one' }, { text: 'two' }]);
+    expect([textOf(await ask(model)), textOf(await ask(model, 'k'))]).toEqual(['one', 'two']);
+    expect(model.remainingSteps()).toBe(0);
+  });
+
 });

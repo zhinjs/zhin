@@ -1,6 +1,7 @@
 import { collectEnvironmentSecrets } from '../security/outbound-leak-guard.js';
 import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 import { scrubSecrets } from './trace-redaction.js';
+import { projectProviderDiagnostics } from '@zhin.js/ai';
 
 export const DEFAULT_TRACE_MAX_BYTES = 64 * 1024 * 1024;
 export class RequestBodyTooLargeError extends Error {
@@ -98,8 +99,7 @@ export function captureRequestBody(input: TurnTraceRequestBodyInput, secrets = c
         consume(jsonStringBytes(key) + 2);
         const sensitive = secretKey.test(normalizeKey(key));
         if ((!schema && /^(?:base64|bytes)$/i.test(key))) return [key, marker('[media omitted]')];
-        if (key === 'providerOptions' || key === 'providerMetadata'
-          || ((!schema && sensitive) || (schema && sensitiveSchema && /^(?:default|const|enum|examples)$/.test(key)))) return [key, marker('[redacted]')];
+        if ((!schema && sensitive) || (schema && sensitiveSchema && /^(?:default|const|enum|examples)$/.test(key))) return [key, marker('[redacted]')];
         return [key, project(entry, schema, sensitiveSchema || (schema && sensitive))];
       }));
     } finally { seen.delete(value); }
@@ -109,6 +109,7 @@ export function captureRequestBody(input: TurnTraceRequestBodyInput, secrets = c
   const body: TurnTraceRequestBody = {
     ...(keptSystem === undefined ? {} : { system: keptSystem }),
     messages: (input.messages ?? []).map(message => {
+      message = projectProviderDiagnostics(message);
       if (!message || typeof message !== 'object') throw new TypeError('Invalid model message');
       const { role, content } = message as { role?: unknown; content?: unknown };
       if (typeof role !== 'string') throw new TypeError('Invalid model message role');

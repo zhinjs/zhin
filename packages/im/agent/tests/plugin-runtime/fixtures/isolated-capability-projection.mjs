@@ -19,7 +19,7 @@ for(const [pkg,Constructor,guard] of [['tool',ToolIndex,isToolIndex],['skill',Sk
  results.push({pkg,sameClass:result.value instanceof Constructor,guard:guard(result.value),rejectFuture:guard({$projection:result.value.$projection.replace('/1','/2')}),rejectUnbranded:guard({list(){return []}})});
 }
 let active=true;
-const capabilities=await new CapabilityIngress().read(snapshot,root,()=>active);
+const capabilities=await new CapabilityIngress().read({snapshot,owner:root,isActive:()=>active});
 const echoed=await capabilities.tools[0].execute({message:'isolated-module-echo'},{signal:new AbortController().signal,traceId:'trace',turnId:'turn',sessionKey:'session',origin:{kind:'internal',source:'test'},principal:{subjectId:'test',roles:[]},policy:{permissions:[],unattended:true,network:{enabled:false,httpsOnly:true,allowedDomains:[]}}});
 active=false; let inactiveRejected=false;
 try {await capabilities.tools[0].execute({},{});} catch(error) {inactiveRejected=error.message.includes('scope has ended');}

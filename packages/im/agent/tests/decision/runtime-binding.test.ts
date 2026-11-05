@@ -1,179 +1,153 @@
-import { childPluginId, createSnapshotView, rootPluginId, Scope, SnapshotStore, type SnapshotState } from '@zhin.js/plugin-runtime';
-import type { DecisionProvider } from '@zhin.js/ai';
+import { createSnapshotView, rootPluginId, SnapshotStore, type SnapshotState, type TokenId } from '@zhin.js/plugin-runtime';
+import { createInferenceRuntime, defineProvider, normalizeProviderGraph, type DecisionPurpose, type InferenceOperationScope } from '@zhin.js/ai/provider';
+import type { DecisionResult } from '@zhin.js/ai';
 import { normalizeAgentDecisionConfig } from '../../src/decision/config.js';
-import { agentDecisionConfigToken, decisionProviderToken, getAgentTurnDecisionRuntime, provideAgentDecisionProvider, resolveAgentDecisionRuntime, runWithAgentDecisionTurn } from '../../src/plugin-runtime/decision-runtime.js';
-import { AgentRuntime, AgentTurnCoordinator, agentTurnEngineToken, turnJournalStoreToken, type AgentTurnExecutor } from '../../src/plugin-runtime/agent-runtime.js';
+import { getAgentTurnDecisionRuntime, resolveAgentDecisionRuntime, runWithAgentDecisionTurn } from '../../src/plugin-runtime/decision-runtime.js';
 import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
+import { AgentRuntime, AgentTurnCoordinator, agentTurnEngineToken, turnJournalStoreToken, type AgentTurnExecutor } from '../../src/plugin-runtime/agent-runtime.js';
+import { turnModelPortToken } from '../../src/model-runtime/turn-resource.js';
+import type { ModelExecutionScope } from '../../src/model-runtime/types.js';
 import type { TurnRequest } from '../../src/turn/turn-ingress.js';
 
-const provider: DecisionProvider = { evaluate: async () => { throw new Error('unused'); } };
-
-function state(service: DecisionProvider = provider): SnapshotState {
+const tasks = ['skills', 'tools', 'memory', 'agents', 'approval', 'ambient'] as const;
+const context = { rootId: 'root', hostOwnerId: 'host:test', ownerId: 'host:test', operationId: 'operation', sessionKey: 'session' };
+function snapshot() {
   const root = rootPluginId();
-  const owner = childPluginId(root, 'typesafe');
-  return {
-    root,
-    tree: new Map([
-      [root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/test', children: [owner] }],
-      [owner, { id: owner, parent: root, instanceKey: 'typesafe', packageName: 'typesafe', packageRoot: '/test/typesafe', children: [] }],
-    ]),
-    config: new Map(),
-    resources: new Map([
-      [root, new Map([[agentDecisionConfigToken.id, normalizeAgentDecisionConfig({ provider: 'root/typesafe', skills: { mode: 'active' } })]])],
-      [owner, new Map([[decisionProviderToken.id, { owner, provider: service }]])],
-    ]),
-    capabilities: new Map(), projections: new Map(),
-  };
+  const state: SnapshotState = { root, tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'root', packageRoot: '/', children: [] }]]),
+    config: new Map(), resources: new Map([[root, new Map()]]), capabilities: new Map(), projections: new Map() };
+  return createSnapshotView(1, state);
+}
+async function fixture() {
+  const base = { rootId: 'root', ownerId: 'host:test', revision: 1 };
+  const graph = normalizeProviderGraph({ rootId: 'root', revision: 1,
+    services: { service: { ...base, id: 'service', driver: { id: 'fixture', owner: 'root/providers', contractVersion: '1' }, options: {}, models: {
+      first: { id: 'first', kinds: ['decision'], protocol: 'native-decision' }, second: { id: 'second', kinds: ['decision'], protocol: 'native-decision' },
+    } } }, accounts: { account: { ...base, id: 'account', serviceId: 'service', incarnation: 'initial', authentication: { method: 'none' } } },
+    profiles: Object.fromEntries(['first', 'second'].map(id => [id, { ...base, id, accountId: 'account', model: id, parameters: {} }])),
+    purposes: { defaults: {}, decisions: Object.fromEntries(tasks.map((task, index) => [task, { profile: index % 2 ? 'second' : 'first', mode: 'active' }])) },
+  });
+  const models: string[] = [];
+  const definition = defineProvider({ id: 'fixture', contractVersion: '1', serviceSchema: { parse: (value: unknown) => value },
+    authentication: { methods: ['none'] }, targets: () => ({ authentication: [], inference: [] }), models: service => service.models,
+    createExecution: input => ({ decision: { evaluate: async ({ questions }) => {
+      models.push(input.binding.model.id);
+      return { model: input.binding.model.id, usage: { inputTokens: 2, outputTokens: 1 },
+        answers: Object.fromEntries(Object.keys(questions).map(key => [key, { type: 'noul', noul: 0.8 }])) } as DecisionResult<typeof questions>;
+    } } }),
+  });
+  const runtime = createInferenceRuntime({ repository: { readGraph: async () => graph },
+    drivers: { acquire: async () => ({ definition, reference: graph.services.service.driver, release() {} }) },
+    credentials: () => ({ bindRequest: (input: { request: Request }) => input.request, authorize: async () => ({ headers: {}, revision: '1' }) }), fetch: () => async () => { throw new Error('unexpected network'); } });
+  const scope = await runtime.openScope({ context });
+  return { models, scope, runtime, decisionScope: { graph: scope.graph, inference: scope.client, resolve: scope.resolve } };
 }
 
-describe('decision configuration and generation binding', () => {
-  it('rejects malformed policies without exposing their values', () => {
-    expect(normalizeAgentDecisionConfig(undefined)).toBeUndefined();
-    for (const config of [null, [], { provider: 'typesafe' }, { provider: 'root/typesafe', extra: 'secret' },
-      ...[{ mode: 'auto' }, { mode: ['active'] }, { mode: 'active', timeoutMs: 0 }, { mode: 'active', maxCandidates: 1.5 },
-        { mode: 'active', minConfidence: NaN }, { mode: 'active', minConfidence: 2 }].map(skills => ({ provider: 'root/typesafe', skills }))]) {
-      let failure: unknown;
-      try { normalizeAgentDecisionConfig(config); } catch (error) { failure = error; }
-      expect(failure).toBeInstanceOf(TypeError);
-      expect((failure as Error).message).not.toContain('secret');
+it('validates per-task Profile policies and rejects the removed global Provider selector', () => {
+  expect(normalizeAgentDecisionConfig(undefined)).toBeUndefined();
+  for (const input of [null, [], { provider: 'root/typesafe' }, { skills: { mode: 'active' } },
+    { skills: { profile: 'first', mode: 'auto' } }, { tools: { profile: 'first', mode: 'active', timeoutMs: 0 } },
+    { memory: { profile: 'first', mode: 'shadow', minConfidence: 2 } }]) expect(() => normalizeAgentDecisionConfig(input)).toThrow(TypeError);
+  const policy = normalizeAgentDecisionConfig({ skills: { profile: 'first', mode: 'shadow' }, ambient: { mode: 'off' } });
+  expect(policy).toEqual({ skills: { profile: 'first', mode: 'shadow' }, ambient: { mode: 'off' } });
+  expect(Object.isFrozen(policy)).toBe(true); expect(Object.isFrozen(policy?.skills)).toBe(true);
+});
+
+it('selects each of six Decision task Profiles at actual use through the unified inference runtime', async () => {
+  const fixture_ = await fixture();
+  const runtime = resolveAgentDecisionRuntime(fixture_.decisionScope);
+  try {
+    for (const task of tasks) {
+      const response = await runtime!.forTask(task)!.evaluate({ state: null, questions: { allowed: { type: 'noul' } } }, { signal: new AbortController().signal });
+      expect(response.model).toBe(fixture_.scope.graph.purposes.decisions![task]!.profile);
+      expect(response.answers.allowed.noul).toBe(0.8);
     }
-    const config = normalizeAgentDecisionConfig({ provider: 'root/123/child', skills: { mode: 'shadow', topK: 2 } });
-    expect(Object.isFrozen(config)).toBe(true);
-    expect(Object.isFrozen(config?.skills)).toBe(true);
-  });
+    expect(fixture_.models).toEqual(['first', 'second', 'first', 'second', 'first', 'second']);
+    await expect(runtime!.forTask('tools')!.evaluate({ model: 'first', state: null, questions: { allowed: { type: 'noul' } } }, { signal: new AbortController().signal })).rejects.toThrow('fixed');
+    expect(fixture_.models).toHaveLength(6);
+  } finally { await fixture_.scope.close(); }
+});
 
-  it('accepts an ambient engagement policy, which alone enables the decision runtime', () => {
-    expect(normalizeAgentDecisionConfig({ provider: 'root/typesafe', ambient: { mode: 'active', timeoutMs: 2000, minConfidence: 0.8 } }))
-      .toEqual({ provider: 'root/typesafe', ambient: { mode: 'active', timeoutMs: 2000, minConfidence: 0.8 } });
-    const ambientOnly = state();
-    ambientOnly.resources.get(ambientOnly.root)!.set(agentDecisionConfigToken.id, normalizeAgentDecisionConfig({ provider: 'root/typesafe', ambient: { mode: 'shadow' } }));
-    expect(resolveAgentDecisionRuntime(createSnapshotView(1, ambientOnly))?.config.ambient).toEqual({ mode: 'shadow' });
-  });
-
-  it('resolves only an explicitly configured owner-local provider', () => {
-    const baseline = state();
-    expect(resolveAgentDecisionRuntime(createSnapshotView(1, baseline))?.provider).toBe(provider);
-    const resources = new Map(baseline.resources);
-    resources.set(childPluginId(baseline.root, 'typesafe'), new Map());
-    expect(() => resolveAgentDecisionRuntime(createSnapshotView(2, { ...baseline, resources }))).toThrow('does not provide');
-    resources.set(baseline.root, new Map([
-      [agentDecisionConfigToken.id, normalizeAgentDecisionConfig({ provider: 'root/typesafe', skills: { mode: 'off' } })],
-    ]));
-    expect(resolveAgentDecisionRuntime(createSnapshotView(3, { ...baseline, resources }))).toBeUndefined();
-    const inherited = { owner: baseline.root, provider };
-    resources.set(baseline.root, new Map([[agentDecisionConfigToken.id, normalizeAgentDecisionConfig({ provider: 'root/typesafe', skills: { mode: 'active' } })], [decisionProviderToken.id, inherited]]));
-    resources.set(childPluginId(baseline.root, 'typesafe'), new Map([[decisionProviderToken.id, inherited]]));
-    expect(() => resolveAgentDecisionRuntime(createSnapshotView(4, { ...baseline, resources }))).toThrow('does not provide');
-  });
-
-  it('accepts an owner-local declaration of the same provider as its parent', () => {
-    const baseline = state();
-    const parent = new Scope(baseline.root);
-    parent.provide(agentDecisionConfigToken, normalizeAgentDecisionConfig({ provider: 'root/typesafe', skills: { mode: 'active' } })!);
-    provideAgentDecisionProvider(parent, provider);
-    const owner = childPluginId(baseline.root, 'typesafe');
-    const child = new Scope(owner, parent);
-    provideAgentDecisionProvider(child, provider);
-    parent.seal();
-    child.seal();
-    expect(resolveAgentDecisionRuntime(createSnapshotView(1, { ...baseline,
-      resources: new Map([[baseline.root, parent.snapshot()], [owner, child.snapshot()]]) }))?.provider).toBe(provider);
-  });
-
-  it('ignores caller decision fields and isolates nested turns within the same generation', async () => {
-    const snapshot = createSnapshotView(1, state());
-    const forged = { bootstrapContext: 'caller context', decision: { provider: { evaluate: vi.fn() } } };
-    await runWithAgentTurnConfiguration(forged, async () => {
+it('keeps decision scope out of caller-supplied turn data, isolates nested contexts and observes only the active runtime', async () => {
+  const fixture_ = await fixture(), held = snapshot();
+  const observations: unknown[] = [];
+  try {
+    await runWithAgentTurnConfiguration({ bootstrapContext: 'caller data' }, async () => {
       expect(getAgentTurnDecisionRuntime()).toBeUndefined();
-      await runWithAgentDecisionTurn(snapshot, 'outer', async outer => {
-        expect(getAgentTurnDecisionRuntime()?.provider).toBe(provider);
-        await runWithAgentTurnConfiguration(forged, async () => {
-          expect(getAgentTurnDecisionRuntime()).toBe(outer);
-        });
-        await runWithAgentDecisionTurn(snapshot, 'inner', async inner => {
-          expect(inner).not.toBe(outer);
-        });
-        await runWithAgentDecisionTurn(snapshot, 'outer', async disabled => {
-          expect(disabled).toBeUndefined();
-          expect(getAgentTurnDecisionRuntime()).toBeUndefined();
-        }, { disabled: true });
+      await runWithAgentDecisionTurn({ snapshot: held, turnId: 'outer', models: fixture_.decisionScope, observe: value => observations.push(value) }, async outer => {
         expect(getAgentTurnDecisionRuntime()).toBe(outer);
+        await runWithAgentDecisionTurn({ snapshot: held, turnId: 'inner', models: fixture_.decisionScope, disabled: true }, async disabled => {
+          expect(disabled).toBeUndefined(); expect(getAgentTurnDecisionRuntime()).toBeUndefined();
+        });
+        expect(getAgentTurnDecisionRuntime()).toBe(outer);
+        outer!.observe!({ task: 'tools', mode: 'active', outcome: 'selected', candidates: 1, selected: 1, durationMs: 1 });
       });
       expect(getAgentTurnDecisionRuntime()).toBeUndefined();
     });
-  });
+    expect(observations).toHaveLength(1); expect(fixture_.models).toHaveLength(0);
+  } finally { await fixture_.scope.close(); }
+});
 
-  it('keeps old and replacement turn providers isolated and journals safe observations', async () => {
-    const old = state();
-    const events: unknown[] = [];
-    const seen: Array<DecisionProvider | undefined> = [];
-    let enter!: () => void;
-    let release!: () => void;
-    const entered = new Promise<void>(resolve => { enter = resolve; });
-    const gate = new Promise<void>(resolve => { release = resolve; });
-    const engine: AgentTurnExecutor = async function* (context) {
-      yield { type: 'turn_start', sessionId: context.turn.session.key, turnId: context.turn.identity.turnId };
-      if (context.turn.identity.turnId === 'old') { enter(); await gate; }
-      expect(getAgentTurnDecisionRuntime()).toBe(context.decision);
-      seen.push(context.decision?.provider);
-      context.decision?.observe?.({ task: 'skills', mode: 'active', outcome: 'selected', candidates: 1, selected: 1, durationMs: 1 });
-      if (context.turn.identity.turnId === 'old') getAgentTurnDecisionRuntime()?.observe?.({ task: 'approval', mode: 'active', outcome: 'selected', candidates: 3, selected: 1, durationMs: 1 });
-      if (context.turn.identity.turnId === 'failed') {
-        context.decision?.observe?.({ task: 'approval', mode: 'active', outcome: 'selected', candidates: 3, selected: 1, durationMs: 1 });
-        throw new Error('engine failed after approval');
-      }
-      yield { type: 'turn_end', output: [], usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } };
-    };
-    const resources = new Map(old.resources);
-    resources.set(old.root, new Map([...resources.get(old.root)!, [agentTurnEngineToken.id, { run: engine }], [turnJournalStoreToken.id, { append: (event: unknown) => { events.push(event); }, replay: async () => [], listRuns: async () => [] }]]));
-    const store = new SnapshotStore({ ...old, resources });
-    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
-    runtime.attach(store);
-    const selection = { binding: { name: 'zhin', providerAlias: 'chat', model: 'model', mcpServers: [] }, mcpServers: [] };
-    const request = (id: string): TurnRequest => ({ identity: { traceId: id, turnId: id }, origin: { kind: 'http', sessionId: id }, principal: { subjectId: 'user', roles: ['user'] }, intent: { kind: 'new' }, input: { text: 'private request' }, session: { key: id }, policy: { permissions: [], unattended: false }, signal: new AbortController().signal, ports: {} });
-    const lease = store.acquire();
-    const pending = runWithAgentDecisionTurn(lease.value, 'old', async decision => {
-      decision?.observe?.({ task: 'agents', mode: 'active', outcome: 'selected', candidates: 1, selected: 1, durationMs: 1 });
-      try { return await runtime.executeLeased(lease, old.root, request('old'), selection); }
-      finally { lease.release(); }
-    });
-    await entered;
-    const replacement: DecisionProvider = { evaluate: async () => { throw new Error('unused new'); } };
-    const nextResources = new Map(resources);
-    const owner = childPluginId(old.root, 'typesafe');
-    nextResources.set(owner, new Map([[decisionProviderToken.id, { owner, provider: replacement }]]));
-    store.commit(0, { snapshot: { ...old, resources: nextResources }, dispose: () => undefined });
-    await expect(runtime.execute(old.root, request('new'), selection)).resolves.toMatchObject({ status: 'completed' });
-    release();
-    await expect(pending).resolves.toMatchObject({ status: 'completed' });
-    expect(seen).toEqual([replacement, provider]);
-    const diagnostics = events.filter(event => (event as { type: string }).type === 'decision.evaluated');
-    expect(diagnostics).toHaveLength(4);
-    expect(diagnostics).toEqual(expect.arrayContaining([
-      expect.objectContaining({ data: expect.objectContaining({ task: 'agents' }) }),
-      expect.objectContaining({ data: expect.objectContaining({ task: 'approval' }) }),
-    ]));
-    expect(JSON.stringify(diagnostics)).not.toContain('private request');
-    for (const guarded of [
-      { ...request('workroom'), session: { key: 'workroom:test' } },
-      { ...request('assignment'), principal: { subjectId: 'user', roles: ['workroom_assignment'] } },
-      { ...request('metadata'), input: { text: 'governed', metadata: { workroom: {} } } },
-      { ...request('scheduled'), origin: { kind: 'schedule' as const, jobId: 'test-job' },
-        policy: { permissions: [], unattended: true, network: { enabled: true, httpsOnly: true, allowedDomains: [] },
-          shell: { preset: 'readonly' as const } }, capabilities: { tools: [], skills: [] },
-        execution: { kind: 'schedule' as const, security: { execPreset: 'readonly' as const, allowedDomains: [] } } },
-    ]) await runtime.execute(old.root, guarded, selection);
-    expect(seen.slice(-4)).toEqual([undefined, undefined, undefined, undefined]);
-    const failureEvents: unknown[] = [];
-    await expect(runtime.execute(old.root, request('failed'), selection, event => { failureEvents.push(event); }))
-      .resolves.toMatchObject({ status: 'failed', error: { code: 'turn_engine_failed' } });
-    expect(failureEvents).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'decision_evaluation', task: 'approval' }),
-    ]));
-    expect(events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'decision.evaluated', run: { sessionId: 'failed', turnId: 'failed' },
-        data: expect.objectContaining({ task: 'approval' }) }),
-    ]));
-    await store.close();
+it('keeps retained and replacement turn scopes isolated and journals observations even when the engine fails', async () => {
+  const old = await fixture(), replacement = await fixture();
+  const held = snapshot(), events: unknown[] = [], seen: unknown[] = [];
+  let enter!: () => void, release!: () => void;
+  const entered = new Promise<void>(resolve => { enter = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
+  function models(source: typeof old): ModelExecutionScope {
+    const binding = { graphRevision: source.scope.graph.revision, profile: source.scope.graph.profiles.first,
+      account: source.scope.graph.accounts.account, service: source.scope.graph.services.service, model: source.scope.graph.services.service.models.first };
+    const unused = async (): Promise<never> => { throw new Error('This journal fixture must not request chat inference'); };
+    return { ...source.decisionScope, context, chat: { binding,
+      model: { id: 'chat-fixture', provider: 'fixture', api: 'fixture', input: ['text'], contextWindow: 100, maxTokens: 100 },
+      completion: { complete: unused, completeSimple: unused } }, policyRevision: 1, summarySource: 'deployment-chat', release: async () => {} };
+  }
+  const oldModels = models(old), nextModels = models(replacement);
+  const engine: AgentTurnExecutor = async function* (input) {
+    yield { type: 'turn_start', sessionId: input.turn.session.key, turnId: input.turn.identity.turnId };
+    if (input.turn.identity.turnId === 'old') { enter(); await gate; }
+    expect(getAgentTurnDecisionRuntime()).toBe(input.decision);
+    seen.push(input.decision?.config);
+    input.decision?.observe?.({ task: 'skills', mode: 'active', outcome: 'selected', candidates: 1, selected: 1, durationMs: 1 });
+    if (input.turn.identity.turnId === 'old' || input.turn.identity.turnId === 'failed') {
+      input.decision?.observe?.({ task: 'approval', mode: 'active', outcome: 'selected', candidates: 3, selected: 1, durationMs: 1 });
+    }
+    if (input.turn.identity.turnId === 'failed') throw new Error('engine failed after approval');
+    yield { type: 'turn_end', output: [], usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } };
+  };
+  const rootResources = (selected: ModelExecutionScope) => new Map<TokenId, unknown>([
+    [turnModelPortToken.id, { acquire: async () => selected }], [agentTurnEngineToken.id, { run: engine }],
+    [turnJournalStoreToken.id, { append: (event: unknown) => { events.push(event); }, replay: async () => [], listRuns: async () => [] }],
+  ]);
+  const initial = { ...held, resources: new Map([[held.root, rootResources(oldModels)]]) };
+  const store = new SnapshotStore(initial), runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() }); runtime.attach(store);
+  const request = (id: string): TurnRequest => ({ identity: { traceId: id, turnId: id }, origin: { kind: 'http', sessionId: id },
+    principal: { subjectId: 'user', roles: ['user'] }, intent: { kind: 'new' }, input: { text: 'private request' }, session: { key: id },
+    policy: { permissions: [], unattended: false }, signal: new AbortController().signal, ports: {} });
+  const selection = { binding: { name: 'zhin', mcpServers: [] }, mcpServers: [] };
+  const lease = store.acquire();
+  const pending = runWithAgentDecisionTurn({ snapshot: lease.value, turnId: 'old', models: oldModels }, async decision => {
+    decision?.observe?.({ task: 'agents', mode: 'active', outcome: 'selected', candidates: 1, selected: 1, durationMs: 1 });
+    try { return await runtime.executeLeased(lease, held.root, request('old'), selection); } finally { lease.release(); }
   });
+  await entered;
+  store.commit(0, { snapshot: { ...initial, resources: new Map([[held.root, rootResources(nextModels)]]) }, dispose() {} });
+  await expect(runtime.execute(held.root, request('new'), selection)).resolves.toMatchObject({ status: 'completed' });
+  release(); await expect(pending).resolves.toMatchObject({ status: 'completed' });
+  expect(seen[0]).toBe(nextModels.graph.purposes.decisions); expect(seen[1]).toBe(oldModels.graph.purposes.decisions);
+  expect(seen[0]).not.toBe(seen[1]);
+  const diagnostics = events.filter(event => (event as { type: string }).type === 'decision.evaluated');
+  expect(diagnostics).toHaveLength(4); expect(JSON.stringify(diagnostics)).not.toContain('private request');
+  const output: unknown[] = [];
+  await expect(runtime.execute(held.root, request('failed'), selection, event => { output.push(event); })).resolves.toMatchObject({ status: 'failed' });
+  expect(output).toContainEqual(expect.objectContaining({ type: 'decision_evaluation', task: 'approval' }));
+  expect(events).toContainEqual(expect.objectContaining({ type: 'decision.evaluated', run: { sessionId: 'failed', turnId: 'failed' }, data: expect.objectContaining({ task: 'approval' }) }));
+  for (const guarded of [
+    { ...request('workroom'), session: { key: 'workroom:test' } },
+    { ...request('assignment'), principal: { subjectId: 'user', roles: ['workroom_assignment'] } },
+    { ...request('metadata'), input: { text: 'governed', metadata: { workroom: {} } } },
+    { ...request('scheduled'), origin: { kind: 'schedule' as const, jobId: 'test-job' },
+      policy: { permissions: [], unattended: true, network: { enabled: true, httpsOnly: true, allowedDomains: [] }, shell: { preset: 'readonly' as const } },
+      capabilities: { tools: [], skills: [] }, execution: { kind: 'schedule' as const, security: { execPreset: 'readonly' as const, allowedDomains: [] } } },
+  ]) await runtime.execute(held.root, guarded, selection);
+  expect(seen.slice(-4)).toEqual([undefined, undefined, undefined, undefined]);
+  await store.close(); await old.scope.close(); await replacement.scope.close();
 });

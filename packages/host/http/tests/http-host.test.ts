@@ -13,7 +13,7 @@ import {
   type GenerationAdmissionGate,
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
-import { createHttpHost, type HttpHost } from '../src/http-host.js';
+import { createHttpHost, type HttpHost, type HttpHandler } from '../src/http-host.js';
 
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];
 
@@ -560,11 +560,27 @@ describe('HttpHost', () => {
       headers: { Authorization: 'Bearer demo-token' },
     });
     expect(denied.status).toBe(403);
-    expect(await denied.json()).toEqual({ success: false, error: 'Token scope does not allow this route' });
+    expect(await denied.json()).toEqual({ success: false, code: 'forbidden', requestOutcome: 'not-dispatched', error: 'Token scope does not allow this route' });
     const invalid = await fetch(`http://127.0.0.1:${port}/api/secret`, {
       headers: { Authorization: 'Bearer invalid-token' },
     });
     expect(invalid.status).toBe(401);
+    expect(await invalid.json()).toMatchObject({ requestOutcome: 'not-dispatched', code: 'unauthorized' });
+  });
+
+  it('proves only a matched admission rejection was not dispatched and preserves the 503 status', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(host);
+    const admission = createGenerationAdmissionGate();
+    const bound = bindGenerationAdmission<HttpHost>(host, admission), handler = vi.fn<HttpHandler>((_request, response) => { response.end('unexpected'); });
+    bound.route('POST', '/mutation', handler);
+    const store = new SnapshotStore(admissionState(admission));
+    const { port } = await host.listen();
+    vi.spyOn(admission, 'acquire').mockReturnValueOnce(undefined);
+    const rejected = await fetch(`http://127.0.0.1:${port}/mutation`, { method: 'POST' });
+    expect(rejected.status).toBe(503);
+    expect(await rejected.json()).toEqual({ success: false, code: 'unavailable', requestOutcome: 'not-dispatched' });
+    expect(handler).not.toHaveBeenCalled();
+    await store.close();
   });
 
   it('injects the token-bound principal into handlers without accepting it from the body', async () => {

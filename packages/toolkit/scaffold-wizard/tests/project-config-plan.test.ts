@@ -6,7 +6,6 @@ import {
   applyProjectConfigPlan,
   createProjectConfigPlan,
   loadProjectConfig,
-  migrateAiLegacyConfig,
   packageToInstanceKey,
   renderProjectConfigPatch,
 } from '../src/project-config-plan.js';
@@ -102,23 +101,12 @@ describe('ProjectConfigPlan', () => {
     expect(() => loadProjectConfig(root)).toThrow(/Multiple Root config files found/);
   });
 
-  it('migrates legacy AI provider fields to sdk and agents.zhin.provider', () => {
-    const { ai, fixes } = migrateAiLegacyConfig({
-      defaultProvider: 'ollama',
-      agent: { chatModel: 'qwen3:8b' },
-      providers: {
-        ollama: { api: 'ollama-chat', host: 'http://127.0.0.1:11434' },
-      },
-    });
-
-    expect(fixes.length).toBeGreaterThan(0);
-    expect(ai.defaultProvider).toBeUndefined();
-    expect((ai.providers as { ollama: { sdk?: string; api?: string } }).ollama.sdk).toBe('ollama');
-    expect((ai.providers as { ollama: { sdk?: string; api?: string } }).ollama.api).toBeUndefined();
-    expect((ai.agents as { zhin: { provider?: string; model?: string } }).zhin).toEqual({
-      provider: 'ollama',
-      model: 'qwen3:8b',
-    });
+  it('preserves legacy AI configuration while repairing Console prerequisites', () => {
+    const ai = { defaultProvider: 'ollama', agent: { chatModel: 'qwen3:8b' }, providers: { ollama: { api: 'ollama-chat', host: 'http://127.0.0.1:11434' } } };
+    const plan = createProjectConfigPlan({ config: { ai }, ensureConsole: true });
+    expect(plan.after.ai).toEqual(ai);
+    expect(plan.mutations.some(change => change.includes('ai.'))).toBe(false);
+    expect(plan.after.http).toBeDefined();
   });
 });
 

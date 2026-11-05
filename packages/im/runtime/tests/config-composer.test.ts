@@ -4,6 +4,9 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ConfigPatchPathError, definePlugin } from '@zhin.js/plugin-runtime';
 import { Schema } from '../../../../basic/schema/src/index.js';
+import planSchema from '../../ai/provider-plan.schema.json' with { type: 'json' };
+import { reviewProviderPlan } from '../../ai/src/provider/index.js';
+import { context, graphFixture } from '../../ai/tests/provider/fixtures.js';
 import {
   ConfigComposer,
   ConfigPatchPlanner,
@@ -294,16 +297,24 @@ describe('hierarchical Plugin config', () => {
     expect(config.views.get(graph.root.children[0]!.id)).toEqual({ retries: 3 });
   });
 
-  it('validates structured decision policy limits through the composed Host Schema', async () => {
+  it('keeps decision policy limits in explicit plan validation rather than the startup Host schema', async () => {
     const root = await configProject({ rootSchema: {}, childSchema: {} });
     const resolver = await NodePackageResolver.create(root);
     const graph = await new ProjectGraphService(resolver).inspect(root, { configVersion: 2, plugins: { child: '@test/child' } });
     const composer = new ConfigComposer();
+    const composed = await composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, ai: {} });
+    expect(composed.effectiveSchema.properties.ai.properties).not.toHaveProperty('decisions');
+    const review = (plan: unknown) => reviewProviderPlan({ input: plan, graph: graphFixture(),
+      ownerId: context.hostOwnerId, hostOwnerId: context.hostOwnerId, bindings: { profiles: { decision: 'decision' } },
+      createId: () => { throw new Error('Policy-only review must not create resources'); },
+      resolveService: () => { throw new Error('Policy-only review must not load a Driver'); } });
     for (const field of ['topK', 'maxCandidates', 'maxSelections']) {
-      const ai = { decisions: { provider: 'root/typesafe', memory: { mode: 'active', [field]: Number.MAX_SAFE_INTEGER } } };
-      await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, ai })).resolves.toMatchObject({ document: { ai } });
-      await expect(composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, ai: { decisions: { provider: 'root/typesafe',
-        memory: { mode: 'active', [field]: Number.MAX_SAFE_INTEGER + 1 } } } })).rejects.toBeInstanceOf(ConfigValidationError);
+      const plan = { version: 1, purposes: { decisions: { memory: { profile: 'decision', mode: 'active', [field]: Number.MAX_SAFE_INTEGER } } } };
+      expect(parsePluginConfigSchema(planSchema, plan).errors).toEqual([]);
+      await expect(review(plan)).resolves.toMatchObject({ graph: { purposes: { decisions: { memory: { [field]: Number.MAX_SAFE_INTEGER } } } } });
+      const invalid = { ...plan, purposes: { decisions: { memory: { ...plan.purposes.decisions.memory, [field]: Number.MAX_SAFE_INTEGER + 1 } } } };
+      expect(parsePluginConfigSchema(planSchema, invalid).errors.length).toBeGreaterThan(0);
+      await expect(review(invalid)).rejects.toThrow('invalid-graph');
     }
   });
 

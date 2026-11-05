@@ -350,6 +350,8 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       if (corsOk && origin) applyCors(response, origin, corsOrigins);
       writeJson(response, auth.forbidden ? 403 : 401, {
         success: false,
+        code: auth.forbidden ? 'forbidden' : 'unauthorized',
+        requestOutcome: 'not-dispatched',
         error: auth.forbidden ? 'Token scope does not allow this route' : 'Invalid or missing token',
       });
       return;
@@ -368,8 +370,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       response.setHeader('X-Frame-Options', 'SAMEORIGIN');
       const release = route.admission?.acquire();
       if (route.admission && !release) {
-        response.writeHead(503);
-        response.end();
+        writeJson(response, 503, { success: false, code: 'unavailable', requestOutcome: 'not-dispatched' });
         return;
       }
       if (!release) {

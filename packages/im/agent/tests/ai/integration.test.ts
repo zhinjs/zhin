@@ -41,8 +41,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
 
 // Import after mocking — AIService from agent; Tool/trigger contracts from core
 import { AIService } from '@zhin.js/agent';
-import { createSdkProviderAdapter } from '@zhin.js/ai';
-import { shouldTriggerAI, resolveSenderRoles, type AgentTool } from '@zhin.js/core';
+import { shouldTriggerAI, resolveSenderRoles } from '@zhin.js/core';
 
 // ============================================================================
 // AI Service 测试
@@ -54,8 +53,6 @@ describe('AI Service 集成测试', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     aiService = new AIService({
-      providers: { mock: { sdk: 'openai', apiKey: 'sk-test' } },
-      agents: { zhin: { provider: 'mock', model: 'gpt-4o-mini' } },
       sessions: { maxHistory: 10 },
     });
   });
@@ -70,82 +67,15 @@ describe('AI Service 集成测试', () => {
       expect(aiService.getBindingRegistry()).toBeDefined();
     });
 
-    it('配置了 provider 与 agents.zhin 时 isReady 为 true', () => {
-      expect(aiService.isReady()).toBe(true);
+    it('starts without any model authority and requires explicit Host preparation', () => {
+      expect(aiService.isReady()).toBe(false);
+      expect(() => aiService.getModelRuntime()).toThrow('not prepared');
+      expect(aiService).not.toHaveProperty('getProvider');
+      expect(aiService).not.toHaveProperty('listProviders');
     });
 
-    it('应该返回已注册的 provider 别名', () => {
-      expect(aiService.listProviders()).toEqual(['mock']);
-    });
-
-    it('获取不存在的提供商应抛出错误', () => {
-      expect(() => aiService.getProvider('nonexistent')).toThrow();
-    });
-
-    it('应该根据配置初始化所有 Provider', async () => {
-      const fullService = new AIService({
-        providers: {
-          openai: { sdk: 'openai', apiKey: 'sk-test' },
-          anthropic: { sdk: 'anthropic', apiKey: 'sk-ant-test' },
-          deepseek: { sdk: 'deepseek', apiKey: 'sk-deepseek' },
-          moonshot: { sdk: 'openai-compatible', apiKey: 'sk-moonshot', baseUrl: 'https://api.moonshot.cn/v1' },
-          zhipu: { sdk: 'openai-compatible', apiKey: 'sk-zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
-          ollama: { sdk: 'ollama', host: 'http://localhost:11434' },
-        },
-        agents: {
-          zhin: { provider: 'openai', model: 'gpt-4o-mini' },
-        },
-      });
-
-      const providers = fullService.listProviders();
-      expect(providers).toContain('openai');
-      expect(providers).toContain('anthropic');
-      expect(providers).toContain('deepseek');
-      expect(providers).toContain('moonshot');
-      expect(providers).toContain('zhipu');
-      expect(providers).toContain('ollama');
-      expect(providers).toHaveLength(6);
-
-      await fullService.dispose();
-    });
-
-    it('动态 Provider 加入既有 service-owned runtime', async () => {
-      const runtime = aiService.getLlmRuntime();
-      const provider = createSdkProviderAdapter('secondary', {
-        sdk: 'openai',
-        apiKey: 'sk-secondary',
-        models: ['gpt-secondary'],
-      });
-      expect(provider).not.toBeNull();
-
-      await aiService.registerProvider(provider!);
-
-      expect(aiService.getLlmRuntime()).toBe(runtime);
-      expect(runtime.model('secondary', 'gpt-secondary')).toMatchObject({
-        provider: 'secondary',
-        id: 'gpt-secondary',
-      });
-    });
-
-    it('应该只初始化有 apiKey 的 Provider', async () => {
-      const partialService = new AIService({
-        providers: {
-          openai: { sdk: 'openai', apiKey: 'sk-test' },
-          deepseek: { sdk: 'deepseek' },
-          moonshot: { sdk: 'openai-compatible', apiKey: 'sk-moonshot', baseUrl: 'https://api.moonshot.cn/v1' },
-        },
-        agents: {
-          zhin: { provider: 'openai', model: 'gpt-4o-mini' },
-        },
-      });
-
-      const providers = partialService.listProviders();
-      expect(providers).toContain('openai');
-      expect(providers).toContain('moonshot');
-      expect(providers).not.toContain('deepseek');
-      expect(providers).toHaveLength(2);
-
-      await partialService.dispose();
+    it.each(['providers', 'modelCatalog', 'modelPolicy', 'defaultProvider'])('rejects old %s authority rather than constructing a parallel runtime', key => {
+      expect(() => new AIService({ [key]: {} })).toThrow('migration required');
     });
   });
 
@@ -162,8 +92,6 @@ describe('AI Service 集成测试', () => {
 
     it('应该返回 access 配置', async () => {
       const svc = new AIService({
-        providers: { mock: { sdk: 'openai', apiKey: 'sk-test' } },
-        agents: { zhin: { provider: 'mock', model: 'gpt-4o-mini' } },
         access: {
           mode: 'whitelist',
           users: ['vip'],
@@ -177,54 +105,10 @@ describe('AI Service 集成测试', () => {
     });
   });
 
-  describe('工具管理', () => {
-    it('standalone agents do not receive implicit tools', () => {
-      expect(aiService.listRegisteredTools()).toEqual([]);
-    });
-
-    it('应该注册自定义工具', () => {
-      const customTool: AgentTool = {
-        name: 'custom_tool',
-        description: '自定义工具',
-        parameters: { type: 'object', properties: {} },
-        execute: async () => 'result',
-      };
-
-      const dispose = aiService.registerTool(customTool);
-      
-      const tools = aiService.listRegisteredTools();
-      expect(tools.some(t => t.name === 'custom_tool')).toBe(true);
-      expect(Object.isFrozen(tools)).toBe(true);
-      
-      dispose();
-      const toolsAfter = aiService.listRegisteredTools();
-      expect(toolsAfter.some(t => t.name === 'custom_tool')).toBe(false);
-    });
-
-    it('rejects ambiguous duplicate registrations', () => {
-      const tool: AgentTool = {
-        name: 'duplicate',
-        description: 'first',
-        parameters: { type: 'object', properties: {} },
-        execute: async () => 'result',
-      };
-      aiService.registerTool(tool);
-
-      expect(() => aiService.registerTool({ ...tool, description: 'second' }))
-        .toThrow('already registered');
-      expect(() => aiService.registerTool({ ...tool, name: ' duplicate ' }))
-        .toThrow('canonical name');
-      expect(() => aiService.createAgent({ tools: [tool], includeRegisteredTools: true }))
-        .toThrow('Duplicate standalone Agent Tool');
-      // Registered tools are opt-in: by default a standalone Agent starts with none.
-      expect(() => aiService.createAgent({ tools: [tool] })).not.toThrow();
-    });
-  });
-
   describe('dispose', () => {
     it('应该正确清理资源', async () => {
       await aiService.dispose();
-      expect(aiService.listProviders()).toEqual([]);
+      await expect(aiService.prepareModelRuntime({} as never)).rejects.toThrow('disposed');
     });
   });
 });

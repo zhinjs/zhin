@@ -10,6 +10,7 @@ import {
   scaffoldDependencyRange,
   withScaffoldVersionRanges,
 } from '../src/stack-version-ranges.js';
+import { findOutdatedAiStackInPackageJson } from '../src/project-deps.js';
 
 const temporaryRoots: string[] = [];
 
@@ -86,6 +87,22 @@ describe('stack version ranges', () => {
       sqlite3: '^5.1.7',
     });
     expect(scaffoldDependencyRange('unknown-package', ranges)).toBe('latest');
+  });
+
+  it('keeps AI-enabled examples on the SDK major required by the engine peer', () => {
+    const workspaceRoot = findZhinWorkspaceRoot(__dirname)!;
+    const examplesRoot = path.join(workspaceRoot, 'examples');
+    const required = { ai: loadStackVersionRanges().ai };
+    expect(required.ai).toBeDefined();
+    for (const entry of fs.readdirSync(examplesRoot, { withFileTypes: true })) {
+      const manifestPath = path.join(examplesRoot, entry.name, 'package.json');
+      if (!entry.isDirectory() || !fs.existsSync(manifestPath)) continue;
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+        dependencies?: Record<string, string>;
+      };
+      if (!manifest.dependencies?.ai) continue;
+      expect(findOutdatedAiStackInPackageJson(manifest, required), entry.name).toEqual([]);
+    }
   });
 
   it('reads the live monorepo versions when running from a checkout', () => {

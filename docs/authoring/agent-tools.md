@@ -1,6 +1,6 @@
 ---
 title: "Agent 工具与技能"
-description: "让 AI 调用你写的函数：编写 Tool、限制可用范围与审批、用 Skill 封装流程、用 Prompt Section 补充业务背景、定义子 Agent"
+description: "让 AI 调用你写的函数：编写 Tool、限制可用范围与审批、用 Skill 封装流程、用 Prompt Section 补充业务背景、定义 Agent"
 ---
 
 # Agent 工具与技能
@@ -10,7 +10,7 @@ description: "让 AI 调用你写的函数：编写 Tool、限制可用范围与
 - **Tool**：AI 可以调用的函数，例如查天气、搜歌、查数据库。
 - **Skill**：一份操作手册，AI 需要时才加载，可以附带专用的 Tool。
 - **Prompt Section**：给 AI 的背景知识，例如产品术语和回答规范。
-- **子 Agent**：有独立职责、规则和工具的专门助手。
+- **Agent**：有独立职责、规则和工具的专门助手，可被其他 Agent 联系、委派。
 
 ::: tip 开始前
 先运行 `npx zhin setup --ai` 启用 AI。向导会安装模型 SDK，并声明 `@zhin.js/tool` 与 `@zhin.js/prompt-section`，`tools/`、`prompt-sections/` 目录才会被识别。详见 [AI 总览](../ai/index.md)。
@@ -175,7 +175,7 @@ export default defineAgentTool.withConfig<WeatherConfig>()<{ city: string }>({
 | --- | --- |
 | `tools/<name>/index.ts` | 插件启用后，可被发现 |
 | `skills/<skill>/tools/<name>/index.ts` | 该 Skill 被加载后 |
-| `agents/<agent>/tools/<name>/index.ts` | 选中该子 Agent 后 |
+| `agents/<agent>/tools/<name>/index.ts` | 选中该 Agent 后 |
 | `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | 选中该 Agent 且加载其 Skill 后 |
 
 根目录 `tools/` 只放通用、高频、不需要额外说明的工具。只在某个平台、工作流或角色下才有意义的工具，应放进对应的 Skill 或 Agent，避免平时占用提示词。所有工具都会在启动时校验，即使暂时不提供给模型。
@@ -300,16 +300,27 @@ tools:
 
 群管理只在群聊披露，服务器/频道管理使用适配器实际归一化后的场景：Slack 的频道是 `group`，Discord、KOOK、QQ 频道是 `channel`。创建新群、账号查询、用户资料等通用能力独立保留；混合场景的 Skill 应拆分。
 
-### 定义子 Agent
+### 定义 Agent
 
-子 Agent 是 `agents/<name>/` 目录，有自己的职责、边界和工具。它必须包含四个文件：
+Agent 是 `agents/<name>/` 目录，有自己的职责、边界和工具。它必须包含四个文件：
 
 | 文件 | 内容 |
 | --- | --- |
-| `agent.json` | 名称、模型、额外的公共工具等 |
+| `agent.json` | 名称、模型、额外的公共工具、协作声明 `collaboration` 等 |
 | `system.md` | 角色与职责 |
 | `boundaries.md` | 不能做什么 |
 | `conventions.md` | 工作约定，只能在插件根目录 `AGENTS.md` 的基础上延伸，不能冲突 |
+
+`agent.json` 的 `collaboration` 声明这个 Agent 在协作里能联系谁、接受谁的委派：
+
+```json
+{
+  "name": "reviewer",
+  "collaboration": { "contacts": ["researcher"], "accepts_from": ["planner"] }
+}
+```
+
+`contacts` 是它可以联系的 Agent 名（不写则不能联系任何人）；`accepts_from` 限定只接受哪些 Agent 的委派（不写则接受任何被允许联系它的 Agent）。被委派时它的权限只会比委派方更小。协作工具与护栏见 [AI Agent · 多 Agent 协作](../ai/agent.md#多-agent-协作)。
 
 可选的 `workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 放场景流程、私有工具、私有 Skill、钩子和知识库。反复出现的错误应该写进 `conventions.md`。
 

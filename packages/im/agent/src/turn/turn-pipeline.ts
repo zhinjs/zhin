@@ -54,8 +54,6 @@ const now = () => performance.now();
 
 export interface ProcessTextTurnOptions {
   prebuiltMessages?: import('@zhin.js/ai').AgentMessage[];
-  /** Deferred worker 完成后的内部自动续聊 turn（跳过速率限制、不重置续聊深度） */
-  deferredAutoContinue?: boolean;
   /** Tap AgentCore.runText TurnEvent stream (processMessageStream) */
   onTurnEvent?: (event: TurnEvent) => void;
   /** Ordered wire-event journal owned by processTextTurnStream. */
@@ -109,9 +107,7 @@ async function processTextTurnInner(
 ): Promise<AgentOutputElement[]> {
     const t0 = now();
     const sessionSystem = requireSessionSystem(host);
-    const prep = await sessionSystem.prepareTextTurn(host, commMessage, content, {
-      deferredAutoContinue: extras?.deferredAutoContinue,
-    });
+    const prep = await sessionSystem.prepareTextTurn(host, commMessage, content);
     const { sessionKey, userId, sessionId, isNewSession, turnUser } = prep;
 
     if (isNewSession) {
@@ -133,22 +129,20 @@ async function processTextTurnInner(
     });
     logPhase(host.phaseConfig, 'turn.start', sessionId, {
       mode: 'text',
-      provider: host.getTurnProvider().name,
+      provider: host.getTurnExecution().binding.account.id,
     });
 
-    if (!extras?.deferredAutoContinue) {
-      const rateCheck = host.rateLimiter.check(userId);
-      if (!rateCheck.allowed) {
-        logPhase(host.phaseConfig, 'turn.rate_limited', sessionId, { userId });
-        logger.debug(formatCompact({ op: 'rate_limited', user: userId }));
-        await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'text', {
-          path: 'rate_limited',
-          reply: rateCheck.message || '请稍后再试',
-          reason: 'rate_limited',
-        }));
-        await host.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'rate_limited' });
-        return parseOutput(rateCheck.message || '请稍后再试');
-      }
+    const rateCheck = host.rateLimiter.check(userId);
+    if (!rateCheck.allowed) {
+      logPhase(host.phaseConfig, 'turn.rate_limited', sessionId, { userId });
+      logger.debug(formatCompact({ op: 'rate_limited', user: userId }));
+      await host.emitter.dispatch('ai.processing.finish', host.emitter.createPayload(sessionId, commMessage, 'text', {
+        path: 'rate_limited',
+        reply: rateCheck.message || '请稍后再试',
+        reason: 'rate_limited',
+      }));
+      await host.finalizeActiveTurn({ usage: EMPTY_USAGE, path: 'rate_limited' });
+      return parseOutput(rateCheck.message || '请稍后再试');
     }
 
     host.emitter.emit('ai.typing.start', host.emitter.createPayload(sessionId, commMessage, 'text', {
@@ -167,7 +161,7 @@ async function processTextTurnInner(
       externalTools,
       sessionId,
       userId,
-      mcpServerNames,
+      mcpServerNames: [...mcpServerNames],
     });
     const {
       contextForTools,

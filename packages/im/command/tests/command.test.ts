@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   childPluginId,
+  createToken,
   createCapabilitySlot,
   rootPluginId,
   type RuntimeSnapshot,
@@ -82,6 +83,22 @@ function snapshotWithOwners(
 }
 
 describe('Command Feature', () => {
+  it('binds operation resources only after matching/validation and preserves result when cleanup fails', async () => {
+    const owner = childPluginId(rootPluginId(), 'operation'), token = createToken<string>('test.operation');
+    const execute = vi.fn(context => ({ value: context.use(token), signal: context.signal }));
+    const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'operation', source: '/commands/operation/index.ts',
+      definition: defineCommand({ params: { value: { type: 'string', required: true } }, execute }) });
+    const snapshot = snapshotWithOwners([owner], [slot]), signal = new AbortController().signal, close = vi.fn(async () => { throw new Error('cleanup'); });
+    const create = vi.fn(({ owner: matched }: { owner: typeof owner }) => { expect(matched).toBe(owner); return { signal,
+      resources: { has: (candidate: unknown) => candidate === token, use: <T>() => 'operation-bound' as T, close } }; });
+    const index = new CommandIndex([slot], snapshot), operation = { signal, create };
+    expect((await index.dispatch({ input: 'missing', operation })).status).toBe('unmatched');
+    expect((await index.dispatch({ input: 'operation', operation })).status).toBe('invalid');
+    expect(create).not.toHaveBeenCalled();
+    const result = await index.dispatch({ input: 'operation value', operation });
+    expect(result).toMatchObject({ status: 'executed', value: { value: 'operation-bound', signal } });
+    expect(create).toHaveBeenCalledTimes(1); expect(close).toHaveBeenCalledTimes(1);
+  });
   it('brands definitions without module-level registration', () => {
     const command = defineCommand({ execute: ({ args }) => args.join(' ') });
     expect(parseCommandDefinition(command)).toBe(command);
