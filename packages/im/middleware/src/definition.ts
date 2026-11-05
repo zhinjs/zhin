@@ -18,6 +18,13 @@ export type MiddlewareTarget = 'inbound' | 'outbound';
 export type MiddlewareNext = () => Promise<MiddlewareContinuation>;
 export type OutboundMiddlewareNext = () => Promise<void>;
 
+export interface InboundDispatchSummary {
+  readonly matched: boolean;
+  readonly path: 'button' | 'command' | 'handler' | 'none';
+  readonly handlerId?: string;
+  readonly replied: boolean;
+}
+
 export interface MiddlewareContext<
   TInput = unknown,
   TConfig = unknown,
@@ -28,6 +35,8 @@ export interface MiddlewareContext<
   /** Lazily resolved native Client. Without `adapter`, its static type is `unknown`. */
   readonly $client: AdapterClient<TAdapter>;
   readonly session: OperationSession<TAdapter> | undefined;
+  readonly dispatch?: InboundDispatchSummary;
+  onAfterDispatch?(listener: (summary: InboundDispatchSummary) => void | Promise<void>): void;
 }
 
 /** Shared metadata for the public inbound and outbound definition contracts. */
@@ -71,15 +80,16 @@ declare module '@zhin.js/plugin-runtime' {
 type AuthoringForAdapter<TInput, TConfig, TAdapter extends string | undefined> =
   Omit<MiddlewareDefinitionBase<TAdapter>, '$feature' | 'phase' | 'order'> & {
     readonly phase?: MiddlewarePhase;
+    readonly stage?: MiddlewarePhase;
     readonly order?: number;
   } & (
-    | { readonly target?: 'inbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: MiddlewareNext): unknown }
+    | { readonly target?: 'inbound'; handle(this: MiddlewareContext<TInput, TConfig, TAdapter>, context: MiddlewareContext<TInput, TConfig, TAdapter>, next: MiddlewareNext): unknown }
     | {
         readonly target: 'outbound';
         /** Opt in to cumulative prefixes. Previously published text, format and addressing must stay stable;
          * do not repeat approvals, external sends or other side effects. */
         readonly incremental?: true;
-        handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void>;
+        handle(this: MiddlewareContext<TInput, TConfig, TAdapter>, context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void>;
       }
   );
 
@@ -109,7 +119,7 @@ export function defineMiddleware<TInput = unknown, TConfig = unknown>(
     && (typeof adapter !== 'string' || adapter.trim() === '')) {
     throw new TypeError('Middleware adapter must be a non-empty string');
   }
-  const phase = definition.phase ?? 'before-dispatch';
+  const phase = definition.phase ?? (definition as { readonly stage?: MiddlewarePhase }).stage ?? 'before-dispatch';
   if (phase !== 'before-dispatch' && phase !== 'after-dispatch') {
     throw new TypeError(`Invalid Middleware phase: ${String(phase)}`);
   }

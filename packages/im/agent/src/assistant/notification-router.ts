@@ -147,7 +147,8 @@ export function createNotificationRouter(deps: NotificationRouterDeps) {
     } else {
       await adapter!.sendMessage(imNotifyToSendOptions(notify, content, locale));
     }
-    return { delivered: true, channel: 'im', ...(receipt ? { receipt } : {}) };
+    const delivered = !receipt || receipt.status === 'sent';
+    return { delivered, channel: 'im', ...(receipt ? { receipt } : {}) };
   }
 
   async function deliver(params: DeliverParams): Promise<DeliverResult> {

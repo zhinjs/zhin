@@ -56,6 +56,7 @@ export interface AgentCompactionConfig {
   enabled?: boolean;
   auto?: boolean;
   keepRecentTokens?: number;
+  keepRecentMessages?: number;
   minKeepCount?: number;
   contextWindow?: number;
   /**
@@ -63,7 +64,13 @@ export interface AgentCompactionConfig {
    * `contextWindow - AUTOCOMPACT_BUFFER_TOKENS`.
    */
   triggerTokens?: number;
+  /**
+   * Message count above which auto-compaction runs, aligned with history window budget.
+   */
+  triggerMessages?: number;
 }
+
+export type AgentMessageCompactionConfig = AgentCompactionConfig;
 
 export interface AgentCompactionState {
   consecutiveFailures: number;
@@ -193,10 +200,25 @@ export function shouldAutoCompactAgentMessages(
   contextWindow: number,
   state?: AgentCompactionState,
   triggerTokens?: number,
+  options?: {
+    triggerMessages?: number;
+    keepRecentTokens?: number;
+    keepRecentMessages?: number;
+    minKeepCount?: number;
+  },
 ): boolean {
   if (state && state.consecutiveFailures >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES) {
     logger.warn(formatCompact({ circuit_breaker: state.consecutiveFailures }));
     return false;
+  }
+  if (options?.triggerMessages !== undefined && options.triggerMessages > 0 && messages.length > options.triggerMessages) {
+    const startIdx = findKeepRecentStartIndex(
+      messages,
+      options.keepRecentTokens ?? 20_000,
+      options.minKeepCount ?? 2,
+      options.keepRecentMessages,
+    );
+    if (startIdx > 0) return true;
   }
   const totalTokens = estimateAgentMessagesTokens(projectPromptContext(messages));
   return totalTokens > (triggerTokens ?? contextWindow - AUTOCOMPACT_BUFFER_TOKENS);
@@ -208,6 +230,7 @@ export async function compactAgentMessages(params: {
   messages: AgentMessage[];
   contextWindow?: number;
   keepRecentTokens?: number;
+  keepRecentMessages?: number;
   minKeepCount?: number;
   customInstructions?: string;
   signal?: AbortSignal;
@@ -220,10 +243,11 @@ export async function compactAgentMessages(params: {
 }> {
   const contextWindow = params.contextWindow ?? DEFAULT_CONTEXT_TOKENS;
   const keepRecentTokens = params.keepRecentTokens ?? 20_000;
+  const keepRecentMessages = params.keepRecentMessages;
   const minKeepCount = params.minKeepCount ?? 2;
   const messages = params.messages;
 
-  const startIdx = findKeepRecentStartIndex(messages, keepRecentTokens, minKeepCount);
+  const startIdx = findKeepRecentStartIndex(messages, keepRecentTokens, minKeepCount, keepRecentMessages);
   if (startIdx === 0) {
     return { summary: '', keptMessages: messages, compactedCount: 0, savedTokens: 0 };
   }
@@ -292,7 +316,18 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
   }
 
   const autoEnabled = config.auto !== false;
-  const needsAuto = params.force || (autoEnabled && shouldAutoCompactAgentMessages(messages, contextWindow, state, config.triggerTokens));
+  const needsAuto = params.force || (autoEnabled && shouldAutoCompactAgentMessages(
+    messages,
+    contextWindow,
+    state,
+    config.triggerTokens,
+    {
+      triggerMessages: config.triggerMessages,
+      keepRecentTokens: config.keepRecentTokens,
+      keepRecentMessages: config.keepRecentMessages,
+      minKeepCount: config.minKeepCount,
+    },
+  ));
   if (!needsAuto) {
     return {
       wasCompacted: micro.didCompact,
@@ -310,6 +345,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
       messages,
       contextWindow,
       keepRecentTokens: config.keepRecentTokens,
+      keepRecentMessages: config.keepRecentMessages,
       minKeepCount: config.minKeepCount,
       customInstructions: params.customInstructions,
       signal: params.signal,

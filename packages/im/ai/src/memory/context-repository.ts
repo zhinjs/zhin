@@ -130,6 +130,7 @@ type MessageWhereResult =
       orderBy(field: string, dir: 'ASC' | 'DESC'): {
         limit(n: number): PromiseLike<AgentMessageRow[]>;
       };
+      limit?(n: number): PromiseLike<AgentMessageRow[]>;
     };
 
 type SummaryWhereResult =
@@ -138,7 +139,12 @@ type SummaryWhereResult =
       orderBy(field: string, dir: 'ASC' | 'DESC'): {
         limit(n: number): PromiseLike<AgentSummaryRecord[]>;
       };
+      limit?(n: number): PromiseLike<AgentSummaryRecord[]>;
     };
+
+function hasLimit<T>(result: unknown): result is { limit(n: number): PromiseLike<T[]> } {
+  return result != null && typeof result === 'object' && 'limit' in result && typeof (result as { limit?: unknown }).limit === 'function';
+}
 
 function isMessageQueryChain(result: MessageWhereResult): result is {
   orderBy(field: string, dir: 'ASC' | 'DESC'): {
@@ -297,9 +303,8 @@ export class DatabaseContextRepository implements ContextRepository {
   ): Promise<void> {
     if (newMessages.length === 0) return;
     await this.writeLock.run(sessionId, async () => {
-      const allRows = await this.loadAllMessageRows(sessionId);
       const session = await this.sessionStore.getBySessionId(sessionId);
-      let parentId = session?.active_leaf_message_id ?? buildActivePathRows(allRows).at(-1)?.id ?? null;
+      let parentId = session?.active_leaf_message_id ?? (await this.selectLatestSessionMessageId(sessionId));
       let lastId: number | undefined;
 
       for (let i = 0; i < newMessages.length; i += 1) {
@@ -309,8 +314,7 @@ export class DatabaseContextRepository implements ContextRepository {
         row.parent_id = parentId;
         let id = await insertAgentMessageRow(this.messageModel, row);
         if (id == null) {
-          const tail = sortRowsChronologically(await this.loadAllMessageRows(sessionId));
-          id = tail.at(-1)?.id;
+          id = (await this.selectLatestSessionMessageId(sessionId)) ?? undefined;
         }
         if (id != null) {
           parentId = id;
@@ -344,7 +348,7 @@ export class DatabaseContextRepository implements ContextRepository {
   async saveCompactionSummary(sessionId: string, summary: string, prefix: readonly AgentMessage[], signal?: AbortSignal): Promise<boolean> {
     return this.writeLock.run(sessionId, async () => {
       if (signal?.aborted || !summary.trim()) return false;
-      const rows = await this.loadAllMessageRows(sessionId);
+      const rows = await this.selectSessionTreeMetadata(sessionId);
       const summaries = await this.loadAllSummaryRows(sessionId);
       const session = await this.sessionStore.getBySessionId(sessionId);
       const path = buildActivePathRows(rows, session?.active_leaf_message_id);
@@ -366,10 +370,7 @@ export class DatabaseContextRepository implements ContextRepository {
   }
 
   async hasBranchSummary(sessionId: string, branchAnchorMessageId: number): Promise<boolean> {
-    const rows = await this.loadAllSummaryRows(sessionId);
-    return rows.some(
-      r => r.branch_anchor_message_id === branchAnchorMessageId && r.summary.trim().length > 0,
-    );
+    return this.existsBranchSummaryInSession(sessionId, branchAnchorMessageId);
   }
 
   async listBranchPoints(sessionId: string): Promise<SessionBranchPoint[]> {
@@ -379,8 +380,8 @@ export class DatabaseContextRepository implements ContextRepository {
   }
 
   async setActiveLeaf(sessionId: string, messageId: number): Promise<boolean> {
-    const allRows = await this.loadAllMessageRows(sessionId);
-    if (!allRows.some(r => r.id === messageId)) return false;
+    const exists = await this.existsMessageInSession(sessionId, messageId);
+    if (!exists) return false;
     await this.writeLock.run(sessionId, async () => {
       await this.sessionStore.setActiveLeafMessageId(sessionId, messageId);
     });
@@ -405,6 +406,11 @@ export class DatabaseContextRepository implements ContextRepository {
     minKeepCount = 2,
   ): Promise<number | undefined> {
     const session = await this.sessionStore.getBySessionId(sessionId);
+    const metaRows = buildActivePathRows(
+      await this.selectSessionTreeMetadata(sessionId),
+      session?.active_leaf_message_id,
+    );
+    if (metaRows.length <= minKeepCount) return undefined;
     const rows = buildActivePathRows(
       await this.loadAllMessageRows(sessionId),
       session?.active_leaf_message_id,
@@ -428,6 +434,78 @@ export class DatabaseContextRepository implements ContextRepository {
     this.deferredToolSnapshots.set(sessionId, snapshot);
   }
 
+  private async selectLatestSessionMessageId(sessionId: string): Promise<number | null> {
+    try {
+      const probe = this.messageModel.select('id', 'timestamp').where({ session_id: sessionId });
+      if (isMessageQueryChain(probe)) {
+        const rows = (await probe.orderBy('id', 'DESC').limit(1)) as AgentMessageRow[];
+        return rows[0]?.id ?? null;
+      }
+      const rows = [...((await Promise.resolve(probe as PromiseLike<AgentMessageRow[]>)) ?? [])];
+      if (rows.length === 0) return null;
+      rows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
+      return rows.at(-1)?.id ?? null;
+    } catch (err) {
+      throw persistenceFailure('agent_context.select_latest_message_id', err);
+    }
+  }
+
+  private async existsMessageInSession(sessionId: string, messageId: number): Promise<boolean> {
+    try {
+      const probe = this.messageModel.select('id').where({ session_id: sessionId, id: messageId });
+      if (hasLimit<AgentMessageRow>(probe)) {
+        const rows = await probe.limit(1);
+        return rows.some(r => r.id === messageId);
+      }
+      if (isMessageQueryChain(probe)) {
+        const rows = (await probe.orderBy('id', 'ASC').limit(1)) as AgentMessageRow[];
+        return rows.some(r => r.id === messageId);
+      }
+      const rows = (await Promise.resolve(probe as PromiseLike<AgentMessageRow[]>)) ?? [];
+      return rows.some(r => r.id === messageId);
+    } catch (err) {
+      throw persistenceFailure('agent_context.exists_message', err);
+    }
+  }
+
+  private async existsBranchSummaryInSession(sessionId: string, branchAnchorMessageId: number): Promise<boolean> {
+    try {
+      const probe = this.summaryModel
+        .select('branch_anchor_message_id', 'summary')
+        .where({ session_id: sessionId, branch_anchor_message_id: branchAnchorMessageId });
+      if (hasLimit<AgentSummaryRecord>(probe)) {
+        const rows = await probe.limit(10);
+        return rows.some(r => r.branch_anchor_message_id === branchAnchorMessageId && typeof r.summary === 'string' && r.summary.trim().length > 0);
+      }
+      if (isSummaryQueryChain(probe)) {
+        const rows = (await probe.orderBy('created_at', 'DESC').limit(10)) as AgentSummaryRecord[];
+        return rows.some(r => r.branch_anchor_message_id === branchAnchorMessageId && typeof r.summary === 'string' && r.summary.trim().length > 0);
+      }
+      const rows = (await Promise.resolve(probe as PromiseLike<AgentSummaryRecord[]>)) ?? [];
+      return rows.some(r => r.branch_anchor_message_id === branchAnchorMessageId && typeof r.summary === 'string' && r.summary.trim().length > 0);
+    } catch (err) {
+      throw persistenceFailure('agent_context.exists_branch_summary', err);
+    }
+  }
+
+  private async selectSessionTreeMetadata(sessionId: string): Promise<AgentMessageRow[]> {
+    try {
+      const probe = this.messageModel
+        .select('id', 'parent_id', 'role', 'timestamp')
+        .where({ session_id: sessionId });
+      if (isMessageQueryChain(probe)) {
+        const rows = [...((await probe.orderBy('timestamp', 'DESC').limit(10_000)) as AgentMessageRow[])];
+        rows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
+        return rows;
+      }
+      const rows = [...((await Promise.resolve(probe as PromiseLike<AgentMessageRow[]>)) ?? [])];
+      rows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
+      return rows;
+    } catch (err) {
+      throw persistenceFailure('agent_context.select_tree_metadata', err);
+    }
+  }
+
   private async loadAllSummaryRows(sessionId: string): Promise<AgentSummaryRecord[]> {
     try {
       const probe = this.summaryModel.select().where({ session_id: sessionId });
@@ -447,10 +525,11 @@ export class DatabaseContextRepository implements ContextRepository {
     try {
       const probe = this.messageModel.select().where({ session_id: sessionId });
       if (isMessageQueryChain(probe)) {
-        const rows = (await probe.orderBy('timestamp', 'ASC').limit(10_000)) as AgentMessageRow[];
+        const rows = [...((await probe.orderBy('timestamp', 'DESC').limit(10_000)) as AgentMessageRow[])];
+        rows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
         return rows;
       }
-      const rows = (await Promise.resolve(probe as PromiseLike<AgentMessageRow[]>)) ?? [];
+      const rows = [...((await Promise.resolve(probe as PromiseLike<AgentMessageRow[]>)) ?? [])];
       rows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
       return rows;
     } catch (err) {

@@ -1,27 +1,10 @@
 /**
  * NapCat 入站消息治理：去重、自发过滤、消息归一化
  */
+import { InboundMessageDeduper, promoteInboundMessagePayload } from 'zhin.js/adapter';
 import type { NapCatMessageEvent, MessageSegment } from './protocol.js';
 
-const DEDUPE_TTL_MS = 120_000;
-
-export class InboundMessageDeduper {
-  private readonly seen = new Map<string, number>();
-
-  shouldProcess(messageId: string): boolean {
-    const now = Date.now();
-    for (const [id, t] of this.seen) {
-      if (now - t > DEDUPE_TTL_MS) this.seen.delete(id);
-    }
-    if (this.seen.has(messageId)) return false;
-    this.seen.set(messageId, now);
-    return true;
-  }
-
-  clear(): void {
-    this.seen.clear();
-  }
-}
+export { InboundMessageDeduper };
 
 /** 判断是否为 bot 自身发出的消息 */
 export function isSelfMessage(event: NapCatMessageEvent | {
@@ -67,8 +50,8 @@ export function isNapCatBotMentioned(ev: {
   const uin = String(ev.self_id).trim();
   if (!uin) return false;
   const segments = normalizeMessage(ev.message ?? []);
-  for (const seg of segments) {
-    if (seg.type === 'at' && atTargetMatchesUin(seg.data?.qq, uin)) return true;
+  if (promoteInboundMessagePayload<{ segments: MessageSegment[]; mentioned?: boolean }>({ segments }, uin).mentioned === true) {
+    return true;
   }
   const text = segments
     .map((seg) => (seg.type === 'text' ? String(seg.data?.text ?? '') : ''))

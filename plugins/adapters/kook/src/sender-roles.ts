@@ -6,6 +6,7 @@
  * 跨平台规范角色 owner / admin。原始角色 id 以 `role:<id>` 形式放入 permissions，
  * 不进入 `sender.roles`。
  */
+import { TtlLookupCache } from 'zhin.js/adapter';
 import type { KookClientTransport } from './ws.js';
 
 /** KOOK 角色权限位：0x1 = 管理员。 */
@@ -19,15 +20,12 @@ export interface KookSenderRoleProjection {
 }
 
 interface GuildSnapshot {
-  readonly at: number;
   readonly ownerId?: string;
   readonly adminRoleIds: ReadonlySet<string>;
 }
 
 export class KookSenderRoleResolver {
-  readonly #guilds = new Map<string, GuildSnapshot>();
-  /** One lookup per guild at a time: concurrent messages on a cache miss share it. */
-  readonly #lookups = new Map<string, Promise<GuildSnapshot | undefined>>();
+  readonly #guilds = new TtlLookupCache<string, GuildSnapshot | undefined>({ ttlMs: CACHE_TTL_MS });
 
   constructor(private readonly getClient: () => KookClientTransport | null) {}
 
@@ -51,18 +49,12 @@ export class KookSenderRoleResolver {
   }
 
   async #snapshot(guildId: string): Promise<GuildSnapshot | undefined> {
-    const cached = this.#guilds.get(guildId);
-    if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached;
-    let lookup = this.#lookups.get(guildId);
-    if (!lookup) {
-      lookup = this.#fetch(guildId).finally(() => this.#lookups.delete(guildId));
-      this.#lookups.set(guildId, lookup);
-    }
-    return lookup;
+    return this.#guilds.getOrLoad(guildId, () => this.#fetch(guildId), {
+      cacheWhen: (snapshot): snapshot is GuildSnapshot => snapshot !== undefined,
+    });
   }
 
   async #fetch(guildId: string): Promise<GuildSnapshot | undefined> {
-    const now = Date.now();
     const client = this.getClient();
     if (!client) return undefined;
     let ownerId: string | undefined;
@@ -76,8 +68,6 @@ export class KookSenderRoleResolver {
         if ((Number(role.permissions) & KOOK_ROLE_ADMIN_BIT) !== 0) adminRoleIds.add(String(role.role_id));
       }
     } catch { /* 保守：视为无管理员角色 */ }
-    const snapshot: GuildSnapshot = { at: now, ...(ownerId ? { ownerId } : {}), adminRoleIds };
-    this.#guilds.set(guildId, snapshot);
-    return snapshot;
+    return { ...(ownerId ? { ownerId } : {}), adminRoleIds };
   }
 }

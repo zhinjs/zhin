@@ -1,6 +1,6 @@
 import { projectPromptContext } from '../memory/prompt-context.js';
 import type { AgentMessage, ToolResultMessage } from '../llm/types/agent-message.js';
-import { CLEARED_MESSAGE, COMPACTABLE_TOOLS } from './micro-compact.js';
+import { CLEARED_MESSAGE, isCompactableToolName } from './micro-compact.js';
 import { estimateAgentMessageTokens } from './agent-message-tokens.js';
 
 export interface AgentMicroCompactResult {
@@ -52,7 +52,7 @@ export function microCompactAgentMessages(
   const out = messages.map((msg, idx) => {
     if (!toClear.includes(idx) || msg.role !== 'toolResult') return msg;
     const tr = msg as ToolResultMessage;
-    if (!COMPACTABLE_TOOLS.has(tr.toolName)) return msg;
+    if (!isCompactableToolName(tr.toolName)) return msg;
     clearedCount += 1;
     return {
       ...tr,

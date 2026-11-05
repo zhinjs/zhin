@@ -22,28 +22,14 @@ import {
 import {
   ZhinAgent,
   composeZhinAgentRuntime,
-  type AgentTraceRecorder,
+  observeAgentTurnTrace,
 } from '@zhin.js/agent/runtime';
 import { auditControlOutbound, checkControlAtOutbound, logControlBlocked } from './turn/control-gate.js';
 import { auditOutbound, createDecisionAudit, decisionScopeOf } from './turn/decision-audit.js';
 
 const logger = getLogger('agent');
 
-export function observeAgentTurnTrace(
-  trace: AgentTraceRecorder,
-  request: TurnRequest,
-  downstream?: (event: TurnEvent) => void,
-): (event: TurnEvent) => void {
-  return (event) => {
-    const tracedEvent: TurnEvent = event.type === 'turn_start'
-      && request.origin.kind === 'im'
-      && request.origin.messageId
-      ? { ...event, sourceMessageId: request.origin.messageId }
-      : event;
-    trace.record(request.session.key, request.identity.turnId, tracedEvent);
-    downstream?.(event);
-  };
-}
+export { observeAgentTurnTrace };
 
 export interface RuntimeZhinAgentOptions {
   readonly service: AIService;

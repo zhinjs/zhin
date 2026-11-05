@@ -206,6 +206,7 @@ export class OneBot11WsEndpoint extends Onebot11Client implements Endpoint {
       endpointId: inbound.endpointId,
       ...(inbound.mentioned ? { mentioned: true } : {}),
       ...(inbound.replyTo ? { replyTo: inbound.replyTo } : {}),
+      ...(inbound.segments?.length ? { segments: inbound.segments } : {}),
       metadata: inbound.metadata,
     }).catch((err) => {
       this.#logger.warn(formatCompact({
@@ -251,6 +252,7 @@ export class OneBot11WsEndpoint extends Onebot11Client implements Endpoint {
         }
         try {
           ws.close();
+          ws.terminate?.();
         } catch {
           /* ignore */
         }

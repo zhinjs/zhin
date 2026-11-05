@@ -34,24 +34,59 @@ function storageIdentity(value: string | undefined): string | null {
   return value === undefined ? null : `k1:${value.replaceAll('%', '%25').replaceAll('\0', '%00')}`;
 }
 
+export const AGENT_MESSAGE_QUERY_VERSION = 2;
+
 export const AGENT_MESSAGE_QUERY_MODEL = {
   actor_id: nullableText, actor_name: nullableText, actor_scope: nullableText, actor_origin: nullableText,
   turn_id: nullableText, turn_intent: nullableText, target_turn_id: nullableText,
   api: nullableText, provider: nullableText, model: nullableText, stop_reason: nullableText,
   tool_call_id: nullableText, tool_name: nullableText, is_error: { type: 'boolean' as const, nullable: true },
+  conversation_event_id: { type: 'integer' as const, nullable: true },
+  conversation_key: nullableText,
+  platform_message_id: nullableText,
+  message_key: nullableText,
   query_version: { type: 'integer' as const, nullable: true },
 };
+
+export function normalizeConversationEventId(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
 
 export function agentMessageQueryFields(message: AgentMessage): Record<string, string | number | boolean | null> {
   const user = message.role === 'user' ? message as UserMessage : undefined;
   const assistant = message.role === 'assistant' ? message as import('../llm/types/agent-message.js').AssistantMessage : undefined;
   const result = message.role === 'toolResult' ? message as import('../llm/types/agent-message.js').ToolResultMessage : undefined;
+  const conversationEventId = normalizeConversationEventId(
+    user
+      ? user.conversationEventId
+      : assistant
+        ? (assistant.conversationEventId ?? assistant.conversationEventIds?.find((id): id is number => typeof id === 'number' && Number.isFinite(id) && id > 0))
+        : null,
+  );
+  const conversationKey = (user?.conversationKey ?? assistant?.conversationKey)?.trim() || null;
+  const platformMessageId = (
+    user?.platformMessageId
+    ?? user?.messageId
+    ?? assistant?.platformMessageId
+    ?? assistant?.messageId
+    ?? assistant?.messageIds?.find((id): id is string => typeof id === 'string' && Boolean(id.trim()))
+  )?.trim() || null;
+  const messageKey = conversationKey && platformMessageId ? `${conversationKey}:${platformMessageId}` : null;
   return { actor_id: storageIdentity(user?.actor?.subjectId), actor_name: storageIdentity(user?.actor?.displayName),
     actor_scope: user?.actor?.scope ?? null, actor_origin: user?.actor?.origin ?? null,
     turn_id: storageIdentity(user?.cause?.turnId), turn_intent: user?.cause?.intent ?? null, target_turn_id: storageIdentity(user?.cause?.targetTurnId),
     api: assistant?.api ?? null, provider: assistant?.provider ?? null, model: assistant?.model ?? null, stop_reason: assistant?.stopReason ?? null,
     tool_call_id: storageIdentity(result?.toolCallId), tool_name: result?.toolName ?? null, is_error: result?.isError ?? null,
-    query_version: 1 };
+    conversation_event_id: conversationEventId,
+    conversation_key: conversationKey,
+    platform_message_id: platformMessageId,
+    message_key: messageKey,
+    query_version: AGENT_MESSAGE_QUERY_VERSION };
 }
 
 // ── agent_sessions ──
@@ -111,6 +146,10 @@ export interface AgentMessageRow {
   parent_id?: number | null;
   extra?: string | AgentMessageExtra | null;
   timestamp: number;
+  conversation_event_id?: number | null;
+  conversation_key?: string | null;
+  platform_message_id?: string | null;
+  message_key?: string | null;
 }
 
 export type { AgentMessageExtra } from './user-message-presentation.js';
@@ -152,6 +191,26 @@ export function parseAgentMessageRow(row: AgentMessageRow): AgentMessage | null 
   if (!parsed || typeof parsed !== 'object' || !parsed.role) return null;
   if (parsed.timestamp == null) {
     parsed.timestamp = row.timestamp;
+  }
+  if (parsed.role === 'user' || parsed.role === 'assistant') {
+    const target = parsed as UserMessage | import('../llm/types/agent-message.js').AssistantMessage;
+    const convEventId = normalizeConversationEventId(row.conversation_event_id);
+    if (convEventId !== null && target.conversationEventId === undefined) {
+      target.conversationEventId = convEventId;
+    }
+    const convKey = typeof row.conversation_key === 'string' && row.conversation_key.trim() ? row.conversation_key.trim() : undefined;
+    if (convKey && target.conversationKey === undefined) {
+      target.conversationKey = convKey;
+    }
+    const platformMsgId = typeof row.platform_message_id === 'string' && row.platform_message_id.trim() ? row.platform_message_id.trim() : undefined;
+    if (platformMsgId) {
+      if (target.platformMessageId === undefined && target.messageId === undefined) {
+        target.platformMessageId = platformMsgId;
+        target.messageId = platformMsgId;
+      } else if (target.messageId === undefined) {
+        target.messageId = platformMsgId;
+      }
+    }
   }
   return parsed;
 }

@@ -218,6 +218,7 @@ export class SatoriWsEndpoint extends SatoriClient implements Endpoint {
       handle.onForceClose(() => {
         try {
           ws.close();
+          ws.terminate?.();
         } catch {
           /* already closed */
         }

@@ -18,6 +18,9 @@ export interface ReplyPhaseFacts {
   readonly messageId?: string;
   readonly messageIds?: readonly (string | null)[];
   readonly contextRefs?: readonly string[];
+  readonly conversationSequence?: number;
+  readonly conversationSequences?: readonly (number | null)[];
+  readonly conversationKey?: string;
   readonly stopped?: true;
 }
 

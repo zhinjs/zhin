@@ -30,6 +30,21 @@ export const COMPACTABLE_TOOLS = new Set([
   'load_skill', 'load_tool', 'discover',
 ]);
 
+/**
+ * 判断工具名（支持 `<plugin>__<tool>` / `mcp__<server>__<tool>` / `skill__<skill>__<tool>` 限定名）是否属于可微压缩工具。
+ */
+export function isCompactableToolName(
+  toolName: string,
+  compactableTools: ReadonlySet<string> = COMPACTABLE_TOOLS,
+): boolean {
+  if (compactableTools.has(toolName)) return true;
+  if (toolName.includes('__')) {
+    const baseName = toolName.split('__').pop()!;
+    if (compactableTools.has(baseName)) return true;
+  }
+  return false;
+}
+
 /** 被清理后的占位文本 */
 export const CLEARED_MESSAGE = '[旧工具结果已清理]';
 
@@ -150,7 +165,7 @@ export function microCompactMessages(
     const toolName = findToolNameForResult(messages, msg, idx);
 
     // 仅清理可压缩工具的结果
-    const isCompactable = !toolName || compactableTools.has(toolName);
+    const isCompactable = !toolName || isCompactableToolName(toolName, compactableTools);
     if (!isCompactable) continue;
 
     const content = msg.content;

@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScheduleJobStore } from '../../src/assistant/job-store.js';
+import { DatabaseScheduleJobStorage, encodeScheduleJob } from '../../src/assistant/job-storage.js';
 import { SCHEDULE_JOBS_FILENAME } from '../../src/assistant/types.js';
 
 describe('ScheduleJobStore', () => {
@@ -184,5 +185,39 @@ describe('ScheduleJobStore', () => {
       kind: 'heartbeat',
       prompt: 'changed',
     });
+  });
+
+  it('pushes down findEventJobByEventId to DatabaseScheduleJobStorage.findByEventId instead of loading all jobs', async () => {
+    const store = new ScheduleJobStore({ dataDir });
+    const eventJob = await store.createEventJob({
+      id: 'evt-job-1',
+      source: 'webhook',
+      eventId: 'evt-123',
+      action: { kind: 'agent', prompt: 'handle event' },
+    });
+    const encodedRow = encodeScheduleJob(eventJob, 0);
+    const whereSpy = vi.fn(() => ({
+      limit: vi.fn(async () => [encodedRow]),
+    }));
+    const readSpy = vi.fn(async () => ({ version: 1 as const, jobs: [] }));
+    const mockDbHost = {
+      models: new Map([
+        ['agent_schedule_jobs', { select: () => ({ where: whereSpy, orderBy: readSpy }) }],
+      ]),
+      transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({
+        model: () => ({ select: () => ({ where: async () => [{ id: 1 }] }) }),
+      }),
+    };
+    const dbStorage = new DatabaseScheduleJobStorage(mockDbHost as never);
+    await store.activateDatabase(dbStorage);
+
+    const found = await store.findEventJobByEventId('evt-123');
+    expect(found?.id).toBe('evt-job-1');
+    expect(found?.schedule).toMatchObject({ kind: 'event', eventId: 'evt-123' });
+    expect(whereSpy).toHaveBeenCalledWith({
+      schedule_kind: 'event',
+      event_id: encodedRow.event_id,
+    });
+    expect(readSpy).not.toHaveBeenCalled();
   });
 });

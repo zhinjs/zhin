@@ -97,6 +97,13 @@ const keyOf = (adapter: string, userId: string): string => `${adapter}\u0000${us
 export class PeerRegistry {
   readonly #endpoints = new Map<string, EndpointEntry>();
   readonly #declared: DeclaredEntry[] = [];
+  #cached?: Map<string, PeerAccount>;
+  #cachedSnapshot?: readonly PeerAccount[];
+
+  #invalidate(): void {
+    this.#cached = undefined;
+    this.#cachedSnapshot = undefined;
+  }
 
   /**
    * 为 owner 预留登记序号（幂等，不创建条目）。序号按激活顺序单调递增，用于“新 generation 胜出”；
@@ -121,8 +128,12 @@ export class PeerRegistry {
     if (existing && existing.owner !== owner && existing.claim > claim) return () => {};
     const entry: EndpointEntry = Object.freeze({ owner, claim, endpointId: input.endpointId, adapter, userId });
     this.#endpoints.set(id, entry);
+    this.#invalidate();
     return () => {
-      if (this.#endpoints.get(id) === entry) this.#endpoints.delete(id);
+      if (this.#endpoints.get(id) === entry) {
+        this.#endpoints.delete(id);
+        this.#invalidate();
+      }
     };
   }
 
@@ -134,9 +145,13 @@ export class PeerRegistry {
       ...(label !== undefined ? { label } : {}),
     });
     this.#declared.push(entry);
+    this.#invalidate();
     return () => {
       const index = this.#declared.indexOf(entry);
-      if (index >= 0) this.#declared.splice(index, 1);
+      if (index >= 0) {
+        this.#declared.splice(index, 1);
+        this.#invalidate();
+      }
     };
   }
 
@@ -158,10 +173,11 @@ export class PeerRegistry {
   }
 
   snapshot(): readonly PeerAccount[] {
-    return Object.freeze([...this.#build().values()]);
+    return (this.#cachedSnapshot ??= Object.freeze([...this.#build().values()]));
   }
 
   #build(): Map<string, PeerAccount> {
+    if (this.#cached) return this.#cached;
     const ids = new Map<string, CapabilityId[]>();
     const base = new Map<string, { adapter: string; userId: string; label?: string }>();
     for (const entry of this.#endpoints.values()) {
@@ -188,6 +204,7 @@ export class PeerRegistry {
         ...(value.label !== undefined ? { label: value.label } : {}),
       }) as PeerAccount);
     }
+    this.#cached = result;
     return result;
   }
 }

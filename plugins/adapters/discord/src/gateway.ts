@@ -157,12 +157,16 @@ export async function toMessageCreateOptions(body: DiscordOutboundBody): Promise
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         ...row.components.map((btn) => {
           const b = new ButtonBuilder()
-            .setCustomId(btn.custom_id)
             .setLabel(btn.label)
             .setDisabled(!!btn.disabled);
-          if (btn.style === 4) b.setStyle(ButtonStyle.Danger);
-          else if (btn.style === 1) b.setStyle(ButtonStyle.Primary);
-          else b.setStyle(ButtonStyle.Secondary);
+          if (btn.url && btn.style === 5) {
+            b.setStyle(ButtonStyle.Link).setURL(btn.url);
+          } else {
+            b.setCustomId(btn.custom_id ?? '');
+            if (btn.style === 4) b.setStyle(ButtonStyle.Danger);
+            else if (btn.style === 1) b.setStyle(ButtonStyle.Primary);
+            else b.setStyle(ButtonStyle.Secondary);
+          }
           return b;
         }),
       ),

@@ -86,4 +86,36 @@ describe('Schema fixes', () => {
       expect(schema.safeParse(123).success).toBe(false);
     });
   });
+
+  describe('object defaults, required fields, and NaN/array guards', () => {
+    it('Schema.object(undefined) 应正确填充子字段 meta.default 而非 builder 方法', () => {
+      const schema = Schema.object({
+        host: Schema.string().default('127.0.0.1'),
+        port: Schema.number().default(8080),
+      });
+      expect(schema(undefined)).toEqual({ host: '127.0.0.1', port: 8080 });
+    });
+
+    it('Schema.object({}) 应填充缺失字段的默认值并校验 required 字段', () => {
+      const withDefaults = Schema.object({
+        host: Schema.string().default('localhost'),
+        port: Schema.number().default(3000),
+      });
+      expect(withDefaults({})).toEqual({ host: 'localhost', port: 3000 });
+
+      const withRequired = Schema.object({
+        token: Schema.string().required(),
+      });
+      expect(() => withRequired({} as any)).toThrow(/required/);
+    });
+
+    it('Schema.number 应拒绝 NaN，Schema.object 应拒绝数组', () => {
+      const numSchema = Schema.number();
+      expect(() => numSchema(NaN)).toThrow(/not a number/);
+      expect(numSchema.safeParse(NaN).success).toBe(false);
+
+      const objSchema = Schema.object({ a: Schema.string() });
+      expect(() => objSchema([] as any)).toThrow(/not a object/);
+    });
+  });
 });

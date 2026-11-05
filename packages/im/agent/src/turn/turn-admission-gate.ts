@@ -477,33 +477,52 @@ export class TurnAdmissionGate {
   }
 
   /**
-   * Explicit stop. Only the running turn's sender or a master may stop it;
-   * the stopping sender's queued messages are dropped as well.
+   * Explicit stop. The running turn's sender (or sole remaining participant) or
+   * a master may stop the running turn; any sender may also drop their own
+   * queued messages or waiting merge-window participation.
    */
   stop(sessionKey: string, senderId: string, isMaster: boolean): TurnStopResult {
     const state = this.#sessions.get(sessionKey);
-    const running = state?.running;
-    if (!state || !running) return 'not_running';
-    if (running.senderId !== senderId && !isMaster) return 'forbidden';
-    running.controller.abort(new TriggerCancelledError(sessionKey));
-    const dropped = (id: string) => id === senderId || id === running.senderId;
+    if (!state) return 'not_running';
+    const running = state.running;
+    const canStopRunning = running !== undefined && (
+      isMaster
+      || running.senderId === senderId
+      || (running.participants.length > 0 && running.participants.every((p) => p.senderId === senderId))
+    );
+    if (canStopRunning && running) {
+      running.controller.abort(new TriggerCancelledError(sessionKey));
+    }
+    const dropped = (id: string) => id === senderId || (canStopRunning && running !== undefined && id === running.senderId) || (isMaster && !running);
+    let droppedQueued = false;
     for (let index = state.queue.length - 1; index >= 0; index -= 1) {
       const entry = state.queue[index]!;
       if (entry.window) {
         // Drop only the stopping senders' messages; the rest of the window stays.
         const participants = entry.window.participants;
         for (let p = participants.length - 1; p >= 0; p -= 1) {
-          if (dropped(participants[p]!.senderId)) participants.splice(p, 1);
+          if (dropped(participants[p]!.senderId)) {
+            participants.splice(p, 1);
+            droppedQueued = true;
+          }
         }
         if (participants.length > 0) continue;
         entry.window.cancelTimer?.();
       } else if (!dropped(entry.senderId)) {
         continue;
+      } else {
+        droppedQueued = true;
       }
       state.queue.splice(index, 1);
       entry.settle(Object.freeze({ kind: 'rejected', reason: 'stopped' }));
     }
-    return 'stopped';
+    if (canStopRunning || droppedQueued) {
+      if (!state.running && state.queue.length === 0 && this.#sessions.get(sessionKey) === state) {
+        this.#sessions.delete(sessionKey);
+      }
+      return 'stopped';
+    }
+    return running ? 'forbidden' : 'not_running';
   }
 
   /** Rejects every queued turn and aborts running ones (generation shutdown). */

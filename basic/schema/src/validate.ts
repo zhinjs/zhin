@@ -45,7 +45,7 @@ function validateOnly(schema: Schema, path: string, value: unknown): unknown {
       }
       return value;
     case 'number':
-      if (value !== undefined && typeof value !== 'number') {
+      if (value !== undefined && (typeof value !== 'number' || Number.isNaN(value))) {
         throw issue(path, `${path} is not a number`);
       }
       return value;

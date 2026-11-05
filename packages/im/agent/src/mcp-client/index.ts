@@ -46,7 +46,9 @@ export class McpClientManager {
     const conn = this.connections.get(name);
     if (conn) {
       await conn.disconnect();
-      this.connections.delete(name);
+      if (this.connections.get(name) === conn) {
+        this.connections.delete(name);
+      }
     }
   }
 

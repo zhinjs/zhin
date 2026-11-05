@@ -115,13 +115,12 @@ export class SessionSystem {
     content: string,
     options?: { strategyName?: string },
   ): Promise<TurnSessionPrep> {
+    await host.waitForMemoryPersistence();
     const deps = this.sessionDeps(host);
     const sessionKey = this.resolveSessionKey(commMessage, options?.strategyName);
     const userId = commMessage.sender?.id || 'unknown';
     const turnUser = buildTurnUserMessages(commMessage, content);
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
-
-    await host.waitForMemoryPersistence();
     const { sessionId } = await beginTurnSession(deps, sessionKey);
 
     return {
@@ -137,13 +136,12 @@ export class SessionSystem {
     host: ZhinAgentPrivate,
     turn: TurnIngress,
   ): Promise<IngressTurnSessionPrep> {
+    await host.waitForMemoryPersistence();
     const deps = this.sessionDeps(host);
     const sessionKey = turn.session.key;
     const userId = turn.principal.subjectId;
     const resolved = resolveIngressUserMessage(turn, await resolveTurnQuote(turn));
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
-
-    await host.waitForMemoryPersistence();
     const { sessionId } = await beginIngressTurnSession(deps, turn);
     return {
       sessionKey,

@@ -1,3 +1,4 @@
+import { childPluginId, rootPluginId, type PluginId, type PluginNodeSnapshot, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Segment } from '../../src/built/segment-contract/types.js';
 import { RuntimeInteractiveRouter } from '../../src/plugin-runtime/im/interactive-router.js';
 import type { Message } from '../../src/plugin-runtime/im/contracts.js';
@@ -50,6 +51,66 @@ describe('Interactive fallback numbering', () => {
     expect(router.resolvePayload(message('2'))).toBeUndefined();
     expect(router.resolvePayload({ ...message('2'), conversation: { ...conversation, id: 'another' } } as Message)).toBe('b');
     expect(router.resolvePayload(message('cancel'))).toBe('stop');
+  });
+
+  it('allocates independent per-conversation counters when numberingScope is conversation', () => {
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    const otherConversation = { ...conversation, id: 'another' };
+    expect(router.rememberFallback(conversation, 1, { '1': 'room-a-1', '2': 'room-a-2' })).toEqual({
+      '1': 'room-a-1',
+      '2': 'room-a-2',
+    });
+    expect(router.rememberFallback(otherConversation, 1, { '1': 'room-b-1' })).toEqual({
+      '1': 'room-b-1',
+    });
+    expect(router.resolvePayload(message('1'))).toBe('room-a-1');
+    expect(router.resolvePayload({ ...message('1'), conversation: otherConversation } as Message)).toBe('room-b-1');
+  });
+
+  it('survives HMR of an unrelated plugin while evicting when the owning plugin reloads', () => {
+    const root = rootPluginId();
+    const gamePlugin = childPluginId(root, 'game');
+    const otherPlugin = childPluginId(root, 'weather');
+    const rootNode: PluginNodeSnapshot = { id: root, instanceKey: 'root', packageName: 'root', packageRoot: '/', children: [gamePlugin, otherPlugin] };
+    const gameNodeV1: PluginNodeSnapshot = { id: gamePlugin, instanceKey: 'game', packageName: 'game', packageRoot: '/game', parent: root, children: [] };
+    const otherNodeV1: PluginNodeSnapshot = { id: otherPlugin, instanceKey: 'weather', packageName: 'weather', packageRoot: '/weather', parent: root, children: [] };
+    const otherNodeV2: PluginNodeSnapshot = { ...otherNodeV1 };
+    const gameNodeV2: PluginNodeSnapshot = { ...gameNodeV1 };
+
+    const makeSnap = (generation: number, gameNode: PluginNodeSnapshot, otherNode: PluginNodeSnapshot): RuntimeSnapshot => ({
+      generation,
+      root,
+      tree: new Map<PluginId, PluginNodeSnapshot>([
+        [root, rootNode],
+        [gamePlugin, gameNode],
+        [otherPlugin, otherNode],
+      ]),
+      config: new Map(),
+      resources: new Map(),
+      capabilities: new Map(),
+      projections: new Map(),
+    });
+
+    const snap1 = makeSnap(1, gameNodeV1, otherNodeV1);
+    const snap2UnrelatedHmr = makeSnap(2, gameNodeV1, otherNodeV2);
+    const snap3OwnerReload = makeSnap(3, gameNodeV2, otherNodeV2);
+
+    const router = new RuntimeInteractiveRouter({ numberingScope: 'conversation' });
+    router.rememberFallback(conversation, 1, { '1': 'game:move:1' }, {
+      incarnation: {
+        requester: gamePlugin,
+        snapshot: snap1,
+        node: gameNodeV1,
+      },
+    });
+
+    // Unrelated plugin (weather) reloaded in generation 2 -> game fallback still resolves!
+    expect(router.resolvePayload(message('1', 2), { snapshot: snap2UnrelatedHmr })).toBe('game:move:1');
+    expect(router.isExpiredFallback(message('1', 2), snap2UnrelatedHmr)).toBe(false);
+
+    // Owning plugin (game) reloaded in generation 3 -> game fallback is evicted and reported expired!
+    expect(router.resolvePayload(message('1', 3), { snapshot: snap3OwnerReload })).toBeUndefined();
+    expect(router.isExpiredFallback(message('1', 3), snap3OwnerReload)).toBe(true);
   });
 
   it('routes prefixed fallback labels after the instance counter reaches multiple digits', () => {

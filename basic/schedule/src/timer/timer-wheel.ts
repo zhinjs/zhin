@@ -100,7 +100,7 @@ export class TimerWheel {
       return;
     }
 
-    await this.onFire(job);
     this.reschedule();
+    await this.onFire(job);
   }
 }

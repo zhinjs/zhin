@@ -7,6 +7,7 @@ import {
   readOperationSession,
 } from '@zhin.js/feature-kit';
 import type {
+  InboundDispatchSummary,
   MiddlewareContext,
   MiddlewareDefinition,
   MiddlewarePhase,
@@ -15,10 +16,16 @@ import type {
 } from './definition.js';
 import { continuationBrand, type MiddlewareContinuation } from './continuation.js';
 
+/** @internal Terminal control passed to inbound terminal callbacks to publish dispatch summary before after-dispatch unwinds. */
+export interface InboundTerminalControl {
+  reportDispatch(summary: InboundDispatchSummary): Promise<void>;
+}
+
 /** @internal Transmission-neutral result policy supplied by the composition layer. */
 export interface MiddlewareResultPolicy<TResult> {
   stop(owner: PluginId): TResult;
   replace(owner: PluginId, value: unknown, downstream: TResult | undefined): TResult;
+  summarize?(result: TResult): InboundDispatchSummary | undefined;
 }
 
 /** @internal Runtime continuation result. */
@@ -109,7 +116,7 @@ export class MiddlewareIndex {
       Object.freeze(context);
       const definition = record.slot.definition;
       if (definition.target !== 'outbound') throw new Error('Invalid outbound Middleware');
-      const result = await definition.handle(context, () => dispatch(index + 1));
+      const result = await definition.handle.call(context, context, () => dispatch(index + 1));
       if (result !== undefined) throw new TypeError('Outbound Middleware must use input.replace(), not return content');
     };
     await dispatch(0);
@@ -118,27 +125,55 @@ export class MiddlewareIndex {
   /** Unwinds one inbound operation before its caller performs any automatic reply. */
   async runInbound<TInput, TResult>(
     input: TInput,
-    terminal: () => Promise<TResult>,
+    terminal: (control: InboundTerminalControl) => Promise<TResult>,
     results: MiddlewareResultPolicy<TResult>,
     operationSnapshot: RuntimeSnapshot = this.snapshot,
   ): Promise<TResult> {
     const clientAdapter = operationClientAdapter(input);
     const records = this.#records.filter((record) => record.target === 'inbound'
       && (!record.adapter || record.adapter === clientAdapter));
+    let dispatchSummary: InboundDispatchSummary | undefined;
+    let reported = false;
+    const afterDispatchListeners: Array<(summary: InboundDispatchSummary) => void | Promise<void>> = [];
+    const reportDispatch = async (summary: InboundDispatchSummary): Promise<void> => {
+      dispatchSummary = Object.freeze({ ...summary });
+      if (reported) return;
+      reported = true;
+      for (const listener of afterDispatchListeners.splice(0)) {
+        await listener(dispatchSummary);
+      }
+    };
     const dispatch = async (index: number): Promise<TResult> => {
       const record = records[index];
-      if (!record) return terminal();
+      if (!record) {
+        const terminalResult = await terminal({ reportDispatch });
+        if (!reported) {
+          const inferred = results.summarize?.(terminalResult)
+            ?? { matched: false, path: 'none' as const, replied: false };
+          await reportDispatch(inferred);
+        }
+        return terminalResult;
+      }
       const definition = record.slot.definition;
       if (definition.target !== 'inbound') throw new Error('Invalid inbound Middleware');
       const authorInput = bindOperationInput(input, record.owner, operationSnapshot);
       const context = {
         ...createCapabilityContext({ snapshot: operationSnapshot, ownerId: record.owner, admission: undefined, signal: readOperationSession(authorInput, record.adapter)?.signal }), input: authorInput,
+        onAfterDispatch(listener: (summary: InboundDispatchSummary) => void | Promise<void>) {
+          if (typeof listener !== 'function') {
+            throw new TypeError('Middleware onAfterDispatch listener must be a function');
+          }
+          afterDispatchListeners.push(listener);
+        },
       } as MiddlewareContext<TInput>;
       Object.defineProperty(context, 'session', {
         enumerable: true, get: () => readOperationSession(authorInput, record.adapter),
       });
       Object.defineProperty(context, '$client', {
         enumerable: true, get: () => readOperationClient(authorInput, record.adapter),
+      });
+      Object.defineProperty(context, 'dispatch', {
+        enumerable: true, get: () => dispatchSummary,
       });
       Object.freeze(context);
       let active = true;
@@ -161,7 +196,7 @@ export class MiddlewareIndex {
       };
       let returned: unknown;
       try {
-        returned = await definition.handle(context, next);
+        returned = await definition.handle.call(context, context, next);
       } catch (error) {
         // Drain an admitted child before the owning generation lease can close.
         await nextTask?.catch(() => undefined);

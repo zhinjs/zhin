@@ -15,7 +15,16 @@ import type { CoreReplyStream } from '@zhin.js/core/runtime';
 
 export type TurnScope = 'private' | 'group' | 'channel';
 
-export type TurnOrigin = Exclude<ToolInvocationOrigin, Readonly<{ kind: 'mcp'; requestId: string }>>;
+export type ImTurnOrigin = Extract<ToolInvocationOrigin, Readonly<{ kind: 'im' }>> & Readonly<{
+  /** Canonical SSOT sequence number (`conversation_events.sequence`) when backed by an IM event. */
+  readonly conversationSequence?: number;
+  /** Canonical conversation key (`conversation_events.conversation_key`) when known. */
+  readonly conversationKey?: string;
+}>;
+
+export type TurnOrigin =
+  | ImTurnOrigin
+  | Exclude<ToolInvocationOrigin, Readonly<{ kind: 'im' }> | Readonly<{ kind: 'mcp'; requestId: string }>>;
 
 export interface TurnIdentity {
   readonly rootId: string;
@@ -234,10 +243,30 @@ export type DeliveryOutcome =
         /** Text submitted to the unified send chain; final delivery may have been transformed. */
         plannedText: string;
       }>[];
+      /** Canonical SSOT sequence number (`conversation_events.sequence`) of the primary delivered outbound message. */
+      conversationSequence?: number;
+      /** Canonical SSOT sequence numbers (`conversation_events.sequence`) for multi-message delivery slots. */
+      conversationSequences?: readonly (number | null)[];
+      /** Canonical conversation key (`conversation_events.conversation_key`) when known. */
+      conversationKey?: string;
     }>
   | Readonly<{ status: 'suppressed' }>
-  | Readonly<{ status: 'unsupported'; code: string; messages?: readonly (MessageRef | null)[] }>
-  | Readonly<{ status: 'rejected'; code: string; messages?: readonly (MessageRef | null)[] }>
+  | Readonly<{
+      status: 'unsupported';
+      code: string;
+      messages?: readonly (MessageRef | null)[];
+      conversationSequence?: number;
+      conversationSequences?: readonly (number | null)[];
+      conversationKey?: string;
+    }>
+  | Readonly<{
+      status: 'rejected';
+      code: string;
+      messages?: readonly (MessageRef | null)[];
+      conversationSequence?: number;
+      conversationSequences?: readonly (number | null)[];
+      conversationKey?: string;
+    }>
   | Readonly<{
       status: 'failed';
       code: string;
@@ -248,6 +277,9 @@ export type DeliveryOutcome =
       deliveryPartial?: true;
       /** Confirmed prefix slots survive a later failure; the full reply is not marked delivered. */
       messages?: readonly (MessageRef | null)[];
+      conversationSequence?: number;
+      conversationSequences?: readonly (number | null)[];
+      conversationKey?: string;
     }>;
 
 export interface ReplyAnswerContext {

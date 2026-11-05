@@ -28,6 +28,74 @@ export interface CompactionRuntimeOptions {
   /** Isolated child turns compact in memory without writing conversational state. */
   persistSummary?: boolean;
   loopHooks?: PluginAILoopHookRegistry | null;
+  /** History window token budget to align compaction thresholds against. */
+  historyWindowTokens?: number;
+  /** History window message budget to align compaction thresholds against. */
+  historyWindowMessages?: number;
+  /** Explicit message-count trigger threshold override. */
+  triggerMessages?: number;
+  /** Explicit recent-messages count to retain during compaction. */
+  keepRecentMessages?: number;
+}
+
+export interface UnifiedHistoryAndCompactionBudget {
+  readonly windowTokens: number;
+  readonly windowMessages: number;
+  readonly effectiveTriggerTokens: number;
+  readonly effectiveKeepRecentTokens: number;
+  readonly effectiveTriggerMessages?: number;
+  readonly effectiveKeepRecentMessages?: number;
+}
+
+export interface AgentCompactionRuntimeOptions {
+  readonly maxSessions?: number;
+  readonly historyWindowTokens?: number;
+  readonly historyWindowMessages?: number;
+  readonly triggerTokens?: number;
+  readonly keepRecentTokens?: number;
+  readonly triggerMessages?: number;
+  readonly keepRecentMessages?: number;
+}
+
+export function resolveUnifiedHistoryAndCompactionBudget(input: {
+  windowTokens?: number;
+  windowMessages?: number;
+  triggerTokens?: number;
+  keepRecentTokens?: number;
+  triggerMessages?: number;
+  keepRecentMessages?: number;
+}): UnifiedHistoryAndCompactionBudget {
+  const windowTokens = input.windowTokens && input.windowTokens > 0 ? input.windowTokens : 8000;
+  const windowMessages = input.windowMessages && input.windowMessages > 0 ? input.windowMessages : 20;
+
+  const rawTriggerTokens = input.triggerTokens ?? Math.max(1000, Math.floor(windowTokens * 0.85));
+  const effectiveTriggerTokens = Math.min(rawTriggerTokens, windowTokens);
+
+  const rawKeepRecentTokens = input.keepRecentTokens ?? Math.max(400, Math.floor(effectiveTriggerTokens * 0.5));
+  const effectiveKeepRecentTokens = Math.min(rawKeepRecentTokens, Math.max(1, Math.floor(windowTokens * 0.75)));
+
+  const hasMessageAlignment = input.windowMessages !== undefined
+    || input.triggerMessages !== undefined
+    || input.keepRecentMessages !== undefined;
+  const effectiveTriggerMessages = hasMessageAlignment && input.triggerMessages !== undefined && input.triggerMessages > 0
+    ? Math.min(input.triggerMessages, windowMessages)
+    : undefined;
+  const effectiveKeepRecentMessages = hasMessageAlignment
+    ? (input.keepRecentMessages !== undefined && input.keepRecentMessages > 0
+      ? Math.min(input.keepRecentMessages, Math.max(1, Math.floor(windowMessages * 0.75)))
+      : effectiveTriggerMessages !== undefined
+        ? Math.max(1, Math.floor(effectiveTriggerMessages * 0.6))
+        : undefined)
+    : undefined;
+
+  return Object.freeze({
+    windowTokens,
+    windowMessages,
+    effectiveTriggerTokens,
+    effectiveKeepRecentTokens,
+    ...(effectiveTriggerMessages !== undefined ? { effectiveTriggerMessages } : {}),
+    ...(effectiveKeepRecentMessages !== undefined ? { effectiveKeepRecentMessages } : {}),
+  });
 }
 
 /** Default share of the context window that triggers auto-compaction (#730). */
@@ -56,17 +124,50 @@ function resolveAgentCompactionConfig(
   compaction: CompactionConfig | undefined,
   contextWindow: number,
   reservedTokens?: number,
+  alignment?: {
+    historyWindowTokens?: number;
+    historyWindowMessages?: number;
+    triggerMessages?: number;
+    keepRecentMessages?: number;
+  },
 ): AgentCompactionConfig {
-  const triggerTokens = resolveCompactionTriggerTokens(compaction, contextWindow, reservedTokens);
+  let triggerTokens = resolveCompactionTriggerTokens(compaction, contextWindow, reservedTokens);
   // 沿用触发预算与保留预算的 1.25 倍余量；小窗口收紧保留量，不抬高触发线。
-  const keepRecentTokens = Math.min(compaction?.keepRecentTokens ?? 20_000, Math.floor(triggerTokens / 1.25));
+  let keepRecentTokens = Math.min(compaction?.keepRecentTokens ?? 20_000, Math.floor(triggerTokens / 1.25));
+  let triggerMessages = alignment?.triggerMessages ?? (compaction as { triggerMessages?: number } | undefined)?.triggerMessages;
+  let keepRecentMessages = alignment?.keepRecentMessages ?? (compaction as { keepRecentMessages?: number } | undefined)?.keepRecentMessages;
+
+  if (
+    alignment?.historyWindowTokens !== undefined
+    || alignment?.historyWindowMessages !== undefined
+    || triggerMessages !== undefined
+    || keepRecentMessages !== undefined
+  ) {
+    const unified = resolveUnifiedHistoryAndCompactionBudget({
+      windowTokens: alignment?.historyWindowTokens ?? contextWindow,
+      windowMessages: alignment?.historyWindowMessages,
+      triggerTokens,
+      keepRecentTokens,
+      triggerMessages,
+      keepRecentMessages,
+    });
+    if (alignment?.historyWindowTokens !== undefined) {
+      triggerTokens = Math.min(triggerTokens, unified.effectiveTriggerTokens);
+      keepRecentTokens = Math.min(keepRecentTokens, unified.effectiveKeepRecentTokens);
+    }
+    triggerMessages = unified.effectiveTriggerMessages ?? triggerMessages;
+    keepRecentMessages = unified.effectiveKeepRecentMessages ?? keepRecentMessages;
+  }
+
   return {
     enabled: compaction?.enabled !== false,
     auto: compaction?.auto !== false,
     keepRecentTokens,
+    ...(keepRecentMessages !== undefined ? { keepRecentMessages } : {}),
     minKeepCount: compaction?.minKeepCount ?? 2,
     contextWindow,
     triggerTokens,
+    ...(triggerMessages !== undefined ? { triggerMessages } : {}),
   };
 }
 
@@ -78,11 +179,51 @@ const MAX_COMPACTION_SESSIONS = 5000;
 /** One Agent host's compaction state and operations. */
 export class AgentCompactionRuntime {
   readonly #states = new Map<string, AgentCompactionState>();
+  private readonly maxSessions: number;
+  #alignment?: AgentCompactionRuntimeOptions;
 
-  constructor(private readonly maxSessions: number = MAX_COMPACTION_SESSIONS) {
+  constructor(maxSessionsOrOptions: number | AgentCompactionRuntimeOptions = MAX_COMPACTION_SESSIONS) {
+    const maxSessions = typeof maxSessionsOrOptions === 'number'
+      ? maxSessionsOrOptions
+      : (maxSessionsOrOptions.maxSessions ?? MAX_COMPACTION_SESSIONS);
     if (!Number.isInteger(maxSessions) || maxSessions < 1) {
       throw new TypeError('AgentCompactionRuntime maxSessions must be a positive integer');
     }
+    this.maxSessions = maxSessions;
+    if (typeof maxSessionsOrOptions === 'object' && maxSessionsOrOptions !== null) {
+      this.#alignment = maxSessionsOrOptions;
+    }
+  }
+
+  alignWithHistoryWindow(window: {
+    maxTokens?: number;
+    budget?: number;
+    maxMessages?: number;
+    triggerTokens?: number;
+    keepRecentTokens?: number;
+    triggerMessages?: number;
+    keepRecentMessages?: number;
+  }): UnifiedHistoryAndCompactionBudget {
+    const windowTokens = window.maxTokens ?? window.budget ?? this.#alignment?.historyWindowTokens;
+    const windowMessages = window.maxMessages ?? this.#alignment?.historyWindowMessages;
+    const unified = resolveUnifiedHistoryAndCompactionBudget({
+      windowTokens,
+      windowMessages,
+      triggerTokens: window.triggerTokens ?? this.#alignment?.triggerTokens,
+      keepRecentTokens: window.keepRecentTokens ?? this.#alignment?.keepRecentTokens,
+      triggerMessages: window.triggerMessages ?? this.#alignment?.triggerMessages,
+      keepRecentMessages: window.keepRecentMessages ?? this.#alignment?.keepRecentMessages,
+    });
+    this.#alignment = {
+      ...this.#alignment,
+      historyWindowTokens: unified.windowTokens,
+      historyWindowMessages: unified.windowMessages,
+      triggerTokens: unified.effectiveTriggerTokens,
+      keepRecentTokens: unified.effectiveKeepRecentTokens,
+      triggerMessages: unified.effectiveTriggerMessages,
+      keepRecentMessages: unified.effectiveKeepRecentMessages,
+    };
+    return unified;
   }
 
   get stateCount(): number {
@@ -119,7 +260,17 @@ export class AgentCompactionRuntime {
   ): Promise<AgentMessage[]> {
     if (signal?.aborted) return messages;
 
-    const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow, options.reservedTokens);
+    const cfg = resolveAgentCompactionConfig(
+      options.compactionConfig,
+      options.contextWindow,
+      options.reservedTokens,
+      {
+        historyWindowTokens: options.historyWindowTokens ?? this.#alignment?.historyWindowTokens,
+        historyWindowMessages: options.historyWindowMessages ?? this.#alignment?.historyWindowMessages,
+        triggerMessages: options.triggerMessages ?? this.#alignment?.triggerMessages,
+        keepRecentMessages: options.keepRecentMessages ?? this.#alignment?.keepRecentMessages,
+      },
+    );
     if (cfg.enabled === false) return messages;
 
     const state = this.#getState(options.sessionId);
@@ -170,7 +321,17 @@ export class AgentCompactionRuntime {
     repo: ContextRepository,
     options: Omit<CompactionRuntimeOptions, 'host'> & { host: CompactionContextHost; locale?: Locale },
   ): Promise<{ ok: boolean; message: string }> {
-    const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow, options.reservedTokens);
+    const cfg = resolveAgentCompactionConfig(
+      options.compactionConfig,
+      options.contextWindow,
+      options.reservedTokens,
+      {
+        historyWindowTokens: options.historyWindowTokens ?? this.#alignment?.historyWindowTokens,
+        historyWindowMessages: options.historyWindowMessages ?? this.#alignment?.historyWindowMessages,
+        triggerMessages: options.triggerMessages ?? this.#alignment?.triggerMessages,
+        keepRecentMessages: options.keepRecentMessages ?? this.#alignment?.keepRecentMessages,
+      },
+    );
     if (cfg.enabled === false) {
       return { ok: false, message: t(options.locale, 'compactDisabled') };
     }

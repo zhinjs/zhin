@@ -3,6 +3,7 @@ export interface NapCatWsSocket {
   readonly readyState: number;
   send(data: string): void;
   close(code?: number, reason?: string): void;
+  terminate?(): void;
   ping?(): void;
   on(event: 'open' | 'message' | 'close' | 'error' | 'pong', listener: (...args: unknown[]) => void): void;
 }

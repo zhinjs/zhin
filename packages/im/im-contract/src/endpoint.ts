@@ -70,6 +70,7 @@ export interface DeliveryPart {
   readonly sourceIndices?: readonly number[];
   /** Digest of this part alone, only when its exact final plain-text body is verified. */
   readonly outboundTextDigest?: string;
+  readonly conversationSequence?: number;
 }
 
 /** Stable transport evidence; a generic thrown error must never imply safe retry. */
@@ -98,6 +99,7 @@ export interface DeliveryReceipt {
   readonly parts?: readonly DeliveryPart[];
   /** Host-computed SHA-256 of the final exact plain-text payload; absent for rich/native content. */
   readonly outboundTextDigest?: string;
+  readonly conversationSequence?: number;
   readonly failure?: DeliveryFailure;
 }
 

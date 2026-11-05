@@ -278,6 +278,18 @@ export function isBotMentioned(ev: OneBot12Event): boolean {
   );
 }
 
+/** 提取入站消息中的回复引用 message_id。 */
+export function extractQuoteId(ev: OneBot12Event): string | undefined {
+  if (!Array.isArray(ev.message)) return undefined;
+  for (const seg of ev.message) {
+    if (seg?.type === 'reply') {
+      const id = seg.data?.['message_id'] ?? seg.data?.['id'];
+      if (id != null && String(id).trim() !== '') return String(id);
+    }
+  }
+  return undefined;
+}
+
 /** OneBot 12 携带媒体的段类型。 */
 const ONEBOT12_MEDIA_TYPES = new Set(['image', 'voice', 'audio', 'video', 'file']);
 

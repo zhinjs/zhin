@@ -195,18 +195,22 @@ export class AgentTurnCoordinator {
     void cumulative.finally(() => {
       if (this.#tails.get(sessionKey) === cumulative) this.#tails.delete(sessionKey);
     });
-    this.#admissions.set(sessionKey, admitted);
     try {
       if (intent.kind === 'new') {
         await waitForTurn(previous.catch(() => undefined), signal);
+        this.#admissions.set(sessionKey, admitted);
         this.#active.set(sessionKey, controller);
       } else if (intent.kind === 'supersede') {
-        await waitForAdmission(previousAdmission, signal);
+        const activeAdmission = this.#admissions.get(sessionKey) ?? previousAdmission;
+        await waitForAdmission(activeAdmission, signal);
         this.#active.get(sessionKey)?.abort(new TurnSupersededError(sessionKey));
         await waitForTurn(previous.catch(() => undefined), signal);
+        this.#admissions.set(sessionKey, admitted);
         this.#active.set(sessionKey, controller);
       } else {
-        await waitForAdmission(previousAdmission, signal);
+        const activeAdmission = this.#admissions.get(sessionKey) ?? previousAdmission;
+        this.#admissions.set(sessionKey, admitted);
+        await waitForAdmission(activeAdmission, signal);
       }
       return await operation(admit, controller.signal);
     } finally {

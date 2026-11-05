@@ -43,7 +43,11 @@ import {
   resolveTurnTrustLevel,
   type InitiatorTrustLevel,
 } from '../security/trust-level.js';
-import { TurnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
+import { TurnToolExecutionAuthority, TurnToolRuntime, type TurnToolRuntimeOptions } from '../tool/turn-tool-runtime.js';
+import type { DecisionAuditSink } from '../security/tool-hard-gate.js';
+import { hostControlPlaneSource } from '../security/host-control-plane.js';
+import { TurnProvenance } from '../security/provenance.js';
+import { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
 import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
 import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../turn/turn-ingress.js';
 import type { ActorModelSelection, CollaborationDirectory, CreateCollaborationTools } from './contracts.js';
@@ -67,6 +71,7 @@ export interface ActorTurnRunnerOptions {
   readonly contextFiles?: readonly ContextFile[];
   readonly interactiveRun?: InteractiveRun;
   readonly imageInspectionBudget?: ImageInspectionBudget;
+  readonly provenance?: TurnProvenance;
   readonly onEscalate?: (reason: string) => Promise<string>;
 }
 
@@ -172,7 +177,24 @@ async function runActorTurn(
     platform: rootTurn.origin.kind === 'im' ? rootTurn.origin.platform : undefined,
     persistSnapshot: async () => undefined,
   });
-  const runtime = new TurnToolRuntime(turn, plan.capabilities);
+  // Preserve external taint across actor turns via shared root provenance.
+  const provenance = options.provenance ?? new TurnProvenance();
+  const leakInspector = new OutboundLeakInspector({
+    promptTexts: [persona, options.bootstrapContext ?? ''],
+  });
+  const audit = (host as { readonly decisionEvents?: Partial<DecisionAuditSink> }).decisionEvents;
+  const controlPlane = hostControlPlaneSource(host);
+  const runtimeOptions: TurnToolRuntimeOptions = {
+    injectionGuard: host.config.injectionGuard,
+    ...(host.config.toolHardGate ? { hardGate: host.config.toolHardGate } : {}),
+    ...(controlPlane ? { controlPlane } : {}),
+    ...(host.toolApprovals ? { approvalQueue: host.toolApprovals } : {}),
+    ...(host.opsCooldown ? { opsCooldown: host.opsCooldown } : {}),
+    ...(audit && typeof audit.record === 'function' ? { decisionAudit: audit as DecisionAuditSink } : {}),
+    provenance,
+    leakInspector,
+  };
+  const runtime = new TurnToolRuntime(turn, plan.capabilities, runtimeOptions);
 
   let modelRequests = 0;
   let usageTokens = 0;

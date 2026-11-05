@@ -47,6 +47,12 @@ export function resolveIngressUserMessage(
   const identified: UserMessage = {
     ...user,
     ...(turn.origin.kind === 'im' && turn.origin.messageId ? { messageId: turn.origin.messageId } : {}),
+    ...(turn.origin.kind === 'im' && typeof turn.origin.conversationSequence === 'number'
+      ? { conversationEventId: turn.origin.conversationSequence }
+      : {}),
+    ...(turn.origin.kind === 'im' && turn.origin.conversationKey
+      ? { conversationKey: turn.origin.conversationKey }
+      : {}),
   };
   const llmMessage = renderUserMessageForLlm(turn.origin.kind === 'im' ? stampUserHeader(identified, quote) : identified, extra);
   return Object.freeze({

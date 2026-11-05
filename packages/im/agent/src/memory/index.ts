@@ -17,8 +17,17 @@ export {
   defaultMemorySystem,
 } from './memory-system.js';
 
-export type { CompactionContextHost, CompactionRuntimeOptions } from './compaction-runtime.js';
-export { AgentCompactionRuntime } from './compaction-runtime.js';
+export type {
+  CompactionContextHost,
+  CompactionRuntimeOptions,
+  UnifiedHistoryAndCompactionBudget,
+  AgentCompactionRuntimeOptions,
+} from './compaction-runtime.js';
+export {
+  AgentCompactionRuntime,
+  resolveCompactionTriggerTokens,
+  resolveUnifiedHistoryAndCompactionBudget,
+} from './compaction-runtime.js';
 export {
   SessionToldLedger,
   extractToldEntries,

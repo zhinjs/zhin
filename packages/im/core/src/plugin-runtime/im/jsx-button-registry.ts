@@ -3,9 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { jsx } from '@zhin.js/jsx';
 import { conversationRefKey, type Segment } from '@zhin.js/im-contract';
 import { bindOperationInput } from '@zhin.js/feature-kit';
-import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { PluginId, PluginNodeSnapshot, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { ButtonProps, ButtonClickHandler } from '../../jsx/message-tags.js';
 import type { Message, SendRequest } from './contracts.js';
+import { operationEndpoint } from './operation-endpoint.js';
 import { isKeyboardSegment } from '../../built/interactive-segments/types.js';
 
 const PREFIX = 'zhin:jsx:';
@@ -15,9 +16,51 @@ export function isJsxButtonPayload(payload: string | undefined): boolean {
   return payload?.startsWith(PREFIX) === true;
 }
 
-interface ButtonBinding {
+export interface PluginIncarnationRef {
+  readonly requester: PluginId;
+  readonly snapshot: RuntimeSnapshot;
+  readonly node: PluginNodeSnapshot | undefined;
+  readonly signal?: AbortSignal;
+}
+
+function hasIdenticalPluginTree(
+  left: ReadonlyMap<PluginId, PluginNodeSnapshot>,
+  right: ReadonlyMap<PluginId, PluginNodeSnapshot>,
+): boolean {
+  if (left === right) return true;
+  if (left.size !== right.size) return false;
+  for (const [id, node] of left) {
+    if (right.get(id) !== node) return false;
+  }
+  return true;
+}
+
+/**
+ * Checks whether the plugin incarnation that registered a callback/interaction
+ * is still live in `currentSnapshot`.
+ * Survives HMR of unrelated plugins (where another plugin's node in `tree` changed
+ * while `origin.node` is unchanged), while retiring if the owning plugin was reloaded/removed,
+ * its endpoint signal aborted, or the runtime performed a full-generation retirement.
+ */
+export function isPluginIncarnationAlive(
+  origin: PluginIncarnationRef,
+  currentSnapshot: RuntimeSnapshot,
+): boolean {
+  if (origin.signal?.aborted) {
+    return false;
+  }
+  if (origin.snapshot === currentSnapshot) {
+    return true;
+  }
+  if (!origin.node || hasIdenticalPluginTree(origin.snapshot.tree, currentSnapshot.tree)) {
+    return false;
+  }
+  const currentNode = currentSnapshot.tree.get(origin.requester);
+  return currentNode !== undefined && currentNode === origin.node;
+}
+
+interface ButtonBinding extends PluginIncarnationRef {
   readonly onClick: ButtonClickHandler;
-  readonly requester: SendRequest['requester'];
   readonly conversationKey: string;
   readonly expiresAt: number;
 }
@@ -28,12 +71,14 @@ export interface JsxButtonBatch {
   activate(payloads: ReadonlySet<string>): () => void;
 }
 
-/** Snapshot-owned callbacks: retired generations are unreachable and can be collected. */
+/** Plugin-incarnation-owned callbacks: survive unrelated plugin HMR; retired when owning plugin reloads. */
 export class JsxButtonRegistry {
-  readonly #bindings = new WeakMap<RuntimeSnapshot, Map<string, ButtonBinding>>();
+  readonly #bindings = new Map<string, ButtonBinding>();
 
   prepare(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch {
     const pending = new Map<string, ButtonBinding>();
+    const node = snapshot.tree.get(request.requester);
+    const signal = request[operationEndpoint]?.signal;
     return {
       bind: (props) => {
         const { onClick, payload: manualPayload, children, label, id, ...options } = props;
@@ -42,7 +87,12 @@ export class JsxButtonRegistry {
         if (!onClick && typeof manualPayload !== 'string') throw new TypeError('Button requires onClick or payload');
         const payload = onClick ? `${PREFIX}${randomUUID()}` : manualPayload!;
         if (onClick && !props.disabled) pending.set(payload, {
-          onClick, requester: request.requester, conversationKey: conversationRefKey(request.conversation),
+          onClick,
+          requester: request.requester,
+          snapshot,
+          node,
+          ...(signal ? { signal } : {}),
+          conversationKey: conversationRefKey(request.conversation),
           expiresAt: 0,
         });
         return { type: 'keyboard', data: { rows: [[{
@@ -54,28 +104,26 @@ export class JsxButtonRegistry {
         }]] } };
       },
       activate: (payloads) => {
-        let active = this.#bindings.get(snapshot);
         const activated: string[] = [];
-        if (active) this.#prune(active);
+        this.#prune(snapshot);
         for (const [payload, binding] of pending) {
           if (!payloads.has(payload)) continue;
-          if (!active) this.#bindings.set(snapshot, active = new Map());
-          active.set(payload, { ...binding, expiresAt: Date.now() + BUTTON_TTL_MS });
+          this.#bindings.set(payload, { ...binding, expiresAt: Date.now() + BUTTON_TTL_MS });
           activated.push(payload);
         }
         pending.clear();
-        return () => { for (const payload of activated) active?.delete(payload); };
+        return () => { for (const payload of activated) this.#bindings.delete(payload); };
       },
     };
   }
 
   async dispatch(message: Message, payload: string, snapshot: RuntimeSnapshot): Promise<boolean> {
     if (!isJsxButtonPayload(payload)) return false;
-    const active = this.#bindings.get(snapshot);
-    if (active) this.#prune(active);
-    const binding = active?.get(payload);
+    this.#prune(snapshot);
+    const binding = this.#bindings.get(payload);
     // Never invoke a retired closure. The reply uses this incoming operation's scope.
-    if (!binding) {
+    if (!binding || !isPluginIncarnationAlive(binding, snapshot)) {
+      if (binding) this.#bindings.delete(payload);
       await message.$reply(t(message.locale, 'expired'));
       return true;
     }
@@ -86,11 +134,15 @@ export class JsxButtonRegistry {
     else if (content != null && typeof content !== 'boolean') await bound.$reply(content);
     return true;
   }
-  #prune(bindings: Map<string, ButtonBinding>): void {
-    const now = Date.now();
-    for (const [payload, binding] of bindings) if (binding.expiresAt <= now) bindings.delete(payload);
-  }
 
+  #prune(currentSnapshot?: RuntimeSnapshot): void {
+    const now = Date.now();
+    for (const [payload, binding] of this.#bindings) {
+      if (binding.expiresAt <= now || (currentSnapshot && !isPluginIncarnationAlive(binding, currentSnapshot))) {
+        this.#bindings.delete(payload);
+      }
+    }
+  }
 }
 
 export function collectButtonPayloads(payload: unknown): Set<string> {

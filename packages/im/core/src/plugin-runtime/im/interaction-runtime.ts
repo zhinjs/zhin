@@ -23,9 +23,22 @@ import { randomUUID } from 'node:crypto';
 import { RuntimeMessage,
   type Message, type MessageSenderRef, type SendContent, type SendRequest } from './contracts.js';
 import { interactionOperationScope, type InteractionOperationScope } from './interaction-operation.js';
-import { actionPayloadFromSegments, RuntimeInteractiveRouter } from './interactive-router.js';
+import { operationEndpoint } from './operation-endpoint.js';
+import {
+  actionPayloadFromSegments,
+  RuntimeInteractiveRouter,
+  type RememberFallbackContext,
+} from './interactive-router.js';
 import type { Segment } from '../../built/segment-contract/types.js';
-import { isJsxButtonPayload, JsxButtonRegistry, type JsxButtonBatch } from './jsx-button-registry.js';
+import {
+  isJsxButtonPayload,
+  isPluginIncarnationAlive,
+  JsxButtonRegistry,
+  type JsxButtonBatch,
+  type PluginIncarnationRef,
+} from './jsx-button-registry.js';
+
+export { isPluginIncarnationAlive, type PluginIncarnationRef } from './jsx-button-registry.js';
 
 interface InteractionAnswer { readonly value: string; readonly action: boolean; }
 
@@ -50,7 +63,8 @@ interface InteractionClaimAuthority {
 
 interface UserInteractionClaim {
   readonly generation?: number;
-  readonly isLiveFor: (generation: number) => boolean;
+  readonly incarnation?: PluginIncarnationRef;
+  readonly isLiveFor: (generation: number, currentSnapshot?: RuntimeSnapshot) => boolean;
   readonly actions: ReadonlyMap<string, string>;
   readonly accept: (raw: string, action?: boolean) => boolean;
   readonly reject: (error: Error) => void;
@@ -58,7 +72,7 @@ interface UserInteractionClaim {
   readonly answer: Promise<InteractionAnswer>;
   readonly check: () => void;
   readonly dispose: () => void;
-  readonly project: (generation: number) => PendingUserInteraction | undefined;
+  readonly project: (generation: number, currentSnapshot?: RuntimeSnapshot) => PendingUserInteraction | undefined;
 }
 
 /** A live conversational prompt; its callbacks still require the original subject and generation. */
@@ -107,6 +121,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   readonly #router: RuntimeInteractiveRouter<Admission>;
   readonly #claims = new Map<string, UserInteractionClaim>();
   readonly #buttons = new JsxButtonRegistry();
+  readonly #pendingFallbackIncarnations = new Map<string, PluginIncarnationRef>();
   readonly #markPrompt: ((message: MessageRef) => void) | undefined;
 
   /** `markPrompt` keeps a delivered prompt out of conversation context, like its answer. */
@@ -127,38 +142,75 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     conversation: ConversationRef,
     generation: number,
     map: Record<string, string>,
+    ttlMsOrContext?: number | RememberFallbackContext | PluginIncarnationRef,
   ): Record<string, string> {
-    return this.#router.rememberFallback(conversation, generation, map);
+    const pendingKey = `${generation}:${conversationRefKey(conversation)}`;
+    const pendingIncarnation = this.#pendingFallbackIncarnations.get(pendingKey);
+    if (ttlMsOrContext === undefined && pendingIncarnation) {
+      return this.#router.rememberFallback(conversation, generation, map, { incarnation: pendingIncarnation });
+    }
+    if (typeof ttlMsOrContext === 'number' && pendingIncarnation) {
+      return this.#router.rememberFallback(conversation, generation, map, {
+        ttlMs: ttlMsOrContext,
+        incarnation: pendingIncarnation,
+      });
+    }
+    return this.#router.rememberFallback(conversation, generation, map, ttlMsOrContext);
   }
 
   async dispatch(message: Message, admission?: Admission, snapshot?: RuntimeSnapshot): Promise<boolean> {
-    const payload = this.#router.resolvePayload(message);
-    if (payload && snapshot && await this.#buttons.dispatch(message, payload, snapshot)) return true;
+    const effectiveSnapshot = snapshot ?? (message instanceof RuntimeMessage ? message[interactionOperationScope]()?.snapshot : undefined);
+    const payload = this.#router.resolvePayload(message, { snapshot: effectiveSnapshot });
+    if (payload && effectiveSnapshot && await this.#buttons.dispatch(message, payload, effectiveSnapshot)) return true;
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
       await message.$reply(t(message.locale, 'expired'));
       return true;
     }
-    if (this.#router.isExpiredFallback(message)) {
+    if (this.#router.isExpiredFallback(message, effectiveSnapshot)) {
       await message.$reply(t(message.locale, 'expired'));
       return true;
     }
-    return this.#router.dispatch(message, admission);
+    return this.#router.dispatch(message, admission, effectiveSnapshot);
   }
 
   prepareButtons(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch {
+    const signal = request[operationEndpoint]?.signal;
+    const incarnation: PluginIncarnationRef = {
+      requester: request.requester,
+      snapshot,
+      node: snapshot.tree.get(request.requester),
+      ...(signal ? { signal } : {}),
+    };
+    const key = `${snapshot.generation}:${conversationRefKey(request.conversation)}`;
+    this.#pendingFallbackIncarnations.set(key, incarnation);
+    if (this.#pendingFallbackIncarnations.size > 256) {
+      const oldest = this.#pendingFallbackIncarnations.keys().next().value;
+      if (oldest !== undefined) this.#pendingFallbackIncarnations.delete(oldest);
+    }
     return this.#buttons.prepare(request, snapshot);
   }
 
-  resolveClaim(message: Message): boolean {
-    const payload = this.#router.resolvePayload(message);
+  resolveClaim(message: Message, snapshot?: RuntimeSnapshot): boolean {
+    const effectiveSnapshot = snapshot ?? (message instanceof RuntimeMessage ? message[interactionOperationScope]()?.snapshot : undefined);
+    const claim = this.#claims.get(this.#conversationKey(message));
+    const claimLive = claim?.isLiveFor(message.generation, effectiveSnapshot) === true;
+    if (claim && !claimLive && effectiveSnapshot && claim.incarnation && !isPluginIncarnationAlive(claim.incarnation, effectiveSnapshot)) {
+      claim.reject(new Error('User interaction operation retired'));
+    }
+    const effectiveGeneration = claimLive && claim?.generation !== undefined
+      ? claim.generation
+      : message.generation;
+    const payload = this.#router.resolvePayload(message, {
+      fallbackGeneration: effectiveGeneration,
+      snapshot: effectiveSnapshot,
+    });
     // A current question owns ordinary text answers, including numbers that once
     // labelled an expired button. Explicit JSX callbacks still belong to buttons.
     if (isJsxButtonPayload(payload)) return false;
     const explicit = actionPayloadFromSegments(message.segments);
     // Another feature's callback is not a plain-text answer to this question.
     if (explicit && !explicit.startsWith(ASK_ACTION_PREFIX)) return false;
-    const claim = this.#claims.get(this.#conversationKey(message));
-    if (!claim || !claim.isLiveFor(message.generation)) return false;
+    if (!claim || !claimLive) return false;
     if (payload?.startsWith(ASK_ACTION_PREFIX)) {
       const answer = claim.actions.get(payload);
       if (answer !== undefined) return claim.accept(answer, true);
@@ -180,19 +232,25 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     senderId: string,
     generation: number,
     input?: { readonly content: string; readonly segments?: readonly Segment[] },
+    snapshot?: RuntimeSnapshot,
   ): boolean {
     const claim = this.#claims.get(`${conversationRefKey(conversation)}:${senderId}`);
     const explicit = actionPayloadFromSegments(input?.segments);
     if (explicit?.startsWith(ASK_ACTION_PREFIX)
-      && (!claim?.isLiveFor(generation) || !claim.actions.has(explicit))) return false;
-    if (claim?.isLiveFor(generation)
+      && (!claim?.isLiveFor(generation, snapshot) || !claim.actions.has(explicit))) return false;
+    if (claim?.isLiveFor(generation, snapshot)
       && (!explicit || claim.actions.has(explicit))) return true;
-    return input !== undefined && this.#router.resolvesLiveFallback(conversation, generation, input);
+    return input !== undefined && this.#router.resolvesLiveFallback(conversation, generation, input, snapshot);
   }
 
   /** Read-only current prompt; never re-delivers, renews its deadline or accepts an answer. */
-  readPendingInteraction(conversation: ConversationRef, subjectId: string, generation: number): PendingUserInteraction | undefined {
-    return this.#claims.get(`${conversationRefKey(conversation)}:${subjectId}`)?.project(generation);
+  readPendingInteraction(
+    conversation: ConversationRef,
+    subjectId: string,
+    generation: number,
+    snapshot?: RuntimeSnapshot,
+  ): PendingUserInteraction | undefined {
+    return this.#claims.get(`${conversationRefKey(conversation)}:${subjectId}`)?.project(generation, snapshot);
   }
 
   createForMessage(
@@ -329,6 +387,14 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     this.#claims.get(key)?.reject(new UserInteractionSupersededError());
     const id = randomUUID();
     const generation = operation?.snapshot.generation ?? sourceGeneration;
+    const incarnation: PluginIncarnationRef | undefined = operation
+      ? {
+          requester: operation.owner,
+          snapshot: operation.snapshot,
+          node: operation.snapshot.tree.get(operation.owner),
+          ...(source?.signal ?? operation.signal ? { signal: source?.signal ?? operation.signal } : {}),
+        }
+      : undefined;
     const answers = new Map(actions?.map((action, index) => [`${ASK_ACTION_PREFIX}${id}:${index}`, action.value]));
     let resolve!: (value: InteractionAnswer) => void;
     let reject!: (error: Error) => void;
@@ -352,10 +418,21 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       reject(error);
     };
     const timer = setTimeout(() => fail(new UserInteractionTimeoutError(timeoutText)), Math.max(1, deadline - Date.now()));
-    const isLiveFor = (candidate: number) => !failure && Date.now() < deadline
-      && (source ? !source.signal.aborted : generation === candidate);
+    const isLiveFor = (candidate: number, currentSnapshot?: RuntimeSnapshot) => {
+      if (failure || Date.now() >= deadline) return false;
+      if (incarnation?.signal?.aborted || source?.signal.aborted) return false;
+      if (currentSnapshot && incarnation) {
+        if (source) {
+          return !incarnation.node || currentSnapshot.tree.get(incarnation.requester) === incarnation.node;
+        }
+        return isPluginIncarnationAlive(incarnation, currentSnapshot);
+      }
+      return source ? !source.signal.aborted : generation === candidate;
+    };
     const claim: UserInteractionClaim = {
-      generation, isLiveFor,
+      generation,
+      ...(incarnation ? { incarnation } : {}),
+      isLiveFor,
       actions: answers,
       answer,
       accept: (raw, action = false) => {
@@ -372,8 +449,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
         if (failure) throw failure;
       },
       dispose,
-      project: currentGeneration => {
-        if (generation === undefined || !isLiveFor(currentGeneration) || !delivered || failure
+      project: (currentGeneration, currentSnapshot) => {
+        if (generation === undefined || !isLiveFor(currentGeneration, currentSnapshot) || !delivered || failure
           || buffered !== undefined || Date.now() >= deadline) return undefined;
         return {
           id, generation, subjectId, expiresAt: deadline,

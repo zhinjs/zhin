@@ -1,13 +1,17 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Registry } from '@zhin.js/database';
 import type {} from '@zhin.js/database/dialects/pg';
 import {
   AGENT_MESSAGE_MODEL,
+  AGENT_MESSAGE_QUERY_VERSION,
   AGENT_SESSION_MODEL,
   AGENT_SUMMARY_MODEL,
+  agentMessageQueryFields,
+  normalizeConversationEventId,
+  parseAgentMessageRow,
 } from '../../src/memory/agent-db-models.js';
 import { AgentSessionStore } from '../../src/memory/agent-session-store.js';
 import { DatabaseContextRepository } from '../../src/memory/context-repository.js';
@@ -136,6 +140,160 @@ describe('DatabaseContextRepository (sqlite)', () => {
 
     const session = await sessionStore.getBySessionId(sessionId);
     expect(session?.active_leaf_message_id).toBe(rows[2]?.id);
+  });
+
+  it('persists and hydrates conversation_events SSOT foreign key columns (query_version=2)', async () => {
+    const sessionStore = new AgentSessionStore(db.models.get('agent_sessions')!);
+    const repository = new DatabaseContextRepository(
+      db.models.get('agent_messages')!,
+      db.models.get('agent_summaries')!,
+      sessionStore,
+    );
+
+    const userMsg = {
+      ...createUserMessage('inbound message', undefined, 100, { subjectId: 'u1' }),
+      messageId: 'plat-msg-10',
+      conversationEventId: 101,
+      conversationKey: 'qq:bot1:group:g9',
+    };
+    const assistantMsg: AssistantMessage = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'outbound reply' }],
+      api: 'openai-completions',
+      provider: 'p',
+      model: 'm',
+      usage: EMPTY_TOKEN_USAGE,
+      stopReason: 'stop',
+      timestamp: 200,
+      messageId: 'plat-msg-11',
+      messageIds: ['plat-msg-11', 'plat-msg-12'],
+      conversationEventId: 102,
+      conversationEventIds: [102, 103],
+      conversationKey: 'qq:bot1:group:g9',
+    };
+
+    expect(normalizeConversationEventId(101)).toBe(101);
+    expect(normalizeConversationEventId('102')).toBe(102);
+    expect(normalizeConversationEventId(0)).toBeNull();
+    expect(normalizeConversationEventId(-5)).toBeNull();
+    expect(normalizeConversationEventId('abc')).toBeNull();
+
+    expect(agentMessageQueryFields(userMsg)).toMatchObject({
+      conversation_event_id: 101,
+      conversation_key: 'qq:bot1:group:g9',
+      platform_message_id: 'plat-msg-10',
+      message_key: 'qq:bot1:group:g9:plat-msg-10',
+      query_version: AGENT_MESSAGE_QUERY_VERSION,
+    });
+    expect(agentMessageQueryFields(assistantMsg)).toMatchObject({
+      conversation_event_id: 102,
+      conversation_key: 'qq:bot1:group:g9',
+      platform_message_id: 'plat-msg-11',
+      message_key: 'qq:bot1:group:g9:plat-msg-11',
+      query_version: AGENT_MESSAGE_QUERY_VERSION,
+    });
+
+    await repository.appendMessages(sessionId, [userMsg, assistantMsg]);
+
+    const rows = await db.query<Array<Record<string, unknown>>>(
+      'SELECT * FROM agent_messages WHERE session_id = ? ORDER BY id ASC',
+      [sessionId],
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      conversation_event_id: 101,
+      conversation_key: 'qq:bot1:group:g9',
+      platform_message_id: 'plat-msg-10',
+      message_key: 'qq:bot1:group:g9:plat-msg-10',
+      query_version: 2,
+    });
+    expect(rows[1]).toMatchObject({
+      conversation_event_id: 102,
+      conversation_key: 'qq:bot1:group:g9',
+      platform_message_id: 'plat-msg-11',
+      message_key: 'qq:bot1:group:g9:plat-msg-11',
+      query_version: 2,
+    });
+
+    // Verify parseAgentMessageRow hydrates FK fields from SQL columns even if stripped from payload JSON
+    const hydrated = parseAgentMessageRow({
+      session_id: sessionId,
+      role: 'user',
+      payload: JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'raw' }], timestamp: 300 }),
+      timestamp: 300,
+      conversation_event_id: 555,
+      conversation_key: 'qq:bot1:private:u1',
+      platform_message_id: 'plat-555',
+    });
+    expect(hydrated).toMatchObject({
+      conversationEventId: 555,
+      conversationKey: 'qq:bot1:private:u1',
+      platformMessageId: 'plat-555',
+      messageId: 'plat-555',
+    });
+  });
+
+  it('pushes down SQL projections for appendMessages, setActiveLeaf, hasBranchSummary, and saveCompactionSummary without full payload scans', async () => {
+    const sessionStore = new AgentSessionStore(db.models.get('agent_sessions')!);
+    const messageModel = db.models.get('agent_messages')!;
+    const summaryModel = db.models.get('agent_summaries')!;
+    const selectMsgSpy = vi.spyOn(messageModel, 'select');
+    const selectSumSpy = vi.spyOn(summaryModel, 'select');
+
+    const repository = new DatabaseContextRepository(messageModel, summaryModel, sessionStore);
+
+    // 1. appendMessages should not call messageModel.select() when active_leaf_message_id or insert lastID is known
+    selectMsgSpy.mockClear();
+    await repository.appendMessages(sessionId, [
+      createUserMessage('first message', undefined, 10),
+      createUserMessage('second message', undefined, 20),
+      createUserMessage('third message', undefined, 30),
+    ]);
+    // On first append when active_leaf_message_id is null, only select('id', 'timestamp') is used
+    for (const call of selectMsgSpy.mock.calls) {
+      expect(call).toEqual(['id', 'timestamp']);
+    }
+
+    // Subsequent append when active_leaf_message_id is set does zero message selects
+    selectMsgSpy.mockClear();
+    await repository.appendMessages(sessionId, [createUserMessage('fourth message', undefined, 40)]);
+    expect(selectMsgSpy).not.toHaveBeenCalled();
+
+    // 2. setActiveLeaf uses select('id') pushdown
+    const allRows = await repository.loadMessageRows(sessionId);
+    const secondId = allRows[1]!.id!;
+    selectMsgSpy.mockClear();
+    expect(await repository.setActiveLeaf(sessionId, secondId)).toBe(true);
+    expect(selectMsgSpy).toHaveBeenCalledWith('id');
+    expect(await repository.setActiveLeaf(sessionId, 999999)).toBe(false);
+
+    // 3. hasBranchSummary uses select('branch_anchor_message_id', 'summary') pushdown
+    await repository.saveSummary(sessionId, 'branch summary text', { branchAnchorMessageId: secondId });
+    selectSumSpy.mockClear();
+    expect(await repository.hasBranchSummary(sessionId, secondId)).toBe(true);
+    expect(selectSumSpy).toHaveBeenCalledWith('branch_anchor_message_id', 'summary');
+    expect(await repository.hasBranchSummary(sessionId, 999999)).toBe(false);
+
+    // 4. saveCompactionSummary uses select('id', 'parent_id', 'role', 'timestamp') metadata pushdown
+    await repository.setActiveLeaf(sessionId, allRows[3]!.id!);
+    const loaded = await repository.loadContext(sessionId);
+    selectMsgSpy.mockClear();
+    // Note: row 2 has a branch summary, so [m1, m2, branchSummary(m2)] share anchor 2 at index 1 and 2;
+    // slicing(0, 3) includes the branchSummary at the anchor boundary.
+    const saved = await repository.saveCompactionSummary(
+      sessionId,
+      'compacted epoch summary',
+      loaded.messages.slice(0, 3),
+    );
+    expect(saved).toBe(true);
+    expect(selectMsgSpy).toHaveBeenCalledWith('id', 'parent_id', 'role', 'timestamp');
+
+    // 5. resolveCompactionAnchorId short-circuits on metadata when path <= minKeepCount
+    selectMsgSpy.mockClear();
+    const shortAnchor = await repository.resolveCompactionAnchorId(sessionId, 10, 10);
+    expect(shortAnchor).toBeUndefined();
+    expect(selectMsgSpy).toHaveBeenCalledTimes(1);
+    expect(selectMsgSpy).toHaveBeenCalledWith('id', 'parent_id', 'role', 'timestamp');
   });
 });
 

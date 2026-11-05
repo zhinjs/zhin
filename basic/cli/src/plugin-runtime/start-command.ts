@@ -172,12 +172,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const im = new ImRuntime({ enrichSender: senderEnricher });
   const endpointRepository = new PersistentEndpointRepository({ rootId: resolve(options.root),
     directory: join(options.root, '.zhin', 'endpoint-credentials'), state: () => databaseHost.state });
-  databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
-  databaseHost.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
-  // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
-  // 必须在 installResources（host.start）之前 define，写入订阅由 Console API 挂载。
-  defineInboxTables(databaseHost);
-  defineWorkspaceConversationTable(databaseHost);
+  const isRelationalDialect = ['sqlite', 'mysql', 'pg'].includes(databaseHost.dialect);
+  if (isRelationalDialect) {
+    databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
+    databaseHost.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
+    // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
+    // 必须在 installResources（host.start）之前 define，写入订阅由 Console API 挂载。
+    defineInboxTables(databaseHost);
+    defineWorkspaceConversationTable(databaseHost);
+  }
+  let durableConversationEventStore: DatabaseConversationEventStore | undefined;
   // console logs 页数据源（SystemLog 表 + 根 logger transport）；
   // 表必须在 installResources（host.start）之前 define，写入在 host started 后才生效。
   const systemLogStore = new SystemLogStore(
@@ -248,23 +252,28 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
       }
       installLocaleHost(databaseHost)(context);
       installConfigurationHost({ store: consoleConfigurationStore, authorize: authorizeConfigurationChat })(context);
-      context.handoff.add({
-        activateNext: async (signal) => {
-          signal.throwIfAborted();
-          const events = databaseHost.models.get('conversation_events');
-          const cursors = databaseHost.models.get('conversation_event_cursors');
-          if (!events || !cursors) {
-            throw new Error('Conversation event database models are unavailable after DatabaseHost activation');
-          }
-          await migrateConversationColumns(databaseHost.getRawDatabase() as StructuredDatabase);
-          await migrateInboxColumns(databaseHost.getRawDatabase() as StructuredDatabase);
-          im.replaceConversationEventStore(new DatabaseConversationEventStore(
-            events as unknown as ConversationDbModel,
-            cursors as unknown as ConversationDbModel,
-          ));
-          signal.throwIfAborted();
-        },
-      });
+      if (isRelationalDialect) {
+        context.handoff.add({
+          activateNext: async (signal) => {
+            signal.throwIfAborted();
+            if (!durableConversationEventStore) {
+              const events = databaseHost.models.get('conversation_events');
+              const cursors = databaseHost.models.get('conversation_event_cursors');
+              if (!events || !cursors) {
+                throw new Error('Conversation event database models are unavailable after DatabaseHost activation');
+              }
+              await migrateConversationColumns(databaseHost.getRawDatabase() as StructuredDatabase);
+              await migrateInboxColumns(databaseHost.getRawDatabase() as StructuredDatabase);
+              durableConversationEventStore = new DatabaseConversationEventStore(
+                events as unknown as ConversationDbModel,
+                cursors as unknown as ConversationDbModel,
+              );
+              im.replaceConversationEventStore(durableConversationEventStore);
+            }
+            signal.throwIfAborted();
+          },
+        });
+      }
       installOutboundHost(im)(context);
       installScheduleHost(scheduleHost)(context);
       installComponentHost()(context);

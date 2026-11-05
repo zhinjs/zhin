@@ -1,4 +1,5 @@
 import { createOnebot12SelfProfile } from './self-profile.js';
+import { toCanonicalSegments } from '@zhin.js/core';
 /**
  * OneBot12 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
@@ -20,6 +21,7 @@ import { createOneBot12EndpointManagement } from './endpoint-management.js';
 import {
   buildSendMessageParams,
   matchesOneBot12Self,
+  extractQuoteId,
   formatInboundContent,
   formatOutboundSegments,
   isBotMentioned,
@@ -179,15 +181,19 @@ export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
     const conversation = { ...onebot12InboundConversation(String(this.#options.id), ev), endpoint: this[endpointSpec].identity };
     const nickname = senderNickname(ev);
     const mentioned = isBotMentioned(ev);
+    const quoteId = extractQuoteId(ev);
+    const segments = Array.isArray(ev.message) ? toCanonicalSegments(ev.message) : undefined;
     void this[endpointSpec].events.message({
       event: ev,
       ...(typeof ev.time === 'number' ? { platformSentAt: ev.time * 1000 } : {}),
       conversation,
       message: { conversation, id: ev.message_id },
       content: formatInboundContent(ev),
+      ...(segments?.length ? { segments } : {}),
       sender: { id: senderUserId(ev), name: senderNickname(ev) },
       endpointId: this.#options.config.id,
       ...(mentioned ? { mentioned: true } : {}),
+      ...(quoteId ? { replyTo: { id: quoteId } } : {}),
       metadata: Object.freeze({
         detail_type: ev.detail_type,
         user_id: ev.user_id,
@@ -225,8 +231,12 @@ export class OneBot12WssEndpoint extends Onebot12Client implements Endpoint {
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
       this.#ws = socket;
       lifecycleHandle.onForceClose(() => {
+        if (this.#ws === socket) {
+          this.#rpc.disconnect();
+        }
         try {
           socket.close();
+          socket.terminate?.();
         } catch {
           /* ignore */
         }

@@ -19,7 +19,8 @@ import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent, type RuntimeMessageRendering } from './message-events.js';
 import { runRuntimeMiddleware } from './runtime-middleware.js';
-import { collectButtonPayloads, type JsxButtonBatch } from './jsx-button-registry.js';
+import { collectButtonPayloads, type JsxButtonBatch, type PluginIncarnationRef } from './jsx-button-registry.js';
+import type { RememberFallbackContext } from './interactive-router.js';
 import type { RuntimeMessageDiagnostics } from './message-diagnostics.js';
 import { resolveOutboundPresentation } from './outbound-presentation.js';
 
@@ -38,14 +39,15 @@ function logRejectedPayload(conversation: ConversationRef, stage: 'render' | 'mi
 interface OutboundDeliveryContext {
   readonly diagnostics?: RuntimeMessageDiagnostics;
   prepareButtons?(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch;
-  record(request: SendRequest, receipt: DeliveryReceipt, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void>;
-  recordUpdate?(request: SendRequest, receipt: DeliveryReceipt, revision: number, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void>;
+  record(request: SendRequest, receipt: DeliveryReceipt, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<number | undefined | void>;
+  recordUpdate?(request: SendRequest, receipt: DeliveryReceipt, revision: number, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<number | undefined | void>;
   /** Side-channel correlation ledger for inbound origin; failures never affect the receipt. */
   ledger?(conversation: ConversationRef, receipt: DeliveryReceipt, payload: unknown): void;
   rememberFallback(
     conversation: ConversationRef,
     generation: number,
     map: Record<string, string>,
+    context?: number | RememberFallbackContext | PluginIncarnationRef,
   ): Record<string, string> | void;
   publish(event: RuntimeMessageEvent): void;
 }
@@ -130,13 +132,27 @@ export class OutboundDeliveryRuntime {
     });
     // Record identities and fallback text before middleware can mutate the array
     // or its segments. Do not copy/serialize media buffers or streams.
+    const initialSegmentSet = new Set<unknown>(Array.isArray(initialPayload) ? initialPayload : []);
     const initialItems = Array.isArray(initialPayload) ? initialPayload.map(item => ({
       item, type: item?.type, text: item?.type === 'text' ? item.data?.text : undefined,
     })) : undefined;
-    const retainsInitialProjection = (value: unknown): boolean => value === initialPayload
-      && (!initialItems || (Array.isArray(value) && value.length === initialItems.length
+    const retainsInitialProjection = (value: unknown): boolean =>
+      (value === initialPayload && !initialItems)
+      || (!!initialItems && initialItems.length > 0 && Array.isArray(value)
+        && value.length === initialItems.length
         && initialItems.every(({ item, type, text }, index) => value[index] === item
-          && item?.type === type && (type !== 'text' || item.data?.text === text))));
+          && item?.type === type && (type !== 'text' || item.data?.text === text)));
+    const retainsInitialSegments = (value: unknown): boolean =>
+      retainsInitialProjection(value)
+      || (!!initialItems && initialItems.length > 0 && Array.isArray(value)
+        && initialItems.every(({ item, type, text }) => value.includes(item)
+          && item?.type === type && (type !== 'text' || item.data?.text === text)));
+    const fallbackIncarnation: PluginIncarnationRef = {
+      requester: request.requester,
+      snapshot,
+      node: snapshot.tree.get(request.requester),
+      ...(boundEndpoint?.signal ? { signal: boundEndpoint.signal } : {}),
+    };
     let terminalEntered = false;
     let receipt: DeliveryReceipt | undefined;
 
@@ -150,23 +166,39 @@ export class OutboundDeliveryRuntime {
           let projection: OutboundProjection;
           const buttonPayloads = new Set<string>();
           try {
-            // Native payload replacements remain possible; only authoring values need evaluation.
+            // Native payload replacements and in-place array mutations remain possible; only authoring values need evaluation.
             const replacement = envelope.payload;
-            const replaced = replacement !== initialPayload && needsAuthoringRender(replacement)
-              ? await this.#renderer.render(replacement as SendContent, {
-                requester: request.requester,
-                snapshot: snapshot,
-                conversation: request.conversation,
-                incoming: request.incoming,
-                ...renderOptions,
-              })
-              : replacement;
+            const renderItemOptions = {
+              requester: request.requester,
+              snapshot: snapshot,
+              conversation: request.conversation,
+              incoming: request.incoming,
+              ...renderOptions,
+            };
+            let replaced: unknown = replacement;
+            if (needsAuthoringRender(replacement)) {
+              if (Array.isArray(replacement) && initialSegmentSet.size > 0 && replacement.some(item => initialSegmentSet.has(item))) {
+                const renderedItems: unknown[] = [];
+                for (const item of flattenOutboundArray(replacement)) {
+                  if (initialSegmentSet.has(item) || !needsAuthoringRender(item)) {
+                    renderedItems.push(item);
+                  } else {
+                    renderedItems.push(await this.#renderer.render(item as SendContent, renderItemOptions));
+                  }
+                }
+                replaced = flattenOutboundArray(renderedItems);
+              } else {
+                replaced = await this.#renderer.render(replacement as SendContent, renderItemOptions);
+              }
+            }
             projection = await projectOutboundPayload(replaced, request.conversation, snapshot, {
               presentation, signal: renderOptions.signal,
-              inheritedFallbacks: retainsInitialProjection(replacement) ? initialProjection.rendering.fallbacks : [],
+              inheritedFallbacks: retainsInitialSegments(replaced) ? initialProjection.rendering.fallbacks : [],
               rememberFallback: (map) => {
                 for (const value of Object.values(map)) buttonPayloads.add(value);
-                return this.context.rememberFallback(request.conversation, snapshot.generation, map);
+                return this.context.rememberFallback(request.conversation, snapshot.generation, map, {
+                  incarnation: fallbackIncarnation,
+                });
               },
             });
             payload = projection.payload;
@@ -226,22 +258,37 @@ export class OutboundDeliveryRuntime {
           receipt = evidence.receipt;
           if (receipt.status !== 'sent' && !receipt.failure?.deliveryUnknown && !receipt.parts?.length) revokeButtons?.();
 
+          const recordedParts: DeliveryPart[] = [];
+          let firstSequence: number | undefined;
           for (const part of evidence.parts) {
-            execution?.confirmed(part.part, part.content);
             const partReceipt: DeliveryReceipt = { status: 'sent', ...(part.part.message ? { message: part.part.message } : {}),
               ...(part.part.outboundTextDigest ? { outboundTextDigest: part.part.outboundTextDigest } : {}) };
             const history = execution?.history() ?? 'create';
+            let partSequence: number | undefined;
             if (part.part.message && history !== 'skip') {
               try {
                 const content = part.content ?? (contentUnavailable || receipt.parts ? 'unavailable' : undefined);
-                if (history === 'create') await this.context.record(request, partReceipt, content);
-                else await this.context.recordUpdate?.(request, partReceipt, history.revision, content);
+                const seq = history === 'create'
+                  ? await this.context.record(request, partReceipt, content)
+                  : await this.context.recordUpdate?.(request, partReceipt, history.revision, content);
+                if (typeof seq === 'number') {
+                  partSequence = seq;
+                  firstSequence ??= seq;
+                }
               } catch (error) {
                 logger.warn(formatCompact({ op: 'outbound_history_failed', error: error instanceof Error ? error.message : String(error) }));
               }
             }
+            const enrichedPart: DeliveryPart = partSequence !== undefined
+              ? Object.freeze({ ...part.part, conversationSequence: partSequence })
+              : part.part;
+            recordedParts.push(enrichedPart);
+            execution?.confirmed(enrichedPart, part.content);
+            const enrichedPartReceipt: DeliveryReceipt = partSequence !== undefined
+              ? { ...partReceipt, conversationSequence: partSequence }
+              : partReceipt;
             try {
-              this.context.ledger?.(request.conversation, partReceipt,
+              this.context.ledger?.(request.conversation, enrichedPartReceipt,
                 part.content ?? (contentUnavailable || receipt.parts ? undefined : payload));
             } catch (error) {
               logger.warn(`outbound ledger write failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -255,6 +302,13 @@ export class OutboundDeliveryRuntime {
                 : contentUnavailable || receipt.parts ? '[Message content unavailable; inspect its reference.]' : previewMessageContent(payload),
               messageId: part.part.message.id,
               timestamp: Date.now(),
+            });
+          }
+          if (firstSequence !== undefined || (receipt.parts && recordedParts.length > 0)) {
+            receipt = Object.freeze({
+              ...receipt,
+              ...(receipt.parts ? { parts: Object.freeze(recordedParts) } : {}),
+              ...(firstSequence !== undefined ? { conversationSequence: firstSequence } : {}),
             });
           }
         },

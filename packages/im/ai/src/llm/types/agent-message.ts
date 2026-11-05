@@ -86,6 +86,12 @@ export interface UserMessage extends AgentMessageBase {
   role: 'user';
   /** Native message identity supplied by a trusted ingress, absent for synthetic/legacy messages. */
   messageId?: string;
+  /** Platform message id alias for canonical FK alignment with `conversation_events.platform_message_id`. */
+  platformMessageId?: string;
+  /** Canonical SSOT sequence number (`conversation_events.sequence`) when backed by a canonical conversation event. */
+  conversationEventId?: number;
+  /** Canonical conversation key (`conversation_events.conversation_key`) when known. */
+  conversationKey?: string;
   content: UserContentBlock[];
   /** Full untrusted events retained for lossless, window-dependent model projection. */
   contextBlocks?: readonly ContextBlock[];
@@ -133,8 +139,16 @@ export interface AssistantMessage extends AgentMessageBase {
   assistantActor?: ConversationActor;
   /** Platform id of the message this reply was delivered as (ADR 0043 §5), when delivery reported one. */
   messageId?: string;
+  /** Platform message id alias for canonical FK alignment with `conversation_events.platform_message_id`. */
+  platformMessageId?: string;
   /** Completed physical delivery slots; null has no confirmed id. `messageId` is the first known id. */
   messageIds?: readonly (string | null)[];
+  /** Canonical SSOT sequence number (`conversation_events.sequence`) of the primary delivered outbound message. */
+  conversationEventId?: number;
+  /** Canonical SSOT sequence numbers (`conversation_events.sequence`) for multi-message delivery slots. */
+  conversationEventIds?: readonly (number | null)[];
+  /** Canonical conversation key (`conversation_events.conversation_key`) when known. */
+  conversationKey?: string;
   /** Opaque facts represented by this delivered reply; stamped by the host, never the provider. */
   contextRefs?: readonly string[];
   /** Binds coverage to the exact assistant content; a later transform invalidates it. */

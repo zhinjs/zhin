@@ -206,6 +206,12 @@ export function generateMessageId(msg: LarkMessage): string {
   return msg.message_id || `${msg.create_time ?? Date.now()}`;
 }
 
+/** 判断入站消息是否 @ 了非全员目标（Lark 群消息 @ 机器人在 mentions 列表中，key 不为 `@_all`）。 */
+export function isLarkBotMentioned(msg: LarkMessage): boolean {
+  if (!Array.isArray(msg.mentions) || msg.mentions.length === 0) return false;
+  return msg.mentions.some((m) => m && m.key !== '@_all');
+}
+
 /** Build inbound text for OutboundMessageService.receive. */
 export function formatInboundContent(msg: LarkMessage): string {
   if (!msg.content || !msg.message_type) return '';

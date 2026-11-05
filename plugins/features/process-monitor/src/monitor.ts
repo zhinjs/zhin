@@ -21,6 +21,7 @@ export interface ProcessMonitorConfig {
 export interface ProcessState {
   lastPid?: number;
   lastStartTime?: number;
+  lastAliveTime?: number;
   cleanExit?: boolean;
   restartCount: number;
   crashCount: number;
@@ -63,8 +64,11 @@ export function classifyStartup(
 ): { reason: StartupReason; uptime?: number } {
   if (!state.lastPid || !state.lastStartTime) return { reason: 'start' };
   if (state.lastPid === currentPid) return { reason: 'start' };
-  const uptime = now - state.lastStartTime;
-  return state.cleanExit === true || uptime >= 5 * 60 * 1000
+  const endTime = state.lastAliveTime != null && state.lastAliveTime >= state.lastStartTime
+    ? state.lastAliveTime
+    : now;
+  const uptime = Math.max(0, endTime - state.lastStartTime);
+  return state.cleanExit === true || (state.lastAliveTime == null && uptime >= 5 * 60 * 1000)
     ? { reason: 'restart', uptime }
     : { reason: 'crash', uptime };
 }
@@ -110,6 +114,7 @@ export class ProcessMonitor {
 
     const markCleanExit = () => {
       this.#state.cleanExit = true;
+      this.#state.lastAliveTime = this.#now();
       this.#saveState();
     };
     const sigterm = () => markCleanExit();
@@ -172,6 +177,7 @@ export class ProcessMonitor {
     this.#state.cleanExit = false;
     this.#state.lastPid = process.pid;
     this.#state.lastStartTime = now;
+    this.#state.lastAliveTime = undefined;
     this.#saveState();
 
     const shouldNotify = reason === 'start'

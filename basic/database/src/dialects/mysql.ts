@@ -319,14 +319,18 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     if (this.usePool) {
       // 从连接池获取一个连接用于事务
       const connection = await this.pool.getConnection();
-      
-      // 设置隔离级别
-      if (options?.isolationLevel) {
-        await connection.query(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
+      try {
+        // 设置隔离级别
+        if (options?.isolationLevel) {
+          await connection.query(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
+        }
+        
+        // 开始事务
+        await connection.beginTransaction();
+      } catch (error) {
+        connection.release();
+        throw error;
       }
-      
-      // 开始事务
-      await connection.beginTransaction();
       
       return {
         async commit(): Promise<void> {

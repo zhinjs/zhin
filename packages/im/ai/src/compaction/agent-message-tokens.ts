@@ -51,21 +51,27 @@ export function snapCompactionStartIndex(messages: AgentMessage[], startIdx: num
 }
 
 /**
- * Walk from newest messages backward until keepRecentTokens budget is met.
+ * Walk from newest messages backward until keepRecentTokens (or keepRecentMessages) budget is met.
  * Returns index of first kept message (0 = keep all).
  */
 export function findKeepRecentStartIndex(
   messages: AgentMessage[],
   keepRecentTokens: number,
   minKeepCount = 2,
+  keepRecentMessages?: number,
 ): number {
   if (messages.length === 0) return 0;
   let tokens = 0;
   let kept = 0;
+  const maxMsgs = keepRecentMessages !== undefined && Number.isFinite(keepRecentMessages) && keepRecentMessages > 0
+    ? Math.max(minKeepCount, Math.floor(keepRecentMessages))
+    : undefined;
   for (let i = messages.length - 1; i >= 0; i--) {
     tokens += estimateAgentMessageTokens(messages[i]);
     kept += 1;
-    if (tokens >= keepRecentTokens && kept >= minKeepCount) {
+    const hitTokenLimit = tokens >= keepRecentTokens && kept >= minKeepCount;
+    const hitMessageLimit = maxMsgs !== undefined && kept >= maxMsgs;
+    if (hitTokenLimit || hitMessageLimit) {
       return snapCompactionStartIndex(messages, i);
     }
   }

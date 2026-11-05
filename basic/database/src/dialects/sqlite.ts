@@ -70,8 +70,9 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     const trimmedSql = sql.trim().toLowerCase();
     const isInsert = trimmedSql.startsWith('insert');
     const isUpdateOrDelete = trimmedSql.startsWith('update') || trimmedSql.startsWith('delete');
-    // 带 RETURNING 的 DML 有结果集，不能走 run 丢行
-    const hasReturning = /\breturning\b/.test(trimmedSql);
+    // 带 RETURNING 的 DML 有结果集，不能走 run 丢行（剥离引号标识符与字符串字面量避免列名误判）
+    const sqlWithoutLiterals = trimmedSql.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
+    const hasReturning = /\breturning\b/.test(sqlWithoutLiterals);
     const args = this.prepareBindParams(params ?? []);
 
     const stmt = this.db.prepare(sql);

@@ -85,6 +85,7 @@ export interface TelegramMessage {
   readonly text?: string;
   readonly caption?: string;
   readonly entities?: readonly TelegramMessageEntity[];
+  readonly caption_entities?: readonly TelegramMessageEntity[];
   readonly reply_to_message?: TelegramMessage;
   readonly photo?: readonly TelegramPhotoSize[];
   readonly video?: {
@@ -162,6 +163,7 @@ export interface TelegramWireSegment {
 export interface TelegramInlineButton {
   readonly text: string;
   readonly callback_data?: string;
+  readonly url?: string;
   /** Bot API 10.3+: mutually exclusive with callback_data. */
   readonly disabled?: Record<string, never>;
 }
@@ -625,13 +627,15 @@ function buildOutboundActions(
           const buttons = Array.isArray(row) ? row : [];
           return buttons.map((btn) => {
             const record = btn && typeof btn === 'object'
-              ? btn as { label?: string; text?: string; payload?: string; callback_data?: string; disabled?: boolean; mode?: string }
+              ? btn as { label?: string; text?: string; payload?: string; callback_data?: string; url?: string; disabled?: boolean; mode?: string }
               : {};
             const text = String(record.label ?? record.text ?? '');
             const callback = String(record.payload ?? record.callback_data ?? '');
+            const url = typeof record.url === 'string' && record.url.trim() ? record.url.trim() : undefined;
             if (record.mode === 'command') throw new EndpointDeliveryError('unsupported_operation', 'Telegram command buttons are not implemented', 'not_sent');
             if (!text.trim()) throw new EndpointDeliveryError('invalid_payload', 'Telegram button label must be nonempty', 'not_sent');
             if (record.disabled) return { text, disabled: {} };
+            if (url && /^https?:\/\//i.test(url)) return { text, url };
             if (Buffer.byteLength(callback, 'utf8') < 1 || Buffer.byteLength(callback, 'utf8') > 64) throw new EndpointDeliveryError('invalid_payload', 'Telegram callback payload must be 1-64 UTF-8 bytes and label nonempty', 'not_sent');
             return {
               text,

@@ -585,6 +585,46 @@ describe('JSX outbound delivery through a real Endpoint', () => {
     ]);
   });
 
+  it('renders authoring items pushed in-place onto envelope.payload by outbound middleware without re-evaluating initial components', async () => {
+    const initialRender = vi.fn(async () => jsx('text', { children: 'initial' }));
+    const appendedRender = vi.fn(async () => jsx('text', { children: 'appended' }));
+    const f = await fixture({
+      mutate(payload) {
+        if (Array.isArray(payload)) {
+          payload.push(jsx(appendedRender, {}));
+        }
+      },
+    });
+
+    const receipt = await f.send(jsx(initialRender, {}));
+    expect(receipt.status).toBe('sent');
+    expect(initialRender).toHaveBeenCalledTimes(1);
+    expect(appendedRender).toHaveBeenCalledTimes(1);
+    expect(f.sent[0]?.payload).toEqual([
+      { type: 'text', data: { text: 'initial' } },
+      { type: 'text', data: { text: 'appended' } },
+    ]);
+  });
+
+  it('threads conversationSequence onto DeliveryReceipt and DeliveryPart for send and edit', async () => {
+    const conversations = new ConversationRuntime();
+    const f = await fixture({
+      onSend: () => ({
+        parts: [
+          { messageId: 'part-1', sourceIndices: [0] },
+          { messageId: 'part-2', sourceIndices: [1] },
+        ],
+      }),
+    });
+    f.record.mockImplementation((request, receipt, content) =>
+      conversations.recordOutbound(request, receipt, content));
+
+    const sendReceipt = await f.send([segment.text('hello'), segment.text('world')]);
+    expect(sendReceipt.status).toBe('sent');
+    expect(sendReceipt.conversationSequence).toBe(1);
+    expect(sendReceipt.parts?.map(part => part.conversationSequence)).toEqual([1, 2]);
+  });
+
   it('normalizes media and applies media fallback alongside direct HTML', async () => {
     const f = await fixture({ segments: { html: 'direct', outboundMedia: ['url'] } });
     expect((await f.send([

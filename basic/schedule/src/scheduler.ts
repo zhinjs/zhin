@@ -134,6 +134,11 @@ export class CalendarScheduler {
 
   registerHandler(key: string, handler: RegisteredHandler): this {
     this.handlers.register(key, handler);
+    for (const job of this.jobs.values()) {
+      if (job.handlerKey === key) {
+        job.handler = undefined;
+      }
+    }
     return this;
   }
 
@@ -258,8 +263,7 @@ export class CalendarScheduler {
     handler?: JobHandler,
     extras?: JobRegisterExtras,
   ): JobInfo {
-    const noop = handler ?? (() => {});
-    return this.register(resolved, noop, extras?.id, extras);
+    return this.register(resolved, handler, extras?.id, extras);
   }
 
   cancel(id: string): boolean {
@@ -294,7 +298,7 @@ export class CalendarScheduler {
 
   private register(
     resolved: ResolvedJob,
-    handler: JobHandler,
+    handler?: JobHandler,
     key?: string,
     extras?: JobRegisterExtras,
   ): JobInfo {
@@ -325,7 +329,7 @@ export class CalendarScheduler {
     const job: InternalJob = {
       id,
       resolved,
-      handler: handlerKey ? undefined : handler,
+      handler,
       handlerKey,
       payload,
       nextRunAt,
@@ -574,15 +578,16 @@ export class CalendarScheduler {
         return;
       }
 
+      const afterRun = new Date(Math.max(Date.now(), scheduledAt.getTime()));
       if (job.resolved.kind === 'scatter') {
         job.payload = mergeScatterPayload(job.payload, nextScatterState);
-        job.nextRunAt = getNextRun(job.resolved, new Date(), {
+        job.nextRunAt = getNextRun(job.resolved, afterRun, {
           jobId: job.id,
           scatterState: nextScatterState,
           holidays: this.holidays,
         });
       } else {
-        job.nextRunAt = getNextRun(job.resolved, new Date(), { holidays: this.holidays });
+        job.nextRunAt = getNextRun(job.resolved, afterRun, { holidays: this.holidays });
       }
 
       if (job.nextRunAt == null) {
@@ -606,7 +611,7 @@ export class CalendarScheduler {
 
   private resolveHandler(job: InternalJob): JobHandler | undefined {
     if (job.handler) {
-      return (ctx) => job.handler!(ctx);
+      return (ctx) => (job.handler as RegisteredHandler)(ctx, job.payload);
     }
     if (job.handlerKey) {
       const registered = this.handlers.get(job.handlerKey);

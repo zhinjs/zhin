@@ -248,6 +248,7 @@ export type {
   AutoCompactResult,
   AgentCompactionConfig,
   AgentCompactionExecution,
+  AgentMessageCompactionConfig,
   AgentCompactionState,
   AgentCompactResult,
   AgentMicroCompactResult,
@@ -302,7 +303,9 @@ export type {
 export {
   AGENT_SESSION_SOURCE_MODEL,
   agentSessionSourceFields,
+  AGENT_MESSAGE_QUERY_VERSION,
   AGENT_MESSAGE_QUERY_MODEL,
+  normalizeConversationEventId,
   agentMessageQueryFields,
   AGENT_SESSION_MODEL,
   AGENT_MESSAGE_MODEL,

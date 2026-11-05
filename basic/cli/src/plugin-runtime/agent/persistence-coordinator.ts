@@ -150,13 +150,19 @@ async function migrateAgentQueryColumns(database: StructuredDatabase): Promise<v
   await ensureDatabaseColumns(database, 'agent_sessions', AGENT_SESSION_SOURCE_MODEL);
   await ensureDatabaseColumns(database, 'agent_messages', AGENT_MESSAGE_QUERY_MODEL);
   const messages = database.models.get('agent_messages')!;
-  while (true) {
-    const rows = await messages.select('id', 'payload', 'timestamp').where({ query_version: null }).orderBy('id').limit(200);
-    if (!rows.length) break;
-    for (const row of rows) {
-      const message = parseAgentMessageRow(row as never);
-      if (!message) throw new Error(`Cannot migrate malformed agent message ${String(row.id)}`);
-      await messages.update(agentMessageQueryFields(message)).where({ id: row.id, query_version: null });
+  for (const priorVersion of [null, 1] as const) {
+    while (true) {
+      const rows = await messages
+        .select('id', 'payload', 'timestamp', 'conversation_event_id', 'conversation_key', 'platform_message_id')
+        .where({ query_version: priorVersion })
+        .orderBy('id')
+        .limit(200);
+      if (!rows.length) break;
+      for (const row of rows) {
+        const message = parseAgentMessageRow(row as never);
+        if (!message) throw new Error(`Cannot migrate malformed agent message ${String(row.id)}`);
+        await messages.update(agentMessageQueryFields(message)).where({ id: row.id, query_version: priorVersion });
+      }
     }
   }
   await ensureDatabaseIndex(database, 'agent_sessions', 'agent_sessions_key_status_time', [{ name: 'session_key', text: true }, { name: 'status', text: true }, { name: 'updated_at' }]);
@@ -168,4 +174,6 @@ async function migrateAgentQueryColumns(database: StructuredDatabase): Promise<v
   ]);
   await ensureDatabaseIndex(database, 'agent_messages', 'agent_messages_session_time', [{ name: 'session_id', text: true }, { name: 'timestamp' }]);
   await ensureDatabaseIndex(database, 'agent_messages', 'agent_messages_actor_time', [{ name: 'actor_id', text: true }, { name: 'timestamp' }]);
+  await ensureDatabaseIndex(database, 'agent_messages', 'agent_messages_conversation_event', [{ name: 'conversation_event_id' }]);
+  await ensureDatabaseIndex(database, 'agent_messages', 'agent_messages_message_key', [{ name: 'message_key', text: true }]);
 }

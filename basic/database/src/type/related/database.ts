@@ -550,8 +550,12 @@ export class RelatedDatabase<
               case '$in':
                 if (isSubquery(value[op])) {
                   // 子查询
+                  const offset = parameterOffset + params.length;
                   const subquery = value[op].toSQL();
-                  clauses.push(`${quotedKey} IN (${subquery.sql})`);
+                  const subSql = offset > 0
+                    ? subquery.sql.replace(/\$(\d+)/g, (_: string, n: string) => `$${Number(n) + offset}`)
+                    : subquery.sql;
+                  clauses.push(`${quotedKey} IN (${subSql})`);
                   params.push(...subquery.params);
                 } else if (Array.isArray(value[op]) && value[op].length) {
                   const placeholders = value[op].map((_: any, i: number) =>
@@ -565,8 +569,12 @@ export class RelatedDatabase<
               case '$nin':
                 if (isSubquery(value[op])) {
                   // 子查询
+                  const offset = parameterOffset + params.length;
                   const subquery = value[op].toSQL();
-                  clauses.push(`${quotedKey} NOT IN (${subquery.sql})`);
+                  const subSql = offset > 0
+                    ? subquery.sql.replace(/\$(\d+)/g, (_: string, n: string) => `$${Number(n) + offset}`)
+                    : subquery.sql;
+                  clauses.push(`${quotedKey} NOT IN (${subSql})`);
                   params.push(...subquery.params);
                 } else if (Array.isArray(value[op]) && value[op].length) {
                   const placeholders = value[op].map((_: any, i: number) =>
@@ -686,6 +694,9 @@ export class RelatedDatabase<
    * 获取所有模型名称
    */
   getModelNames(): string[] {
+    if (this.definitions instanceof Map) {
+      return Array.from(this.definitions.keys()).map(String);
+    }
     return Object.keys(this.definitions || {});
   }
 }
