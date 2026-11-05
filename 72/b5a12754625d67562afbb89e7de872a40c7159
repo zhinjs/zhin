@@ -1,0 +1,266 @@
+.changeset/dx-ux-ci-and-docs-improvements.md
+  h_6f5e45c41d0910 1-39
+README.md
+  h_6f5e45c41d0910 10-11,32,41,43,45,47-51,53-54,56,58-59,61,63,65-69,71,73,75,77,79-81,83-96,98,100,102-117,120,122,124-141,143,154-159,163-166,170,175,177,197,200,204,207,212-235,241,245,254,256,258-262,264,270-272,276,278,294,296
+README.zh-CN.md
+  h_6f5e45c41d0910 10-11,32,41,43,45,47-51,53-54,56,58-59,61,63,65-69,71,73,75,77,79-81,83-96,98,100,102-117,120,122,124-141,143,154-159,163-166,175,177,197,200,204,207,212-235,241,245,249,258,260,262-266,268,274-276,300
+basic/cli/src/cli.ts
+  h_6f5e45c41d0910 67-75
+basic/cli/src/commands/config.ts
+  h_6f5e45c41d0910 69-71,73,79-80
+basic/cli/src/commands/new-plugin-manifest.ts
+  h_6f5e45c41d0910 164,187,268,274,383-384
+basic/cli/src/commands/setup.ts
+  h_6f5e45c41d0910 219
+basic/cli/src/plugin-check/source-checks.ts
+  h_6f5e45c41d0910 25-39,119,191-222
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  h_6f5e45c41d0910 1-2,4-5,10,213-219,471-599
+basic/cli/src/plugin-runtime/console/page-renderer.ts
+  h_6f5e45c41d0910 58-60,76-80,104-105,110-115,120,131-143,151-154,156-184,188
+basic/cli/src/plugin-runtime/start-command.ts
+  h_6f5e45c41d0910 147-149,578-603,732-765
+basic/cli/tests/config-command.test.ts
+  h_6f5e45c41d0910 298-316
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  h_6f5e45c41d0910 432-483
+basic/cli/tests/plugin-runtime/console/page-shell-sandbox.test.ts
+  h_6f5e45c41d0910 18-24
+basic/schema/src/schema.ts
+  h_6f5e45c41d0910 109-112
+docs/.vitepress/config.ts
+  h_6f5e45c41d0910 392,395,398,401-405,407,413,415-418,424-425,427-434,437,442,444,450-476,508,514,517-521,523,529,531-534,540-541,543-550,553,558,560,565-591
+docs/adapters/index.md
+  h_6f5e45c41d0910 3,5-7
+docs/advanced/activity-feedback.md
+  h_6f5e45c41d0910 27-32,37,40,42-51,54-55,57-62,83-91
+docs/ai/agent.md
+  h_6f5e45c41d0910 532
+docs/ai/default-behavior.md
+  h_6f5e45c41d0910 44-47,75
+docs/ai/index.md
+  h_6f5e45c41d0910 12,14-23,25-58,60,62,119,146
+docs/ai/model-policy.md
+  h_6f5e45c41d0910 8-20,22-62,64,89
+docs/ai/providers.md
+  h_6f5e45c41d0910 8,10,12,14,16-43,45-72,74-103,105-106,137,139,141-143,145,147,149-151,153-170,174-175,190,192,194-200
+docs/ai/structured-replies.md
+  h_6f5e45c41d0910 152,155-160
+docs/authoring/agent-tools.md
+  h_6f5e45c41d0910 21-22,25,28-33,35-36,38,48-60,160,163-165,172,174,176,179-182,184-187,192,307,310,312-317,319-320,323-327,332,340,342,344,353-363,366,368-374,378,423
+docs/authoring/commands.md
+  h_6f5e45c41d0910 223,229-256,268-314,439-507,553-555,560,562-564,568-585
+docs/authoring/conventions.md
+  h_6f5e45c41d0910 156-158
+docs/authoring/define-plugin.md
+  h_6f5e45c41d0910 118,128,130,133,335-337,358
+docs/authoring/host-tokens.md
+  h_6f5e45c41d0910 12-17
+docs/authoring/middleware-components.md
+  h_6f5e45c41d0910 60-81,167-175,177,186-197,303-324,359,361-363
+docs/authoring/plugin-delivery.md
+  h_6f5e45c41d0910 28-29,31,35
+docs/concepts/architecture.md
+  h_6f5e45c41d0910 169-181
+docs/concepts/capability-seams.md
+  h_6f5e45c41d0910 8-11
+docs/concepts/config-as-data.md
+  h_6f5e45c41d0910 38,99,101,106-109,115,121-127,151,153,155,158,160,162,166-167
+docs/concepts/generation-lifecycle.md
+  h_6f5e45c41d0910 93,106-108,112-117
+docs/concepts/message-flow.md
+  h_6f5e45c41d0910 73,149,188,191,195,197,199
+docs/concepts/plugin-model.md
+  h_6f5e45c41d0910 8,44-46,132
+docs/concepts/what-zhin-is.md
+  h_6f5e45c41d0910 1,3,5,7,9-30,33-34,36,38,40-42,44,46,48,50-52,54,56,58-68,70,74-78,80-85,87,89-108
+docs/configuration/index.md
+  h_6f5e45c41d0910 265
+docs/console/index.md
+  h_6f5e45c41d0910 112-115,137
+docs/en/advanced/activity-feedback.md
+  h_6f5e45c41d0910 27-32,37-38,40,42-51,54-59,80-88
+docs/en/ai/agent.md
+  h_6f5e45c41d0910 446
+docs/en/ai/default-behavior.md
+  h_6f5e45c41d0910 44-47,75
+docs/en/ai/index.md
+  h_6f5e45c41d0910 12,14-23,25-27,29-60,119,121,225-237
+docs/en/ai/model-policy.md
+  h_6f5e45c41d0910 2,8-58,62-64,85
+docs/en/ai/structured-replies.md
+  h_6f5e45c41d0910 202,207-219
+docs/en/authoring/agent-tools.md
+  h_6f5e45c41d0910 21-22,25,28-33,35-36,38,48-60,150,153-155,162-166,169-172,174-177,269,272,274-279,281-282,285-289,294,300,308,313-339,383
+docs/en/authoring/commands.md
+  h_6f5e45c41d0910 221,227-254,266-312,437-505,551-553,558,560-562,566-583
+docs/en/authoring/conventions.md
+  h_6f5e45c41d0910 156-158
+docs/en/authoring/define-plugin.md
+  h_6f5e45c41d0910 118,128,130,133,335-337,358
+docs/en/authoring/host-tokens.md
+  h_6f5e45c41d0910 12-17
+docs/en/authoring/middleware-components.md
+  h_6f5e45c41d0910 60-81,157-165,167,176-187,293-314,349,351-353
+docs/en/authoring/plugin-delivery.md
+  h_6f5e45c41d0910 28-29,31,35
+docs/en/concepts/architecture.md
+  h_6f5e45c41d0910 142-154
+docs/en/concepts/capability-seams.md
+  h_6f5e45c41d0910 8-11
+docs/en/concepts/config-as-data.md
+  h_6f5e45c41d0910 38,99,101,106-109,121-127,151-152
+docs/en/concepts/generation-lifecycle.md
+  h_6f5e45c41d0910 93-98,117,119
+docs/en/concepts/message-flow.md
+  h_6f5e45c41d0910 64,141,155,157,161,163,165
+docs/en/concepts/plugin-model.md
+  h_6f5e45c41d0910 44-46
+docs/en/concepts/what-zhin-is.md
+  h_6f5e45c41d0910 1,3,5,7,9-30,33-34,36,38,40-42,44,46,48,50-52,54,56,58-68,70,74-78,82-106
+docs/en/console/index.md
+  h_6f5e45c41d0910 112-115,134
+docs/en/getting-started/concepts.md
+  h_6f5e45c41d0910 66-67,70,86-94,115
+docs/en/getting-started/first-plugin.md
+  h_6f5e45c41d0910 8,10-12,191,204,214-217
+docs/en/getting-started/index.md
+  h_6f5e45c41d0910 3,20,22,24,26-32,34,38,42-43,53-54,58,60-121,136-137,148
+docs/en/getting-started/introduction.md
+  h_6f5e45c41d0910 39
+docs/en/index.md
+  h_6f5e45c41d0910 5,8-9,12-16,20-25,28,31,33,36-45,49,53-57,63,70-72,74,76-81
+docs/en/operations/structured-storage.md
+  h_6f5e45c41d0910 7-16
+docs/en/paths/ai-agent.md
+  h_6f5e45c41d0910 33-34,36,38-61,64-65,67,71,74,79-81,94
+docs/en/paths/im-bot.md
+  h_6f5e45c41d0910 104,117
+docs/en/showcase/personal-assistant.md
+  h_6f5e45c41d0910 34,46-52,54-59,62,67-89,97
+docs/getting-started/concepts.md
+  h_6f5e45c41d0910 66-67,70,86-94,115
+docs/getting-started/first-plugin.md
+  h_6f5e45c41d0910 8,10-12,191,204,214-217
+docs/getting-started/index.md
+  h_6f5e45c41d0910 3,20,22,24,26-32,34,38,42-43,53-54,56,58,60-121,136-137,148
+docs/getting-started/introduction.md
+  h_6f5e45c41d0910 39
+docs/index.md
+  h_6f5e45c41d0910 5,8-9,12-17,21,24,26,29-38,42,46-50,56,63-65,67,69-74
+docs/operations/structured-storage.md
+  h_6f5e45c41d0910 7-16
+docs/paths/ai-agent.md
+  h_6f5e45c41d0910 33-34,36,38-61,64-65,67,71,74,79-81,94
+docs/paths/im-bot.md
+  h_6f5e45c41d0910 104,117
+docs/showcase/personal-assistant.md
+  h_6f5e45c41d0910 35,47-53,55-60,63,68-90,98,104
+docs/snippets/install-tiers.md
+  h_6f5e45c41d0910 14,25
+examples/single-file-bot/zhin.config.yml
+  h_6f5e45c41d0910 4-8
+packages/im/agent/src/core/turn-progress.ts
+  h_6f5e45c41d0910 60
+packages/im/agent/src/plugin-runtime/ingress/ingress-route.ts
+  h_6f5e45c41d0910 891-893
+packages/im/command/src/arguments.ts
+  h_6f5e45c41d0910 10,139,283
+packages/im/command/src/command-index.ts
+  h_6f5e45c41d0910 165-166,528-539,569-576,580-581,585,606,632
+packages/im/command/src/messages.ts
+  h_6f5e45c41d0910 45
+packages/im/command/tests/command.test.ts
+  h_6f5e45c41d0910 1779,1939,1945-1954
+packages/im/command/tests/localization.test.ts
+  h_6f5e45c41d0910 49-52,54
+packages/im/component/src/definition.ts
+  h_6f5e45c41d0910 35-47,75-81
+packages/im/core/src/built/html-to-text.ts
+  h_6f5e45c41d0910 8,202
+packages/im/core/src/built/rich-segments/markdown-to-text.ts
+  h_6f5e45c41d0910 91,116-133
+packages/im/core/src/built/user-interaction.ts
+  h_6f5e45c41d0910 75-77
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  h_6f5e45c41d0910 128-131,172
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  h_6f5e45c41d0910 118-122,199-203,208-218,221-224
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  h_6f5e45c41d0910 106,157-193,201,214-216
+packages/im/core/tests/html-to-text.test.ts
+  h_6f5e45c41d0910 23-24,26,29
+packages/im/core/tests/markdown-to-text.test.ts
+  h_6f5e45c41d0910 10
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  h_6f5e45c41d0910 1719-1741
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  h_6f5e45c41d0910 114-133
+packages/im/core/tests/plugin-runtime/interactive-router.test.ts
+  h_6f5e45c41d0910 70-89
+packages/im/core/tests/user-interaction.test.ts
+  h_6f5e45c41d0910 108-110
+packages/im/feature-kit/src/context.ts
+  h_6f5e45c41d0910 24,29
+packages/im/handler/src/definition.ts
+  h_6f5e45c41d0910 19-22,25-26,38,40,44-75,79,83,85,88,90,118-125,128,130
+packages/im/mcp-feature/src/definition.ts
+  h_6f5e45c41d0910 30-33,43-49
+packages/im/middleware/src/definition.ts
+  h_6f5e45c41d0910 105-119,152-159
+packages/im/runtime/src/platform-features.ts
+  h_6f5e45c41d0910 18-34
+packages/im/runtime/src/plugin-config-schema.ts
+  h_6f5e45c41d0910 3,29-33,35,43-55
+packages/im/runtime/src/typescript-specifier-remap.ts
+  h_6f5e45c41d0910 1,95-96,100-121,124-125,145,147,149
+packages/im/runtime/tests/config-composer.test.ts
+  h_6f5e45c41d0910 94-98
+packages/im/runtime/tests/native-development-runtime.test.ts
+  h_6f5e45c41d0910 2,15,536-569
+packages/im/schedule-feature/src/definition.ts
+  h_6f5e45c41d0910 18-21,26-32
+packages/im/tool/src/definition.ts
+  h_6f5e45c41d0910 173-174,416-419,421-422,424-425
+packages/im/tool/src/input-schema.ts
+  h_6f5e45c41d0910 19,31-44,49-56,70,91,104-110,113-118,123-147,151-153,184-187
+packages/im/tool/tests/input-schema.test.ts
+  h_6f5e45c41d0910 3,83-116
+packages/im/tool/tests/types/config.ts
+  h_6f5e45c41d0910 4,55-70
+packages/toolkit/create-zhin/src/index.ts
+  h_6f5e45c41d0910 16,367
+packages/toolkit/scaffold-wizard/src/ai.ts
+  h_6f5e45c41d0910 49-50,58-59,67-68,72-80,85-86,94-95,99-134,139-140,148-149,157-158,175-176,180-183,197-200,218-219,309,312,325-326,328-331,333,335-348,350-351,356,364,366-403,418,423-424,427,431-452
+packages/toolkit/scaffold-wizard/src/project-deps.ts
+  h_6f5e45c41d0910 5,37,40-43,65,69-72,341-342,345-357,367
+packages/toolkit/scaffold-wizard/src/zhin-stack-deps.ts
+  h_6f5e45c41d0910 152-165
+packages/toolkit/scaffold-wizard/tests/ai.test.ts
+  h_6f5e45c41d0910 60-61,64-67,70-74,77-101
+packages/toolkit/scaffold-wizard/tests/project-deps.test.ts
+  h_6f5e45c41d0910 175-197
+packages/toolkit/scaffold-wizard/tests/zhin-stack-deps.test.ts
+  h_6f5e45c41d0910 42-52
+packages/toolkit/testing/src/fake-runners.ts
+  h_6f5e45c41d0910 3,18-28,30,32-48,63,67-72,75,80,82-203,264-334
+packages/toolkit/testing/src/index.ts
+  h_6f5e45c41d0910 19,21-22,84-104,109,116,122
+packages/toolkit/testing/tests/fakes.test.ts
+  h_6f5e45c41d0910 8,169-246
+scripts/check-ci-preflight.mjs
+  h_6f5e45c41d0910 13-36,105-111,145,170,185-194,199
+scripts/sync-adapter-docs.mjs
+  h_6f5e45c41d0910 132,134-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "72b5a12754625d67562afbb89e7de872a40c7159",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
