@@ -1,0 +1,14 @@
+tests/snapshots/api-surface.json
+  h_6f5e45c41d0910 109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c76166279186786f8de2f40c2c6ec9ba6eea8f48",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
