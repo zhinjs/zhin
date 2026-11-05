@@ -894,8 +894,9 @@ export class AgentTurnIngressRoute implements IngressRoute {
             projectRoot: options.projectRoot,
             defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
           });
-          const approvalInteraction = ownerId
-            ? options.im.createInteraction(message, { subjectId: ownerId })
+          const approverId = senderRoles.isMaster ? message.sender?.id : (ownerId ?? trigger?.masters?.[0]);
+          const approvalInteraction = approverId
+            ? options.im.createInteraction(message, { subjectId: approverId })
             : undefined;
           const askApprovalPort = createRuntimeApprovalPort({
             locale: message.locale,

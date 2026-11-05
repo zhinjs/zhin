@@ -63,11 +63,11 @@ export default definePlugin({
 
 | 文件 | 回答的问题 | 典型内容 |
 | --- | --- | --- |
-| `package.json` 的 `zhin` 字段 | **装了什么**（结构） | 入口文件、用到哪些 Feature、挂载哪些子插件 |
-| `zhin.config.yml` | **怎么配**（数值） | HTTP 端口、平台凭据、AI 模型、各插件的配置项 |
+| `package.json` 的 `zhin` 字段 | **插件契约**（结构） | 插件入口文件（`entry`）、本插件用到哪些能力包（`features`） |
+| `zhin.config.yml` | **装了什么 & 怎么配**（实例与数值） | 挂载哪些子插件与适配器（`plugins:`）、HTTP 端口、平台凭据、各插件配置项 |
 | `.env` | **秘密** | Token、API Key，在 yml 里用 `${HTTP_TOKEN}` 引用 |
 
-在 `zhin.config.yml` 里，Root 插件的配置写在 `plugin:` 下，子插件的配置写在 `<instanceKey>:` 下。深入：[配置即数据](../concepts/config-as-data.md) · [配置参考](../configuration/index.md)
+在 `zhin.config.yml`（`configVersion: 2`）里，挂载的子插件写在 `plugins:` 下，Root 插件自己的配置写在 `plugin:` 下，子插件的配置写在对应的 `<instanceKey>:` 下。深入：[配置即数据](../concepts/config-as-data.md) · [配置参考](../configuration/index.md)
 
 ### Console
 
@@ -83,7 +83,15 @@ export default definePlugin({
 
 ### instanceKey（插件实例）
 
-挂载子插件时给它起的名字，例如 `{ "package": "./plugins/ping-pong", "instanceKey": "ping-pong" }`。它决定了这个子插件读取 `zhin.config.yml` 里哪一段配置。同一个插件包可以用不同 instanceKey 挂载多次，各自独立配置。
+在 `zhin.config.yml` 的 `plugins:` 下挂载子插件时给它起的名字，例如：
+
+```yaml
+configVersion: 2
+plugins:
+  ping-pong: './plugins/ping-pong'
+```
+
+这里的 `ping-pong` 就是 `instanceKey`，它决定了这个子插件读取 `zhin.config.yml` 里哪一段配置（即顶层的 `ping-pong:`）。同一个插件包可以用不同 `instanceKey` 挂载多次，各自独立配置。
 
 ### Host
 
@@ -104,7 +112,7 @@ Bot 进程对外开放的 HTTP 服务。Console、Webhook 类平台回调、MCP 
 | 名词 | 一句话解释 | 深入 |
 | --- | --- | --- |
 | **Agent** | 接管"没匹配到命令的消息"，用大模型回答。私聊默认触发；群里用 `ai:` 等前缀或 @ 触发 | [AI 总览](../ai/index.md) |
-| **Provider** | 模型服务的连接配置（OpenAI、Ollama…），写在 `ai.providers` | [AI 总览](../ai/index.md) |
+| **Provider** | 模型服务、账号与 Profile 配置（OpenAI、DeepSeek、Ollama…），通过 `npx zhin setup --ai` 生成 `ai.plan.yml` 并在 Console 管理 | [AI 总览](../ai/index.md) |
 | **Tool** | 让 AI 能调用的函数，例如查天气、查数据库。权限与审批由框架策略控制 | [Agent 工具](../authoring/agent-tools.md) |
 | **Skill** | 一份 `SKILL.md` 说明书，AI 需要时才加载，适合封装一套操作流程 | [Agent 工具](../authoring/agent-tools.md) |
 | **Prompt Section** | 插件贡献给 AI 的背景知识片段（产品术语、规则），只影响上下文，不授予权限 | [Agent 工具](../authoring/agent-tools.md) |

@@ -7,7 +7,7 @@ import { commandDescription, commandMessages } from './messages.js';
 
 export type CommandValidationIssueCode = 'expectedType' | 'expectedArray' | 'minimum' | 'maximum'
   | 'choices' | 'invalidFormat' | 'invalidValue' | 'unknownOption' | 'duplicateOption'
-  | 'defaultUndefined' | 'parameterUndefined' | 'missingOption' | 'unexpectedArguments'
+  | 'defaultUndefined' | 'parameterUndefined' | 'missingOption' | 'missingRequiredParam' | 'unexpectedArguments'
   | 'invalidParameter' | 'custom';
 
 export interface CommandValidationIssue {
@@ -136,7 +136,7 @@ export function requestsCommandHelp(segments: readonly Readonly<CommandSegment>[
   for (const token of tokenize(segments)) {
     if (!isTextToken(token) || token.quoted) continue;
     if (token.value === '--') return false;
-    if (token.value === '--help') return true;
+    if (token.value === '--help' || token.value === '-h') return true;
   }
   return false;
 }
@@ -280,7 +280,7 @@ export function parseCommandArguments(
       if (value !== undefined) params[name] = value;
       else if (schema.default !== undefined) params[name] = typeof schema.default === 'function' ? schema.default(session) : schema.default;
       else if (!schema.optional && !(definition.$parameter?.name === name && definition.$parameter.optional)) {
-        issues.push(commandValidationIssue('expectedType', name, locale, { type: schema.type }));
+        issues.push(commandValidationIssue('missingRequiredParam', name, locale, { type: schema.type }));
       }
     }
     if (Object.hasOwn(params, name) && params[name] === undefined) issues.push(commandValidationIssue('parameterUndefined', name, locale));

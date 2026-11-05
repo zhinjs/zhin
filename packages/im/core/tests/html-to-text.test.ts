@@ -20,11 +20,13 @@ describe('htmlToPlainTextWithBlockBreaks', () => {
 });
 
 describe('htmlToFallbackText', () => {
-  it('strips svg and adds block newlines', () => {
-    const html = '<div>标题</div><div>120</div><svg><circle/></svg>';
+  it('strips svg and adds block newlines while preserving header and footer content', () => {
+    const html = '<header>卡片头部</header><div>标题</div><div>120</div><footer>卡片底部</footer><svg><circle/></svg>';
     const text = htmlToFallbackText(html);
+    expect(text).toContain('卡片头部');
     expect(text).toContain('标题');
     expect(text).toContain('120');
+    expect(text).toContain('卡片底部');
     expect(text).not.toContain('<');
   });
 

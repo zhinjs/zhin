@@ -22,6 +22,21 @@ const DECLARATION = /\.d\.[cm]?ts$/u;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const RUNTIME_ENTRIES_BUILDER = /runtime-entries/u;
 
+const DIRECTORY_FEATURE_PACKAGE: Readonly<Record<string, string>> = {
+  commands: '@zhin.js/command',
+  components: '@zhin.js/component',
+  middlewares: '@zhin.js/middleware',
+  handlers: '@zhin.js/handler',
+  schedules: '@zhin.js/schedule-feature',
+  tools: '@zhin.js/tool',
+  'prompt-sections': '@zhin.js/prompt-section',
+  hooks: '@zhin.js/hook-feature',
+  mcps: '@zhin.js/mcp-feature',
+  adapters: '@zhin.js/adapter',
+  skills: '@zhin.js/skill',
+  agents: '@zhin.js/agent-feature',
+};
+
 /** Reads package.json; a missing or invalid file is reported as an error. */
 export function readPluginManifest(pluginDirectory: string, problems: PluginCheckProblems): Record<string, unknown> | undefined {
   const manifestPath = path.join(pluginDirectory, 'package.json');
@@ -101,6 +116,7 @@ export function checkPluginSource(pluginDirectory: string, manifest: Record<stri
 
   checkRuntimeEntry(pluginDirectory, zhinFields.entry, hasZhinManifest, files, problems);
   checkConventionDirectories(pluginDirectory, files, problems);
+  checkCapabilityFeatures(pluginDirectory, hasZhinManifest, zhinFields.features, problems);
   checkPackScripts(pluginDirectory, manifest, problems);
 
   if (manifest.main === undefined && manifest.exports === undefined) {
@@ -169,6 +185,38 @@ function checkConventionDirectories(
   const hasSchema = fs.existsSync(path.join(pluginDirectory, 'schema.json'));
   if (hasSchema && !filesWhitelistIncludes(files, 'schema.json')) {
     problems.warnings.push('schema.json 存在但不在 files 白名单中，Console 将拿不到配置 schema');
+  }
+}
+
+function checkCapabilityFeatures(
+  pluginDirectory: string,
+  hasZhinManifest: boolean,
+  rawFeatures: unknown,
+  problems: PluginCheckProblems,
+): void {
+  if (!hasZhinManifest) return;
+  const declaredFeatures = new Set<string>();
+  if (Array.isArray(rawFeatures)) {
+    for (const item of rawFeatures) {
+      if (typeof item === 'string') {
+        declaredFeatures.add(item);
+      } else if (item && typeof item === 'object' && typeof (item as { package?: unknown }).package === 'string') {
+        declaredFeatures.add((item as { package: string }).package);
+      }
+    }
+  }
+  const activeDirectories = new Set<string>();
+  for (const source of listRuntimeEntrySources(pluginDirectory)) {
+    if (source.includes('/')) activeDirectories.add(source.split('/')[0]!);
+  }
+  for (const asset of listAssetFiles(pluginDirectory)) {
+    if (asset.includes('/')) activeDirectories.add(asset.split('/')[0]!);
+  }
+  for (const directory of activeDirectories) {
+    const featurePackage = DIRECTORY_FEATURE_PACKAGE[directory];
+    if (featurePackage && !declaredFeatures.has(featurePackage)) {
+      problems.warnings.push(`约定目录 ${directory}/ 存在能力源码，但 zhin.features 未声明 ${featurePackage}`);
+    }
   }
 }
 

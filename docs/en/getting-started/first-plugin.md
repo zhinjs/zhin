@@ -5,9 +5,11 @@ description: "Build a configurable /ping child plugin from scratch, mount it on 
 
 # Write your first plugin
 
-This page walks you through a plugin called `ping-pong`: a user sends `/ping` and the bot replies with text **you can change in config**.
+For everyday bot features — adding commands, JSX cards, or AI tools — you don't need a child plugin package at all: just drop files directly into `commands/` or `tools/` inside `my-bot` (your Root plugin), as shown in [Quick start · 1→2](./index.md#4-observe-hot-reload-add-features-directly-to-your-bot-1→2).
 
-By the end you will know the four building blocks of a plugin — manifest, entry, command, config — and how to mount a plugin on a bot. It takes about 15 minutes.
+**When do you need this guide?** When you want to **extract a reusable sub-plugin package (`plugins/ping-pong`) with its own config schema that can be shared across bots or published to npm**.
+
+This page walks you through building `ping-pong` from scratch: a user sends `/ping` and the bot replies with text **you can change in config**. By the end you will know the four building blocks of a reusable plugin package — manifest, entry, command, config schema — and how to mount it in `zhin.config.yml`. It takes about 15 minutes.
 
 ::: tip Before you start
 - You have created and run `my-bot` from the [Quick start](./index.md) (if not, run `npm create zhin-app my-bot -y`).
@@ -186,7 +188,7 @@ pnpm install
 cd ../..
 ```
 
-Declare the dependency in **the bot's** `package.json` (`zhin.plugins` stays empty; the main configuration declares instances) (merge with what's there — don't overwrite it):
+Declare the `@zhin.js/command` dependency in **the bot's** `package.json` (`zhin.plugins` stays an empty array because plugin instances are mounted in `zhin.config.yml`; merge with what's already there — don't overwrite the whole file):
 
 ```json
 {
@@ -199,10 +201,7 @@ Declare the dependency in **the bot's** `package.json` (`zhin.plugins` stays emp
 }
 ```
 
-- `package` points at the plugin folder. It must start with `./` and cannot escape the project with `..`.
-- `instanceKey` is the plugin's name inside this bot: lowercase letters, digits and hyphens only.
-
-Finally, in **the bot's** `zhin.config.yml`, add the config under the `instanceKey`:
+Finally, in **the bot's** `zhin.config.yml`, mount the child plugin under `plugins:` and add its settings under the same `instanceKey`:
 
 ```yaml
 configVersion: 2
@@ -211,6 +210,10 @@ plugins:
 ping-pong:
   reply: pong!
 ```
+
+- The key `ping-pong` under `plugins:` is the plugin's `instanceKey` inside this bot (lowercase letters, digits, and hyphens only).
+- The value `'./plugins/ping-pong'` points to the local plugin directory (must start with `./` and cannot escape the project with `..`; for an npm plugin, use its package name).
+- The top-level `ping-pong:` block holds the configuration values for that instance, merged with the defaults from `schema.json`.
 
 ::: details Why does the bot depend on @zhin.js/command too?
 Projects created by `npm create zhin-app` already include `plugins/*` in the pnpm workspace. The bot depends on `@zhin.js/command` directly and the child uses that same copy through its peer — don't add it to the child's `dependencies`. Zhin requires every capability package to come from exactly one physical directory.

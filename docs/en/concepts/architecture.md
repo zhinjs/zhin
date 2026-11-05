@@ -139,3 +139,16 @@ When writing a Feature (a new capability type), depend only on `feature-kit` / `
 ## JSX and visual components
 
 `@zhin.js/jsx` owns lazy JSX trees and an HTML serializer, depending only on the canonical IM contract types. Core lays out JSX as ordered Segments; only `<html>` / `<Html>` children become `segment.html`. Native lowercase tags are typed without imports, and registered components can be used as named tags; `zhin.js/jsx` is the authoring facade. Optional `@zhin.js/components` uses this base plus Markdown parsing and syntax highlighting dependencies, accepts `JSXRenderable` display props and does not depend on Core, React or image engines. Render tools consume HTML; adapters declare platform policies.
+
+```tsx
+// 1. Native message JSX (auto-degrades to platform cards/buttons or numbered menus)
+<card title="Build Status">
+  <text>All checks passed</text>
+  <button onClick={async () => 'Release triggered'}>Deploy to Production</button>
+</card>
+
+// 2. HTML subtree (rendered into an image segment via @zhin.js/html-renderer)
+<html>
+  <div style={{ padding: '24px', background: '#0f172a', color: '#f8fafc' }}>Status Board</div>
+</html>
+```

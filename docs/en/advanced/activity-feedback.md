@@ -24,41 +24,39 @@ Events are serialized within one IM conversation. Different conversations still 
 pnpm add @zhin.js/service-activity-feedback @zhin.js/agent
 ```
 
-Add the plugin to `package.json#zhin.plugins`:
+Mount the plugin under `plugins` in `zhin.config.yml`:
 
-```json
-{
-  "zhin": {
-    "plugins": [
-      {
-        "package": "@zhin.js/service-activity-feedback",
-        "instanceKey": "activity-feedback"
-      }
-    ]
-  }
-}
+```yaml
+configVersion: 2
+plugins:
+  activity-feedback: "@zhin.js/service-activity-feedback"
 ```
 
 ## Configure it
 
+Configure the instance at the top-level `activity-feedback:` block in `zhin.config.yml`:
+
 ```yaml
+configVersion: 2
 plugins:
-  activity-feedback:
-    enabled: true
-    defaults:
+  activity-feedback: "@zhin.js/service-activity-feedback"
+
+activity-feedback:
+  enabled: true
+  defaults:
+    phases:
+      active:
+        private: { type: message, message: "Working…" }
+  platforms:
+    discord:
       phases:
         active:
-          private: { type: message, message: "Working…" }
-    platforms:
-      discord:
-        phases:
-          active:
-            channel: { type: typing }
-    endpoints:
-      "discord:operations":
-        phases:
-          queued:
-            channel: { type: reaction, emoji: "⏳" }
+          channel: { type: typing }
+  endpoints:
+    "discord:operations":
+      phases:
+        queued:
+          channel: { type: reaction, emoji: "⏳" }
 ```
 
 Layers merge in this order: `defaults → platforms.<platform> → endpoints.<platform:endpointKey>`. Each phase can configure `private`, `group`, and `channel` independently.
@@ -79,16 +77,15 @@ A `phase` is a fixed Agent lifecycle state, not an arbitrary label. The Schema a
 The first three phases are for interactive turns. The last three are for Schedule Jobs that explicitly enable `activityFeedback`. Schedule shorthand keys `start`, `finish`, and `error` map to `schedule_start`, `schedule_finish`, and `schedule_error`:
 
 ```yaml
-plugins:
-  activity-feedback:
-    schedule:
-      phases:
-        start:
-          group: { type: message, message: "⏰ Scheduled task started" }
-        finish:
-          group: { type: message, message: "✅ Scheduled task complete", removeDelay: 3000 }
-        error:
-          group: { type: message, message: "❌ Scheduled task failed", removeDelay: 10000 }
+activity-feedback:
+  schedule:
+    phases:
+      start:
+        group: { type: message, message: "⏰ Scheduled task started" }
+      finish:
+        group: { type: message, message: "✅ Scheduled task complete", removeDelay: 3000 }
+      error:
+        group: { type: message, message: "❌ Scheduled task failed", removeDelay: 10000 }
 ```
 
 ## Scenes and presentation types

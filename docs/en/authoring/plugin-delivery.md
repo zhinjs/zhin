@@ -25,14 +25,14 @@ One capability goes in a convention directory; shared resources or lifecycle go 
 
 ## 2. Declare the package structure
 
-- `package.json#zhin` declares the plugin entry, the Features it uses, and child plugins.
-- `zhin.config.yml` only provides config **values** — it doesn't install packages or enable Features.
+- `package.json#zhin` declares the plugin package's own entry (`entry`) and the Features it uses (`features`); plugin instances (adapters, child plugins, services) are mounted in the host project's `zhin.config.yml` under `plugins:`.
+- `zhin.config.yml` declares mounted plugin instances and config **values** — it doesn't install packages or enable Features.
 - Plugins published to npm must use a JavaScript entry (`./plugin.js`); local projects can use `./plugin.ts` directly. See [definePlugin · Development entry vs. npm entry](./define-plugin.md#development-entry-vs-npm-entry).
-- Declare optional capabilities (database, HTML rendering…) as optional peers, check them with `context.resources.has(token)` in `setup`, and degrade explicitly when missing.
+- Declare optional capabilities (database, HTML rendering…) as optional peers, check them with `context.resources.has(token)` in `setup` (or `context.has(token)` in commands and tools), and degrade explicitly when missing.
 
 ## 3. Design the config
 
-`definePlugin({ config: Schema.object(...) })` declares defaults, types, constraints and Console form hints in one place, with types inferred via `Schema.Output`. A root `schema.json` works too, but use only one of the two (`isolated` plugins must use `schema.json`). See [definePlugin · Read config](./define-plugin.md#read-config).
+`definePlugin({ config: Schema.object(...) })` declares defaults, types, constraints and Console form hints in one place, with types inferred via `Schema.Output`. A root `schema.json` works too (if you also include an equivalent `schema.json` with identical structure, the runtime verifies their equivalence; `isolated` plugins must use `schema.json`). See [definePlugin · Read config](./define-plugin.md#read-config).
 
 - Your bot itself reads the `plugin:` section; child plugins read `<instanceKey>`.
 - Reference secrets with `${VAR}`; never put them in Schema defaults or example repos.

@@ -64,6 +64,15 @@ program.addCommand(needsAgentCommand
   ? (await import('./commands/agent.js')).agentCommand
   : new Command('agent').description('Agent diagnostics and Workroom operations'));
 program.addCommand(runtimeCommand);
+program
+  .command('start')
+  .description('启动 Bot（同 zhin runtime start）')
+  .usage('[options]')
+  .allowUnknownOption(true)
+  .allowExcessArguments(true)
+  .action(async (_options, command) => {
+    await runtimeCommand.parseAsync(['start', ...command.args], { from: 'user' });
+  });
 program.addCommand(traceCommand);
 program.addCommand(usageCommand);
 program.addCommand(devCommand);

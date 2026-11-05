@@ -35,7 +35,7 @@ sandbox:
 napcat:
   connection: ws
   endpoints:
-    - name: full-bot-napcat
+    - id: full-bot-napcat
       url: ${ONEBOT11_WS_URL} # Environment variable interpolation
       access_token: ${ONEBOT11_ACCESS_TOKEN}
 ```
@@ -96,17 +96,17 @@ plugins:
 icqq:
   commandPrefix: "/" # Top-level: shared by all endpoints
   endpoints:
-    - name: bot-a
+    - id: bot-a
       uin: ${ICQQ_UIN_A}
-    - name: bot-b
+    - id: bot-b
       uin: ${ICQQ_UIN_B}
       commandPrefix: "" # Per-entry override of top-level
 ```
 
-- Each entry's effective configuration = instance configuration (without the `endpoints` key) **merged with** the entry's own fields; `name` is required.
-- After expansion, each endpoint is an independent record. The capability ID is in the form `<slot>~<name>`, and Console and message chains address by name.
-- Entries missing `name`, containing `~` or `\0` in the name, or having duplicate names are discarded with a warning; when all entries are invalid, it falls back to a single endpoint.
-- When `endpoints` is empty or absent, a single endpoint is created from the instance configuration.
+- Each entry's effective configuration = instance configuration (without the `endpoints` key) **merged with** the entry's own fields; `id` is required.
+- After expansion, each endpoint is an independent record. The capability ID is in the form `<slot>~<id>`, and Console and message chains address by `id`.
+- Entries missing `id`, containing `~` or `\0` in `id`, or having duplicate IDs are rejected with an explicit error.
+- When `endpoints` is empty or absent, a single endpoint is created from the instance configuration (using top-level `id` or `instanceKey`).
 
 ### commandPrefix
 
@@ -118,7 +118,13 @@ The command prefix is resolved by default based on the adapter instance that own
 
 ## Configuration Document Transactions and Rollback
 
-Runtime configuration changes (Console UI, `patchConfig` API) do not modify the file directly. They use a two-phase transaction; the `ConfigDocumentPort` and structural patch semantics live in zero-dependency `@zhin.js/plugin-runtime`:
+Runtime configuration changes (Console UI, `zhin config`, or chat `config set`) do not overwrite the file directly. Instead, they execute a **two-phase transaction**: Zhin first builds and activates the candidate generation in the background, and only commits the file to disk after activation succeeds. If validation or activation fails at any point, both the file and the in-memory runtime roll back cleanly so the previous configuration continues serving uninterrupted.
+
+Direct external edits to `zhin.config.yml` or `.env` are equally safe: when `--watch` is enabled, Runtime inspects the changed projection and either reloads only the affected child plugin, rebuilds the Root generation, or requests a process restart when Host-level startup sections (`http`, `database`, `ai`, etc.) change.
+
+::: details Host Internal Port Contracts (Maintainer Reference)
+
+`ConfigDocumentPort` and structural patch semantics live in zero-dependency `@zhin.js/plugin-runtime`:
 
 ```ts
 interface ConfigDocumentPort {
@@ -142,4 +148,5 @@ The composition root creates one concrete `ConfigFileDocument`. Root Runtime, En
 
 Transactions are woven into generation handoff: `RootRuntime.patchConfig` first performs a shadow prepare (see [Generation and Lifecycle](./generation-lifecycle.md)), and the file commit happens after the new generation's resources are activated; if the handoff fails, the rollback order is reversed -- first restore the file, then deactivate the shadow generation. If any step fails, neither the Root config on disk nor the in-memory runtime will be left in a half-updated state.
 
-Direct external editing of the configuration file is also supported: the config file itself is watched, and external modifications trigger a full reload using the disk content as the source of truth.
+CLI also wraps `.env` and `.env.<environment>` in `EnvironmentLayersPort`, re-expanding `${VAR}`, `${VAR:-default}`, and `${VAR:=default}` inside an owner-scoped `EnvStore` without mutating global `process.env`.
+:::

@@ -7,8 +7,8 @@
 <h1 align="center">Zhin.js</h1>
 
 <p align="center">
-  <strong>One bot for your groups on 20+ chat platforms.</strong><br />
-  Operators run it from the browser — developers write it once in TypeScript.<br />
+  <strong>Write once in TypeScript. Run your bot across 20+ chat platforms.</strong><br />
+  File-based commands, cross-platform JSX cards, leak-free hot reload, and opt-in AI agents — managed from the browser.<br />
   QQ · WeChat · WeCom · DingTalk · Lark · Discord · Telegram · Slack · KOOK · LINE · …
 </p>
 
@@ -29,67 +29,20 @@
 
 <p align="center">
   <a href="https://zhin.js.org/en/">Documentation</a> ·
+  <a href="./docs/en/authoring/define-plugin.md">Plugin Authoring</a> ·
   <a href="./docs/en/customer/index.md">Operator Guide</a> ·
   <a href="https://demo.zhin.dev">Live Demo</a> ·
   <a href="https://console.zhin.dev">Remote Console</a> ·
-  <a href="https://github.com/zhinjs/zhin/wiki">Wiki</a> ·
   <a href="./docs/contributing/development.md">Contributing</a>
 </p>
 
 ---
 
-## Choose your path
+> **Running a bot without writing code?** Jump to the [Operator & Group Admin Guide](./docs/en/customer/index.md) or try the [Live Demo](https://demo.zhin.dev). Building plugins or adapters in TypeScript? Start right below or browse [Plugin Authoring](./docs/en/authoring/define-plugin.md).
 
-Zhin serves two kinds of people. Pick yours — the rest of this README is split the same way.
+## 30-Second Quick Start
 
-| | 🧭 **Customer — operators & group owners** | 🛠 **Developer — plugin & adapter authors** |
-|---|---|---|
-| **You are** | A group owner, community operator or support lead. You run the bot; you don't write TypeScript. | Someone who writes commands, plugins, AI tools or platform adapters. |
-| **You use** | The browser [Console](https://console.zhin.dev) and a config file | TypeScript, `create-zhin-app`, the `zhin` CLI |
-| **You get** | Welcomes, check-ins, reminders, feed pushes, moderation, announcements that wait for approval, a one-switch emergency stop | One codebase on 20+ platforms, a feature is a file, hot reload that can't take you down |
-| **Start here** | [Try the live demo](https://demo.zhin.dev) → [Operator & Group Admin Guide](./docs/en/customer/index.md) | [Developer quick start](#developer-quick-start) → [First plugin](./docs/en/getting-started/first-plugin.md) |
-
-## What is Zhin.js?
-
-Zhin.js is a framework for **bots that live in chat apps** — operators run them from a browser console, developers build them in TypeScript. Think community bots, personal assistants, notification and support bots, AI chat assistants.
-
-- **One codebase, many platforms.** Adapters translate each platform into one unified message, so your commands and replies work everywhere. One bot can run many accounts on many platforms at once.
-- **A feature is a file.** `commands/hello/index.ts` *is* the `/hello` command. Middleware, message cards, scheduled jobs and AI tools work the same way — no registration boilerplate.
-- **Small by default, AI when you want it.** The IM core is under 10MB and needs no model key. Add LLMs, tools, memory and MCP with one command.
-- **Hot reload that can't take you down.** Save a file and the bot reloads. If the new code fails, the previous version keeps serving.
-- **Managed from the browser.** [console.zhin.dev](https://console.zhin.dev) lets you send test messages, read logs, edit config and manage plugins — nothing to deploy.
-
-> Zhin is **not** an in-editor coding agent (like Cursor or Claude Code). Its AI features exist to power bots on chat platforms.
-
-## For operators and group owners
-
-You don't need to write code to run a Zhin bot well. Once a developer (or your ops person) has deployed it once, day-to-day work happens in the browser.
-
-**Connect.** Open [console.zhin.dev](https://console.zhin.dev) and enter the bot's API address and token (`HTTP_TOKEN`). Use a read-only Demo token for colleagues who only watch. Not deployed yet? Try the [live demo](https://demo.zhin.dev) first.
-
-| I want to… | In Console |
-|------------|------------|
-| See whether the bot and each account are online | Home |
-| Read and send messages in any group | Chat accounts · Chat history |
-| Install or switch off features (group suite, reminders, RSS, moderation…) | Feature store · Feature management |
-| Change settings without editing files | Each plugin's config form; secrets under Advanced → environment variables |
-| Welcome new members only in selected groups | Task center → start by use case ([guide](./docs/en/solutions/group-welcome.md)) |
-| See why the AI replied or stayed silent | Bot status → decision replay |
-| Make the bot go quiet *now* | Bot status → control plane: emergency stop / muted / read-only / mention only |
-
-**Group ops with guardrails.** The AI can draft announcements but only a person with approval rights can send them; risky admin actions such as kicking a member become approval cards with a cooldown; every decision is traceable in decision replay.
-
-**When to call a developer:** first deployment or server moves, a feature no existing plugin provides, a new platform, connecting the AI to your business systems, or errors in the run log you can't interpret.
-
-👉 Full guide: [Operator & Group Admin Guide](./docs/en/customer/index.md) · [Console path](./docs/en/paths/console.md) · [Troubleshooting](./docs/en/troubleshooting/index.md)
-
-## For developers
-
-Everything below is for people writing plugins and adapters in TypeScript.
-
-### Developer quick start
-
-No platform account and no model key required.
+No platform account and no model key required (Node.js **≥22.19.0**, pnpm 9+):
 
 ```bash
 npm create zhin-app my-bot -y
@@ -97,18 +50,97 @@ cd my-bot
 pnpm dev
 ```
 
-1. Open [console.zhin.dev](https://console.zhin.dev).
-2. Enter the API address printed in the terminal (new projects use `http://127.0.0.1:8068`) and the `HTTP_TOKEN` from `.env`.
-3. Open the **Sandbox** chat and send `/hello`. You should get a reply.
+1. **Instant local Sandbox**: Open `http://127.0.0.1:8068/sandbox` in your browser and send `/hello` to get an immediate reply.
+2. **Full Remote Console**: Open [console.zhin.dev](https://console.zhin.dev), connect to `http://127.0.0.1:8068` with the `HTTP_TOKEN` from `.env`, and inspect logs, plugins, and live messages.
 
-`-y` accepts every default: a browser **Sandbox** (simulated chat) instead of a real platform, and no AI. Requirements: Node.js **≥22.19.0** and pnpm 9+. Something wrong? Run `npx zhin doctor`.
-
-Full walkthrough: [Quick start](./docs/en/getting-started/index.md) · Prefer not to install yet? Try the [live demo](https://demo.zhin.dev).
+Full walkthrough: [Quick start](./docs/en/getting-started/index.md) · Something wrong? Run `npx zhin doctor`.
 
 > [!IMPORTANT]
 > **Upgrading an existing bot from 1.1.13 or earlier?** The Runtime now only accepts `configVersion: 2`. Stop the Bot first, upgrade `zhin.js` / `@zhin.js/cli` to the latest, then run `zhin migrate instances` (preview) and `zhin migrate instances --apply` (backs up first). Full steps and restore: [Upgrading to configVersion 2](./docs/en/operations/upgrades.md#configversion-2).
 
-### How a bot is put together
+## Why Zhin.js?
+
+Zhin.js is a TypeScript framework for **bots that live in chat apps** — community bots, personal assistants, notification and support bots, and governed AI chat assistants.
+
+- **One codebase, 20+ platforms.** Adapters translate each platform into one unified message model. One bot can host multiple accounts across multiple platforms simultaneously.
+- **A feature is a file.** Drop a file in `commands/`, `middlewares/`, `components/`, `schedules/`, or `tools/` and it registers automatically — zero wiring boilerplate.
+- **Generation-isolated hot reload.** Save a file and Zhin atomically swaps in a new Generation. In-flight messages finish on the previous version; if new code throws on startup, the previous version keeps serving without downtime.
+- **Small by default (<10MB), AI when you want it.** The IM core needs no LLM dependencies. Add AI agents, tools, 3-layer Markdown memory, and MCP anytime with `npx zhin setup --ai`.
+- **Browser Console included.** Manage accounts, edit schema-driven forms, replay AI decisions, and trigger emergency stops from [console.zhin.dev](https://console.zhin.dev).
+
+> Zhin is **not** an in-editor coding agent (like Cursor or Claude Code). Its AI stack is purpose-built for chat platforms, group permissions, and multi-user conversations.
+
+## Show, Don't Tell: 3 Killer Features
+
+### 1. Command + Cross-Platform JSX Card & Interactive Button
+
+Write interactive cards once in JSX (`commands/poll/index.tsx`). On platforms that support buttons, users click directly; on plain-text platforms, Zhin automatically degrades `<button>` into numbered text choices and routes the reply back to your `onClick` callback:
+
+```tsx
+// commands/poll/index.tsx  →  /poll "Release v1.2 today?"
+import { defineCommand } from 'zhin.js/command'
+
+export default defineCommand({
+  description: 'Start a quick one-click poll',
+  params: {
+    topic: { type: 'text', default: 'Ship it today?' },
+  },
+  execute: ({ params }) => (
+    <card title={`📊 ${params.topic}`}>
+      <text>Click a button (or reply with its number on plain-text platforms):</text>
+      <button label="👍 Yes" onClick={(msg) => `Recorded 👍 from ${msg.$sender.name}`} />
+      <button label="🤔 Wait" onClick={(msg) => `Recorded 🤔 from ${msg.$sender.name}`} />
+    </card>
+  ),
+})
+```
+
+### 2. Zero-Boilerplate AI Tool
+
+Drop a file in `tools/<name>/index.ts` using `defineAgentTool` and `Schema.object(...)` from `zhin.js`. Framework security policies enforce permissions, visibility, and human approval before the model can invoke it:
+
+```ts
+// tools/weather/index.ts
+import { Schema } from 'zhin.js'
+import { defineAgentTool } from '@zhin.js/tool'
+
+export default defineAgentTool<{ city: string }>({
+  description: 'Get live weather for a city',
+  parameters: Schema.object({
+    city: Schema.string().required().description('City name, e.g. Shanghai'),
+  }),
+  requiresApproval: 'never',
+  async execute({ city }) {
+    const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`)
+    return res.text()
+  },
+})
+```
+
+### 3. Leak-Free Hot Reload & Multi-Platform `configVersion: 2`
+
+Your project's `package.json#zhin.entry` points to `plugin.ts` (or `bot.ts` in single-file bots), while mounted adapters, child plugins, and per-instance settings all live cleanly in `zhin.config.yml`:
+
+```yaml
+# zhin.config.yml
+configVersion: 2
+
+http:
+  host: 127.0.0.1
+  port: 8068
+  token: ${HTTP_TOKEN}
+
+plugins:
+  sandbox: '@zhin.js/adapter-sandbox'
+  reminder: '@zhin.js/plugin-reminder'
+
+sandbox:
+  endpoints:
+    - id: local-sandbox
+      commandPrefix: /
+```
+
+## How a Bot is Put Together
 
 ```text
  chat platform        your project (a plugin)                         chat platform
@@ -119,70 +151,30 @@ Full walkthrough: [Quick start](./docs/en/getting-started/index.md) · Prefer no
 
 | Part | What it is | Where it lives |
 |------|------------|----------------|
-| **Plugin** | Your project *is* a plugin; split it into child plugins as it grows | `plugin.ts` + the `zhin` field in `package.json` |
-| **Command** | Runs when a user sends `/hello` | `commands/hello/index.ts` |
-| **Middleware** | Sees every message — keyword replies, filters | `middlewares/<name>/index.ts` |
-| **Adapter** | An npm package connecting one platform; one adapter can host many accounts | `@zhin.js/adapter-*`, configured in `zhin.config.yml` |
-| **AI Agent** *(optional)* | Answers messages no command matched, and can call your tools | `tools/<name>/index.ts`, `ai:` in `zhin.config.yml` |
-| **Console** | Browser admin UI for logs, config and test messages | [console.zhin.dev](https://console.zhin.dev) |
-
-New to these terms? Read [Core concepts at a glance](./docs/en/getting-started/concepts.md) — it explains every word the docs use, in plain language.
-
-### Writing features
-
-A whole bot can be one file:
-
-```ts
-// bot.ts
-import { definePlugin } from 'zhin.js'
-import { defineCommand } from 'zhin.js/command'
-
-export default definePlugin({
-  name: 'my-bot',
-  setup({ addCommand }) {
-    addCommand('hello', defineCommand({
-      description: 'Say hello',
-      execute: () => 'Hello from Zhin!',
-    }))
-  },
-})
-```
-
-As it grows, move each capability into its own file. The folder path is the name, and the file registers itself:
-
-```ts
-// commands/remind/index.ts  →  /remind 10 stretch
-import { defineCommand } from 'zhin.js/command'
-
-export default defineCommand({
-  description: 'Create a reminder',
-  params: {
-    minutes: { type: 'integer', min: 1, max: 1440 },
-    note: { type: 'text', default: 'Take a break' },
-  },
-  options: { quiet: { type: 'boolean', default: false } },   // --quiet
-  execute: ({ params, options }) =>
-    options.quiet ? 'OK' : `OK, I'll remind you in ${params.minutes} min: ${params.note}`,
-})
-```
+| **Plugin** | Your project *is* the Root plugin; split into child plugins as it grows | Entry in `package.json#zhin.entry` (`plugin.ts`); child instances mounted in `zhin.config.yml` (`plugins:`) |
+| **Command** | Runs when a user sends `/hello` or `/remind 10 break` | `commands/<name>/index.ts` |
+| **Middleware** | Sees every message — keyword replies, rate limits, filters | `middlewares/<name>/index.ts` |
+| **Adapter** | Connects one platform; one adapter can host many account `endpoints` | `@zhin.js/adapter-*`, configured in `zhin.config.yml` |
+| **AI Agent** *(optional)* | Answers messages no command matched and calls your tools | `tools/<name>/index.ts`, enabled via `npx zhin setup --ai` |
+| **Console** | Browser admin UI for logs, config, and test messages | Local `/sandbox` or [console.zhin.dev](https://console.zhin.dev) |
 
 ```text
 my-bot/
-├── package.json      # "zhin" field: entry and child plugins (what is installed)
-├── zhin.config.yml   # port, platform credentials, models (how it is configured)
-├── .env              # secrets: HTTP_TOKEN, API keys
-├── plugin.ts         # entry: definePlugin()
+├── package.json      # "zhin" field: entry ("./plugin.ts") and capability features
+├── zhin.config.yml   # configVersion: 2 — mounted plugins, platform endpoints, HTTP port
+├── .env              # secrets: HTTP_TOKEN, platform tokens, API keys
+├── plugin.ts         # Root plugin entry: definePlugin()
 ├── commands/         # /commands — folder path = command name
 ├── middlewares/      # runs on every message
 ├── components/       # reusable JSX message cards
-├── schedules/        # scheduled jobs
+├── schedules/        # cron scheduled jobs
 ├── tools/            # functions the AI may call (optional)
 └── pages/            # custom Console pages
 ```
 
-Next: [Write your first plugin](./docs/en/getting-started/first-plugin.md) · [All convention folders](./docs/en/authoring/conventions.md) · [Commands in depth](./docs/en/authoring/commands.md)
+Next: [Core concepts at a glance](./docs/en/getting-started/concepts.md) · [Write your first reusable plugin](./docs/en/getting-started/first-plugin.md) · [All convention folders](./docs/en/authoring/conventions.md) · [Commands in depth](./docs/en/authoring/commands.md)
 
-### Connect a real platform
+## Connect a Real Platform
 
 ```bash
 npx zhin setup --adapters   # pick platforms, enter credentials
@@ -202,39 +194,55 @@ pnpm install && pnpm dev
 
 Each adapter has a maturity tier (Stable / Advanced / Experimental) and its own setup guide: [Adapters overview](./docs/en/adapters/index.md).
 
-### Add AI (optional)
+## Add AI (Optional)
 
 ```bash
-npx zhin setup --ai   # choose a provider (OpenAI, Ollama, …) and write the config
+npx zhin setup --ai   # pick a provider preset (OpenAI, DeepSeek, Qwen, Anthropic, Ollama…)
 pnpm install && pnpm dev
 ```
 
-The wizard installs the Agent runtime and the tool / prompt features, and writes something like this to `zhin.config.yml` (keys go to `.env`):
+The wizard installs `@zhin.js/agent` along with `@zhin.js/tool` and `@zhin.js/prompt-section`, enables AI in `zhin.config.yml`, and generates an `ai.plan.yml` (with API keys stored in `.env`) that is automatically seeded into the runtime catalog on first startup:
 
 ```yaml
+# zhin.config.yml
 ai:
   enabled: true
-  providers:
-    openai-main:
-      sdk: openai
-      apiKey: ${AI_API_KEY}
-  agents:
-    zhin:
-      provider: openai-main
-      model: gpt-4o-mini
 ```
 
-Messages that match no command now go to the model — in DMs by default, in groups with an `ai:` prefix or a mention. Give it abilities by adding files to `tools/`; permissions, approvals and file/network access are enforced by framework policy, not by the prompt.
+```yaml
+# ai.plan.yml (generated by `npx zhin setup --ai`, seeded on first start)
+version: 1
+services:
+  - id: openai
+    label: OpenAI
+    driver: openai
+accounts:
+  - id: openai-main
+    label: OpenAI Default
+    serviceId: openai
+    authKind: api_key
+    apiKey: ${OPENAI_API_KEY}
+profiles:
+  - id: default-chat
+    label: Default Chat
+    serviceId: openai
+    accountId: openai-main
+    model: gpt-4o-mini
+defaults:
+  chatProfileId: default-chat
+```
+
+Messages that match no command now go to the model — in DMs by default, in groups with an `ai:` prefix or `@mention`. Add files to `tools/` to give it new capabilities.
 
 > Claude subscription and Antigravity are experimental channels: 实验 · 不受官方支持 · 可能违反供应商条款 · 风险由使用者自行承担 (experimental · not officially supported · may violate vendor terms · use at your own risk). See [AI providers](./docs/ai/providers.md).
 
 Next: [AI overview](./docs/en/ai/index.md) · [Agent tools, Skills and Prompt Sections](./docs/en/authoring/agent-tools.md) · [AI Agent learning path](./docs/en/paths/ai-agent.md)
 
-### Install only what you need
+## Install Only What You Need
 
 | Tier | Install | Adds |
 |------|---------|------|
-| **IM** (default) | `zhin.js` + an adapter; `@zhin.js/cli` for dev | Plugins, commands, middleware, components, adapters, hot reload — **<10MB** |
+| **IM** (default) | `zhin.js` + an adapter; `@zhin.js/cli` for dev | Built-in commands, components, middleware, schedules, hot reload — **<10MB** |
 | **AI** | `npx zhin setup --ai` (installs `@zhin.js/agent` and features) | Agent, sessions, memory, tools, compaction |
 | **Provider** | `@ai-sdk/openai` etc. | Calls to a specific LLM vendor |
 | **MCP** | `@modelcontextprotocol/sdk` | Use tools from external MCP servers |
@@ -243,33 +251,31 @@ Next: [AI overview](./docs/en/ai/index.md) · [Agent tools, Skills and Prompt Se
 
 Detailed table and sizes: [Install tiers](./docs/en/getting-started/index.md#install-tiers). Since 1.1, `ZhinAgent` / `AIService` are imported from `zhin.js/agent` / `zhin.js/ai`, not from `zhin.js`.
 
-## Documentation
+## For Operators and Group Owners (No Code)
 
-**Operators & group owners**
+Once a bot is deployed, day-to-day operations happen in [console.zhin.dev](https://console.zhin.dev):
 
-| I want to… | Start here |
-|------------|------------|
-| Run the bot without code | [Operator & Group Admin Guide](./docs/en/customer/index.md) · [Live demo](https://demo.zhin.dev) |
-| Manage it in the browser | [Console path](./docs/en/paths/console.md) · [Console reference](./docs/en/console/index.md) |
-| Set up group welcomes, reminders, feeds | [Solutions by outcome](./docs/en/solutions/index.md) |
-| Check why the bot didn't reply | [Find where a message stopped](./docs/en/troubleshooting/messages.md) |
+- **Monitor & chat**: Check online status across accounts, read group history, and send messages.
+- **No-code configuration**: Enable plugins, edit schema-validated config forms, and configure group welcomes or scheduled reminders in the Task Center.
+- **Guardrails & emergency stop**: Approve AI-drafted announcements or risky moderation actions before they run, replay AI decisions, or mute/stop the bot with one click.
 
-**Developers**
+👉 Full guide: [Operator & Group Admin Guide](./docs/en/customer/index.md) · [Console path](./docs/en/paths/console.md) · [Solutions by outcome](./docs/en/solutions/index.md)
+
+## Documentation Map
 
 | I want to… | Start here |
 |------------|------------|
 | Understand what Zhin is | [What is Zhin.js](./docs/en/getting-started/introduction.md) · [Core concepts](./docs/en/getting-started/concepts.md) |
 | Run a bot for the first time | [Quick start](./docs/en/getting-started/index.md) · [Examples](./docs/en/examples/index.md) |
-| Write plugins | [First plugin](./docs/en/getting-started/first-plugin.md) · [definePlugin](./docs/en/authoring/define-plugin.md) · [Plugin delivery (test & publish)](./docs/en/authoring/plugin-delivery.md) |
-| Connect platforms | [Adapters](./docs/en/adapters/index.md) · [Configuration](./docs/en/configuration/index.md) |
-| Use Chinese or English | [Project, personal and Console languages](./docs/en/configuration/localization.md) |
-| Add AI | [AI overview](./docs/en/ai/index.md) · [Agent deep dive](./docs/en/ai/agent.md) |
+| Write commands, cards & plugins | [First plugin](./docs/en/getting-started/first-plugin.md) · [definePlugin](./docs/en/authoring/define-plugin.md) · [Plugin delivery](./docs/en/authoring/plugin-delivery.md) |
+| Connect platforms | [Adapters](./docs/en/adapters/index.md) · [Configuration](./docs/en/configuration/index.md) · [Localization](./docs/en/configuration/localization.md) |
+| Add AI & tools | [AI overview](./docs/en/ai/index.md) · [Agent tools](./docs/en/authoring/agent-tools.md) · [Agent deep dive](./docs/en/ai/agent.md) |
 | Deploy and operate | [Production](./docs/en/operations/production.md) · [Console](./docs/en/console/index.md) · [Troubleshooting](./docs/en/troubleshooting/index.md) |
 | Understand the internals | [Architecture](./docs/en/concepts/architecture.md) · [Plugin model](./docs/en/concepts/plugin-model.md) · [Message flow](./docs/en/concepts/message-flow.md) · [Hot reload (Generations)](./docs/en/concepts/generation-lifecycle.md) |
 
-Full site: [zhin.js.org](https://zhin.js.org) (Chinese by default; switch language in the nav).
+Full site: [zhin.js.org](https://zhin.js.org) (Chinese by default; switch language in the top navigation).
 
-## CLI cheat sheet
+## CLI Cheat Sheet
 
 ```bash
 npx zhin setup            # add platforms, AI, database to an existing project
@@ -285,9 +291,9 @@ All commands: [CLI reference](./docs/en/cli/index.md).
 
 | Package | What it is |
 |---------|------------|
-| [`zhin.js`](./packages/im/zhin) | The package you install — re-exports everything plugin authors need |
+| [`zhin.js`](./packages/im/zhin) | The main package — re-exports everything plugin authors need |
 | [`create-zhin-app`](./packages/toolkit/create-zhin) | Project scaffolder (`npm create zhin-app`) |
-| [`@zhin.js/cli`](./basic/cli) | The `zhin` command: run, set up, diagnose, publish |
+| [`@zhin.js/cli`](./basic/cli) | The `zhin` command: run, set up, diagnose, migrate, publish |
 | [`@zhin.js/agent`](./packages/im/agent) | Optional AI Agent runtime with security policies |
 | [`@zhin.js/adapter-*`](./plugins/adapters) | Platform adapters |
 | [`plugins/`](./plugins) | Official plugins: games, reminders, RSS, calendar, moderation… |

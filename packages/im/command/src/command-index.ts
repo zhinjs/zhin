@@ -162,6 +162,8 @@ export interface CommandMenuConfig {
   readonly keyword?: string;
 }
 
+const DEFAULT_MENU_KEYWORDS = new Set(['菜单', '帮助', 'help', 'menu']);
+
 export class CommandIndex {
   readonly $projection = 'zhin.command-index/1' as const;
   readonly #commands: readonly CommandRecord[];
@@ -523,9 +525,18 @@ export class CommandIndex {
     const { commandPrefix, keyword, locale } = context;
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (text === undefined) return undefined;
-    if (text === keyword) return this.#buildMenu({}, context);
-    if (text.startsWith(keyword + ' ')) {
-      const key = text.slice(keyword.length + 1).trim();
+    const spaceIndex = text.search(/\s/u);
+    const firstToken = spaceIndex === -1 ? text : text.slice(0, spaceIndex);
+    const normalizedFirst = !commandPrefix && firstToken.startsWith('/')
+      ? firstToken.slice(1)
+      : firstToken;
+    const matchedDefaultAlias = this.#menu?.keyword === undefined
+      && DEFAULT_MENU_KEYWORDS.has(normalizedFirst.toLowerCase());
+    if (text === keyword || (matchedDefaultAlias && spaceIndex === -1)) return this.#buildMenu({}, context);
+    if (text.startsWith(keyword + ' ') || (matchedDefaultAlias && spaceIndex !== -1)) {
+      const key = (text.startsWith(keyword + ' ')
+        ? text.slice(keyword.length + 1)
+        : text.slice(spaceIndex + 1)).trim();
       const args = key.split(/\s+/u);
       const flag = args.indexOf('--page');
       if (flag !== -1) {
@@ -555,17 +566,23 @@ export class CommandIndex {
     const children = node.children
       .map((childId) => snapshot.tree.get(childId))
       .filter((child): child is NonNullable<typeof child> => !!child);
+    const effectiveCommands = targetId === root
+      && directCommands.length === 0
+      && this.#commands.length > 0
+      && this.#commands.length <= MENU_PAGE_SIZE
+      ? this.#commands
+      : directCommands;
 
-    const pages = Math.max(1, Math.ceil((directCommands.length + children.length) / MENU_PAGE_SIZE));
+    const pages = Math.max(1, Math.ceil((effectiveCommands.length + children.length) / MENU_PAGE_SIZE));
     const invocation = `${commandPrefix}${keyword}${pluginKey ? ` ${pluginKey}` : ''}`;
     if (page > pages) return { value: commandMessages(locale, 'pageOutOfRange', { pages, command: invocation }) };
     const offset = (page - 1) * MENU_PAGE_SIZE;
-    const pageCommands = directCommands.slice(offset, offset + MENU_PAGE_SIZE);
-    const pageChildren = children.slice(Math.max(0, offset - directCommands.length), Math.max(0, offset + MENU_PAGE_SIZE - directCommands.length));
+    const pageCommands = effectiveCommands.slice(offset, offset + MENU_PAGE_SIZE);
+    const pageChildren = children.slice(Math.max(0, offset - effectiveCommands.length), Math.max(0, offset + MENU_PAGE_SIZE - effectiveCommands.length));
 
     const displayKey = pluginKey ?? node.instanceKey;
     const lines: string[] = [commandMessages(locale, 'menuTitle', { plugin: displayKey })];
-    if (pages > 1) lines.push(commandMessages(locale, 'menuSummary', { page, pages, commands: directCommands.length, plugins: children.length }));
+    if (pages > 1) lines.push(commandMessages(locale, 'menuSummary', { page, pages, commands: effectiveCommands.length, plugins: children.length }));
 
     if (pageCommands.length > 0) {
       lines.push('');
@@ -586,7 +603,7 @@ export class CommandIndex {
       }
     }
 
-    if (directCommands.length === 0 && children.length === 0) {
+    if (effectiveCommands.length === 0 && children.length === 0) {
       lines.push('');
       lines.push(commandMessages(locale, 'emptyMenu'));
     }
@@ -612,7 +629,7 @@ export class CommandIndex {
         name: pluginKey ? `${pluginKey}.${child.instanceKey}` : child.instanceKey,
         description: child.metadata?.displayName ?? child.instanceKey,
       }))),
-      commandTotal: directCommands.length, pluginTotal: children.length, hint, text,
+      commandTotal: effectiveCommands.length, pluginTotal: children.length, hint, text,
       appearance: Object.freeze(readMenuAppearance(config?.menuStyle)),
     });
     if (!snapshot.resources.get(root)?.has(htmlRendererToken.id)) return { value: text, menu };

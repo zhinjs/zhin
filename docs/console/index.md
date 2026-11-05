@@ -109,6 +109,10 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | Marketplace | `GET /pub/marketplace/search`、`/pub/marketplace/detail/*`、`GET /api/marketplace/updates` | 插件市场（plugins.json + npmmirror）与更新检查 |
 | Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
 
+实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。
+
+::: details HTTP / RPC 协议状态码与边界契约
+
 会话树的 `preview` 仍是短摘要。按需读取完整用户正文使用 `GET /api/agent/sessions/<encoded-sessionKey>/message?sessionId=<tree.sessionId>&messageId=<positive-safe-integer>`，沿用会话接口的 HTTP 鉴权，响应 `data: { messageId, text }`，不返回图片内容，也不切换分支。会话实例已变化返回 `409`，消息不存在或不是该会话的用户消息返回 `404`，旧 runtime 未提供读取能力返回 `501`；完整正文只限仍保留的消息。
 
 聊天记录接口仅允许 full scope，固定每页最近 50 条 canonical 事件，并按 sequence 升序返回。响应为 `data: { conversation, items, nextBeforeSequence, hasMore }`，加载更早记录时传入排他的 `beforeSequence`。消息事件含完整正文与安全媒体引用，撤回事件含 `messageRef`；其他事件仅返回类型、时间和 sequence，仍计入分页。不会返回本地图片路径、base64 或平台原始数据。未保存记录返回 `404 history_not_recorded`，同一 sessionKey 对应多个父频道／话题返回 `409 conversation_ambiguous`，当前账号地址或存储无法解析返回 `503 history_unavailable`，不以 Agent 内部历史代替。响应禁止缓存；客户端拼接分页前应核对完整 `conversation` 未变化。
@@ -118,8 +122,6 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 用量是供应商报告的输入、输出和缓存／推理分项，缺报不显示为零；分类 token 为估算，不能当作计费分摊。请求正文是在模型 SDK 调用边界捕获的输入，按系统提示、工具定义、消息序列和输出格式展示，不是 HTTP 抓包，也不证明上游已接收。框架发起的重试和降级分别记录；SDK 内部对相同输入的重试合并在同一次语义请求中，不作为逐次 HTTP 尝试记录。旧请求没有正文时不从当前配置重建。
 
 请求正文默认保存在 Host 的 `data/agent-traces`，只记录脱敏文本，图片／音频等二进制仅留占位。默认保留最多 7 天、归档硬上限 64 MiB；容量不足会清理最旧记录，正文过大时保留统计并标记未保存。`ai.agent.recordRequestBodies: false` 可停止新增正文留存。现有 `ZHIN_TRACE_RETENTION_DAYS` / `ZHIN_TRACE_MAX_MB` 配置仍可显式调整保留范围；用量数据库的保留规则独立。过期记录立即停止返回；文件在启动后的维护、写入和既有每小时维护中清理。每个数据目录由一个 Host 进程写入。64 MiB 是归档容量，不是进程内存上限；原子替换期间可能短暂存在临时副本，并发回合和待写队列也会占用内存。
-
-实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。
 
 插件写操作都采用“计划后提交”：Console 先调用 `plugin:plan-install`、
 `plugin:plan-update` 或 `plugin:plan-uninstall` 展示变更，再携带当前配置 revision 提交。
@@ -132,6 +134,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 默认值只采用外层声明；对象联合、混合类型、`oneOf` 和其他无法完整表达的组合仍回退源码。
 表单投影不改变原始 JSON Schema 校验。保存值不在选项内（如环境引用）时应保留原值，
 由用户明确选择替换；只改该字段，不删除未选日历后端或其他实例的配置。此展示需要配套 Console 更新。
+:::
 
 ## Agent 工作台运行策略
 

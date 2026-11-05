@@ -46,6 +46,8 @@ const PROVIDERS = [
     name: 'OpenAI (GPT-4o, 推荐)',
     value: 'openai',
     defaultModel: 'gpt-4o',
+    presetModels: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'o4-mini'],
+    defaultInput: ['text', 'image'] as const,
     hint: '需 OpenAI API Key；国内可用代理 baseUrl',
     keyPlaceholder: 'sk-...',
   },
@@ -53,6 +55,8 @@ const PROVIDERS = [
     name: 'Anthropic (Claude)',
     value: 'anthropic',
     defaultModel: 'claude-sonnet-4-20250514',
+    presetModels: ['claude-sonnet-4-20250514', 'claude-3-7-sonnet-20250219', 'claude-3-5-haiku-20241022'],
+    defaultInput: ['text', 'image'] as const,
     hint: '需 Anthropic API Key',
     keyPlaceholder: 'sk-ant-...',
   },
@@ -60,13 +64,26 @@ const PROVIDERS = [
     name: 'DeepSeek',
     value: 'deepseek',
     defaultModel: 'deepseek-chat',
+    presetModels: ['deepseek-chat', 'deepseek-reasoner'],
+    defaultInput: ['text'] as const,
     hint: '性价比高，国内直连',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    name: '通义千问 (Qwen / DashScope)',
+    value: 'qwen',
+    defaultModel: 'qwen-plus',
+    presetModels: ['qwen-plus', 'qwen-max', 'qwen-turbo'],
+    defaultInput: ['text'] as const,
+    hint: '阿里云百炼兼容模式，国内直连',
     keyPlaceholder: 'sk-...',
   },
   {
     name: 'Moonshot (月之暗面)',
     value: 'moonshot',
     defaultModel: 'moonshot-v1-8k',
+    presetModels: ['moonshot-v1-8k', 'moonshot-v1-32k', 'kimi-k2-0711-preview'],
+    defaultInput: ['text'] as const,
     hint: 'Kimi 同款 API',
     keyPlaceholder: 'sk-...',
   },
@@ -74,13 +91,53 @@ const PROVIDERS = [
     name: '智谱 AI (GLM)',
     value: 'zhipu',
     defaultModel: 'glm-4-flash',
+    presetModels: ['glm-4-flash', 'glm-4-plus', 'glm-4.5'],
+    defaultInput: ['text'] as const,
     hint: '国内直连，open.bigmodel.cn',
     keyPlaceholder: '...',
+  },
+  {
+    name: 'SiliconFlow (硅基流动)',
+    value: 'siliconflow',
+    defaultModel: 'deepseek-ai/DeepSeek-V3',
+    presetModels: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'],
+    defaultInput: ['text'] as const,
+    hint: '国内聚合推理平台，api.siliconflow.cn',
+    keyPlaceholder: 'sk-...',
+  },
+  {
+    name: '火山方舟 (Volcengine / 豆包)',
+    value: 'volcengine',
+    defaultModel: 'doubao-1-5-pro-32k-250115',
+    presetModels: ['doubao-1-5-pro-32k-250115', 'deepseek-v3-250324'],
+    defaultInput: ['text'] as const,
+    hint: '字节火山引擎方舟 API',
+    keyPlaceholder: '...',
+  },
+  {
+    name: 'MiniMax (海螺 AI)',
+    value: 'minimax',
+    defaultModel: 'MiniMax-M2.7',
+    presetModels: ['MiniMax-M2.7', 'MiniMax-Text-01'],
+    defaultInput: ['text'] as const,
+    hint: 'MiniMax 官方 API',
+    keyPlaceholder: '...',
+  },
+  {
+    name: 'OpenRouter',
+    value: 'openrouter',
+    defaultModel: 'openai/gpt-4o-mini',
+    presetModels: ['openai/gpt-4o-mini', 'anthropic/claude-3.7-sonnet', 'deepseek/deepseek-chat'],
+    defaultInput: ['text', 'image'] as const,
+    hint: '海外多模型聚合路由，openrouter.ai',
+    keyPlaceholder: 'sk-or-...',
   },
   {
     name: 'Google (Gemini)',
     value: 'google',
     defaultModel: 'gemini-2.5-flash',
+    presetModels: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+    defaultInput: ['text', 'image'] as const,
     hint: '需 Google AI API Key',
     keyPlaceholder: 'AIza...',
   },
@@ -88,6 +145,8 @@ const PROVIDERS = [
     name: 'Ollama (本地部署)',
     value: 'ollama',
     defaultModel: 'qwen3:8b',
+    presetModels: ['qwen3:8b', 'llama3.2:latest', 'deepseek-r1:8b'],
+    defaultInput: ['text'] as const,
     hint: '本地运行，无需 API Key；先 ollama pull 模型',
     keyPlaceholder: '',
   },
@@ -95,6 +154,8 @@ const PROVIDERS = [
     name: 'OpenAI 兼容接口 (vLLM / OneAPI / SiliconFlow 等)',
     value: 'openai-compatible',
     defaultModel: '',
+    presetModels: [] as const,
+    defaultInput: ['text'] as const,
     hint: '任何兼容 OpenAI API 的服务，需填 baseUrl',
     keyPlaceholder: 'sk-...',
   },
@@ -111,9 +172,15 @@ export function providerSdkFor(name: string): string {
       return 'ollama';
     case 'deepseek':
       return 'deepseek';
+    case 'minimax':
+      return 'minimax';
     case 'openai-compatible':
     case 'moonshot':
     case 'zhipu':
+    case 'qwen':
+    case 'siliconflow':
+    case 'openrouter':
+    case 'volcengine':
       return 'openai-compatible';
     default:
       return 'openai';
@@ -127,6 +194,10 @@ export function providerSdkFor(name: string): string {
 export const PROVIDER_DEFAULT_BASE_URLS: Readonly<Record<string, string>> = Object.freeze({
   zhipu: 'https://open.bigmodel.cn/api/paas/v4',
   moonshot: 'https://api.moonshot.cn/v1',
+  qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  siliconflow: 'https://api.siliconflow.cn/v1',
+  openrouter: 'https://openrouter.ai/api/v1',
+  volcengine: 'https://ark.cn-beijing.volces.com/api/v3',
 });
 
 export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentProvider' | 'providers'>): string {
@@ -144,8 +215,8 @@ export function materializeAIPlan(config: AISetupConfig): Record<string, unknown
     const driver = provider.sdk ?? providerSdkFor(name);
     const models = provider.models?.filter(model => model.trim()) ?? [];
     if (!models.length) throw new Error(`A model ID is required for ${name}`);
-    const protocol = driver === 'anthropic' ? 'anthropic-messages' : driver === 'google' ? 'google-generate-content' : 'openai-chat';
-    const baseUrl = provider.baseUrl ?? provider.host;
+    const protocol = driver === 'anthropic' || driver === 'minimax' ? 'anthropic-messages' : driver === 'google' ? 'google-generate-content' : 'openai-chat';
+    const baseUrl = provider.baseUrl ?? provider.host ?? PROVIDER_DEFAULT_BASE_URLS[name];
     services[name] = { driver, ...(baseUrl ? { options: { baseUrl } } : {}),
       models: Object.fromEntries(models.map(id => [id, { id, kinds: ['language'], protocol, input: provider.capabilities?.input ?? ['text'], ...(provider.capabilities?.streaming !== undefined ? { streaming: provider.capabilities.streaming } : {}), ...(provider.capabilities?.toolCalling !== undefined ? { toolCalling: provider.capabilities.toolCalling } : {}) }])) };
     const env = provider.apiKey?.match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$/u);
@@ -235,9 +306,10 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
 
   let providerConfig: Record<string, any> = {};
   const envVarName = `AI_API_KEY`;
+  let selectedModelChoice: string = '__custom__';
 
   if (provider === 'ollama') {
-    const ollamaConfig = await inquirer.prompt([
+    const { host, modelPreset } = await inquirer.prompt([
       {
         type: 'input',
         name: 'host',
@@ -250,21 +322,38 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
         },
       },
       {
-        type: 'input',
-        name: 'model',
+        type: 'select',
+        name: 'modelPreset',
         message: wizardText(locale, "模型名称（需已 ollama pull）:"),
+        choices: [
+          ...providerInfo.presetModels.map(m => ({ name: m, value: m })),
+          { name: locale === 'en' ? 'Custom model ID...' : '自定义模型 ID...', value: '__custom__' },
+        ],
         default: providerInfo.defaultModel,
-        validate: (input: string) => (input.trim() ? true : wizardText(locale, "模型名不能为空")),
-      }
+      },
     ]);
+    selectedModelChoice = modelPreset;
+    let resolvedModel = modelPreset;
+    if (modelPreset === '__custom__') {
+      const { customModel } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'customModel',
+          message: wizardText(locale, "模型名称（需已 ollama pull）:"),
+          default: providerInfo.defaultModel,
+          validate: (input: string) => (input.trim() ? true : wizardText(locale, "模型名不能为空")),
+        },
+      ]);
+      resolvedModel = customModel.trim();
+    }
     providerConfig = {
-      host: ollamaConfig.host.trim(),
-      models: [ollamaConfig.model.trim()],
+      host: host.trim(),
+      models: [resolvedModel],
     };
   } else {
     const defaultBaseUrl = PROVIDER_DEFAULT_BASE_URLS[provider];
     const requireBaseUrl = providerSdkFor(provider) === 'openai-compatible';
-    const cloudConfig = await inquirer.prompt([
+    const { apiKey } = await inquirer.prompt([
       {
         type: 'input',
         name: 'apiKey',
@@ -272,19 +361,46 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
         validate: (input: string) => {
           if (!input.trim()) return wizardText(locale, "API Key 不能为空（可稍后在 .env 中填写 AI_API_KEY）");
           return true;
-        }
+        },
       },
-      {
-        type: 'input',
-        name: 'model',
-        message: provider === 'openai-compatible'
-          ? wizardText(locale, "模型名称（服务端实际部署的模型 ID）:")
-          : wizardText(locale, "模型名称:"),
-        default: providerInfo.defaultModel || undefined,
-        validate: provider === 'openai-compatible'
-          ? (input: string) => (input.trim() ? true : wizardText(locale, "模型名称不能为空"))
-          : undefined,
-      },
+    ]);
+
+    let resolvedModel = providerInfo.defaultModel;
+    if (providerInfo.presetModels.length > 0) {
+      const { modelPreset } = await inquirer.prompt([
+        {
+          type: 'select',
+          name: 'modelPreset',
+          message: wizardText(locale, "模型名称:"),
+          choices: [
+            ...providerInfo.presetModels.map(m => ({ name: m, value: m })),
+            { name: locale === 'en' ? 'Custom model ID...' : '自定义模型 ID...', value: '__custom__' },
+          ],
+          default: providerInfo.defaultModel,
+        },
+      ]);
+      selectedModelChoice = modelPreset;
+      resolvedModel = modelPreset;
+    } else {
+      selectedModelChoice = '__custom__';
+    }
+
+    if (selectedModelChoice === '__custom__') {
+      const { customModel } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'customModel',
+          message: provider === 'openai-compatible'
+            ? wizardText(locale, "模型名称（服务端实际部署的模型 ID）:")
+            : wizardText(locale, "模型名称:"),
+          default: providerInfo.defaultModel || undefined,
+          validate: (input: string) => (input.trim() ? true : wizardText(locale, "模型名称不能为空")),
+        },
+      ]);
+      resolvedModel = customModel.trim() || providerInfo.defaultModel;
+    }
+
+    const { baseUrl } = await inquirer.prompt([
       {
         type: 'input',
         name: 'baseUrl',
@@ -299,33 +415,41 @@ export async function configureAI(locale: 'zh-CN' | 'en' = 'zh-CN'): Promise<AIS
               return true;
             }
           : undefined,
-      }
+      },
     ]);
 
     providerConfig = {
       apiKey: `\${${envVarName}}`,
-      models: [cloudConfig.model?.trim() || providerInfo.defaultModel],
-      ...(cloudConfig.baseUrl?.trim() ? { baseUrl: cloudConfig.baseUrl.trim() } : {}),
+      models: [resolvedModel],
+      ...(baseUrl?.trim() ? { baseUrl: baseUrl.trim() } : {}),
     };
 
-    (providerConfig as any).__envApiKey = cloudConfig.apiKey.trim();
+    (providerConfig as any).__envApiKey = apiKey.trim();
   }
 
   console.log('');
-  const featureChoices = [
-    { name: wizardText(locale, "未知"), value: 'unknown' },
-    { name: wizardText(locale, "支持"), value: 'yes' },
-    { name: wizardText(locale, "不支持"), value: 'no' },
-  ];
-  const features = await inquirer.prompt([
-    { type: 'select', name: 'toolCalling', message: wizardText(locale, "模型支持工具调用？"), choices: featureChoices },
-    { type: 'select', name: 'streaming', message: wizardText(locale, "模型支持流式输出？"), choices: featureChoices },
-    { type: 'checkbox', name: 'input', message: wizardText(locale, "模型支持的输入类型："),
-      choices: ['text', 'image', 'audio', 'video', 'file'].map(value => ({ name: value, value, ...(value === 'text' ? { checked: true, disabled: true } : {}) })) },
-  ]);
-  providerConfig.capabilities = { input: ['text', ...(features.input ?? []).filter((value: string) => value !== 'text')],
-    ...(features.toolCalling === 'unknown' ? {} : { toolCalling: features.toolCalling === 'yes' }),
-    ...(features.streaming === 'unknown' ? {} : { streaming: features.streaming === 'yes' }) };
+  if (selectedModelChoice !== '__custom__') {
+    providerConfig.capabilities = {
+      input: providerInfo.defaultInput ? [...providerInfo.defaultInput] : ['text'],
+      toolCalling: true,
+      streaming: true,
+    };
+  } else {
+    const featureChoices = [
+      { name: wizardText(locale, "未知"), value: 'unknown' },
+      { name: wizardText(locale, "支持"), value: 'yes' },
+      { name: wizardText(locale, "不支持"), value: 'no' },
+    ];
+    const features = await inquirer.prompt([
+      { type: 'select', name: 'toolCalling', message: wizardText(locale, "模型支持工具调用？"), choices: featureChoices },
+      { type: 'select', name: 'streaming', message: wizardText(locale, "模型支持流式输出？"), choices: featureChoices },
+      { type: 'checkbox', name: 'input', message: wizardText(locale, "模型支持的输入类型："),
+        choices: ['text', 'image', 'audio', 'video', 'file'].map(value => ({ name: value, value, ...(value === 'text' ? { checked: true, disabled: true } : {}) })) },
+    ]);
+    providerConfig.capabilities = { input: ['text', ...(features.input ?? []).filter((value: string) => value !== 'text')],
+      ...(features.toolCalling === 'unknown' ? {} : { toolCalling: features.toolCalling === 'yes' }),
+      ...(features.streaming === 'unknown' ? {} : { streaming: features.streaming === 'yes' }) };
+  }
   console.log(chalk.blue(wizardText(locale, "⚡ 配置 AI 触发方式")));
   console.log(chalk.gray(wizardText(locale, "  决定 Endpoint 何时自动调用大模型；命令（/ 开头）不会被 AI 拦截。")));
 

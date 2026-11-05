@@ -4,7 +4,16 @@ title: 结构化存储与用量查询
 
 # 结构化存储与用量查询
 
-启用 Agent 并使用 SQLite、MySQL 或 PostgreSQL 时，运行时会自动保存每轮对话及模型调用的用量。记录独立于日志级别，也不依赖 Workroom 或 trace 归档。Console 的数据库页可以查看这些表；图表、统计指令和专用查询 API 尚未提供。
+Zhin 的所有持久化存储由 Host 统一管理（默认使用开箱即用的 `.zhin/data.sqlite`，也可在 `zhin.config.yml` 中配置为 PostgreSQL、MySQL 等，见[配置参考 · database](../configuration/index.md#database)）。
+
+## 插件如何使用宿主存储（开发者速览）
+
+插件不需要自己建立数据库连接或拼接全局表名，而是通过 Host 提供的两类隔离存储接口读写数据：
+
+1. **轻量键值存储（KV Store）**：适合保存插件配置状态、开关、游标等小规模键值数据，自动按插件实例 `owner` 隔离，可在 Console「数据库」页面直接查看与编辑。
+2. **结构化数据表（`DatabaseFeature` 表声明）**：插件声明逻辑表名与列结构后，Host 会在底层数据库自动创建带插件实例前缀的物理表，并提供支持单事务原子提交（CAS / 认领 / 回执）的存储访问接口，避免多实例冲突。
+
+此外，启用 Agent 并使用 SQLite、MySQL 或 PostgreSQL 时，运行时会自动保存每轮对话及模型调用的结构化用量与会话事件。记录独立于日志级别，也不依赖 Workroom 或 trace 归档。Console 的数据库页可以查看这些表；图表、统计指令和专用查询 API 尚未提供。
 
 ```yaml
 ai:

@@ -5,7 +5,7 @@ import { readableLinkTarget, decodeReadableEntities as decodeCommonEntities } fr
 
 const DEFAULT_MAX_INPUT = 2 * 1024 * 1024;
 
-const BLOCK_TAGS = ['script', 'style', 'svg', 'nav', 'footer', 'header', 'form'] as const;
+const BLOCK_TAGS = ['script', 'style', 'svg', 'nav', 'form'] as const;
 
 function findTagClose(html: string, from: number): number {
   const gt = html.indexOf('>', from);
@@ -199,7 +199,7 @@ export function htmlToFallbackText(html: string, options?: HtmlToPlainTextOption
     else if (tag === 'pre') { pre = !closing; out.push('\n'); }
     else if (tag === 'br' || tag === 'hr') out.push('\n');
     else if (/^h[1-6]$/u.test(tag)) out.push(closing ? '\n\n' : `\n${'#'.repeat(Number(tag[1]))} `);
-    else if (['p', 'div', 'section', 'article', 'table', 'blockquote'].includes(tag)) {
+    else if (['p', 'div', 'section', 'article', 'table', 'blockquote', 'header', 'footer'].includes(tag)) {
       if (closing) out.push(tag === 'p' ? '\n\n' : '\n');
     }
   }

@@ -32,7 +32,7 @@ zhin 的契合点：**IM 框架和 AI 是可拆开的**——这个案例里 AI 
 ┌────────────┐   ws    ┌─────────────────────────────────┐
 │  浏览器     │ ──────▶ │  zhin（life-assistant-bot）      │
 │  Console   │  API    │  ├─ Sandbox 适配器（本地调试）    │
-└────────────┘  :8086  │  ├─ ZhinAgent（对话/工具/压缩）  │
+└────────────┘  :8068  │  ├─ ZhinAgent（对话/工具/压缩）  │
                        │  ├─ knowledge_search（知识库）   │
 ┌────────────┐         │  ├─ 三层 Markdown 记忆           │
 │  Ollama    │ ◀────── │  └─ Assistant Runtime（定时任务）│
@@ -44,23 +44,48 @@ zhin 的契合点：**IM 框架和 AI 是可拆开的**——这个案例里 AI 
 
 ```yaml
 # zhin.config.yml
+configVersion: 2
+
+http:
+  host: 127.0.0.1
+  port: 8068
+  token: ${HTTP_TOKEN}
+
 plugins:
-  sandbox:
-    endpoints:
-      - id: assistant
-        owner: assistant-user
+  sandbox: '@zhin.js/adapter-sandbox'
+
+sandbox:
+  endpoints:
+    - id: local-sandbox
+      owner: assistant-user
 
 ai:
-  providers:
-    ollama:
-      sdk: ollama
-      host: "http://localhost:11434"
-  agents:
-    zhin:
-      provider: ollama
-      model: qwen3:8b
+  enabled: true
   knowledge:
     baseDir: ./knowledge        # 我的笔记目录，knowledge_search 自动检索
+```
+
+```yaml
+# ai.plan.yml（由 npx zhin setup --ai 生成，首次启动自动导入）
+version: 1
+services:
+  - id: ollama
+    label: Ollama (Local)
+    driver: ollama
+    baseUrl: http://127.0.0.1:11434
+accounts:
+  - id: ollama-local
+    label: Local Ollama
+    serviceId: ollama
+    authKind: none
+profiles:
+  - id: default-chat
+    label: Local Qwen
+    serviceId: ollama
+    accountId: ollama-local
+    model: qwen3:8b
+defaults:
+  chatProfileId: default-chat
 ```
 
 ## 踩过的坑
@@ -70,13 +95,13 @@ ai:
 2. **提醒任务想"别烦我"**：assistant 的定时任务默认失败也通知。
    `assistant.defaults.notifyOnFailure: false` 关掉。
 3. **Console 连不上**：token 就是 `.env` 里的 `HTTP_TOKEN`，
-   Console 里填 `http://127.0.0.1:8086` + 该 token 即可，不用配任何账号系统。
+   Console 里填 `http://127.0.0.1:8068` + 该 token（或直接打开 `http://127.0.0.1:8068/sandbox`）即可，不用配任何账号系统。
 
 ## 后续扩展方向
 
 - 加 `@zhin.js/adapter-qq` → 同一个助手进 QQ
 - `pnpm add @zhin.js/speech` → 语音输入/播报
-- 换云模型只需改 `ai.providers`，本地/云可并存做分流
+- 换云模型只需在 `ai.plan.yml` 或 Console 里新增云端 Service / Profile，本地与云端模型可并存分流
 
 ## 下一步
 

@@ -66,15 +66,18 @@ async function connection(options: Options): Promise<Connection> {
   if (tokenEnvironment !== 'ZHIN_CONSOLE_TOKEN' && process.env[tokenEnvironment] === undefined) {
     throw usage(`指定的 Console token 环境变量 ${tokenEnvironment} 未设置`);
   }
+  const envToken = tokenEnvironment === 'ZHIN_CONSOLE_TOKEN'
+    ? (process.env.ZHIN_CONSOLE_TOKEN ?? process.env.HTTP_TOKEN)
+    : process.env[tokenEnvironment];
   const explicit = options.host ?? options.live;
-  if (explicit) return { host: explicit, token: process.env[tokenEnvironment], tokenEnvironment };
+  if (explicit) return { host: explicit, token: envToken, tokenEnvironment };
   const discovered = await loadHostHttpConfig(process.cwd());
   if (!discovered) {
     throw new ConfigCommandError({ status: 'not-connected',
       message: `未找到 Host 地址；请用 --host <url> 指定运行中的 Host。${NOT_CONNECTED_MESSAGE}` }, CONFIG_EXIT_CODES.notConnected);
   }
-  // ZHIN_CONSOLE_TOKEN (or --token-env) wins over the project's http.token.
-  return { host: discovered.baseUrl, token: process.env[tokenEnvironment] || discovered.token || undefined, tokenEnvironment };
+  // ZHIN_CONSOLE_TOKEN / HTTP_TOKEN (or --token-env) wins over the project's http.token.
+  return { host: discovered.baseUrl, token: envToken || discovered.token || undefined, tokenEnvironment };
 }
 
 /** Pre-mutation requests: a lost reply means nothing was written, so it is not `unknown`. */

@@ -41,7 +41,9 @@ Using `examples/minimal-bot/package.json` as an example:
 }
 ```
 
-The fields are strictly validated by `@zhin.js/runtime`'s manifest parser (`packages/im/runtime/src/manifest.ts`). Any invalid field throws a `ManifestValidationError` listing all issues. After parsing, the `package-contract` module enforces the current engine and Feature API semver contracts and throws `PackageContractError` on a contract violation.
+::: note Manifest and contract validation
+`@zhin.js/runtime` validates `package.json#zhin` at startup (throwing `ManifestValidationError` on invalid fields and `PackageContractError` on engine or Feature API semver mismatches) so configuration errors surface immediately.
+:::
 
 | Field | Type | Description |
 |-------|------|-------------|

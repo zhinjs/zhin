@@ -33,6 +33,19 @@ declare module '@zhin.js/plugin-runtime' {
 }
 
 /**
+ * Returned by `defineComponent.withConfig<Config>()`: fixes the plugin config type while
+ * keeping props and result generic.
+ *
+ * @public
+ */
+export type ComponentDefiner<TConfig> = <
+  TProps = unknown,
+  TResult = unknown,
+>(
+  definition: Omit<ComponentDefinition<TProps, TResult, TConfig>, '$feature'>,
+) => Readonly<ComponentDefinition<TProps, TResult, TConfig>>;
+
+/**
  * Define a renderable component for the `components/` convention directory.
  * The render function may return synchronously or asynchronously.
  *
@@ -58,6 +71,13 @@ export function defineComponent<
   }
   return Object.freeze({ $feature: componentBrand, ...definition });
 }
+
+/**
+ * Fix the plugin config type first, then define the component.
+ */
+defineComponent.withConfig = function withConfig<TConfig = unknown>(): ComponentDefiner<TConfig> {
+  return (definition) => defineComponent(definition);
+};
 
 /** @internal Runtime validation for convention-discovered modules. */
 export function parseComponentDefinition(value: unknown): ComponentDefinition {

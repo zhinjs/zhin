@@ -9,10 +9,12 @@ description: "插件可以从框架取用的资源：主动发消息、数据库
 
 ## 怎么取用
 
-| 在哪里 | 怎么写 |
-| --- | --- |
-| `plugin.ts` 的 `setup` | `context.resources.use(token)` |
-| 命令、工具、定时任务执行时 | 执行参数里的 `use(token)` |
+| 在哪里 | 检查可选 token（无需 `try/catch`） | 取出 token |
+| --- | --- | --- |
+| `plugin.ts` 的 `setup` | `context.resources.has(token)` | `context.resources.use(token)` |
+| 命令、中间件、组件、工具、定时任务执行时 | 执行参数里的 `context.has(token)` | 执行参数里的 `context.use(token)` |
+
+> 提示：所有内置能力上下文（命令、中间件、组件、Agent 工具、定时任务）都直接提供 `has(token)` 和 `use(token)`。访问可选的 Host token（如 `databaseHostToken`、`aiCompletionToken`）时，先用 `context.has(token)` 判断即可，无需包裹 `try/catch`。
 
 ```ts
 // plugin.ts：每天 9 点往指定群发"早安"

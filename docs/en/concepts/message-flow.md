@@ -61,7 +61,7 @@ The actual code locations for each step:
    }
    ```
 
-3. **Lease and Message**. `ImRuntime.endpointEvents.receive` is the sole public ingress port and delegates events to the instance-owned `InboundRuntime`. That owner acquires the event generation lease (in-flight events are not interrupted by reloads, see [Generation and Lifecycle](./generation-lifecycle.md)) and controls message construction, inbound middleware, handlers, interactions, command and Agent fallback routing, plus action scopes for notice/request/system side events. Message events construct a `Message` with a lazy `$client` getter for the current platform SDK instance, `$reply(content)`, and `$replyFrom(owner, content)`; after dispatch ends, reading `$client` or calling `$reply` fails because the operation scope has ended. The former flat `ImRuntime.receiveEndpointEvent()` method is removed.
+3. **Lease and Message**. `ImRuntime.endpointEvents.receive` is the sole public ingress port and delegates events to the instance-owned `InboundRuntime`. That owner acquires the event generation lease (in-flight events are not interrupted by reloads, see [Generation and Lifecycle](./generation-lifecycle.md)) and controls message construction, inbound middleware, handlers, interactions, command and Agent fallback routing, plus action scopes for notice/request/system side events. Message events construct a `Message` with a lazy `$client` getter for the current platform SDK instance, `$reply(content)`, and `$replyFrom(owner, content)`; after dispatch ends, reading `$client` or calling `$reply` fails because the operation scope has ended.
 
 4. **Inbound middleware**. `MiddlewareIndex` sorts by `phase` (`before-dispatch` first, `after-dispatch` later) and `order`, wrapping each around the terminal action:
 
@@ -138,7 +138,7 @@ Unread inbound conversation messages are consumed from that same Store by the Ag
 
 The current Turn registers `replyTo`, forward, and media values as scoped `TurnReference`s. The Agent exposes only `inspect_conversation_reference(reference, depth?)`: it checks local facts first, then resolves through the lease-bound Endpoint. Cross-conversation, cross-Endpoint, and expired-Turn access fails closed. Important unread notices are attached to the next user Turn as explicitly untrusted conversation data, never as system/developer instructions. The session cursor advances only after a successful Turn; failed Turns retain the events. High-frequency reactions/pokes are aggregated, while login, QR, disconnect, and other process events remain diagnostics only.
 
-**Outbound**: AI reply → `OutputElement[]` → canonical `Segment[]` (`publishOutboundElements`) → `$reply` (Segment is first-class `SendContent`) → `normalizeOutboundPayload` (html→image/text, keyboard, media negotiation) → endpoint. Negotiation is driven by the adapter definition's `segments.outboundMedia` declaration (`'url' | 'path' | 'base64' | 'upload'`): only `url-or-text` endpoints degrade non-URL media to text centrally; other adapters materialize along the platform-optimal path (URL pass-through / base64 / platform upload / disk read). Segments without `data.media` are dropped with a warning -- the legacy `data.url/file/base64` shapes no longer exist.
+**Outbound**: AI reply → `OutputElement[]` → canonical `Segment[]` (`publishOutboundElements`) → `$reply` (Segment is first-class `SendContent`) → `normalizeOutboundPayload` (html→image/text, keyboard, media negotiation) → endpoint. Negotiation is driven by the adapter definition's `segments.outboundMedia` declaration (`'url' | 'path' | 'base64' | 'upload'`): only `url-or-text` endpoints degrade non-URL media to text centrally; other adapters materialize along the platform-optimal path (URL pass-through / base64 / platform upload / disk read). Media segments without `data.media` are dropped with a warning.
 
 ## User Interaction: Confirmation, Selection, and Input
 
@@ -152,19 +152,17 @@ Claims match the complete Endpoint, conversation, parent, thread and sender, and
 
 ## Endpoint runtime ownership
 
-Each `ImRuntime` exposes one instance-owned `EndpointRuntime` as the sole runtime entry to the generation-owned `AdapterIndex`. Endpoint listing, capability lookup, Console-addressed delivery, reactions, recalls, edits, typing, and management operations acquire and release the current snapshot lease there. Upper-layer Hosts depend on narrow ports containing only the operations they use. `ImRuntime` retains the canonical inbound gateway and delegates every send to its private `OutboundDeliveryRuntime`, so Console-addressed delivery still follows `render -> before.sendMessage -> AdapterIndex.send` and cannot bypass rendering or middleware.
+Each `ImRuntime` exposes one instance-owned `EndpointRuntime` as the sole runtime entry to the generation-owned `AdapterIndex`. Endpoint listing, capability lookup, Console-addressed delivery, reactions, recalls, edits, typing, and management operations acquire and release the current snapshot lease there. Upper-layer Hosts depend on narrow ports containing only the operations they use. `ImRuntime` retains the canonical inbound gateway and delegates every send to its private `OutboundDeliveryRuntime`, so Console-addressed delivery still follows `render -> before.sendMessage -> AdapterIndex.send` and cannot bypass rendering or middleware. Internal composition uses `im.endpoints.*`.
 
-The former flat `ImRuntime.listEndpoints()`, `sendEndpointMessage()`, and related methods are removed. Internal composition uses `im.endpoints.*` without forwarding aliases or a second Endpoint authority.
-
-Observers use the read-only `im.messageEvents.subscribe()` source. Console and Inbox can consume bounded message projections but cannot publish or forge Core runtime events. The former flat `im.onMessage()` method is removed.
+Observers use the read-only `im.messageEvents.subscribe()` source. Console and Inbox can consume bounded message projections but cannot publish or forge Core runtime events.
 
 ## Endpoint 1:N Expansion
 
-When an adapter plugin instance configuration declares `endpoints: [{name, ...}]`, `AdapterIndex` expands it into N independent endpoint records (for configuration merge rules see [Config as Data](./config-as-data.md)):
+When an adapter plugin instance configuration declares `endpoints: [{ id, ... }]`, `AdapterIndex` expands it into N independent endpoint records (for configuration merge rules see [Config as Data](./config-as-data.md)):
 
-- Each record's capability ID is in the form `<slot id>~<name>`, with its own lifecycle (start/open/close/stop) and online status;
+- Each record's capability ID is in the form `<slot id>~<id>`, with its own lifecycle (start/open/close/stop) and online status;
 - The `$adapter` on a message carries the expanded identifier (e.g., `icqq~8596238`), and replies are routed back to the corresponding account via the same path;
-- The Console side addresses by `(adapter, endpointId)`. `AdapterIndex.resolve` matches in order: local name, capability ID, owner path segment, and the Endpoint's runtime name (e.g., ICQQ's uin). When multiple matches occur, the exact endpoint name takes priority.
+- The Console side addresses by `(adapter, endpointId)`. `AdapterIndex.resolve` matches in order: local `id`, capability ID, owner path segment, and the Endpoint's runtime name (e.g., ICQQ's uin). When multiple matches occur, the exact endpoint `id` takes priority.
 
 Therefore, "two QQ accounts each receiving their own messages and sending their own replies" requires no special code -- just configure two endpoint entries.
 

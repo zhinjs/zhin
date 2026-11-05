@@ -2,87 +2,83 @@
 layout: home
 ---
 
-<ZhinHero tagline="One bot for your groups on QQ, WeChat, Discord, Telegram and 20+ other platforms: operators run it from the browser, developers write it once in TypeScript. Small by default — add AI when you need it." />
+<ZhinHero tagline="Write once in TypeScript. Run your bot on QQ, WeChat, Lark, DingTalk, Discord, Telegram, and 20+ chat platforms. File-based commands, cross-platform JSX cards, leak-free hot reload, and opt-in AI agents — managed from the browser." />
 
 <ZhinTerminal>
-<b>$</b> npm create zhin-app my-bot -y<br>
-<b>$</b> cd my-bot && pnpm dev<br>
-<span>✔ Bot started — no platform account or model key required</span>
+<b>$</b> npm create zhin-app my-bot -y && cd my-bot && pnpm dev<br>
+<span>✔ Bot started — open http://127.0.0.1:8068/sandbox to chat immediately (no account or model key needed)</span>
 </ZhinTerminal>
 
-<ZhinAudienceSplit heading="Which kind of user are you?" intro="One bot, two ways to use it: operators manage it in the browser, developers extend it in code. Pick your role, then a goal." :audiences="[
-  { eyebrow: 'CUSTOMER · OPERATORS / GROUP OWNERS', title: 'Run your bot without code', who: 'Group owners, community operators, support leads', description: 'Read messages, change settings, install features and manage welcomes and reminders in Console. Risky actions wait for approval.', links: [ { text: 'Connect Console', href: '/en/customer/#connect-console' }, { text: 'Change settings without code', href: '/en/customer/#no-code-config' }, { text: 'Group ops, announcements and approvals', href: '/en/customer/#group-ops' }, { text: 'Online demo', href: 'https://demo.zhin.dev' } ], primary: { text: 'Operator guide', href: '/en/customer/' } },
-  { eyebrow: 'DEVELOPER · PLUGIN / ADAPTER AUTHORS', title: 'Extend your bot in TypeScript', who: 'People who write commands, plugins, AI tools and adapters', description: 'One command to scaffold, a feature is a file, hot reload on save — one codebase on 20+ platforms.', links: [ { text: 'Quick start', href: '/en/getting-started/' }, { text: 'First plugin', href: '/en/getting-started/first-plugin' }, { text: 'Adapter authoring', href: '/en/authoring/adapters' }, { text: 'Agent tools', href: '/en/authoring/agent-tools' } ], primary: { text: 'Start building', href: '/en/getting-started/' } },
-]" />
-
-<ZhinRolePaths heading="What do you want to do?" intro="You don't need the full architecture first. Pick a goal — each path fits in one sitting." :items="[
-  { eyebrow: 'RUN', title: 'Run your first bot', description: 'No platform account or model key — get a reply in the browser Sandbox.', href: '/en/getting-started/', action: 'Start the quick start' },
-  { eyebrow: 'BUILD', title: 'Write your own features', description: 'Commands, keyword replies, schedules, AI tools — drop a file in a folder and it works.', href: '/en/getting-started/first-plugin', action: 'Write a first plugin' },
-  { eyebrow: 'SHIP', title: 'Connect platforms and go live', description: 'Pick adapters for QQ / WeChat / Discord and more, then deploy, monitor and upgrade.', href: '/en/adapters/', action: 'Choose a platform' },
-  { eyebrow: 'OPERATE', title: 'Run it without code', description: 'Operators and group owners: read messages, change settings, install features, manage welcomes and announcement approvals in Console.', href: '/en/customer/', action: 'Operator guide' },
+<ZhinRolePaths heading="Where do you want to start?" intro="You don't need to learn the whole architecture upfront. Pick a goal — each path fits in one sitting." :items="[
+  { eyebrow: 'STEP 1 · 30s RUN', title: 'Run your first bot', description: 'Zero platform accounts or API keys — get your first reply in the local /sandbox or Remote Console.', href: '/en/getting-started/', action: '10-min Quick Start' },
+  { eyebrow: 'STEP 2 · BUILD', title: 'Write commands, cards & AI tools', description: 'Commands, cross-platform JSX button cards, middleware, cron jobs, and AI tools — drop a file in a folder and save to hot-reload.', href: '/en/authoring/define-plugin', action: 'Plugin Authoring' },
+  { eyebrow: 'STEP 3 · SHIP', title: 'Connect platforms & go live', description: 'Run npx zhin setup --adapters for QQ / WeChat / Lark / Discord and deploy to production.', href: '/en/adapters/', action: 'Choose an adapter' },
+  { eyebrow: 'NO-CODE · OPERATE', title: 'Operators & group owners', description: 'Read messages, edit form settings, configure welcomes & reminders, and approve risky actions in Console.', href: '/en/customer/', action: 'Operator Guide' },
 ]" />
 
 <ZhinFeatureGrid heading="Why Zhin.js" :features="[
-  { title: 'One codebase, 20+ platforms', desc: 'QQ, WeChat, WeCom, DingTalk, Lark, Discord, Telegram, Slack, KOOK, LINE… Your code sees one kind of message; adapters handle the platform differences.' },
-  { title: 'A feature is a file', desc: '<code>commands/hello/index.ts</code> is the <code>/hello</code> command. Middleware, components, schedules and AI tools work the same way — no registration boilerplate.' },
-  { title: 'No restarts while coding', desc: 'Save to hot-reload. In-flight messages finish on the old version, and if the new code throws, the old version keeps serving.' },
-  { title: 'Develop with zero accounts', desc: 'The built-in Sandbox is a simulated chat window. Build and test everything without any platform account or model key.' },
-  { title: 'Manage it in the browser', desc: 'Open <code>console.zhin.dev</code>, enter your address and token: send test messages, read logs, edit config, manage plugins. Nothing to deploy.' },
-  { title: 'Opt-in AI', desc: 'The default install is an IM core under 10MB. Run <code>npx zhin setup --ai</code> to add models, tools, memory and MCP.' },
+  { title: 'One codebase, 20+ platforms', desc: 'QQ, WeChat, WeCom, DingTalk, Lark, Discord, Telegram, Slack, KOOK, LINE… Your code sees one unified message; adapters handle platform differences.' },
+  { title: 'A feature is a file', desc: '<code>commands/hello/index.ts</code> is the <code>/hello</code> command. Middleware, JSX components, schedules, and AI tools work the same way — zero registration boilerplate.' },
+  { title: 'Generation-isolated hot reload', desc: 'Save to hot-reload. In-flight messages finish on the old version, and if new code throws on startup, the previous version keeps serving.' },
+  { title: 'Develop with zero accounts', desc: 'Open <code>http://127.0.0.1:8068/sandbox</code> for an instant simulated chat window — build and test everything without a platform account or model key.' },
+  { title: 'Managed in the browser', desc: 'Connect <code>console.zhin.dev</code> to your bot: send test messages, inspect logs, edit schema forms, and manage plugins with zero frontend deployment.' },
+  { title: 'Opt-in AI (<10MB core)', desc: 'The default install is a lean IM core under 10MB. Run <code>npx zhin setup --ai</code> to add LLMs, tools, 3-layer memory, and MCP.' },
 ]" />
 
-<ZhinDuo heading="What a bot looks like">
+<ZhinDuo heading="What building with Zhin.js feels like">
 <template #left>
 
-**Smallest form**: one `bot.ts` is the whole bot.
+**File-based command + Cross-platform JSX card** (`commands/poll/index.tsx`): renders native interactive buttons where supported, and automatically degrades to numbered text choices on plain-text platforms.
 
-```ts
-import { definePlugin } from 'zhin.js';
+```tsx
 import { defineCommand } from 'zhin.js/command';
 
-export default definePlugin({
-  name: 'my-bot',
-  setup({ addCommand }) {
-    addCommand('hello', defineCommand({
-      description: 'Say hello',
-      execute: () => 'Hello from Zhin!',
-    }));
-  },
+export default defineCommand({
+  description: 'Start a quick poll',
+  params: { topic: { type: 'text', default: 'Ship v1.2 today?' } },
+  execute: ({ params }) => (
+    <card title={`📊 ${params.topic}`}>
+      <text>Click a button (or reply with its number):</text>
+      <button label="👍 Yes" onClick={(m) => `${m.$sender.name} voted Yes`} />
+      <button label="🤔 Wait" onClick={(m) => `${m.$sender.name} voted Wait`} />
+    </card>
+  ),
 });
 ```
 
-**As it grows**: one file per capability, auto-registered from convention folders.
+**Auto-discovered convention folders**: no manual wiring, hot-reloaded on save.
 
 ```text
 my-bot/
-├── plugin.ts                 # entry: definePlugin()
-├── commands/hello/index.ts   # the /hello command
-├── middlewares/…             # keyword replies, filters
-├── tools/…                   # tools the AI can call (optional)
-└── zhin.config.yml           # port, platform credentials, models
+├── plugin.ts                 # Root plugin entry: definePlugin()
+├── commands/poll/index.tsx   # /poll command (auto-discovered)
+├── middlewares/…             # runs on every message
+├── tools/weather/index.ts    # tools the AI can call (optional)
+└── zhin.config.yml           # configVersion: 2 (plugins & platforms)
 ```
 
 </template>
 <template #right>
 
-**Running in 10 minutes** (no accounts or keys):
+**Up and running in 3 steps** (no platform accounts or API keys):
 
 ```bash
 npm create zhin-app my-bot -y
 cd my-bot && pnpm dev
 ```
 
-1. Open [console.zhin.dev](https://console.zhin.dev)
-2. Enter the address printed in the terminal and `HTTP_TOKEN` from `.env`
-3. Send `/hello` in the Sandbox
+1. **Instant local Sandbox**: Open `http://127.0.0.1:8068/sandbox` and send `/hello`
+2. **Remote Console**: Or open [console.zhin.dev](https://console.zhin.dev) with `http://127.0.0.1:8068` and `HTTP_TOKEN` from `.env`
+3. **Hot-reload on save**: Edit any file under `commands/` and test immediately without restarting
 
-**Next**
+**Where to go next**
 
-- Operator or group owner, no code? → [Operator guide](/en/customer/)
-- Confused by a term? → [Core concepts](/en/getting-started/concepts)
-- Write your own command → [First plugin](/en/getting-started/first-plugin)
-- Connect a real platform → [Adapters](/en/adapters/)
-- Add AI → [AI overview](/en/ai/)
+- New to Zhin terms? → [Core concepts at a glance](/en/getting-started/concepts)
+- Add commands, JSX cards, and AI tools → [Quick Start (with 1→2 examples)](/en/getting-started/)
+- Extract a reusable sub-plugin package → [Write your first plugin](/en/getting-started/first-plugin)
+- Connect Discord / Telegram / QQ / Lark → [Platform adapters](/en/adapters/)
+- Add LLMs and tools → [AI overview](/en/ai/)
+- Non-coder operator or group admin? → [Operator guide](/en/customer/)
 
 </template>
 </ZhinDuo>

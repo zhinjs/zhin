@@ -429,4 +429,56 @@ describe('installAgentHost optional Workroom', () => {
       await rm(project, { recursive: true, force: true });
     }
   });
+
+  it('auto-seeds initial inference graph from ai.plan.yml when the database graph is empty', async () => {
+    const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-ai-plan-seed-')));
+    try {
+      await writeFile(
+        join(project, 'ai.plan.yml'),
+        [
+          'version: 1',
+          'services:',
+          '  openai:',
+          '    driver: openai',
+          '    models:',
+          '      gpt-4o:',
+          '        id: gpt-4o',
+          '        kinds: [language]',
+          '        protocol: openai-chat',
+          '        input: [text]',
+          'accounts:',
+          '  openai:',
+          '    service: openai',
+          '    auth:',
+          '      method: api-key',
+          '      source: env://AI_API_KEY',
+          'profiles:',
+          '  openai:gpt-4o:',
+          '    account: openai',
+          '    model: gpt-4o',
+          'purposes:',
+          '  chat:',
+          '    profile: openai:gpt-4o',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const inference = inferenceFor(project);
+      expect(await inference.repository.readGraph({ rootId: inference.rootId })).toBeUndefined();
+      const installer = installAgentHost({
+        runtime: {} as never,
+        workroomStorageMode: 'file',
+        im: {} as never,
+        projectRoot: project,
+        inference,
+      });
+      await installer(context(new Scope()));
+      const seeded = await inference.repository.readGraph({ rootId: inference.rootId });
+      expect(seeded).toBeDefined();
+      expect(seeded?.revision).toBe(1);
+      expect(Object.values(seeded?.services ?? {}).map(s => s.driver.id)).toEqual(['openai']);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
 });

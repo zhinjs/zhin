@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { register } from 'node:module';
 import { isAbsolute, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -88,24 +88,65 @@ async function firstExistingTypeScript(
   const resolvedJs = resolveAgainstParent(specifier, parentURL);
   if (!resolvedJs) return undefined;
 
-  // Prefer compiled lib/ over strip-types (.ts): many packages use syntax that
-  // Node strip-only mode rejects (parameter properties, enums, etc.).
-  const libCandidate = compiledLibPath(resolvedJs);
-  if (libCandidate && await exists(libCandidate)) {
-    return pathToFileURL(libCandidate).href;
-  }
-
   const bases = [
     resolvedJs.replace(/\.jsx$/u, ''),
     resolvedJs.replace(/\.[cm]?js$/u, ''),
   ];
+  let tsCandidate: string | undefined;
+  let tsMtimeMs: number | undefined;
   for (const base of bases) {
     for (const ext of ['.ts', '.tsx', '.mts', '.cts'] as const) {
       const candidate = `${base}${ext}`;
-      if (await exists(candidate)) return pathToFileURL(candidate).href;
+      const mtime = await fileMtimeMs(candidate);
+      if (mtime !== undefined) {
+        tsCandidate = candidate;
+        tsMtimeMs = mtime;
+        break;
+      }
+    }
+    if (tsCandidate !== undefined) break;
+  }
+
+  // Prefer compiled lib/ over strip-types (.ts) when lib/ is up to date:
+  // many packages use syntax that Node strip-only mode rejects (parameter properties, enums, etc.).
+  // When the TypeScript source is newer than the compiled lib/ file, prefer the fresh source
+  // so development mode does not silently load stale build artifacts.
+  const libCandidate = compiledLibPath(resolvedJs);
+  if (libCandidate) {
+    const libMtimeMs = await fileMtimeMs(libCandidate);
+    if (libMtimeMs !== undefined) {
+      if (
+        !isCiEnvironment()
+        && tsCandidate !== undefined
+        && tsMtimeMs !== undefined
+        && tsMtimeMs > libMtimeMs
+        && await isStripTypesCompatible(tsCandidate)
+      ) {
+        return pathToFileURL(tsCandidate).href;
+      }
+      return pathToFileURL(libCandidate).href;
     }
   }
-  return undefined;
+
+  return tsCandidate ? pathToFileURL(tsCandidate).href : undefined;
+}
+
+function isCiEnvironment(): boolean {
+  const ci = process.env.CI;
+  return Boolean(ci && ci !== 'false' && ci !== '0');
+}
+
+async function isStripTypesCompatible(tsPath: string): Promise<boolean> {
+  if (tsPath.endsWith('.tsx') || tsPath.endsWith('.jsx')) return false;
+  try {
+    const source = await readFile(tsPath, 'utf8');
+    if (/(?:^|[\s;{}])(?:export\s+)?(?:const\s+)?enum\s+[A-Za-z_$]/u.test(source)) return false;
+    if (/(?:^|[\s;{}])(?:export\s+)?namespace\s+[A-Za-z_$]/u.test(source)) return false;
+    if (/\bconstructor\s*\([^)]*\b(?:private|protected|public|readonly)\s+/u.test(source)) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function compiledLibPath(sourceJsPath: string): string | undefined {
@@ -125,11 +166,10 @@ function resolveAgainstParent(specifier: string, parentURL: string | undefined):
   }
 }
 
-async function exists(path: string): Promise<boolean> {
+async function fileMtimeMs(path: string): Promise<number | undefined> {
   try {
-    await access(path);
-    return true;
+    return (await stat(path)).mtimeMs;
   } catch {
-    return false;
+    return undefined;
   }
 }

@@ -5,9 +5,11 @@ description: "从零写一个可配置的 /ping 子插件，挂载到你的 Bot 
 
 # 编写第一个插件
 
-这一页带你写一个叫 `ping-pong` 的插件：用户发 `/ping`，Bot 回复一段**可以在配置里修改**的文字。
+如果只是给自己的 Bot 加命令、卡片或 AI 工具，你其实**不需要**新建子插件包——直接在 `my-bot`（Root 插件）的 `commands/`、`tools/` 目录里放文件就能自动生效（见 [快速开始 · 1→2 进阶](./index.md#4-修改并观察热重载-在你的-bot-里直接加功能-1→2)）。
 
-做完后你会掌握插件的四个基本组成——清单、入口、命令、配置——以及怎样把插件挂到 Bot 上。大约需要 15 分钟。
+**什么时候需要看本页？** 当你想把一组能力**抽离成带独立配置 Schema、可跨多个 Bot 复用、或准备发布到 npm 的独立子插件包**时。
+
+这一页带你从零写一个叫 `ping-pong` 的子插件包（`plugins/ping-pong`）：用户发 `/ping`，Bot 回复一段**可以在配置里修改**的文字。做完后你会掌握独立插件包的四个基本组成——清单、入口、命令、配置 Schema——以及怎样在 `zhin.config.yml` 中把它挂载到 Bot 上。大约需要 15 分钟。
 
 ::: tip 开始前
 - 已经按 [快速开始](./index.md) 创建并跑通了 `my-bot`（没有的话先运行 `npm create zhin-app my-bot -y`）。
@@ -186,7 +188,7 @@ pnpm install
 cd ../..
 ```
 
-然后在 **Bot 的** `package.json` 里声明依赖（`zhin.plugins` 保持为空，实例由主配置声明）（与已有内容合并，不要覆盖）：
+然后在 **Bot 的** `package.json` 里确保已声明 `@zhin.js/command` 依赖（`zhin.plugins` 保持为空数组，插件实例统一在 `zhin.config.yml` 中挂载；与已有内容合并，不要覆盖整个文件）：
 
 ```json
 {
@@ -199,10 +201,7 @@ cd ../..
 }
 ```
 
-- `package` 指向插件目录，必须以 `./` 开头，不能用 `..` 跳出项目。
-- `instanceKey` 是这个插件在 Bot 里的名字，只能用小写字母、数字和连字符。
-
-最后在 **Bot 的** `zhin.config.yml` 里，以 `instanceKey` 为键填写配置：
+最后在 **Bot 的** `zhin.config.yml` 里，在 `plugins:` 下挂载该子插件，并以实例名（`instanceKey`）为顶层键填写它的配置：
 
 ```yaml
 configVersion: 2
@@ -211,6 +210,10 @@ plugins:
 ping-pong:
   reply: pong!
 ```
+
+- `plugins:` 下的键 `ping-pong` 是这个插件在 Bot 里的实例名（`instanceKey`），只能用小写字母、数字和连字符。
+- 值 `'./plugins/ping-pong'` 指向本地子插件目录（必须以 `./` 开头，不能用 `..` 跳出项目；如果是 npm 包则写包名）。
+- 顶层的 `ping-pong:` 区块就是传给该实例的业务配置，会与 `schema.json` 默认值合并。
 
 ::: details 为什么 Bot 也要依赖 @zhin.js/command？
 `npm create zhin-app` 生成的项目已把 `plugins/*` 纳入 pnpm workspace。Bot 直接依赖 `@zhin.js/command`，子插件通过 peer 使用同一份；不要再把它加到子插件的 `dependencies` 里。Zhin 要求每个能力包只来自一个物理目录。

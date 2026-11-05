@@ -153,7 +153,9 @@ Render it from a command with `component('status-card', { title: '…' })`. Plat
 
 ### schedules/: scheduled jobs
 
-`schedules/<name>/index.ts` default-exports `defineSchedule(...)`. `execute(ctx)` gets the plugin config and `use(token)` for that run; `addSchedule` in `plugin.ts` registers the same definition.
+`schedules/<name>/index.ts` default-exports `defineSchedule(...)`. `execute(ctx)` gets the plugin config and `use(token)` / `has(token)` for that run; `addSchedule` in `plugin.ts` registers the same definition.
+
+When a capability in a convention folder needs a strongly typed plugin config `TConfig`, alongside `defineCommand.withConfig<TConfig>()`, `defineMiddleware.withConfig<TConfig>()`, `defineComponent.withConfig<TConfig>()` and `defineAgentTool.withConfig<TConfig>()`, handlers, schedules and MCP servers also provide `defineHandler.withConfig<TConfig>()`, `defineSchedule.withConfig<TConfig>()` and `defineMcp.withConfig<TConfig>()`.
 
 A job has no incoming message to reply to; send messages with proactive delivery (see [definePlugin · Send messages proactively](./define-plugin.md)). Data that must survive restarts belongs in persistent storage such as the database — never cache `ctx` or client objects. Full examples: [Schedule Feature](https://github.com/zhinjs/zhin/blob/main/packages/im/schedule-feature/README.md) and the [persistent reminder plugin](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/README.md).
 

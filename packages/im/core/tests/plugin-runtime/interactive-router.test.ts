@@ -67,6 +67,26 @@ describe('Interactive fallback numbering', () => {
     expect(router.resolvePayload({ ...message('1'), conversation: otherConversation } as Message)).toBe('room-b-1');
   });
 
+  it('resets per-conversation numbering back to 1 once all fallbacks in that conversation expire', () => {
+    let now = 1000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const router = new RuntimeInteractiveRouter({ fallbackTtlMs: 100, numberingScope: 'conversation' });
+      expect(router.rememberFallback(conversation, 1, { '1': 'first-1', '2': 'first-2' })).toEqual({
+        '1': 'first-1',
+        '2': 'first-2',
+      });
+      now += 101;
+      expect(router.rememberFallback(conversation, 1, { '1': 'next-1', '2': 'next-2' })).toEqual({
+        '1': 'next-1',
+        '2': 'next-2',
+      });
+      expect(router.resolvePayload(message('1'))).toBe('next-1');
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('survives HMR of an unrelated plugin while evicting when the owning plugin reloads', () => {
     const root = rootPluginId();
     const gamePlugin = childPluginId(root, 'game');

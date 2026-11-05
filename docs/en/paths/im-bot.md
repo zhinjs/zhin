@@ -101,7 +101,7 @@ pnpm install
 pnpm dev
 ```
 
-The wizard asks which platform to connect, then updates `package.json#zhin.plugins`, `zhin.config.yml`, and `.env` together. Account secrets go only into `.env`; the config file keeps `${VAR}` references.
+The wizard asks which platform to connect, then updates `package.json` (adding the adapter dependency), `zhin.config.yml` (mounting the instance under `plugins:` and writing `endpoints` settings), and `.env` together. Account secrets go only into `.env`; the config file keeps `${VAR}` references.
 
 The `/roll` command and the notification need no changes: commands don't depend on a specific platform, so moving from Sandbox to QQ, Discord, or Slack leaves your code as is. Per-platform setup is in [Platform adapters](../adapters/index.md).
 
@@ -114,7 +114,7 @@ The `/roll` command and the notification need no changes: commands don't depend 
 
 ## Common pitfalls
 
-- **Config in the wrong place**: `zhin.config.yml` holds values only; which plugins are installed lives in `package.json#zhin.plugins`.
+- **Config in the wrong place**: in `configVersion: 2`, mounted plugin instances are declared under `plugins:` in `zhin.config.yml` and their settings live in the matching top-level block; `package.json#zhin` only declares `entry` and capability `features`.
 - **Bypassing the send path**: send proactive messages through `outboundHostToken`; don't keep an adapter instance and call its send method yourself.
 - **A missing cron field**: schedules need six fields with seconds first; a five-field expression such as `0 9 * * *` is rejected.
 

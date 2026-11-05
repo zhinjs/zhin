@@ -16,9 +16,10 @@ export { FakeDatabaseRootHost, FakeOutboundRootHost, type FakeOutboundCall } fro
 export { FakePlugin, createFakePlugin, runPluginSetup, resolvePluginConfig, PluginConfigValidationError, fakeResource,
   type FakePluginOptions, type RunPluginSetupOptions, type FakeResource, type FakeRegisteredFeature } from './fake-plugin.js';
 export { fakeOf } from './partial.js';
-export { createFakeMessage, createCommandContext, runCommand, runMiddleware, runHandler,
+export { createFakeMessage, createFakeInteraction, createCommandContext, runCommand, runMiddleware, runHandler,
   createToolContext, runTool, toolOriginFromMessage,
-  type FakeMessage, type RunToolOptions, type FakeMessageInit, type RunCommandOptions, type RunMiddlewareResult } from './fake-runners.js';
+  type FakeMessage, type FakeSentDelivery, type FakeInteraction, type FakeInteractionOptions,
+  type RunToolOptions, type FakeMessageInit, type RunCommandOptions, type RunMiddlewareResult } from './fake-runners.js';
 
 export interface PluginTestKitOptions {
   /** A real, disposable test app with its own package.json, plugin entry, dependencies and mounts. */
@@ -80,32 +81,45 @@ export class PluginTestKit {
       || names.some(name => !/^[a-z][a-z0-9-]*$/.test(name))) {
       throw new TypeError('Test endpoints must have unique lowercase names');
     }
-    this.#defaultEndpoint = names[0]!;
-    const kit = this;
+    const [firstEndpoint = 'test'] = names;
+    this.#defaultEndpoint = firstEndpoint;
+    const recordAttempt = (endpoint: string, request: EndpointSendRequest): string => {
+      const id = `test-${this.#nextDelivery++}`;
+      this.#attempts.push(Object.freeze({
+        endpoint,
+        id,
+        conversation: captureDeliveryValue(request.conversation),
+        payload: captureDeliveryValue(request.payload),
+      }));
+      return id;
+    };
+    const registerOpen = (endpoint: string, spec: Endpoint[typeof endpointSpec]): void => {
+      this.#identities.set(endpoint, spec.identity);
+      this.#sinks.set(endpoint, spec.events);
+    };
+    const releaseEndpoint = (endpoint: string, spec: Endpoint[typeof endpointSpec]): void => {
+      if (this.#sinks.get(endpoint) !== spec.events) return;
+      this.#sinks.delete(endpoint);
+      this.#identities.delete(endpoint);
+    };
     const definitions = new Map<string, AdapterDefinition>(names.map(name => {
       class SyntheticClient {
         readonly synthetic = true;
         send(request: EndpointSendRequest): string {
-          const id = `test-${kit.#nextDelivery++}`;
-          kit.#attempts.push(Object.freeze({ endpoint: name, id,
-            conversation: captureDeliveryValue(request.conversation), payload: captureDeliveryValue(request.payload),
-          }));
-          return id;
+          return recordAttempt(name, request);
         }
       }
       class SyntheticEndpoint extends SyntheticClient implements Endpoint {
         readonly [endpointSpec] = createEndpointSpecification(this, {
           start: signal => signal.throwIfAborted(),
           open: () => {
-            kit.#identities.set(name, this[endpointSpec].identity);
-            kit.#sinks.set(name, this[endpointSpec].events);
+            registerOpen(name, this[endpointSpec]);
           },
           close: () => this.#release(), stop: () => this.#release(),
           send: request => this.send(request),
         });
         #release(): void {
-          if (kit.#sinks.get(name) !== this[endpointSpec].events) return;
-          kit.#sinks.delete(name); kit.#identities.delete(name);
+          releaseEndpoint(name, this[endpointSpec]);
         }
       }
       class SyntheticAdapter extends Adapter<SyntheticEndpoint> {

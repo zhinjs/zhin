@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { Schema } from '../../../../basic/schema/src/index.js';
 import {
   isToolInputSchema,
   parseToolInputSchema,
@@ -78,5 +79,39 @@ describe('Tool input schema', () => {
       ok: true,
       data: { name: 'Ada', limit: 3 },
     });
+  });
+
+  it('supports @zhin.js/schema Schema.object() in defineAgentTool with validation, default filling, and JSON Schema projection', async () => {
+    const tool = defineAgentTool({
+      name: 'test',
+      description: 'test',
+      inputSchema: Schema.object({
+        query: Schema.string().required(),
+        limit: Schema.number().default(5),
+      }),
+      execute(args) {
+        return `${args.query}:${args.limit}`;
+      },
+    });
+
+    const parameters = toolInputSchemaToParameters(tool.inputSchema);
+    expect(parameters.type).toBe('object');
+    expect(parameters.required).toEqual(['query']);
+    expect(parameters.properties).toMatchObject({
+      query: { type: 'string' },
+      limit: { type: 'number', default: 5 },
+    });
+
+    const invalid = parseToolInputSchema(tool.inputSchema, {});
+    expect(invalid.ok).toBe(false);
+
+    const valid = parseToolInputSchema(tool.inputSchema, { query: 'hello' });
+    expect(valid).toEqual({
+      ok: true,
+      data: { query: 'hello', limit: 5 },
+    });
+    if (valid.ok) {
+      expect(await tool.execute(valid.data, {} as never)).toBe('hello:5');
+    }
   });
 });

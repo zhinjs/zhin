@@ -55,6 +55,9 @@ export function renderPageShell(page: {
     .composer input { flex: 1; padding: 0.55rem 0.75rem; border: 1px solid #d4d4d8; border-radius: 8px; }
     .composer button { padding: 0.55rem 0.9rem; border: 0; border-radius: 8px; background: #0f766e; color: #fff; cursor: pointer; }
     .status { font-size: 0.85rem; color: #71717a; }
+    .token-bar { margin-left: auto; display: flex; gap: 0.4rem; align-items: center; }
+    .token-bar input { padding: 0.3rem 0.55rem; border: 1px solid #d4d4d8; border-radius: 6px; font-size: 0.8rem; width: 180px; }
+    .token-bar button { padding: 0.3rem 0.65rem; border: 0; border-radius: 6px; background: #0f766e; color: #fff; font-size: 0.8rem; cursor: pointer; }
   </style>
   <script type="importmap">
   {
@@ -70,7 +73,11 @@ export function renderPageShell(page: {
   <header>
     <a href="/console">Console</a>
     <strong>${escapeHtml(page.title)}</strong>
-    <span class="status" id="ws-status">connecting…</span>
+    <span class="status" id="ws-status">connecting…</span>${isSandbox ? `
+    <form class="token-bar" id="token-form">
+      <input id="token-input" type="password" placeholder="HTTP_TOKEN (可选)" autocomplete="off" />
+      <button type="submit">保存 Token 并重连</button>
+    </form>` : ''}
   </header>
   <div id="root"></div>
   ${isSandbox ? sandboxFallbackScript() : pageModuleScript(page.module)}
@@ -94,14 +101,23 @@ const log = document.getElementById('log');
 const status = document.getElementById('ws-status');
 const form = document.getElementById('form');
 const input = document.getElementById('input');
+const tokenForm = document.getElementById('token-form');
+const tokenInput = document.getElementById('token-input');
 function resolveSandboxWsUrl() {
   // Prefer the stored Host base (Remote Console) over page origin, then
   // flip http(s) → ws(s) from the *resolved base*, not location.protocol —
   // otherwise a https UI page + http Host would produce wss://http-host and fail.
+  const urlToken = typeof location !== 'undefined' && typeof location.search === 'string'
+    ? new URLSearchParams(location.search).get('token')?.trim() || ''
+    : '';
+  if (urlToken && typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function') {
+    localStorage.setItem('zhin_api_token', urlToken);
+  }
   const storedToken = (typeof localStorage !== 'undefined' && localStorage.getItem('zhin_api_token'))
     || (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('zhin_api_token'))
     || '';
   const token = (typeof window !== 'undefined' && window.__ZHIN_API_TOKEN)
+    || urlToken
     || storedToken
     || '';
   const stored = (typeof localStorage !== 'undefined' && localStorage.getItem('zhin_api_base')?.trim())
@@ -112,7 +128,19 @@ function resolveSandboxWsUrl() {
   if (token) url.searchParams.set('token', token);
   return url.href;
 }
-const ws = new WebSocket(resolveSandboxWsUrl());
+if (typeof location !== 'undefined' && typeof location.search === 'string' && new URLSearchParams(location.search).has('token')) {
+  const params = new URLSearchParams(location.search);
+  const t = params.get('token')?.trim();
+  if (t && typeof localStorage !== 'undefined') localStorage.setItem('zhin_api_token', t);
+  params.delete('token');
+  const nextSearch = params.toString();
+  if (typeof history !== 'undefined' && typeof history.replaceState === 'function') {
+    history.replaceState(null, '', location.pathname + (nextSearch ? '?' + nextSearch : '') + (location.hash || ''));
+  }
+}
+if (tokenInput && typeof localStorage !== 'undefined') {
+  tokenInput.value = localStorage.getItem('zhin_api_token') || '';
+}
 function push(kind, text) {
   const el = document.createElement('div');
   el.className = 'bubble ' + kind;
@@ -120,24 +148,44 @@ function push(kind, text) {
   log.appendChild(el);
   log.scrollTop = log.scrollHeight;
 }
-ws.addEventListener('open', () => { status.textContent = 'connected'; });
-ws.addEventListener('close', () => { status.textContent = 'disconnected'; });
-ws.addEventListener('error', () => { status.textContent = 'error (check token / Host)'; });
-ws.addEventListener('message', (event) => {
-  try {
-    const data = JSON.parse(String(event.data));
-    const text = Array.isArray(data.content)
-      ? data.content.map((s) => s?.data?.text ?? '').filter(Boolean).join('\\n')
-      : String(data.content ?? event.data);
-    push('in', text || String(event.data));
-  } catch {
-    push('in', String(event.data));
+let ws;
+function connectWs() {
+  if (ws) {
+    try { ws.close(); } catch {}
   }
-});
+  status.textContent = 'connecting…';
+  ws = new WebSocket(resolveSandboxWsUrl());
+  ws.addEventListener('open', () => { status.textContent = 'connected'; });
+  ws.addEventListener('close', () => { status.textContent = 'disconnected'; });
+  ws.addEventListener('error', () => { status.textContent = 'error (请在右上角输入 .env 中的 HTTP_TOKEN 后重连)'; });
+  ws.addEventListener('message', (event) => {
+    try {
+      const data = JSON.parse(String(event.data));
+      const text = Array.isArray(data.content)
+        ? data.content.map((s) => s?.data?.text ?? '').filter(Boolean).join('\\n')
+        : String(data.content ?? event.data);
+      push('in', text || String(event.data));
+    } catch {
+      push('in', String(event.data));
+    }
+  });
+}
+connectWs();
+if (tokenForm && tokenInput) {
+  tokenForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const nextToken = tokenInput.value.trim();
+    if (typeof localStorage !== 'undefined') {
+      if (nextToken) localStorage.setItem('zhin_api_token', nextToken);
+      else localStorage.removeItem('zhin_api_token');
+    }
+    connectWs();
+  });
+}
 form.addEventListener('submit', (event) => {
   event.preventDefault();
   const text = input.value.trim();
-  if (!text || ws.readyState !== WebSocket.OPEN) return;
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ text, timestamp: Date.now() }));
   push('out', text);
   input.value = '';

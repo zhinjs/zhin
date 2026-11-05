@@ -57,7 +57,28 @@ export default defineMiddleware<Message>({
 
 Sorting compares `phase` → `order` → plugin mount order → capability id.
 
-The middleware argument also has `config` (plugin config), `use(token)` (plugin services), `owner` and `generation`. Declare `adapter` and `$client` gets that platform SDK's type.
+The middleware argument also has `config` (plugin config), `has(token)`, `use(token)` (plugin services), `session`, `signal`, `onAfterDispatch`, `owner` and `generation`. Declare `adapter` and `$client` gets that platform SDK's type.
+
+To give `config` a strong TypeScript type, use `defineMiddleware.withConfig<MyConfig>()`:
+
+```ts
+import { defineMiddleware } from 'zhin.js/middleware';
+import { databaseHostToken } from 'zhin.js';
+
+interface MyConfig {
+  triggerWord: string;
+}
+
+export default defineMiddleware.withConfig<MyConfig>()({
+  handle({ input, config, has, use }, next) {
+    if (input.content === config.triggerWord) {
+      const db = has(databaseHostToken) ? use(databaseHostToken) : undefined;
+      return `Matched trigger word (DB: ${db ? 'connected' : 'none'})`;
+    }
+    return next();
+  },
+});
+```
 
 ### Rewrite or block outgoing messages
 
@@ -133,9 +154,17 @@ When the user clicks, `onClick` runs in the original conversation and its return
 - The callback function never goes to the platform; the framework binds a random token, and native-button platforms report it back via callback.
 :::
 
-### Styled cards
+### Styled cards vs. native `<card>`
 
-Install the component library with `pnpm add @zhin.js/components` and put cards inside `<html>`:
+Zhin supports two ways to build cards, and you can combine both in a single reply:
+
+| Dimension | 1. Native IM segments (`<card>`, `<button>`, etc.) | 2. Visual image cards (`<html><Card>...</Card></html>`) |
+| --- | --- | --- |
+| Tag syntax | Lowercase built-in tags: `<text>`, `<image>`, `<mention>` (or `<at>` semantics), `<face>`, `<card title="..." />`, `<button onClick={...}>` | `<html>` wrapping PascalCase components from `@zhin.js/components`: `<html><Card>...</Card></html>` |
+| How it renders | Maps directly to each platform's native segments (native cards, native buttons; text-only platforms automatically degrade `<button onClick>` to numbered replies) | Rendered to a PNG image via `@zhin.js/components` + `@zhin.js/html-renderer` (HTML platforms display HTML directly; falls back to text when no renderer is installed) |
+| Best for | Native click interactions, mentions, lightweight notices | Dashboards, leaderboards, and multi-row reports with a consistent visual layout |
+
+Side-by-side example (install the component library with `pnpm add @zhin.js/components`):
 
 ```tsx
 // commands/status/index.tsx
@@ -144,10 +173,18 @@ import { Card, CardHeader, Badge } from '@zhin.js/components';
 
 export default defineCommand({
   execute: () => (
-    <html><Card>
-      <CardHeader title={<strong>Service status</strong>} badge={<Badge>online</Badge>} />
-      <p>All good</p>
-    </Card></html>
+    <>
+      {/* 1. Platform-native segments + interactive button */}
+      <card title="Deployment Notice" content="v1.1.0 is ready" />
+      {/* 2. Visual HTML card (rendered to PNG via @zhin.js/html-renderer) */}
+      <html><Card>
+        <CardHeader title={<strong>Service status</strong>} badge={<Badge>online</Badge>} />
+        <p>All good</p>
+      </Card></html>
+      <button onClick={(msg) => `Refresh confirmed by ${msg.sender?.name ?? msg.sender?.id}`}>
+        Refresh status
+      </button>
+    </>
   ),
 });
 ```
@@ -253,6 +290,28 @@ export default defineComponent<{ title: string; url: string; audio?: string }>({
 - With `previewProps`, Console can preview the component with that sample data.
 - Display slots such as `title`, `label` and `value` accept `JSXRenderable`: text, numbers, JSX, arrays, async content or nothing.
 
+### Typed config and plugin services inside components
+
+The second parameter of `render(props, context)` gives components full access to the plugin's `config`, `has(token)` and `use(token)`. Use `defineComponent.withConfig<MyConfig>()` to type the plugin config before declaring the component's Props type:
+
+```tsx
+// components/status-card/index.tsx
+import { defineComponent } from 'zhin.js/component';
+import { databaseHostToken } from 'zhin.js';
+
+interface MyConfig {
+  brandTitle: string;
+}
+
+export default defineComponent.withConfig<MyConfig>()<{ title: string }>({
+  name: 'status-card',
+  render(props, { config, has, use }) {
+    const dbReady = has(databaseHostToken) && Boolean(use(databaseHostToken));
+    return <text>[{config.brandTitle}] {props.title} (DB: {dbReady ? 'ready' : 'none'})</text>;
+  },
+});
+```
+
 ## How it looks on each platform
 
 | Content | Platform shows HTML directly (e.g. Sandbox, Email) | `@zhin.js/html-renderer` installed | Neither |
@@ -287,7 +346,11 @@ Lowercase tags map to segment types and their attributes to segment data, with t
 | --- | --- |
 | `input` | A `Message` inbound; an `OutboundEnvelope` with `replace()` for `target: 'outbound'` |
 | `config` | This plugin's config |
+| `has(token)` | Check if an optional plugin service or Host token is available |
 | `use(token)` | Get plugin services |
+| `session` | Bound single-operation platform session for inbound messages (`adapter`, `endpoint`, `scene`, `sender`, `event`, `reply`) |
+| `signal` | `AbortSignal` for the current operation or generation, cancelled on hot reload or account disconnect |
+| `onAfterDispatch(fn)` | Register a post-dispatch callback in an inbound `before-dispatch` middleware |
 | `owner` / `generation` | Owning plugin and current version number |
 | `$client` | With `adapter` declared, that platform's native client type |
 

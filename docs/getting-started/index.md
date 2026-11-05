@@ -1,6 +1,6 @@
 # 10 分钟跑通第一个 Bot
 
-本页只完成一个结果：在浏览器 Sandbox 里向新 Bot 发送 `/hello`，并收到回复。整个过程不需要平台账号，也不需要模型 Key。
+本页带你从 0 到 1 跑起一个 Zhin Bot，并直接在项目里加上带参数的命令、跨平台 JSX 互动按钮卡片和 AI 工具（1 → 2 进阶）。整个过程不需要平台账号，也不需要模型 Key。
 
 > 还不清楚 Zhin.js 是做什么的？先花 5 分钟读 [Zhin.js 是什么](./introduction.md)。
 
@@ -8,7 +8,6 @@
 
 - 脚手架项目与编译后的 IM 库都需要 Node.js `>=22.19.0`（`@zhin.js/ai` 依赖的 undici 8 要求该版本）。
 - pnpm 9 或更高版本。
-- 能访问 [Remote Console](https://console.zhin.dev)。
 
 ## 1. 创建并启动
 
@@ -18,27 +17,30 @@ cd my-bot
 pnpm dev
 ```
 
-`-y` 表示全部使用默认选项：只接入 Sandbox（浏览器里的模拟聊天窗口）、开启 Console 所需的 HTTP 服务、附带一个 `/hello` 命令，不启用 AI。想在创建时就选择真实平台、数据库或 AI，去掉 `-y` 使用交互向导；之后也可以随时用 `npx zhin setup` 补充。
+`-y` 表示全部使用默认选项：只接入 Sandbox（浏览器里的模拟聊天窗口）、开启 HTTP 服务、附带一个 `/hello` 命令，不启用 AI。想在创建时就选择真实平台、数据库或 AI，去掉 `-y` 使用交互向导；之后也可以随时用 `npx zhin setup` 补充。
 
-## 2. 在 Console 验证
+## 2. 打开调试界面验证
 
-启动日志会打印 API Base；新脚手架当前默认是 `http://127.0.0.1:8068`。以终端实际输出或 `zhin.config.yml` 的 `http.port` 为准。
+启动日志会打印 API Base；新脚手架默认端口是 `http://127.0.0.1:8068`（以终端实际输出或 `zhin.config.yml` 的 `http.port` 为准）。你可以任选以下一种方式验证：
 
-1. 打开 [console.zhin.dev](https://console.zhin.dev)。
-2. 填入终端显示的 API Base。
-3. Token 使用项目 `.env` 中的 `HTTP_TOKEN`。创建项目时终端只显示打码后的 Token 和它的存放位置，不会打印完整值，避免进入 CI 日志。
-4. 打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`。
+- **方式 A：本地内置 Sandbox（最快，零配置）**
+  直接在浏览器打开 `http://127.0.0.1:8068/sandbox`，输入 `/hello` 并发送，立即看到回复。
+- **方式 B：Remote Console 管理后台（完整运维与调试能力）**
+  1. 打开 [console.zhin.dev](https://console.zhin.dev)。
+  2. 填入终端显示的 API Base（如 `http://127.0.0.1:8068`）。
+  3. Token 使用项目 `.env` 中的 `HTTP_TOKEN`（创建项目时终端只显示打码后的 Token，避免泄露到 CI 日志）。
+  4. 打开侧栏「机器人 → 试聊一下」（Sandbox），发送 `/hello`。
 
-收到回复才算首跑成功。这一条消息走完了完整的链路：Console 通过 HTTP 连上 Bot → Sandbox 适配器收到消息 → 匹配到 `commands/hello` → 回复经同一个适配器发回。之后接入真实平台，只是把 Sandbox 换成对应的适配器。
+收到回复即代表完整链路跑通：Sandbox 适配器收到入站消息 → 匹配到 `commands/hello` → 回复经统一出站链路发回。之后接入真实平台，只是在配置里挂载对应的适配器。
 
 ## 3. 认识刚生成的项目
 
-想知道 Bot 还能执行哪些指令？在会话中发送 **`/菜单`**（无命令前缀时发 `菜单`）。它列出根插件的指令与子插件；再发 `/菜单 <插件实例名>` 可逐层查看。某条指令的参数用 `/hello --help` 查看。关键词可在项目配置中通过 `menuKeyword` 修改，详见[指令菜单](../authoring/commands.md#查看已加载的指令菜单)。
+想知道 Bot 当前加载了哪些指令？在会话中发送 **`/菜单`**（无命令前缀时发 `菜单`），会列出根插件的指令与子插件；某条指令的参数用法可通过 `/hello --help` 查看（详见[指令菜单](../authoring/commands.md#查看已加载的指令菜单)）。
 
 ```text
 my-bot/
-├── package.json          # Runtime 拓扑：entry、features、plugins
-├── zhin.config.yml       # Host 与插件配置值
+├── package.json          # Runtime 拓扑：entry、features
+├── zhin.config.yml       # Host、挂载的插件实例（plugins）与各插件配置值
 ├── .env                  # token、平台凭据、模型 Key
 ├── plugin.ts             # 根插件入口
 ├── commands/             # 文件路径就是命令路由
@@ -48,14 +50,75 @@ my-bot/
 
 记住两点就够了：
 
-- **`package.json` 的 `zhin` 字段描述“装了什么”**（入口、子插件），**`zhin.config.yml` 描述“怎么配”**（端口、凭据、插件配置），密钥放 `.env`。
-- **放进 `commands/`、`components/`、`pages/` 等约定目录的文件会被自动注册**，不需要在 `plugin.ts` 里手动登记。
+- **`package.json` 的 `zhin` 字段只描述插件自身入口与能力 Feature**（`entry`、`features`）；**`zhin.config.yml` 描述挂载了哪些插件以及怎么配**（`plugins`、端口、凭据、插件配置），密钥放 `.env`。
+- **`my-bot` 本身就是一个 Root 插件**——放进 `commands/`、`components/`、`middlewares/`、`pages/` 等约定目录的文件会被自动发现并注册，不需要改 `package.json`，也不需要在 `plugin.ts` 里手写登记。
 
-这些名词的完整解释见 [核心概念速览](./concepts.md)。
+名词速查见 [核心概念速览](./concepts.md)。
 
-## 4. 修改并观察热重载
+## 4. 修改并观察热重载 —— 在你的 Bot 里直接加功能 (1→2)
 
-打开 `commands/hello/index.ts`，修改返回文案并保存，再发送 `/hello`——不用重启就能看到新回复。正在处理中的消息会用旧代码跑完；如果新代码有错误，旧版本会继续工作，终端会打印错误原因。
+打开 `commands/hello/index.ts`，修改返回文案并保存，再发 `/hello`——不用重启就能看到新回复。正在处理中的消息会用旧代码跑完；如果新代码有语法或运行错误，旧版本继续服务，终端会打印错误原因。
+
+因为 `my-bot` 已经是 Root 插件，日常写业务功能**不需要新建子插件包**，直接在约定目录里加文件即可：
+
+### ① 加一个带参数的命令（`commands/roll/index.ts`）
+
+新建 `commands/roll/index.ts`，保存后在 Sandbox 发送 `/roll 20` 或 `/roll --help`：
+
+```ts
+// commands/roll/index.ts  →  /roll [sides]
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: '掷一个指定面数的骰子',
+  params: {
+    sides: { type: 'integer', min: 2, max: 100, default: 6 },
+  },
+  execute: ({ params }) => `🎲 (1-${params.sides}) 掷出了：${1 + Math.floor(Math.random() * params.sides)}`,
+});
+```
+
+### ② 加一个跨平台 JSX 互动卡片（`commands/card/index.tsx`）
+
+新建 `commands/card/index.tsx`（注意 `.tsx` 扩展名）。支持按钮的平台直接渲染按钮，纯文本平台会自动降级为编号选项，点击或回复序号都会触发 `onClick`：
+
+```tsx
+// commands/card/index.tsx  →  /card
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: '发送一张带互动按钮的卡片',
+  execute: () => (
+    <card title="⚡ 今日状态打卡">
+      <text>选择你现在的状态：</text>
+      <button label="🔥 状态拉满" onClick={(msg) => `${msg.$sender.name} 已打卡：状态拉满！`} />
+      <button label="☕ 需要咖啡" onClick={(msg) => `${msg.$sender.name} 正在补充咖啡因…`} />
+    </card>
+  ),
+});
+```
+
+### ③ 加一个给 AI 调用的工具（`tools/weather/index.ts`，可选）
+
+如果你运行过 `npx zhin setup --ai` 启用了 AI，新建 `tools/weather/index.ts` 即可让大模型自动调用：
+
+```ts
+// tools/weather/index.ts
+import { Schema } from 'zhin.js';
+import { defineAgentTool } from '@zhin.js/tool';
+
+export default defineAgentTool<{ city: string }>({
+  description: '查询城市实时天气',
+  parameters: Schema.object({
+    city: Schema.string().required().description('城市名称，例如上海'),
+  }),
+  requiresApproval: 'never',
+  async execute({ city }) {
+    const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`);
+    return res.text();
+  },
+});
+```
 
 ## 遇到问题
 
@@ -70,7 +133,8 @@ Doctor 会检查 Node、pnpm、端口、`HTTP_TOKEN`、CORS 和项目清单。�
 | 当前需要 | 推荐形态 | 下一步 |
 | --- | --- | --- |
 | 验证一个想法 | 单文件 `bot.ts` | [single-file-bot](../examples/index.md#single-file-bot-一个-bot-ts-就是机器人) |
-| 做命令与组件 | 单插件 + 约定目录 | [IM Bot 路径](../paths/im-bot.md) |
+| 做命令、卡片与定时通知 | Root 插件 + 约定目录 | [IM Bot 路径](../paths/im-bot.md) |
+| 把功能抽成可复用/可发布的插件包 | `plugins/<name>` 子插件 | [编写第一个插件](./first-plugin.md) |
 | 增加模型与工具 | 挂载 Agent Features | [AI Agent 路径](../paths/ai-agent.md) |
 | 多账号与生产运维 | HTTP Host + Remote Console | [Console 管理路径](../paths/console.md) |
 
@@ -81,6 +145,6 @@ Doctor 会检查 Node、pnpm、端口、`HTTP_TOKEN`、CORS 和项目清单。�
 ## 下一步
 
 1. [核心概念速览](./concepts.md)：把文档里常见的名词一次弄懂。
-2. [第一个插件](./first-plugin.md)：写一个带配置的 `/ping` 命令。
+2. [编写第一个插件](./first-plugin.md)：当你想把功能抽离成带独立配置 Schema、可跨项目复用或发布到 npm 的子插件包时看这篇。
 3. [平台适配器](../adapters/index.md)：用 `npx zhin setup --adapters` 接入真实平台。
 4. [AI 总览](../ai/index.md)：用 `npx zhin setup --ai` 接入大模型。

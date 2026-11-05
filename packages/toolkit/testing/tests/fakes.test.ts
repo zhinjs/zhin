@@ -5,7 +5,7 @@ import {
   createToken, databaseHostToken, definePlugin, outboundHostToken, scheduleHostToken,
 } from '@zhin.js/plugin-runtime';
 import {
-  createFakeMessage, createFakePlugin, fakeResource, runCommand, runMiddleware, runHandler, createCommandContext, runPluginSetup, FakeClock,
+  createFakeMessage, createFakeInteraction, createFakePlugin, fakeResource, runCommand, runMiddleware, runHandler, createCommandContext, runPluginSetup, FakeClock,
 } from '../src/index.js';
 
 const greeterToken = createToken<{ greet(name: string): string }>('test.greeter');
@@ -165,5 +165,83 @@ describe('testing fakes', () => {
     // The next advance continues from the target, so the skipped window is not replayed.
     await clock.advance(60_000);
     expect(runs).toEqual([60_000, 120_000, 360_000]);
+  });
+
+  it('supports $sendTo, $replyToPrivate, $replyToGroup, and $replyToChannel on createFakeMessage', async () => {
+    const message = createFakeMessage({
+      sender: { id: 'u1', name: 'Alice' },
+      conversation: { kind: 'group', id: 'g1' },
+    });
+    await message.$sendTo({ kind: 'private', id: 'u2' }, 'direct');
+    await message.$replyToPrivate('secret', true);
+    await message.$replyToGroup('g2', 'group-msg');
+    await message.$replyToChannel('c1', 'guild1', 'channel-msg', 'thread1');
+
+    expect(message.replies).toEqual(['direct', 'secret', 'group-msg', 'channel-msg']);
+    expect(message.sent).toEqual([
+      { target: { kind: 'private', id: 'u2' }, content: 'direct' },
+      { target: { kind: 'private', id: 'u1', parent: { kind: 'group', id: 'g1' } }, content: 'secret' },
+      { target: { kind: 'group', id: 'g2' }, content: 'group-msg' },
+      { target: { kind: 'channel', id: 'c1', parent: { kind: 'channel', id: 'guild1' }, threadId: 'thread1' }, content: 'channel-msg' },
+    ]);
+  });
+
+  it('populates command params from args and default values in runCommand when params is omitted', async () => {
+    const fake = createFakePlugin();
+    const command = defineCommand({
+      params: {
+        target: { type: 'string' },
+        count: { type: 'number', default: 3 },
+      },
+      options: {
+        loud: { type: 'boolean', default: false },
+      },
+      execute({ params, options }) {
+        return `${params.target}:${params.count}:${options.loud}`;
+      },
+    });
+
+    expect(await runCommand(fake, command, { args: ['world'] })).toBe('world:3:false');
+    expect(await runCommand(fake, command, { args: ['world', '7'] })).toBe('world:7:false');
+  });
+
+  it('scripts ask, confirm, select, and sequence flows with createFakeInteraction', async () => {
+    const fake = createFakePlugin();
+    const interaction = createFakeInteraction(['Alice', true, 'pro', 'yes']);
+    const command = defineCommand({
+      async execute(ctx) {
+        const name = await ctx.interaction!.ask({ type: 'text', title: 'Your name?' });
+        const ok = await interaction.confirm('Continue?');
+        const tier = await interaction.select('Plan?', ['free', 'pro'] as const);
+        const seq = await ctx.interaction!.sequence({
+          title: 'Wizard',
+          steps: [
+            { id: 'final', type: 'text', title: 'Final answer?' },
+          ],
+        });
+        return `${name}:${ok}:${tier}:${seq.final}`;
+      },
+    });
+
+    const result = await runCommand(fake, command, { interaction });
+    expect(result).toBe('Alice:true:pro:yes');
+    expect(interaction.prompts.map(p => p.title)).toEqual([
+      'Your name?',
+      'Continue?',
+      'Plan?',
+      'Final answer?',
+    ]);
+  });
+
+  it('supports defineMiddleware.withConfig<TConfig>()', async () => {
+    const fake = createFakePlugin({ config: { prefix: '!' } });
+    const mw = defineMiddleware.withConfig<{ prefix: string }>()<{ text: string }>({
+      handle(ctx, next) {
+        if (ctx.input.text.startsWith(ctx.config.prefix)) return next();
+        return undefined;
+      },
+    });
+    expect((await runMiddleware(fake, mw, { text: '!help' })).continued).toBe(true);
+    expect((await runMiddleware(fake, mw, { text: 'help' })).continued).toBe(false);
   });
 });

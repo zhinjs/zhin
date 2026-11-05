@@ -25,14 +25,14 @@ description: "把一个能跑的插件变成可配置、可热重载、有测试
 
 ## 2. 声明包结构
 
-- `package.json#zhin` 声明插件入口、用到的 Feature 和子插件。
-- `zhin.config.yml` 只提供配置**值**，它不会安装包，也不会启用 Feature。
+- `package.json#zhin` 声明插件包自身的入口（`entry`）和用到的 Feature（`features`）；插件实例（适配器、子插件、服务）统一在宿主项目的 `zhin.config.yml` 的 `plugins:` 下挂载。
+- `zhin.config.yml` 声明挂载的插件实例与配置**值**，它不会安装包，也不会启用 Feature。
 - 发布到 npm 的插件入口必须是 JavaScript（`./plugin.js`）；本地项目可以直接用 `./plugin.ts`。见 [definePlugin · 开发入口与 npm 发布入口](./define-plugin.md#开发入口与-npm-发布入口)。
-- 可选的能力（数据库、HTML 渲染等）声明为 optional peer，并在 `setup` 里先用 `context.resources.has(token)` 判断，缺失时明确降级。
+- 可选的能力（数据库、HTML 渲染等）声明为 optional peer，并在 `setup` 里先用 `context.resources.has(token)`（或在命令/工具里用 `context.has(token)`）判断，缺失时明确降级。
 
 ## 3. 设计配置
 
-用 `definePlugin({ config: Schema.object(...) })` 一次性声明默认值、类型、约束和 Console 表单信息，`Schema.Output` 会推导出配置类型；也可以用根目录的 `schema.json`，但两者只能选一个（`isolated` 插件只能用 `schema.json`）。见 [definePlugin · 读取配置](./define-plugin.md#读取配置)。
+用 `definePlugin({ config: Schema.object(...) })` 一次性声明默认值、类型、约束和 Console 表单信息，`Schema.Output` 会推导出配置类型；也可以用根目录的 `schema.json`（若同时保留由同一 Schema 生成、结构一致的 `schema.json`，运行时会校验二者等价并放行；`isolated` 插件只能用 `schema.json`）。见 [definePlugin · 读取配置](./define-plugin.md#读取配置)。
 
 - 你的 Bot 自身读 `plugin:` 段，子插件读 `<instanceKey>` 段。
 - 密钥用 `${VAR}` 引用环境变量，不要写进 Schema 默认值或示例仓库。

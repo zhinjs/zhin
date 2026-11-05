@@ -529,7 +529,7 @@ ai:
 
 **文件边界**：文件工具只能在当前回合授权的项目目录内工作。相对路径以该目录为根；绝对路径必须仍在其中；`~`、`../` 越界以及通过符号链接指向目录外的路径都会被拒绝。通过检查的规范化路径才会交给工具；`glob` / `grep` 不启动 shell 子进程。
 
-**网络边界**：只有 `ai.agent.execPreset: network` 时，网络工具才获得 HTTPS 访问权限，`readonly` 等其他预设不会隐式开放网络。`web_fetch` 对初始 URL 和每一次重定向都重新检查协议、域名和 SSRF；私网、link-local、CGNAT 与组播地址会被拒绝，实际连接固定到已检查的地址。
+**网络边界**：默认关闭出网；开启 `ai.agent.network.enabled: true` 时（可用 `ai.agent.network.allowedDomains` 限定域名；未设置 `enabled` 时兼容 `ai.agent.execPreset: network`），网络工具（`web_search` / `web_fetch`）才获得 HTTPS 访问权限，`readonly` 等其他预设不会隐式开放网络。`web_fetch` 对初始 URL 和每一次重定向都重新检查协议、域名和 SSRF；私网、link-local、CGNAT 与组播地址会被拒绝，实际连接固定到已检查的地址。
 
 **待办**：`todo_read` / `todo_write` 只操作当前会话的计划，不接受 `chat_id` 或路径参数。状态原子写入 `.zhin/todos`；`.zhin/` 整体是运行时私有目录，文件工具无法读取或列出。
 

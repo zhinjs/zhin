@@ -52,76 +52,7 @@ export default definePlugin({
 两种写法共用同一套命令表和冲突检测。命令变多后移到 `commands/` 目录，修改单个命令时只会重载这一个文件。
 :::
 
-## 平台类型与单次 Session
-
-在项目统一声明入口加载已安装的适配器类型，业务命令不需要引入 Adapter 类。例如项目 `tsconfig.json` 的 `compilerOptions.types` 可包含 `"node"`、`"@zhin.js/adapter-icqq"`；保留原有类型条目。仅安装 npm 包并不会让 TypeScript 自动扫描它。
-
-```ts
-import { defineCommand } from 'zhin.js/command';
-
-export default defineCommand({
-  adapter: 'icqq',
-  params: { text: { type: 'text' } },
-  options: { silent: { type: 'boolean', default: false } },
-  async execute({ session, params, options }) {
-    if (!session) return;
-    session.adapter;  // IcqqAdapter
-    session.endpoint; // IcqqEndpoint，继承实际 ICQQ Client
-    session.scene;    // 当前群、私聊或频道；使用群字段前仍需收窄 kind
-    session.sender;   // platformRoles 与 authorizationRoles 分开
-    session.event;    // 同一次 SDK 回调的原生对象
-    if (!options.silent) await session.reply(params.text);
-  },
-});
-```
-
-`params`、`options`、`withConfig` 与命令工厂保留各自的类型推断。没有实际 IM 输入的直接调用中，`session` 为 `undefined`。规范化 `message.receive` Handler 和入站 Middleware 使用同一 Session；未形成规范消息的原生事件不伪造 Session。
-
-Session 是当前操作的只读视图。账号停止或重连会取消它的 `signal`；之后框架回复不会发送到替代连接。直接保存 SDK 引用并调用原生方法不经过框架租约，插件作者仍需遵守统一发送链路。
-
 ## 常见需求
-
-### 查看已加载的指令菜单
-
-启用 Command Feature 后，内置关键词是 **`菜单`**，不需要另装帮助插件。像普通命令一样在 Bot 会话中发送；当前账号配置了 `commandPrefix: '/'` 时，下面的消息都要加 `/`：
-
-| 消息（无前缀时） | 返回内容 |
-| --- | --- |
-| `菜单` | 根插件的指令、说明和直接子插件列表 |
-| `菜单 rss` | 实例键为 `rss` 的插件所拥有的指令和直接子插件 |
-| `菜单 foo.bar` | 嵌套插件 `foo` 下的 `bar` 的指令和子插件 |
-| `菜单 --page 2` | 根菜单的第 2 页 |
-| `菜单 rss --page 2` | `rss` 实例菜单的第 2 页 |
-| `remind --help` | 某条命令的参数、选项和用法；不会执行该命令 |
-
-菜单按插件逐层查看，不会一次展开所有插件的全部指令。这里的插件名是**实例键**，不是 npm 包名；先发 `菜单`，再按返回的子插件列表继续查看。
-
-关键词在项目根 `zhin.config.yml` 的顶层配置，与 `plugins` 同级：
-
-```yaml
-menuKeyword: 帮助
-```
-
-这会把入口改成 `帮助`（有 `/` 前缀时是 `/帮助`）；`menuKeyword: false` 或 `menuKeyword: ''` 关闭内置菜单。未配置时仍是 `菜单`，`help` 不是默认别名。
-
-安装 `@zhin.js/html-renderer` 后，菜单通过统一发送链输出 HTML 样式卡片：图片平台渲染为菜单图，原生 HTML 平台遵循自身声明的策略。渲染失败、平台要求纯文本或不能接收生成的图片时，保留原菜单文本；未安装渲染器时仍返回文本。插件浏览、命令前缀和自定义关键词保持一致。
-
-每页最多 **30 项**，指令与子插件合计。菜单显示总数、当前页和可以直接发送的上一页／下一页消息，沿用当前前缀和关键词。文本降级也只返回同一页，不会一次发送所有分页。页码必须为正整数；超出范围时提示实际总页数。图片中的长名称和说明最多显示两行，完整的指令声明仍可通过 `--help` 查看。
-
-当端点同时声明支持**原生 Markdown 和原生按钮**时，多页菜单还会附上 Markdown 页码和“上一页 / 下一页”按钮：第一页禁用上一页，最后一页禁用下一页，只有一页时不显示翻页控件。点击后通过统一回复链发送目标页，保留自定义关键词、前缀和插件路径；回调只在原会话和当前 generation 内有效，过期或旧代按钮不能调用旧处理器。缺少任意一项能力的端点继续使用文本导航。Telegram 的禁用按钮映射需要 Bot API 10.3+，见 [DisabledButton](https://core.telegram.org/bots/api#disabledbutton)。
-
-默认背景插画、装饰和图标均内置，不需要下载外部素材。项目根配置可自定义展示：
-
-```yaml
-menuStyle:
-  title: 知音 · 指令指南
-  subtitle: 在日常里，发现一点不一样。
-  accentColor: '#e7c993'
-  # 可选：换成自己的背景图；省略则使用内置山月插画。
-  backgroundImage: https://example.com/my-menu.webp
-```
-
-`backgroundImage` 支持 HTTP(S) 图片地址或 PNG/JPEG/WebP 的 base64 data URL，不支持文件路径或可执行 CSS。远程背景需要 Bot 所在机器能访问，其可用性与渲染器本身独立；离线使用自定义图片时可填写 data URL。`accentColor` 接受六位十六进制颜色，不合法的可选值使用默认样式。这些配置只改变图片展示，不改变文本菜单。
 
 ### 接收参数
 
@@ -289,10 +220,39 @@ export default defineCommand({
 | 返回值 | 效果 |
 | --- | --- |
 | 字符串 | 文本回复 |
+| JSX（`<card>`、`<html><Card>...</Card></html>`、`<button onClick>` 等） | 直接按平台能力发送富消息、图片卡片或交互按钮 |
 | `component('status-card', props)` | 渲染一个[组件](./middleware-components.md)，支持图片的平台会显示为图片 |
 | `raw({ type: 'html', data: { html, width } })` | 原样发送的平台消息段 |
 | 由以上值组成的数组 | 多段消息 |
 | `undefined` | 不回复（例如你已经用 `input.$reply()` 自己回复过了） |
+
+把命令文件保存为 `.tsx`（如 `commands/poll/index.tsx`），就可以直接返回 JSX，包括平台原生 `<card>`、可视化图片卡片 `<html><Card>...</Card></html>`，以及带回调的 `<button onClick>`（支持原生按钮的平台渲染为按钮，纯文本平台自动降级为编号回复）：
+
+```tsx
+// commands/poll/index.tsx
+import { defineCommand } from 'zhin.js/command';
+import { Card, CardHeader, Badge } from '@zhin.js/components';
+
+export default defineCommand({
+  description: '发起发布确认投票',
+  execute: () => (
+    <>
+      <card title="版本发布确认" content="是否立即发布 v1.1.0？" />
+      <html>
+        <Card>
+          <CardHeader title={<strong>发布检查单</strong>} badge={<Badge>就绪</Badge>} />
+          <p>构建与单元测试均已通过。</p>
+        </Card>
+      </html>
+      <button onClick={async (clickMsg) => `已由 ${clickMsg.sender?.name ?? clickMsg.sender?.id} 确认！`}>
+        确认
+      </button>
+    </>
+  ),
+});
+```
+
+也可以按名字调用已注册的组件：
 
 ```ts
 // commands/card/index.ts
@@ -305,7 +265,53 @@ export default defineCommand({
 });
 ```
 
-需要多轮交互时，让 `execute` 返回 `Promise`：先回复第一条，之后用 `input.$reply(...)` 继续发送。
+### 多轮交互追问（`context.interaction`）
+
+命令执行到一半需要向用户追问确认、文本、数字或单选/多选（`type: 'confirm' | 'select' | 'text' | 'number'`，单选也可搭配 `interaction.select()` / `pick` 风格选项）时，直接使用 `execute` 参数里的 `interaction`：
+
+```ts
+// commands/deploy/index.ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: '交互式发布向导',
+  async execute({ interaction }) {
+    if (!interaction) return '当前环境不支持多轮交互';
+
+    const env = await interaction.ask({
+      type: 'select',
+      title: '请选择目标环境：',
+      options: [
+        { label: '预发环境 (staging)', value: 'staging' },
+        { label: '生产环境 (prod)', value: 'prod' },
+      ],
+    });
+
+    const replicas = await interaction.ask({
+      type: 'number',
+      title: '请输入实例副本数（1-10）：',
+      min: 1,
+      max: 10,
+       integer: true,
+      default: 2,
+    });
+
+    const notes = await interaction.ask({
+      type: 'text',
+      title: '请输入本次变更说明：',
+      default: '常规维护更新',
+    });
+
+    const confirmed = await interaction.ask({
+      type: 'confirm',
+      title: `确认发布到 ${env}（${replicas} 个副本，说明：${notes}）？`,
+      default: false,
+    });
+
+    return confirmed ? `已开始发布到 ${env}（${replicas} 副本）` : '已取消发布';
+  },
+});
+```
 
 ### 知道是谁、在哪里发的
 
@@ -430,6 +436,75 @@ qq:
 
 `npm create zhin-app` 生成的 Sandbox 已设置为 `/`。
 
+### 查看已加载的指令菜单
+
+启用 Command Feature 后，内置菜单开箱即响应 **`菜单`**、**`帮助`**、**`help`**、**`menu`**（以及带前缀的 `/help`、`/menu` 或 `@Bot 菜单`），不需要另装帮助插件。当命令总数 **≤ 8** 时，首页会自动扁平化展示根命令，方便一眼看完；超过 8 条时按插件分层分页展示。当前账号配置了 `commandPrefix: '/'` 时，也可以加 `/` 发送：
+
+| 消息（无前缀时） | 返回内容 |
+| --- | --- |
+| `菜单` / `帮助` / `help` / `menu` | 根插件的指令、说明和直接子插件列表（总数 ≤ 8 时自动展开根指令） |
+| `菜单 rss` | 实例键为 `rss` 的插件所拥有的指令和直接子插件 |
+| `菜单 foo.bar` | 嵌套插件 `foo` 下的 `bar` 的指令和子插件 |
+| `菜单 --page 2` | 根菜单的第 2 页 |
+| `菜单 rss --page 2` | `rss` 实例菜单的第 2 页 |
+| `remind --help` | 某条命令的参数、选项和用法；不会执行该命令 |
+
+这里的插件名是**实例键**，不是 npm 包名；先发 `菜单`，再按返回的子插件列表继续查看。
+
+可以在项目根 `zhin.config.yml` 的顶层自定义菜单主关键词（与 `plugins` 同级）：
+
+```yaml
+menuKeyword: 帮助
+```
+
+`menuKeyword: false` 或 `menuKeyword: ''` 关闭内置菜单。
+
+安装 `@zhin.js/html-renderer` 后，菜单通过统一发送链输出 HTML 样式卡片：图片平台渲染为菜单图，原生 HTML 平台遵循自身声明的策略。渲染失败、平台要求纯文本或不能接收生成的图片时，保留原菜单文本；未安装渲染器时仍返回文本。插件浏览、命令前缀和自定义关键词保持一致。
+
+每页最多 **30 项**，指令与子插件合计。菜单显示总数、当前页和可以直接发送的上一页／下一页消息，沿用当前前缀和关键词。文本降级也只返回同一页，不会一次发送所有分页。页码必须为正整数；超出范围时提示实际总页数。图片中的长名称和说明最多显示两行，完整的指令声明仍可通过 `--help` 查看。
+
+当端点同时声明支持**原生 Markdown 和原生按钮**时，多页菜单还会附上 Markdown 页码和“上一页 / 下一页”按钮：第一页禁用上一页，最后一页禁用下一页，只有一页时不显示翻页控件。点击后通过统一回复链发送目标页，保留自定义关键词、前缀和插件路径；回调只在原会话和当前 generation 内有效，过期或旧代按钮不能调用旧处理器。缺少任意一项能力的端点继续使用文本导航。Telegram 的禁用按钮映射需要 Bot API 10.3+，见 [DisabledButton](https://core.telegram.org/bots/api#disabledbutton)。
+
+默认背景插画、装饰和图标均内置，不需要下载外部素材。项目根配置可自定义展示：
+
+```yaml
+menuStyle:
+  title: 知音 · 指令指南
+  subtitle: 在日常里，发现一点不一样。
+  accentColor: '#e7c993'
+  # 可选：换成自己的背景图；省略则使用内置山月插画。
+  backgroundImage: https://example.com/my-menu.webp
+```
+
+`backgroundImage` 支持 HTTP(S) 图片地址或 PNG/JPEG/WebP 的 base64 data URL，不支持文件路径或可执行 CSS。远程背景需要 Bot 所在机器能访问，其可用性与渲染器本身独立；离线使用自定义图片时可填写 data URL。`accentColor` 接受六位十六进制颜色，不合法的可选值使用默认样式。这些配置只改变图片展示，不改变文本菜单。
+
+## 平台类型与单次 Session
+
+在项目统一声明入口加载已安装的适配器类型，业务命令不需要引入 Adapter 类。例如项目 `tsconfig.json` 的 `compilerOptions.types` 可包含 `"node"`、`"@zhin.js/adapter-icqq"`；保留原有类型条目。仅安装 npm 包并不会让 TypeScript 自动扫描它。
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  adapter: 'icqq',
+  params: { text: { type: 'text' } },
+  options: { silent: { type: 'boolean', default: false } },
+  async execute({ session, params, options }) {
+    if (!session) return;
+    session.adapter;  // IcqqAdapter
+    session.endpoint; // IcqqEndpoint，继承实际 ICQQ Client
+    session.scene;    // 当前群、私聊或频道；使用群字段前仍需收窄 kind
+    session.sender;   // platformRoles 与 authorizationRoles 分开
+    session.event;    // 同一次 SDK 回调的原生对象
+    if (!options.silent) await session.reply(params.text);
+  },
+});
+```
+
+`params`、`options`、`withConfig` 与命令工厂保留各自的类型推断。没有实际 IM 输入的直接调用中，`session` 为 `undefined`。规范化 `message.receive` Handler 和入站 Middleware 使用同一 Session；未形成规范消息的原生事件不伪造 Session。
+
+Session 是当前操作的只读视图。账号停止或重连会取消它的 `signal`；之后框架回复不会发送到替代连接。直接保存 SDK 引用并调用原生方法不经过框架租约，插件作者仍需遵守统一发送链路。
+
 ## 输入有误时会怎样
 
 | 情况 | Bot 的行为 |
@@ -475,13 +550,38 @@ qq:
 | `segments` | 剩余的消息段，保留图片、@ 等非文本内容 |
 | `config` | 本插件的配置 |
 | `input` | 触发命令的消息；由 Host 或程序调用时可能不存在 |
+| `session` | 绑定的单次平台操作视图（含 `adapter`、`endpoint`、`scene`、`sender`、`event`、`reply`） |
+| `$client` | 声明 `adapter` 后，对应平台的强类型原生 Endpoint 客户端 |
+| `interaction` | 多轮交互追问接口（`ask` / `sequence`），见[多轮交互追问](#多轮交互追问-context-interaction) |
 | `adapter` | 适配器实例 id，如 `root/icqq` |
 | `endpoint` | 账号 / 连接名 |
 | `scene` | `{ id, type, name? }`：群、私聊或频道 |
 | `sender` | `{ id, name?, role: string[] }`：发送者及其角色 |
+| `has(token)` | 检查可选的插件服务或 Host token 是否可用（在调用 `use(token)` 前使用） |
 | `use(token)` | 取出插件提供的服务，缺失时抛错 |
+| `locale` | 当前消息或会话的语言区域（如 `'zh-CN'`、`'en'`） |
+| `formatCommand(localPath)` | 按当前账号的 `commandPrefix` 和插件 `commandNamespace` 格式化命令展示名 |
+| `signal` | 当前操作或 generation 的 `AbortSignal`，热重载或账号断开时触发取消 |
 | `owner` | 命令所属的插件 |
 | `generation` | 当前版本号（每次热重载递增） |
+
+### 单元测试命令
+
+用 [`@zhin.js/testing`](./testing.md) 的 `createFakeMessage` 和 `runCommand` 只需 10 行即可测试一条命令——`runCommand` 会根据命令声明自动解析位置参数 `args` 并填充 `options` 的默认值：
+
+```ts
+import { createFakeMessage, createFakePlugin, runCommand } from '@zhin.js/testing';
+import remind from '../commands/remind/index.js';
+
+it('parses positional args and fills option defaults', async () => {
+  const fake = createFakePlugin();
+  const input = createFakeMessage({ sender: { id: 'u1', name: 'Alice' } });
+  const reply = await runCommand(fake, remind, { input, args: ['10', '喝水'] });
+  expect(reply).toBe('好的，10 分钟后提醒你：喝水');
+});
+```
+
+完整测试指南见 [插件测试](./testing.md)。
 
 `input` 不一定是消息（可能来自 Host 调用），读取发送者前要做类型判断；非消息来源时 `$reply` 不做任何事。`input` 的类型默认为 `CommandMessage`，与运行时的 `Message` 结构兼容（因分层限制，`@zhin.js/command` 不能直接依赖 `@zhin.js/core`）。
 

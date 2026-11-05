@@ -90,9 +90,7 @@ try {
 
 ### 插件自主处理热更事件
 
-`RootRuntime` 在现有事务内、任何候选模块求值与 setup 之前，等待各插件实例的
-`hmr.pause` 处理器完成；它只等待处理器，不自动排空或取消插件任务。处理器失败则中止
-候选发布。`handoff` 仍只负责候选 readiness，Controller 仍独占提交与回滚。
+如果插件在后台维护了自己的任务队列，可以在 `setup` 中订阅 `hmr.pause` 与 `hmr.resume` 事件，在热重载交接前后保存检查点或恢复任务：
 
 ```ts
 setup({ events }) {
@@ -105,55 +103,18 @@ setup({ events }) {
 }
 ```
 
-事件属于实际插件 Scope：复用实例保留订阅，子插件不继承父插件的订阅。暂停通知所有现有
-实例，完成通知已尝试暂停的旧实例与已提交实例的并集，每个实例一次；新实例可只收到完成
-事件，被拒绝的候选不收完成通知。通知期间持有对应快照租约，之后保留任务仍须持有自己的
-操作租约，通知不会重新开放旧代准入。
-
-`details` 包括手动／源码触发、变更路径、请求的规划范围、前后代数、接收实例创建代数与
-当前／已替换状态；完成事件还给出实际替换 owner 和 committed、unchanged、rejected、
-cancelled、restart-required 结果。手动 `reload(target)` 沿用完整 Root 构建；显式配置修改
-也沿用手动控制事务，`changed` 为空。`planned.fullRoot` 是保守规划范围，不能代替实际
-`replaced` 列表。启动和普通账号操作不会发热更事件。
-
-持有连接租约的 Host 可监听 `GenerationAdmissionGate.stopSignal` 处理显式 Root 关闭。
-它在首次发布时绑定，与该 Root 的快照租约共享；未发布候选为 `undefined`，复用和退休后
-仍保持原信号。Root 先关闭全部准入再取消该信号，因此连接可释放租约，停止无需等待
-持有这些租约的 Scope disposer 才开始关闭连接。热更退役事实不再替插件决定是否断开连接。
-
-暂停事件的 signal 属于控制事务；完成事件使用独立的 Root stop signal。插件自己选择
-继续、保存或取消任务。完成处理器失败只报告控制错误，不回滚已提交代，不重试处理器，
-也不自动恢复持久化数据迁移的 maintenance。
-
-#### 暂停／完成处理器不得等待取模型的工作
-
-`hmr.pause` 与 `hmr.resume` 都在 Root 控制队列（`RootRuntime.control` 背后的同一串行队列）内执行：暂停在候选 setup 之前，完成在提交或回滚之后、事务释放队列之前。
-
-- 处理器内直接递归调用 `control()`，会以 `Recursive Runtime control` 拒绝：在 `hmr.pause` 中会中止本次热更并保留旧代；`hmr.resume` 中的错误只上报，不回滚已提交代。
-- 等待仍需进入该控制队列的任务会造成互等。处理器只做有界的本地检查点，不等待模型或其他外部 I/O。
-- Provider 目标运行时从实际 operation 的持有租约和权威图建立 scope，模型请求、凭据和网络工作不放在控制队列中。旧的 `createModelConfigurationAccess` 已退役；不能再把所有模型调用描述为经由它取配置，也不能宣称所有模型调用会触发递归控制拒绝。
-
-插件决定保留、取消和恢复自己的工作；需要模型的续作交给插件任务完成。Runtime 不自动检测任意任务的互等。控制队列的守护测试位于 `packages/im/runtime/tests/root-runtime.test.ts`；实际模型等待不占用控制阶段的回归位于 `basic/cli/tests/plugin-runtime/inference/configuration.test.ts`。
-
-Worker 与子进程通过独立控制请求交付同一事件，本地重建 AbortSignal。事件取消只通知对应
-处理器，不强杀 isolate，也不重新开放已退休实例的业务 RPC。
+- `hmr.pause` 在候选代开始求值和 `setup` 之前触发；若处理器抛错，本次热重载中止，旧代继续运行。
+- `hmr.resume` 在新一代提交或回滚后触发，用于通知插件恢复或接续工作。
+- 这两个处理器运行在 Root 控制队列内，因此**只应做快速的本地状态检查点**，不要在处理器里递归调用 Runtime 控制接口，也不要阻塞等待外部网络或慢速 I/O（耗时任务应放到插件自己的异步队列中执行）。
 
 ### Adapter 的准入由快照原子切换
 
-`@zhin.js/adapter` 不会提前关闭旧 Endpoint。候选 `AdapterIndex` 在
-`activateNext` 中完成 `start()` 与 `open()`，但 `CapabilityContext` 注入的是绑定到候选代
-`GenerationAdmissionGate` 的 `OutboundMessageService`；commit 前所有入站都 fail-closed。`SnapshotStore`
-提交新快照时同步关闭被移除的 gate、开放新 gate，保留在两代里的同一投影不会被短暂关闭。
+热重载时，平台连接不会先断开再重连：
 
-因此旧代在 commit 前始终可用，候选激活失败只需 `stop()` 候选；commit 后旧 Endpoint
-仍可随旧 lease drain，迟到事件会被旧 gate 拒绝，最终由旧代 disposer 执行
-`close()` / `stop()`。不存在 Adapter 专用的 `quiescePrevious`、`resumePrevious` 或
-post-commit `openNext` 阶段。已配置 Endpoint 全部是 required prerequisite：create、start、
-open 任一失败都拒绝候选代，不会发布 inert/unconfigured record，也不会后台 late-open。
-共享 HTTP listener 归 Process Host；候选 generation 只能向 `HttpHost` routing port 注册带
-gate 的 HTTP/WS route，不能 listen/close，也不会在 commit 前遮住旧代同路径 route。
-Console RPC、SSE 与登录辅助订阅同样由 Process Host 持有，并在首代 Adapter 激活前可用；
-它们访问 generation 能力时仍通过当前 snapshot lease，不把候选能力提前暴露给外部。
+1. 候选代的 `AdapterIndex` 在 `activateNext` 阶段完成 `start()` 与 `open()` 准备，但在 `commit` 之前，候选代的入站准入闸门（`GenerationAdmissionGate`）保持关闭。
+2. `SnapshotStore` 提交新快照的瞬间，同步开放新代准入闸门并关闭被替换的旧闸门；未被替换的插件子树与连接投影保持无感复用。
+3. 若候选代有任何已配置的 Endpoint 创建或启动失败，整个候选代会被拒绝，旧代保持原样在线服务。
+4. 提交后，旧 Endpoint 随在途消息的快照租约自然排空（drain），排空后由旧代 disposer 执行 `close()` / `stop()`。共享的 HTTP listener、Console RPC 与 SSE 归属于进程级 Host，热重载期间始终保持可用。
 
 ## 快照租约：在途消息不被打断
 

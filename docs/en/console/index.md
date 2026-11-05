@@ -109,6 +109,10 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 | Marketplace | `GET /pub/marketplace/search`, `/pub/marketplace/detail/*`, `GET /api/marketplace/updates` | Plugin marketplace (plugins.json + npmmirror) and update checks |
 | Sandbox | WS `/sandbox` | Built-in sandbox chat, direct conversation without platform integration |
 
+Real-time pushes go through SSE: `GET /api/events` (page directory sync, HMR reload, message/configuration events).
+
+::: details HTTP / RPC Protocol Status Codes and Boundary Contracts
+
 Tree `preview` values remain short summaries. Read a complete user message on demand with `GET /api/agent/sessions/<encoded-sessionKey>/message?sessionId=<tree.sessionId>&messageId=<positive-safe-integer>` under the existing session HTTP authentication boundary. The response is `data: { messageId, text }`, without image payloads or branch mutation. A changed session incarnation returns `409`; a missing message, a message from another session, or a non-user message returns `404`; an older runtime without the reader returns `501`. Only retained message text is available.
 
 Conversation history requires full scope and returns the latest 50 canonical events in ascending sequence order. The response is `data: { conversation, items, nextBeforeSequence, hasMore }`; load earlier events with the exclusive `beforeSequence` cursor. Created messages include complete text and safe media references; recalls include `messageRef`. Other event types expose only type, timestamp, and sequence, and still count toward pagination. Local media paths, base64, and raw platform payloads are omitted. Missing history returns `404 history_not_recorded`, an ambiguous parent/thread address returns `409 conversation_ambiguous`, and an unavailable Endpoint mapping or store returns `503 history_unavailable`. Agent context is never substituted for recorded chat. Responses are not cached; clients must verify the complete `conversation` is unchanged before joining pages.
@@ -119,8 +123,6 @@ Reported usage separates input/output and cache/reasoning details; missing field
 
 Request bodies are recorded by default under the Host's `data/agent-traces`, retaining redacted text and media placeholders rather than image/audio binaries. Defaults retain at most seven days with a hard 64 MiB archive cap. Capacity cleanup removes the oldest records; oversized bodies leave statistics and an explicit unavailable-body status. Set `ai.agent.recordRequestBodies: false` to stop recording new bodies. Existing `ZHIN_TRACE_RETENTION_DAYS` / `ZHIN_TRACE_MAX_MB` overrides remain available, independently of numeric usage-database retention. Expired records are immediately excluded from reads; files are pruned by post-startup maintenance, on writes and by the existing hourly maintenance. One Host process owns writes to each data directory. The 64 MiB cap bounds archived data, not process memory: atomic replacements can temporarily keep a second file, while concurrent turns and queued writes can retain multiple bodies in memory.
 
-Real-time pushes go through SSE: `GET /api/events` (page directory sync, HMR reload, message/configuration events).
-
 Fixed string choices, such as the calendar `provider`, can use the existing select field instead of
 forcing the entire document into source editing. The supported `anyOf` consists of 1–64 unique,
 nonempty string constants of at most 256 characters, with no extra branch validation constraints;
@@ -129,6 +131,7 @@ cannot be represented completely still use source editing. The original JSON Sch
 unchanged. A saved value outside the options, including an environment reference, must be preserved
 until explicitly replaced; changing one choice must not remove other backends or instances.
 This display requires the corresponding Console update.
+:::
 
 ## Agent Studio run policy
 

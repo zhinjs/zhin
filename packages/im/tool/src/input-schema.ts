@@ -16,7 +16,7 @@ export interface ToolInputJsonObjectSchema extends ToolInputJsonSchema {
 }
 
 export interface ToolInputIssue {
-  readonly path?: readonly PropertyKey[];
+  readonly path?: readonly PropertyKey[] | string;
   readonly message?: string;
 }
 
@@ -28,15 +28,32 @@ export type ExecutableToolInputParseResult<T> =
     }>;
 
 /**
- * Runtime schema port implemented by Zod 4 object schemas.
+ * Runtime schema port implemented by `@zhin.js/schema` (`Schema.object(...)`).
+ * Infers `T` from the schema's `output` type witness so defaulted fields are
+ * non-optional on `execute(args)`.
+ */
+export interface ZhinToolInputSchema<T = unknown> {
+  (value?: never, key?: string): unknown;
+  readonly output?: T;
+  safeParse(input: unknown): ExecutableToolInputParseResult<unknown>;
+  toJsonSchema(): unknown;
+  toJSONSchema?(options?: Readonly<{ io?: 'input' }>): unknown;
+}
+
+/**
+ * Runtime schema port implemented by Zod 4 object schemas or `@zhin.js/schema`.
  *
  * Requiring both public operations keeps validation and model-facing JSON
  * Schema projection on one contract without coupling this package to Zod.
  */
-export interface ExecutableToolInputSchema<T = unknown> {
-  safeParse(input: unknown): ExecutableToolInputParseResult<T>;
-  toJSONSchema(options?: Readonly<{ io?: 'input' }>): unknown;
-}
+export type ExecutableToolInputSchema<T = unknown> =
+  | ZhinToolInputSchema<T>
+  | {
+      readonly output?: never;
+      safeParse(input: unknown): ExecutableToolInputParseResult<T>;
+      toJSONSchema?(options?: Readonly<{ io?: 'input' }>): unknown;
+      toJsonSchema?(): unknown;
+    };
 
 export type ToolInputSchema<T = unknown> =
   | ToolInputJsonObjectSchema
@@ -50,7 +67,7 @@ export function isToolInputSchema(value: unknown): value is ToolInputSchema {
   if (isJsonObjectSchema(value)) return true;
   if (!isExecutableToolInputSchema(value)) return false;
   try {
-    return isJsonObjectSchema(value.toJSONSchema({ io: 'input' }));
+    return isJsonObjectSchema(projectExecutableSchema(value));
   } catch {
     return false;
   }
@@ -71,7 +88,7 @@ export function toolInputSchemaToParameters(
 ): ToolInputJsonObjectSchema {
   if (schema === undefined) return emptyObjectSchema();
   if (isExecutableToolInputSchema(schema)) {
-    return normalizeJsonObjectSchema(schema.toJSONSchema({ io: 'input' }));
+    return normalizeJsonObjectSchema(projectExecutableSchema(schema));
   }
   return normalizeJsonObjectSchema(schema);
 }
@@ -84,19 +101,56 @@ export function parseToolInputSchema<T>(
     return { ok: true, data: input as T };
   }
   const parsed = schema.safeParse(input);
-  if (parsed.success) return { ok: true, data: parsed.data };
+  if (parsed.success) {
+    if (typeof schema === 'function') {
+      const evaluated = (schema as (value: unknown) => unknown)(parsed.data);
+      return { ok: true, data: toPlainData(evaluated) as T };
+    }
+    return { ok: true, data: parsed.data as T };
+  }
 
   const error = parsed.error.issues
-    .map((issue) => `${issue.path?.map(String).join('.') || 'root'}: ${issue.message ?? 'invalid'}`)
+    .map((issue) => {
+      const path = Array.isArray(issue.path)
+        ? issue.path.map(String).join('.')
+        : (typeof issue.path === 'string' ? issue.path : '');
+      return `${path || 'root'}: ${issue.message ?? 'invalid'}`;
+    })
     .join('; ');
   return { ok: false, error: error || 'Invalid arguments' };
+}
+
+function projectExecutableSchema(schema: ExecutableToolInputSchema): unknown {
+  if (typeof schema.toJSONSchema === 'function') {
+    return schema.toJSONSchema({ io: 'input' });
+  }
+  if (typeof schema.toJsonSchema === 'function') {
+    return schema.toJsonSchema();
+  }
+  return undefined;
+}
+
+function toPlainData(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(toPlainData);
+  if (value !== null && typeof value === 'object') {
+    const proto = Object.getPrototypeOf(value);
+    if (proto === null || proto === Object.prototype) {
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        out[k] = toPlainData(v);
+      }
+      return out;
+    }
+  }
+  return value;
 }
 
 function isExecutableToolInputSchema<T = unknown>(
   value: unknown,
 ): value is ExecutableToolInputSchema<T> {
-  if (!isRecord(value)) return false;
-  return typeof value.safeParse === 'function' && typeof value.toJSONSchema === 'function';
+  if (!isObjectOrFunction(value)) return false;
+  return typeof value.safeParse === 'function'
+    && (typeof value.toJSONSchema === 'function' || typeof value.toJsonSchema === 'function');
 }
 
 function isJsonObjectSchema(value: unknown): value is ToolInputJsonObjectSchema {
@@ -126,4 +180,8 @@ function emptyObjectSchema(): ToolInputJsonObjectSchema {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isObjectOrFunction(value: unknown): value is Record<string, unknown> {
+  return value !== null && (typeof value === 'object' || typeof value === 'function') && !Array.isArray(value);
 }

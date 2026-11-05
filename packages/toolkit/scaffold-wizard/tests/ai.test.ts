@@ -57,14 +57,47 @@ describe('create-zhin ai config', () => {
 
 })
 
-describe('openai-compatible providers baseUrl', () => {
-  it('requires prefilled official baseUrl for zhipu/moonshot (runtime rejects empty baseUrl)', () => {
+describe('openai-compatible and domestic providers baseUrl & drivers', () => {
+  it('requires prefilled official baseUrl for zhipu/moonshot/qwen/siliconflow/openrouter/volcengine', () => {
     expect(PROVIDER_DEFAULT_BASE_URLS.zhipu).toBe('https://open.bigmodel.cn/api/paas/v4')
     expect(PROVIDER_DEFAULT_BASE_URLS.moonshot).toBe('https://api.moonshot.cn/v1')
-    // 这两个 provider 的 sdk 为 openai-compatible，runtime 无 baseUrl 无法建 provider
+    expect(PROVIDER_DEFAULT_BASE_URLS.qwen).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1')
+    expect(PROVIDER_DEFAULT_BASE_URLS.siliconflow).toBe('https://api.siliconflow.cn/v1')
+    expect(PROVIDER_DEFAULT_BASE_URLS.openrouter).toBe('https://openrouter.ai/api/v1')
+    expect(PROVIDER_DEFAULT_BASE_URLS.volcengine).toBe('https://ark.cn-beijing.volces.com/api/v3')
     expect(providerSdkFor('zhipu')).toBe('openai-compatible')
     expect(providerSdkFor('moonshot')).toBe('openai-compatible')
+    expect(providerSdkFor('qwen')).toBe('openai-compatible')
+    expect(providerSdkFor('siliconflow')).toBe('openai-compatible')
+    expect(providerSdkFor('openrouter')).toBe('openai-compatible')
+    expect(providerSdkFor('volcengine')).toBe('openai-compatible')
+    expect(providerSdkFor('minimax')).toBe('minimax')
     expect(PROVIDER_DEFAULT_BASE_URLS.openai).toBeUndefined()
+  })
+
+  it('materializes qwen and minimax plans with correct driver, protocol, and default baseUrl fallback', () => {
+    const plan = materializeAIPlan({
+      enabled: true,
+      agentProvider: 'qwen',
+      providers: {
+        qwen: { apiKey: '${AI_API_KEY}', models: ['qwen-plus'] },
+        minimax: { apiKey: '${AI_API_KEY}', models: ['MiniMax-M2.7'] },
+      },
+    })
+    expect(plan).toMatchObject({
+      services: {
+        qwen: {
+          driver: 'openai-compatible',
+          options: { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+          models: { 'qwen-plus': { protocol: 'openai-chat' } },
+        },
+        minimax: {
+          driver: 'minimax',
+          models: { 'MiniMax-M2.7': { protocol: 'anthropic-messages' } },
+        },
+      },
+      purposes: { chat: { profile: 'qwen:qwen-plus' } },
+    })
   })
 })
 

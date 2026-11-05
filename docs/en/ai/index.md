@@ -9,17 +9,55 @@ Out of the box Zhin only runs commands; it doesn't "chat". With AI enabled, **me
 
 AI is optional: without it, the bot depends on no model SDK and needs no API key.
 
-## Enable and select a model
+## 2-minute quick start
 
-```bash
-npx zhin setup --ai
-pnpm install
-pnpm dev
+1. **Run the setup wizard to choose a provider**:
+
+   ```bash
+   npx zhin setup --ai
+   pnpm install
+   ```
+
+   The wizard enables `ai: { enabled: true }` in `zhin.config.yml` and generates `ai.plan.yml` with your chosen provider preset (OpenAI, DeepSeek, Qwen/DashScope, SiliconFlow, Volcengine, MiniMax, OpenRouter, Anthropic, or local Ollama) plus `.env` placeholders.
+
+2. **Start the bot and chat immediately**:
+
+   ```bash
+   pnpm dev
+   ```
+
+   On first startup (when the Host database has no model graph yet), `ai.plan.yml` is **automatically seeded into the Host database** — you can open `/sandbox` and chat with the bot right away without manual Console steps! You can adjust Services, Accounts, Profiles, and purposes anytime in Console, and changes take effect on the very next turn without restarting the process.
+
+```yaml
+# Example ai.plan.yml (DeepSeek)
+version: 1
+services:
+  deepseek:
+    driver: deepseek
+    models:
+      deepseek-chat:
+        id: deepseek-chat
+        kinds: [language]
+        protocol: openai-chat
+        input: [text]
+        streaming: true
+        toolCalling: true
+accounts:
+  default:
+    service: deepseek
+    auth:
+      method: api-key
+      source: env://DEEPSEEK_API_KEY
+profiles:
+  chat-default:
+    account: default
+    model: deepseek-chat
+purposes:
+  chat:
+    profile: chat-default
 ```
 
-The wizard records explicit model IDs and capabilities in an `ai.plan.yml` import proposal. Start Console, review the proposal and explicitly import it. An empty Host can start without a model: configure a Service, Account, Profile and purpose in Console. The database graph is authoritative; updates affect the next operation without restarting the process.
-
-API Keys use the Host-private key form or an `env://AI_API_KEY` reference; values are not stored in the public graph. Host subscription Accounts use an explicit OAuth flow. Personal Accounts currently support API Keys. Install the optional AI stack (`@zhin.js/agent zod ai`) and the selected Driver's SDK; pure IM installations remain independent.
+API Keys live in `.env` (referenced via `env://AI_API_KEY`) or in the Host-private key form in Console. Host subscription Accounts use an explicit OAuth flow. Install the optional AI stack (`@zhin.js/agent zod ai`) and the selected Driver's SDK; pure IM installations remain independent.
 
 See [Services and subscription Accounts](../../ai/providers.md) and [upgrade and version boundaries](../../ai/provider-upgrade.md).
 
@@ -78,9 +116,9 @@ Everything lives under `ai:` in `zhin.config.yml`; `${VAR}` expands from environ
 
 ### Models and Agent roles
 
-Service, Account, Profile and purpose selection live in the runtime graph. `ai.plan.yml` is only an explicit import proposal; startup and hot reload never apply it automatically. Model names do not prove tool, media or streaming support. Directory refresh is explicit and its observations need capability confirmation before use.
+Service, Account, Profile, and purpose selection (`chat`, `compaction`, `ambient`, `perception`, etc.) live in the Host database. When the database is empty on first startup, `ai.plan.yml` is seeded automatically; you can also review/import proposals or update Profiles anytime in Console.
 
-`ai.agents` retains role authority, MCP selection and fallback display metadata. It does not contain provider/model/preset selectors. Endpoint account data takes precedence over configured nickname fallbacks. A role's model is selected by its `agents.<role>` Profile purpose. See [model policy](./model-policy.md).
+`ai.agents` retains role authority, MCP selection, and fallback display metadata. It does not contain provider/model/preset selectors. Endpoint account data takes precedence over configured nickname fallbacks. A role's model is selected by its `agents.<role>` Profile purpose. See [model policy](./model-policy.md).
 
 ### ai.mcpServers
 
@@ -184,7 +222,19 @@ Denied DMs get `denyMessage`; denied groups and channels get no reply.
 
 ### ai.multimodal.perception
 
-This section controls perception processing limits (`kinds`, `maxChars`, `timeoutMs`, `maxItemsPerTurn`). Model selection belongs to the runtime `perception` purpose, including only its explicitly configured fallback chain. A text-only chat model can receive a description from that service. Unsupported media is not silently presented as successfully understood.
+When the primary chat model does not support an incoming media type, the perception layer uses the `perception` Language Profile configured in `ai.plan.yml` or Console (including its explicitly configured fallback chain) to generate a description for the chat model:
+
+```yaml
+ai:
+  multimodal:
+    perception:
+      kinds: [image]
+      maxChars: 800
+      timeoutMs: 30000
+      maxItemsPerTurn: 4
+```
+
+Unsupported or failed media is explicitly marked as unrecognized and never silently presented as understood.
 
 ### ai.agent
 

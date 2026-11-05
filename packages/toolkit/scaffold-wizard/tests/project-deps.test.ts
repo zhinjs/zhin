@@ -172,3 +172,26 @@ it('installs the explicit proposal protocol SDKs without treating it as startup 
   expect(required).toMatchObject({ '@ai-sdk/openai': 'latest', '@ai-sdk/anthropic': 'latest', '@ai-sdk/google': 'latest', '@ai-sdk/minimax': 'latest', '@ai-sdk/openai-compatible': 'latest' });
   expect(getRequiredAIDependenciesForConfig({ ai: { enabled: true } }, { services: { unknown: { driver: 'opencode-go', models: { 'claude-name-does-not-prove-protocol': {} } } } })).not.toHaveProperty('@ai-sdk/anthropic');
 });
+
+it('diagnoseAIDependencies reads ai.plan.yml in cwd when proposal is not explicitly passed', async () => {
+  const { diagnoseAIDependencies } = await import('../src/project-deps.js');
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-ai-plan-diag-'));
+  try {
+    await fs.writeJson(path.join(dir, 'package.json'), {
+      name: 'fixture',
+      version: '0.0.0',
+      dependencies: { '@zhin.js/agent': 'latest', ai: '^7.0.35', zod: 'latest' },
+    });
+    await fs.writeFile(
+      path.join(dir, 'ai.plan.yml'),
+      'version: 1\nservices:\n  deepseek:\n    driver: deepseek\naccounts:\n  deepseek:\n    service: deepseek\nprofiles:\n  deepseek:deepseek-chat:\n    account: deepseek\n    model: deepseek-chat\npurposes:\n  chat:\n    profile: deepseek:deepseek-chat\n',
+      'utf8',
+    );
+    const diag = diagnoseAIDependencies(dir, { ai: { enabled: true } });
+    expect(diag).not.toBeNull();
+    expect(diag?.required).toHaveProperty('@ai-sdk/deepseek');
+    expect(diag?.missingFromPackageJson).toContain('@ai-sdk/deepseek');
+  } finally {
+    await fs.remove(dir);
+  }
+});

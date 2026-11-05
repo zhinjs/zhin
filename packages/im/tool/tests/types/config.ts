@@ -1,6 +1,7 @@
 /** #857: a typed plugin config in convention tool files without spelling out every type argument. */
 import { expectTypeOf } from 'vitest';
 import { z } from 'zod';
+import { Schema } from '../../../../../basic/schema/src/index.js';
 import type { PluginSetupContext } from '@zhin.js/plugin-runtime';
 import { defineAgentTool } from '../../src/index.js';
 
@@ -51,3 +52,19 @@ defineAgentTool<{ city: string }, string, Config>({
     return input.city;
   },
 });
+
+// @zhin.js/schema Schema.object() infers args with defaulted fields as required output properties.
+const zhinSchemaTool = defineAgentTool({
+  name: 'test',
+  description: 'test',
+  inputSchema: Schema.object({
+    query: Schema.string().required(),
+    limit: Schema.number().default(5),
+  }),
+  execute(args) {
+    expectTypeOf(args.query).toEqualTypeOf<string>();
+    expectTypeOf(args.limit).toEqualTypeOf<number>();
+    return `${args.query}:${args.limit}`;
+  },
+});
+expectTypeOf(zhinSchemaTool.execute).returns.toEqualTypeOf<string | Promise<string>>();

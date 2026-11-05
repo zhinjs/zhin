@@ -15,4 +15,11 @@ describe('page shell and runtime.sandbox (ADR 0044)', () => {
     expect(html).not.toContain('resolveSandboxWsUrl');
     expect(renderPageShell(page, { runtimeSandbox: false })).toContain('/assets/client/sandbox.js');
   });
+
+  it('includes a token input form and ?token= query bootstrap in the sandbox shell', () => {
+    const html = renderPageShell(page, { runtimeSandbox: true });
+    expect(html).toContain('id="token-form"');
+    expect(html).toContain('id="token-input"');
+    expect(html).toContain("new URLSearchParams(location.search).get('token')");
+  });
 });

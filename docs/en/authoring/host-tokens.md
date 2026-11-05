@@ -9,10 +9,12 @@ What the framework provides — sending messages, the database, schedules, HTTP 
 
 ## How to use them
 
-| Where | How |
-| --- | --- |
-| `setup` in `plugin.ts` | `context.resources.use(token)` |
-| While a command, tool or schedule runs | `use(token)` on its execution argument |
+| Where | Check an optional token (no `try/catch` needed) | Get the token |
+| --- | --- | --- |
+| `setup` in `plugin.ts` | `context.resources.has(token)` | `context.resources.use(token)` |
+| While a command, middleware, component, tool or schedule runs | `context.has(token)` on its execution argument | `context.use(token)` on its execution argument |
+
+> Tip: Every built-in capability context (commands, middleware, components, Agent tools, schedules) provides both `has(token)` and `use(token)`. Check optional Host tokens (such as `databaseHostToken` or `aiCompletionToken`) with `context.has(token)` before calling `context.use(token)`—no `try/catch` needed.
 
 ```ts
 // plugin.ts: send "Good morning" to a group every day at 9:00

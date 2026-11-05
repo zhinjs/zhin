@@ -106,6 +106,10 @@ export class Schema<S = any, T = S> {
     toJsonSchema(): Readonly<Record<string, unknown>> {
         return toJsonSchema(this);
     }
+    /** Alias for `toJsonSchema()` so `Schema` satisfies standard `ExecutableToolInputSchema` ports. */
+    toJSONSchema(): Readonly<Record<string, unknown>> {
+        return this.toJsonSchema();
+    }
     /** 设置选项列表 */
     option(list: (T | Schema.Option<T>)[]): this {
         this.meta.options = Schema.formatOptionList(list);

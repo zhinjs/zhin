@@ -52,76 +52,7 @@ export default definePlugin({
 Both styles share the same command table and conflict detection. As commands grow, move them into `commands/`; editing one then reloads only that file.
 :::
 
-## Platform types and the operation Session
-
-Load installed adapter declarations once in the project, for example by including `"node"` and `"@zhin.js/adapter-icqq"` in `compilerOptions.types` while preserving existing entries. Business commands do not import Adapter classes. Installing a package alone does not make TypeScript scan its declarations.
-
-```ts
-import { defineCommand } from 'zhin.js/command';
-
-export default defineCommand({
-  adapter: 'icqq',
-  params: { text: { type: 'text' } },
-  options: { silent: { type: 'boolean', default: false } },
-  async execute({ session, params, options }) {
-    if (!session) return;
-    session.adapter;  // IcqqAdapter
-    session.endpoint; // IcqqEndpoint, extending the actual ICQQ Client
-    session.scene;    // Narrow kind before using scene-specific fields
-    session.sender;   // Separate platformRoles and authorizationRoles
-    session.event;    // The original SDK callback object
-    if (!options.silent) await session.reply(params.text);
-  },
-});
-```
-
-Parameter, option, `withConfig`, and factory inference remains intact. Direct execution without a real IM input has no Session. Canonical message handlers and inbound middleware share the same operation view; unrelated native callbacks do not fabricate one.
-
-Stopping or reconnecting the account cancels the captured signal. Framework replies cannot switch to a replacement connection. Retaining an SDK reference does not make direct native calls cancellable; use the unified send chain.
-
 ## Common tasks
-
-### Browse loaded commands
-
-With the Command Feature enabled, the built-in keyword is **`菜单`** (Chinese for “menu”); no help plugin is needed. Send it in a bot conversation like any other command. If the current account uses `commandPrefix: '/'`, prefix every message below with `/`:
-
-| Message (without a prefix) | Result |
-| --- | --- |
-| `菜单` | Commands, descriptions, and immediate child plugins of the root plugin |
-| `菜单 rss` | Commands and immediate children of the plugin instance named `rss` |
-| `菜单 foo.bar` | Commands and children of nested plugin `bar` under `foo` |
-| `菜单 --page 2` | The second page of the root menu |
-| `菜单 rss --page 2` | The second page of the `rss` instance menu |
-| `remind --help` | A command's parameters, options, and usage, without executing it |
-
-The menu browses one plugin at a time; it does not flatten every plugin's commands into one list. Plugin names here are **instance keys**, not npm package names. Start with `菜单` and follow the child plugin names it returns.
-
-Set the keyword at the top level of the project's `zhin.config.yml`, alongside `plugins`:
-
-```yaml
-menuKeyword: help
-```
-
-This changes the entry to `help` (or `/help` with a `/` prefix). Set `menuKeyword: false` or `menuKeyword: ''` to disable the built-in menu. Without configuration, the keyword remains `菜单`; `help` is not a default alias.
-
-With `@zhin.js/html-renderer` installed, the menu emits a styled HTML card through the unified outbound pipeline. Image-capable platforms receive a menu image; native HTML platforms follow their declared HTML policy. If rendering fails or the platform requires text or cannot accept the generated image, the original text menu is preserved. Without a renderer, it remains plain text. Browsing, prefixes and custom keywords are unchanged.
-
-Each page contains at most **30 entries**, counting commands and child plugins together. The menu shows totals, the current page and explicit previous/next messages, using the current prefix and keyword. Text fallback uses the same page; it never sends every page at once. Page numbers must be positive integers; out-of-range requests report the actual page count. Long names and descriptions in the image are limited to two lines; command help retains the full declaration.
-
-On endpoints declaring **both native Markdown and native keyboard support**, a multi-page menu also includes a Markdown page indicator and **Previous / Next** buttons. Previous is disabled on the first page, Next on the last; a single-page menu omits the controls. Each click sends the requested page through the unified reply pipeline, preserving the custom keyword, prefix and plugin target. Callback bindings stay within the original conversation and generation; expired or retired-generation buttons cannot invoke old handlers. Endpoints missing either capability retain the textual navigation. Telegram's disabled button wire format requires Bot API 10.3+; see [DisabledButton](https://core.telegram.org/bots/api#disabledbutton).
-
-The default artwork, ornaments and icons are embedded; they need no external downloads. Customize the presentation at the project root:
-
-```yaml
-menuStyle:
-  title: My Bot · Command Atlas
-  subtitle: A little help for your everyday
-  accentColor: '#e7c993'
-  # Optional: your own artwork; omit to use the built-in landscape.
-  backgroundImage: https://example.com/my-menu.webp
-```
-
-`backgroundImage` accepts HTTP(S) URLs or PNG/JPEG/WebP base64 data URLs, not file paths or executable CSS. Remote artwork must be reachable from the bot host; its availability is independent of the HTML renderer. Use a data URL for fully offline custom artwork. `accentColor` accepts a six-digit hex color; invalid optional values use the defaults. These settings change image presentation only.
 
 ### Accept parameters
 
@@ -287,10 +218,39 @@ Policies require a genuine Core inbound operation and complete identity. Direct 
 | Return value | Effect |
 | --- | --- |
 | A string | Text reply |
+| JSX (`<card>`, `<html><Card>...</Card></html>`, `<button onClick>`, etc.) | Sends rich messages, visual image cards, or interactive buttons adapted to each platform |
 | `component('status-card', props)` | Renders a [component](./middleware-components.md); image-capable platforms show it as an image |
 | `raw({ type: 'html', data: { html, width } })` | A platform segment sent as-is |
 | An array of the above | Multiple segments |
 | `undefined` | No reply (e.g. you already replied with `input.$reply()`) |
+
+Save a command as `.tsx` (e.g. `commands/poll/index.tsx`) to return JSX directly—including native `<card>`, visual image cards (`<html><Card>...</Card></html>`), and interactive `<button onClick>` (which renders native buttons on supported platforms and automatically degrades to numbered replies on text platforms):
+
+```tsx
+// commands/poll/index.tsx
+import { defineCommand } from 'zhin.js/command';
+import { Card, CardHeader, Badge } from '@zhin.js/components';
+
+export default defineCommand({
+  description: 'Start a release confirmation poll',
+  execute: () => (
+    <>
+      <card title="Release Confirmation" content="Ship v1.1.0 now?" />
+      <html>
+        <Card>
+          <CardHeader title={<strong>Release Checklist</strong>} badge={<Badge>Ready</Badge>} />
+          <p>Build and unit tests have passed.</p>
+        </Card>
+      </html>
+      <button onClick={async (clickMsg) => `Confirmed by ${clickMsg.sender?.name ?? clickMsg.sender?.id}!`}>
+        Confirm
+      </button>
+    </>
+  ),
+});
+```
+
+You can also invoke a registered component by name:
 
 ```ts
 // commands/card/index.ts
@@ -303,7 +263,53 @@ export default defineCommand({
 });
 ```
 
-For multi-step conversations, return a `Promise`: send the first reply, then keep sending with `input.$reply(...)`.
+### Multi-turn interactive prompts (`context.interaction`)
+
+When a command needs to ask follow-up questions mid-execution (`type: 'confirm' | 'select' | 'text' | 'number'`, or `interaction.select()` / `pick`-style choices), use `interaction` from the `execute` argument:
+
+```ts
+// commands/deploy/index.ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: 'Interactive deploy wizard',
+  async execute({ interaction }) {
+    if (!interaction) return 'Interactive prompts are not supported in this environment';
+
+    const env = await interaction.ask({
+      type: 'select',
+      title: 'Choose the target environment:',
+      options: [
+        { label: 'Staging (staging)', value: 'staging' },
+        { label: 'Production (prod)', value: 'prod' },
+      ],
+    });
+
+    const replicas = await interaction.ask({
+      type: 'number',
+      title: 'Enter replica count (1-10):',
+      min: 1,
+      max: 10,
+      integer: true,
+      default: 2,
+    });
+
+    const notes = await interaction.ask({
+      type: 'text',
+      title: 'Enter release notes:',
+      default: 'Routine maintenance update',
+    });
+
+    const confirmed = await interaction.ask({
+      type: 'confirm',
+      title: `Deploy to ${env} (${replicas} replicas, notes: ${notes})?`,
+      default: false,
+    });
+
+    return confirmed ? `Deploying to ${env} (${replicas} replicas)` : 'Deployment cancelled';
+  },
+});
+```
 
 ### Know who sent it and where
 
@@ -428,6 +434,75 @@ qq:
 
 The Sandbox created by `npm create zhin-app` is set to `/`.
 
+### Browse loaded commands
+
+With the Command Feature enabled, the built-in command menu responds out of the box to **`菜单`**, **`帮助`**, **`help`**, and **`menu`** (as well as `/help`, `/menu`, and `@Bot 菜单`)—no separate help plugin is needed. When total commands are **≤ 8**, the first page automatically flattens root commands so users can see them at a glance; with more than 8 commands, it browses by plugin layer and page. If the current account uses `commandPrefix: '/'`, you can also prefix these messages with `/`:
+
+| Message (without a prefix) | Result |
+| --- | --- |
+| `菜单` / `帮助` / `help` / `menu` | Commands, descriptions, and immediate child plugins of the root plugin (automatically flattens root commands when total ≤ 8) |
+| `菜单 rss` | Commands and immediate children of the plugin instance named `rss` |
+| `菜单 foo.bar` | Commands and children of nested plugin `bar` under `foo` |
+| `菜单 --page 2` | The second page of the root menu |
+| `菜单 rss --page 2` | The second page of the `rss` instance menu |
+| `remind --help` | A command's parameters, options, and usage, without executing it |
+
+Plugin names here are **instance keys**, not npm package names. Start with `菜单` or `help` and follow the child plugin names it returns.
+
+You can customize the primary menu keyword at the top level of the project's `zhin.config.yml`, alongside `plugins`:
+
+```yaml
+menuKeyword: help
+```
+
+Set `menuKeyword: false` or `menuKeyword: ''` to disable the built-in menu.
+
+With `@zhin.js/html-renderer` installed, the menu emits a styled HTML card through the unified outbound pipeline. Image-capable platforms receive a menu image; native HTML platforms follow their declared HTML policy. If rendering fails or the platform requires text or cannot accept the generated image, the original text menu is preserved. Without a renderer, it remains plain text. Browsing, prefixes and custom keywords are unchanged.
+
+Each page contains at most **30 entries**, counting commands and child plugins together. The menu shows totals, the current page and explicit previous/next messages, using the current prefix and keyword. Text fallback uses the same page; it never sends every page at once. Page numbers must be positive integers; out-of-range requests report the actual page count. Long names and descriptions in the image are limited to two lines; command help retains the full declaration.
+
+On endpoints declaring **both native Markdown and native keyboard support**, a multi-page menu also includes a Markdown page indicator and **Previous / Next** buttons. Previous is disabled on the first page, Next on the last; a single-page menu omits the controls. Each click sends the requested page through the unified reply pipeline, preserving the custom keyword, prefix and plugin target. Callback bindings stay within the original conversation and generation; expired or retired-generation buttons cannot invoke old handlers. Endpoints missing either capability retain the textual navigation. Telegram's disabled button wire format requires Bot API 10.3+; see [DisabledButton](https://core.telegram.org/bots/api#disabledbutton).
+
+The default artwork, ornaments and icons are embedded; they need no external downloads. Customize the presentation at the project root:
+
+```yaml
+menuStyle:
+  title: My Bot · Command Atlas
+  subtitle: A little help for your everyday
+  accentColor: '#e7c993'
+  # Optional: your own artwork; omit to use the built-in landscape.
+  backgroundImage: https://example.com/my-menu.webp
+```
+
+`backgroundImage` accepts HTTP(S) URLs or PNG/JPEG/WebP base64 data URLs, not file paths or executable CSS. Remote artwork must be reachable from the bot host; its availability is independent of the HTML renderer. Use a data URL for fully offline custom artwork. `accentColor` accepts a six-digit hex color; invalid optional values use the defaults. These settings change image presentation only.
+
+## Platform types and the operation Session
+
+Load installed adapter declarations once in the project, for example by including `"node"` and `"@zhin.js/adapter-icqq"` in `compilerOptions.types` while preserving existing entries. Business commands do not import Adapter classes. Installing a package alone does not make TypeScript scan its declarations.
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  adapter: 'icqq',
+  params: { text: { type: 'text' } },
+  options: { silent: { type: 'boolean', default: false } },
+  async execute({ session, params, options }) {
+    if (!session) return;
+    session.adapter;  // IcqqAdapter
+    session.endpoint; // IcqqEndpoint, extending the actual ICQQ Client
+    session.scene;    // Narrow kind before using scene-specific fields
+    session.sender;   // Separate platformRoles and authorizationRoles
+    session.event;    // The original SDK callback object
+    if (!options.silent) await session.reply(params.text);
+  },
+});
+```
+
+Parameter, option, `withConfig`, and factory inference remains intact. Direct execution without a real IM input has no Session. Canonical message handlers and inbound middleware share the same operation view; unrelated native callbacks do not fabricate one.
+
+Stopping or reconnecting the account cancels the captured signal. Framework replies cannot switch to a replacement connection. Retaining an SDK reference does not make direct native calls cancellable; use the unified send chain.
+
 ## What happens on bad input
 
 | Situation | Bot behavior |
@@ -473,13 +548,38 @@ Real examples: [QR code](https://github.com/zhinjs/zhin/tree/main/plugins/utils/
 | `segments` | Remaining segments, keeping images, mentions and other non-text content |
 | `config` | This plugin's config |
 | `input` | The message that triggered the command; may be absent for Host or programmatic calls |
+| `session` | Bound single-operation platform session (`adapter`, `endpoint`, `scene`, `sender`, `event`, `reply`) |
+| `$client` | Typed platform endpoint client when `adapter` is specified |
+| `interaction` | Multi-turn interactive prompt API (`ask` / `sequence`), see [Multi-turn interactive prompts](#multi-turn-interactive-prompts-context-interaction) |
 | `adapter` | Adapter instance id, e.g. `root/icqq` |
 | `endpoint` | Account / connection name |
 | `scene` | `{ id, type, name? }`: group, DM or channel |
 | `sender` | `{ id, name?, role: string[] }`: the sender and their roles |
+| `has(token)` | Check if an optional capability or Host token is available before calling `use(token)` |
 | `use(token)` | Get a service provided by the plugin; throws when missing |
+| `locale` | Active locale for the message or conversation (e.g. `'zh-CN'`, `'en'`) |
+| `formatCommand(localPath)` | Format a command display string using the current account's `commandPrefix` and plugin `commandNamespace` |
+| `signal` | `AbortSignal` for the current operation or generation, cancelled on hot reload or account disconnect |
 | `owner` | The plugin that owns the command |
 | `generation` | Current version number (increments on each hot reload) |
+
+### Unit testing a command
+
+With `createFakeMessage` and `runCommand` from [`@zhin.js/testing`](./testing.md), you can unit-test a command in 10 lines—`runCommand` automatically parses positional `args` and fills option defaults from your command declaration:
+
+```ts
+import { createFakeMessage, createFakePlugin, runCommand } from '@zhin.js/testing';
+import remind from '../commands/remind/index.js';
+
+it('parses positional args and fills option defaults', async () => {
+  const fake = createFakePlugin();
+  const input = createFakeMessage({ sender: { id: 'u1', name: 'Alice' } });
+  const reply = await runCommand(fake, remind, { input, args: ['10', 'drink water'] });
+  expect(reply).toBe("OK, I'll remind you in 10 min: drink water");
+});
+```
+
+See [Testing Plugins](./testing.md) for the full guide.
 
 `input` isn't always a message (it may come from a Host call), so type-check before reading the sender; for non-message sources `$reply` does nothing. `input` is typed as `CommandMessage` by default, structurally compatible with the runtime `Message` (layering prevents `@zhin.js/command` from depending on `@zhin.js/core`).
 

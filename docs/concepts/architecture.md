@@ -166,4 +166,17 @@ Plugin Runtime、HTTP 契约和 Console wire 契约，不依赖 Core 或 Agent�
 
 `@zhin.js/jsx` 提供惰性 JSX tree 与 HTML serializer，仅依赖基础 `im-contract` 的类型。Core 默认把 JSX 排版成有序 Segment；只有 `<html>` / `<Html>` 子树转为 `segment.html`。小写原生标签具有类型提示且无需导入，注册组件可按名字作为标签使用；`zhin.js/jsx` 是作者门面。可选 `@zhin.js/components` 使用 JSX 基础包及 Markdown／代码高亮依赖，展示位接受 `JSXRenderable`，不依赖 Core、React 或图片引擎。图片工具只消费 HTML，平台差异由 Adapter 声明策略承接。
 
+```tsx
+// 1. 原生消息段 JSX（自动降级为各平台原生卡片/按钮或文本菜单）
+<card title="构建结果">
+  <text>全部测试已通过</text>
+  <button onClick={async () => '已触发发布'}>发布到生产</button>
+</card>
+
+// 2. HTML 子树（经 @zhin.js/html-renderer 渲染为高清图片段发出）
+<html>
+  <div style={{ padding: '24px', background: '#0f172a', color: '#f8fafc' }}>状态看板</div>
+</html>
+```
+
 可选 `@zhin.js/tailwind` 使用官方 Tailwind 编译器将静态工具类转换为内联样式，输出可用于 JSX、组件局部样式和共享主题。它不依赖 Core、组件库或渲染引擎；JSX 基础包也不加载它。图片渲染统一由可选 `@zhin.js/html-renderer` 使用 `@pixel.js/shotium` 完成，不再维护 Satori 图片工具包。

@@ -57,7 +57,7 @@ export const DEFAULT_TOOL_BUDGET: ToolBudgetSettings = Object.freeze({
   autoContinue: 'master_dm',
   maxContinuations: 2,
   progressUpdates: 'private',
-  progressMinIntervalMs: 45_000,
+  progressMinIntervalMs: 15_000,
   progressMaxUpdates: 3,
 });
 

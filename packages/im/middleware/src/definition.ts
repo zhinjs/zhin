@@ -102,6 +102,21 @@ export type MiddlewareAuthoringDefinition<TInput, TConfig> =
       }
     }[RegisteredAdapterName];
 
+/**
+ * Returned by `defineMiddleware.withConfig<Config>()`: fixes the plugin config type while
+ * keeping inbound/outbound input inference intact.
+ *
+ * @public
+ */
+export interface MiddlewareDefiner<TConfig> {
+  <TInput = unknown>(
+    definition: Extract<MiddlewareAuthoringDefinition<TInput, TConfig>, { readonly target: 'outbound' }>,
+  ): Readonly<Extract<MiddlewareDefinition<TInput, TConfig>, { readonly target: 'outbound' }>>;
+  <TInput = unknown>(
+    definition: Extract<MiddlewareAuthoringDefinition<TInput, TConfig>, { readonly target?: 'inbound' }>,
+  ): Readonly<Extract<MiddlewareDefinition<TInput, TConfig>, { readonly target: 'inbound' }>>;
+}
+
 export function defineMiddleware<TInput = unknown, TConfig = unknown>(
   definition: Extract<MiddlewareAuthoringDefinition<TInput, TConfig>, { readonly target: 'outbound' }>,
 ): Readonly<Extract<MiddlewareDefinition<TInput, TConfig>, { readonly target: 'outbound' }>>;
@@ -133,6 +148,14 @@ export function defineMiddleware<TInput = unknown, TConfig = unknown>(
     MiddlewareDefinition<TInput, TConfig, string | undefined>
   >;
 }
+
+/**
+ * Fix the plugin config type first, then define the middleware.
+ */
+defineMiddleware.withConfig = function withConfig<TConfig = unknown>(): MiddlewareDefiner<TConfig> {
+  return ((definition: MiddlewareAuthoringDefinition<unknown, TConfig>) =>
+    defineMiddleware(definition as never)) as MiddlewareDefiner<TConfig>;
+};
 
 /** @internal Runtime validation for convention-discovered modules. */
 export function parseMiddlewareDefinition(value: unknown): MiddlewareDefinition {

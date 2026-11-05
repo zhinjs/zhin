@@ -9,19 +9,57 @@ description: "给 Bot 接入大模型：三步启用、AI 什么时候会回复�
 
 AI 是可选的：不启用时，Bot 不依赖任何模型 SDK，也不需要 API Key。
 
-## 启用与选型
+## 2 分钟快速上手
 
-```bash
-npx zhin setup --ai
-pnpm install
-pnpm dev
+1. **运行向导选择模型服务**：
+
+   ```bash
+   npx zhin setup --ai
+   pnpm install
+   ```
+
+   向导会在 `zhin.config.yml` 中开启 `ai: { enabled: true }`，并根据你选择的预设（OpenAI、DeepSeek、通义千问 DashScope、硅基流动 SiliconFlow、火山引擎 Volcengine、MiniMax、OpenRouter、Anthropic 或本地 Ollama）生成 `ai.plan.yml` 与 `.env` 密钥占位。
+
+2. **启动并直接开聊**：
+
+   ```bash
+   pnpm dev
+   ```
+
+   首次启动（数据库尚无模型配置）时，`ai.plan.yml` 会**自动种子化（seed）导入 Host 数据库**——无需手动打开 Console 点击导入，直接访问本地 `/sandbox` 就能和 Bot 对话！后续你可以随时在 Console 的「模型管理」页面调整服务、账号、Profile 和用途，保存后下一轮对话立即生效，无需重启进程。
+
+```yaml
+# ai.plan.yml 示例（DeepSeek）
+version: 1
+services:
+  deepseek:
+    driver: deepseek
+    models:
+      deepseek-chat:
+        id: deepseek-chat
+        kinds: [language]
+        protocol: openai-chat
+        input: [text]
+        streaming: true
+        toolCalling: true
+accounts:
+  default:
+    service: deepseek
+    auth:
+      method: api-key
+      source: env://DEEPSEEK_API_KEY
+profiles:
+  chat-default:
+    account: default
+    model: deepseek-chat
+purposes:
+  chat:
+    profile: chat-default
 ```
 
-向导选择服务、模型 ID 和明确支持的能力，生成 `ai.plan.yml` 导入提案。启动后在 Console 预览并确认导入；也可以从空 Host 开始，直接在 Console 配置服务、账号、Profile 和用途。模型设置持久化在数据库中，下一次调用生效，不重启整个进程。
+云端 API Key 保存在 `.env` 并通过 `env://...` 引用，或在 Console 私有密钥表单中输入；Host 的订阅账号通过 OAuth 登录授权。详见[模型服务与订阅账号](./providers.md)和[目标接口升级](./provider-upgrade.md)。
 
-云端 API Key 可以放在 `.env` 并通过 `env://AI_API_KEY` 引用，或在 Console 私有密钥表单输入。Host 的订阅账号通过明确的 OAuth 登录流程授权。见[模型服务与订阅账号](./providers.md)和[目标接口升级](./provider-upgrade.md)。
-
-手动安装仍采用可选 AI 分档：`pnpm add @zhin.js/agent zod ai`，并按 Driver 安装所需 `@ai-sdk/*`。命令／工具目录还需要相应 Feature 声明。默认 IM 安装不引入 AI 引擎或模型 SDK。
+手动安装同样采用按需 AI 分档：`pnpm add @zhin.js/agent zod ai`，并按 Driver 安装对应 `@ai-sdk/*`。默认 IM 安装不引入 AI 引擎或模型 SDK。
 
 ## AI 什么时候会回复
 
@@ -78,7 +116,7 @@ export default defineAgentTool<{ city: string }>({
 
 ### 模型服务与角色
 
-Service、Account、Profile 和用途在 Console 管理，独立文件 `ai.plan.yml` 只作为显式导入提案。完整示例见[模型服务与订阅账号](./providers.md)。旧 `ai.providers`、`modelCatalog/modelPolicy` 及 Agent 中的 provider/model/preset 需要[显式迁移](./provider-upgrade.md)。
+Service、Account、Profile 和用途（`chat`、`compaction`、`ambient`、`perception` 等）保存在 Host 数据库中。首次启动时若数据库为空，`ai.plan.yml` 会自动导入作为初始配置；之后也可在 Console 中预览导入或随时在线调整。完整示例见[模型服务与订阅账号](./providers.md)与[个人 Session 与用途选择](./model-policy.md)。旧 `ai.providers`、`modelCatalog/modelPolicy` 及 Agent 中的 provider/model/preset 需要[显式迁移](./provider-upgrade.md)。
 
 `ai.agents` 只保留角色的昵称兜底、MCP 选择与权限；平台资料优先于配置昵称。角色对应的模型由用途 `agents.<name>.profile` 选择，不在角色里复制服务或密钥。
 
@@ -105,7 +143,7 @@ ai:
 
 Host 将 MCP 标准图片块及嵌入的图片资源保存到工作区的 `data/agent-assets`，在工具日志和模型上下文里只留下资源 ID、类型、大小和到期时间，不自动上传 R2。模型需要看图时调用 `get_local_assets(asset_id)`（本地资源工具）；仅原 Host、账号、会话、发起人及继承该身份的授权子任务可读取，不增加发布审批。
 
-有视觉能力的模型只在下一次请求中收到图片输入，原图不会作为文本或历史消息保存。文本模型使用已配置的 `ai.agent.perception` 服务，原图会发送给该识图供应商；未配置、到期或识图失败会明确标为未识别。按需查看共用本回合的识图数量预算，主任务和子任务不各自重置额度；识图调用计入用量。
+有视觉能力的模型只在下一次请求中收到图片输入，原图不会作为文本或历史消息保存。文本模型使用已配置的 `perception` 用途 Profile（配合 [`ai.multimodal.perception`](#ai-multimodal-perception)），原图会发送给该识图供应商；未配置、到期或识图失败会明确标为未识别。按需查看共用本回合的识图数量预算，主任务和子任务不各自重置额度；识图调用计入用量。
 
 本地图片保留 7 天，读取不延长。每 Host 最多 1 GiB 或 1,000 张，单张 25 MiB；启动、写入前和每小时清理过期资源。清理后仍满则拒存新图并返回明确说明，不删除未过期图片，也不自动上传云端。该目录仅供 Host 管理，通用文件工具不能读取；不要将整个 `data` 目录作为公开静态文件目录。程序直接使用 Agent 而不安装 Host 时，需注入本地资源存储与认证会话范围；否则 MCP 图片返回不可用提示。
 

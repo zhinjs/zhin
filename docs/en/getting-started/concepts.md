@@ -63,11 +63,11 @@ The most common point of confusion: a Zhin project has **two** places for config
 
 | File | Answers | Typical contents |
 | --- | --- | --- |
-| `zhin` field in `package.json` | **What is installed** (structure) | entry file, which Features are used, which child plugins are mounted |
-| `zhin.config.yml` | **How it is configured** (values) | HTTP port, platform credentials, AI models, per-plugin settings |
+| `zhin` field in `package.json` | **Plugin contract** (structure) | plugin entry file (`entry`) and capability packages (`features`) |
+| `zhin.config.yml` | **What is mounted & how it is configured** (instances & values) | mounted child plugins and adapters (`plugins:`), HTTP port, platform credentials, per-plugin settings |
 | `.env` | **Secrets** | tokens and API keys, referenced from yml as `${HTTP_TOKEN}` |
 
-In `zhin.config.yml`, the Root plugin's settings go under `plugin:` and each child plugin's under `<instanceKey>:`. More: [Config as data](../concepts/config-as-data.md) · [Configuration](../configuration/index.md)
+In `zhin.config.yml` (`configVersion: 2`), mounted child plugins are declared under `plugins:`, the Root plugin's settings go under `plugin:`, and each child plugin's settings go under `<instanceKey>:`. More: [Config as data](../concepts/config-as-data.md) · [Configuration](../configuration/index.md)
 
 ### Console
 
@@ -83,7 +83,15 @@ When your Root plugin depends on `zhin.js`, it inherits the common Stable Featur
 
 ### instanceKey (plugin instance)
 
-The name you give a child plugin when mounting it, e.g. `{ "package": "./plugins/ping-pong", "instanceKey": "ping-pong" }`. It decides which section of `zhin.config.yml` the child reads. The same package can be mounted several times under different instanceKeys, each with its own config.
+The name you give a child plugin when mounting it under `plugins:` in `zhin.config.yml`:
+
+```yaml
+configVersion: 2
+plugins:
+  ping-pong: './plugins/ping-pong'
+```
+
+Here `ping-pong` is the `instanceKey` — it decides which top-level section of `zhin.config.yml` (`ping-pong:`) the child reads. The same package can be mounted several times under different `instanceKey`s, each with its own config.
 
 ### Host
 
@@ -104,7 +112,7 @@ The one rule for plugin authors: **anything you acquire in `setup()` (timers, co
 | Term | In one sentence | More |
 | --- | --- | --- |
 | **Agent** | Takes over messages that match no command and answers with an LLM. Triggers by default in DMs; in groups use a prefix such as `ai:` or a mention | [AI overview](../ai/index.md) |
-| **Provider** | Connection settings for a model service (OpenAI, Ollama…), under `ai.providers` | [AI overview](../ai/index.md) |
+| **Provider** | Model services, accounts, and profiles (OpenAI, DeepSeek, Ollama…), seeded via `npx zhin setup --ai` (`ai.plan.yml`) and managed in Console | [AI overview](../ai/index.md) |
 | **Tool** | A function the AI may call, e.g. weather lookup or a DB query. Permissions and approval are enforced by framework policy | [Agent tools](../authoring/agent-tools.md) |
 | **Skill** | A `SKILL.md` playbook the AI loads only when needed — good for packaging a procedure | [Agent tools](../authoring/agent-tools.md) |
 | **Prompt Section** | Background knowledge a plugin contributes to the AI (terms, rules). It changes context only and grants no permissions | [Agent tools](../authoring/agent-tools.md) |

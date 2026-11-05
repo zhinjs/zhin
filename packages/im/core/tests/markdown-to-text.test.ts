@@ -7,7 +7,7 @@ describe('readable Markdown fallback', () => {
   });
   it('preserves list nesting, task state, ordered lists and table columns', () => {
     expect(markdownToPlainText('# 任务\n- [x] 已完成\n  - [ ] 待验证\n1. 发布\n| 任务 | 状态 |\n| --- | --- |\n| 早报 | 暂停 |'))
-      .toBe('任务\n• [x] 已完成\n  • [ ] 待验证\n1. 发布\n| 任务 | 状态 |\n| --- | --- |\n| 早报 | 暂停 |');
+      .toBe('任务\n• [x] 已完成\n  • [ ] 待验证\n1. 发布\n任务 | 状态\n早报 | 暂停');
   });
 
   it('keeps actionable destinations, nested labels, parentheses and image alt without media data', () => {

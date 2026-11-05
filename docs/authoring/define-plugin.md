@@ -115,7 +115,7 @@ export default definePlugin({
 
 - `.default()` 或 `.required()` 的字段在类型上一定存在，其余字段可选。
 - `.secret()` 会让 Console 隐藏输入内容。密钥的值仍然写在 `zhin.config.yml` 里引用环境变量，例如 `apiKey: ${SUBSCRIPTION_API_KEY}`。
-- `schema.json` 和内联 `config` 只能二选一，同时存在会拒绝启动，见下文 [选择配置来源](#choose-a-config-source)。
+- `definePlugin({ config: Schema.object(...) })` 开箱即支持运行时校验与默认值填充；如果你同时为 IDE / Console 元数据生成了结构完全一致的 `schema.json`，运行时会自动比对并放行，不会报冲突错误（只有结构不一致时才会拒绝启动）。详见下文 [选择配置来源](#choose-a-config-source)。
 
 #### 选择配置来源 {#choose-a-config-source}
 
@@ -125,12 +125,12 @@ export default definePlugin({
 | Zhin 如何读取 | 直接读取包根目录的文件 | 配置预检时加载入口文件（不执行 `setup`），调用 `config.toJsonSchema()` |
 | `isolated` 插件 | 唯一可用的方式 | 不可用，隔离进程会拒绝 |
 
-两者**没有优先级**，Zhin 不会替你挑一个：
+两者的共存规则：
 
-- trusted 插件同时有内联 `config` 和 `schema.json` 时，配置预检和启动都会失败，错误信息会列出入口文件和 `schema.json` 的路径。想保留带类型的内联 Schema，就删掉 `schema.json`；想保留 `schema.json`，就删掉 `definePlugin` 里的 `config`。
+- trusted 插件可以直接只写 `definePlugin({ config: Schema.object(...) })`；若同时保留了由同一 Schema 生成、结构等价的 `schema.json`，运行时会验证二者等价并正常启动。若两份 Schema 结构不一致，配置预检和启动都会失败，错误信息会列出入口文件和 `schema.json` 的路径。
 - `isolated` 插件的入口不会在宿主进程执行，宿主只读取 `schema.json`；入口里再写 `config` 会在隔离进程里报错。
 
-`zhin new` 生成的插件只带 `schema.json`。改用内联 `config` 时先删掉 `schema.json`（也可以顺手从 `package.json#files` 里去掉它）。
+`zhin new` 生成的插件默认带 `schema.json`。改用内联 `config` 时可以直接删掉 `schema.json`，或保持两者同步。
 
 更多规则见页尾 [配置声明细则](#配置声明细则)。
 
@@ -332,7 +332,9 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 
 ### package.json 的 zhin 字段
 
-插件和 Feature 包都用 `package.json` 顶层的 `zhin` 字段声明清单。清单在启动时被严格校验，任何字段不合法都会抛出 `ManifestValidationError`。
+插件和 Feature 包都用 `package.json` 顶层的 `zhin` 字段声明自身的打包契约（`protocol`、`type`、`entry`、`features` 等）。清单在启动时被严格校验，任何字段不合法都会抛出 `ManifestValidationError`。
+
+> 注意：`package.json#zhin` 只声明当前插件包自身的打包契约，**不**在 `package.json` 里挂载子插件实例。适配器（如 `icqq`）、子插件和服务实例统一在宿主项目的 `zhin.config.yml` 的 `plugins:` 下挂载。
 
 ```jsonc
 {
@@ -345,9 +347,6 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
     "platformFeatures": true,         // 可选（仅 plugin）：默认 true，Root 自动获得官方 Stable Features
     "features": [                     // 可选（仅 plugin）：依赖的 Feature 包
       { "package": "@zhin.js/command", "api": "^1.0.0", "optional": false }
-    ],
-    "plugins": [                      // 可选（仅 plugin）：挂载的子插件实例
-      { "package": "@zhin.js/adapter-icqq", "instanceKey": "icqq" }
     ]
   }
 }
@@ -356,13 +355,12 @@ Zhin 内部把每个版本称为一个 generation，详见 [Generation 生命周
 | 字段 | 必填 | 含义 |
 | --- | --- | --- |
 | `protocol` | 是 | 清单协议版本，当前必须为 `1` |
-| `type` | 是 | `plugin`（普通插件，可挂载子插件）或 `feature`（提供一类能力的平台包） |
+| `type` | 是 | `plugin`（普通插件包）或 `feature`（提供一类能力的平台包） |
 | `entry` | 是（或用 `exports["./zhin"]`） | 入口文件，包内相对路径，`./` 开头且不得含 `..`；省略时读取 `exports["./zhin"]`，见下文 |
 | `engine` | 否 | semver 范围，与运行时版本不匹配时拒绝加载 |
 | `runtime` | 否 | `isolated` 表示在隔离环境中运行：仅限子插件、不能挂载 Host Feature，且需要隔离适配器支持 |
 | `platformFeatures` | 否 | 默认 `true`：Root 插件即使不声明，也会获得官方 Stable Features |
 | `features` | 否 | 依赖的 Feature 包。`package` 可以是 npm 包名或 `./` 相对路径；`api` 是对其 `featureApi` 的版本要求；`optional` 表示缺失时可降级 |
-| `plugins` | 否 | 挂载的子插件。`instanceKey` **必填**，匹配 `^[a-z0-9][a-z0-9-]*$`，是配置段的键；同一包挂多个实例就用不同的 `instanceKey` |
 
 `type: "feature"` 的包只有 `protocol` / `type` / `entry` / `engine` / `featureApi` 五个字段，`featureApi` 声明它实现的 API 版本，供使用方的 `features[].api` 校验。
 

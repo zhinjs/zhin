@@ -5,6 +5,10 @@ description: "Let a Root Host connect a remote capability service or an existing
 
 # Capability Seam
 
+::: tip Who needs this page?
+**95% of plugin authors do not need this page!** For everyday bot and plugin development, simply drop files into `commands/`, `components/`, `middlewares/`, `tools/`, and `skills/` (see [Directory Conventions](../authoring/conventions.md)). This page is only for framework extenders defining a brand-new capability type via `defineFeature` or wiring an external remote tool registry into the Root Host.
+:::
+
 Most plugins **don't need** this page. To write Tools and Skills, use the convention directories `tools/<name>/index.ts` and `skills/<name>/SKILL.md`, or `addTool` / `addSkill`; they come with a manifest, ownership, hot reload, and duplicate-name checks.
 
 Capability Seam is an advanced extension point for the **Root Host** (the layer that assembles the whole runtime). Reach for it only when you need to connect a remote capability service, an existing tool registry, or a provider that doesn't fit in a single file.

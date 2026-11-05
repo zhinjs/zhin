@@ -153,7 +153,9 @@ export default defineComponent<{ title: string }>({
 
 ### schedules/：定时任务
 
-`schedules/<name>/index.ts` 默认导出 `defineSchedule(...)`。`execute(ctx)` 能拿到本次执行的插件配置和 `use(token)`，也可以在 `plugin.ts` 里用 `addSchedule` 注册同一定义。
+`schedules/<name>/index.ts` 默认导出 `defineSchedule(...)`。`execute(ctx)` 能拿到本次执行的插件配置和 `use(token)` / `has(token)`，也可以在 `plugin.ts` 里用 `addSchedule` 注册同一定义。
+
+当约定目录里的能力需要强类型插件配置 `TConfig` 时，除了 `defineCommand.withConfig<TConfig>()`、`defineMiddleware.withConfig<TConfig>()`、`defineComponent.withConfig<TConfig>()` 和 `defineAgentTool.withConfig<TConfig>()`，事件、定时任务和 MCP 同样支持 `defineHandler.withConfig<TConfig>()`、`defineSchedule.withConfig<TConfig>()` 和 `defineMcp.withConfig<TConfig>()`。
 
 定时任务没有"收到的消息"可回复；要发消息请使用主动推送（见 [definePlugin · 主动发消息](./define-plugin.md)）。需要在重启后保留的数据，应保存到数据库等持久存储，不要缓存 `ctx` 或客户端对象。完整示例见 [Schedule Feature](https://github.com/zhinjs/zhin/blob/main/packages/im/schedule-feature/README.md) 与 [持久提醒插件](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/README.md)。
 

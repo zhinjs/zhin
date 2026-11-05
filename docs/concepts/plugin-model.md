@@ -5,7 +5,7 @@ description: "插件是什么、插件树如何组成、Plugin 与 Feature 的�
 
 # 插件模型
 
-两个 QQ 账号接进同一个 Bot，或者把一个游戏插件拆出去单独发布——在 zhin.js 里这两件事用同一个机制解决：插件树。插件就是一个普通的 npm 包，区别只在 `package.json` 里多了一个 `zhin` 字段；Root 应用在 `zhin.config.yml` 的 `plugins` 中声明“实例名 → 包”，业务参数放在顶层同名块，`disable_plugins` 负责停用。首版扁平配置只支持直接实例；旧包清单挂载需先[迁移](../migrations/plugin-instance-declarations.md)。
+两个 QQ 账号接进同一个 Bot，或者把一个游戏插件拆出去单独发布——在 zhin.js 里这两件事用同一个机制解决：插件树。插件就是一个普通的 npm 包，区别只在 `package.json` 里多了一个 `zhin` 字段；Root 应用在 `zhin.config.yml` 的 `plugins` 中声明“实例名 → 包”，业务参数放在顶层同名块，`disable_plugins` 负责停用。扁平配置直接声明所有启用的插件实例；旧版 `package.json#zhin.plugins` 挂载方式请参考[迁移指南](../migrations/plugin-instance-declarations.md)。
 
 ## 核心规则
 
@@ -41,7 +41,9 @@ description: "插件是什么、插件树如何组成、Plugin 与 Feature 的�
 }
 ```
 
-字段由 `@zhin.js/runtime` 的 manifest 解析器（`packages/im/runtime/src/manifest.ts`）严格校验，任何字段不合法都会抛出 `ManifestValidationError` 并列出全部问题。解析完成后，`package-contract` 模块校验当前 engine 与 Feature API 的 semver 契约，违反契约时抛出 `PackageContractError`。
+::: note 清单与契约校验
+`package.json#zhin` 字段由 `@zhin.js/runtime` 在启动时严格校验（格式不合法抛 `ManifestValidationError`，引擎或 Feature API 版本不兼容抛 `PackageContractError`），有问题会在启动阶段一次性列出。
+:::
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -127,7 +129,7 @@ sandbox:
 zhin runtime start
 ```
 
-CLI 会以当前目录为项目根，读取包契约和 `configVersion: 2` 主配置后启动。首版应用声明只创建 Root 的直接实例，不隐式挂载依赖包中的历史子插件。这意味着：开发一个游戏插件时，你可以直接在插件目录里启动它自测，不需要先装进某个 Bot 项目。`examples/minimal-bot` 就是一个 Root Plugin 的最小完整形态。
+CLI 会以当前目录为项目根，读取包契约和 `configVersion: 2` 主配置后启动。应用声明直接创建主配置中列出的插件实例，不会隐式挂载依赖包中的子插件。这意味着：开发一个游戏插件时，你可以直接在插件目录里启动它自测，不需要先装进某个 Bot 项目。`examples/minimal-bot` 就是一个 Root Plugin 的最小完整形态。
 
 ## platformFeatures：Root 继承的平台 Features
 

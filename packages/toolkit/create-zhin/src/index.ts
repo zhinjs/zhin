@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-import { wizardText } from '@zhin.js/scaffold-wizard';
-
 import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
@@ -15,6 +13,7 @@ import {
   isValidProjectName,
 } from './utils.js';
 import {
+  wizardText,
   configureDatabaseOptions,
   configureAdapters,
   configureAI,
@@ -365,7 +364,7 @@ async function main() {
     if (options.installGlobalCli) {
       console.log('');
       console.log(chalk.green(wizardText(locale, "✓ 已为你配置全局 CLI")));
-      console.log(`  ${chalk.cyan('pnpm link')} ${chalk.gray(wizardText(locale, "# 执行一次以链接全局 CLI"))}`);
+      console.log(`  ${chalk.cyan('pnpm dev')} ${chalk.gray(wizardText(locale, "# 启动开发模式（或直接运行 zhin runtime start）"))}`);
       console.log('');
       console.log(chalk.yellow(wizardText(locale, "开发环境：")));
       console.log(`  ${chalk.cyan('zhin runtime start')} ${chalk.gray(wizardText(locale, "# 或 pnpm dev - 开发模式（自动监听，支持热重载）"))}`);
@@ -401,9 +400,6 @@ async function main() {
       console.log('');
       console.log(chalk.yellow(wizardText(locale, "插件开发：")));
       console.log(`  ${chalk.cyan('npx zhin new <plugin-name>')} ${chalk.gray(wizardText(locale, "# 创建项目内插件；独立插件加 --standalone"))}`);
-      console.log('');
-      console.log(chalk.gray(wizardText(locale, "💡 后续如需全局安装 CLI，可运行：")));
-      console.log(`  ${chalk.cyan('pnpm link')} ${chalk.gray(wizardText(locale, "# 在项目根目录执行，链接全局 CLI"))}`);
     }
     
     console.log('');

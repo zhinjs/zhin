@@ -262,7 +262,7 @@ CLI 的数据库选择项会同时显示当前支持的服务端实机验收版�
 
 ```yaml
 speech:
-  stt: { provider: ollama, model: whisper, host: http://localhost:11434 }
+  stt: { provider: openai, model: whisper-1, apiKey: ${OPENAI_API_KEY} }
   tts: { provider: edge, voice: zh-CN-XiaoxiaoNeural }
 ```
 
