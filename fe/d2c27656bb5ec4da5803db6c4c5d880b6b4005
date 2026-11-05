@@ -1,0 +1,82 @@
+.changeset/console-and-pages-ux-improvements.md
+  h_6f5e45c41d0910 1-16
+.github/workflows/codeql.yml
+  h_6f5e45c41d0910 75
+basic/cli/src/plugin-runtime/console/entry-projection.ts
+  h_6f5e45c41d0910 11-31,42-67,72-73,75-98,110-121,124-134,142-196,199,201,203-206
+basic/cli/src/plugin-runtime/console/host.ts
+  h_6f5e45c41d0910 10,20-26,76-87,89,91,111-116,120,161,163-169
+basic/cli/src/plugin-runtime/console/page-renderer.ts
+  h_6f5e45c41d0910 1-454,456,461,463-485,490-496,499,504,510-514,519-524,526-527,531-532,534-535,540-612,615,617-644,649,651-652,655-713,721-722,724,739,743,751,753-883,886-892,896-935,943-946,952-953,955,957,959,967-974,982,988-1071
+basic/cli/src/plugin-runtime/console/plugin-console-rpc.ts
+  h_6f5e45c41d0910 46-48,99-100,206-227,233,247-252,254
+basic/cli/src/plugin-runtime/console/system-log.ts
+  h_6f5e45c41d0910 21-40,58,60,77-85,88-90,94-109,118,124,126-152,227,229,232,246-260
+basic/cli/tests/plugin-runtime/console/host.test.ts
+  h_6f5e45c41d0910 11,152-244
+basic/cli/tests/plugin-runtime/console/page-shell-sandbox.test.ts
+  h_6f5e45c41d0910 2,4-10,29,32-89,91
+basic/cli/tests/plugin-runtime/console/plugin-console-rpc.test.ts
+  h_6f5e45c41d0910 234-296
+basic/cli/tests/plugin-runtime/console/system-log.test.ts
+  h_6f5e45c41d0910 1-2,8,10,150-198
+packages/console/client/client/bootstrap/loadConsoleEntries.ts
+  h_6f5e45c41d0910 15,22-35,114-115,128-131,133-140,144-151,157-167,177,185,196-198,200,206,220-259,261-263
+packages/console/client/client/index.ts
+  h_6f5e45c41d0910 113-137
+packages/console/client/client/transport/console-transport.ts
+  h_6f5e45c41d0910 138-140,151-156,343-345,602-604,610-615
+packages/console/client/client/ui/declarative-page.tsx
+  h_6f5e45c41d0910 1-510
+packages/console/client/client/ui/index.ts
+  h_6f5e45c41d0910 8-9,12-26
+packages/console/client/client/ui/plugin-id.ts
+  h_6f5e45c41d0910 11-12,23-43,55-59,61-62,64-105,108,126-141
+packages/console/client/client/ui/rpc.ts
+  h_6f5e45c41d0910 3,141-157
+packages/console/client/client/ui/ui.test.ts
+  h_6f5e45c41d0910 209-265
+packages/console/contract/src/index.ts
+  h_6f5e45c41d0910 130-161
+packages/console/page/src/definition.ts
+  h_6f5e45c41d0910 2,5-6,8-10,14-69,71-74,81-96,98-102
+packages/console/page/src/page-index.ts
+  h_6f5e45c41d0910 39-42
+packages/console/page/tests/page.test.ts
+  h_6f5e45c41d0910 9,12-40
+packages/console/pagemanager/src/client-build/static-metadata.ts
+  h_6f5e45c41d0910 33-40,45,54
+packages/console/pagemanager/src/client-build/typescript-builder.ts
+  h_6f5e45c41d0910 99,101-104,106-107,126,129,131-134,137-138,196,199,202,204-207,210-211,216,219,221-224,227-228,237-245,251-255,257,260-274,279,281-289,293,296,318
+packages/console/pagemanager/src/node/esmForBrowser.test.ts
+  h_6f5e45c41d0910 3,5,44-79
+packages/console/pagemanager/src/node/esmForBrowser.ts
+  h_6f5e45c41d0910 29-85,87,98-99,110-111,122,126-142,145-147,172-181,183-197,207-343,345-353,355-357,381-382,388-394
+packages/console/pagemanager/tests/client-build/client-build.test.ts
+  h_6f5e45c41d0910 59-80,88-114
+packages/im/plugin-runtime/src/plugin-console-rpc.ts
+  h_6f5e45c41d0910 32,35-36,46-57,73,76-77,82,84,89,95-99,139-141,145-148,156-164,176-185
+packages/im/plugin-runtime/tests/plugin-console-rpc.test.ts
+  h_6f5e45c41d0910 37-69
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  h_6f5e45c41d0910 109-112,247,336,346-347,350,539,589,679-819,856-857,860-861,865,1046-1079,1165-1175,1182-1225,1404-1427
+plugins/adapters/sandbox/src/endpoint.ts
+  h_6f5e45c41d0910 366-367,376,385-387,390-400,408,416
+plugins/adapters/sandbox/src/protocol.ts
+  h_6f5e45c41d0910 133-134,144-146,149-150,159-161,200-201,240-250,260-262
+plugins/adapters/sandbox/tests/sandbox-page-transport.test.ts
+  h_6f5e45c41d0910 20,600-625
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  h_6f5e45c41d0910 17,626-726
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fed2c27656bb5ec4da5803db6c4c5d880b6b4005",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
