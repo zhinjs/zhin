@@ -1,0 +1,16 @@
+packages/im/adapter/src/adapter-index.ts
+  h_b680f75345178a 174-180
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  h_b680f75345178a 57,59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "56fb05f474f5eb7ae91d516dcff0b4fee5529893",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
