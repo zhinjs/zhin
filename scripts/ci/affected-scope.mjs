@@ -56,7 +56,21 @@ export function readScope(root, base, head) {
     ])] };
   });
   const tests = git('ls-files', '-z').split('\0').filter(file => file.endsWith('.test.ts') && existsSync(join(root, file)));
-  const testSources = Object.fromEntries(tests.map(file => [file, readFileSync(join(root, file), 'utf8')]));
+  const testSources = Object.fromEntries(tests.map(file => {
+    let source = readFileSync(join(root, file), 'utf8');
+    if (/^(?:tests|scripts)\//.test(file)) {
+      for (const match of source.matchAll(/(?:from\s*|import\s*\(\s*|import\s*)['"](\.[^'"]+)['"]/g)) {
+        const baseRel = normalize(join(dirname(file), match[1])).replaceAll('\\', '/');
+        for (const candidate of [baseRel, baseRel.replace(/\.js$/, '.ts'), `${baseRel}.ts`, `${baseRel}.mjs`]) {
+          if (existsSync(join(root, candidate))) {
+            source += `\n${readFileSync(join(root, candidate), 'utf8')}`;
+            break;
+          }
+        }
+      }
+    }
+    return [file, source];
+  }));
   const scope = affectedScope({ changed, packages, tests, testSources });
   return { ...scope, base, head, changed };
 }

@@ -8,39 +8,39 @@
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
       "import": "./lib/index.js",
-      "require": "./lib/index.js",
-      "development": "./src/index.ts"
+      "require": "./lib/index.js"
     },
     "./registry": {
       "types": "./lib/registry.d.ts",
+      "development": "./src/index.ts",
       "import": "./lib/index.js",
-      "require": "./lib/index.js",
-      "development": "./src/index.ts"
+      "require": "./lib/index.js"
     },
     "./dialects/mysql": {
       "types": "./lib/dialects/mysql.d.ts",
+      "development": "./src/dialects/mysql.ts",
       "import": "./lib/dialects/mysql.js",
-      "require": "./lib/dialects/mysql.js",
-      "development": "./src/dialects/mysql.ts"
+      "require": "./lib/dialects/mysql.js"
     },
     "./dialects/pg": {
       "types": "./lib/dialects/pg.d.ts",
+      "development": "./src/dialects/pg.ts",
       "import": "./lib/dialects/pg.js",
-      "require": "./lib/dialects/pg.js",
-      "development": "./src/dialects/pg.ts"
+      "require": "./lib/dialects/pg.js"
     },
     "./dialects/mongodb": {
       "types": "./lib/dialects/mongodb.d.ts",
+      "development": "./src/dialects/mongodb.ts",
       "import": "./lib/dialects/mongodb.js",
-      "require": "./lib/dialects/mongodb.js",
-      "development": "./src/dialects/mongodb.ts"
+      "require": "./lib/dialects/mongodb.js"
     },
     "./dialects/redis": {
       "types": "./lib/dialects/redis.d.ts",
+      "development": "./src/dialects/redis.ts",
       "import": "./lib/dialects/redis.js",
-      "require": "./lib/dialects/redis.js",
-      "development": "./src/dialects/redis.ts"
+      "require": "./lib/dialects/redis.js"
     }
   },
   "files": [

@@ -3,6 +3,17 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "client/**",
+        "bin/**",
+        "shared/**",
+        "scripts/**",
+        "package.json",
+        "tsconfig*.json",
+        "vite.config.*",
+        "../../tsconfig.base.json"
+      ],
       "outputs": ["lib/**", "dist/**", ".vitepress/dist/**"],
       "env": ["NODE_OPTIONS"]
     },

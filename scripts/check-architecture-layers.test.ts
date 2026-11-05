@@ -9,6 +9,10 @@ import {
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 import { findBarrelViolations, parseImports, parseReexports } from './lib/parse-imports.mjs';
 import {
+  extractBarePackageName,
+  findUndeclaredWorkspaceImports,
+} from './check-architecture-layers.mjs';
+import {
   isAgentForbiddenWorkroomReference,
   isForbiddenDomainSpecifier,
   isWorkroomPackageSpecifier,
@@ -55,11 +59,13 @@ describe('architecture layer import parsing', () => {
     expect(parseImports(`export * from '${spec}';`)).toEqual([spec]);
   });
 
-  it('ignores imports inside comments and template strings', () => {
+  it('ignores imports inside comments, template strings, and quoted string literals', () => {
     const source = [
       `// import type { X } from '${spec}';`,
       `/* import { X } from '${spec}'; */`,
       'const t = `import type { X } from \'' + spec + '\'`;',
+      `const dq = "import { definePlugin } from 'zhin.js';";`,
+      `const sq = 'import type { X } from "@zhin.js/agent";';`,
     ].join('\n');
     expect(parseImports(source, typed)).toEqual([]);
   });
@@ -277,19 +283,94 @@ describe('findAgentManifestWorkroomViolations', () => {
   });
 });
 
+describe('findUndeclaredWorkspaceImports', () => {
+  const workspacePackageNames = new Set(['@zhin.js/core', '@zhin.js/agent', '@zhin.js/tool', 'zhin.js']);
+
+  it('extracts bare package names and ignores relative, node:, and # specifiers', () => {
+    expect(extractBarePackageName('@zhin.js/agent/config')).toBe('@zhin.js/agent');
+    expect(extractBarePackageName('zhin.js/command')).toBe('zhin.js');
+    expect(extractBarePackageName('zod')).toBe('zod');
+    expect(extractBarePackageName('./local.js')).toBeNull();
+    expect(extractBarePackageName('../parent.js')).toBeNull();
+    expect(extractBarePackageName('node:fs')).toBeNull();
+    expect(extractBarePackageName('#internal')).toBeNull();
+  });
+
+  it('reports undeclared workspace value and type imports', () => {
+    const violations = findUndeclaredWorkspaceImports({
+      file: 'packages/im/foo/src/index.ts',
+      content: [
+        `import { a } from '@zhin.js/core';`,
+        `import type { B } from '@zhin.js/agent/config';`,
+        `export type { C } from 'zhin.js/command';`,
+      ].join('\n'),
+      manifest: {
+        name: '@zhin.js/foo',
+        dependencies: { '@zhin.js/core': 'workspace:*' },
+      },
+      manifestPath: 'packages/im/foo/package.json',
+      workspacePackageNames,
+    });
+    expect(violations).toEqual([
+      {
+        file: 'packages/im/foo/src/index.ts',
+        import: '@zhin.js/agent/config',
+        packageName: '@zhin.js/agent',
+        manifestPath: 'packages/im/foo/package.json',
+        reason: '@zhin.js/foo imports workspace package "@zhin.js/agent" (@zhin.js/agent/config) without declaring it in packages/im/foo/package.json',
+      },
+      {
+        file: 'packages/im/foo/src/index.ts',
+        import: 'zhin.js/command',
+        packageName: 'zhin.js',
+        manifestPath: 'packages/im/foo/package.json',
+        reason: '@zhin.js/foo imports workspace package "zhin.js" (zhin.js/command) without declaring it in packages/im/foo/package.json',
+      },
+    ]);
+  });
+
+  it('allows self-imports, declared dependencies across all sections, and external packages', () => {
+    const violations = findUndeclaredWorkspaceImports({
+      file: 'packages/im/core/src/index.ts',
+      content: [
+        `import { self } from '@zhin.js/core';`,
+        `import { a } from '@zhin.js/agent';`,
+        `import type { T } from '@zhin.js/tool';`,
+        `import { z } from 'zhin.js';`,
+        `import { external } from 'zod';`,
+        `const code = "import { definePlugin } from 'zhin.js';";`,
+      ].join('\n'),
+      manifest: {
+        name: '@zhin.js/core',
+        dependencies: { '@zhin.js/agent': 'workspace:*' },
+        peerDependencies: { '@zhin.js/tool': 'workspace:^' },
+        devDependencies: { 'zhin.js': 'workspace:*' },
+      },
+      manifestPath: 'packages/im/core/package.json',
+      workspacePackageNames,
+    });
+    expect(violations).toEqual([]);
+  });
+});
+
 describe('check-architecture-layers.mjs wiring', () => {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
   const scriptPath = path.join(scriptDir, 'check-architecture-layers.mjs');
 
-  it('delegates the agent -> workroom checks to the tested pure functions', () => {
+  it('delegates the agent -> workroom and undeclared workspace checks to the tested pure functions', () => {
     const source = fs.readFileSync(scriptPath, 'utf8');
     expect(source).toContain("from './lib/agent-workroom-boundary.mjs'");
     expect(source).toMatch(/findAgentWorkroomViolations\(/u);
     expect(source).toMatch(/findAgentManifestWorkroomViolations\(/u);
+    expect(source).toMatch(/findUndeclaredWorkspaceImports\(/u);
+    expect(source).toContain("'packages/im/harness'");
+    expect(source).toContain("'packages/im/permission'");
+    expect(source).toContain("'packages/im/schedule-feature'");
   });
 
   it('passes against the real repository', () => {
     const out = execFileSync('node', [scriptPath], { encoding: 'utf8' });
     expect(out).toContain('Harness Agent -> Workroom reference check: OK.');
+    expect(out).toContain('Harness undeclared workspace dependency check: OK.');
   }, 60_000);
 });

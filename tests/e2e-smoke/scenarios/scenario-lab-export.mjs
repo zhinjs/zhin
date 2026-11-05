@@ -65,43 +65,57 @@ try {
   });
   await project.write('plugin.ts', rootPluginSource);
   await project.write('commands/status/index.ts', statusCommandSource);
-  await copyFile(join(exportedFixtureDirectory, 'scenario.test.mjs'), project.path('scenario.test.mjs'));
-
-  const runExportedScenario = async () => {
-    // The trusted fixture process receives no credentials from the parent environment.
-    const windowsSystemVariables = process.platform === 'win32'
-      ? { SystemRoot: process.env.SystemRoot, SystemDrive: process.env.SystemDrive }
-      : {};
-    const environment = { ZHIN_SCENARIO_FIXTURE_ROOT: project.root, ...windowsSystemVariables };
-    const nodeArguments = ['--conditions=development', '--import', 'tsx', '--test', '--test-reporter=tap', project.path('scenario.test.mjs')];
-    return runFile(process.execPath, nodeArguments, { cwd: project.root, env: environment, timeout: 30_000 });
+  const exportedScenarioTemplate = join(exportedFixtureDirectory, 'scenario.test.mjs');
+  const writeScenarioCase = async (caseName, scenario) => {
+    const relativeDir = `cases/${caseName}`;
+    await project.writeJson(`${relativeDir}/scenario.json`, scenario);
+    await copyFile(exportedScenarioTemplate, project.path(`${relativeDir}/scenario.test.mjs`));
+    return project.path(`${relativeDir}/scenario.test.mjs`);
   };
 
+  const files = [
+    await writeScenarioCase('executed', authoredScenario({ name: 'smoke bot status in a threaded channel' })),
+    await writeScenarioCase('denied', authoredScenario({
+      name: 'smoke bot denial in a threaded channel',
+      sender: { id: 'visitor', name: '访客', roles: [] },
+      assertions: { dispatchStatus: 'denied', deliveries: ['没有权限执行此指令。'] },
+    })),
+    await writeScenarioCase('wrong', authoredScenario({
+      name: 'smoke bot wrong expectation',
+      assertions: { dispatchStatus: 'executed', deliveries: [[{ type: 'text', data: { text: '状态：wrong' } }]] },
+    })),
+  ];
+
+  // The trusted fixture process receives no credentials from the parent environment.
+  const windowsSystemVariables = process.platform === 'win32'
+    ? { SystemRoot: process.env.SystemRoot, SystemDrive: process.env.SystemDrive }
+    : {};
+  const environment = { ZHIN_SCENARIO_FIXTURE_ROOT: project.root, ...windowsSystemVariables };
+  const nodeArguments = ['--conditions=development', '--import', 'tsx', '--test', '--test-isolation=none', '--test-reporter=tap', ...files];
+
+  let batchOutput = '';
+  let batchRejected = false;
+  try {
+    await runFile(process.execPath, nodeArguments, { cwd: project.root, env: environment, timeout: 45_000 });
+  } catch (error) {
+    batchRejected = true;
+    batchOutput = String(error.stdout ?? '') + String(error.stderr ?? '');
+  }
+
   await smokeStep('scenario lab: exported executed scenario passes with the configured reply', async () => {
-    await project.writeJson('scenario.json', authoredScenario({}));
-    const result = await runExportedScenario();
-    assert.match(result.stdout, /# pass 1/u);
+    assert.match(batchOutput, /^ok \d+ - smoke bot status in a threaded channel$/mu);
   });
 
   await smokeStep('scenario lab: exported denial scenario passes with the real permission reply', async () => {
-    const denied = authoredScenario({
-      sender: { id: 'visitor', name: '访客', roles: [] },
-      assertions: { dispatchStatus: 'denied', deliveries: ['没有权限执行此指令。'] },
-    });
-    await project.writeJson('scenario.json', denied);
-    const result = await runExportedScenario();
-    assert.match(result.stdout, /# pass 1/u);
+    assert.match(batchOutput, /^ok \d+ - smoke bot denial in a threaded channel$/mu);
   });
 
   await smokeStep('scenario lab: a wrong author expectation makes the exported test fail', async () => {
-    const wrong = authoredScenario({
-      assertions: { dispatchStatus: 'executed', deliveries: [[{ type: 'text', data: { text: '状态：wrong' } }]] },
-    });
-    await project.writeJson('scenario.json', wrong);
-    await assert.rejects(runExportedScenario(), error => {
-      assert.match(error.stdout, /exact target and final payloads/u);
-      return true;
-    });
+    assert.equal(batchRejected, true);
+    assert.match(batchOutput, /^not ok \d+ - smoke bot wrong expectation$/mu);
+    assert.match(batchOutput, /exact target and final payloads/u);
+    assert.match(batchOutput, /# pass 2/u);
+    assert.match(batchOutput, /# fail 1/u);
   });
 
   console.log('E2E_SMOKE_SCENARIO_LAB_OK');

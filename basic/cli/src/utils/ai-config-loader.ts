@@ -19,8 +19,26 @@ export type AiConfigUtils = {
 const MODULE_ID = '@zhin.js/agent/config';
 const requireFromCli = createRequire(import.meta.url);
 
+async function loadMonorepoDevUtils(): Promise<AiConfigUtils | null> {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const repoRoot = path.resolve(here, '../../../../');
+    const srcPath = path.join(repoRoot, 'packages/im/agent/src/config/index.ts');
+    if (!fs.existsSync(srcPath)) return null;
+    return (await import(pathToFileURL(srcPath).href)) as AiConfigUtils;
+  } catch {
+    return null;
+  }
+}
+
+/** Vitest 下 createRequire 会因 development 条件解析到 .ts；用 ESM import 预热 monorepo 源码。 */
+const monorepoDevUtils = await loadMonorepoDevUtils();
+
 function loadFromAgentPackageJson(agentPkgJson: string): AiConfigUtils | null {
   const agentDir = path.dirname(agentPkgJson);
+  if (monorepoDevUtils && fs.existsSync(path.join(agentDir, 'src/config/index.ts'))) {
+    return monorepoDevUtils;
+  }
   const libPath = path.join(agentDir, 'lib/config/index.js');
   if (!fs.existsSync(libPath)) return null;
   try {
@@ -69,25 +87,12 @@ function walkUpForAgentConfig(startDir: string, maxDepth = 14): AiConfigUtils | 
   return null;
 }
 
-async function loadMonorepoDevUtils(): Promise<AiConfigUtils | null> {
-  try {
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const repoRoot = path.resolve(here, '../../../../');
-    const srcPath = path.join(repoRoot, 'packages/im/agent/src/config/index.ts');
-    if (!fs.existsSync(srcPath)) return null;
-    return (await import(pathToFileURL(srcPath).href)) as AiConfigUtils;
-  } catch {
-    return null;
-  }
-}
-
-/** Vitest 下 createRequire 会因 development 条件解析到 .ts；用 ESM import 预热 monorepo 源码。 */
-const monorepoDevUtils = await loadMonorepoDevUtils();
-
 /** 从项目 cwd 向上解析；monorepo 开发时回退到仓库根与源码 import。 */
 export function loadAiConfigUtils(cwd: string): AiConfigUtils | null {
   const fromProject = walkUpForAgentConfig(cwd);
   if (fromProject) return fromProject;
+
+  if (monorepoDevUtils) return monorepoDevUtils;
 
   try {
     const here = path.dirname(fileURLToPath(import.meta.url));
@@ -98,5 +103,5 @@ export function loadAiConfigUtils(cwd: string): AiConfigUtils | null {
     /* ignore */
   }
 
-  return monorepoDevUtils;
+  return null;
 }

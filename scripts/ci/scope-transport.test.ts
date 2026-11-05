@@ -24,7 +24,7 @@ function fixture() {
   write('packages/app/package.json', JSON.stringify({ name: '@fixture/app' }));
   write('packages/other/package.json', JSON.stringify({ name: '@fixture/other' }));
   git('add', '-A'); git('commit', '-qm', 'baseline'); const base = git('rev-parse', 'HEAD');
-  const tests = Array.from({ length: 720 }, (_, index) => `packages/app/tests/${String(index).padStart(4, '0')}-${'x'.repeat(100)}.test.ts`);
+  const tests = Array.from({ length: 200 }, (_, index) => `packages/app/tests/${String(index).padStart(4, '0')}-${'x'.repeat(210)}.test.ts`);
   for (const file of tests) write(file, "it('fixture', () => {});\n");
   // A global change must continue selecting every package and every test file.
   write('pnpm-lock.yaml', 'lockfileVersion: 9.0\n');

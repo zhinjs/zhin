@@ -8,7 +8,15 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/*.test.ts'],
-    exclude: ['**/node_modules/**', '**/lib/**', '**/.claude/**'],
+    exclude: [
+      '**/node_modules/**',
+      '**/lib/**',
+      '**/dist/**',
+      '**/.claude/**',
+      '**/.tmp/**',
+      '**/.vite-temp/**',
+      'packages/im/agent/evals/**',
+    ],
     setupFiles: ['./vitest.setup.ts'],
     testTimeout: 10000,
     hookTimeout: 10000,
@@ -20,6 +28,13 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
+      include: [
+        'basic/*/src/**/*.ts',
+        'packages/*/src/**/*.ts',
+        'packages/*/*/src/**/*.ts',
+        'plugins/*/*/src/**/*.ts',
+      ],
+      exclude: ['**/*.test.ts', '**/*.d.ts', '**/lib/**', '**/dist/**'],
       thresholds: {
         lines: 45,
         branches: 35,

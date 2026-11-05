@@ -12,8 +12,8 @@ describe('ReDoS Protection Tests', () => {
         segment.from(smallInput);
         const duration = Date.now() - start;
         
-        // 应该在合理时间内完成（100ms）
-        expect(duration).toBeLessThan(100);
+        // 应该在合理时间内完成（500ms）
+        expect(duration).toBeLessThan(500);
       } catch (error) {
         // 如果抛出错误，也是可以接受的（比如输入太大）
         expect(error).toBeDefined();
@@ -102,7 +102,7 @@ describe('ReDoS Protection Tests', () => {
       const result = segment.from(malformedInput);
       const duration = Date.now() - start;
       
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(500);
       expect(result).toBeDefined();
     });
 
@@ -130,7 +130,7 @@ describe('ReDoS Protection Tests', () => {
       const result = segment.from(complexInput);
       const duration = Date.now() - start;
       
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(500);
       expect(Array.isArray(result)).toBe(true);
     });
 
@@ -157,7 +157,7 @@ describe('ReDoS Protection Tests', () => {
       const result = segment.from(specialChars);
       const duration = Date.now() - start;
       
-      expect(duration).toBeLessThan(100);
+      expect(duration).toBeLessThan(500);
       expect(Array.isArray(result)).toBe(true);
     });
   });

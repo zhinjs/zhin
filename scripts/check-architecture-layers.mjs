@@ -13,6 +13,7 @@ import { parseImports } from './lib/parse-imports.mjs';
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 import { findAgentManifestWorkroomViolations, findAgentWorkroomViolations } from './lib/agent-workroom-boundary.mjs';
 import { isForbiddenDomainSpecifier } from './lib/workroom-specifier.mjs';
+import { readWorkspaceGraph } from './lib/workspace-graph.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -35,6 +36,7 @@ const providerLayerAllowed = [
   'packages/im/im-contract',
   'packages/im/interaction',
   'packages/im/plugin-runtime',
+  'packages/im/permission',
   'packages/im/feature-kit',
 ];
 const workroomAllowedLayers = [
@@ -53,12 +55,14 @@ const layers = {
   'packages/host/http-contract': { level: 0, allowedImports: [] },
   'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
-  'packages/im/jsx': { level: 0, allowedImports: [] },
+  'packages/im/jsx': { level: 0, allowedImports: ['packages/im/im-contract'] },
   'packages/toolkit/tailwind': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/toolkit/components': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/im/im-contract': { level: 0, allowedImports: [] },
   'packages/im/interaction': { level: 0, allowedImports: [] },
+  'packages/im/harness': { level: 0, allowedImports: [] },
   'packages/im/plugin-runtime': { level: 1, allowedImports: ['basic'] },
+  'packages/im/permission': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
   'packages/im/feature-kit': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
   'packages/im/adapter': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/command': { level: 1, allowedImports: providerLayerAllowed },
@@ -70,15 +74,16 @@ const layers = {
   'packages/im/agent-feature': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/mcp-feature': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/prompt-section': { level: 1, allowedImports: providerLayerAllowed },
-  'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section'] },
+  'packages/im/schedule-feature': { level: 1, allowedImports: providerLayerAllowed },
+  'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/schedule-feature'] },
   'packages/im/isolate': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
   'packages/im/config-file': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
   'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
   'packages/im/ai-provider': { level: 3, allowedImports: ['packages/im/ai', 'packages/im/plugin-runtime'] },
-  'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
-  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/ai-provider', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
+  'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/interaction', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/permission', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
+  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/harness', 'packages/im/kernel', 'packages/im/ai', 'packages/im/ai-provider', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/permission', 'packages/im/feature-kit', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
   // Note: `level` is only an ordering hint. workroom and zhin both sit at 5 but are siblings with no import edge
   // between them (zhin does not import workroom; workroom does not import zhin), so their relative console
   // output order is not meaningful.
@@ -88,11 +93,11 @@ const layers = {
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   // ADR 0044 §3: shared OneBot-family raw event → canonical side event mapping; adapters depend on it, core never does.
   'packages/im/adapter-onebot-events': { level: 4, allowedImports: ['basic', 'packages/im/core', 'packages/im/adapter', 'packages/im/im-contract'] },
-  'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
+  'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime', 'packages/im/permission'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
   // depend on the concrete HTTP Host implementation.
-  'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/http-contract'] },
-  'packages/host/a2a': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/http-contract'] },
+  'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/tool', 'packages/host/http-contract'] },
+  'packages/host/a2a': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/workroom', 'packages/host/http-contract'] },
   'packages/console/contract': { level: 10, allowedImports: ['basic', 'packages/im/ai', 'packages/console/protocol'] },
   'packages/console/pagemanager': { level: 11, allowedImports: ['basic', 'packages/console/contract', 'packages/im/plugin-runtime', 'packages/im/feature-kit', 'packages/im/runtime'] },
   'packages/console/client': { level: 12, allowedImports: ['basic', 'packages/console/protocol', 'packages/console/contract'] },
@@ -122,6 +127,8 @@ const packageNameToPath = {
   '@zhin.js/mcp': 'packages/host/mcp',
   '@zhin.js/a2a': 'packages/host/a2a',
   '@zhin.js/plugin-runtime': 'packages/im/plugin-runtime',
+  '@zhin.js/permission': 'packages/im/permission',
+  '@zhin.js/harness': 'packages/im/harness',
   '@zhin.js/feature-kit': 'packages/im/feature-kit',
   '@zhin.js/adapter': 'packages/im/adapter',
   '@zhin.js/command': 'packages/im/command',
@@ -133,6 +140,7 @@ const packageNameToPath = {
   '@zhin.js/agent-feature': 'packages/im/agent-feature',
   '@zhin.js/mcp-feature': 'packages/im/mcp-feature',
   '@zhin.js/prompt-section': 'packages/im/prompt-section',
+  '@zhin.js/schedule-feature': 'packages/im/schedule-feature',
   '@zhin.js/runtime': 'packages/im/runtime',
   '@zhin.js/isolate': 'packages/im/isolate',
   '@zhin.js/config-file': 'packages/im/config-file',
@@ -238,6 +246,76 @@ function checkImport(sourceLayer, sourceFile, importPath) {
   return { valid: true };
 }
 
+/**
+ * Extract bare package name (`@scope/pkg` or `pkg`) from an import specifier,
+ * or `null` for relative/absolute/node:/subpath-import (`#...`) specifiers.
+ * @param {string} importPath
+ * @returns {string | null}
+ */
+export function extractBarePackageName(importPath) {
+  if (
+    !importPath
+    || importPath.startsWith('.')
+    || importPath.startsWith('/')
+    || importPath.startsWith('#')
+    || importPath.startsWith('node:')
+  ) {
+    return null;
+  }
+  if (importPath.startsWith('@')) {
+    const parts = importPath.split('/');
+    return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
+  }
+  return importPath.split('/')[0];
+}
+
+/**
+ * Check that every workspace package imported in `content` (including `import type`)
+ * is declared in `manifest` (`dependencies`, `peerDependencies`, `optionalDependencies`,
+ * or `devDependencies`), or is a self-import (`manifest.name`).
+ *
+ * @param {{
+ *   file: string,
+ *   content: string,
+ *   manifest: Record<string, any>,
+ *   manifestPath: string,
+ *   workspacePackageNames: ReadonlySet<string>,
+ * }} params
+ * @returns {Array<{ file: string, import: string, packageName: string, manifestPath: string, reason: string }>}
+ */
+export function findUndeclaredWorkspaceImports({
+  file,
+  content,
+  manifest,
+  manifestPath,
+  workspacePackageNames,
+}) {
+  const declared = new Set([
+    ...(typeof manifest.name === 'string' ? [manifest.name] : []),
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.peerDependencies ?? {}),
+    ...Object.keys(manifest.optionalDependencies ?? {}),
+    ...Object.keys(manifest.devDependencies ?? {}),
+  ]);
+  const violations = [];
+  const seen = new Set();
+  for (const importPath of parseImports(content, { includeTypeOnly: true })) {
+    const pkgName = extractBarePackageName(importPath);
+    if (!pkgName || !workspacePackageNames.has(pkgName) || declared.has(pkgName)) continue;
+    if (seen.has(pkgName)) continue;
+    seen.add(pkgName);
+    violations.push({
+      file,
+      import: importPath,
+      packageName: pkgName,
+      manifestPath,
+      reason: `${manifest.name ?? manifestPath} imports workspace package "${pkgName}" (${importPath}) without declaring it in ${manifestPath}`,
+    });
+  }
+  return violations;
+}
+
+function runMain() {
 const violations = [];
 const seenFiles = new Set();
 
@@ -253,7 +331,7 @@ for (const layerPath of layerPathsBySpecificity) {
     seenFiles.add(relativeFilePath);
     const sourceLayer = getLayerForFile(file) ?? layerPath;
     const content = fs.readFileSync(file, 'utf8');
-    const imports = parseImports(content);
+    const imports = parseImports(content, { includeTypeOnly: true });
 
     if (sourceLayer.startsWith('packages/host/')
       && /^let\s+[A-Za-z_$][\w$]*(?:\s*:[^=;]+)?\s*(?:=|;)/mu.test(content)) {
@@ -371,7 +449,7 @@ for (const layerPath of assistantForbiddenLayers) {
   walkTs(absPath, files);
   for (const file of files) {
     const content = fs.readFileSync(file, 'utf8');
-    for (const importPath of parseImports(content)) {
+    for (const importPath of parseImports(content, { includeTypeOnly: true })) {
       if (assistantImportRe.test(importPath) || assistantPathRe.test(importPath)) {
         reverseViolations.push({
           file: path.relative(repoRoot, file),
@@ -391,7 +469,7 @@ const hostImportRe = /@zhin\.js\/host-|packages\/host\//;
 
 for (const file of agentFiles) {
   const content = fs.readFileSync(file, 'utf8');
-  for (const importPath of parseImports(content)) {
+  for (const importPath of parseImports(content, { includeTypeOnly: true })) {
     if (hostImportRe.test(importPath)) {
       reverseViolations.push({
         file: path.relative(repoRoot, file),
@@ -522,3 +600,48 @@ if (agentReexportViolations.length) {
 }
 
 console.log('Harness Agent -> Workroom reference check: OK.');
+
+// Undeclared workspace dependency check: every workspace package imported in a
+// package's src/ (or client/) directory must be declared in its package.json so
+// isolated per-package tsc builds never fail with TS2307 in CI.
+const workspaceGraph = readWorkspaceGraph();
+const workspacePackageNames = new Set(workspaceGraph.keys());
+const undeclaredViolations = [];
+
+for (const node of workspaceGraph.values()) {
+  if (node.dir.startsWith('examples/')) continue;
+  const manifestPath = `${node.dir}/package.json`;
+  const absManifestPath = path.join(repoRoot, manifestPath);
+  if (!fs.existsSync(absManifestPath)) continue;
+  const manifest = JSON.parse(fs.readFileSync(absManifestPath, 'utf8'));
+  const files = [];
+  walkTs(path.join(repoRoot, node.dir, 'src'), files);
+  walkTs(path.join(repoRoot, node.dir, 'client'), files);
+  for (const file of files) {
+    const content = fs.readFileSync(file, 'utf8');
+    undeclaredViolations.push(...findUndeclaredWorkspaceImports({
+      file: path.relative(repoRoot, file),
+      content,
+      manifest,
+      manifestPath,
+      workspacePackageNames,
+    }));
+  }
+}
+
+if (undeclaredViolations.length) {
+  console.error('\nHarness undeclared workspace dependency check: FAILED\n');
+  for (const violation of undeclaredViolations) {
+    console.error(`  ${violation.file}:`);
+    console.error(`    Import: ${violation.import}`);
+    console.error(`    Reason: ${violation.reason}\n`);
+  }
+  process.exit(1);
+}
+
+console.log('Harness undeclared workspace dependency check: OK.');
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  runMain();
+}
