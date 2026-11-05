@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { register } from 'node:module';
 import { isAbsolute, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -115,7 +115,13 @@ async function firstExistingTypeScript(
   if (libCandidate) {
     const libMtimeMs = await fileMtimeMs(libCandidate);
     if (libMtimeMs !== undefined) {
-      if (tsCandidate !== undefined && tsMtimeMs !== undefined && tsMtimeMs > libMtimeMs) {
+      if (
+        !isCiEnvironment()
+        && tsCandidate !== undefined
+        && tsMtimeMs !== undefined
+        && tsMtimeMs > libMtimeMs
+        && await isStripTypesCompatible(tsCandidate)
+      ) {
         return pathToFileURL(tsCandidate).href;
       }
       return pathToFileURL(libCandidate).href;
@@ -123,6 +129,24 @@ async function firstExistingTypeScript(
   }
 
   return tsCandidate ? pathToFileURL(tsCandidate).href : undefined;
+}
+
+function isCiEnvironment(): boolean {
+  const ci = process.env.CI;
+  return Boolean(ci && ci !== 'false' && ci !== '0');
+}
+
+async function isStripTypesCompatible(tsPath: string): Promise<boolean> {
+  if (tsPath.endsWith('.tsx') || tsPath.endsWith('.jsx')) return false;
+  try {
+    const source = await readFile(tsPath, 'utf8');
+    if (/(?:^|[\s;{}])(?:export\s+)?(?:const\s+)?enum\s+[A-Za-z_$]/u.test(source)) return false;
+    if (/(?:^|[\s;{}])(?:export\s+)?namespace\s+[A-Za-z_$]/u.test(source)) return false;
+    if (/\bconstructor\s*\([^)]*\b(?:private|protected|public|readonly)\s+/u.test(source)) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function compiledLibPath(sourceJsPath: string): string | undefined {
