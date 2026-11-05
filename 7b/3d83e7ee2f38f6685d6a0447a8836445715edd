@@ -1,0 +1,16 @@
+packages/im/harness/src/harness.ts
+  h_b680f75345178a 65,113-119,198-199,480-484,596-599
+packages/im/harness/tests/harness.test.ts
+  h_b680f75345178a 266-288
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7b3d83e7ee2f38f6685d6a0447a8836445715edd",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
