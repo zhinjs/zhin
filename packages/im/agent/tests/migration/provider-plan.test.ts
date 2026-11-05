@@ -209,3 +209,19 @@ it('does not give a personal owner access to Host environment expression sources
   expect(result.blocked).toContainEqual({ path: 'providers.main.apiKey', code: 'environment-source-owner-required' });
   expect(JSON.stringify(result)).not.toContain('synthetic-private-default');
 });
+
+it('blocks legacy ai.decisions.provider migration preview without guessing a model (ADR 0047 S3)', () => {
+  const withGuessBait = compile({
+    providers: { typesafe: { sdk: 'typesafe', models: ['chat'] } },
+    decisions: { provider: 'typesafe', model: 'jev-latest' },
+  });
+  expect(withGuessBait.blocked).toContainEqual({ path: 'decisions', code: 'decision-profile-mapping-required' });
+  expect(withGuessBait.plan.purposes?.decisions).toBeUndefined();
+  // Legacy decisions.provider/model must not invent Decision purposes or a jev-latest Decision Profile.
+  expect(JSON.stringify(withGuessBait.plan.purposes ?? {})).not.toMatch(/jev-latest/);
+  expect(Object.keys(withGuessBait.plan.profiles ?? {}).some(alias => /jev-latest|decision/i.test(alias))).toBe(false);
+  const providerOnly = compile({ decisions: { provider: 'root/typesafe' } });
+  expect(providerOnly.blocked).toContainEqual({ path: 'decisions', code: 'decision-profile-mapping-required' });
+  expect(providerOnly.plan.purposes?.decisions).toBeUndefined();
+  expect(JSON.stringify(providerOnly.plan)).not.toMatch(/jev-latest/);
+});
