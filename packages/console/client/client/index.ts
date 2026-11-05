@@ -110,7 +110,31 @@ export {
   resolveApiUrl,
 } from "./console-utils/remoteApi.js";
 
-export { resolveAdapterConsolePluginId } from './ui/plugin-id.js';
+export { resolveAdapterConsolePluginId, resolvePluginId, resolveSyncPluginId, type ResolvePluginIdOptions } from './ui/plugin-id.js';
+export {
+  usePluginRpc,
+  usePluginData,
+  useRpcResource,
+  type RpcResource,
+  type RpcResourceState,
+  type RpcResourceOptions,
+  type UsePluginRpcOptions,
+  type UsePluginDataOptions,
+} from './ui/rpc.js';
+export {
+  createDeclarativePage,
+  DeclarativePageView,
+  type DeclarativePageSpec,
+  type DeclarativePageContext,
+  type DeclarativePageComponentProps,
+  type DeclarativeBadgeSpec,
+  type DeclarativeStatSpec,
+  type DeclarativeActionSpec,
+  type DeclarativeActionFieldSpec,
+  type DeclarativeColumnSpec,
+  type DeclarativeSectionSpec,
+  type DeclarativeI18nText,
+} from './ui/declarative-page.js';
 export { adapterConsoleStyles } from './adapter-console/styles.js';
 
 export {

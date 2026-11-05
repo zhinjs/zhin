@@ -5,8 +5,22 @@ export {
   type ButtonProps, type ButtonVariant, type ButtonSize, type BadgeTone, type NoticeProps, type NoticeTone, type ConfirmButtonProps, type FieldControlProps,
 } from './components.js';
 export {
-  usePluginRpc, useRpcResource,
-  type RpcResource, type RpcResourceState, type RpcResourceOptions, type UsePluginRpcOptions,
+  usePluginRpc, usePluginData, useRpcResource,
+  type RpcResource, type RpcResourceState, type RpcResourceOptions, type UsePluginRpcOptions, type UsePluginDataOptions,
 } from './rpc.js';
 export { useLocale, detectLocale, translate, formatClock, type PluginUiLocale, type PluginUiText } from './locale.js';
-export { resolvePluginId, type ResolvePluginIdOptions } from './plugin-id.js';
+export { resolvePluginId, resolveSyncPluginId, resolveAdapterConsolePluginId, type ResolvePluginIdOptions } from './plugin-id.js';
+export {
+  createDeclarativePage,
+  DeclarativePageView,
+  type DeclarativePageSpec,
+  type DeclarativePageContext,
+  type DeclarativePageComponentProps,
+  type DeclarativeBadgeSpec,
+  type DeclarativeStatSpec,
+  type DeclarativeActionSpec,
+  type DeclarativeActionFieldSpec,
+  type DeclarativeColumnSpec,
+  type DeclarativeSectionSpec,
+  type DeclarativeI18nText,
+} from './declarative-page.js';

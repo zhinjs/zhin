@@ -135,6 +135,9 @@ export class ConsoleTransport {
         return;
       }
       if (!res.ok || !res.body) {
+        if (res.status === 401) {
+          this.notifyAuthRequired();
+        }
         throw new ConnectionError(`SSE failed: HTTP ${res.status}`);
       }
       this.setState(ConnectionState.CONNECTED);
@@ -145,6 +148,12 @@ export class ConsoleTransport {
     } catch (error) {
       if (!this.isCurrentConnection(generation)) return;
       if ((error as Error).name === "AbortError") return;
+      if (
+        (error as { status?: number })?.status === 401
+        || (error instanceof Error && /\bHTTP 401\b/.test(error.message))
+      ) {
+        this.notifyAuthRequired();
+      }
       // Reconnect timers only run while the transport remains in RECONNECTING.
       const connectionError = error instanceof Error ? error : new Error(String(error));
       this.callbacks.onError?.(connectionError);
@@ -331,6 +340,9 @@ export class ConsoleTransport {
         requestId?: number;
       };
       if (!res.ok || json.success === false) {
+        if (res.status === 401) {
+          this.notifyAuthRequired();
+        }
         throw new ConsoleTransportError(json.error ?? `HTTP ${res.status}`, "SERVER_ERROR");
       }
       return json.data as T;
@@ -587,9 +599,18 @@ export class ConsoleTransport {
     });
     const body = await response.json() as { success?: boolean; data?: T; error?: string };
     if (!response.ok || body.success === false) {
+      if (response.status === 401) {
+        this.notifyAuthRequired();
+      }
       throw new ConsoleTransportError(body.error ?? `HTTP ${response.status}`, 'SERVER_ERROR');
     }
     return body.data as T;
+  }
+
+  private notifyAuthRequired(): void {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('zhin:auth-required'));
+    }
   }
 
   private setState(newState: ConnectionState): void {

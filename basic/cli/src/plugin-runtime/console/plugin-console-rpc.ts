@@ -43,6 +43,9 @@ export interface PluginConsoleRpcRequestOptions {
    * They take precedence over the same name on the root plugin's own provider.
    */
   readonly hostRpc?: HostConsoleRpcFactory;
+  /** Optional override or resolver for the owning plugin's configuration. */
+  readonly pluginConfig?: ReadonlyMap<PluginId, unknown> | Readonly<Record<string, unknown>>;
+  readonly resolveConfig?: (pluginId: PluginId, snapshot: RuntimeSnapshot) => unknown;
   /** @internal Test seam; defaults to the generation's Console Page catalog. */
   readonly pagesOwnedBy?: (snapshot: RuntimeSnapshot, owner: PluginId) => ReturnType<ConsoleCatalog['pagesOwnedBy']>;
 }
@@ -93,7 +96,8 @@ export async function dispatchPluginConsoleRpcRequest(
         return projection.forOwner(pluginId);
       },
     });
-    const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS, runtime);
+    const config = resolvePluginConfig(snapshot, pluginId, options);
+    const output = await callWithTimeout(method, input, options.timeoutMs ?? PLUGIN_CONSOLE_RPC_TIMEOUT_MS, runtime, config);
     return { status: 200, body: { success: true, data: output, ...(requestId === undefined ? {} : { requestId }) } };
   } catch (error) {
     const failure = toFailure(error);
@@ -199,11 +203,34 @@ function parseInput(value: unknown): Readonly<Record<string, unknown>> {
   return Object.freeze(JSON.parse(encoded) as Record<string, unknown>);
 }
 
+function resolvePluginConfig(
+  snapshot: RuntimeSnapshot,
+  pluginId: PluginId,
+  options: PluginConsoleRpcRequestOptions,
+): unknown {
+  let raw: unknown;
+  if (options.resolveConfig) {
+    raw = options.resolveConfig(pluginId, snapshot);
+  } else if (options.pluginConfig instanceof Map) {
+    raw = options.pluginConfig.get(pluginId);
+  } else if (options.pluginConfig && typeof options.pluginConfig === 'object' && Object.hasOwn(options.pluginConfig, pluginId)) {
+    raw = (options.pluginConfig as Record<string, unknown>)[pluginId];
+  } else {
+    raw = snapshot.config.get(pluginId);
+  }
+  if (raw === undefined) return Object.freeze({});
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return Object.freeze({ ...(raw as Record<string, unknown>) });
+  }
+  return raw;
+}
+
 async function callWithTimeout(
   method: NormalizedPluginConsoleRpcMethod,
   input: Readonly<Record<string, unknown>>,
   timeoutMs: number,
   runtime: NonNullable<PluginConsoleRpcCall['runtime']>,
+  config: unknown,
 ): Promise<unknown> {
   const controller = new AbortController();
   let commitStarted = false;
@@ -217,8 +244,14 @@ async function callWithTimeout(
     }, timeoutMs);
   });
   try {
+    const callContext = {
+      signal: controller.signal,
+      runtime,
+      config,
+      commitStarted: () => { commitStarted = true; },
+    } as PluginConsoleRpcCall & { readonly config: unknown };
     const result = await Promise.race([
-      Promise.resolve().then(() => method.handler(input as never, { signal: controller.signal, runtime, commitStarted: () => { commitStarted = true; } })),
+      Promise.resolve().then(() => method.handler(input as never, callContext)),
       timeout,
     ]);
     return encodeOutput(result);

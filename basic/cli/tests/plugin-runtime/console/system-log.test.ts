@@ -1,11 +1,13 @@
-import { DefaultFormatter, LogLevel } from '@zhin.js/logger';
-import { describe, expect, it } from 'vitest';
+import { DefaultFormatter, LogLevel, type Transport } from '@zhin.js/logger';
+import { describe, expect, it, vi } from 'vitest';
 import { SYSTEM_LOG_TABLE, type DatabaseHost, type DatabaseHostModel } from '@zhin.js/plugin-runtime';
 import {
   DEFAULT_SYSTEM_LOG_CONFIG,
   SystemLogDatabaseTransport,
   SystemLogStore,
+  installSystemLogRecording,
   mapFormattedLevel,
+  type ConsoleLogEntry,
 } from '../../../src/plugin-runtime/console/system-log.js';
 
 /** 内存假 DatabaseHost：支持 $lt / $in 操作符，覆盖 cleanup 查询路径。 */
@@ -144,5 +146,54 @@ describe('SystemLogStore', () => {
     store.dispose();
     store.dispose();
     expect(removed).toEqual(added);
+  });
+
+  it('emits log:entry to eventBus and onEntry when a log line is recorded', async () => {
+    const { host } = fakeDatabaseHost();
+    const emit = vi.fn();
+    const publish = vi.fn();
+    const entries: ConsoleLogEntry[] = [];
+    const transports: Transport[] = [];
+    const store = installSystemLogRecording(host, {
+      eventBus: { emit },
+      onEntry: (entry) => entries.push(entry),
+      sink: {
+        add: (transport) => transports.push(transport),
+        remove: () => undefined,
+      },
+    });
+
+    expect(transports).toHaveLength(1);
+    transports[0]!.write('[07-22 02:03:44] [INF] [ConsoleHost:sse]: stream connected');
+    await flush();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      level: 'info',
+      name: 'ConsoleHost:sse',
+      message: 'stream connected',
+      source: 'ConsoleHost',
+    });
+    expect(typeof entries[0]!.timestamp).toBe('string');
+    expect(emit).toHaveBeenCalledWith('log:entry', entries[0]);
+    store.dispose();
+
+    const pubTransports: Transport[] = [];
+    const pubStore = installSystemLogRecording(host, {
+      eventHub: { publish },
+      registry: {
+        add: (transport) => pubTransports.push(transport),
+        remove: () => undefined,
+      },
+    });
+    pubTransports[0]!.write('[07-22 02:03:44] [WRN] [ConsoleHost:sse]: slow consumer');
+    await flush();
+    expect(publish).toHaveBeenCalledWith('log:entry', expect.objectContaining({
+      level: 'warn',
+      name: 'ConsoleHost:sse',
+      message: 'slow consumer',
+      source: 'ConsoleHost',
+    }));
+    pubStore.dispose();
   });
 });

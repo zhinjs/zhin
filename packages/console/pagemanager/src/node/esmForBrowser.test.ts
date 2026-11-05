@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  getOrBuildCanonicalEsmBundle,
   joinConsolePublicPath,
+  KNOWN_NAMED_EXPORTS,
   rewriteBareImportsForBrowser,
 } from "./esmForBrowser.js";
 
@@ -37,5 +39,41 @@ describe("rewriteBareImportsForBrowser", () => {
     const out = rewriteBareImportsForBrowser(input, "/", "");
     expect(out).toMatch(/from "\/esm\/react\.mjs\?v=/);
     expect(out).toMatch(/from "\/esm\/react-dom~client\.mjs\?v=/);
+  });
+});
+
+describe("KNOWN_NAMED_EXPORTS and getOrBuildCanonicalEsmBundle", () => {
+  it("includes React 19, react-dom, react-dom/client, and react-router exports", () => {
+    expect(KNOWN_NAMED_EXPORTS.react).toEqual(
+      expect.arrayContaining([
+        "use",
+        "useActionState",
+        "useOptimistic",
+        "useSyncExternalStore",
+        "useTransition",
+        "cache",
+        "act",
+      ]),
+    );
+    expect(KNOWN_NAMED_EXPORTS["react-dom"]).toEqual(
+      expect.arrayContaining(["createPortal", "flushSync", "useFormStatus"]),
+    );
+    expect(KNOWN_NAMED_EXPORTS["react-dom/client"]).toEqual(
+      expect.arrayContaining(["createRoot", "hydrateRoot"]),
+    );
+    expect(KNOWN_NAMED_EXPORTS["react-router-dom"]).toEqual(
+      expect.arrayContaining(["useLocation", "useNavigate", "useParams", "Link", "Routes", "Route"]),
+    );
+  });
+
+  it("builds a self-fallback ESM bundle for react and react-router-dom", async () => {
+    const reactCode = await getOrBuildCanonicalEsmBundle("react", process.cwd(), "/");
+    expect(reactCode).toContain("export const useState");
+    expect(reactCode).toContain("export const useSyncExternalStore");
+    expect(reactCode).toContain("_loadLocalFallback");
+
+    const routerCode = await getOrBuildCanonicalEsmBundle("react-router-dom", process.cwd(), "/");
+    expect(routerCode).toContain("export const useNavigate");
+    expect(routerCode).toContain("export const Link");
   });
 });

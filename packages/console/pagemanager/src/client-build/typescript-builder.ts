@@ -96,8 +96,15 @@ export class TypeScriptClientBuilder implements ClientModuleLoader {
 
 type PageMeta = {
   readonly title?: string;
+  readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
   readonly icon?: string;
+  readonly group?: string;
+  readonly order?: number;
+  readonly parent?: string;
+  readonly fullWidth?: boolean;
   readonly hideInNav?: boolean;
+  readonly requiredPermissions?: readonly string[];
+  readonly requiredRoles?: readonly string[];
 };
 
 async function bundlePageEntry(
@@ -116,11 +123,19 @@ async function bundlePageEntry(
   const icon = meta.icon;
   const hideInNav = meta.hideInNav === true;
   const wrapperSource = buildPageRegisterWrapper(absSource, {
+    owner: request.owner,
     route,
     title,
+    titleI18n: meta.titleI18n,
     icon,
+    group: meta.group,
+    order: meta.order,
+    parent: meta.parent,
+    fullWidth: meta.fullWidth,
     hideInNav,
     localName: request.localName,
+    requiredPermissions: meta.requiredPermissions,
+    requiredRoles: meta.requiredRoles,
   });
   const result = await esbuild({
     stdin: {
@@ -178,23 +193,39 @@ async function bundleSource(absSource: string, projectRoot: string): Promise<str
  * Wrap a convention page (default export component + optional meta) into the
  * Remote Console entry contract: `export function register(api)`.
  */
-function buildPageRegisterWrapper(
+export function buildPageRegisterWrapper(
   absSource: string,
   options: {
+    readonly owner?: string;
     readonly route: string;
     readonly title: string;
+    readonly titleI18n?: Readonly<Partial<Record<'zh-CN' | 'en', string>>>;
     readonly icon?: string;
+    readonly group?: string;
+    readonly order?: number;
+    readonly parent?: string;
+    readonly fullWidth?: boolean;
     readonly hideInNav: boolean;
     readonly localName: string;
+    readonly requiredPermissions?: readonly string[];
+    readonly requiredRoles?: readonly string[];
   },
 ): string {
   // abs path import so esbuild resolves the real page regardless of stdin dir.
   const pageImport = JSON.stringify(absSource);
+  const owner = JSON.stringify(options.owner ?? rootPluginId());
   const route = JSON.stringify(options.route);
   const title = JSON.stringify(options.title);
+  const titleI18n = options.titleI18n === undefined ? 'undefined' : JSON.stringify(options.titleI18n);
   const icon = options.icon === undefined ? 'undefined' : JSON.stringify(options.icon);
+  const group = options.group === undefined ? 'undefined' : JSON.stringify(options.group);
+  const order = options.order === undefined ? 'undefined' : JSON.stringify(options.order);
+  const parent = options.parent === undefined ? 'undefined' : JSON.stringify(options.parent);
+  const fullWidth = options.fullWidth === undefined ? 'undefined' : JSON.stringify(options.fullWidth);
   const hideInNav = options.hideInNav ? 'true' : 'false';
   const toolId = JSON.stringify(options.localName);
+  const requiredPermissions = options.requiredPermissions === undefined ? 'undefined' : JSON.stringify(options.requiredPermissions);
+  const requiredRoles = options.requiredRoles === undefined ? 'undefined' : JSON.stringify(options.requiredRoles);
   // Re-export `meta` only when present via namespace — a hard
   // `export { meta } from page` fails esbuild for pages that only
   // export a default component (no meta).
@@ -203,28 +234,66 @@ import Page, * as pageNs from ${pageImport};
 export { default } from ${pageImport};
 export const meta = pageNs.meta;
 
+const _owner = ${owner};
+const _route = ${route};
+const _localName = ${toolId};
+if (typeof globalThis !== 'undefined') {
+  globalThis.__ZHIN_ACTIVE_PLUGIN_ID__ = _owner;
+  const _owners = globalThis.__ZHIN_PAGE_OWNERS__ ?? (globalThis.__ZHIN_PAGE_OWNERS__ = {});
+  _owners[_route] = _owner;
+}
+
 export function register(api) {
   const Component = Page?.default ?? Page;
   if (typeof Component !== 'function' && (typeof Component !== 'object' || Component == null)) {
     throw new Error('Page module default export is not a React component');
   }
+  if (typeof globalThis !== 'undefined') {
+    globalThis.__ZHIN_ACTIVE_PLUGIN_ID__ = _owner;
+    const _owners = globalThis.__ZHIN_PAGE_OWNERS__ ?? (globalThis.__ZHIN_PAGE_OWNERS__ = {});
+    _owners[_route] = _owner;
+  }
   const m = pageNs.meta && typeof pageNs.meta === 'object' ? pageNs.meta : {};
-  const route = ${route};
+  const route = _route;
   const name = typeof m.title === 'string' && m.title ? m.title : ${title};
   const icon = m.icon ?? ${icon};
-  const element = api.React.createElement(Component);
+  const group = m.group ?? ${group};
+  const order = typeof m.order === 'number' ? m.order : ${order};
+  const parent = m.parent ?? ${parent};
+  const fullWidth = typeof m.fullWidth === 'boolean' ? m.fullWidth : ${fullWidth};
+  const titleI18n = m.titleI18n ?? ${titleI18n};
+  const requiredPermissions = Array.isArray(m.requiredPermissions) ? m.requiredPermissions : ${requiredPermissions};
+  const requiredRoles = Array.isArray(m.requiredRoles) ? m.requiredRoles : ${requiredRoles};
+  const pageProps = {
+    pluginId: _owner,
+    owner: _owner,
+    localName: _localName,
+    route,
+    title: name,
+  };
+  const element = api.React.createElement(Component, pageProps);
   api.addRoute({
     path: route,
     name,
     element,
+    ...(parent !== undefined ? { parent } : {}),
     ...(icon != null ? { icon } : {}),
-    meta: { hideInMenu: m.hideInNav === true || ${hideInNav}, ...(m.titleI18n === undefined ? {} : { titleI18n: m.titleI18n }) },
+    ...(requiredPermissions !== undefined ? { requiredPermissions } : {}),
+    ...(requiredRoles !== undefined ? { requiredRoles } : {}),
+    meta: {
+      hideInMenu: m.hideInNav === true || ${hideInNav},
+      ...(titleI18n === undefined ? {} : { titleI18n }),
+      ...(group !== undefined ? { group } : {}),
+      ...(order !== undefined ? { order } : {}),
+      ...(fullWidth !== undefined ? { fullWidth } : {}),
+    },
   });
   if (typeof api.addTool === 'function') {
     api.addTool({
-      id: ${toolId},
+      id: _localName,
       name,
       path: route,
+      ...(parent !== undefined ? { parent } : {}),
       ...(icon != null ? { icon } : {}),
     });
   }
@@ -246,7 +315,7 @@ function consoleContractStubPlugin(): EsbuildPlugin {
   return {
     name: 'zhin-console-contract-stub',
     setup(build) {
-      build.onResolve({ filter: /^@zhin\.js\/console-contract$/ }, () => ({
+      build.onResolve({ filter: /^(?:@zhin\.js\/console-contract|@zhin\.js\/page|zhin\.js\/page)$/ }, () => ({
         path: 'zhin-console-contract-stub',
         namespace: 'zhin-virtual',
       }));

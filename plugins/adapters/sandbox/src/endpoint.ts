@@ -363,6 +363,8 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
           }
           const parsed = frame.message;
           void this.#emitPlatformEvent('message', raw);
+          const senderId = parsed.senderId || owner;
+          const senderName = parsed.senderName || senderId;
           const sceneId = parsed.id || owner;
           const conversation = { ...sandboxInboundConversation(String(this.#options.id), {
             type: parsed.type,
@@ -371,7 +373,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
           this.#logger.debug(formatCompact({
             op: 'sandbox_recv',
             target,
-            sender: owner,
+            sender: senderId,
             channelType: parsed.type,
             channelId: sceneId,
             text: parsed.text.slice(0, 80),
@@ -380,9 +382,22 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
           subscription.conversation = scene;
           const messageId = parsed.messageId ?? randomUUID();
           this.#broadcast(this.#subscribers(scene, true), JSON.stringify({
-            ...scene, conversation: scene, direction: 'inbound', senderId: owner,
+            ...scene, conversation: scene, direction: 'inbound', senderId,
+            ...(parsed.senderName ? { senderName: parsed.senderName } : {}),
+            ...(parsed.senderRole ? { senderRole: parsed.senderRole } : {}),
             messageId, endpoint: this.#options.defaults.id, content: parsed.content, timestamp: parsed.timestamp,
           }));
+          const sender = {
+            id: senderId,
+            name: senderName,
+            ...(parsed.senderRole
+              ? {
+                  role: parsed.senderRole,
+                  roles: parsed.senderRole === 'master' ? ['master', 'admin'] : parsed.senderRole === 'admin' ? ['admin'] : ['member'],
+                  permissions: parsed.senderRole === 'master' ? ['master', 'admin'] : parsed.senderRole === 'admin' ? ['admin'] : [],
+                }
+              : {}),
+          };
           void this[endpointSpec].events.message({
             event: raw,
             ...(typeof parsed.timestamp === 'number' ? { platformSentAt: parsed.timestamp } : {}),
@@ -390,7 +405,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
             message: { conversation, id: messageId },
             content: parsed.text,
             segments: parsed.content,
-            sender: { id: owner },
+            sender,
             endpointId: target,
             metadata: Object.freeze({
               type: parsed.type,
@@ -398,6 +413,7 @@ export class SandboxWsEndpoint extends SandboxClient<SandboxConnection> implemen
               channelId: parsed.id || owner,
               elements: parsed.content,
               timestamp: parsed.timestamp,
+              ...(parsed.senderRole ? { senderRole: parsed.senderRole } : {}),
               ...(parsed.action ? { action: parsed.action } : {}),
               ...(parsed.agentRun ? { sandboxAgentRun: parsed.agentRun } : {}),
             }),

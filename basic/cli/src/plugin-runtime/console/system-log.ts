@@ -18,7 +18,26 @@ import {
  * - 写库失败静默降级，绝不阻塞/炸掉日志路径。
  */
 
-export interface SystemLogStoreConfig {
+export interface ConsoleLogEntry {
+  readonly level: 'debug' | 'info' | 'warn' | 'error';
+  readonly name: string;
+  readonly message: string;
+  readonly source: string;
+  readonly timestamp: string;
+}
+
+export interface SystemLogEventBus {
+  publish?(type: string, data: unknown): unknown;
+  emit?(type: string, data: unknown): unknown;
+}
+
+export interface SystemLogRecordingOptions {
+  readonly eventBus?: SystemLogEventBus;
+  readonly eventHub?: SystemLogEventBus;
+  readonly onEntry?: (entry: ConsoleLogEntry) => void;
+}
+
+export interface SystemLogStoreConfig extends SystemLogRecordingOptions {
   /** 最大日志保留天数，默认 7 天 */
   readonly maxDays: number;
   /** 最大日志条数，默认 10000 条 */
@@ -36,9 +55,9 @@ export const DEFAULT_SYSTEM_LOG_CONFIG: SystemLogStoreConfig = Object.freeze({
 const ANSI_ESCAPE = String.fromCharCode(27);
 const ANSI_REGEX = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*[mGKHF]`, 'g');
 /** Current DefaultFormatter: `[HH:mm:ss.SSS][LEVEL] [name] message`. */
-const CURRENT_LOG_LINE_REGEX = /^\[\d{2}:\d{2}:\d{2}\.\d{3}\]\[(\w+)\](?: \[([^\]]+)\])? ([\s\S]*)$/;
+const CURRENT_LOG_LINE_REGEX = /^\[\d{2}:\d{2}:\d{2}\.\d{3}\]\[(\w+)\](?: \[([^\[\]]+)\])? ([\s\S]*)$/;
 /** Accept persisted/older formatters without changing their existing contract. */
-const LOG_LINE_REGEX = /\[[\d-]+ [\d:.]+\] \[(\w+)\] \[([^\]]+)\]: ([\s\S]+)/;
+const LOG_LINE_REGEX = /\[[\d-]+ [\d:.]+\] \[(\w+)\] \[([^\[\]]+)\]: ([\s\S]+)/;
 
 const LEVEL_ALIASES: Readonly<Record<string, 'debug' | 'info' | 'warn' | 'error'>> = {
   dbg: 'debug',
@@ -55,30 +74,82 @@ export function mapFormattedLevel(raw: string): 'debug' | 'info' | 'warn' | 'err
   return LEVEL_ALIASES[raw.trim().toLowerCase()];
 }
 
+function isEventBus(value: unknown): value is SystemLogEventBus {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && (typeof (value as SystemLogEventBus).publish === 'function'
+      || typeof (value as SystemLogEventBus).emit === 'function'),
+  );
+}
+
 export class SystemLogDatabaseTransport implements LogTransport {
   private cleanupTimer?: NodeJS.Timeout;
+  private readonly config: SystemLogStoreConfig;
+  private readonly eventBus?: SystemLogEventBus;
+  private readonly onEntry?: (entry: ConsoleLogEntry) => void;
 
   constructor(
     private readonly host: Pick<DatabaseHost, 'started' | 'models'>,
-    private readonly config: SystemLogStoreConfig = DEFAULT_SYSTEM_LOG_CONFIG,
-  ) {}
+    configOrOptions: Partial<SystemLogStoreConfig> & SystemLogRecordingOptions = DEFAULT_SYSTEM_LOG_CONFIG,
+    thirdArg?: SystemLogRecordingOptions | SystemLogEventBus | ((entry: ConsoleLogEntry) => void),
+  ) {
+    this.config = Object.freeze({
+      maxDays: configOrOptions.maxDays ?? DEFAULT_SYSTEM_LOG_CONFIG.maxDays,
+      maxRecords: configOrOptions.maxRecords ?? DEFAULT_SYSTEM_LOG_CONFIG.maxRecords,
+      cleanupInterval: configOrOptions.cleanupInterval ?? DEFAULT_SYSTEM_LOG_CONFIG.cleanupInterval,
+    });
+    const extraOptions: SystemLogRecordingOptions = typeof thirdArg === 'function'
+      ? { onEntry: thirdArg }
+      : isEventBus(thirdArg)
+        ? { eventBus: thirdArg }
+        : (thirdArg ?? {});
+    this.eventBus = extraOptions.eventBus ?? extraOptions.eventHub ?? configOrOptions.eventBus ?? configOrOptions.eventHub;
+    this.onEntry = extraOptions.onEntry ?? configOrOptions.onEntry;
+  }
 
   write(formatted: string): void {
-    // host 未启动（或正在重启 generation）时模型不可用，静默丢弃。
-    if (!this.host.started) return;
     const plain = formatted.replace(ANSI_REGEX, '');
     const match = plain.match(CURRENT_LOG_LINE_REGEX) ?? plain.match(LOG_LINE_REGEX);
     if (!match) return;
     const level = mapFormattedLevel(match[1] ?? '');
     if (!level) return; // OFF / 未识别级别不落库
     const name = match[2] ?? '';
+    const now = new Date();
     const row = {
       level,
       name,
       message: (match[3] ?? '').trim(),
       source: name.split(':')[0] ?? name,
-      timestamp: new Date(),
+      timestamp: now,
     };
+    if (this.onEntry || this.eventBus) {
+      const entry: ConsoleLogEntry = Object.freeze({
+        level: row.level,
+        name: row.name,
+        message: row.message,
+        source: row.source,
+        timestamp: now.toISOString(),
+      });
+      try {
+        this.onEntry?.(entry);
+      } catch {
+        // 回调失败静默降级
+      }
+      if (this.eventBus) {
+        try {
+          if (typeof this.eventBus.emit === 'function') {
+            this.eventBus.emit('log:entry', entry);
+          } else if (typeof this.eventBus.publish === 'function') {
+            this.eventBus.publish('log:entry', entry);
+          }
+        } catch {
+          // 事件总线发布失败静默降级
+        }
+      }
+    }
+    // host 未启动（或正在重启 generation）时模型不可用，静默丢弃。
+    if (!this.host.started) return;
     void insertSystemLogRow(this.host, row).catch(() => {
       // 写库失败静默降级，避免日志存储失败影响主流程
     });
@@ -153,11 +224,12 @@ export class SystemLogStore {
 
   constructor(
     host: DatabaseHost,
-    config: SystemLogStoreConfig = DEFAULT_SYSTEM_LOG_CONFIG,
+    config: Partial<SystemLogStoreConfig> & SystemLogRecordingOptions = DEFAULT_SYSTEM_LOG_CONFIG,
     registry: SystemLogTransportRegistry = rootLoggerTransports,
+    options?: SystemLogRecordingOptions | SystemLogEventBus | ((entry: ConsoleLogEntry) => void),
   ) {
     defineSystemLogTable(host);
-    this.#transport = new SystemLogDatabaseTransport(host, config);
+    this.#transport = new SystemLogDatabaseTransport(host, config, options);
     this.#registry = registry;
     this.#registry.add(this.#transport);
     this.#transport.startCleanup();
@@ -169,6 +241,21 @@ export class SystemLogStore {
     this.#transport.stopCleanup();
     this.#registry.remove(this.#transport);
   }
+}
+
+export function installSystemLogRecording(
+  host: DatabaseHost,
+  config: Partial<SystemLogStoreConfig> & SystemLogRecordingOptions & {
+    readonly registry?: SystemLogTransportRegistry;
+    readonly sink?: SystemLogTransportRegistry;
+  } = DEFAULT_SYSTEM_LOG_CONFIG,
+  options: SystemLogRecordingOptions & {
+    readonly registry?: SystemLogTransportRegistry;
+    readonly sink?: SystemLogTransportRegistry;
+  } = {},
+): SystemLogStore {
+  const registry = options.registry ?? options.sink ?? config.registry ?? config.sink ?? rootLoggerTransports;
+  return new SystemLogStore(host, config, registry, options);
 }
 
 /** 从 Runtime 配置文档读取 `log.*` 清理策略（对齐 legacy AppConfig.log），缺省用默认值。 */

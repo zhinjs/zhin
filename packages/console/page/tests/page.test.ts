@@ -6,9 +6,38 @@ import {
   type SnapshotState,
 } from '@zhin.js/plugin-runtime';
 import { FeatureDiscovery, type DiscoveryHost } from '@zhin.js/feature-kit';
-import pageFeature, { PageIndex, isPageIndex, pageIndexProjection } from '../src/index.js';
+import pageFeature, { PageIndex, definePage, isPageIndex, pageIndexProjection, parsePageArtifact } from '../src/index.js';
 
 describe('Page Feature', () => {
+  it('re-exports definePage and supports extended PageMetadata fields', () => {
+    const meta = definePage({
+      title: 'Dashboard',
+      group: 'ops',
+      parent: 'root',
+      fullWidth: true,
+      order: 15,
+    });
+    expect(meta).toMatchObject({
+      title: 'Dashboard',
+      group: 'ops',
+      parent: 'root',
+      fullWidth: true,
+      order: 15,
+    });
+    const parsed = parsePageArtifact(
+      { module: '/assets/dash.js', hash: 'h1', metadata: meta },
+      { owner: rootPluginId(), feature: pageFeature.id, localName: 'dashboard', source: '/app/pages/dashboard/index.tsx' },
+    );
+    expect(parsed).toMatchObject({
+      title: 'Dashboard',
+      group: 'ops',
+      parent: 'root',
+      fullWidth: true,
+      order: 15,
+      module: '/assets/dash.js',
+    });
+  });
+
   it('recognizes PageIndex by its projection brand rather than prototype identity', () => {
     expect(pageIndexProjection).toBe('zhin.page-index/1');
     expect(isPageIndex({ $projection: 'zhin.page-index/1' })).toBe(true);

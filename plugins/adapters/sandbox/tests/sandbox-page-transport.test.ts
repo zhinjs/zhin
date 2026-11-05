@@ -17,6 +17,7 @@ const prefix = source.slice(declaration.getStart(ast), renderBoundary.getStart(a
 const code = ts.transpileModule(prefix + `return {locale,endpointId,canExecute,channels,messages,inputText,previewSegments,transportNotice,
   trace,traceNotice,cancellationFeedback,traceLoading,currentTask,stoppingTask,showInspector,sessionKey,loadTrace,stopActiveTask,
   handleInboundPayload,handleSendMessage,sendInteractiveAction,switchChannel,addSession,updateRunConfig,setInputText,setPreviewSegments,editorRef,
+  senderId,setSenderId,senderName,setSenderName,senderRole,setSenderRole,
   directoryStatus,workspaceScope,activeChannel,directoryControllerRef};}`, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React, module: ts.ModuleKind.None },
 }).outputText;
@@ -594,6 +595,32 @@ describe('Sandbox page transport boundary', () => {
       const sessions = f.render().channels.slice(3);
       expect(sessions).toHaveLength(2); expect(sessions[0].id).not.toBe(sessions[1].id);
       expect(sessions.every((session: playground.PlaygroundSession) => session.id.startsWith('private-'))).toBe(true);
+    } finally { f.close(); }
+  });
+
+  it('includes simulated senderId, senderName, and senderRole in outbound text and interactive action frames', () => {
+    const f = fixture();
+    try {
+      f.ready();
+      f.view.setSenderId('qa-admin');
+      f.view.setSenderName('QA Admin');
+      f.view.setSenderRole('admin');
+      const view = f.render();
+      view.handleSendMessage('/help', text('/help'));
+      view.sendInteractiveAction('confirm:1');
+      const frames = f.socket().frames;
+      expect(frames[1]).toMatchObject({
+        senderId: 'qa-admin',
+        senderName: 'QA Admin',
+        senderRole: 'admin',
+        content: text('/help'),
+      });
+      expect(frames[2]).toMatchObject({
+        senderId: 'qa-admin',
+        senderName: 'QA Admin',
+        senderRole: 'admin',
+        content: [{ type: 'action', data: { id: 'confirm:1', payload: 'confirm:1' } }],
+      });
     } finally { f.close(); }
   });
 });

@@ -8,6 +8,7 @@ import {
   createConsoleHostModules,
   registerConsoleHttp,
 } from '../../../src/plugin-runtime/console/host.js';
+import { projectConsoleEntries } from '../../../src/plugin-runtime/console/entry-projection.js';
 
 describe('Console topology Host endpoint', () => {
   it('loads and reloads server TSX through the CLI fallback loader', async () => {
@@ -147,5 +148,98 @@ describe('Console topology Host endpoint', () => {
     const missingHead = vi.fn();
     await handler({}, { writeHead: missingHead, end: vi.fn(), setHeader: vi.fn() }, new URL('http://localhost/nope'));
     expect(missingHead).toHaveBeenCalledWith(404);
+  });
+
+  it('projects Console entries with rich PageMetadata and locale title resolution across GET /entries and GET /pages', async () => {
+    const richPage = {
+      id: 'root/ambient:ambient',
+      localName: 'ambient',
+      route: '/ambient',
+      title: '群潜望',
+      titleI18n: { 'zh-CN': '群潜望', 'en-US': 'Ambient Insights' },
+      description: 'Ambient group radar',
+      icon: 'Radar',
+      group: 'Agent',
+      order: 10,
+      parent: 'overview',
+      fullWidth: true,
+      hideInNav: false,
+      module: '/assets/client/ambient.js',
+      owner: 'root/ambient' as never,
+      source: '/app/ambient/pages/ambient/index.tsx',
+      requiredPermissions: ['ambient:read'],
+      requiredRoles: ['member'],
+    };
+
+    const projected = projectConsoleEntries([richPage], { locale: 'en' });
+    expect(projected.entries[0]).toMatchObject({
+      id: 'ambient',
+      name: 'ambient',
+      title: 'Ambient Insights',
+      titleI18n: { 'zh-CN': '群潜望', 'en-US': 'Ambient Insights' },
+      description: 'Ambient group radar',
+      icon: 'Radar',
+      group: 'Agent',
+      order: 10,
+      parent: 'overview',
+      fullWidth: true,
+      hideInNav: false,
+      owner: 'root/ambient',
+      requiredPermissions: ['ambient:read'],
+      requiredRoles: ['member'],
+    });
+
+    const route = vi.fn();
+    const consoleRuntime = {
+      runView: async (_access: unknown, operation: (catalog: unknown) => unknown) =>
+        operation({
+          pages: () => [richPage],
+          topology: () => ({
+            generation: 1,
+            pages: [richPage],
+            navigation: [],
+            resolve: () => ({ status: 'missing' as const }),
+          }),
+        }),
+    } as unknown as ConsoleRuntime;
+
+    registerConsoleHttp({
+      http: { route, tokenRegistry: new TokenRegistry() } as never,
+      console: consoleRuntime,
+      clientOutDir: '/tmp/client',
+      projectRoot: '/tmp/project',
+    });
+
+    const entriesHandler = route.mock.calls.find((call) => call[1] === '/entries')?.[2] as (
+      request: unknown,
+      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void },
+      url: URL,
+    ) => Promise<void>;
+    const writeEntriesHead = vi.fn();
+    const writeEntriesEnd = vi.fn();
+    await entriesHandler({}, { writeHead: writeEntriesHead, end: writeEntriesEnd }, new URL('http://localhost/entries?locale=en'));
+    expect(writeEntriesHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'content-type': 'application/json; charset=utf-8',
+    }));
+    const entriesBody = JSON.parse(writeEntriesEnd.mock.calls[0]?.[0] as string);
+    expect(entriesBody.entries[0]).toMatchObject({
+      id: 'ambient',
+      title: 'Ambient Insights',
+      group: 'Agent',
+      icon: 'Radar',
+    });
+
+    const pagesHandler = route.mock.calls.find((call) => call[1] === '/pages')?.[2] as (
+      request: unknown,
+      response: { writeHead: (status: number, headers?: Record<string, string>) => void; end: (body?: string) => void },
+      url: URL,
+    ) => Promise<void>;
+    const writePagesHead = vi.fn();
+    const writePagesEnd = vi.fn();
+    await pagesHandler({}, { writeHead: writePagesHead, end: writePagesEnd }, new URL('http://localhost/pages'));
+    expect(writePagesHead).toHaveBeenCalledWith(200, expect.objectContaining({
+      'content-type': 'text/html; charset=utf-8',
+    }));
+    expect(writePagesEnd.mock.calls[0]?.[0]).toContain('Ambient group radar');
   });
 });
