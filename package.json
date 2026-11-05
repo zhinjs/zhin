@@ -104,6 +104,7 @@
     "check:no-removed-plugin-api": "node scripts/check-no-removed-plugin-api.mjs",
     "check:plugin-runtime-migration-readiness": "node scripts/check-plugin-runtime-migration-readiness.mjs",
     "check:plugin-runtime-migration-verify": "pnpm exec vitest run basic/cli/tests/plugin-runtime/migration-verify.test.ts",
+    "check:ci-preflight": "node scripts/check-ci-preflight.mjs",
     "check:all": "node scripts/check-all-harness.mjs",
     "type-check": "tsc --noEmit -p tsconfig.typecheck.json",
     "link": "pnpm --filter @zhin.js/cli exec npm link",

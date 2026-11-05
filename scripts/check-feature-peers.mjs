@@ -15,6 +15,7 @@ const PLUGIN_DIRS = [
   'plugins/utils',
   'plugins/features',
   'plugins/games',
+  'plugins/services',
 ];
 
 const errors = [];

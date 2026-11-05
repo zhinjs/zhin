@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -13,6 +14,88 @@ import {
 const root = path.resolve(import.meta.dirname, '..');
 const changesetDir = path.join(root, '.changeset');
 const versionPolicyPath = path.join(changesetDir, 'version-policy.json');
+
+function expandBrace(glob) {
+  const match = /\{([^}]+)\}/u.exec(glob);
+  if (!match) return [glob];
+  const [whole, body] = match;
+  return body.split(',').flatMap((alt) =>
+    expandBrace(glob.slice(0, match.index) + alt.trim() + glob.slice(match.index + whole.length)));
+}
+
+function listWorkspacePackages() {
+  const workspacePath = path.join(root, 'pnpm-workspace.yaml');
+  const globs = [];
+  if (fs.existsSync(workspacePath)) {
+    const yaml = fs.readFileSync(workspacePath, 'utf8');
+    const packagesSection = /^packages:\s*$/m.exec(yaml);
+    if (packagesSection) {
+      const tail = yaml.slice(packagesSection.index + packagesSection[0].length);
+      for (const line of tail.split(/\r?\n/)) {
+        if (!line.trim() || line.trim().startsWith('#')) continue;
+        const match = /^\s+-\s+(?:'([^']+)'|"([^"]+)"|([^\s#]+))/.exec(line);
+        if (!match) break;
+        globs.push(match[1] ?? match[2] ?? match[3]);
+      }
+    }
+  }
+  const seenDirs = new Set();
+  const packages = [];
+  for (const glob of globs) {
+    for (const pattern of expandBrace(glob)) {
+      const starAt = pattern.indexOf('*');
+      const dirs = [];
+      if (starAt === -1) {
+        if (fs.existsSync(path.join(root, pattern, 'package.json'))) dirs.push(pattern);
+      } else {
+        const parent = pattern.slice(0, starAt).replace(/\/$/u, '');
+        const absParent = path.join(root, parent);
+        if (fs.existsSync(absParent)) {
+          for (const entry of fs.readdirSync(absParent, { withFileTypes: true })) {
+            if (entry.isDirectory() && fs.existsSync(path.join(absParent, entry.name, 'package.json'))) {
+              dirs.push(parent ? `${parent}/${entry.name}` : entry.name);
+            }
+          }
+        }
+      }
+      for (const dir of dirs) {
+        const normalizedDir = dir.replaceAll('\\', '/');
+        if (seenDirs.has(normalizedDir)) continue;
+        seenDirs.add(normalizedDir);
+        const pkgPath = path.join(root, normalizedDir);
+        const manifest = JSON.parse(fs.readFileSync(path.join(pkgPath, 'package.json'), 'utf8'));
+        if (!manifest.private && manifest.name && manifest.version) {
+          packages.push({
+            name: manifest.name,
+            version: manifest.version,
+            path: pkgPath,
+            directory: normalizedDir,
+          });
+        }
+      }
+    }
+  }
+  return packages;
+}
+
+function resolveChangesetBin() {
+  const searchBases = [
+    import.meta.url,
+    ...(process.env.INIT_CWD ? [path.join(process.env.INIT_CWD, 'package.json')] : []),
+    ...(process.env.PATH ?? '')
+      .split(path.delimiter)
+      .filter((entry) => entry.endsWith(path.join('node_modules', '.bin')))
+      .map((entry) => path.join(entry, '..', '..', 'package.json')),
+  ];
+  for (const base of searchBases) {
+    try {
+      return createRequire(base).resolve('@changesets/cli/bin.js');
+    } catch {
+      // continue searching
+    }
+  }
+  return null;
+}
 
 function readChangesetDeclarations() {
   const declarations = [];
@@ -42,33 +125,34 @@ function readChangesetDeclarations() {
 }
 
 function readWorkspacePackagesWithVersionTags(plannedPackages) {
-  const listed = spawnSync(
-    'pnpm',
-    ['-r', 'ls', '--json', '--depth', '-1'],
+  const packages = listWorkspacePackages();
+  const tags = spawnSync(
+    'git',
+    ['for-each-ref', '--format=%(objectname) %(*objectname) %(refname:strip=2)', 'refs/tags'],
     { cwd: root, encoding: 'utf8' },
   );
-  if (listed.status !== 0) {
-    process.stderr.write(listed.stdout);
-    process.stderr.write(listed.stderr);
-    process.exit(listed.status ?? 1);
-  }
-
-  const packages = JSON.parse(listed.stdout)
-    .filter((pkg) => !pkg.private && pkg.name && pkg.version && pkg.path);
-  const tags = spawnSync('git', ['tag', '--list'], { cwd: root, encoding: 'utf8' });
   if (tags.status !== 0) {
     process.stderr.write(tags.stdout);
     process.stderr.write(tags.stderr);
     process.exit(tags.status ?? 1);
   }
-  const existingTags = new Set(tags.stdout.trim().split('\n').filter(Boolean));
+  const existingTags = new Set();
+  const tagToCommit = new Map();
+  for (const line of tags.stdout.trim().split('\n').filter(Boolean)) {
+    const match = /^([0-9a-f]+)\s+([0-9a-f]*)\s+(.+)$/.exec(line);
+    if (match) {
+      const [, obj, peeled, tagName] = match;
+      existingTags.add(tagName);
+      tagToCommit.set(tagName, peeled || obj);
+    }
+  }
   const evidenceCache = new Map();
   const versionedBaselines = new Map();
   for (const pkg of packages) {
     if (plannedPackages.has(pkg.name) || existingTags.has(`${pkg.name}@${pkg.version}`)) continue;
     const baseline = findVersionedReleaseBaseline({
       root,
-      directory: path.relative(root, pkg.path).replaceAll('\\', '/'),
+      directory: pkg.directory,
       name: pkg.name,
       version: pkg.version,
       evidenceCache,
@@ -86,27 +170,34 @@ function readWorkspacePackagesWithVersionTags(plannedPackages) {
     process.exit(1);
   }
 
+  const diffByBaseline = new Map();
   const coveragePackages = packages
     .filter((pkg) => !plannedPackages.has(pkg.name))
     .map((pkg) => {
-      const baseline = versionedBaselines.get(pkg.name) ?? `${pkg.name}@${pkg.version}`;
-      const directory = path.relative(root, pkg.path).replaceAll('\\', '/');
-      const diff = spawnSync(
-        'git',
-        ['diff', '--name-only', `${baseline}..HEAD`, '--', directory],
-        { cwd: root, encoding: 'utf8' },
-      );
-      if (diff.status !== 0) {
-        process.stderr.write(diff.stdout);
-        process.stderr.write(diff.stderr);
-        process.exit(diff.status ?? 1);
+      const baselineRef = versionedBaselines.get(pkg.name) ?? `${pkg.name}@${pkg.version}`;
+      const baselineCommit = tagToCommit.get(baselineRef) ?? baselineRef;
+      let allChanged = diffByBaseline.get(baselineCommit);
+      if (!allChanged) {
+        const diff = spawnSync(
+          'git',
+          ['diff', '--name-only', `${baselineCommit}..HEAD`],
+          { cwd: root, encoding: 'utf8' },
+        );
+        if (diff.status !== 0) {
+          process.stderr.write(diff.stdout);
+          process.stderr.write(diff.stderr);
+          process.exit(diff.status ?? 1);
+        }
+        allChanged = diff.stdout.trim().split('\n').filter(Boolean);
+        diffByBaseline.set(baselineCommit, allChanged);
       }
-
+      const directory = pkg.directory;
+      const prefix = `${directory}/`;
       return {
         name: pkg.name,
         version: pkg.version,
         directory,
-        changedFiles: diff.stdout.trim().split('\n').filter(Boolean),
+        changedFiles: allChanged.filter((file) => file.startsWith(prefix)),
       };
     });
   return { packages: coveragePackages, versionedCount: versionedBaselines.size };
@@ -143,11 +234,10 @@ try {
   // main before our history-based coverage check can validate them.
   let plan = { releases: [] };
   if (declarations.length > 0) {
-    const result = spawnSync(
-      'pnpm',
-      ['changeset', 'status', '--output', outputPath],
-      { cwd: root, encoding: 'utf8' },
-    );
+    const changesetBin = resolveChangesetBin();
+    const result = changesetBin
+      ? spawnSync(process.execPath, [changesetBin, 'status', '--output', outputPath], { cwd: root, encoding: 'utf8' })
+      : spawnSync('pnpm', ['changeset', 'status', '--output', outputPath], { cwd: root, encoding: 'utf8' });
     if (result.status !== 0) {
       process.stderr.write(result.stdout);
       process.stderr.write(result.stderr);

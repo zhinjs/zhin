@@ -48,7 +48,9 @@ function fixture() {
   };
   const check = (env = {}) => {
     const result = spawnSync(process.execPath, ['scripts/check-release-plan.mjs'], {
-      cwd: root, encoding: 'utf8', env: { ...process.env, GITHUB_HEAD_REF: '', GITHUB_BASE_REF: '', ...env },
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, INIT_CWD: path.resolve(import.meta.dirname, '..'), GITHUB_HEAD_REF: '', GITHUB_BASE_REF: '', ...env },
     });
     return { status: result.status, output: result.stdout + result.stderr };
   };

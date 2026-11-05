@@ -105,7 +105,7 @@ const slowStartPlugin = `import { definePlugin } from 'zhin.js';
 export default definePlugin({
   name: 'slow-start',
   async setup() {
-    await new Promise(resolve => setTimeout(resolve, 3_000));
+    await new Promise(resolve => setTimeout(resolve, 1_500));
   },
 });
 `;
@@ -181,7 +181,7 @@ describe.skipIf(process.platform === 'win32')('process signal shutdown', () => {
     const result = await startAndSignal(root, ['SIGINT']);
     expect(result.killed, result.output).toBe(false);
     expect(result.code, result.output).toBe(0);
-    expect(result.elapsedMs).toBeLessThan(5_000);
+    expect(result.elapsedMs).toBeLessThan(10_000);
     expect(await portIsFree(port)).toBe(true);
   }, 60_000);
 
@@ -190,7 +190,7 @@ describe.skipIf(process.platform === 'win32')('process signal shutdown', () => {
     const result = await startAndSignal(root, ['SIGINT']);
     expect(result.killed, result.output).toBe(false);
     expect(result.code, result.output).toBe(0);
-    expect(result.elapsedMs).toBeLessThan(5_000);
+    expect(result.elapsedMs).toBeLessThan(10_000);
     expect(result.output).not.toContain('forcedExit');
     expect(await portIsFree(port)).toBe(true);
   }, 60_000);

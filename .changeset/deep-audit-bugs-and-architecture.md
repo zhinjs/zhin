@@ -10,6 +10,10 @@
 "@zhin.js/ai": patch
 "@zhin.js/agent": patch
 "@zhin.js/a2a": patch
+"@zhin.js/host-http": patch
+"@zhin.js/client": patch
+"@zhin.js/pagemanager": patch
+"@zhin.js/testing": patch
 "@zhin.js/process-monitor": patch
 "@zhin.js/adapter-onebot11": patch
 "@zhin.js/adapter-napcat": patch
