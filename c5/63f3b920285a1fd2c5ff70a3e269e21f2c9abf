@@ -1,0 +1,22 @@
+.changeset/adr-0048-h3-mailbox-pr2.md
+  h_b680f75345178a 1-9
+basic/cli/tests/plugin-runtime/agent/turn/endpoint-cancellation.test.ts
+  h_b680f75345178a 37
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  h_b680f75345178a 10,294,386,388,605
+packages/im/agent/evals/README.md
+  h_b680f75345178a 76,90,390
+packages/im/agent/src/turn/index.ts
+  h_b680f75345178a 116-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c563f3b920285a1fd2c5ff70a3e269e21f2c9abf",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
