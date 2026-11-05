@@ -1,0 +1,74 @@
+.changeset/deep-audit-bugs-and-architecture.md
+  h_b680f75345178a 13-16
+.github/workflows/ci.yml
+  h_b680f75345178a 65,88,122
+.github/workflows/plugin-runtime-size.yml
+  h_b680f75345178a 16,69
+.github/workflows/update-dependencies.yml
+  h_b680f75345178a 20-23
+.github/workflows/update-plugins.yml
+  h_b680f75345178a 15-18
+.nvmrc
+  h_b680f75345178a 1
+basic/cli/src/plugin-runtime/html-renderer-host-installer.ts
+  h_b680f75345178a 2,73-86
+basic/cli/src/utils/ai-config-loader.ts
+  h_b680f75345178a 22-36,39-41,95-96,106
+basic/cli/tests/new-integration.test.ts
+  h_b680f75345178a 45
+basic/cli/tests/plugin-runtime/start/restart-shutdown.test.ts
+  h_b680f75345178a 108,184,193
+basic/database/package.json
+  h_b680f75345178a 11,13,17,19,23,25,29,31,35,37,41,43
+package.json
+  h_b680f75345178a 107
+packages/console/client/package.json
+  h_b680f75345178a 11
+packages/console/pagemanager/package.json
+  h_b680f75345178a 9,15
+packages/host/http/tests/console-rpc.test.ts
+  h_b680f75345178a 1,738-764,768-792
+packages/im/core/tests/redos-protection.test.ts
+  h_b680f75345178a 15-16,105,133,160
+packages/toolkit/testing/tests/run-scenario.mjs
+  h_b680f75345178a 2,31-102,105-127
+scripts/check-architecture-layers.mjs
+  h_b680f75345178a 16,39,58,63,65,77-78,85-86,96,99-100,130-131,143,249-318,334,452,472,603-647
+scripts/check-architecture-layers.test.ts
+  h_b680f75345178a 11-14,62,67-68,286-355,360,365-368,374
+scripts/check-ci-preflight.mjs
+  h_b680f75345178a 1-171
+scripts/check-feature-peers.mjs
+  h_b680f75345178a 18
+scripts/check-release-plan.mjs
+  h_b680f75345178a 4,18-99,128-131,139-148,155,173,177-192,194-195,200,237-240
+scripts/check-release-plan.test.ts
+  h_b680f75345178a 51-53
+scripts/ci/affected-scope.mjs
+  h_b680f75345178a 59-73
+scripts/ci/run-pr-check.mjs
+  h_b680f75345178a 32-41
+scripts/ci/scope-transport.test.ts
+  h_b680f75345178a 27
+scripts/ci/validation-plan.test.ts
+  h_b680f75345178a 156
+scripts/lib/parse-imports.mjs
+  h_b680f75345178a 16-19,37-47,65-76
+tests/e2e-smoke/scenarios/scenario-lab-export.mjs
+  h_b680f75345178a 68-73,76-104,106,110,114-118
+turbo.json
+  h_b680f75345178a 6-16
+vitest.config.ts
+  h_b680f75345178a 11-19,31-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "358091d6dd76f1b22a5b0c694e56c989020646ee",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
