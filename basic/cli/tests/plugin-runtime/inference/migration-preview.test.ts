@@ -197,3 +197,26 @@ it('isolates a selected Root from another Root sharing SQLite without buffering 
     await other.close();
   }
 });
+
+it('preserves a legacy Cloudflare accountId through the real built-in Service resolver', async () => {
+  const f = await setup();
+  try {
+    await writeFile(f.file, JSON.stringify({ configVersion: 2, ai: {
+      providers: { main: { sdk: 'cloudflare', accountId: 'synthetic-account', models: ['@cf/meta/llama-3.1-8b-instruct'], apiKey: '${CF_KEY}' } },
+      agents: { zhin: { provider: 'main', model: '@cf/meta/llama-3.1-8b-instruct' } },
+    } }));
+    const preview = await previewInferenceMigration({ root: f.root, mapping: { version: 1, services: { deployment: {
+      main: { driver: 'cloudflare', authentication: 'api-key', models: {
+        '@cf/meta/llama-3.1-8b-instruct': { id: '@cf/meta/llama-3.1-8b-instruct', protocol: 'openai-chat', kinds: ['language'], input: ['text'] },
+      } },
+    } } } });
+    const migration = preview.units[0].migration;
+    expect(migration.blocked).toEqual([]);
+    expect(migration.plan.services).toMatchObject({ 'service:main': { options: {
+      accountId: 'synthetic-account', baseUrl: 'https://api.cloudflare.com/client/v4/accounts/synthetic-account/ai/v1',
+    } } });
+    expect(migration.credentials).toEqual([{ accountAlias: 'account:main', source: { kind: 'environment', reference: 'env://CF_KEY' } }]);
+  } finally {
+    await f.close();
+  }
+});

@@ -182,3 +182,30 @@ it('blocks ambiguous old exact selectors mapped onto the same target instead of 
     'agent.modelHarness.models.alias-one', 'agent.modelHarness.models.alias-two',
   ]);
 });
+
+
+it.each(['${API_KEY:-synthetic-private-default}', '${API_KEY:=synthetic-private-default}'])(
+  'classifies private environment defaults without publishing fallback text (%s)', apiKey => {
+    const result = compile({ providers: { main: { sdk: 'fixture', models: ['chat'], apiKey } } });
+    expect(result.blocked).toEqual([]);
+    expect(result.credentials).toEqual([{ accountAlias: 'account:main', source: { kind: 'legacy-environment-expression', path: 'providers.main.apiKey' } }]);
+    expect(result.plan.accounts).toMatchObject({ 'account:main': { auth: { method: 'api-key' } } });
+    expect(JSON.stringify(result)).not.toContain('synthetic-private-default');
+  },
+);
+
+it.each(['${KEY:-${OTHER}}', 'prefix${KEY:-default}', '${KEY:-a}${OTHER:-b}', '${KEY:-unfinished'])(
+  'blocks unsupported credential templates rather than migrating literal keys (%s)', apiKey => {
+    expect(compile({ providers: { main: { sdk: 'fixture', apiKey } } }).blocked).toContainEqual({
+      path: 'providers.main.apiKey', code: 'environment-expression-mapping-required',
+    });
+  },
+);
+
+
+it('does not give a personal owner access to Host environment expression sources', () => {
+  const result = compile({ providers: { main: { sdk: 'fixture', apiKey: '${HOST_KEY:-synthetic-private-default}' } } },
+    { target: { ...target, ownerId: 'personal-owner' } });
+  expect(result.blocked).toContainEqual({ path: 'providers.main.apiKey', code: 'environment-source-owner-required' });
+  expect(JSON.stringify(result)).not.toContain('synthetic-private-default');
+});

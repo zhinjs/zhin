@@ -1,9 +1,9 @@
 import {
-  createProfileReference, providerPurposeProfiles, resolveProviderProfile, ProviderError,
-  type ExecutionBinding, type InferenceOperationScope, type LanguagePurpose,
+  createProfileReference, providerPurposeSelections,
+  type ExecutionBinding, type InferenceOperationScope, type LanguagePurpose, type ProviderSelectionSource,
 } from '@zhin.js/ai/provider';
 import { createInvocationCompletion, invocationModel } from './completion.js';
-import { ModelRuntimeError, type ModelExecutionBundle, type ModelExecutionScope,
+import { ModelRuntimeError, type ModelExecutionBundle, type ModelExecutionCandidate, type ModelExecutionScope,
   type ModelDelegationAuthority, type ModelContextAcquireInput, type ModelRuntimeServiceOptions, type ModelTurnAcquireInput } from './types.js';
 
 async function bundle(input: Readonly<{
@@ -56,26 +56,35 @@ export class ModelRuntimeService {
       const purpose = !input.bindingName || input.bindingName === 'zhin' ? 'chat' : `agent:${input.bindingName}` as const;
       const selected = await scope.resolve({ kind: 'language', purpose });
       const chat = await bundle({ scope, binding: selected, purpose });
-      let summary: ModelExecutionBundle | undefined;
+      const candidate = (options: Readonly<{
+        profileId: string;
+        source?: ProviderSelectionSource;
+        resolve: (binding: ExecutionBinding) => Promise<ModelExecutionBundle>;
+      }>): ModelExecutionCandidate => {
+        let pending: Promise<ModelExecutionBundle> | undefined;
+        const profile = scope.graph.profiles[options.profileId];
+        const account = scope.graph.accounts[profile.accountId];
+        const service = scope.graph.services[account.serviceId];
+        const binding = Object.freeze({ graphRevision: scope.graph.revision, profile, account, service, model: service.models[profile.model], ...(options.source ? { source: options.source } : {}) });
+        return Object.freeze({ binding,
+          resolve: async () => {
+            scope.signal.throwIfAborted();
+            return pending ??= options.resolve(binding);
+          } });
+      };
+      let summary: ModelExecutionCandidate | undefined;
       if (scope.graph.purposes.defaults.summary || scope.graph.purposes.defaults.chat) {
-        summary = await bundle({ scope, binding: await scope.resolve({ kind: 'language', purpose: 'summary' }), purpose: 'summary' });
+        summary = candidate({ profileId: scope.graph.purposes.defaults.summary ?? scope.graph.purposes.defaults.chat!, resolve: async () =>
+          bundle({ scope, binding: await scope.resolve({ kind: 'language', purpose: 'summary' }), purpose: 'summary' }) });
       }
-      const perception: ModelExecutionBundle[] = [];
-      const perceptionIds = providerPurposeProfiles({ graph: scope.graph, context, purpose: 'perception' });
-      const perceptionSource = perceptionIds.length ? (await scope.resolve({ kind: 'language', purpose: 'perception' })).source : undefined;
-      for (const id of perceptionIds) {
-        const candidate = scope.graph.profiles[id];
-        if (!candidate) throw new ProviderError('profile-not-found');
-        // Only declared candidates from the immutable graph; no new model discovery.
-        const unbound = resolveProviderProfile({ graph: scope.graph, context, kind: 'language',
-          profile: createProfileReference({ binding: {
-            graphRevision: scope.graph.revision, profile: candidate,
-            account: scope.graph.accounts[candidate.accountId],
-            service: scope.graph.services[scope.graph.accounts[candidate.accountId].serviceId],
-            model: scope.graph.services[scope.graph.accounts[candidate.accountId].serviceId].models[candidate.model],
-          }, kind: 'language' }), purpose: 'perception' });
-        const binding = await scope.resolve({ kind: 'language', profile: createProfileReference({ binding: unbound, kind: 'language' }), purpose: 'perception' });
-        perception.push(await bundle({ scope, binding: { ...binding, source: perceptionSource }, purpose: 'perception' }));
+      const perception: ModelExecutionCandidate[] = [];
+      for (const { id, source } of providerPurposeSelections({ graph: scope.graph, context, purpose: 'perception' })) {
+        perception.push(candidate({ profileId: id, source, resolve: async declaration => {
+          // Resolve and validate only the candidate now being attempted.
+          const binding = await scope.resolve({ kind: 'language',
+            profile: createProfileReference({ binding: declaration, kind: 'language' }), purpose: 'perception' });
+          return bundle({ scope, binding: { ...binding, source }, purpose: 'perception' });
+        } }));
       }
       let release: Promise<void> | undefined;
       return Object.freeze({ chat, ...(summary ? { summary } : {}),

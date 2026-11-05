@@ -105,7 +105,6 @@ it('requires exact official Driver identity for MiniMax and Gemini quirks', () =
       { id: 'google', owner: 'root/other', contractVersion: '1' },
       { id: 'openai-compatible', owner: 'root/other', contractVersion: '1' },
       { id: 'openai-compatible', owner: 'root', contractVersion: '2' },
-      { id: 'opencode-zen', owner: 'root', contractVersion: '1' },
     ]) expect(resolveModelHarness({ driver, serviceId: 'service', modelId })).toEqual({});
   }
   for (const modelId of ['minimax-m3', 'minimax/minimax-m3']) {

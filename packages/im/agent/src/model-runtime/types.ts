@@ -21,6 +21,11 @@ export interface ModelExecutionBundle {
   readonly model: Model;
   readonly completion: LlmCompletionPort;
 }
+/** A declaration in the captured graph; Driver validation occurs only when consumed. */
+export interface ModelExecutionCandidate {
+  readonly binding: ExecutionBinding;
+  resolve(): Promise<ModelExecutionBundle>;
+}
 export interface ModelExecutionLease extends ModelExecutionBundle { release(): Promise<void> }
 export type ModelSummarySource = 'runtime' | 'deployment-chat';
 /** A queued child owns this reservation independently of its parent's turn. */
@@ -30,9 +35,9 @@ export interface ModelDelegationAuthority {
 }
 export interface ModelExecutionScope {
   readonly chat: ModelExecutionBundle;
-  readonly perception?: ModelExecutionBundle;
-  readonly perceptionFallbacks?: readonly ModelExecutionBundle[];
-  readonly summary?: ModelExecutionBundle;
+  readonly perception?: ModelExecutionCandidate;
+  readonly perceptionFallbacks?: readonly ModelExecutionCandidate[];
+  readonly summary?: ModelExecutionCandidate;
   readonly graph: ProviderGraph;
   readonly context: ProviderCallContext;
   readonly inference: InferenceClient;

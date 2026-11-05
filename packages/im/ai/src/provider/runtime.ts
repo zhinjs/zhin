@@ -155,15 +155,16 @@ class InferenceOperation implements InferenceClient {
         await this.#authorize(binding, input.purpose);
         return binding;
       },
-      describeModel: async (input: Parameters<InferenceOperationScope['describeModel']>[0]) => {
+      describeModel: (input: Parameters<InferenceOperationScope['describeModel']>[0]) => this.#track((async () => {
         const binding = this.#binding('language', input.profile, input.purpose);
         await this.#authorize(binding, input.purpose);
         const lease = await this.#options.drivers.acquire({ service: binding.service, signal: this.signal });
         try {
+          this.#assertOpen();
           const bound = this.#validateDriverBinding(lease, binding);
           return Object.freeze({ ...lease.definition.describeModel?.(bound) });
         } finally { await this.#dispose(undefined, lease); }
-      }, close: () => this.close() });
+      })()), close: () => this.close() });
   }
   async #dispose(execution: ProviderExecution | undefined, lease: ProviderDriverLease | undefined): Promise<void> {
     try { await execution?.dispose?.(); }

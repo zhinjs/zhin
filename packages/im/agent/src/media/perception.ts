@@ -74,7 +74,7 @@ export interface LlmMediaPerceptionOptions {
   readonly cache?: Map<string, PerceptionCacheEntry>;
   readonly cacheNamespace?: string;
   readonly runtime: LlmCompletionPort & {
-    model(alias: string, model: string): Model;
+    model(alias: string, model: string): Model | Promise<Model>;
     resilience?(accountId: string): Readonly<{ requestTimeoutMs?: number; maxRetries?: number }> | undefined;
   };
   readonly config: ResolvedPerceptionConfig;
@@ -199,7 +199,7 @@ export function createLlmMediaPerceptionPort(options: LlmMediaPerceptionOptions)
         signal?.throwIfAborted();
         let sent = false;
         try {
-          const model = runtime.model(candidate.provider, candidate.model);
+          const model = await runtime.model(candidate.provider, candidate.model);
           if (!(model.input ?? ['text']).includes(payload.kind)) {
             throw new Error(`perception model ${candidate.provider}/${candidate.model} does not declare ${payload.kind} input`);
           }

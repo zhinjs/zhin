@@ -62,6 +62,21 @@ it.each([
   expect(fetch).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+  { header: '120', delay: 120_000 },
+  { header: 'Thu, 01 Jan 1970 00:02:01 GMT', delay: 120_000 },
+  { header: 'not-a-delay', delay: undefined },
+])('preserves only normalized Retry-After=$header facts from a token rejection', async ({ header, delay }) => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+  const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ error: 'slow_down', error_description: 'PRIVATE' },
+    { status: 429, headers: { 'retry-after': header, 'x-private': 'PRIVATE' } }));
+  try {
+    await expect(codexOAuth.refresh({ service, fetch, signal, credential: { accessToken: 'old', refreshToken: 'refresh' } }))
+      .rejects.toMatchObject({ code: 'rejected', status: 429, oauthError: 'slow_down', retryAfterMs: delay });
+    expect(fetch).toHaveBeenCalledOnce();
+  } finally { clock.mockRestore(); }
+});
+
 it.each(['required', 'ready'] as const)('preserves account preparation=$value across Antigravity refresh', async status => {
   const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ access_token: 'rotated-access', expires_in: 3600 }));
   const credential = { accessToken: 'old', refreshToken: 'synthetic-refresh', subject: 'verified-by-userinfo',

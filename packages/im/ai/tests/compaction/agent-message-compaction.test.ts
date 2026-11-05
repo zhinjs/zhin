@@ -26,6 +26,41 @@ import type { Model } from '../../src/llm/types/model.js';
 
 const model = { id: 'mock-model' } as unknown as Model;
 
+describe('lazy summary execution boundary', () => {
+  it.each(['disabled', 'below-threshold', 'no-prefix'] as const)('does not resolve a summary when %s', async mode => {
+    const resolveExecution = vi.fn(async () => { throw new Error('Unused summary must not be acquired'); });
+    await autoCompactAgentMessagesIfNeeded({ transport, model, resolveExecution,
+      messages: [createUserMessage('short')], force: mode === 'no-prefix',
+      config: { enabled: mode !== 'disabled', contextWindow: 32000, keepRecentTokens: 1000, minKeepCount: 1 } });
+    expect(resolveExecution).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 'selected instructions'])('resolves the actual summary execution and preserves instructions (%s)', async customInstructions => {
+    const completeSimple = vi.fn(async () => ({ ...assistantOf('摘要'), usage: structuredClone(EMPTY_TOKEN_USAGE) } as AssistantMessage));
+    const selected = { ...model, id: 'deployment-summary' };
+    const selectedTransport = { complete: completeSimple, completeSimple };
+    const resolveExecution = vi.fn(async () => ({ model: selected, transport: selectedTransport, customInstructions }));
+    const result = await autoCompactAgentMessagesIfNeeded({ transport, model, resolveExecution,
+      messages: makeMessages(), force: true, customInstructions: 'existing instructions', config: { keepRecentTokens: 1, minKeepCount: 1 } });
+    expect(resolveExecution).toHaveBeenCalledTimes(1);
+    expect(completeSimple).toHaveBeenCalledWith(selected, expect.anything(), undefined);
+    expect(JSON.stringify(completeSimple.mock.calls)).toContain(customInstructions ?? 'existing instructions');
+    expect(result.summary).toBe('摘要');
+  });
+
+  it('keeps summary resolution failures in the existing compaction failure and circuit-breaker path', async () => {
+    const state = createAgentCompactionState();
+    const messages = makeMessages();
+    const resolveExecution = vi.fn(async () => { throw new Error('Summary permission denied'); });
+    const result = await autoCompactAgentMessagesIfNeeded({ transport, model, resolveExecution, state,
+      messages, force: true, config: { keepRecentTokens: 1, minKeepCount: 1 } });
+    expect(resolveExecution).toHaveBeenCalledTimes(1);
+    expect(result.messages).toEqual(messages);
+    expect(result.wasCompacted).toBe(false);
+    expect(state.consecutiveFailures).toBe(1);
+  });
+});
+
 function makeMessages(): AgentMessage[] {
   return [
     createUserMessage('第一条历史消息，需要被压缩'),

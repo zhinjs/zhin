@@ -1,3 +1,4 @@
+import type { EnvironmentExpressionSource } from './credentials.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { open, readFile, rename, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -7,6 +8,7 @@ import { compileLegacySessionSelection } from '@zhin.js/agent/migration';
 import { personalSessionIdentity, personalSessionOwnerId } from '@zhin.js/agent/personal-session';
 import {
   normalizeProviderJson,
+  parseCredentialEnvironmentExpression,
   providerPlanFingerprint,
   type JsonObject,
   type ProfileSelection,
@@ -145,8 +147,8 @@ async function keysForUnit(
     source: LegacyInferenceSources;
     authorized: boolean;
   }>
-): Promise<ReadonlyMap<string, string>> {
-  const keys = new Map<string, string>();
+): Promise<ReadonlyMap<string, string | EnvironmentExpressionSource>> {
+  const keys = new Map<string, string | EnvironmentExpressionSource>();
   const references = input.unit.migration.credentials.filter(
     (value) => value.source.kind !== 'environment'
   );
@@ -169,6 +171,13 @@ async function keysForUnit(
     cipher = createHostDocumentCipher(oldDirectory);
   for (const reference of references) {
     let key: string;
+    if (reference.source.kind === 'legacy-environment-expression') {
+      const expression = keyAtPath(config, reference.source.path);
+      if (!parseCredentialEnvironmentExpression(expression) || input.unit.ownerId !== input.unit.migration.target.hostOwnerId)
+        throw new Error('Invalid private environment credential source');
+      keys.set(reference.accountAlias, { kind: 'environment-expression', expression });
+      continue;
+    }
     if (reference.source.kind === 'legacy-config') key = keyAtPath(config, reference.source.path);
     else if (reference.source.kind === 'legacy-vault') {
       const ref = reference.source.reference;

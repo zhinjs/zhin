@@ -42,10 +42,16 @@ function selectedProfiles(graph: ProviderGraph, context: ProviderCallContext, pu
     .map(id => ({ id, source: Object.freeze(source) })) : [];
 }
 /** Explicit configured candidates, preserving the sole approved perception chain. */
+export function providerPurposeSelections(input: Readonly<{
+  graph: ProviderGraph; context: ProviderCallContext; purpose: InferencePurpose;
+}>): readonly Readonly<SelectedProfile>[] {
+  return Object.freeze(selectedProfiles(input.graph, input.context, input.purpose).map(value => Object.freeze(value)));
+}
+
 export function providerPurposeProfiles(input: Readonly<{
   graph: ProviderGraph; context: ProviderCallContext; purpose: InferencePurpose;
 }>): readonly string[] {
-  return Object.freeze(selectedProfiles(input.graph, input.context, input.purpose).map(value => value.id));
+  return Object.freeze(providerPurposeSelections(input).map(value => value.id));
 }
 export function createProfileReference<K extends ModelKind>(input: Readonly<{
   binding: ExecutionBinding; kind: K;

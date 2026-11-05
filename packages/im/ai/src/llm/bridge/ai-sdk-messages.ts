@@ -332,14 +332,17 @@ export function contextToAiSdkPrompt(
 }
 
 /**
- * Thinking-mode models that need openai-compatible `reasoning_content` round-trip
- * on tool_calls. Anthropic-protocol SDKs are excluded — they need signatures, not placeholders.
+ * Repair missing `reasoning_content` only on the selected replay protocol.
+ * Native thinking/signature protocols must never receive fabricated reasoning.
  */
 export function shouldEnsureToolCallReasoning(model: {
   reasoning?: boolean;
   sdk?: string;
+  toolCallReasoning?: 'openai-content' | 'provider-native';
 }): boolean {
   if (model.reasoning !== true) return false;
+  if (model.toolCallReasoning !== undefined) return model.toolCallReasoning === 'openai-content';
+  // Legacy descriptors retain their existing compatibility convention.
   if (usesAnthropicReasoningProtocol(model.sdk)) return false;
   return true;
 }

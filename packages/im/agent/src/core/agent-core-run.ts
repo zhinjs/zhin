@@ -28,7 +28,7 @@ import { chatFailureKindOf, chatFailureLine, type ChatFailureOptions } from '../
 import { trackTurnCompletionUsage } from './turn-completion-usage.js';
 import { turnReplyMessages } from './turn-reply-messages.js';
 import type { InteractiveRun } from './interactive-run.js';
-import { resolveTurnSummaryExecution } from '../memory/summary-model.js';
+import { createTurnSummaryExecutionResolver } from '../memory/summary-model.js';
 import { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import { LocalImageInspection, type ImageInspectionBudget } from '../media/local-image-inspection.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
@@ -830,8 +830,9 @@ export async function* runAgentLoopTextTurnRun(
   const recordProgress = (toolName: string, args: unknown, ok: boolean, output?: string) =>
     progress.record(iterations, { toolName, args, ok, output });
 
-  const summaryExecution = () => {
-    const summary = resolveTurnSummaryExecution({ transport: host.completion, model: llmModel });
+  const resolveSummary = createTurnSummaryExecutionResolver({ transport: host.completion, model: llmModel });
+  const summaryExecution = async () => {
+    const summary = await resolveSummary();
     return { transport: completionUsage.forTransport(summary.transport), model: summary.model };
   };
   const settlePhase = async (output: AgentOutputElement[], raw: string, hostReply: boolean) => {
@@ -953,7 +954,9 @@ export async function* runAgentLoopTextTurnRun(
       persistentConversation || input.interactiveRun ? compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
-        ...summaryExecution(),
+        transport: completionPort,
+        model: llmModel,
+        resolveExecution: summaryExecution,
         compactionConfig: host.config.compaction,
         contextWindow,
         reservedTokens: await fixedPromptTokens(),
@@ -966,7 +969,9 @@ export async function* runAgentLoopTextTurnRun(
       replyRun?.offered ? undefined : persistentConversation || input.interactiveRun ? compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
-        ...summaryExecution(),
+        transport: completionPort,
+        model: llmModel,
+        resolveExecution: summaryExecution,
         compactionConfig: host.config.compaction,
         contextWindow,
         reservedTokens: await fixedPromptTokens(),

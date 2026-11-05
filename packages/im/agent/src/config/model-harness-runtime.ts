@@ -23,6 +23,17 @@ export const MODEL_HARNESS_DEFAULTS: ModelHarnessRow[] = [
     modelPattern: /(?:^|\/)gemini-/i,
     emptyReplyRetries: 1,
   })),
+  // Gateway model quirks do not change the Driver-specific exploration budgets.
+  ...['anthropic', 'opencode-go', 'opencode-zen'].map(id => ({
+    driver: { id, owner: 'root', contractVersion: '1' },
+    modelPattern: /(?:^|\/)(?:minimax-m\d|gemini-|deepseek-)/i,
+    emptyReplyRetries: 1,
+  })),
+  ...['deepseek', 'openai-compatible'].map(id => ({
+    driver: { id, owner: 'root', contractVersion: '1' },
+    modelPattern: /(?:^|\/)deepseek-/i,
+    emptyReplyRetries: 1,
+  })),
 ];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

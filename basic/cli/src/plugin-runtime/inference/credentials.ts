@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
-import type {
-  JsonObject,
-  OAuthCredential,
-  ProviderAccount,
-  ProviderCredentialRecord,
-  ProviderRepository,
+import {
+  parseCredentialEnvironmentExpression,
+  type JsonObject,
+  type OAuthCredential,
+  type ProviderAccount,
+  type ProviderCredentialRecord,
+  type ProviderRepository,
 } from '@zhin.js/ai/provider';
 import { createHostDocumentCipher } from '../host-credential-storage.js';
 
@@ -13,30 +14,71 @@ export interface CredentialIdentity {
   readonly materialFingerprint?: string;
   readonly subject?: string;
   readonly client?: Readonly<{ clientSecret?: string }>;
+  /** A default may itself be secret; this expression never enters public configuration. */
+  readonly source?: EnvironmentExpressionSource;
+}
+export interface EnvironmentExpressionSource {
+  readonly kind: 'environment-expression';
+  readonly expression: string;
+}
+export type ApiKeyMaterial = Readonly<{ key: string; source?: never }> | Readonly<{ source: EnvironmentExpressionSource; key?: never }>;
+
+/** Validates private entry and offline migration with the same exact-template parser. */
+export function environmentExpressionSource(input: unknown): EnvironmentExpressionSource {
+  const source = object(input);
+  if (source.kind !== 'environment-expression' || typeof source.expression !== 'string'
+    || !parseCredentialEnvironmentExpression(source.expression)) throw new InferenceAuthenticationError('not-authorized');
+  return { kind: 'environment-expression', expression: source.expression };
+}
+
+/** Keep the existing private password entry and offline imports on one syntax boundary. */
+export function normalizeApiKeyMaterial(input: ApiKeyMaterial): ApiKeyMaterial {
+  if (input.source) return { source: environmentExpressionSource(input.source) };
+  if (input.key.includes('${')) return { source: environmentExpressionSource({ kind: 'environment-expression', expression: input.key }) };
+  if (!input.key.trim()) throw new InferenceAuthenticationError('not-authorized');
+  return { key: input.key };
+}
+/** Private recovery only; its presence never authorizes token reuse. */
+export interface OAuthRecovery {
+  readonly credential: OAuthCredential;
+  readonly receivedAt?: number;
+}
+export interface OAuthExchangeFailure {
+  readonly kind: 'temporary-response' | 'response-error' | 'transport-unknown' | 'invalid-response';
+  readonly status?: number;
+  readonly oauthError?: string;
 }
 export type CredentialPayload = (
   | Readonly<{
       status: 'ready';
       method: 'api-key';
-      key: string;
-      materialFingerprint: string;
+      /** Missing until a private source is first resolved by Host authorization. */
+      key?: string;
+      materialFingerprint?: string;
       subject?: string;
     }>
   | Readonly<{
       status: 'ready';
       method: 'oauth';
       credential: OAuthCredential;
+      /** Host receipt time, unchanged when restoring this same token after a rejection. */
+      receivedAt?: number;
+      /** Account-wide cooldown, independent of public configuration and model purposes. */
+      refresh?: Readonly<{ failures: number; nextAttemptAt: number }>;
       subject?: string;
     }>
   | Readonly<{
       status: 'exchange-pending';
       method: 'oauth';
       operationId: string;
+      recovery?: OAuthRecovery;
     }>
   | Readonly<{ status: 'not-authorized'; method: 'oauth' }>
   | Readonly<{
       status: 'disconnected' | 'reauthorize' | 'uncertain';
       method: 'api-key' | 'oauth';
+      recovery?: OAuthRecovery;
+      failure?: OAuthExchangeFailure;
     }>
 ) &
   CredentialIdentity;
@@ -70,6 +112,7 @@ function payload(input: unknown): CredentialPayload {
   const value = object(input);
   if (!['api-key', 'oauth'].includes(String(value.method)))
     throw new InferenceAuthenticationError('integrity');
+  if (value.source !== undefined) environmentExpressionSource(value.source);
   if (['disconnected', 'reauthorize', 'uncertain', 'not-authorized'].includes(String(value.status)))
     return value as unknown as CredentialPayload;
   if (
@@ -82,9 +125,8 @@ function payload(input: unknown): CredentialPayload {
   if (value.status !== 'ready') throw new InferenceAuthenticationError('integrity');
   if (value.method === 'api-key') {
     if (
-      typeof value.key !== 'string' ||
-      !value.key.trim() ||
-      typeof value.materialFingerprint !== 'string'
+      value.key === undefined ? value.source === undefined
+        : typeof value.key !== 'string' || !value.key.trim() || typeof value.materialFingerprint !== 'string'
     ) {
       throw new InferenceAuthenticationError('integrity');
     }

@@ -20,7 +20,12 @@ import {
   InferenceCredentialStore,
   type CredentialPayload,
   type OpenCredential,
+  type OAuthExchangeFailure,
+  type EnvironmentExpressionSource,
+  type ApiKeyMaterial,
+  normalizeApiKeyMaterial,
 } from './credentials.js';
+import { oauthExchangeFailure, oauthRecovery, oauthRefreshCooldown, oauthRefreshDue } from './oauth-refresh-policy.js';
 
 interface AccountRuntimeOptions {
   readonly hostOwnerId: string;
@@ -45,7 +50,7 @@ interface AccountRuntimeOptions {
     }>
   ) => boolean;
   /** Explicit Host environment port. Never reads .env or another client's credential cache. */
-  readonly resolveSource: (source: string) => string | undefined | Promise<string | undefined>;
+  readonly resolveSource: (source: string | EnvironmentExpressionSource) => string | undefined | Promise<string | undefined>;
   readonly now?: () => number;
   readonly cleanupFailed?: () => void;
 }
@@ -73,6 +78,10 @@ export interface AccountStatusView {
   readonly status: CredentialPayload['status'] | 'authenticated';
   readonly revision: number;
   readonly preparation?: 'required' | 'ready';
+  readonly failure?: OAuthExchangeFailure;
+  readonly source?: 'environment-expression';
+  /** Present only while a private account-wide authentication cooldown is active. */
+  readonly retryAt?: number;
 }
 export interface LoginChallengeView {
   readonly loginId: string;
@@ -89,6 +98,7 @@ function identity(open: OpenCredential | undefined): Readonly<{
   materialFingerprint?: string;
   subject?: string;
   client?: Readonly<{ clientSecret?: string }>;
+  source?: EnvironmentExpressionSource;
 }> {
   const payload = open?.payload;
   const subject =
@@ -103,6 +113,7 @@ function identity(open: OpenCredential | undefined): Readonly<{
     ...(payload?.materialFingerprint ? { materialFingerprint: payload.materialFingerprint } : {}),
     ...(subject ? { subject } : {}),
     ...(payload?.client ? { client: payload.client } : {}),
+    ...(payload?.source ? { source: payload.source } : {}),
   };
 }
 async function waitFor<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -236,7 +247,7 @@ export class HostAccountRuntime {
       if (binding.account.authentication.method === 'api-key') {
         open = await this.#environmentKey(binding.account, definition.contractVersion, open);
         ready(open);
-        if (open.payload.method !== 'api-key') throw new InferenceAuthenticationError('integrity');
+        if (open.payload.method !== 'api-key' || typeof open.payload.key !== 'string') throw new InferenceAuthenticationError('integrity');
         signal.throwIfAborted();
         return {
           token: open.payload.key,
@@ -251,8 +262,10 @@ export class HostAccountRuntime {
         throw new InferenceAuthenticationError('integrity');
       if (open.record.authContractVersion !== definition.authentication.oauth.contractVersion)
         throw new InferenceAuthenticationError('conflict');
-      const expiresAt = open.payload.credential.expiresAt;
-      if (expiresAt !== undefined && expiresAt <= (this.options.now?.() ?? Date.now())) {
+      const now = this.options.now?.() ?? Date.now();
+      if (open.payload.refresh && now < open.payload.refresh.nextAttemptAt)
+        throw new InferenceAuthenticationError('rejected');
+      if (oauthRefreshDue(open.payload, now)) {
         const refreshed = await waitFor(
           this.#refresh({
             account: binding.account,
@@ -386,16 +399,19 @@ export class HostAccountRuntime {
         ? 'uncertain'
         : open?.payload.status ?? 'not-authorized',
       revision: open?.record.revision ?? 0,
+      ...(open?.payload.status === 'uncertain' && open.payload.failure ? { failure: open.payload.failure } : {}),
+      ...(open?.payload.source ? { source: 'environment-expression' as const } : {}),
+      ...(open?.payload.status === 'ready' && open.payload.method === 'oauth' && open.payload.refresh
+        && open.payload.refresh.nextAttemptAt > (this.options.now?.() ?? Date.now()) ? { retryAt: open.payload.refresh.nextAttemptAt } : {}),
     };
   }
 
   async putKey(
     input: Readonly<{
       account: ProviderAccount;
-      key: string;
       expectedRevision: number;
       authContractVersion: string;
-    }>
+    }> & ApiKeyMaterial
   ): Promise<void> {
     const write = await this.prepareKey(input);
     const result = await this.options.repository.commitCredential({
@@ -418,27 +434,31 @@ export class HostAccountRuntime {
   async prepareKey(
     input: Readonly<{
       account: ProviderAccount;
-      key: string;
       expectedRevision: number;
       authContractVersion: string;
-    }>
+    }> & ApiKeyMaterial
   ): Promise<ProviderCredentialWrite> {
     this.#assertOpen();
     await this.#account(input.account);
     if (
       input.account.authentication.method !== 'api-key' ||
-      input.account.authentication.source ||
-      !input.key.trim()
+      input.account.authentication.source
     ) {
       throw new InferenceAuthenticationError('not-authorized');
     }
     const current = await this.options.credentials.read(input.account);
     if ((current?.record.revision ?? 0) !== input.expectedRevision)
       throw new InferenceAuthenticationError('conflict');
-    const fingerprint = credentialMaterialFingerprint(input.key);
+    const material = normalizeApiKeyMaterial(input);
+    const source = material.source;
+    if (source && input.account.ownerId !== this.options.hostOwnerId)
+      throw new InferenceAuthenticationError('not-authorized');
+    const exactTemplateRepair = source && current?.payload.status === 'ready' && current.payload.method === 'api-key'
+      && current.payload.key === source.expression;
+    const fingerprint = material.key === undefined ? undefined : credentialMaterialFingerprint(material.key);
     if (
       current?.payload.materialFingerprint &&
-      current.payload.materialFingerprint !== fingerprint
+      current.payload.materialFingerprint !== fingerprint && !source
     ) {
       throw new InferenceAuthenticationError('identity-change');
     }
@@ -449,8 +469,12 @@ export class HostAccountRuntime {
       payload: {
         status: 'ready',
         method: 'api-key',
-        key: input.key,
-        materialFingerprint: fingerprint,
+        ...(source ? {
+          ...identity(current),
+          // Only an exact malformed migration value proves that this fingerprint is synthetic.
+          ...(exactTemplateRepair ? { materialFingerprint: undefined } : {}),
+          source,
+        } : { key: material.key!, materialFingerprint: fingerprint! }),
       },
     });
     return {
@@ -719,6 +743,7 @@ export class HostAccountRuntime {
           method: 'oauth',
           operationId: login.id,
           ...identity(previous),
+          ...(oauthRecovery(previous?.payload) ? { recovery: oauthRecovery(previous?.payload) } : {}),
         },
       });
       const signal = AbortSignal.any([
@@ -775,6 +800,7 @@ export class HostAccountRuntime {
             status: 'ready',
             method: 'oauth',
             credential,
+            receivedAt: this.options.now?.() ?? Date.now(),
             ...identity(previous),
             identityEstablished: true,
             ...(credential.subject ? { subject: credential.subject } : {}),
@@ -911,8 +937,7 @@ export class HostAccountRuntime {
       previous: current,
       authContractVersion: current.record.authContractVersion,
       payload: {
-        status: 'ready',
-        method: 'oauth',
+        ...current.payload,
         credential,
         ...identity(current),
         ...(credential.subject ? { subject: credential.subject } : {}),
@@ -997,30 +1022,28 @@ export class HostAccountRuntime {
     contract: string,
     current: OpenCredential | undefined
   ): Promise<OpenCredential | undefined> {
-    if (account.authentication.method !== 'api-key' || !account.authentication.source)
-      return current;
-    const source = account.authentication.source;
+    if (account.authentication.method !== 'api-key') return current;
+    const source = account.authentication.source ?? current?.payload.source;
+    if (!source) return current;
     if (account.ownerId !== this.options.hostOwnerId)
       throw new InferenceAuthenticationError('not-authorized');
-    if (!/^env:\/\/[A-Za-z_][A-Za-z0-9_]*$/u.test(source))
+    if (typeof source === 'string' && !/^env:\/\/[A-Za-z_][A-Za-z0-9_]*$/u.test(source))
       throw new InferenceAuthenticationError('integrity');
+    if (current?.payload.status !== 'ready' && current !== undefined) return current;
     const key = await this.options.resolveSource(source);
     if (!key?.trim()) throw new InferenceAuthenticationError('not-authorized');
-    if (current?.payload.status !== 'ready' && current !== undefined) return current;
     const fingerprint = credentialMaterialFingerprint(key);
     if (current?.payload.status === 'ready' && current.payload.method === 'api-key') {
-      if (current.payload.materialFingerprint === fingerprint) return current;
-      await this.#publish({
-        account,
-        previous: current,
-        authContractVersion: contract,
-        payload: {
-          status: 'reauthorize',
-          method: 'api-key',
-          ...identity(current),
-        },
-      });
-      throw new InferenceAuthenticationError('identity-change');
+      if (current.payload.materialFingerprint === fingerprint && current.payload.key !== undefined) return current;
+      if (current.payload.materialFingerprint !== undefined && current.payload.materialFingerprint !== fingerprint) {
+        await this.#publish({
+          account,
+          previous: current,
+          authContractVersion: contract,
+          payload: { status: 'reauthorize', method: 'api-key', ...identity(current) },
+        });
+        throw new InferenceAuthenticationError('identity-change');
+      }
     }
     return this.#publish({
       account,
@@ -1031,6 +1054,8 @@ export class HostAccountRuntime {
         method: 'api-key',
         key,
         materialFingerprint: fingerprint,
+        ...(typeof source === 'string' ? {} : { source }),
+        ...(current?.payload.subject ? { subject: current.payload.subject } : {}),
       },
     });
   }
@@ -1089,6 +1114,7 @@ export class HostAccountRuntime {
           method: 'oauth',
           operationId: randomUUID(),
           ...identity(current),
+          recovery: oauthRecovery(current.payload),
         },
       });
       let invoked = false;
@@ -1121,6 +1147,7 @@ export class HostAccountRuntime {
             status: 'ready',
             method: 'oauth',
             credential,
+            receivedAt: this.options.now?.() ?? Date.now(),
             ...identity(current),
             ...(credential.subject ? { subject: credential.subject } : {}),
           },
@@ -1154,13 +1181,20 @@ export class HostAccountRuntime {
   ): Promise<void> {
     const { account, pending, contract, error, previous } = input;
     const failure = authenticationFailure(error);
+    const cooldown = previous?.payload.status === 'ready' && previous.payload.method === 'oauth'
+      ? oauthRefreshCooldown({ error, previous: previous.payload, now: this.options.now?.() ?? Date.now() }) : undefined;
+    const recovery = oauthRecovery(previous?.payload);
     const payload: CredentialPayload =
       failure === 'rejected' || failure === 'not-submitted'
-        ? previous?.payload ?? { status: 'reauthorize', method: 'oauth' }
+        ? previous ? { ...previous.payload, ...(cooldown ? { refresh: cooldown } : {}) } : { status: 'reauthorize', method: 'oauth' }
         : {
             status: failure === 'credential-invalid' ? 'reauthorize' : 'uncertain',
             method: 'oauth',
             ...identity(previous),
+            ...(failure === 'credential-invalid' ? {} : {
+              ...(recovery ? { recovery } : {}),
+              failure: oauthExchangeFailure(error),
+            }),
           };
     try {
       await this.#publish({

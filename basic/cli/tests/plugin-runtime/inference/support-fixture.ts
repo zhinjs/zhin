@@ -15,7 +15,7 @@ import { HostInference } from '../../../src/plugin-runtime/inference/host.js';
 
 /** The real management producer with synthetic declarations; no SDK or credential is needed. */
 export async function supportFixture(
-  options: Readonly<{ support?: unknown }> = {}
+  options: Readonly<{ support?: unknown; discovery?: boolean }> = {}
 ) {
   const directory = await mkdtemp(join(tmpdir(), 'inference-support-'));
   const root = rootPluginId(),
@@ -34,7 +34,7 @@ export async function supportFixture(
   const unavailable = () => {
     throw new Error('A metadata view must not execute a Driver');
   };
-  function definition(support: unknown): ProviderDefinition<unknown, unknown> {
+  function definition(support: unknown, discovery = options.discovery !== false): ProviderDefinition<unknown, unknown> {
     const value: ProviderDefinition<unknown, unknown> = {
       id: 'same',
       contractVersion: '1',
@@ -42,7 +42,7 @@ export async function supportFixture(
       serviceSchema: { parse: unavailable },
       models: unavailable,
       targets: unavailable,
-      discover: unavailable,
+      ...(discovery ? { discover: unavailable } : {}),
       identity: unavailable,
       authentication: { methods: ['none'] },
       createExecution: unavailable,
@@ -91,7 +91,7 @@ export async function supportFixture(
                   definition: definition({
                     status: 'standard',
                     notice: 'Other owner',
-                  }),
+                  }, false),
                 },
               ],
             ],
