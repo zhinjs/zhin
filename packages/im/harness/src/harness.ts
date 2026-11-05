@@ -62,6 +62,7 @@ import {
   type MailSender,
   type Mailbox,
   type MailboxKey,
+  type InboxDropReason,
   type InboxPolicy,
   type InboxRejectCode,
   type InboxSetTimer,
@@ -109,6 +110,13 @@ export interface OpenEngagementInput {
    * `event:<source>` for webhooks. Omitted = the engagement's own lane.
    */
   readonly lane?: string;
+  /**
+   * Called synchronously with the admitted root mail right before it is
+   * posted. The inbox may start its turn in the next microtask, before
+   * `deliver` resolves, so a host that correlates turns with its own
+   * callers registers the mail here.
+   */
+  readonly onPosting?: (root: Mail) => void;
 }
 
 /** How the inbox took an inbound mail. `stopped`: it was a stop request and was consumed. */
@@ -187,6 +195,8 @@ export interface Harness {
   /** Records model / tool usage against the grant of `current`. */
   charge(current: Mail, usage: Partial<BudgetAmounts>): Promise<BudgetResult<BudgetSnapshot>>;
   cancel(mailId: MailId, reason?: string): boolean;
+  /** Drops every queued mail of `senderId` on one lane of `actor` (reported `cancelled` with `reason`). */
+  cancelSender(actor: ActorId, lane: string, senderId: string, reason?: InboxDropReason): number;
   engagement(id: EngagementId): Engagement | undefined;
   graph(id: EngagementId): EngagementGraphView | undefined;
   idle(): Promise<void>;
@@ -467,6 +477,11 @@ export function createHarness(options: HarnessOptions): Harness {
       await maybeCloseEngagement(state);
       return { ok: false, code: 'closed', reason: 'harness is closed' };
     }
+    try {
+      input.onPosting?.(root);
+    } catch (error) {
+      reportError(error);
+    }
     const posted = post(state, root);
     if (!posted.ok) {
       await record(engagementId, 'mail_denied', { ...mailSummary(root), code: posted.code, reason: posted.reason });
@@ -576,6 +591,10 @@ export function createHarness(options: HarnessOptions): Harness {
 
     cancel(mailId, reason) {
       return mailbox.cancel(mailId, reason);
+    },
+
+    cancelSender(actor, lane, senderId, reason) {
+      return mailbox.cancelSender({ actor, lane }, senderId, reason);
     },
 
     engagement(id) {

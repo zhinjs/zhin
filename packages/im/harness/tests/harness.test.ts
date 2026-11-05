@@ -263,6 +263,29 @@ describe('harness: inbound delivery (H3)', () => {
     expect((await eventTypes(journal, opened.engagement.id)).at(-1)).toBe('engagement_closed');
   });
 
+  it('hands the root mail to onPosting before the turn can start, and cancelSender drops queued mail', async () => {
+    let release!: () => void;
+    const block = new Promise<void>((resolve) => { release = resolve; });
+    const posted: string[] = [];
+    const ran: string[] = [];
+    const { harness } = setup([ceiling('zhin', ALL)], {
+      zhin: async (mail) => {
+        ran.push(mail.id);
+        expect(posted).toContain(mail.id);
+        await block;
+        return { status: 'completed' };
+      },
+    });
+    const first = await harness.deliver({ principal: master, entry: 'zhin', body: humanBody('a'), budget: BUDGET, lane: 'im:s', onPosting: (root) => posted.push(root.id) });
+    const queued = await harness.deliver({ principal: master, entry: 'zhin', body: humanBody('b'), budget: BUDGET, lane: 'im:s', onPosting: (root) => posted.push(root.id) });
+    if (!first.ok || !queued.ok) throw new Error('deliver failed');
+    expect(posted).toEqual([first.root.id, queued.root.id]);
+    expect(harness.cancelSender('zhin', 'im:s', master.id, 'stopped')).toBe(1);
+    release();
+    await harness.idle();
+    expect(ran).toEqual([first.root.id]);
+  });
+
   it('reports the remaining budget of a grant', async () => {
     let remaining: number | undefined;
     const { harness } = setup([ceiling('zhin', ALL)], {
