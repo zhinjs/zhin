@@ -89,6 +89,7 @@ export function createScheduleExecutionFixture(options: {
     store,
     due: { run: (job, runOptions) => executor.execute(job, { signal: runOptions.signal, attempt: runOptions.attempt }) },
     history,
+    observations,
     router: options.router ?? createNotificationRouter({ resolveAdapter: () => undefined }),
     queue: { maxRetries: 1, maxConcurrency: 1, defaultTimeoutMs: 5_000 },
   });

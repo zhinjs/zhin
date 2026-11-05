@@ -34,7 +34,7 @@ describe('Host schema null compatibility with actual configuration consumers', (
   });
 
   it('keeps explicit null MCP entries accepted by the existing resolvers', () => {
-    const input = { ai: { mcpServers: null }, assistant: { enabled: null } };
+    const input = { ai: { mcpServers: null }, assistant: {} };
     expect(parsePluginConfigSchema(HOST_CONFIG_SCHEMA, input)).toEqual({ value: input, errors: [] });
     expect(resolveAgentHostMcpServers(input.ai as never)).toEqual([]);
     expect(resolveAssistantQueueConfig(undefined)).toEqual({

@@ -27,6 +27,7 @@ export default defineEvalCase({
   allowUnusedSteps: true,
   expect: {
     maxModelSteps: 3,
+    termination: 'budget_exceeded',
     outboundContains: ['预算用完了'],
   },
 });

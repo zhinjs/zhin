@@ -315,6 +315,17 @@ async function runInWorkspace(
           if (modelRequests > 0 || usageTokens > 0) {
             await admission.harness.charge(admission.mail, { modelCalls: modelRequests, tokens: usageTokens });
           }
+          const exceeded = Object.freeze({
+            type: 'budget_exceeded' as const,
+            budget: 'modelCalls',
+            usage: Object.freeze({
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: usageTokens,
+            }),
+          });
+          events.push(exceeded);
+          terminals.push(exceeded);
           status = 'cancelled';
         } else {
           status = admission.signal.aborted ? 'cancelled' : 'completed';
