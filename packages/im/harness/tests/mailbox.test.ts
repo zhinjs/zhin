@@ -1,5 +1,5 @@
 import { createMailbox } from '../src/mailbox.js';
-import type { ActorTurnResult, Mail, MailboxKey, MailboxOptions } from '../src/contracts.js';
+import type { ActorTurnResult, InboxReadyDecision, InboxView, Mail, MailboxKey, MailboxOptions } from '../src/contracts.js';
 
 function mail(id: string, to: string, eng: string): Mail {
   return { id, to, engagementId: eng } as unknown as Mail;
@@ -112,7 +112,7 @@ describe('mailbox', () => {
   });
 
   it('applies the batch policy', async () => {
-    const { box, runs } = harness({ batch: (p) => p });
+    const { box, runs } = harness({ policy: { ready: (v) => ({ kind: 'run', batch: v.pending.map((e) => e.mail) }) } });
     box.post(mail('1', 'a', 'e'));
     box.post(mail('2', 'a', 'e'));
     box.post(mail('3', 'a', 'e'));
@@ -122,17 +122,18 @@ describe('mailbox', () => {
 
   it('falls back to the first mail on invalid batch selection', async () => {
     const errors: string[] = [];
-    const bads: Array<MailboxOptions['batch']> = [
-      () => [],
-      (p) => [p[1]],
-      (p) => [p[1], p[0]],
-      () => [mail('x', 'a', 'e')],
+    const run = (pick: (p: readonly Mail[]) => Mail[]) => (v: InboxView): InboxReadyDecision => ({ kind: 'run', batch: pick(v.pending.map((e) => e.mail)) });
+    const bads: Array<(v: InboxView) => InboxReadyDecision> = [
+      run(() => []),
+      run((p) => [p[1]!]),
+      run((p) => [p[1]!, p[0]!]),
+      run(() => [mail('x', 'a', 'e')]),
       () => {
         throw new Error('boom');
       },
     ];
     for (const bad of bads) {
-      const { box, runs } = harness({ batch: bad }, (_e, c) => errors.push(c));
+      const { box, runs } = harness({ policy: { ready: bad } }, (_e, c) => errors.push(c));
       box.post(mail('1', 'a', 'e'));
       box.post(mail('2', 'a', 'e'));
       await tick();
@@ -143,13 +144,13 @@ describe('mailbox', () => {
 
   it('reports queue_full and positions', async () => {
     const { box } = harness({ maxQueuedPerKey: 2 });
-    expect(box.post(mail('1', 'a', 'e'))).toEqual({ accepted: true, position: 1 });
-    expect(box.post(mail('2', 'a', 'e'))).toEqual({ accepted: true, position: 2 });
+    expect(box.post(mail('1', 'a', 'e'))).toEqual({ accepted: true, position: 1, disposition: 'queued' });
+    expect(box.post(mail('2', 'a', 'e'))).toEqual({ accepted: true, position: 2, disposition: 'queued' });
     expect(box.post(mail('3', 'a', 'e'))).toMatchObject({ accepted: false, code: 'queue_full' });
-    expect(box.post(mail('4', 'b', 'e'))).toEqual({ accepted: true, position: 1 });
+    expect(box.post(mail('4', 'b', 'e'))).toEqual({ accepted: true, position: 1, disposition: 'queued' });
     await tick();
     // mail 1 left the queue when it started
-    expect(box.post(mail('5', 'a', 'e'))).toEqual({ accepted: true, position: 2 });
+    expect(box.post(mail('5', 'a', 'e'))).toEqual({ accepted: true, position: 2, disposition: 'queued' });
   });
 
   it('cancels a running mail via signal', async () => {
@@ -252,5 +253,93 @@ describe('mailbox', () => {
     const byId = Object.fromEntries(finished.map((f) => [f.ids[0], f.result.status]));
     expect(byId).toEqual({ '1': 'cancelled', '2': 'cancelled' });
     await box.idle();
+  });
+});
+
+describe('mailbox inbox policy plumbing (ADR 0048 H3)', () => {
+  const human = (id: string, lane: string, eng: string): Mail =>
+    ({ id, to: 'a', lane, engagementId: eng, from: { kind: 'human', principal: { kind: 'human', id: 'u', trust: 'stranger' } }, body: { kind: 'human', text: id, venue: { kind: 'g', id: '1' }, senderId: 'u' } }) as unknown as Mail;
+
+  it('serializes one lane across engagements and reports the first engagement', async () => {
+    const { box, runs, finished } = harness();
+    box.post(human('1', 'L', 'e1'));
+    box.post(human('2', 'L', 'e2'));
+    await tick();
+    expect(runs.map((r) => r.ids)).toEqual([['1']]);
+    runs[0].d.resolve(ok);
+    await tick();
+    expect(finished[0].key).toEqual({ actor: 'a', lane: 'L', engagementId: 'e1' });
+    expect(runs.map((r) => r.ids)).toEqual([['1'], ['2']]);
+  });
+
+  it('waits on the injected timer and does not hold a slot while waiting', async () => {
+    let clock = 0;
+    const timers: Array<{ at: number; fn: () => void }> = [];
+    const { box, runs } = harness({
+      maxConcurrentTurns: 1,
+      now: () => clock,
+      setTimer: (fn, ms) => {
+        const t = { at: clock + ms, fn };
+        timers.push(t);
+        return () => timers.splice(timers.indexOf(t), 1);
+      },
+      policy: {
+        ready: (v) => (v.key.lane === 'slow' && v.now < 100 ? { kind: 'wait', until: 100 } : { kind: 'run', batch: [v.pending[0]!.mail] }),
+      },
+    });
+    box.post(human('s', 'slow', 'e1'));
+    box.post(human('f', 'fast', 'e2'));
+    await tick();
+    expect(runs.map((r) => r.ids[0])).toEqual(['f']);
+    expect(timers.map((t) => t.at)).toEqual([100]);
+    runs[0].d.resolve(ok);
+    await tick();
+    clock = 100;
+    timers.shift()!.fn();
+    await tick();
+    expect(runs.map((r) => r.ids[0])).toEqual(['f', 's']);
+  });
+
+  it('falls back to enqueue / fresh when policy callbacks throw', async () => {
+    const errors: string[] = [];
+    const { box, runs } = harness(
+      {
+        policy: {
+          onPost: () => { throw new Error('post'); },
+        },
+      },
+      (_e, c) => errors.push(c),
+    );
+    expect(box.post(human('1', 'L', 'e1'))).toMatchObject({ accepted: true, disposition: 'queued' });
+    await tick();
+    expect(runs).toHaveLength(1);
+    expect(errors).toEqual(['onPost']);
+  });
+
+  it('applies reject decisions without queueing', () => {
+    const { box } = harness({ policy: { onPost: () => ({ kind: 'reject', code: 'forbidden', message: 'no' }) } });
+    expect(box.post(human('1', 'L', 'e1'))).toEqual({ accepted: false, code: 'forbidden', message: 'no' });
+  });
+
+  it('cancelling a superseded mail drops its requeued copy, not the aborted turn', async () => {
+    const { box, runs, finished } = harness({ policy: { onPost: (_e, v) => (v.running ? { kind: 'supersede' } : { kind: 'enqueue' }), ready: (v) => ({ kind: 'run', batch: v.pending.map((e) => e.mail) }) } });
+    box.post(human('1', 'L', 'e1'));
+    await tick();
+    expect(box.post(human('2', 'L', 'e2'))).toEqual({ accepted: true, position: 2, disposition: 'superseded' });
+    expect(runs[0].signal.reason).toBe('superseded');
+    expect(box.cancel('1', 'nah')).toBe(true);
+    runs[0].d.resolve(ok);
+    await tick();
+    expect(finished.map((f) => [f.ids, f.result.status])).toEqual([[['1'], 'cancelled']]);
+    expect(runs[1].ids).toEqual(['2']);
+  });
+
+  it('hands the runner a control with facts and a default fresh stale check', async () => {
+    const controls: Array<Parameters<MailboxOptions['run']>[3]> = [];
+    const box = createMailbox({ maxConcurrentTurns: 1, maxQueuedPerKey: 5, run: async (_a, _b, _s, control) => { controls.push(control); return ok; } });
+    box.post(mail('1', 'a', 'e'));
+    await box.idle();
+    expect(controls[0]!.facts).toEqual({ queuedMs: 0, mergedMessages: 1, supersededPrevious: false, carried: false, evicted: 0 });
+    expect(controls[0]!.staleCheck()).toEqual({ kind: 'fresh' });
   });
 });
