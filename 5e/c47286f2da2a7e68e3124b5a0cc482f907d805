@@ -1,0 +1,16 @@
+.changeset/adr-0048-h3-drop-assistant-queue-schema-coverage.md
+  h_6f5e45c41d0910 1-5
+packages/im/runtime/tests/host-config-schema-coverage.test.ts
+  h_6f5e45c41d0910 96-97,102,105,137-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ec47286f2da2a7e68e3124b5a0cc482f907d805",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
