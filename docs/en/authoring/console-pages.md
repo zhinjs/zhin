@@ -433,6 +433,10 @@ Controlled self-changes drafted by the bot (see [Letting the bot change itself](
 | `plugin.root.resolve-self-change` | `pluginRpc('root', 'resolve-self-change', { id, decision: 'approve' \| 'reject' })` | `ops:approve` (action) |
 | `plugin.root.mark-self-change-handled` | `pluginRpc('root', 'mark-self-change-handled', { id })` | `ops:approve` (action; a `failed` change was dealt with) |
 
+## Page UI kit
+
+Use `@zhin.js/client/ui` instead of hand-rolled styles: buttons, badges, notices, empty/loading/error states, inline confirmation, form fields, and `usePluginRpc`, which reports loading / empty / error / stale. It reads the Console theme variables (light/dark follow automatically) and does not rely on Tailwind, because remote pages are not scanned by the Console's Tailwind. See the [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) for usage and the export list.
+
 ## Adapter Console pages
 
 Every built-in platform adapter (`plugins/adapters/*`) ships a `pages/index/index.ts`. Pages use `createAdapterConsolePage(adapterKey)` from `@zhin.js/client`; the server side uses `createAdapterConsoleRpc(spec)` from `@zhin.js/adapter`:
@@ -465,6 +469,10 @@ Permissions are per adapter: page reads need `<adapterKey>:read`; writes (accoun
 Each mutation supplies the directory’s `expectedGeneration` and `expectedRevision` and targets an `instanceId`; the first migration adds `confirmMigration: true` only after user confirmation. New and replacement accounts are saved disabled; connection updates reconnect only the target account. Refresh to verify conflicts or unknown commit outcomes rather than automatically retrying. Persistence acknowledgment and asynchronous startup or cleanup completion are separate states.
 
 Keep `createAdapterConsoleRpc` specs limited to public field metadata. Fields marked `env: true` or `secret: true` are masked; `env` no longer grants file-writing behavior. Editing submits only fields declared mutable by the platform; blank or masked secrets retain their current value. Replacement requires a complete new configuration. `extraStatus` should expose only a few state values (for example `bindState` or `scanUrl`), never logs, chat text or secrets.
+
+## Comment review pages
+
+Reply-drafting adapters that go "AI drafts → human approves → send" (Bilibili, Juejin) do not need a hand-written page: `pages/index/index.tsx` calls `createCommentReviewPage(spec)` from `@zhin.js/client` and gets the account section, login status, draft cards (edit / send / discard draft) and consistent error and stale-data notices. The `spec` only describes what differs per platform: platform name and zh/en copy, the resource noun, field mappers for the account and draft resource, plus optional `renderLoginExtras` (for example QR login), `renderResources` and `isLoginPending` (poll faster while a login is in flight). The server provides `plugin.<pluginId>.status` / `edit` / `send` / `drop`, still implemented per adapter in its own `src/console.ts`. See the [`@zhin.js/client` README](https://github.com/zhinjs/zhin/blob/main/packages/console/client/README.md) for the full field list.
 
 ## Saving settings from a page (config:patch)
 
