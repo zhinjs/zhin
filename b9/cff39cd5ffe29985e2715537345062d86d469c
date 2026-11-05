@@ -1,0 +1,58 @@
+basic/schema/src/schema.ts
+  h_6f5e45c41d0910 32-34
+docs/adr/0036-controlled-landing-phase0.md
+  h_6f5e45c41d0910 7,132,134-140
+docs/adr/0037-controlled-landing-phase1-group-ops.md
+  h_6f5e45c41d0910 7,157,159-165,167,177,179
+docs/adr/0038-continuous-input-merge.md
+  h_6f5e45c41d0910 7,104,106-112,123
+docs/adr/0039-group-ops-rules.md
+  h_6f5e45c41d0910 7,120,122-128,140
+docs/adr/0040-controlled-self-change.md
+  h_6f5e45c41d0910 7,53,140,151,164
+docs/adr/0041-prompt-segments-and-message-headers.md
+  h_6f5e45c41d0910 7,161,163-169,183
+docs/adr/0042-first-turn-token-budget.md
+  h_6f5e45c41d0910 7,98,100,102-106,108
+docs/adr/0043-history-token-budget.md
+  h_6f5e45c41d0910 7,93,95-101,103
+docs/adr/0044-adapter-capability-profile.md
+  h_6f5e45c41d0910 7,134,136-143,154
+docs/adr/0045-current-message-runtime-context.md
+  h_6f5e45c41d0910 7,51-58
+docs/adr/0046-personal-session-model-policy.md
+  h_6f5e45c41d0910 7-12,20-22,24,26,29-32,68-70,72-73
+docs/adr/0047-ai-provider-subscriptions-and-decision-models.md
+  h_6f5e45c41d0910 7,11,17,19-21,51,53,55,57,148,150,152-158,160,240
+docs/adr/0048-agent-harness.md
+  h_6f5e45c41d0910 11,185
+docs/adr/index.md
+  h_6f5e45c41d0910 1-57
+docs/plans/configuration-live-update.md
+  h_6f5e45c41d0910 9
+docs/plans/controlled-ops-roadmap.md
+  h_6f5e45c41d0910 56-62,194,196,210-212,247,249,251
+examples/multi-agent-room/package.json
+  h_6f5e45c41d0910 24-26,29-30
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  h_6f5e45c41d0910 15,17-28,59-62
+packages/im/agent/README.md
+  h_6f5e45c41d0910 119-120,144,146-153
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  h_6f5e45c41d0910 41-42,293,304-305,307,310,323,646,655,724,729-731,733-734,736-749,752,755
+packages/im/tool/src/input-schema.ts
+  h_6f5e45c41d0910 120-125,127-128
+pnpm-lock.yaml
+  h_6f5e45c41d0910 527-528,539-540,545,548-550,552-553,10793-10794
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b9cff39cd5ffe29985e2715537345062d86d469c",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
