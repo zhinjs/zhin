@@ -188,12 +188,12 @@ export function createHarness(options: HarnessOptions): Harness {
   };
 
   const mailbox = options.createMailbox({
-    run: async (actor, batch, signal) => {
+    run: async (actor, batch, signal, control) => {
       const engagementId = batch[0]?.engagementId;
       if (engagementId) {
         await record(engagementId, 'turn_started', { actor, mails: batch.map((mail) => mail.id) }).catch(reportError);
       }
-      return options.runTurn(actor, batch, signal);
+      return options.runTurn(actor, batch, signal, control);
     },
     maxConcurrentTurns: options.maxConcurrentTurns ?? 8,
     maxQueuedPerKey: options.maxQueuedPerKey ?? 16,

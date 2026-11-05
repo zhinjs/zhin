@@ -203,7 +203,30 @@ export type MailSender =
   | { readonly kind: 'system'; readonly source: 'timer' | 'event' | 'harness' };
 
 export type MailBody =
-  | { readonly kind: 'human'; readonly text: string; readonly venue: VenueRef; readonly messageId?: string }
+  | {
+      readonly kind: 'human';
+      readonly text: string;
+      readonly venue: VenueRef;
+      readonly messageId?: string;
+      // Inbox-policy markers (ADR 0048 H3, D2). All optional: an absent marker
+      // means "no" (`plainText` included), so a bare human mail is never
+      // merged, superseded or treated as a stop. Set by the venue from the
+      // transport, never from message text (invariant 6).
+      /** Platform sender id; defaults to the sender principal's id. */
+      readonly senderId?: string;
+      /** Display name used when several senders share one turn. */
+      readonly senderName?: string;
+      /** Plain text without media, quotes or forwards (only those may be merged / superseded). */
+      readonly plainText?: boolean;
+      /** May join a merge window (ADR 0038 §1): plain group text from a non-master, not a command, stop or approval. */
+      readonly mergeable?: boolean;
+      /** A danmaku of a live room (ADR 0038 §5): joins the lane's danmaku window. */
+      readonly live?: boolean;
+      /** Sender is the bot master (may stop anyone's turn). */
+      readonly isMaster?: boolean;
+      /** Explicit stop request: consumed by the inbox, never run as a turn. */
+      readonly isStop?: boolean;
+    }
   | { readonly kind: 'ask'; readonly question: string }
   | { readonly kind: 'delegate'; readonly brief: string; readonly deliverable?: string }
   | { readonly kind: 'tell'; readonly content: string }
@@ -227,6 +250,14 @@ export interface Mail {
   /** Filled by the harness from the transport, never by the sender (invariant 6). */
   readonly from: MailSender;
   readonly to: ActorId;
+  /**
+   * Serial lane inside the target's inbox (ADR 0048 H3, D1). Mails of one
+   * actor in the same lane run one turn at a time and may be merged by the
+   * inbox policy; different lanes run in parallel. Defaults to the engagement
+   * (`engagement:<id>`); an IM venue session uses one lane across the
+   * engagements its messages open. See `laneOf`.
+   */
+  readonly lane?: string;
   readonly authority: Authority;
   readonly grantId: GrantId;
   readonly body: MailBody;
@@ -369,49 +400,206 @@ export interface EngagementJournal {
 // Mailbox scheduling (ADR 0048 §3.1)
 // ---------------------------------------------------------------------------
 
-/** Serial key: one actor runs one turn at a time within one engagement. */
+/**
+ * Serial key: one actor runs one turn at a time per lane (D1). `lane`
+ * defaults to the mail's engagement, so without explicit lanes this is the
+ * H1 rule "one actor, one engagement, one turn at a time".
+ */
 export interface MailboxKey {
   readonly actor: ActorId;
+  readonly lane: string;
+  /**
+   * Engagement of the batch's first mail. A merged batch may span several
+   * engagements (one per human message); the first one carries the turn (Q2).
+   */
   readonly engagementId: EngagementId;
 }
 
+/** Lane of a mail: `mail.lane`, or its engagement. */
+export function laneOf(mail: Pick<Mail, 'lane' | 'engagementId'>): string {
+  return mail.lane ?? `engagement:${mail.engagementId}`;
+}
+
+export function mailboxKeyOf(mail: Pick<Mail, 'to' | 'lane' | 'engagementId'>): MailboxKey {
+  return { actor: mail.to, lane: laneOf(mail), engagementId: mail.engagementId };
+}
+
+/**
+ * Stable sender id the inbox policies compare: the human body's `senderId`,
+ * else the principal's id; the actor id for actor mail; `system:<source>`.
+ * Always transport-derived (invariant 6), never read from free text.
+ */
+export function senderOf(mail: Pick<Mail, 'from' | 'body'>): string {
+  if (mail.body.kind === 'human' && mail.body.senderId) return mail.body.senderId;
+  switch (mail.from.kind) {
+    case 'human': return mail.from.principal.id;
+    case 'actor': return mail.from.actor;
+    default: return `system:${mail.from.source}`;
+  }
+}
+
 export type TurnStatus = 'completed' | 'failed' | 'cancelled' | 'budget_exceeded';
+
+/** Why the inbox finished a mail without running it (status `cancelled`). */
+export type InboxDropReason = 'cancelled' | 'expired' | 'stopped' | 'evicted' | 'closed';
 
 export interface ActorTurnResult {
   readonly status: TurnStatus;
   /** Text handed back to the asker / delegator when the batch contains ask / delegate mail. */
   readonly content?: string;
+  /** Set when the inbox dropped the mail(s) instead of running them. */
+  readonly reason?: InboxDropReason;
+}
+
+/** Pre-send verdict for a running turn (ADR 0038 §4). */
+export type InboxStaleVerdict =
+  | { readonly kind: 'fresh' }
+  | { readonly kind: 'discard'; readonly senders: readonly string[] }
+  | { readonly kind: 'send'; readonly senders: readonly string[]; readonly reason: 'acted' | 'starvation' };
+
+/** Facts about how the inbox admitted a batch (recorded on the turn trace by the agent layer). */
+export interface InboxTurnFacts {
+  /** Milliseconds between the batch's earliest (re)queue time and its start. */
+  readonly queuedMs: number;
+  /** Mails in the batch. */
+  readonly mergedMessages: number;
+  /** The batch replaces the same sender's own unanswered turn. */
+  readonly supersededPrevious: boolean;
+  /** The batch carries mails whose previous reply was discarded as stale. */
+  readonly carried: boolean;
+  /** Mails of this lane evicted (danmaku window cap) since the previous turn started. */
+  readonly evicted: number;
+}
+
+/** Handed to the runner with each batch; lets the turn talk back to its inbox. */
+export interface ActorTurnControl {
+  readonly facts: InboxTurnFacts;
+  /** A reply went out: later same-sender mails queue instead of superseding, and the reply is never cut. */
+  markDelivered(): void;
+  /** The turn did something that must be reported (tool call, hard gate): a stale reply still goes out. */
+  markActed(): void;
+  /**
+   * Ask before each send. The first `discard` moves this batch back into the
+   * follow-up's group; later calls keep answering `discard`.
+   */
+  staleCheck(): InboxStaleVerdict;
 }
 
 /** Runs one actor turn over a batch of mails. Supplied by the agent layer. */
-export type ActorTurnRunner = (actor: ActorId, batch: readonly Mail[], signal: AbortSignal) => Promise<ActorTurnResult>;
+export type ActorTurnRunner = (
+  actor: ActorId,
+  batch: readonly Mail[],
+  signal: AbortSignal,
+  control?: ActorTurnControl,
+) => Promise<ActorTurnResult>;
+
+/** One queued (or running) mail as the inbox policy sees it. */
+export interface InboxEntry {
+  readonly mail: Mail;
+  /** Global arrival order (kept when a mail is requeued). */
+  readonly seq: number;
+  /** Mailbox clock when the mail was (re)queued. */
+  readonly postedAt: number;
+  /** Requeued because the same sender superseded its running turn. */
+  readonly superseded?: boolean;
+  /** Requeued because its reply went stale; belongs to the group of this mail. */
+  readonly carriedInto?: MailId;
+}
+
+export interface InboxRunning {
+  readonly batch: readonly InboxEntry[];
+  readonly startedAt: number;
+  /** Entries with `seq >= startSeq` arrived while this batch ran. */
+  readonly startSeq: number;
+  readonly delivered: boolean;
+  readonly acted: boolean;
+}
+
+/** Read-only view of one lane's inbox handed to the policy. */
+export interface InboxView {
+  readonly key: MailboxKey;
+  readonly now: number;
+  /** Queued mails in queue order (not necessarily `seq` order). */
+  readonly pending: readonly InboxEntry[];
+  readonly running?: InboxRunning;
+  /** Last finished batch of this lane, kept for `InboxPolicy.memoryMs`. */
+  readonly lastTurn?: { readonly batch: readonly Mail[]; readonly endedAt: number };
+}
+
+export type InboxRejectCode = 'queue_full' | 'forbidden' | 'not_running';
+
+/** What happens to a mail being posted (decided before it is queued). */
+export type InboxPostDecision =
+  /** Queue it. `merged`: it joined an existing group. `evict`: queued mails to drop (danmaku cap). */
+  | { readonly kind: 'enqueue'; readonly merged?: boolean; readonly evict?: readonly MailId[] }
+  /** Abort the running batch and requeue it in front, followed by this mail. */
+  | { readonly kind: 'supersede' }
+  /** Consume this mail: abort the running batch and drop these senders' queued mails. */
+  | { readonly kind: 'stop'; readonly cancelSenders: readonly string[] }
+  | { readonly kind: 'reject'; readonly code: InboxRejectCode; readonly message: string };
+
+/** When an idle lane starts its next turn. */
+export type InboxReadyDecision =
+  /** Run these mails: an in-order subsequence of `pending` that contains `pending[0]`. */
+  | { readonly kind: 'run'; readonly batch: readonly Mail[] }
+  /** Not yet: re-check at `until` (or on the next post when omitted). */
+  | { readonly kind: 'wait'; readonly until?: number };
+
+export type InboxStaleDecision =
+  | Exclude<InboxStaleVerdict, { readonly kind: 'discard' }>
+  /** Discard the reply and requeue the running batch right before `carryInto`. */
+  | { readonly kind: 'discard'; readonly senders: readonly string[]; readonly carryInto: MailId };
 
 /**
- * Picks the next batch from an actor's pending mails (all for the same key,
- * in arrival order). Must return a non-empty prefix-preserving selection;
- * unselected mails stay queued. Default: the first mail only.
+ * Inbox policy (D2): pure decisions over an `InboxView`; the mailbox applies
+ * them. Omitted members fall back to plain FIFO: enqueue, run the first
+ * mail, always fresh. See `createInboxPolicy` for the IM admission policy.
  */
-export type BatchPolicy = (pending: readonly Mail[]) => readonly Mail[];
+export interface InboxPolicy {
+  onPost?(entry: InboxEntry, view: InboxView): InboxPostDecision;
+  ready?(view: InboxView): InboxReadyDecision;
+  staleOf?(view: InboxView & { readonly running: InboxRunning }): InboxStaleDecision;
+  /** How long a lane's last finished batch stays visible as `lastTurn`. Default 0. */
+  readonly memoryMs?: number;
+}
+
+/** Schedules `callback` after `delayMs`; returns a cancel function. */
+export type InboxSetTimer = (callback: () => void, delayMs: number) => () => void;
 
 export interface MailboxOptions {
   readonly run: ActorTurnRunner;
-  readonly batch?: BatchPolicy;
+  readonly policy?: InboxPolicy;
   /** Max turns running at once across all keys. */
   readonly maxConcurrentTurns: number;
-  /** Max mails queued per key; posting beyond it is rejected. */
+  /**
+   * Hard cap on mails queued per key; posting beyond it is rejected. With a
+   * merging policy this is a memory ceiling, the policy bounds turns.
+   */
   readonly maxQueuedPerKey: number;
-  /** Called once per finished batch (also on failure / cancel). */
+  /** A queued mail older than this when its lane would start is dropped (`expired`). `0`/omitted = never. */
+  readonly queueTtlMs?: number;
+  readonly now?: () => number;
+  /** Defaults to an unref'd `setTimeout`. */
+  readonly setTimer?: InboxSetTimer;
+  /** Called once per finished batch (also on failure / cancel / drop). */
   readonly onTurnFinished?: (key: MailboxKey, batch: readonly Mail[], result: ActorTurnResult) => void | Promise<void>;
 }
 
 export type PostResult =
-  | { readonly accepted: true; readonly position: number }
-  | { readonly accepted: false; readonly code: 'queue_full' | 'mailbox_closed'; readonly message: string };
+  | {
+      readonly accepted: true;
+      /** 1-based queue position; 0 when the mail was consumed (`stopped`). */
+      readonly position: number;
+      readonly disposition: 'queued' | 'merged' | 'superseded' | 'stopped';
+    }
+  | { readonly accepted: false; readonly code: 'queue_full' | 'mailbox_closed' | 'forbidden' | 'not_running'; readonly message: string };
 
 export interface Mailbox {
   post(mail: Mail): PostResult;
   /** Cancels the running turn for `mailId` (via its AbortSignal) or drops it if still queued. */
   cancel(mailId: MailId, reason?: string): boolean;
+  /** Drops every queued mail of `senderId` in one lane; returns how many were dropped. */
+  cancelSender(key: Pick<MailboxKey, 'actor' | 'lane'>, senderId: string, reason?: InboxDropReason): number;
   /** Resolves when no turn is running or queued. */
   idle(): Promise<void>;
   /** Stops accepting mail, aborts running turns, drops the queue. */

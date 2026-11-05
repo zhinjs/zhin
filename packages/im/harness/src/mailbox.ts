@@ -1,18 +1,30 @@
 /**
- * Mailbox scheduler (ADR 0048 §3.1).
+ * Mailbox scheduler (ADR 0048 §3.1, H3).
  *
  * Semantics:
- * - Key = (mail.to, mail.engagementId). Mails for a key queue FIFO. At most one
- *   turn runs per key at a time; different keys run in parallel, bounded by
- *   `maxConcurrentTurns` across all keys.
- * - Fairness: when a slot frees, the next key to start is the one whose oldest
- *   waiting mail arrived first (global arrival order), so a busy key cannot
- *   starve the others.
- * - Batch: when a key starts a turn, `options.batch ?? (p => p.slice(0, 1))`
- *   selects from that key's pending mails. The selection must be a non-empty
- *   in-order prefix of pending; anything else is a programming error and only
- *   the first mail is run. Selected mails leave the queue.
- * - `post` never starts a turn synchronously; turns start in a microtask.
+ * - Key = (mail.to, laneOf(mail)). A lane defaults to the mail's engagement,
+ *   so without explicit lanes one actor runs one turn per engagement at a
+ *   time. At most one turn runs per key; different keys run in parallel,
+ *   bounded by `maxConcurrentTurns` across all keys.
+ * - Fairness: when a slot frees, idle keys are offered the slot in global
+ *   arrival order of their oldest queued mail, so a busy key cannot starve
+ *   the others. A key whose policy says `wait` does not hold a slot.
+ * - Policy (`InboxPolicy`, all members optional): `onPost` decides what a new
+ *   mail does (enqueue / supersede / stop / reject), `ready` picks the next
+ *   batch of an idle key or asks to wait until a time (merge and danmaku
+ *   windows), `staleOf` answers the running turn's pre-send check. Without a
+ *   policy the mailbox is plain FIFO, one mail per turn.
+ * - A `ready` batch must be an in-order subsequence of the key's queue that
+ *   contains its first mail; anything else is a programming error and only
+ *   the first mail runs. Selected mails leave the queue.
+ * - Supersede and stale discard requeue the running batch (in front of the
+ *   queue / right before the follow-up's group). Requeued mails are reported
+ *   to `onTurnFinished` only once, by the turn that finally answers them.
+ * - Queued mails older than `queueTtlMs` when their key would start are
+ *   dropped (`expired`). Dropped and cancelled mails are reported one by one
+ *   with `{status:'cancelled', reason}`.
+ * - `post` never starts a turn synchronously; turns start in a microtask (or
+ *   when a `wait` timer fires, via the injectable `setTimer`).
  * - A runner rejection becomes `{status:'failed', content: message}`.
  *   `onTurnFinished` is awaited before the key (and its slot) is released;
  *   errors it throws are swallowed and reported through `onError`.
@@ -20,10 +32,21 @@
  *   non-cancelled status after abort is reported as cancelled), or removes a
  *   queued mail and reports it cancelled.
  * - `close` rejects new posts, drops queued mails (reported cancelled), aborts
- *   running turns and resolves once everything has settled.
+ *   running turns, clears wait timers and resolves once everything settled.
  */
+import { laneOf, senderOf } from './contracts.js';
 import type {
+  ActorTurnControl,
   ActorTurnResult,
+  InboxDropReason,
+  InboxEntry,
+  InboxPolicy,
+  InboxPostDecision,
+  InboxReadyDecision,
+  InboxRunning,
+  InboxStaleDecision,
+  InboxStaleVerdict,
+  InboxView,
   Mail,
   MailId,
   Mailbox,
@@ -33,24 +56,50 @@ import type {
 } from './contracts.js';
 
 export interface MailboxLocalOptions {
-  /** Receives swallowed errors from `onTurnFinished` and invalid batch selections. */
+  /** Receives swallowed errors from `onTurnFinished` and policy callbacks / invalid batch selections. */
   readonly onError?: (error: unknown, context: string) => void;
 }
 
-interface Entry {
-  readonly mail: Mail;
-  readonly seq: number;
+interface RunningState {
+  readonly batch: readonly InboxEntry[];
+  readonly controller: AbortController;
+  readonly startedAt: number;
+  readonly startSeq: number;
+  delivered: boolean;
+  acted: boolean;
+  /** Mails of this batch that went back to the queue (supersede / stale discard). */
+  readonly requeued: Set<MailId>;
+  /** Sticky verdict once the reply was discarded. */
+  discarded?: InboxStaleVerdict;
 }
 
 interface KeyState {
-  readonly key: MailboxKey;
-  pending: Entry[];
-  running?: { batch: readonly Mail[]; controller: AbortController };
+  readonly actor: string;
+  readonly lane: string;
+  pending: InboxEntry[];
+  running?: RunningState;
+  cancelTimer?: () => void;
+  /** Mails evicted since the last turn started. */
+  evicted: number;
+  /** Engagement of the most recent mail, for keys with an empty queue. */
+  lastEngagement: string;
+}
+
+const FRESH: InboxStaleVerdict = Object.freeze({ kind: 'fresh' });
+
+function defaultSetTimer(callback: () => void, delayMs: number): () => void {
+  const handle = setTimeout(callback, delayMs);
+  handle.unref?.();
+  return () => clearTimeout(handle);
 }
 
 export function createMailbox(options: MailboxOptions, local: MailboxLocalOptions = {}): Mailbox {
-  const policy = options.batch ?? ((p: readonly Mail[]) => p.slice(0, 1));
+  const policy: InboxPolicy = options.policy ?? {};
+  const now = options.now ?? Date.now;
+  const setTimer = options.setTimer ?? defaultSetTimer;
+  const ttl = Math.max(0, options.queueTtlMs ?? 0);
   const keys = new Map<string, KeyState>();
+  const lastTurns = new Map<string, { batch: readonly Mail[]; endedAt: number }>();
   const settling = new Set<Promise<void>>();
   const idleWaiters: Array<() => void> = [];
   let seq = 0;
@@ -68,7 +117,32 @@ export function createMailbox(options: MailboxOptions, local: MailboxLocalOption
     }
   };
 
-  const keyId = (k: MailboxKey): string => `${k.actor}\u0000${k.engagementId}`;
+  const keyId = (actor: string, lane: string): string => `${actor}\u0000${lane}`;
+
+  const keyOf = (st: KeyState, first?: Mail): MailboxKey => ({
+    actor: st.actor,
+    lane: st.lane,
+    engagementId: (first ?? st.pending[0]?.mail ?? st.running?.batch[0]?.mail)?.engagementId ?? st.lastEngagement,
+  });
+
+  const runningView = (r: RunningState): InboxRunning => ({
+    batch: r.batch,
+    startedAt: r.startedAt,
+    startSeq: r.startSeq,
+    delivered: r.delivered,
+    acted: r.acted,
+  });
+
+  const viewOf = (st: KeyState): InboxView => {
+    const last = lastTurns.get(keyId(st.actor, st.lane));
+    return {
+      key: keyOf(st),
+      now: now(),
+      pending: st.pending.slice(),
+      ...(st.running ? { running: runningView(st.running) } : {}),
+      ...(last ? { lastTurn: last } : {}),
+    };
+  };
 
   const checkIdle = (): void => {
     if (runningCount === 0 && queuedCount === 0 && notifying === 0) {
@@ -94,6 +168,30 @@ export function createMailbox(options: MailboxOptions, local: MailboxLocalOption
     settling.add(p);
   };
 
+  /** Removes `entries` from the queue and reports each one cancelled. */
+  const drop = (st: KeyState, entries: readonly InboxEntry[], reason: InboxDropReason, content?: string): void => {
+    if (entries.length === 0) return;
+    const gone = new Set(entries);
+    st.pending = st.pending.filter((e) => !gone.has(e));
+    queuedCount -= entries.length;
+    for (const e of entries) {
+      notifyDetached(keyOf(st, e.mail), [e.mail], { status: 'cancelled', reason, ...(content !== undefined ? { content } : {}) });
+    }
+  };
+
+  const clearTimer = (st: KeyState): void => {
+    st.cancelTimer?.();
+    st.cancelTimer = undefined;
+  };
+
+  const cleanup = (st: KeyState): void => {
+    if (st.pending.length === 0 && !st.running) {
+      clearTimer(st);
+      const id = keyId(st.actor, st.lane);
+      if (keys.get(id) === st) keys.delete(id);
+    }
+  };
+
   const schedulePump = (): void => {
     if (pumpScheduled) return;
     pumpScheduled = true;
@@ -103,57 +201,151 @@ export function createMailbox(options: MailboxOptions, local: MailboxLocalOption
     });
   };
 
-  const pump = (): void => {
-    while (!closed && runningCount < options.maxConcurrentTurns) {
-      let best: KeyState | undefined;
-      for (const st of keys.values()) {
-        if (st.running || st.pending.length === 0) continue;
-        if (!best || st.pending[0].seq < best.pending[0].seq) best = st;
-      }
-      if (!best) return;
-      start(best);
+  const pruneMemory = (t: number): void => {
+    const memory = Math.max(0, policy.memoryMs ?? 0);
+    for (const [id, last] of lastTurns) {
+      if (t - last.endedAt >= memory && !keys.get(id)?.running) lastTurns.delete(id);
     }
   };
 
-  const start = (st: KeyState): void => {
-    const pendingMails = st.pending.map((e) => e.mail);
-    let selected: readonly Mail[];
+  const decideReady = (st: KeyState): InboxReadyDecision => {
+    const fallback: InboxReadyDecision = { kind: 'run', batch: [st.pending[0]!.mail] };
+    if (!policy.ready) return fallback;
+    let decision: InboxReadyDecision;
     try {
-      selected = policy(pendingMails);
+      decision = policy.ready(viewOf(st));
     } catch (e) {
       report(e, 'batch');
-      selected = [pendingMails[0]];
+      return fallback;
     }
+    if (decision.kind === 'wait') return decision;
+    let cursor = 0;
     const valid =
-      selected.length > 0 &&
-      selected.length <= pendingMails.length &&
-      selected.every((m, i) => m === pendingMails[i]);
+      decision.batch.length > 0 &&
+      decision.batch[0] === st.pending[0]!.mail &&
+      decision.batch.every((m) => {
+        while (cursor < st.pending.length && st.pending[cursor]!.mail !== m) cursor++;
+        if (cursor >= st.pending.length) return false;
+        cursor++;
+        return true;
+      });
     if (!valid) {
       report(new Error('invalid batch selection'), 'batch');
-      selected = [pendingMails[0]];
+      return fallback;
     }
-    const batch = selected.slice();
-    st.pending.splice(0, batch.length);
-    queuedCount -= batch.length;
-    const controller = new AbortController();
-    st.running = { batch, controller };
+    return decision;
+  };
+
+  const pump = (): void => {
+    if (closed) return;
+    const t = now();
+    pruneMemory(t);
+    const idle = [...keys.values()].filter((st) => !st.running && st.pending.length > 0);
+    for (const st of idle) {
+      if (ttl > 0) drop(st, st.pending.filter((e) => t - e.postedAt > ttl), 'expired', 'expired');
+    }
+    const candidates = idle
+      .filter((st) => {
+        if (st.pending.length > 0) return true;
+        cleanup(st);
+        return false;
+      })
+      .sort((a, b) => a.pending[0]!.seq - b.pending[0]!.seq);
+    for (const st of candidates) {
+      if (runningCount >= options.maxConcurrentTurns) return;
+      const decision = decideReady(st);
+      if (decision.kind === 'run') {
+        start(st, decision.batch);
+        continue;
+      }
+      clearTimer(st);
+      if (decision.until !== undefined) {
+        st.cancelTimer = setTimer(() => {
+          st.cancelTimer = undefined;
+          schedulePump();
+        }, Math.max(0, decision.until - t));
+      }
+    }
+  };
+
+  const staleCheck = (st: KeyState, running: RunningState): InboxStaleVerdict => {
+    if (running.discarded) return running.discarded;
+    if (st.running !== running || !policy.staleOf) return FRESH;
+    let decision: InboxStaleDecision;
+    try {
+      decision = policy.staleOf({ ...viewOf(st), running: runningView(running) });
+    } catch (e) {
+      report(e, 'staleOf');
+      return FRESH;
+    }
+    if (decision.kind !== 'discard') return decision;
+    const anchor = st.pending.findIndex((e) => e.mail.id === decision.carryInto);
+    if (anchor < 0) {
+      report(new Error(`stale carry target ${decision.carryInto} is not queued`), 'staleOf');
+      return FRESH;
+    }
+    const t = now();
+    const carried = running.batch
+      .filter((e) => !running.requeued.has(e.mail.id))
+      .map((e): InboxEntry => ({ mail: e.mail, seq: e.seq, postedAt: t, carriedInto: decision.carryInto }));
+    st.pending.splice(anchor, 0, ...carried);
+    queuedCount += carried.length;
+    for (const e of carried) running.requeued.add(e.mail.id);
+    running.discarded = Object.freeze({ kind: 'discard', senders: Object.freeze([...decision.senders]) });
+    return running.discarded;
+  };
+
+  const start = (st: KeyState, selected: readonly Mail[]): void => {
+    clearTimer(st);
+    const chosen = new Set(selected);
+    const entries = st.pending.filter((e) => chosen.has(e.mail));
+    st.pending = st.pending.filter((e) => !chosen.has(e.mail));
+    queuedCount -= entries.length;
+    const t = now();
+    const running: RunningState = {
+      batch: entries,
+      controller: new AbortController(),
+      startedAt: t,
+      startSeq: seq,
+      delivered: false,
+      acted: false,
+      requeued: new Set(),
+    };
+    const facts = Object.freeze({
+      queuedMs: Math.max(0, t - Math.min(...entries.map((e) => e.postedAt))),
+      mergedMessages: entries.length,
+      supersededPrevious: entries.some((e) => e.superseded === true),
+      carried: entries.some((e) => e.carriedInto !== undefined),
+      evicted: st.evicted,
+    });
+    st.evicted = 0;
+    st.running = running;
     runningCount++;
+    const batch = entries.map((e) => e.mail);
+    const control: ActorTurnControl = {
+      facts,
+      markDelivered: () => { running.delivered = true; },
+      markActed: () => { running.acted = true; },
+      staleCheck: () => staleCheck(st, running),
+    };
 
     const p: Promise<void> = (async () => {
       let result: ActorTurnResult;
       try {
-        result = await options.run(st.key.actor, batch, controller.signal);
+        result = await options.run(st.actor, batch, running.controller.signal, control);
       } catch (e) {
         result = { status: 'failed', content: e instanceof Error ? e.message : String(e) };
       }
-      if (controller.signal.aborted && result.status !== 'cancelled') {
+      if (running.controller.signal.aborted && result.status !== 'cancelled') {
         result = { status: 'cancelled', content: result.content };
       }
-      await notify(st.key, batch, result);
+      lastTurns.set(keyId(st.actor, st.lane), { batch, endedAt: now() });
+      const answered = batch.filter((m) => !running.requeued.has(m.id));
+      if (answered.length > 0) await notify(keyOf(st, answered[0]), answered, result);
     })().finally(() => {
       st.running = undefined;
       runningCount--;
-      if (st.pending.length === 0) keys.delete(keyId(st.key));
+      cleanup(st);
       settling.delete(p);
       if (!closed) schedulePump();
       checkIdle();
@@ -161,42 +353,98 @@ export function createMailbox(options: MailboxOptions, local: MailboxLocalOption
     settling.add(p);
   };
 
+  const decidePost = (st: KeyState, entry: InboxEntry): InboxPostDecision => {
+    if (!policy.onPost) return { kind: 'enqueue' };
+    try {
+      return policy.onPost(entry, viewOf(st));
+    } catch (e) {
+      report(e, 'onPost');
+      return { kind: 'enqueue' };
+    }
+  };
+
   return {
     post(mail: Mail): PostResult {
       if (closed) return { accepted: false, code: 'mailbox_closed', message: 'mailbox is closed' };
-      const key: MailboxKey = { actor: mail.to, engagementId: mail.engagementId };
-      const id = keyId(key);
-      let st = keys.get(id);
-      const waiting = st ? st.pending.length : 0;
-      if (waiting >= options.maxQueuedPerKey) {
-        return { accepted: false, code: 'queue_full', message: `queue full for ${mail.to} in ${mail.engagementId}` };
+      const lane = laneOf(mail);
+      const id = keyId(mail.to, lane);
+      const st: KeyState = keys.get(id) ?? { actor: mail.to, lane, pending: [], evicted: 0, lastEngagement: mail.engagementId };
+      const entry: InboxEntry = { mail, seq, postedAt: now() };
+      const decision = decidePost(st, entry);
+
+      if (decision.kind === 'reject') return { accepted: false, code: decision.code, message: decision.message };
+
+      if (decision.kind === 'stop') {
+        st.running?.controller.abort('stopped');
+        const senders = new Set(decision.cancelSenders);
+        drop(st, st.pending.filter((e) => senders.has(senderOf(e.mail))), 'stopped', 'stopped');
+        cleanup(st);
+        checkIdle();
+        return { accepted: true, position: 0, disposition: 'stopped' };
       }
-      if (!st) {
-        st = { key, pending: [] };
-        keys.set(id, st);
+
+      const evict = decision.kind === 'enqueue' && decision.evict ? new Set(decision.evict) : undefined;
+      const evicted = evict ? st.pending.filter((e) => evict.has(e.mail.id)) : [];
+      if (st.pending.length - evicted.length >= options.maxQueuedPerKey) {
+        return { accepted: false, code: 'queue_full', message: `queue full for ${mail.to} in ${lane}` };
       }
-      st.pending.push({ mail, seq: seq++ });
-      queuedCount++;
+      if (!keys.has(id)) keys.set(id, st);
+      st.lastEngagement = mail.engagementId;
+      seq++;
+
+      let position: number;
+      let disposition: 'queued' | 'merged' | 'superseded';
+      const running = st.running;
+      if (decision.kind === 'supersede' && running) {
+        running.controller.abort('superseded');
+        const t = entry.postedAt;
+        const requeued = running.batch
+          .filter((e) => !running.requeued.has(e.mail.id))
+          .map((e): InboxEntry => ({ mail: e.mail, seq: e.seq, postedAt: t, superseded: true }));
+        for (const e of requeued) running.requeued.add(e.mail.id);
+        const fresh: InboxEntry = { ...entry, superseded: true };
+        st.pending.unshift(...requeued, fresh);
+        queuedCount += requeued.length + 1;
+        position = requeued.length + 1;
+        disposition = 'superseded';
+      } else {
+        if (evicted.length > 0) {
+          st.evicted += evicted.length;
+          drop(st, evicted, 'evicted', 'evicted');
+        }
+        st.pending.push(entry);
+        queuedCount++;
+        position = st.pending.length;
+        disposition = decision.kind === 'enqueue' && decision.merged ? 'merged' : 'queued';
+      }
       schedulePump();
-      return { accepted: true, position: st.pending.length };
+      return { accepted: true, position, disposition };
     },
 
     cancel(mailId: MailId, reason?: string): boolean {
-      for (const [id, st] of keys) {
-        if (st.running?.batch.some((m) => m.id === mailId)) {
-          st.running.controller.abort(reason ?? 'cancelled');
-          return true;
-        }
+      for (const st of keys.values()) {
         const i = st.pending.findIndex((e) => e.mail.id === mailId);
         if (i >= 0) {
-          const [removed] = st.pending.splice(i, 1);
-          queuedCount--;
-          if (st.pending.length === 0 && !st.running) keys.delete(id);
-          notifyDetached(st.key, [removed.mail], { status: 'cancelled', content: reason });
+          drop(st, [st.pending[i]!], 'cancelled', reason);
+          cleanup(st);
+          return true;
+        }
+        const running = st.running;
+        if (running && !running.requeued.has(mailId) && running.batch.some((e) => e.mail.id === mailId)) {
+          running.controller.abort(reason ?? 'cancelled');
           return true;
         }
       }
       return false;
+    },
+
+    cancelSender(key: Pick<MailboxKey, 'actor' | 'lane'>, senderId: string, reason: InboxDropReason = 'cancelled'): number {
+      const st = keys.get(keyId(key.actor, key.lane));
+      if (!st) return 0;
+      const dropped = st.pending.filter((e) => senderOf(e.mail) === senderId);
+      drop(st, dropped, reason, reason);
+      cleanup(st);
+      return dropped.length;
     },
 
     idle(): Promise<void> {
@@ -206,14 +454,11 @@ export function createMailbox(options: MailboxOptions, local: MailboxLocalOption
 
     async close(reason?: string): Promise<void> {
       closed = true;
-      for (const [id, st] of [...keys]) {
-        const dropped = st.pending.splice(0);
-        queuedCount -= dropped.length;
-        for (const e of dropped) {
-          notifyDetached(st.key, [e.mail], { status: 'cancelled', content: reason });
-        }
+      for (const st of [...keys.values()]) {
+        clearTimer(st);
+        drop(st, st.pending.slice(), 'closed', reason);
         if (st.running) st.running.controller.abort(reason ?? 'closed');
-        else keys.delete(id);
+        else cleanup(st);
       }
       while (settling.size > 0) await Promise.all([...settling]);
       checkIdle();
