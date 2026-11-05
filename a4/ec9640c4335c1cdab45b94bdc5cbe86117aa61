@@ -1,0 +1,61 @@
+packages/im/agent/src/plugin-runtime/schedule-capability-plan.ts
+  s_178aad69aa64a5::t_9c35f7099e1f87 84-105
+packages/im/agent/src/collaboration/turn-collaboration.ts
+  s_178aad69aa64a5::t_bb10d1eae34670 10-13,29,31
+  s_178aad69aa64a5::t_39e7a2e78de999 44-47,51
+  s_178aad69aa64a5::t_0b56630d68cd35 109-110,127-292,294-305,325-326,328-329,333,340-341,346,350,354,356-358,368
+basic/cli/src/plugin-runtime/agent/assistant-runtime.ts
+  s_178aad69aa64a5::t_36c330db367c8a 270-273
+packages/im/agent/tests/plugin-runtime/schedule-turn-collaboration.test.ts
+  s_1d3a5bfa25439b::t_c839b24ec67722 201-203,205
+  s_178aad69aa64a5::t_b3cd256b1c7129 1-200,204,206-273,275-285
+  s_1d3a5bfa25439b::t_dc9aeac8196a2e 274
+packages/im/agent/tests/collaboration/schedule-collaboration.test.ts
+  s_1d3a5bfa25439b::t_fe18ad23a2f0b7 147-148
+  s_1d3a5bfa25439b::t_ece85c3f1f85c9 1-62,67-146,149-181
+  s_1d3a5bfa25439b::t_93e589b441055d 63-66
+packages/im/agent/tests/schedule-domain/execution-domain.test.ts
+  s_178aad69aa64a5::t_484f086e50cbab 48
+  s_1d3a5bfa25439b::t_3d3eb7921950ef 31-47
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_178aad69aa64a5::t_d4ba5507a7ba7b 37,54
+  s_178aad69aa64a5::t_566c02414b62ec 684-685,687,701-720,722
+  s_178aad69aa64a5::t_38b7c69de6278c 637
+  s_178aad69aa64a5::t_10650d19358d6d 575,581-596
+  s_178aad69aa64a5::t_cf3da3d97446ad 686,721,723-725
+packages/im/agent/src/turn/turn-ingress.ts
+  s_178aad69aa64a5::t_9d24c7de75ce94 286-297,301-302
+packages/im/agent/src/schedule-domain/execution-domain.ts
+  s_178aad69aa64a5::t_2ce20cae819214 18,62-63,130-131,135-136,138-148,160,196,198,201-202
+packages/im/agent/src/collaboration/directory.ts
+  s_178aad69aa64a5::t_88b714cf136608 23-28,41-44,47-53,63
+.changeset/adr-0048-h3-schedule-engagement.md
+  s_1d3a5bfa25439b::t_334079b8116f80 1-6
+packages/im/agent/src/collaboration/actor-turn.ts
+  s_178aad69aa64a5::t_4de9440078a4f7 48,71-80,124,127,171,202,265,275-284
+  s_1d3a5bfa25439b::t_af0ba4b8164608 285,296-307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a4ec9640c4335c1cdab45b94bdc5cbe86117aa61",
+  "prompts": {},
+  "sessions": {
+    "s_178aad69aa64a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b0eca046-2ac8-49e0-a6a9-b7766f7049bb",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_1d3a5bfa25439b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fc1e8043-729d-4b9a-bcbc-3be522bd8774",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
