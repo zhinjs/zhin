@@ -2,7 +2,6 @@ import { sandboxText, type SandboxLocale } from './messages.js';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   cn,
-  adapterConsoleStyles,
   CodeBlock,
   MarkdownContent,
   resolveMediaSrc,
@@ -221,9 +220,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         }) ? 'saved' : 'error')
     }, [activeChannel.id, channels, messages, directoryStatus.mode])
 
+    const [inlineNotices, setInlineNotices] = useState<{ emoji: boolean; parse: boolean }>({ emoji: false, parse: false })
     const fetchFaceList = async () => {
         try { const res = await fetch('https://face.viki.moe/metadata.json'); setFaceList(await res.json()) }
-        catch (err) { console.error('[Sandbox] Failed to fetch face list:', err) }
+        catch (err) { console.error('[Sandbox] Failed to fetch face list:', err); setInlineNotices((n) => ({ ...n, emoji: true })) }
     }
 
     useEffect(() => { fetchFaceList() }, [])
@@ -408,7 +408,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
             ws.onmessage = (event) => {
                 if (wsRef.current !== ws) return
                 try { handleInboundPayload(JSON.parse(String(event.data))) }
-                catch (err) { console.error('[Sandbox] Failed to parse message:', err) }
+                catch (err) { console.error('[Sandbox] Failed to parse message:', err); setInlineNotices((n) => ({ ...n, parse: true })) }
             }
             ws.onclose = () => {
                 if (wsRef.current !== ws) return
@@ -567,7 +567,6 @@ export default function Sandbox(props: SandboxPageProps = {}) {
         onInteractionSubmitted?: () => void,
         allowInteraction = true,
     ) => {
-        const ring = isSent ? 'ring-1 ring-primary-foreground/25' : 'ring-1 ring-border/60'
         return segments.map((segment, index) => {
             if (typeof segment === 'string') {
                 return <MarkdownContent key={index} text={segment} className={isSent ? 'zhin-markdown--inverse' : undefined} />
@@ -584,30 +583,30 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     return <CodeBlock key={index} code={String(d.code ?? d.text ?? d.content ?? '')} language={String(d.language ?? d.lang ?? '')} />
                 case 'mention':
                 case 'at':
-                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-xs mx-0.5">@{String(d.name ?? d.target ?? d.qq ?? '')}</span>
+                    return <span key={index} className="sandbox-chip is-mention">@{String(d.name ?? d.target ?? d.qq ?? '')}</span>
                 case 'face':
-                    return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt={String(d.name ?? '')} className="w-6 h-6 inline-block align-middle mx-0.5" title={String(d.name ?? d.id ?? '')} />
+                    return <img key={index} src={`https://face.viki.moe/apng/${d.id}.png`} alt={String(d.name ?? '')} className="sandbox-inline-face" title={String(d.name ?? d.id ?? '')} />
                 case 'dice':
-                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">🎲 {d.result != null ? sandboxText(locale, "点数 {0}", [String(d.result)]) : sandboxText(locale, "骰子")}</span>
+                    return <span key={index} className="sandbox-chip">🎲 {d.result != null ? sandboxText(locale, "点数 {0}", [String(d.result)]) : sandboxText(locale, "骰子")}</span>
                 case 'rps':
-                    return <span key={index} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-xs mx-0.5">✊ {d.result != null ? sandboxText(locale, "结果 {0}", [String(d.result)]) : sandboxText(locale, "猜拳")}</span>
+                    return <span key={index} className="sandbox-chip">✊ {d.result != null ? sandboxText(locale, "结果 {0}", [String(d.result)]) : sandboxText(locale, "猜拳")}</span>
                 case 'image': {
                     const raw = pickMediaRawUrl(d)
                     const src = resolveMediaSrc(raw, 'image')
-                    if (!src) return <span key={index} className="text-xs opacity-70">{sandboxText(locale, "[图片]")}</span>
+                    if (!src) return <span key={index} className="sandbox-segment-note">{sandboxText(locale, "[图片]")}</span>
                     return (
                         // resolveMediaSrc allowlists non-executable URL schemes and image data MIME types.
                         // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
-                        <a key={index} href={src} target="_blank" rel="noreferrer" className="block my-1">
+                        <a key={index} href={src} target="_blank" rel="noreferrer" className="sandbox-media-link">
                             {/* lgtm[js/xss,js/client-side-unvalidated-url-redirection] */}
-                            <img src={src} alt="" className={cn('max-w-[min(320px,88vw)] rounded-lg block', ring, 'ring-offset-0')} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                            <img src={src} alt="" className="sandbox-media-image" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                         </a>
                     )
                 }
                 case 'video': {
                     const raw = pickMediaRawUrl(d)
                     const src = resolveMediaSrc(raw, 'video')
-                    if (!src) return <span key={index} className="text-xs opacity-70">{sandboxText(locale, "[视频无地址]")}</span>
+                    if (!src) return <span key={index} className="sandbox-segment-note">{sandboxText(locale, "[视频无地址]")}</span>
                     return (
                         // resolveMediaSrc allowlists non-executable URL schemes and video data MIME types.
                         // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
@@ -617,7 +616,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             controls
                             playsInline
                             preload="metadata"
-                            className={cn('max-w-[min(360px,92vw)] max-h-72 rounded-lg my-1 bg-black/10', ring)}
+                            className="sandbox-media-video"
                         />
                     )
                 }
@@ -625,7 +624,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 case 'record': {
                     const raw = pickMediaRawUrl(d)
                     const src = resolveMediaSrc(raw, 'audio')
-                    if (!src) return <span key={index} className="text-xs opacity-70">{sandboxText(locale, "[音频无地址]")}</span>
+                    if (!src) return <span key={index} className="sandbox-segment-note">{sandboxText(locale, "[音频无地址]")}</span>
                     return (
                         // resolveMediaSrc allowlists non-executable URL schemes and audio data MIME types.
                         // lgtm[js/xss,js/client-side-unvalidated-url-redirection]
@@ -634,13 +633,13 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                             src={src}
                             controls
                             preload="metadata"
-                            className={cn('w-full max-w-sm my-2 h-10', isSent && 'opacity-95')}
+                            className="sandbox-media-audio"
                         />
                     )
                 }
                 case 'reply':
                     return (
-                        <div key={index} className="mb-1 rounded-md border border-dashed px-2 py-1 text-xs opacity-90">
+                        <div key={index} className="sandbox-reply-quote">
                             {sandboxText(locale, "↩ 引用消息 #")}{String(d.message_id ?? d.id ?? '')}
                         </div>
                     )
@@ -648,12 +647,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     const messages = d.messages as Array<Array<{ type?: string; data?: Record<string, unknown> }>> | undefined
                     const title = String(d.title ?? sandboxText(locale, "聊天记录"))
                     return (
-                        <div key={index} className="my-1 rounded-md border bg-background/40 px-2 py-2 text-xs space-y-1">
-                            <div className="font-medium">📨 {title}</div>
+                        <div key={index} className="sandbox-forward">
+                            <div className="sandbox-forward-title">📨 {title}</div>
                             {Array.isArray(messages) && messages.length > 0 ? (
-                                <div className="space-y-1 pl-2 border-l-2 border-muted">
+                                <div className="sandbox-forward-list">
                                     {messages.slice(0, 3).map((batch, bi) => (
-                                        <div key={bi} className="opacity-90">
+                                        <div key={bi}>
                                             {batch.map((s, si) => (
                                                 <span key={si}>
                                                     {s.type === 'text' ? String(s.data?.text ?? '') : `[${s.type ?? 'seg'}]`}
@@ -661,10 +660,10 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                             ))}
                                         </div>
                                     ))}
-                                    {messages.length > 3 && <div className="opacity-60">{sandboxText(locale, "…共")}{messages.length} {sandboxText(locale, "条")}</div>}
+                                    {messages.length > 3 && <div className="sandbox-forward-more">{sandboxText(locale, "…共")}{messages.length} {sandboxText(locale, "条")}</div>}
                                 </div>
                             ) : (
-                                <div className="opacity-70">{sandboxText(locale, "[合并转发]")}</div>
+                                <div className="sandbox-forward-empty">{sandboxText(locale, "[合并转发]")}</div>
                             )}
                         </div>
                     )
@@ -697,7 +696,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     )
                 }
                 default:
-                    return <span key={index} className="text-xs opacity-70">[{segment.type}]</span>
+                    return <span key={index} className="sandbox-segment-note">[{segment.type}]</span>
             }
         })
     }
@@ -891,8 +890,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
     const recoveryConnectionId = connectionRef.current.connectionId
     return (
-        <section className={cn("zhin-console-surface zhin-sandbox agent-playground-shell", showInspector && "has-inspector")}>
-            <style>{adapterConsoleStyles}{sandboxStyles}</style>
+        <section className={cn("zhin-sandbox agent-playground-shell", showInspector && "has-inspector")}>
+            <style>{sandboxStyles}</style>
             <div className="agent-playground-mobilebar">
                 <button type="button" aria-expanded={showChannelList} onClick={() => setShowChannelList(!showChannelList)}><MessageSquare size={17} />{sandboxText(locale, "会话列表")}</button>
                 <strong>{sandboxText(locale, "会话")}</strong>
@@ -901,8 +900,8 @@ export default function Sandbox(props: SandboxPageProps = {}) {
 
             <nav className={cn("channel-sidebar agent-playground-sessions", showChannelList && "show")} aria-label={sandboxText(locale, "会话列表")}>
                 <div className="agent-playground-brand">
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
+                    <div>
+                        <div>
                             <span className="agent-playground-mark"><Sparkles size={16} /></span>
                             <div><h2>{sandboxText(locale, "会话")}</h2><small>Conversations</small></div>
                         </div>
@@ -919,11 +918,11 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         return (
                             <button type="button" key={`${channel.type}:${channel.id}`} disabled={directoryStatus.mode === 'loading'} aria-current={isActive ? 'page' : undefined} className={cn("agent-playground-session", isActive && "active")} onClick={() => switchChannel(channel)}>
                                 <span className="agent-playground-session-icon">{getChannelIcon(channel.type)}</span>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium truncate">{channel.name}</div>
-                                    <div className="text-xs text-muted-foreground">{channel.type === 'private' ? sandboxText(locale, "单用户作用域") : channel.type === 'group' ? sandboxText(locale, "群组作用域") : sandboxText(locale, "频道作用域")}</div>
+                                <div className="agent-playground-session-copy">
+                                    <div className="agent-playground-session-title">{channel.name}</div>
+                                    <div className="agent-playground-session-scope">{channel.type === 'private' ? sandboxText(locale, "单用户作用域") : channel.type === 'group' ? sandboxText(locale, "群组作用域") : sandboxText(locale, "频道作用域")}</div>
                                 </div>
-                                {channel.unread > 0 && <span className="inline-flex items-center justify-center h-5 min-w-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-medium px-1">{channel.unread}</span>}
+                                {channel.unread > 0 && <span className="agent-playground-unread">{channel.unread}</span>}
                             </button>
                         )
                     })}
@@ -996,6 +995,14 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                         <button type="button" className="danger" onClick={clearMessages}>{sandboxText(locale, "确认清空")}</button>
                     </div>
                 )}
+
+                {(['emoji', 'parse'] as const).filter((kind) => inlineNotices[kind]).map((kind) => (
+                    <div key={kind} className="sandbox-notice" role="status">
+                        <CircleAlert size={14} />
+                        <span>{kind === 'emoji' ? sandboxText(locale, "表情列表加载失败，表情选择器暂不可用。") : sandboxText(locale, "收到一条无法解析的消息，已忽略。")}</span>
+                        <button type="button" onClick={() => setInlineNotices((n) => ({ ...n, [kind]: false }))}>{sandboxText(locale, "知道了")}</button>
+                    </div>
+                ))}
 
                 {transportNotice && (
                     <div className="agent-playground-confirm" role="status">
@@ -1137,59 +1144,59 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 {/* Input area */}
                 <section className="agent-playground-composer" hidden={showConversationDetails} aria-label={sandboxText(locale, "任务输入")}>
                     {/* Toolbar */}
-                    <div className="flex gap-2 items-center flex-wrap">
-                        <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", showFacePicker ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
+                    <div className="sandbox-toolbar">
+                        <button type="button" className={cn("sandbox-tool-button", showFacePicker && "is-active")}
                             onClick={() => { setShowFacePicker(!showFacePicker); setMediaPanel(null) }} title={sandboxText(locale, "插入表情")}>
                             <Smile size={16} />
                         </button>
-                        <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'image' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
+                        <button type="button" className={cn("sandbox-tool-button", mediaPanel === 'image' && "is-active")}
                             onClick={() => { setMediaPanel((p) => (p === 'image' ? null : 'image')); setShowFacePicker(false) }} title={sandboxText(locale, "插入图片 URL")}>
                             <Image size={16} />
                         </button>
-                        <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'video' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
+                        <button type="button" className={cn("sandbox-tool-button", mediaPanel === 'video' && "is-active")}
                             onClick={() => { setMediaPanel((p) => (p === 'video' ? null : 'video')); setShowFacePicker(false) }} title={sandboxText(locale, "插入视频 URL")}>
                             <Video size={16} />
                         </button>
-                        <button type="button" className={cn("h-8 w-8 rounded-md flex items-center justify-center border transition-colors", mediaPanel === 'audio' ? "bg-primary text-primary-foreground" : "hover:bg-accent")}
+                        <button type="button" className={cn("sandbox-tool-button", mediaPanel === 'audio' && "is-active")}
                             onClick={() => { setMediaPanel((p) => (p === 'audio' ? null : 'audio')); setShowFacePicker(false) }} title={sandboxText(locale, "插入音频 URL")}>
                             <Music size={16} />
                         </button>
-                        <div className="flex-1 min-w-[1rem]" />
+                        <div className="sandbox-toolbar-spacer" />
                         <div className="sandbox-composer-tabs" role="tablist" aria-label={sandboxText(locale, "消息编辑模式")}>
                             <button type="button" role="tab" aria-selected={composerMode === 'write'} className={cn(composerMode === 'write' && 'active')} onClick={() => setComposerMode('write')}>{sandboxText(locale, "编写")}</button>
                             <button type="button" role="tab" aria-selected={composerMode === 'preview'} className={cn(composerMode === 'preview' && 'active')} onClick={() => setComposerMode('preview')}>{sandboxText(locale, "预览")}</button>
                         </div>
                         {inputText && (
-                            <button className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-accent transition-colors"
+                            <button type="button" className="sandbox-tool-button"
                                 onClick={() => { editorRef.current?.clear(); setInputText(''); setPreviewSegments([]); setComposerMode('write') }} aria-label={sandboxText(locale, "清空输入")}><X size={16} /></button>
                         )}
                     </div>
 
                     {/* Face picker */}
                     {showFacePicker && (
-                        <div className="p-3 rounded-md border bg-muted/30 max-h-64 overflow-y-auto space-y-2">
+                        <div className="sandbox-panel">
                             <input value={faceSearchQuery} onChange={(e) => setFaceSearchQuery(e.target.value)}
-                                placeholder={sandboxText(locale, "搜索表情...")} className="w-full h-8 rounded-md border bg-transparent px-2 text-sm" />
-                            <div className="grid grid-cols-8 gap-1">
+                                placeholder={sandboxText(locale, "搜索表情...")} className="sandbox-input" />
+                            <div className="sandbox-face-grid">
                                 {filteredFaces.slice(0, 80).map((face) => (
                                     <button key={face.id} onClick={() => insertFace(face.id)} title={face.name}
-                                        className="w-10 h-10 rounded-md border flex items-center justify-center hover:bg-accent transition-colors">
-                                        <img src={`https://face.viki.moe/apng/${face.id}.png`} alt={face.name} className="w-8 h-8" />
+                                        className="sandbox-face-button" type="button">
+                                        <img src={`https://face.viki.moe/apng/${face.id}.png`} alt={face.name} className="sandbox-face-img" />
                                     </button>
                                 ))}
                             </div>
                             {filteredFaces.length === 0 && (
-                                <div className="flex flex-col items-center gap-2 py-4">
-                                    <Search size={32} className="text-muted-foreground/30" />
-                                    <span className="text-sm text-muted-foreground">{sandboxText(locale, "未找到匹配的表情")}</span>
+                                <div className="sandbox-empty-hint">
+                                    <Search size={28} />
+                                    <span>{sandboxText(locale, "未找到匹配的表情")}</span>
                                 </div>
                             )}
                         </div>
                     )}
 
                     {mediaPanel && (
-                        <div className="p-3 rounded-md border bg-muted/30 space-y-2">
-                            <p className="text-xs text-muted-foreground">
+                        <div className="sandbox-panel">
+                            <p className="sandbox-panel-hint">
                                 {mediaPanel === 'image' && sandboxText(locale, "支持 http(s) 图片链接或 data URL")}
                                 {mediaPanel === 'video' && sandboxText(locale, "支持浏览器可解码的视频直链（如 .mp4、.webm）")}
                                 {mediaPanel === 'audio' && sandboxText(locale, "支持 .mp3、.ogg、.wav 等音频直链")}
@@ -1198,12 +1205,12 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 value={mediaUrl}
                                 onChange={(e) => setMediaUrl(e.target.value)}
                                 placeholder={mediaPanel === 'image' ? sandboxText(locale, "图片 URL…") : mediaPanel === 'video' ? sandboxText(locale, "视频 URL…") : sandboxText(locale, "音频 URL…")}
-                                className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm"
+                                className="sandbox-input"
                                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitMediaUrl() } }}
                             />
                             <button
                                 type="button"
-                                className="inline-flex items-center gap-1 h-8 px-3 rounded-md bg-primary text-primary-foreground text-sm disabled:opacity-50"
+                                className="sandbox-submit"
                                 onClick={commitMediaUrl}
                                 disabled={!mediaUrl.trim()}
                             >
@@ -1212,9 +1219,9 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     )}
 
                     {/* Editor + send */}
-                    <div className="flex gap-2 items-start">
-                        <div className="flex-1 relative">
-                            <div className={composerMode === 'write' ? 'block' : 'hidden'}>
+                    <div className="sandbox-editor-row">
+                        <div className="sandbox-editor-wrap">
+                            <div hidden={composerMode !== 'write'}>
                                 <RichTextEditor
                                     locale={locale}
                                     ref={editorRef} placeholder={sandboxText(locale, "向 {0} 发送消息，支持 Markdown...", [activeChannel.name])}
@@ -1230,33 +1237,34 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 </div>
                             )}
                             {atPopoverPosition && (
-                                <div className="absolute z-50 rounded-lg border bg-popover shadow-md min-w-60 max-h-72 overflow-y-auto p-1"
+                                <div className="sandbox-at-popover"
                                     style={{ top: `${atPopoverPosition.top}px`, left: `${atPopoverPosition.left}px` }}>
                                     {filteredAtSuggestions.length > 0 ? filteredAtSuggestions.map((user) => (
-                                        <div key={user.id} className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent transition-colors" onClick={() => selectAtUser(user)}>
-                                            <User size={16} className="text-muted-foreground" />
-                                            <div className="flex-1"><div className="text-sm font-medium">{user.name}</div><div className="text-xs text-muted-foreground">ID: {user.id}</div></div>
+                                        <div key={user.id} className="sandbox-at-item" onClick={() => selectAtUser(user)}>
+                                            <User size={16} />
+                                            <div><div className="sandbox-at-name">{user.name}</div><div className="sandbox-at-id">ID: {user.id}</div></div>
                                         </div>
                                     )) : (
-                                        <div className="flex flex-col items-center gap-2 p-4">
-                                            <Search size={20} className="text-muted-foreground/50" />
-                                            <span className="text-xs text-muted-foreground">{sandboxText(locale, "未找到匹配的用户")}</span>
+                                        <div className="sandbox-empty-hint">
+                                            <Search size={20} />
+                                            <span>{sandboxText(locale, "未找到匹配的用户")}</span>
                                         </div>
                                     )}
                                 </div>
                             )}
                         </div>
                         <button
-                            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 transition-colors hover:bg-primary/90"
+                            type="button"
+                            className="sandbox-send"
                             onClick={() => { const c = editorRef.current?.getContent(); if (c) handleSendMessage(c.text, c.segments) }}
                             disabled={!canExecute || directoryStatus.mode === 'loading' || !hasRenderableSegments(previewSegments)}>
                             <Send size={16} /> {sandboxText(locale, "发送")}</button>
                     </div>
 
                     {/* Hints */}
-                    <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-                        <Info size={12} /> {sandboxText(locale, "快捷操作:")}<span className="px-1 py-0.5 rounded border text-[10px]">Enter</span> {sandboxText(locale, "发送")}<span className="px-1 py-0.5 rounded border text-[10px]">Shift+Enter</span> {sandboxText(locale, "换行")}<span className="px-1 py-0.5 rounded border text-[10px]">```ts</span> {sandboxText(locale, "代码块")}<span className="px-1 py-0.5 rounded border text-[10px]">{sandboxText(locale, "**文本**")}</span> {sandboxText(locale, "加粗")}<span className="px-1 py-0.5 rounded border text-[10px]">{sandboxText(locale, "[@名称]")}</span> {sandboxText(locale, "@某人")}<span className="px-1 py-0.5 rounded border text-[10px]">[video:URL]</span>
-                        <span className="px-1 py-0.5 rounded border text-[10px]">[audio:URL]</span>
+                    <div className="sandbox-hints">
+                        <Info size={12} /> {sandboxText(locale, "快捷操作:")}<span className="sandbox-hint-key">Enter</span> {sandboxText(locale, "发送")}<span className="sandbox-hint-key">Shift+Enter</span> {sandboxText(locale, "换行")}<span className="sandbox-hint-key">```ts</span> {sandboxText(locale, "代码块")}<span className="sandbox-hint-key">{sandboxText(locale, "**文本**")}</span> {sandboxText(locale, "加粗")}<span className="sandbox-hint-key">{sandboxText(locale, "[@名称]")}</span> {sandboxText(locale, "@某人")}<span className="sandbox-hint-key">[video:URL]</span>
+                        <span className="sandbox-hint-key">[audio:URL]</span>
                     </div>
                 </section>
             </main>
@@ -1265,7 +1273,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 <div className="agent-playground-inspector-head">
                     <div><span>Run inspector</span><h2>{sandboxText(locale, "运行检查器")}</h2></div>
                     <div>
-                        <button type="button" onClick={() => void loadTrace()} aria-label={sandboxText(locale, "刷新 Agent Trace")} disabled={traceLoading}><RefreshCw size={15} className={cn(traceLoading && 'animate-spin')} /></button>
+                        <button type="button" onClick={() => void loadTrace()} aria-label={sandboxText(locale, "刷新 Agent Trace")} disabled={traceLoading}><RefreshCw size={15} className={cn(traceLoading && 'is-spinning')} /></button>
                         <button type="button" className="agent-playground-inspector-close" onClick={() => setShowInspector(false)} aria-label={sandboxText(locale, "关闭运行检查器")}><X size={15} /></button>
                     </div>
                 </div>
@@ -1275,7 +1283,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     <button type="button" role="tab" aria-selected={inspectorView === 'artifacts'} className={cn(inspectorView === 'artifacts' && 'active')} onClick={() => setInspectorView('artifacts')}><FileDiff size={13} />{sandboxText(locale, "变更与产物")}<span>{workbenchArtifacts.length}</span></button>
                 </div>
 
-                <div className={cn("agent-playground-inspector-view", inspectorView !== 'runs' && 'hidden')}>
+                <div className={"agent-playground-inspector-view"} hidden={inspectorView !== 'runs'}>
 
                 <section className="agent-playground-inspector-section">
                     <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "运行概览")}</span><small>{traceSummary.activeTurns > 0 ? 'live' : 'idle'}</small></div>
@@ -1345,7 +1353,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                 </section>
                 </div>
 
-                <div className={cn("agent-playground-inspector-view", inspectorView !== 'artifacts' && 'hidden')}>
+                <div className={"agent-playground-inspector-view"} hidden={inspectorView !== 'artifacts'}>
                     <section className="agent-playground-inspector-section agent-playground-artifact-section">
                         <div className="agent-playground-inspector-title"><span>{sandboxText(locale, "文件与命令产物")}</span><small>{workbenchArtifacts.length} items</small></div>
                         {workbenchArtifacts.length > 0 ? (
@@ -1365,7 +1373,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                                 <div className="agent-playground-artifact-detail">
                                                     {artifact.path && <code>{artifact.path}</code>}
                                                     {canExecute && artifact.projectFilePath && (
-                                                        <a href={`/files?${new URLSearchParams({ path: artifact.projectFilePath })}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                                        <a href={`/files?${new URLSearchParams({ path: artifact.projectFilePath })}`} target="_blank" rel="noopener noreferrer" className="sandbox-file-link">
                                                             <ExternalLink size={13} />{sandboxText(locale, "打开当前文件")}
                                                         </a>
                                                     )}
