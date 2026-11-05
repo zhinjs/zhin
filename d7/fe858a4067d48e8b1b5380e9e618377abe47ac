@@ -1,0 +1,18 @@
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  h_6f5e45c41d0910 6
+packages/host/a2a/src/mailbox-remote-transport.ts
+  h_6f5e45c41d0910 614-618
+packages/im/agent/src/self-change/policy.ts
+  h_6f5e45c41d0910 247-248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d7fe858a4067d48e8b1b5380e9e618377abe47ac",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
