@@ -848,11 +848,11 @@
           "description": "Agent execution, queueing, tool, and model policies.",
           "x-descriptionZh": "Agent 执行、排队、工具与模型策略。",
           "properties": {
-            "inboundQueue": {
+            "mailbox": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Inbound turn queue policy.",
-              "x-descriptionZh": "入站回合排队策略。",
+              "description": "IM inbox policy of the agent Mailbox (ADR 0048 H3; renamed from inboundQueue, which now fails startup).",
+              "x-descriptionZh": "Agent 收件箱（Mailbox）的 IM 收件策略（ADR 0048 H3；由 inboundQueue 改名，旧键会导致启动失败）。",
               "properties": {
                 "groupMode": {
                   "type": "string",

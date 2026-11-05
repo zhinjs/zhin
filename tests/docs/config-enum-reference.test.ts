@@ -64,7 +64,7 @@ describe('source-owned configuration enums', () => {
     ));
     const agentSchema = schema.properties.ai.properties.agent.properties;
     const contracts = [
-      ['inboundQueue.groupMode', stringLiterals(source, 'InboundGroupQueueMode'), agentSchema.inboundQueue.properties.groupMode.enum],
+      ['mailbox.groupMode', stringLiterals(source, 'MailboxGroupMode'), agentSchema.mailbox.properties.groupMode.enum],
       ['execSecurity', propertyStringLiterals(agentConfigSource, 'execSecurity'), agentSchema.execSecurity.enum],
       ['execPreset', propertyStringLiterals(agentConfigSource, 'execPreset'), agentSchema.execPreset.enum],
       ['execApprovalMode', stringLiterals(source, 'ExecApprovalMode'), agentSchema.execApprovalMode.enum],

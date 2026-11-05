@@ -14,7 +14,11 @@ import { dirname, join } from 'node:path';
 import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { defineAgentPromptSection, type PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { ToolIndex, type ToolAvailabilityContext } from '@zhin.js/tool';
-import { collaborationIdle, closeCollaborations } from '../../src/collaboration/registry.js';
+import { collaborationIdle } from '../../src/collaboration/registry.js';
+import { HostMailbox } from '../../src/collaboration/host-mailbox.js';
+import { runInMailTurn } from '../../src/collaboration/mail-turn-context.js';
+import { normalizeMailboxConfig } from '../../src/turn/mailbox-config.js';
+import type { TurnAdmission } from '../../src/turn/turn-admission.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import { AgentCore } from '../../src/core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
@@ -128,9 +132,13 @@ async function runInWorkspace(
   liveModel: ScriptedModel | undefined,
   imageAssets?: ImageAssetPublisher,
 ): Promise<EvalRunRecord> {
+  const inboundList: readonly EvalInbound[] = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
+  /** ADR 0048 H3 mid-turn delivery hook, bound once the mailbox exists. */
+  let onModelRequest: ((entryStep: number | undefined) => Promise<void>) | undefined;
   const model = liveModel ?? createScriptedModel(definition.script, {
     extraModels: definition.models,
     clock,
+    ...(inboundList.some((message) => !isTimerInbound(message) && message.deliver) ? { onRequest: (entryStep: number | undefined) => onModelRequest?.(entryStep) } : {}),
     ...(definition.contextWindow ? { contextWindow: definition.contextWindow } : {}),
     ...(definition.modelInput ? { input: definition.modelInput } : {}),
     ...(definition.perception ? { perception: true } : {}),
@@ -191,6 +199,7 @@ async function runInWorkspace(
     ...(bootstrapContext ? { bootstrapContext } : {}),
   });
 
+  const mailbox = new HostMailbox({ config: normalizeMailboxConfig(definition.agentConfig?.mailbox) });
   const executedTools: EvalToolInvocation[] = [];
   const rawToolOutputs: string[] = [];
   const outbound: string[] = [];
@@ -212,15 +221,33 @@ async function runInWorkspace(
     ];
     const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
 
-    const inbound = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
-    for (const [index, entry] of (inbound as readonly EvalInbound[]).entries()) {
-      if (isTimerInbound(entry)) {
-        deliverTimerMailInbound(entry);
-      }
-      const message = entry as EvalInboundMessage;
+    // ADR 0048 H3: every inbound is a human Mail of the host Mailbox, and each
+    // `run` admission is one Mail turn, exactly as the IM ingress route does.
+    const runInbound = async (message: EvalInboundMessage, index: number): Promise<void> => {
+      const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
+      const admission = await mailbox.admit({
+        sessionKey: sessionKeyFor(message),
+        senderId: sender.id,
+        text: message.text,
+        plainText: !message.images?.length && !message.quote,
+        isMaster: (sender.roles ?? []).includes('master'),
+        ...(sender.name ? { senderName: sender.name } : {}),
+        ...(message.addressed === false ? { unaddressed: true } : {}),
+      });
+      if (admission.kind !== 'run') return;
+      await runAdmitted(message, index, admission);
+    };
+    const runAdmitted = async (message: EvalInboundMessage, index: number, admission: Extract<TurnAdmission, { kind: 'run' }>): Promise<void> => {
       const trace = createTurnTrace(definition, message, index);
       const releaseTrace = registerTurnTrace(trace);
-      const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, native.available, approval, outbound, workspace, trace);
+      // A merged / superseding batch answers every mail in it.
+      const admitted = admission.batch.length > 1 ? { ...message, text: admission.text } : message;
+      const { turn, tools: turnTools } = buildTurn(definition, admitted, index, tools, native.available, approval, outbound, workspace, trace, {
+        signal: admission.signal,
+        // A superseded / stopped turn never sends; a stale reply is dropped (ADR 0038 §4).
+        blocked: () => admission.signal.aborted || admission.staleCheck().kind === 'discard',
+        delivered: () => admission.markDelivered(),
+      });
       const context: AgentTurnExecutionContext = {
         turn,
         capabilities: {
@@ -239,6 +266,7 @@ async function runInWorkspace(
           mcpServers: [],
         },
       };
+      let status: 'completed' | 'failed' | 'cancelled' = 'failed';
       const lease = inference.snapshots.acquire();
       const models = await inference.runtime.acquireForTurn({ request: turn, binding: context.selection.binding, lease, snapshots: inference.snapshots });
       const mediaPerception = perception({ scope: models, sessionKey: turn.session.key, settings: perceptionConfig,
@@ -246,18 +274,44 @@ async function runInWorkspace(
       try {
         // Same path as AgentRuntime: the journal is the single source and
         // `events` is the journal-derived feed (includes authority tool events).
-        await runWithAgentTurnConfiguration({ models, mediaPerception }, () => executeAgentTurn(turn, () => engine.run(context), (event) => {
-          events.push(event);
-          if (isTurnTerminalEvent(event)) terminals.push(event);
-        }));
+        await runInMailTurn({ mailbox, mail: admission.mail, batch: admission.batch }, () =>
+          runWithAgentTurnConfiguration({ models, mediaPerception }, () => executeAgentTurn(turn, () => engine.run(context), (event) => {
+            events.push(event);
+            if (isTurnTerminalEvent(event)) terminals.push(event);
+          })));
+        status = admission.signal.aborted ? 'cancelled' : 'completed';
+      } finally {
+        admission.release(status);
         // Delegated work outlives the entry turn; wait for it (and the result turns it wakes) before observing.
         await collaborationIdle();
-      } finally {
         await models.release(); lease.release();
         releaseTrace();
         trace.finalize();
         traces.push(trace.snapshot());
       }
+    };
+
+    const midTurn = inboundList
+      .map((message, index) => ({ message, index }))
+      .filter((pending): pending is { message: EvalInboundMessage; index: number } => !isTimerInbound(pending.message) && pending.message.deliver !== undefined);
+    const spawned: Promise<void>[] = [];
+    onModelRequest = async (entryStep) => {
+      for (const pending of midTurn) {
+        if (entryStep === undefined || pending.message.deliver!.duringStep !== entryStep) continue;
+        spawned.push(runInbound(pending.message, pending.index));
+      }
+      if (entryStep !== undefined && midTurn.some(({ message }) => message.deliver!.duringStep === entryStep)) {
+        // Let the Mailbox take the mail (and abort a superseded turn) before the step answers.
+        for (let tick = 0; tick < 8; tick += 1) await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    };
+    for (const [index, entry] of inboundList.entries()) {
+      // ADR 0048 H3 Gap A: timer Mail delivery is PR-3; the hook still throws.
+      if (isTimerInbound(entry)) deliverTimerMailInbound(entry);
+      const message = entry as EvalInboundMessage;
+      if (message.deliver) continue;
+      await runInbound(message, index);
+      while (spawned.length) await spawned.shift();
     }
 
     const selfChanges = selfChange
@@ -290,7 +344,8 @@ async function runInWorkspace(
       traces,
     };
   } finally {
-    await closeCollaborations('eval case finished');
+    await mailbox.close('eval case finished');
+    agent.hostMailbox.dispose();
     selfChange?.approvals.dispose();
     selfChange?.queue.dispose();
     await agent.dispose(); await inference.runtime.dispose(); await inference.snapshots.close();
@@ -307,6 +362,7 @@ function buildTurn(
   outbound: string[],
   workspace: string | undefined,
   trace: TurnTraceCollector,
+  gate: Readonly<{ signal: AbortSignal; blocked: () => boolean; delivered: () => void }>,
 ) {
   const scope = message.scope ?? 'private';
   const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
@@ -347,13 +403,15 @@ function buildTurn(
       tools: turnTools.map((tool) => tool.name),
       skills: evalSkills(definition).map((skill) => skill.qualifiedName),
     },
-    signal: new AbortController().signal,
+    signal: gate.signal,
     ports: {
       journal: createJournalFeed(createTracingJournal({ append: async () => undefined }, trace), { turnId }),
       reply: {
         send: async (output) => {
+          if (gate.blocked()) return { status: 'suppressed' as const };
           const text = renderAgentOutput(output);
           outbound.push(text);
+          gate.delivered();
           // This local port delivers the captured output unchanged. Supply the same
           // plain-text evidence the production receipt bridge verifies after sending.
           const messageContexts = plannedReplyTexts(output).flatMap(plannedText => plannedText === undefined ? [] : [{

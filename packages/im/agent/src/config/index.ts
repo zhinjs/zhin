@@ -31,8 +31,8 @@ export type {
   ModelSizeHint,
   ExecApprovalMode,
   CompactionConfig,
-  InboundQueueConfig,
-  InboundGroupQueueMode,
+  MailboxConfig,
+  MailboxGroupMode,
   ScheduleBudgetConfig,
   ScheduleDomainConfig,
 } from './zhin-agent-config.js';

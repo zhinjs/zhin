@@ -1,28 +1,27 @@
 /**
  * Multi-message ingress evals (#725).
  *
- * `runEvalCase` drives one engine turn per inbound message and bypasses IM
- * admission. This driver feeds several timed messages through the same
- * TurnAdmissionGate protocol the CLI IM ingress route uses
- * (`basic/cli/.../turn/ingress-route.ts`): an explicit cancel intent calls
- * `gate.stop`, everything else calls `gate.admit`; `merged` and `rejected`
- * admissions produce no turn, and a `run` admission executes one real agent
- * turn (via `runEvalCase`, scripted model) with the admitted — possibly
- * merged — text, then releases the gate.
+ * `runEvalCase` drives one engine turn per inbound message. This driver
+ * feeds several timed messages through the same host Mailbox protocol the
+ * IM ingress route uses (ADR 0048 H3, `HostMailbox` in
+ * `plugin-runtime/ingress/ingress-route.ts`): an explicit cancel intent calls
+ * `mailbox.stop`, everything else calls `mailbox.admit`; `merged` and
+ * `rejected` admissions produce no turn, and a `run` admission executes one
+ * real agent turn (via `runEvalCase`, scripted model) with the admitted —
+ * possibly merged — text, then releases the Mail turn.
  *
  * Time is virtual: message arrival (`at`) and turn duration (`turnMs`) are
- * milliseconds on a deterministic clock that also drives the gate's queue TTL.
- * The route lives in @zhin.js/cli, which this package cannot import, so the
- * protocol is mirrored here; keep the two in sync.
+ * milliseconds on a deterministic clock that also drives the mailbox queue TTL.
  */
 import { isCancelIntent } from '../../src/turn/cancel-intent.js';
+import { HostMailbox } from '../../src/collaboration/host-mailbox.js';
+import { DEFAULT_MAILBOX_CONFIG } from '../../src/turn/mailbox-config.js';
 import {
   DEFAULT_MAX_QUEUED_TURNS,
-  TurnAdmissionGate,
   type TurnAdmission,
   type TurnAdmissionFacts,
   type TurnStopResult,
-} from '../../src/turn/turn-admission-gate.js';
+} from '../../src/turn/turn-admission.js';
 import { runEvalCase } from './driver.js';
 
 export interface IngressEvalMessage {
@@ -91,7 +90,7 @@ export interface IngressEvalRun {
 }
 
 /** Same user-facing notices as the IM ingress route. */
-const REJECTION_NOTICE: Partial<Record<'queue_full' | 'expired' | 'stopped', string>> = {
+const REJECTION_NOTICE: Partial<Record<string, string>> = {
   queue_full: '前面还有几条消息在处理，请稍后再发。',
   expired: '这条消息排队太久，已跳过，需要的话请重新发送。',
 };
@@ -104,14 +103,21 @@ interface Running {
   readonly endsAt: number;
 }
 
-const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+/** Lets the Mailbox finish the harness hops of earlier calls. */
+const flush = async () => {
+  for (let index = 0; index < 8; index += 1) await new Promise<void>((resolve) => setImmediate(resolve));
+};
 
 export async function runIngressEvalCase(definition: IngressEvalCase): Promise<IngressEvalRun> {
   let now = 0;
-  const gate = new TurnAdmissionGate({
-    maxQueuedTurns: definition.gate?.maxQueuedTurns ?? DEFAULT_MAX_QUEUED_TURNS,
-    queueTtlMs: definition.gate?.queueTtlMs ?? 0,
-    supersedeSameSender: definition.gate?.supersedeSameSender ?? true,
+  const gate = new HostMailbox({
+    config: {
+      ...DEFAULT_MAILBOX_CONFIG,
+      groupMode: (definition.gate?.supersedeSameSender ?? true) ? 'supersede' : 'fifo',
+      ttlMs: definition.gate?.queueTtlMs ?? 0,
+      maxQueuedTurns: definition.gate?.maxQueuedTurns ?? DEFAULT_MAX_QUEUED_TURNS,
+      merge: { ...DEFAULT_MAILBOX_CONFIG.merge, enabled: false },
+    },
     now: () => now,
   });
   const sessionKey = `eval:${definition.scope ?? 'group'}:${definition.id}`;
@@ -141,7 +147,7 @@ export async function runIngressEvalCase(definition: IngressEvalCase): Promise<I
       facts: current.admission.facts,
       ...(reply !== undefined ? { reply } : {}),
     });
-    current.admission.release();
+    current.admission.release(status);
     await flush();
   };
 
@@ -162,7 +168,7 @@ export async function runIngressEvalCase(definition: IngressEvalCase): Promise<I
   const messages = [...definition.messages].sort((a, b) => a.at - b.at);
   let next = 0;
   while (next < messages.length || running) {
-    // A running turn the gate aborted (superseded or stopped) ends now.
+    // A running turn the mailbox aborted (superseded or stopped) ends now.
     if (running?.admission.signal.aborted) {
       await finish('cancelled');
       continue;
@@ -179,7 +185,8 @@ export async function runIngressEvalCase(definition: IngressEvalCase): Promise<I
     const sender = arrival.sender.id;
     const isMaster = (arrival.sender.roles ?? []).includes('master');
     if (isCancelIntent(arrival.text)) {
-      const result: TurnStopResult = gate.stop(sessionKey, sender, isMaster);
+      await flush();
+      const result: TurnStopResult = await gate.stop(sessionKey, sender, isMaster);
       stops.push(`${sender}:${result}`);
       if (result === 'stopped') {
         notices.push(STOP_NOTICE);
@@ -188,12 +195,12 @@ export async function runIngressEvalCase(definition: IngressEvalCase): Promise<I
       }
       // Nothing of the sender's to stop: an ordinary message, like the route.
     }
-    // Queued admissions settle later, when the gate pumps them.
+    // Queued admissions settle later, when the mailbox pumps them.
     void gate.admit({ sessionKey, senderId: sender, text: arrival.text, plainText: arrival.plainText ?? true })
       .then((admission) => handle(admission, arrival));
     await flush();
   }
-  gate.dispose();
+  await gate.close();
   return { turns, merged, rejected, stops, notices };
 }
 

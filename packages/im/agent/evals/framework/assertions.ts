@@ -146,7 +146,7 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
   }
   const expectedTermination = expect.termination ?? 'turn_end';
   const terminal = run.terminals.at(-1);
-  if (terminal?.type !== expectedTermination) {
+  if ((terminal?.type ?? 'none') !== expectedTermination) {
     const detail = terminal?.type === 'error' ? ` (${terminal.error.message})` : '';
     fail('termination', `expected termination "${expectedTermination}", got "${terminal?.type ?? 'none'}"${detail}`);
   }

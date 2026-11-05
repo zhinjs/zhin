@@ -34,7 +34,7 @@ async function fixture() {
     ingress: { read: async () => ({ agents: [], tools: [] }) } as never,
     agent: { service: {
       getBindingRegistry: () => ({ requireZhinBinding: () => ({ name: 'zhin', mcpServers: [] }) }),
-      getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({ inboundQueue: { merge: { enabled: false } } }),
+      getTriggerConfig: () => ({ enabled: true }), getAgentConfig: () => ({ mailbox: { merge: { enabled: false } } }),
     }, agent: {} } as never });
   let saved: EndpointDesiredSnapshot | undefined;
   const repository: EndpointDesiredRepository = {

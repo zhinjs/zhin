@@ -51,6 +51,19 @@ export interface EvalInboundMessage {
    * hands it over (`TurnInput.liveDanmaku`). `sender` is the carrier.
    */
   readonly liveDanmaku?: TurnLiveDanmaku;
+  /**
+   * ADR 0048 H3: `false` = an ordinary group message that neither @s nor
+   * replies to the bot. The Mailbox admission policy rejects it
+   * (`not_addressed`) and no turn starts. Default true.
+   */
+  readonly addressed?: boolean;
+  /**
+   * ADR 0048 H3 mid-turn delivery: post this message to the Mailbox while the
+   * scripted model serves entry step `duringStep` (1-based) of an earlier
+   * turn, instead of after the previous turn ended. Exercises supersede /
+   * interrupt and the stale-reply check.
+   */
+  readonly deliver?: Readonly<{ duringStep: number }>;
 }
 
 /**
@@ -164,7 +177,8 @@ export type EvalSelfChangeStatus =
 /** How the fake approval channel answers approval requests. */
 export type EvalApprovalBehaviour = 'approve' | 'deny' | 'unavailable';
 
-export type EvalTermination = 'turn_end' | 'error' | 'turn_cancelled' | 'budget_exceeded';
+/** `none`: no turn ran at all (the Mailbox did not admit the message, ADR 0048 H3). */
+export type EvalTermination = 'turn_end' | 'error' | 'turn_cancelled' | 'budget_exceeded' | 'none';
 
 export interface EvalExpectations {
   readonly toolsCalled?: readonly string[];

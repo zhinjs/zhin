@@ -22,7 +22,7 @@ Zhin.js Bilibili 直播弹幕适配器（Plugin Runtime）：让 Bot 像主播�
 
 ## 先读这几条
 
-- **一窗只回一条**：本适配器声明 `liveDanmaku` 能力。Agent 不逐条回弹幕，而是把一段时间内的弹幕收进窗口，由模型挑一条（或总结后）回一次；两次回复之间至少隔 `ai.agent.inboundQueue.live.minIntervalMs`（默认 15 秒）。窗口参数见下文「弹幕窗口」。
+- **一窗只回一条**：本适配器声明 `liveDanmaku` 能力。Agent 不逐条回弹幕，而是把一段时间内的弹幕收进窗口，由模型挑一条（或总结后）回一次；两次回复之间至少隔 `ai.agent.mailbox.live.minIntervalMs`（默认 15 秒）。窗口参数见下文「弹幕窗口」。
 - **弹幕回合只读**：弹幕回合按匿名观众的权限跑，只开放声明了 `readOnly: true` 的工具，不出任何审批卡，不跑 Shell / MCP / 子 Agent。禁言、拉黑等动作不走弹幕。
 - **以你的账号身份发弹幕**：发弹幕需要登录 Cookie（`SESSDATA` + `bili_jct`），等同于账号密码：**用环境变量注入，不要写进 `zhin.config.yml` 明文，不要提交到仓库，不要贴进日志或 issue**。不填 Cookie 时只能匿名收弹幕（平台会把昵称打码、uid 给 0），不能发。
 - **默认直接发**：`sendMode` 默认 `direct`，回复直接作为弹幕发出（弹幕是实时的，先审再发没有意义）。只想让 Bot 听不想让它说，设 `sendMode: off`。
@@ -47,7 +47,7 @@ Zhin.js Bilibili 直播弹幕适配器（Plugin Runtime）：让 Bot 像主播�
 
 1. 你自己的 B 站直播间号（`roomId`，短号长号都行）
 2. 要让 Bot 发弹幕：你的账号 Cookie `SESSDATA` 与 `bili_jct`，放进 `.env`（已被 gitignore）：`BILIBILI_SESSDATA`、`BILIBILI_BILI_JCT`。只想让 Bot 听弹幕可以不填
-3. Agent 已启用（`ai.agent`）：弹幕窗口由 Agent 的 `inboundQueue.live` 驱动
+3. Agent 已启用（`ai.agent`）：弹幕窗口由 Agent 的 `mailbox.live` 驱动
 
 ## 最小配置
 
@@ -78,7 +78,7 @@ bilibili-live:
 ```yaml
 ai:
   agent:
-    inboundQueue:
+    mailbox:
       live:
         mode: pick-one        # pick-one：挑一条回；summary：总结窗口后回一次
         windowMs: 10000       # 第一条弹幕后等多久发车
@@ -125,6 +125,6 @@ ai:
 | 日志 `bilibili_live_anonymous` | 没配 Cookie 或 Cookie 已失效：只能匿名收弹幕，发弹幕返回 `not_logged_in`。重新取 Cookie 后重启 |
 | 连接反复失败、`getDanmuInfo` 返回 `-352` | 平台风控拦截取 token 的请求。确认 Cookie 有效、配上 `buvid3` 后重启；仍失败说明接口改版 |
 | `bilibili live auth rejected` | 认证包被拒（token 过期或房间号错）。核对 `roomId`；重连会重新取 token |
-| 日志 `bilibili_live_circuit_open` | 发弹幕遇到频控 / 风控，已停止发送。调大 `minSendIntervalSec` 或 `inboundQueue.live.minIntervalMs`，人工确认账号状态后重启 |
+| 日志 `bilibili_live_circuit_open` | 发弹幕遇到频控 / 风控，已停止发送。调大 `minSendIntervalSec` 或 `mailbox.live.minIntervalMs`，人工确认账号状态后重启 |
 | 回复被截成「…」 | 超过 `maxLength × maxChunks`。直播等级高的账号可调大 `maxLength` |
 | 发送返回 `rate_limited` | 距上次发送不足 `minSendIntervalSec`，这次回复被丢弃（不排队） |

@@ -19,6 +19,7 @@ export interface InboxMarkers {
   readonly live: boolean;
   readonly isMaster: boolean;
   readonly isStop: boolean;
+  readonly unaddressed: boolean;
 }
 
 function textOf(mail: Mail): string {
@@ -39,7 +40,7 @@ export function inboxMarkers(mail: Mail): InboxMarkers {
   const text = textOf(mail);
   const body = mail.body;
   if (body.kind !== 'human') {
-    return { senderId, text, human: false, plainText: false, mergeable: false, live: false, isMaster: false, isStop: false };
+    return { senderId, text, human: false, plainText: false, mergeable: false, live: false, isMaster: false, isStop: false, unaddressed: false };
   }
   return {
     senderId,
@@ -52,5 +53,6 @@ export function inboxMarkers(mail: Mail): InboxMarkers {
     live: body.live === true,
     isMaster: body.isMaster === true,
     isStop: body.isStop === true,
+    unaddressed: body.unaddressed === true,
   };
 }

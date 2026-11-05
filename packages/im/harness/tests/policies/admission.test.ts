@@ -25,6 +25,16 @@ describe('inbox admission (#725)', () => {
     expect(d.finished).toEqual([{ ids: ['m1'], result: { status: 'completed' } }]);
   });
 
+  it('never runs a group message that does not address the agent', async () => {
+    const d = createInboxDriver();
+    expect(d.say('alice', '今天食堂有什么菜？', { unaddressed: true }).result).toEqual({
+      accepted: false, code: 'not_addressed', message: 'the message does not address the agent',
+    });
+    await tick();
+    expect(d.current()).toBeUndefined();
+    expect(d.finished).toEqual([]);
+  });
+
   it('merges a sender follow-up into one fresh turn when nothing was delivered yet', async () => {
     const d = createInboxDriver();
     d.say('alice', '帮我查明天的天气');

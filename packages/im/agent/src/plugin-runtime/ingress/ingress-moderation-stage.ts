@@ -1,4 +1,5 @@
 import { readOperationSession } from '@zhin.js/core';
+import type { HostMailbox } from '../../collaboration/host-mailbox.js';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -249,11 +250,14 @@ export function createSceneEventIngress(input: Readonly<{
   agent: AgentIngressFoundationPort;
   memberLifecycle: MemberLifecycle;
   onSpoke: (key: string) => void;
+  /** ADR 0048 H3 (Q3): scene wakes run as event Mail turns of the route's host Mailbox. */
+  mailbox?: () => HostMailbox | undefined;
 }>): SceneEventIngress {
-  const { projectRoot, im, runtime, agent, memberLifecycle, onSpoke } = input;
+  const { projectRoot, im, runtime, agent, memberLifecycle, onSpoke, mailbox } = input;
   const readOnlyFilesystem = Object.freeze({ workspaceRoot: projectRoot, access: 'read-only' as const });
   return new SceneEventIngress({
     projectRoot,
+    ...(mailbox ? { mailbox } : {}),
     triggerConfig: () => agent.service.getTriggerConfig(),
     reader: () => im.conversationEventReader,
     sessions: () => agent.agent.getUserProfiles?.()?.sessions,

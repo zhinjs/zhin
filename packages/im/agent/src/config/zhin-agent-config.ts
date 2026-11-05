@@ -15,37 +15,39 @@ export type OnChunkCallback = (chunk: string, full: string) => void;
 export type ModelSizeHint = 'small' | 'medium' | 'large';
 export type ExecApprovalMode = 'ask' | 'bypass' | 'auto';
 
-export type InboundGroupQueueMode = 'supersede' | 'fifo';
+export type MailboxGroupMode = 'supersede' | 'fifo';
 
-export interface InboundQueueConfig {
-  groupMode?: InboundGroupQueueMode;
+/** `ai.agent.mailbox` (ADR 0048 H3): the IM inbox policy; replaces `ai.agent.inboundQueue`. */
+export interface MailboxConfig {
+  /** `supersede` (default): the same sender's follow-up replaces their unanswered turn; `fifo`: it queues. */
+  groupMode?: MailboxGroupMode;
+  /** A queued message older than this when its turn would start is dropped. Default 180000; `0` never. */
   ttlMs?: number;
-  coalesceWindowMs?: number;
   /**
-   * Plugin-runtime IM ingress (#725): turns allowed to wait behind the running
-   * turn of one session. Further messages get a short "busy" reply. Default 5.
+   * Turns allowed to wait behind the running turn of one session. Further
+   * messages get a short "busy" reply. Default 5.
    */
   maxQueuedTurns?: number;
   /** ADR 0038 §1: merge mentions from several group members into one reply. */
-  merge?: InboundMergeConfig;
+  merge?: MailboxMergeConfig;
   /** ADR 0038 §5: danmaku mode for adapters that declare `liveDanmaku`. */
-  live?: InboundLiveConfig;
+  live?: MailboxLiveConfig;
 }
 
 /** ADR 0038 §5 danmaku window. Applies only to conversations of a `liveDanmaku` adapter. */
-export interface InboundLiveConfig {
+export interface MailboxLiveConfig {
   /** `pick-one` answers one danmaku of the window; `summary` answers the window once. Default `pick-one`. */
-  mode?: InboundLiveMode;
+  mode?: MailboxLiveMode;
   /** Danmaku window length from its first message. Default 10000. */
   windowMs?: number;
   /** Minimum time between two danmaku replies of one room. Default 15000. */
   minIntervalMs?: number;
 }
 
-export type InboundLiveMode = 'pick-one' | 'summary';
+export type MailboxLiveMode = 'pick-one' | 'summary';
 
 /** ADR 0038 §1 group merge window. Private chats never merge. */
-export interface InboundMergeConfig {
+export interface MailboxMergeConfig {
   /** Default `true` (group chats only); `false` answers every member one by one as before. */
   enabled?: boolean;
   /** Flush after this long without a new message in the window. Default 1500. */
@@ -107,7 +109,7 @@ export interface ZhinAgentConfig {
   contextTokens?: number;
   maxHistoryShare?: number;
   compaction?: CompactionConfig;
-  inboundQueue?: InboundQueueConfig;
+  mailbox?: MailboxConfig;
   disabledTools?: string[];
   allowedTools?: string[];
   execSecurity?: 'deny' | 'allowlist' | 'full';

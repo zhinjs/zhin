@@ -23,6 +23,7 @@ export interface HumanFlags {
   readonly live?: boolean;
   readonly isMaster?: boolean;
   readonly isStop?: boolean;
+  readonly unaddressed?: boolean;
   readonly messageId?: string;
   readonly senderName?: string;
   readonly lane?: string;
@@ -87,6 +88,7 @@ export function humanMail(n: number, senderId: string, text: string, flags: Huma
       ...(flags.live ? { live: true } : {}),
       ...(flags.isMaster ? { isMaster: true } : {}),
       ...(flags.isStop ? { isStop: true } : {}),
+      ...(flags.unaddressed ? { unaddressed: true } : {}),
       ...(flags.messageId ? { messageId: flags.messageId } : {}),
       ...(flags.senderName ? { senderName: flags.senderName } : {}),
     },

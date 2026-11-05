@@ -12,6 +12,8 @@ const REMOVED_COLLABORATION_AGENT_KEYS = [
 const COLLABORATION_MIGRATION_HINT = 'sub-agents and deferred workers were replaced by agent collaboration (ADR 0048):'
   + ' delete these keys; declare who an agent may contact in agents/<name>/agent.json `collaboration`.';
 
+import { MAILBOX_MIGRATION_HINT, validateMailboxConfig, type MailboxConfig } from '../turn/mailbox-config.js';
+
 /** Startup validation only: model resources now require an explicit runtime import. */
 export function validateModelRuntimeConfig(input: unknown, _hostOwnerId: string): string[] {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return ['Invalid AI configuration'];
@@ -60,6 +62,15 @@ export function validateModelRuntimeConfig(input: unknown, _hostOwnerId: string)
     }
   }
   if (removed.length) errors.push(`${removed.join(', ')} removed; ${COLLABORATION_MIGRATION_HINT}`);
+  if (raw.agent && typeof raw.agent === 'object' && !Array.isArray(raw.agent)) {
+    const agent = raw.agent as Record<string, unknown>;
+    if (Object.hasOwn(agent, 'inboundQueue')) errors.push(MAILBOX_MIGRATION_HINT);
+    const mailbox = agent.mailbox;
+    if (mailbox !== undefined && mailbox !== null) {
+      if (typeof mailbox !== 'object' || Array.isArray(mailbox)) errors.push('ai.agent.mailbox must be an object');
+      else errors.push(...validateMailboxConfig(mailbox as MailboxConfig));
+    }
+  }
   const servers = Array.isArray(raw.mcpServers) ? raw.mcpServers : [];
   const names = servers.flatMap(server => server && typeof server === 'object' && 'name' in server && typeof server.name === 'string' ? [server.name] : []);
   if (new Set(names).size !== names.length) errors.push('ai.mcpServers: duplicate server name');

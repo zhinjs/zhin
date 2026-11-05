@@ -1,17 +1,22 @@
 /**
- * Process-wide registry of live collaboration harnesses (ADR 0048 H2).
+ * Process-wide registry of live collaboration hosts (ADR 0048 H2/H3).
  *
- * A turn's harness outlives the turn while delegated work is still running.
- * The engine registers each harness here; hosts and tests await
- * {@link collaborationIdle} to know when background collaboration settled,
- * and {@link closeCollaborations} stops it on shutdown.
+ * Delegated work outlives the turn that started it. Each host Mailbox
+ * registers here; hosts and tests await {@link collaborationIdle} to know
+ * when background collaboration settled, and {@link closeCollaborations}
+ * stops it on shutdown. A host's `idle` covers its collaboration
+ * engagements only, never the ordinary human turns of its long-lived
+ * Mailbox (D3), so it may be awaited from inside another turn.
  */
-import type { Harness } from '@zhin.js/harness';
+export interface CollaborationHost {
+  idle(): Promise<void>;
+  close(reason?: string): Promise<void>;
+}
 
-const live = new Set<Harness>();
+const live = new Set<CollaborationHost>();
 
-/** Tracks `harness` until `release` is called (normally when its engagement closes). */
-export function registerCollaboration(harness: Harness): () => void {
+/** Tracks `harness` until `release` is called (normally when its host closes). */
+export function registerCollaboration(harness: CollaborationHost): () => void {
   live.add(harness);
   return () => { live.delete(harness); };
 }

@@ -9,12 +9,10 @@ const senders = [
 // human Mails into one turn. Two members @ the bot within one window: one model step, one reply that
 // @s each sender it answers. Mirrors `merged-turn-mentions-each-sender`, but the merge must come from
 // the Mailbox rather than the ingress router.
-// Unskip once H3 moves merge-window coalescing into the Mailbox.
 export default defineEvalCase({
   id: 'harness-mailbox-merge-window-coalesce',
   description: 'Two human Mails inside one merge window are coalesced by the Mailbox into one turn and one reply that @s both senders.',
   source: 'ADR 0048 §3.1 / §8 H3 (Mailbox absorbs the ADR 0038 merge window)',
-  skip: 'ADR 0048 H3',
   tags: ['collaboration'],
   inbound: {
     text: 'Alice: 周会改到几点了？\nBob: 周会在哪个会议室？',

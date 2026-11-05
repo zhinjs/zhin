@@ -28,11 +28,9 @@ export function turnCancelledEvent(error: unknown): TurnCancelledEvent {
   if (name === 'TriggerCancelledError') {
     return { type: 'turn_cancelled', code: 'cancelled', reason };
   }
-  if (name === 'TriggerTimeoutError' || name === 'InboundTurnExpiredError') {
+  const rejected = name === 'MailboxTurnRejectedError' ? (error as { reason?: unknown }).reason : undefined;
+  if (name === 'TriggerTimeoutError' || rejected === 'expired') {
     return { type: 'turn_cancelled', code: 'timeout', reason };
-  }
-  if (name === 'InboundTurnQueueDisposedError' || reason === 'InboundTurnQueue disposed') {
-    return { type: 'turn_cancelled', code: 'disposed', reason };
   }
   return { type: 'turn_cancelled', code: 'cancelled', reason };
 }
@@ -41,8 +39,7 @@ export function isTurnCancellation(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   return error.name === 'TurnCancelledError'
     || error.name === 'TurnSupersededError'
-    || error.name === 'InboundTurnCancelledError'
-    || error.name === 'InboundTurnExpiredError'
+    || error.name === 'MailboxTurnRejectedError'
     || error.name === 'TriggerTimeoutError'
     || error.name === 'TriggerCancelledError'
     || error.name === 'AbortError';

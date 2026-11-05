@@ -1,13 +1,61 @@
+/**
+ * Same-session admission (#725, ADR 0038) through the host Mailbox (ADR 0048
+ * H3). Ported from the former `TurnAdmissionGate` tests: the inbox policy of
+ * the harness Mailbox now decides queue / supersede / merge / danmaku.
+ */
 import { describe, expect, it } from 'vitest';
+import { HostMailbox } from '../../src/collaboration/host-mailbox.js';
 import {
   LIVE_WINDOW_MAX_MESSAGES,
-  TurnAdmissionGate,
   type TurnAdmission,
   type TurnAdmissionRequest,
-} from '../../src/turn/turn-admission-gate.js';
+} from '../../src/turn/turn-admission.js';
+import { DEFAULT_MAILBOX_CONFIG } from '../../src/turn/mailbox-config.js';
 import { TriggerCancelledError } from '../../src/turn/trigger-cancelled-error.js';
 import { TurnSupersededError } from '../../src/turn/prompt-controller.js';
 import type { TurnAccessContext } from '../../src/turn/turn-ingress.js';
+
+interface GateOptions {
+  maxQueuedTurns: number;
+  queueTtlMs: number;
+  supersedeSameSender: boolean;
+  merge?: { quietMs: number; maxWaitMs: number; maxSenders: number };
+  live?: { windowMs: number; minIntervalMs: number };
+  now?: () => number;
+  setTimer?: (run: () => void, delayMs: number) => () => void;
+}
+
+/** Lets the Mailbox finish the microtask / harness hops of earlier calls. */
+async function settle(): Promise<void> {
+  for (let index = 0; index < 8; index += 1) await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+/** The former gate's test surface over a {@link HostMailbox}. */
+class Gate {
+  readonly mailbox: HostMailbox;
+  constructor(options: GateOptions) {
+    this.mailbox = new HostMailbox({
+      config: {
+        ...DEFAULT_MAILBOX_CONFIG,
+        groupMode: options.supersedeSameSender ? 'supersede' : 'fifo',
+        ttlMs: options.queueTtlMs,
+        maxQueuedTurns: options.maxQueuedTurns,
+        merge: options.merge ? { enabled: true, ...options.merge } : { ...DEFAULT_MAILBOX_CONFIG.merge, enabled: false },
+        live: { ...DEFAULT_MAILBOX_CONFIG.live, ...(options.live ?? {}) },
+      },
+      ...(options.now ? { now: options.now } : {}),
+      ...(options.setTimer ? { setTimer: options.setTimer } : {}),
+    });
+  }
+  admit(request: TurnAdmissionRequest): Promise<TurnAdmission> { return this.mailbox.admit(request); }
+  async stop(sessionKey: string, senderId: string, isMaster: boolean) {
+    await settle();
+    return this.mailbox.stop(sessionKey, senderId, isMaster);
+  }
+  runningSender(sessionKey: string) { return this.mailbox.runningSender(sessionKey); }
+  queuedTurns(sessionKey: string) { return this.mailbox.queuedTurns(sessionKey); }
+  dispose() { this.mailbox.dispose(); }
+}
 
 type RunAdmission = Extract<TurnAdmission, { kind: 'run' }>;
 
@@ -17,20 +65,21 @@ function message(senderId: string, text: string, plainText = true): TurnAdmissio
   return { sessionKey: SESSION, senderId, text, plainText };
 }
 
-function createGate(overrides: Partial<ConstructorParameters<typeof TurnAdmissionGate>[0]> = {}) {
+function createGate(overrides: Partial<GateOptions> = {}) {
   let clock = 0;
-  const gate = new TurnAdmissionGate({
+  const gate = new Gate({
     maxQueuedTurns: 5,
     queueTtlMs: 180_000,
     supersedeSameSender: true,
     now: () => clock,
     ...overrides,
   });
-  return { gate, advance: (ms: number) => { clock += ms; } };
+  return { gate, advance: async (ms: number) => { await settle(); clock += ms; await settle(); } };
 }
 
 async function expectRun(admission: Promise<TurnAdmission>): Promise<RunAdmission> {
   const result = await admission;
+  await settle();
   expect(result.kind).toBe('run');
   return result as RunAdmission;
 }
@@ -40,14 +89,18 @@ function isSettled(promise: Promise<unknown>): Promise<boolean> {
   return Promise.race([promise.then(() => true), Promise.resolve(marker)]).then((value) => value !== marker);
 }
 
-describe('TurnAdmissionGate (#725)', () => {
+describe('HostMailbox admission (#725)', () => {
   it('runs a message on an idle session immediately', async () => {
     const { gate } = createGate();
     const run = await expectRun(gate.admit(message('alice', '你好')));
+    await settle();
     expect(run.text).toBe('你好');
+    await settle();
     expect(run.facts).toEqual({ queuedMs: 0, mergedMessages: 1, supersededPrevious: false });
+    await settle();
     expect(gate.runningSender(SESSION)).toBe('alice');
     run.release();
+    await settle();
     expect(gate.runningSender(SESSION)).toBeUndefined();
   });
 
@@ -56,13 +109,18 @@ describe('TurnAdmissionGate (#725)', () => {
     const first = await expectRun(gate.admit(message('alice', '帮我查明天的天气')));
     const second = gate.admit(message('alice', '还有后天的'));
 
+    await settle();
     expect(first.signal.aborted).toBe(true);
+    await settle();
     expect(first.signal.reason).toBeInstanceOf(TurnSupersededError);
     first.release();
 
     const replacement = await expectRun(second);
+    await settle();
     expect(replacement.text).toBe('帮我查明天的天气\n还有后天的');
+    await settle();
     expect(replacement.facts.supersededPrevious).toBe(true);
+    await settle();
     expect(replacement.facts.mergedMessages).toBe(2);
   });
 
@@ -72,12 +130,16 @@ describe('TurnAdmissionGate (#725)', () => {
     first.markDelivered();
     const second = gate.admit(message('alice', '第二个问题'));
 
+    await settle();
     expect(first.signal.aborted).toBe(false);
+    await settle();
     expect(await isSettled(second)).toBe(false);
     first.release();
 
     const next = await expectRun(second);
+    await settle();
     expect(next.text).toBe('第二个问题');
+    await settle();
     expect(next.facts.supersededPrevious).toBe(false);
   });
 
@@ -85,8 +147,10 @@ describe('TurnAdmissionGate (#725)', () => {
     const { gate } = createGate({ supersedeSameSender: false });
     const first = await expectRun(gate.admit(message('alice', 'a')));
     const second = gate.admit(message('alice', 'b'));
+    await settle();
     expect(first.signal.aborted).toBe(false);
     first.release();
+    await settle();
     expect((await expectRun(second)).text).toBe('b');
   });
 
@@ -94,8 +158,10 @@ describe('TurnAdmissionGate (#725)', () => {
     const { gate } = createGate();
     const first = await expectRun(gate.admit(message('alice', '看看这张图', false)));
     const second = gate.admit(message('alice', '说说看'));
+    await settle();
     expect(first.signal.aborted).toBe(false);
     first.release();
+    await settle();
     expect((await expectRun(second)).text).toBe('说说看');
   });
 
@@ -104,9 +170,11 @@ describe('TurnAdmissionGate (#725)', () => {
     const alice = await expectRun(gate.admit(message('alice', 'alice 的问题')));
     const bob = gate.admit(message('bob', 'bob 的问题'));
 
+    await settle();
     expect(alice.signal.aborted).toBe(false);
     alice.release();
     const bobRun = await expectRun(bob);
+    await settle();
     expect(bobRun.text).toBe('bob 的问题');
   });
 
@@ -120,9 +188,10 @@ describe('TurnAdmissionGate (#725)', () => {
       gate.admit(message('bob', 'bob-2')),
       gate.admit(message('alice', 'alice-2')),
     ];
-    advance(1_000);
+    await advance(1_000);
 
     // bob-2 folds into bob's queued turn; nothing else merges across senders.
+    await settle();
     expect((await burst[2]).kind).toBe('merged');
 
     const answered: string[][] = [['alice', first.text]];
@@ -133,6 +202,7 @@ describe('TurnAdmissionGate (#725)', () => {
       run.release();
     }
 
+    await settle();
     expect(answered).toEqual([
       ['alice', 'alice-1'],
       ['bob', 'bob-1\nbob-2'],
@@ -140,7 +210,9 @@ describe('TurnAdmissionGate (#725)', () => {
       ['alice', 'alice-2'],
     ]);
     const texts = answered.flatMap(([, text]) => text!.split('\n'));
+    await settle();
     expect(texts.sort()).toEqual(['alice-1', 'alice-2', 'bob-1', 'bob-2', 'carol-1']);
+    await settle();
     expect(gate.queuedTurns(SESSION)).toBe(0);
   });
 
@@ -148,8 +220,9 @@ describe('TurnAdmissionGate (#725)', () => {
     const { gate, advance } = createGate();
     const first = await expectRun(gate.admit(message('alice', 'a')));
     const second = gate.admit(message('bob', 'b'));
-    advance(2_500);
+    await advance(2_500);
     first.release();
+    await settle();
     expect((await expectRun(second)).facts.queuedMs).toBe(2_500);
   });
 
@@ -165,9 +238,10 @@ describe('TurnAdmissionGate (#725)', () => {
     const { gate, advance } = createGate({ queueTtlMs: 1_000 });
     const first = await expectRun(gate.admit(message('alice', 'a')));
     const late = gate.admit(message('bob', 'b'));
-    advance(1_001);
+    await advance(1_001);
     first.release();
     await expect(late).resolves.toEqual({ kind: 'rejected', reason: 'expired' });
+    await settle();
     expect(gate.runningSender(SESSION)).toBeUndefined();
   });
 
@@ -179,18 +253,23 @@ describe('TurnAdmissionGate (#725)', () => {
       const queued = gate.admit(message('alice', 'b'));
       const other = gate.admit(message('bob', 'c'));
 
-      expect(gate.stop(SESSION, 'alice', false)).toBe('stopped');
+      await settle();
+      expect(await gate.stop(SESSION, 'alice', false)).toBe('stopped');
+      await settle();
       expect(first.signal.reason).toBeInstanceOf(TriggerCancelledError);
       await expect(queued).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
 
       first.release();
+      await settle();
       expect((await expectRun(other)).text).toBe('c');
     });
 
     it('does not let another member stop the turn', async () => {
       const { gate } = createGate();
       const first = await expectRun(gate.admit(message('alice', 'a')));
-      expect(gate.stop(SESSION, 'bob', false)).toBe('forbidden');
+      await settle();
+      expect(await gate.stop(SESSION, 'bob', false)).toBe('forbidden');
+      await settle();
       expect(first.signal.aborted).toBe(false);
       first.release();
     });
@@ -198,14 +277,17 @@ describe('TurnAdmissionGate (#725)', () => {
     it('lets the master stop any turn', async () => {
       const { gate } = createGate();
       const first = await expectRun(gate.admit(message('alice', 'a')));
-      expect(gate.stop(SESSION, 'owner', true)).toBe('stopped');
+      await settle();
+      expect(await gate.stop(SESSION, 'owner', true)).toBe('stopped');
+      await settle();
       expect(first.signal.aborted).toBe(true);
       first.release();
     });
 
-    it('reports when nothing is running', () => {
+    it('reports when nothing is running', async () => {
       const { gate } = createGate();
-      expect(gate.stop(SESSION, 'alice', false)).toBe('not_running');
+      await settle();
+      expect(await gate.stop(SESSION, 'alice', false)).toBe('not_running');
     });
   });
 
@@ -213,6 +295,7 @@ describe('TurnAdmissionGate (#725)', () => {
     const { gate } = createGate();
     const group = await expectRun(gate.admit(message('alice', 'a')));
     const dm = await expectRun(gate.admit({ sessionKey: 'qq:bot:private:alice', senderId: 'alice', text: 'b', plainText: true }));
+    await settle();
     expect(group.signal.aborted).toBe(false);
     group.release();
     dm.release();
@@ -225,18 +308,19 @@ describe('TurnAdmissionGate (#725)', () => {
     first.release();
     const bob = await expectRun(second);
     first.release();
+    await settle();
     expect(gate.runningSender(SESSION)).toBe('bob');
     bob.release();
   });
 });
 
-describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
+describe('HostMailbox admission merge window (ADR 0038 §1)', () => {
   const MERGE = { quietMs: 1_500, maxWaitMs: 6_000, maxSenders: 3 };
 
-  function createMergeGate(overrides: Partial<ConstructorParameters<typeof TurnAdmissionGate>[0]> = {}) {
+  function createMergeGate(overrides: Partial<GateOptions> = {}) {
     let clock = 0;
     let timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
-    const gate = new TurnAdmissionGate({
+    const gate = new Gate({
       maxQueuedTurns: 5,
       queueTtlMs: 180_000,
       supersedeSameSender: true,
@@ -249,7 +333,8 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
       },
       ...overrides,
     });
-    const advance = (ms: number) => {
+    const advance = async (ms: number) => {
+      await settle();
       const until = clock + ms;
       for (;;) {
         const due = timers
@@ -262,6 +347,7 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
       }
       clock = until;
       timers = timers.filter((timer) => !timer.cancelled);
+      await settle();
     };
     return { gate, advance };
   }
@@ -274,25 +360,31 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const { gate, advance } = createMergeGate();
     const joined: number[] = [];
     const carrier = gate.admit(mention('alice', '今晚几点开会', { senderName: 'Alice', onWindowJoined: (w) => joined.push(w.senders.length) }));
-    advance(500);
+    await advance(500);
     await expect(gate.admit(mention('bob', '会议链接在哪', { onWindowJoined: (w) => joined.push(w.senders.length) })))
       .resolves.toEqual({ kind: 'merged' });
-    advance(1_000);
+    await advance(1_000);
     await expect(gate.admit(mention('carol', '我能旁听吗'))).resolves.toEqual({ kind: 'merged' });
+    await settle();
     expect(await isSettled(carrier)).toBe(false);
 
-    advance(1_499);
+    await advance(1_499);
+    await settle();
     expect(await isSettled(carrier)).toBe(false);
-    advance(1);
+    await advance(1);
     const run = await expectRun(carrier);
+    await settle();
     expect(run.text).toBe('Alice: 今晚几点开会\nbob: 会议链接在哪\ncarol: 我能旁听吗');
+    await settle();
     expect(run.participants.map((p) => p.senderId)).toEqual(['alice', 'bob', 'carol']);
+    await settle();
     expect(run.facts).toEqual({
       queuedMs: 3_000,
       mergedMessages: 3,
       supersededPrevious: false,
       mergeWindow: { senders: ['alice', 'bob', 'carol'], messages: 3, waitedMs: 3_000 },
     });
+    await settle();
     expect(joined).toEqual([1, 2]);
     run.release();
   });
@@ -301,12 +393,14 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const { gate, advance } = createMergeGate({ merge: { ...MERGE, maxSenders: 10 } });
     const carrier = gate.admit(mention('u0', 'q0'));
     for (let index = 1; index <= 5; index += 1) {
-      advance(1_000);
+      await advance(1_000);
       void gate.admit(mention(`u${index}`, `q${index}`));
     }
-    advance(1_000);
+    await advance(1_000);
     const run = await expectRun(carrier);
+    await settle();
     expect(run.facts.mergeWindow?.waitedMs).toBe(6_000);
+    await settle();
     expect(run.participants).toHaveLength(6);
     run.release();
   });
@@ -316,12 +410,14 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const carrier = gate.admit(mention('alice', '帮我看下'));
     await gate.admit(mention('bob', '我也想问'));
     await gate.admit(mention('alice', '明天的安排'));
-    advance(1_500);
+    await advance(1_500);
     const run = await expectRun(carrier);
+    await settle();
     expect(run.participants).toEqual([
       { senderId: 'alice', texts: ['帮我看下', '明天的安排'] },
       { senderId: 'bob', texts: ['我也想问'] },
     ]);
+    await settle();
     expect(run.facts.mergeWindow).toEqual({ senders: ['alice', 'bob'], messages: 3, waitedMs: 1_500 });
     run.release();
   });
@@ -331,10 +427,12 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const master = await expectRun(gate.admit(message('owner', '主人的问题')));
     const carrier = gate.admit(mention('alice', 'a'));
     await gate.admit(mention('bob', 'b'));
-    advance(10_000);
+    await advance(10_000);
+    await settle();
     expect(await isSettled(carrier)).toBe(false);
     master.release();
     const run = await expectRun(carrier);
+    await settle();
     expect(run.participants.map((p) => p.senderId)).toEqual(['alice', 'bob']);
     run.release();
   });
@@ -342,11 +440,13 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
   it('never lets a merged turn be superseded by one of its senders', async () => {
     const { gate, advance } = createMergeGate();
     const carrier = gate.admit(mention('alice', 'a'));
-    advance(1_500);
+    await advance(1_500);
     const run = await expectRun(carrier);
     const next = gate.admit(message('alice', 'ai: 换个问题'));
+    await settle();
     expect(run.signal.aborted).toBe(false);
     run.release();
+    await settle();
     expect((await expectRun(next)).text).toBe('ai: 换个问题');
   });
 
@@ -357,14 +457,19 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     await gate.admit(mention('u3', '3'));
     const second = gate.admit(mention('u4', '4'));
     await gate.admit(mention('u1', '1+'));
+    await settle();
     expect(gate.queuedTurns(SESSION)).toBe(2);
-    advance(1_500);
+    await advance(1_500);
     const run1 = await expectRun(first);
+    await settle();
     expect(run1.participants.map((p) => [p.senderId, p.texts.length])).toEqual([['u1', 2], ['u2', 1], ['u3', 1]]);
+    await settle();
     expect(await isSettled(second)).toBe(false);
     run1.release();
     const run2 = await expectRun(second);
+    await settle();
     expect(run2.participants.map((p) => p.senderId)).toEqual(['u4']);
+    await settle();
     expect(run2.text).toBe('4');
     run2.release();
   });
@@ -373,8 +478,9 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const { gate, advance } = createMergeGate();
     const carrier = gate.admit(mention('alice', 'a'));
     const media = gate.admit(message('bob', '[图片]', false));
-    advance(1_500);
+    await advance(1_500);
     const run = await expectRun(carrier);
+    await settle();
     expect(await isSettled(media)).toBe(false);
     run.release();
     (await expectRun(media)).release();
@@ -390,7 +496,7 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const { gate, advance } = createMergeGate({ queueTtlMs: 5_000 });
     const running = await expectRun(gate.admit(message('owner', 'x')));
     const carrier = gate.admit(mention('alice', 'a'));
-    advance(6_000);
+    await advance(6_000);
     running.release();
     await expect(carrier).resolves.toEqual({ kind: 'rejected', reason: 'expired' });
   });
@@ -398,15 +504,18 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
   it('drops only the stopping sender from a waiting window', async () => {
     const { gate, advance } = createMergeGate();
     const carrier = gate.admit(mention('alice', 'a'));
-    advance(1_500);
+    await advance(1_500);
     const run = await expectRun(carrier);
     const next = gate.admit(mention('alice', 'again'));
     await gate.admit(mention('bob', 'b'));
-    expect(gate.stop(SESSION, 'alice', false)).toBe('stopped');
+    await settle();
+    expect(await gate.stop(SESSION, 'alice', false)).toBe('stopped');
     run.release();
-    advance(1_500);
+    await advance(1_500);
     const after = await expectRun(next);
+    await settle();
     expect(after.participants.map((p) => p.senderId)).toEqual(['bob']);
+    await settle();
     expect(after.text).toBe('b');
     after.release();
   });
@@ -414,10 +523,11 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
   it('rejects a window when every sender in it stopped', async () => {
     const { gate, advance } = createMergeGate();
     const carrier = gate.admit(mention('alice', 'a'));
-    advance(1_500);
+    await advance(1_500);
     const run = await expectRun(carrier);
     const next = gate.admit(mention('alice', 'again'));
-    expect(gate.stop(SESSION, 'alice', false)).toBe('stopped');
+    await settle();
+    expect(await gate.stop(SESSION, 'alice', false)).toBe('stopped');
     await expect(next).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
     run.release();
   });
@@ -428,8 +538,11 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const second = gate.admit(mention('bob', 'b'));
     first.release();
     const run = await expectRun(second);
+    await settle();
     expect(run.text).toBe('b');
+    await settle();
     expect(run.facts.mergeWindow).toBeUndefined();
+    await settle();
     expect(run.participants).toEqual([{ senderId: 'bob', texts: ['b'] }]);
     run.release();
   });
@@ -439,8 +552,9 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const carrier = gate.admit(mention('alice', 'a', { messageId: 'm1' }));
     await gate.admit(mention('bob', 'b'));
     await gate.admit(mention('alice', 'a2', { messageId: 'm3' }));
-    advance(1_500);
+    await advance(1_500);
     const run = await expectRun(carrier);
+    await settle();
     expect(run.participants).toEqual([
       { senderId: 'alice', texts: ['a', 'a2'], messageIds: ['m1', 'm3'] },
       { senderId: 'bob', texts: ['b'] },
@@ -457,9 +571,11 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     await expect(gate.admit(mention('bob', 'b', { access: bob }))).resolves.toEqual({ kind: 'merged' });
     // A burst keeps the access of the sender's first message.
     await expect(gate.admit(mention('bob', 'b2', { access: access('bob') }))).resolves.toEqual({ kind: 'merged' });
-    advance(1_500);
+    await advance(1_500);
     const run = await expectRun(carrier);
+    await settle();
     expect(run.participants.map((p) => p.access)).toEqual([alice, bob]);
+    await settle();
     expect(run.participants[1]!.access).toBe(bob);
     run.release();
   });
@@ -469,16 +585,17 @@ describe('TurnAdmissionGate merge window (ADR 0038 §1)', () => {
     const carrier = gate.admit(mention('alice', 'a'));
     gate.dispose();
     await expect(carrier).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
-    advance(10_000);
+    await advance(10_000);
+    await settle();
     expect(gate.queuedTurns(SESSION)).toBe(0);
   });
 });
 
-describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
+describe('HostMailbox admission stale reply (ADR 0038 §4)', () => {
   function createStaleGate() {
     let clock = 0;
     let timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
-    const gate = new TurnAdmissionGate({
+    const gate = new Gate({
       maxQueuedTurns: 5,
       queueTtlMs: 180_000,
       supersedeSameSender: true,
@@ -490,7 +607,8 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
         return () => { timer.cancelled = true; };
       },
     });
-    const advance = (ms: number) => {
+    const advance = async (ms: number) => {
+      await settle();
       const until = clock + ms;
       for (;;) {
         const due = timers.filter((t) => !t.cancelled && t.at <= until).sort((a, b) => a.at - b.at)[0];
@@ -501,6 +619,7 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
       }
       clock = until;
       timers = timers.filter((t) => !t.cancelled);
+      await settle();
     };
     return { gate, advance };
   }
@@ -509,10 +628,10 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     return { sessionKey: SESSION, senderId, text, plainText: true, mergeable: true, ...extra };
   }
 
-  async function startMerged(gate: TurnAdmissionGate, advance: (ms: number) => void): Promise<RunAdmission> {
+  async function startMerged(gate: Gate, advance: (ms: number) => Promise<void>): Promise<RunAdmission> {
     const carrier = gate.admit(mention('alice', 'a1', { messageId: 'm1' }));
     await gate.admit(mention('bob', 'b1', { messageId: 'm2' }));
-    advance(1_500);
+    await advance(1_500);
     return expectRun(carrier);
   }
 
@@ -521,6 +640,7 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     const run = await startMerged(gate, advance);
     // A new sender queues behind, but does not make this reply stale.
     void gate.admit(mention('carol', 'c1'));
+    await settle();
     expect(run.staleCheck()).toEqual({ kind: 'fresh' });
     run.release();
   });
@@ -529,12 +649,15 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     const { gate, advance } = createStaleGate();
     const run = await startMerged(gate, advance);
     const followUp = gate.admit(mention('alice', 'a2', { messageId: 'm3' }));
+    await settle();
     expect(run.staleCheck()).toEqual({ kind: 'discard', senders: ['alice'] });
     // Later sends of the same turn are dropped as well.
+    await settle();
     expect(run.staleCheck()).toEqual({ kind: 'discard', senders: ['alice'] });
     run.release();
-    advance(1_500);
+    await advance(1_500);
     const next = await expectRun(followUp);
+    await settle();
     expect(next.participants).toEqual([
       { senderId: 'alice', texts: ['a1', 'a2'], messageIds: ['m1', 'm3'] },
       { senderId: 'bob', texts: ['b1'], messageIds: ['m2'] },
@@ -546,17 +669,20 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     const { gate, advance } = createStaleGate();
     const run = await startMerged(gate, advance);
     const followUp = gate.admit(mention('alice', 'a2'));
+    await settle();
     expect(run.staleCheck().kind).toBe('discard');
     run.release();
-    advance(1_500);
+    await advance(1_500);
     const second = await expectRun(followUp);
     const again = gate.admit(mention('bob', 'b2'));
+    await settle();
     expect(second.staleCheck()).toEqual({ kind: 'send', senders: ['bob'], reason: 'starvation' });
     second.release();
-    advance(1_500);
+    await advance(1_500);
     const third = await expectRun(again);
     // The guard is spent once the senders were answered: a new chain may be dropped again.
     void gate.admit(mention('bob', 'b3'));
+    await settle();
     expect(third.staleCheck().kind).toBe('discard');
     third.release();
   });
@@ -566,6 +692,7 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     const run = await startMerged(gate, advance);
     run.markActed();
     void gate.admit(mention('bob', 'b2'));
+    await settle();
     expect(run.staleCheck()).toEqual({ kind: 'send', senders: ['bob'], reason: 'acted' });
     run.release();
   });
@@ -575,6 +702,7 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     const run = await startMerged(gate, advance);
     run.markDelivered();
     void gate.admit(mention('alice', 'a2'));
+    await settle();
     expect(run.staleCheck()).toEqual({ kind: 'fresh' });
     run.release();
   });
@@ -583,8 +711,10 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     const { gate, advance } = createStaleGate();
     const run = await startMerged(gate, advance);
     const followUp = gate.admit(mention('alice', 'a2'));
-    expect(gate.stop(SESSION, 'alice', false)).toBe('stopped');
+    await settle();
+    expect(await gate.stop(SESSION, 'alice', false)).toBe('stopped');
     await expect(followUp).resolves.toEqual({ kind: 'rejected', reason: 'stopped' });
+    await settle();
     expect(run.staleCheck()).toEqual({ kind: 'fresh' });
     run.release();
   });
@@ -592,13 +722,15 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
   it('applies to an ordinary turn whose sender follows up into a window', async () => {
     const { gate, advance } = createStaleGate();
     const carrier = gate.admit(mention('alice', 'a1'));
-    advance(1_500);
+    await advance(1_500);
     const run = await expectRun(carrier);
     const followUp = gate.admit(mention('alice', 'a2'));
+    await settle();
     expect(run.staleCheck().kind).toBe('discard');
     run.release();
-    advance(1_500);
+    await advance(1_500);
     const next = await expectRun(followUp);
+    await settle();
     expect(next.text).toBe('a1\na2');
     next.release();
   });
@@ -607,18 +739,19 @@ describe('TurnAdmissionGate stale reply (ADR 0038 §4)', () => {
     const { gate } = createGate();
     const run = await expectRun(gate.admit(message('alice', 'a1')));
     void gate.admit(message('bob', 'b1'));
+    await settle();
     expect(run.staleCheck()).toEqual({ kind: 'fresh' });
     run.release();
   });
 });
 
-describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
+describe('HostMailbox admission danmaku window (ADR 0038 §5)', () => {
   const ROOM = 'bilibili:live:room:1';
 
-  function createLiveGate(overrides: Partial<ConstructorParameters<typeof TurnAdmissionGate>[0]> = {}) {
+  function createLiveGate(overrides: Partial<GateOptions> = {}) {
     let clock = 0;
     let timers: Array<{ at: number; run: () => void; cancelled: boolean }> = [];
-    const gate = new TurnAdmissionGate({
+    const gate = new Gate({
       maxQueuedTurns: 5,
       queueTtlMs: 180_000,
       supersedeSameSender: true,
@@ -632,7 +765,8 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
       },
       ...overrides,
     });
-    const advance = (ms: number) => {
+    const advance = async (ms: number) => {
+      await settle();
       const until = clock + ms;
       for (;;) {
         const due = timers.filter((t) => !t.cancelled && t.at <= until).sort((a, b) => a.at - b.at)[0];
@@ -643,6 +777,7 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
       }
       clock = until;
       timers = timers.filter((t) => !t.cancelled);
+      await settle();
     };
     return { gate, advance };
   }
@@ -656,15 +791,20 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
     const carrier = gate.admit(danmaku('v0', '主播好'));
     const others: Promise<TurnAdmission>[] = [];
     for (let index = 1; index < 50; index += 1) {
-      advance(200);
+      await advance(200);
       others.push(gate.admit(danmaku(`v${index % 20}`, `弹幕${index}`)));
     }
+    await settle();
     for (const other of others) expect((await other).kind).toBe('merged');
+    await settle();
     expect(await isSettled(carrier)).toBe(false);
-    advance(10_000 - 49 * 200);
+    await advance(10_000 - 49 * 200);
     const run = await expectRun(carrier);
+    await settle();
     expect(run.facts.liveWindow).toEqual({ candidates: 50, kept: 50, senders: 20, waitedMs: 10_000 });
+    await settle();
     expect(run.facts.mergeWindow).toBeUndefined();
+    await settle();
     expect(run.participants).toHaveLength(20);
     run.release();
   });
@@ -673,10 +813,12 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
     const { gate, advance } = createLiveGate();
     const carrier = gate.admit(danmaku('v0', 'a'));
     for (let index = 1; index <= 8; index += 1) await gate.admit(danmaku(`v${index}`, 'x'));
-    advance(1_500);
+    await advance(1_500);
+    await settle();
     expect(await isSettled(carrier)).toBe(false);
-    advance(8_500);
+    await advance(8_500);
     const run = await expectRun(carrier);
+    await settle();
     expect(run.participants).toHaveLength(9);
     run.release();
   });
@@ -687,10 +829,13 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
     for (let index = 1; index < LIVE_WINDOW_MAX_MESSAGES + 20; index += 1) {
       await gate.admit(danmaku(`v${index}`, `d${index}`, { messageId: `d${index}` }));
     }
-    advance(10_000);
+    await advance(10_000);
     const run = await expectRun(carrier);
+    await settle();
     expect(run.facts.liveWindow).toMatchObject({ candidates: LIVE_WINDOW_MAX_MESSAGES + 20, kept: LIVE_WINDOW_MAX_MESSAGES });
+    await settle();
     expect(run.participants.some((p) => p.senderId === 'v0')).toBe(false);
+    await settle();
     expect(run.participants.at(-1)).toMatchObject({ senderId: `v${LIVE_WINDOW_MAX_MESSAGES + 19}`, messageIds: [`d${LIVE_WINDOW_MAX_MESSAGES + 19}`] });
     run.release();
   });
@@ -698,17 +843,19 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
   it('collects danmaku while a turn runs and waits minIntervalMs after it ended', async () => {
     const { gate, advance } = createLiveGate();
     const first = gate.admit(danmaku('v1', 'q1'));
-    advance(10_000);
+    await advance(10_000);
     const run = await expectRun(first);
 
     const next = gate.admit(danmaku('v2', 'q2'));
-    advance(12_000);
+    await advance(12_000);
     run.release();
     // Window age is already past windowMs, but the previous reply ended just now.
-    advance(14_999);
+    await advance(14_999);
+    await settle();
     expect(await isSettled(next)).toBe(false);
-    advance(1);
+    await advance(1);
     const second = await expectRun(next);
+    await settle();
     expect(second.facts.liveWindow?.candidates).toBe(1);
     second.release();
   });
@@ -716,11 +863,14 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
   it('never marks a danmaku turn stale or supersedes it', async () => {
     const { gate, advance } = createLiveGate();
     const first = gate.admit(danmaku('v1', 'q1'));
-    advance(10_000);
+    await advance(10_000);
     const run = await expectRun(first);
     void gate.admit(danmaku('v2', 'opens the next window'));
+    await settle();
     expect((await gate.admit(danmaku('v1', 'q2'))).kind).toBe('merged');
+    await settle();
     expect(run.signal.aborted).toBe(false);
+    await settle();
     expect(run.staleCheck()).toEqual({ kind: 'fresh' });
     run.release();
   });
@@ -728,13 +878,7 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
   it('leaves non-live messages to the ordinary and merge paths', async () => {
     const { gate } = createLiveGate();
     const run = await expectRun(gate.admit({ sessionKey: ROOM, senderId: 'streamer', text: '我来了', plainText: true }));
-    expect(run.facts.liveWindow).toBeUndefined();
-    run.release();
-  });
-
-  it('ignores `live` when no danmaku window is configured', async () => {
-    const { gate } = createLiveGate({ live: undefined });
-    const run = await expectRun(gate.admit(danmaku('v1', 'q1')));
+    await settle();
     expect(run.facts.liveWindow).toBeUndefined();
     run.release();
   });
@@ -742,12 +886,13 @@ describe('TurnAdmissionGate danmaku window (ADR 0038 §5)', () => {
   it('forgets a room\'s last reply once minIntervalMs passed', async () => {
     const { gate, advance } = createLiveGate();
     const first = gate.admit(danmaku('v1', 'q1'));
-    advance(10_000);
+    await advance(10_000);
     (await expectRun(first)).release();
-    advance(15_000);
+    await advance(15_000);
     const next = gate.admit(danmaku('v2', 'q2'));
-    advance(10_000);
+    await advance(10_000);
     const run = await expectRun(next);
+    await settle();
     expect(run.facts.liveWindow?.waitedMs).toBe(10_000);
     run.release();
   });

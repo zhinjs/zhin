@@ -15,13 +15,14 @@ import {
   liveReplyAuditPayload,
   mergedReplyAuditPayload,
   narrowMergedAccess,
-  normalizeInboundQueueConfig,
+  normalizeMailboxConfig,
   readOnlyCapabilities,
   withMergeMembers,
-  TurnAdmissionGate,
   type TurnAdmission,
   type TurnLiveDanmaku,
 } from '../../turn/index.js';
+import { HostMailbox } from '../../collaboration/host-mailbox.js';
+import { runInMailTurn } from '../../collaboration/mail-turn-context.js';
 import {
   CapabilityIngress,
   AgentRuntime,
@@ -197,8 +198,8 @@ export interface AgentTurnIngressRouteOptions {
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
 export class AgentTurnIngressRoute implements IngressRoute {
 
-  #admissionGate: TurnAdmissionGate | undefined;
-  /** Whether this generation's gate has the ADR 0038 group merge window. */
+  #hostMailbox: HostMailbox | undefined;
+  /** Whether this generation's mailbox has the ADR 0038 group merge window. */
   #mergeWindowEnabled = false;
   #ambient: AmbientEngagement | null | undefined;
   private readonly workroomPort: AgentWorkroomPort;
@@ -259,6 +260,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       agent: options.agent,
       memberLifecycle: this.#memberLifecycle,
       onSpoke,
+      mailbox: () => this.#mailbox(),
     });
     this.#sessionEvents = createSessionEventDispatcher({
       im: options.im,
@@ -371,27 +373,24 @@ export class AgentTurnIngressRoute implements IngressRoute {
     this.#reactionPacer.clear();
     this.#sceneEvents.dispose();
     this.#sceneFactRefresher.dispose();
+    this.#hostMailbox?.dispose();
+    this.#hostMailbox = undefined;
   }
 
   /**
-   * Same-session admission (#725). Created on first use so it reads the
-   * configuration of this generation; one gate per route generation.
+   * The host Mailbox (ADR 0048 H3): every Agent turn of this route is a Mail
+   * turn of its long-lived harness (D3). Same-session admission (#725), the
+   * ADR 0038 merge / danmaku windows and supersede are its inbox policy.
+   * Created on first use so it reads the configuration of this generation;
+   * one mailbox per route generation, closed with it.
    */
-  #gate(): TurnAdmissionGate {
-    if (!this.#admissionGate) {
-      const queue = normalizeInboundQueueConfig(this.options.agent.service.getAgentConfig()?.inboundQueue);
-      this.#mergeWindowEnabled = queue.merge.enabled;
-      this.#admissionGate = new TurnAdmissionGate({
-        maxQueuedTurns: queue.maxQueuedTurns,
-        queueTtlMs: queue.ttlMs,
-        supersedeSameSender: queue.groupMode === 'supersede',
-        // ADR 0038 §1: group merge window (opt-in in slice A).
-        ...(queue.merge.enabled ? { merge: queue.merge } : {}),
-        // ADR 0038 §5: only conversations of a `liveDanmaku` adapter ask for it.
-        live: { windowMs: queue.live.windowMs, minIntervalMs: queue.live.minIntervalMs },
-      });
+  #mailbox(): HostMailbox {
+    if (!this.#hostMailbox) {
+      const config = normalizeMailboxConfig(this.options.agent.service.getAgentConfig()?.mailbox);
+      this.#mergeWindowEnabled = config.merge.enabled;
+      this.#hostMailbox = new HostMailbox({ config });
     }
-    return this.#admissionGate;
+    return this.#hostMailbox;
   }
 
   /** Pacing belongs to this route; model execution belongs to each held operation. */
@@ -608,12 +607,15 @@ export class AgentTurnIngressRoute implements IngressRoute {
     } else if (ambientKey) {
       this.#ambientEngagement()?.noteSpoke(ambientKey);
     }
-    // #725: ordinary IM turns go through the admission gate. Workroom turns
-    // and products that resolve their own turn intent keep their semantics.
+    // #725 / ADR 0048 H3: every Agent turn is a Mail turn of the host Mailbox.
+    // Ordinary IM turns share the session lane (queue / supersede / merge /
+    // danmaku). Workroom turns and products that resolve their own turn intent
+    // keep their semantics on a lane of their own (`gate` undefined).
     const intentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
+    const mailbox = this.#mailbox();
     const gate = workroomAgentTurn || intentResolver || message.metadata?.turnIntent !== undefined
       ? undefined
-      : this.#gate();
+      : mailbox;
     const plainText = isPlainTextRuntimeMessage(message);
     const mergeable = gate !== undefined && !liveRoom && isMergeableGroupTurn({
       message,
@@ -659,13 +661,13 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const senderId = turnAccess.principal.subjectId;
     if (gate && isCancelIntent(matched.content)) {
       let stoppedKey = sessionKey;
-      let stopped = gate.stop(sessionKey, senderId, senderRoles.isMaster);
+      let stopped = await gate.stop(sessionKey, senderId, senderRoles.isMaster, binding.name);
       // A stop word is never mergeable, so it routes to the personal Session; a
       // merged group turn of the same scene runs in the scene Session (R0-fix).
       if (stopped !== 'stopped' && this.#mergeWindowEnabled && !liveRoom && !ambient
         && turnAccess.origin.kind === 'im' && turnAccess.origin.scope !== 'private') {
         const sceneKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
-        if (sceneKey !== sessionKey && gate.stop(sceneKey, senderId, senderRoles.isMaster) === 'stopped') {
+        if (sceneKey !== sessionKey && (await gate.stop(sceneKey, senderId, senderRoles.isMaster, binding.name)) === 'stopped') {
           stopped = 'stopped';
           stoppedKey = sceneKey;
         }
@@ -692,6 +694,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
     /** ADR 0038 §4: the stale verdict is audited once per turn. */
     let staleAudited = false;
     const staleReplyBlocked = (): boolean => {
+      // A superseded / stopped turn never sends its answer (ADR 0048 H3).
+      if (admission?.signal.aborted) return true;
       const verdict = admission?.staleCheck();
       if (!verdict || verdict.kind === 'fresh') return false;
       if (!staleAudited) {
@@ -707,57 +711,59 @@ export class AgentTurnIngressRoute implements IngressRoute {
         options.transcribeUrl,
       );
       let inbound = preprocessed;
-      if (gate) {
-        const admitted = await gate.admit({
-          sessionKey,
-          senderId,
-          text: preprocessed.text,
-          plainText,
-          // Masters keep their own turn (ADR 0038 §0.3), in a live room too.
-          live: liveRoom && !senderRoles.isMaster,
-          mergeable,
-          ...(message.sender?.name ? { senderName: message.sender.name } : {}),
-          ...(message.message?.id ? { messageId: message.message.id } : {}),
-          access: turnAccess,
-          onWindowJoined: (window) => audit({
-            kind: 'inbound_wake',
-            outcome: 'defer',
-            reasonCode: 'merge_window_joined',
-            payload: { source: 'message', senders: window.senders.length, messages: window.messages },
-          }),
-        });
-        if (admitted.kind === 'merged') {
-          logger.debug(formatCompact({ op: 'agent_host_turn_merged', sessionKey }));
-          return true;
-        }
-        if (admitted.kind === 'rejected') {
-          logger.info(formatCompact({ op: 'agent_host_turn_rejected', sessionKey, reason: admitted.reason }));
-          const notice = admissionRejectionNotice(admitted.reason, message.locale);
-          if (notice) await reply(notice);
-          return true;
-        }
-        admission = admitted;
-        inbound = { ...preprocessed, text: admitted.text };
-        const window = admitted.facts.mergeWindow;
-        if (window) {
-          audit({
-            kind: 'inbound_wake',
-            outcome: 'allow',
-            reasonCode: 'merge_window_flushed',
-            payload: {
-              source: 'message',
-              senders: window.senders,
-              messages: window.messages,
-              waitedMs: window.waitedMs,
-            },
-          });
-        }
+      const admitted = await mailbox.admit({
+        // Turns outside the shared session lane get a lane of their own.
+        sessionKey: gate ? sessionKey : `turn:${turnId}`,
+        senderId,
+        entry: binding.name,
+        isMaster: senderRoles.isMaster,
+        text: preprocessed.text,
+        plainText,
+        // Masters keep their own turn (ADR 0038 §0.3), in a live room too.
+        live: gate !== undefined && liveRoom && !senderRoles.isMaster,
+        mergeable,
+        ...(message.sender?.name ? { senderName: message.sender.name } : {}),
+        ...(message.message?.id ? { messageId: message.message.id } : {}),
+        access: turnAccess,
+        onWindowJoined: (window) => audit({
+          kind: 'inbound_wake',
+          outcome: 'defer',
+          reasonCode: 'merge_window_joined',
+          payload: { source: 'message', senders: window.senders.length, messages: window.messages },
+        }),
+      });
+      if (admitted.kind === 'merged') {
+        logger.debug(formatCompact({ op: 'agent_host_turn_merged', sessionKey }));
+        return true;
       }
-      const { outcome, capabilities, routed } = await withTriggerTimeout(async (timeoutSignal) => {
+      if (admitted.kind === 'rejected') {
+        logger.info(formatCompact({ op: 'agent_host_turn_rejected', sessionKey, reason: admitted.reason }));
+        const notice = admissionRejectionNotice(admitted.reason, message.locale);
+        if (notice) await reply(notice);
+        return true;
+      }
+      admission = admitted;
+      if (gate) inbound = { ...preprocessed, text: admitted.text };
+      const window = admitted.facts.mergeWindow;
+      if (window) {
+        audit({
+          kind: 'inbound_wake',
+          outcome: 'allow',
+          reasonCode: 'merge_window_flushed',
+          payload: {
+            source: 'message',
+            senders: window.senders,
+            messages: window.messages,
+            waitedMs: window.waitedMs,
+          },
+        });
+      }
+      const mailTurn = admitted;
+      const { outcome, capabilities, routed } = await runInMailTurn({ mailbox, mail: mailTurn.mail, batch: mailTurn.batch }, () => withTriggerTimeout(async (timeoutSignal) => {
         const signal = AbortSignal.any([
           timeoutSignal,
           ...(operationSignal ? [operationSignal] : []),
-          ...(admission ? [admission.signal] : []),
+          mailTurn.signal,
           ...(lease.stopSignal ? [lease.stopSignal] : []),
         ]);
         const source = readOperationSession(message);
@@ -781,7 +787,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         const liveWindow = admission?.facts.liveWindow;
         const liveDanmaku: TurnLiveDanmaku | undefined = liveWindow && admission
           ? Object.freeze({
-              mode: normalizeInboundQueueConfig(service.getAgentConfig()?.inboundQueue).live.mode,
+              mode: mailbox.config.live.mode,
               candidates: liveWindow.candidates,
               senders: mergedTurnSenders(admission.participants),
             })
@@ -946,12 +952,12 @@ export class AgentTurnIngressRoute implements IngressRoute {
             } : ambient ? {
               trustedMetadata: Object.freeze({ [AMBIENT_ENGAGEMENT_METADATA_KEY]: 'ambient' }),
             } : {}),
-            // The gate already serialized (and, if needed, superseded) this
+            // The mailbox already serialized (and, if needed, superseded) this
             // session, so the coordinator only has to queue behind it.
-            intent: admission ? Object.freeze({ kind: 'new' as const }) : await resolveProductTurnIntent(
+            intent: gate ? Object.freeze({ kind: 'new' as const }) : await resolveProductTurnIntent(
               message,
               senderRoles,
-              service.getAgentConfig()?.inboundQueue?.groupMode,
+              service.getAgentConfig()?.mailbox?.groupMode,
               intentResolver,
             ),
             resolveReference: (reference, limits, referenceSignal) =>
@@ -1140,7 +1146,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           } finally { replyOperation?.release(); }
         }));
         return { outcome, capabilities, routed };
-      }, resolveTriggerTimeoutMs(trigger));
+      }, resolveTriggerTimeoutMs(trigger)));
       auditModelRun(audit, outcome, { ...modelPayload(), agent: routed.agent?.name ?? null });
       const elements = completedOutput(outcome);
       const outputText = flattenOutputElements(elements).trim();
