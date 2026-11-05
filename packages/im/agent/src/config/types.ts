@@ -1,3 +1,9 @@
+import type { VenueDefinition } from '@zhin.js/core';
+import type { AgentStartupConfig } from './agent-startup.js';
+
+export type VenueConfig = VenueDefinition;
+export type AIConfig = AgentStartupConfig;
+
 /**
  * @deprecated Inbound routing by `match` never took effect (IM inbound always
  * uses the `zhin` binding). Accepted with a warning; removed in the next minor.

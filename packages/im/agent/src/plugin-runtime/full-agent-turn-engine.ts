@@ -51,6 +51,7 @@ import { resolveTurnTrustLevel } from '../security/trust-level.js';
 import { usageSubjectFromTurn } from '../security/usage-subject.js';
 import { getLogger } from '@zhin.js/logger';
 import { isLocale } from '@zhin.js/plugin-runtime';
+import { currentMailTurn } from '../collaboration/mail-turn-context.js';
 import { startTurnCollaboration } from '../collaboration/turn-collaboration.js';
 import type { ActorModelSelection } from '../collaboration/contracts.js';
 import { recordRelationTurn } from '../user-relation-turn.js';
@@ -159,12 +160,29 @@ async function* runInteractiveTurn(
   const actorModel: { current?: ActorModelSelection } = {};
   // ADR 0048: the live turn is the root actor of an engagement whenever other agents exist.
   const provenance = new TurnProvenance();
+  const rawEntryAgentName = context.selection.agent ?? context.selection.binding.name;
+  const entryDescriptor = context.capabilities.agents.find(
+    (agent) => agent.name === rawEntryAgentName || agent.qualifiedName === rawEntryAgentName,
+  );
+  const entryAgentName = entryDescriptor?.name ?? rawEntryAgentName;
+  const entryDisallowed = new Set(entryDescriptor?.disallowedTools ?? []);
+  const entryDeclared = entryDescriptor?.toolNames ? new Set(entryDescriptor.toolNames) : undefined;
+  const entryToolCapabilities = entryDescriptor
+    ? Object.freeze(
+        context.toolCapabilities.filter(
+          (tool) =>
+            (!entryDeclared || entryDeclared.has(tool.name) || entryDeclared.has(tool.qualifiedName))
+            && !entryDisallowed.has(tool.name)
+            && !entryDisallowed.has(tool.qualifiedName),
+        ),
+      )
+    : context.toolCapabilities;
   const collaboration = await startTurnCollaboration({
     host,
     core: options.core,
     turn: context.turn,
     capabilities: { ...context.capabilities, tools: context.toolCapabilities },
-    entry: context.selection.binding.name,
+    entry: entryAgentName,
     resolveModel: () => actorModel.current,
     loopHooks: options.loopHooks,
     bootstrapContext: options.bootstrapContext,
@@ -176,8 +194,8 @@ async function* runInteractiveTurn(
   const projected = {
     ...context.capabilities,
     tools: collaboration
-      ? Object.freeze([...context.toolCapabilities, ...collaboration.tools])
-      : context.toolCapabilities,
+      ? Object.freeze([...entryToolCapabilities, ...collaboration.tools])
+      : entryToolCapabilities,
   };
   const primed = await primeSkillsForIntent({
     capabilities: projected,
@@ -255,8 +273,11 @@ async function* runInteractiveTurn(
   if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
     provenance.record({ kind: 'media_perception' });
   }
+  const effectivePersona = entryDescriptor?.instructions?.trim()
+    ? `${prompt.personaEnhanced}\n\n${entryDescriptor.instructions.trim()}`
+    : prompt.personaEnhanced;
   const leakInspector = new OutboundLeakInspector({
-    promptTexts: [prompt.personaEnhanced, options.bootstrapContext ?? ''],
+    promptTexts: [effectivePersona, options.bootstrapContext ?? ''],
   });
   const reply = guardedReply(host, context.turn, leakInspector);
   const messageAliases = new MessageAliasTable();
@@ -400,7 +421,7 @@ async function* runInteractiveTurn(
       toolEventSource: 'authority',
       loopHooks: options.loopHooks,
       promptRuntime,
-      personaEnhanced: prompt.personaEnhanced,
+      personaEnhanced: effectivePersona,
       modelId: prompt.modelId,
       modelCandidates: prompt.modelCandidates,
       initialMessages,
@@ -426,9 +447,24 @@ async function* runInteractiveTurn(
     thinkingPreview: host.config.thinkingPreview === true,
     thinkingMaxLength: host.config.thinkingPreviewMaxLength ?? 200,
   }) : undefined;
+  const activeMailTurn = currentMailTurn();
+  const onTurnEvent = (event: TurnEvent): void => {
+    projectActivity?.(event);
+    if (activeMailTurn && (event.type === 'tool_result' || event.type === 'tool_denied' || event.type === 'tool_failed')) {
+      void activeMailTurn.mailbox
+        .recordToolCalled({
+          engagementId: activeMailTurn.mail.engagementId,
+          actor: entryAgentName,
+          mailId: activeMailTurn.mail.id,
+          tool: event.toolName,
+          ok: event.type === 'tool_result',
+        })
+        .catch(() => undefined);
+    }
+  };
   let projectionOwnsReply = false;
   try {
-  const completion = yield* collectPromptExecutions(stream, executions, projectActivity);
+  const completion = yield* collectPromptExecutions(stream, executions, onTurnEvent);
   if (phaseFacts.size && completion.terminal.type === 'turn_end') {
     const output = [...phaseFacts.values()].flatMap(facts => facts.confirmedOutput);
     completion.terminal = { ...completion.terminal, output };

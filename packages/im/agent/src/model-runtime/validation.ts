@@ -17,7 +17,15 @@ import { MAILBOX_MIGRATION_HINT, validateMailboxConfig, type MailboxConfig } fro
 /** Startup validation only: model resources now require an explicit runtime import. */
 export function validateModelRuntimeConfig(input: unknown, _hostOwnerId: string): string[] {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return ['Invalid AI configuration'];
-  const fields = ['plan', 'providers', 'modelCatalog', 'modelPolicy', 'defaultProvider', 'decisions', 'imageGeneration', 'routes', 'pipeline', 'workrooms', 'remoteAgents', 'remote_mesh', 'remoteMesh']
+  if (
+    Object.prototype.hasOwnProperty.call(input, 'workroom')
+    || Object.prototype.hasOwnProperty.call(input, 'workrooms')
+  ) {
+    throw new Error(
+      'Config "ai.workroom" / "ai.workrooms" has been removed in ADR 0048. Migrate multi-bot rooms to "ai.venues" and agent collaboration to "agents/<name>/agent.json" collaboration.',
+    );
+  }
+  const fields = ['plan', 'providers', 'modelCatalog', 'modelPolicy', 'defaultProvider', 'decisions', 'imageGeneration', 'routes', 'pipeline', 'remoteAgents', 'remote_mesh', 'remoteMesh']
     .filter(key => Object.prototype.hasOwnProperty.call(input, key));
   const raw: Record<string, unknown> = { ...input };
   if (raw.agents && typeof raw.agents === 'object' && !Array.isArray(raw.agents)) {
@@ -34,11 +42,6 @@ export function validateModelRuntimeConfig(input: unknown, _hostOwnerId: string)
     if ('modelHarness' in raw.agent && raw.agent.modelHarness && typeof raw.agent.modelHarness === 'object') {
       for (const key of ['providerPatterns', 'models']) if (Object.hasOwn(raw.agent.modelHarness, key)) fields.push(`agent.modelHarness.${key}`);
     }
-  }
-  const workroom = raw.workroom;
-  if (workroom && typeof workroom === 'object' && 'disclosure' in workroom) {
-    const disclosure = workroom.disclosure;
-    if (disclosure && typeof disclosure === 'object' && 'modelProviders' in disclosure) fields.push('workroom.disclosure.modelProviders');
   }
   if (raw.trigger && typeof raw.trigger === 'object' && 'ambient' in raw.trigger) {
     const ambient = raw.trigger.ambient;

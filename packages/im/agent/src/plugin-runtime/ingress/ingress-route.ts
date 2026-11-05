@@ -1,4 +1,13 @@
-import { readOperationSession } from '@zhin.js/core';
+import {
+  readOperationSession,
+  routeVenueMessage,
+  venueProjectorToken,
+  venueRegistryToken,
+  type VenueDefinition,
+  type VenueProjector,
+  type VenueRegistry,
+} from '@zhin.js/core';
+import { agentFeatureId, isAgentIndex } from '@zhin.js/agent-feature';
 import { ingressMessages as t } from './ingress-messages.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -67,7 +76,6 @@ import {
   resolveTriggerTimeoutMs,
   routeSpecialistAgent,
   withTriggerTimeout,
-  workroomOrchestratorSessionKey,
 } from './trigger.js';
 import {
   adapterLiveEndpointId,
@@ -90,7 +98,6 @@ import {
   runtimePersonalSessionAddress,
   runtimeSceneTaskSessionKey,
 } from './request.js';
-import { NO_WORKROOM_PORT, type AgentWorkroomPort } from './turn-continuation-port.js';
 import { AMBIENT_ENGAGEMENT_METADATA_KEY } from '../../context/index.js';
 import { AmbientEngagement } from './ambient-engagement.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
@@ -187,8 +194,10 @@ export interface AgentTurnIngressRouteOptions {
   readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointKey: string) => readonly string[];
   readonly ingress: CapabilityIngress;
   readonly agent: AgentIngressFoundationPort;
-  /** Absent when the optional Workroom package is not installed. */
-  readonly workroom?: AgentWorkroomPort;
+  /** Optional VenueRegistry for multi-bot Venue routing (ADR 0048 H4). */
+  readonly venueRegistry?: VenueRegistry;
+  /** Optional VenueProjector for multi-bot Venue collaboration projection (ADR 0048 H4). */
+  readonly venueProjector?: VenueProjector;
   /** Process-owned Console status for 群聊插话 / 技能助手 (#970); metadata only. */
   readonly assistantStatus?: AgentAssistantStatusPort;
   /** Hard-gate IM approval channel (G6, #1013): settles `approve <id>` / `deny <id>` for approval cards. */
@@ -202,7 +211,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
   /** Whether this generation's mailbox has the ADR 0038 group merge window. */
   #mergeWindowEnabled = false;
   #ambient: AmbientEngagement | null | undefined;
-  private readonly workroomPort: AgentWorkroomPort;
   /** 状态感知（#996）：高优先社交事件独立唤醒；所有回合的 `[Scene events]` 摘要。 */
   readonly #sceneEvents: SceneEventIngress;
   /** ADR 0041 §6: background refresh of stale scene facts; cancelled with this generation. */
@@ -229,7 +237,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
   readonly #groupRuleDefaults: GroupRuleDefaults;
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {
-    this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
     options.assistantStatus?.bindAmbientConfig(() => options.agent.service.getTriggerConfig()?.ambient);
     options.assistantStatus?.bindDecisionEvents(() => options.agent.agent.getDecisionEvents?.());
     options.assistantStatus?.bindControlPlane(
@@ -408,21 +415,16 @@ export class AgentTurnIngressRoute implements IngressRoute {
   }
 
   async preRoute(
-    message: Message,
+    _message: Message,
     _lease: SnapshotLease,
     _requester: PluginId,
-    conversationSequence: number | undefined,
+    _conversationSequence: number | undefined,
   ): Promise<boolean> {
-    return await this.workroomPort.preRoute(message, conversationSequence);
+    return false;
   }
 
-  shouldRouteBeforeDispatch(message: Message): boolean {
-    return this.workroomPort.hasAgentTurn(message)
-      && resolveRuntimeAgentTrigger(
-        message,
-        this.options.agent.service.getTriggerConfig(),
-        true,
-      ) != null;
+  shouldRouteBeforeDispatch(_message: Message): boolean {
+    return false;
   }
 
   async route(
@@ -431,6 +433,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
     requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean> {
+    // ADR 0048 §3.4 invariant 7: non-human messages (self, member, peer_bot) never open a human Mail turn.
+    const messageOrigin = (message as { readonly origin?: unknown }).origin ?? message.metadata?.origin;
+    if (typeof messageOrigin === 'string' && messageOrigin !== 'human') {
+      return false;
+    }
     // Capture the actual inbound incarnation once, before async preprocessing can retire it.
     const operationSession = readOperationSession(message);
     const operationSignal = operationSession?.signal;
@@ -440,47 +447,61 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const traceRuntime = options.agent.traceRuntime;
     const binding = service.getBindingRegistry().requireZhinBinding();
     const ingress = options.ingress;
-    const workroom = this.workroomPort;
     const snapshot = lease.value;
     const trigger = service.getTriggerConfig();
-    const workroomAgentTurn = workroom.takeAgentTurn(message);
-    let matched = resolveRuntimeAgentTrigger(message, trigger, workroomAgentTurn != null);
 
     const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner, snapshot);
     const endpointTrusted = resolveTrustedForRuntimeMessage(message, options.resolveEndpointTrusted, snapshot);
     const senderRoles = resolveRuntimeSenderRoles(message, { endpointMaster: ownerId, endpointTrusted, trigger });
     const turnAccess = createRuntimeTurnAccess(message, senderRoles, undefined, undefined, conversationSequence);
-    // Unattended live reactions belong to the scene, independently of whichever
-    // participant supplied the first candidate in the window.
-    const liveRoom = !workroomAgentTurn
-      && turnAccess.origin.kind === 'im'
-      && turnAccess.origin.scope !== 'private'
-      && adapterDeclaresLiveDanmaku(message.conversation.endpoint.id as CapabilityId, snapshot);
-    let sessionKey = workroomAgentTurn
-      ? workroomOrchestratorSessionKey(workroomAgentTurn)
-      : liveRoom ? runtimeSceneTaskSessionKey(turnAccess, options.projectRoot)
-        : runtimeImSessionKey(turnAccess, options.projectRoot);
-    const workroomReplyConversation = workroomAgentTurn
-      ? await workroom.resolveOrchestratorConversation(workroomAgentTurn)
-      : undefined;
-    if (workroomAgentTurn && !workroomReplyConversation) {
-      throw new Error(`Workroom ${workroomAgentTurn.projectId} has no current Orchestrator projection binding`);
-    }
-
     // Runtime message.adapter is a CapabilityId (\0-separated); strip it and
     // use Endpoint liveName so the OutboundHost resolve() succeeds.
     const effectiveAdapter = capabilityLocalName(String(message.conversation.endpoint.id));
     const effectiveEndpoint = adapterLiveEndpointId(message);
+
+    // ADR 0048 H4: resolve Venue routing if this conversation is a configured Venue.
+    const venueRegistry = options.venueRegistry
+      ?? (snapshot.resources.get(snapshot.root)?.get(venueRegistryToken.id) as VenueRegistry | undefined);
+    const venueProjector = options.venueProjector
+      ?? (snapshot.resources.get(snapshot.root)?.get(venueProjectorToken.id) as VenueProjector | undefined);
+    const matchedVenue: VenueDefinition | undefined = turnAccess.origin.kind === 'im'
+      ? venueRegistry?.findByConversation({
+          platform: turnAccess.origin.platform,
+          sceneType: message.conversation.kind,
+          sceneId: message.conversation.id,
+        })
+      : undefined;
+    const structuredMentions = Array.isArray(message.metadata?.mentions)
+      ? (message.metadata.mentions as readonly unknown[]).filter((m): m is string => typeof m === 'string')
+      : undefined;
+    const replyToSenderId = typeof message.metadata?.replyToSenderId === 'string'
+      ? message.metadata.replyToSenderId
+      : undefined;
+    const venueRoute = matchedVenue
+      ? routeVenueMessage({
+          venue: matchedVenue,
+          text: message.content ?? '',
+          ...(structuredMentions ? { mentions: structuredMentions } : {}),
+          ...(replyToSenderId ? { replyToSenderId } : {}),
+          winningEndpointId: effectiveEndpoint,
+        })
+      : undefined;
+    const venueAddressed = venueRoute !== undefined
+      && (venueRoute.reason === 'mention' || venueRoute.reason === 'reply' || venueRoute.reason === 'pending');
+    let matched = resolveRuntimeAgentTrigger(message, trigger, venueAddressed);
+
+    // Unattended live reactions belong to the scene, independently of whichever
+    // participant supplied the first candidate in the window.
+    const liveRoom = turnAccess.origin.kind === 'im'
+      && turnAccess.origin.scope !== 'private'
+      && adapterDeclaresLiveDanmaku(message.conversation.endpoint.id as CapabilityId, snapshot);
+    let sessionKey = liveRoom
+      ? runtimeSceneTaskSessionKey(turnAccess, options.projectRoot)
+      : runtimeImSessionKey(turnAccess, options.projectRoot);
     const reply = async (
       content: SendContent,
     ): Promise<Awaited<ReturnType<Message['$reply']>>> => {
-      const receipt = workroomReplyConversation
-        ? await options.im.sendWithSnapshotLease(lease, {
-            conversation: workroomReplyConversation,
-            requester: rootPluginId(),
-            content,
-          })
-        : await message.$reply(content);
+      const receipt = await message.$reply(content);
       logger.debug(formatCompact({
         op: 'replychain_message_reply',
         status: receipt.status,
@@ -490,7 +511,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       return receipt;
     };
 
-    if (!workroomAgentTurn && turnAccess.origin.kind === 'im') {
+    if (turnAccess.origin.kind === 'im') {
       observeFloodMessage({
         im: options.im,
         enforcer: this.#groupRuleEnforcer,
@@ -510,7 +531,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
       turnAccess,
       ownerId,
       effectiveEndpoint,
-      workroomAgentTurn,
       agent: options.agent,
       groupRules: this.#groupRules,
       toolApprovalIm: options.toolApprovalIm,
@@ -526,7 +546,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     let ambient = false;
     // 决策审计（ADR 0036 切片 B）：本条入站的所有判定共享一个 turn_id；写失败不影响回合。
     const turnId = randomUUID();
-    const audit = !workroomAgentTurn && turnAccess.origin.kind === 'im'
+    const audit = turnAccess.origin.kind === 'im'
       ? createDecisionAudit(zhinAgent.getDecisionEvents?.(), decisionScopeOf({
           turnId,
           platform,
@@ -563,7 +583,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     };
     // 会话画像（#996）：先折叠会话事件与发送者；Bot 在此会话不能发言（禁言 / 全员禁言 / 宿主限制）时
     // 直接不进 AI 回合，也不跑旁听判定，不调用模型。
-    if (!workroomAgentTurn && turnAccess.origin.kind === 'im') {
+    if (turnAccess.origin.kind === 'im') {
       const blocked = await observeSessionAndCheckSpeak({
         sessions: zhinAgent.getUserProfiles?.()?.sessions,
         events: options.im.conversationEventReader,
@@ -587,7 +607,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       if (text && trigger?.enabled !== false && !hasIgnoredTriggerPrefix(text, trigger)) matched = { content: text };
     }
     if (!matched) {
-      matched = workroomAgentTurn ? null : await considerAmbientEngagement({
+      matched = await considerAmbientEngagement({
         im: options.im,
         agent: options.agent,
         ambientEngagement: this.#ambientEngagement(),
@@ -609,11 +629,12 @@ export class AgentTurnIngressRoute implements IngressRoute {
     }
     // #725 / ADR 0048 H3: every Agent turn is a Mail turn of the host Mailbox.
     // Ordinary IM turns share the session lane (queue / supersede / merge /
-    // danmaku). Workroom turns and products that resolve their own turn intent
-    // keep their semantics on a lane of their own (`gate` undefined).
+    // danmaku). Products that resolve their own turn intent keep their
+    // semantics on a lane of their own (`gate` undefined).
     const intentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
     const mailbox = this.#mailbox();
-    const gate = workroomAgentTurn || intentResolver || message.metadata?.turnIntent !== undefined
+    if (venueProjector) mailbox.setVenueProjector(venueProjector);
+    const gate = intentResolver || message.metadata?.turnIntent !== undefined
       ? undefined
       : mailbox;
     const plainText = isPlainTextRuntimeMessage(message);
@@ -639,7 +660,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
       payload: { source: 'message', scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : undefined },
     });
     // 状态感知（#996）：上次以来的社交事件（含低优先）作为本轮 ephemeral `[Scene events]`。
-    const sceneEvents = !workroomAgentTurn && turnAccess.origin.kind === 'im' && turnAccess.origin.scope !== 'private'
+    const sceneEvents = turnAccess.origin.kind === 'im' && turnAccess.origin.scope !== 'private'
       ? await this.#sceneEvents.linesFor({
         sessionKey,
         conversation: message.conversation,
@@ -652,22 +673,37 @@ export class AgentTurnIngressRoute implements IngressRoute {
       })
       : [];
 
-    if (!workroomAgentTurn && isClearCommand(matched.content)) {
+    if (isClearCommand(matched.content)) {
       await zhinAgent.archiveSession(sessionKey);
       await reply(t(message.locale, 'cleared'));
       return true;
     }
 
+    const agentProj = snapshot.projections.get(agentFeatureId);
+    const snapshotAgents = isAgentIndex(agentProj) ? agentProj.list() : [];
+    let preRoutedAgentName: string | undefined;
+    try {
+      preRoutedAgentName = routeSpecialistAgent(
+        matched.content,
+        { agents: snapshotAgents },
+        venueRoute?.member.agent,
+        binding.name,
+        turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : undefined,
+      ).agent?.name;
+    } catch {
+      preRoutedAgentName = undefined;
+    }
+    const entryActorName = preRoutedAgentName ?? venueRoute?.member.agent ?? binding.name;
     const senderId = turnAccess.principal.subjectId;
     if (gate && isCancelIntent(matched.content)) {
       let stoppedKey = sessionKey;
-      let stopped = await gate.stop(sessionKey, senderId, senderRoles.isMaster, binding.name);
+      let stopped = await gate.stop(sessionKey, senderId, senderRoles.isMaster, entryActorName);
       // A stop word is never mergeable, so it routes to the personal Session; a
       // merged group turn of the same scene runs in the scene Session (R0-fix).
       if (stopped !== 'stopped' && this.#mergeWindowEnabled && !liveRoom && !ambient
         && turnAccess.origin.kind === 'im' && turnAccess.origin.scope !== 'private') {
         const sceneKey = runtimeSceneTaskSessionKey(turnAccess, options.projectRoot);
-        if (sceneKey !== sessionKey && (await gate.stop(sceneKey, senderId, senderRoles.isMaster, binding.name)) === 'stopped') {
+        if (sceneKey !== sessionKey && (await gate.stop(sceneKey, senderId, senderRoles.isMaster, entryActorName)) === 'stopped') {
           stopped = 'stopped';
           stoppedKey = sceneKey;
         }
@@ -715,10 +751,23 @@ export class AgentTurnIngressRoute implements IngressRoute {
         // Turns outside the shared session lane get a lane of their own.
         sessionKey: gate ? sessionKey : `turn:${turnId}`,
         senderId,
-        entry: binding.name,
+        entry: entryActorName,
         isMaster: senderRoles.isMaster,
         text: preprocessed.text,
         plainText,
+        ...(matchedVenue
+          ? {
+              venue: Object.freeze({
+                kind: message.conversation.kind,
+                id: matchedVenue.id,
+                platform: matchedVenue.conversation.platform,
+                sceneType: matchedVenue.conversation.sceneType ?? message.conversation.kind,
+                sceneId: matchedVenue.conversation.sceneId,
+                ...(matchedVenue.conversation.threadId ? { threadId: matchedVenue.conversation.threadId } : {}),
+                ...(venueRoute?.member.botEndpoint ? { accountId: venueRoute.member.botEndpoint } : {}),
+              }),
+            }
+          : {}),
         // Masters keep their own turn (ADR 0038 §0.3), in a live room too.
         live: gate !== undefined && liveRoom && !senderRoles.isMaster,
         mergeable,
@@ -828,7 +877,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         let routed = routeSpecialistAgent(
           inbound.text,
           capabilities,
-          workroomAgentTurn?.agentDefinitionId,
+          venueRoute?.member.agent,
           binding.name,
           turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : undefined,
         );
@@ -848,7 +897,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         modelStartedAt = Date.now();
         const outcome = await this.#withInference({ lease, sessionKey, operationId: turnId, signal }, scope => runWithAgentDecisionTurn({
           snapshot, turnId, inferenceSnapshot: scope.snapshot, models: { graph: scope.graph, inference: scope.client, resolve: scope.resolve },
-          disabled: workroomAgentTurn != null, observe: observation => {
+          disabled: false, observe: observation => {
             options.assistantStatus?.recordDecision(observation);
             logger.debug(formatCompact({
               op: 'agent_decision_evaluation',
@@ -869,7 +918,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             routed,
             capabilities,
             decisionRuntime,
-            workroomTurn: workroomAgentTurn != null,
+            workroomTurn: venueRoute != null,
             signal,
           });
           const approvalPolicy = decisionRuntime?.config.approval;
@@ -912,7 +961,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             interaction: approvalInteraction,
             memory: options.agent.approvalReviewer,
           });
-          const replyConversation = workroomReplyConversation ?? message.conversation;
+          const replyConversation = message.conversation;
           const replySegments = resolveAiOutboundSegments(
             replyConversation.endpoint.id as CapabilityId,
             snapshot,
@@ -931,7 +980,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             shell: liveDanmaku ? undefined : turnPolicy.shell,
             network: turnPolicy.network,
             sessionKey,
-            ...(!workroomAgentTurn && !liveRoom && !ambient && !sceneMerge
+            ...(!liveRoom && !ambient && !sceneMerge
               ? { personalSession: runtimePersonalSessionAddress(turnAccess, options.projectRoot) } : {}),
             contextState,
             ...(platformCapabilities ? { platformCapabilities } : {}),
@@ -939,17 +988,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             ...(sceneEvents.length ? { sceneEvents } : {}),
             ...(mergedSenders ? { mergedSenders } : {}),
             ...(liveDanmaku ? { liveDanmaku } : {}),
-            ...(workroomAgentTurn ? {
-              trustedMetadata: Object.freeze({
-                workroom: Object.freeze({
-                  projectId: workroomAgentTurn.projectId,
-                  proposalId: workroomAgentTurn.proposalId,
-                  space: workroomAgentTurn.space,
-                  disposition: 'discussion',
-                  orchestratorAgentDefinitionId: workroomAgentTurn.agentDefinitionId,
-                }),
-              }),
-            } : ambient ? {
+            ...(ambient ? {
               trustedMetadata: Object.freeze({ [AMBIENT_ENGAGEMENT_METADATA_KEY]: 'ambient' }),
             } : {}),
             // The mailbox already serialized (and, if needed, superseded) this
@@ -967,7 +1006,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 maxEntries: limits.maxEntries,
                 maxChars: limits.maxChars,
               }),
-            ...(conversationSequence === undefined || workroomAgentTurn ? {} : {
+            ...(conversationSequence === undefined ? {} : {
               readConversationContext: async (consumer: string, contextSignal: AbortSignal) => {
                 contextSignal.throwIfAborted();
                 if (!lease.active) throw new Error('Conversation context generation lease expired');
@@ -1003,12 +1042,12 @@ export class AgentTurnIngressRoute implements IngressRoute {
               question: createRuntimeQuestionPort(options.im, message),
               reply: {
                 // Message segments follow the target scene; reactions additionally need the original message.
-                segments: workroomReplyConversation || !message.message
+                segments: !message.message
                   ? { ...replySegments, reaction: undefined }
                   : replySegments,
                 openStream: () => {
-                  // Redirected workroom and live-room replies keep their existing delivery authority.
-                  if (workroomAgentTurn || workroomReplyConversation || liveDanmaku) return undefined;
+                  // Live-room replies keep their existing delivery authority.
+                  if (liveDanmaku) return undefined;
                   replyOperation ??= options.im.endpoints.captureOperation({ target: replyConversation,
                     client: message.$client, signal, requester });
                   const stream = replyOperation.openReplyStream?.({ locale: message.locale,

@@ -16,13 +16,13 @@ import type {
   ConsoleRpcComposition,
   ConsoleRpcRequestIdentity,
 } from './rpc-composition.js';
-import { createWorkroomCatalogRpcContext } from './workroom-catalog-rpc.js';
 import { readDeclaredPlugins, setProjectPluginEnabled } from '../plugin-lifecycle-store.js';
 import { resolveDiagnosticPlugin } from './plugin-diagnostics.js';
 
 /** Owns the generation lease and capability context for one Console RPC request. */
 export class ConsoleRpcRequestScope {
   readonly context: RuntimeConsoleRpcContext;
+  readonly agent: AgentConsolePort | null;
   readonly #lease: ReturnType<typeof acquireGenerationAgentConsole>;
   #closed = false;
 
@@ -31,7 +31,8 @@ export class ConsoleRpcRequestScope {
     identity: ConsoleRpcRequestIdentity,
   ) {
     this.#lease = acquireGenerationAgentConsole(composition.snapshots);
-    this.context = createRpcContext(composition, identity, this.#lease?.value ?? null);
+    this.agent = this.#lease?.value ?? null;
+    this.context = createRpcContext(composition, identity, this.agent);
   }
 
   close(): void {
@@ -73,7 +74,6 @@ function createRpcContext(
     applyConfig: configuration.apply ? expectedRevision => configuration.apply!(expectedRevision) : undefined,
     pluginManagement,
     setPluginEnabled: (instanceKey: string, enabled: boolean) => setProjectPluginEnabled(projectRoot, instanceKey, enabled),
-    ...createWorkroomCatalogRpcContext(agent, im, principal),
     listProjectFiles: () => buildProjectFileTree(projectRoot),
     readProjectFile: (filePath: string) => readProjectFile(projectRoot, filePath),
     saveProjectFile: (filePath: string, content: string) =>

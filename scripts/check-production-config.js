@@ -52,7 +52,6 @@ const scanRoots = [
   'packages/im/ai/src',
   'packages/im/core/src',
   'packages/im/agent/src',
-  'packages/im/workroom/src',
   'packages/im/zhin/src',
   'plugins/features',
   'packages/host',

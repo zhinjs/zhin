@@ -13,7 +13,6 @@ const repoRoot = path.resolve(__dirname, '..');
 const scanRoots = [
   'packages/im/zhin/src',
   'packages/im/agent/src',
-  'packages/im/workroom/src',
   'plugins/features',
   'packages/host',
   'plugins/adapters',

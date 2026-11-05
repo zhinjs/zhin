@@ -46,6 +46,7 @@ import {
   type AgentCeiling,
   type BudgetAmounts,
   type EngagementId,
+  type EngagementJournal,
   type EscalationNotice,
   type Harness,
   type InboxEntry,
@@ -56,7 +57,9 @@ import {
   type MailboxKey,
   type MailboxOptions,
   type Principal,
+  agentOf,
 } from '@zhin.js/harness';
+import type { VenueProjector } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 import { TriggerCancelledError } from '../turn/trigger-cancelled-error.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
@@ -98,6 +101,8 @@ export interface HostMailboxOptions {
   /** Turns running at once across every lane (the one global concurrency budget, ADR 0048 §3.1). */
   readonly maxConcurrentTurns?: number;
   readonly budget?: BudgetAmounts;
+  /** Optional VenueProjector for multi-bot Venue hop projection (ADR 0048 H4). */
+  readonly venueProjector?: VenueProjector;
 }
 
 /** What a turn with peer agents registers for its engagement. */
@@ -106,6 +111,7 @@ export interface CollaborationBinding {
   /** Runs actor turns (peers, and the entry actor continuing with results). */
   readonly runTurn: ActorTurnRunner;
   readonly onEscalate?: (notice: EscalationNotice) => void | Promise<void>;
+  readonly venueProjector?: VenueProjector;
 }
 
 interface Ticket {
@@ -199,8 +205,10 @@ export class HostMailbox {
   /** Sender of the batch running on each lane. */
   readonly #running = new Map<string, string>();
   readonly #bindings = new Map<EngagementId, CollaborationBinding>();
+  readonly #venueHopsSeen = new Map<EngagementId, number>();
   readonly #idleWaiters: Array<() => void> = [];
   readonly #release: () => void;
+  #venueProjector?: VenueProjector;
   #seq = 0;
   #closedSince = 0;
   #closed = false;
@@ -210,6 +218,7 @@ export class HostMailbox {
     this.config = config;
     this.#now = options.now ?? Date.now;
     this.#budget = options.budget ?? DEFAULT_ENGAGEMENT_BUDGET;
+    this.#venueProjector = options.venueProjector;
     const merge = config.merge.enabled
       ? { quietMs: config.merge.quietMs, maxWaitMs: config.merge.maxWaitMs, maxSenders: config.merge.maxSenders }
       : undefined;
@@ -221,10 +230,24 @@ export class HostMailbox {
       // ADR 0038 §5: only conversations of a `liveDanmaku` adapter post live mail.
       live: { windowMs: config.live.windowMs, minIntervalMs: config.live.minIntervalMs },
     });
+    const journalProxy: EngagementJournal = {
+      append: async (record) => {
+        const appended = await this.#journal.append(record);
+        if (record.type === 'mail_admitted') {
+          await this.#maybeProjectAdmittedMail(record.engagementId, record.data.mailId as string | undefined);
+        }
+        return appended;
+      },
+      read: (engagementId) => this.#journal.read(engagementId),
+      listEngagements: () => this.#journal.listEngagements(),
+      summarize: (engagementId) => this.#journal.summarize(engagementId),
+      compact: (engagementId) => this.#journal.compact(engagementId),
+      prune: (now) => this.#journal.prune(now),
+    };
     this.harness = createHarness({
       guard: createGuardKernel({ isAttenuationOf }),
       ledger: new InMemoryBudgetLedger(),
-      journal: this.#journal,
+      journal: journalProxy,
       createMailbox: (mailboxOptions: MailboxOptions) => createMailbox({
         ...mailboxOptions,
         onTurnFinished: async (key, batch, result) => {
@@ -255,6 +278,8 @@ export class HostMailbox {
         await this.#bindings.get(notice.engagement.id)?.onEscalate?.(notice);
       },
       onEngagementClosed: (engagement) => {
+        this.#venueHopsSeen.delete(engagement.id);
+        void this.#journal.compact(engagement.id).catch(() => undefined);
         if (this.#bindings.delete(engagement.id) && this.#bindings.size === 0) {
           for (const waiter of this.#idleWaiters.splice(0)) waiter();
         }
@@ -266,6 +291,120 @@ export class HostMailbox {
       onError: (error) => logger.warn(`harness: ${error instanceof Error ? error.message : String(error)}`),
     });
     this.#release = registerCollaboration({ idle: () => this.idle(), close: (reason) => this.close(reason) });
+  }
+
+  /** Underlying engagement journal for inspection and telemetry. */
+  get journal(): EngagementJournal {
+    return this.#journal;
+  }
+
+  /** Sets or updates the default VenueProjector for engagements on this mailbox. */
+  setVenueProjector(projector: VenueProjector | undefined): void {
+    this.#venueProjector = projector;
+  }
+
+  /** Appends a `tool_called` event to the engagement journal. */
+  async recordToolCalled(info: {
+    readonly engagementId: EngagementId;
+    readonly actor: string;
+    readonly mailId: MailId;
+    readonly tool: string;
+    readonly ok: boolean;
+  }): Promise<void> {
+    await this.#journal.append({
+      engagementId: info.engagementId,
+      at: this.#now(),
+      type: 'tool_called',
+      data: {
+        actor: info.actor,
+        mailId: info.mailId,
+        tool: info.tool,
+        ok: info.ok,
+      },
+    });
+  }
+
+  /** Projects a direct `tell` to a Venue room if a projector is configured. */
+  async projectVenueTell(engagementId: EngagementId, fromActor: string, mailId: MailId, venueId: string, content: string): Promise<void> {
+    const projector = this.#bindings.get(engagementId)?.venueProjector ?? this.#venueProjector;
+    if (!projector) return;
+    const engagement = this.harness.engagement(engagementId);
+    const resolvedVenueId = venueId === 'current' && engagement?.venue ? engagement.venue.id : venueId;
+    const projected = await projector.projectHop({
+      venueId: resolvedVenueId,
+      mailId,
+      kind: 'tell',
+      fromAgent: agentOf(fromActor),
+      content,
+      isStart: true,
+    });
+    if (projected) {
+      await this.#journal.append({
+        engagementId,
+        at: this.#now(),
+        type: 'venue_projected',
+        data: {
+          venueId: resolvedVenueId,
+          actor: agentOf(fromActor),
+          mailId,
+          kind: 'tell',
+        },
+      });
+    }
+  }
+
+  async #maybeProjectAdmittedMail(engagementId: EngagementId, mailId: string | undefined): Promise<void> {
+    if (!mailId) return;
+    const projector = this.#bindings.get(engagementId)?.venueProjector ?? this.#venueProjector;
+    if (!projector) return;
+    const graph = this.harness.graph(engagementId);
+    const venue = graph?.engagement.venue;
+    if (!graph || !venue) return;
+    const mail = graph.get(mailId);
+    if (!mail || mail.from.kind !== 'actor') return;
+    if (mail.kind !== 'ask' && mail.kind !== 'delegate' && mail.kind !== 'tell' && mail.kind !== 'result') return;
+    const content = mail.body.kind === 'ask'
+      ? mail.body.question
+      : mail.body.kind === 'delegate'
+        ? mail.body.brief
+        : mail.body.kind === 'tell' || mail.body.kind === 'result'
+          ? mail.body.content
+          : '';
+    if (!content) return;
+    const prevHops = this.#venueHopsSeen.get(engagementId) ?? 0;
+    const nextHops = prevHops + 1;
+    this.#venueHopsSeen.set(engagementId, nextHops);
+    const isStart = prevHops === 0 && (mail.kind === 'ask' || mail.kind === 'delegate' || mail.kind === 'tell');
+    const fromAgent = agentOf(mail.from.actor);
+    const toAgent = agentOf(mail.to);
+    try {
+      const projected = await projector.projectHop({
+        venueId: venue.id,
+        mailId: mail.id,
+        kind: mail.kind,
+        fromAgent,
+        toAgent,
+        content,
+        isStart,
+        isConclusion: false,
+      });
+      if (projected) {
+        await this.#journal.append({
+          engagementId,
+          at: this.#now(),
+          type: 'venue_projected',
+          data: {
+            venueId: venue.id,
+            actor: fromAgent,
+            to: toAgent,
+            mailId: mail.id,
+            kind: mail.kind,
+          },
+        });
+      }
+    } catch (error) {
+      logger.warn(`venue projection failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /** Sender of the batch currently running on `sessionKey`, if any. */

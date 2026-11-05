@@ -3,6 +3,7 @@
  * failures against an EvalRunRecord. An empty list means the case passed.
  */
 import { formatTurnTrace } from '../../src/trace/turn-trace-format.js';
+import type { TurnTrace } from '../../src/trace/turn-trace.js';
 import type { EvalCase, EvalExpectations } from './fixture.js';
 import type { EvalRunRecord } from './driver.js';
 
@@ -34,11 +35,18 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
     }
   }
   // Collaboration tools (ask / escalate / …) execute outside the fixture
-  // tool wrappers, so they land as turn events rather than executedTools.
+  // tool wrappers, so they land as turn events or subagent trace calls rather than executedTools.
   const ran = new Set(executed);
   for (const event of run.events) {
     if (event.type === 'tool_result') ran.add(event.toolName);
   }
+  const collectTraceTools = (trace: TurnTrace): void => {
+    for (const call of trace.tool_calls) {
+      if (call.status === 'ok') ran.add(call.tool_name);
+    }
+    for (const sub of trace.subagents) collectTraceTools(sub);
+  };
+  for (const trace of run.traces) collectTraceTools(trace);
   for (const name of expect.toolsCalled ?? []) {
     if (!ran.has(name)) fail('toolsCalled', `expected tool "${name}" to run; ran [${list([...ran])}]`);
   }
@@ -149,6 +157,20 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
   }
   if (expect.outboundMessages !== undefined && run.outbound.length !== expect.outboundMessages) {
     fail('outboundMessages', `expected ${expect.outboundMessages} outbound message(s), got ${run.outbound.length}`);
+  }
+  if (expect.venueProjections !== undefined) {
+    const actual = (run.venueProjections ?? []).map((item) => `${item.endpointId}: ${item.text}`);
+    if (expect.venueProjections.length === 0) {
+      if (actual.length > 0) {
+        fail('venueProjections', `expected no venue projections, got [${list(actual)}]`);
+      }
+    } else {
+      for (const expected of expect.venueProjections) {
+        if (!actual.some((entry) => entry.includes(expected))) {
+          fail('venueProjections', `expected venue projection containing "${expected}"; got [${list(actual)}]`);
+        }
+      }
+    }
   }
   const expectedTermination = expect.termination ?? 'turn_end';
   const terminal = run.terminals.at(-1);

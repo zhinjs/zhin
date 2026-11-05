@@ -8,7 +8,7 @@ describe('start command Agent configuration boundary', () => {
     expect(hasAgentConfiguration({ assistant: {} })).toBe(true);
   });
 
-  it.each(['workrooms', 'remoteAgents', 'remote_mesh', 'remoteMesh'])(
+  it.each(['workroom', 'workrooms', 'remoteAgents', 'remote_mesh', 'remoteMesh'])(
     'rejects removed ai.%s before the disabled-Agent short circuit',
     (legacyKey) => {
       expect(() => hasAgentConfiguration({

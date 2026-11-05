@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../console-utils/remoteApi.js';
 import { buildWaterfall, formatTime, toQueryTime, type TraceDetail } from './traceView.js';
+import WorkroomRunsPage from '../workroom/WorkroomRunsPage.js';
 
 type SessionRow = { session_key: string; turns: number; last_started_at: number; last_status: string; total_tokens: number };
 type TurnRow = { turn_id: string; started_at: number; duration_ms?: number; model_calls: number; tool_calls: number; total_tokens: number; termination: { status: string; code?: string } };
@@ -14,9 +15,10 @@ async function getJson<T>(path: string): Promise<T> {
 
 const statusClass = (status: string) => (status === 'completed' ? 'text-emerald-600' : status === 'running' ? 'text-sky-600' : 'text-rose-600');
 
-/** Persisted Agent turn traces: sessions → turns → turn detail (#728). */
+/** Persisted Agent turn traces & multi-agent Engagement Collaboration Graph (#728 / ADR 0048). */
 export default function TraceArchivePage() {
   const initialTurn = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('turn') ?? '' : '';
+  const [viewMode, setViewMode] = useState<'turns' | 'engagements'>('turns');
   const [since, setSince] = useState('');
   const [until, setUntil] = useState('');
   const [sessions, setSessions] = useState<SessionRow[]>([]);
@@ -61,14 +63,40 @@ export default function TraceArchivePage() {
 
   const bars = useMemo(() => (detail ? buildWaterfall(detail) : []), [detail]);
 
+  if (viewMode === 'engagements') {
+    return (
+      <div className="space-y-2">
+        <div className="px-4 pt-4 md:px-6 max-w-7xl mx-auto flex justify-end">
+          <div className="inline-flex rounded-lg border p-1 text-xs">
+            <button type="button" className="rounded px-2.5 py-1 text-muted-foreground hover:text-foreground" onClick={() => setViewMode('turns')}>
+              单回合轨迹 (Turns)
+            </button>
+            <button type="button" className="rounded bg-muted px-2.5 py-1 font-medium" onClick={() => setViewMode('engagements')}>
+              多 Agent 协作图谱 (Engagements)
+            </button>
+          </div>
+        </div>
+        <WorkroomRunsPage />
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
       <header className="flex flex-wrap items-end justify-between gap-3 border-b pb-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Agent Trace</h1>
-          <p className="mt-1 text-sm text-muted-foreground">已落盘的回合记录（默认保留 7 天）：会话 → 回合 → 详情。命令行同样可用 <code>zhin trace --sessions</code>。</p>
+          <p className="mt-1 text-sm text-muted-foreground">已落盘的回合记录与多 Agent 协作图谱：会话 → 回合 → 详情。命令行同样可用 <code>zhin trace --sessions</code> 或 <code>zhin trace --engagements</code>。</p>
         </div>
         <div className="flex flex-wrap items-end gap-2 text-sm">
+          <div className="inline-flex rounded-lg border p-1 text-xs mr-2">
+            <button type="button" className="rounded bg-muted px-2.5 py-1 font-medium" onClick={() => setViewMode('turns')}>
+              单回合轨迹 (Turns)
+            </button>
+            <button type="button" className="rounded px-2.5 py-1 text-muted-foreground hover:text-foreground" onClick={() => setViewMode('engagements')}>
+              多 Agent 协作图谱 (Engagements)
+            </button>
+          </div>
           <label className="flex flex-col">起<input type="datetime-local" className="border rounded px-2 py-1" value={since} onChange={(e) => setSince(e.target.value)} /></label>
           <label className="flex flex-col">止<input type="datetime-local" className="border rounded px-2 py-1" value={until} onChange={(e) => setUntil(e.target.value)} /></label>
           <button type="button" className="border rounded px-3 py-1" onClick={() => void loadSessions()}>刷新</button>

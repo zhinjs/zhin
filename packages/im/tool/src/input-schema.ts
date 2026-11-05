@@ -33,11 +33,9 @@ export type ExecutableToolInputParseResult<T> =
  * non-optional on `execute(args)`.
  */
 export interface ZhinToolInputSchema<T = unknown> {
-  (value?: never, key?: string): unknown;
   readonly output?: T;
   safeParse(input: unknown): ExecutableToolInputParseResult<unknown>;
   toJsonSchema(): unknown;
-  toJSONSchema?(options?: Readonly<{ io?: 'input' }>): unknown;
 }
 
 /**
@@ -49,10 +47,8 @@ export interface ZhinToolInputSchema<T = unknown> {
 export type ExecutableToolInputSchema<T = unknown> =
   | ZhinToolInputSchema<T>
   | {
-      readonly output?: never;
       safeParse(input: unknown): ExecutableToolInputParseResult<T>;
-      toJSONSchema?(options?: Readonly<{ io?: 'input' }>): unknown;
-      toJsonSchema?(): unknown;
+      toJSONSchema(options?: Readonly<{ io?: 'input' }>): unknown;
     };
 
 export type ToolInputSchema<T = unknown> =
@@ -121,10 +117,10 @@ export function parseToolInputSchema<T>(
 }
 
 function projectExecutableSchema(schema: ExecutableToolInputSchema): unknown {
-  if (typeof schema.toJSONSchema === 'function') {
+  if ('toJSONSchema' in schema && typeof schema.toJSONSchema === 'function') {
     return schema.toJSONSchema({ io: 'input' });
   }
-  if (typeof schema.toJsonSchema === 'function') {
+  if ('toJsonSchema' in schema && typeof schema.toJsonSchema === 'function') {
     return schema.toJsonSchema();
   }
   return undefined;

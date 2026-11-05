@@ -387,3 +387,207 @@ describe('harness: escalation freezes the engagement', () => {
     expect(again).toMatchObject({ ok: false, code: 'frozen' });
   });
 });
+
+describe('harness: blackboard, followUp, and remoteTransport (H5)', () => {
+  it('writes, versions, filters, and reconstructs shared blackboard entries per engagement', async () => {
+    const { harness, journal } = setup([ceiling('zhin', ALL), ceiling('researcher', ALL)], {});
+    const v1 = await harness.writeBoard('eng-b1', {
+      key: 'summary',
+      content: 'initial notes',
+      author: 'zhin',
+    });
+    expect(v1).toEqual({
+      key: 'summary',
+      kind: 'note',
+      content: 'initial notes',
+      author: 'zhin',
+      updatedAt: 1000,
+      version: 1,
+    });
+    const v2 = await harness.writeBoard('eng-b1', {
+      key: 'summary',
+      kind: 'artifact',
+      content: 'refined spec',
+      author: 'researcher',
+    });
+    expect(v2.version).toBe(2);
+    expect(v2.kind).toBe('artifact');
+
+    await harness.writeBoard('eng-b1', {
+      key: 'task-1',
+      kind: 'todo',
+      content: 'verify tests',
+      author: 'zhin',
+      status: 'in_progress',
+    });
+
+    expect(await harness.readBoard('eng-b1')).toHaveLength(2);
+    expect(await harness.readBoard('eng-b1', { kind: 'todo' })).toEqual([
+      expect.objectContaining({ key: 'task-1', kind: 'todo', status: 'in_progress', version: 1 }),
+    ]);
+    expect(await harness.readBoard('eng-b1', { key: 'summary' })).toEqual([
+      expect.objectContaining({ key: 'summary', kind: 'artifact', content: 'refined spec', version: 2 }),
+    ]);
+    await expect(harness.writeBoard('eng-b1', { key: '   ', content: 'x', author: 'zhin' })).rejects.toThrow(TypeError);
+
+    // A fresh harness sharing the persisted journal reconstructs the board when its in-memory map is empty
+    const freshHarness = createHarness({
+      guard: createGuardKernel({ isAttenuationOf }),
+      ledger: new InMemoryBudgetLedger(),
+      journal,
+      createMailbox: (options) => createMailbox(options),
+      ceilingOf: () => ceiling('zhin', ALL),
+      rootAuthority,
+      attenuate,
+      runTurn: async () => ({ status: 'completed' }),
+    });
+    const reconstructed = await freshHarness.readBoard('eng-b1');
+    expect(reconstructed).toEqual([
+      expect.objectContaining({ key: 'summary', kind: 'artifact', content: 'refined spec', version: 2 }),
+      expect.objectContaining({ key: 'task-1', kind: 'todo', content: 'verify tests', status: 'in_progress', version: 1 }),
+    ]);
+  });
+
+  it('follows up on delegated work with attenuated authority and rejects invalid handles', async () => {
+    const receivedByResearcher: Mail[] = [];
+    let delegatedMailId = '';
+    const { harness } = setup([ceiling('zhin', ALL), ceiling('researcher', only(['lookup']))], {
+      zhin: async (mail, h) => {
+        if (mail.body.kind === 'result') return { status: 'completed', content: 'done' };
+        const delegated = await h.send('zhin', mail, {
+          kind: 'delegate',
+          to: 'researcher',
+          text: 'initial brief',
+          narrowing: { tools: only(['lookup']) },
+        });
+        if (delegated.ok) delegatedMailId = delegated.mail.id;
+        return { status: 'completed', content: 'started' };
+      },
+      researcher: async (mail) => {
+        receivedByResearcher.push(mail);
+        if (mail.body.kind === 'ask') {
+          return { status: 'completed', content: `follow-up answer: ${mail.body.question}` };
+        }
+        return { status: 'completed', content: 'initial result' };
+      },
+    });
+
+    await harness.open({ principal: member, entry: 'zhin', body: humanBody('start'), budget: BUDGET });
+    await harness.idle();
+    expect(delegatedMailId).not.toBe('');
+
+    // Reject unknown mailId or wrong sender
+    const unknownAck = await harness.followUp({ mailId: 'missing-id', from: 'zhin', content: 'status?' });
+    expect(unknownAck).toMatchObject({
+      accepted: false,
+      mailId: 'missing-id',
+      reason: { code: 'missing_causation' },
+    });
+
+    const wrongSenderAck = await harness.followUp({ mailId: delegatedMailId, from: 'researcher', content: 'spoof?' });
+    expect(wrongSenderAck).toMatchObject({
+      accepted: false,
+      mailId: delegatedMailId,
+      reason: { code: 'missing_causation' },
+    });
+
+    // Valid follow-up after initial delegation completed
+    const ack = await harness.followUp({
+      mailId: delegatedMailId,
+      from: 'zhin',
+      content: 'Also check edge cases',
+    });
+    expect(ack.accepted).toBe(true);
+    expect(ack.result).toEqual({
+      status: 'completed',
+      content: `follow-up answer: [Follow-up on ${delegatedMailId}]\nAlso check edge cases`,
+    });
+    const followUpMail = receivedByResearcher.at(-1)!;
+    expect(followUpMail.causationId).toBe(delegatedMailId);
+    expect(followUpMail.authority.tools).toEqual(only(['lookup']));
+    expect(followUpMail.authority.trust).toBe('group_member');
+  });
+
+  it('routes remote mails via remoteTransport with budget charging and timeout support', async () => {
+    const journal = new InMemoryEngagementJournal();
+    const remoteSent: Array<{ mail: Mail; budget: BudgetAmounts }> = [];
+    let ids = 0;
+    const harness = createHarness({
+      guard: createGuardKernel({ isAttenuationOf }),
+      ledger: new InMemoryBudgetLedger(),
+      journal,
+      createMailbox: (options) => createMailbox(options),
+      ceilingOf: (agent) => {
+        if (agent === 'zhin') return ceiling('zhin', ALL);
+        if (agent === 'remote-worker') {
+          return {
+            ...ceiling('remote-worker', ALL),
+            defaultBudget: { modelCalls: 4, tokens: 2000 },
+          };
+        }
+        return undefined;
+      },
+      rootAuthority,
+      attenuate,
+      newId: () => `rm${++ids}`,
+      clock: () => 2000,
+      remoteTransport: {
+        canRoute: (target) => target.startsWith('remote-'),
+        send: async (mail, grantedBudget) => {
+          remoteSent.push({ mail, budget: grantedBudget });
+          if (mail.body.kind === 'ask' && mail.body.question === 'slow') {
+            await new Promise((resolve) => setTimeout(resolve, 80));
+            return { status: 'completed', content: 'too late' };
+          }
+          return {
+            status: 'completed',
+            content: `remote:${mail.kind}`,
+            consumed: { modelCalls: 2, tokens: 300 },
+          };
+        },
+      },
+      runTurn: async (_actor, batch) => {
+        const root = batch[0]!;
+        const askRes = await harness.send('zhin', root, {
+          kind: 'ask',
+          to: 'remote-worker',
+          text: 'ping remote',
+        });
+        expect(askRes).toMatchObject({
+          accepted: true,
+          result: { status: 'completed', content: 'remote:ask' },
+        });
+        const tellRes = await harness.send('zhin', root, {
+          kind: 'tell',
+          to: 'remote-worker',
+          text: 'fyi remote',
+        });
+        expect(tellRes).toMatchObject({ accepted: true });
+        const timeoutRes = await harness.send('zhin', root, {
+          kind: 'ask',
+          to: 'remote-worker',
+          text: 'slow',
+          timeoutMs: 10,
+        });
+        expect(timeoutRes).toMatchObject({
+          accepted: true,
+          result: { status: 'cancelled' },
+        });
+        return { status: 'completed', content: 'all done' };
+      },
+    });
+
+    const opened = await harness.open({ principal: master, entry: 'zhin', body: humanBody('run remote'), budget: BUDGET });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    await harness.idle();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Verify defaultBudget from AgentCeiling was used when request.budget was omitted
+    expect(remoteSent[0]?.budget).toMatchObject({ modelCalls: 4, tokens: 2000 });
+    const types = await eventTypes(journal, opened.engagement.id);
+    expect(types).toContain('mail_delivered');
+    expect(types).toContain('mail_completed');
+    expect(types).toContain('mail_cancelled');
+  });
+});

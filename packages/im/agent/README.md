@@ -160,7 +160,7 @@ packages/im/agent/src/
   event/         Event System — Agent turn 域事件（不替代 Kernel RunEvent）
   skill/         Skill System — SkillRegistry 统一出口
   memory/        Memory System — Port → ContextRepository + host-owned compaction runtime
-  subagent/      Subagent System — SubagentSystem + ImResultSink
+  collaboration/ Actor Collaboration — HostMailbox + ask/delegate/tell/follow_up/board/escalate（ADR 0048）
   context/       Context System — builder/injector 链、tail limit
   prompt/        系统提示词、assembly、workspace 模板
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
@@ -170,9 +170,9 @@ packages/im/agent/src/
   init/          Plugin Runtime 组合、数据库激活与 ZhinAgent dispose 生命周期
 ```
 
-普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom 的持久编排（Run/Task/Assignment、验收、Journal、Projection Outbox）由 [`@zhin.js/workroom`](../workroom/README.md) 承载。
+Actor 间协作（`ask` / `delegate` / `tell` / `follow_up` / `board_read` / `board_write` / `escalate`）与权限单调衰减、预算守恒、Engagement Journal 由 [`@zhin.js/harness`](../harness/README.md) 承载；多 Bot 同场 Venue 路由与发言席位锁由 [`@zhin.js/core`](../core/README.md) `venue` 模块承载（见 [ADR 0048](../../../docs/adr/0048-agent-harness.md)）。
 
-`AgentResourceHub` 是 generation-owned 的 Agent 支持资源入口，管理 Skill、SubAgent、MCP 与 Hook，不拥有 Tool 状态。Tool 只通过 `tools/<name>/index.ts` 或 `context.addTool()` 进入候选 generation，由唯一 `ToolIndex` 发布；持久编排位于 [`@zhin.js/workroom`](../workroom/README.md)。
+`AgentResourceHub` 是 generation-owned 的 Agent 支持资源入口，管理 Skill、Agent、MCP 与 Hook，不拥有 Tool 状态。Tool 只通过 `tools/<name>/index.ts` 或 `context.addTool()` 进入候选 generation，由唯一 `ToolIndex` 发布。
 
 Agent 生命周期事件由本包的 `AIEventPayload` / `AIEventName` 定义。Runtime 消费方通过
 `subscribeAIEventsOnTarget` 订阅显式 event target；事件契约不再挂在经典 `Plugin` namespace，
@@ -277,35 +277,17 @@ ai:
 
 ## 多 Agent 使用方式
 
-### 1. 主 Agent + 子 Agent（内置）
+### 1. Actor 协作与委派（ADR 0048）
 
-框架已提供 **SubagentSystem**：主 ZhinAgent 通过工具 `spawn_task` 把复杂/耗时任务派给**后台子 Agent** 异步执行。子 Agent 使用受限工具集；完成后**先交还主 Agent**（写入主会话 + auto-continue 续聊），用户可见回复由主 Agent 整理发出。
-
-- 主对话不阻塞，用户可继续聊天（异步 `spawn_task`）。
-- `spawn_task` 在每轮 `turn-pipeline` 注入（`createSpawnTaskTool`），并默认列入 `deferredTools.alwaysLoadedTools`。
-- **`wait: true`** 时同步等待，结果经 tool result 回到当前主 Agent turn。
-- 监听 `ai.subagent.finish` 可做 log / 监控；需旧式「子任务摘要直推 IM」时设 `ai.agent.subagentDirectImDelivery: true`。
-
-**并发与并行（ADR 0030）**
-
-| 配置 | 默认 | 说明 |
-|------|------|------|
-| `toolExecution` | `tiered` | 同轮 `spawn_task` + 只读工具并行；写/bash 顺序 |
-| `maxParallelSubagents` | `5` | 并行子 agent 硬顶，超限拒绝 |
-| `subagentAutoContinue` | `true` | 异步完成后唤醒主 Agent |
-| `subagentDirectImDelivery` | `false` | 额外直发格式化摘要到 IM |
-
-**类型权限**：`ai.agents.<name>.permission.task`（glob → allow/deny）控制主 Agent 可见的子 agent 预设。
+基于 `@zhin.js/harness` 的统一 Actor 邮局模型：主 Actor 通过 `agents`、`ask`、`delegate`、`tell`、`follow_up`、`cancel_delegation`、`board_read`、`board_write`、`escalate` 与其他具名 Agent 或临时受限 Actor 协作。每次委派携带单调衰减的 `Authority` 与守恒的 `Budget`（`modelCalls` / `tokens` / `wallMs` / `sideEffects`），全链路记入 `EngagementJournal`，可通过 `zhin trace <engagement>` 审计。
 
 关键路径：
 
-- `src/subagent/` — `SubagentSystem`、`SubagentRuntime`、`onSubagentComplete`
-- `src/builtin/spawn-task-tool.ts` — 工具定义与 `permission.task` 校验
-- `src/turn/persist-subagent-context.ts` / `subagent-auto-continue.ts` — 结果落库与续聊
-- `src/turn/turn-pipeline.ts` — 每轮注入 `spawn_task`
+- `src/collaboration/host-mailbox.ts` — `HostMailbox` 入站队列、合并窗/弹幕窗与 Engagement 生命周期
+- `src/collaboration/tools.ts` — 协作工具定义与 `GuardKernel` / `BudgetLedger` 对接
+- `src/collaboration/actor-turn.ts` — 受限 Actor 回合执行器
+- `src/collaboration/turn-collaboration.ts` — 回合级协作会话与 Venue 可见性投影
 - `packages/im/ai/src/llm/tiered-tool-buckets.ts` — tiered 并行工具 SSOT
-
-无需额外配置即可使用；若需放宽子 Agent 的工具范围，使用 `ai.agent.subagentTools` 显式追加白名单（不会自动继承主会话全部 skill/tool）。
 
 ### 2. 独立任务
 
@@ -315,9 +297,9 @@ ai:
 
 无需工具循环时，优先用 operation-bound inference client 的 `generate`；需要 Agent 循环时，用 `AIService.runAgent(input, { models, systemPrompt, tools })`。两者都固定本次选择；显式模型失败不自动切换。摘要、审批和旁听的采样／输出参数由其所选 Profile 决定。
 
-### 4. 多 Agent 协作与普通 chat 委派
+### 4. 多 Bot 同场协作（Venue）
 
-普通 chat 可用 `spawn_task` 临时委派子代理；它没有 durable Run/Task、验收或 Project Memory 语义。Project 级多 Agent 协作由 [`@zhin.js/workroom`](../workroom/README.md) 承载。旧 `zhin.js/agent` `runPipeline` / `runParallel` / `route` 会立即调用模型且没有可靠状态边界，已在 breaking cutover 中删除；后续构图便利 API 只会生成 Plan proposal，不直接执行 Agent。
+通过 `ai.venues` 声明同群多 Bot 成员与可见性（`visible` / `summary` / `backstage`），由 `@zhin.js/core` 的 `VenueRegistry`、`routeVenueMessage`、`VenueFloorController` 与 `VenueProjector` 驱动同群点名协作与后台静默协作。详见 [多 Agent 协作与同场 Venue](../../../docs/ai/multi-agent-workroom.md)。
 
 ## 工具命名策略
 
@@ -376,7 +358,7 @@ src/
 ├── event/                           # Event System — turn 域事件 + session 事件
 ├── skill/                           # Skill System
 ├── memory/                          # Memory System
-├── subagent/                        # Subagent System + manager init
+├── collaboration/                   # Actor Collaboration & HostMailbox (ADR 0048)
 ├── context/                         # Context System — builder/injector、tail limit
 ├── prompt/                          # 系统提示词、assembly、workspace 模板
 ├── turn/                            # Turn pipeline、inbound 队列、auto-continue

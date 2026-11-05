@@ -11,6 +11,12 @@ import { plannedReplyTexts } from '../../src/session/context-provenance.js';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import {
+  createVenueProjector,
+  createVenueRegistry,
+  routeVenueMessage,
+  type VenueDefinition,
+} from '@zhin.js/core';
 import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { defineAgentPromptSection, type PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { ToolIndex, type ToolAvailabilityContext } from '@zhin.js/tool';
@@ -48,6 +54,7 @@ import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-tr
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
+import { routeSpecialistAgent } from '../../src/plugin-runtime/ingress/trigger.js';
 import { isTimerInbound, type EvalAgentFixture, type EvalApprovalBehaviour, type EvalCase, type EvalSelfChangeStatus, type EvalPromptSection, type EvalSkill, type EvalInbound, type EvalInboundMessage, type EvalNativeTool, type EvalTimerInbound, type EvalTool } from './fixture.js';
 import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { resolvePerceptionConfig } from '../../src/media/perception.js';
@@ -95,6 +102,8 @@ export interface EvalRunRecord {
   readonly selfChanges: readonly Readonly<{ id: string; status: EvalSelfChangeStatus }>[];
   /** Production workspace files named by `expect.workspaceFiles`, read after the run (`null` = absent). */
   readonly workspaceFiles: Readonly<Record<string, string | null>>;
+  /** ADR 0048 H4: projected collaboration hops sent through the VenueProjector. */
+  readonly venueProjections: readonly Readonly<{ endpointId: string; text: string }>[];
 }
 
 const ENDPOINT = 'eval-bot';
@@ -204,11 +213,40 @@ async function runInWorkspace(
   const executedTools: EvalToolInvocation[] = [];
   const rawToolOutputs: string[] = [];
   const outbound: string[] = [];
+  const venueProjections: Array<Readonly<{ endpointId: string; text: string }>> = [];
   const approvalRequests: string[] = [];
   const approvalQuestions: string[] = [];
   const events: TurnEvent[] = [];
   const terminals: TurnTerminalEvent[] = [];
   const traces: TurnTrace[] = [];
+  const venueDef: VenueDefinition | undefined = definition.venue
+    ? Object.freeze({
+        id: definition.venue.id ?? 'eval-venue',
+        conversation: {
+          platform: PLATFORM,
+          sceneType: 'group' as const,
+          sceneId: 'eval-group',
+        },
+        members: definition.venue.members.map((member) => ({
+          agent: member.agent,
+          botEndpoint: member.botEndpoint,
+          ...(member.aliases?.length ? { aliases: [...member.aliases] } : {}),
+        })),
+        ...(definition.venue.entry ? { entry: definition.venue.entry } : {}),
+        visibility: definition.venue.visibility ?? 'summary',
+      })
+    : undefined;
+  if (venueDef) {
+    const venueRegistry = createVenueRegistry([venueDef]);
+    const venueProjector = createVenueProjector({
+      registry: venueRegistry,
+      send: async (sendInput) => {
+        venueProjections.push(Object.freeze({ endpointId: sendInput.endpointId, text: sendInput.text }));
+        outbound.push(`[${sendInput.endpointId}] ${sendInput.text}`);
+      },
+    });
+    mailbox.setVenueProjector(venueProjector);
+  }
   const selfChange = workspace && definition.nativeTools?.includes('change_draft')
     ? await createEvalSelfChange(definition, workspace)
     : undefined;
@@ -225,20 +263,60 @@ async function runInWorkspace(
     // ADR 0048 H3: every inbound is a human Mail of the host Mailbox, and each
     // `run` admission is one Mail turn, exactly as the IM ingress route does.
     const runInbound = async (message: EvalInboundMessage, index: number): Promise<void> => {
+      // ADR 0048 §3.4 invariant 7: non-human messages (self, member, peer_bot) never open a human Mail turn.
+      if (message.origin !== undefined && message.origin !== 'human') return;
       const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
+      const scope = message.scope ?? (venueDef ? 'group' : 'private');
+      const sceneId = scope === 'group' ? 'eval-group' : sender.id;
+      const venueRoute = venueDef
+        ? routeVenueMessage({
+            venue: venueDef,
+            text: message.text,
+            ...(message.mentions ? { mentions: message.mentions } : {}),
+            ...(message.replyToSenderId ? { replyToSenderId: message.replyToSenderId } : {}),
+            winningEndpointId: message.endpointId ?? venueDef.members[0]?.botEndpoint ?? ENDPOINT,
+          })
+        : undefined;
+      const agentsList = evalAgents(definition);
+      const routed = routeSpecialistAgent(
+        message.text,
+        { agents: agentsList },
+        venueRoute?.member.agent,
+        'zhin',
+        PLATFORM,
+      );
+      const entryActor = routed.agent?.name ?? venueRoute?.member.agent ?? 'zhin';
       const admission = await mailbox.admit({
         sessionKey: sessionKeyFor(message),
         senderId: sender.id,
-        text: message.text,
+        entry: entryActor,
+        text: routed.userText,
         plainText: !message.images?.length && !message.quote,
         isMaster: (sender.roles ?? []).includes('master'),
         ...(sender.name ? { senderName: sender.name } : {}),
         ...(message.addressed === false ? { unaddressed: true } : {}),
+        ...(venueDef
+          ? {
+              venue: Object.freeze({
+                kind: scope,
+                id: venueDef.id,
+                platform: PLATFORM,
+                sceneType: scope,
+                sceneId,
+                ...(venueRoute?.member.botEndpoint ? { accountId: venueRoute.member.botEndpoint } : {}),
+              }),
+            }
+          : {}),
       });
       if (admission.kind !== 'run') return;
-      await runAdmitted(message, index, admission);
+      await runAdmitted({ ...message, scope, text: routed.userText }, index, admission, entryActor);
     };
-    const runAdmitted = async (message: EvalInboundMessage, index: number, admission: Extract<TurnAdmission, { kind: 'run' }>): Promise<void> => {
+    const runAdmitted = async (
+      message: EvalInboundMessage,
+      index: number,
+      admission: Extract<TurnAdmission, { kind: 'run' }>,
+      entryActor = 'zhin',
+    ): Promise<void> => {
       const trace = createTurnTrace(definition, message, index);
       const releaseTrace = registerTurnTrace(trace);
       // A merged / superseding batch answers every mail in it.
@@ -257,7 +335,7 @@ async function runInWorkspace(
         // A superseded / stopped turn never sends; a stale reply is dropped (ADR 0038 §4).
         blocked: () => turnSignal.aborted || admission.staleCheck().kind === 'discard',
         delivered: () => admission.markDelivered(),
-      });
+      }, entryActor);
       const context: AgentTurnExecutionContext = {
         turn,
         capabilities: {
@@ -274,6 +352,7 @@ async function runInWorkspace(
         selection: {
           binding: { name: 'zhin', mcpServers: [] },
           mcpServers: [],
+          ...(entryActor !== 'zhin' ? { agent: entryActor } : {}),
         },
       };
       let status: 'completed' | 'failed' | 'cancelled' = 'failed';
@@ -347,10 +426,10 @@ async function runInWorkspace(
     const spawned: Promise<void>[] = [];
     onModelRequest = async (entryStep) => {
       for (const pending of midTurn) {
-        if (entryStep === undefined || pending.message.deliver!.duringStep !== entryStep) continue;
+        if (entryStep === undefined || pending.message.deliver?.duringStep !== entryStep) continue;
         spawned.push(runInbound(pending.message, pending.index));
       }
-      if (entryStep !== undefined && midTurn.some(({ message }) => message.deliver!.duringStep === entryStep)) {
+      if (entryStep !== undefined && midTurn.some(({ message }) => message.deliver?.duringStep === entryStep)) {
         // Let the Mailbox take the mail (and abort a superseded turn) before the step answers.
         for (let tick = 0; tick < 8; tick += 1) await new Promise<void>((resolve) => setImmediate(resolve));
       }
@@ -388,6 +467,7 @@ async function runInWorkspace(
     return {
       selfChanges,
       workspaceFiles,
+      venueProjections,
       events,
       executedTools,
       attemptedTools: model.requests.flatMap((request) => request.toolCalls),
@@ -426,12 +506,15 @@ function buildTurn(
   workspace: string | undefined,
   trace: TurnTraceCollector,
   gate: Readonly<{ signal: AbortSignal; blocked: () => boolean; delivered: () => void }>,
+  entryActor = 'zhin',
 ) {
   const scope = message.scope ?? 'private';
   const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
   const roles = [...(sender.roles ?? ['user'])];
   const sceneId = scope === 'group' ? 'eval-group' : sender.id;
-  const sessionKey = sessionKeyFor(message);
+  const baseSessionKey = sessionKeyFor(message);
+  const hasActorScript = entryActor !== 'zhin' && definition.script.some((step) => step.actor === entryActor);
+  const sessionKey = hasActorScript ? `${baseSessionKey}#actor:${entryActor}` : baseSessionKey;
   const requestedPolicy: TurnPolicyContext = message.policy ?? defaultPolicy(roles, workspace, message.shell === true);
   const origin = { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId } as const;
   // Per-turn availability (`isAvailable`), as capability ingress binds tools in production (#1051 F4).
@@ -541,9 +624,12 @@ function evalAgents(definition: EvalCase): AgentDescriptor[] {
     knowledge: Object.freeze([]),
     toolNames: Object.freeze([...agent.tools]),
     collaboration: Object.freeze({
-      contacts: Object.freeze([...(agent.collaboration?.contacts ?? [])]),
+      ...(agent.collaboration?.contacts !== undefined
+        ? { contacts: Object.freeze([...agent.collaboration.contacts]) }
+        : {}),
       // Omitted acceptsFrom means "anyone in scope", so it stays absent rather than becoming an empty list.
       ...(agent.collaboration?.acceptsFrom ? { acceptsFrom: Object.freeze([...agent.collaboration.acceptsFrom]) } : {}),
+      ...(agent.collaboration?.budget ? { budget: Object.freeze({ ...agent.collaboration.budget }) } : {}),
     }),
     owner: rootPluginId(),
     qualifiedName: agent.name,

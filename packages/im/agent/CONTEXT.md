@@ -123,7 +123,7 @@ _避免使用_：subagent id、spawn id、job item
 _避免使用_：worker、handler、直接改 task status
 
 **Remote Executor**:
-（已冻结：A2A 扩展，经 `@zhin.js/workroom/remote` 提供；默认装配仍创建其 runtime/authority，C2 之后处理。）
+（经 `@zhin.js/a2a` `A2AMailboxTransport` 对接 `@zhin.js/harness` `RemoteMailTransport`，见 ADR 0048。）
 通过 A2A 执行 Assignment 的 transport adapter，遵守与 local 相同的 lease、heartbeat、checkpoint、Task Report 与 terminal event 契约。endpoint/Card/auth/extension capability 随 Assignment 固定；只有支持 idempotent dispatch、typed Completion Envelope 与允许 Workspace Provider 的端点可 claim。共同工作空间通过版本化 Workspace/Artifact Reference 表达，不假设共享本地文件系统；Kernel、Scheduler 与 Project Memory 不因远程拓扑改变状态模型。
 _避免使用_：远程专用 Task 状态机、共享 host path、text-only A2A completed 直接完成 Task、A2A 绕过 Kernel
 
@@ -176,11 +176,11 @@ _避免使用_：进程内消息数组、每条消息直接 spawn、让 Orchestr
 _避免使用_：等待无期限 Promise、只有 Agent 能解除的阻塞、进程内 cancel flag、无法识别 owner 的 pending
 
 **Workroom Scheduler**:
-消费 Kernel facts 的无状态、确定性决策器。多实例对同一 sequence 必须产生相同 decision，并以 `append(expectedSequence, events)` 竞争提交；dispatch 通过 event outbox/Assignment id 幂等交付。排序依次考虑 Kernel control、安全 reservation、starvation bound、Sponsor lane、deadline、lane 内 rank/aging、enqueue sequence 与 task key。Orchestrator 只可在 lane 内调 rank；跨 lane 必须提交带 owner/deadline/approve/reject/rebase/cancel 的 Approval Gate。capacity、aging、starvation 与 preemption 阈值作为 Run 的 Scheduler Policy Snapshot 持久化，HMR 不得改变旧 Journal replay。 其导出位于冻结的 `@zhin.js/workroom/scheduler` 子路径（C4b，仅移出包根）。
+消费 Kernel facts 的无状态、确定性决策器。多实例对同一 sequence 必须产生相同 decision，并以 `append(expectedSequence, events)` 竞争提交；dispatch 通过 event outbox/Assignment id 幂等交付。排序依次考虑 Kernel control、安全 reservation、starvation bound、Sponsor lane、deadline、lane 内 rank/aging、enqueue sequence 与 task key。Orchestrator 只可在 lane 内调 rank；跨 lane 必须提交带 owner/deadline/approve/reject/rebase/cancel 的 Approval Gate。capacity、aging、starvation 与 preemption 阈值作为 Run 的 Scheduler Policy Snapshot 持久化，HMR 不得改变旧 Journal replay。
 _避免使用_：模型上下文里的隐式队列、FIFO 即全部策略、无限期饿死低优先级 Task
 
 **Portfolio Admission**:
-位于多个 Project 之上的持久化资源准入控制面。它只比较各 Workroom Scheduler 已选择的不透明 Capacity Request，按 Sponsor Portfolio Policy、预算、Pool capacity/rate、weighted dominant service 与 starvation reservation 决定是否发放 Capacity Grant；不能读取 Project Context/Memory、重排 Project 内 Task、修改 Plan，或直接完成/暂停/取消 Task。Sponsor Room 是 Portfolio facts/commands 的 projection，不是状态 writer。 其导出位于冻结的 `@zhin.js/workroom/portfolio` 子路径（C4b，仅移出包根）。
+位于多个 Project 之上的持久化资源准入控制面。它只比较各 Workroom Scheduler 已选择的不透明 Capacity Request，按 Sponsor Portfolio Policy、预算、Pool capacity/rate、weighted dominant service 与 starvation reservation 决定是否发放 Capacity Grant；不能读取 Project Context/Memory、重排 Project 内 Task、修改 Plan，或直接完成/暂停/取消 Task。Sponsor Room 是 Portfolio facts/commands 的 projection，不是状态 writer。
 _避免使用_：全局总 Orchestrator、合并所有 Project queue、进程内 semaphore 即资源权威、Portfolio 直接改 Task status
 
 **Capacity Request**:
@@ -244,7 +244,7 @@ _避免使用_：单一 privacy level、消息 metadata 自分类、摘要即匿
 _避免使用_：sensitive 万能标签、regulated 作为保密等级、用 risk tier 代替数据治理
 
 **Disclosure Decision**:
-当前 Data Governance Policy 对 exact Descriptor、Envelope/principal、purpose、channel、Processing Destination/recipient snapshot 与 approvals 的唯一判定，结果只能为 full、metadata-only、trusted transform required、exact approval required 或 deny。Context View、Evidence Port、IM/Console projection 与 A2A 共享此判定，不得各自放宽。 其包根导出已在 C4c 移到冻结的 `@zhin.js/workroom/data-governance` 子路径（仅移出包根，旧 Kernel 默认装配仍创建；C2 之后处理）。
+当前的 Data Governance Policy 对 exact Descriptor、Envelope/principal、purpose、channel、Processing Destination/recipient snapshot 与 approvals 的唯一判定，结果只能为 full、metadata-only、trusted transform required、exact approval required 或 deny。Context View、Evidence Port、IM/Console projection 与 A2A 共享此判定，不得各自放宽。
 _避免使用_：引用即授权、sink 本地过滤、Sponsor 可越过 tenant/credential hard deny、缓存旧受众决定
 
 **Trusted Minimizing Transform**:
@@ -514,9 +514,8 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Event System | `src/event/` | agent | Agent turn 域事件 + **AgentStreamBus**（per-resource-hub egress）；不替代 Kernel RunEvent 或 plugin `before.*` |
 | Skill System | `src/skill/` | agent | 包装 `SkillRegistry` + discovery |
 | Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；`ZhinAgent` 独占一个 `AgentCompactionRuntime`，压缩状态不跨 Host 共享 |
-| Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
+| Collaboration | `src/collaboration/` | agent → harness | `HostMailbox` 与 `ask`/`delegate`/`tell`/`follow_up`/`board`/`escalate`（ADR 0048） |
 | Context System | `src/context/` | agent | 只读 canonical Turn 的 prompt-assembly / turn-user-message builder 链；IM `Message` 投影仅存在于外层 ingress adapter |
-| Workroom Kernel | `src/workroom/` | agent | versioned Journal + pure replay/decision；不并入 Subagent |
 | IM 装配 | `basic/cli` Plugin Runtime | composition root | canonical Turn ingress / reply Delivery；不承担 Agent 间通信 |
 
 `ZhinAgent` 同时拥有实例级 `AgentCompactionRuntime` 与 `OwnerApprovalRuntime`。后者是 `/approve always bash`、ICQQ 正则放行和 exec 策略读取的唯一权威；安全策略不从模块全局状态或经典 `Plugin` 树解析审批。
@@ -531,12 +530,11 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Event System | `src/event/`（含 `event-emitter.ts`、`session-events.ts`） | `@zhin.js/agent/event` |
 | Skill System | `src/skill/`、`resource-hub/skill-registry.ts` | `@zhin.js/agent/skill` |
 | Memory System | `src/memory/`、`ContextRepository`（ai） | `@zhin.js/agent/memory` |
-| Subagent System | `src/subagent/`、`SubagentSystem` | `@zhin.js/agent/subagent` |
+| Collaboration | `src/collaboration/`、`HostMailbox` | `@zhin.js/agent` |
 | Context System | `src/context/` | `@zhin.js/agent/context` |
 | Prompt | `src/prompt/` | `@zhin.js/agent/prompt` |
 | Turn | `src/turn/`（`turn-pipeline`、`turn-complete`） | `@zhin.js/agent/turn` |
 | Config | `src/config/` | `@zhin.js/agent/config` |
-| Workroom Kernel | `src/workroom/` | 包根 export；Journal / command / read projection 分权 |
 | IM 组合 | `src/init/`、`zhin-agent/`（门面） | 包根 export；IM ingress / delivery 在 `basic/cli` |
 | Host 契约（包内） | `src/internal/agent-host.ts`、`as-private.ts` | 不对外 export |
 
@@ -557,7 +555,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 |-----|------|------------------|
 | [0009](../../../docs/adr/0009-pi-aligned-ai-agent-core.md) | 唯一 LLM 入口 `stream` / `agentLoop` | `AgentCore.runText()` AsyncGenerator + `runTextTurn` collector |
 | [0004](../../../docs/adr/0004-normalize-queue-outbound-fields-before-im-send.md) | 出站不得旁路统一 delivery pipeline | ReplyPort / DeliveryPort 是唯一入口；Agent 不直接依赖 Message / Adapter |
-| [0027](../../../docs/adr/0027-agent-run-orchestration-kernel.md) | Kernel 为 Run/Task/Assignment 事实 SSOT | 由 `src/workroom/` 的 Journal + replay state machine 实现；无 Dispatcher |
+| [0048](../../../docs/adr/0048-agent-harness.md) | 统一 Actor + Mail + Engagement + GuardKernel + Budget 协作架构 | 由 `@zhin.js/harness` 与 `src/collaboration/` 实现 |
 | [0019](../../../docs/adr/0019-install-size-layering.md) | agent 可选 peer、依赖扁平 | 迁移期单包 + 子目录；阶段 5 前不拆 8 个 npm 包 |
 
 **公开 API**：`ZhinAgent` 实现 `config/agent-interfaces.ts` 四接口（`IAgentTurnProcessor` 等）；`@zhin.js/agent` 与 `@zhin.js/agent/config` 均可 import 类型。

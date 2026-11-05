@@ -127,8 +127,7 @@
     "export * from './scene-fact-refresher.js';",
     "export * from './session-event-dispatch.js';",
     "export * from './session-gate.js';",
-    "export * from './trigger.js';",
-    "export * from './turn-continuation-port.js';"
+    "export * from './trigger.js';"
   ],
   "cli/runtime": [
     "export * from './migrate/index.js';",
@@ -180,6 +179,7 @@
     "export * from '../../notice.js';",
     "export * from '../../request.js';",
     "export * from '../../system-event.js';",
+    "export * from '../../venue/index.js';",
     "export * from './contracts.js';",
     "export * from './group-rule-violation.js';",
     "export * from './im-runtime.js';",

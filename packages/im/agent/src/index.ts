@@ -924,16 +924,6 @@ export type {
 } from './resource-hub/index.js';
 
 export {
-  FIVE_AGENT_ROLES,
-  isFiveAgentRole,
-  asFiveAgentRole,
-  filterToolNamesForRole,
-  filterToolsForRole,
-  isToolAllowedForRole,
-} from './orchestration/five-agent/index.js';
-export type { FiveAgentRole } from './orchestration/five-agent/index.js';
-
-export {
   defineSkill,
   defineHook,
   defineEval,

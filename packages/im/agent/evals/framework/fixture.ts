@@ -59,6 +59,17 @@ export interface EvalInboundMessage {
    */
   readonly addressed?: boolean;
   /**
+   * ADR 0048 §3.4 invariant 7: message origin in a Venue (`human`, `member`, `peer_bot`, `self`).
+   * Only `human` messages may open a `human` Mail turn; non-human origins are ignored at ingress.
+   */
+  readonly origin?: 'human' | 'member' | 'peer_bot' | 'self';
+  /** Structured mentions for Venue routing (ADR 0048 H4). */
+  readonly mentions?: readonly string[];
+  /** Sender id of the message being replied to, for Venue routing (ADR 0048 H4). */
+  readonly replyToSenderId?: string;
+  /** Winning bot endpoint id that received this message in a multi-bot Venue (ADR 0048 H4). */
+  readonly endpointId?: string;
+  /**
    * ADR 0048 H3 mid-turn delivery: post this message to the Mailbox while the
    * scripted model serves entry step `duringStep` (1-based) of an earlier
    * turn, instead of after the previous turn ended. Exercises supersede /
@@ -251,6 +262,11 @@ export interface EvalExpectations {
   readonly selfChangeStatuses?: readonly EvalSelfChangeStatus[];
   /** Production workspace files after the run: content, or `null` when the file must not exist. */
   readonly workspaceFiles?: Readonly<Record<string, string | null>>;
+  /**
+   * ADR 0048 H4 Venue projections (`<endpointId>: <substring>`), or `[]` when no collaboration
+   * hops may be projected to the Venue.
+   */
+  readonly venueProjections?: readonly string[];
 }
 
 /** A skill visible to the turn. Only its name and one-line trigger are resident; instructions load on demand. */
@@ -298,7 +314,24 @@ export interface EvalAgentFixture {
     contacts?: readonly string[];
     /** Agents (or `human`) it accepts delegated work from. */
     acceptsFrom?: readonly string[];
+    /** Default per-delegation budget ceiling (ADR 0048 §2). */
+    budget?: Partial<BudgetAmounts>;
   }>;
+}
+
+/** ADR 0048 H4: a bot member of a multi-bot Venue. */
+export interface EvalVenueMemberFixture {
+  readonly agent: string;
+  readonly botEndpoint: string;
+  readonly aliases?: readonly string[];
+}
+
+/** ADR 0048 H4: multi-bot IM Venue fixture for the eval conversation. */
+export interface EvalVenueFixture {
+  readonly id?: string;
+  readonly visibility?: 'visible' | 'summary' | 'backstage';
+  readonly entry?: string;
+  readonly members: readonly EvalVenueMemberFixture[];
 }
 
 export interface EvalCase {
@@ -314,6 +347,8 @@ export interface EvalCase {
   readonly tools?: readonly EvalTool[];
   /** ADR 0048 peer Agents (H2). Script steps tagged `actor: '<name>'` answer that agent's model requests. */
   readonly agents?: readonly EvalAgentFixture[];
+  /** ADR 0048 H4 multi-bot Venue configuration for the eval conversation. */
+  readonly venue?: EvalVenueFixture;
   readonly skills?: readonly EvalSkill[];
   readonly nativeTools?: readonly EvalNativeTool[];
   /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
@@ -419,7 +454,7 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   const duplicateAgents = agentNames.filter((name, index) => agentNames.indexOf(name) !== index);
   if (duplicateAgents.length > 0) problems.push(`duplicate agent names: ${[...new Set(duplicateAgents)].join(', ')}`);
   candidate.script?.forEach((step, index) => {
-    if (step.actor !== undefined && step.actor !== 'zhin' && !agentNames.includes(step.actor)) {
+    if (step.actor !== undefined && step.actor !== 'zhin' && step.actor !== 'self' && !agentNames.includes(step.actor)) {
       problems.push(`script step ${index + 1} names actor "${step.actor}" which is not a declared agent`);
     }
     if ('toolCalls' in step && step.toolCalls.length === 0) problems.push(`script step ${index + 1} has an empty toolCalls list`);

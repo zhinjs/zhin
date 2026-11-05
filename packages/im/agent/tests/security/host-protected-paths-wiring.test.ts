@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const packagesIm = join(here, '..', '..', '..');
 
 function sourceFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
   return readdirSync(dir).flatMap((name) => {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) return name === 'node_modules' || name === 'lib' ? [] : sourceFiles(full);
@@ -41,7 +42,7 @@ describe('host-protected paths reach every production Turn (#1030 P0)', () => {
   it('passes hostProtectedPaths at every createTurnIngress call site (or the call carries it via a spread)', () => {
     const sites = production.flatMap((file) =>
       turnIngressArguments(readFileSync(file, 'utf8')).map((body) => ({ file: file.slice(packagesIm.length), body })));
-    expect(sites.length).toBeGreaterThanOrEqual(3);
+    expect(sites.length).toBeGreaterThanOrEqual(2);
     const missing = sites.filter(({ body }) => !body.includes('hostProtectedPaths')).map(({ file }) => file);
     expect(missing).toEqual([]);
   });

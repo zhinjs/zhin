@@ -4,7 +4,6 @@ import type { AgentCapabilities } from '../index.js';
 import { chatFailureLine } from '../../index.js';
 import { isCancelIntent } from '../../turn/index.js';
 import type { Locale } from '@zhin.js/plugin-runtime';
-import type { WorkroomTurnContinuation } from './turn-continuation-port.js';
 
 const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
 const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';
@@ -65,7 +64,7 @@ export function routeSpecialistAgent(
       item.name === preferredAgentDefinitionId
       || item.qualifiedName === preferredAgentDefinitionId);
     if (!preferred) {
-      throw new Error(`Workroom Orchestrator Agent is unavailable: ${preferredAgentDefinitionId}`);
+      throw new Error(`Preferred specialist Agent is unavailable: ${preferredAgentDefinitionId}`);
     }
     return { userText, agent: preferred };
   }
@@ -156,18 +155,12 @@ export function matchAiTrigger(
   return null;
 }
 
-export function workroomOrchestratorSessionKey(
-  continuation: Pick<WorkroomTurnContinuation, 'projectId' | 'agentDefinitionId'>,
-): string {
-  return `workroom:${encodeURIComponent(continuation.projectId)}:orchestrator:${encodeURIComponent(continuation.agentDefinitionId)}`;
-}
-
 export function resolveRuntimeAgentTrigger(
   message: Message,
   trigger: AITriggerConfig | undefined,
-  workroomAgentTurn: boolean,
+  forceTriggered = false,
 ): { content: string } | null {
-  if (!workroomAgentTurn) return matchAiTrigger(message, trigger);
+  if (!forceTriggered) return matchAiTrigger(message, trigger);
   if (trigger?.enabled === false) return null;
   const text = message.content.trim();
   if (!text) return null;

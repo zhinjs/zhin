@@ -106,10 +106,6 @@ export class Schema<S = any, T = S> {
     toJsonSchema(): Readonly<Record<string, unknown>> {
         return toJsonSchema(this);
     }
-    /** Alias for `toJsonSchema()` so `Schema` satisfies standard `ExecutableToolInputSchema` ports. */
-    toJSONSchema(): Readonly<Record<string, unknown>> {
-        return this.toJsonSchema();
-    }
     /** 设置选项列表 */
     option(list: (T | Schema.Option<T>)[]): this {
         this.meta.options = Schema.formatOptionList(list);
@@ -165,7 +161,10 @@ export class Schema<S = any, T = S> {
     static dict<X extends Schema>(input: X, key?: string) {
         return new Schema<Record<string, Schema.Input<X>>, Record<string, Schema.Output<X>>>({ type: 'dict', key }, { inner: input });
     }
-    static object<X extends Record<string, Schema<any, any>>>(input: X, key: string = '') {
+    static object<X extends Record<string, Schema<any, any>>>(
+        input: X,
+        key: string = '',
+    ): Schema<Schema.InputRecord<X>, Schema.RecordTypes<X>> & { readonly output?: Schema.RecordTypes<X> } {
         return new Schema<Schema.InputRecord<X>, Schema.RecordTypes<X>>({ type: 'object', key }, { object: input });
     }
     /** 声明一个列表类型 */
@@ -263,10 +262,9 @@ export namespace Schema {
         list?: readonly Schema[];
     }
     export type Types<T> = Output<T>;
-    export type RecordTypes<T> = T extends Record<string, Schema>
-        ? { [K in keyof T as T[K] extends Present ? K : never]-?: Output<T[K]> }
-            & { [K in keyof T as T[K] extends Present ? never : K]?: Output<T[K]> }
-        : unknown;
+    export type RecordTypes<T extends Record<string, any>> =
+        { [K in keyof T as T[K] extends Present ? K : never]-?: Output<T[K]> }
+        & { [K in keyof T as T[K] extends Present ? never : K]?: Output<T[K]> };
     export type Union<T extends readonly any[]> = T extends readonly [infer L, ...infer R]
         ? Types<L> | Union<R>
         : never;

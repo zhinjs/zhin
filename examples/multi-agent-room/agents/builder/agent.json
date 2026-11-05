@@ -1,0 +1,21 @@
+{
+  "name": "builder",
+  "version": "1.0.0",
+  "description": "群内实现 Agent：读取黑板上的规划（plan），产出具体实现方案或代码草稿并写回黑板（draft）。",
+  "role": "specialist",
+  "entry_points": ["system.md", "boundaries.md", "conventions.md"],
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": ["实现", "构建", "编码", "草稿", "build"]
+  },
+  "collaboration": {
+    "contacts": ["planner", "reviewer"],
+    "accepts_from": ["human", "planner", "reviewer"],
+    "budget": {
+      "modelCalls": 10,
+      "tokens": 40000,
+      "wallMs": 60000,
+      "sideEffects": 4
+    }
+  }
+}

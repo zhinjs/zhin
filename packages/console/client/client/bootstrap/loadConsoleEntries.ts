@@ -193,17 +193,22 @@ export async function registerConsolePluginsFromEntries(
   );
 }
 
-let activeEntriesLoadPromise: Promise<void> | null = null;
-let lastLoadOptions: LoadConsoleEntriesOptions | null = null;
+const entryLoaderState: {
+  activePromise: Promise<void> | null;
+  lastOptions: LoadConsoleEntriesOptions | null;
+} = {
+  activePromise: null,
+  lastOptions: null,
+};
 
 export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Promise<void> {
-  lastLoadOptions = options;
+  entryLoaderState.lastOptions = options;
   options.beforeLoad?.();
   let data: ConsoleEntriesResponse;
   try {
     data = await fetchConsoleEntries(options);
   } catch (error) {
-    activeEntriesLoadPromise = null;
+    entryLoaderState.activePromise = null;
     const status = typeof (error as { status?: unknown }).status === "number"
       ? (error as { status: number }).status
       : 0;
@@ -226,20 +231,20 @@ export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Pr
       options.locale,
     );
   } catch (error) {
-    activeEntriesLoadPromise = null;
+    entryLoaderState.activePromise = null;
     throw error;
   }
 }
 
 export async function reloadConsoleEntries(options?: LoadConsoleEntriesOptions): Promise<void> {
-  activeEntriesLoadPromise = null;
-  const resolved = options ?? lastLoadOptions;
+  entryLoaderState.activePromise = null;
+  const resolved = options ?? entryLoaderState.lastOptions;
   if (!resolved) return;
-  activeEntriesLoadPromise = loadConsoleEntries(resolved).catch((error) => {
-    activeEntriesLoadPromise = null;
+  entryLoaderState.activePromise = loadConsoleEntries(resolved).catch((error) => {
+    entryLoaderState.activePromise = null;
     throw error;
   });
-  return activeEntriesLoadPromise;
+  return entryLoaderState.activePromise;
 }
 
 export const CONSOLE_ENTRY_LIFECYCLE_EVENTS = [

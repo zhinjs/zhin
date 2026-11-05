@@ -1,0 +1,21 @@
+{
+  "name": "planner",
+  "version": "1.0.0",
+  "description": "群内协作入口 Agent：接收人类需求、拆解方案写入共享黑板（board），并调度 builder 与 reviewer 协作交付。",
+  "role": "orchestrator",
+  "entry_points": ["system.md", "boundaries.md", "conventions.md"],
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": ["规划", "设计", "交付", "方案", "plan"]
+  },
+  "collaboration": {
+    "contacts": ["builder", "reviewer"],
+    "accepts_from": ["human", "builder", "reviewer"],
+    "budget": {
+      "modelCalls": 16,
+      "tokens": 64000,
+      "wallMs": 120000,
+      "sideEffects": 8
+    }
+  }
+}

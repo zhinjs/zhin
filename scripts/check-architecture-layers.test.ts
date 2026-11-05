@@ -11,6 +11,8 @@ import { findBarrelViolations, parseImports, parseReexports } from './lib/parse-
 import {
   extractBarePackageName,
   findUndeclaredWorkspaceImports,
+  layers,
+  packageNameToPath,
 } from './check-architecture-layers.mjs';
 import {
   isAgentForbiddenWorkroomReference,
@@ -366,6 +368,10 @@ describe('check-architecture-layers.mjs wiring', () => {
     expect(source).toContain("'packages/im/harness'");
     expect(source).toContain("'packages/im/permission'");
     expect(source).toContain("'packages/im/schedule-feature'");
+    expect(layers['packages/im/harness']).toBeDefined();
+    expect(layers['packages/im/workroom']).toBeUndefined();
+    expect(packageNameToPath['@zhin.js/harness']).toBe('packages/im/harness');
+    expect(packageNameToPath['@zhin.js/workroom' as keyof typeof packageNameToPath]).toBeUndefined();
   });
 
   it('passes against the real repository', () => {

@@ -60,12 +60,33 @@ describe('Agent Feature', () => {
     expect(parseAgentPackage(packageSource(), validation()).collaboration).toBeUndefined();
     expect(parse({ contacts: ['coder', 'qa-bot'], accepts_from: ['human', 'planner'] }).collaboration)
       .toEqual({ contacts: ['coder', 'qa-bot'], acceptsFrom: ['human', 'planner'] });
+    expect(parse({ acceptsFrom: ['human'] }).collaboration)
+      .toEqual({ contacts: undefined, acceptsFrom: ['human'] });
+    expect(parse({
+      contacts: ['coder'],
+      budget: { model_calls: 5, tokens: 10_000, wall_ms: 30_000, side_effects: 2 },
+    }).collaboration).toEqual({
+      contacts: ['coder'],
+      acceptsFrom: undefined,
+      budget: { modelCalls: 5, tokens: 10_000, wallMs: 30_000, sideEffects: 2 },
+    });
+    expect(parse({
+      budget: { modelCalls: 3, wallMs: 5_000, sideEffects: 1 },
+    }).collaboration).toEqual({
+      contacts: undefined,
+      acceptsFrom: undefined,
+      budget: { modelCalls: 3, wallMs: 5_000, sideEffects: 1 },
+    });
     expect(parse({}).collaboration).toEqual({ contacts: undefined, acceptsFrom: undefined });
     expect(() => parse({ contacts: ['Bad Name'] })).toThrow(/invalid agent name/);
     expect(() => parse({ accepts_from: ['Bad_Name'] })).toThrow(/invalid agent name/);
     expect(() => parse({ contacts: ['a', 'a'] })).toThrow(/duplicates/);
     expect(() => parse({ extra: [] })).toThrow(/unknown fields/);
     expect(() => parse(['x'])).toThrow(/must be an object/);
+    expect(() => parse({ budget: 'lots' })).toThrow(/collaboration\.budget must be an object/);
+    expect(() => parse({ budget: { unknown_key: 1 } })).toThrow(/collaboration\.budget has unknown fields/);
+    expect(() => parse({ budget: { model_calls: 0 } })).toThrow(/positive integer/);
+    expect(() => parse({ budget: { tokens: -10 } })).toThrow(/positive integer/);
   });
 
   it('rejects incomplete core entry points and traversal', () => {

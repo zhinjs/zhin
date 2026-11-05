@@ -87,7 +87,8 @@ fallback is separate and remains covered by `multimodal-perception-fallback`.
 | `models` | Extra model ids registered after the primary `scripted-model`, in registration order (legacy `modelCandidates`; fixed chat selection must not call the later models). A step's optional `model` pins which model must receive that request. |
 | `modelInput` | Input modalities the scripted model declares (default `['text']`). Add `'image'` so turn images reach it. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
-| `agents` | ADR 0048 H2 peer Agents (`name`, `description`, `tools`, optional `collaboration: { contacts, acceptsFrom }`). The driver registers them as `capabilities.agents` (owned by the driver's root plugin) and awaits `collaborationIdle()` after every inbound turn, then closes the case's host Mailbox at the end of the case. See "Peer agents and actors". |
+| `agents` | ADR 0048 H2 peer Agents (`name`, `description`, `tools`, optional `collaboration: { contacts, acceptsFrom, budget }`). The driver registers them as `capabilities.agents` (owned by the driver's root plugin) and awaits `collaborationIdle()` after every inbound turn, then closes the case's host Mailbox at the end of the case. See "Peer agents and actors". |
+| `venue` | ADR 0048 H4 multi-bot Venue (`id`, `visibility: 'visible' \| 'summary' \| 'backstage'`, `entry`, `members: [{ agent, botEndpoint, aliases? }]`). Routes inbound messages to the addressed member and projects peer collaboration hops through `VenueProjector`. |
 
 ### Peer agents and actors (ADR 0048 H2)
 
@@ -219,12 +220,16 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `session-history-carried` | context, memory | QQ: follow-up questions lost the previous turn (baseline for #730 compaction / told-ledger) |
 | `harness-agent-result-is-data` | collaboration, approval, injection | ADR 0048 invariant 6: a peer's result claiming owner approval does not skip the human  |
 | `harness-approval-routed-to-principal` | collaboration, approval | ADR 0048 invariant 4: approvals go to the engagement's human (replaces `subagent-approval-routed`) |
+| `harness-board-and-follow-up` | collaboration, long-task | ADR 0048 §3.3: collaborating agents share a blackboard (`board_write` / `board_read`) and send `follow_up` on prior work |
 | `harness-contacts-enforced` | collaboration, injection | ADR 0048 §2: an agent only reaches the agents its policy lists  |
 | `harness-delegate-attenuates-authority` | collaboration, approval, injection | ADR 0048 invariant 1: delegating for a group member never lends the delegatee's shell  |
 | `harness-delegate-result-wakes-delegator` | collaboration, long-task | ADR 0048 §3.3: async delegate, result mail wakes the delegator  |
 | `harness-delegatee-ceiling-not-widened` | collaboration, approval | ADR 0048 invariant 1: the delegatee's ceiling caps a master's delegation  |
 | `harness-delegation-budget-enforced` | collaboration, long-task, quota | ADR 0048 invariant 2: a delegatee cannot exceed its budget grant  |
 | `harness-ping-pong-escalates` | collaboration, long-task | ADR 0048 invariant 5: agents bouncing a question are stopped and the human decides  |
+| `harness-specialist-routing` | collaboration, tool-use | ADR 0048 §2 / H4: addressing `@<specialist>` routes the entry turn to that specialist with its own ceiling and contacts |
+| `harness-venue-bot-origin-not-human` | collaboration, injection | ADR 0048 §3.4 invariant 7: bot-origin messages in a Venue (`member` / `peer_bot` / `self`) never open a human Mail turn |
+| `harness-venue-visibility-modes` | collaboration | ADR 0048 §3.2 / H4: a visible multi-bot Venue routes to the mentioned member and projects peer hops via the peer bot endpoint |
 | `tool-result-summarized` | tool-use | QQ: raw tool output (JSON payload) pasted straight to the user (#716 H1 / tool-calls-user-format) |
 | `unknown-tool-hinted` | tool-use | QQ: model invented a tool name and the turn looped on "Unknown tool" (#716 core-tools-loaded) |
 

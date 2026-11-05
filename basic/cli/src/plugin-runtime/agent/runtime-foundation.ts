@@ -4,7 +4,9 @@ import type { ModelRuntimeServiceOptions, ModelExecutionScope } from '@zhin.js/a
 import { getAgentTurnConfiguration, runWithAgentTurnConfiguration } from '@zhin.js/agent/turn';
 import { projectLocaleToken, resolveLocale } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { VenueDefinition } from '@zhin.js/core';
 import type { ImRuntime } from '@zhin.js/core/runtime';
+import { InMemoryEngagementJournal, type EngagementJournal } from '@zhin.js/harness';
 import {
   AIService,
   type LocalImageAssetStore,
@@ -29,6 +31,7 @@ import {
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import {
   resolveAgentHostKnowledgeDirectory,
+  resolveAgentHostVenues,
   type AgentHostAIConfig,
 } from './config.js';
 import { createRuntimeZhinAgent } from './runtime-factory.js';
@@ -86,6 +89,7 @@ interface AgentRuntimeFoundationState {
   readonly approvalReviewer: ApprovalReviewAgent;
   readonly approvalJudgment: ApprovalJudgmentPort;
   readonly bypassApprovalPort: ApprovalPort;
+  readonly venues: readonly VenueDefinition[];
 }
 
 /** A complete, validated Agent runtime candidate with all owned auxiliaries. */
@@ -106,6 +110,8 @@ export class AgentRuntimeFoundation {
   readonly approvalReviewer: ApprovalReviewAgent;
   readonly approvalJudgment: ApprovalJudgmentPort;
   readonly bypassApprovalPort: ApprovalPort;
+  readonly venues: readonly VenueDefinition[];
+  #engagementJournal: EngagementJournal = new InMemoryEngagementJournal();
 
   private constructor(state: AgentRuntimeFoundationState) {
     this.withModels = state.withModels;
@@ -124,9 +130,19 @@ export class AgentRuntimeFoundation {
     this.approvalReviewer = state.approvalReviewer;
     this.approvalJudgment = state.approvalJudgment;
     this.bypassApprovalPort = state.bypassApprovalPort;
+    this.venues = state.venues;
+  }
+
+  get engagementJournal(): EngagementJournal {
+    return this.#engagementJournal;
+  }
+
+  setEngagementJournal(journal: EngagementJournal): void {
+    this.#engagementJournal = journal;
   }
 
   static async create(options: AgentRuntimeFoundationOptions): Promise<AgentRuntimeFoundation> {
+    const venues = resolveAgentHostVenues(options.config);
     const service = await createReadyService(options.config, options.modelRuntime);
     options.lifecycle.add(() => service.dispose());
     const knowledgeDirectory = resolveAgentHostKnowledgeDirectory(
@@ -206,7 +222,7 @@ export class AgentRuntimeFoundation {
         },
         withModels: async (input, run) => {
           const activeBinding = service.getBindingRegistry().getBinding(input.bindingName);
-          if (!activeBinding) throw new Error('Workroom model role is unavailable');
+          if (!activeBinding) throw new Error('Agent model role is unavailable');
           const models = await options.acquireDeploymentModels({ service, bindingName: input.bindingName,
             sessionKey: input.sessionKey, operationId: input.turnId, lease: input.lease, signal: input.signal });
           try { return await runWithAgentTurnConfiguration({ models, activeBinding }, () => run(models)); }
@@ -228,6 +244,7 @@ export class AgentRuntimeFoundation {
         approvalReviewer,
         approvalJudgment,
         bypassApprovalPort,
+        venues,
       });
     } catch (error) {
       throw new Error('Agent Host candidate initialization failed', { cause: error });

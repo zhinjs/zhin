@@ -601,16 +601,12 @@ async function loadConfiguredAgentHost(options: Readonly<{
     }
     throw error;
   }
-  // Only a missing @zhin.js/workroom package degrades; any other load failure aborts startup.
-  const workroom = await agentHost.loadWorkroomHostModule();
-  if (!workroom) getLogger('runtime').info('Workroom 未安装，仅启用 Agent');
   // One writer across generations; persistence maintenance also prunes while the bot is idle.
   const turnTraceStore = createTurnTraceArchive(defaultTurnTraceDir(projectRoot), {
     ...resolveTraceArchiveOptions(),
     legacyFile: defaultTurnTraceFile(projectRoot),
   });
   const initialAi = await agentHost.resolveAiConfig(document);
-  const workroomStorageMode = agentHost.resolveWorkroomStorageMode(initialAi);
   const runtime = new agentHost.AgentRuntime({
     coordinator: new agentHost.AgentTurnCoordinator(),
     turnTraceStore,
@@ -630,9 +626,6 @@ async function loadConfiguredAgentHost(options: Readonly<{
     }),
   ]));
   let sourceOwnership: (() => import('@zhin.js/runtime').SourceOwnershipIndex) | undefined;
-  let localWorkroomDataGovernance: ReturnType<
-    NonNullable<typeof workroom>['createLocalWorkroomDataGovernanceAuthority']
-  > | undefined;
   const configured: ConfiguredAgentHost = {
     close: () => inference.close(),
     ambientModels: input => inference.ambientModels(input),
@@ -660,19 +653,12 @@ async function loadConfiguredAgentHost(options: Readonly<{
     },
     install: (options) => {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
-      localWorkroomDataGovernance ??= workroom?.createLocalWorkroomDataGovernanceAuthority({
-        stateRoot: join(options.projectRoot, '.zhin'),
-      });
       return agentHost.installAgentHost({
         ...options,
         inference,
         pruneTraces: () => turnTraceStore.prune(),
         runtime,
         snapshots: snapshotReader,
-        workroom,
-        workroomStorageMode,
-        workroomTrustedPackPublishers: agentHost.resolveWorkroomTrustedPackPublishers(initialAi),
-        workroomLocalDataGovernance: localWorkroomDataGovernance,
         selfChangeImpact: agentHost.createSelfChangeImpactPort(sourceOwnership),
         selfChangePluginRoots: agentHost.createSelfChangePluginRoots(options.projectRoot, sourceOwnership),
         extraTools: options.extraTools as Parameters<typeof agentHost.installAgentHost>[0]['extraTools'],
@@ -695,24 +681,29 @@ export function hasAgentConfiguration(document: RuntimeConfigDocument): boolean 
 function assertNoRemovedAgentConfiguration(section: unknown): void {
   if (section == null || typeof section !== 'object' || Array.isArray(section)) return;
   const ai = section as Record<string, unknown>;
+  if (Object.hasOwn(ai, 'workroom')) {
+    throw new Error(
+      'ai.workroom removed in ADR 0048; declare shared rooms under ai.venues and agent collaboration ceilings under agents/<name>/agent.json ("collaboration")',
+    );
+  }
   if (Object.hasOwn(ai, 'workrooms')) {
     throw new Error(
-      'ai.workrooms removed; manage the persistent Workroom Catalog through Console or its repository API',
+      'ai.workrooms removed in ADR 0048; declare shared rooms under ai.venues and agent collaboration ceilings under agents/<name>/agent.json ("collaboration")',
     );
   }
   if (Object.hasOwn(ai, 'remoteAgents')) {
     throw new Error(
-      'ai.remoteAgents removed; register a governed Workroom A2A Executor through the persistent Catalog and generation resources',
+      'ai.remoteAgents removed in ADR 0048; declare remote peers under a2a.mailbox.peers',
     );
   }
   if (Object.hasOwn(ai, 'remote_mesh')) {
     throw new Error(
-      'ai.remote_mesh removed; use the fenced Workroom Assignment A2A transport instead of a parallel remote Task state machine',
+      'ai.remote_mesh removed in ADR 0048; use a2a.mailbox for remote peer mail transport',
     );
   }
   if (Object.hasOwn(ai, 'remoteMesh')) {
     throw new Error(
-      'ai.remoteMesh removed; use the fenced Workroom Assignment A2A transport instead of a parallel remote Task state machine',
+      'ai.remoteMesh removed in ADR 0048; use a2a.mailbox for remote peer mail transport',
     );
   }
 }

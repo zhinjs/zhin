@@ -6,12 +6,27 @@
  * so the host registers `ENGAGEMENT_EVENT_MODEL` and passes its database in.
  */
 import {
+  BUDGET_KEYS,
   DEFAULT_JOURNAL_RETENTION,
   JournalFullError,
+  type ActorId,
+  type BoardEntry,
+  type BoardEntryKind,
+  type BoardReadFilter,
+  type BoardTodoStatus,
+  type BudgetAmounts,
   type EngagementEvent,
+  type EngagementHopSummary,
   type EngagementId,
   type EngagementJournal,
+  type EngagementSummary,
+  type GuardBlockReason,
+  type JournalRecord,
   type JournalRetention,
+  type MailId,
+  type MailKind,
+  type Principal,
+  type VenueRef,
 } from './contracts.js';
 
 export interface JournalOptions {
@@ -106,6 +121,447 @@ class KeyedSerializer {
   }
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function recordPayload(record: JournalRecord): Record<string, unknown> {
+  const data = isPlainRecord(record.data) ? record.data : {};
+  const event = isPlainRecord(record.event) ? record.event : {};
+  return { ...event, ...data };
+}
+
+function recordType(record: JournalRecord): string {
+  if (typeof record.type === 'string' && record.type) return record.type;
+  if (isPlainRecord(record.event) && typeof record.event.type === 'string') return record.event.type;
+  return '';
+}
+
+function isActorRef(value: unknown): value is ActorId {
+  return (
+    typeof value === 'string'
+    && value.length > 0
+    && !value.startsWith('human:')
+    && !value.startsWith('system:')
+    && value !== 'human'
+    && value !== 'system'
+  );
+}
+
+/** Reconstructs blackboard entries from a sequence of journal records. */
+export function reconstructBoardFromEvents(
+  records: readonly JournalRecord[],
+  filter?: BoardReadFilter,
+): readonly BoardEntry[] {
+  const byKey = new Map<string, BoardEntry>();
+  for (const record of records) {
+    if (recordType(record) !== 'board_written') continue;
+    const payload = recordPayload(record);
+    const key = typeof payload.key === 'string' ? payload.key.trim() : '';
+    if (!key) continue;
+    const prev = byKey.get(key);
+    const kind: BoardEntryKind =
+      payload.kind === 'artifact' || payload.kind === 'todo' || payload.kind === 'note'
+        ? payload.kind
+        : prev?.kind ?? 'note';
+    const content = typeof payload.content === 'string' ? payload.content : prev?.content ?? '';
+    const author = typeof payload.actor === 'string'
+      ? payload.actor
+      : typeof payload.author === 'string'
+        ? payload.author
+        : prev?.author ?? '';
+    const version = typeof payload.version === 'number' && Number.isFinite(payload.version)
+      ? payload.version
+      : (prev?.version ?? 0) + 1;
+    const status: BoardTodoStatus | undefined =
+      payload.status === 'pending' || payload.status === 'in_progress' || payload.status === 'done'
+        ? payload.status
+        : prev?.status;
+    byKey.set(
+      key,
+      deepFreeze({
+        key,
+        kind,
+        content,
+        author,
+        updatedAt: record.at,
+        version,
+        ...(status !== undefined ? { status } : {}),
+      }),
+    );
+  }
+  const entries = [...byKey.values()].filter((entry) => {
+    if (filter?.key !== undefined && entry.key !== filter.key) return false;
+    if (filter?.kind !== undefined && entry.kind !== filter.kind) return false;
+    return true;
+  });
+  return Object.freeze(entries);
+}
+
+/** Pure helper that summarizes an engagement's journal records into a collaboration graph and metrics. */
+export function summarizeEngagementEvents(
+  engagementId: EngagementId,
+  records: readonly JournalRecord[],
+): EngagementSummary {
+  let initiator: Principal | undefined;
+  let venue: VenueRef | undefined;
+  let startedAt = records[0]?.at ?? 0;
+  let endedAt: number | undefined;
+  let closedStatus: EngagementSummary['status'] | undefined;
+  let reason: string | undefined;
+  let toolCallCount = 0;
+
+  const actors: ActorId[] = [];
+  const seenActors = new Set<ActorId>();
+  const addActor = (actor: unknown): void => {
+    if (isActorRef(actor) && !seenActors.has(actor)) {
+      seenActors.add(actor);
+      actors.push(actor);
+    }
+  };
+
+  const guardBlocks: Array<{
+    readonly from: ActorId;
+    readonly to?: ActorId;
+    readonly reason: GuardBlockReason;
+    readonly at: number;
+  }> = [];
+  const escalations: Array<{
+    readonly by: ActorId;
+    readonly reason: string;
+    readonly at: number;
+  }> = [];
+  const projections: Array<{
+    readonly venue: VenueRef;
+    readonly actor: ActorId;
+    readonly mailId: MailId;
+    readonly mode: 'visible' | 'summary';
+    readonly at: number;
+  }> = [];
+
+  const consumed = { modelCalls: 0, tokens: 0, wallMs: 0, sideEffects: 0 };
+  let closedSpent: Partial<BudgetAmounts> | undefined;
+
+  const hopsById = new Map<MailId, {
+    mailId: MailId;
+    kind: MailKind;
+    from: string;
+    to: ActorId;
+    causationId?: MailId;
+    status: 'sent' | 'delivered' | 'completed' | 'cancelled';
+  }>();
+  const hopOrder: MailId[] = [];
+  const seenMailIds = new Set<string>();
+  let anonymousMailCount = 0;
+
+  for (const record of records) {
+    const type = recordType(record);
+    const payload = recordPayload(record);
+
+    switch (type) {
+      case 'engagement_opened': {
+        startedAt = record.at;
+        if (isPlainRecord(payload.initiator) && typeof payload.initiator.id === 'string') {
+          initiator = payload.initiator as unknown as Principal;
+        } else if (isPlainRecord(payload.principal) && typeof payload.principal.id === 'string') {
+          initiator = payload.principal as unknown as Principal;
+        } else if (typeof payload.principal === 'string' && payload.principal) {
+          initiator = {
+            kind: 'human',
+            id: payload.principal,
+            trust: 'group_member',
+          };
+        }
+        if (isPlainRecord(payload.venue) && typeof payload.venue.kind === 'string' && typeof payload.venue.id === 'string') {
+          venue = { kind: payload.venue.kind, id: payload.venue.id };
+        }
+        addActor(payload.entry);
+        break;
+      }
+
+      case 'mail_admitted':
+      case 'mail_sent': {
+        const mailId = typeof payload.mailId === 'string' ? payload.mailId : '';
+        const kind = (typeof payload.kind === 'string' ? payload.kind : 'ask') as MailKind;
+        const from = typeof payload.from === 'string' ? payload.from : '';
+        const to = typeof payload.to === 'string' ? payload.to : '';
+        const causationId = typeof payload.causationId === 'string' && payload.causationId ? payload.causationId : undefined;
+        addActor(from);
+        addActor(to);
+        if (mailId) {
+          seenMailIds.add(mailId);
+          if (!hopsById.has(mailId)) {
+            hopsById.set(mailId, {
+              mailId,
+              kind,
+              from,
+              to,
+              ...(causationId !== undefined ? { causationId } : {}),
+              status: 'sent',
+            });
+            hopOrder.push(mailId);
+          }
+          if (kind === 'result' && causationId) {
+            const parentHop = hopsById.get(causationId);
+            if (parentHop) {
+              parentHop.status = payload.status === 'cancelled' ? 'cancelled' : 'completed';
+            }
+          }
+        } else {
+          anonymousMailCount++;
+        }
+        break;
+      }
+
+      case 'turn_started':
+      case 'mail_delivered': {
+        addActor(payload.actor);
+        const ids: string[] = [];
+        if (typeof payload.mailId === 'string') ids.push(payload.mailId);
+        if (Array.isArray(payload.mails)) {
+          for (const id of payload.mails) if (typeof id === 'string') ids.push(id);
+        }
+        for (const id of ids) {
+          const hop = hopsById.get(id);
+          if (hop && hop.status === 'sent') hop.status = 'delivered';
+        }
+        break;
+      }
+
+      case 'turn_finished':
+      case 'mail_completed': {
+        addActor(payload.actor);
+        const nextStatus = payload.status === 'cancelled' ? 'cancelled' : 'completed';
+        const ids: string[] = [];
+        if (typeof payload.mailId === 'string') ids.push(payload.mailId);
+        if (Array.isArray(payload.mails)) {
+          for (const id of payload.mails) if (typeof id === 'string') ids.push(id);
+        }
+        for (const id of ids) {
+          const hop = hopsById.get(id);
+          if (hop) hop.status = nextStatus;
+        }
+        break;
+      }
+
+      case 'mail_cancelled': {
+        const mailId = typeof payload.mailId === 'string' ? payload.mailId : '';
+        const hop = mailId ? hopsById.get(mailId) : undefined;
+        if (hop) hop.status = 'cancelled';
+        break;
+      }
+
+      case 'tool_called': {
+        toolCallCount++;
+        addActor(payload.actor);
+        break;
+      }
+
+      case 'board_written': {
+        addActor(payload.actor ?? payload.author);
+        break;
+      }
+
+      case 'guard_blocked':
+      case 'mail_denied': {
+        const from = typeof payload.from === 'string'
+          ? payload.from
+          : typeof payload.actor === 'string'
+            ? payload.actor
+            : '';
+        const to = typeof payload.to === 'string' ? payload.to : undefined;
+        addActor(from);
+        addActor(to);
+        const blockReason: GuardBlockReason = isPlainRecord(payload.reason) && typeof payload.reason.code === 'string'
+          ? {
+              code: payload.reason.code,
+              ...(typeof payload.reason.detail === 'string' ? { detail: payload.reason.detail } : {}),
+            }
+          : {
+              code: typeof payload.code === 'string' ? payload.code : 'denied',
+              ...(typeof payload.reason === 'string' ? { detail: payload.reason } : {}),
+            };
+        guardBlocks.push({
+          from,
+          ...(to !== undefined ? { to } : {}),
+          reason: blockReason,
+          at: record.at,
+        });
+        break;
+      }
+
+      case 'escalated': {
+        const by = typeof payload.by === 'string'
+          ? payload.by
+          : typeof payload.from === 'string'
+            ? payload.from
+            : typeof payload.actor === 'string'
+              ? payload.actor
+              : '';
+        addActor(by);
+        const escReason = typeof payload.reason === 'string' ? payload.reason : '';
+        escalations.push({ by, reason: escReason, at: record.at });
+        break;
+      }
+
+      case 'venue_projected': {
+        addActor(payload.actor);
+        if (isPlainRecord(payload.venue) && typeof payload.venue.kind === 'string' && typeof payload.venue.id === 'string') {
+          projections.push({
+            venue: { kind: payload.venue.kind, id: payload.venue.id },
+            actor: typeof payload.actor === 'string' ? payload.actor : '',
+            mailId: typeof payload.mailId === 'string' ? payload.mailId : '',
+            mode: payload.mode === 'summary' ? 'summary' : 'visible',
+            at: record.at,
+          });
+        }
+        break;
+      }
+
+      case 'budget_charged': {
+        const usage = isPlainRecord(payload.usage)
+          ? payload.usage
+          : isPlainRecord(payload.amount)
+            ? payload.amount
+            : isPlainRecord(payload.consumed)
+              ? payload.consumed
+              : payload;
+        for (const key of BUDGET_KEYS) {
+          const val = usage[key];
+          if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+            consumed[key] += val;
+          }
+        }
+        break;
+      }
+
+      case 'engagement_closed': {
+        endedAt = record.at;
+        if (
+          payload.status === 'completed'
+          || payload.status === 'escalated'
+          || payload.status === 'cancelled'
+          || payload.status === 'blocked'
+        ) {
+          closedStatus = payload.status;
+        }
+        if (typeof payload.reason === 'string') {
+          reason = payload.reason;
+        }
+        if (isPlainRecord(payload.budget) && isPlainRecord(payload.budget.spent)) {
+          closedSpent = payload.budget.spent as Partial<BudgetAmounts>;
+        } else if (isPlainRecord(payload.consumed)) {
+          closedSpent = payload.consumed as Partial<BudgetAmounts>;
+        }
+        break;
+      }
+
+      default:
+        break;
+    }
+  }
+
+  if (closedSpent) {
+    for (const key of BUDGET_KEYS) {
+      const val = closedSpent[key];
+      if (typeof val === 'number' && Number.isFinite(val)) {
+        consumed[key] = Math.max(consumed[key], val);
+      }
+    }
+  }
+
+  const status: EngagementSummary['status'] = closedStatus
+    ?? (endedAt !== undefined
+      ? escalations.length > 0
+        ? 'escalated'
+        : 'completed'
+      : escalations.length > 0
+        ? 'escalated'
+        : 'open');
+
+  if (reason === undefined && escalations.length > 0) {
+    reason = escalations[escalations.length - 1]?.reason;
+  }
+
+  const boardEntries = reconstructBoardFromEvents(records);
+  const hops: EngagementHopSummary[] = [];
+  for (const id of hopOrder) {
+    const hop = hopsById.get(id);
+    if (hop) hops.push({ ...hop });
+  }
+
+  return deepFreeze({
+    engagementId,
+    ...(initiator !== undefined ? { initiator } : {}),
+    ...(venue !== undefined ? { venue } : {}),
+    startedAt,
+    ...(endedAt !== undefined ? { endedAt } : {}),
+    status,
+    ...(reason !== undefined ? { reason } : {}),
+    actors,
+    mailCount: seenMailIds.size + anonymousMailCount,
+    toolCallCount,
+    boardEntries,
+    guardBlocks,
+    escalations,
+    projections,
+    consumed,
+    hops,
+  });
+}
+
+const COMPACTABLE_EVENT_TYPES = new Set<string>([
+  'budget_charged',
+  'budget_granted',
+  'mail_delivered',
+  'turn_started',
+]);
+
+function compactRecordList(
+  engagementId: EngagementId,
+  records: readonly EngagementEvent[],
+): readonly EngagementEvent[] | undefined {
+  if (records.length <= 20) return undefined;
+  let closedRecord: EngagementEvent | undefined;
+  for (const record of records) {
+    const type = recordType(record);
+    if (type === 'guard_blocked' || type === 'mail_denied' || type === 'escalated') {
+      return undefined;
+    }
+    if (type === 'engagement_closed') {
+      closedRecord = record;
+    }
+  }
+  if (!closedRecord) return undefined;
+  const closedStatus = closedRecord.data.status;
+  if (closedStatus !== undefined && closedStatus !== 'completed') {
+    return undefined;
+  }
+
+  const summary = summarizeEngagementEvents(engagementId, records);
+  const filtered = records.filter((record) => !COMPACTABLE_EVENT_TYPES.has(recordType(record)));
+  if (filtered.length === records.length) return undefined;
+
+  return filtered.map((record, index) => {
+    const data = record === closedRecord
+      ? (cloneJson(
+          {
+            ...record.data,
+            status: 'completed',
+            consumed: summary.consumed,
+          },
+          'data',
+          new Set(),
+        ) as Record<string, unknown>)
+      : (cloneJson(record.data, 'data', new Set()) as Record<string, unknown>);
+    return buildEvent(
+      { engagementId: record.engagementId, at: record.at, type: record.type, data },
+      index,
+      data,
+    );
+  });
+}
+
 // ---------------------------------------------------------------------------
 // In-memory
 // ---------------------------------------------------------------------------
@@ -154,6 +610,37 @@ export class InMemoryEngagementJournal implements EngagementJournal {
       }
     }
     return removed;
+  }
+
+  async listEngagements(limit?: number): Promise<readonly EngagementId[]> {
+    const entries: Array<{ id: EngagementId; lastAt: number; order: number }> = [];
+    let order = 0;
+    for (const [id, list] of this.#events) {
+      const last = list[list.length - 1];
+      if (!last) continue;
+      const lastAt = last.at;
+      entries.push({ id, lastAt, order: order++ });
+    }
+    entries.sort((a, b) => (b.lastAt !== a.lastAt ? b.lastAt - a.lastAt : b.order - a.order));
+    const ids = entries.map((entry) => entry.id);
+    return Object.freeze(limit !== undefined ? ids.slice(0, Math.max(0, limit)) : ids);
+  }
+
+  async summarize(engagementId: EngagementId): Promise<EngagementSummary | undefined> {
+    const records = await this.read(engagementId);
+    if (records.length === 0) return undefined;
+    return summarizeEngagementEvents(engagementId, records);
+  }
+
+  async compact(engagementId: EngagementId): Promise<void> {
+    await this.#serial.run(engagementId, async () => {
+      const list = this.#events.get(engagementId);
+      if (!list) return;
+      const compacted = compactRecordList(engagementId, list);
+      if (compacted) {
+        this.#events.set(engagementId, [...compacted]);
+      }
+    });
   }
 }
 
@@ -284,6 +771,55 @@ export class DatabaseEngagementJournal implements EngagementJournal {
       removed++;
     }
     return removed;
+  }
+
+  async listEngagements(limit?: number): Promise<readonly EngagementId[]> {
+    const rows = await this.#db
+      .select(ENGAGEMENT_EVENTS_TABLE, ['engagement_id', 'at', 'seq'])
+      .where({});
+    const meta = new Map<string, { lastAt: number; order: number }>();
+    let order = 0;
+    for (const row of rows) {
+      const id = String(row.engagement_id);
+      const at = Number(row.at);
+      const existing = meta.get(id);
+      if (!existing) {
+        meta.set(id, { lastAt: at, order: order++ });
+      } else {
+        if (at >= existing.lastAt) existing.lastAt = at;
+        existing.order = order++;
+      }
+    }
+    const entries = [...meta.entries()].sort(([, a], [, b]) =>
+      b.lastAt !== a.lastAt ? b.lastAt - a.lastAt : b.order - a.order,
+    );
+    const ids = entries.map(([id]) => id);
+    return Object.freeze(limit !== undefined ? ids.slice(0, Math.max(0, limit)) : ids);
+  }
+
+  async summarize(engagementId: EngagementId): Promise<EngagementSummary | undefined> {
+    const records = await this.read(engagementId);
+    if (records.length === 0) return undefined;
+    return summarizeEngagementEvents(engagementId, records);
+  }
+
+  async compact(engagementId: EngagementId): Promise<void> {
+    await this.#serial.run(engagementId, async () => {
+      const records = await this.read(engagementId);
+      const compacted = compactRecordList(engagementId, records);
+      if (!compacted) return;
+      await this.#db.delete(ENGAGEMENT_EVENTS_TABLE, { engagement_id: engagementId });
+      for (const record of compacted) {
+        await this.#db.insert(ENGAGEMENT_EVENTS_TABLE, {
+          id: `${engagementId}:${record.seq}`,
+          engagement_id: engagementId,
+          seq: record.seq,
+          at: record.at,
+          type: record.type,
+          data: JSON.stringify(record.data),
+        });
+      }
+    });
   }
 
   async #nextSeq(engagementId: EngagementId): Promise<number> {

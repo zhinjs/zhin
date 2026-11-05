@@ -16,8 +16,7 @@ if (!process.env.L4_SKIP_PLATFORM) {
 
 /** @type {string[]} */
 const l4TestFiles = [
-  'packages/im/workroom/tests/workroom/workroom-kernel.test.ts',
-  'packages/im/workroom/tests/workroom/assignment-observation-ingress.test.ts',
+  'packages/im/harness/tests/harness.test.ts',
   'packages/im/agent/tests/remote-loopback.test.ts',
   'packages/im/agent/tests/memory/memory-system.test.ts',
   'packages/host/mcp/tests/mesh-auth.test.ts',
@@ -52,12 +51,6 @@ for (const file of l4TestFiles) {
 }
 
 execSync(`pnpm vitest run ${l4TestFiles.map((f) => JSON.stringify(f)).join(' ')}`, {
-  cwd: repoRoot,
-  stdio: 'inherit',
-  env: { ...process.env, L4_SKIP_PLATFORM: process.env.L4_SKIP_PLATFORM },
-});
-
-execSync('pnpm check:workroom-ssot', {
   cwd: repoRoot,
   stdio: 'inherit',
   env: { ...process.env, L4_SKIP_PLATFORM: process.env.L4_SKIP_PLATFORM },

@@ -329,11 +329,6 @@ const checks = [
     description: '已知 LLM 网关 sdk/contextWindow 预设与 OpenCode 等契约',
   },
   {
-    name: 'Workroom SSOT',
-    command: 'pnpm check:workroom-ssot',
-    description: 'Workroom 状态须经 Journal + CAS Kernel，禁止并行可变权威',
-  },
-  {
     name: 'A2A Mesh',
     command: 'pnpm check:a2a-mesh',
     description: '禁止残留 MCP Agent Mesh v1 符号',

@@ -168,42 +168,50 @@ ai:
 
 ## 多 Agent 协作
 
-框架只管边界，Agent 自己决定怎么协作（ADR 0048）。一次人的消息会开启一次**协作**（engagement）：当前回合的 Agent 是根，它可以找别的 Agent，对方的回合是它的子回合，全程写进同一份 journal。协作工具**只在本回合确实有其他 Agent 可联系时**才提供给模型：
+框架只管边界，Agent 自己决定怎么协作（ADR 0048 Agent Harness）。一次人类消息、定时触发或外部事件会开启一次**协作**（Engagement）：入口 Agent 是根 Actor，它可以向同伴发信协作，所有回合与共享黑板变更都写入同一份 `engagement_events` Journal。协作工具**只在本回合确实有其他 Agent 可联系时**才提供给模型：
 
 | 工具 | 用途 |
 |------|------|
-| `agents` | 列出你能联系的 Agent 及其职责 |
-| `ask` | 同步提问，在本回合内等对方答复 |
-| `delegate` | 异步委派，立即返回句柄；结果稍后作为新消息回来，唤醒委派方继续 |
-| `tell` | 单向通知，不期待回复 |
-| `cancel_delegation` | 撤回自己委派出去的工作（传 `delegate` 返回的 mail id） |
-| `escalate` | 把决定交还给发起的人，等待回复 |
+| `agents` | 列出当前可联系的 Agent 及其职责说明 |
+| `ask` | 同步提问，在本回合内等待对方答复并返回结果 |
+| `delegate` | 异步委派，立即返回 `mailId`；对方完成后结果作为 `result` 邮件投回委派方信箱并唤醒新回合 |
+| `tell` | 单向通知同伴，不等待回复 |
+| `follow_up` | 针对先前已委派或提问的 `mailId` 追问或补充上下文，复用同一 Engagement 与因果链 |
+| `board_read` | 读取当前 Engagement 共享黑板（Blackboard）上的条目（支持按 `key` 或 `kind: note | todo | artifact` 过滤） |
+| `board_write` | 向当前 Engagement 共享黑板写入或更新条目（自动递增 `version` 并记入 `board_written` 事件） |
+| `cancel_delegation` | 撤回自己委派出去的工作（传 `delegate` 返回的 `mailId`） |
+| `escalate` | 遇到越权、死锁或高风险决策时冻结当前 Engagement，把决定交还给发起的人类 |
 
-谁能被联系，由 `agents/<name>/agent.json` 的 `collaboration` 声明：
+谁能被联系以及默认预算上限，由 `agents/<name>/agent.json` 的 `collaboration` 声明：
 
 ```json
 {
   "name": "planner",
   "collaboration": {
-    "contacts": ["researcher", "reviewer"],
-    "accepts_from": ["planner"]
+    "contacts": ["builder", "reviewer"],
+    "accepts_from": ["human", "builder", "reviewer"],
+    "budget": {
+      "modelCalls": 16,
+      "tokens": 64000,
+      "wallMs": 120000,
+      "sideEffects": 8
+    }
   }
 }
 ```
 
-- `contacts`：这个 Agent 可以联系的 Agent 名；不写则它不能联系任何人（也拿不到协作工具）。入口 Agent（处理人类消息的那个）可以联系目录里所有 Agent。
-- `accepts_from`：只接受这些 Agent 的委派；不写表示接受任何允许联系它的 Agent。
+- `contacts`：这个 Agent 可以联系的 Agent 名（支持远程 A2A Actor，如 `remote://<peer>/<agent>`）；不写则不能联系其他 Agent。
+- `accepts_from`：允许接收哪些来源的协作请求（含 `"human"` 或其他 Agent 名）。
+- `budget`：单次协作的默认预算上限（`modelCalls`、`tokens`、`wallMs`、`sideEffects`）。
 - 被联系的 Agent 的工具、模型与迭代上限仍由它自己的 `agent.json` 与三个核心 Markdown 文件决定，见 [Agent 工具与技能 · 定义 Agent](../authoring/agent-tools.md#定义-agent)。
 
-护栏由 Guard Kernel 按结构化字段强制执行，不依赖提示词：
+护栏由 `@zhin.js/harness` 的 Guard Kernel 按结构化字段强制执行，不依赖提示词：
 
-- **权限只减不增**：被委派方的有效权限 = 委派方权限 ∩ 委派时声明的范围 ∩ 被委派方自己的能力上限。对方的回答是数据，不是指令，也不会让你多出权限。
-- **预算划拨**：协作有一个预算池（模型调用次数、token、墙钟时间、有副作用的工具调用次数）。每次委派从委派方剩余额度里划出一份，子树用量不能超过它；超支的分支以 `budget_exceeded` 收尾，结果照常回到委派方。
-- **审批归人**：需要审批的动作（硬闸、危险工具、自我变更）始终路由给发起协作的人，不会交给另一个 Agent 批准。
-- **防环与收敛**：委派深度、扇出、同一对 Agent 的往返次数和重复内容都有上限；触发后冻结该协作并 `escalate` 给人。
-- **身份来自传输**：消息来自谁由框架填写，正文里自称"主人"或"审核员"无效。
-
-委派的结果以新一轮回合回到入口 Agent，它整理后再回复用户；根回合结束后仍在跑的委派会继续，完成时在同一会话里续写。
+- **权限只减不增**：被委派方的有效权限 = 委派方权限 ∩ 委派时收窄的范围 ∩ 被委派方自己的能力上限。对方的回答是数据，不是指令，也不会放大调用方权限。
+- **守恒预算账本**：每个 Engagement 有根预算池（`modelCalls`、`tokens`、`wallMs`、`sideEffects`）。每次 `ask` / `delegate` 从父级剩余额度中划拨子配额，子树总消耗绝不超过父级授信。
+- **审批归人**：需要审批的动作（硬闸、危险工具、自我变更）始终路由给发起协作的人类 Principal，不会交给另一个 Agent 批准。
+- **防环与收敛**：委派深度（`maxDepth`）、扇出（`maxFanout`）、同一对 Agent 往返次数（`maxPairRoundTrips`）、重复消息（`maxDuplicates`）与同步等待环（`wait_cycle`）均由 Guard Kernel 拦截，触发后自动冻结 Engagement 并 `escalate`。
+- **身份来自传输**：消息发送方由框架填写，正文里自称"主人"或"审核员"无效。
 
 ## 会话与会话树
 
@@ -651,141 +659,45 @@ ai:
 
 按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 
-## Workroom Kernel
+## 多 Bot 群聊协作场所（`ai.venues`）与追踪
 
-Workroom 让多个 Agent 在一个群、频道或 GitHub 仓库里**按角色分工**处理多步骤任务：Orchestrator 负责理解需求和分派，Executor 执行，Reviewer 审核。和普通对话不同，它的每一步都记录在只追加的日志里，可审计、可恢复。
-
-**普通聊天和 Agent 之间的协作都不会自动创建 Workroom**，只有显式的 Project 命令（如 `/work`）才会。
-
-### 核心规则
-
-- `WorkroomKernel` 只接受显式的、限定 Project 的命令，用带版本的只追加 Journal 作为 Run / Task / Assignment 的唯一事实来源。
-- 不提供让模型伪造"已执行 / 已验收"的通用状态切换工具。命令适配器必须持有认证后的 Project capability，并分别接入 Scheduler、Executor 与 Acceptance 端口。
-- 人类的消息先按完整空间地址进入 content-free 的 Project Inbox，再由 Orchestrator 仲裁成任务。`conversation.agent` 标识这个 Inbox 所属的 Orchestrator，但**不能**绕过仲裁直接把消息变成 Task 状态。
-- 普通讨论持久化后，以一次性 handoff 继续执行该 Orchestrator 回合，直接返回 Agent 回复。这个回合使用限定 Project 的会话和可信的 Project / Proposal envelope：不读取普通群聊的会话尾部，回复固定经 Catalog Orchestrator Endpoint 的统一出站链路发出。
-- 回复投影卡片或 `@` 具名成员时，只有在**唯一**一个 active Assignment 时才生成精确的 TaskInput，否则会请求澄清。
-- 只有显式的 `/work` 才会通过受治理的规划入口创建 Run / Task。
-
-### 在 Console 中声明 Workroom
-
-在 Console 的 **Workrooms** 菜单声明 Project 边界、Agent 成员与角色，以及绑定的群、频道或 GitHub 仓库。Workroom 定义保存在**持久化的运行时 Catalog** 中，而不是 `ai` 配置文件；保存立即生效，不需要重启。旧的 `ai.workrooms` 配置会被明确拒绝并提示迁移。记录键就是 Workroom Kernel 使用的 `projectId`：
-
-```json
-{
-  "projectId": "support",
-  "name": "客户支持",
-  "enabled": true,
-  "members": [
-    { "agent": "zhin", "role": "orchestrator" },
-    { "agent": "support", "role": "executor" },
-    { "agent": "reviewer", "role": "reviewer" }
-  ],
-  "conversation": {
-    "adapter": "telegram",
-    "endpoint": "support-bot",
-    "kind": "group",
-    "id": "10001",
-    "agent": "support"
-  }
-}
-```
-
-| 字段 | 规则 |
-| --- | --- |
-| `members[].agent` | 必须引用 `ai.agents` 中的 Agent，且每个角色引用独立的 binding |
-| `members[].role` | `orchestrator | executor | reviewer | integration` 之一 |
-| `members[].assignmentRoute` | `{ "kind": "local" }` 固定本地执行，或 `{ "kind": "remote", "endpointId": "..." }` 固定唯一的 A2A endpoint。省略时视为本地；远程执行绝不会在多个 endpoint 之间猜测。该路由随 Catalog revision / digest 持久化，并在认领前复验 |
-| `members[].messageRoute` | 如 `{ "adapter": "icqq", "endpoint": "reviewer-bot" }`：该成员在共享群里用哪个 Bot 发言。省略时用 `conversation` 的主 Endpoint。配置后，从该 Bot 收到的同群消息也进入同一 Workroom，该成员的进度、里程碑和结论由它发出 |
-| `sponsors[]` | 可以执行 Project Sponsor 控制的认证身份 id（如 `owner:<platform-user-id>`）。属于持久的 Catalog 权限，不读取消息 metadata 中自报的身份 |
-| `conversation` | 普通 Workroom 空间 |
-| `sponsorConversation` | 可选，独立的 `group | channel` Sponsor Room：承载 Sponsor 命令、生命周期 / 超期通知，以及 Portfolio 的 lane / queue / grant / budget / fairness 卡片 |
-
-更多约束：
-
-- 两种 conversation 的 `agent` 都必须是承担 `orchestrator` 角色的成员。启用的 Workroom 至少需要一个 Orchestrator 和一个普通协作空间。
-- 一个 Workroom 绑定一个完整空间地址；**同一个 Bot / App Endpoint 可以服务多个 Workroom**，但普通 Workroom 地址不能复用，也不能和 Sponsor Room 冲突。
-- 多个 Project 可以声明同一个 Sponsor Room，形成 Portfolio 级的聚合房间，但每条投影仍是独立的 Project 视图。在聚合房间里写治理命令：`/control data-lifecycle project <projectId> ...`；Portfolio 命令：`/control portfolio <portfolioId> project <projectId> ...`；回复当前单个 Project 的卡片时可以省略 Project 段。房间地址本身不代表 Project 权限：显式 Project 与回复的卡片不一致、卡片 revision 过期或 Endpoint 版本漂移时，只会请求澄清，不会执行命令。
-- Host 在启动或扫描时，根据持久 Catalog 与当前 Endpoint 能力建立 Sponsor 投递绑定，所以第一条纯出站告警不依赖房间先收到消息。
-
-### 把 GitHub 仓库作为 Workroom
-
-GitHub 适配器用 Webhook 中稳定的 `repo` 元数据（`owner/repo`）匹配 `repository` 类型的 Workroom，因此同一仓库下所有 Issue / PR 评论都归入同一个 Workroom：
-
-```json
-{
-  "projectId": "zhin-repo",
-  "name": "Zhin Repository",
-  "enabled": true,
-  "members": [{ "agent": "zhin", "role": "orchestrator" }],
-  "conversation": {
-    "adapter": "github",
-    "endpoint": "my-github-bot",
-    "kind": "repository",
-    "id": "zhinjs/zhin",
-    "agent": "zhin"
-  }
-}
-```
-
-GitHub Project Item 是 Task 的外部投影 / 同步目标，**不是** Workroom 身份的一部分。Console 的 Task 页目前只读 Journal 与 Kernel 事实；同步到 Project V2 需要独立的 Integration Port、幂等的 task-key ↔ item-id 映射和冲突策略，不能由 Console 直接修改 Task 状态。完整方案见 [GitHub 仓库 Workroom](../solutions/github-workroom.md)。
-
-### 用 `/work` 规划任务
-
-`/work` 不会退化成单个固定任务：
-
-- 只有在 composition root 安装了受治理的 `HumanIngressPlanningPort` 后才会创建 Run；否则持久化请求，并返回 `planning_unavailable` 请求澄清。
-- 推荐使用 `DynamicWorkflowPlanningPort`：模型或 Strategy 只返回**不可信**的结构化 DAG 候选；Project / Catalog、Profile、Orchestrator、规划策略、预算和 Sponsor Gate 权限全部由可信端口注入。
-- 候选经 `WorkflowPlanBuilder` 重新校验 Profile 能力上限、必选 / 可选、依赖与环、Task / 尝试预算和审批门；只有 `WorkroomKernel.admitWorkflowPlan()` 能原子写入 Plan / Task 事实。
-- Plan Gate 会先变成 `approval` Blocker，普通 Orchestrator 的 `resolve_blocker` 无法解除。安装 `WorkroomPlanGateAuthorityPort` 后，人类 Sponsor 可以用 `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]` 提交精确、可重放的决定。
-
-### 首次启用规划
-
-在 Console 的 **Workrooms → 规划与披露配置** 中输入 `projectId` 并运行诊断。写操作需要绑定了 `principalId` 的 full token，而且同一身份必须同时出现在 Project 的 `sponsors` 和进程固定的共享 Pack 发布者列表中：
+当多个 Agent 在同一个群或频道中协作时，可以通过 `zhin.config.yml` 的 `ai.venues` 将群场景绑定为一个**协作场所（Venue）**，为每个参与 Agent 绑定各自的 Bot Endpoint，并控制协作过程的可见性（完整示例见 `examples/multi-agent-room`）：
 
 ```yaml
-http:
-  tokens:
-    - token: ${WORKROOM_SPONSOR_TOKEN}
-      scope: full
-      principalId: workroom-admin
 ai:
-  workroom:
-    trustedPackPublishers:
-      - workroom-admin
-    disclosure:
-      modelServices:
-        ACTUAL_SERVICE_ID:
-          endpoint: REPLACE_WITH_CONTRACTED_ENDPOINT
-          processingRegions: [REPLACE_WITH_CONTRACTED_REGION]
-          maxConfidentiality: project_internal
-          external: true
-          noTraining: REPLACE_WITH_PROVIDER_GUARANTEE
-          loggingMode: REPLACE_WITH_LOGGING_MODE
-          maximumRetentionSeconds: REPLACE_WITH_MAX_RETENTION_SECONDS
-          allowsRedisclosure: REPLACE_WITH_PROVIDER_GUARANTEE
-          supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE
+  venues:
+    - id: product-room
+      adapter: sandbox
+      scene: group:product-room
+      mode: visible
+      entry: planner
+      participants:
+        planner: sandbox:planner-bot
+        builder: sandbox:builder-bot
+        reviewer: sandbox:reviewer-bot
 ```
 
-1. 上面的 `REPLACE_WITH_*` 是故意无效的占位符，不能原样保存。`modelServices` 的键必须是 Orchestrator 实际选中 Profile 所属的运行时 Service ID；处理地区、训练、日志、保留和删除等字段是治理声明，必须与提供商的真实策略和账号设置一致。使用 OpenRouter 时，还应在其 [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) 中启用零留存并禁止 data collection。
-2. 保存真实配置后重启 Host，用该 token 登录 Console，并在 Catalog Project 的 `sponsors` 中加入 `workroom-admin`。
-3. 诊断通过后点击"初始化编排能力"。Console 会根据当前版本真实的 Agent / Tool / Skill digest 发布 Capability Pack，激活首个 Project Profile，发布默认 Planning Policy，并由认证的 Sponsor 签发 Project Data Governance 权限。
-4. 成功后状态会显示 Planning 与 Disclosure 都已就绪，此时才能提交 `/work`。
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 场所唯一标识 |
+| `adapter` / `scene` | 绑定的适配器与群/频道场景（如 `group:product-room`） |
+| `mode` | 投影模式：`visible`（每个 Agent 用各自绑定的 Bot 账号在群内发言）、`summary`（后台协作，仅由入口 Agent 发送汇总）、`backstage`（纯后台协作，不投射中间过程） |
+| `entry` | 未 `@` 特定成员时默认接管人类消息的入口 Agent |
+| `participants` | `agentName -> "<adapter>:<endpoint>"` 映射；Venue 路由器会自动过滤同群内其他参与 Bot 发出的自发回声消息，并支持群成员直接 `@builder-bot` 点名特定 Agent |
 
-::: warning 备份数据治理根密钥
-自托管 Host 首次签发时会生成权限为 `0600` 的 `.zhin/workroom-data-governance-root-key.json`，用于本机的数据密钥包装与权限签名。必须纳入加密备份：**丢失后，既有 Payload Vault 中的正文无法恢复。**
-:::
+### 用 `zhin trace` 与 Console 检视协作
 
-::: details 存储后端、Console 控制面与远程执行
-- **存储后端**：Catalog 与 Run Journal 使用相同的持久化选择。`ai.sessions.useDatabase !== false` 时使用数据库的 `workroom_catalog` / `workroom_events`，Database Root Host 未就绪会使新版本发布失败；显式设为 `false` 时回退到 `.zhin/workroom-catalog.json` 与 `.zhin/workroom-journal` 的原子文件事件流。后端在进程启动时固定，**热重载不能切换**，修改必须重启进程，避免新旧版本写入两个没有 CAS 关系的事实来源。
-- **Catalog 编辑**：保存采用 revision CAS；成员引用以当前版本的 `ai.agents` 为准，失效引用会被拒绝。已有 Run 的 Journal 事实不会被 Catalog 编辑覆盖。
-- **只读投影**：Console 的 Run 列表与详情是限定 Project 的只读投影（例如 `GET /api/agent/workroom/runs?projectId=...`），不能直接修改 Task / Assignment。
-- **类型化控制面**（彼此隔离）：Profile 与 Project Knowledge 通过 `workroom.profile.*` / `workroom.knowledge.*` RPC 发布或回滚；Portfolio Sponsor 通过 `POST /api/agent/workroom/portfolio/commands` 提交精确命令；Effect Sponsor 通过 `POST /api/agent/workroom/effects/sponsor-decisions` 只对绑定了精确 Intent 的授权做决定，只接受闭集 `reasonCode`，不保存任意解释文本；Data Steward / Privacy / Compliance 通过 `/api/agent/workroom/data-lifecycle`、`/overdue` 与 `/commands` 查询生命周期投影，执行 Hold、主体删除 / 导出、保留期清理 / 对账——这些入口只有在 Root 私有角色权限、当前 Catalog Project 与 P12 Console recipient 同时匹配时才会发布。所有入口都从认证 token 重新推导身份，并复验当前 Catalog / Profile / 治理 revision；请求体自报的身份、审批或讨论都不能获得写权限。
-- **远程执行**：可选的 Remote A2A Executor 复用同一套 Assignment lease / fence / event 契约。只有持久 Profile、Authority Grant、Workspace、Disclosure 与 endpoint 的 Card / auth / transport 快照全部精确匹配时才允许新认领，缺项会持久阻塞。旧的 `ai.remoteAgents` poller 已不存在。
-:::
+每次协作的完整因果链、黑板快照、预算消耗与护栏拦截均保存在 `engagement_events` 表中：
 
-### 旧数据
+```bash
+# 列出最近的 Engagement 摘要
+zhin trace
 
-旧格式（内嵌 payload 的 Journal）以及旧 Run 不再受支持，也没有迁移工具；打开旧格式 store 时会 fail-closed。详见 [旧概念兼容说明](../contributing/legacy-concepts.md)。
+# 查看指定 Engagement 的完整因果跳数、黑板条目、护栏阻断与预算消耗
+zhin trace <engagementId>
+```
+
+在 Remote Console 的 **Collaboration Graph** 页面中，也可以可视化查看每个 Engagement 的参与者拓扑、消息跳数（`ask` / `delegate` / `tell` / `result`）、共享黑板（`note` / `todo` / `artifact`）与预算账本。
 
 ## 相关
 

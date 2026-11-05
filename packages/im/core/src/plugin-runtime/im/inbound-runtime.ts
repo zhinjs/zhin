@@ -271,6 +271,23 @@ export class InboundRuntime {
         }));
         return Object.freeze({ matched: false });
       }
+      if (typeof roomMembership?.isRoomReady === 'function') {
+        const readiness = roomMembership.isRoomReady({
+          platform: conversation.endpoint.adapter,
+          sceneType: conversation.kind,
+          sceneId: conversation.id,
+          ...(conversation.threadId !== undefined ? { threadId: conversation.threadId } : {}),
+        });
+        if (!readiness.ready) {
+          logger.warn(formatCompact({
+            op: 'venue_unready',
+            conv: formatConversationLog(conversation),
+            unreadyEndpoints: readiness.unreadyEndpoints?.join(',') ?? '',
+            reason: 'Venue member endpoints have not reported selfUserId yet',
+          }));
+          return Object.freeze({ matched: false });
+        }
+      }
       // Must stay synchronous and before any await: concurrent arrivals of the same
       // message from N Endpoints are decided atomically. Only human origin claims,
       // so bot-origin messages never consume the key. Scoped to Room conversations:
@@ -837,7 +854,11 @@ function resolveRoomMembership(snapshot: RuntimeSnapshot): RoomMembershipPort | 
     const candidate = snapshot.resources.get(snapshot.root)?.get(roomMembershipToken.id);
     return candidate
       && typeof candidate === 'object'
-      && typeof (candidate as RoomMembershipPort).isMember === 'function'
+      && (
+        typeof (candidate as RoomMembershipPort).isMember === 'function'
+        || typeof (candidate as RoomMembershipPort).resolveRoom === 'function'
+        || typeof (candidate as RoomMembershipPort).isRoomReady === 'function'
+      )
       ? candidate as RoomMembershipPort
       : undefined;
   } catch {

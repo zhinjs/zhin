@@ -7,14 +7,6 @@ import ts from 'typescript';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const boundaries = [
   {
-    name: 'Workroom Journal',
-    directory: 'packages/im/workroom/src/workroom/journal',
-  },
-  {
-    name: 'Workroom Projection Outbox',
-    directory: 'packages/im/workroom/src/workroom/projection-outbox',
-  },
-  {
     name: 'Host Extended Console RPC',
     directory: 'packages/host/http/src/console-rpc-extended',
   },

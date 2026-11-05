@@ -1,0 +1,21 @@
+{
+  "name": "reviewer",
+  "version": "1.0.0",
+  "description": "群内审阅 Agent：对照黑板上的规划（plan）与实现草稿（draft）给出审阅结论并写回黑板（review）。",
+  "role": "specialist",
+  "entry_points": ["system.md", "boundaries.md", "conventions.md"],
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": ["审阅", "检查", "验收", "review"]
+  },
+  "collaboration": {
+    "contacts": ["planner", "builder"],
+    "accepts_from": ["human", "planner", "builder"],
+    "budget": {
+      "modelCalls": 8,
+      "tokens": 32000,
+      "wallMs": 60000,
+      "sideEffects": 2
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { definePlugin } from 'zhin.js';
-import { SelfDeliveryProject, selfDeliveryProjectToken } from '@zhin.js/workroom';
+import { SelfDeliveryProject, selfDeliveryProjectToken } from './src/pipeline.js';
 
 export default definePlugin<{ stateDirectory: string }>({
   name: 'self-delivery-bot',

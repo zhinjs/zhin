@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/bilibili-live/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/bilibili-live/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=0cbd5b0c0de6eda5 -->
+<!-- sync-adapter-docs:sha256=23e9e19c2a489c95 -->
 
 # @zhin.js/adapter-bilibili-live
 

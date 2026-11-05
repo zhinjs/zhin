@@ -78,3 +78,6 @@ export type { CapabilityContext, OperationClientPort, OperationSession, Operatio
 /** ADR 0044: adapter capability types, re-exported so the agent layer reads them through core. */
 export type { TurnCapabilities, AdapterCapabilityProfile, CapabilityFacts } from '@zhin.js/adapter';
 export { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+
+// ── Venue 模块 (ADR 0048 H4) ──────────────────────────────────────────
+export * from './venue/index.js';

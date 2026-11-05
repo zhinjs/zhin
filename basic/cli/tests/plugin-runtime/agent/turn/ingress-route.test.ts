@@ -109,12 +109,10 @@ describe('AgentTurnIngressRoute', () => {
   });
 
   it.each([
-    { source: 'group', target: undefined, messageId: undefined, share: true, reaction: false },
-    { source: 'channel', target: undefined, messageId: undefined, share: true, reaction: false },
-    { source: 'group', target: undefined, messageId: 'm1', share: true, reaction: true },
-    { source: 'private', target: 'group', messageId: 'm1', share: true, reaction: false },
-    { source: 'group', target: 'channel', messageId: 'm1', share: true, reaction: false },
-    { source: 'group', target: 'private', messageId: 'm1', share: false, reaction: false },
+    { source: 'group', messageId: undefined, share: true, reaction: false },
+    { source: 'channel', messageId: undefined, share: true, reaction: false },
+    { source: 'group', messageId: 'm1', share: true, reaction: true },
+    { source: 'private', messageId: 'm1', share: false, reaction: false },
   ] as const)('discloses target-scoped segments independently of reaction eligibility: %j', async scenario => {
     const endpoint = { id: 'root\u0000zhin.adapter\u0000test', adapter: 'root' };
     const conversation = { endpoint, kind: scenario.source, id: 'source' };
@@ -161,12 +159,6 @@ describe('AgentTurnIngressRoute', () => {
         },
         agent: {},
       } as never,
-      ...(scenario.target ? { workroom: {
-        preRoute: async () => false,
-        hasAgentTurn: () => true,
-        takeAgentTurn: () => ({ projectId: 'p', proposalId: 'case', space: 'workroom', agentDefinitionId: 'zhin' }),
-        resolveOrchestratorConversation: async () => ({ endpoint, kind: scenario.target!, id: 'target' }),
-      } } : {}),
     });
 
     await route.route(message, { value: snapshot, active: true } as never, rootPluginId(), undefined);
@@ -181,23 +173,7 @@ describe('AgentTurnIngressRoute', () => {
     expect(profile.reaction).toEqual(scenario.reaction ? { values: [{ value: '76', label: '赞' }] } : undefined);
   });
 
-  it('adapts the durable Workroom pre-route through the IngressRoute interface', async () => {
-    const preRoute = vi.fn().mockResolvedValue(true);
-    const route = new AgentTurnIngressRoute({
-      projectRoot: process.cwd(),
-      runtime: {} as never,
-      im: {} as never,
-      ingress: {} as never,
-      agent: {} as never,
-      workroom: { preRoute } as never,
-    });
-    const message = {} as never;
-
-    await expect(route.preRoute(message, {} as never, {} as never, 42)).resolves.toBe(true);
-    expect(preRoute).toHaveBeenCalledWith(message, 42);
-  });
-
-  it('behaves as a no-op Workroom pre-route when Workroom is not installed', async () => {
+  it('behaves as a no-op pre-route on the IngressRoute interface', async () => {
     const route = new AgentTurnIngressRoute({
       projectRoot: process.cwd(),
       runtime: {} as never,

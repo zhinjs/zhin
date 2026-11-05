@@ -9,16 +9,16 @@
 pnpm check:l4
 ```
 
-覆盖：Workroom Kernel、语义记忆、MCP 鉴权、full-bot 配置契约、NapCat/KOOK L4 契约（实机项 `L4_SKIP_PLATFORM=1` 时 skip）；`pnpm check:workroom-ssot` 验证 Journal/CAS 唯一权威。
+覆盖：Agent Harness、语义记忆、MCP 鉴权、full-bot 配置契约、NapCat/KOOK L4 契约（实机项 `L4_SKIP_PLATFORM=1` 时 skip）。
 
-## Workroom SSOT v1（手工项）
+## Agent Harness 协作验收（手工项）
 
-与 [ADR 0027](https://github.com/zhinjs/zhin/blob/main/docs/adr/0027-agent-run-orchestration-kernel.md) 对齐；自动化见 `pnpm check:workroom-ssot` / `pnpm check:l4`。
+与 [ADR 0048](https://github.com/zhinjs/zhin/blob/main/docs/adr/0048-agent-harness.md) 对齐；自动化见 `pnpm check:l4`。
 
-### A. 状态权威（Kernel-only）
+### A. 状态权威（Harness Journal + Guard Kernel）
 
-- [ ] local Assignment 的 progress、执行完成、失败与取消均成为 Workroom Journal event；`execution_completed` 不等于 `accepted`
-- [x] `pnpm check:workroom-ssot` 通过
+- [ ] 协作邮件（`ask` / `delegate` / `tell` / `result`）与黑板写入（`board_write`）均记入 Engagement Journal
+- [x] `pnpm check:l4` 通过
 
 ### B. IM 终态反馈（观众 #1）
 

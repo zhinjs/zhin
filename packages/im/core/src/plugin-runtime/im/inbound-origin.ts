@@ -16,6 +16,31 @@ export function isMessageOrigin(value: unknown): value is MessageOrigin {
   return typeof value === 'string' && (MESSAGE_ORIGINS as readonly string[]).includes(value);
 }
 
+export interface RoomClaimInput {
+  readonly platform: string;
+  readonly sceneType?: string;
+  readonly sceneId: string;
+  readonly threadId?: string;
+}
+
+export interface RoomArbitrationInput extends RoomClaimInput {
+  readonly endpointId: string;
+  readonly rawText?: string;
+  readonly mentions?: readonly string[];
+  readonly replyToSenderId?: string;
+}
+
+export interface ResolvedRoomInfo {
+  readonly roomId: string;
+  readonly defaultEndpointId: string;
+  readonly memberEndpoints: readonly string[];
+}
+
+export interface RoomReadinessResult {
+  readonly ready: boolean;
+  readonly unreadyEndpoints?: readonly string[];
+}
+
 /**
  * Room 成员端口。由 Room 激活（后续条目，workroom）通过 root resources 提供；
  * 未提供时没有任何 member：Registry 命中的账号全部是 `peer_bot`。
@@ -49,6 +74,12 @@ export interface RoomMembershipPort {
    * `fallbackEndpointIds` 中的成员在宽限期后按优先级接管。决策按消息缓存，每条消息只决定一次。
    */
   route?(input: RoomInboundRouteInput): RoomRouteDecision | undefined;
+  /** Resolve a conversation to its Venue / Room definition summary. */
+  resolveRoom?(input: RoomClaimInput): ResolvedRoomInfo | undefined;
+  /** Check whether an endpoint in a Venue / Room is directly addressed by @mention or reply. */
+  isAddressedEndpoint?(input: RoomArbitrationInput): boolean;
+  /** Fail-closed readiness check for Venue member endpoints (ADR 0048 §3.4 invariant 7). */
+  isRoomReady?(input: RoomClaimInput): RoomReadinessResult;
 }
 
 /** core 用可信数据构造的路由输入；不信任正文。 */

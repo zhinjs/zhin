@@ -665,6 +665,51 @@ export interface ConsoleConfigExplanation {
   readonly fields: readonly ConsoleConfigFieldEvidence[];
 }
 
+export const AGENT_COLLABORATION_RPC = Object.freeze({
+  ENGAGEMENTS_LIST: 'agent.engagements.list',
+  ENGAGEMENTS_GET: 'agent.engagements.get',
+  VENUES_LIST: 'agent.venues.list',
+} as const);
+
+export interface ConsoleEngagementSummary {
+  readonly engagementId: string;
+  readonly venue?: string;
+  readonly status: 'running' | 'completed' | 'failed';
+  readonly startedAt: number;
+  readonly endedAt?: number;
+  readonly eventCount: number;
+  readonly hops: number;
+  readonly turns: number;
+  readonly tokensUsed: number;
+  readonly wallClockMs: number;
+  readonly participants: readonly string[];
+  readonly stopReason?: string;
+}
+
+export interface ConsoleEngagementDetail {
+  readonly summary: ConsoleEngagementSummary;
+  readonly events: readonly Record<string, unknown>[];
+  readonly board: readonly Readonly<{
+    key: string;
+    value: unknown;
+    version: number;
+    updatedBy: Readonly<Record<string, unknown>>;
+    updatedAt: number;
+  }>[];
+}
+
+export interface ConsoleVenueDefinition {
+  readonly key: string;
+  readonly channel: Readonly<{
+    endpoint: Readonly<{ adapter: string; id: string }>;
+    kind: 'private' | 'group' | 'channel';
+    id: string;
+    parent?: Readonly<{ kind: 'private' | 'group' | 'channel'; id: string }>;
+    threadId?: string;
+  }>;
+  readonly floor?: 'moderated' | 'open';
+}
+
 export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'ping',
   'entries:get',
@@ -679,6 +724,9 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'schema:get',
   'schema:get-all',
   'workrooms:get',
+  AGENT_COLLABORATION_RPC.ENGAGEMENTS_LIST,
+  AGENT_COLLABORATION_RPC.ENGAGEMENTS_GET,
+  AGENT_COLLABORATION_RPC.VENUES_LIST,
   'schedule:list',
   'cron:list',
   'cron:validate',

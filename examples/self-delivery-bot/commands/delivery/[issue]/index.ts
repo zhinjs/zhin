@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { selfDeliveryProjectToken } from '@zhin.js/workroom';
+import { selfDeliveryProjectToken } from '../../../src/pipeline.js';
 
 export default defineCommand({
   description: 'Select a GitHub Issue with explicit acceptance criteria',

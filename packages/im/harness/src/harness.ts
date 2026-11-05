@@ -36,6 +36,7 @@
  *   instead of running beside it.
  */
 import {
+  ALL,
   DEFAULT_GUARD_LIMITS,
   type ActorId,
   type ActorTurnResult,
@@ -44,6 +45,10 @@ import {
   type AgentName,
   type Authority,
   type AuthorityNarrowing,
+  type BoardEntry,
+  type BoardEntryKind,
+  type BoardReadFilter,
+  type BoardWriteInput,
   type BudgetAmounts,
   type BudgetLedger,
   type BudgetResult,
@@ -52,6 +57,7 @@ import {
   type EngagementGraphView,
   type EngagementId,
   type EngagementJournal,
+  type FollowUpInput,
   type GrantId,
   type GuardDenyCode,
   type GuardKernel,
@@ -69,9 +75,13 @@ import {
   type MailboxOptions,
   type PostResult,
   type Principal,
+  type RemoteMailResult,
+  type RemoteMailTransport,
+  type SendAck,
   type VenueRef,
 } from './contracts.js';
 import { agentOf } from './authority.js';
+import { reconstructBoardFromEvents } from './journal.js';
 
 export type HarnessDenyCode =
   | GuardDenyCode
@@ -83,8 +93,25 @@ export type HarnessDenyCode =
   | 'frozen';
 
 export type SendOutcome =
-  | { readonly ok: true; readonly mail: Mail; readonly reply?: { readonly status: ActorTurnResult['status']; readonly content: string } }
-  | { readonly ok: false; readonly code: HarnessDenyCode; readonly reason: string; readonly escalated: boolean };
+  | {
+      readonly ok: true;
+      readonly accepted?: true;
+      readonly mailId?: MailId;
+      readonly mail: Mail;
+      readonly reply?: { readonly status: ActorTurnResult['status']; readonly content: string };
+      readonly result?: { readonly status: ActorTurnResult['status'] | 'rejected'; readonly content: string };
+    }
+  | {
+      readonly ok: false;
+      readonly accepted?: false;
+      readonly mailId?: MailId;
+      readonly mail?: Mail;
+      readonly code: HarnessDenyCode;
+      readonly reason: string;
+      readonly escalated: boolean;
+      readonly reply?: { readonly status: ActorTurnResult['status']; readonly content: string };
+      readonly result?: { readonly status: ActorTurnResult['status'] | 'rejected'; readonly content: string };
+    };
 
 export interface SendRequest {
   readonly kind: 'ask' | 'delegate' | 'tell';
@@ -94,6 +121,8 @@ export interface SendRequest {
   readonly budget?: Partial<BudgetAmounts>;
   /** For `delegate`: what the delegator expects back. */
   readonly deliverable?: string;
+  /** Optional timeout (ms) for remote transport calls. */
+  readonly timeoutMs?: number;
 }
 
 export interface OpenEngagementInput {
@@ -170,11 +199,14 @@ export interface HarnessOptions {
   }>;
   readonly clock?: () => number;
   readonly newId?: () => string;
+  readonly remoteTransport?: RemoteMailTransport;
   readonly onEscalate?: (notice: EscalationNotice) => void | Promise<void>;
   /** Called once when an engagement closed (after `engagement_closed` was journaled). */
   readonly onEngagementClosed?: (engagement: Engagement) => void;
   readonly onError?: (error: unknown) => void;
 }
+
+export type CreateHarnessOptions = HarnessOptions;
 
 export interface Harness {
   /**
@@ -192,6 +224,12 @@ export interface Harness {
   remaining(current: Mail): BudgetAmounts | undefined;
   /** Called by collaboration tools while `current` (the mail being processed) is running. */
   send(from: ActorId, current: Mail, request: SendRequest): Promise<SendOutcome>;
+  /** Follows up on previously delegated / asked work within the same engagement. */
+  followUp(input: FollowUpInput): Promise<SendAck>;
+  /** Writes an artifact, note, or todo item to the engagement's shared blackboard. */
+  writeBoard(engagementId: EngagementId, input: BoardWriteInput): Promise<BoardEntry>;
+  /** Reads entries from the engagement's shared blackboard, reconstructing from journal if needed. */
+  readBoard(engagementId: EngagementId, filter?: BoardReadFilter): Promise<readonly BoardEntry[]>;
   /** Records model / tool usage against the grant of `current`. */
   charge(current: Mail, usage: Partial<BudgetAmounts>): Promise<BudgetResult<BudgetSnapshot>>;
   cancel(mailId: MailId, reason?: string): boolean;
@@ -206,6 +244,7 @@ export interface Harness {
 
 interface EngagementState {
   readonly engagement: Engagement;
+  readonly initialBudget: BudgetAmounts;
   readonly mails: Mail[];
   readonly byId: Map<MailId, Mail>;
   /** Mails posted to the mailbox whose turn has not finished. */
@@ -215,6 +254,16 @@ interface EngagementState {
   closed: boolean;
   /** Set by the first escalation; the engagement accepts no new collaboration after it. */
   frozen?: { readonly code: HarnessDenyCode; readonly reason: string };
+}
+
+interface DelegatedMailRecord {
+  readonly id: MailId;
+  readonly engagementId: EngagementId;
+  readonly from: ActorId;
+  readonly to: ActorId;
+  readonly authority: Authority;
+  readonly parentMail: Mail;
+  readonly lane?: string;
 }
 
 interface Waiter {
@@ -229,6 +278,9 @@ export function createHarness(options: HarnessOptions): Harness {
   let counter = 0;
   const newId = options.newId ?? (() => `m${++counter}`);
   const engagements = new Map<EngagementId, EngagementState>();
+  const allEngagements = new Map<EngagementId, EngagementState>();
+  const sentDelegations = new Map<MailId, DelegatedMailRecord>();
+  const boards = new Map<EngagementId, Map<string, BoardEntry>>();
   const askWaiters = new Map<MailId, Waiter>();
   /** asker actor → actors it is currently waiting on (per engagement). */
   const waitingOn = new Map<string, Set<ActorId>>();
@@ -330,8 +382,11 @@ export function createHarness(options: HarnessOptions): Harness {
     state.closed = true;
     const snapshot = options.ledger.close(state.engagement.rootGrantId);
     await record(state.engagement.id, 'engagement_closed', {
+      status: state.frozen ? 'escalated' : 'completed',
+      ...(state.frozen ? { reason: state.frozen.reason } : {}),
       budget: snapshot.ok ? { spent: snapshot.value.spent, granted: snapshot.value.granted } : null,
     });
+    await options.journal.compact?.(state.engagement.id).catch(reportError);
     engagements.delete(state.engagement.id);
     try { options.onEngagementClosed?.(state.engagement); } catch (error) { reportError(error); }
   }
@@ -459,10 +514,25 @@ export function createHarness(options: HarnessOptions): Harness {
       body: input.body,
       createdAt: clock(),
     });
-    const state: EngagementState = { engagement, mails: [], byId: new Map(), pendingTurns: 0, outstanding: new Set(), closed: false };
+    const state: EngagementState = {
+      engagement,
+      initialBudget: input.budget,
+      mails: [],
+      byId: new Map(),
+      pendingTurns: 0,
+      outstanding: new Set(),
+      closed: false,
+    };
     engagements.set(engagementId, state);
+    allEngagements.set(engagementId, state);
     await record(engagementId, 'engagement_opened', {
-      principal: input.principal.id, entry: input.entry, rootMailId, rootGrantId, budget: input.budget,
+      principal: input.principal.id,
+      initiator: input.principal,
+      ...(input.venue ? { venue: input.venue } : {}),
+      entry: input.entry,
+      rootMailId,
+      rootGrantId,
+      budget: input.budget,
       ...(input.lane !== undefined ? { lane: input.lane } : {}),
     });
     const decision = options.guard.admitMail(root, { graph: graphOf(state), targetCeiling: ceiling, limits });
@@ -492,6 +562,232 @@ export function createHarness(options: HarnessOptions): Harness {
     return { ok: true, engagement, root, disposition: posted.disposition, position: posted.position };
   }
 
+  async function sendInternal(
+    from: ActorId,
+    current: Mail,
+    request: SendRequest,
+    overrides?: { readonly causationId?: MailId; readonly authority?: Authority },
+  ): Promise<SendOutcome> {
+    const state = engagements.get(current.engagementId);
+    const deny = async (code: HarnessDenyCode, reason: string, mail?: Mail, escalateIt = false): Promise<SendOutcome> => {
+      if (state && mail) {
+        await record(state.engagement.id, 'mail_denied', { ...mailSummary(mail), code, reason });
+        if (escalateIt) await escalate(state, mail, code, reason);
+      }
+      return { ok: false, accepted: false, code, reason, escalated: escalateIt && Boolean(state && mail) };
+    };
+    if (closed) return deny('closed', 'harness is closed');
+    if (!state || state.closed) return deny('unknown_engagement', `engagement ${current.engagementId} is not open`);
+    if (state.frozen) {
+      return {
+        ok: false,
+        accepted: false,
+        code: 'frozen',
+        reason: `collaboration is paused for the human to decide: ${state.frozen.reason}`,
+        escalated: true,
+      };
+    }
+    if (current.to !== from || !state.byId.has(current.id)) {
+      return deny('authority_not_attenuated', `${from} is not processing mail ${current.id}`);
+    }
+    const isRemote = Boolean(options.remoteTransport?.canRoute(request.to));
+    const ceiling = options.ceilingOf(agentOf(request.to), state.engagement.id)
+      ?? (isRemote
+        ? {
+            agent: agentOf(request.to),
+            tools: ALL,
+            contacts: ALL,
+            maxTrust: 'master' as const,
+            egress: { network: true, hosts: ALL },
+            acceptsFrom: ALL,
+          }
+        : undefined);
+    if (!ceiling) return deny('unknown_agent', `unknown agent ${agentOf(request.to)}`);
+
+    const budgetRequest = request.budget ?? ceiling.defaultBudget ?? {};
+    const granted = options.ledger.grant(current.grantId, budgetRequest);
+    const grantId: GrantId = granted.ok ? granted.value : current.grantId;
+    const body: MailBody = request.kind === 'ask'
+      ? { kind: 'ask', question: request.text }
+      : request.kind === 'delegate'
+        ? { kind: 'delegate', brief: request.text, ...(request.deliverable ? { deliverable: request.deliverable } : {}) }
+        : { kind: 'tell', content: request.text };
+    const mail: Mail = Object.freeze({
+      id: newId(),
+      kind: request.kind,
+      engagementId: state.engagement.id,
+      causationId: overrides?.causationId ?? current.id,
+      from: Object.freeze({ kind: 'actor', actor: from }) as MailSender,
+      to: request.to,
+      authority: overrides?.authority ?? options.attenuate(current.authority, request.narrowing ?? {}, ceiling, from),
+      grantId,
+      body: Object.freeze(body),
+      createdAt: clock(),
+    });
+    if (!granted.ok) return deny('budget_exceeded', granted.message, mail);
+
+    const decision = options.guard.admitMail(mail, {
+      graph: graphOf(state),
+      targetCeiling: ceiling,
+      senderAuthority: current.authority,
+      limits,
+    });
+    if (!decision.allow) {
+      options.ledger.close(grantId);
+      return deny(decision.code, decision.reason, mail, decision.escalate);
+    }
+    if (request.kind === 'ask' && wouldCycle(state.engagement.id, from, request.to)) {
+      options.ledger.close(grantId);
+      return deny('wait_cycle', `${request.to} is waiting on ${from}; asking it back would deadlock`, mail, true);
+    }
+
+    admit(state, mail);
+    await record(state.engagement.id, 'mail_admitted', mailSummary(mail));
+    const snapshot = options.ledger.snapshot(grantId);
+    if (granted.ok && request.kind !== 'tell') {
+      await record(state.engagement.id, 'budget_granted', {
+        grantId,
+        parentId: current.grantId,
+        granted: snapshot?.granted ?? null,
+      });
+    }
+    if (request.kind === 'ask' || request.kind === 'delegate') {
+      sentDelegations.set(mail.id, {
+        id: mail.id,
+        engagementId: state.engagement.id,
+        from,
+        to: request.to,
+        authority: mail.authority,
+        parentMail: current,
+        ...(current.lane !== undefined ? { lane: current.lane } : {}),
+      });
+    }
+
+    if (isRemote && options.remoteTransport) {
+      const remoteTransport = options.remoteTransport;
+      const grantedAmounts: BudgetAmounts = snapshot?.granted ?? {
+        modelCalls: 0,
+        tokens: 0,
+        wallMs: 0,
+        sideEffects: 0,
+      };
+      if (request.kind === 'tell') {
+        void Promise.resolve()
+          .then(() => remoteTransport.send(mail, grantedAmounts))
+          .then(async (remoteRes) => {
+            if (remoteRes?.consumed && Object.keys(remoteRes.consumed).length > 0) {
+              const ch = options.ledger.charge(grantId, remoteRes.consumed);
+              await record(state.engagement.id, ch.ok ? 'budget_charged' : 'budget_exceeded', {
+                grantId,
+                mailId: mail.id,
+                usage: remoteRes.consumed,
+                ...(ch.ok ? {} : { exhausted: ch.exhausted ?? [] }),
+              });
+            }
+          })
+          .catch(reportError)
+          .finally(() => {
+            options.ledger.close(grantId);
+            void maybeCloseEngagement(state).catch(reportError);
+          });
+        return { ok: true, accepted: true, mailId: mail.id, mail };
+      }
+
+      state.outstanding.add(mail.id);
+      let remoteResult: RemoteMailResult;
+      try {
+        const sendPromise = options.remoteTransport.send(mail, grantedAmounts);
+        if (request.timeoutMs !== undefined && request.timeoutMs > 0) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const timeoutPromise = new Promise<RemoteMailResult>((resolve) => {
+            timer = setTimeout(() => {
+              resolve({
+                status: 'cancelled',
+                content: `remote mail ${mail.id} timed out after ${request.timeoutMs}ms`,
+              });
+            }, request.timeoutMs);
+            timer.unref?.();
+          });
+          remoteResult = await Promise.race([sendPromise, timeoutPromise]).finally(() => {
+            if (timer !== undefined) clearTimeout(timer);
+          });
+        } else {
+          remoteResult = await sendPromise;
+        }
+      } catch (error) {
+        remoteResult = {
+          status: 'rejected',
+          content: error instanceof Error ? error.message : String(error),
+        };
+      } finally {
+        state.outstanding.delete(mail.id);
+      }
+
+      const consumed = remoteResult.consumed ?? { modelCalls: 1 };
+      const chargeRes = options.ledger.charge(grantId, consumed);
+      await record(state.engagement.id, chargeRes.ok ? 'budget_charged' : 'budget_exceeded', {
+        grantId,
+        mailId: mail.id,
+        usage: consumed,
+        ...(chargeRes.ok ? {} : { exhausted: chargeRes.exhausted ?? [] }),
+      });
+      options.ledger.close(grantId);
+      await record(state.engagement.id, 'mail_delivered', { mailId: mail.id, actor: request.to });
+      if (remoteResult.status === 'completed') {
+        await record(state.engagement.id, 'mail_completed', {
+          mailId: mail.id,
+          actor: request.to,
+          status: 'completed',
+          content: remoteResult.content,
+        });
+      } else {
+        await record(state.engagement.id, 'mail_cancelled', {
+          mailId: mail.id,
+          actor: request.to,
+          status: remoteResult.status,
+          reason: remoteResult.content,
+        });
+      }
+      await maybeCloseEngagement(state).catch(reportError);
+      const turnStatus: ActorTurnResult['status'] =
+        remoteResult.status === 'completed'
+          ? 'completed'
+          : remoteResult.status === 'cancelled'
+            ? 'cancelled'
+            : 'failed';
+      return {
+        ok: true,
+        accepted: true,
+        mailId: mail.id,
+        mail,
+        reply: { status: turnStatus, content: remoteResult.content },
+        result: { status: remoteResult.status, content: remoteResult.content },
+      };
+    }
+
+    if (request.kind !== 'tell') state.outstanding.add(mail.id);
+
+    let replied: Promise<{ status: ActorTurnResult['status']; content: string }> | undefined;
+    if (request.kind === 'ask') {
+      replied = new Promise((resolve) => askWaiters.set(mail.id, { asker: from, engagementId: state.engagement.id, resolve }));
+      const key = waitKey(state.engagement.id, from);
+      const set = waitingOn.get(key) ?? new Set<ActorId>();
+      set.add(request.to);
+      waitingOn.set(key, set);
+    }
+    const posted = post(state, mail);
+    if (!posted.ok) {
+      state.outstanding.delete(mail.id);
+      askWaiters.delete(mail.id);
+      waitingOn.get(waitKey(state.engagement.id, from))?.delete(request.to);
+      options.ledger.close(grantId);
+      return deny(posted.code, posted.reason, mail);
+    }
+    if (!replied) return { ok: true, accepted: true, mailId: mail.id, mail };
+    const replyVal = await replied;
+    return { ok: true, accepted: true, mailId: mail.id, mail, reply: replyVal, result: replyVal };
+  }
+
   return {
     deliver,
 
@@ -501,81 +797,140 @@ export function createHarness(options: HarnessOptions): Harness {
       return options.ledger.snapshot(current.grantId)?.remaining;
     },
 
-    async send(from, current, request) {
-      const state = engagements.get(current.engagementId);
-      const deny = async (code: HarnessDenyCode, reason: string, mail?: Mail, escalateIt = false): Promise<SendOutcome> => {
-        if (state && mail) {
-          await record(state.engagement.id, 'mail_denied', { ...mailSummary(mail), code, reason });
-          if (escalateIt) await escalate(state, mail, code, reason);
-        }
-        return { ok: false, code, reason, escalated: escalateIt && Boolean(state && mail) };
-      };
-      if (closed) return deny('closed', 'harness is closed');
-      if (!state || state.closed) return deny('unknown_engagement', `engagement ${current.engagementId} is not open`);
-      if (state.frozen) return { ok: false, code: 'frozen', reason: `collaboration is paused for the human to decide: ${state.frozen.reason}`, escalated: true };
-      if (current.to !== from || !state.byId.has(current.id)) {
-        return deny('authority_not_attenuated', `${from} is not processing mail ${current.id}`);
-      }
-      const ceiling = options.ceilingOf(agentOf(request.to), state.engagement.id);
-      if (!ceiling) return deny('unknown_agent', `unknown agent ${agentOf(request.to)}`);
+    send(from, current, request) {
+      return sendInternal(from, current, request);
+    },
 
-      const granted = options.ledger.grant(current.grantId, request.budget ?? {});
-      const grantId: GrantId = granted.ok ? granted.value : current.grantId;
-      const body: MailBody = request.kind === 'ask'
-        ? { kind: 'ask', question: request.text }
-        : request.kind === 'delegate'
-          ? { kind: 'delegate', brief: request.text, ...(request.deliverable ? { deliverable: request.deliverable } : {}) }
-          : { kind: 'tell', content: request.text };
-      const mail: Mail = Object.freeze({
-        id: newId(),
-        kind: request.kind,
-        engagementId: state.engagement.id,
-        causationId: current.id,
-        from: Object.freeze({ kind: 'actor', actor: from }) as MailSender,
-        to: request.to,
-        authority: options.attenuate(current.authority, request.narrowing ?? {}, ceiling, from),
-        grantId,
-        body: Object.freeze(body),
-        createdAt: clock(),
+    async followUp(input) {
+      const original = sentDelegations.get(input.mailId);
+      if (!original || original.from !== input.from) {
+        return Object.freeze({
+          ok: false,
+          accepted: false,
+          mailId: input.mailId,
+          code: 'missing_causation',
+          reason: Object.freeze({
+            code: 'missing_causation',
+            detail: !original
+              ? `unknown delegated mail ${input.mailId}`
+              : `mail ${input.mailId} was sent by ${original.from}, not ${input.from}`,
+          }),
+          escalated: false,
+        });
+      }
+      const state = engagements.get(original.engagementId) ?? allEngagements.get(original.engagementId);
+      if (!state) {
+        return Object.freeze({
+          ok: false,
+          accepted: false,
+          mailId: input.mailId,
+          code: 'unknown_engagement',
+          reason: Object.freeze({
+            code: 'unknown_engagement',
+            detail: `engagement ${original.engagementId} does not exist`,
+          }),
+          escalated: false,
+        });
+      }
+      const wasClosed = state.closed;
+      let carrierMail = original.parentMail;
+      if (wasClosed) {
+        state.closed = false;
+        engagements.set(state.engagement.id, state);
+      }
+      const snap = options.ledger.snapshot(carrierMail.grantId);
+      if (!snap || snap.closed) {
+        const reopenedGrant = options.ledger.openRoot(state.initialBudget);
+        carrierMail = Object.freeze({ ...carrierMail, grantId: reopenedGrant });
+        state.byId.set(carrierMail.id, carrierMail);
+      }
+
+      const outcome = await sendInternal(
+        input.from,
+        carrierMail,
+        {
+          kind: 'ask',
+          to: original.to,
+          text: `[Follow-up on ${input.mailId}]\n${input.content}`,
+          ...(input.budget ? { budget: input.budget } : {}),
+          ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
+        },
+        {
+          causationId: input.mailId,
+          authority: original.authority,
+        },
+      );
+
+      if (wasClosed) {
+        await maybeCloseEngagement(state).catch(reportError);
+      }
+
+      if (!outcome.ok) {
+        return Object.freeze({
+          ok: false,
+          accepted: false,
+          mailId: input.mailId,
+          code: outcome.code,
+          reason: Object.freeze({ code: outcome.code, detail: outcome.reason }),
+          escalated: outcome.escalated,
+        });
+      }
+      return Object.freeze({
+        ok: true,
+        accepted: true,
+        mailId: outcome.mail.id,
+        mail: outcome.mail,
+        ...(outcome.reply ? { reply: outcome.reply } : {}),
+        ...(outcome.result ? { result: outcome.result } : outcome.reply ? { result: outcome.reply } : {}),
       });
-      if (!granted.ok) return deny('budget_exceeded', granted.message, mail);
+    },
 
-      const decision = options.guard.admitMail(mail, { graph: graphOf(state), targetCeiling: ceiling, senderAuthority: current.authority, limits });
-      if (!decision.allow) {
-        options.ledger.close(grantId);
-        return deny(decision.code, decision.reason, mail, decision.escalate);
+    async writeBoard(engagementId, input) {
+      const key = typeof input.key === 'string' ? input.key.trim() : '';
+      if (!key) throw new TypeError('Board entry key must be a non-empty string');
+      const kind: BoardEntryKind = input.kind ?? 'note';
+      let board = boards.get(engagementId);
+      if (!board) {
+        board = new Map<string, BoardEntry>();
+        boards.set(engagementId, board);
       }
-      if (request.kind === 'ask' && wouldCycle(state.engagement.id, from, request.to)) {
-        options.ledger.close(grantId);
-        return deny('wait_cycle', `${request.to} is waiting on ${from}; asking it back would deadlock`, mail, true);
-      }
+      const existing = board.get(key);
+      const version = (existing?.version ?? 0) + 1;
+      const updatedAt = clock();
+      const entry: BoardEntry = Object.freeze({
+        key,
+        kind,
+        content: input.content,
+        author: input.author,
+        updatedAt,
+        version,
+        ...(input.status !== undefined ? { status: input.status } : {}),
+      });
+      board.set(key, entry);
+      await record(engagementId, 'board_written', {
+        actor: input.author,
+        key,
+        kind,
+        content: input.content,
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.mailId !== undefined ? { mailId: input.mailId } : {}),
+        version,
+      });
+      return entry;
+    },
 
-      admit(state, mail);
-      await record(state.engagement.id, 'mail_admitted', mailSummary(mail));
-      if (granted.ok && request.kind !== 'tell') {
-        const snapshot = options.ledger.snapshot(grantId);
-        await record(state.engagement.id, 'budget_granted', { grantId, parentId: current.grantId, granted: snapshot?.granted ?? null });
+    async readBoard(engagementId, filter) {
+      const board = boards.get(engagementId);
+      if (board && board.size > 0) {
+        const entries = [...board.values()].filter((entry) => {
+          if (filter?.key !== undefined && entry.key !== filter.key) return false;
+          if (filter?.kind !== undefined && entry.kind !== filter.kind) return false;
+          return true;
+        });
+        return Object.freeze(entries);
       }
-      if (request.kind !== 'tell') state.outstanding.add(mail.id);
-
-      let replied: Promise<{ status: ActorTurnResult['status']; content: string }> | undefined;
-      if (request.kind === 'ask') {
-        replied = new Promise((resolve) => askWaiters.set(mail.id, { asker: from, engagementId: state.engagement.id, resolve }));
-        const key = waitKey(state.engagement.id, from);
-        const set = waitingOn.get(key) ?? new Set<ActorId>();
-        set.add(request.to);
-        waitingOn.set(key, set);
-      }
-      const posted = post(state, mail);
-      if (!posted.ok) {
-        state.outstanding.delete(mail.id);
-        askWaiters.delete(mail.id);
-        waitingOn.get(waitKey(state.engagement.id, from))?.delete(request.to);
-        options.ledger.close(grantId);
-        return deny(posted.code, posted.reason, mail);
-      }
-      if (!replied) return { ok: true, mail };
-      return { ok: true, mail, reply: await replied };
+      const records = await options.journal.read(engagementId);
+      return reconstructBoardFromEvents(records, filter);
     },
 
     async charge(current, usage) {
@@ -602,7 +957,7 @@ export function createHarness(options: HarnessOptions): Harness {
     },
 
     graph(id) {
-      const state = engagements.get(id);
+      const state = engagements.get(id) ?? allEngagements.get(id);
       return state ? graphOf(state) : undefined;
     },
 

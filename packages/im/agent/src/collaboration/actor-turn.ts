@@ -73,6 +73,14 @@ export interface ActorTurnRunnerOptions {
   readonly imageInspectionBudget?: ImageInspectionBudget;
   readonly provenance?: TurnProvenance;
   readonly onEscalate?: (reason: string) => Promise<string>;
+  readonly onVenueTell?: (venue: string, content: string) => Promise<void>;
+  readonly onToolCalled?: (info: {
+    readonly engagementId: string;
+    readonly actor: ActorId;
+    readonly mailId: string;
+    readonly tool: string;
+    readonly ok: boolean;
+  }) => void | Promise<void>;
 }
 
 const GENERIC_PERSONA = 'You are a focused assistant agent. Do the work you are given carefully and report the result plainly.';
@@ -130,7 +138,11 @@ async function runActorTurn(
     && !isToolAboveTrust(tool, trustLevel));
   const collaboration = options.createTools(
     { harness, directory: options.directory, actor, mail },
-    { owner: options.capabilities.owner, ...(options.onEscalate ? { onEscalate: options.onEscalate } : {}) },
+    {
+      owner: options.capabilities.owner,
+      ...(options.onEscalate ? { onEscalate: options.onEscalate } : {}),
+      ...(options.onVenueTell ? { onVenueTell: options.onVenueTell } : {}),
+    },
   );
   const collaborationNames = new Set(collaboration.map(tool => tool.name));
   const childTools: readonly ToolCapability[] = Object.freeze([
@@ -141,7 +153,8 @@ async function runActorTurn(
   const text = renderMailBatch(batch);
   const persona = actorPersona(agent.displayName || agent.name, agent.instructions, agent.name === options.directory.entry.name);
   const turnId = `${rootTurn.identity.turnId}:actor:${actor}:${mail.id}`;
-  const sessionKey = `${rootTurn.session.key}#actor:${actor}`;
+  const rootSessionKey = rootTurn.session.key.replace(/#actor:[^#]+$/u, '');
+  const sessionKey = `${rootSessionKey}#actor:${actor}`;
   // Budget is enforced per model request, not only by the iteration cap (invariant 2).
   const budgetStop = new AbortController();
   const turnSignal = AbortSignal.any([signal, rootTurn.signal, budgetStop.signal]);
@@ -203,6 +216,20 @@ async function runActorTurn(
     modelRequests >= allowance.modelCalls || (allowance.tokens > 0 && usageTokens >= allowance.tokens)
   ));
   const onEvent = (event: TurnEvent): void => {
+    if (event.type === 'tool_result' || event.type === 'tool_denied' || event.type === 'tool_failed') {
+      try {
+        void options.onToolCalled?.({
+          engagementId: mail.engagementId,
+          actor,
+          mailId: mail.id,
+          tool: event.toolName,
+          ok: event.type === 'tool_result',
+        });
+      } catch {
+        // journal telemetry must not break turn execution
+      }
+      return;
+    }
     if (event.type === 'iteration_start') {
       // The next model request would overspend the grant: stop before it is made.
       if (modelRequests > 0 && exhausted() && !budgetStop.signal.aborted) budgetStop.abort(BUDGET_EXHAUSTED);
