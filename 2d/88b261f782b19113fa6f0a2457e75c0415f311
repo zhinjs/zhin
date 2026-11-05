@@ -1,0 +1,14 @@
+scripts/check-ci-preflight.mjs
+  h_6f5e45c41d0910 140-194,196
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2d88b261f782b19113fa6f0a2457e75c0415f311",
+  "prompts": {},
+  "humans": {
+    "h_6f5e45c41d0910": {
+      "author": "lc-cn <1659488338@qq.com>"
+    }
+  }
+}
