@@ -23,7 +23,7 @@ export function runInTurnContext<T>(
   fn: () => Promise<T>,
   options?: TurnContextRunOptions,
 ): Promise<T> {
-  const tracker = new TurnTracker(config.subagentTurnWaitMs);
+  const tracker = new TurnTracker();
   const init: Partial<Pick<import('../internal/turn-context.js').TurnContextStore, 'activityFeedbackEligible'>> = {};
   if (options?.activityFeedbackEligible === true) init.activityFeedbackEligible = true;
   return runInTurnContextAls(turnId, tracker, fn, Object.keys(init).length ? init : undefined);

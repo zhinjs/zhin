@@ -32,7 +32,6 @@ import { createTurnSummaryExecutionResolver } from '../memory/summary-model.js';
 import { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import { LocalImageInspection, type ImageInspectionBudget } from '../media/local-image-inspection.js';
 import { DEFAULT_PERCEPTION_SETTINGS } from '../config/perception-config.js';
-import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
@@ -880,12 +879,10 @@ export async function* runAgentLoopTextTurnRun(
   const settleQueuedAnswer = async () => {
     if (!phaseAssistant || phaseSettled) return;
     const calls = toolCalls.slice(phaseToolStart);
-    if (calls.some(call => call.tool === 'spawn_task')) await host.getActiveTurnTracker()?.waitForPendingSubagents();
-    const delegated = suppressesPhaseReply(calls);
     let output: AgentOutputElement[] = [];
     let raw = lastAssistantText;
     let hostReply = lastAssistantNeedsHostReply;
-    if (!delegated && !hostReply) {
+    if (!hostReply) {
       try { output = decodeStructuredReply(raw, input.replySegments); } catch (error) {
         if (!replyRun?.offered) {
           const lenient = decodeLenientStructuredReply(raw, input.replySegments);
@@ -901,8 +898,8 @@ export async function* runAgentLoopTextTurnRun(
           }
         }
       }
-    } else if (!delegated) output = parseOutput(sanitizeAssistantReply(raw));
-    if (!delegated) output = mergeToolOutboundElements(output, calls);
+    } else output = parseOutput(sanitizeAssistantReply(raw));
+    output = mergeToolOutboundElements(output, calls);
     if (input.messageAliases) output = resolveReplyAliases(output, input.messageAliases);
     await settlePhase(output, raw, hostReply);
   };
@@ -1312,8 +1309,7 @@ export async function* runAgentLoopTextTurnRun(
         || !lastAssistantHadToolCalls
         || !progress.segmentProgressed
         || continuations >= toolBudget.maxContinuations
-        || hardLimitReached()
-        || suppressesPhaseReply(toolCalls.slice(phaseToolStart))) break;
+        || hardLimitReached()) break;
       const checkpoint = await summarizeExhaustedTurn({
         locale: input.turnContext.input?.locale,
         transport: completionUsage.transport,
@@ -1378,11 +1374,6 @@ export async function* runAgentLoopTextTurnRun(
   }
 
   const finalPhaseToolCalls = toolCalls.slice(phaseToolStart);
-  const spawnedSubagent = finalPhaseToolCalls.some(tc => tc.tool === 'spawn_task');
-  if (spawnedSubagent) {
-    await host.getActiveTurnTracker()?.waitForPendingSubagents();
-  }
-  const delegatedOnly = suppressesPhaseReply(finalPhaseToolCalls);
 
   // The loop ran tools but never produced visible text (usually maxIterations
   // was hit mid-exploration). Ask the model for a tools-off summary instead of
@@ -1391,7 +1382,7 @@ export async function* runAgentLoopTextTurnRun(
     ? input.interactiveRun.check() ?? (progress.stalled ? turnReplyMessages(input.turnContext.input?.locale, 'stalled') : undefined)
     : undefined;
   if (replyPhases && stopped) phaseStopped = true;
-  const needsReplyRecovery = !phaseSettled && !phaseStopped && !replyRun?.offered && !stopped && !(input.interactiveRun && lastAssistantNeedsHostReply) && !delegatedOnly
+  const needsReplyRecovery = !phaseSettled && !phaseStopped && !replyRun?.offered && !stopped && !(input.interactiveRun && lastAssistantNeedsHostReply)
     && hasTools
     && (toolCalls.length > 0 || iterations >= maxIterations)
     && (!lastAssistantText.trim() || (imReply && lastAssistantHadToolCalls));
@@ -1427,9 +1418,9 @@ export async function* runAgentLoopTextTurnRun(
       toolSummary: formatToolCallsForUser(finalPhaseToolCalls),
       ...(chatFailure ? { emptyMessage: chatFailureLine('malformed_tool_call', chatFailure) } : {}),
     });
-  const textReply = delegatedOnly ? '' : proseReply.trim() ? continuationPrefix + proseReply : proseReply;
-  let output: AgentOutputElement[] = phaseSettled ? [...settledPhaseOutput] : delegatedOnly || structuredReply ? [] : parseOutput(textReply);
-  if (!phaseSettled && !delegatedOnly && structuredReply) {
+  const textReply = proseReply.trim() ? continuationPrefix + proseReply : proseReply;
+  let output: AgentOutputElement[] = phaseSettled ? [...settledPhaseOutput] : structuredReply ? [] : parseOutput(textReply);
+  if (!phaseSettled && structuredReply) {
     try {
       output = decodeStructuredReply(rawReply, input.replySegments);
     } catch (error) {
@@ -1458,7 +1449,7 @@ export async function* runAgentLoopTextTurnRun(
       }
     }
   }
-  if (!phaseSettled && !delegatedOnly) {
+  if (!phaseSettled) {
     output = mergeToolOutboundElements(output, toolCalls.slice(phaseToolStart));
   }
   // ADR 0043 §5: a `reply` segment may name its target by alias (`m12`); delivery needs the platform id.
@@ -1468,7 +1459,7 @@ export async function* runAgentLoopTextTurnRun(
     await settlePhase(output, rawReply, hostReply);
   } else if (replyRun && (answering || replyRun.offered)) {
     await replyRun.stop();
-    if (!hostReply && structuredReply && !delegatedOnly && !replyRun.error) {
+    if (!hostReply && structuredReply && !replyRun.error) {
       try {
         const snapshot = await replyRun.complete(rawReply);
         if (snapshot) progressive = { run: replyRun, snapshot };
@@ -1519,11 +1510,6 @@ export async function* runAgentLoopTextTurnRun(
     projectConversation: (delivered) => appendConversationBatches(repo, sessionId, conversationBatches,
       replyPhases ? undefined : hostReply && delivered ? { ...delivered, contextRefs: undefined } : delivered, conversationPhaseFacts),
   };
-}
-
-function suppressesPhaseReply(calls: readonly ToolCallRecord[]): boolean {
-  return shouldSuppressReplyForSpawnDelegation([...calls]) && !calls.some(call => call.tool === 'generate_image'
-    && call.result && typeof call.result === 'object' && typeof (call.result as Record<string, unknown>).image === 'string');
 }
 
 function encodeConfirmedOutput(output: readonly AgentOutputElement[]): string {

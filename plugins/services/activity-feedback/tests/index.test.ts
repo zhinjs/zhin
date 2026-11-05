@@ -107,65 +107,7 @@ describe('ActivityFeedbackOrchestrator', () => {
     expect(executor.start).not.toHaveBeenCalled();
   });
 
-  it('子 agent 的 message phase 应带 [agentId] 前缀', async () => {
-    const executor = {
-      kindCapabilities: vi.fn(() => undefined),
-      start: vi.fn(),
-      stop: vi.fn(),
-      updateText: vi.fn(),
-      updateThinkingText: vi.fn(),
-      dispose: vi.fn(async () => undefined),
-    } satisfies ActivityFeedbackExecution;
-
-    const policy = new ActivityFeedbackPolicy(
-      loadActivityFeedbackServiceConfig({
-        platforms: {
-          qq: {
-            phases: {
-              thinking: { private: { type: 'message', message: '思考中...', autoRemove: true } },
-              active: { private: { type: 'message', message: '正在处理中...', autoRemove: true } },
-            },
-          },
-        },
-      }),
-    );
-
-    const orchestrator = new ActivityFeedbackOrchestrator(policy, executor, {
-      debug: vi.fn(),
-      error: vi.fn(),
-    });
-
-    const payload = {
-      source: 'subagent',
-      agentId: 'researcher',
-      taskId: '91a68419',
-      platform: 'qq',
-      endpointKey: '知音',
-      sessionId: 'qq:知音:private:477561',
-      sceneId: '477561',
-      userId: '477561',
-      scope: 'private',
-      hookContext: { activityFeedbackEligible: true },
-    } as AIEventPayload;
-
-    await orchestrator.startPhase(payload, 'thinking', 'subagent.start');
-    expect(executor.start).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: expect.stringContaining('::agent:researcher:'),
-      }),
-      'thinking',
-      expect.objectContaining({ message: '[researcher] 思考中...' }),
-    );
-
-    await orchestrator.startPhase(payload, 'active', 'processing.start');
-    expect(executor.start).toHaveBeenCalledWith(
-      expect.anything(),
-      'active',
-      expect.objectContaining({ message: '[researcher] 正在处理中...' }),
-    );
-  });
-
-  it('dispose 清理所有仍活跃的主/子 Agent phase', async () => {
+  it('dispose 清理所有会话仍活跃的 phase', async () => {
     const executor = {
       kindCapabilities: vi.fn(() => undefined),
       start: vi.fn(),
@@ -190,7 +132,7 @@ describe('ActivityFeedbackOrchestrator', () => {
     } as AIEventPayload;
     await orchestrator.startPhase(base, 'active', 'test');
     await orchestrator.startPhase({
-      ...base, source: 'subagent', agentId: 'researcher', taskId: 'task-1',
+      ...base, sessionId: 'discord:bot:private:u2', sceneId: 'u2', userId: 'u2',
     }, 'thinking', 'test');
 
     await orchestrator.dispose();
@@ -198,7 +140,7 @@ describe('ActivityFeedbackOrchestrator', () => {
     expect(executor.stop).toHaveBeenCalledTimes(2);
     expect(executor.stop).toHaveBeenCalledWith(expect.anything(), 'active');
     expect(executor.stop).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: expect.stringContaining('::agent:researcher:') }),
+      expect.objectContaining({ sessionId: 'discord:bot:private:u2' }),
       'thinking',
     );
   });

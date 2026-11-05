@@ -1,4 +1,4 @@
-# CI contract fixture without credentials. It validates Agent bindings and Kernel task tools.
+# CI contract fixture without credentials. It validates Agent bindings.
 
 ai:
   trigger:
@@ -9,6 +9,3 @@ ai:
       nickname: Planner
     researcher:
       nickname: Researcher
-  agent:
-    tools:
-      - spawn_task

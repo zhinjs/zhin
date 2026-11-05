@@ -1,7 +1,9 @@
 import { createMemoryContextRepository, createUserMessage } from '@zhin.js/ai';
 import { createScopedMediaPerceptionPort } from '../../src/media/scoped-perception.js';
 import { modelRuntimeFixture } from '../helpers/model-runtime.js';
-import { AIService } from '../../src/service.js';
+import { ZhinAgent } from '../../src/zhin-agent/index.js';
+import { renderAgentOutput } from '../../src/outbound/agent-output.js';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import { AgentCompactionRuntime } from '../../src/memory/compaction-runtime.js';
 import { runWithAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 import { createTurnSummaryExecutionResolver } from '../../src/memory/summary-model.js';
@@ -87,9 +89,10 @@ describe('auxiliary models are acquired only at their consuming boundary', () =>
     f.update({ ...f.graph, profiles: { ...f.graph.profiles, summary: { ...f.graph.profiles.text, id: 'summary' } },
       purposes: { defaults: { chat: 'text', summary: 'summary' } } });
     const scope = await f.acquire();
-    const service = new AIService();
+    const agent = new ZhinAgent({ config: { outputSchema: false } });
     try {
-      expect((await service.runAgent('Hello', { models: scope, maxIterations: 1 })).content).toBe('done');
+      expect(renderAgentOutput(await agent.processTurn({ content: 'Hello', message: mockCommMessage(),
+        configuration: { models: scope } }))).toBe('done');
       const resolveSummary = await runWithAgentTurnConfiguration({ models: scope }, async () =>
         createTurnSummaryExecutionResolver({ model: scope.chat.model, transport: scope.chat.completion }));
       const summary = vi.fn(resolveSummary);
@@ -103,7 +106,7 @@ describe('auxiliary models are acquired only at their consuming boundary', () =>
       expect(transformed).toEqual(messages);
       expect(summary).not.toHaveBeenCalled();
       await expect(scope.summary!.resolve()).rejects.toThrow('Broken summary Driver');
-    } finally { await service.dispose(); await scope.release(); }
+    } finally { await agent.dispose(); await scope.release(); }
   });
 
   it.each(['release', 'cancel'] as const)('does not acquire unresolved candidates after %s', async action => {

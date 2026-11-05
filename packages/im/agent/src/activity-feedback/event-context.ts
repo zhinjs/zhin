@@ -2,7 +2,6 @@ import { activityFeedbackSource, type ActivityFeedbackSourceCarrier } from './op
 import type { TypingIndicatorOptions } from '../typing-indicator/index.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import type { ActivitySceneType } from './types.js';
-import { resolveActivityFeedbackSessionId } from './subagent-prefix.js';
 import { isLocale, type Locale } from '@zhin.js/plugin-runtime';
 
 /** 单次 activity phase 操作的归一化上下文（由 AI 事件 payload 解析） */
@@ -72,8 +71,7 @@ export function toActivityFeedbackEventContext(
 
   const sceneType = resolveActivitySceneType(payload);
   const targets = resolveActivityEventTargets(payload, sceneType);
-  // Subagent shares the IM session but uses an isolated indicator key.
-  const activitySessionId = resolveActivityFeedbackSessionId(payload);
+  const activitySessionId = sessionId;
   const locale = isLocale(payload.locale) ? payload.locale : defaultLocale;
 
   const context: ActivityFeedbackEventContext = {

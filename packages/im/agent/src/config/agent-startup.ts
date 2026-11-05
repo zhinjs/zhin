@@ -182,8 +182,6 @@ export interface AgentStartupConfig {
      * auto：交给自动审核（审核拒绝时仍会转问 master）；inherit：沿用 `execApprovalMode`。
      */
     masterShellApprovalMode?: 'ask' | 'auto' | 'inherit';
-    /** IM / plugin-runtime 回合的子 Agent：sync 在当前回合内同步运行 spawn_task；off（默认）不提供 */
-    subagentTurnMode?: 'off' | 'sync';
     /** 进度感知的工具调用预算：maxIterations 为软上限，有进展时自动延长；含硬上限与自动续跑 */
     toolBudget?: {
       extendBy?: number;
@@ -204,8 +202,6 @@ export interface AgentStartupConfig {
     execAllowlist?: string[];
     /** 审批方式：人工询问、独立审核 Agent，或跳过审批。 */
     execApprovalMode?: 'ask' | 'auto' | 'bypass';
-    subagentExecApprovalMode?: 'ask' | 'auto' | 'bypass';
-    workerExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
     taskExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     /** 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） */
@@ -261,7 +257,6 @@ export interface AgentStartupConfig {
       perGroupRequestsPerMinute?: number;
       exemptOwner?: boolean;
     };
-    /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
     /** @deprecated No effect (#735); use `deferredTools.discoverTopK`. */
     deferredToolMaxResults?: number;
     /** 工具 schema 按需加载 */
@@ -274,8 +269,6 @@ export interface AgentStartupConfig {
       alwaysLoadedMode?: 'extend' | 'replace';
       mcpServers?: Record<string, { alwaysLoaded?: string[] }>;
     };
-    /** Deferred Worker 基础工具 */
-    workerBaseTools?: string[];
     /**
      * AI 结构化输出（AI SDK Output.object）：
      * - false/缺省：纯文本回复（现状）；

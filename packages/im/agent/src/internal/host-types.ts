@@ -28,8 +28,6 @@ export type HostTurnPath = 'chat' | 'fast' | 'agent' | 'multimodal' | 'rate_limi
 
 export interface HostTurnMetrics {
   usage: Usage;
-  mainUsage?: Usage;
-  subagentUsage?: Usage;
   path: HostTurnPath;
   iterations?: number;
   model?: string;
@@ -108,8 +106,7 @@ export interface HostAgentLoopTurnResult {
 
 export interface HostTurnTracker {
   begin(): void;
-  waitForPendingSubagents(): Promise<void>;
-  finalize(partial: Omit<HostTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage }): Promise<void>;
+  finalize(partial: Omit<HostTurnMetrics, 'usage'> & { usage: Usage }): Promise<void>;
 }
 
 export type RequiredHostConfig = Required<ZhinAgentConfig>;

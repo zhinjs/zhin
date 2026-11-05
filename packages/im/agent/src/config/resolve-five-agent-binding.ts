@@ -35,7 +35,6 @@ export function resolveFiveAgentRoleBinding(
     nickname: override?.nickname
       ?? (role === 'planner' ? base.nickname : undefined)
       ?? FIVE_AGENT_ROLE_LABELS[role],
-    permission: override?.permission ?? base.permission,
   };
 }
 

@@ -9,7 +9,6 @@ import {
   DEFAULT_DEFERRED_TOOLS_CONFIG,
 } from '../tool-catalog/types.js';
 import type { ZhinAgentConfig } from './zhin-agent-config.js';
-import { DEFAULT_WORKER_BASE_TOOLS } from './zhin-agent-constants.js';
 
 export const DEFAULT_CONFIG = {
   persona: 'You are Zhin, a member of this chat running on Zhin.js. Talk like the people here.',
@@ -36,20 +35,12 @@ export const DEFAULT_CONFIG = {
   execPreset: 'custom',
   execAllowlist: [],
   execApprovalMode: 'auto',
-  subagentExecApprovalMode: 'auto',
-  maxParallelSubagents: 5,
   toolExecution: 'tiered',
-  subagentAutoContinue: true,
-  subagentDirectImDelivery: false,
-  workerExecApprovalMode: 'auto',
   maxSubagentIterations: 25,
-  subagentTurnMode: 'off',
   toolBudget: { ...DEFAULT_TOOL_BUDGET },
   injectionGuard: { ...DEFAULT_INJECTION_GUARD, trustedOutputTools: [] },
   usageQuota: { ...DEFAULT_USAGE_QUOTA },
   toolHardGate: { ...DEFAULT_TOOL_HARD_GATE, dangerousTools: [] },
-  subagentTools: [],
-  subagentTurnWaitMs: 300_000,
   modelSizeHint: '',
   skillInstructionMaxChars: 0,
   modelHarness: {},
@@ -65,11 +56,8 @@ export const DEFAULT_CONFIG = {
     maxLoadedPerSession: DEFAULT_DEFERRED_TOOLS_CONFIG.maxLoadedPerSession,
     discoverTopK: DEFAULT_DEFERRED_TOOLS_CONFIG.discoverTopK,
   },
-  workerBaseTools: [...DEFAULT_WORKER_BASE_TOOLS],
   steeringMode: DEFAULT_STEERING_MODE,
   followUpMode: DEFAULT_FOLLOW_UP_MODE,
-  deferredAutoContinue: false,
-  deferredAutoContinueMaxDepth: 8,
   outputSchema: 'segments',
   gitStatus: true,
   contextPaths: [],

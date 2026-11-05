@@ -92,12 +92,6 @@ export type { ResolvedInboundLiveConfig, ResolvedInboundMergeConfig, ResolvedInb
 export { createInboundTurnQueue, runWithInboundQueue } from './inbound-queue-runtime.js';
 
 export {
-  continueAfterDeferredWorker,
-  continueAfterSubagent,
-} from './auto-continue.js';
-export type { AutoContinueHost } from './auto-continue.js';
-
-export {
   runPromptTurn,
   steerMessage,
   followUpMessage,
@@ -107,23 +101,6 @@ export {
 export { PromptAccessDeniedError } from './prompt-access.js';
 
 export { normalizePromptMessages } from './prompt-input.js';
-
-export { extractDeferredBody, deliverDeferredWorkerResult, deliverDeferredAutoContinueReply } from './deferred-delivery.js';
-
-export {
-  DEFERRED_AUTO_CONTINUE_MARKER,
-  isDeferredAutoContinueEnabled,
-  shouldDeferredAutoContinue,
-  buildDeferredAutoContinueUserMessage,
-} from './deferred-auto-continue.js';
-
-export {
-  SUBAGENT_AUTO_CONTINUE_MARKER,
-  buildSubagentAutoContinueUserMessage,
-} from './subagent-auto-continue.js';
-
-export { persistDeferredWorkerResultToContext } from './persist-deferred-context.js';
-export { persistSubagentResultToContext } from './persist-subagent-context.js';
 
 export { computeDeferredDelta } from './turn-deferred-delta.js';
 export { DeferredTurnState } from './deferred-turn-state.js';

@@ -22,9 +22,9 @@ pnpm check:l4
 
 ### B. IM 终态反馈（观众 #1）
 
-- [ ] **私聊 spawn_task**（路由到非 `zhin` Agent）：Sandbox 发 `ai: <触发 vision 路由的文本>`，应收到子 Agent 文本结果
-- [ ] **空 summary**：子 Agent 返回空文本时，IM 应收到固定 fallback：`任务已完成，但没有可展示的文本结果。`
-- [ ] **失败**：子 Agent 抛错时，IM 应收到 `trigger.errorTemplate` 错误回复（非仅日志）
+- [ ] **私聊协作**（入口 Agent `ask` / `delegate` 其他 Agent）：Sandbox 发 `ai: <触发 vision 路由的文本>`，应收到入口 Agent 整理后的文本结果
+- [ ] **空 summary**：被委派的 Agent 返回空文本时，IM 应收到固定 fallback：`任务已完成，但没有可展示的文本结果。`
+- [ ] **失败**：被委派的 Agent 抛错时，IM 应收到 `trigger.errorTemplate` 错误回复（非仅日志）
 - [ ] **Remote A2A**：尚未进入生产路径；接入后必须复用相同 Assignment lease/fence/report 契约，不恢复旧 poller
 
 ### C. API / Console 投影（v1 = API；v1.1 = UI）
@@ -40,7 +40,7 @@ pnpm check:l4
 1. `cd examples/full-bot && cp .env.example .env && pnpm dev`
 2. Remote Console 连接 Host（端口默认 `8069`），确认 Workroom 查询必须提供显式 `projectId`
 3. 普通 Agent 工具目录不得出现通用 Workroom transition 工具
-4. 普通 `spawn_task` 不应创建或修改 Workroom Run
+4. 普通 Agent 协作（`ask` / `delegate`）不应创建或修改 Workroom Run
 5. 未配置 Database Host 时文件 Journal 回归通过；显式数据库激活失败时候选 generation 必须失败
 
 ### 2. 语义记忆

@@ -19,7 +19,6 @@ import {
 } from '@zhin.js/agent-feature';
 import { workspaceRoot } from './utils.js';
 
-export type SubagentContextMode = 'fork' | 'fresh';
 export type AgentEffortLevel = 'low' | 'medium' | 'high' | 'max';
 
 const logger = getLogger('builtin-tools');
@@ -40,7 +39,6 @@ export interface AgentMeta {
   provider?: string;
   maxIterations?: number;
   role?: string;
-  contextMode?: SubagentContextMode;
   effort?: AgentEffortLevel;
   memory?: 'user' | 'session' | 'agent';
   skillNames?: string[];
@@ -109,7 +107,6 @@ function toAgentMeta(definition: AgentDefinition, agentDir: string): AgentMeta {
     systemPrompt: definition.instructions,
     maxIterations: definition.maxIterations,
     role: definition.role,
-    contextMode: definition.contextMode,
     model: definition.model,
     provider: definition.provider,
     effort: definition.effort,

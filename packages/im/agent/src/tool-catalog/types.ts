@@ -52,7 +52,6 @@ export const CORE_WORKSPACE_TOOLS = [
 
 export const DEFAULT_ALWAYS_LOADED_TOOLS = [
   'ask_user',
-  'spawn_task',
   'discover',
   'load_tool',
   'load_skill',
@@ -81,7 +80,7 @@ export const CHAT_ESSENTIAL_TOOLS = [
  * Development and delegation tools, resident only for a master's private chat
  * (`bash` still obeys the turn's shell policy).
  */
-export const MASTER_DEV_TOOLS = ['ask_user', 'spawn_task', ...CORE_WORKSPACE_TOOLS, 'bash'] as const;
+export const MASTER_DEV_TOOLS = ['ask_user', ...CORE_WORKSPACE_TOOLS, 'bash'] as const;
 
 const TIER_RESIDENT_TOOLS: Record<ToolTier, readonly string[]> = {
   chat: CHAT_ESSENTIAL_TOOLS,

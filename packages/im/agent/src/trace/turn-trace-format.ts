@@ -91,9 +91,6 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
     lines.push(`${indent}  预算: 延长 ${trace.budget.extensions.length} 次${extensions ? ` (${extensions})` : ''}，自动续跑 ${trace.budget.continuations} 次`);
   }
 
-  for (const task of trace.subagent_tasks) {
-    lines.push(`${indent}  子任务 ${task.task_id} [${task.status}] ${task.description}`);
-  }
   for (const child of trace.subagents) {
     lines.push(`${indent}  子 agent:`);
     lines.push(...renderTrace(child, `${indent}    `, false));

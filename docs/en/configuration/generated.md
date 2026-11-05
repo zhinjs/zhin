@@ -158,10 +158,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.usageQuota.perGroupTokens` | integer | no | `0` | Tokens one group may use per window; 0 = unlimited. |
 | `ai.agent.usageQuota.perGroupRequestsPerMinute` | integer | no | `0` | Turns one group may start per minute; 0 = unlimited. |
 | `ai.agent.usageQuota.exemptOwner` | boolean | no | `true` | The owner is never limited. |
-| `ai.agent.subagentTurnMode` | string: `"off"`, `"sync"` | no | `"off"` | Sub-agents in IM turns. off: no spawn_task. sync: spawn_task runs a sub-agent inside the current turn with at most the parent's permissions (never wider; no bash unless the parent could run it) and approvals routed to the same conversation. |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for main Agent commands. |
-| `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for sub-Agent commands. |
-| `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for worker commands. |
 | `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | no | — | How tool calls in one model step are scheduled. |
 | `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | no | — | Optional model-size hint; an empty string clears the hint. |
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | no | — | Provider prompt-cache retention policy. |
@@ -210,7 +207,6 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.deferredTools.alwaysLoadedMode` | string | no | — | `extend`（默认）追加到内置常驻集合；`replace` 完全替换 |
 | `ai.agent.deferredTools.mcpServers` | object | no | — | — |
 | `ai.agent.deferredTools.mcpServers.<key>.alwaysLoaded` | array&lt;string&gt; | no | — | — |
-| `ai.agent.workerBaseTools` | array&lt;string&gt; | no | — | Deferred Worker 基础工具 |
 | `ai.agent.persona` | string | no | — | — |
 | `ai.agent.maxIterations` | number \| string | no | — | — |
 | `ai.agent.timeout` | number \| string | no | — | — |
@@ -231,20 +227,13 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.compaction.thresholdRatio` | number \| string | no | — | Share of the model context window (system prompt and tools included) at which auto-compaction runs. Default 0.7 (#730). |
 | `ai.agent.disabledTools` | array&lt;string&gt; | no | — | — |
 | `ai.agent.allowedTools` | array&lt;string&gt; | no | — | — |
-| `ai.agent.maxParallelSubagents` | number \| string | no | — | — |
-| `ai.agent.subagentAutoContinue` | boolean \| string | no | — | — |
-| `ai.agent.subagentDirectImDelivery` | boolean \| string | no | — | — |
 | `ai.agent.maxSubagentIterations` | number \| string | no | — | — |
-| `ai.agent.subagentTools` | array&lt;string&gt; | no | — | — |
-| `ai.agent.subagentTurnWaitMs` | number \| string | no | — | — |
 | `ai.agent.skillInstructionMaxChars` | number \| string | no | — | — |
 | `ai.agent.promptTrace` | boolean \| string | no | — | — |
 | `ai.agent.promptTraceVerbose` | boolean \| string | no | — | — |
 | `ai.agent.recordRequestBodies` | boolean | no | — | — |
 | `ai.agent.promptCache` | boolean \| string | no | — | — |
 | `ai.agent.promptCacheKeyPrefix` | string | no | — | — |
-| `ai.agent.deferredAutoContinue` | boolean \| string | no | — | — |
-| `ai.agent.deferredAutoContinueMaxDepth` | number \| string | no | — | — |
 | `ai.agent.gitStatus` | boolean \| string | no | — | §1 Runtime 注入单行 git 状态摘要（非 git 仓库自动跳过） |
 | `ai.agent.contextPaths` | array&lt;string&gt; | no | — | 追加的上下文文件路径（支持 ~ 与相对路径；默认另加载 ~/.config/zhin/AGENTS.md 等全局路径） |
 | `ai.agent.systemPromptMaxChars` | number \| string | no | — | 系统提示词总字符上限；按 retention/order 让出预算，required 内容放不下则失败。 |

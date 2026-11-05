@@ -34,7 +34,7 @@ function fixture(defaultLocale: Locale = 'zh-CN', customMessage?: string) {
   return { source, payload, sent, edit, recall, handlers, orchestrator, logger, extend, makePayload };
 }
 
-it('carries the originating personal language through status sends, edits, iteration and child activity', async () => {
+it('carries the originating personal language through status sends, edits and iteration', async () => {
   const f = fixture('zh-CN');
   try {
     // Preference changes after event creation cannot alter this operation's language.
@@ -56,8 +56,6 @@ it('carries the originating personal language through status sends, edits, itera
     await f.handlers.onThinking?.(f.extend({ thinking: '模型思考原文' }));
     expect(f.sent.at(-1)).toMatchObject({ content: 'Thinking...', locale: 'en' });
     expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: '模型思考原文' }));
-    await f.handlers.onSubagentStart?.(f.extend({ source: 'subagent', taskId: 'child', agentId: 'researcher', label: '原始任务标题' }));
-    expect(f.edit).toHaveBeenCalledWith(expect.objectContaining({ content: '[researcher] Subtask running: 原始任务标题...' }));
     expect(f.sent.every(input => input.locale === 'en')).toBe(true);
     expect(f.logger.error).not.toHaveBeenCalled();
   } finally { await f.orchestrator.dispose(); }

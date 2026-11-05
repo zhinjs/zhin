@@ -9,7 +9,6 @@ export function resolveAgentBinding(
     name,
     mcpServers: raw.mcpServers ?? [],
     nickname: raw.nickname,
-    permission: raw.permission,
   };
 }
 

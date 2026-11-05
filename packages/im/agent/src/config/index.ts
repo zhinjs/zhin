@@ -43,7 +43,6 @@ export {
   SECTION_SEP,
   HISTORY_CONTEXT_MARKER,
   CURRENT_MESSAGE_MARKER,
-  DEFAULT_WORKER_BASE_TOOLS,
 } from './zhin-agent-constants.js';
 
 export {
@@ -71,8 +70,6 @@ export {
   isPromptTraceVerbose,
   isPromptCacheEnabled,
   buildAgentPromptCacheStreamOptions,
-  resolveDeferredTaskToolTimeout,
-  resolveWorkerSlowToolTimeout,
 } from './zhin-agent-runtime.js';
 
 export type {

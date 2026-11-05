@@ -498,7 +498,7 @@ describe('DeferredCapabilityPlan', () => {
         generation: 7,
         owner,
         tools: Object.freeze([
-          tool(owner, 'spawn_task', 'Spawn a chat-only subtask'),
+          tool(owner, 'delegate', 'Delegate background work'),
           tool(owner, 'workroomish_helper', 'Ordinary domain tool with a similar word'),
           ...forbidden.map(name => tool(owner, name, name)),
         ]),
@@ -510,11 +510,11 @@ describe('DeferredCapabilityPlan', () => {
         loadedTools: Object.fromEntries(forbidden.map((name, index) => [name, index + 1])),
         loadedSkills: [],
       },
-      config: { deferredTools: { alwaysLoadedTools: ['spawn_task', ...forbidden] } },
+      config: { deferredTools: { alwaysLoadedTools: ['delegate', ...forbidden] } },
       persistSnapshot: async () => undefined,
     });
 
-    expect(plan.allTools.map(entry => entry.name)).toContain('spawn_task');
+    expect(plan.allTools.map(entry => entry.name)).toContain('delegate');
     expect(plan.allTools.map(entry => entry.name)).toContain('workroomish_helper');
     expect(plan.allTools.map(entry => entry.name)).not.toEqual(expect.arrayContaining(forbidden));
     const discovery = String(await execute(
