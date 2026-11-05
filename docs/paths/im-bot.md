@@ -101,7 +101,7 @@ pnpm install
 pnpm dev
 ```
 
-向导会问你要接哪个平台，然后同时修改 `package.json#zhin.plugins`、`zhin.config.yml` 和 `.env`。账号密钥只写进 `.env`，配置文件里只保留 `${变量}` 引用。
+向导会问你要接哪个平台，然后自动写入 `package.json`（添加适配器依赖）、`zhin.config.yml`（在 `plugins:` 下挂载实例并生成 `endpoints` 配置）和 `.env`。账号密钥只写进 `.env`，配置文件里只保留 `${变量}` 引用。
 
 刚才写的 `/roll` 和定时通知不用改：命令不依赖具体平台，从 Sandbox 换到 QQ、Discord 或 Slack 时业务代码保持不变。各平台的准备工作见 [平台适配器](../adapters/index.md)。
 
@@ -114,7 +114,7 @@ pnpm dev
 
 ## 容易踩的坑
 
-- **配置写错地方**：`zhin.config.yml` 只保存配置值；装了哪些插件只写在 `package.json#zhin.plugins`。
+- **配置写错地方**：在 `configVersion: 2` 中，挂载哪些插件实例写在 `zhin.config.yml` 的 `plugins:` 下，各实例的业务配置写在顶层同名字段下；`package.json#zhin` 只声明入口（`entry`）和能力包（`features`）。
 - **绕过发送链路**：主动发消息用 `outboundHostToken`，不要自己保存适配器实例去调用它的发送方法。
 - **cron 少一段**：定时任务是六段（秒在最前），`0 9 * * *` 这种五段写法会被拒绝。
 

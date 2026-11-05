@@ -41,6 +41,10 @@
 
 核心名单按类别默认危险：成员管理（踢人、禁言、设管理员、角色、拉人）、内容发布（群公告、频道发帖、精华、置顶、B 站评论）、资金（红包、转账、付款，**默认禁用**，`allowFunds: true` 后仍需审批）、身份（改 Bot 资料、头像、签名、解绑账号）。
 
+另有一类按**本次调用的目标**判定，而不是按工具名：**改宿主自身（`self` 硬闸）**。`node_modules/**`、锁文件、`.env*`、`.zhin/`、根 `data/` 等路径直接拒绝写入；项目根目录的 `zhin.config.*`、`package.json`、`schema.json`、插件入口、`AGENTS.md`、`skills/` 等受保护文件走 `self` 硬闸，必须每次获得新鲜人工批准。关于受控自我变更（`change_draft` → 沙箱试跑 → 人工审批 → 生效与自动回滚）的用法见[让 Bot 改自己](./self-change.md)。
+
+::: details 架构演进记录（Slice A–E2：宿主保护与自我变更细节）
+
 另有一类按**本次调用的目标**判定，而不是按工具名：**改宿主自身**，分两档，路径都经过 realpath、`../` 折叠和大小写折叠后再匹配。**直接拒绝（不弹审批）**：`node_modules/**`（任意层）、锁文件（`pnpm-lock.yaml`、`package-lock.json`、`yarn.lock`、`bun.lock(b)`、`npm-shrinkwrap.json`）、`ZHIN_PLUGIN_LIFECYCLE_FILE` 指向的文件，以及文件策略本来就拒绝的 `.env*`、`.zhin/`、根 `data/`、`config.json`、`.npmrc`；任何角色都不能写。**`self` 硬闸**：写**项目根**下的根配置（`zhin.config.*`、`config.yml|yaml`）、`package.json`、`schema.json`、根插件入口（`package.json#zhin.entry`）、`AGENTS.md`、`skills/`、`.agents/skills/`、`.git/`、`.pnpmfile.cjs`、`assistant.profile.yml`；只匹配项目根，`plugins/x/package.json` 这类嵌套文件不受影响，`pnpm-workspace.yaml` 与 `tsconfig*.json` 本阶段不管。项目根和根插件入口由宿主注入；宿主没注入时按文件名在任意层级匹配（宁可多拦）。`bash` 命令通过重定向、`tee`、`rm`/`cp`/`mv` 等写这些路径时按同样两档处理，用 `pnpm` / `npm` / `yarn` / `bun` 增删改依赖按 `self` 处理。`self` 写入可能放松硬闸、改变宿主运行的代码或触发重启，所以和其他危险类别一样，每次都要新鲜的人工批准，bypass、自动审核、主人免审、`danger-full-access` 和"记住授权"都不能放行。只读查询（查成员、查群信息）不受硬闸限制，照常记审计。
 
 **隔离 shell 的只读挂载（#1030 P0-c）。** 上面对 `bash` 的字符串识别只是第一道（报错更友好），真正的强制是挂载：隔离容器以 `workspace-write` 挂载工作目录时，再把上述两档路径中**已存在**的部分叠加成只读绑定（`--mount type=bind,...,readonly`），所以 `sed -i`、软链写入、`mv`、`rm -rf node_modules` 都会失败（`Read-only file system` / `Device or resource busy`），与 `danger-full-access` 无关。覆盖范围：挂载目录内的项目根配置、`package.json`、`schema.json`、插件入口、`AGENTS.md`、`skills/`、`.agents/skills/`、`.git/`、`.pnpmfile.*`、`assistant.profile.*`、锁文件、`ZHIN_PLUGIN_LIFECYCLE_FILE`、`.env*`、`.zhin/`、`.npmrc`、`data/` 下除 `memory`/`media` 外的子项，以及挂载目录下**至多 4 层、最多 64 个**的 `node_modules`（扫描不进入 `node_modules`、`.git` 与符号链接）。不存在的目录（如 `skills/`、`node_modules`）用只读 tmpfs 占位，Docker 会在宿主上临时建出空挂载点，运行结束后若仍为空即删除。**不存在的文件不挂占位**：Docker 会在宿主上留下空文件，空的 `zhin.config.*` / 锁文件 / `.pnpmfile.cjs` 对热重载和包管理器更危险，所以"新建一个原本不存在的受保护文件"仍只靠字符串识别拦截。宿主没注入受保护路径时，按挂载目录自身解析惯用文件名（宁可多拦）。**残余风险：** `danger-full-access`（`isolation: none`）没有容器，无法挂载，只剩字符串识别，换成间接写法（脚本、`python -c`、`git` 钩子之类）可能绕过；指向受保护文件的符号链接本身可被替换（链接目标仍是只读）。需要硬保证时请用隔离 shell，不要给 `danger-full-access`。
@@ -68,6 +72,7 @@
 **禁改配置键的维护方式（#1051 F2）。** 上文暂存区一段列出的 `SELF_CHANGE_SECURITY_CONFIG_KEYS` 与宿主 schema 中标 `x-zhin-config.security` 的键由守卫单测保持一致：schema 里新加安全标记的键一定进拒绝集，避免名单漏网；拒绝发生在起草时，生效前再按当前名单复核一次。bypass、自动审核、主人身份、记住授权都不能让这些键经 `configPatch` 进审批——要改只能由人自己编辑配置文件——人在编辑器里直接改不经过 Bot 的任何闸门；让 Bot 用文件工具或 shell 写根配置仍是 `self` 硬闸，每次都要新鲜人工批准。
 
 **收口状态（#1051，ADR 0040 已 Accepted）。** Fin 确认的默认值见 [ADR 0040「Fin 已确认的默认值」](../adr/0040-controlled-self-change.md#fin-已确认的默认值)。要点：试跑里被跳过（`skipped`）的检查不阻断提交，审批卡的试跑结论标出跳过数并列出被跳过的检查名（「通过 (N skipped)；跳过：…」，逐项结论在 `change.json` 的 `trial` 与 Console 详情）；一次人工批准即发布，不设第二道审批；新建本地插件包与 npm 安装依赖不在本期。回归由脚本化 harness eval（`packages/im/agent/evals/cases/self-change-*.case.ts`：主人私聊起草 `/ping`、试跑失败后重新起草、禁改键被拒后不改用文件写入、已有待审时不再起草、群成员不能起草、不直接写约定目录）与 `basic/cli/tests/plugin-runtime/self-change-e2e.test.ts`（假守护进程 exit 75 → `recover()` → 回报、回滚一次、急停、生效中途被杀、残留 `approved` 的 1 小时时限）覆盖，随 `pnpm --filter @zhin.js/agent eval` 与单测运行。**审批可见性（#1142 F3）**：Host 侧 `self-change-detail` RPC 与 IM 卡 diff 摘录已提供，见上文「审批」；Console「自我变更」页面（调 `self-changes` / `self-change-detail` / `resolve-self-change` / `mark-self-change-handled`）随 `zhinjs/console` 配套版本发布。用户向说明见[让 Bot 改自己](./self-change.md)。
+:::
 
 ```yaml
 ai:

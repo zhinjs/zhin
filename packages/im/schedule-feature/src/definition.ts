@@ -15,9 +15,20 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+export type ScheduleDefiner<TConfig> = (
+  definition: ScheduleDefinition<TConfig>,
+) => Readonly<ScheduleDefinition<TConfig>>;
+
 export function defineSchedule<TConfig = unknown>(definition: ScheduleDefinition<TConfig>): Readonly<ScheduleDefinition<TConfig>> {
   return parseScheduleDefinition<TConfig>(definition);
 }
+
+/**
+ * Fix the plugin config type first, then define the schedule.
+ */
+defineSchedule.withConfig = function withConfig<TConfig = unknown>(): ScheduleDefiner<TConfig> {
+  return (definition) => defineSchedule(definition);
+};
 
 export function parseScheduleDefinition<TConfig = unknown>(value: unknown): Readonly<ScheduleDefinition<TConfig>> {
   if (!value || typeof value !== 'object') {

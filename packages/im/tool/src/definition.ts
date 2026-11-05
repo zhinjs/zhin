@@ -170,6 +170,8 @@ export interface AgentToolDefinition<
 > {
   /** @internal Runtime feature brand. */
   readonly $feature: typeof toolBrand;
+  /** Optional local tool name hint; convention discovery uses the directory name. */
+  readonly name?: string;
   readonly description: string;
   readonly inputSchema?: ToolInputSchema<TInput>;
   readonly requiresApproval: ToolApproval;
@@ -411,15 +413,16 @@ export function parseAgentToolDefinition(
 }
 
 function placementFromLocalName(localName: string): ToolPlacement | undefined {
-  const segments = localName.split('/');
-  if (segments[0] === 'agent' && segments[2] === 'skill' && segments.length === 5) {
-    return Object.freeze({ kind: 'agent-skill', agent: segments[1]!, skill: segments[3]! });
+  const [first, second, third, fourth] = localName.split('/');
+  const segmentCount = localName.split('/').length;
+  if (first === 'agent' && third === 'skill' && segmentCount === 5 && second && fourth) {
+    return Object.freeze({ kind: 'agent-skill', agent: second, skill: fourth });
   }
-  if (segments[0] === 'agent' && segments.length === 3) {
-    return Object.freeze({ kind: 'agent', agent: segments[1]! });
+  if (first === 'agent' && segmentCount === 3 && second) {
+    return Object.freeze({ kind: 'agent', agent: second });
   }
-  if (segments[0] === 'skill' && segments.length === 3) {
-    return Object.freeze({ kind: 'skill', skill: segments[1]! });
+  if (first === 'skill' && segmentCount === 3 && second) {
+    return Object.freeze({ kind: 'skill', skill: second });
   }
   return undefined;
 }

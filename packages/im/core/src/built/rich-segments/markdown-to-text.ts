@@ -88,6 +88,7 @@ export function markdownToPlainText(md: string): string {
   }).filter((line): line is string => line !== undefined).join('\n');
   if (fence) text += `${text ? '\n' : ''}${stash(fence.code.join('\n'))}`;
   text = readableLinks(decodeReadableEntities(text), stash);
+  text = formatMarkdownTables(text);
   text = text.replace(/^#{1,6}\s+/gm, '');
   text = text.replace(/^[ \t]*>[ \t]?/gm, '');
   text = text.replace(/^([ \t]*)[-*+][ \t]+/gm, '$1• ');
@@ -111,4 +112,22 @@ export function markdownToHtmlForRender(md: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
   return `<pre style="white-space:pre-wrap;font-family:sans-serif;font-size:14px;line-height:1.5;padding:16px;">${escaped}</pre>`;
+}
+
+function formatMarkdownTables(text: string): string {
+  if (!text.includes('|')) return text;
+  const out: string[] = [];
+  for (const line of text.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.length > 1 && trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const cells = trimmed.slice(1, -1).split('|').map(cell => cell.trim());
+      if (cells.length > 0 && cells.every(cell => /^:?-{2,}:?$/u.test(cell))) {
+        continue;
+      }
+      out.push(cells.join(' | '));
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join('\n');
 }

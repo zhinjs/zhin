@@ -21,11 +21,12 @@ export interface ConstructionContext<TConfig = unknown> {
    * Optional so hand-written contexts stay valid; built-in contexts always provide it.
    * Prefer `hasResource(context, token)` from `zhin.js`, which also works without it.
    */
-  has?(token: Token<unknown>): boolean;
+  has?<T>(token: Token<T>): boolean;
 }
 
 /** Context for an operation whose caller owns this generation snapshot. */
 export interface CapabilityContext<TConfig = unknown> extends ConstructionContext<TConfig> {
+  has<T>(token: Token<T>): boolean;
   /** Resolve a generation-owned Feature projection from this operation's snapshot. */
   project<T>(feature: FeatureId): T;
 }

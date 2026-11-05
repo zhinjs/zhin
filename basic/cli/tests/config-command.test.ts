@@ -295,3 +295,22 @@ it('--offline cannot be combined with --host and never touches the network', asy
   expect(last(output).status).toBe('usage');
   expect(process.exitCode).toBe(CONFIG_EXIT_CODES.error);
 });
+
+it('falls back to HTTP_TOKEN when ZHIN_CONSOLE_TOKEN is unset', async () => {
+  const prevConsole = process.env.ZHIN_CONSOLE_TOKEN;
+  const prevHttp = process.env.HTTP_TOKEN;
+  delete process.env.ZHIN_CONSOLE_TOKEN;
+  process.env.HTTP_TOKEN = 'env-http-token';
+  try {
+    await fixture({ configVersion: 2, plugins: {}, http: { host: '127.0.0.1', port: 18086 } });
+    const fetch = fakeHost();
+    await run('set', 'log_level', 'debug');
+    expect(fetch.mock.calls[0]![1]?.headers).toMatchObject({ authorization: 'Bearer env-http-token' });
+    expect(process.exitCode).toBe(CONFIG_EXIT_CODES.ok);
+  } finally {
+    if (prevConsole === undefined) delete process.env.ZHIN_CONSOLE_TOKEN;
+    else process.env.ZHIN_CONSOLE_TOKEN = prevConsole;
+    if (prevHttp === undefined) delete process.env.HTTP_TOKEN;
+    else process.env.HTTP_TOKEN = prevHttp;
+  }
+});

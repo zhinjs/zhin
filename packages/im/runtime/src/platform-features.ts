@@ -16,6 +16,23 @@ export const PLATFORM_FEATURE_CARRIER = '@zhin.js/core';
 export const PLATFORM_FEATURE_FACADE = 'zhin.js';
 
 /**
+ * Package whose `zhin.features` define the Agent Feature composition
+ * (tool / skill / agent-feature / mcp-feature / prompt-section).
+ */
+export const AGENT_FEATURE_CARRIER = '@zhin.js/agent';
+
+/**
+ * Default Agent platform features inherited when `@zhin.js/agent` is present.
+ */
+export const AGENT_PLATFORM_FEATURES: readonly PackageReference[] = Object.freeze([
+  Object.freeze({ package: '@zhin.js/tool', api: '^1.0.0' }),
+  Object.freeze({ package: '@zhin.js/skill', api: '^1.0.0' }),
+  Object.freeze({ package: '@zhin.js/agent-feature', api: '^1.0.0' }),
+  Object.freeze({ package: '@zhin.js/mcp-feature', api: '^1.0.0' }),
+  Object.freeze({ package: '@zhin.js/prompt-section', api: '^1.0.0' }),
+]);
+
+/**
  * Merge user-declared features with inherited platform features.
  * User references for the same package win (pin / override).
  */

@@ -199,13 +199,24 @@ synthetic `json` tool. The transport preserves its answer text, and Agent valida
 the same full schema regardless of transport. Reasoning is never a final reply and
 is never searched for JSON.
 
-How a provider is asked for structured output is `compat.structuredOutput`:
+How a model service is asked for structured output is controlled by `compat.structuredOutput`:
 `native` uses the provider's structured output / JSON mode; `prompt` writes the
 schema into the system prompt and decodes the answer text leniently. DeepSeek
 defaults to `prompt`: its thinking models in JSON mode often think and then return
 only whitespace (4 of 8 replies measured), while without JSON mode 12 of 12 were
-usable. Other SDKs default to `native`; set `compat: { structuredOutput: prompt }`
-on a provider whose JSON mode returns empty answers.
+usable. Other Drivers default to `native`; set `compat: { structuredOutput: prompt }`
+under the service options in `ai.plan.yml` (or Console service settings) when an OpenAI-compatible gateway returns empty answers in JSON mode:
+
+```yaml
+# ai.plan.yml
+services:
+  my-gateway:
+    driver: openai-compatible
+    options:
+      baseUrl: https://gateway.example.com/v1
+      compat:
+        structuredOutput: prompt
+```
 
 On a schema mismatch, Agent makes at most one format-only completion without
 conversation history or business tools (30-second timeout, turn cancellation

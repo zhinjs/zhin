@@ -129,9 +129,11 @@ ${rows}
 function buildIndexMarkdown() {
   return `# 平台适配器
 
-适配器把外部平台接入 Zhin 的统一消息与 Endpoint 模型。先按部署条件选择接入方式，再检查能力和维护档位；不要只按平台名称选包。
+适配器把外部平台（QQ、微信、飞书、钉钉、Discord、Telegram、Slack 等）接入 Zhin 的统一消息模型。你的命令、组件与 AI 工具只需编写一次；切换或新增平台时，运行 \`npx zhin setup --adapters\` 并在 \`zhin.config.yml\` 中配置对应的账号实例（\`endpoints\`，每项带唯一 \`id\`）即可。
 
-所属 \`Adapter\` 管理账号期望状态与运行实例；Endpoint 是实现 \`endpointSpec\` 的实际 SDK 或协议 Client，原生 API 保持自身语义。框架入站通过 \`endpoint[endpointSpec].events\`，完整回调使用 \`events.run(...)\` 接纳，详见[适配器开发](/authoring/adapters)。
+- **适配器（Adapter）**：对应一个平台的 npm 包（如 \`@zhin.js/adapter-qq\`），在 \`zhin.config.yml\` 的 \`plugins:\` 中挂载。
+- **账号端点（Endpoint）**：适配器下的一个具体机器人账号或连接（写在对应适配器的 \`endpoints:\` 列表中），一个适配器可以同时挂载多个账号。
+- 想自己开发新平台适配器？请阅读 [适配器开发](/authoring/adapters)。
 
 ## 先做选择
 

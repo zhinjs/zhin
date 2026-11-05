@@ -30,34 +30,55 @@ pnpm dev
 
 ## 2. 看一眼生成的模型配置
 
+向导会在 `zhin.config.yml` 中开启 AI，并在项目根目录生成 `ai.plan.yml`（预置 OpenAI、DeepSeek、通义千问、Anthropic、Ollama 等模型模板，首次启动时自动导入运行时目录）：
+
 ```yaml
+# zhin.config.yml
 ai:
-  providers:
-    openai-main:
-      sdk: openai
-      apiKey: ${AI_API_KEY}
-  agents:
-    zhin:
-      provider: openai-main
-      model: gpt-4o-mini
+  enabled: true
 ```
 
-- `providers` 是"怎么连到模型服务"：SDK 类型和密钥；
-- `agents` 是"用哪个模型回复"：把一个 Agent（这里叫 `zhin`）绑定到某个 provider 的某个模型。
+```yaml
+# ai.plan.yml（由 npx zhin setup --ai 生成，首次启动自动导入）
+version: 1
+services:
+  - id: openai
+    label: OpenAI
+    driver: openai
+accounts:
+  - id: openai-main
+    label: OpenAI Default
+    serviceId: openai
+    authKind: api_key
+    apiKey: ${OPENAI_API_KEY}
+profiles:
+  - id: default-chat
+    label: Default Chat
+    serviceId: openai
+    accountId: openai-main
+    model: gpt-4o-mini
+defaults:
+  chatProfileId: default-chat
+```
 
-重启后私聊 Bot 就会由 AI 回复。在群或频道里，消息需要以 `ai:`、`AI:` 或 `#` 开头，或者 @ 机器人（取决于平台是否支持）。
+- `services` 与 `accounts` 定义“怎么连到模型服务”（驱动类型与 `.env` 中的密钥引用）；
+- `profiles` 与 `defaults.chatProfileId` 定义“默认用哪个模型回复”。
+
+启动后私聊 Bot 就会由 AI 回复。在群或频道里，消息需要以 `ai:`、`AI:` 或 `#` 开头，或者 @ 机器人（取决于平台是否支持）。
 
 ## 3. 写一个工具
 
-创建 `tools/weather/index.ts`：
+创建 `tools/weather/index.ts`，使用 `zhin.js` 内置的 `Schema` 描述参数：
 
 ```ts
+import { Schema } from 'zhin.js';
 import { defineAgentTool } from '@zhin.js/tool';
-import { z } from 'zod';
 
 export default defineAgentTool<{ city: string }>({
   description: '查询城市实时天气',
-  inputSchema: z.object({ city: z.string().min(1) }),
+  parameters: Schema.object({
+    city: Schema.string().required().description('城市名称，如上海'),
+  }),
   requiresApproval: 'never',
   async execute({ city }) {
     const response = await fetch(
@@ -70,7 +91,7 @@ export default defineAgentTool<{ city: string }>({
 
 保存后私聊 Bot："上海天气怎么样？"AI 会自己决定调用这个工具，并用结果组织回复。
 
-- 工具名来自文件路径（这里是 `weather`），`description` 和 `inputSchema` 告诉模型什么时候用、怎么传参；
+- 工具名来自文件路径（这里是 `weather`），`description` 和 `parameters`（也兼容 `inputSchema`）告诉模型什么时候用、怎么传参；
 - `requiresApproval: 'never'` 表示无需人工确认。会改动数据的工具应该要求审批；
 - 工具不是对所有人都可见：Zhin 会按当前用户权限、平台、群/私聊和审批策略过滤后，才把它交给模型。
 

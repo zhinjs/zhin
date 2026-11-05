@@ -91,6 +91,11 @@ describe('hierarchical Plugin config', () => {
     expect(conflictMessage).toContain('Zhin does not pick one for you');
     expect(conflictMessage).toContain('delete schema.json');
     expect(conflictMessage).toContain('remove config from definePlugin');
+
+    // When schema.json matches the inline Schema.object(...).toJsonSchema(), both coexist cleanly
+    await writeFile(join(root, 'schema.json'), JSON.stringify(rootSchema.toJsonSchema()));
+    const matched = await composer.compose(graph, { configVersion: 2, plugins: { child: '@test/child' }, child: { token: '${TOKEN}' } });
+    expect(matched.views.get(graph.root.id)).toEqual({ label: 'root' });
   });
 
   it('composes child schemas, applies defaults, and exposes owner-only views', async () => {

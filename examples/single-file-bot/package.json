@@ -10,7 +10,6 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@zhin.js/adapter-icqq": "workspace:*",
     "@zhin.js/adapter-sandbox": "workspace:*",
     "zhin.js": "workspace:*"
   },

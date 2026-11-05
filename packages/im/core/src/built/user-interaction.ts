@@ -72,7 +72,9 @@ export function renderUserInteraction(
     view.tip?.trim() ? quoteTip(view.tip.trim()) : undefined,
   ].filter((part): part is string => !!part).join('\n\n');
   const actions = view.actions ?? [];
-  if (actions.length === 0) {
+  const hasInlineOptionList = actions.length > 0
+    && actions.every((action, index) => view.description?.includes(`${index + 1}. ${action.label}`));
+  if (actions.length === 0 || hasInlineOptionList) {
     return [{ type: 'markdown', data: { content: markdown } }];
   }
   const buttons = actions.map((action, index) => ({

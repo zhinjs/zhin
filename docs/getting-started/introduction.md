@@ -36,7 +36,7 @@ description: "用一页说清 Zhin.js 解决什么问题、适合谁、一个 Bo
 
 | 组成部分 | 它是什么 | 你需要做什么 |
 | --- | --- | --- |
-| **插件** | 你的项目本身就是一个插件；功能多了还可以拆成多个子插件 | 写 `plugin.ts`，并在 `package.json` 里加一个 `zhin` 字段 |
+| **插件** | 你的项目本身就是一个插件（Root 插件）；功能多了可拆成子插件包 | 写 `plugin.ts`（在 `package.json#zhin.entry` 声明）；子插件实例挂载在 `zhin.config.yml` 的 `plugins:` |
 | **命令** | 用户发 `/hello` 时执行的函数 | 在 `commands/hello/index.ts` 里写 `defineCommand()` |
 | **中间件** | 每条消息都会经过的拦截器，适合关键词回复、过滤 | 在 `middlewares/` 里写 `defineMiddleware()` |
 | **适配器** | 把某个平台接进来的 npm 包，如 `@zhin.js/adapter-qq` | 用 `npx zhin setup --adapters` 选择并填凭据 |

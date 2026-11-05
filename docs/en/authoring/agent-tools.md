@@ -18,18 +18,24 @@ Run `npx zhin setup --ai` first. The wizard installs a model SDK and declares `@
 
 ## Your first tool
 
+We recommend declaring parameters with `Schema.object()` from `zhin.js` (zero extra dependencies!): `execute({ city, days })` automatically infers `{ city: string; days: number }` with default values populated and validated before execution.
+
 ```ts
 // tools/weather/index.ts
+import { Schema } from 'zhin.js';
 import { defineAgentTool } from '@zhin.js/tool';
-import { z } from 'zod';
 
-export default defineAgentTool<{ city: string }>({
-  description: 'Get the current weather for a city',
-  inputSchema: z.object({ city: z.string().min(1) }),
+export default defineAgentTool({
+  description: 'Get the current and multi-day weather forecast for a city',
+  inputSchema: Schema.object({
+    city: Schema.string().required().description('City name'),
+    days: Schema.number().default(3),
+  }),
   requiresApproval: 'never',
-  async execute({ city }) {
+  async execute({ city, days }) {
+    // city: string, days: number (default 3 is automatically populated)
     const response = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`);
-    return response.text();
+    return `${await response.text()} (${days}-day forecast)`;
   },
 });
 ```
@@ -37,8 +43,20 @@ export default defineAgentTool<{ city: string }>({
 Save, then ask the bot in a DM "What's the weather in Berlin?" — the AI calls this tool and answers from the result.
 
 - `description` and `inputSchema` are **written for the model**: say clearly what the tool does and what the parameters are, so it gets called at the right moment.
-- `inputSchema` can be a Zod 4 object or a JSON Schema whose root is `object`. The framework validates arguments before calling.
 - Whatever `execute` returns goes back to the model, which turns it into a reply.
+
+### Parameter Schema styles
+
+Alongside the recommended `Schema.object(...)` from `zhin.js`, `inputSchema` also supports Zod 4 `z.object(...)` (with automatic type inference) and raw JSON Schema whose root is `object`:
+
+```ts
+// Alternative 1: Zod 4 (infers input type automatically)
+import { z } from 'zod';
+inputSchema: z.object({ city: z.string().min(1), days: z.number().default(3) })
+
+// Alternative 2: Raw JSON Schema (pair with defineAgentTool<{ city: string }>)
+inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+```
 
 ## Common tasks
 
@@ -129,22 +147,34 @@ The second argument to `execute` gives access to plugin services and the current
 | Field | Description |
 | --- | --- |
 | `config` | This plugin's config |
+| `has(token)` | Check if an optional plugin service or Host token is available before calling `use(token)` |
 | `use(token)` | Get services the plugin provides |
 | `origin` / `principal` | Which conversation the call came from and which user it acts for |
+| `selfProfile` | The bot's own profile on the current platform account (nickname, avatar, platform roles, etc.) |
+| `locale` | Active locale for the conversation (e.g. `'zh-CN'`, `'en'`) |
+| `signal` | `AbortSignal` for the current turn or generation |
 | `policy` | The security policy in effect |
 | `question` | Ask the user something (next section) |
 | `$client` | Platform client inferred from the adapter |
 
 Always get dependencies through this argument rather than looking up other plugins at execution time, so the tool uses the right version of each resource during hot reloads.
 
-`config` is `unknown` by default. To type it, use `defineAgentTool.withConfig`: fix the config type first and give the input type on the second call (with a Zod `inputSchema` the input type is inferred):
+::: details Internal effects evidence port
+The Host may also provide an optional internal `effects` evidence port. It grants no permissions and does not replace approval; only the actual action owner can report authentic commit outcomes, and plain return text never acts as commit evidence. Tools must not require this field to exist and should continue to run when an older Host omits it; calls without reliable evidence are never treated as safely replayable. Regular plugins and scaffolds need no changes for this.
+:::
+
+`config` is `unknown` by default. To type it, use `defineAgentTool.withConfig<WeatherConfig>()` to fix the config type first, paired with `Schema.object()` for automatic input inference:
 
 ```ts
-export default defineAgentTool.withConfig<WeatherConfig>()<{ city: string }>({
+import { Schema, databaseHostToken } from 'zhin.js';
+import { defineAgentTool } from '@zhin.js/tool';
+
+export default defineAgentTool.withConfig<WeatherConfig>()({
   description: 'Look up the weather',
-  inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
-  execute({ city }, { config }) {
-    return fetchWeather(city, config.apiKey); // config: WeatherConfig
+  inputSchema: Schema.object({ city: Schema.string().required() }),
+  async execute({ city }, { config, has, use }) {
+    const db = has(databaseHostToken) ? use(databaseHostToken) : undefined;
+    return fetchWeather(city, config.apiKey, db); // city: string, config: WeatherConfig
   },
 });
 ```
@@ -236,27 +266,38 @@ Without `npx zhin setup --ai`, declare both the dependency and the Feature in `p
 
 ### Package a procedure as a Skill
 
-A Skill is `skills/<name>/SKILL.md`: a playbook with frontmatter. The model normally sees only its summary, loads the full text when needed, and that unlocks the tools in its folder.
+A Skill is `skills/<name>/SKILL.md`: a playbook with YAML frontmatter. The model normally sees only its summary, loads the full text when needed, and that unlocks the tools in its folder. Here is a ready-to-copy template:
 
 ```markdown
+<!-- skills/code-review/SKILL.md -->
 ---
-name: memory-consolidate
-description: At turn end or when the master says "remember", write 1–3 retrievable facts to memory_entries
+name: code-review
+description: Review pull requests or code diffs and produce a structured checklist with fix suggestions
+keywords:
+  - review
+  - pr
+  - code-review
 tools:
-  - memory_upsert
-  - memory_search
+  - fetch_diff
+  - post_review_comment
 ---
 
-(Detailed steps go here…)
+# Code Review Procedure
+
+1. Call `fetch_diff` first to inspect the changed file list and diff.
+2. Check each change in order: correctness → security boundaries → maintainability.
+3. When you find a clear defect, call `post_review_comment` with the file path, line number, and suggested fix.
 ```
 
 Split a Skill that covers several independently triggered tasks, so a simple task doesn't pull in every tool. Skills shipped by adapters go in `agents/<platform>/skills/<name>/` and appear only in that platform's conversations.
 
+::: details Platform and scene disclosure details (ICQQ example)
 Classify before disclosure. Adapters own their Skill instructions, Tool descriptions and platform segment hints; the framework filters them using trusted inbound identity. Use `platforms` for the platform, `scopes` for conversation kinds, separate Skills by purpose, and keep authorization in `permissions`. Saying “group only” in prose is insufficient.
 
 For example, ICQQ likes remain in the common `icqq-interaction` Skill; group pokes and sign-in belong to `icqq-group-interaction`. Both that Skill's frontmatter and its private Tools declare `scopes: ['group']`. Private turns receive neither its catalog entry, instructions nor tools, even if previously loaded. Omitted `scopes` means all scenes, not all permissions.
 
 Group administration is disclosed in groups. For guild/channel administration, use the adapter's canonical scene: Slack channels are `group`, while Discord, KOOK and QQ channels are `channel`. Keep group creation, account queries and user lookup separate as common capabilities. Split mixed-scene Skills.
+:::
 
 ### Define a sub-agent
 
@@ -264,10 +305,37 @@ A sub-agent is an `agents/<name>/` folder with its own responsibilities, boundar
 
 | File | Contents |
 | --- | --- |
-| `agent.json` | Name, model, extra public tools, etc. |
+| `agent.json` | Name, model, extra public tools, `collaboration`, etc. |
 | `system.md` | Role and responsibilities |
 | `boundaries.md` | What it must not do |
 | `conventions.md` | Working conventions; may only extend the plugin root's `AGENTS.md`, never contradict it |
+
+A minimal `agents/researcher/` folder layout and `agent.json` example:
+
+```text
+agents/researcher/
+├── agent.json
+├── system.md         # "# Researcher\nGather documentation and summarize findings with source citations."
+├── boundaries.md     # "- Never mutate external production data.\n- Mark unverified claims explicitly."
+├── conventions.md    # "- Prefer repository docs and authoritative API responses."
+└── tools/
+    └── search-docs/index.ts
+```
+
+```json
+// agents/researcher/agent.json
+{
+  "name": "researcher",
+  "description": "Research assistant that searches technical docs and summarizes evidence",
+  "tools": ["weather"],
+  "collaboration": {
+    "contacts": ["reviewer"],
+    "accepts_from": ["planner"]
+  }
+}
+```
+
+`collaboration.contacts` lists the Agent names it may contact (omit to disallow contacting any Agent); `accepts_from` restricts which Agents may delegate to it (omit to accept delegation from any Agent allowed to contact it). When delegated to, its permissions are never wider than the delegator's. See [AI Agent · Multi-Agent collaboration](../ai/agent.md).
 
 Optional `workflows/`, `tools/`, `skills/`, `hooks/` and `knowledge/` hold scenario flows, private tools, private Skills, hooks and a knowledge base. Mistakes that recur belong in `conventions.md`.
 
@@ -312,7 +380,7 @@ my-plugin/
 | Field | Required | Description |
 | --- | --- | --- |
 | `description` | Yes | What the tool does, for the model |
-| `inputSchema` | No | Zod 4 object or a JSON Schema with an `object` root; validated before execution |
+| `inputSchema` | No | `Schema.object(...)` (recommended, from `zhin.js`), Zod 4 object, or a JSON Schema with an `object` root; validated and populated with defaults before execution |
 | `requiresApproval` | No | `'never' \| 'on-risk' \| 'once' \| 'always'`, default `'on-risk'` |
 | `risk` | No | `'dangerous' \| 'safe'`; `dangerous` goes through the hard gate, see [Declare a dangerous tool](#declare-a-dangerous-tool-hard-gate) |
 | `riskCategory` | No | `'member' \| 'publish' \| 'funds' \| 'identity'`, shown on the approval card; `funds` is disabled by default |

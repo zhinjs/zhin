@@ -35,7 +35,7 @@ sandbox:
 napcat:
   connection: ws
   endpoints:
-    - name: full-bot-napcat
+    - id: full-bot-napcat
       url: ${ONEBOT11_WS_URL} # 环境变量插值
       access_token: ${ONEBOT11_ACCESS_TOKEN}
 ```
@@ -96,29 +96,35 @@ plugins:
 icqq:
   commandPrefix: "/" # 顶层：所有 endpoint 共享
   endpoints:
-    - name: bot-a
+    - id: bot-a
       uin: ${ICQQ_UIN_A}
-    - name: bot-b
+    - id: bot-b
       uin: ${ICQQ_UIN_B}
       commandPrefix: "" # 逐项覆盖顶层
 ```
 
-- 每个 entry 的生效配置 = 实例配置（去掉 `endpoints` 键）**合并** entry 自己的字段；`name` 必填。
-- 展开后每个 endpoint 是独立记录，能力 id 形如 `<slot>~<name>`，Console 和消息链路按 name 寻址。
-- entry 缺 `name`、name 含 `~` 或 `\0`、name 重复：该项被丢弃并告警；全部无效时退化为单 endpoint。
-- `endpoints` 为空/缺省时按实例配置创建单个 endpoint。
+- 每个 entry 的生效配置 = 实例配置（去掉 `endpoints` 键）**合并** entry 自己的字段；`id` 必填。
+- 展开后每个 endpoint 是独立记录，能力 id 形如 `<slot>~<id>`，Console 和消息链路按 `id` 寻址。
+- entry 缺 `id`、`id` 含 `~` 或 `\0`、`id` 重复：直接报错并拒绝无效条目。
+- `endpoints` 为空/缺省时按实例配置创建单个 endpoint（使用顶层 `id` 或 `instanceKey`）。
 
 ### commandPrefix
 
 命令前缀默认按消息所属的适配器实例解析（`defaultCommandPrefixResolver`）：
 
-1. 消息带 `metadata.endpoint` 且配置里有同名 `endpoints[i]` → 用该 entry 的 `commandPrefix`；
+1. 消息带 `metadata.endpoint` 且配置里有对应 `endpoints[i]` → 用该 entry 的 `commandPrefix`；
 2. 否则用实例顶层的 `commandPrefix`；
 3. 都没有 → `''`（无前缀，任意文本都尝试按命令匹配）。
 
 ## 配置文档事务与回滚
 
-运行时改配置（Console 界面、`patchConfig` API）不是直接改文件，而是一个两阶段事务。`ConfigDocumentPort` 与结构化 patch 语义定义在零依赖的 `@zhin.js/plugin-runtime`：
+运行时修改配置（Console 界面、`zhin config`、聊天 `config set`）不是直接覆盖文件，而是一个**两阶段事务**：先在后台用候选配置构建并激活新一代资源，全部成功后再原子替换磁盘上的配置文件；如果任何一步失败，文件与内存中的运行时都会完整回滚，旧配置继续无感生效。
+
+直接用编辑器修改 `zhin.config.yml` 或 `.env` 同样安全：开启 `--watch` 时，Runtime 会按实际变更范围决定是只重载受影响的子插件、重建 Root generation，还是在触及 `http` / `database` / `ai` 等 Host 级启动配置时提示进程重启。
+
+::: details 宿主内部端口契约（维护者参考）
+
+`ConfigDocumentPort` 与结构化 patch 语义定义在零依赖的 `@zhin.js/plugin-runtime`：
 
 ```ts
 interface ConfigDocumentPort {
@@ -142,28 +148,20 @@ composition root 只创建一个具体的 `ConfigFileDocument`。Root Runtime、
 
 事务被编入 generation 交接：`RootRuntime.patchConfig` 先走影子 prepare（见 [generation 与生命周期](./generation-lifecycle.md)），文件 commit 发生在新一代资源激活之后；若交接失败，回滚顺序相反——先恢复文件，再停用影子代。任何一步失败，磁盘上的 Root 配置和内存里的运行时都不会出现半更新状态。
 
-外部直接编辑配置文件也可以。配置文件适配器通过 `ConfigDocumentPort.sources` 声明受监视的
-权威文件，Runtime 重新读取、校验并比较实际投影后再决定影响范围：
+外部直接编辑配置文件时，配置文件适配器通过 `ConfigDocumentPort.sources` 声明受监视的权威文件，Runtime 重新读取、校验并比较实际投影后再决定影响范围：
 
-- `<instanceKey>` 只变化时，仅替换对应 Plugin 的最浅子树；兄弟 Plugin 和 Root
-  Resources 保持当前 generation；
+- `<instanceKey>` 只变化时，仅替换对应 Plugin 的最浅子树；兄弟 Plugin 和 Root Resources 保持当前 generation；
 - Root Plugin 的 `plugin` 配置变化时，重建 Root generation；
-- `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` /
-  `assistant` / `log_level` 等 Host 配置变化时，请求进程重启，因为这些资源在 composition
-  root 启动阶段创建，不能用 Plugin generation 假装已经替换；
+- `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` / `assistant` / `log_level` 等 Host 配置变化时，请求进程重启，因为这些资源在 composition root 启动阶段创建，不能用 Plugin generation 假装已经替换；
 - 只改注释、空白或等价值时，只采纳新的文档 revision，不创建无意义 generation。
 
-## 环境文件重载
+### 环境文件重载（`EnvironmentLayersPort`）
 
-CLI 把 `.env` 与当前环境的 `.env.<environment>` 包装成 `EnvironmentLayersPort`。端口保留
-启动进程继承的基础环境，每次文件事件重新读取 dotenv overlay，不把项目密钥写回全局
-`process.env`。Runtime 随后用新的 owner-scoped `EnvStore` 重新展开配置中的 `${VAR}`、
-`${VAR:-default}` 和 `${VAR:=default}`：
+CLI 把 `.env` 与当前环境的 `.env.<environment>` 包装成 `EnvironmentLayersPort`。端口保留启动进程继承的基础环境，每次文件事件重新读取 dotenv overlay，不把项目密钥写回全局 `process.env`。Runtime 随后用新的 owner-scoped `EnvStore` 重新展开配置中的 `${VAR}`、`${VAR:-default}` 和 `${VAR:=default}`：
 
-- 若 Host 配置的展开值变化，触发进程重启，新进程用新环境创建 HTTP、Database、Agent 等
-  Host 资源；
+- 若 Host 配置的展开值变化，触发进程重启，新进程用新环境创建 HTTP、Database、Agent 等 Host 资源；
 - 否则重建 Root generation，使插件配置引用和直接使用 `EnvStore` 的插件同时切换到新快照；
 - dotenv 内容未产生有效环境变化时，不创建 generation。
 
-环境文件和配置文件都走同一个 HMR 串行队列。候选配置校验或 shadow setup 失败时，旧
-generation、旧环境快照和旧配置 revision 继续生效。
+环境文件和配置文件都走同一个 HMR 串行队列。候选配置校验或 shadow setup 失败时，旧 generation、旧环境快照和旧配置 revision 继续生效。
+:::

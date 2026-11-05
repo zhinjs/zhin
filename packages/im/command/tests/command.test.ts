@@ -1776,7 +1776,7 @@ describe('central command argument declarations', () => {
     await expect(index.dispatch({ input: "remind -n='hello world' actual body" })).resolves.toMatchObject({
       status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'hello world' } },
     });
-    await expect(index.dispatch({ input: 'remind --note="say \\\"hi\\\"" actual body' })).resolves.toMatchObject({
+    await expect(index.dispatch({ input: 'remind --note="say \\"hi\\"" actual body' })).resolves.toMatchObject({
       status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'say "hi"' } },
     });
   });
@@ -1936,9 +1936,19 @@ describe('central command argument declarations', () => {
   it.each([undefined, {}])('intercepts help in any argument position with options %j', async (options) => {
     const execute = vi.fn();
     const index = indexFor(defineCommand({ params: { url: { type: 'string' } }, options, execute }), 'scan/$url', { name: 'url', type: 'string' });
-    for (const input of ['scan --help', 'scan --help https://example.org', 'scan https://example.org --help']) {
+    for (const input of ['scan --help', 'scan -h', 'scan --help https://example.org', 'scan https://example.org --help', 'scan https://example.org -h']) {
       await expect(index.dispatch({ input: input, commandPrefix: '#' })).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('#scan <url>') });
     }
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('reports missingRequiredParam when a required parameter is omitted', async () => {
+    const execute = vi.fn();
+    const index = indexFor(defineCommand({ params: { minutes: { type: 'integer' } }, execute }));
+    await expect(index.dispatch({ input: 'remind' })).resolves.toMatchObject({
+      status: 'invalid',
+      issues: [{ field: 'minutes', code: 'missingRequiredParam', message: '缺少必填参数 minutes（类型：integer）' }],
+    });
     expect(execute).not.toHaveBeenCalled();
   });
 

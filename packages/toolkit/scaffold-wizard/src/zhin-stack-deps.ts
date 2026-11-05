@@ -149,6 +149,20 @@ export function getRequiredZhinDependenciesForConfig(config: Record<string, unkn
     'zhin.js': ZHIN_STACK_VERSIONS['zhin.js'],
   };
 
+  const plugins = config.plugins;
+  if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
+    for (const entry of Object.values(plugins as Record<string, unknown>)) {
+      const pkgName = typeof entry === 'string'
+        ? entry.trim()
+        : (entry && typeof entry === 'object' && !Array.isArray(entry) && typeof (entry as { package?: unknown }).package === 'string')
+          ? (entry as { package: string }).package.trim()
+          : undefined;
+      if (pkgName && pkgName.startsWith('@zhin.js/')) {
+        deps[pkgName] = resolveStackVersion(pkgName);
+      }
+    }
+  }
+
   const database = config.database;
   if (database && typeof database === 'object' && !Array.isArray(database)) {
     deps['@zhin.js/database'] = ZHIN_STACK_VERSIONS['@zhin.js/database'];

@@ -5,6 +5,10 @@ description: "让 Root Host 把远程能力服务或已有的工具注册表接�
 
 # 能力接缝（Capability Seam）
 
+::: tip 谁需要看这一页？
+**95% 的插件作者不需要看这一页！** 日常开发只需在 `commands/`、`components/`、`middlewares/`、`tools/`、`skills/` 目录放文件即可（详见[目录约定](../authoring/conventions.md)）。只有当你在扩展框架底层——比如用 `defineFeature` 定义一种全新的能力类型，或在 Root Host 中把外部远程工具注册表接入 Agent 时，才需要阅读本页。
+:::
+
 大多数插件**用不到**这一页：写 Tool 和 Skill 请直接用约定目录 `tools/<name>/index.ts`、`skills/<name>/SKILL.md`，或 `addTool` / `addSkill`，它们自带清单、归属、热重载和重名检查。
 
 Capability Seam 是给 **Root Host**（组装整个运行时的那一层）准备的高级扩展口：当你要把一个远程能力服务、已有的工具注册表，或者不适合写成单个文件的能力提供者接入 Agent 时，才需要它。

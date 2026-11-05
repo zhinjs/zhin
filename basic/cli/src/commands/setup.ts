@@ -216,7 +216,7 @@ export const setupCommand = new Command('setup')
       console.log('');
       console.log(chalk.cyan(options.global
         ? wizardText(locale, "💡 提示: 任意目录运行 \"zhin runtime start\" 启动全局实例")
-        : wizardText(locale, "💡 提示: 运行 \"zhin dev\" 启动开发服务器")));
+        : wizardText(locale, "💡 提示: 运行 \"pnpm dev\" 启动开发服务器")));
     } catch (error: unknown) {
       logger.error(wizardText(locale, "配置失败: {v0}", [error instanceof Error ? error.message : String(error)]));
       process.exit(1);

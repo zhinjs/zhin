@@ -18,18 +18,24 @@ description: "让 AI 调用你写的函数：编写 Tool、限制可用范围与
 
 ## 写第一个工具
 
+推荐使用 `zhin.js` 内置的 `Schema.object()` 声明参数（零额外依赖）：`execute({ city, days })` 会自动推导出 `{ city: string; days: number }`，并在调用前自动校验参数、填充默认值！
+
 ```ts
 // tools/weather/index.ts
+import { Schema } from 'zhin.js';
 import { defineAgentTool } from '@zhin.js/tool';
-import { z } from 'zod';
 
-export default defineAgentTool<{ city: string }>({
-  description: '查询城市的实时天气',
-  inputSchema: z.object({ city: z.string().min(1) }),
+export default defineAgentTool({
+  description: '查询城市的实时与未来几天天气',
+  inputSchema: Schema.object({
+    city: Schema.string().required().description('城市名称'),
+    days: Schema.number().default(3),
+  }),
   requiresApproval: 'never',
-  async execute({ city }) {
+  async execute({ city, days }) {
+    // city: string，days: number（默认 3 已自动填充）
     const response = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`);
-    return response.text();
+    return `${await response.text()}（预测 ${days} 天）`;
   },
 });
 ```
@@ -37,8 +43,20 @@ export default defineAgentTool<{ city: string }>({
 保存后在私聊里问 Bot "北京今天天气怎么样"，AI 会调用这个工具并根据结果回答。
 
 - `description` 和 `inputSchema` 是**写给模型看的**：清楚地说明这个工具做什么、参数是什么，模型才会在正确的时机调用它。
-- `inputSchema` 可以是 Zod 4 对象，也可以是根节点为 `object` 的 JSON Schema。调用前框架会先校验参数。
 - `execute` 的返回值会交给模型，由模型组织成回复。
+
+### 参数 Schema 写法
+
+除了推荐的 `Schema.object(...)`（来自 `zhin.js`），`inputSchema` 也兼容 Zod 4 的 `z.object(...)`（同样支持类型自动推导）以及根节点为 `object` 的原生 JSON Schema：
+
+```ts
+// 备选 1：Zod 4（自动推导输入类型）
+import { z } from 'zod';
+inputSchema: z.object({ city: z.string().min(1), days: z.number().default(3) })
+
+// 备选 2：原生 JSON Schema（配合泛型 defineAgentTool<{ city: string }>）
+inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+```
 
 ## 常见需求
 
@@ -139,29 +157,39 @@ export default definePlugin({
 | 字段 | 说明 |
 | --- | --- |
 | `config` | 本插件配置 |
+| `has(token)` | 检查可选的插件服务或 Host token 是否可用（在调用 `use(token)` 前使用） |
 | `use(token)` | 取用插件提供的服务 |
 | `origin` / `principal` | 本次调用来自哪个会话、代表哪个用户 |
+| `selfProfile` | 当前平台账号的 Bot 自身信息（昵称、头像、平台角色等） |
+| `locale` | 当前会话的语言区域（如 `'zh-CN'`、`'en'`） |
+| `signal` | 当前回合或 generation 的 `AbortSignal` |
 | `policy` | 当前生效的安全策略 |
 | `question` | 向用户提问的接口（见下一节） |
 | `$client` | 按适配器推断的平台客户端 |
 
 请始终通过这个参数取用依赖，而不是在执行时查找其他插件。这样工具在热重载期间也能使用正确版本的资源。
 
+::: details 内部 effects 证据接口
 Host 还可能提供可选的内部 `effects` 证据接口。它不授予权限，也不能替代审批；只有实际动作 owner 能按真实提交结果上报，普通返回文本不能充当提交凭据。工具不能依赖该字段存在，旧 Host 缺失时仍应正常执行；未提供可靠证据的调用不会被当作可安全重放。普通插件与脚手架无需为此修改。
+:::
 
-`config` 默认是 `unknown`。要给它加类型，用 `defineAgentTool.withConfig` 先固定配置类型，第二次调用再写输入类型（`inputSchema` 用 Zod 时输入类型会自动推断）：
+`config` 默认是 `unknown`。要给它加类型，用 `defineAgentTool.withConfig<WeatherConfig>()` 先固定配置类型，再配合 `Schema.object()` 自动推断输入类型：
 
 ```ts
-export default defineAgentTool.withConfig<WeatherConfig>()<{ city: string }>({
+import { Schema, databaseHostToken } from 'zhin.js';
+import { defineAgentTool } from '@zhin.js/tool';
+
+export default defineAgentTool.withConfig<WeatherConfig>()({
   description: '查询天气',
-  inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] },
-  execute({ city }, { config }) {
-    return fetchWeather(city, config.apiKey); // config: WeatherConfig
+  inputSchema: Schema.object({ city: Schema.string().required() }),
+  async execute({ city }, { config, has, use }) {
+    const db = has(databaseHostToken) ? use(databaseHostToken) : undefined;
+    return fetchWeather(city, config.apiKey, db); // city: string，config: WeatherConfig
   },
 });
 ```
 
-`defineAgentTool<Input, Result, Config>({...})` 的写法不变。
+`defineAgentTool<Input, Result, Config>({...})` 的写法同样保留兼容。
 
 ### 在工具里向用户提问
 
@@ -276,22 +304,32 @@ export default definePlugin({
 
 ### 用 Skill 封装一套流程
 
-Skill 是 `skills/<name>/SKILL.md`：一份带 frontmatter 的说明书，平时只向模型展示摘要，需要时才加载全文，并解锁它目录下的专用工具。
+Skill 是 `skills/<name>/SKILL.md`：一份带 YAML frontmatter 的说明书，平时只向模型展示摘要，需要时才加载全文，并解锁它目录下的专用工具。可以直接复制下面的示例作为模板：
 
 ```markdown
+<!-- skills/code-review/SKILL.md -->
 ---
-name: memory-consolidate
-description: 回合末或 master 说「记住」时，将 1–3 条可检索事实写入 memory_entries
+name: code-review
+description: 审查拉取请求或代码变更，输出结构化的问题清单与修复建议
+keywords:
+  - review
+  - pr
+  - 代码审查
 tools:
-  - memory_upsert
-  - memory_search
+  - fetch_diff
+  - post_review_comment
 ---
 
-（这里写详细的操作步骤……）
+# 代码审查流程
+
+1. 先调用 `fetch_diff` 获取目标变更的文件列表与 diff。
+2. 按「正确性 → 安全边界 → 可维护性」顺序逐项检查。
+3. 发现明确缺陷时，用 `post_review_comment` 指出文件路径、行号与修复建议。
 ```
 
 一个 Skill 如果包含多个可以独立触发的任务，应拆成多个 Skill，避免加载一个简单任务时带出所有工具。适配器提供的 Skill 放在 `agents/<platform>/skills/<name>/`，只在对应平台的对话中出现。
 
+::: details 平台与场景的分类披露细则（以 ICQQ 为例）
 先分类，再披露：适配器负责自己的 Skill 说明、Tool 描述和平台消息段提示；框架根据当前可信入站身份筛选。用 `platforms` 指定平台，`scopes` 指定会话类型，按用途划分 Skill，`permissions` 继续控制权限。不要只在文字中写“仅群聊”。
 
 例如 ICQQ 的点赞放在通用 `icqq-interaction`，戳一戳和签到放在 `icqq-group-interaction`；后者的 SKILL.md frontmatter 和每个私有 Tool 都声明 `scopes: ['group']`。私聊不会获得这个 Skill 的目录、正文或工具，之前加载过也不会绕过本轮筛选。未声明 `scopes` 表示所有场景，不代表拥有所有权限。
@@ -299,10 +337,11 @@ tools:
 绑定当前会话的工具还可声明 `currentConversationBotRoles: ['owner', 'admin']`，由可信入站提供 Bot 平台角色。它与发起人的 `permissions` 同时满足才披露，角色未知时该工具不可发现或加载。角色条件只适用于当前会话：如果工具参数可以选择其他群，须在执行时检查目标群角色，不能用当前群角色代替。入站筛选也不能替代执行前的实时平台检查。
 
 群管理只在群聊披露，服务器/频道管理使用适配器实际归一化后的场景：Slack 的频道是 `group`，Discord、KOOK、QQ 频道是 `channel`。创建新群、账号查询、用户资料等通用能力独立保留；混合场景的 Skill 应拆分。
+:::
 
-### 定义 Agent
+### 定义子 Agent
 
-Agent 是 `agents/<name>/` 目录，有自己的职责、边界和工具。它必须包含四个文件：
+子 Agent 是 `agents/<name>/` 目录，有自己的职责、边界和工具。它必须包含四个文件：
 
 | 文件 | 内容 |
 | --- | --- |
@@ -311,16 +350,32 @@ Agent 是 `agents/<name>/` 目录，有自己的职责、边界和工具。它�
 | `boundaries.md` | 不能做什么 |
 | `conventions.md` | 工作约定，只能在插件根目录 `AGENTS.md` 的基础上延伸，不能冲突 |
 
-`agent.json` 的 `collaboration` 声明这个 Agent 在协作里能联系谁、接受谁的委派：
+一个最小可用的 `agents/researcher/` 目录与 `agent.json` 示例：
+
+```text
+agents/researcher/
+├── agent.json
+├── system.md         # "# Researcher\n负责检索资料并整理带来源引用的摘要。"
+├── boundaries.md     # "- 不得直接修改外部业务数据。\n- 未经证实的结论必须标明待核实。"
+├── conventions.md    # "- 优先引用仓库内文档与权威 API 响应。"
+└── tools/
+    └── search-docs/index.ts
+```
 
 ```json
+// agents/researcher/agent.json
 {
-  "name": "reviewer",
-  "collaboration": { "contacts": ["researcher"], "accepts_from": ["planner"] }
+  "name": "researcher",
+  "description": "负责检索技术文档并汇总证据链的研究助手",
+  "tools": ["weather"],
+  "collaboration": {
+    "contacts": ["reviewer"],
+    "accepts_from": ["planner"]
+  }
 }
 ```
 
-`contacts` 是它可以联系的 Agent 名（不写则不能联系任何人）；`accepts_from` 限定只接受哪些 Agent 的委派（不写则接受任何被允许联系它的 Agent）。被委派时它的权限只会比委派方更小。协作工具与护栏见 [AI Agent · 多 Agent 协作](../ai/agent.md#多-agent-协作)。
+`collaboration.contacts` 是它可以联系的 Agent 名（不写则不能联系任何人）；`accepts_from` 限定只接受哪些 Agent 的委派（不写则接受任何被允许联系它的 Agent）。被委派时它的权限只会比委派方更小。协作工具与护栏见 [AI Agent · 多 Agent 协作](../ai/agent.md#多-agent-协作)。
 
 可选的 `workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 放场景流程、私有工具、私有 Skill、钩子和知识库。反复出现的错误应该写进 `conventions.md`。
 
@@ -365,7 +420,7 @@ my-plugin/
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `description` | 是 | 给模型看的功能描述 |
-| `inputSchema` | 否 | Zod 4 对象，或根节点为 `object` 的 JSON Schema；执行前校验 |
+| `inputSchema` | 否 | `Schema.object(...)`（推荐，来自 `zhin.js`）、Zod 4 对象，或根节点为 `object` 的 JSON Schema；执行前校验并填充默认值 |
 | `requiresApproval` | 否 | `'never' \| 'on-risk' \| 'once' \| 'always' \| 'human'`，默认 `'on-risk'` |
 | `risk` | 否 | `'dangerous' \| 'safe'`；`dangerous` 走危险工具硬闸，见[声明危险工具](#声明危险工具-硬闸) |
 | `riskCategory` | 否 | `'member' \| 'publish' \| 'funds' \| 'identity'`，显示在审批卡片上；`funds` 默认禁用 |

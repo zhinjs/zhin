@@ -27,6 +27,10 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
+export type McpDefiner<TConfig> = (
+  definition: Omit<McpDefinition<TConfig>, '$feature'>,
+) => Readonly<McpDefinition<TConfig>>;
+
 export function defineMcp<TConfig = unknown>(
   definition: Omit<McpDefinition<TConfig>, '$feature'>,
 ): Readonly<McpDefinition<TConfig>> {
@@ -35,6 +39,13 @@ export function defineMcp<TConfig = unknown>(
   }
   return Object.freeze({ ...definition, $feature: mcpBrand });
 }
+
+/**
+ * Fix the plugin config type first, then define the MCP client.
+ */
+defineMcp.withConfig = function withConfig<TConfig = unknown>(): McpDefiner<TConfig> {
+  return (definition) => defineMcp(definition);
+};
 
 export function parseMcpDefinition(value: unknown): McpDefinition {
   if (!value || typeof value !== 'object') throw invalidMcp();

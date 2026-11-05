@@ -57,7 +57,28 @@ export default defineMiddleware<Message>({
 
 排序依次比较：`phase` → `order` → 插件挂载顺序 → 能力 id。
 
-中间件的参数还包括 `config`（本插件配置）、`use(token)`（取用插件服务）、`owner`、`generation`。声明 `adapter` 后，`$client` 会带上该平台 SDK 的类型。
+中间件的参数还包括 `config`（本插件配置）、`has(token)`、`use(token)`（取用插件服务）、`session`、`signal`、`onAfterDispatch`、`owner`、`generation`。声明 `adapter` 后，`$client` 会带上该平台 SDK 的类型。
+
+需要给 `config` 加上强类型时，使用 `defineMiddleware.withConfig<MyConfig>()`：
+
+```ts
+import { defineMiddleware } from 'zhin.js/middleware';
+import { databaseHostToken } from 'zhin.js';
+
+interface MyConfig {
+  triggerWord: string;
+}
+
+export default defineMiddleware.withConfig<MyConfig>()({
+  handle({ input, config, has, use }, next) {
+    if (input.content === config.triggerWord) {
+      const db = has(databaseHostToken) ? use(databaseHostToken) : undefined;
+      return `已命中配置词（数据库：${db ? '已连接' : '未连接'}）`;
+    }
+    return next();
+  },
+});
+```
 
 ### 改写或拦截 Bot 发出的消息
 
@@ -143,9 +164,17 @@ export default defineCommand({
 - 回调函数不会发送到平台；框架会绑定一个随机标识，支持原生按钮的平台通过 callback 回传。
 :::
 
-### 带样式的卡片
+### 带样式的卡片 vs 平台原生 `<card>`
 
-安装组件库 `pnpm add @zhin.js/components`，把卡片放进 `<html>` 里：
+Zhin 提供两种卡片写法，用途不同，也可以在同一条回复中搭配使用：
+
+| 对比维度 | 1. 平台原生消息段（`<card>`、`<button>` 等） | 2. 可视化图片卡片（`<html><Card>...</Card></html>`） |
+| --- | --- | --- |
+| 标签写法 | 小写内置标签：`<text>`、`<image>`、`<mention>`（或 `<at>` 语义）、`<face>`、`<card title="..." />`、`<button onClick={...}>` | `<html>` 包裹 `@zhin.js/components` 的大写组件：`<html><Card>...</Card></html>` |
+| 渲染方式 | 直接映射为各平台的原生消息段（原生卡片、原生按钮；纯文本平台对 `<button onClick>` 自动降级为编号回复） | 通过 `@zhin.js/components` + `@zhin.js/html-renderer` 渲染为 PNG 图片（HTML 平台直出 HTML，无渲染器时降级为纯文本） |
+| 适用场景 | 需要原生点击交互、@ 提醒、轻量通知 | 排行榜、状态面板、数据报表等需要统一视觉排版的多行卡片 |
+
+对比与组合示例（安装组件库 `pnpm add @zhin.js/components`）：
 
 ```tsx
 // commands/status/index.tsx
@@ -154,10 +183,18 @@ import { Card, CardHeader, Badge } from '@zhin.js/components';
 
 export default defineCommand({
   execute: () => (
-    <html><Card>
-      <CardHeader title={<strong>服务状态</strong>} badge={<Badge>在线</Badge>} />
-      <p>运行正常</p>
-    </Card></html>
+    <>
+      {/* 1. 平台原生消息段 + 交互按钮 */}
+      <card title="部署通知" content="v1.1.0 已准备就绪" />
+      {/* 2. 可视化 HTML 样式卡片（通过 @zhin.js/html-renderer 渲染为 PNG） */}
+      <html><Card>
+        <CardHeader title={<strong>服务状态</strong>} badge={<Badge>在线</Badge>} />
+        <p>运行正常</p>
+      </Card></html>
+      <button onClick={(msg) => `已由 ${msg.sender?.name ?? msg.sender?.id} 确认刷新`}>
+        刷新状态
+      </button>
+    </>
   ),
 });
 ```
@@ -263,6 +300,28 @@ export default defineComponent<{ title: string; url: string; audio?: string }>({
 - 提供 `previewProps` 后，Console 可以用这份示例数据预览组件。
 - `title`、`label`、`value` 这类展示位接受 `JSXRenderable`：文本、数字、JSX、数组、异步内容或空值都可以。
 
+### 在组件里读取强类型配置与插件服务
+
+组件的 `render(props, context)` 第二个参数完整提供当前插件的 `config`、`has(token)` 和 `use(token)`。用 `defineComponent.withConfig<MyConfig>()` 可以固定配置类型，再声明组件的 Props 类型：
+
+```tsx
+// components/status-card/index.tsx
+import { defineComponent } from 'zhin.js/component';
+import { databaseHostToken } from 'zhin.js';
+
+interface MyConfig {
+  brandTitle: string;
+}
+
+export default defineComponent.withConfig<MyConfig>()<{ title: string }>({
+  name: 'status-card',
+  render(props, { config, has, use }) {
+    const dbReady = has(databaseHostToken) && Boolean(use(databaseHostToken));
+    return <text>[{config.brandTitle}] {props.title}（DB：{dbReady ? '已就绪' : '未连接'}）</text>;
+  },
+});
+```
+
 ## 不同平台上的效果
 
 | 内容 | 平台能直接显示 HTML（如 Sandbox、Email） | 安装了 `@zhin.js/html-renderer` | 都没有 |
@@ -297,7 +356,11 @@ return segment.html({ html: await renderToHtml(node), width: 640, text: '服务�
 | --- | --- |
 | `input` | 入站时是 `Message`；`target: 'outbound'` 时是可 `replace()` 的 `OutboundEnvelope` |
 | `config` | 本插件配置 |
+| `has(token)` | 检查可选的插件服务或 Host token 是否可用 |
 | `use(token)` | 取用插件服务 |
+| `session` | 入站消息绑定的单次平台操作视图（含 `adapter`、`endpoint`、`scene`、`sender`、`event`、`reply`） |
+| `signal` | 当前操作或 generation 的 `AbortSignal`，热重载或账号断开时触发取消 |
+| `onAfterDispatch(fn)` | 在入站 `before-dispatch` 中间件中注册派发完成后的回调 |
 | `owner` / `generation` | 所属插件与当前版本号 |
 | `$client` | 声明 `adapter` 后，为该平台的原生客户端类型 |
 

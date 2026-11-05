@@ -90,25 +90,12 @@ try {
 
 ### Adapter Admission Switches Atomically with the Snapshot
 
-`@zhin.js/adapter` does not close the old Endpoint before commit. The candidate
-`AdapterIndex` completes `start()` and `open()` during `activateNext`, but its
-`CapabilityContext` injects a `OutboundMessageService` bound to the candidate generation's
-`GenerationAdmissionGate`; every inbound event fails closed before commit. When
-`SnapshotStore` publishes the new snapshot it synchronously closes removed gates and opens
-new gates. A projection retained by both generations is never closed briefly.
+During a hot reload, platform connections are never torn down before the new generation is ready:
 
-The old generation therefore remains available throughout preparation. Failed activation only
-stops the candidate. After commit, the old Endpoint may drain with old snapshot leases; late
-events are rejected by its retired gate, and its disposer eventually runs `close()` / `stop()`.
-Adapters have no dedicated `quiescePrevious`, `resumePrevious`, or post-commit `openNext` phase.
-Every configured Endpoint is a required prerequisite: create, start, or open failure rejects the
-candidate generation. No inert/unconfigured record or background late-open is published.
-The shared HTTP listener belongs to the Process Host. Candidate generations receive only an
-`HttpHost` routing port; gated HTTP/WS registrations cannot shadow an old route before commit, and
-generation code has no listener `listen`/`close` authority.
-Console RPC, SSE, and login-assistance subscriptions are also owned by the Process Host and remain
-available before first-generation Adapter activation. Operations that need generation capabilities
-still acquire the current snapshot lease, so candidate capabilities are never exposed early.
+1. The candidate `AdapterIndex` completes `start()` and `open()` during `activateNext`, while its `GenerationAdmissionGate` remains closed before `commit`.
+2. When `SnapshotStore` publishes the new snapshot, it synchronously opens the new admission gates and closes replaced gates; projections retained across both generations are reused without interruption.
+3. Every configured Endpoint is a required prerequisite: if creating, starting, or opening an Endpoint fails, the candidate generation is rejected and the previous generation keeps serving.
+4. After commit, retired Endpoints drain alongside in-flight snapshot leases and are then closed and stopped by the old generation's disposer. The shared HTTP listener, Console RPC, and SSE streams belong to the Process Host and remain available across reloads.
 
 ## Snapshot Leases: In-Flight Messages Are Not Interrupted
 
@@ -127,15 +114,9 @@ Committing only switches the pointer -- the old generation is not destroyed imme
 
 A failed HMR transaction cancels the remaining changes in the batch and invokes `onError`; it will not silently replay. HMR stop closes admission and awaits the in-flight reload. Once a process restart is required, the coordinator rejects further generation work. Post-commit Console or logging observer failures are diagnostic only and cannot rewrite a committed reload as failed.
 
-### Pause and resume handlers must not wait on model-fetching work
+### Plugin `hmr.pause` and `hmr.resume` hooks
 
-`hmr.pause` and `hmr.resume` run inside the Root control queue behind `RootRuntime.control`: pause precedes candidate setup; resume follows commit or rollback, before the transaction releases that queue.
-
-- A recursive `control()` call from a handler rejects with `Recursive Runtime control`. A pause rejection keeps the old generation; a resume error is reported without rolling back the committed generation.
-- Waiting for work that still needs to enter the same control queue can deadlock. Handlers should make bounded local checkpoints instead of awaiting model or other external I/O.
-- The target Provider runtime builds scopes from an operation's actual held lease and authoritative graph. Model requests, credentials and network work stay outside control. The old `createModelConfigurationAccess` is retired; it is no longer accurate to describe every model call as using that queue or receiving its recursive-control rejection.
-
-Plugins decide how to retain, cancel and resume their work, and run model-dependent follow-ups in their own tasks. Runtime does not detect arbitrary waits. `packages/im/runtime/tests/root-runtime.test.ts` guards control ordering; `basic/cli/tests/plugin-runtime/inference/configuration.test.ts` verifies that model waits do not occupy the control phase.
+Plugins that maintain their own background queues can subscribe to `hmr.pause` (before candidate setup) and `hmr.resume` (after commit or rollback) inside `setup({ events })`. Because these handlers run inside the serialized Root control queue, keep them to fast local checkpoints — do not call Runtime control methods recursively or block on slow external I/O inside the handler.
 
 ## Why Resources Must Be Attached to Lifecycle
 

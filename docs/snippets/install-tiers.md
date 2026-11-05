@@ -11,7 +11,7 @@
 <!-- #region tiers-table -->
 | 档位 | 安装 | 约 production 体积 | 能力 |
 |------|------|-------------------|------|
-| **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | Plugin Runtime、命令/组件/适配器约定目录（Stable Features 由 `@zhin.js/core` 的 `zhin.features` 继承；Host 为 optional peer + `zhin.plugins`，见 [插件模型](/concepts/plugin-model)） |
+| **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | 内置命令、组件、中间件、定时任务与热重载运行时（按需在 `zhin.config.yml` 挂载适配器与插件，详见 [插件模型](/concepts/plugin-model)） |
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
 | **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
@@ -22,7 +22,7 @@
 <!-- #region tiers-table-en -->
 | Tier | Install | ~production size | Capabilities |
 |------|---------|------------------|--------------|
-| **IM** | `pnpm add zhin.js` + an adapter (for example, `@zhin.js/adapter-sandbox`); dev: `@zhin.js/cli` | **&lt;10MB** (library) | Plugin Runtime; command / component / adapter convention directories (Stable Features inherited via `@zhin.js/core` `zhin.features`; Host is an optional peer + `zhin.plugins`, see [Plugin model](/en/concepts/plugin-model)) |
+| **IM** | `pnpm add zhin.js` + an adapter (for example, `@zhin.js/adapter-sandbox`); dev: `@zhin.js/cli` | **&lt;10MB** (library) | Built-in commands, components, middleware, schedules and hot-reload runtime (mount adapters and plugins on demand in `zhin.config.yml`; see [Plugin model](/en/concepts/plugin-model)) |
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent, sessions, tools, compaction |
 | **Provider** | `+ @ai-sdk/openai` etc. | per vendor | LLM calls |
 | **MCP** | `+ @modelcontextprotocol/sdk` | + a few MB | MCP client |

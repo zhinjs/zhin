@@ -10,6 +10,30 @@ const args = new Set(process.argv.slice(2));
 const skipBuild = args.has('--skip-build');
 const withTests = args.has('--with-tests');
 
+const childEnv = {
+  ...process.env,
+  NPM_TOKEN: '',
+  PATH: `${join(root, 'node_modules', '.bin')}:${process.env.PATH ?? ''}`,
+  TURBO_TELEMETRY_DISABLED: '1',
+  TURBO_CONFIG_DIR_PATH: join(root, '.turbo'),
+};
+const turboEnv = (() => {
+  if (process.platform === 'darwin' && process.env.HOME) {
+    try {
+      readFileSync(join(process.env.HOME, '.npmrc'));
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'EPERM') {
+        return {
+          ...childEnv,
+          COREPACK_HOME: process.env.COREPACK_HOME ?? join(process.env.HOME, '.cache/node/corepack'),
+          HOME: '/tmp',
+        };
+      }
+    }
+  }
+  return childEnv;
+})();
+
 const git = (...gitArgs) =>
   execFileSync('git', gitArgs, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 
@@ -78,8 +102,13 @@ function checkPolynomialReDoS(files) {
   }
 }
 
-const runSync = (command, commandArgs) =>
-  execFileSync(command, commandArgs, { cwd: root, stdio: 'inherit', env: { ...process.env, NPM_TOKEN: '' } });
+const bin = (name) => join(root, 'node_modules', '.bin', name);
+const runSync = (command, commandArgs, env = childEnv) =>
+  execFileSync(command, commandArgs, {
+    cwd: root,
+    stdio: 'inherit',
+    env,
+  });
 
 const base = resolveBaseCommit();
 const changed = collectChangedFiles(base);
@@ -113,7 +142,7 @@ checkPolynomialReDoS(changed);
 const lintFiles = scope.lint.filter((file) => existsSync(join(root, file)));
 if (lintFiles.length > 0) {
   console.log(`[ci-preflight] linting ${lintFiles.length} changed file(s)...`);
-  runSync('pnpm', ['exec', 'eslint', '--no-warn-ignored', ...lintFiles]);
+  runSync(bin('eslint'), ['--no-warn-ignored', ...lintFiles]);
 }
 
 const checks = [
@@ -138,7 +167,7 @@ const runCheck = (command) =>
     const child = spawn('pnpm', [command], {
       cwd: root,
       stdio: 'inherit',
-      env: { ...process.env, NPM_TOKEN: '' },
+      env: childEnv,
     });
     child.once('error', rejectPromise);
     child.once('exit', (code) =>
@@ -153,19 +182,21 @@ await Promise.all(
 
 if (!skipBuild && scope.builds.length > 0) {
   console.log(`[ci-preflight] building ${scope.builds.length} affected package(s)...`);
-  runSync('pnpm', [
-    'exec',
-    'turbo',
-    'run',
-    'build',
-    '--cache-dir=.turbo/cache',
-    ...scope.builds.map((name) => `--filter=${name}...`),
-  ]);
+  runSync(
+    bin('turbo'),
+    [
+      'run',
+      'build',
+      '--cache-dir=.turbo/cache',
+      ...scope.builds.map((name) => `--filter=${name}...`),
+    ],
+    turboEnv,
+  );
 }
 
 if (withTests && scope.tests.length > 0) {
   console.log(`[ci-preflight] running ${scope.tests.length} affected test file(s)...`);
-  runSync('pnpm', ['exec', 'vitest', 'run', ...scope.tests, '--passWithNoTests']);
+  runSync(bin('vitest'), ['run', ...scope.tests, '--passWithNoTests']);
 }
 
 console.log('[ci-preflight] all selected checks passed.');

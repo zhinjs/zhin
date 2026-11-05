@@ -42,6 +42,7 @@ export const commandMessages = createMessages({
   defaultUndefined: { 'zh-CN': '{field}：默认值返回了 undefined', en: '{field}: default returned undefined' },
   parameterUndefined: { 'zh-CN': '{field}：默认值或快捷指令返回了 undefined', en: '{field}: default or shortcut returned undefined' },
   missingOption: { 'zh-CN': '缺少选项 --{field}', en: 'Missing option --{field}' },
+  missingRequiredParam: { 'zh-CN': '缺少必填参数 {field}（类型：{type}）', en: 'Missing required parameter {field} (expected {type})' },
   unexpectedArguments: { 'zh-CN': '存在多余参数', en: 'Unexpected arguments' },
   invalidParameter: { 'zh-CN': '缺少指令参数或参数不正确', en: 'Missing or invalid command parameter' },
   defaultValue: { 'zh-CN': '默认值：{value}', en: 'default: {value}' },

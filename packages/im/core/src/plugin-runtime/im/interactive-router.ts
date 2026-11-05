@@ -115,11 +115,15 @@ export class RuntimeInteractiveRouter<Admission = never> {
         : ttlMsOrContext.incarnation)
       : undefined;
     const key = conversationRefKey(conversation);
+    const entries = this.#fallbacks.get(key) ?? [];
+    if (this.#numberingScope === 'conversation'
+      && !entries.some(entry => this.#isEntryLive(entry, generation, incarnation?.snapshot))) {
+      this.#conversationNumbers.delete(key);
+    }
     const allocated: Record<string, string> = {};
     for (const [label, payload] of Object.entries(map)) {
       allocated[/^\d+$/.test(label) ? String(this.#allocateNumber(key)) : label] = payload;
     }
-    const entries = this.#fallbacks.get(key) ?? [];
     entries.push(Object.freeze({
       generation,
       ...(incarnation ? { incarnation } : {}),
@@ -192,15 +196,32 @@ export class RuntimeInteractiveRouter<Admission = never> {
   }
 
   /** Bounded label-only history: stale text buttons are not mistaken for new input. */
-  isExpiredFallback(message: Message, snapshot?: RuntimeSnapshot): boolean {
+  isExpiredFallback(
+    message: Message,
+    snapshot?: RuntimeSnapshot,
+    options?: { readonly ignoreTtlExpiredBareGroupNumbers?: boolean },
+  ): boolean {
     if (actionPayloadFromSegments(message.segments) || this.resolvePayload(message, { snapshot })) return false;
     const key = conversationRefKey(message.conversation);
     const matches = (map: Readonly<Record<string, string>>) =>
       resolvePayloadFromText(message.content, map) !== undefined;
-    if (this.#expired.some(entry => entry.conversationKey === key && matches(entry.map))) return true;
+    const ignoreTtlExpired = options?.ignoreTtlExpiredBareGroupNumbers === true
+      && message.conversation.kind !== 'private'
+      && /^\d+$/u.test(message.content.trim())
+      && !(message.segments ?? []).some(
+        segment => segment.type === 'mention'
+          || segment.type === 'at'
+          || segment.type === 'reply'
+          || segment.type === 'action',
+      );
+    const now = Date.now();
+    if (!ignoreTtlExpired && this.#expired.some(entry => entry.conversationKey === key && matches(entry.map))) return true;
     // A generation change (or owning plugin reload) invalidates even a keyboard whose TTL has not elapsed.
     const entries = this.#fallbacks.get(key);
-    if (entries?.some(entry => !this.#isEntryLive(entry, message.generation, snapshot) && matches(entry.map))) {
+    if (entries?.some(entry =>
+      (!ignoreTtlExpired || entry.expiresAt > now)
+      && !this.#isEntryLive(entry, message.generation, snapshot)
+      && matches(entry.map))) {
       return true;
     }
     return false;

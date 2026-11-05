@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, utimes, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ import {
   supportsNativeTypeScript,
   type ModuleRuntime,
 } from '../src/index.js';
+import { resolve as resolveTypeScriptSpecifier } from '../src/typescript-specifier-remap.js';
 
 const temporary: string[] = [];
 const execFileAsync = promisify(execFile);
@@ -531,6 +532,40 @@ process.stdout.write(JSON.stringify({ first, second }));
       clearInterval(writer);
       await runtime.close();
     }
+  });
+
+  it('prefers newer src/*.ts over stale compiled lib/*.js during specifier remap', async () => {
+    const root = await fixture();
+    const srcTs = join(root, 'src/helper.ts');
+    const libJs = join(root, 'lib/helper.js');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await mkdir(join(root, 'lib'), { recursive: true });
+    await writeFile(srcTs, "export const v = 'ts';\n");
+    await writeFile(libJs, "export const v = 'lib';\n");
+
+    const parentURL = pathToFileURL(join(root, 'src/index.ts')).href;
+    const nextResolve = async (specifier: string) => {
+      if (specifier === './helper.js') {
+        const err = new Error('Not found') as Error & { code?: string };
+        err.code = 'ERR_MODULE_NOT_FOUND';
+        throw err;
+      }
+      return { url: specifier };
+    };
+
+    // When lib/helper.js is newer than src/helper.ts, remap prefers lib/helper.js
+    const baseTime = new Date(2_000_000_000_000);
+    const newerTime = new Date(2_000_000_010_000);
+    await utimes(srcTs, baseTime, baseTime);
+    await utimes(libJs, newerTime, newerTime);
+    const resolvedFromLib = await resolveTypeScriptSpecifier('./helper.js', { parentURL }, nextResolve);
+    expect(resolvedFromLib.url).toBe(pathToFileURL(libJs).href);
+
+    // When src/helper.ts is edited and becomes newer than lib/helper.js, remap prefers src/helper.ts
+    const newestTime = new Date(2_000_000_020_000);
+    await utimes(srcTs, newestTime, newestTime);
+    const resolvedFromTs = await resolveTypeScriptSpecifier('./helper.js', { parentURL }, nextResolve);
+    expect(resolvedFromTs.url).toBe(pathToFileURL(srcTs).href);
   });
 });
 

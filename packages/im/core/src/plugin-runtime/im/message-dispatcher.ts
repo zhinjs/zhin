@@ -103,7 +103,7 @@ export class MessageDispatcher {
       try { observe?.(stage, status); } catch { /* Observation never controls dispatch. */ }
     };
     const prefix = message.commandPrefix ?? this.resolvePrefix(message, snapshot);
-    let input = message.content.trim();
+    let input = normalizeCommandInputText(message);
     if (prefix && !input.startsWith(prefix)) {
       note('prefix', 'mismatch');
       return dispatchOutcome(Object.freeze({ matched: false }));
@@ -154,6 +154,43 @@ export class MessageDispatcher {
  * command"). Leading quotes are moved after the command text so the command name still
  * matches and a `reply` parameter can still read the quote; `message.replyTo` is untouched.
  */
+function hasTextAfterLeadingMentions(segments: readonly Readonly<CommandSegment>[]): boolean {
+  let seenMention = false;
+  for (const segment of segments) {
+    if (segment.type === 'reply') continue;
+    if (segment.type === 'mention' || segment.type === 'at') {
+      seenMention = true;
+      continue;
+    }
+    return seenMention && segment.type === 'text' && typeof segment.data.text === 'string' && segment.data.text.trim().length > 0;
+  }
+  return false;
+}
+
+function normalizeCommandInputText(message: Message): string {
+  const raw = message.content.trim();
+  const segments = message.segments;
+  if (segments && hasTextAfterLeadingMentions(segments)) {
+    let atStart = true;
+    const textParts: string[] = [];
+    for (const segment of segments) {
+      if (atStart && (segment.type === 'reply' || segment.type === 'mention' || segment.type === 'at')) {
+        continue;
+      }
+      atStart = false;
+      if (segment.type === 'text' && typeof segment.data?.text === 'string') {
+        textParts.push(segment.data.text);
+      }
+    }
+    const candidate = textParts.join('').trim();
+    if (candidate) return candidate;
+  }
+  if (message.conversation?.kind !== 'private' && /^(?:@\S+\s+)+/u.test(raw)) {
+    return raw.replace(/^(?:@\S+\s+)+/u, '').trim();
+  }
+  return raw;
+}
+
 function stripCommandPrefix(
   segments: readonly Readonly<CommandSegment>[],
   prefix: string,
@@ -161,6 +198,7 @@ function stripCommandPrefix(
   let pendingPrefix = prefix;
   let atStart = true;
   let trimLeading = true;
+  const skipLeadingMentions = hasTextAfterLeadingMentions(segments);
   const result: CommandSegment[] = [];
   const leadingQuotes: CommandSegment[] = [];
 
@@ -171,6 +209,9 @@ function stripCommandPrefix(
     }
     if (segment.type === 'reply') {
       leadingQuotes.push(segment);
+      continue;
+    }
+    if (skipLeadingMentions && (segment.type === 'mention' || segment.type === 'at')) {
       continue;
     }
     if (segment.type !== 'text' || typeof segment.data.text !== 'string') {

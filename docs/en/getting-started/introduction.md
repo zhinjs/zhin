@@ -36,7 +36,7 @@ Keep this picture in mind — the rest of the docs zoom into one box at a time:
 
 | Part | What it is | What you do |
 | --- | --- | --- |
-| **Plugin** | Your project itself is a plugin; split into child plugins as it grows | Write `plugin.ts` and add a `zhin` field to `package.json` |
+| **Plugin** | Your project itself is the Root plugin; split into child plugin packages as it grows | Write `plugin.ts` (declared in `package.json#zhin.entry`); mount child plugin instances under `plugins:` in `zhin.config.yml` |
 | **Command** | A function that runs when a user sends `/hello` | Write `defineCommand()` in `commands/hello/index.ts` |
 | **Middleware** | An interceptor every message passes through — keyword replies, filters | Write `defineMiddleware()` in `middlewares/` |
 | **Adapter** | An npm package that connects one platform, e.g. `@zhin.js/adapter-qq` | Pick it and fill in credentials with `npx zhin setup --adapters` |

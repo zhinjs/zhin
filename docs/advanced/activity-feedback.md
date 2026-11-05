@@ -24,46 +24,42 @@ AI 处理一条消息可能要几秒到几十秒。`@zhin.js/service-activity-fe
 pnpm add @zhin.js/service-activity-feedback @zhin.js/agent
 ```
 
-在项目 `package.json` 的 `zhin.plugins` 中加入：
+在 `zhin.config.yml` 的 `plugins` 中声明实例：
 
-```json
-{
-  "zhin": {
-    "plugins": [
-      {
-        "package": "@zhin.js/service-activity-feedback",
-        "instanceKey": "activity-feedback"
-      }
-    ]
-  }
-}
+```yaml
+configVersion: 2
+plugins:
+  activity-feedback: "@zhin.js/service-activity-feedback"
 ```
 
 ## 配置
 
-插件配置位于 `zhin.config.yml` 的实例命名空间：
+插件配置位于 `zhin.config.yml` 的顶层 `activity-feedback:` 实例命名空间：
 
 ```yaml
+configVersion: 2
 plugins:
-  activity-feedback:
-    enabled: true
-    defaults:
+  activity-feedback: "@zhin.js/service-activity-feedback"
+
+activity-feedback:
+  enabled: true
+  defaults:
+    phases:
+      active:
+        private: { type: message, message: "正在处理中…" }
+  platforms:
+    icqq:
       phases:
         active:
-          private: { type: message, message: "正在处理中…" }
-    platforms:
-      icqq:
-        phases:
-          active:
-            group: { type: reaction, emoji: "60" }
-      discord:
-        phases:
-          active:
-            channel: { type: typing }
-    schedule:
+          group: { type: reaction, emoji: "60" }
+    discord:
       phases:
-        finish:
-          private: { type: message, message: "✅ 定时任务完成", removeDelay: 3000 }
+        active:
+          channel: { type: typing }
+  schedule:
+    phases:
+      finish:
+        private: { type: message, message: "✅ 定时任务完成", removeDelay: 3000 }
 ```
 
 配置按 `defaults → platforms.<platform> → endpoints.<platform:endpointKey>` 合并。每个 phase 可按 `private`、`group`、`channel` 分别配置。
@@ -84,16 +80,15 @@ plugins:
 前三个 phase 只用于普通交互回合；后三个只用于显式启用 `activityFeedback` 的 Schedule。Schedule 简写配置中的 `start`、`finish`、`error` 会分别映射到 `schedule_start`、`schedule_finish`、`schedule_error`：
 
 ```yaml
-plugins:
-  activity-feedback:
-    schedule:
-      phases:
-        start:
-          group: { type: message, message: "⏰ 定时任务开始" }
-        finish:
-          group: { type: message, message: "✅ 定时任务完成", removeDelay: 3000 }
-        error:
-          group: { type: message, message: "❌ 定时任务失败", removeDelay: 10000 }
+activity-feedback:
+  schedule:
+    phases:
+      start:
+        group: { type: message, message: "⏰ 定时任务开始" }
+      finish:
+        group: { type: message, message: "✅ 定时任务完成", removeDelay: 3000 }
+      error:
+        group: { type: message, message: "❌ 定时任务失败", removeDelay: 10000 }
 ```
 
 ## Scene 与呈现类型

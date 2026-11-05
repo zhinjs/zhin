@@ -111,6 +111,26 @@ describe('UserInteraction via ImRuntime', () => {
       clock.mockRestore();
     }
   });
+
+  it('ignores bare numeric messages in group chats when checking expired fallbacks', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const router = new RuntimeInteractiveRouter(100);
+    const interactions = new RuntimeInteractionCoordinator(router);
+    const conversation = { endpoint: { adapter: 'test', id: 'main' }, kind: 'group' as const, id: 'room' };
+    const reply = vi.fn(async () => ({ status: 'sent' as const }));
+    const groupNumberMessage = new Message(
+      { conversation, content: '1', sender: { id: 'alice' } },
+      { generation: 1, reply },
+    );
+    try {
+      router.rememberFallback(conversation, 1, { '1': 'old:button:action' });
+      clock.mockReturnValue(1100);
+      await expect(interactions.dispatch(groupNumberMessage)).resolves.toBe(false);
+      expect(reply).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
+  });
   async function createInteractionFixture(options: { preferences?: UserLocalePreferences; confirmation?: boolean; detached?: boolean } = {}) {
     const sent: unknown[] = [];
     const events: string[] = [];

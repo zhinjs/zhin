@@ -2,6 +2,7 @@ import { wizardText } from './messages.js';
 import { createRequire } from 'node:module';
 import fs from 'fs-extra';
 import path from 'node:path';
+import yaml from 'yaml';
 import type { AISetupConfig } from './ai.js';
 import type { InitOptions } from './types.js';
 
@@ -33,8 +34,13 @@ const WIZARD_ALIAS_TO_SDK: Record<string, string> = {
   google: 'google',
   gemini: 'google',
   ollama: 'ollama',
+  minimax: 'minimax',
   moonshot: 'openai-compatible',
   zhipu: 'openai-compatible',
+  qwen: 'openai-compatible',
+  siliconflow: 'openai-compatible',
+  openrouter: 'openai-compatible',
+  volcengine: 'openai-compatible',
 };
 
 const SDK_TO_NPM_PACKAGE: Record<string, keyof typeof AI_STACK_VERSIONS> = {
@@ -56,9 +62,14 @@ const PROVIDER_SDK_PACKAGES: Record<string, { pkg: string; version: string }> = 
   google: { pkg: '@ai-sdk/google', version: AI_STACK_VERSIONS['@ai-sdk/google'] },
   gemini: { pkg: '@ai-sdk/google', version: AI_STACK_VERSIONS['@ai-sdk/google'] },
   deepseek: { pkg: '@ai-sdk/deepseek', version: AI_STACK_VERSIONS['@ai-sdk/deepseek'] },
+  minimax: { pkg: '@ai-sdk/minimax', version: AI_STACK_VERSIONS['@ai-sdk/minimax'] },
   ollama: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
   moonshot: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
   zhipu: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
+  qwen: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
+  siliconflow: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
+  openrouter: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
+  volcengine: { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
   'openai-compatible': { pkg: '@ai-sdk/openai-compatible', version: AI_STACK_VERSIONS['@ai-sdk/openai-compatible'] },
 };
 
@@ -327,10 +338,23 @@ export function diagnoseAIDependencies(
   cwd: string,
   config: { ai?: unknown },
   pkg?: PackageJsonLike,
-  locale: 'zh-CN' | 'en' = 'zh-CN'
+  locale: 'zh-CN' | 'en' = 'zh-CN',
+  proposal?: unknown,
 ): AIDependencyDiagnosis | null {
   if (!isAiEnabledInConfig(config)) return null;
-  const required = getRequiredAIDependenciesForConfig(config);
+  let resolvedProposal = proposal;
+  if (resolvedProposal === undefined) {
+    const planPath = path.join(cwd, 'ai.plan.yml');
+    if (fs.existsSync(planPath)) {
+      try {
+        resolvedProposal = yaml.parse(fs.readFileSync(planPath, 'utf8'));
+      } catch {
+        // Ignore malformed ai.plan.yml in dependency diagnostics
+      }
+    }
+  }
+  const required = getRequiredAIDependenciesForConfig(config, resolvedProposal);
+  const provider = resolveAgentProviderFromPlan(resolvedProposal);
   const packageJsonPath = path.join(cwd, 'package.json');
   const packageJson = pkg ?? (fs.existsSync(packageJsonPath) ? fs.readJsonSync(packageJsonPath) as PackageJsonLike : {});
   const missingFromPackageJson = findMissingPackageDependencies(packageJson, required);
@@ -340,7 +364,7 @@ export function diagnoseAIDependencies(
   const notInstalled = findUnresolvedPackageInstalls(cwd, declared);
   return {
     enabled: true,
-
+    ...(provider ? { provider } : {}),
     required,
     missingFromPackageJson,
     outdatedInPackageJson,

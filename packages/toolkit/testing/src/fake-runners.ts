@@ -1,6 +1,6 @@
 import { resolveLocale, type Locale } from 'zhin.js/i18n';
 import type {
-  CommandContext, CommandDefinition, CommandMessage, CommandParameterValue,
+  CommandContext, CommandDefinition, CommandMessage, CommandParamSchema, CommandParameterValue, CommandSession,
 } from 'zhin.js/command';
 import type { HandlerContext, HandlerDefinition } from 'zhin.js/handler';
 import type {
@@ -15,10 +15,37 @@ import { readOperationSession, type OperationClientPort } from 'zhin.js';
 import type { FakePlugin } from './fake-plugin.js';
 import { fileURLToPath } from 'node:url';
 
-/** Inbound message with recorded replies. */
+export interface FakeSentDelivery {
+  readonly target: {
+    readonly kind: 'private' | 'group' | 'channel';
+    readonly id: string;
+    readonly parent?: { readonly kind: 'private' | 'group' | 'channel'; readonly id: string };
+    readonly threadId?: string;
+  };
+  readonly content: unknown;
+}
+
+/** Inbound message with recorded replies and targeted sends. */
 export interface FakeMessage extends CommandMessage {
-  /** Everything passed to `$reply`, in order. */
+  /** Everything passed to `$reply`, `$sendTo`, `$replyToPrivate`, `$replyToGroup`, or `$replyToChannel`, in order. */
   readonly replies: unknown[];
+  /** Targeted sends invoked via `$sendTo`, `$replyToPrivate`, `$replyToGroup`, or `$replyToChannel`. */
+  readonly sent: FakeSentDelivery[];
+  $sendTo(
+    conversation: FakeSentDelivery['target'],
+    content: unknown,
+  ): Promise<string>;
+  $replyToPrivate(
+    content: unknown,
+    from?: boolean | { readonly kind: 'group' | 'channel'; readonly id: string },
+  ): Promise<string>;
+  $replyToGroup(groupIdOrContent: string | unknown, content?: unknown): Promise<string>;
+  $replyToChannel(
+    channelIdOrContent: string | unknown,
+    guildId?: string,
+    content?: unknown,
+    threadId?: string,
+  ): Promise<string>;
 }
 
 export interface FakeMessageInit {
@@ -33,17 +60,147 @@ export interface FakeMessageInit {
 
 export function createFakeMessage(init: FakeMessageInit = {}): FakeMessage {
   const replies: unknown[] = [];
+  const sent: FakeSentDelivery[] = [];
   const conversation: CommandMessage['conversation'] = {
     endpoint: { id: 'test', adapter: 'test' }, kind: 'group', id: 'test-group', ...init.conversation,
   };
+  const sender = init.sender ?? { id: 'test-user', name: 'Tester', roles: [] };
+  const recordSend = (target: FakeSentDelivery['target'], content: unknown): string => {
+    replies.push(content);
+    sent.push({ target, content });
+    return `reply-${replies.length}`;
+  };
   return {
     conversation, content: init.content ?? '', locale: resolveLocale(init.locale),
-    sender: init.sender ?? { id: 'test-user', name: 'Tester', roles: [] },
+    sender,
     ...(init.id === undefined ? {} : { id: init.id }),
     ...(init.metadata === undefined ? {} : { metadata: init.metadata }),
     ...(init.$client === undefined ? {} : { $client: init.$client }),
     replies,
+    sent,
     async $reply(content: unknown) { replies.push(content); return `reply-${replies.length}`; },
+    async $sendTo(target, content) {
+      return recordSend(target, content);
+    },
+    async $replyToPrivate(content, from) {
+      let parent: FakeSentDelivery['target']['parent'];
+      if (from === true && (conversation.kind === 'group' || conversation.kind === 'channel')) {
+        parent = { kind: conversation.kind, id: conversation.id };
+      } else if (from != null && typeof from === 'object') {
+        parent = from;
+      }
+      return recordSend({
+        kind: 'private',
+        id: sender.id,
+        ...(parent ? { parent } : {}),
+      }, content);
+    },
+    async $replyToGroup(groupIdOrContent: string | unknown, maybeContent?: unknown) {
+      if (maybeContent === undefined) {
+        return recordSend({ kind: 'group', id: conversation.id }, groupIdOrContent);
+      }
+      return recordSend({ kind: 'group', id: String(groupIdOrContent) }, maybeContent);
+    },
+    async $replyToChannel(
+      channelIdOrContent: string | unknown,
+      guildId?: string,
+      content?: unknown,
+      threadId?: string,
+    ) {
+      if (guildId === undefined && content === undefined) {
+        return recordSend({ kind: 'channel', id: conversation.id }, channelIdOrContent);
+      }
+      return recordSend({
+        kind: 'channel',
+        id: String(channelIdOrContent),
+        ...(guildId ? { parent: { kind: 'channel', id: guildId } } : {}),
+        ...(threadId ? { threadId } : {}),
+      }, content);
+    },
+  };
+}
+
+export type FakeInteraction = NonNullable<CommandContext['interaction']> & {
+  /** Every interaction request presented via `ask`, `sequence`, `confirm`, or `select`, in order. */
+  readonly prompts: Parameters<NonNullable<CommandContext['interaction']>['ask']>[0][];
+  /** Append additional scripted answers to the queue. */
+  enqueue(...answers: unknown[]): void;
+  /** Convenience helper for confirm requests. */
+  confirm(title: string, defaultValue?: boolean): Promise<boolean>;
+  /** Convenience helper for select requests. */
+  select<V = string>(
+    title: string,
+    options: readonly (V | { readonly label: string; readonly value: V })[],
+  ): Promise<V>;
+};
+
+export interface FakeInteractionOptions {
+  readonly answers?: readonly unknown[];
+}
+
+/**
+ * Create a scripted `UserInteraction` double for unit-testing commands and handlers that use
+ * `interaction.ask()`, `interaction.sequence()`, `interaction.confirm()`, or `interaction.select()`.
+ */
+export function createFakeInteraction(
+  init: readonly unknown[] | FakeInteractionOptions = [],
+): FakeInteraction {
+  type Interaction = NonNullable<CommandContext['interaction']>;
+  type Request = Parameters<Interaction['ask']>[0];
+  const queue: unknown[] = Array.isArray(init)
+    ? [...init]
+    : [...(init as FakeInteractionOptions).answers ?? []];
+  const prompts: Request[] = [];
+
+  const ask: Interaction['ask'] = (async (request: Request) => {
+    prompts.push(request);
+    if (queue.length > 0) {
+      const next = queue.shift();
+      return typeof next === 'function' ? await (next as (r: Request) => unknown)(request) : next;
+    }
+    if ('default' in request && request.default !== undefined) {
+      return request.default;
+    }
+    throw new Error(`No scripted answer remaining for interaction prompt: ${request.title}`);
+  }) as Interaction['ask'];
+
+  const sequence: Interaction['sequence'] = (async (seq) => {
+    const acc: Record<string, unknown> = {};
+    for (const step of seq.steps) {
+      acc[step.id] = await ask(step);
+    }
+    return Object.freeze({ ...acc });
+  }) as Interaction['sequence'];
+
+  return {
+    prompts,
+    enqueue(...answers: unknown[]) {
+      queue.push(...answers);
+    },
+    ask,
+    sequence,
+    confirm(title: string, defaultValue?: boolean): Promise<boolean> {
+      return ask({
+        type: 'confirm',
+        title,
+        ...(defaultValue === undefined ? {} : { default: defaultValue }),
+      });
+    },
+    select<V = string>(
+      title: string,
+      options: readonly (V | { readonly label: string; readonly value: V })[],
+    ): Promise<V> {
+      const normalized = options.map((opt) =>
+        opt !== null && typeof opt === 'object' && 'value' in opt && 'label' in opt
+          ? opt
+          : { label: String(opt), value: opt as V },
+      );
+      return ask({
+        type: 'select',
+        title,
+        options: normalized,
+      }) as Promise<V>;
+    },
   };
 }
 
@@ -104,7 +261,77 @@ export async function runCommand<TConfig, TResult, TInput extends CommandMessage
   options?: RunCommandOptions<TInput>,
 ): Promise<TResult> {
   const command = options?.source === undefined ? definition : await bindSource(definition, options.source);
-  return command.execute(createCommandContext(fake, options));
+  const resolvedOptions = populateCommandOptionsFromDefinition(command, options);
+  return command.execute(createCommandContext(fake, resolvedOptions));
+}
+
+function populateCommandOptionsFromDefinition<TConfig, TResult, TInput extends CommandMessage>(
+  command: CommandDefinition<TConfig, TResult, TInput, string | undefined>,
+  options?: RunCommandOptions<TInput>,
+): RunCommandOptions<TInput> | undefined {
+  if (!command.params && !command.options) return options;
+  const args = options?.args ?? [];
+  const input = (options?.input ?? createFakeMessage()) as TInput;
+  const session: CommandSession = {
+    adapter: input.conversation.endpoint.adapter,
+    endpoint: input.conversation.endpoint.id,
+    scene: input.scene ?? { id: input.conversation.id, type: input.conversation.kind },
+    ...(input.sender ? { sender: { id: input.sender.id, name: input.sender.name, role: input.sender.roles ?? [] } } : {}),
+  };
+  const resolveDefault = (def: CommandParamSchema['default']): CommandParameterValue | undefined => {
+    if (def === undefined) return undefined;
+    return typeof def === 'function' ? def(session) : def;
+  };
+  const inferredParams: Record<string, CommandParameterValue> = {};
+  if (command.params) {
+    const entries = Object.entries(command.params);
+    for (let i = 0; i < entries.length; i++) {
+      const [name, schema] = entries[i]!;
+      if (schema.rest) {
+        const rest = args.slice(i);
+        if (rest.length > 0) {
+          inferredParams[name] = rest.map((token) => coerceCommandScalar(token, schema));
+        } else {
+          const def = resolveDefault(schema.default);
+          if (def !== undefined) inferredParams[name] = def;
+        }
+        break;
+      }
+      const raw = args[i];
+      if (raw !== undefined) {
+        inferredParams[name] = coerceCommandScalar(raw, schema);
+      } else {
+        const def = resolveDefault(schema.default);
+        if (def !== undefined) inferredParams[name] = def;
+      }
+    }
+  }
+  const inferredOptions: Record<string, CommandParameterValue> = {};
+  if (command.options) {
+    for (const [name, opt] of Object.entries(command.options)) {
+      const def = resolveDefault(opt.default);
+      if (def !== undefined) {
+        inferredOptions[name] = def;
+      }
+    }
+  }
+  return {
+    ...options,
+    params: { ...inferredParams, ...(options?.params ?? {}) },
+    options: { ...inferredOptions, ...(options?.options ?? {}) },
+  };
+}
+
+function coerceCommandScalar(raw: string, schema: CommandParamSchema): string | number | boolean {
+  if (schema.type === 'number' || schema.type === 'integer' || schema.type === 'float' || schema.type === 'dice' || schema.type === 'rps') {
+    const parsed = Number(raw);
+    return Number.isNaN(parsed) ? raw : parsed;
+  }
+  if (schema.type === 'boolean') {
+    if (raw === 'true' || raw === '1') return true;
+    if (raw === 'false' || raw === '0') return false;
+  }
+  return raw;
 }
 
 async function bindSource<T extends CommandDefinition<never, unknown, never, string | undefined>>(

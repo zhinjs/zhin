@@ -161,6 +161,7 @@ export function capabilityPackages(kind: PluginKind): PluginStackPackage[] {
  */
 export const CONVENTION_SOURCE_DIRECTORIES = [
   'commands',
+  'components',
   'middlewares',
   'handlers',
   'schedules',
@@ -183,7 +184,7 @@ export const LIBRARY_SOURCE_DIRECTORY = 'src';
  * removes it again (same flow as the official plugins' build-plugin-runtime-entries.mjs).
  */
 export function runtimeEntrySources(): string[] {
-  return ['plugin.ts', ...CONVENTION_SOURCE_DIRECTORIES.map((dir) => `${dir}/**/*`)];
+  return ['plugin.ts', 'plugin.tsx', ...CONVENTION_SOURCE_DIRECTORIES.map((dir) => `${dir}/**/*`)];
 }
 
 /** Generated JavaScript the tarball ships for runtime entries (never their `.ts`). */
@@ -264,12 +265,13 @@ await clean();
 if (!process.argv.includes('--clean')) {
   const sources = [];
   if (await isFile(join(root, 'plugin.ts'))) sources.push(join(root, 'plugin.ts'));
+  else if (await isFile(join(root, 'plugin.tsx'))) sources.push(join(root, 'plugin.tsx'));
   for (const directory of DIRECTORIES) await walk(join(root, directory), ['.ts', '.tsx'], sources);
   for (const source of sources) {
     const output = ts.transpileModule(await readFile(source, 'utf8'), {
       fileName: source,
       compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022,
-        jsx: ts.JsxEmit.ReactJSX, verbatimModuleSyntax: true },
+        jsx: ts.JsxEmit.ReactJSX, jsxImportSource: 'zhin.js', verbatimModuleSyntax: true },
       transformers: { before: [rewrite] },
       reportDiagnostics: true,
     });
@@ -378,6 +380,8 @@ export function createPluginTsconfigs(_kind?: PluginKind): {
         target: 'ES2022',
         module: 'ESNext',
         moduleResolution: 'bundler',
+        jsx: 'react-jsx',
+        jsxImportSource: 'zhin.js',
         strict: true,
         esModuleInterop: true,
         skipLibCheck: true,

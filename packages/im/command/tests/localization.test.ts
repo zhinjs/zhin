@@ -46,9 +46,12 @@ describe('operation-scoped command localization', () => {
     expect(chinese.menu).toMatchObject({ locale: 'zh-CN', keyword: '菜单', commands: [{ name: '/daily list', description: '查看提醒' }] });
     expect(english.menu).toMatchObject({ locale: 'en', keyword: 'menu', commands: [{ name: '!daily list', description: 'List reminders' }] });
     expect(english.value).toContain('command menu');
-    expect((await index.dispatch({ input: '菜单', source: message('en') })).matched).toBe(false);
-    expect((await index.dispatch({ input: 'menu', source: message('zh-CN') })).matched).toBe(false);
+    expect((await index.dispatch({ input: '菜单', source: message('en') })).menu?.locale).toBe('en');
+    expect((await index.dispatch({ input: 'menu', source: message('zh-CN') })).menu?.locale).toBe('zh-CN');
+    expect((await index.dispatch({ input: '帮助', source: message('zh-CN') })).menu?.locale).toBe('zh-CN');
+    expect((await index.dispatch({ input: '/help', source: message('en') })).menu?.locale).toBe('en');
     expect((await index.dispatch({ input: '菜单' })).menu?.locale).toBe('zh-CN');
+    expect((await index.dispatch({ input: '菜单' })).menu?.commands).toEqual([{ name: 'daily list', description: '查看提醒' }]);
     const englishProject = new CommandIndex(slots, snapshot(slots, 'en'), {});
     expect((await englishProject.dispatch({ input: 'menu' })).menu?.locale).toBe('en');
   });

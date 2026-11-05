@@ -39,6 +39,17 @@ describe('zhin-stack-deps', () => {
     expect(required['@zhin.js/database']).toBe('latest');
   });
 
+  it('includes explicit @zhin.js/* package names declared in config.plugins', () => {
+    const required = getRequiredZhinDependenciesForConfig({
+      plugins: {
+        sandbox: '@zhin.js/adapter-sandbox',
+        telegram: { package: '@zhin.js/adapter-telegram' },
+      },
+    });
+    expect(required['@zhin.js/adapter-sandbox']).toBe('latest');
+    expect(required['@zhin.js/adapter-telegram']).toBe('latest');
+  });
+
   it('pins generated database drivers to the verified major line', () => {
     const required = getRequiredZhinDependenciesForConfig({
       database: { dialect: 'pg', host: '127.0.0.1', port: 5432 },

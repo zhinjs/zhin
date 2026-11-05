@@ -16,9 +16,14 @@ export interface HandlerEventMap {
   // Augmented by higher-level packages (e.g. @zhin.js/core)
 }
 
-export interface HandlerDefinition<K extends string = string> {
+export interface HandlerDefinition<
+  K extends string = string,
+  TConfig = unknown,
+> {
   /** @internal Runtime feature brand. */
   readonly $feature: typeof handlerBrand;
+  /** @internal Type-only plugin configuration witness. */
+  readonly $config?: TConfig;
   readonly event?: K;
   readonly adapter?: string;
   handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
@@ -30,29 +35,59 @@ export interface HandlerDefinition<K extends string = string> {
  *
  * @public
  */
-type BoundHandlerAuthoring<K extends keyof HandlerEventMap & string> = {
+type BoundHandlerAuthoring<K extends keyof HandlerEventMap & string, TConfig = unknown> = {
   [A in RegisteredAdapterName]: { readonly adapter: A; readonly event: K;
-    handle(this: HandlerContext<unknown, A>, ...args: HandlerEventMap[K] extends unknown[] ? HandlerEventMap[K] : unknown[]): void | Promise<void>;
+    handle(this: HandlerContext<TConfig, A>, ...args: HandlerEventMap[K] extends unknown[] ? HandlerEventMap[K] : unknown[]): void | Promise<void>;
   }
 }[RegisteredAdapterName];
-export function defineHandler<K extends keyof HandlerEventMap & string>(options: BoundHandlerAuthoring<K>): Readonly<HandlerDefinition<K>>;
 
-export function defineHandler<K extends keyof HandlerEventMap & string>(
+/**
+ * Returned by `defineHandler.withConfig<Config>()`: fixes the plugin config type while
+ * keeping event argument inference intact.
+ *
+ * @public
+ */
+export interface HandlerDefiner<TConfig> {
+  <K extends keyof HandlerEventMap & string>(
+    options: BoundHandlerAuthoring<K, TConfig>,
+  ): Readonly<HandlerDefinition<K, TConfig>>;
+  <K extends keyof HandlerEventMap & string>(
+    options: {
+      readonly event: K;
+      handle(
+        this: HandlerContext<TConfig>,
+        ...args: HandlerEventMap[K] extends unknown[] ? HandlerEventMap[K] : unknown[]
+      ): void | Promise<void>;
+    },
+  ): Readonly<HandlerDefinition<K, TConfig>>;
+  (
+    options: {
+      readonly event?: string;
+      handle(this: HandlerContext<TConfig>, ...args: unknown[]): void | Promise<void>;
+    },
+  ): Readonly<HandlerDefinition<string, TConfig>>;
+}
+
+export function defineHandler<K extends keyof HandlerEventMap & string, TConfig = unknown>(
+  options: BoundHandlerAuthoring<K, TConfig>,
+): Readonly<HandlerDefinition<K, TConfig>>;
+
+export function defineHandler<K extends keyof HandlerEventMap & string, TConfig = unknown>(
   options: {
     readonly event: K;
     handle(
-      this: HandlerContext,
+      this: HandlerContext<TConfig>,
       ...args: HandlerEventMap[K] extends unknown[] ? HandlerEventMap[K] : unknown[]
     ): void | Promise<void>;
   },
-): Readonly<HandlerDefinition<K>>;
+): Readonly<HandlerDefinition<K, TConfig>>;
 
-export function defineHandler(
+export function defineHandler<TConfig = unknown>(
   options: {
     readonly event?: string;
-    handle(this: HandlerContext, ...args: unknown[]): void | Promise<void>;
+    handle(this: HandlerContext<TConfig>, ...args: unknown[]): void | Promise<void>;
   },
-): Readonly<HandlerDefinition>;
+): Readonly<HandlerDefinition<string, TConfig>>;
 
 export function defineHandler(
   options: {
@@ -80,13 +115,19 @@ export function defineHandler(
   });
 }
 
+/**
+ * Fix the plugin config type first, then define the handler.
+ */
+defineHandler.withConfig = function withConfig<TConfig = unknown>(): HandlerDefiner<TConfig> {
+  return ((options: Parameters<typeof defineHandler>[0]) =>
+    defineHandler(options)) as unknown as HandlerDefiner<TConfig>;
+};
+
 declare module '@zhin.js/plugin-runtime' {
-  // Generic name must match the canonical declaration for module merging.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface PluginSetupContext<TConfig = unknown> {
-    addHandler(
+    addHandler<K extends string = string>(
       localName: string,
-      definition: HandlerDefinition,
+      definition: HandlerDefinition<K, TConfig>,
     ): void;
   }
 }

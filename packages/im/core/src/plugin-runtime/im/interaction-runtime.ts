@@ -125,7 +125,10 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   readonly #markPrompt: ((message: MessageRef) => void) | undefined;
 
   /** `markPrompt` keeps a delivered prompt out of conversation context, like its answer. */
-  constructor(router = new RuntimeInteractiveRouter<Admission>(), markPrompt?: (message: MessageRef) => void) {
+  constructor(
+    router = new RuntimeInteractiveRouter<Admission>({ numberingScope: 'conversation' }),
+    markPrompt?: (message: MessageRef) => void,
+  ) {
     this.#router = router;
     this.#markPrompt = markPrompt;
   }
@@ -166,7 +169,7 @@ export class RuntimeInteractionCoordinator<Admission = never> {
       await message.$reply(t(message.locale, 'expired'));
       return true;
     }
-    if (this.#router.isExpiredFallback(message, effectiveSnapshot)) {
+    if (this.#router.isExpiredFallback(message, effectiveSnapshot, { ignoreTtlExpiredBareGroupNumbers: true })) {
       await message.$reply(t(message.locale, 'expired'));
       return true;
     }

@@ -105,6 +105,8 @@ describe('UserInteraction module', () => {
     expect(parseUserInteractionAnswer(request, 'n')).toEqual({ ok: true, value: 'reject' });
     expect(parseUserInteractionAnswer(request, '拒绝')).toEqual({ ok: true, value: 'reject' });
     expect(parseUserInteractionAnswer(request, 'maybe')).toMatchObject({ ok: false });
-    expect(JSON.stringify(renderUserInteraction(projectUserInteraction(request)))).toContain('2. 允许一次（y / 同意） — 仅执行当前操作');
+    const rendered = renderUserInteraction(projectUserInteraction(request));
+    expect(rendered).toHaveLength(1);
+    expect(JSON.stringify(rendered)).toContain('2. 允许一次（y / 同意） — 仅执行当前操作');
   });
 });

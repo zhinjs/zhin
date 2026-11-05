@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto';
+import yaml from 'yaml';
 import { createHostOperationResources } from '../inference/operation-resources.js';
-import { listSnapshotAiProviders, provideAiProviders } from '@zhin.js/ai-provider';
+import { describeSnapshotAiProvider, listSnapshotAiProviders, provideAiProviders } from '@zhin.js/ai-provider';
+import { ProviderError, providerPlanFingerprint, reviewProviderPlan, type JsonObject, type ProviderGraph, type ProviderService } from '@zhin.js/ai/provider';
 import { builtinAiProviders } from '@zhin.js/ai/providers';
 import type { HostInference } from '../inference/host.js';
 import { turnModelPortToken } from '@zhin.js/agent/model-runtime';
 import { createOwnerApprovalMigrationProvider } from '../data-migration/owner-approval-provider.js';
-import { pluginDataMigrationProviderToken, databaseRootHostToken, type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { pluginDataMigrationProviderToken, databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import { resolveHostProtectedPaths } from './host-protected-paths.js';
 import { installAgentPersistence } from './persistence-coordinator.js';
 import { createSelfChangeTrialOptions } from './self-change-trial.js';
@@ -207,6 +210,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       lifecycle.add(() => options.inference.retireUnusedDrivers(definitions.map(entry => entry.definition)));
       handoff.add({ activateNext() { definitions = listSnapshotAiProviders(readCandidateSnapshot()); } });
     }
+    await seedInitialAiPlanIfEmpty(options.projectRoot, options.inference, readCandidateSnapshot, true);
+    handoff.add({
+      async activateNext(handoffSignal) {
+        handoffSignal.throwIfAborted();
+        await seedInitialAiPlanIfEmpty(options.projectRoot, options.inference, readCandidateSnapshot, false);
+      },
+    });
     zhinAgent.hostProtectedPaths = hostProtectedPaths;
     // #1051 F1: the store (drafts), the trial (grouping by plugin root) and the applier (writes) share one view
     // of the local plugin roots, so a draft accepted under `plugins/<x>/commands/` is also trial-run and written.
@@ -457,4 +467,133 @@ async function loadBootstrap(projectRoot: string): Promise<{
 function truncate(value: string, max: number): string {
   if (value.length <= max) return value;
   return `${value.slice(0, Math.max(0, max - 1))}…`;
+}
+
+async function seedInitialAiPlanIfEmpty(
+  projectRoot: string,
+  inference: HostInference,
+  readCandidateSnapshot?: () => ReturnType<SnapshotReader['acquire']>['value'],
+  allowDeferredDatabase = false,
+): Promise<void> {
+  const planPath = join(projectRoot, 'ai.plan.yml');
+  let rawPlan: string;
+  try {
+    rawPlan = await readFile(planPath, 'utf8');
+  } catch {
+    return;
+  }
+  try {
+    const existing = await inference.repository.readGraph({ rootId: inference.rootId });
+    if (
+      existing &&
+      (existing.revision > 0 ||
+        Object.keys(existing.services).length > 0 ||
+        Object.keys(existing.accounts).length > 0 ||
+        Object.keys(existing.profiles).length > 0)
+    ) {
+      return;
+    }
+    const proposal = yaml.parse(rawPlan);
+    if (!proposal || typeof proposal !== 'object') return;
+    const snapshot = readCandidateSnapshot?.();
+    const resolveDriverEntry = (id: string, owner?: string) => {
+      if (snapshot) {
+        return describeSnapshotAiProvider({
+          snapshot,
+          id,
+          ...(owner ? { owner: owner as PluginId } : {}),
+        });
+      }
+      const def = builtinAiProviders.find((d) => d.id === id);
+      if (!def) throw new ProviderError('driver-unavailable');
+      return { owner: (owner as PluginId | undefined) ?? rootPluginId(), definition: def };
+    };
+    const emptyGraph: ProviderGraph = {
+      rootId: inference.rootId,
+      revision: 0,
+      services: {},
+      accounts: {},
+      profiles: {},
+      purposes: { defaults: {} },
+    };
+    const reviewed = await reviewProviderPlan({
+      input: proposal,
+      graph: emptyGraph,
+      ownerId: inference.hostOwnerId,
+      hostOwnerId: inference.hostOwnerId,
+      createId: (kind) => `${kind}:${randomUUID()}`,
+      resolveService: (input) => {
+        const reference =
+          typeof input.driver === 'string'
+            ? {
+                id: input.driver,
+                ...(input.existing ? { owner: input.existing.driver.owner } : {}),
+              }
+            : input.driver;
+        const entry = resolveDriverEntry(reference.id, reference.owner);
+        if (
+          'contractVersion' in reference &&
+          reference.contractVersion !== entry.definition.contractVersion
+        ) {
+          throw new ProviderError('driver-contract-mismatch');
+        }
+        const options = entry.definition.serviceSchema.parse(input.options);
+        const service: ProviderService<unknown> = {
+          id: input.existing?.id ?? `preview:${randomUUID()}`,
+          rootId: inference.rootId,
+          ownerId: input.existing?.ownerId ?? inference.hostOwnerId,
+          revision: input.existing?.revision ?? 1,
+          driver: {
+            id: entry.definition.id,
+            owner: entry.owner,
+            contractVersion: entry.definition.contractVersion,
+          },
+          options,
+          models: input.models,
+        };
+        return {
+          driver: service.driver,
+          options: options as ProviderService['options'],
+          models: entry.definition.models(service),
+          ...(entry.definition.identity
+            ? {
+                identity: (candidate: ProviderService) =>
+                  entry.definition.identity!({
+                    ...candidate,
+                    options: entry.definition.serviceSchema.parse(candidate.options),
+                  }),
+              }
+            : {}),
+        };
+      },
+    });
+    const result = await inference.repository.commit({
+      rootId: inference.rootId,
+      mutationId: `seed-ai-plan:${randomUUID()}`,
+      fingerprint: providerPlanFingerprint(reviewed.graph),
+      expectedRevision: 0,
+      graph: reviewed.graph,
+      credentials: [],
+      result: {
+        ownerId: inference.hostOwnerId,
+        bindings: reviewed.bindings as unknown as JsonObject,
+      },
+    });
+    if (result.status === 'committed') {
+      await inference.accounts?.committed({
+        graph: reviewed.graph,
+        removedAccounts: [],
+        credentials: [],
+      });
+      logger.info(
+        `Seeded initial AI inference graph from ai.plan.yml (revision ${reviewed.graph.revision})`,
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (allowDeferredDatabase && message.includes('DatabaseHost is not started')) {
+      return;
+    }
+    logger.warn(`ai.plan.yml auto-seed failed: ${message}`);
+  }
 }

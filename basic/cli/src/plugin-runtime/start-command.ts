@@ -144,7 +144,9 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     platform: 'node',
   } as const);
   const hostEnvironment = createEnvStore(rootPluginId(), runtimeEnvironment, environmentVariables);
-  const hostConfig = hostEnvironment.expandMissingAsEmpty((await config.read()).document);
+  const rawConfigDocument = (await config.read()).document;
+  warnUnsetConfigEnvPlaceholders(rawConfigDocument, name => hostEnvironment.get(name), configFile);
+  const hostConfig = hostEnvironment.expandMissingAsEmpty(rawConfigDocument);
   const pluginLifecycleFile = resolvePluginLifecycleFile(options.root);
   await readProjectPluginLifecycleState(options.root, pluginLifecycleFile);
   const pluginLifecycleStore = createPluginLifecycleStore(options.root);
@@ -573,12 +575,35 @@ async function loadConfiguredAgentHost(options: Readonly<{
   const { config, projectRoot } = options;
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
-  const agentHost = await import('./agent/module.js');
+  let agentHost: typeof import('./agent/module.js');
+  let agentHostToken: typeof import('@zhin.js/agent/runtime').agentHostToken;
+  let createTurnTraceArchive: typeof import('@zhin.js/agent/trace').createTurnTraceArchive;
+  let defaultTurnTraceDir: typeof import('@zhin.js/agent/trace').defaultTurnTraceDir;
+  let defaultTurnTraceFile: typeof import('@zhin.js/agent/trace').defaultTurnTraceFile;
+  let resolveTraceArchiveOptions: typeof import('@zhin.js/agent/trace').resolveTraceArchiveOptions;
+  let personalSessionOwnerId: typeof import('@zhin.js/agent/personal-session').personalSessionOwnerId;
+  try {
+    agentHost = await import('./agent/module.js');
+    ({ agentHostToken } = await import('@zhin.js/agent/runtime'));
+    ({ createTurnTraceArchive, defaultTurnTraceDir, defaultTurnTraceFile, resolveTraceArchiveOptions } = await import('@zhin.js/agent/trace'));
+    ({ personalSessionOwnerId } = await import('@zhin.js/agent/personal-session'));
+  } catch (error) {
+    const code = (error as { code?: string } | undefined)?.code;
+    if (
+      code === 'ERR_MODULE_NOT_FOUND' ||
+      code === 'MODULE_NOT_FOUND' ||
+      (error instanceof Error && /Cannot find package|Cannot find module/i.test(error.message))
+    ) {
+      throw new Error(
+        `检测到配置中启用了 AI / Assistant，但缺少 AI 运行时依赖（${error instanceof Error ? error.message : String(error)}）。请运行 \`npx zhin setup\` 或 \`pnpm add @zhin.js/agent @zhin.js/ai @zhin.js/ai-provider ai zod\` 安装依赖。`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
   // Only a missing @zhin.js/workroom package degrades; any other load failure aborts startup.
   const workroom = await agentHost.loadWorkroomHostModule();
   if (!workroom) getLogger('runtime').info('Workroom 未安装，仅启用 Agent');
-  const { agentHostToken } = await import('@zhin.js/agent/runtime');
-  const { createTurnTraceArchive, defaultTurnTraceDir, defaultTurnTraceFile, resolveTraceArchiveOptions } = await import('@zhin.js/agent/trace');
   // One writer across generations; persistence maintenance also prunes while the bot is idle.
   const turnTraceStore = createTurnTraceArchive(defaultTurnTraceDir(projectRoot), {
     ...resolveTraceArchiveOptions(),
@@ -598,7 +623,6 @@ async function loadConfiguredAgentHost(options: Readonly<{
       return snapshotReader;
     },
   });
-  const { personalSessionOwnerId } = await import('@zhin.js/agent/personal-session');
   const principalBindings = Object.fromEntries(Object.entries(initialAi?.personalPrincipals ?? {}).map(([id, owners]) => [id,
     owners.map(owner => {
       if (owner.rootId !== inference.rootId) throw new Error('Personal principal binding belongs to another Host');
@@ -705,7 +729,40 @@ function createRemoteConsoleUrl(httpOrigin: string): string {
 function printFirstRunGuidance(httpOrigin: string, tokenConfigured: boolean): void {
   const startup = getLogger('setup');
   const consoleUrl = createRemoteConsoleUrl(httpOrigin);
-  startup.info(`Remote Console: ${consoleUrl}${tokenConfigured ? chalk.dim(' (token required)') : ''}`);
+  startup.info(`Remote Console: ${consoleUrl}${tokenConfigured ? chalk.dim(' (token required — 见 .env 中的 HTTP_TOKEN)') : ''}`);
+  startup.info(`Local Sandbox:  ${httpOrigin}/sandbox${tokenConfigured ? chalk.dim(' (可在页面顶部直接输入 HTTP_TOKEN 或访问 ?token=<HTTP_TOKEN>)') : ''}`);
+}
+
+function warnUnsetConfigEnvPlaceholders(
+  document: unknown,
+  getEnv: (name: string) => string | undefined,
+  configFile: string,
+): void {
+  const unset = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (typeof value === 'string') {
+      for (const match of value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
+        const varName = match[1];
+        if (varName && getEnv(varName) === undefined) {
+          unset.add(varName);
+        }
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === 'object') {
+      for (const item of Object.values(value)) visit(item);
+    }
+  };
+  visit(document);
+  if (unset.size > 0) {
+    const vars = [...unset].map(name => `\${${name}}`).join(', ');
+    const rel = relative(process.cwd(), configFile) || configFile;
+    getLogger('setup').warn(`配置文件 ${rel} 中引用了未设置的环境变量: ${vars}（已展开为空字符串，请检查 .env）`);
+  }
 }
 
 function openBrowser(url: string): void {

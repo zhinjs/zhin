@@ -1716,6 +1716,29 @@ describe('IM Runtime', () => {
     // The prefix is still required after the quote.
     await expect(new MessageDispatcher().dispatch(quoted(prefixedSnapshot, '同意'), prefixedSnapshot))
       .resolves.toMatchObject({ matched: false });
+
+    const mentioned = (snapshot: RuntimeSnapshot, text: string) => new Message(
+      {
+        conversation: {
+          endpoint: {
+            id: String(capabilityId(root, adapterFeatureId, 'memory')),
+            adapter: String(root),
+          },
+          kind: 'group',
+          id: 'room',
+        },
+        content: `@Bot ${text}`,
+        segments: [
+          { type: 'mention', data: { target: 'bot-1' } },
+          { type: 'text', data: { text: ` ${text}` } },
+        ],
+      },
+      { generation: snapshot.generation, snapshot, reply: async () => ({ status: 'sent' as const }) },
+    );
+    await expect(new MessageDispatcher().dispatch(mentioned(defaultSnapshot, '同意'), defaultSnapshot))
+      .resolves.toMatchObject({ matched: true, command: '同意' });
+    await expect(new MessageDispatcher().dispatch(mentioned(prefixedSnapshot, '/同意'), prefixedSnapshot))
+      .resolves.toMatchObject({ matched: true, command: '同意' });
   });
 
   it('菜单输出带上当前 endpoint 的 commandPrefix', async () => {

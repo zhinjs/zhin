@@ -149,13 +149,15 @@ IM 专属输出类型属于 `@zhin.js/agent`，不进入通用 `@zhin.js/ai` 引
 - Provider 错误及总结调用失败时的固定提示由宿主生成，不要求把错误提示再交给模型编码。
 - 格式纠正最多等待 30 秒，遵守当前回合取消信号；超过 32,000 字符的回复不截断纠正。格式失败不会重新执行工具，已经完成的工具副作用不会被重试。
 - thinking 不属于最终回答，宽松处理只读回答正文。MiniMax 通过 SDK 的 JSON 响应工具或 JSON 文本返回对象时，都要经过同一份完整 Schema 校验。
-- 结构化输出的获取方式按 Provider 决定（`compat.structuredOutput`）：`native` 使用 Provider 的结构化输出 / JSON 模式；`prompt` 把 Schema 写进系统提示词，再宽松解析回答正文。DeepSeek 默认 `prompt`：它的思考模型在 JSON 模式下经常想完只返回空白（实测 8 次中 4 次），不用 JSON 模式时 12 次全部可用。其他 Provider 默认 `native`，遇到 JSON 模式返回空内容的模型可以手动改成 `prompt`：
+- 结构化输出的获取方式按模型服务决定（`compat.structuredOutput`）：`native` 使用模型服务的原生结构化输出 / JSON 模式；`prompt` 把 Schema 写进系统提示词，再宽松解析回答正文。DeepSeek 默认 `prompt`：它的思考模型在 JSON 模式下经常想完只返回空白（实测 8 次中 4 次），不用 JSON 模式时 12 次全部可用。其他模型服务默认 `native`，遇到 JSON 模式返回空内容的兼容网关可以在 `ai.plan.yml`（或 Console 模型服务配置）中手动改成 `prompt`：
 
   ```yaml
-  ai:
-    providers:
-      my-gateway:
-        sdk: openai-compatible
+  # ai.plan.yml
+  services:
+    my-gateway:
+      driver: openai-compatible
+      options:
+        baseUrl: https://gateway.example.com/v1
         compat:
           structuredOutput: prompt
   ```

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import type { PluginDefinition } from '@zhin.js/plugin-runtime';
 import type { ModuleRuntime } from './module-runtime.js';
 import type { ResolvedPackage } from './package-resolver.js';
@@ -25,15 +26,31 @@ export async function readPluginConfigSchema(
     const module = await modules.load<{ default?: PluginDefinition }>(entryFile);
     declaration = module.default?.config;
   }
-  if (declaration && fileSchema !== undefined) {
-    throw new PluginConfigSourceConflictError(pkg.name, entryFile ?? manifest.entry, file);
+  const inlineSchema = declaration ? declaration.toJsonSchema() : undefined;
+  if (inlineSchema !== undefined && fileSchema !== undefined) {
+    if (!schemasMatch(inlineSchema, fileSchema)) {
+      throw new PluginConfigSourceConflictError(pkg.name, entryFile ?? manifest.entry, file);
+    }
   }
-  const schema: unknown = declaration ? declaration.toJsonSchema() : fileSchema;
+  const schema: unknown = inlineSchema ?? fileSchema;
   if (schema === undefined) return null;
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
     throw new TypeError(`${pkg.name} configuration must contain a JSON Schema object`);
   }
   return immutableConfigSchema(schema as Readonly<Record<string, unknown>>);
+}
+
+function schemasMatch(inlineSchema: unknown, fileSchema: unknown): boolean {
+  if (!inlineSchema || typeof inlineSchema !== 'object' || Array.isArray(inlineSchema)) return false;
+  if (!fileSchema || typeof fileSchema !== 'object' || Array.isArray(fileSchema)) return false;
+  const stripDialect = (value: Record<string, unknown>): Record<string, unknown> => {
+    const { $schema: _ignored, ...rest } = value;
+    return rest;
+  };
+  return isDeepStrictEqual(
+    stripDialect(inlineSchema as Record<string, unknown>),
+    stripDialect(fileSchema as Record<string, unknown>),
+  );
 }
 
 /** Detached declaration metadata for preflight and custom-resolver startup views. */
