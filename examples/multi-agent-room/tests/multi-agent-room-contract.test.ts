@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
-import { rootPluginId } from '@zhin.js/plugin-runtime';
+import { rootPluginId } from 'zhin.js';
 import { agentFeatureId, parseAgentPackage } from '@zhin.js/agent-feature';
 
 const exampleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');

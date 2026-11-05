@@ -611,5 +611,9 @@ function normalizeMailboxPath(path: string): string {
   const trimmed = path.trim();
   if (!trimmed) return DEFAULT_A2A_MAILBOX_PATH;
   const leading = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  return leading.replace(/\/+$/u, '') || DEFAULT_A2A_MAILBOX_PATH;
+  let end = leading.length;
+  while (end > 0 && leading.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return end > 0 ? leading.slice(0, end) : DEFAULT_A2A_MAILBOX_PATH;
 }

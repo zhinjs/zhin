@@ -241,15 +241,11 @@ export const SELF_CHANGE_SECURITY_CONFIG_KEYS: readonly string[] = Object.freeze
   'ai.agent.injectionGuard',
   'ai.agent.usageQuota.exemptOwner',
   'ai.agent.schedule.security',
-  // 工作室信任；模型用途与决策审批配置由认证 Host runtime API 管理。
-  'ai.workroom.trustedPackPublishers',
-  'ai.workroom.disclosure',
   // 访问令牌
   'http.token',
   'http.tokens',
-  // 跨实例执行与回调
-  'a2a.workroomRemoteExecutors',
-  'a2a.workroomCallbacks',
+  // 跨进程 A2A Mailbox 传输与签名配置（ADR 0048 §3.6）
+  'a2a.mailbox',
   // 主人私域策略
   'assistant.home.policy',
   // MCP：对外暴露工具 / 接入新的工具面
