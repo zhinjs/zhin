@@ -1,0 +1,34 @@
+.changeset/adr-0048-h3-mailbox-timer-evals.md
+  h_b680f75345178a 1-5
+packages/im/agent/evals/cases/harness-mailbox-admission-gate.case.ts
+  h_b680f75345178a 1-25
+packages/im/agent/evals/cases/harness-mailbox-danmaku-pick-one.case.ts
+  h_b680f75345178a 1-36
+packages/im/agent/evals/cases/harness-mailbox-inbound-queue-serial.case.ts
+  h_b680f75345178a 1-27
+packages/im/agent/evals/cases/harness-mailbox-interrupt-stale.case.ts
+  h_b680f75345178a 1-28
+packages/im/agent/evals/cases/harness-mailbox-merge-skip-noise-sender.case.ts
+  h_b680f75345178a 1-32
+packages/im/agent/evals/cases/harness-mailbox-merge-window-coalesce.case.ts
+  h_b680f75345178a 1-37
+packages/im/agent/evals/cases/harness-timer-ask-peer-allowed.case.ts
+  h_b680f75345178a 1-26
+packages/im/agent/evals/cases/harness-timer-budget-enforced.case.ts
+  h_b680f75345178a 1-28
+packages/im/agent/evals/cases/harness-timer-cancel-or-escalate.case.ts
+  h_b680f75345178a 1-23
+packages/im/agent/evals/cases/harness-timer-mail-starts-engagement.case.ts
+  h_b680f75345178a 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4e646a26345d8c92eb99f2cb4dc78ed3f52b5d4b",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
