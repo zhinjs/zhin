@@ -1,0 +1,28 @@
+.changeset/eval-h3-gap-a-timer-inbound.md
+  h_b680f75345178a 1-5
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 50,135,141,296,308-311,648-650,747-758
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 21-22,69-102,295,374-383
+packages/im/agent/evals/framework/framework.test.ts
+  h_b680f75345178a 20,361-392
+packages/im/agent/evals/framework/index.ts
+  h_b680f75345178a 5,10
+packages/im/agent/tests/decision/rank.test.ts
+  h_b680f75345178a 90-129
+packages/im/agent/tests/migration/provider-plan.test.ts
+  h_b680f75345178a 212-227
+packages/im/ai/tests/provider/plan.test.ts
+  h_b680f75345178a 132-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "558dd75a967c8ec3748dbb325e352775a884dc17",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
