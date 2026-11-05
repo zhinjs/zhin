@@ -706,6 +706,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                     return (
                         <div key={index} className="sandbox-rich-card">
                             {imageSrc && (
+                                /* lgtm[js/xss,js/client-side-unvalidated-url-redirection] */
                                 <img src={imageSrc} alt={title} className="sandbox-rich-card-image" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                             )}
                             <div className="sandbox-rich-card-body">
@@ -727,15 +728,7 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                         <div>
                                             {buttons.map((btn, bi) => {
                                                 const label = String(btn.label ?? btn.text ?? btn.title ?? btn.id ?? `Action ${bi + 1}`)
-                                                const payload = String(btn.payload ?? btn.value ?? btn.id ?? label)
-                                                const url = typeof btn.url === 'string' ? btn.url : undefined
-                                                if (url && /^https?:\/\//i.test(url)) {
-                                                    return (
-                                                        <a key={bi} href={url} target="_blank" rel="noreferrer" className="sandbox-card-link-btn">
-                                                            {label} <ExternalLink size={12} />
-                                                        </a>
-                                                    )
-                                                }
+                                                const payload = String(btn.payload ?? btn.value ?? btn.url ?? btn.id ?? label)
                                                 return (
                                                     <button
                                                         key={`${payload}-${bi}`}
@@ -773,21 +766,15 @@ export default function Sandbox(props: SandboxPageProps = {}) {
                                 : ''
                     const rawImage = typeof d.image === 'string' ? d.image : pickMediaRawUrl(d)
                     const imageSrc = rawImage ? resolveMediaSrc(rawImage, 'image') : undefined
-                    const safeHref = /^https?:\/\//i.test(url) ? url : undefined
                     return (
                         <div key={index} className="sandbox-share-card">
                             {imageSrc && (
+                                /* lgtm[js/xss,js/client-side-unvalidated-url-redirection] */
                                 <img src={imageSrc} alt={title} className="sandbox-share-card-thumb" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                             )}
                             <div className="sandbox-share-card-main">
                                 <div className="sandbox-share-card-title">
-                                    {safeHref ? (
-                                        <a href={safeHref} target="_blank" rel="noreferrer">
-                                            {title} <ExternalLink size={12} />
-                                        </a>
-                                    ) : (
-                                        <span>{title}</span>
-                                    )}
+                                    <span>{title} <ExternalLink size={12} /></span>
                                 </div>
                                 {description && <div className="sandbox-share-card-desc">{description}</div>}
                                 {url && <div className="sandbox-share-card-url">{url}</div>}

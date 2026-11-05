@@ -413,11 +413,7 @@ export const BASE_STYLE = `
 function inferPageCategory(page: ConsoleIndexPage): string {
   if (page.group && page.group.trim()) return page.group.trim();
   const owner = page.owner ?? '';
-  const route = page.route ?? '';
-  if (route === '/sandbox' || owner.includes('sandbox')) return 'sandbox';
-  if (owner.includes('adapter') || /^\/(qq|icqq|onebot|discord|telegram|slack|kook|dingtalk|feishu|lark|wechat|line|github|email|satori)\b/iu.test(route)) {
-    return 'adapter';
-  }
+  if (owner.includes('adapter')) return 'adapter';
   if (owner === 'root' || !owner) return 'core';
   return 'plugin';
 }

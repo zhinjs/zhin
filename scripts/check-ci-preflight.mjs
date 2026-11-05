@@ -194,6 +194,7 @@ function checkLockfileImporters(files) {
 
 checkPolynomialReDoS(changed);
 checkLockfileImporters(changed);
+runSync(process.execPath, [join(root, 'scripts', 'check-no-platform-branches.mjs')]);
 
 const lintFiles = scope.lint.filter((file) => existsSync(join(root, file)));
 if (lintFiles.length > 0) {
