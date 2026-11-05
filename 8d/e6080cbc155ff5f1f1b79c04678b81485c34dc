@@ -1,0 +1,239 @@
+packages/im/ai/src/compaction/agent-message-compaction.ts
+  s_9622fd28aba994::t_ddc1188a2e8a1a 241
+  s_9622fd28aba994::t_f3504b5d43524a 37-43,214,235,237-238,268,316
+packages/im/agent/tests/helpers/model-runtime.ts
+  s_9622fd28aba994::t_e744d56eafc45b 3,12,19,23,31
+basic/cli/src/plugin-runtime/inference/headless-host.ts
+  s_9622fd28aba994::t_631c376918bf75 1,12
+docs/ai/providers.md
+  s_9622fd28aba994::t_d176bc7603a22e 93-94
+.changeset/gateway-model-retry-reasoning.md
+  s_9622fd28aba994::t_07a67aed7fdfa7 8
+  s_9622fd28aba994::t_d7bf6a3e2632e1 1-5,7
+  s_9622fd28aba994::t_0f6b6d2e45089e 6
+docs/ai/provider-upgrade.md
+  s_9622fd28aba994::t_d176bc7603a22e 65-70
+packages/im/ai/tests/providers/reasoning-tool-history.test.ts
+  s_9622fd28aba994::t_0370a008ce9624 132
+  s_9622fd28aba994::t_2bf93a4add6e95 2,7,16,24-25,27,34,36-38,40-45,48-53,57-64,66
+  s_9622fd28aba994::t_ac211628861164 3,39,46-47,54-56,67-94
+  s_9622fd28aba994::t_f04df5653ffe25 10
+  s_9622fd28aba994::t_7082dd68bf087d 95-122
+  s_9622fd28aba994::t_cf53ad6238b0a4 1,4-6,8-9,12-15,17-23,28-31,127-131,133-141
+  s_9622fd28aba994::t_8b43b635cc4639 123-126
+  s_9622fd28aba994::t_305f1f793e4abf 65
+  s_9622fd28aba994::t_0f6b6d2e45089e 11,26,32-33,35
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  s_9622fd28aba994::t_c84e003adcc08b 345
+  s_9622fd28aba994::t_07a67aed7fdfa7 335-336,341,344
+packages/im/agent/tests/model-runtime/lazy-auxiliary-models.test.ts
+  s_9622fd28aba994::t_8fcfb43c2a46b1 1,98,100
+  s_9622fd28aba994::t_2f4f85b3788482 2-3,8-30,32-49,149,163
+  s_9622fd28aba994::t_e744d56eafc45b 4-6,50-51,82-92,96-97,99,101-120,147-148
+  s_9622fd28aba994::t_ac0c1b4b1e83e5 52-81,121-146
+  s_9622fd28aba994::t_dab6b751bc9a35 31,93-95
+  s_9622fd28aba994::t_014f872727b2ea 150-162
+  s_9622fd28aba994::t_069d6ab9ea9483 7
+packages/im/ai/src/providers/oauth.ts
+  s_9622fd28aba994::t_f6aab4eba63d2a 93,97
+  s_9622fd28aba994::t_8f108c104efef3 5,15-20,24-28,94-96,98,101
+.changeset/private-environment-credential-sources.md
+  s_9622fd28aba994::t_5d95d82f819436 1-7
+basic/cli/src/plugin-runtime/start-command.ts
+  s_9622fd28aba994::t_631c376918bf75 1,161,562
+packages/im/agent/src/media/perception.ts
+  s_9622fd28aba994::t_19f3a43aae5156 77,202
+basic/cli/src/plugin-runtime/inference/host.ts
+  s_9622fd28aba994::t_4448c1f01aad6b 31
+  s_9622fd28aba994::t_631c376918bf75 48
+  s_9622fd28aba994::t_53da5d0c7f5029 344
+.changeset/adapter-credential-configuration-redaction.md
+  s_9622fd28aba994::t_346b01e90a23ea 1-5
+basic/cli/tests/plugin-runtime/inference/support-fixture.ts
+  s_9622fd28aba994::t_97293d4b4cb25a 18,37,45,94
+basic/cli/src/plugin-runtime/inference/oauth-refresh-policy.ts
+  s_9622fd28aba994::t_8f108c104efef3 1-44,46-50
+  s_9622fd28aba994::t_d761859a0ae622 45
+basic/cli/tests/plugin-runtime/inference/support-metadata.test.ts
+  s_9622fd28aba994::t_97293d4b4cb25a 159-172
+packages/im/agent/src/config/model-harness-runtime.ts
+  s_9622fd28aba994::t_d7bf6a3e2632e1 33-34
+  s_9622fd28aba994::t_f65330815b6acb 26-32,35-36
+packages/im/agent/tests/helpers/execution-bundle.ts
+  s_9622fd28aba994::t_3e6cb2dad28451 3-6,58
+  s_9622fd28aba994::t_11a0aee4b00738 2,44-52
+basic/cli/src/plugin-runtime/inference/credentials.ts
+  s_9622fd28aba994::t_a9ed7640676f3e 17-32,55-57,115,128-129
+  s_9622fd28aba994::t_8d4cec48d2abbb 33-40
+  s_9622fd28aba994::t_8f108c104efef3 41-49,64-67,74,80-81
+  s_9622fd28aba994::t_0ca53e92b837cf 2-8
+packages/im/agent/src/session/branch-summarization-runtime.ts
+  s_9622fd28aba994::t_59da45c4a8552b 45,49-51
+  s_9622fd28aba994::t_1950c49f1fbcee 14
+packages/im/agent/src/model-runtime/service.ts
+  s_9622fd28aba994::t_aac7cf6c2726da 2-3,69,81,83-86
+  s_9622fd28aba994::t_8fcfb43c2a46b1 70
+  s_9622fd28aba994::t_2d767b70f0b314 6,64,71,73-75,80
+  s_9622fd28aba994::t_96bdd79a5846eb 59-63,65,68,72,77-78,82,87
+  s_9622fd28aba994::t_19f3a43aae5156 66-67
+.changeset/oauth-account-refresh-safety.md
+  s_9622fd28aba994::t_e663d69bb8648b 1-6
+.changeset/lazy-auxiliary-model-candidates.md
+  s_9622fd28aba994::t_346b01e90a23ea 1-8
+packages/im/ai/src/provider/runtime.ts
+  s_9622fd28aba994::t_dab6b751bc9a35 158,163,167
+packages/im/ai/tests/provider/model-description-lifecycle.test.ts
+  s_9622fd28aba994::t_014f872727b2ea 29
+  s_9622fd28aba994::t_66f382f89eccfd 1-28,30-39
+basic/cli/tests/plugin-runtime/console/configuration-adapter-credentials.test.ts
+  s_9622fd28aba994::t_7c114de908d3a8 3,72-87
+  s_9622fd28aba994::t_b60ff005ceeffd 1-2,4-35,37-41,49-51,53-59,61-71,88-89
+  s_9622fd28aba994::t_51a0af5bdd4499 60
+  s_9622fd28aba994::t_43d40e90c2e1a2 36,42-48,52
+packages/im/agent/src/model-runtime/types.ts
+  s_9622fd28aba994::t_2d767b70f0b314 24-25,27-28,38-40
+  s_9622fd28aba994::t_19f3a43aae5156 26
+packages/im/agent/src/migration/provider-plan.ts
+  s_9622fd28aba994::t_bfb3793a0d08ed 113
+  s_9622fd28aba994::t_8dc5026af4c625 2,44,153
+  s_9622fd28aba994::t_97cb2819e4fb03 149-152
+packages/im/agent/src/memory/compaction-runtime.ts
+  s_9622fd28aba994::t_f3504b5d43524a 3,18,133-141
+  s_9622fd28aba994::t_96bdd79a5846eb 17
+basic/cli/tests/plugin-runtime/inference/standalone-service.test.ts
+  s_9622fd28aba994::t_4903719a0e1eaf 1-35
+basic/cli/src/plugin-runtime/inference/environment-source.ts
+  s_9622fd28aba994::t_631c376918bf75 1-12
+packages/im/ai/src/llm/types/model.ts
+  s_9622fd28aba994::t_07a67aed7fdfa7 86-88
+packages/im/ai/src/provider/index.ts
+  s_9622fd28aba994::t_8dc5026af4c625 4
+packages/im/agent/src/memory/memory-system.ts
+  s_9622fd28aba994::t_f3504b5d43524a 62-63
+  s_9622fd28aba994::t_e47f35a7f62404 8,64
+packages/im/agent/tests/memory/summary-model-integration.test.ts
+  s_9622fd28aba994::t_8fcfb43c2a46b1 94,96-98
+  s_9622fd28aba994::t_6c9033e2a09528 114-141
+basic/cli/tests/plugin-runtime/inference/account-runtime.test.ts
+  s_9622fd28aba994::t_f6aab4eba63d2a 303
+  s_9622fd28aba994::t_34e0bcef537a5f 9,88
+  s_9622fd28aba994::t_3f862889a7decd 11,18-62
+basic/cli/tests/plugin-runtime/inference/migration-preview.test.ts
+  s_9622fd28aba994::t_e742ea410526a2 200-222
+basic/cli/src/plugin-runtime/inference/account-runtime.ts
+  s_9622fd28aba994::t_dc6aeb6e2d5603 24-25,53,82,101,116,250,403
+  s_9622fd28aba994::t_8d4cec48d2abbb 26,452-453,458,477
+  s_9622fd28aba994::t_8f108c104efef3 23,28,81,265-268,402,746,803,1117,1150,1184-1186,1189,1194-1197
+  s_9622fd28aba994::t_7c3c534ba973e9 83-84,404-405
+  s_9622fd28aba994::t_5f686fdf4916b6 414,439,445,454-457,461,472-476
+  s_9622fd28aba994::t_945f8469fce7a6 940,1025-1027,1030,1032,1037-1046,1057-1058
+packages/im/ai/src/provider/environment-source.ts
+  s_9622fd28aba994::t_8dc5026af4c625 1-14
+packages/im/agent/tests/migration/provider-plan.test.ts
+  s_9622fd28aba994::t_526b08f73b61b0 185-203
+  s_9622fd28aba994::t_2be68bcf1af5a9 204-211
+basic/cli/tests/plugin-runtime/inference/oauth-refresh-policy.test.ts
+  s_9622fd28aba994::t_7c3c534ba973e9 89,96
+  s_9622fd28aba994::t_ff8e35d41c5973 1-7,9-50,52-70,72,74-88,90-95,97-157
+  s_9622fd28aba994::t_f6aab4eba63d2a 8,71,73
+  s_9622fd28aba994::t_5c04e517d66873 51
+basic/cli/tests/plugin-runtime/inference/private-environment-source.test.ts
+  s_9622fd28aba994::t_7c3c534ba973e9 35
+  s_9622fd28aba994::t_a7fec10d4f93ac 1-34,36-52
+packages/im/agent/tests/media/scoped-perception.test.ts
+  s_9622fd28aba994::t_3e6cb2dad28451 1,4,10-11
+basic/cli/tests/plugin-runtime/inference/fixtures.ts
+  s_9622fd28aba994::t_a7fec10d4f93ac 7,28,31,41
+packages/im/agent/tests/model-runtime/purpose-parameters.test.ts
+  s_9622fd28aba994::t_3e6cb2dad28451 8,40,56
+  s_9622fd28aba994::t_8a669b3a207264 60-70
+plugins/adapters/bilibili/tests/bilibili-start-lifecycle.test.ts
+  s_9622fd28aba994::t_a395d54855737c 2-4,7,46-73,76-88
+  s_9622fd28aba994::t_e0b280cd46b304 9,23,27,38-45
+  s_9622fd28aba994::t_d8e1b6ffe084a4 1,5-6,8,10-22,24-26,28-31,33-37,89-90
+  s_9622fd28aba994::t_cb2697c0f68633 32
+  s_9622fd28aba994::t_68cd2de7b409fe 74-75
+packages/im/agent/src/memory/summary-model.ts
+  s_9622fd28aba994::t_f3504b5d43524a 15-16
+  s_9622fd28aba994::t_96bdd79a5846eb 9-10
+  s_9622fd28aba994::t_8b4118a71f3ea8 11,13-14,17-18
+packages/im/agent/src/memory/ai-compaction-strategy.ts
+  s_9622fd28aba994::t_f3504b5d43524a 31-32
+  s_9622fd28aba994::t_b495a8533df678 13,33
+basic/cli/tests/plugin-runtime/inference/environment-source.test.ts
+  s_9622fd28aba994::t_35fedeed19a322 1-13
+packages/im/ai/tests/llm/ai-sdk-messages.test.ts
+  s_9622fd28aba994::t_c84e003adcc08b 109,113-115
+  s_9622fd28aba994::t_07a67aed7fdfa7 110-112,116-117
+basic/cli/src/plugin-runtime/inference/migration-apply.ts
+  s_9622fd28aba994::t_631c376918bf75 1,11,150-151,174-180
+packages/im/ai/src/providers/api-key.ts
+  s_9622fd28aba994::t_07a67aed7fdfa7 5,53,95,128
+packages/im/ai/src/provider/selection.ts
+  s_9622fd28aba994::t_aac7cf6c2726da 45-50,54
+basic/cli/src/plugin-runtime/inference/management.ts
+  s_9622fd28aba994::t_8d4cec48d2abbb 26,300,309,322-323,357-358,360
+  s_9622fd28aba994::t_2cb4f5fa7240dd 251,258,365
+  s_9622fd28aba994::t_a7fec10d4f93ac 359
+  s_9622fd28aba994::t_43fd864bfc277a 88-89
+packages/im/ai/tests/providers/oauth.test.ts
+  s_9622fd28aba994::t_569a29c3df641f 75
+  s_9622fd28aba994::t_20959753dd2d42 65-74,76-79
+packages/im/agent/tests/ai/gateway-model-harness.test.ts
+  s_9622fd28aba994::t_cd102d1d62c686 2,62
+  s_9622fd28aba994::t_8c7fad0f2ccbad 3,36-41,43-49,55-61,63,66-67
+  s_9622fd28aba994::t_cf53ad6238b0a4 1,4-10,15-35,68-69
+  s_9622fd28aba994::t_f65330815b6acb 11-14
+  s_9622fd28aba994::t_2129c25a65e2f8 42,50-54,64-65
+packages/im/agent/src/routing/subagent-summarize.ts
+  s_9622fd28aba994::t_f3504b5d43524a 13
+  s_9622fd28aba994::t_59da45c4a8552b 17
+packages/im/ai/tests/compaction/agent-message-compaction.test.ts
+  s_9622fd28aba994::t_ddc1188a2e8a1a 38,42,44,47
+  s_9622fd28aba994::t_8fcfb43c2a46b1 29-37,39-41,43,45,48-63
+  s_9622fd28aba994::t_61f311ffc7efe2 46
+packages/im/ai/src/providers/sdk-execution.ts
+  s_9622fd28aba994::t_07a67aed7fdfa7 33-34,91
+  s_9622fd28aba994::t_d7bf6a3e2632e1 89
+  s_9622fd28aba994::t_c84e003adcc08b 90
+packages/im/agent/tests/model-runtime/target-runtime.test.ts
+  s_9622fd28aba994::t_c1cdc7f79eaf69 167,176
+  s_9622fd28aba994::t_3e6cb2dad28451 8
+packages/im/ai/tests/provider/environment-source.test.ts
+  s_9622fd28aba994::t_7653160c1b54ac 1-10,12-13
+  s_9622fd28aba994::t_4448c1f01aad6b 11
+packages/im/agent/src/core/agent-core-run.ts
+  s_9622fd28aba994::t_f3504b5d43524a 835,960-962,975-977
+  s_9622fd28aba994::t_a1aacdf4d81076 31,834,836
+packages/im/ai/src/index.ts
+  s_9622fd28aba994::t_346b01e90a23ea 250
+packages/im/agent/src/media/scoped-perception.ts
+  s_9622fd28aba994::t_19f3a43aae5156 3,17,19,23,25,35-38,67
+  s_9622fd28aba994::t_4de36dacea59f8 21,41,46
+.changeset/cloudflare-account-id-migration.md
+  s_9622fd28aba994::t_5d95d82f819436 1-5
+basic/cli/src/plugin-runtime/console/configuration-schema-safety.ts
+  s_9622fd28aba994::t_6448c15b6f310f 17-18
+.changeset/provider-discovery-management-metadata.md
+  s_9622fd28aba994::t_abb8833f0a164f 1-5
+basic/cli/tests/plugin-runtime/inference/migration-apply.test.ts
+  s_9622fd28aba994::t_226d8e17dec7ea 11-12,15,22,396-429
+basic/cli/tests/plugin-runtime/inference/routes.test.ts
+  s_9622fd28aba994::t_25e2d996b241a1 6-8,11-12,122-153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8de6080cbc155ff5f1f1b79c04678b81485c34dc",
+  "prompts": {},
+  "sessions": {
+    "s_9622fd28aba994": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a166a4-5b4c-7e22-80f0-d3374c43b4fb",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
