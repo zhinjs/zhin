@@ -38,3 +38,7 @@ export { ownedConsoleAdapter, mutateConsoleAdapter, prepareConsoleAdapterMutatio
 /** @internal Shared request ownership for protocol Clients, without connection/reconnect policy. */
 export { createPendingRpc } from './pending-rpc.js';
 export type { PendingRpc, PendingRpcOptions, PendingRpcRequest, PendingRpcEnvelope, PendingRpcTransport } from './pending-rpc.js';
+
+export { promoteInboundMessagePayload, extractReplyIdFromSegment, extractMentionTargetFromSegment } from './inbound-promotion.js';
+export { InboundDeduper, InboundMessageDeduper, type InboundDeduperOptions, type InboundMessageDeduperOptions } from './inbound-deduper.js';
+export { TtlLookupCache, type TtlLookupCacheOptions } from './ttl-lookup-cache.js';

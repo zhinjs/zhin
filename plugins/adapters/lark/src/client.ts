@@ -20,6 +20,8 @@ import {
   type EndpointSendRequest,
   type EndpointManagementRequest,
   type EndpointGroupRequest,
+  InboundDeduper,
+  TtlLookupCache,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -138,10 +140,10 @@ export class LarkClient extends SdkClient {
   #started = false;
   readonly #lifecycle: EndpointLifecycle;
   readonly #cardSources = new Map<string, { conversation: ConversationRef; time: number }>();
-  readonly #seen = new Map<string, number>();
-  readonly #chatManagers = new Map<string, { at: number; owner?: string; admins: ReadonlySet<string> }>();
-  /** One chat.get per chat at a time: concurrent messages on a cache miss share the lookup. */
-  readonly #chatManagerLookups = new Map<string, Promise<{ at: number; owner?: string; admins: ReadonlySet<string> }>>();
+  readonly #seen = new InboundDeduper({ ttlMs: 300_000, maxEntries: 10_000 });
+  readonly #chatManagers = new TtlLookupCache<string, { owner?: string; admins: ReadonlySet<string> }>({
+    ttlMs: LARK_CHAT_MANAGER_CACHE_TTL_MS,
+  });
   #startupGeneration = 0;
   readonly #pendingInbound: { message: LarkMessage; event: unknown }[] = [];
 
@@ -359,13 +361,7 @@ export class LarkClient extends SdkClient {
   admit(msg: LarkMessage, nativeEvent: unknown = msg): void {
     if (!this.#open) return;
     void this.receiveInboundCallback(async () => {
-      if (msg.message_id) {
-        const now = Date.now();
-        for (const [id, time] of this.#seen) if (now - time > 300_000) this.#seen.delete(id);
-        if (this.#seen.has(msg.message_id)) return;
-        this.#seen.set(msg.message_id, now);
-        if (this.#seen.size > 10_000) this.#seen.delete(this.#seen.keys().next().value!);
-      }
+      if (!this.#seen.shouldProcess(msg.message_id)) return;
       await this.#emitInbound(msg, larkInboundConversation(String(this.#options.id), msg), nativeEvent);
     }).catch((err) => this.#logger.warn(formatCompact({ op: 'lark_gateway_receive_failed',
       conversation: msg.chat_id, error: err instanceof Error ? err.message : String(err) })));
@@ -401,30 +397,17 @@ export class LarkClient extends SdkClient {
 
   /** 群主 / 群管理员来自 chat.get（owner_id + 管理员列表），按群缓存；失败时保守地视为普通成员。 */
   async #resolveChatRole(chatId: string, senderId: string): Promise<{ isOwner: boolean; isAdmin: boolean }> {
-    const now = Date.now();
-    for (const [id, entry] of this.#chatManagers) if (now - entry.at > LARK_CHAT_MANAGER_CACHE_TTL_MS) this.#chatManagers.delete(id);
-    let entry = this.#chatManagers.get(chatId);
-    if (!entry) {
-      let lookup = this.#chatManagerLookups.get(chatId);
-      if (!lookup) {
-        lookup = (async () => {
-          const info = await this.getChatInfo(chatId) as {
-            owner_id?: unknown;
-            user_manager_id_list?: unknown;
-          } | null;
-          const admins = Array.isArray(info?.user_manager_id_list) ? info.user_manager_id_list.map(String) : [];
-          const fetched = {
-            at: Date.now(),
-            ...(typeof info?.owner_id === 'string' && info.owner_id ? { owner: info.owner_id } : {}),
-            admins: new Set(admins) as ReadonlySet<string>,
-          };
-          this.#chatManagers.set(chatId, fetched);
-          return fetched;
-        })().finally(() => this.#chatManagerLookups.delete(chatId));
-        this.#chatManagerLookups.set(chatId, lookup);
-      }
-      entry = await lookup;
-    }
+    const entry = await this.#chatManagers.getOrLoad(chatId, async () => {
+      const info = await this.getChatInfo(chatId) as {
+        owner_id?: unknown;
+        user_manager_id_list?: unknown;
+      } | null;
+      const admins = Array.isArray(info?.user_manager_id_list) ? info.user_manager_id_list.map(String) : [];
+      return {
+        ...(typeof info?.owner_id === 'string' && info.owner_id ? { owner: info.owner_id } : {}),
+        admins: new Set(admins) as ReadonlySet<string>,
+      };
+    });
     return {
       isOwner: entry.owner !== undefined && entry.owner === senderId,
       isAdmin: entry.admins.has(senderId),
@@ -447,9 +430,7 @@ export class LarkClient extends SdkClient {
     const source = this.#cardSources.get(sourceId);
     if (!source || source.conversation.id !== chatId || Date.now() - source.time > 300_000) return;
     const dedup = `card:${event.token ?? `${sourceId}:${sender}:${payload}`}`;
-    if (this.#seen.has(dedup)) return;
-    this.#seen.set(dedup, Date.now());
-    if (this.#seen.size > 10_000) this.#seen.delete(this.#seen.keys().next().value!);
+    if (!this.#seen.shouldProcess(dedup)) return;
     const conversation = source.conversation;
     void this.publishEvent('message.receive', {
       event,

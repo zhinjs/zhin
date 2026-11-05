@@ -8,7 +8,7 @@ import type {
 } from '@zhin.js/plugin-runtime';
 import type { EndpointEvent, PeerRegistry, EndpointChildLease } from '@zhin.js/adapter';
 import { operationEndpoint } from './operation-endpoint.js';
-import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
+import { isMiddlewareIndex, middlewareFeatureId, type InboundTerminalControl } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import { bindOperationInput, operationInputBinding, type OperationResourceView } from '@zhin.js/feature-kit';
@@ -373,9 +373,11 @@ export class InboundRuntime {
       }
       const mentioned = routedTarget ? true : input.mentioned;
       const locale = await messageLocale(lease.value, conversation, enrichedSender?.id);
+      let operationReplied = false;
       const operationReply: RuntimeMessageOperation['reply'] = (content, replyRequester = requester, targetConversation) => {
           if (!active) throw new Error('Message reply scope has ended');
           boundEndpoint.assertActive();
+          operationReplied = true;
           const effectiveConversation = targetConversation
             ? { ...targetConversation, endpoint: conversation.endpoint }
             : conversation;
@@ -534,7 +536,7 @@ export class InboundRuntime {
         } else {
           const interactionFactory = (value: unknown) =>
             this.context.interactions.createFromUnknown(value);
-          const terminal = async (): Promise<InboundOutcome> => {
+          const terminal = async (control?: InboundTerminalControl): Promise<InboundOutcome> => {
               const ingressRoute = resolveIngressRoute(lease.value);
               const preRouted = await ingressRoute?.preRoute?.(
                 message,
@@ -545,6 +547,12 @@ export class InboundRuntime {
               if (preRouted) {
                 this.context.diagnostics?.route('agent');
                 result = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
+                await control?.reportDispatch({
+                  matched: true,
+                  path: 'handler',
+                  handlerId: 'pre-route',
+                  replied: operationReplied,
+                });
                 return { dispatch: result };
               }
               if (ingressRoute?.shouldRouteBeforeDispatch?.(message) === true) {
@@ -557,14 +565,22 @@ export class InboundRuntime {
                 if (handled) {
                   this.context.diagnostics?.route('agent');
                   result = Object.freeze({ matched: true, command: 'ai', owner: requester });
+                  await control?.reportDispatch({
+                    matched: true,
+                    path: 'handler',
+                    handlerId: 'ai',
+                    replied: operationReplied,
+                  });
                   return { dispatch: result };
                 }
               }
+              const repliedBeforeHandlers = operationReplied;
               this.context.diagnostics?.step('handlers', 'started');
               await this.#runHandlers({ lease, event: 'message.receive', args: [
                 withEndpointEventPayload(source, message),
               ], signal: operationSignal });
               this.context.diagnostics?.step('handlers', 'completed');
+              const repliedDuringHandlers = !repliedBeforeHandlers && operationReplied;
               const interactive = await this.#dispatchInteractive({ message, requester, admission, snapshot: lease.value });
               if (interactive) this.context.diagnostics?.route('interaction');
               const dispatched = interactive ? undefined : await this.#dispatcher.dispatchWithReply(message, lease.value, interactionFactory,
@@ -588,6 +604,43 @@ export class InboundRuntime {
               }
               const response = dispatched?.reply ?? (interactive?.value !== undefined && interactive.owner
                 ? { owner: interactive.owner, content: interactive.value as SendContent } : undefined);
+              const replied = operationReplied || response !== undefined;
+              if (interactive) {
+                await control?.reportDispatch({
+                  matched: true,
+                  path: 'button',
+                  handlerId: interactive.command ?? 'interactive',
+                  replied,
+                });
+              } else if (dispatched?.dispatch.matched) {
+                await control?.reportDispatch({
+                  matched: true,
+                  path: 'command',
+                  ...(dispatched.dispatch.command ? { handlerId: dispatched.dispatch.command } : {}),
+                  replied,
+                });
+              } else if (result.matched) {
+                await control?.reportDispatch({
+                  matched: true,
+                  path: 'handler',
+                  ...(result.command ? { handlerId: result.command } : {}),
+                  replied,
+                });
+              } else if (repliedDuringHandlers) {
+                const handlerName = handlers(lease.value)?.list().find(descriptor => descriptor.event === 'message.receive')?.name ?? 'message.receive';
+                await control?.reportDispatch({
+                  matched: true,
+                  path: 'handler',
+                  handlerId: handlerName,
+                  replied: true,
+                });
+              } else {
+                await control?.reportDispatch({
+                  matched: false,
+                  path: 'none',
+                  replied,
+                });
+              }
               return {
                 dispatch: result,
                 ...(response ? { reply: response } : {}),

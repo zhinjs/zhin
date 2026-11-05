@@ -20,6 +20,7 @@ import {
   createAgentCompactionState,
   shouldAutoCompactAgentMessages,
 } from '../../src/compaction/agent-message-compaction.js';
+import { findKeepRecentStartIndex } from '../../src/compaction/agent-message-tokens.js';
 import { MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES } from '../../src/compaction/compaction.js';
 import { createUserMessage, EMPTY_TOKEN_USAGE, type AgentMessage, type AssistantMessage } from '../../src/llm/types/agent-message.js';
 import type { Model } from '../../src/llm/types/model.js';
@@ -383,5 +384,41 @@ describe('summary acceptance', () => {
     expect(result.messages).toEqual(messages);
     expect(result.summary).toBeUndefined();
     expect(state.consecutiveFailures).toBe(0);
+  });
+
+  it('triggers and slices compaction by message count budget (triggerMessages & keepRecentMessages)', async () => {
+    completeSimpleMock.mockResolvedValue(assistantOf('按条数摘要'));
+    const messages = [
+      createUserMessage('第一条较长的历史消息内容用于满足压缩前后体积对比', undefined, 1),
+      createUserMessage('第二条较长的历史消息内容用于满足压缩前后体积对比', undefined, 2),
+      createUserMessage('第三条较长的历史消息内容用于满足压缩前后体积对比', undefined, 3),
+      createUserMessage('第四条消息保留', undefined, 4),
+      createUserMessage('第五条消息保留', undefined, 5),
+    ];
+
+    expect(findKeepRecentStartIndex(messages, 100_000, 2, 2)).toBe(3);
+    expect(shouldAutoCompactAgentMessages(messages, 100_000, undefined, 90_000, {
+      triggerMessages: 4,
+      keepRecentTokens: 100_000,
+      keepRecentMessages: 2,
+      minKeepCount: 2,
+    })).toBe(true);
+
+    const result = await autoCompactAgentMessagesIfNeeded({
+      transport,
+      model,
+      messages,
+      config: {
+        contextWindow: 100_000,
+        triggerTokens: 90_000,
+        keepRecentTokens: 100_000,
+        triggerMessages: 4,
+        keepRecentMessages: 2,
+        minKeepCount: 2,
+      },
+    });
+    expect(result.wasCompacted).toBe(true);
+    expect(result.compactedCount).toBe(3);
+    expect(result.messages).toHaveLength(3); // 1 summary + 2 kept
   });
 });

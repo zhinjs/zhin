@@ -78,6 +78,21 @@ describe('TurnIngress session projection', () => {
     expect(text?.type === 'text' && text.text).toContain('hello');
   });
 
+  it('threads conversationSequence and conversationKey from IM turn origin onto UserMessage', () => {
+    const base = turn();
+    const withConv = createTurnIngress({
+      ...base,
+      origin: {
+        ...(base.origin as Extract<typeof base.origin, { kind: 'im' }>),
+        conversationSequence: 77,
+        conversationKey: 'qq:bot-1:group:group-9',
+      },
+    });
+    const result = resolveIngressUserMessage(withConv);
+    expect(result.llmMessage.conversationEventId).toBe(77);
+    expect(result.llmMessage.conversationKey).toBe('qq:bot-1:group:group-9');
+  });
+
   it('carries principal origin into the actor and escapes spoofed labels in the body', () => {
     const base = turn();
     const withOrigin = createTurnIngress({

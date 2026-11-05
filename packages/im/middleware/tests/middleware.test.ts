@@ -308,6 +308,63 @@ describe('Middleware Feature', () => {
     });
     expect(reads).toBe(1);
   });
+
+  it('exposes InboundDispatchSummary via this.dispatch and onAfterDispatch to after-dispatch middlewares', async () => {
+    const root = rootPluginId();
+    const events: string[] = [];
+    const seenSummaries: unknown[] = [];
+    const slot = createCapabilitySlot({
+      owner: root,
+      feature: middlewareFeatureId,
+      localName: 'audit',
+      source: '/middlewares/audit/index.ts',
+      definition: defineMiddleware({
+        stage: 'after-dispatch',
+        async handle(_input, next) {
+          expect(this.dispatch).toBeUndefined();
+          this.onAfterDispatch?.((summary) => {
+            events.push(`listener:${summary.path}:${summary.handlerId}`);
+            seenSummaries.push(summary);
+          });
+          await next();
+          events.push(`resumed:${this.dispatch?.path}:${this.dispatch?.handlerId}:${this.dispatch?.replied}`);
+          seenSummaries.push(this.dispatch);
+        },
+      }),
+    });
+    const current = snapshot(root, undefined, [slot]);
+    const index = new MiddlewareIndex([slot], current);
+
+    const result = await index.runInbound(
+      { content: '/ping' },
+      async (control) => {
+        events.push('terminal');
+        await control.reportDispatch({
+          matched: true,
+          path: 'command',
+          handlerId: 'ping',
+          replied: true,
+        });
+        return 'ok';
+      },
+      {
+        stop: () => 'stopped',
+        replace: (_owner, value) => String(value),
+      },
+      current,
+    );
+
+    expect(result).toBe('ok');
+    expect(events).toEqual([
+      'terminal',
+      'listener:command:ping',
+      'resumed:command:ping:true',
+    ]);
+    expect(seenSummaries).toEqual([
+      { matched: true, path: 'command', handlerId: 'ping', replied: true },
+      { matched: true, path: 'command', handlerId: 'ping', replied: true },
+    ]);
+  });
 });
 
 function middlewareSlot(

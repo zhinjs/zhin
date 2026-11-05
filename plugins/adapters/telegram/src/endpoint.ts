@@ -4,6 +4,7 @@ import {
   createEndpointSpecification, endpointSpec, type Endpoint, type EndpointSpecification, createEndpointLifecycle,
   type EndpointLifecycle, type EndpointContentPort, type EndpointContentResolveContext,
   type EndpointControl, type EndpointSendRequest, type EndpointTransportState,
+  InboundDeduper, TtlLookupCache,
 } from 'zhin.js/adapter';
 /**
  * TelegramEndpoint — lifecycle, outbound, admit, Bot API helpers for agent tools.
@@ -49,7 +50,6 @@ const ADMITTED_UPDATE_LIMIT = 2_048;
 const INFLIGHT_UPDATE_LIMIT = 256;
 
 interface ChatMemberPermit {
-  readonly at: number;
   readonly role?: string;
   readonly permissions: string[];
 }
@@ -91,12 +91,15 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
   #executionSignal?: AbortSignal;
   #updateOffset = 0;
   #pollingHealthy = true;
-  readonly #admittedUpdates = new Set<number>();
+  readonly #admittedUpdates = new InboundDeduper({ maxEntries: ADMITTED_UPDATE_LIMIT });
   readonly #inflightUpdates = new Map<number, Promise<void>>();
   #botUserId?: number;
   #botUsername?: string;
   #botName?: string;
-  readonly #chatMemberCache = new Map<string, ChatMemberPermit>();
+  readonly #chatMemberCache = new TtlLookupCache<string, ChatMemberPermit>({
+    ttlMs: CHAT_MEMBER_CACHE_TTL_MS,
+    maxEntries: CHAT_MEMBER_CACHE_MAX,
+  });
   readonly #control: EndpointControl = Object.freeze<EndpointControl>({
     recall: ({ message, signal }) => this.recallMessage(message, signal),
   });
@@ -449,10 +452,8 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
     const chatId = Number(msg.chat.id);
     const userId = msg.from.id;
     const key = `${chatId}:${userId}`;
-    const now = Date.now();
-    this.#sweepChatMemberCache(now);
     const cached = this.#chatMemberCache.get(key);
-    if (cached && now - cached.at < CHAT_MEMBER_CACHE_TTL_MS) return cached;
+    if (cached) return cached;
     try {
       const member = await this.callApi<TelegramChatMember>('getChatMember', {
         chat_id: chatId,
@@ -460,27 +461,12 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       }, signal);
       if (signal.aborted) return undefined;
       const normalized = normalizeTelegramChatMember(member);
-      const entry: ChatMemberPermit = { at: now, ...normalized };
+      const entry: ChatMemberPermit = { ...normalized };
       this.#chatMemberCache.set(key, entry);
       return entry;
     } catch {
       // 保守拒绝：无角色快照
       return undefined;
-    }
-  }
-
-  #sweepChatMemberCache(now: number): void {
-    for (const [key, entry] of this.#chatMemberCache) {
-      if (now - entry.at >= CHAT_MEMBER_CACHE_TTL_MS) this.#chatMemberCache.delete(key);
-    }
-    if (this.#chatMemberCache.size > CHAT_MEMBER_CACHE_MAX) {
-      const excess = this.#chatMemberCache.size - CHAT_MEMBER_CACHE_MAX;
-      let removed = 0;
-      for (const [key] of this.#chatMemberCache) {
-        if (removed >= excess) break;
-        this.#chatMemberCache.delete(key);
-        removed++;
-      }
     }
   }
 
@@ -526,7 +512,8 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
       if (!Number.isSafeInteger(update.update_id) || update.update_id < 0) {
         throw new TypeError('Telegram update_id must be a non-negative safe integer');
       }
-      if (this.#admittedUpdates.has(update.update_id)) return;
+      const updateKey = String(update.update_id);
+      if (this.#admittedUpdates.has(updateKey)) return;
       const pending = this.#inflightUpdates.get(update.update_id);
       if (pending) return pending;
       if (this.#inflightUpdates.size >= INFLIGHT_UPDATE_LIMIT) {
@@ -537,10 +524,7 @@ export class TelegramEndpoint extends TelegramClient implements Endpoint {
         // Once canonical dispatch enters Core, its generation lease drains the work.
         // Closing the transport cannot turn successful business processing into a retry.
         await this.#receiveUpdate(update, AbortSignal.any([admission.signal, this.#executionSignal!]));
-        this.#admittedUpdates.add(update.update_id);
-        if (this.#admittedUpdates.size > ADMITTED_UPDATE_LIMIT) {
-          this.#admittedUpdates.delete(this.#admittedUpdates.values().next().value!);
-        }
+        this.#admittedUpdates.shouldProcess(updateKey);
       })();
       this.#inflightUpdates.set(update.update_id, receiving);
       try {

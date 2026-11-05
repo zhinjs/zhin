@@ -23,6 +23,7 @@ export type {
   DeliveryOutcome,
   DeliveryPort,
   FrozenCapabilityCatalog,
+  ImTurnOrigin,
   ReplyAnswerContext,
   ReplyPort,
   TurnIdentity,

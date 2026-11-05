@@ -6,6 +6,7 @@ import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointStreaming } from './endpoint-stream.js';
 import type { EndpointProfile } from './endpoint-profile.js';
+import { promoteInboundMessagePayload } from './inbound-promotion.js';
 
 /** Framework namespace; native SDK emit/on/off and other methods remain untouched. */
 export const endpointSpec: unique symbol = Symbol.for('zhin.endpoint.specification/1');
@@ -73,8 +74,14 @@ class NativeEndpointRuntime extends EndpointRuntime<object> {
     if (!this.#hooks.send) throw new Error('Endpoint does not support outbound');
     return this.#hooks.send(request);
   }
-  publish(name: string, payload: unknown): Promise<unknown> { return this.emit(name, payload); }
-  publishAccepted(name: string, payload: unknown): Promise<unknown> { return this.emitAccepted(name, payload); }
+  publish(name: string, payload: unknown): Promise<unknown> {
+    const normalizedPayload = name === 'message.receive' ? promoteInboundMessagePayload(payload, this.selfUserId) : payload;
+    return this.emit(name, normalizedPayload);
+  }
+  publishAccepted(name: string, payload: unknown): Promise<unknown> {
+    const normalizedPayload = name === 'message.receive' ? promoteInboundMessagePayload(payload, this.selfUserId) : payload;
+    return this.emitAccepted(name, normalizedPayload);
+  }
   publishPlatform(name: string, event: unknown): Promise<unknown> { return this.emitPlatform(name, event); }
   report(userId: string | undefined): void { this.reportSelfUserId(userId); }
 }

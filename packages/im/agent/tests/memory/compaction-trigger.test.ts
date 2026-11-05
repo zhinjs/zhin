@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCompactionTriggerTokens } from '../../src/memory/compaction-runtime.js';
+import {
+  AgentCompactionRuntime,
+  resolveCompactionTriggerTokens,
+  resolveUnifiedHistoryAndCompactionBudget,
+} from '../../src/memory/compaction-runtime.js';
 
 describe('resolveCompactionTriggerTokens', () => {
   it('triggers at 70% of the window minus the fixed prompt by default', () => {
@@ -27,4 +31,36 @@ it.each([8_192, 16_384])('uses the available message budget in a %i-token window
 
 it('never returns a negative budget when fixed instructions consume the window', () => {
   expect(resolveCompactionTriggerTokens(undefined, 8_192, 9_000)).toBe(0);
+});
+
+describe('resolveUnifiedHistoryAndCompactionBudget', () => {
+  it('caps triggerTokens at windowTokens and keepRecentTokens at 75% of windowTokens', () => {
+    const budget = resolveUnifiedHistoryAndCompactionBudget({
+      windowTokens: 8_000,
+      windowMessages: 20,
+      triggerTokens: 20_000,
+      keepRecentTokens: 15_000,
+      triggerMessages: 50,
+      keepRecentMessages: 30,
+    });
+    expect(budget).toEqual({
+      windowTokens: 8_000,
+      windowMessages: 20,
+      effectiveTriggerTokens: 8_000,
+      effectiveKeepRecentTokens: 6_000,
+      effectiveTriggerMessages: 20,
+      effectiveKeepRecentMessages: 15,
+    });
+  });
+
+  it('derives sensible defaults when only windowTokens and windowMessages are given', () => {
+    const runtime = new AgentCompactionRuntime({ historyWindowTokens: 10_000, historyWindowMessages: 24 });
+    const aligned = runtime.alignWithHistoryWindow({ maxTokens: 10_000, maxMessages: 24, triggerMessages: 20 });
+    expect(aligned.windowTokens).toBe(10_000);
+    expect(aligned.windowMessages).toBe(24);
+    expect(aligned.effectiveTriggerTokens).toBe(8_500);
+    expect(aligned.effectiveKeepRecentTokens).toBe(4_250);
+    expect(aligned.effectiveTriggerMessages).toBe(20);
+    expect(aligned.effectiveKeepRecentMessages).toBe(12);
+  });
 });

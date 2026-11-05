@@ -2,6 +2,7 @@
  * icqq 入站事件归一化（post_type / message_type / message 段）
  */
 import { toCanonicalSegments, type MessageSegment } from "zhin.js";
+import { InboundMessageDeduper, promoteInboundMessagePayload } from "zhin.js/adapter";
 import { parseCqMessage, icqqMediaRefFromString } from "./cq-message.js";
 import { extractForwardResidFromJsonElement } from "./forward-msg.js";
 import type { GroupRole } from "./types.js";
@@ -141,8 +142,6 @@ export interface NormalizedIcqqInbound {
   raw: IcqqMessageEvent;
 }
 
-const DEDUPE_TTL_MS = 120_000;
-
 const ICQQ_GROUP_ROLES = new Set<GroupRole>(["owner", "admin", "member"]);
 
 /** 从 sender.role 解析群成员角色（供 Message.$sender → resolveSenderRoles） */
@@ -167,15 +166,13 @@ export function isIcqqBotMentioned(input: {
 }): boolean {
   const uin = String(input.uin ?? "").trim();
   if (!uin) return false;
-  for (const seg of input.content ?? []) {
-    if (!seg || (seg.type !== "at" && seg.type !== "mention")) continue;
-    const data = (seg.data ?? {}) as Record<string, unknown>;
-    const target = String(
-      data.qq ?? data.user_id ?? data.id ?? data.target ?? "",
-    ).trim();
-    if (target && target !== "all" && Number(target) === Number(uin)) {
-      return true;
-    }
+  if (
+    promoteInboundMessagePayload<{ segments: readonly MessageSegment[]; mentioned?: boolean }>(
+      { segments: input.content ?? [] },
+      uin,
+    ).mentioned === true
+  ) {
+    return true;
   }
   const raw = input.rawMessage ?? "";
   if (!raw) return false;
@@ -805,10 +802,10 @@ function mergeReplyFromSource(
 }
 
 function quoteIdFromSegments(content: readonly MessageSegment[]): string | undefined {
-  const reply = content.find((item) => item.type === 'reply');
-  const data = reply?.data as Readonly<Record<string, unknown>> | undefined;
-  const value = data?.message_id ?? data?.id;
-  return value == null || !String(value).trim() ? undefined : String(value).trim();
+  return promoteInboundMessagePayload<{ segments: readonly MessageSegment[]; replyTo?: { readonly id: string } }>(
+    { segments: content },
+    undefined,
+  ).replyTo?.id;
 }
 
 export function resolveInboundContent(
@@ -863,20 +860,4 @@ export function normalizeIcqqInboundMessage(
 }
 
 /** 按 message_id 去重（多路 subscribe 会收到同一消息多次） */
-export class InboundMessageDeduper {
-  private readonly seen = new Map<string, number>();
-
-  shouldProcess(messageId: string): boolean {
-    const now = Date.now();
-    for (const [id, t] of this.seen) {
-      if (now - t > DEDUPE_TTL_MS) this.seen.delete(id);
-    }
-    if (this.seen.has(messageId)) return false;
-    this.seen.set(messageId, now);
-    return true;
-  }
-
-  clear(): void {
-    this.seen.clear();
-  }
-}
+export { InboundMessageDeduper };

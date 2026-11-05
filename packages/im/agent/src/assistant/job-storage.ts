@@ -83,8 +83,17 @@ export function decodeScheduleJob(row: Record<string, unknown>): ScheduleJob {
   } as ScheduleJob;
 }
 
+export interface ScheduleJobStorage {
+  activate(loadLegacy: () => Promise<ScheduleJobFile>): Promise<void>;
+  read(): Promise<ScheduleJobFile>;
+  get(id: string): Promise<ScheduleJob | undefined>;
+  findByEventId?(eventId: string): Promise<ScheduleJob | undefined>;
+  mutateJob<T>(id: string, mutate: (job: ScheduleJob | undefined) => { job: ScheduleJob | undefined; result: T }): Promise<T>;
+  update<T>(mutate: (file: ScheduleJobFile) => T): Promise<T>;
+}
+
 /** Existing worker stays unchanged; mutations and first import use one DB transaction. */
-export class DatabaseScheduleJobStorage {
+export class DatabaseScheduleJobStorage implements ScheduleJobStorage {
   constructor(private readonly database: DatabaseHost) {}
   async activate(loadLegacy: () => Promise<ScheduleJobFile>): Promise<void> {
     await retryRelationalOperation(() => this.database.transaction!(async transaction => {
@@ -102,6 +111,21 @@ export class DatabaseScheduleJobStorage {
   }
   async get(id: string): Promise<ScheduleJob | undefined> {
     const row = (await this.database.models.get('agent_schedule_jobs')!.select().where({ id: jobKey(id) }).limit(1))[0];
+    return row ? decodeScheduleJob(row) : undefined;
+  }
+  async findByEventId(eventId: string): Promise<ScheduleJob | undefined> {
+    if (!eventId) return undefined;
+    const model = this.database.models.get('agent_schedule_jobs')!;
+    const encoded = encode(eventId);
+    const selectRow = async (cond: Record<string, unknown>) => {
+      const query = model.select().where(cond);
+      const rows = typeof (query as { limit?: unknown }).limit === 'function'
+        ? await query.limit(1)
+        : await query;
+      return rows[0];
+    };
+    const row = (await selectRow({ schedule_kind: 'event', event_id: encoded }))
+      ?? (encoded !== eventId ? await selectRow({ schedule_kind: 'event', event_id: eventId }) : undefined);
     return row ? decodeScheduleJob(row) : undefined;
   }
   async mutateJob<T>(id: string, mutate: (job: ScheduleJob | undefined) => { job: ScheduleJob | undefined; result: T }): Promise<T> {

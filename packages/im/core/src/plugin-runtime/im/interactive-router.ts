@@ -1,11 +1,35 @@
 import { conversationRefKey, type ConversationRef } from '@zhin.js/im-contract';
+import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { resolvePayloadFromText } from '../../built/interactive-segments/action.js';
 import type { Segment } from '../../built/segment-contract/types.js';
 import type { Message } from './contracts.js';
+import { isPluginIncarnationAlive, type PluginIncarnationRef } from './jsx-button-registry.js';
+
+export { isPluginIncarnationAlive, type PluginIncarnationRef } from './jsx-button-registry.js';
 
 const DEFAULT_FALLBACK_TTL_MS = 60 * 60 * 1000;
 
 type RuntimeInteractiveHandler = (message: Message) => Promise<boolean> | boolean;
+
+export interface InteractiveRouterOptions {
+  readonly fallbackTtlMs?: number;
+  /**
+   * Scope for auto-allocated numeric fallback labels (`1`, `2`, ...).
+   * - `'router'` (default): shared monotonic counter across the router instance.
+   * - `'conversation'`: independent monotonic counter per conversation.
+   */
+  readonly numberingScope?: 'router' | 'conversation';
+}
+
+export interface RememberFallbackContext {
+  readonly ttlMs?: number;
+  readonly incarnation?: PluginIncarnationRef;
+}
+
+export interface ResolveFallbackContext {
+  readonly fallbackGeneration?: number;
+  readonly snapshot?: RuntimeSnapshot;
+}
 
 interface RegisteredRuntimeInteractiveHandler<Admission> {
   readonly prefix: string;
@@ -14,6 +38,8 @@ interface RegisteredRuntimeInteractiveHandler<Admission> {
 }
 
 interface InteractiveFallbackEntry {
+  readonly generation: number;
+  readonly incarnation?: PluginIncarnationRef;
   readonly map: Readonly<Record<string, string>>;
   readonly expiresAt: number;
 }
@@ -26,10 +52,6 @@ interface ExpiredFallbackEntry {
 
 const MAX_EXPIRED_BATCHES = 1000;
 
-function interactiveConversationKey(conversation: ConversationRef, generation: number): string {
-  return `${generation}:${conversationRefKey(conversation)}`;
-}
-
 /**
  * One ImRuntime-owned authority for interactive routing and keyboard fallback state.
  * No handler or conversation state escapes to another runtime instance.
@@ -38,10 +60,24 @@ export class RuntimeInteractiveRouter<Admission = never> {
   readonly #handlers: RegisteredRuntimeInteractiveHandler<Admission>[] = [];
   readonly #fallbacks = new Map<string, InteractiveFallbackEntry[]>();
   readonly #expired: ExpiredFallbackEntry[] = [];
+  readonly #conversationNumbers = new Map<string, number>();
+  readonly #fallbackTtlMs: number;
+  readonly #numberingScope: 'router' | 'conversation';
 
   #nextNumber = 1;
 
-  constructor(private readonly fallbackTtlMs = DEFAULT_FALLBACK_TTL_MS) {}
+  constructor(
+    optionsOrTtlMs: number | InteractiveRouterOptions = DEFAULT_FALLBACK_TTL_MS,
+    options?: InteractiveRouterOptions,
+  ) {
+    if (typeof optionsOrTtlMs === 'number') {
+      this.#fallbackTtlMs = optionsOrTtlMs;
+      this.#numberingScope = options?.numberingScope ?? 'router';
+    } else {
+      this.#fallbackTtlMs = optionsOrTtlMs.fallbackTtlMs ?? DEFAULT_FALLBACK_TTL_MS;
+      this.#numberingScope = optionsOrTtlMs.numberingScope ?? 'router';
+    }
+  }
 
   register(
     prefix: string,
@@ -65,17 +101,31 @@ export class RuntimeInteractiveRouter<Admission = never> {
     conversation: ConversationRef,
     generation: number,
     map: Record<string, string>,
-    ttlMs = this.fallbackTtlMs,
+    ttlMsOrContext?: number | RememberFallbackContext | PluginIncarnationRef,
   ): Record<string, string> {
     this.#pruneFallbacks();
-    const key = interactiveConversationKey(conversation, generation);
+    const ttlMs = typeof ttlMsOrContext === 'number'
+      ? ttlMsOrContext
+      : (ttlMsOrContext && 'ttlMs' in ttlMsOrContext && ttlMsOrContext.ttlMs !== undefined
+        ? ttlMsOrContext.ttlMs
+        : this.#fallbackTtlMs);
+    const incarnation = ttlMsOrContext && typeof ttlMsOrContext === 'object'
+      ? ('requester' in ttlMsOrContext && 'snapshot' in ttlMsOrContext
+        ? ttlMsOrContext
+        : ttlMsOrContext.incarnation)
+      : undefined;
+    const key = conversationRefKey(conversation);
     const allocated: Record<string, string> = {};
     for (const [label, payload] of Object.entries(map)) {
-      allocated[/^\d+$/.test(label) ? String(this.#nextNumber++) : label] = payload;
+      allocated[/^\d+$/.test(label) ? String(this.#allocateNumber(key)) : label] = payload;
     }
-    // One runtime counter survives expiry/generation changes without retaining conversation IDs.
     const entries = this.#fallbacks.get(key) ?? [];
-    entries.push(Object.freeze({ map: Object.freeze({ ...allocated }), expiresAt: Date.now() + ttlMs }));
+    entries.push(Object.freeze({
+      generation,
+      ...(incarnation ? { incarnation } : {}),
+      map: Object.freeze({ ...allocated }),
+      expiresAt: Date.now() + ttlMs,
+    }));
     this.#fallbacks.set(key, entries);
     return allocated;
   }
@@ -92,10 +142,11 @@ export class RuntimeInteractiveRouter<Admission = never> {
     conversation: ConversationRef,
     generation: number,
     input: { readonly content: string; readonly segments?: readonly Segment[] },
+    snapshot?: RuntimeSnapshot,
   ): boolean {
     const now = Date.now();
-    const entries = this.#fallbacks.get(interactiveConversationKey(conversation, generation));
-    const live = entries?.filter(entry => entry.expiresAt > now);
+    const entries = this.#fallbacks.get(conversationRefKey(conversation));
+    const live = entries?.filter(entry => entry.expiresAt > now && this.#isEntryLive(entry, generation, snapshot));
     if (!live?.length) return false;
     const actionPayload = actionPayloadFromSegments(input.segments);
     if (actionPayload !== undefined) {
@@ -106,38 +157,57 @@ export class RuntimeInteractiveRouter<Admission = never> {
     return resolvePayloadFromText(raw, Object.assign({}, ...live.map(entry => entry.map))) !== undefined;
   }
 
-  resolvePayload(message: Message, fallbackGeneration = message.generation): string | undefined {
+  resolvePayload(
+    message: Message,
+    contextOrFallbackGeneration?: number | RuntimeSnapshot | ResolveFallbackContext,
+    explicitSnapshot?: RuntimeSnapshot,
+  ): string | undefined {
     const fromSegments = actionPayloadFromSegments(message.segments);
     if (fromSegments) return fromSegments;
     const raw = message.content.trim();
     if (!raw) return undefined;
+    let fallbackGeneration = message.generation;
+    let snapshot = explicitSnapshot;
+    if (typeof contextOrFallbackGeneration === 'number') {
+      fallbackGeneration = contextOrFallbackGeneration;
+    } else if (contextOrFallbackGeneration && typeof contextOrFallbackGeneration === 'object') {
+      if ('tree' in contextOrFallbackGeneration && 'generation' in contextOrFallbackGeneration) {
+        snapshot = contextOrFallbackGeneration;
+      } else {
+        if (contextOrFallbackGeneration.fallbackGeneration !== undefined) {
+          fallbackGeneration = contextOrFallbackGeneration.fallbackGeneration;
+        }
+        if (contextOrFallbackGeneration.snapshot !== undefined) {
+          snapshot = contextOrFallbackGeneration.snapshot;
+        }
+      }
+    }
     return resolvePayloadFromText(
       raw,
-      this.#fallbackMap(message.conversation, message.generation)
+      this.#fallbackMap(message.conversation, message.generation, snapshot)
         ?? (fallbackGeneration !== message.generation
-          ? this.#fallbackMap(message.conversation, fallbackGeneration)
+          ? this.#fallbackMap(message.conversation, fallbackGeneration, snapshot)
           : undefined),
     );
   }
 
   /** Bounded label-only history: stale text buttons are not mistaken for new input. */
-  isExpiredFallback(message: Message): boolean {
-    if (actionPayloadFromSegments(message.segments) || this.resolvePayload(message)) return false;
+  isExpiredFallback(message: Message, snapshot?: RuntimeSnapshot): boolean {
+    if (actionPayloadFromSegments(message.segments) || this.resolvePayload(message, { snapshot })) return false;
     const key = conversationRefKey(message.conversation);
-    const currentKey = interactiveConversationKey(message.conversation, message.generation);
     const matches = (map: Readonly<Record<string, string>>) =>
       resolvePayloadFromText(message.content, map) !== undefined;
     if (this.#expired.some(entry => entry.conversationKey === key && matches(entry.map))) return true;
-    // A generation change invalidates even a keyboard whose TTL has not elapsed.
-    for (const [batchKey, entries] of this.#fallbacks) {
-      if (batchKey !== currentKey && batchKey.slice(batchKey.indexOf(':') + 1) === key
-        && entries.some(entry => matches(entry.map))) return true;
+    // A generation change (or owning plugin reload) invalidates even a keyboard whose TTL has not elapsed.
+    const entries = this.#fallbacks.get(key);
+    if (entries?.some(entry => !this.#isEntryLive(entry, message.generation, snapshot) && matches(entry.map))) {
+      return true;
     }
     return false;
   }
 
-  async dispatch(message: Message, admission?: Admission): Promise<boolean> {
-    const payload = this.resolvePayload(message);
+  async dispatch(message: Message, admission?: Admission, snapshot?: RuntimeSnapshot): Promise<boolean> {
+    const payload = this.resolvePayload(message, { snapshot });
     if (!payload) return false;
     let match: RegisteredRuntimeInteractiveHandler<Admission> | undefined;
     for (const entry of this.#handlers) {
@@ -150,14 +220,42 @@ export class RuntimeInteractiveRouter<Admission = never> {
     return match ? Boolean(await match.handler(message)) : false;
   }
 
+  #allocateNumber(conversationKey: string): number {
+    if (this.#numberingScope === 'conversation') {
+      const next = this.#conversationNumbers.get(conversationKey) ?? 1;
+      this.#conversationNumbers.set(conversationKey, next + 1);
+      if (this.#conversationNumbers.size > MAX_EXPIRED_BATCHES) {
+        const oldest = this.#conversationNumbers.keys().next().value;
+        if (oldest !== undefined) this.#conversationNumbers.delete(oldest);
+      }
+      return next;
+    }
+    return this.#nextNumber++;
+  }
+
+  #isEntryLive(
+    entry: InteractiveFallbackEntry,
+    generation: number,
+    snapshot?: RuntimeSnapshot,
+  ): boolean {
+    if (entry.incarnation && snapshot) {
+      return isPluginIncarnationAlive(entry.incarnation, snapshot);
+    }
+    if (entry.incarnation?.signal?.aborted) {
+      return false;
+    }
+    return entry.generation === generation;
+  }
+
   #fallbackMap(
     conversation: ConversationRef,
     generation: number,
+    snapshot?: RuntimeSnapshot,
   ): Readonly<Record<string, string>> | undefined {
-    const key = interactiveConversationKey(conversation, generation);
+    const key = conversationRefKey(conversation);
     this.#pruneFallbacks();
-    const entries = this.#fallbacks.get(key);
-    return entries ? Object.assign({}, ...entries.map(entry => entry.map)) : undefined;
+    const entries = this.#fallbacks.get(key)?.filter(entry => this.#isEntryLive(entry, generation, snapshot));
+    return entries?.length ? Object.assign({}, ...entries.map(entry => entry.map)) : undefined;
   }
 
   #pruneFallbacks(): void {
@@ -165,11 +263,11 @@ export class RuntimeInteractiveRouter<Admission = never> {
     for (const [key, entries] of this.#fallbacks) {
       const active = entries.filter(entry => entry.expiresAt > now);
       for (const entry of entries) {
-        if (entry.expiresAt > now || entry.expiresAt + this.fallbackTtlMs <= now) continue;
+        if (entry.expiresAt > now || entry.expiresAt + this.#fallbackTtlMs <= now) continue;
         this.#expired.push({
-          conversationKey: key.slice(key.indexOf(':') + 1),
+          conversationKey: key,
           map: Object.freeze(Object.fromEntries(Object.keys(entry.map).map(label => [label, 'expired']))),
-          expiresAt: entry.expiresAt + this.fallbackTtlMs,
+          expiresAt: entry.expiresAt + this.#fallbackTtlMs,
         });
       }
       if (active.length) this.#fallbacks.set(key, active);

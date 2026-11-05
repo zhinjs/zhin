@@ -154,10 +154,10 @@ export class ConversationRuntime {
     return appended.sequence;
   }
 
-  async recordOutbound(request: SendRequest, receipt: DeliveryReceipt, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void> {
-    if (receipt.status !== 'sent' || !receipt.message?.id) return;
+  async recordOutbound(request: SendRequest, receipt: DeliveryReceipt, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<number | undefined> {
+    if (receipt.status !== 'sent' || !receipt.message?.id) return undefined;
     const timestamp = Date.now();
-    await this.#events.append(Object.freeze({
+    const appended = await this.#events.append(Object.freeze({
       eventId: `message:${messageRefKey(receipt.message)}`,
       conversation: request.conversation,
       timestamp,
@@ -172,15 +172,16 @@ export class ConversationRuntime {
         } : {}),
       }),
     }));
+    return appended.sequence;
   }
 
   /** Records a confirmed replacement body without inventing another physical message. */
-  async recordOutboundUpdate(request: SendRequest, receipt: DeliveryReceipt, revision: number, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<void> {
-    if (receipt.status !== 'sent' || !receipt.message?.id) return;
+  async recordOutboundUpdate(request: SendRequest, receipt: DeliveryReceipt, revision: number, canonicalContent?: readonly Segment[] | 'unavailable'): Promise<number | undefined> {
+    if (receipt.status !== 'sent' || !receipt.message?.id) return undefined;
     const original = await this.#events.getMessage(receipt.message);
     if (!original) throw new Error('Cannot record an update before its original message');
     const { contentStatus: _status, outboundTextDigest: _digest, ...identity } = original;
-    await this.#events.append(Object.freeze({
+    const appended = await this.#events.append(Object.freeze({
       eventId: `message:${messageRefKey(receipt.message)}:revision:${revision}`,
       conversation: request.conversation, timestamp: Date.now(), type: 'message.updated',
       message: Object.freeze({ ...identity, revision,
@@ -190,6 +191,7 @@ export class ConversationRuntime {
           ? { outboundTextDigest: receipt.outboundTextDigest } : {}),
       }),
     }));
+    return appended.sequence;
   }
 
   /** Records a normalized notice; returns the stored event (with its sequence) when newly appended. */

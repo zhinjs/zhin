@@ -222,15 +222,35 @@ describe.each(dialects)('Agent structured persistence without Workroom (%s)', di
     host.define('agent_sessions', strip(AGENT_SESSION_MODEL, ['session_id', 'session_key', 'model', 'status', 'active_leaf_message_id', 'created_at', 'updated_at']));
     host.define('agent_summaries', AGENT_SUMMARY_MODEL); await host.start();
     const message = { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 10, actor: { subjectId: 'alice', scope: 'channel' }, cause: { turnId: 'old' } };
+    const v1Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'linked' }],
+      timestamp: 20,
+      messageId: 'plat-99',
+      conversationEventId: 42,
+      conversationKey: 'slack:bot:channel:room',
+      actor: { subjectId: 'bob', scope: 'channel' },
+    };
     await host.models.get('agent_messages')!.insert({ id: 1, session_id: 'epoch', role: 'user', payload: JSON.stringify(message), parent_id: null, timestamp: 10 });
-    await host.models.get('agent_sessions')!.insert({ session_id: 'epoch', session_key: 'key', active_leaf_message_id: 1 });
+    await host.models.get('agent_messages')!.insert({ id: 2, session_id: 'epoch', role: 'user', payload: JSON.stringify(v1Message), parent_id: 1, timestamp: 20 });
+    await host.models.get('agent_sessions')!.insert({ session_id: 'epoch', session_key: 'key', active_leaf_message_id: 2 });
     await host.models.get('agent_summaries')!.insert({ session_id: 'epoch', summary: 'prior', anchor_message_id: 1 });
     await host.stop(); host = createHost();
     await activate();
-    const row = (await host.models.get('agent_messages')!.select())[0]!;
-    expect(row).toMatchObject({ actor_id: 'k1:alice', actor_scope: 'channel', turn_id: 'k1:old', query_version: 1, parent_id: null });
+    const rows = await host.models.get('agent_messages')!.select().orderBy('id');
+    const row = rows[0]!;
+    expect(row).toMatchObject({ actor_id: 'k1:alice', actor_scope: 'channel', turn_id: 'k1:old', query_version: 2, parent_id: null, conversation_event_id: null, message_key: null });
     expect(parseAgentMessageRow(row as never)).toEqual(message);
-    expect((await host.models.get('agent_sessions')!.select())[0]).toMatchObject({ active_leaf_message_id: 1, source_kind: null });
+    const row2 = rows[1]!;
+    expect(row2).toMatchObject({
+      actor_id: 'k1:bob',
+      query_version: 2,
+      conversation_event_id: 42,
+      conversation_key: 'slack:bot:channel:room',
+      platform_message_id: 'plat-99',
+      message_key: 'slack:bot:channel:room:plat-99',
+    });
+    expect((await host.models.get('agent_sessions')!.select())[0]).toMatchObject({ active_leaf_message_id: 2, source_kind: null });
     expect((await host.models.get('agent_summaries')!.select())[0]).toMatchObject({ summary: 'prior', anchor_message_id: 1 });
   });
 

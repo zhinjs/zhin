@@ -158,6 +158,10 @@ export class ScheduleJobStore {
   }
 
   async findEventJobByEventId(eventId: string): Promise<ScheduleJob | undefined> {
+    if (this.database && typeof this.database.findByEventId === 'function') {
+      const found = await this.database.findByEventId(eventId);
+      return found ? structuredClone(found) : undefined;
+    }
     const jobs = await this.listJobs();
     return jobs.find((j) => j.schedule.kind === 'event' && j.schedule.eventId === eventId);
   }

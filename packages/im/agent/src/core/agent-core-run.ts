@@ -269,7 +269,15 @@ export interface AgentLoopTurnResult {
   replyPhaseId?: string;
   replyPhaseStopped?: true;
   /** Conversation projection applied only after the durable terminal commits. */
-  projectConversation?: (delivered?: { readonly messageId?: string; readonly messageIds?: readonly (string | null)[]; readonly contextRefs?: readonly string[]; readonly confirmedOutput?: AgentOutputElement[] }) => Promise<void>;
+  projectConversation?: (delivered?: {
+    readonly messageId?: string;
+    readonly messageIds?: readonly (string | null)[];
+    readonly contextRefs?: readonly string[];
+    readonly confirmedOutput?: AgentOutputElement[];
+    readonly conversationSequence?: number;
+    readonly conversationSequences?: readonly (number | null)[];
+    readonly conversationKey?: string;
+  }) => Promise<void>;
 }
 
 /** @deprecated No production caller: image turns run through `runText` with media
@@ -865,12 +873,25 @@ export async function* runAgentLoopTextTurnRun(
     if (phaseAssistant) {
       phaseAssistant.content = [{ type: 'text', text: encodeConfirmedOutput(facts.confirmedOutput) }];
       delete phaseAssistant.messageId;
+      delete phaseAssistant.conversationEventId;
+      delete phaseAssistant.conversationEventIds;
+      delete phaseAssistant.conversationKey;
       const headed = stampAssistantHeaders([phaseAssistant], input.turnContext.input?.contextState?.bot);
-      const stamped = stampDeliveredMessageId(headed, facts.messageId, facts.contextRefs, facts.messageIds)[0];
+      const deliveryConv = facts.delivery.status !== 'suppressed' ? facts.delivery : undefined;
+      const stamped = stampDeliveredMessageId(headed, facts.messageId, facts.contextRefs, facts.messageIds, {
+        conversationSequence: facts.conversationSequence ?? deliveryConv?.conversationSequence,
+        conversationSequences: facts.conversationSequences ?? deliveryConv?.conversationSequences,
+        conversationKey: facts.conversationKey ?? deliveryConv?.conversationKey,
+      })[0];
       if (stamped) Object.assign(phaseAssistant, stamped);
       conversationPhaseFacts.set(phaseAssistant, facts);
       for (const copy of conversationProjectionCopies.get(phaseAssistant) ?? []) {
-        if (copy.role === 'assistant') delete (copy as AssistantMessage).messageId;
+        if (copy.role === 'assistant') {
+          delete (copy as AssistantMessage).messageId;
+          delete (copy as AssistantMessage).conversationEventId;
+          delete (copy as AssistantMessage).conversationEventIds;
+          delete (copy as AssistantMessage).conversationKey;
+        }
         Object.assign(copy, phaseAssistant);
         conversationPhaseFacts.set(copy, facts);
       }
@@ -1549,7 +1570,15 @@ async function appendConversationBatches(
     messages: AgentMessage[];
     messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
   }[],
-  delivered?: { readonly messageId?: string; readonly messageIds?: readonly (string | null)[]; readonly contextRefs?: readonly string[]; readonly confirmedOutput?: AgentOutputElement[] },
+  delivered?: {
+    readonly messageId?: string;
+    readonly messageIds?: readonly (string | null)[];
+    readonly contextRefs?: readonly string[];
+    readonly confirmedOutput?: AgentOutputElement[];
+    readonly conversationSequence?: number;
+    readonly conversationSequences?: readonly (number | null)[];
+    readonly conversationKey?: string;
+  },
   phaseFacts?: ReadonlyMap<AgentMessage, ReplyPhaseFacts>,
 ): Promise<void> {
   // Delivery is authoritative after publication, including an empty confirmed prefix.
@@ -1576,14 +1605,34 @@ async function appendConversationBatches(
   }
   const lastIndex = projected.length - 1;
   for (const [index, batch] of projected.entries()) {
-    const clean = stampDeliveredMessageId(batch.messages, index === lastIndex ? delivered?.messageId : undefined,
-      index === lastIndex ? delivered?.contextRefs : undefined, index === lastIndex ? delivered?.messageIds : undefined);
+    const clean = stampDeliveredMessageId(
+      batch.messages,
+      index === lastIndex ? delivered?.messageId : undefined,
+      index === lastIndex ? delivered?.contextRefs : undefined,
+      index === lastIndex ? delivered?.messageIds : undefined,
+      index === lastIndex ? {
+        conversationSequence: delivered?.conversationSequence,
+        conversationSequences: delivered?.conversationSequences,
+        conversationKey: delivered?.conversationKey,
+      } : undefined,
+    );
     const messages = clean.map((message, messageIndex) => {
       const facts = phaseFacts?.get(batch.messages[messageIndex]!);
       // Provider-authored provenance stays stripped; only the delivery owner's exact phase facts return.
       if (!facts) return message;
-      const { messageId: _providerId, ...authoritative } = message as AssistantMessage;
-      return stampDeliveredMessageId([authoritative], facts.messageId, facts.contextRefs, facts.messageIds)[0]!;
+      const {
+        messageId: _providerId,
+        conversationEventId: _providerConvEventId,
+        conversationEventIds: _providerConvEventIds,
+        conversationKey: _providerConvKey,
+        ...authoritative
+      } = message as AssistantMessage;
+      const deliveryConv = facts.delivery.status !== 'suppressed' ? facts.delivery : undefined;
+      return stampDeliveredMessageId([authoritative], facts.messageId, facts.contextRefs, facts.messageIds, {
+        conversationSequence: facts.conversationSequence ?? deliveryConv?.conversationSequence,
+        conversationSequences: facts.conversationSequences ?? deliveryConv?.conversationSequences,
+        conversationKey: facts.conversationKey ?? deliveryConv?.conversationKey,
+      })[0]!;
     });
     await repo.appendMessages(sessionId, messages, { messageExtras: batch.messageExtras });
   }

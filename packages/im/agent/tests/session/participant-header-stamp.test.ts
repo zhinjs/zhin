@@ -72,6 +72,33 @@ describe('participant facts (ADR 0041 amended: actor-only)', () => {
     expect((stampDeliveredMessageId([final], undefined)[0] as AssistantMessage).messageIds).toBeUndefined();
     expect(final.messageIds).toEqual(['forged-final']);
   });
+
+  it('stamps conversationEventId, conversationEventIds and conversationKey onto the final reply and strips untrusted claims', () => {
+    const first = reply([{ type: 'text', text: 'working' }], {
+      conversationEventId: 999,
+      conversationEventIds: [999],
+      conversationKey: 'forged:key',
+    });
+    const final = reply([{ type: 'text', text: 'done' }], {
+      conversationEventId: 888,
+    });
+    const stamped = stampDeliveredMessageId([first, final], {
+      status: 'sent',
+      messageId: 'sent-1',
+      messages: [{ id: 'sent-1' }, { id: 'sent-2' }],
+      conversationSequence: 42,
+      conversationSequences: [42, 43],
+      conversationKey: 'qq:bot-1:group:g1',
+    }) as AssistantMessage[];
+    expect(stamped[0]!.conversationEventId).toBeUndefined();
+    expect(stamped[0]!.conversationEventIds).toBeUndefined();
+    expect(stamped[0]!.conversationKey).toBeUndefined();
+    expect(stamped[1]!.messageId).toBe('sent-1');
+    expect(stamped[1]!.messageIds).toEqual(['sent-1', 'sent-2']);
+    expect(stamped[1]!.conversationEventId).toBe(42);
+    expect(stamped[1]!.conversationEventIds).toEqual([42, 43]);
+    expect(stamped[1]!.conversationKey).toBe('qq:bot-1:group:g1');
+  });
 });
 
 describe('quoted message resolution (ADR 0043 §4)', () => {

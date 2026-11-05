@@ -527,6 +527,108 @@ describe('IM Runtime', () => {
       expect(sent).toHaveLength(3);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
+
+  it('keeps JSX button callbacks alive across HMR of an unrelated plugin and expires them when the owning plugin reloads', async () => {
+    const sent: unknown[] = [];
+    const clicked = vi.fn(() => 'clicked');
+    const root = rootPluginId();
+    const ownerPlugin = childPluginId(root, 'game');
+    const siblingPlugin = childPluginId(root, 'weather');
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      commandOwner: ownerPlugin,
+      adapterSegments: { interactive: 'native' },
+      commandResult: () => jsx('button', { label: 'play', onClick: clicked }),
+      inboundMiddleware: (_input, next) => next(),
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      // Register sibling plugin in generation 1 before sending the button
+      const gen0 = fixture.store.current;
+      const siblingNodeV1: PluginNodeSnapshot = {
+        id: siblingPlugin,
+        instanceKey: 'weather',
+        packageName: '@test/weather',
+        packageRoot: '/project/plugins/weather',
+        parent: root,
+        children: [],
+      };
+      const treeGen1 = new Map(gen0.tree);
+      treeGen1.set(siblingPlugin, siblingNodeV1);
+      fixture.store.commit(0, { snapshot: { ...snapshotState(gen0), tree: treeGen1 }, dispose: () => undefined });
+
+      const input = fixtureInput(fixture, '/gh issue list open');
+      await receive(fixture.im, input);
+      const rows = (sent[0] as { payload: Array<{ data: { rows: Array<Array<{ payload: string }>> } }> }).payload[0].data.rows;
+      const action = (payload: string) => ({ ...input, content: '', segments: [{ type: 'action', data: { id: 'a', payload } }] });
+
+      // Reload only the unrelated sibling plugin in generation 2
+      const gen1 = fixture.store.current;
+      const treeGen2 = new Map(gen1.tree);
+      treeGen2.set(siblingPlugin, { ...siblingNodeV1 });
+      fixture.store.commit(1, { snapshot: { ...snapshotState(gen1), tree: treeGen2 }, dispose: () => undefined });
+
+      await receive(fixture.im, action(rows[0][0].payload));
+      expect(clicked).toHaveBeenCalledTimes(1);
+
+      // Reload the owning plugin in generation 3 -> button is now expired
+      const gen2 = fixture.store.current;
+      const treeGen3 = new Map(gen2.tree);
+      treeGen3.set(ownerPlugin, { ...gen2.tree.get(ownerPlugin)! });
+      fixture.store.commit(2, { snapshot: { ...snapshotState(gen2), tree: treeGen3 }, dispose: () => undefined });
+
+      await receive(fixture.im, action(rows[0][0].payload));
+      expect(clicked).toHaveBeenCalledTimes(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('reports InboundDispatchSummary to after-dispatch middlewares via this.dispatch and onAfterDispatch', async () => {
+    const sent: unknown[] = [];
+    const summaries: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      adapterSegments: { interactive: 'native' },
+      commandResult: () => jsx('button', { label: 'btn', onClick: () => 'clicked' }),
+    });
+    const current = fixture.store.current;
+    const auditSlot = createCapabilitySlot({
+      owner: current.root,
+      feature: middlewareFeatureId,
+      localName: 'audit-after',
+      source: '/middlewares/audit-after/index.ts',
+      definition: defineMiddleware<Message>({
+        stage: 'after-dispatch',
+        async handle(_input, next) {
+          await next();
+          summaries.push(this.dispatch);
+        },
+      }),
+    });
+    const capabilities = new Map(current.capabilities);
+    capabilities.set(auditSlot.id, auditSlot);
+    const projections = new Map(current.projections);
+    projections.set(middlewareFeatureId, new MiddlewareIndex([auditSlot], current));
+    fixture.store.commit(0, {
+      snapshot: { ...snapshotState(current), capabilities, projections },
+      dispose: () => undefined,
+    });
+
+    try {
+      const input = fixtureInput(fixture, '/gh issue list open');
+      await receive(fixture.im, input);
+      const rows = (sent[0] as { payload: Array<{ data: { rows: Array<Array<{ payload: string }>> } }> }).payload[0].data.rows;
+      await receive(fixture.im, {
+        ...input,
+        content: '',
+        segments: [{ type: 'action', data: { id: 'a', payload: rows[0][0].payload } }],
+      });
+      await receive(fixture.im, fixtureInput(fixture, 'unmatched plain text'));
+
+      expect(summaries).toEqual([
+        { matched: true, path: 'command', handlerId: 'gh issue list', replied: true },
+        { matched: true, path: 'button', handlerId: 'interactive', replied: true },
+        { matched: false, path: 'none', replied: false },
+      ]);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
   it.each(['command', 'command-shortcut', 'middleware'] as const)('binds every explicit %s send to its component author', async (entry) => {
     const root = rootPluginId();
     const child = childPluginId(root, 'explicit-author');
@@ -2004,7 +2106,7 @@ describe('IM Runtime', () => {
       const current = fixture.store.current;
       fixture.store.commit(current.generation, { snapshot: snapshotState(current), dispose: () => undefined });
       await expect(fixture.im.endpoints.sendTarget(JSON.parse(JSON.stringify(target)), 'reminder'))
-        .resolves.toEqual({ messageId: 'sent-1', receipt: { status: 'sent', message: {
+        .resolves.toEqual({ messageId: 'sent-1', receipt: { status: 'sent', conversationSequence: 1, message: {
           id: 'sent-1', conversation: { endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
             kind: 'private', id: 'result-room' },
         } } });
@@ -2028,7 +2130,7 @@ describe('IM Runtime', () => {
       const current = fixture.store.current;
       fixture.store.commit(current.generation, { snapshot: snapshotState(current), dispose: () => undefined });
       await expect(fixture.im.endpoints.sendTarget(target, 'saved target')).resolves.toEqual({ messageId: 'sent-1',
-        receipt: { status: 'sent', message: { id: 'sent-1', conversation: {
+        receipt: { status: 'sent', conversationSequence: 1, message: { id: 'sent-1', conversation: {
           endpoint: { id: String(fixture.adapter.id), adapter: 'memory' }, kind: 'channel', id: 'child',
           parent: { kind: 'channel', id: 'guild' }, threadId: 'thread',
         } } } });
@@ -2529,6 +2631,7 @@ describe('IM Runtime', () => {
 
     expect(receipt).toEqual({
       status: 'sent',
+      conversationSequence: 1,
       message: { conversation: expect.any(Object), id: 'sent-1' },
     });
     expect(sent).toContainEqual(expect.objectContaining({
